@@ -153,6 +153,14 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'interviews/:id',
+        name: 'InterviewDetail',
+        component: () => import('@/views/interview/InterviewDetailView.vue'),
+        meta: {
+          title: '面试详情'
+        }
+      },
+      {
         path: 'interviews/:id/report',
         name: 'InterviewReport',
         component: () => import('@/views/interview/InterviewReportView.vue'),
