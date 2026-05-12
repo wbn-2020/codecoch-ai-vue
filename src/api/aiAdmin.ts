@@ -1,30 +1,42 @@
 import request from '@/utils/request'
-import type { PageQuery, PageResult } from '@/types/api'
+import type { PageResult } from '@/types/api'
+import type {
+  AiCallLogQueryDTO,
+  AiCallLogVO,
+  PromptTemplateDTO,
+  PromptTemplateQueryDTO,
+  PromptTemplateVO
+} from '@/types/ai'
 
-export interface AiPromptTemplateVO {
-  id: number
-  templateName: string
-  templateType: string
-  status: number
-}
-
-export interface AiCallLogVO {
-  id: number
-  bizType: string
-  status: number
-  createdAt?: string
-}
-
-// Admin-only placeholders for later integration. Stage 1 pages do not call them.
-export const getAdminAiPromptsApi = (params: PageQuery) => {
-  return request.get<PageResult<AiPromptTemplateVO>, PageResult<AiPromptTemplateVO>>(
+export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
+  return request.get<PageResult<PromptTemplateVO>, PageResult<PromptTemplateVO>>(
     '/admin/ai/prompts',
     { params }
   )
 }
 
-export const getAdminAiLogsApi = (params: PageQuery) => {
+export const getAdminAiPromptDetailApi = (id: number) => {
+  return request.get<PromptTemplateVO, PromptTemplateVO>(`/admin/ai/prompts/${id}`)
+}
+
+export const createAdminAiPromptApi = (data: PromptTemplateDTO) => {
+  return request.post<PromptTemplateVO, PromptTemplateVO>('/admin/ai/prompts', data)
+}
+
+export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
+  return request.put<PromptTemplateVO, PromptTemplateVO>(`/admin/ai/prompts/${id}`, data)
+}
+
+export const updateAdminAiPromptStatusApi = (id: number, status: number) => {
+  return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status })
+}
+
+export const getAdminAiLogsApi = (params: AiCallLogQueryDTO) => {
   return request.get<PageResult<AiCallLogVO>, PageResult<AiCallLogVO>>('/admin/ai/logs', {
     params
   })
+}
+
+export const getAdminAiLogDetailApi = (id: number) => {
+  return request.get<AiCallLogVO, AiCallLogVO>(`/admin/ai/logs/${id}`)
 }
