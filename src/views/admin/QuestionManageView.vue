@@ -52,9 +52,6 @@
           <el-table-column label="难度" width="110">
             <template #default="{ row }">{{ getOptionLabel(difficultyOptions, row.difficulty) }}</template>
           </el-table-column>
-          <el-table-column label="题型" width="120">
-            <template #default="{ row }">{{ getOptionLabel(questionTypeOptions, row.questionType) }}</template>
-          </el-table-column>
           <el-table-column label="标签" min-width="220">
             <template #default="{ row }">
               <el-space wrap>
@@ -69,7 +66,7 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="操作" width="230" fixed="right">
+          <el-table-column label="操作" width="180">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
@@ -124,11 +121,6 @@
             <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="题型" prop="questionType">
-          <el-select v-model="form.questionType" style="width: 100%">
-            <el-option v-for="item in questionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="题干" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="5" />
         </el-form-item>
@@ -165,7 +157,7 @@ import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
 import StatusTag from '@/components/common/StatusTag.vue'
-import { difficultyOptions, QUESTION_DIFFICULTY, QUESTION_TYPE, questionTypeOptions } from '@/constants/enums'
+import { difficultyOptions, QUESTION_DIFFICULTY } from '@/constants/enums'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
@@ -205,7 +197,6 @@ const form = reactive<QuestionCreateDTO>({
   categoryId: undefined,
   groupId: undefined,
   difficulty: QUESTION_DIFFICULTY.MEDIUM,
-  questionType: QUESTION_TYPE.SHORT_ANSWER,
   tagIds: [],
   status: 1
 })
@@ -275,7 +266,6 @@ const openDialog = (row?: AdminQuestionVO) => {
     categoryId: row?.categoryId,
     groupId: row?.groupId,
     difficulty: row?.difficulty || QUESTION_DIFFICULTY.MEDIUM,
-    questionType: row?.questionType || QUESTION_TYPE.SHORT_ANSWER,
     tagIds: resolveTagIdsFromRow(row),
     status: row?.status ?? 1
   })

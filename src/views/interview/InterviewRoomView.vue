@@ -22,11 +22,18 @@
 
         <el-alert
           v-if="current.status === 'NOT_STARTED'"
+          class="state-alert"
           type="info"
           show-icon
           :closable="false"
           title="面试尚未开始，点击开始后会获取第一道题。"
         />
+
+        <div v-if="current.status === 'NOT_STARTED'" class="start-row">
+          <el-button type="primary" size="large" :loading="starting" @click="handleStart">
+            开始面试
+          </el-button>
+        </div>
 
         <div v-if="current.currentQuestion" class="question-panel">
           <div class="question-panel__head">
@@ -36,7 +43,10 @@
           <MarkdownPreview :content="current.currentQuestion.questionContent" />
         </div>
 
-        <el-empty v-else description="暂无当前问题，可尝试开始或刷新面试" />
+        <el-empty
+          v-else
+          :description="current.status === 'NOT_STARTED' ? '点击开始面试后获取第一道题' : '暂无当前问题，请刷新或稍后重试'"
+        />
 
         <div class="answer-panel">
           <h2>我的回答</h2>
@@ -44,15 +54,13 @@
             v-model="answerContent"
             type="textarea"
             :rows="8"
+            :disabled="answerDisabled"
             placeholder="请输入你的回答，提交后由 interview-service 完成评分和下一步决策"
           />
           <div class="answer-actions">
-            <el-button v-if="current.status === 'NOT_STARTED'" type="primary" :loading="starting" @click="handleStart">
-              开始面试
-            </el-button>
             <el-button
               type="primary"
-              :disabled="!current.currentQuestion || current.status === 'COMPLETED'"
+              :disabled="answerDisabled"
               :loading="submitting"
               @click="handleSubmit"
             >
@@ -137,6 +145,8 @@ const nextActionAlertType = computed(() => {
   return 'info'
 })
 
+const answerDisabled = computed(() => !current.value?.currentQuestion || current.value.status === 'COMPLETED')
+
 const fetchCurrent = async () => {
   if (!interviewId) return
   loading.value = true
@@ -153,6 +163,11 @@ const handleStart = async () => {
   starting.value = true
   try {
     current.value = await startInterviewApi(interviewId)
+    await fetchCurrent()
+    if (!current.value?.currentQuestion) {
+      ElMessage.warning('面试已开始，但暂未获取到题目，请稍后刷新当前题。')
+      return
+    }
     ElMessage.success('面试已开始')
   } finally {
     starting.value = false
@@ -225,10 +240,19 @@ onMounted(fetchCurrent)
 
 <style scoped lang="scss">
 .header-actions,
-.answer-actions {
+.answer-actions,
+.start-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.state-alert {
+  margin-bottom: 14px;
+}
+
+.start-row {
+  margin-bottom: 18px;
 }
 
 .room-status {

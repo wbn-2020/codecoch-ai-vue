@@ -26,9 +26,7 @@ const normalizeTagList = (list: BackendQuestionTagVO[] = []) =>
 
 const toBackendTagDTO = (data: QuestionTagDTO) => ({
   tagName: data.name,
-  tagCode: data.code,
-  status: data.status,
-  remark: data.description
+  status: data.status
 })
 
 export const getQuestionTagsApi = (params?: { status?: number | ''; keyword?: string }) => {

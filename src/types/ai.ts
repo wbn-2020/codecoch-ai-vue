@@ -10,7 +10,7 @@ export type AiScene =
 
 export interface PromptTemplateQueryDTO extends PageQuery {
   keyword?: string
-  promptType?: AiScene | ''
+  scene?: AiScene | ''
   status?: number | ''
 }
 

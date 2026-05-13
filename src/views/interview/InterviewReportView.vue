@@ -22,6 +22,14 @@
         </div>
 
         <el-alert
+          class="score-source"
+          type="info"
+          show-icon
+          :closable="false"
+          title="总分来源于后端面试报告 totalScore 字段；为空时按 0 分展示，不在前端重新计算。"
+        />
+
+        <el-alert
           v-if="report.reportStatus === 'FAILED'"
           class="report-alert"
           type="error"
@@ -34,7 +42,8 @@
           <el-button type="primary" :loading="retrying" @click="handleRetry">重试生成报告</el-button>
         </div>
 
-        <ReportChart :stages="report.stageReports" />
+        <ReportChart v-if="report.stageReports?.length" :stages="report.stageReports" />
+        <el-empty v-else description="暂无阶段得分数据" />
 
         <div class="report-grid">
           <section class="report-section">
@@ -165,7 +174,8 @@ onMounted(fetchReport)
 }
 
 .report-alert,
-.retry-row {
+.retry-row,
+.score-source {
   margin-bottom: 16px;
 }
 

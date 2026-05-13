@@ -28,11 +28,8 @@ const normalizeCategoryList = (list: BackendQuestionCategoryVO[] = []) =>
 
 const toBackendCategoryDTO = (data: QuestionCategoryDTO) => ({
   categoryName: data.name,
-  categoryCode: data.code,
-  parentId: data.parentId && data.parentId > 0 ? data.parentId : undefined,
   sort: data.sort,
-  status: data.status,
-  remark: data.description
+  status: data.status
 })
 
 export const getQuestionCategoriesApi = (params?: { status?: number | ''; keyword?: string }) => {
