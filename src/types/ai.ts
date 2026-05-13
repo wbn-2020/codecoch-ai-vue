@@ -17,28 +17,28 @@ export interface PromptTemplateQueryDTO extends PageQuery {
 export interface PromptTemplateVO {
   id: number
   promptName: string
+  name?: string
   templateCode: string
   promptType: AiScene
+  scene?: AiScene
   templateContent?: string
+  content?: string
   systemPrompt?: string
   userPromptTemplate?: string
   variables?: string
+  variableDesc?: string
   version?: string
   status: number
   description?: string
   createdAt?: string
   updatedAt?: string
+  updateTime?: string
 }
 
 export interface PromptTemplateDTO {
-  promptName: string
-  templateCode: string
-  promptType: AiScene
-  templateContent: string
-  systemPrompt?: string
-  userPromptTemplate?: string
-  variables?: string
-  version?: string
+  scene: AiScene
+  name: string
+  content: string
   status: number
   description?: string
 }

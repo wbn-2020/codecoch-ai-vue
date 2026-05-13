@@ -35,20 +35,25 @@
       <div class="table-card">
         <el-table v-loading="loading" :data="prompts" row-key="id">
           <el-table-column prop="promptName" label="模板名称" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="templateCode" label="模板编码" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="templateCode" label="模板编码" min-width="220" show-overflow-tooltip />
           <el-table-column label="类型" min-width="210">
             <template #default="{ row }">{{ getOptionLabel(promptTypeOptions, row.promptType) }}</template>
           </el-table-column>
-          <el-table-column prop="version" label="版本" width="100" />
+          <el-table-column label="版本" width="100">
+            <template #default="{ row }">{{ row.version || 'V1' }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column prop="variables" label="变量说明" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="updatedAt" label="更新时间" min-width="170" />
+          <el-table-column label="变量说明" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.variables || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="更新时间" min-width="170">
+            <template #default="{ row }">{{ row.updatedAt || '-' }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -69,31 +74,16 @@
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑 Prompt 模板' : '新增 Prompt 模板'" width="820px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="112px">
-        <el-form-item label="模板名称" prop="promptName">
-          <el-input v-model.trim="form.promptName" />
+        <el-form-item label="模板名称" prop="name">
+          <el-input v-model.trim="form.name" />
         </el-form-item>
-        <el-form-item label="模板编码" prop="templateCode">
-          <el-input v-model.trim="form.templateCode" />
-        </el-form-item>
-        <el-form-item label="模板类型" prop="promptType">
-          <el-select v-model="form.promptType" style="width: 100%">
+        <el-form-item label="模板类型" prop="scene">
+          <el-select v-model="form.scene" style="width: 100%">
             <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="版本">
-          <el-input v-model.trim="form.version" placeholder="例如 v1" />
-        </el-form-item>
-        <el-form-item label="变量说明">
-          <el-input v-model="form.variables" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="模板内容" prop="templateContent">
-          <el-input v-model="form.templateContent" type="textarea" :rows="9" />
-        </el-form-item>
-        <el-form-item label="系统提示词">
-          <el-input v-model="form.systemPrompt" type="textarea" :rows="4" />
-        </el-form-item>
-        <el-form-item label="用户提示词">
-          <el-input v-model="form.userPromptTemplate" type="textarea" :rows="4" />
+        <el-form-item label="模板内容" prop="content">
+          <el-input v-model="form.content" type="textarea" :rows="9" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
@@ -117,10 +107,8 @@ import { onMounted, reactive, ref } from 'vue'
 
 import {
   createAdminAiPromptApi,
-  getAdminAiPromptDetailApi,
   getAdminAiPromptsApi,
-  updateAdminAiPromptApi,
-  updateAdminAiPromptStatusApi
+  updateAdminAiPromptApi
 } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { AI_SCENE, promptTypeOptions } from '@/constants/enums'
@@ -144,23 +132,17 @@ const query = reactive<PromptTemplateQueryDTO>({
 })
 
 const form = reactive<PromptTemplateDTO>({
-  promptName: '',
-  templateCode: '',
-  promptType: AI_SCENE.INTERVIEW_QUESTION_GENERATE,
-  templateContent: '',
-  systemPrompt: '',
-  userPromptTemplate: '',
-  variables: '',
-  version: 'v1',
+  scene: AI_SCENE.INTERVIEW_QUESTION_GENERATE,
+  name: '',
+  content: '',
   status: 1,
   description: ''
 })
 
 const rules: FormRules<PromptTemplateDTO> = {
-  promptName: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
-  templateCode: [{ required: true, message: '请输入模板编码', trigger: 'blur' }],
-  promptType: [{ required: true, message: '请选择模板类型', trigger: 'change' }],
-  templateContent: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
+  scene: [{ required: true, message: '请选择模板类型', trigger: 'change' }],
+  content: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 }
 
 const fetchPrompts = async () => {
@@ -176,26 +158,17 @@ const fetchPrompts = async () => {
 
 const applyPrompt = (prompt?: PromptTemplateVO) => {
   Object.assign(form, {
-    promptName: prompt?.promptName || '',
-    templateCode: prompt?.templateCode || '',
-    promptType: prompt?.promptType || AI_SCENE.INTERVIEW_QUESTION_GENERATE,
-    templateContent: prompt?.templateContent || '',
-    systemPrompt: prompt?.systemPrompt || '',
-    userPromptTemplate: prompt?.userPromptTemplate || '',
-    variables: prompt?.variables || '',
-    version: prompt?.version || 'v1',
+    name: prompt?.promptName || prompt?.name || '',
+    scene: prompt?.promptType || prompt?.scene || AI_SCENE.INTERVIEW_QUESTION_GENERATE,
+    content: prompt?.templateContent || prompt?.content || '',
     status: prompt?.status ?? 1,
     description: prompt?.description || ''
   })
 }
 
-const openDialog = async (row?: PromptTemplateVO) => {
+const openDialog = (row?: PromptTemplateVO) => {
   editingId.value = row?.id || null
-  if (row?.id) {
-    applyPrompt(await getAdminAiPromptDetailApi(row.id))
-  } else {
-    applyPrompt()
-  }
+  applyPrompt(row)
   dialogVisible.value = true
 }
 
@@ -215,12 +188,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: PromptTemplateVO) => {
-  await updateAdminAiPromptStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('Prompt 模板状态已更新')
-  await fetchPrompts()
 }
 
 const handleSearch = () => {

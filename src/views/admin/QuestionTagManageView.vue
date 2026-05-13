@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">标签管理</h1>
-        <p class="page-subtitle">维护题目标签，用于题库筛选和题目归类。</p>
+        <p class="page-subtitle">维护题目标签，用于筛选和知识点标记。</p>
       </div>
       <el-button type="primary" @click="openDialog()">新增标签</el-button>
     </div>
@@ -11,16 +11,19 @@
     <section class="content-card">
       <div class="table-card">
         <el-table v-loading="loading" :data="tags" row-key="id">
-          <el-table-column prop="name" label="标签名称" min-width="160" />
-          <el-table-column prop="code" label="编码" min-width="140" />
-          <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="name" label="标签名称" min-width="180" />
+          <el-table-column label="编码" min-width="140">
+            <template #default="{ row }">{{ row.code || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="描述" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.description || '-' }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -54,8 +57,7 @@ import {
   createQuestionTagApi,
   deleteQuestionTagApi,
   getQuestionTagsApi,
-  updateQuestionTagApi,
-  updateQuestionTagStatusApi
+  updateQuestionTagApi
 } from '@/api/questionTag'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { QuestionTagDTO, QuestionTagVO } from '@/types/question'
@@ -66,6 +68,7 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const tags = ref<QuestionTagVO[]>([])
+
 const form = reactive<QuestionTagDTO>({
   name: '',
   code: '',
@@ -113,12 +116,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: QuestionTagVO) => {
-  await updateQuestionTagStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('状态已更新')
-  await fetchTags()
 }
 
 const handleDelete = async (row: QuestionTagVO) => {

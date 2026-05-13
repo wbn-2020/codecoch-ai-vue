@@ -60,11 +60,6 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="指定问题组">
-            <el-select v-model="form.questionGroupId" clearable filterable placeholder="可选，按问题组抽题" style="width: 100%">
-              <el-option v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" />
-            </el-select>
-          </el-form-item>
           <el-form-item label="题目数量">
             <el-input-number v-model="form.questionCount" :min="1" :max="20" />
           </el-form-item>
@@ -105,7 +100,6 @@ import {
   targetPositionOptions
 } from '@/constants/enums'
 import type { InterviewCreateDTO } from '@/types/interview'
-import type { QuestionGroupVO } from '@/types/question'
 import type { ResumeVO } from '@/types/resume'
 
 const router = useRouter()
@@ -114,7 +108,6 @@ const creating = ref(false)
 const resumeLoading = ref(false)
 const useResume = ref(true)
 const resumes = ref<ResumeVO[]>([])
-const groups = ref<QuestionGroupVO[]>([])
 
 const form = reactive<InterviewCreateDTO>({
   interviewName: '',
@@ -125,7 +118,6 @@ const form = reactive<InterviewCreateDTO>({
   difficulty: 'MEDIUM',
   interviewerStyle: 'NORMAL',
   resumeId: undefined,
-  questionGroupId: undefined,
   questionCount: 8
 })
 

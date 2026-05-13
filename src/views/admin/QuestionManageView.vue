@@ -46,18 +46,23 @@
         <el-table v-loading="loading" :data="questions" row-key="id">
           <el-table-column prop="title" label="题目标题" min-width="220" show-overflow-tooltip />
           <el-table-column prop="categoryName" label="分类" min-width="130" />
-          <el-table-column prop="groupTitle" label="问题组" min-width="160" show-overflow-tooltip />
+          <el-table-column label="问题组" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.groupTitle || getGroupNameById(row.groupId) }}</template>
+          </el-table-column>
           <el-table-column label="难度" width="110">
             <template #default="{ row }">{{ getOptionLabel(difficultyOptions, row.difficulty) }}</template>
           </el-table-column>
           <el-table-column label="题型" width="120">
             <template #default="{ row }">{{ getOptionLabel(questionTypeOptions, row.questionType) }}</template>
           </el-table-column>
-          <el-table-column label="标签" min-width="180">
+          <el-table-column label="标签" min-width="220">
             <template #default="{ row }">
-              <el-tag v-for="tag in row.tags" :key="tag.id" class="tag-item" size="small" effect="plain">
-                {{ tag.name }}
-              </el-tag>
+              <el-space wrap>
+                <el-tag v-for="(tag, index) in getDisplayTags(row)" :key="`${row.id}-${index}`" class="tag-item" size="small" effect="plain">
+                  {{ tag }}
+                </el-tag>
+                <span v-if="getDisplayTags(row).length === 0">-</span>
+              </el-space>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="100">
@@ -67,7 +72,6 @@
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -155,19 +159,13 @@ import {
   createAdminQuestionApi,
   deleteAdminQuestionApi,
   getAdminQuestionsApi,
-  updateAdminQuestionApi,
-  updateAdminQuestionStatusApi
+  updateAdminQuestionApi
 } from '@/api/question'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
 import StatusTag from '@/components/common/StatusTag.vue'
-import {
-  difficultyOptions,
-  QUESTION_DIFFICULTY,
-  QUESTION_TYPE,
-  questionTypeOptions
-} from '@/constants/enums'
+import { difficultyOptions, QUESTION_DIFFICULTY, QUESTION_TYPE, questionTypeOptions } from '@/constants/enums'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
@@ -217,9 +215,32 @@ const rules: FormRules<QuestionCreateDTO> = {
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
   groupId: [{ required: true, message: '请选择问题组', trigger: 'change' }],
   difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }],
-  questionType: [{ required: true, message: '请选择题型', trigger: 'change' }],
   content: [{ required: true, message: '请输入题干', trigger: 'blur' }],
   answer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
+}
+
+const getGroupNameById = (groupId?: number) => {
+  if (!groupId) return '-'
+  return groups.value.find((item) => item.id === groupId)?.name || String(groupId)
+}
+
+const getDisplayTags = (row: AdminQuestionVO) => {
+  return (row.tags || [])
+    .map((tag) => (typeof tag === 'string' ? tag : tag?.name || ''))
+    .filter((name) => Boolean(name))
+}
+
+const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {
+  if (!row?.tags?.length) return []
+
+  return row.tags
+    .map((tag) => {
+      if (typeof tag === 'string') {
+        return tags.value.find((item) => item.name === tag)?.id
+      }
+      return tag?.id
+    })
+    .filter((id): id is number => Number.isFinite(Number(id)) && Number(id) > 0)
 }
 
 const fetchOptions = async () => {
@@ -244,22 +265,18 @@ const fetchQuestions = async () => {
   }
 }
 
-const findCategoryIdByName = (categoryName?: string) => {
-  return categories.value.find((item) => item.name === categoryName)?.id
-}
-
 const openDialog = (row?: AdminQuestionVO) => {
   editingId.value = row?.id || null
   Object.assign(form, {
     title: row?.title || '',
     content: row?.content || '',
-    answer: row?.answer || '',
+    answer: row?.answer || row?.referenceAnswer || '',
     analysis: row?.analysis || '',
-    categoryId: row?.categoryId || findCategoryIdByName(row?.categoryName),
+    categoryId: row?.categoryId,
     groupId: row?.groupId,
     difficulty: row?.difficulty || QUESTION_DIFFICULTY.MEDIUM,
     questionType: row?.questionType || QUESTION_TYPE.SHORT_ANSWER,
-    tagIds: row?.tags?.map((tag) => tag.id) || [],
+    tagIds: resolveTagIdsFromRow(row),
     status: row?.status ?? 1
   })
   dialogVisible.value = true
@@ -281,12 +298,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: AdminQuestionVO) => {
-  await updateAdminQuestionStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('题目状态已更新')
-  await fetchQuestions()
 }
 
 const handleDelete = async (row: AdminQuestionVO) => {

@@ -16,6 +16,16 @@ type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   responseBody?: string
 }
 
+type BackendPromptTemplateVO = Partial<PromptTemplateVO> & {
+  scene?: string
+  name?: string
+  content?: string
+  promptContent?: string
+  variableDesc?: string
+  updateTime?: string
+  createTime?: string
+}
+
 const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
   ...log,
   callType: log.callType || log.scene || '',
@@ -30,27 +40,61 @@ const normalizeAiLogPage = (result: PageResult<BackendAiCallLogVO>): PageResult<
   records: (result.records || []).map(normalizeAiCallLog)
 })
 
-export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
-  return request.get<PageResult<PromptTemplateVO>, PageResult<PromptTemplateVO>>(
-    '/admin/ai/prompts',
-    { params }
-  )
-}
+const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplateVO => ({
+  id: Number(prompt.id || 0),
+  promptName: prompt.promptName || prompt.name || '',
+  templateCode: prompt.templateCode || prompt.promptType || prompt.scene || '',
+  promptType: prompt.promptType || prompt.scene || prompt.templateCode || '',
+  templateContent: prompt.templateContent || prompt.content || prompt.promptContent || '',
+  systemPrompt: prompt.systemPrompt || '',
+  userPromptTemplate: prompt.userPromptTemplate || '',
+  variables: prompt.variables || prompt.variableDesc || '',
+  version: prompt.version || 'V1',
+  status: prompt.status ?? 1,
+  description: prompt.description || '',
+  createdAt: prompt.createdAt || prompt.createTime,
+  updatedAt: prompt.updatedAt || prompt.updateTime
+})
 
-export const getAdminAiPromptDetailApi = (id: number) => {
-  return request.get<PromptTemplateVO, PromptTemplateVO>(`/admin/ai/prompts/${id}`)
+const normalizePromptPage = (
+  result: PageResult<BackendPromptTemplateVO>
+): PageResult<PromptTemplateVO> => ({
+  ...result,
+  records: (result.records || []).map(normalizePromptTemplate)
+})
+
+const toBackendPromptDTO = (data: PromptTemplateDTO) => ({
+  scene: data.scene,
+  name: data.name,
+  content: data.content,
+  status: data.status
+})
+
+export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
+  return request
+    .get<PageResult<BackendPromptTemplateVO>, PageResult<BackendPromptTemplateVO>>(
+      '/admin/ai/prompts',
+      { params }
+    )
+    .then(normalizePromptPage)
 }
 
 export const createAdminAiPromptApi = (data: PromptTemplateDTO) => {
-  return request.post<PromptTemplateVO, PromptTemplateVO>('/admin/ai/prompts', data)
+  return request
+    .post<BackendPromptTemplateVO, BackendPromptTemplateVO>(
+      '/admin/ai/prompts',
+      toBackendPromptDTO(data)
+    )
+    .then(normalizePromptTemplate)
 }
 
 export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
-  return request.put<PromptTemplateVO, PromptTemplateVO>(`/admin/ai/prompts/${id}`, data)
-}
-
-export const updateAdminAiPromptStatusApi = (id: number, status: number) => {
-  return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status })
+  return request
+    .put<BackendPromptTemplateVO, BackendPromptTemplateVO>(
+      `/admin/ai/prompts/${id}`,
+      toBackendPromptDTO(data)
+    )
+    .then(normalizePromptTemplate)
 }
 
 export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {

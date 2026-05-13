@@ -11,22 +11,8 @@
     <section class="content-card">
       <div class="content-card__body">
         <el-form :model="query" inline>
-          <el-form-item label="关键词">
-            <el-input v-model.trim="query.keyword" clearable placeholder="面试名称 / 岗位" />
-          </el-form-item>
-          <el-form-item label="状态">
-            <el-select v-model="query.status" clearable placeholder="全部" style="width: 150px">
-              <el-option v-for="item in interviewStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="报告">
-            <el-select v-model="query.reportStatus" clearable placeholder="全部" style="width: 150px">
-              <el-option v-for="item in reportStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" @click="fetchInterviews">刷新</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -77,7 +63,6 @@ import { useRouter } from 'vue-router'
 
 import { getInterviewsApi } from '@/api/interview'
 import StatusTag from '@/components/common/StatusTag.vue'
-import { INTERVIEW_STATUS, REPORT_STATUS } from '@/constants/enums'
 import type { InterviewListVO, InterviewQueryDTO } from '@/types/interview'
 
 const router = useRouter()
@@ -85,25 +70,7 @@ const loading = ref(false)
 const interviews = ref<InterviewListVO[]>([])
 const total = ref(0)
 
-const interviewStatusOptions = [
-  { label: '未开始', value: INTERVIEW_STATUS.NOT_STARTED },
-  { label: '进行中', value: INTERVIEW_STATUS.IN_PROGRESS },
-  { label: '已完成', value: INTERVIEW_STATUS.COMPLETED },
-  { label: '已取消', value: INTERVIEW_STATUS.CANCELED },
-  { label: '失败', value: INTERVIEW_STATUS.FAILED }
-]
-
-const reportStatusOptions = [
-  { label: '未生成', value: REPORT_STATUS.NOT_GENERATED },
-  { label: '生成中', value: REPORT_STATUS.GENERATING },
-  { label: '已生成', value: REPORT_STATUS.GENERATED },
-  { label: '失败', value: REPORT_STATUS.FAILED }
-]
-
 const query = reactive<InterviewQueryDTO>({
-  keyword: '',
-  status: '',
-  reportStatus: '',
   pageNo: 1,
   pageSize: 10
 })
@@ -117,22 +84,6 @@ const fetchInterviews = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const handleSearch = () => {
-  query.pageNo = 1
-  fetchInterviews()
-}
-
-const handleReset = () => {
-  Object.assign(query, {
-    keyword: '',
-    status: '',
-    reportStatus: '',
-    pageNo: 1,
-    pageSize: 10
-  })
-  fetchInterviews()
 }
 
 onMounted(fetchInterviews)

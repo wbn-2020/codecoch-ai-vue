@@ -6,7 +6,6 @@ export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH'
 
 export interface InterviewCreateDTO {
   resumeId?: number
-  questionGroupId?: number
   mode?: string
   title?: string
   maxQuestionCount?: number

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ detail?.title || '题目详情' }}</h1>
-        <p class="page-subtitle">查看题目内容，提交自评答案，并维护收藏和掌握状态。</p>
+        <p class="page-subtitle">查看题目内容，提交练习答案，并维护收藏和掌握状态。</p>
       </div>
       <el-button @click="router.back()">返回</el-button>
     </div>
@@ -15,7 +15,7 @@
             :category-name="detail.category?.name || detail.categoryName"
             :difficulty="detail.difficulty"
             :question-type="detail.questionType"
-            :tags="normalizedTags"
+            :tags="displayTags"
           />
 
           <section class="detail-section">
@@ -94,7 +94,7 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
 import { answerResultOptions, masteryOptions, MASTERY_STATUS } from '@/constants/enums'
-import type { QuestionAnswerDTO, QuestionDetailVO, MasteryStatus } from '@/types/question'
+import type { MasteryStatus, QuestionAnswerDTO, QuestionDetailVO, QuestionTagVO } from '@/types/question'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -107,10 +107,23 @@ const favoriteLoading = ref(false)
 const masteryLoading = ref(false)
 const detail = ref<QuestionDetailVO | null>(null)
 const masteryStatus = ref<MasteryStatus>(MASTERY_STATUS.UNKNOWN)
-const normalizedTags = computed(() => {
-  return (detail.value?.tags || []).map((tag, index) =>
-    typeof tag === 'string' ? { id: index + 1, name: tag, status: 1 } : tag
-  )
+
+const displayTags = computed<QuestionTagVO[]>(() => {
+  const tags = detail.value?.tags || []
+  const normalized = tags
+    .map((tag, index) => {
+      if (!tag) return null
+      if (typeof tag === 'string') {
+        return { id: index + 1, name: tag, status: 1 } as QuestionTagVO
+      }
+      const id = Number(tag.id || index + 1)
+      const name = tag.name || ''
+      if (!Number.isFinite(id) || id <= 0 || !name) return null
+      return { ...tag, id, name, status: tag.status ?? 1 } as QuestionTagVO
+    })
+    .filter((item): item is QuestionTagVO => Boolean(item))
+
+  return normalized
 })
 
 const answerForm = reactive<QuestionAnswerDTO>({
