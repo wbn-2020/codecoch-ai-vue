@@ -26,19 +26,18 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="fetchGroups">查询</el-button>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
 
       <div class="table-card">
-        <el-table v-loading="loading" :data="groups" row-key="id">
+        <el-table v-loading="loading" :data="pagedGroups" row-key="id">
           <el-table-column prop="name" label="问题组名称" min-width="200" show-overflow-tooltip />
           <el-table-column label="分类" min-width="160">
             <template #default="{ row }">{{ getCategoryName(row.categoryId) }}</template>
           </el-table-column>
-          <el-table-column prop="questionCount" label="题目数" width="90" />
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
@@ -50,6 +49,17 @@
             </template>
           </el-table-column>
         </el-table>
+      </div>
+
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="filters.pageNo"
+          v-model:page-size="filters.pageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="filteredGroups.length"
+          :page-sizes="[10, 20, 50]"
+        />
       </div>
     </section>
 
@@ -81,7 +91,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import {
@@ -104,7 +114,9 @@ const categories = ref<QuestionCategoryVO[]>([])
 const filters = reactive({
   keyword: '',
   categoryId: undefined as number | undefined,
-  status: '' as number | ''
+  status: '' as number | '',
+  pageNo: 1,
+  pageSize: 10
 })
 
 const form = reactive<QuestionGroupDTO>({
@@ -123,10 +135,29 @@ const fetchOptions = async () => {
   categories.value = await getQuestionCategoriesApi()
 }
 
+const filteredGroups = computed(() => {
+  const keyword = filters.keyword.trim().toLowerCase()
+  return groups.value.filter((item) => {
+    const matchKeyword =
+      !keyword ||
+      item.name.toLowerCase().includes(keyword) ||
+      (item.description || '').toLowerCase().includes(keyword) ||
+      (item.knowledgePoint || '').toLowerCase().includes(keyword)
+    const matchCategory = !filters.categoryId || item.categoryId === filters.categoryId
+    const matchStatus = filters.status === '' || item.status === filters.status
+    return matchKeyword && matchCategory && matchStatus
+  })
+})
+
+const pagedGroups = computed(() => {
+  const start = (filters.pageNo - 1) * filters.pageSize
+  return filteredGroups.value.slice(start, start + filters.pageSize)
+})
+
 const fetchGroups = async () => {
   loading.value = true
   try {
-    groups.value = await getQuestionGroupsApi(filters)
+    groups.value = await getQuestionGroupsApi()
   } finally {
     loading.value = false
   }
@@ -183,9 +214,14 @@ const handleReset = () => {
   Object.assign(filters, {
     keyword: '',
     categoryId: undefined,
-    status: ''
+    status: '',
+    pageNo: 1,
+    pageSize: 10
   })
-  fetchGroups()
+}
+
+const handleSearch = () => {
+  filters.pageNo = 1
 }
 
 onMounted(async () => {
@@ -193,3 +229,11 @@ onMounted(async () => {
   await fetchGroups()
 })
 </script>
+
+<style scoped lang="scss">
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px 20px;
+}
+</style>

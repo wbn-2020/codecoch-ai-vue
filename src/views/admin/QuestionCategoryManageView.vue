@@ -9,19 +9,28 @@
     </div>
 
     <section class="content-card">
+      <div class="content-card__body">
+        <el-form class="filter-form" :model="query" inline>
+          <el-form-item label="关键词">
+            <el-input v-model.trim="query.keyword" clearable placeholder="分类名称" />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
+              <el-option label="启用" :value="1" />
+              <el-option label="禁用" :value="0" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+
       <div class="table-card">
-        <el-table v-loading="loading" :data="categories" row-key="id">
+        <el-table v-loading="loading" :data="pagedCategories" row-key="id">
           <el-table-column prop="name" label="分类名称" min-width="180" />
-          <el-table-column label="编码" min-width="140">
-            <template #default="{ row }">{{ row.code || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="父级" width="120">
-            <template #default="{ row }">{{ row.parentId || '-' }}</template>
-          </el-table-column>
           <el-table-column prop="sort" label="排序" width="90" />
-          <el-table-column label="描述" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.description || '-' }}</template>
-          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
@@ -33,18 +42,26 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="query.pageNo"
+          v-model:page-size="query.pageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="filteredCategories.length"
+          :page-sizes="[10, 20, 50]"
+        />
+      </div>
     </section>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑分类' : '新增分类'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="名称" prop="name"><el-input v-model.trim="form.name" /></el-form-item>
-        <el-form-item label="编码"><el-input v-model.trim="form.code" /></el-form-item>
-        <el-form-item label="父级 ID"><el-input-number v-model="form.parentId" :min="0" /></el-form-item>
         <el-form-item label="排序"><el-input-number v-model="form.sort" :min="0" /></el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -57,7 +74,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createQuestionCategoryApi,
@@ -75,6 +92,13 @@ const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const categories = ref<QuestionCategoryVO[]>([])
 
+const query = reactive({
+  keyword: '',
+  status: '' as number | '',
+  pageNo: 1,
+  pageSize: 10
+})
+
 const form = reactive<QuestionCategoryDTO>({
   name: '',
   code: '',
@@ -87,6 +111,20 @@ const form = reactive<QuestionCategoryDTO>({
 const rules: FormRules<QuestionCategoryDTO> = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }]
 }
+
+const filteredCategories = computed(() => {
+  const keyword = query.keyword.trim().toLowerCase()
+  return categories.value.filter((item) => {
+    const matchKeyword = !keyword || item.name.toLowerCase().includes(keyword)
+    const matchStatus = query.status === '' || item.status === query.status
+    return matchKeyword && matchStatus
+  })
+})
+
+const pagedCategories = computed(() => {
+  const start = (query.pageNo - 1) * query.pageSize
+  return filteredCategories.value.slice(start, start + query.pageSize)
+})
 
 const fetchCategories = async () => {
   loading.value = true
@@ -101,13 +139,23 @@ const openDialog = (row?: QuestionCategoryVO) => {
   editingId.value = row?.id || null
   Object.assign(form, {
     name: row?.name || '',
-    code: row?.code || '',
-    parentId: row?.parentId && row.parentId > 0 ? row.parentId : undefined,
     sort: row?.sort || 0,
-    status: row?.status ?? 1,
-    description: row?.description || ''
+    status: row?.status ?? 1
   })
   dialogVisible.value = true
+}
+
+const handleSearch = () => {
+  query.pageNo = 1
+}
+
+const handleReset = () => {
+  Object.assign(query, {
+    keyword: '',
+    status: '',
+    pageNo: 1,
+    pageSize: 10
+  })
 }
 
 const handleSave = async () => {
@@ -137,3 +185,15 @@ const handleDelete = async (row: QuestionCategoryVO) => {
 
 onMounted(fetchCategories)
 </script>
+
+<style scoped lang="scss">
+.filter-form {
+  width: 100%;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px 20px;
+}
+</style>

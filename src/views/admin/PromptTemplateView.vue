@@ -15,7 +15,7 @@
             <el-input v-model.trim="query.keyword" clearable placeholder="名称 / 编码" />
           </el-form-item>
           <el-form-item label="类型">
-            <el-select v-model="query.promptType" clearable placeholder="全部类型" style="width: 220px">
+            <el-select v-model="query.scene" clearable placeholder="全部类型" style="width: 220px">
               <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
@@ -44,9 +44,6 @@
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
-          </el-table-column>
-          <el-table-column label="变量说明" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.variables || '-' }}</template>
           </el-table-column>
           <el-table-column label="更新时间" min-width="170">
             <template #default="{ row }">{{ row.updatedAt || '-' }}</template>
@@ -125,7 +122,7 @@ const total = ref(0)
 
 const query = reactive<PromptTemplateQueryDTO>({
   keyword: '',
-  promptType: '',
+  scene: '',
   status: '',
   pageNo: 1,
   pageSize: 10
@@ -198,7 +195,7 @@ const handleSearch = () => {
 const handleReset = () => {
   Object.assign(query, {
     keyword: '',
-    promptType: '',
+    scene: '',
     status: '',
     pageNo: 1,
     pageSize: 10
