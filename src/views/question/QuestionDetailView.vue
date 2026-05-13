@@ -114,11 +114,11 @@ const displayTags = computed<QuestionTagVO[]>(() => {
     .map((tag, index) => {
       if (!tag) return null
       if (typeof tag === 'string') {
-        return { id: index + 1, name: tag, status: 1 } as QuestionTagVO
+        return { id: 0, name: tag, status: 1 } as QuestionTagVO
       }
-      const id = Number(tag.id || index + 1)
-      const name = tag.name || ''
-      if (!Number.isFinite(id) || id <= 0 || !name) return null
+      const id = Number(tag.id || 0)
+      const name = tag.name || tag.tagName || ''
+      if (!Number.isFinite(id) || !name) return null
       return { ...tag, id, name, status: tag.status ?? 1 } as QuestionTagVO
     })
     .filter((item): item is QuestionTagVO => Boolean(item))

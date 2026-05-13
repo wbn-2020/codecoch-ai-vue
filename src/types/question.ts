@@ -68,6 +68,8 @@ export interface QuestionVO {
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   tags?: QuestionTagVO[]
+  tagIds?: number[]
+  tagNames?: string[]
   favorite?: boolean
   masteryStatus?: MasteryStatus
   answered?: boolean
@@ -86,6 +88,8 @@ export interface QuestionDetailVO {
   categoryId?: number
   categoryName?: string
   tags?: QuestionTagVO[] | string[]
+  tagIds?: number[]
+  tagNames?: string[]
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   favorite: boolean

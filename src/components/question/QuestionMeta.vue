@@ -3,7 +3,9 @@
     <el-tag type="info" effect="plain">{{ categoryName || '未分类' }}</el-tag>
     <el-tag effect="plain">{{ difficultyLabel }}</el-tag>
     <el-tag v-if="questionType" type="warning" effect="plain">{{ questionType }}</el-tag>
-    <el-tag v-for="tag in tags" :key="tag.id" type="success" effect="plain">{{ tag.name }}</el-tag>
+    <el-tag v-for="tag in tags" :key="`${tag.id}-${tag.name || tag.tagName}`" type="success" effect="plain">
+      {{ tag.name || tag.tagName }}
+    </el-tag>
   </div>
 </template>
 
