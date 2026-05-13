@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ detail?.title || '题目详情' }}</h1>
-        <p class="page-subtitle">查看题目内容，提交自评答案，并维护收藏和掌握状态。</p>
+        <p class="page-subtitle">查看题目内容，提交练习答案，并维护收藏和掌握状态。</p>
       </div>
       <el-button @click="router.back()">返回</el-button>
     </div>
@@ -12,10 +12,10 @@
       <div v-if="detail" class="content-card__body detail-layout">
         <div class="detail-main">
           <QuestionMeta
-            :category-name="detail.category?.name"
+            :category-name="detail.category?.name || detail.categoryName"
             :difficulty="detail.difficulty"
             :question-type="detail.questionType"
-            :tags="detail.tags"
+            :tags="displayTags"
           />
 
           <section class="detail-section">
@@ -39,7 +39,7 @@
 
           <section class="detail-section">
             <h2>参考答案</h2>
-            <MarkdownPreview :content="detail.answer" />
+            <MarkdownPreview :content="detail.referenceAnswer || detail.answer || '暂无参考答案'" />
           </section>
 
           <section class="detail-section">
@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -94,7 +94,7 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
 import { answerResultOptions, masteryOptions, MASTERY_STATUS } from '@/constants/enums'
-import type { QuestionAnswerDTO, QuestionDetailVO, MasteryStatus } from '@/types/question'
+import type { MasteryStatus, QuestionAnswerDTO, QuestionDetailVO, QuestionTagVO } from '@/types/question'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -107,6 +107,24 @@ const favoriteLoading = ref(false)
 const masteryLoading = ref(false)
 const detail = ref<QuestionDetailVO | null>(null)
 const masteryStatus = ref<MasteryStatus>(MASTERY_STATUS.UNKNOWN)
+
+const displayTags = computed<QuestionTagVO[]>(() => {
+  const tags = detail.value?.tags || []
+  const normalized = tags
+    .map((tag, index) => {
+      if (!tag) return null
+      if (typeof tag === 'string') {
+        return { id: index + 1, name: tag, status: 1 } as QuestionTagVO
+      }
+      const id = Number(tag.id || index + 1)
+      const name = tag.name || ''
+      if (!Number.isFinite(id) || id <= 0 || !name) return null
+      return { ...tag, id, name, status: tag.status ?? 1 } as QuestionTagVO
+    })
+    .filter((item): item is QuestionTagVO => Boolean(item))
+
+  return normalized
+})
 
 const answerForm = reactive<QuestionAnswerDTO>({
   userAnswer: '',
@@ -166,10 +184,12 @@ const handleSubmitAnswer = async () => {
   try {
     const result = await submitQuestionAnswerApi(detail.value.id, answerForm)
     detail.value.lastAnswer = answerForm.userAnswer
-    detail.value.lastAnswerResult = result.answerResult
+    detail.value.lastAnswerResult = result.answerResult || (result.wrong ? 'WRONG' : 'CORRECT')
     detail.value.masteryStatus = result.masteryStatus
+    detail.value.referenceAnswer = result.referenceAnswer || detail.value.referenceAnswer
+    detail.value.analysis = result.analysis || detail.value.analysis
     masteryStatus.value = result.masteryStatus || masteryStatus.value
-    ElMessage.success(result.wrongRecordGenerated ? '答案已提交，已更新错题记录' : '答案已提交')
+    ElMessage.success(result.wrongRecordGenerated || result.wrong ? '答案已提交，已更新错题记录' : '答案已提交')
   } finally {
     submitting.value = false
   }

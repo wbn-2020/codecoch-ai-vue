@@ -19,15 +19,19 @@ export interface PromptTemplateVO {
   promptName: string
   templateCode: string
   promptType: AiScene
+  scene?: AiScene
   templateContent?: string
+  content?: string
   systemPrompt?: string
   userPromptTemplate?: string
   variables?: string
+  variableDesc?: string
   version?: string
   status: number
   description?: string
   createdAt?: string
   updatedAt?: string
+  updateTime?: string
 }
 
 export interface PromptTemplateDTO {

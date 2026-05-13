@@ -94,7 +94,6 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { createInterviewApi } from '@/api/interview'
-import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getResumesApi } from '@/api/resume'
 import {
   difficultyOptions,
@@ -167,10 +166,6 @@ const fetchResumes = async () => {
   }
 }
 
-const fetchGroups = async () => {
-  groups.value = await getQuestionGroupsApi({ status: 1 })
-}
-
 const handleCreate = async () => {
   if (!formRef.value) return
   await formRef.value.validate()
@@ -195,7 +190,6 @@ const handleCreate = async () => {
 
 onMounted(() => {
   fetchResumes()
-  fetchGroups()
 })
 </script>
 

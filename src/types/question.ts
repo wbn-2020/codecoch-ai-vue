@@ -8,11 +8,14 @@ export type AnswerResult = 'CORRECT' | 'PARTIAL_CORRECT' | 'WRONG' | string
 export interface QuestionCategoryVO {
   id: number
   name: string
+  categoryName?: string
   code?: string
+  categoryCode?: string
   parentId?: number
   sort?: number
   status: number
   description?: string
+  remark?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -20,9 +23,12 @@ export interface QuestionCategoryVO {
 export interface QuestionTagVO {
   id: number
   name: string
+  tagName?: string
   code?: string
+  tagCode?: string
   status: number
   description?: string
+  remark?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -30,10 +36,12 @@ export interface QuestionTagVO {
 export interface QuestionGroupVO {
   id: number
   name: string
+  groupName?: string
   canonicalAnswer?: string
   description?: string
   categoryId?: number
   knowledgePoint?: string
+  mainKnowledgePoint?: string
   difficulty: QuestionDifficulty
   status: number
   questionCount?: number
@@ -70,10 +78,13 @@ export interface QuestionDetailVO {
   id: number
   title: string
   content: string
-  answer: string
+  answer?: string
+  referenceAnswer?: string
   analysis?: string
   category?: QuestionCategoryVO
-  tags?: QuestionTagVO[]
+  categoryId?: number
+  categoryName?: string
+  tags?: QuestionTagVO[] | string[]
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   favorite: boolean
@@ -84,6 +95,7 @@ export interface QuestionDetailVO {
 
 export interface QuestionAnswerDTO {
   userAnswer: string
+  answerContent?: string
   selfResult?: AnswerResult
   masteryStatus?: MasteryStatus
 }
@@ -91,19 +103,24 @@ export interface QuestionAnswerDTO {
 export interface QuestionAnswerResultVO {
   recordId: number
   questionId: number
-  answerResult: AnswerResult
+  answerResult?: AnswerResult
+  referenceAnswer?: string
+  analysis?: string
   masteryStatus?: MasteryStatus
-  wrongRecordGenerated: boolean
+  wrongRecordGenerated?: boolean
+  wrong?: boolean
   answeredAt: string
 }
 
 export interface FavoriteQuestionVO {
-  favoriteId: number
-  questionId: number
+  id?: number
+  favoriteId?: number
+  questionId?: number
   title: string
+  categoryId?: number
   categoryName?: string
   difficulty: QuestionDifficulty
-  tags?: QuestionTagVO[]
+  tags?: QuestionTagVO[] | string[]
   createdAt?: string
 }
 
@@ -155,10 +172,12 @@ export interface AdminQuestionVO {
   categoryName?: string
   groupId?: number
   groupTitle?: string
+  groupName?: string
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   status: number
-  tags?: QuestionTagVO[]
+  tags?: QuestionTagVO[] | string[]
+  tagIds?: number[]
   createdAt?: string
   updatedAt?: string
 }
