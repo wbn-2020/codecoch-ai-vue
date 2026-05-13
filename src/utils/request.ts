@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
 import type { ApiResult, RequestErrorPayload } from '@/types/api'
-import { getToken, removeToken } from '@/utils/token'
+import { clearLocalAuth, getToken } from '@/utils/token'
 
 const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
@@ -37,7 +37,7 @@ request.interceptors.response.use(
       result.code === HTTP_STATUS_CODE.UNAUTHENTICATED ||
       result.code === HTTP_STATUS_CODE.TOKEN_INVALID
     ) {
-      removeToken()
+      clearLocalAuth()
       if (window.location.pathname !== '/login') {
         const redirect = encodeURIComponent(window.location.pathname + window.location.search)
         window.location.href = `/login?redirect=${redirect}`
