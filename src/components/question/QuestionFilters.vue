@@ -1,11 +1,11 @@
 <template>
   <el-form class="filter-form" :model="model" inline>
     <el-form-item label="关键词">
-      <el-input v-model.trim="model.keyword" clearable placeholder="题目标题关键字" />
+      <el-input v-model.trim="model.keyword" clearable placeholder="题目标题关键词" />
     </el-form-item>
     <el-form-item label="分类">
       <el-select v-model="model.categoryId" clearable placeholder="全部分类" style="width: 160px">
-        <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+        <el-option v-for="item in validCategories" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
     </el-form-item>
     <el-form-item label="标签">
@@ -17,7 +17,7 @@
         placeholder="全部标签"
         style="width: 220px"
       >
-        <el-option v-for="item in tags" :key="item.id" :label="item.name" :value="item.id" />
+        <el-option v-for="item in validTags" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
     </el-form-item>
     <el-form-item label="难度">
@@ -33,6 +33,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import { difficultyOptions } from '@/constants/enums'
 import type { QuestionCategoryVO, QuestionQueryDTO, QuestionTagVO } from '@/types/question'
 
@@ -41,9 +43,17 @@ defineEmits<{
   reset: []
 }>()
 
-defineProps<{
+const props = defineProps<{
   model: QuestionQueryDTO
   categories: QuestionCategoryVO[]
   tags: QuestionTagVO[]
 }>()
+
+const validCategories = computed(() =>
+  (props.categories || []).filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name)
+)
+
+const validTags = computed(() =>
+  (props.tags || []).filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name)
+)
 </script>

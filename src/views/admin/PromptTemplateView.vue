@@ -35,16 +35,22 @@
       <div class="table-card">
         <el-table v-loading="loading" :data="prompts" row-key="id">
           <el-table-column prop="promptName" label="模板名称" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="templateCode" label="模板编码" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="templateCode" label="模板编码" min-width="220" show-overflow-tooltip />
           <el-table-column label="类型" min-width="210">
             <template #default="{ row }">{{ getOptionLabel(promptTypeOptions, row.promptType) }}</template>
           </el-table-column>
-          <el-table-column prop="version" label="版本" width="100" />
+          <el-table-column label="版本" width="100">
+            <template #default="{ row }">{{ row.version || 'V1' }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column prop="variables" label="变量说明" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="updatedAt" label="更新时间" min-width="170" />
+          <el-table-column label="变量说明" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.variables || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="更新时间" min-width="170">
+            <template #default="{ row }">{{ row.updatedAt || '-' }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
@@ -81,7 +87,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="版本">
-          <el-input v-model.trim="form.version" placeholder="例如 v1" />
+          <el-input v-model.trim="form.version" placeholder="例如 V1" />
         </el-form-item>
         <el-form-item label="变量说明">
           <el-input v-model="form.variables" type="textarea" :rows="3" />
@@ -151,7 +157,7 @@ const form = reactive<PromptTemplateDTO>({
   systemPrompt: '',
   userPromptTemplate: '',
   variables: '',
-  version: 'v1',
+  version: 'V1',
   status: 1,
   description: ''
 })
@@ -183,7 +189,7 @@ const applyPrompt = (prompt?: PromptTemplateVO) => {
     systemPrompt: prompt?.systemPrompt || '',
     userPromptTemplate: prompt?.userPromptTemplate || '',
     variables: prompt?.variables || '',
-    version: prompt?.version || 'v1',
+    version: prompt?.version || 'V1',
     status: prompt?.status ?? 1,
     description: prompt?.description || ''
   })

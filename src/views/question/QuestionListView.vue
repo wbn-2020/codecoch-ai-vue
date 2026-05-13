@@ -110,9 +110,19 @@ const categoryOptions = computed<QuestionCategoryVO[]>(() => {
 })
 
 const tagOptions = computed<QuestionTagVO[]>(() => {
-  const map = new Map<number, QuestionTagVO>()
-  questions.value.forEach((item) => item.tags?.forEach((tag) => map.set(tag.id, tag)))
-  return Array.from(map.values())
+  const byName = new Map<string, QuestionTagVO>()
+
+  questions.value.forEach((item) => {
+    item.tags?.forEach((tag) => {
+      const name = (tag?.name || '').trim()
+      if (!name || byName.has(name)) return
+      const id = Number(tag?.id)
+      if (!Number.isFinite(id) || id <= 0) return
+      byName.set(name, { ...(tag || {}), id, name, status: tag?.status ?? 1 })
+    })
+  })
+
+  return Array.from(byName.values())
 })
 
 const fetchQuestions = async () => {

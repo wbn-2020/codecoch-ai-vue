@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">问题组管理</h1>
-        <p class="page-subtitle">维护同一考察意图下的标准问题，V1 只做手动问题组，不接入 Embedding 或 AI 判重。</p>
+        <p class="page-subtitle">维护同一考察意图下的问题组，V1 仅做手动维护。</p>
       </div>
       <el-button type="primary" @click="openDialog()">新增问题组</el-button>
     </div>
@@ -34,9 +34,9 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="groups" row-key="id">
-          <el-table-column prop="name" label="问题组名称" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="knowledgePoint" label="主知识点" min-width="150" show-overflow-tooltip />
-          <el-table-column label="分类" min-width="140">
+          <el-table-column prop="name" label="问题组名称" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="knowledgePoint" label="主知识点" min-width="160" show-overflow-tooltip />
+          <el-table-column label="分类" min-width="160">
             <template #default="{ row }">{{ getCategoryName(row.categoryId) }}</template>
           </el-table-column>
           <el-table-column label="难度" width="110">
@@ -46,7 +46,7 @@
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
@@ -69,7 +69,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="主知识点">
-          <el-input v-model.trim="form.knowledgePoint" placeholder="例如：事务传播、隔离级别" />
+          <el-input v-model.trim="form.knowledgePoint" />
         </el-form-item>
         <el-form-item label="难度" prop="difficulty">
           <el-select v-model="form.difficulty" style="width: 100%">
@@ -77,10 +77,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="题目 ID">
-          <el-input
-            v-model="questionIdsText"
-            placeholder="可选，多个题目 ID 用英文逗号分隔"
-          />
+          <el-input v-model="questionIdsText" placeholder="多个题目 ID 用逗号分隔" />
         </el-form-item>
         <el-form-item label="标准答案">
           <el-input v-model="form.canonicalAnswer" type="textarea" :rows="4" />
@@ -240,9 +237,3 @@ onMounted(async () => {
   await fetchGroups()
 })
 </script>
-
-<style scoped lang="scss">
-.filter-form {
-  width: 100%;
-}
-</style>

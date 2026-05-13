@@ -8,11 +8,14 @@ export type AnswerResult = 'CORRECT' | 'PARTIAL_CORRECT' | 'WRONG' | string
 export interface QuestionCategoryVO {
   id: number
   name: string
+  categoryName?: string
   code?: string
+  categoryCode?: string
   parentId?: number
   sort?: number
   status: number
   description?: string
+  remark?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -20,9 +23,12 @@ export interface QuestionCategoryVO {
 export interface QuestionTagVO {
   id: number
   name: string
+  tagName?: string
   code?: string
+  tagCode?: string
   status: number
   description?: string
+  remark?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -30,10 +36,12 @@ export interface QuestionTagVO {
 export interface QuestionGroupVO {
   id: number
   name: string
+  groupName?: string
   canonicalAnswer?: string
   description?: string
   categoryId?: number
   knowledgePoint?: string
+  mainKnowledgePoint?: string
   difficulty: QuestionDifficulty
   status: number
   questionCount?: number
@@ -164,10 +172,12 @@ export interface AdminQuestionVO {
   categoryName?: string
   groupId?: number
   groupTitle?: string
+  groupName?: string
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   status: number
-  tags?: QuestionTagVO[]
+  tags?: QuestionTagVO[] | string[]
+  tagIds?: number[]
   createdAt?: string
   updatedAt?: string
 }

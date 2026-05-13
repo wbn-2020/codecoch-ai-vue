@@ -61,10 +61,7 @@ const metrics = computed(() => [
 const fetchOverview = async () => {
   loading.value = true
   try {
-    overview.value = {
-      ...overview.value,
-      ...(await getAdminSystemOverviewApi())
-    }
+    overview.value = await getAdminSystemOverviewApi()
   } catch {
     // Keep zero-valued cards when backend aggregation is not ready.
   } finally {

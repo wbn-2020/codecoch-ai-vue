@@ -12,6 +12,19 @@ type BackendSystemConfigVO = SystemConfigVO & {
   valueType?: string
 }
 
+type BackendAdminOverviewVO = Partial<AdminOverviewVO> & {
+  usersCount?: number
+  questionsCount?: number
+  resumesCount?: number
+  interviewsCount?: number
+  completedInterviewsCount?: number
+  aiCallsCount?: number
+  aiCallFailedCount?: number
+  promptsCount?: number
+  todayInterviewsCount?: number
+  todayAiCallsCount?: number
+}
+
 const normalizeSystemConfig = (config: BackendSystemConfigVO): SystemConfigVO => ({
   ...config,
   configType: config.configType || config.valueType || 'STRING',
@@ -40,8 +53,23 @@ const normalizeConfigPage = (
   }
 }
 
+const normalizeAdminOverview = (data: BackendAdminOverviewVO): AdminOverviewVO => ({
+  userCount: data.userCount ?? data.usersCount ?? 0,
+  questionCount: data.questionCount ?? data.questionsCount ?? 0,
+  resumeCount: data.resumeCount ?? data.resumesCount ?? 0,
+  interviewCount: data.interviewCount ?? data.interviewsCount ?? 0,
+  completedInterviewCount: data.completedInterviewCount ?? data.completedInterviewsCount ?? 0,
+  aiCallCount: data.aiCallCount ?? data.aiCallsCount ?? 0,
+  aiCallFailedCount: data.aiCallFailedCount ?? 0,
+  promptCount: data.promptCount ?? data.promptsCount ?? 0,
+  todayInterviewCount: data.todayInterviewCount ?? data.todayInterviewsCount ?? 0,
+  todayAiCallCount: data.todayAiCallCount ?? data.todayAiCallsCount ?? 0
+})
+
 export const getAdminSystemOverviewApi = () => {
-  return request.get<AdminOverviewVO, AdminOverviewVO>('/admin/system/overview')
+  return request
+    .get<BackendAdminOverviewVO, BackendAdminOverviewVO>('/admin/system/overview')
+    .then(normalizeAdminOverview)
 }
 
 export const getSystemConfigsApi = async (params: SystemConfigQueryDTO) => {
