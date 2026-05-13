@@ -7,8 +7,11 @@ export interface ResumeQueryDTO extends PageQuery {
 export interface ResumeVO {
   id: number
   resumeName: string
+  title?: string
+  realName?: string
   targetPosition?: string
   skills?: string
+  summary?: string
   isDefault: number
   status: number
   projectCount?: number
@@ -17,14 +20,18 @@ export interface ResumeVO {
 }
 
 export interface ResumeProjectVO {
+  id?: number
   projectId: number
   resumeId?: number
   projectName: string
   projectTime?: string
   projectBackground?: string
+  description?: string
   techStack?: string
+  role?: string
   responsibility?: string
   coreFeatures?: string
+  highlights?: string
   technicalChallenges?: string
   optimizationResult?: string
   extraInfo?: string
@@ -35,6 +42,11 @@ export interface ResumeProjectVO {
 
 export interface ResumeDetailVO {
   id: number
+  title?: string
+  realName?: string
+  email?: string
+  phone?: string
+  summary?: string
   resumeName: string
   targetPosition?: string
   skills?: string
@@ -49,6 +61,11 @@ export interface ResumeDetailVO {
 
 export interface ResumeCreateDTO {
   resumeName: string
+  title?: string
+  realName?: string
+  email?: string
+  phone?: string
+  summary?: string
   targetPosition?: string
   skills: string
   workSummary?: string
@@ -62,9 +79,12 @@ export interface ResumeProjectDTO {
   projectName: string
   projectTime?: string
   projectBackground?: string
+  description?: string
   techStack?: string
+  role?: string
   responsibility?: string
   coreFeatures?: string
+  highlights?: string
   technicalChallenges?: string
   optimizationResult?: string
   extraInfo?: string

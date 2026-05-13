@@ -39,8 +39,8 @@
           <el-table-column prop="id" label="日志 ID" width="100" />
           <el-table-column prop="userId" label="用户 ID" width="100" />
           <el-table-column prop="interviewId" label="面试 ID" width="110" />
-          <el-table-column label="场景" min-width="210">
-            <template #default="{ row }">{{ getOptionLabel(promptTypeOptions, row.callType) }}</template>
+          <el-table-column label="场景" min-width="230">
+            <template #default="{ row }">{{ row.callType }}</template>
           </el-table-column>
           <el-table-column prop="modelName" label="模型" min-width="140" />
           <el-table-column label="状态" width="110">
@@ -73,7 +73,7 @@
       <div v-if="detail" class="log-detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="日志 ID">{{ detail.id }}</el-descriptions-item>
-          <el-descriptions-item label="调用场景">{{ getOptionLabel(promptTypeOptions, detail.callType) }}</el-descriptions-item>
+          <el-descriptions-item label="调用场景">{{ detail.callType }}</el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ detail.latencyMs ?? '-' }} ms</el-descriptions-item>
@@ -98,7 +98,6 @@ import { getAdminAiLogDetailApi, getAdminAiLogsApi } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { promptTypeOptions } from '@/constants/enums'
 import type { AiCallLogQueryDTO, AiCallLogVO } from '@/types/ai'
-import { getOptionLabel } from '@/utils/format'
 
 const loading = ref(false)
 const drawerVisible = ref(false)

@@ -12,10 +12,10 @@
       <div v-if="detail" class="content-card__body detail-layout">
         <div class="detail-main">
           <QuestionMeta
-            :category-name="detail.category?.name"
+            :category-name="detail.category?.name || detail.categoryName"
             :difficulty="detail.difficulty"
             :question-type="detail.questionType"
-            :tags="detail.tags"
+            :tags="normalizedTags"
           />
 
           <section class="detail-section">
@@ -39,7 +39,7 @@
 
           <section class="detail-section">
             <h2>参考答案</h2>
-            <MarkdownPreview :content="detail.answer" />
+            <MarkdownPreview :content="detail.referenceAnswer || detail.answer || '暂无参考答案'" />
           </section>
 
           <section class="detail-section">
@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -107,6 +107,11 @@ const favoriteLoading = ref(false)
 const masteryLoading = ref(false)
 const detail = ref<QuestionDetailVO | null>(null)
 const masteryStatus = ref<MasteryStatus>(MASTERY_STATUS.UNKNOWN)
+const normalizedTags = computed(() => {
+  return (detail.value?.tags || []).map((tag, index) =>
+    typeof tag === 'string' ? { id: index + 1, name: tag, status: 1 } : tag
+  )
+})
 
 const answerForm = reactive<QuestionAnswerDTO>({
   userAnswer: '',
@@ -166,10 +171,12 @@ const handleSubmitAnswer = async () => {
   try {
     const result = await submitQuestionAnswerApi(detail.value.id, answerForm)
     detail.value.lastAnswer = answerForm.userAnswer
-    detail.value.lastAnswerResult = result.answerResult
+    detail.value.lastAnswerResult = result.answerResult || (result.wrong ? 'WRONG' : 'CORRECT')
     detail.value.masteryStatus = result.masteryStatus
+    detail.value.referenceAnswer = result.referenceAnswer || detail.value.referenceAnswer
+    detail.value.analysis = result.analysis || detail.value.analysis
     masteryStatus.value = result.masteryStatus || masteryStatus.value
-    ElMessage.success(result.wrongRecordGenerated ? '答案已提交，已更新错题记录' : '答案已提交')
+    ElMessage.success(result.wrongRecordGenerated || result.wrong ? '答案已提交，已更新错题记录' : '答案已提交')
   } finally {
     submitting.value = false
   }

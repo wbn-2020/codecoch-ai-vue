@@ -26,7 +26,7 @@
       </div>
 
       <div class="table-card">
-        <el-table v-loading="loading" :data="favorites" row-key="favoriteId">
+        <el-table v-loading="loading" :data="favorites" :row-key="getQuestionId">
           <el-table-column prop="title" label="题目" min-width="240" show-overflow-tooltip />
           <el-table-column prop="categoryName" label="分类" width="140" />
           <el-table-column label="难度" width="100">
@@ -35,8 +35,8 @@
           <el-table-column prop="createdAt" label="收藏时间" min-width="170" />
           <el-table-column label="操作" width="170" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="router.push(`/questions/${row.questionId}`)">详情</el-button>
-              <el-button link type="danger" :loading="removingId === row.questionId" @click="removeFavorite(row)">
+              <el-button link type="primary" @click="router.push(`/questions/${getQuestionId(row)}`)">详情</el-button>
+              <el-button link type="danger" :loading="removingId === getQuestionId(row)" @click="removeFavorite(row)">
                 取消收藏
               </el-button>
             </template>
@@ -103,10 +103,14 @@ const handleReset = () => {
   fetchFavorites()
 }
 
+const getQuestionId = (row: FavoriteQuestionVO) => row.questionId || row.id || row.favoriteId || 0
+
 const removeFavorite = async (row: FavoriteQuestionVO) => {
-  removingId.value = row.questionId
+  const questionId = getQuestionId(row)
+  if (!questionId) return
+  removingId.value = questionId
   try {
-    await unfavoriteQuestionApi(row.questionId)
+    await unfavoriteQuestionApi(questionId)
     ElMessage.success('已取消收藏')
     await fetchFavorites()
   } finally {

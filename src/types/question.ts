@@ -70,10 +70,13 @@ export interface QuestionDetailVO {
   id: number
   title: string
   content: string
-  answer: string
+  answer?: string
+  referenceAnswer?: string
   analysis?: string
   category?: QuestionCategoryVO
-  tags?: QuestionTagVO[]
+  categoryId?: number
+  categoryName?: string
+  tags?: QuestionTagVO[] | string[]
   difficulty: QuestionDifficulty
   questionType?: QuestionType
   favorite: boolean
@@ -84,6 +87,7 @@ export interface QuestionDetailVO {
 
 export interface QuestionAnswerDTO {
   userAnswer: string
+  answerContent?: string
   selfResult?: AnswerResult
   masteryStatus?: MasteryStatus
 }
@@ -91,19 +95,24 @@ export interface QuestionAnswerDTO {
 export interface QuestionAnswerResultVO {
   recordId: number
   questionId: number
-  answerResult: AnswerResult
+  answerResult?: AnswerResult
+  referenceAnswer?: string
+  analysis?: string
   masteryStatus?: MasteryStatus
-  wrongRecordGenerated: boolean
+  wrongRecordGenerated?: boolean
+  wrong?: boolean
   answeredAt: string
 }
 
 export interface FavoriteQuestionVO {
-  favoriteId: number
-  questionId: number
+  id?: number
+  favoriteId?: number
+  questionId?: number
   title: string
+  categoryId?: number
   categoryName?: string
   difficulty: QuestionDifficulty
-  tags?: QuestionTagVO[]
+  tags?: QuestionTagVO[] | string[]
   createdAt?: string
 }
 

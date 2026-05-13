@@ -8,6 +8,28 @@ import type {
   PromptTemplateVO
 } from '@/types/ai'
 
+type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
+  status: string | number
+  scene?: AiCallLogVO['callType']
+  costMillis?: number
+  requestBody?: string
+  responseBody?: string
+}
+
+const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
+  ...log,
+  callType: log.callType || log.scene || '',
+  status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
+  latencyMs: log.latencyMs ?? log.costMillis,
+  requestParams: log.requestParams ?? log.requestBody,
+  responseContent: log.responseContent ?? log.responseBody
+})
+
+const normalizeAiLogPage = (result: PageResult<BackendAiCallLogVO>): PageResult<AiCallLogVO> => ({
+  ...result,
+  records: (result.records || []).map(normalizeAiCallLog)
+})
+
 export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
   return request.get<PageResult<PromptTemplateVO>, PageResult<PromptTemplateVO>>(
     '/admin/ai/prompts',
@@ -31,12 +53,17 @@ export const updateAdminAiPromptStatusApi = (id: number, status: number) => {
   return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status })
 }
 
-export const getAdminAiLogsApi = (params: AiCallLogQueryDTO) => {
-  return request.get<PageResult<AiCallLogVO>, PageResult<AiCallLogVO>>('/admin/ai/logs', {
-    params
-  })
+export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
+  const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
+    '/admin/ai/logs',
+    {
+      params
+    }
+  )
+  return normalizeAiLogPage(result)
 }
 
-export const getAdminAiLogDetailApi = (id: number) => {
-  return request.get<AiCallLogVO, AiCallLogVO>(`/admin/ai/logs/${id}`)
+export const getAdminAiLogDetailApi = async (id: number) => {
+  const result = await request.get<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}`)
+  return normalizeAiCallLog(result)
 }

@@ -25,7 +25,14 @@ export const getQuestionDetailApi = (id: number) => {
 }
 
 export const submitQuestionAnswerApi = (id: number, data: QuestionAnswerDTO) => {
-  return request.post<QuestionAnswerResultVO, QuestionAnswerResultVO>(`/questions/${id}/answers`, data)
+  const payload = {
+    answerContent: data.answerContent || data.userAnswer,
+    masteryStatus: data.masteryStatus
+  }
+  return request.post<QuestionAnswerResultVO, QuestionAnswerResultVO>(
+    `/questions/${id}/answers`,
+    payload
+  )
 }
 
 export const favoriteQuestionApi = (id: number) => {
