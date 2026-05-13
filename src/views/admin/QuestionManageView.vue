@@ -72,7 +72,6 @@
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -160,8 +159,7 @@ import {
   createAdminQuestionApi,
   deleteAdminQuestionApi,
   getAdminQuestionsApi,
-  updateAdminQuestionApi,
-  updateAdminQuestionStatusApi
+  updateAdminQuestionApi
 } from '@/api/question'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
@@ -217,7 +215,6 @@ const rules: FormRules<QuestionCreateDTO> = {
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
   groupId: [{ required: true, message: '请选择问题组', trigger: 'change' }],
   difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }],
-  questionType: [{ required: true, message: '请选择题型', trigger: 'change' }],
   content: [{ required: true, message: '请输入题干', trigger: 'blur' }],
   answer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
 }
@@ -273,7 +270,7 @@ const openDialog = (row?: AdminQuestionVO) => {
   Object.assign(form, {
     title: row?.title || '',
     content: row?.content || '',
-    answer: row?.answer || '',
+    answer: row?.answer || row?.referenceAnswer || '',
     analysis: row?.analysis || '',
     categoryId: row?.categoryId,
     groupId: row?.groupId,
@@ -301,12 +298,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: AdminQuestionVO) => {
-  await updateAdminQuestionStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('题目状态已更新')
-  await fetchQuestions()
 }
 
 const handleDelete = async (row: AdminQuestionVO) => {

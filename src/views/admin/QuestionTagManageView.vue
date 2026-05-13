@@ -24,7 +24,6 @@
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -58,8 +57,7 @@ import {
   createQuestionTagApi,
   deleteQuestionTagApi,
   getQuestionTagsApi,
-  updateQuestionTagApi,
-  updateQuestionTagStatusApi
+  updateQuestionTagApi
 } from '@/api/questionTag'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { QuestionTagDTO, QuestionTagVO } from '@/types/question'
@@ -118,12 +116,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: QuestionTagVO) => {
-  await updateQuestionTagStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('状态已更新')
-  await fetchTags()
 }
 
 const handleDelete = async (row: QuestionTagVO) => {

@@ -43,7 +43,6 @@
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" :disabled="row.editable !== 1" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -63,16 +62,16 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingKey ? '编辑配置' : '新增配置'" width="620px">
+    <el-dialog v-model="dialogVisible" :title="editingConfigId ? '编辑配置' : '新增配置'" width="620px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
         <el-form-item label="配置 Key" prop="configKey">
-          <el-input v-model.trim="form.configKey" :disabled="Boolean(editingKey)" />
+          <el-input v-model.trim="form.configKey" :disabled="Boolean(editingConfigId)" />
         </el-form-item>
         <el-form-item label="配置名称">
-          <el-input v-model.trim="form.configName" :disabled="Boolean(editingKey)" />
+          <el-input v-model.trim="form.configName" :disabled="Boolean(editingConfigId)" />
         </el-form-item>
         <el-form-item label="配置类型">
-          <el-select v-model="form.configType" :disabled="Boolean(editingKey)" style="width: 100%">
+          <el-select v-model="form.configType" :disabled="Boolean(editingConfigId)" style="width: 100%">
             <el-option label="STRING" value="STRING" />
             <el-option label="NUMBER" value="NUMBER" />
             <el-option label="BOOLEAN" value="BOOLEAN" />
@@ -85,10 +84,10 @@
         <el-form-item label="说明">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item v-if="!editingKey" label="可编辑">
+        <el-form-item v-if="!editingConfigId" label="可编辑">
           <el-switch v-model="form.editable" :active-value="1" :inactive-value="0" />
         </el-form-item>
-        <el-form-item v-if="!editingKey" label="状态">
+        <el-form-item v-if="!editingConfigId" label="状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
         </el-form-item>
       </el-form>
@@ -109,8 +108,7 @@ import {
   createSystemConfigApi,
   deleteSystemConfigApi,
   getSystemConfigsApi,
-  updateSystemConfigApi,
-  updateSystemConfigStatusApi
+  updateSystemConfigApi
 } from '@/api/system'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { SystemConfigCreateDTO, SystemConfigQueryDTO, SystemConfigVO } from '@/types/system'
@@ -118,7 +116,7 @@ import type { SystemConfigCreateDTO, SystemConfigQueryDTO, SystemConfigVO } from
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
-const editingKey = ref<string | null>(null)
+const editingConfigId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const configs = ref<SystemConfigVO[]>([])
 const total = ref(0)
@@ -157,7 +155,7 @@ const fetchConfigs = async () => {
 }
 
 const openDialog = (row?: SystemConfigVO) => {
-  editingKey.value = row?.configKey || null
+  editingConfigId.value = row?.id || null
   Object.assign(form, {
     configKey: row?.configKey || '',
     configName: row?.configName || '',
@@ -175,8 +173,8 @@ const handleSave = async () => {
   await formRef.value.validate()
   saving.value = true
   try {
-    if (editingKey.value) {
-      await updateSystemConfigApi(editingKey.value, {
+    if (editingConfigId.value) {
+      await updateSystemConfigApi(editingConfigId.value, {
         configValue: form.configValue || '',
         description: form.description
       })
@@ -191,15 +189,10 @@ const handleSave = async () => {
   }
 }
 
-const toggleStatus = async (row: SystemConfigVO) => {
-  await updateSystemConfigStatusApi(row.configKey, row.status === 1 ? 0 : 1)
-  ElMessage.success('配置状态已更新')
-  await fetchConfigs()
-}
 
 const handleDelete = async (row: SystemConfigVO) => {
   await ElMessageBox.confirm(`确认删除配置 ${row.configKey}？`, '删除确认', { type: 'warning' })
-  await deleteSystemConfigApi(row.configKey)
+  await deleteSystemConfigApi(row.id)
   ElMessage.success('系统配置已删除')
   await fetchConfigs()
 }

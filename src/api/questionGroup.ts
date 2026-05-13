@@ -31,16 +31,10 @@ const normalizeGroupList = (list: BackendQuestionGroupVO[] = []) =>
     .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name)
 
 const toBackendGroupDTO = (data: QuestionGroupDTO) => ({
-  name: data.name,
   groupName: data.name,
-  canonicalAnswer: data.canonicalAnswer,
   categoryId: data.categoryId,
-  knowledgePoint: data.knowledgePoint,
-  mainKnowledgePoint: data.knowledgePoint,
-  difficulty: data.difficulty,
   description: data.description,
-  status: data.status,
-  questionIds: data.questionIds
+  status: data.status
 })
 
 export const getQuestionGroupsApi = (params?: {
@@ -69,10 +63,6 @@ export const updateQuestionGroupApi = (id: number, data: QuestionGroupDTO) => {
       toBackendGroupDTO(data)
     )
     .then(normalizeQuestionGroup)
-}
-
-export const updateQuestionGroupStatusApi = (id: number, status: number) => {
-  return request.put<null, null>(`/admin/question-groups/${id}/status`, { status })
 }
 
 export const deleteQuestionGroupApi = (id: number) => {

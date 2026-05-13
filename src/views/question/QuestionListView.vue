@@ -83,7 +83,7 @@ const total = ref(0)
 const query = reactive<QuestionQueryDTO>({
   keyword: '',
   categoryId: undefined,
-  tagIds: [],
+  tagId: undefined,
   difficulty: '',
   pageNo: 1,
   pageSize: 10
@@ -145,7 +145,7 @@ const handleReset = () => {
   Object.assign(query, {
     keyword: '',
     categoryId: undefined,
-    tagIds: [],
+    tagId: undefined,
     difficulty: '',
     pageNo: 1,
     pageSize: 10

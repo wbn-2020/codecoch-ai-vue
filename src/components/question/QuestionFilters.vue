@@ -10,9 +10,7 @@
     </el-form-item>
     <el-form-item label="标签">
       <el-select
-        v-model="model.tagIds"
-        multiple
-        collapse-tags
+        v-model="model.tagId"
         clearable
         placeholder="全部标签"
         style="width: 220px"

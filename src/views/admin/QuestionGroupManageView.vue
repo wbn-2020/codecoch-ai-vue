@@ -35,12 +35,8 @@
       <div class="table-card">
         <el-table v-loading="loading" :data="groups" row-key="id">
           <el-table-column prop="name" label="问题组名称" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="knowledgePoint" label="主知识点" min-width="160" show-overflow-tooltip />
           <el-table-column label="分类" min-width="160">
             <template #default="{ row }">{{ getCategoryName(row.categoryId) }}</template>
-          </el-table-column>
-          <el-table-column label="难度" width="110">
-            <template #default="{ row }">{{ getOptionLabel(difficultyOptions, row.difficulty) }}</template>
           </el-table-column>
           <el-table-column prop="questionCount" label="题目数" width="90" />
           <el-table-column label="状态" width="100">
@@ -50,7 +46,6 @@
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -67,20 +62,6 @@
           <el-select v-model="form.categoryId" placeholder="请选择分类" style="width: 100%">
             <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="主知识点">
-          <el-input v-model.trim="form.knowledgePoint" />
-        </el-form-item>
-        <el-form-item label="难度" prop="difficulty">
-          <el-select v-model="form.difficulty" style="width: 100%">
-            <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="题目 ID">
-          <el-input v-model="questionIdsText" placeholder="多个题目 ID 用逗号分隔" />
-        </el-form-item>
-        <el-form-item label="标准答案">
-          <el-input v-model="form.canonicalAnswer" type="textarea" :rows="4" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
@@ -107,13 +88,10 @@ import {
   createQuestionGroupApi,
   deleteQuestionGroupApi,
   getQuestionGroupsApi,
-  updateQuestionGroupApi,
-  updateQuestionGroupStatusApi
+  updateQuestionGroupApi
 } from '@/api/questionGroup'
 import StatusTag from '@/components/common/StatusTag.vue'
-import { difficultyOptions, QUESTION_DIFFICULTY } from '@/constants/enums'
 import type { QuestionCategoryVO, QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
-import { getOptionLabel } from '@/utils/format'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -122,7 +100,6 @@ const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const groups = ref<QuestionGroupVO[]>([])
 const categories = ref<QuestionCategoryVO[]>([])
-const questionIdsText = ref('')
 
 const filters = reactive({
   keyword: '',
@@ -132,19 +109,14 @@ const filters = reactive({
 
 const form = reactive<QuestionGroupDTO>({
   name: '',
-  canonicalAnswer: '',
   categoryId: undefined,
-  knowledgePoint: '',
-  difficulty: QUESTION_DIFFICULTY.MEDIUM,
   description: '',
-  status: 1,
-  questionIds: []
+  status: 1
 })
 
 const rules: FormRules<QuestionGroupDTO> = {
   name: [{ required: true, message: '请输入问题组名称', trigger: 'blur' }],
-  categoryId: [{ required: true, message: '请选择主分类', trigger: 'change' }],
-  difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }]
+  categoryId: [{ required: true, message: '请选择主分类', trigger: 'change' }]
 }
 
 const fetchOptions = async () => {
@@ -165,26 +137,14 @@ const getCategoryName = (categoryId?: number) => {
   return categories.value.find((item) => item.id === categoryId)?.name || String(categoryId)
 }
 
-const parseQuestionIds = () => {
-  return questionIdsText.value
-    .split(',')
-    .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item > 0)
-}
-
 const openDialog = (row?: QuestionGroupVO) => {
   editingId.value = row?.id || null
   Object.assign(form, {
     name: row?.name || '',
-    canonicalAnswer: row?.canonicalAnswer || '',
     categoryId: row?.categoryId,
-    knowledgePoint: row?.knowledgePoint || '',
-    difficulty: row?.difficulty || QUESTION_DIFFICULTY.MEDIUM,
     description: row?.description || '',
-    status: row?.status ?? 1,
-    questionIds: row?.questionIds || []
+    status: row?.status ?? 1
   })
-  questionIdsText.value = row?.questionIds?.join(',') || ''
   dialogVisible.value = true
 }
 
@@ -194,8 +154,10 @@ const handleSave = async () => {
   saving.value = true
   try {
     const payload: QuestionGroupDTO = {
-      ...form,
-      questionIds: parseQuestionIds()
+      name: form.name,
+      categoryId: form.categoryId,
+      description: form.description,
+      status: form.status
     }
     if (editingId.value) {
       await updateQuestionGroupApi(editingId.value, payload)
@@ -208,12 +170,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: QuestionGroupVO) => {
-  await updateQuestionGroupStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('问题组状态已更新')
-  await fetchGroups()
 }
 
 const handleDelete = async (row: QuestionGroupVO) => {

@@ -53,6 +53,7 @@ export interface QuestionGroupVO {
 export interface QuestionQueryDTO extends PageQuery {
   keyword?: string
   categoryId?: number
+  tagId?: number
   tagIds?: number[]
   difficulty?: QuestionDifficulty | ''
   masteryStatus?: MasteryStatus | ''
@@ -167,6 +168,7 @@ export interface AdminQuestionVO {
   title: string
   content?: string
   answer?: string
+  referenceAnswer?: string
   analysis?: string
   categoryId?: number
   categoryName?: string
@@ -218,7 +220,7 @@ export interface QuestionGroupDTO {
   canonicalAnswer?: string
   categoryId?: number
   knowledgePoint?: string
-  difficulty: QuestionDifficulty
+  difficulty?: QuestionDifficulty
   description?: string
   status?: number
   questionIds?: number[]

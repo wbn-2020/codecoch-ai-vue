@@ -25,12 +25,9 @@ const normalizeTagList = (list: BackendQuestionTagVO[] = []) =>
     .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name)
 
 const toBackendTagDTO = (data: QuestionTagDTO) => ({
-  name: data.name,
   tagName: data.name,
-  code: data.code,
   tagCode: data.code,
   status: data.status,
-  description: data.description,
   remark: data.description
 })
 
@@ -53,10 +50,6 @@ export const updateQuestionTagApi = (id: number, data: QuestionTagDTO) => {
       toBackendTagDTO(data)
     )
     .then(normalizeQuestionTag)
-}
-
-export const updateQuestionTagStatusApi = (id: number, status: number) => {
-  return request.put<null, null>(`/admin/question-tags/${id}/status`, { status })
 }
 
 export const deleteQuestionTagApi = (id: number) => {

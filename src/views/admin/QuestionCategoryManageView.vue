@@ -28,7 +28,6 @@
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link @click="toggleStatus(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -64,8 +63,7 @@ import {
   createQuestionCategoryApi,
   deleteQuestionCategoryApi,
   getQuestionCategoriesApi,
-  updateQuestionCategoryApi,
-  updateQuestionCategoryStatusApi
+  updateQuestionCategoryApi
 } from '@/api/questionCategory'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
@@ -80,7 +78,7 @@ const categories = ref<QuestionCategoryVO[]>([])
 const form = reactive<QuestionCategoryDTO>({
   name: '',
   code: '',
-  parentId: 0,
+  parentId: undefined,
   sort: 0,
   status: 1,
   description: ''
@@ -104,7 +102,7 @@ const openDialog = (row?: QuestionCategoryVO) => {
   Object.assign(form, {
     name: row?.name || '',
     code: row?.code || '',
-    parentId: row?.parentId ?? 0,
+    parentId: row?.parentId && row.parentId > 0 ? row.parentId : undefined,
     sort: row?.sort || 0,
     status: row?.status ?? 1,
     description: row?.description || ''
@@ -128,12 +126,6 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const toggleStatus = async (row: QuestionCategoryVO) => {
-  await updateQuestionCategoryStatusApi(row.id, row.status === 1 ? 0 : 1)
-  ElMessage.success('状态已更新')
-  await fetchCategories()
 }
 
 const handleDelete = async (row: QuestionCategoryVO) => {

@@ -43,6 +43,8 @@ type BackendAdminQuestionVO = Omit<AdminQuestionVO, 'tags' | 'groupTitle'> & {
   tagIds?: number[]
   groupName?: string
   groupTitle?: string
+  answer?: string
+  referenceAnswer?: string
 }
 
 const normalizeTagName = (tag: BackendQuestionTag): string => {
@@ -131,6 +133,7 @@ const normalizeQuestionDetail = (item: BackendQuestionDetailVO): QuestionDetailV
 const normalizeAdminQuestion = (item: BackendAdminQuestionVO): AdminQuestionVO => ({
   ...item,
   groupTitle: item.groupTitle || item.groupName || '',
+  answer: item.answer || item.referenceAnswer || '',
   tags: normalizeTags(item.tags, item.tagIds)
 })
 
@@ -142,8 +145,16 @@ const normalizeAdminQuestionPage = (
 })
 
 export const getQuestionsApi = (params: QuestionQueryDTO) => {
+  const requestParams = {
+    ...params,
+    tagId: params.tagId,
+    tagIds: undefined
+  }
+
   return request
-    .get<PageResult<BackendQuestionVO>, PageResult<BackendQuestionVO>>('/questions', { params })
+    .get<PageResult<BackendQuestionVO>, PageResult<BackendQuestionVO>>('/questions', {
+      params: requestParams
+    })
     .then(normalizeUserQuestionPage)
 }
 
@@ -173,11 +184,17 @@ export const unfavoriteQuestionApi = (id: number) => {
 }
 
 export const getFavoriteQuestionsApi = (params: QuestionQueryDTO) => {
+  const requestParams = {
+    ...params,
+    tagId: params.tagId,
+    tagIds: undefined
+  }
+
   return request
     .get<
       PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>,
       PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>
-    >('/questions/favorites', { params })
+    >('/questions/favorites', { params: requestParams })
     .then(normalizeFavoritePage)
 }
 
@@ -203,14 +220,38 @@ export const getAdminQuestionsApi = (params: AdminQuestionQueryDTO) => {
 }
 
 export const createAdminQuestionApi = (data: QuestionCreateDTO) => {
+  const payload = {
+    title: data.title,
+    content: data.content,
+    referenceAnswer: data.answer,
+    analysis: data.analysis,
+    categoryId: data.categoryId,
+    groupId: data.groupId,
+    difficulty: data.difficulty,
+    tagIds: data.tagIds,
+    status: data.status
+  }
+
   return request
-    .post<BackendAdminQuestionVO, BackendAdminQuestionVO>('/admin/questions', data)
+    .post<BackendAdminQuestionVO, BackendAdminQuestionVO>('/admin/questions', payload)
     .then(normalizeAdminQuestion)
 }
 
 export const updateAdminQuestionApi = (id: number, data: QuestionCreateDTO) => {
+  const payload = {
+    title: data.title,
+    content: data.content,
+    referenceAnswer: data.answer,
+    analysis: data.analysis,
+    categoryId: data.categoryId,
+    groupId: data.groupId,
+    difficulty: data.difficulty,
+    tagIds: data.tagIds,
+    status: data.status
+  }
+
   return request
-    .put<BackendAdminQuestionVO, BackendAdminQuestionVO>(`/admin/questions/${id}`, data)
+    .put<BackendAdminQuestionVO, BackendAdminQuestionVO>(`/admin/questions/${id}`, payload)
     .then(normalizeAdminQuestion)
 }
 

@@ -50,12 +50,9 @@ const overview = ref<AdminOverviewVO>({
 const metrics = computed(() => [
   { label: '用户数', value: overview.value.userCount || 0 },
   { label: '题目数', value: overview.value.questionCount || 0 },
-  { label: '面试数', value: overview.value.interviewCount || 0 },
-  { label: 'AI 调用数', value: overview.value.aiCallCount || 0 },
   { label: '简历数', value: overview.value.resumeCount || 0 },
-  { label: '已完成面试', value: overview.value.completedInterviewCount || 0 },
-  { label: 'Prompt 数', value: overview.value.promptCount || 0 },
-  { label: '今日 AI 调用', value: overview.value.todayAiCallCount || 0 }
+  { label: '面试数', value: overview.value.interviewCount || 0 },
+  { label: 'AI 调用数', value: overview.value.aiCallCount || 0 }
 ])
 
 const fetchOverview = async () => {

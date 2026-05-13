@@ -13,7 +13,7 @@ const normalizeQuestionCategory = (item: BackendQuestionCategoryVO): QuestionCat
   id: Number(item.id || 0),
   name: item.name || item.categoryName || '',
   code: item.code || item.categoryCode || '',
-  parentId: item.parentId,
+  parentId: item.parentId ?? 0,
   sort: item.sort ?? 0,
   status: item.status ?? 1,
   description: item.description || item.remark || '',
@@ -27,14 +27,11 @@ const normalizeCategoryList = (list: BackendQuestionCategoryVO[] = []) =>
     .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name)
 
 const toBackendCategoryDTO = (data: QuestionCategoryDTO) => ({
-  name: data.name,
   categoryName: data.name,
-  code: data.code,
   categoryCode: data.code,
-  parentId: data.parentId,
+  parentId: data.parentId && data.parentId > 0 ? data.parentId : undefined,
   sort: data.sort,
   status: data.status,
-  description: data.description,
   remark: data.description
 })
 
@@ -62,10 +59,6 @@ export const updateQuestionCategoryApi = (id: number, data: QuestionCategoryDTO)
       toBackendCategoryDTO(data)
     )
     .then(normalizeQuestionCategory)
-}
-
-export const updateQuestionCategoryStatusApi = (id: number, status: number) => {
-  return request.put<null, null>(`/admin/question-categories/${id}/status`, { status })
 }
 
 export const deleteQuestionCategoryApi = (id: number) => {
