@@ -182,7 +182,7 @@ const handleSaveProject = async () => {
   projectSaving.value = true
   try {
     if (editingProjectId.value) {
-      await updateResumeProjectApi(editingProjectId.value, payload)
+      await updateResumeProjectApi(resumeId.value, editingProjectId.value, payload)
     } else {
       await createResumeProjectApi(resumeId.value, payload)
     }
@@ -195,8 +195,9 @@ const handleSaveProject = async () => {
 }
 
 const handleDeleteProject = async (project: ResumeProjectVO) => {
+  if (!resumeId.value) return
   await ElMessageBox.confirm(`确认删除项目经历 ${project.projectName}？`, '删除确认', { type: 'warning' })
-  await deleteResumeProjectApi(project.projectId)
+  await deleteResumeProjectApi(resumeId.value, project.projectId)
   ElMessage.success('项目经历已删除')
   await fetchDetail()
 }

@@ -39,10 +39,17 @@ export const createResumeProjectApi = (resumeId: number, data: ResumeProjectDTO)
   return request.post<ResumeProjectVO, ResumeProjectVO>(`/resumes/${resumeId}/projects`, data)
 }
 
-export const updateResumeProjectApi = (projectId: number, data: ResumeProjectDTO) => {
-  return request.put<ResumeProjectVO, ResumeProjectVO>(`/resumes/projects/${projectId}`, data)
+export const updateResumeProjectApi = (
+  resumeId: number,
+  projectId: number,
+  data: ResumeProjectDTO
+) => {
+  return request.put<ResumeProjectVO, ResumeProjectVO>(
+    `/resumes/${resumeId}/projects/${projectId}`,
+    data
+  )
 }
 
-export const deleteResumeProjectApi = (projectId: number) => {
-  return request.delete<null, null>(`/resumes/projects/${projectId}`)
+export const deleteResumeProjectApi = (resumeId: number, projectId: number) => {
+  return request.delete<null, null>(`/resumes/${resumeId}/projects/${projectId}`)
 }

@@ -9,3 +9,9 @@ export const setToken = (token: string): void => {
 export const removeToken = (): void => {
   localStorage.removeItem(STORAGE_KEYS.token)
 }
+
+export const clearLocalAuth = (): void => {
+  localStorage.removeItem(STORAGE_KEYS.token)
+  localStorage.removeItem(STORAGE_KEYS.userInfo)
+  localStorage.removeItem(STORAGE_KEYS.roles)
+}
