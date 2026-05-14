@@ -16,24 +16,20 @@ import type {
   WrongQuestionQueryDTO,
   WrongQuestionVO
 } from '@/types/question'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendQuestionTag = QuestionTagVO | string | number | null | undefined
-
-const hashTagName = (name: string): number => {
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0
-  }
-  return Math.abs(hash) + 1
-}
 
 type BackendQuestionVO = Omit<QuestionVO, 'tags'> & {
   tags?: BackendQuestionTag[]
   tagIds?: number[]
+  tagNames?: string[]
 }
 
 type BackendQuestionDetailVO = Omit<QuestionDetailVO, 'tags' | 'referenceAnswer'> & {
   tags?: BackendQuestionTag[]
+  tagIds?: number[]
+  tagNames?: string[]
   answer?: string
   referenceAnswer?: string
 }
@@ -41,6 +37,7 @@ type BackendQuestionDetailVO = Omit<QuestionDetailVO, 'tags' | 'referenceAnswer'
 type BackendAdminQuestionVO = Omit<AdminQuestionVO, 'tags' | 'groupTitle'> & {
   tags?: BackendQuestionTag[]
   tagIds?: number[]
+  tagNames?: string[]
   groupName?: string
   groupTitle?: string
   answer?: string
@@ -51,16 +48,27 @@ const normalizeTagName = (tag: BackendQuestionTag): string => {
   if (!tag) return ''
   if (typeof tag === 'string') return tag
   if (typeof tag === 'number') return String(tag)
-  return tag.name || ''
+  return tag.name || tag.tagName || ''
 }
 
-const normalizeTags = (tags: BackendQuestionTag[] = [], tagIds?: number[]): QuestionTagVO[] => {
-  const normalized = tags
+const normalizeTags = (
+  tags: BackendQuestionTag[] = [],
+  tagIds: number[] = [],
+  tagNames: string[] = []
+): QuestionTagVO[] => {
+  const sourceTags: BackendQuestionTag[] =
+    tags.length > 0
+      ? tags
+      : tagNames.length > 0
+        ? tagNames
+        : tagIds
+
+  const normalized = sourceTags
     .map((tag, index) => {
       if (!tag) return null
       if (typeof tag === 'string') {
         return {
-          id: Number(tagIds?.[index] || hashTagName(tag)),
+          id: Number(tagIds[index] || 0),
           name: tag,
           status: 1
         } as QuestionTagVO
@@ -68,14 +76,17 @@ const normalizeTags = (tags: BackendQuestionTag[] = [], tagIds?: number[]): Ques
       if (typeof tag === 'number') {
         return {
           id: tag,
-          name: String(tag),
+          name: tagNames[index] || String(tag),
           status: 1
         } as QuestionTagVO
       }
 
+      const id = Number(tag.id || tagIds[index] || 0)
+      const name = tag.name || tag.tagName || tagNames[index] || ''
       return {
-        id: Number(tag.id || tagIds?.[index] || hashTagName(tag.name || normalizeTagName(tag) || `${index + 1}`)),
-        name: tag.name || normalizeTagName(tag),
+        id,
+        name,
+        tagName: tag.tagName,
         code: tag.code,
         status: tag.status ?? 1,
         description: tag.description,
@@ -83,12 +94,13 @@ const normalizeTags = (tags: BackendQuestionTag[] = [], tagIds?: number[]): Ques
         updatedAt: tag.updatedAt
       } as QuestionTagVO
     })
-    .filter((item): item is QuestionTagVO => Boolean(item?.id && item?.name))
+    .filter((item): item is QuestionTagVO => Boolean(item?.name))
 
   const map = new Map<string, QuestionTagVO>()
   normalized.forEach((tag) => {
-    if (!map.has(tag.name)) {
-      map.set(tag.name, tag)
+    const key = tag.id > 0 ? `id:${tag.id}` : `name:${tag.name}`
+    if (!map.has(key)) {
+      map.set(key, tag)
     }
   })
   return Array.from(map.values())
@@ -96,59 +108,50 @@ const normalizeTags = (tags: BackendQuestionTag[] = [], tagIds?: number[]): Ques
 
 const normalizeUserQuestion = (item: BackendQuestionVO): QuestionVO => ({
   ...item,
-  tags: normalizeTags(item.tags, item.tagIds)
+  tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
 })
 
-const normalizeUserQuestionPage = (result: PageResult<BackendQuestionVO>): PageResult<QuestionVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizeUserQuestion)
-})
+const normalizeUserQuestionPage = (result: PageResult<BackendQuestionVO>): PageResult<QuestionVO> =>
+  normalizePageResult(result, undefined, normalizeUserQuestion)
 
 const normalizeFavoritePage = (
-  result: PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>
-): PageResult<FavoriteQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map((item) => ({
+  result: PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
+): PageResult<FavoriteQuestionVO> =>
+  normalizePageResult(result, undefined, (item) => ({
     ...item,
-    tags: normalizeTags(item.tags, item.tagIds)
+    tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
   }))
-})
 
 const normalizeWrongPage = (
-  result: PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>
-): PageResult<WrongQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map((item) => ({
+  result: PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
+): PageResult<WrongQuestionVO> =>
+  normalizePageResult(result, undefined, (item) => ({
     ...item,
-    tags: normalizeTags(item.tags, item.tagIds)
+    tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
   }))
-})
 
 const normalizeQuestionDetail = (item: BackendQuestionDetailVO): QuestionDetailVO => ({
   ...item,
   referenceAnswer: item.referenceAnswer || item.answer || '',
-  tags: normalizeTags(item.tags)
+  tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
 })
 
 const normalizeAdminQuestion = (item: BackendAdminQuestionVO): AdminQuestionVO => ({
   ...item,
   groupTitle: item.groupTitle || item.groupName || '',
-  answer: item.answer || item.referenceAnswer || '',
-  tags: normalizeTags(item.tags, item.tagIds)
+  referenceAnswer: item.referenceAnswer || item.answer || '',
+  tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
 })
 
 const normalizeAdminQuestionPage = (
   result: PageResult<BackendAdminQuestionVO>
-): PageResult<AdminQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizeAdminQuestion)
-})
+): PageResult<AdminQuestionVO> => normalizePageResult(result, undefined, normalizeAdminQuestion)
 
 export const getQuestionsApi = (params: QuestionQueryDTO) => {
+  const { tagIds: _tagIds, ...restParams } = params
   const requestParams = {
-    ...params,
-    tagId: params.tagId,
-    tagIds: undefined
+    ...restParams,
+    tagId: params.tagId
   }
 
   return request
@@ -184,16 +187,16 @@ export const unfavoriteQuestionApi = (id: number) => {
 }
 
 export const getFavoriteQuestionsApi = (params: QuestionQueryDTO) => {
+  const { tagIds: _tagIds, ...restParams } = params
   const requestParams = {
-    ...params,
-    tagId: params.tagId,
-    tagIds: undefined
+    ...restParams,
+    tagId: params.tagId
   }
 
   return request
     .get<
-      PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>,
-      PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>
+      PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>,
+      PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
     >('/questions/favorites', { params: requestParams })
     .then(normalizeFavoritePage)
 }
@@ -201,8 +204,8 @@ export const getFavoriteQuestionsApi = (params: QuestionQueryDTO) => {
 export const getWrongQuestionsApi = (params: WrongQuestionQueryDTO) => {
   return request
     .get<
-      PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>,
-      PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[] }>
+      PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>,
+      PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
     >('/questions/wrong-records', { params })
     .then(normalizeWrongPage)
 }
@@ -223,11 +226,14 @@ export const createAdminQuestionApi = (data: QuestionCreateDTO) => {
   const payload = {
     title: data.title,
     content: data.content,
-    referenceAnswer: data.answer,
+    referenceAnswer: data.referenceAnswer || data.answer,
     analysis: data.analysis,
     categoryId: data.categoryId,
     groupId: data.groupId,
     difficulty: data.difficulty,
+    questionType: data.questionType,
+    experienceLevel: data.experienceLevel,
+    isHighFrequency: data.isHighFrequency,
     tagIds: data.tagIds,
     status: data.status
   }
@@ -241,11 +247,14 @@ export const updateAdminQuestionApi = (id: number, data: QuestionCreateDTO) => {
   const payload = {
     title: data.title,
     content: data.content,
-    referenceAnswer: data.answer,
+    referenceAnswer: data.referenceAnswer || data.answer,
     analysis: data.analysis,
     categoryId: data.categoryId,
     groupId: data.groupId,
     difficulty: data.difficulty,
+    questionType: data.questionType,
+    experienceLevel: data.experienceLevel,
+    isHighFrequency: data.isHighFrequency,
     tagIds: data.tagIds,
     status: data.status
   }

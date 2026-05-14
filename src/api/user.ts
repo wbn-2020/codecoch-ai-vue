@@ -10,6 +10,7 @@ import type {
   UserProfileVO,
   UserStatusUpdateDTO
 } from '@/types/user'
+import { normalizePageResult } from '@/utils/page'
 
 export const getUserProfileApi = () => {
   return request.get<UserProfileVO, UserProfileVO>('/users/profile')
@@ -28,7 +29,9 @@ export const getUserOverviewApi = () => {
 }
 
 export const getAdminUsersApi = (params: AdminUserQuery) => {
-  return request.get<PageResult<AdminUserVO>, PageResult<AdminUserVO>>('/admin/users', { params })
+  return request
+    .get<PageResult<AdminUserVO>, PageResult<AdminUserVO>>('/admin/users', { params })
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const updateAdminUserStatusApi = (id: number, data: UserStatusUpdateDTO) => {

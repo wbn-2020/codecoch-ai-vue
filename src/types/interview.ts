@@ -1,14 +1,20 @@
 import type { PageQuery } from './api'
 
-export type InterviewStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED' | 'FAILED' | string
+export type InterviewStatus =
+  | 'NOT_STARTED'
+  | 'IN_PROGRESS'
+  | 'WAITING_ANSWER'
+  | 'AI_EVALUATING'
+  | 'REPORT_GENERATING'
+  | 'COMPLETED'
+  | 'CANCELED'
+  | 'FAILED'
+  | string
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 
 export interface InterviewCreateDTO {
   resumeId?: number
-  mode?: string
-  title?: string
-  maxQuestionCount?: number
   basedOnResume?: boolean
   interviewName?: string
   interviewMode?: string
@@ -17,9 +23,7 @@ export interface InterviewCreateDTO {
   industryDirection?: string
   difficulty?: string
   interviewerStyle?: string
-  stageTypes?: string[]
   questionCount?: number
-  config?: Record<string, unknown>
 }
 
 export interface InterviewStageVO {
@@ -43,20 +47,28 @@ export interface InterviewSessionVO {
 }
 
 export interface InterviewQuestionVO {
+  sessionId?: number
   messageId: number
   questionId?: number
-  groupId?: number
+  questionGroupId?: number
   questionTitle?: string
   questionContent: string
   questionType?: string
   isFollowUp: boolean
+  parentMessageId?: number
+  followUpCount?: number
+  stageProgress?: string
+  interviewStatus?: InterviewStatus
   stageId: number
+  stageName?: string
   stageType?: string
 }
 
 export interface InterviewCurrentVO {
   interviewId: number
+  sessionId?: number
   status: InterviewStatus
+  interviewStatus?: InterviewStatus
   currentStage?: InterviewStageVO
   currentQuestion?: InterviewQuestionVO
   startedAt?: string
@@ -198,19 +210,35 @@ export interface StageReportVO {
   suggestions?: string
 }
 
+export interface RecommendedQuestionVO {
+  id?: number
+  questionId?: number
+  title?: string
+  difficulty?: string
+  reason?: string
+}
+
 export interface InterviewReportVO {
   reportId?: number
   interviewId: number
+  sessionId?: number
   reportStatus: ReportStatus
   totalScore?: number
+  stageScores?: StageReportVO[]
+  weakPoints?: string[] | string
   summary?: string
+  reportContent?: string
   stageReports?: StageReportVO[]
   strengths?: string
+  mainProblems?: string
   weaknesses?: string
+  reviewSuggestions?: string
   suggestions?: string
   weakKnowledgePoints?: string
+  projectProblems?: string
   projectExpressionProblems?: string
-  recommendedQuestions?: Record<string, unknown>[]
+  recommendedQuestions?: RecommendedQuestionVO[]
+  qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]
   generatedAt?: string
   failedReason?: string

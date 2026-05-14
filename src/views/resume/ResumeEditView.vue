@@ -14,8 +14,14 @@
           <el-form-item label="简历名称" prop="resumeName">
             <el-input v-model.trim="form.resumeName" placeholder="例如：Java 后端 3 年经验简历" />
           </el-form-item>
+          <el-form-item label="真实姓名">
+            <el-input v-model.trim="form.realName" placeholder="请输入姓名" />
+          </el-form-item>
           <el-form-item label="求职方向">
             <el-input v-model.trim="form.targetPosition" placeholder="例如：Java 微服务开发" />
+          </el-form-item>
+          <el-form-item label="个人摘要">
+            <el-input v-model="form.summary" type="textarea" :rows="3" placeholder="简要说明工作背景、优势和求职方向" />
           </el-form-item>
           <el-form-item label="技能栈" prop="skills">
             <el-input v-model="form.skills" type="textarea" :rows="3" placeholder="Spring Boot、MySQL、Redis、MQ..." />
@@ -110,7 +116,9 @@ const projects = ref<ResumeProjectVO[]>([])
 
 const form = reactive<ResumeCreateDTO>({
   resumeName: '',
+  realName: '',
   targetPosition: '',
+  summary: '',
   skills: '',
   workSummary: '',
   education: '',
@@ -125,10 +133,12 @@ const rules: FormRules<ResumeCreateDTO> = {
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
     resumeName: detail.resumeName,
+    realName: detail.realName || '',
     targetPosition: detail.targetPosition || '',
+    summary: detail.summary || '',
     skills: detail.skills || '',
-    workSummary: detail.workSummary || '',
-    education: detail.education || '',
+    workSummary: detail.workSummary || detail.workExperience || '',
+    education: detail.education || detail.educationExperience || '',
     isDefault: detail.isDefault
   })
   projects.value = detail.projects || []

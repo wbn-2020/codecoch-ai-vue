@@ -10,42 +10,78 @@ import type {
   ResumeVO,
   SetDefaultResumeVO
 } from '@/types/resume'
+import { normalizePageResult } from '@/utils/page'
 
 const normalizeProject = (project: ResumeProjectVO): ResumeProjectVO => ({
   ...project,
   projectId: project.projectId || project.id || 0,
+  projectTime: project.projectTime || project.projectPeriod || '',
+  projectPeriod: project.projectPeriod || project.projectTime || '',
   projectBackground: project.projectBackground || project.description || '',
   responsibility: project.responsibility || project.role || '',
-  coreFeatures: project.coreFeatures || project.highlights || ''
+  coreFeatures: project.coreFeatures || project.highlights || '',
+  technicalChallenges: project.technicalChallenges || project.technicalDifficulties || '',
+  technicalDifficulties: project.technicalDifficulties || project.technicalChallenges || '',
+  optimizationResult: project.optimizationResult || project.optimizationResults || '',
+  optimizationResults: project.optimizationResults || project.optimizationResult || '',
+  sort: project.sort ?? project.sortOrder ?? 0,
+  sortOrder: project.sortOrder ?? project.sort ?? 0
 })
 
-const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T): T => ({
-  ...resume,
-  resumeName: resume.resumeName || resume.title || '',
-  targetPosition: resume.targetPosition || resume.realName || '',
-  skills: resume.skills || resume.summary || '',
-  projects: 'projects' in resume ? resume.projects?.map(normalizeProject) || [] : undefined
-} as T)
+const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T): T => {
+  const item = resume as T & Partial<ResumeVO & ResumeDetailVO>
+  return {
+    ...item,
+    resumeName: item.resumeName || item.title || '',
+    targetPosition: item.targetPosition || '',
+    skills: item.skills || item.skillStack || '',
+    skillStack: item.skillStack || item.skills || '',
+    workSummary: item.workSummary || item.workExperience || '',
+    workExperience: item.workExperience || item.workSummary || '',
+    education: item.education || item.educationExperience || '',
+    educationExperience: item.educationExperience || item.education || '',
+    projects: item.projects?.map(normalizeProject) || []
+  } as T
+}
 
 const toResumePayload = (data: ResumeCreateDTO | ResumeUpdateDTO) => ({
+  resumeName: data.resumeName,
   title: data.title || data.resumeName,
-  realName: data.realName || data.targetPosition,
+  realName: data.realName,
+  targetPosition: data.targetPosition,
   email: data.email,
   phone: data.phone,
-  summary: data.summary || data.skills || data.workSummary
+  skillStack: data.skillStack || data.skills,
+  skills: data.skills || data.skillStack,
+  workExperience: data.workExperience || data.workSummary,
+  workSummary: data.workSummary || data.workExperience,
+  educationExperience: data.educationExperience || data.education,
+  education: data.education || data.educationExperience,
+  summary: data.summary,
+  isDefault: data.isDefault
 })
 
 const toProjectPayload = (data: ResumeProjectDTO) => ({
   projectName: data.projectName,
+  projectPeriod: data.projectPeriod || data.projectTime,
+  projectTime: data.projectTime || data.projectPeriod,
+  projectBackground: data.projectBackground || data.description,
   role: data.role || data.responsibility,
+  responsibility: data.responsibility || data.role,
   techStack: data.techStack,
   description: data.description || data.projectBackground,
+  coreFeatures: data.coreFeatures,
+  technicalDifficulties: data.technicalDifficulties || data.technicalChallenges,
+  technicalChallenges: data.technicalChallenges || data.technicalDifficulties,
+  optimizationResults: data.optimizationResults || data.optimizationResult,
+  optimizationResult: data.optimizationResult || data.optimizationResults,
   highlights:
     data.highlights ||
-    [data.coreFeatures, data.technicalChallenges, data.optimizationResult, data.extraInfo]
+    [data.coreFeatures, data.technicalDifficulties || data.technicalChallenges, data.optimizationResults || data.optimizationResult, data.extraInfo]
       .filter(Boolean)
       .join('\n'),
-  sort: data.sort
+  sort: data.sort ?? data.sortOrder,
+  sortOrder: data.sortOrder ?? data.sort
 })
 
 export const getResumesApi = (params?: ResumeQueryDTO) => {
@@ -53,22 +89,7 @@ export const getResumesApi = (params?: ResumeQueryDTO) => {
     .get<PageResult<ResumeVO> | ResumeVO[], PageResult<ResumeVO> | ResumeVO[]>('/resumes', {
       params
     })
-    .then((result) => {
-      if (Array.isArray(result)) {
-        return {
-          records: result.map(normalizeResume),
-          total: result.length,
-          pageNo: params?.pageNo || 1,
-          pageSize: params?.pageSize || result.length || 10,
-          pages: 1
-        }
-      }
-
-      return {
-        ...result,
-        records: (result.records || []).map(normalizeResume)
-      }
-    })
+    .then((result) => normalizePageResult(result, params, normalizeResume))
 }
 
 export const createResumeApi = (data: ResumeCreateDTO) => {

@@ -7,6 +7,7 @@ import type {
   PromptTemplateQueryDTO,
   PromptTemplateVO
 } from '@/types/ai'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   status: string | number
@@ -36,8 +37,7 @@ const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
 })
 
 const normalizeAiLogPage = (result: PageResult<BackendAiCallLogVO>): PageResult<AiCallLogVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizeAiCallLog)
+  ...normalizePageResult(result, undefined, normalizeAiCallLog)
 })
 
 const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplateVO => ({
@@ -58,10 +58,7 @@ const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplat
 
 const normalizePromptPage = (
   result: PageResult<BackendPromptTemplateVO>
-): PageResult<PromptTemplateVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizePromptTemplate)
-})
+): PageResult<PromptTemplateVO> => normalizePageResult(result, undefined, normalizePromptTemplate)
 
 const toBackendPromptDTO = (data: PromptTemplateDTO) => ({
   scene: data.scene,

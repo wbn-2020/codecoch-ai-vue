@@ -11,7 +11,10 @@ export interface ResumeVO {
   realName?: string
   targetPosition?: string
   skills?: string
+  skillStack?: string
   summary?: string
+  workExperience?: string
+  educationExperience?: string
   isDefault: number
   status: number
   projectCount?: number
@@ -25,6 +28,7 @@ export interface ResumeProjectVO {
   resumeId?: number
   projectName: string
   projectTime?: string
+  projectPeriod?: string
   projectBackground?: string
   description?: string
   techStack?: string
@@ -33,9 +37,12 @@ export interface ResumeProjectVO {
   coreFeatures?: string
   highlights?: string
   technicalChallenges?: string
+  technicalDifficulties?: string
   optimizationResult?: string
+  optimizationResults?: string
   extraInfo?: string
   sort?: number
+  sortOrder?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -50,8 +57,11 @@ export interface ResumeDetailVO {
   resumeName: string
   targetPosition?: string
   skills?: string
+  skillStack?: string
   workSummary?: string
+  workExperience?: string
   education?: string
+  educationExperience?: string
   isDefault: number
   status: number
   projects?: ResumeProjectVO[]
@@ -68,8 +78,11 @@ export interface ResumeCreateDTO {
   summary?: string
   targetPosition?: string
   skills: string
+  skillStack?: string
   workSummary?: string
+  workExperience?: string
   education?: string
+  educationExperience?: string
   isDefault?: number
 }
 
@@ -78,6 +91,7 @@ export type ResumeUpdateDTO = ResumeCreateDTO
 export interface ResumeProjectDTO {
   projectName: string
   projectTime?: string
+  projectPeriod?: string
   projectBackground?: string
   description?: string
   techStack?: string
@@ -86,9 +100,12 @@ export interface ResumeProjectDTO {
   coreFeatures?: string
   highlights?: string
   technicalChallenges?: string
+  technicalDifficulties?: string
   optimizationResult?: string
+  optimizationResults?: string
   extraInfo?: string
   sort?: number
+  sortOrder?: number
 }
 
 export interface SetDefaultResumeVO {

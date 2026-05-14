@@ -114,11 +114,11 @@ const tagOptions = computed<QuestionTagVO[]>(() => {
 
   questions.value.forEach((item) => {
     item.tags?.forEach((tag) => {
-      const name = (tag?.name || '').trim()
-      if (!name || byName.has(name)) return
+      const name = (tag?.name || tag?.tagName || '').trim()
       const id = Number(tag?.id)
       if (!Number.isFinite(id) || id <= 0) return
-      byName.set(name, { ...(tag || {}), id, name, status: tag?.status ?? 1 })
+      if (!name || byName.has(String(id))) return
+      byName.set(String(id), { ...(tag || {}), id, name, status: tag?.status ?? 1 })
     })
   })
 

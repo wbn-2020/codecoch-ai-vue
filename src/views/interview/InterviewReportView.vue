@@ -17,6 +17,7 @@
           <div>
             <div class="score">{{ report.totalScore ?? 0 }}</div>
             <p>综合得分</p>
+            <p class="generated-time">生成时间：{{ report.generatedAt || '-' }}</p>
           </div>
           <StatusTag :status="report.reportStatus" />
         </div>
@@ -48,7 +49,7 @@
         <div class="report-grid">
           <section class="report-section">
             <h2>AI 总结</h2>
-            <MarkdownPreview :content="report.summary || '暂无总结'" />
+            <MarkdownPreview :content="report.reportContent || report.summary || '暂无总结'" />
           </section>
           <section class="report-section">
             <h2>回答亮点</h2>
@@ -56,19 +57,19 @@
           </section>
           <section class="report-section">
             <h2>主要问题</h2>
-            <MarkdownPreview :content="report.weaknesses || '暂无问题'" />
+            <MarkdownPreview :content="report.mainProblems || report.weaknesses || '暂无问题'" />
           </section>
           <section class="report-section">
             <h2>复习建议</h2>
-            <MarkdownPreview :content="report.suggestions || '暂无建议'" />
+            <MarkdownPreview :content="report.reviewSuggestions || report.suggestions || '暂无建议'" />
           </section>
           <section class="report-section">
             <h2>薄弱知识点</h2>
-            <MarkdownPreview :content="report.weakKnowledgePoints || '暂无薄弱知识点'" />
+            <MarkdownPreview :content="weakPointText" />
           </section>
           <section class="report-section">
             <h2>项目表达问题</h2>
-            <MarkdownPreview :content="report.projectExpressionProblems || '暂无项目表达问题'" />
+            <MarkdownPreview :content="report.projectProblems || report.projectExpressionProblems || '暂无项目表达问题'" />
           </section>
         </div>
       </div>
@@ -89,11 +90,22 @@
       </div>
     </section>
 
-    <section v-if="report?.messages?.length" class="content-card">
+    <section v-if="report?.recommendedQuestions?.length" class="content-card">
+      <div class="content-card__body">
+        <h2 class="section-title">推荐练习题</h2>
+        <el-table :data="report.recommendedQuestions" row-key="id">
+          <el-table-column prop="title" label="题目" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="difficulty" label="难度" width="110" />
+          <el-table-column prop="reason" label="推荐原因" min-width="260" show-overflow-tooltip />
+        </el-table>
+      </div>
+    </section>
+
+    <section v-if="qaMessages.length" class="content-card">
       <div class="content-card__body">
         <h2 class="section-title">完整问答明细</h2>
         <div class="message-list">
-          <article v-for="message in report.messages" :key="message.messageId" class="message-item">
+          <article v-for="message in qaMessages" :key="message.messageId" class="message-item">
             <div class="message-item__head">
               <strong>{{ message.role }}</strong>
               <span>{{ message.score ?? '-' }} 分</span>
@@ -110,7 +122,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getInterviewReportApi, retryInterviewReportApi } from '@/api/interview'
@@ -126,6 +138,16 @@ const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const retrying = ref(false)
 const report = ref<InterviewReportVO | null>(null)
+
+const weakPointText = computed(() => {
+  const value = report.value?.weakPoints || report.value?.weakKnowledgePoints
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => `- ${item}`).join('\n') : '暂无薄弱知识点'
+  }
+  return value || '暂无薄弱知识点'
+})
+
+const qaMessages = computed(() => report.value?.qaReview || report.value?.messages || [])
 
 const fetchReport = async () => {
   if (!interviewId) return
@@ -171,6 +193,12 @@ onMounted(fetchReport)
   font-size: 44px;
   font-weight: 800;
   line-height: 1;
+}
+
+.generated-time {
+  margin: 6px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .report-alert,

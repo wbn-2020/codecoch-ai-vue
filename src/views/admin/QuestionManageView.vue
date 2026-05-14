@@ -121,11 +121,24 @@
             <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="题型" prop="questionType">
+          <el-select v-model="form.questionType" style="width: 100%">
+            <el-option v-for="item in questionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="经验年限">
+          <el-select v-model="form.experienceLevel" clearable placeholder="请选择经验年限" style="width: 100%">
+            <el-option v-for="item in experienceLevelOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="高频题">
+          <el-switch v-model="form.isHighFrequency" :active-value="1" :inactive-value="0" />
+        </el-form-item>
         <el-form-item label="题干" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="5" />
         </el-form-item>
-        <el-form-item label="参考答案" prop="answer">
-          <el-input v-model="form.answer" type="textarea" :rows="5" />
+        <el-form-item label="参考答案" prop="referenceAnswer">
+          <el-input v-model="form.referenceAnswer" type="textarea" :rows="5" />
         </el-form-item>
         <el-form-item label="解析">
           <el-input v-model="form.analysis" type="textarea" :rows="4" />
@@ -157,7 +170,13 @@ import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
 import StatusTag from '@/components/common/StatusTag.vue'
-import { difficultyOptions, QUESTION_DIFFICULTY } from '@/constants/enums'
+import {
+  difficultyOptions,
+  experienceLevelOptions,
+  QUESTION_DIFFICULTY,
+  QUESTION_TYPE,
+  questionTypeOptions
+} from '@/constants/enums'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
@@ -192,11 +211,14 @@ const query = reactive<AdminQuestionQueryDTO>({
 const form = reactive<QuestionCreateDTO>({
   title: '',
   content: '',
-  answer: '',
+  referenceAnswer: '',
   analysis: '',
   categoryId: undefined,
   groupId: undefined,
   difficulty: QUESTION_DIFFICULTY.MEDIUM,
+  questionType: QUESTION_TYPE.SHORT_ANSWER,
+  experienceLevel: '',
+  isHighFrequency: 0,
   tagIds: [],
   status: 1
 })
@@ -206,8 +228,9 @@ const rules: FormRules<QuestionCreateDTO> = {
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
   groupId: [{ required: true, message: '请选择问题组', trigger: 'change' }],
   difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }],
+  questionType: [{ required: true, message: '请选择题型', trigger: 'change' }],
   content: [{ required: true, message: '请输入题干', trigger: 'blur' }],
-  answer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
+  referenceAnswer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
 }
 
 const getGroupNameById = (groupId?: number) => {
@@ -261,11 +284,14 @@ const openDialog = (row?: AdminQuestionVO) => {
   Object.assign(form, {
     title: row?.title || '',
     content: row?.content || '',
-    answer: row?.answer || row?.referenceAnswer || '',
+    referenceAnswer: row?.referenceAnswer || '',
     analysis: row?.analysis || '',
     categoryId: row?.categoryId,
     groupId: row?.groupId,
     difficulty: row?.difficulty || QUESTION_DIFFICULTY.MEDIUM,
+    questionType: row?.questionType || QUESTION_TYPE.SHORT_ANSWER,
+    experienceLevel: row?.experienceLevel || '',
+    isHighFrequency: row?.isHighFrequency ?? 0,
     tagIds: resolveTagIdsFromRow(row),
     status: row?.status ?? 1
   })
