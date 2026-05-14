@@ -74,6 +74,17 @@ const normalizeAnswerResult = (result: any, interviewId: number): InterviewAnswe
   interviewStatus: result.interviewStatus || 'IN_PROGRESS'
 })
 
+const parseArrayValue = <T>(value: T[] | string | undefined | null): T[] => {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'string') return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 const normalizeFinish = (result: any, interviewId: number): FinishInterviewVO => ({
   ...result,
   interviewId: result.interviewId || result.id || interviewId,
@@ -109,12 +120,13 @@ const normalizeDetail = (detail: any): InterviewDetailVO => ({
 
 const normalizeReport = (report: any, interviewId: number): InterviewReportVO => ({
   ...report,
+  id: report.id || report.reportId,
   reportId: report.reportId || report.id,
   interviewId: report.interviewId || report.sessionId || interviewId,
   sessionId: report.sessionId || report.interviewId || interviewId,
   reportStatus: report.reportStatus || report.status,
-  stageReports: report.stageReports || report.stageScores || [],
-  stageScores: report.stageScores || report.stageReports || [],
+  stageReports: parseArrayValue(report.stageReports || report.stageScores),
+  stageScores: parseArrayValue(report.stageScores || report.stageReports),
   weakPoints: report.weakPoints || report.weakKnowledgePoints,
   strengths: report.strengths,
   mainProblems: report.mainProblems || report.weaknesses,
@@ -123,8 +135,9 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
   suggestions: report.suggestions || report.reviewSuggestions,
   projectProblems: report.projectProblems || report.projectExpressionProblems,
   projectExpressionProblems: report.projectExpressionProblems || report.projectProblems,
-  qaReview: report.qaReview || report.messages || [],
-  messages: report.messages || report.qaReview || [],
+  questionReviews: parseArrayValue(report.questionReviews || report.qaReview || report.messages),
+  qaReview: parseArrayValue(report.qaReview || report.questionReviews || report.messages),
+  messages: parseArrayValue(report.messages || report.qaReview || report.questionReviews),
   summary: report.summary || report.reportContent,
   reportContent: report.reportContent || report.summary,
   failedReason: report.failedReason || report.failureReason

@@ -219,6 +219,7 @@ export interface RecommendedQuestionVO {
 }
 
 export interface InterviewReportVO {
+  id?: number
   reportId?: number
   interviewId: number
   sessionId?: number
@@ -238,6 +239,7 @@ export interface InterviewReportVO {
   projectProblems?: string
   projectExpressionProblems?: string
   recommendedQuestions?: RecommendedQuestionVO[]
+  questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]
   generatedAt?: string

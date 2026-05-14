@@ -147,7 +147,7 @@ const weakPointText = computed(() => {
   return value || '暂无薄弱知识点'
 })
 
-const qaMessages = computed(() => report.value?.qaReview || report.value?.messages || [])
+const qaMessages = computed(() => report.value?.questionReviews || report.value?.qaReview || report.value?.messages || [])
 
 const fetchReport = async () => {
   if (!interviewId) return

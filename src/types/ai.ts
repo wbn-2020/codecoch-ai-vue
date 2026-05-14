@@ -46,9 +46,11 @@ export interface PromptTemplateDTO {
 export interface AiCallLogQueryDTO extends PageQuery {
   userId?: number
   interviewId?: number
+  scene?: AiScene | ''
   callType?: AiScene | ''
-  status?: string
+  status?: number | ''
   modelName?: string
+  businessId?: string
   startTime?: string
   endTime?: string
 }
@@ -59,16 +61,21 @@ export interface AiCallLogVO {
   interviewId?: number
   stageId?: number
   messageId?: number
+  scene?: AiScene
   callType: AiScene
-  status: string
+  status: string | number
   provider?: string
   modelName?: string
   promptTemplateId?: number
   promptVersion?: string
+  requestPrompt?: string
   requestParams?: string
   promptContent?: string
   responseContent?: string
+  businessId?: string
+  elapsedMs?: number
   errorMessage?: string
+  failReason?: string
   latencyMs?: number
   inputTokens?: number
   outputTokens?: number
