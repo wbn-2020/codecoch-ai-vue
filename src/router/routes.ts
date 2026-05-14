@@ -175,7 +175,8 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: true
+      requiresAdmin: true,
+      title: '后台管理'
     },
     children: [
       {
@@ -183,7 +184,9 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminDashboard',
         component: () => import('@/views/admin/AdminDashboardView.vue'),
         meta: {
-          title: '管理首页'
+          title: '管理首页',
+          icon: 'DataBoard',
+          affix: true
         }
       },
       {
@@ -191,7 +194,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminUsers',
         component: () => import('@/views/admin/UserManageView.vue'),
         meta: {
-          title: '用户管理'
+          title: '用户管理',
+          icon: 'UserFilled'
         }
       },
       {
@@ -199,7 +203,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminRoles',
         component: () => import('@/views/admin/RoleManageView.vue'),
         meta: {
-          title: '角色管理'
+          title: '角色管理',
+          icon: 'Connection'
         }
       },
       {
@@ -207,7 +212,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminQuestions',
         component: () => import('@/views/admin/QuestionManageView.vue'),
         meta: {
-          title: '题目管理'
+          title: '题目管理',
+          icon: 'Collection'
         }
       },
       {
@@ -215,7 +221,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminQuestionCategories',
         component: () => import('@/views/admin/QuestionCategoryManageView.vue'),
         meta: {
-          title: '分类管理'
+          title: '分类管理',
+          icon: 'Files'
         }
       },
       {
@@ -223,7 +230,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminQuestionTags',
         component: () => import('@/views/admin/QuestionTagManageView.vue'),
         meta: {
-          title: '标签管理'
+          title: '标签管理',
+          icon: 'PriceTag'
         }
       },
       {
@@ -231,7 +239,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminQuestionGroups',
         component: () => import('@/views/admin/QuestionGroupManageView.vue'),
         meta: {
-          title: '问题组管理'
+          title: '问题组管理',
+          icon: 'List'
         }
       },
       {
@@ -239,7 +248,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminAiPrompts',
         component: () => import('@/views/admin/PromptTemplateView.vue'),
         meta: {
-          title: 'Prompt 模板'
+          title: 'Prompt 模板',
+          icon: 'Operation'
         }
       },
       {
@@ -247,7 +257,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminAiLogs',
         component: () => import('@/views/admin/AiCallLogView.vue'),
         meta: {
-          title: 'AI 调用日志'
+          title: 'AI 调用日志',
+          icon: 'DataAnalysis'
         }
       },
       {
@@ -255,7 +266,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'AdminSystemConfigs',
         component: () => import('@/views/admin/SystemConfigView.vue'),
         meta: {
-          title: '系统配置'
+          title: '系统配置',
+          icon: 'Setting'
         }
       }
     ]

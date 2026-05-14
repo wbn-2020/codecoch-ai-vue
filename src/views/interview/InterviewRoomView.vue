@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">面试房间</h1>
-        <p class="page-subtitle">根据 interview-service 返回的 nextAction 推进追问、下一题、下一阶段和结束流程。</p>
+        <p class="page-subtitle">根据后端返回的评分、追问决策和报告状态推进 V1 面试流程。</p>
       </div>
       <div class="header-actions">
         <el-button @click="router.push('/interviews/history')">历史记录</el-button>
@@ -12,7 +12,7 @@
     </div>
 
     <section class="content-card" v-loading="loading">
-      <div class="content-card__body" v-if="current">
+      <div v-if="current" class="content-card__body">
         <div class="room-status">
           <StatusTag :status="current.status" />
           <span v-if="current.currentStage">
@@ -55,7 +55,7 @@
             type="textarea"
             :rows="8"
             :disabled="answerDisabled"
-            placeholder="请输入你的回答，提交后由 interview-service 完成评分和下一步决策"
+            placeholder="请输入你的回答，提交后由 AI 完成评分和下一步决策"
           />
           <div class="answer-actions">
             <el-button
@@ -64,10 +64,18 @@
               :loading="submitting"
               @click="handleSubmit"
             >
-              提交回答
+              {{ submitting ? 'AI 正在评分并生成下一步问题' : '提交回答' }}
             </el-button>
             <el-button @click="fetchCurrent">刷新当前题</el-button>
           </div>
+          <el-alert
+            v-if="submitting"
+            class="state-alert"
+            type="info"
+            show-icon
+            :closable="false"
+            title="AI 正在评分并生成下一步问题，预计需要 5-20 秒"
+          />
         </div>
       </div>
       <el-empty v-else-if="!loading" description="未找到面试会话" />
@@ -80,10 +88,43 @@
           <StatusTag :status="lastResult.nextAction" />
         </div>
         <div class="score-line">
-          <span class="score">{{ lastResult.evaluation.score ?? 0 }}</span>
+          <span class="score">{{ lastResult.evaluation.score ?? lastResult.score ?? 0 }}</span>
           <span>分 · {{ lastResult.evaluation.level || '未分级' }}</span>
         </div>
-        <MarkdownPreview :content="lastResult.evaluation.comment" />
+        <MarkdownPreview :content="lastResult.evaluation.comment || lastResult.comment" />
+
+        <div v-if="lastResult.knowledgePoints?.length" class="knowledge-row">
+          <span>相关知识点</span>
+          <el-tag v-for="item in lastResult.knowledgePoints" :key="item" effect="plain">{{ item }}</el-tag>
+        </div>
+
+        <el-alert
+          v-if="lastResult.followUpQuestion"
+          class="next-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="系统已生成追问"
+          :description="lastResult.followUpQuestion"
+        />
+        <el-alert
+          v-if="lastResult.followUpReason"
+          class="next-alert"
+          type="info"
+          show-icon
+          :closable="false"
+          title="追问原因"
+          :description="lastResult.followUpReason"
+        />
+        <el-alert
+          v-if="lastResult.followUpValid === false"
+          class="next-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="本次追问质量不足，已按当前面试进度继续推进"
+        />
+
         <el-descriptions :column="1" border>
           <el-descriptions-item label="亮点">{{ lastResult.evaluation.advantage || '-' }}</el-descriptions-item>
           <el-descriptions-item label="问题">{{ lastResult.evaluation.weakness || '-' }}</el-descriptions-item>
@@ -97,7 +138,7 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -123,6 +164,7 @@ const current = ref<InterviewCurrentVO | null>(null)
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerStartTime = ref(Date.now())
+let slowSubmitTimer: number | undefined
 
 const nextActionText = computed(() => {
   switch (lastResult.value?.nextAction) {
@@ -133,7 +175,7 @@ const nextActionText = computed(() => {
     case NEXT_ACTION.NEXT_STAGE:
       return '当前阶段已完成，系统已切换到下一阶段。'
     case NEXT_ACTION.FINISH:
-      return '面试已满足结束条件，正在结束面试并生成报告。'
+      return '面试已满足结束条件，正在进入报告生成流程。'
     default:
       return '等待下一步动作。'
   }
@@ -145,7 +187,9 @@ const nextActionAlertType = computed(() => {
   return 'info'
 })
 
-const answerDisabled = computed(() => !current.value?.currentQuestion || current.value.status === 'COMPLETED')
+const answerDisabled = computed(() => {
+  return !current.value?.currentQuestion || ['COMPLETED', 'REPORT_GENERATING', 'FAILED'].includes(current.value.status)
+})
 
 const fetchCurrent = async () => {
   if (!interviewId) return
@@ -183,7 +227,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
     return
   }
 
-  if (result.nextQuestion) {
+  if (result.nextAction === NEXT_ACTION.FOLLOW_UP && result.nextQuestion) {
     current.value = {
       interviewId: result.interviewId,
       status: result.interviewStatus,
@@ -197,6 +241,15 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   await fetchCurrent()
 }
 
+const startSlowSubmitHint = () => {
+  window.clearTimeout(slowSubmitTimer)
+  slowSubmitTimer = window.setTimeout(() => {
+    if (submitting.value) {
+      ElMessage.info('真实 AI 响应较慢，请稍候，不要重复提交')
+    }
+  }, 20000)
+}
+
 const handleSubmit = async () => {
   if (!interviewId || !current.value?.currentQuestion) return
   if (!answerContent.value.trim()) {
@@ -205,6 +258,7 @@ const handleSubmit = async () => {
   }
 
   submitting.value = true
+  startSlowSubmitHint()
   try {
     const result = await submitInterviewAnswerApi(interviewId, {
       messageId: current.value.currentQuestion.messageId,
@@ -214,16 +268,17 @@ const handleSubmit = async () => {
     })
     await applyAnswerResult(result)
   } finally {
+    window.clearTimeout(slowSubmitTimer)
     submitting.value = false
   }
 }
 
-const handleFinish = async (manual: boolean) => {
+const handleFinish = async (_manual: boolean) => {
   if (!interviewId) return
   finishing.value = true
   try {
     const result = await finishInterviewApi(interviewId)
-    ElMessage.success(result.message || '面试已结束，正在进入报告页')
+    ElMessage.success(result.message || '正在结束面试并提交报告生成任务')
     await router.push(`/interviews/${interviewId}/report`)
   } finally {
     finishing.value = false
@@ -236,6 +291,7 @@ const handleManualFinish = async () => {
 }
 
 onMounted(fetchCurrent)
+onBeforeUnmount(() => window.clearTimeout(slowSubmitTimer))
 </script>
 
 <style scoped lang="scss">
@@ -248,6 +304,7 @@ onMounted(fetchCurrent)
 }
 
 .state-alert {
+  margin-top: 14px;
   margin-bottom: 14px;
 }
 
@@ -298,7 +355,17 @@ onMounted(fetchCurrent)
   font-weight: 800;
 }
 
+.knowledge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
 .next-alert {
-  margin-top: 16px;
+  margin: 14px 0;
 }
 </style>

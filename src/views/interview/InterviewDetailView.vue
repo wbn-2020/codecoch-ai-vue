@@ -71,10 +71,21 @@
               <span>{{ message.score ?? '-' }} 分</span>
             </div>
             <MarkdownPreview :content="message.questionContent || message.content" />
-            <el-divider v-if="message.userAnswer || message.aiComment" />
+            <el-divider v-if="message.userAnswer || message.aiComment || message.followUpReason" />
             <p v-if="message.userAnswer"><strong>回答：</strong>{{ message.userAnswer }}</p>
             <p v-if="message.aiComment"><strong>点评：</strong>{{ message.aiComment }}</p>
             <p v-if="message.followUpReason"><strong>追问原因：</strong>{{ message.followUpReason }}</p>
+            <div v-if="normalizeKnowledgePoints(message.knowledgePoints).length" class="knowledge-tags">
+              <span>知识点：</span>
+              <el-tag
+                v-for="item in normalizeKnowledgePoints(message.knowledgePoints)"
+                :key="item"
+                size="small"
+                effect="plain"
+              >
+                {{ item }}
+              </el-tag>
+            </div>
           </article>
         </div>
       </div>
@@ -97,6 +108,15 @@ const router = useRouter()
 const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const detail = ref<InterviewDetailVO | null>(null)
+
+const normalizeKnowledgePoints = (value: string | string[] | undefined) => {
+  if (Array.isArray(value)) return value.filter(Boolean)
+  if (!value) return []
+  return value
+    .split(/[,\n;；、，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
 const fetchDetail = async () => {
   if (!interviewId) return
@@ -153,5 +173,15 @@ onMounted(fetchDetail)
     align-items: center;
     gap: 8px;
   }
+}
+
+.knowledge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 </style>

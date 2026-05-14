@@ -1,19 +1,27 @@
 <template>
-  <el-container class="app-layout admin-layout">
+  <el-container class="app-layout admin-layout" :class="{ 'is-collapsed': appStore.sidebarCollapsed }">
     <el-aside class="app-layout__aside">
       <div class="app-layout__brand">
         <div class="brand-mark">A</div>
-        <div>
+        <div v-show="!appStore.sidebarCollapsed" class="brand-text">
           <strong>CodeCoachAI</strong>
           <span>后台管理</span>
         </div>
       </div>
-      <AdminSidebar />
+      <AdminSidebar :collapsed="appStore.sidebarCollapsed" />
     </el-aside>
 
     <el-container>
       <el-header class="app-layout__header">
-        <div class="app-layout__header-title">{{ route.meta.title || '管理首页' }}</div>
+        <div class="header-left">
+          <el-button class="collapse-button" text @click="appStore.toggleSidebar()">
+            <el-icon>
+              <Expand v-if="appStore.sidebarCollapsed" />
+              <Fold v-else />
+            </el-icon>
+          </el-button>
+          <AppBreadcrumb />
+        </div>
         <div class="app-layout__header-actions">
           <el-button text @click="router.push('/dashboard')">用户端</el-button>
           <el-dropdown trigger="click" @command="handleCommand">
@@ -33,6 +41,8 @@
         </div>
       </el-header>
 
+      <TagsView />
+
       <el-main class="app-layout__main">
         <RouterView />
       </el-main>
@@ -41,20 +51,33 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { Expand, Fold } from '@element-plus/icons-vue'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
+import TagsView from '@/components/layout/TagsView.vue'
+import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useTagsViewStore } from '@/stores/tagsView'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const appStore = useAppStore()
+const tagsStore = useTagsViewStore()
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || '管理员'
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+
+watch(
+  () => route.fullPath,
+  () => tagsStore.addVisitedView(route),
+  { immediate: true }
+)
 
 const handleCommand = async (command: string) => {
   if (command === 'profile') {
@@ -63,6 +86,7 @@ const handleCommand = async (command: string) => {
   }
 
   if (command === 'logout') {
+    tagsStore.clearVisitedViews()
     await authStore.logout()
     await router.push('/login')
   }
@@ -76,17 +100,27 @@ const handleCommand = async (command: string) => {
 
 .app-layout__aside {
   width: var(--app-sidebar-width);
+  overflow-x: hidden;
   border-right: 1px solid var(--app-border);
   background: var(--app-surface);
+  transition: width 0.2s ease;
+}
+
+.admin-layout.is-collapsed {
+  .app-layout__aside {
+    width: 64px;
+  }
 }
 
 .app-layout__brand {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
   height: var(--app-header-height);
-  padding: 0 18px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--app-border);
+  white-space: nowrap;
 
   span {
     display: block;
@@ -98,6 +132,7 @@ const handleCommand = async (command: string) => {
 
 .brand-mark {
   display: inline-flex;
+  flex: 0 0 32px;
   align-items: center;
   justify-content: center;
   width: 32px;
@@ -108,18 +143,32 @@ const handleCommand = async (command: string) => {
   font-weight: 700;
 }
 
+.brand-text {
+  min-width: 0;
+}
+
 .app-layout__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: var(--app-header-height);
   border-bottom: 1px solid var(--app-border);
-  background: rgb(255 255 255 / 88%);
+  background: rgb(255 255 255 / 92%);
   backdrop-filter: blur(12px);
 }
 
-.app-layout__header-title {
-  font-weight: 700;
+.header-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.collapse-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 18px;
 }
 
 .app-layout__header-actions {
@@ -151,7 +200,8 @@ const handleCommand = async (command: string) => {
     display: block;
   }
 
-  .app-layout__aside {
+  .app-layout__aside,
+  .admin-layout.is-collapsed .app-layout__aside {
     width: 100%;
     border-right: 0;
   }
