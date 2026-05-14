@@ -6,14 +6,9 @@
 import MarkdownIt from 'markdown-it'
 import { computed } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    content?: string | null
-  }>(),
-  {
-    content: ''
-  }
-)
+const props = defineProps<{
+  content?: unknown
+}>()
 
 const md = new MarkdownIt({
   html: false,
@@ -21,7 +16,19 @@ const md = new MarkdownIt({
   breaks: true
 })
 
-const html = computed(() => md.render(props.content || ''))
+const normalizeContent = (content: unknown) => {
+  if (content === null || content === undefined) return ''
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => (typeof item === 'string' ? item : JSON.stringify(item, null, 2)))
+      .join('\n')
+  }
+  if (typeof content === 'object') return JSON.stringify(content, null, 2)
+  return String(content)
+}
+
+const html = computed(() => md.render(normalizeContent(props.content)))
 </script>
 
 <style scoped lang="scss">
