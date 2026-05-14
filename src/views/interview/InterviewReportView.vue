@@ -11,13 +11,22 @@
       </div>
     </div>
 
-    <section class="content-card" v-loading="loading">
-      <div v-if="report" class="content-card__body">
+    <section v-if="isGenerating" class="content-card">
+      <div class="content-card__body generating-panel">
+        <el-icon class="generating-icon"><Loading /></el-icon>
+        <h2>报告生成中，请稍候</h2>
+        <p>系统正在根据问答记录生成结构化报告，页面会自动刷新结果。</p>
+        <el-progress :percentage="pollProgress" :show-text="false" />
+      </div>
+    </section>
+
+    <section v-else class="content-card" v-loading="loading">
+      <div v-if="report && isGenerated" class="content-card__body">
         <div class="report-hero">
           <div>
             <div class="score">{{ report.totalScore ?? 0 }}</div>
             <p>综合得分</p>
-            <p class="generated-time">生成时间：{{ report.generatedAt || '-' }}</p>
+            <p class="generated-time">生成时间：{{ report.generatedAt || report.createdAt || '-' }}</p>
           </div>
           <StatusTag :status="report.reportStatus" />
         </div>
@@ -30,20 +39,7 @@
           title="总分来源于后端面试报告 totalScore 字段；为空时按 0 分展示，不在前端重新计算。"
         />
 
-        <el-alert
-          v-if="report.reportStatus === 'FAILED'"
-          class="report-alert"
-          type="error"
-          show-icon
-          :closable="false"
-          :title="report.failedReason || '报告生成失败，可点击重试。'"
-        />
-
-        <div v-if="report.reportStatus === 'FAILED'" class="retry-row">
-          <el-button type="primary" :loading="retrying" @click="handleRetry">重试生成报告</el-button>
-        </div>
-
-        <ReportChart v-if="report.stageReports?.length" :stages="report.stageReports" />
+        <ReportChart v-if="stageReports.length" :stages="stageReports" />
         <el-empty v-else description="暂无阶段得分数据" />
 
         <div class="report-grid">
@@ -73,13 +69,28 @@
           </section>
         </div>
       </div>
+
+      <div v-else-if="isFailed" class="content-card__body failed-panel">
+        <el-alert
+          type="error"
+          show-icon
+          :closable="false"
+          title="报告生成失败"
+          :description="failureReason"
+        />
+        <div class="retry-row">
+          <el-button type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+          <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+        </div>
+      </div>
+
       <el-empty v-else-if="!loading" description="报告暂不可用，可能仍在生成中" />
     </section>
 
-    <section v-if="report?.stageReports?.length" class="content-card">
+    <section v-if="stageReports.length && isGenerated" class="content-card">
       <div class="content-card__body">
         <h2 class="section-title">阶段得分</h2>
-        <el-table :data="report.stageReports" row-key="stageId">
+        <el-table :data="stageReports" row-key="stageId">
           <el-table-column prop="stageName" label="阶段" min-width="160" />
           <el-table-column prop="stageType" label="类型" min-width="140" />
           <el-table-column prop="score" label="得分" width="90" />
@@ -90,10 +101,10 @@
       </div>
     </section>
 
-    <section v-if="report?.recommendedQuestions?.length" class="content-card">
+    <section v-if="recommendedQuestions.length && isGenerated" class="content-card">
       <div class="content-card__body">
         <h2 class="section-title">推荐练习题</h2>
-        <el-table :data="report.recommendedQuestions" row-key="id">
+        <el-table :data="recommendedQuestions" row-key="id">
           <el-table-column prop="title" label="题目" min-width="220" show-overflow-tooltip />
           <el-table-column prop="difficulty" label="难度" width="110" />
           <el-table-column prop="reason" label="推荐原因" min-width="260" show-overflow-tooltip />
@@ -101,7 +112,7 @@
       </div>
     </section>
 
-    <section v-if="qaMessages.length" class="content-card">
+    <section v-if="qaMessages.length && isGenerated" class="content-card">
       <div class="content-card__body">
         <h2 class="section-title">完整问答明细</h2>
         <div class="message-list">
@@ -121,15 +132,16 @@
 </template>
 
 <script setup lang="ts">
+import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getInterviewReportApi, retryInterviewReportApi } from '@/api/interview'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
-import type { InterviewReportVO } from '@/types/interview'
+import type { InterviewMessageVO, InterviewReportVO, RecommendedQuestionVO, StageReportVO } from '@/types/interview'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -138,6 +150,35 @@ const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const retrying = ref(false)
 const report = ref<InterviewReportVO | null>(null)
+const pollCount = ref(0)
+const pollFailures = ref(0)
+let pollTimer: number | undefined
+
+const normalizedStatus = computed(() => {
+  const status = report.value?.reportStatus || report.value?.status || ''
+  return String(status).toUpperCase()
+})
+
+const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
+const isFailed = computed(() => normalizedStatus.value === 'FAILED')
+const isGenerated = computed(() => {
+  if (['GENERATED', 'COMPLETED'].includes(normalizedStatus.value)) return true
+  return Boolean(report.value?.totalScore || report.value?.summary || report.value?.reportContent)
+})
+
+const objectItems = <T>(value: unknown): T[] => {
+  return Array.isArray(value)
+    ? (value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as T[])
+    : []
+}
+
+const stageReports = computed<StageReportVO[]>(() => objectItems<StageReportVO>(report.value?.stageReports || report.value?.stageScores))
+const recommendedQuestions = computed<RecommendedQuestionVO[]>(() => objectItems<RecommendedQuestionVO>(report.value?.recommendedQuestions))
+const qaMessages = computed<InterviewMessageVO[]>(() =>
+  objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
+)
+const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
+const failureReason = computed(() => report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage || '请稍后重试')
 
 const weakPointText = computed(() => {
   const value = report.value?.weakPoints || report.value?.weakKnowledgePoints
@@ -147,13 +188,43 @@ const weakPointText = computed(() => {
   return value || '暂无薄弱知识点'
 })
 
-const qaMessages = computed(() => report.value?.questionReviews || report.value?.qaReview || report.value?.messages || [])
+const stopPolling = () => {
+  if (pollTimer) {
+    window.clearTimeout(pollTimer)
+    pollTimer = undefined
+  }
+}
+
+const schedulePolling = () => {
+  stopPolling()
+  if (!isGenerating.value) return
+  if (pollCount.value >= 30) {
+    ElMessage.warning('报告生成时间较长，请稍后刷新查看')
+    return
+  }
+  pollTimer = window.setTimeout(fetchReport, 2000)
+}
 
 const fetchReport = async () => {
   if (!interviewId) return
   loading.value = true
   try {
     report.value = await getInterviewReportApi(interviewId)
+    pollFailures.value = 0
+    if (isGenerating.value) {
+      pollCount.value += 1
+      schedulePolling()
+    } else {
+      stopPolling()
+    }
+  } catch (error) {
+    pollFailures.value += 1
+    if (pollFailures.value >= 3) {
+      stopPolling()
+      ElMessage.error('报告状态查询失败，请稍后刷新')
+    } else {
+      schedulePolling()
+    }
   } finally {
     loading.value = false
   }
@@ -164,20 +235,58 @@ const handleRetry = async () => {
   retrying.value = true
   try {
     await retryInterviewReportApi(interviewId)
-    ElMessage.success('已提交报告重试任务')
-    await fetchReport()
+    ElMessage.success('已提交报告重新生成任务')
+    report.value = {
+      interviewId,
+      reportStatus: 'GENERATING',
+      status: 'GENERATING'
+    }
+    pollCount.value = 0
+    pollFailures.value = 0
+    schedulePolling()
   } finally {
     retrying.value = false
   }
 }
 
 onMounted(fetchReport)
+onBeforeUnmount(stopPolling)
 </script>
 
 <style scoped lang="scss">
 .header-actions {
   display: flex;
   gap: 10px;
+}
+
+.generating-panel,
+.failed-panel {
+  padding: 42px 24px;
+  text-align: center;
+}
+
+.generating-panel {
+  h2 {
+    margin: 12px 0 8px;
+    font-size: 22px;
+  }
+
+  p {
+    margin: 0 auto 18px;
+    color: var(--app-text-muted);
+  }
+}
+
+.generating-icon {
+  color: var(--app-primary);
+  font-size: 36px;
+  animation: spin 1.1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .report-hero {
@@ -201,10 +310,9 @@ onMounted(fetchReport)
   font-size: 13px;
 }
 
-.report-alert,
 .retry-row,
 .score-source {
-  margin-bottom: 16px;
+  margin: 16px 0;
 }
 
 .report-grid {

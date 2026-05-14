@@ -62,6 +62,8 @@ export interface InterviewQuestionVO {
   stageId: number
   stageName?: string
   stageType?: string
+  followUpReason?: string
+  knowledgePoints?: string[]
 }
 
 export interface InterviewCurrentVO {
@@ -88,7 +90,7 @@ export interface InterviewEvaluationVO {
   advantage?: string
   weakness?: string
   suggestion?: string
-  knowledgePoints?: string
+  knowledgePoints?: string | string[]
   followUpSuggested?: boolean
   followUpReason?: string
 }
@@ -106,11 +108,18 @@ export interface InterviewProgressVO {
 export interface InterviewAnswerResultVO {
   interviewId: number
   answerMessageId: number
+  score?: number
+  comment?: string
   evaluation: InterviewEvaluationVO
   nextAction: NextAction
   nextQuestion?: InterviewQuestionVO
+  followUpQuestion?: string
+  followUpReason?: string
+  followUpValid?: boolean
+  knowledgePoints?: string[]
   currentStage?: InterviewStageVO
   interviewStatus: InterviewStatus
+  reportStatus?: ReportStatus
   progress?: InterviewProgressVO
 }
 
@@ -118,6 +127,7 @@ export interface FinishInterviewVO {
   interviewId: number
   status: InterviewStatus
   reportStatus: ReportStatus
+  report?: Partial<InterviewReportVO>
   reportId?: number
   finishedAt?: string
   message?: string
@@ -177,7 +187,7 @@ export interface InterviewMessageVO {
   isFollowUp: boolean
   parentMessageId?: number
   followUpReason?: string
-  knowledgePoints?: string
+  knowledgePoints?: string | string[]
   createdAt?: string
 }
 
@@ -224,6 +234,7 @@ export interface InterviewReportVO {
   interviewId: number
   sessionId?: number
   reportStatus: ReportStatus
+  status?: ReportStatus | InterviewStatus
   totalScore?: number
   stageScores?: StageReportVO[]
   weakPoints?: string[] | string
@@ -243,5 +254,8 @@ export interface InterviewReportVO {
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]
   generatedAt?: string
+  createdAt?: string
   failedReason?: string
+  failureReason?: string
+  errorMessage?: string
 }

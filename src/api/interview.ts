@@ -24,6 +24,27 @@ const normalizeStage = (stage: any = {}) => ({
   actualQuestionCount: stage.actualQuestionCount || 0
 })
 
+const normalizeKnowledgePoints = (value: any): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value !== 'string') return []
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim()).filter(Boolean)
+    }
+  } catch {
+    // split plain text below
+  }
+  return trimmed
+    .split(/[,\n;；、，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 const normalizeQuestion = (question: any) => {
   if (!question) return undefined
   return {
@@ -39,7 +60,9 @@ const normalizeQuestion = (question: any) => {
     stageProgress: question.stageProgress,
     interviewStatus: question.interviewStatus || question.status,
     stageId: question.stageId || 0,
-    stageName: question.stageName
+    stageName: question.stageName,
+    followUpReason: question.followUpReason,
+    knowledgePoints: normalizeKnowledgePoints(question.knowledgePoints)
   }
 }
 
@@ -61,18 +84,52 @@ const normalizeSession = (session: any): InterviewSessionVO => ({
   stageList: (session.stageList || session.stages || []).map(normalizeStage)
 })
 
-const normalizeAnswerResult = (result: any, interviewId: number): InterviewAnswerResultVO => ({
-  ...result,
-  interviewId: result.interviewId || result.id || interviewId,
-  answerMessageId: result.answerMessageId || 0,
-  evaluation: result.evaluation || {
+const normalizeAnswerResult = (result: any, interviewId: number): InterviewAnswerResultVO => {
+  const knowledgePoints = normalizeKnowledgePoints(result.knowledgePoints || result.evaluation?.knowledgePoints)
+  const followUpQuestion = result.followUpQuestion || result.nextQuestion?.questionContent || ''
+  const evaluation = result.evaluation || {
     score: result.score || 0,
     comment: result.comment || ''
-  },
-  nextQuestion: normalizeQuestion(result.nextQuestion),
-  currentStage: result.currentStage ? normalizeStage(result.currentStage) : undefined,
-  interviewStatus: result.interviewStatus || 'IN_PROGRESS'
-})
+  }
+  const nextQuestion =
+    result.nextQuestion ||
+    (followUpQuestion
+      ? {
+          questionTitle: '追问',
+          questionContent: followUpQuestion,
+          messageId: result.nextMessageId || result.answerMessageId || 0,
+          isFollowUp: true,
+          followUpCount: result.progress?.followUpCount || 0,
+          followUpReason: result.followUpReason || evaluation.followUpReason,
+          knowledgePoints,
+          stageId: result.currentStage?.stageId || 0,
+          stageName: result.currentStage?.stageName
+        }
+      : undefined)
+
+  return {
+    ...result,
+    interviewId: result.interviewId || result.id || interviewId,
+    answerMessageId: result.answerMessageId || 0,
+    score: result.score ?? evaluation.score,
+    comment: result.comment || evaluation.comment || '',
+    evaluation: {
+      ...evaluation,
+      score: evaluation.score ?? result.score ?? 0,
+      comment: evaluation.comment || result.comment || '',
+      knowledgePoints,
+      followUpReason: result.followUpReason || evaluation.followUpReason
+    },
+    nextQuestion: normalizeQuestion(nextQuestion),
+    followUpQuestion,
+    followUpReason: result.followUpReason || evaluation.followUpReason || '',
+    followUpValid: result.followUpValid,
+    knowledgePoints,
+    currentStage: result.currentStage ? normalizeStage(result.currentStage) : undefined,
+    interviewStatus: result.interviewStatus || 'IN_PROGRESS',
+    reportStatus: result.reportStatus
+  }
+}
 
 const parseArrayValue = <T>(value: T[] | string | undefined | null): T[] => {
   if (Array.isArray(value)) return value
@@ -90,6 +147,15 @@ const normalizeFinish = (result: any, interviewId: number): FinishInterviewVO =>
   interviewId: result.interviewId || result.id || interviewId,
   reportId: result.reportId || result.report?.id,
   message: result.message || '面试已结束'
+})
+
+const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterviewVO => ({
+  ...result,
+  interviewId: result.interviewId || result.id || result.sessionId || interviewId,
+  status: result.status || result.interviewStatus || 'REPORT_GENERATING',
+  reportStatus: result.reportStatus || result.report?.status || result.report?.reportStatus || 'GENERATING',
+  reportId: result.reportId || result.report?.id,
+  message: result.message || '面试已结束，报告正在生成'
 })
 
 const normalizeListItem = (item: any): InterviewListVO => ({
@@ -118,30 +184,39 @@ const normalizeDetail = (detail: any): InterviewDetailVO => ({
   }))
 })
 
-const normalizeReport = (report: any, interviewId: number): InterviewReportVO => ({
-  ...report,
-  id: report.id || report.reportId,
-  reportId: report.reportId || report.id,
-  interviewId: report.interviewId || report.sessionId || interviewId,
-  sessionId: report.sessionId || report.interviewId || interviewId,
-  reportStatus: report.reportStatus || report.status,
-  stageReports: parseArrayValue(report.stageReports || report.stageScores),
-  stageScores: parseArrayValue(report.stageScores || report.stageReports),
-  weakPoints: report.weakPoints || report.weakKnowledgePoints,
-  strengths: report.strengths,
-  mainProblems: report.mainProblems || report.weaknesses,
-  weaknesses: report.weaknesses || report.mainProblems,
-  reviewSuggestions: report.reviewSuggestions || report.suggestions,
-  suggestions: report.suggestions || report.reviewSuggestions,
-  projectProblems: report.projectProblems || report.projectExpressionProblems,
-  projectExpressionProblems: report.projectExpressionProblems || report.projectProblems,
-  questionReviews: parseArrayValue(report.questionReviews || report.qaReview || report.messages),
-  qaReview: parseArrayValue(report.qaReview || report.questionReviews || report.messages),
-  messages: parseArrayValue(report.messages || report.qaReview || report.questionReviews),
-  summary: report.summary || report.reportContent,
-  reportContent: report.reportContent || report.summary,
-  failedReason: report.failedReason || report.failureReason
-})
+const normalizeReport = (report: any, interviewId: number): InterviewReportVO => {
+  const nestedReport = report?.report && typeof report.report === 'object' ? report.report : {}
+  const source = { ...nestedReport, ...report }
+  const status = source.reportStatus || source.status || nestedReport.status || nestedReport.reportStatus
+  const hasReportContent = Boolean(source.totalScore || source.summary || source.reportContent || source.generatedAt || source.createdAt)
+
+  return {
+    ...source,
+    id: source.id || source.reportId,
+    reportId: source.reportId || source.id,
+    interviewId: source.interviewId || source.sessionId || interviewId,
+    sessionId: source.sessionId || source.interviewId || interviewId,
+    status,
+    reportStatus: status || (hasReportContent ? 'GENERATED' : 'NOT_GENERATED'),
+    stageReports: parseArrayValue(source.stageReports || source.stageScores),
+    stageScores: parseArrayValue(source.stageScores || source.stageReports),
+    weakPoints: source.weakPoints || source.weakKnowledgePoints || [],
+    strengths: source.strengths || '',
+    mainProblems: source.mainProblems || source.weaknesses || '',
+    weaknesses: source.weaknesses || source.mainProblems || '',
+    reviewSuggestions: source.reviewSuggestions || source.suggestions || '',
+    suggestions: source.suggestions || source.reviewSuggestions || '',
+    projectProblems: source.projectProblems || source.projectExpressionProblems || '',
+    projectExpressionProblems: source.projectExpressionProblems || source.projectProblems || '',
+    questionReviews: parseArrayValue(source.questionReviews || source.qaReview || source.messages),
+    qaReview: parseArrayValue(source.qaReview || source.questionReviews || source.messages),
+    messages: parseArrayValue(source.messages || source.qaReview || source.questionReviews),
+    summary: source.summary || source.reportContent || '',
+    reportContent: source.reportContent || source.summary || '',
+    generatedAt: source.generatedAt || source.createdAt,
+    failedReason: source.failedReason || source.failureReason || source.errorMessage || ''
+  }
+}
 
 const toCreatePayload = (data: InterviewCreateDTO) => ({
   interviewMode: data.interviewMode,
@@ -182,7 +257,7 @@ export const submitInterviewAnswerApi = (id: number, data: InterviewAnswerDTO) =
 export const finishInterviewApi = (id: number) => {
   return request
     .post<FinishInterviewVO, FinishInterviewVO>(`/interviews/${id}/finish`)
-    .then((result) => normalizeFinish(result, id))
+    .then((result) => normalizeAsyncFinish(result, id))
 }
 
 export const retryInterviewReportApi = (id: number) => {
