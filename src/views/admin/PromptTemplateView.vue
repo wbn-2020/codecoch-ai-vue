@@ -48,9 +48,13 @@
           <el-table-column label="更新时间" min-width="170">
             <template #default="{ row }">{{ row.updatedAt || '-' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button link type="warning" @click="handleStatus(row)">
+                {{ row.status === 1 ? '禁用' : '启用' }}
+              </el-button>
+              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -99,13 +103,15 @@
 
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 
 import {
   createAdminAiPromptApi,
+  deleteAdminAiPromptApi,
   getAdminAiPromptsApi,
-  updateAdminAiPromptApi
+  updateAdminAiPromptApi,
+  updateAdminAiPromptStatusApi
 } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { AI_SCENE, promptTypeOptions } from '@/constants/enums'
@@ -185,6 +191,22 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const handleStatus = async (row: PromptTemplateVO) => {
+  const nextStatus = row.status === 1 ? 0 : 1
+  await updateAdminAiPromptStatusApi(row.id, nextStatus)
+  ElMessage.success(nextStatus === 1 ? 'Prompt 模板已启用' : 'Prompt 模板已禁用')
+  await fetchPrompts()
+}
+
+const handleDelete = async (row: PromptTemplateVO) => {
+  await ElMessageBox.confirm(`确认删除 Prompt 模板 ${row.promptName || row.name}？`, '删除确认', {
+    type: 'warning'
+  })
+  await deleteAdminAiPromptApi(row.id)
+  ElMessage.success('Prompt 模板已删除')
+  await fetchPrompts()
 }
 
 const handleSearch = () => {

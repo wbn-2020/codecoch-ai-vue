@@ -15,6 +15,7 @@ type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   costMillis?: number
   requestBody?: string
   responseBody?: string
+  failReason?: string
 }
 
 type BackendPromptTemplateVO = Partial<PromptTemplateVO> & {
@@ -29,11 +30,17 @@ type BackendPromptTemplateVO = Partial<PromptTemplateVO> & {
 
 const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
   ...log,
+  scene: log.scene || log.callType || '',
   callType: log.callType || log.scene || '',
   status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
-  latencyMs: log.latencyMs ?? log.costMillis,
-  requestParams: log.requestParams ?? log.requestBody,
-  responseContent: log.responseContent ?? log.responseBody
+  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costMillis,
+  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+  requestPrompt: log.requestPrompt ?? log.promptContent ?? log.requestBody,
+  requestParams: log.requestParams ?? log.requestBody ?? log.requestPrompt,
+  promptContent: log.promptContent ?? log.requestPrompt,
+  responseContent: log.responseContent ?? log.responseBody,
+  failReason: log.failReason ?? log.errorMessage,
+  errorMessage: log.errorMessage ?? log.failReason
 })
 
 const normalizeAiLogPage = (result: PageResult<BackendAiCallLogVO>): PageResult<AiCallLogVO> => ({
@@ -94,11 +101,24 @@ export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
     .then(normalizePromptTemplate)
 }
 
+export const deleteAdminAiPromptApi = (id: number) => {
+  return request.delete<null, null>(`/admin/ai/prompts/${id}`)
+}
+
+export const updateAdminAiPromptStatusApi = (id: number, status: number) => {
+  return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status })
+}
+
 export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
+  const { callType: _callType, ...restParams } = params
+  const requestParams = {
+    ...restParams,
+    scene: params.scene || params.callType || undefined
+  }
   const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
     '/admin/ai/logs',
     {
-      params
+      params: requestParams
     }
   )
   return normalizeAiLogPage(result)

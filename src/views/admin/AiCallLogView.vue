@@ -14,17 +14,20 @@
             <el-input-number v-model="query.userId" :min="1" controls-position="right" />
           </el-form-item>
           <el-form-item label="场景">
-            <el-select v-model="query.callType" clearable placeholder="全部场景" style="width: 220px">
+            <el-select v-model="query.scene" clearable placeholder="全部场景" style="width: 220px">
               <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="业务 ID">
+            <el-input v-model.trim="query.businessId" clearable placeholder="businessId" />
           </el-form-item>
           <el-form-item label="模型">
             <el-input v-model.trim="query.modelName" clearable placeholder="模型名称" />
           </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
-              <el-option label="成功" value="SUCCESS" />
-              <el-option label="失败" value="FAILED" />
+              <el-option label="成功" :value="1" />
+              <el-option label="失败" :value="0" />
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -38,15 +41,15 @@
         <el-table v-loading="loading" :data="logs" row-key="id">
           <el-table-column prop="id" label="日志 ID" width="100" />
           <el-table-column prop="userId" label="用户 ID" width="100" />
-          <el-table-column prop="interviewId" label="面试 ID" width="110" />
+          <el-table-column prop="businessId" label="业务 ID" min-width="130" show-overflow-tooltip />
           <el-table-column label="场景" min-width="230">
-            <template #default="{ row }">{{ row.callType }}</template>
+            <template #default="{ row }">{{ row.scene || row.callType }}</template>
           </el-table-column>
           <el-table-column prop="modelName" label="模型" min-width="140" />
           <el-table-column label="状态" width="110">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column prop="latencyMs" label="耗时(ms)" width="110" />
+          <el-table-column prop="elapsedMs" label="耗时(ms)" width="110" />
           <el-table-column prop="createdAt" label="调用时间" min-width="170" />
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
@@ -73,15 +76,16 @@
       <div v-if="detail" class="log-detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="日志 ID">{{ detail.id }}</el-descriptions-item>
-          <el-descriptions-item label="调用场景">{{ detail.callType }}</el-descriptions-item>
+          <el-descriptions-item label="调用场景">{{ detail.scene || detail.callType }}</el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="耗时">{{ detail.latencyMs ?? '-' }} ms</el-descriptions-item>
-          <el-descriptions-item label="失败原因">{{ detail.errorMessage || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="业务 ID">{{ detail.businessId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="耗时">{{ detail.elapsedMs ?? detail.latencyMs ?? '-' }} ms</el-descriptions-item>
+          <el-descriptions-item label="失败原因">{{ detail.failReason || detail.errorMessage || '-' }}</el-descriptions-item>
         </el-descriptions>
 
-        <h3>请求参数</h3>
-        <pre>{{ detail.requestParams || '-' }}</pre>
+        <h3>请求 Prompt</h3>
+        <pre>{{ detail.requestPrompt || detail.promptContent || detail.requestParams || '-' }}</pre>
         <h3>Prompt 内容</h3>
         <pre>{{ detail.promptContent || '-' }}</pre>
         <h3>响应内容</h3>
@@ -107,7 +111,8 @@ const total = ref(0)
 
 const query = reactive<AiCallLogQueryDTO>({
   userId: undefined,
-  callType: '',
+  scene: '',
+  businessId: '',
   modelName: '',
   status: '',
   pageNo: 1,
@@ -138,7 +143,8 @@ const handleSearch = () => {
 const handleReset = () => {
   Object.assign(query, {
     userId: undefined,
-    callType: '',
+    scene: '',
+    businessId: '',
     modelName: '',
     status: '',
     pageNo: 1,
