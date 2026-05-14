@@ -16,6 +16,7 @@ import type {
   WrongQuestionQueryDTO,
   WrongQuestionVO
 } from '@/types/question'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendQuestionTag = QuestionTagVO | string | number | null | undefined
 
@@ -110,30 +111,24 @@ const normalizeUserQuestion = (item: BackendQuestionVO): QuestionVO => ({
   tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
 })
 
-const normalizeUserQuestionPage = (result: PageResult<BackendQuestionVO>): PageResult<QuestionVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizeUserQuestion)
-})
+const normalizeUserQuestionPage = (result: PageResult<BackendQuestionVO>): PageResult<QuestionVO> =>
+  normalizePageResult(result, undefined, normalizeUserQuestion)
 
 const normalizeFavoritePage = (
   result: PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
-): PageResult<FavoriteQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map((item) => ({
+): PageResult<FavoriteQuestionVO> =>
+  normalizePageResult(result, undefined, (item) => ({
     ...item,
     tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
   }))
-})
 
 const normalizeWrongPage = (
   result: PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
-): PageResult<WrongQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map((item) => ({
+): PageResult<WrongQuestionVO> =>
+  normalizePageResult(result, undefined, (item) => ({
     ...item,
     tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
   }))
-})
 
 const normalizeQuestionDetail = (item: BackendQuestionDetailVO): QuestionDetailVO => ({
   ...item,
@@ -144,16 +139,13 @@ const normalizeQuestionDetail = (item: BackendQuestionDetailVO): QuestionDetailV
 const normalizeAdminQuestion = (item: BackendAdminQuestionVO): AdminQuestionVO => ({
   ...item,
   groupTitle: item.groupTitle || item.groupName || '',
-  answer: item.answer || item.referenceAnswer || '',
+  referenceAnswer: item.referenceAnswer || item.answer || '',
   tags: normalizeTags(item.tags, item.tagIds, item.tagNames)
 })
 
 const normalizeAdminQuestionPage = (
   result: PageResult<BackendAdminQuestionVO>
-): PageResult<AdminQuestionVO> => ({
-  ...result,
-  records: (result.records || []).map(normalizeAdminQuestion)
-})
+): PageResult<AdminQuestionVO> => normalizePageResult(result, undefined, normalizeAdminQuestion)
 
 export const getQuestionsApi = (params: QuestionQueryDTO) => {
   const { tagIds: _tagIds, ...restParams } = params
@@ -234,11 +226,14 @@ export const createAdminQuestionApi = (data: QuestionCreateDTO) => {
   const payload = {
     title: data.title,
     content: data.content,
-    referenceAnswer: data.answer,
+    referenceAnswer: data.referenceAnswer || data.answer,
     analysis: data.analysis,
     categoryId: data.categoryId,
     groupId: data.groupId,
     difficulty: data.difficulty,
+    questionType: data.questionType,
+    experienceLevel: data.experienceLevel,
+    isHighFrequency: data.isHighFrequency,
     tagIds: data.tagIds,
     status: data.status
   }
@@ -252,11 +247,14 @@ export const updateAdminQuestionApi = (id: number, data: QuestionCreateDTO) => {
   const payload = {
     title: data.title,
     content: data.content,
-    referenceAnswer: data.answer,
+    referenceAnswer: data.referenceAnswer || data.answer,
     analysis: data.analysis,
     categoryId: data.categoryId,
     groupId: data.groupId,
     difficulty: data.difficulty,
+    questionType: data.questionType,
+    experienceLevel: data.experienceLevel,
+    isHighFrequency: data.isHighFrequency,
     tagIds: data.tagIds,
     status: data.status
   }

@@ -10,8 +10,26 @@
     <section class="content-card">
       <div class="content-card__body">
         <el-form :model="query" inline>
+          <el-form-item label="用户 ID">
+            <el-input-number v-model="query.userId" :min="1" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="场景">
+            <el-select v-model="query.callType" clearable placeholder="全部场景" style="width: 220px">
+              <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="模型">
+            <el-input v-model.trim="query.modelName" clearable placeholder="模型名称" />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
+              <el-option label="成功" value="SUCCESS" />
+              <el-option label="失败" value="FAILED" />
+            </el-select>
+          </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="fetchLogs">刷新</el-button>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -78,6 +96,7 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { getAdminAiLogDetailApi, getAdminAiLogsApi } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { promptTypeOptions } from '@/constants/enums'
 import type { AiCallLogQueryDTO, AiCallLogVO } from '@/types/ai'
 
 const loading = ref(false)
@@ -87,6 +106,10 @@ const detail = ref<AiCallLogVO | null>(null)
 const total = ref(0)
 
 const query = reactive<AiCallLogQueryDTO>({
+  userId: undefined,
+  callType: '',
+  modelName: '',
+  status: '',
   pageNo: 1,
   pageSize: 10
 })
@@ -105,6 +128,23 @@ const fetchLogs = async () => {
 const openDetail = async (row: AiCallLogVO) => {
   detail.value = await getAdminAiLogDetailApi(row.id)
   drawerVisible.value = true
+}
+
+const handleSearch = () => {
+  query.pageNo = 1
+  fetchLogs()
+}
+
+const handleReset = () => {
+  Object.assign(query, {
+    userId: undefined,
+    callType: '',
+    modelName: '',
+    status: '',
+    pageNo: 1,
+    pageSize: 10
+  })
+  fetchLogs()
 }
 
 onMounted(fetchLogs)

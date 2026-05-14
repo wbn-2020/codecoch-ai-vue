@@ -39,7 +39,7 @@
 
           <section class="detail-section">
             <h2>参考答案</h2>
-            <MarkdownPreview :content="detail.referenceAnswer || detail.answer || '暂无参考答案'" />
+            <MarkdownPreview :content="detail.referenceAnswer || '暂无参考答案'" />
           </section>
 
           <section class="detail-section">

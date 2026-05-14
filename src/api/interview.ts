@@ -13,6 +13,7 @@ import type {
   InterviewSessionVO,
   RetryReportVO
 } from '@/types/interview'
+import { normalizePageResult } from '@/utils/page'
 
 const normalizeStage = (stage: any = {}) => ({
   ...stage,
@@ -27,20 +28,29 @@ const normalizeQuestion = (question: any) => {
   if (!question) return undefined
   return {
     ...question,
+    sessionId: question.sessionId || question.interviewId,
     messageId: question.messageId || question.questionId || 0,
-    groupId: question.groupId || question.questionGroupId,
+    questionGroupId: question.questionGroupId || question.groupId,
     questionTitle: question.questionTitle || '当前问题',
-    questionContent: question.questionContent || question.questionText || '',
+    questionContent: question.questionContent || question.questionText || question.content || '',
     isFollowUp: Boolean(question.isFollowUp),
-    stageId: question.stageId || 0
+    parentMessageId: question.parentMessageId,
+    followUpCount: question.followUpCount || 0,
+    stageProgress: question.stageProgress,
+    interviewStatus: question.interviewStatus || question.status,
+    stageId: question.stageId || 0,
+    stageName: question.stageName
   }
 }
 
 const normalizeCurrent = (current: any): InterviewCurrentVO => ({
   ...current,
   interviewId: current.interviewId || current.id,
+  sessionId: current.sessionId || current.interviewId || current.id,
+  status: current.interviewStatus || current.status,
+  interviewStatus: current.interviewStatus || current.status,
   currentStage: current.currentStage ? normalizeStage(current.currentStage) : undefined,
-  currentQuestion: normalizeQuestion(current.currentQuestion)
+  currentQuestion: normalizeQuestion(current.currentQuestion || current.question)
 })
 
 const normalizeSession = (session: any): InterviewSessionVO => ({
@@ -77,6 +87,8 @@ const normalizeListItem = (item: any): InterviewListVO => ({
   interviewName: item.interviewName || item.title,
   interviewMode: item.interviewMode || item.mode,
   questionCount: item.questionCount || item.answeredQuestionCount,
+  startedAt: item.startedAt || item.startTime,
+  finishedAt: item.finishedAt || item.endTime,
   createdAt: item.createdAt || item.updatedAt
 })
 
@@ -99,15 +111,30 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
   ...report,
   reportId: report.reportId || report.id,
   interviewId: report.interviewId || report.sessionId || interviewId,
+  sessionId: report.sessionId || report.interviewId || interviewId,
   reportStatus: report.reportStatus || report.status,
+  stageReports: report.stageReports || report.stageScores || [],
+  stageScores: report.stageScores || report.stageReports || [],
+  weakPoints: report.weakPoints || report.weakKnowledgePoints,
+  strengths: report.strengths,
+  mainProblems: report.mainProblems || report.weaknesses,
+  weaknesses: report.weaknesses || report.mainProblems,
+  reviewSuggestions: report.reviewSuggestions || report.suggestions,
+  suggestions: report.suggestions || report.reviewSuggestions,
+  projectProblems: report.projectProblems || report.projectExpressionProblems,
+  projectExpressionProblems: report.projectExpressionProblems || report.projectProblems,
+  qaReview: report.qaReview || report.messages || [],
+  messages: report.messages || report.qaReview || [],
+  summary: report.summary || report.reportContent,
+  reportContent: report.reportContent || report.summary,
   failedReason: report.failedReason || report.failureReason
 })
 
 const toCreatePayload = (data: InterviewCreateDTO) => ({
-  mode: data.mode || data.interviewMode,
+  interviewMode: data.interviewMode,
   resumeId: data.resumeId,
-  title: data.title || data.interviewName,
-  maxQuestionCount: data.maxQuestionCount || data.questionCount,
+  interviewName: data.interviewName,
+  questionCount: data.questionCount,
   targetPosition: data.targetPosition,
   experienceLevel: data.experienceLevel,
   industryDirection: data.industryDirection,
@@ -156,10 +183,7 @@ export const getInterviewsApi = (params?: InterviewQueryDTO) => {
     .get<PageResult<InterviewListVO>, PageResult<InterviewListVO>>('/interviews', {
       params
     })
-    .then((result) => ({
-      ...result,
-      records: (result.records || []).map(normalizeListItem)
-    }))
+    .then((result) => normalizePageResult(result, params, normalizeListItem))
 }
 
 export const getInterviewDetailApi = (id: number) => {

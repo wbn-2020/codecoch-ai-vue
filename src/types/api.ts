@@ -7,6 +7,7 @@ export interface ApiResult<T = unknown> {
 
 export interface PageQuery {
   pageNo?: number
+  pageNum?: number
   pageSize?: number
 }
 
@@ -14,6 +15,7 @@ export interface PageResult<T> {
   records: T[]
   total: number
   pageNo: number
+  pageNum?: number
   pageSize: number
   pages: number
 }

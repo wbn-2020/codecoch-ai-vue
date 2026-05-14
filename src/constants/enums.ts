@@ -32,6 +32,9 @@ export const ANSWER_RESULT = {
 export const INTERVIEW_STATUS = {
   NOT_STARTED: 'NOT_STARTED',
   IN_PROGRESS: 'IN_PROGRESS',
+  WAITING_ANSWER: 'WAITING_ANSWER',
+  AI_EVALUATING: 'AI_EVALUATING',
+  REPORT_GENERATING: 'REPORT_GENERATING',
   COMPLETED: 'COMPLETED',
   CANCELED: 'CANCELED',
   FAILED: 'FAILED'
@@ -60,7 +63,7 @@ export const INTERVIEW_MODE = {
 export const AI_SCENE = {
   INTERVIEW_QUESTION_GENERATE: 'INTERVIEW_QUESTION_GENERATE',
   PROJECT_DEEP_DIVE_QUESTION: 'PROJECT_DEEP_DIVE_QUESTION',
-  ANSWER_EVALUATE: 'ANSWER_EVALUATE',
+  INTERVIEW_ANSWER_EVALUATE: 'INTERVIEW_ANSWER_EVALUATE',
   INTERVIEW_FOLLOW_UP_GENERATE: 'INTERVIEW_FOLLOW_UP_GENERATE',
   INTERVIEW_REPORT_GENERATE: 'INTERVIEW_REPORT_GENERATE'
 } as const
@@ -131,7 +134,25 @@ export const interviewerStyleOptions: SelectOption[] = [
 export const promptTypeOptions: SelectOption[] = [
   { label: '八股文提问模板', value: AI_SCENE.INTERVIEW_QUESTION_GENERATE },
   { label: '项目深挖提问模板', value: AI_SCENE.PROJECT_DEEP_DIVE_QUESTION },
-  { label: '回答评分模板', value: AI_SCENE.ANSWER_EVALUATE },
+  { label: '回答评分模板', value: AI_SCENE.INTERVIEW_ANSWER_EVALUATE },
   { label: '动态追问模板', value: AI_SCENE.INTERVIEW_FOLLOW_UP_GENERATE },
   { label: '面试报告生成模板', value: AI_SCENE.INTERVIEW_REPORT_GENERATE }
 ]
+
+export const interviewStatusMap: Record<string, string> = {
+  NOT_STARTED: '未开始',
+  IN_PROGRESS: '进行中',
+  WAITING_ANSWER: '等待作答',
+  AI_EVALUATING: 'AI 评分中',
+  REPORT_GENERATING: '报告生成中',
+  COMPLETED: '已完成',
+  CANCELED: '已取消',
+  FAILED: '失败'
+}
+
+export const reportStatusMap: Record<string, string> = {
+  NOT_GENERATED: '未生成',
+  GENERATING: '生成中',
+  GENERATED: '已生成',
+  FAILED: '生成失败'
+}

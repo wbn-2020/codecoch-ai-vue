@@ -67,6 +67,7 @@ export interface QuestionVO {
   categoryName?: string
   difficulty: QuestionDifficulty
   questionType?: QuestionType
+  experienceLevel?: string
   tags?: QuestionTagVO[]
   tagIds?: number[]
   tagNames?: string[]
@@ -81,7 +82,6 @@ export interface QuestionDetailVO {
   id: number
   title: string
   content: string
-  answer?: string
   referenceAnswer?: string
   analysis?: string
   category?: QuestionCategoryVO
@@ -92,6 +92,7 @@ export interface QuestionDetailVO {
   tagNames?: string[]
   difficulty: QuestionDifficulty
   questionType?: QuestionType
+  experienceLevel?: string
   favorite: boolean
   masteryStatus?: MasteryStatus
   lastAnswer?: string
@@ -171,7 +172,6 @@ export interface AdminQuestionVO {
   id: number
   title: string
   content?: string
-  answer?: string
   referenceAnswer?: string
   analysis?: string
   categoryId?: number
@@ -181,6 +181,8 @@ export interface AdminQuestionVO {
   groupName?: string
   difficulty: QuestionDifficulty
   questionType?: QuestionType
+  experienceLevel?: string
+  isHighFrequency?: boolean | number
   status: number
   tags?: QuestionTagVO[] | string[]
   tagIds?: number[]
@@ -191,12 +193,15 @@ export interface AdminQuestionVO {
 export interface QuestionCreateDTO {
   title: string
   content: string
-  answer: string
+  referenceAnswer: string
+  answer?: string
   analysis?: string
   categoryId?: number
   groupId?: number
   difficulty: QuestionDifficulty
   questionType?: QuestionType
+  experienceLevel?: string
+  isHighFrequency?: boolean | number
   tagIds?: number[]
   status?: number
 }

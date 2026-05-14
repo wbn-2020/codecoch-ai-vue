@@ -7,6 +7,7 @@ import type {
   SystemConfigUpdateDTO,
   SystemConfigVO
 } from '@/types/system'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendSystemConfigVO = SystemConfigVO & {
   valueType?: string
@@ -34,24 +35,7 @@ const normalizeSystemConfig = (config: BackendSystemConfigVO): SystemConfigVO =>
 const normalizeConfigPage = (
   result: PageResult<BackendSystemConfigVO> | BackendSystemConfigVO[],
   params: SystemConfigQueryDTO
-): PageResult<SystemConfigVO> => {
-  if (Array.isArray(result)) {
-    const pageNo = params.pageNo || 1
-    const pageSize = params.pageSize || result.length || 10
-    return {
-      records: result.map(normalizeSystemConfig),
-      total: result.length,
-      pageNo,
-      pageSize,
-      pages: Math.max(1, Math.ceil(result.length / pageSize))
-    }
-  }
-
-  return {
-    ...result,
-    records: (result.records || []).map(normalizeSystemConfig)
-  }
-}
+): PageResult<SystemConfigVO> => normalizePageResult(result, params, normalizeSystemConfig)
 
 const normalizeAdminOverview = (data: BackendAdminOverviewVO): AdminOverviewVO => ({
   userCount: data.userCount ?? data.usersCount ?? 0,

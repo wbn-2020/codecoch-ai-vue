@@ -3,7 +3,7 @@ import type { PageQuery } from './api'
 export type AiScene =
   | 'INTERVIEW_QUESTION_GENERATE'
   | 'PROJECT_DEEP_DIVE_QUESTION'
-  | 'ANSWER_EVALUATE'
+  | 'INTERVIEW_ANSWER_EVALUATE'
   | 'INTERVIEW_FOLLOW_UP_GENERATE'
   | 'INTERVIEW_REPORT_GENERATE'
   | string
