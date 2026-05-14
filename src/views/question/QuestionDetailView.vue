@@ -167,7 +167,7 @@ const handleUpdateMastery = async () => {
   masteryLoading.value = true
   try {
     const result = await updateQuestionMasteryApi(detail.value.id, { masteryStatus: masteryStatus.value })
-    detail.value.masteryStatus = result.masteryStatus
+    detail.value.masteryStatus = result?.masteryStatus || masteryStatus.value
     ElMessage.success('掌握状态已更新')
   } finally {
     masteryLoading.value = false
