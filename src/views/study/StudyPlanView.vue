@@ -200,11 +200,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
-  completeStudyTaskApi,
   generateStudyPlanApi,
   getStudyPlanDetailApi,
   getStudyPlansApi,
-  skipStudyTaskApi,
   updateStudyTaskStatusApi
 } from '@/api/studyPlan'
 import type {
@@ -355,13 +353,13 @@ const updateTask = async (taskId: number, taskStatus: StudyTaskStatus) => {
 }
 
 const completeTask = async (taskId: number) => {
-  await completeStudyTaskApi(taskId)
+  await updateStudyTaskStatusApi(taskId, 'COMPLETED')
   ElMessage.success('任务已完成')
   await refreshSelectedPlan()
 }
 
 const skipTask = async (taskId: number) => {
-  await skipStudyTaskApi(taskId)
+  await updateStudyTaskStatusApi(taskId, 'SKIPPED')
   ElMessage.success('任务已跳过')
   await refreshSelectedPlan()
 }

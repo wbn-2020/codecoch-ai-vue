@@ -50,11 +50,3 @@ export const getStudyPlanTasksApi = (id: number) => {
 export const updateStudyTaskStatusApi = (taskId: number, taskStatus: StudyTaskStatus) => {
   return request.post<StudyTaskVO, StudyTaskVO>(`/study-tasks/${taskId}/status`, { taskStatus })
 }
-
-export const completeStudyTaskApi = (taskId: number) => {
-  return request.post<StudyTaskVO, StudyTaskVO>(`/study-tasks/${taskId}/complete`)
-}
-
-export const skipStudyTaskApi = (taskId: number) => {
-  return request.post<StudyTaskVO, StudyTaskVO>(`/study-tasks/${taskId}/skip`)
-}
