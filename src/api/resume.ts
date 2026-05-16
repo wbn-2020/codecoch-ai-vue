@@ -2,10 +2,18 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
   ResumeCreateDTO,
+  ResumeAnalysisResultVO,
+  ResumeConfirmAnalysisVO,
   ResumeDetailVO,
+  ResumeOptimizeDetailVO,
+  ResumeOptimizeRecordVO,
+  ResumeOptimizeRequestDTO,
+  ResumeOptimizeSubmitVO,
+  ResumeParseStatusVO,
   ResumeProjectDTO,
   ResumeProjectVO,
   ResumeQueryDTO,
+  ResumeUploadVO,
   ResumeUpdateDTO,
   ResumeVO,
   SetDefaultResumeVO
@@ -97,6 +105,59 @@ export const createResumeApi = (data: ResumeCreateDTO) => {
     .post<ResumeDetailVO, ResumeDetailVO>('/resumes', toResumePayload(data))
     .then(normalizeResume)
 }
+
+export const uploadResumeFileApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ResumeUploadVO, ResumeUploadVO>('/resumes/upload', formData)
+}
+
+export const getResumeParseTaskApi = (analysisRecordId: number) => {
+  return request.get<ResumeParseStatusVO, ResumeParseStatusVO>(
+    `/resumes/${analysisRecordId}/parse-status`
+  )
+}
+
+export const createResumeParseTaskApi = uploadResumeFileApi
+
+export const reparseResumeApi = (analysisRecordId: number) => {
+  return request.post<ResumeParseStatusVO, ResumeParseStatusVO>(
+    `/resumes/${analysisRecordId}/reparse`
+  )
+}
+
+export const getResumeParseResultApi = (analysisRecordId: number) => {
+  return request.get<ResumeAnalysisResultVO, ResumeAnalysisResultVO>(
+    `/resumes/${analysisRecordId}/analysis-result`
+  )
+}
+
+export const confirmResumeParseResultApi = (analysisRecordId: number) => {
+  return request.post<ResumeConfirmAnalysisVO, ResumeConfirmAnalysisVO>(
+    `/resumes/${analysisRecordId}/confirm-analysis`
+  )
+}
+
+export const optimizeResumeApi = (resumeId: number, data?: ResumeOptimizeRequestDTO) => {
+  return request.post<ResumeOptimizeSubmitVO, ResumeOptimizeSubmitVO>(
+    `/resumes/${resumeId}/optimize`,
+    data || {}
+  )
+}
+
+export const getResumeOptimizeRecordsApi = (resumeId: number) => {
+  return request.get<ResumeOptimizeRecordVO[], ResumeOptimizeRecordVO[]>(
+    `/resumes/${resumeId}/optimize-records`
+  )
+}
+
+export const getResumeOptimizeResultApi = (recordId: number) => {
+  return request.get<ResumeOptimizeDetailVO, ResumeOptimizeDetailVO>(
+    `/resumes/optimize-records/${recordId}`
+  )
+}
+
+export const getResumeOptimizeCompareApi = getResumeOptimizeResultApi
 
 export const getResumeDetailApi = (id: number) => {
   return request.get<ResumeDetailVO, ResumeDetailVO>(`/resumes/${id}`).then(normalizeResume)

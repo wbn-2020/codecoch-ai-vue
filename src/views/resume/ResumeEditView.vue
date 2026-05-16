@@ -204,21 +204,63 @@
           </el-button>
         </section>
 
-        <section class="content-card side-panel">
-          <h3>V2 能力入口</h3>
-          <div class="capability-item">
-            <span>简历上传 / 解析</span>
-            <el-tag type="warning" effect="plain">待接入</el-tag>
+        <section v-if="isEdit && resumeId" class="content-card side-panel ai-panel">
+          <h3>AI 简历优化</h3>
+          <p>基于当前已保存简历触发真实 V2 优化接口。结果只展示建议，不会自动覆盖当前表单。</p>
+          <el-form class="optimize-form" :model="optimizeForm" label-position="top">
+            <el-form-item label="目标岗位">
+              <el-input v-model.trim="optimizeForm.targetPosition" placeholder="默认使用当前求职方向" />
+            </el-form-item>
+            <el-form-item label="工作年限">
+              <el-input-number v-model="optimizeForm.experienceYears" :min="0" :max="30" />
+            </el-form-item>
+            <el-form-item label="行业方向">
+              <el-input v-model.trim="optimizeForm.industryDirection" placeholder="例如：电商 / 金融支付 / SaaS" />
+            </el-form-item>
+          </el-form>
+          <el-button class="full-button" type="primary" :loading="optimizing" @click="handleOptimizeResume">
+            <Sparkles :size="16" />
+            发起 AI 优化
+          </el-button>
+
+          <div class="optimize-records">
+            <div class="capability-item">
+              <span>最近记录</span>
+              <el-tag :type="latestOptimizeRecord?.optimizeStatus === 'FAILED' ? 'danger' : latestOptimizeRecord ? 'success' : 'info'" effect="plain">
+                {{ optimizeStatusText(latestOptimizeRecord?.optimizeStatus) }}
+              </el-tag>
+            </div>
+            <button
+              v-for="record in optimizeRecords"
+              :key="record.optimizeRecordId"
+              class="record-row"
+              type="button"
+              @click="openOptimizeDetail(record.optimizeRecordId)"
+            >
+              <span>#{{ record.optimizeRecordId }} · {{ optimizeStatusText(record.optimizeStatus) }}</span>
+              <small>{{ formatDateTime(record.createdAt || record.updatedAt) }}</small>
+            </button>
           </div>
-          <div class="capability-item">
-            <span>AI 简历优化</span>
-            <el-tag type="warning" effect="plain">待接入</el-tag>
+
+          <div v-if="optimizeDetail" class="optimize-result">
+            <div class="score-line">
+              <span>综合评分</span>
+              <strong>{{ optimizeDetail.resultJson?.overallScore ?? '--' }}</strong>
+            </div>
+            <p>{{ optimizeDetail.resultJson?.overallComment || optimizeDetail.errorMessage || '后端未返回整体评价。' }}</p>
+            <div v-if="optimizeDetail.resultJson?.rewriteSuggestions?.length" class="rewrite-list">
+              <article v-for="(item, index) in optimizeDetail.resultJson.rewriteSuggestions.slice(0, 3)" :key="index">
+                <span>{{ item.projectName || item.section || `建议 ${index + 1}` }}</span>
+                <p>{{ item.after || item.reason || '后端未返回改写内容' }}</p>
+              </article>
+            </div>
+            <el-tooltip content="后端当前没有应用优化结果接口，不能自动覆盖简历内容" placement="top">
+              <el-button class="full-button" disabled>
+                <GitCompareArrows :size="16" />
+                应用优化结果 · 待接入真实接口
+              </el-button>
+            </el-tooltip>
           </div>
-          <div class="capability-item">
-            <span>优化对比报告</span>
-            <el-tag type="warning" effect="plain">待接入</el-tag>
-          </div>
-          <p>当前 `src/api/resume.ts` 未提供对应前端方法，本轮不伪造结果。</p>
         </section>
 
         <section class="content-card side-panel">
@@ -258,10 +300,12 @@ import {
   Circle,
   FilePenLine,
   FolderOpen,
+  GitCompareArrows,
   Layers3,
   MessagesSquare,
   Plus,
   Save,
+  Sparkles,
   Target,
   UserRound
 } from 'lucide-vue-next'
@@ -272,14 +316,26 @@ import {
   createResumeApi,
   createResumeProjectApi,
   deleteResumeProjectApi,
+  getResumeOptimizeRecordsApi,
+  getResumeOptimizeResultApi,
   getResumeDetailApi,
+  optimizeResumeApi,
   setDefaultResumeApi,
   updateResumeApi,
   updateResumeProjectApi
 } from '@/api/resume'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
-import type { ResumeCreateDTO, ResumeDetailVO, ResumeProjectDTO, ResumeProjectVO } from '@/types/resume'
+import type {
+  ResumeCreateDTO,
+  ResumeDetailVO,
+  ResumeOptimizeDetailVO,
+  ResumeOptimizeRecordVO,
+  ResumeOptimizeRequestDTO,
+  ResumeProjectDTO,
+  ResumeProjectVO
+} from '@/types/resume'
 import { getRouteNumberParam } from '@/utils/route'
+import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -289,12 +345,15 @@ const isEdit = computed(() => Boolean(resumeId.value))
 const loading = ref(false)
 const saving = ref(false)
 const projectSaving = ref(false)
+const optimizing = ref(false)
 const formRef = ref<FormInstance>()
 const projectFormRef = ref<InstanceType<typeof ResumeProjectForm>>()
 const projectDialogVisible = ref(false)
 const editingProjectId = ref<number | null>(null)
 const editingProject = ref<ResumeProjectVO | null>(null)
 const projects = ref<ResumeProjectVO[]>([])
+const optimizeRecords = ref<ResumeOptimizeRecordVO[]>([])
+const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 
 const form = reactive<ResumeCreateDTO>({
   resumeName: '',
@@ -307,6 +366,12 @@ const form = reactive<ResumeCreateDTO>({
   workSummary: '',
   education: '',
   isDefault: 0
+})
+
+const optimizeForm = reactive<ResumeOptimizeRequestDTO>({
+  targetPosition: '',
+  experienceYears: undefined,
+  industryDirection: ''
 })
 
 const rules: FormRules<ResumeCreateDTO> = {
@@ -329,6 +394,8 @@ const completion = computed(() => {
   return Math.round((done / completionItems.value.length) * 100)
 })
 
+const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
+
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
     resumeName: detail.resumeName,
@@ -342,6 +409,9 @@ const applyDetail = (detail: ResumeDetailVO) => {
     education: detail.education || detail.educationExperience || '',
     isDefault: detail.isDefault
   })
+  if (!optimizeForm.targetPosition) {
+    optimizeForm.targetPosition = detail.targetPosition || ''
+  }
   projects.value = detail.projects || []
 }
 
@@ -350,8 +420,54 @@ const fetchDetail = async () => {
   loading.value = true
   try {
     applyDetail(await getResumeDetailApi(resumeId.value))
+    await fetchOptimizeRecords()
   } finally {
     loading.value = false
+  }
+}
+
+const optimizeStatusText = (status?: string) => {
+  const map: Record<string, string> = {
+    PROCESSING: '优化中',
+    SUCCESS: '优化成功',
+    FAILED: '优化失败'
+  }
+  return status ? map[status] || status : '暂无记录'
+}
+
+const fetchOptimizeRecords = async () => {
+  if (!resumeId.value) return
+  optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
+  if (!optimizeDetail.value && optimizeRecords.value[0]) {
+    optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+  }
+}
+
+const openOptimizeDetail = async (recordId: number) => {
+  optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
+}
+
+const handleOptimizeResume = async () => {
+  if (!resumeId.value) return
+  optimizing.value = true
+  try {
+    const result = await optimizeResumeApi(resumeId.value, {
+      targetPosition: optimizeForm.targetPosition || form.targetPosition,
+      experienceYears: optimizeForm.experienceYears,
+      industryDirection: optimizeForm.industryDirection,
+      selectedProjectIds: projects.value.map((project) => project.projectId).filter(Boolean)
+    })
+    if (result.optimizeStatus === 'FAILED') {
+      ElMessage.error(result.errorMessage || 'AI 优化失败')
+    } else {
+      ElMessage.success('AI 优化已完成')
+    }
+    await fetchOptimizeRecords()
+    if (result.optimizeRecordId) {
+      await openOptimizeDetail(result.optimizeRecordId)
+    }
+  } finally {
+    optimizing.value = false
   }
 }
 
@@ -721,6 +837,114 @@ onMounted(fetchDetail)
   width: 100%;
   margin-top: 14px;
   gap: 8px;
+}
+
+.ai-panel {
+  border-color: rgba(129, 140, 248, 0.24);
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.1), rgba(2, 6, 23, 0.12)),
+    rgba(15, 23, 42, 0.72);
+}
+
+.optimize-form {
+  margin-top: 14px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
+  }
+
+  :deep(.el-input-number) {
+    width: 100%;
+  }
+}
+
+.optimize-records {
+  margin-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.record-row {
+  display: block;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  span,
+  small {
+    display: block;
+  }
+
+  span {
+    color: #dbeafe;
+    font-size: 13px;
+  }
+
+  small {
+    margin-top: 4px;
+    color: var(--app-text-muted);
+  }
+}
+
+.optimize-result {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 14px;
+  background: rgba(8, 47, 73, 0.18);
+
+  > p {
+    margin: 10px 0 0;
+    color: #cbd5e1;
+  }
+}
+
+.score-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 13px;
+  }
+
+  strong {
+    color: #a5b4fc;
+    font-size: 26px;
+  }
+}
+
+.rewrite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+
+  article {
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.26);
+  }
+
+  span {
+    color: #dbeafe;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
 }
 
 @media (max-width: 1120px) {
