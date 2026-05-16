@@ -172,6 +172,15 @@
         :description="loadError"
       />
 
+      <el-alert
+        v-if="optimizeRecordsLoadError"
+        class="resume-alert optimize-records-alert"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="优化记录加载失败，请稍后重试"
+      />
+
       <div class="resume-list" v-loading="loading">
         <div v-if="!loading && !loadError && resumes.length === 0" class="empty-state">
           <div class="empty-icon">
@@ -407,7 +416,7 @@ import {
   TimerReset,
   UploadCloud
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -451,6 +460,7 @@ const parseDrawerVisible = ref(false)
 const confirmingParse = ref(false)
 const optimizingId = ref<number | null>(null)
 const optimizeRecords = ref<Record<number, ResumeOptimizeRecordVO[]>>({})
+const optimizeRecordsLoadError = ref(false)
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 const optimizeDrawerVisible = ref(false)
 
@@ -495,6 +505,7 @@ const parseStatusMessage = computed(() => parseTask.value?.message || parseTask.
 const allOptimizeRecords = computed(() => Object.values(optimizeRecords.value).flat())
 
 const latestOptimizeStatus = computed(() => {
+  if (optimizeRecordsLoadError.value) return '加载失败'
   const latest = allOptimizeRecords.value[0]
   return latest ? optimizeStatusText(latest.optimizeStatus) : '暂无记录'
 })
@@ -571,17 +582,20 @@ const formatJson = (value: unknown) => {
 }
 
 const fetchOptimizeRecords = async () => {
+  let hasLoadError = false
   const entries = await Promise.all(
     resumes.value.map(async (resume) => {
       try {
         const records = await getResumeOptimizeRecordsApi(resume.id)
         return [resume.id, records] as const
       } catch {
+        hasLoadError = true
         return [resume.id, []] as const
       }
     })
   )
   optimizeRecords.value = Object.fromEntries(entries)
+  optimizeRecordsLoadError.value = hasLoadError
 }
 
 const fetchResumes = async () => {
@@ -591,11 +605,13 @@ const fetchResumes = async () => {
     const result = await getResumesApi(query)
     resumes.value = result.records || []
     total.value = result.total || 0
+    optimizeRecordsLoadError.value = false
     await fetchOptimizeRecords()
   } catch (error) {
     resumes.value = []
     total.value = 0
     optimizeRecords.value = {}
+    optimizeRecordsLoadError.value = false
     loadError.value = getErrorMessage(error, '请稍后重试，或确认后端简历服务是否可用。')
   } finally {
     loading.value = false
@@ -761,7 +777,9 @@ const handleDelete = async (row: ResumeVO) => {
 }
 
 onMounted(fetchResumes)
-onBeforeUnmount(stopParsePolling)
+onUnmounted(() => {
+  stopParsePolling()
+})
 </script>
 
 <style scoped lang="scss">
@@ -1059,6 +1077,16 @@ onBeforeUnmount(stopParsePolling)
 
 .resume-alert.compact {
   margin: 16px 0 0;
+}
+
+.optimize-records-alert {
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(120, 53, 15, 0.24);
+
+  :deep(.el-alert__title),
+  :deep(.el-alert__icon) {
+    color: #facc15;
+  }
 }
 
 .resume-list {
