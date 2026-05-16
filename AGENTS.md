@@ -1,105 +1,985 @@
-# AGENTS.md — CodeCoachAI Vue Frontend
+# AGENTS.md
 
-## Project identity
+## 1. 项目背景
 
-This repository is the Vue frontend of CodeCoachAI, an AI interview training platform.
+你正在参与 `CodeCoachAI-vue` 前端重构。
 
-Current project phase:
-- V1 code is considered functionally complete.
-- V1 documentation still needs to be updated and aligned with the actual code.
-- The next development phase is V2.
-- Do not start V2 feature implementation until V1 frontend pages, API contracts, and release notes are synchronized.
+CodeCoachAI 是一个面向 Java 求职者的 AI Java 面试训练与简历优化平台，用于 GitHub、个人博客和求职作品集展示。
 
-Related repositories:
-- Frontend: https://github.com/wbn-2020/codecoch-ai-vue.git
-- Backend: https://github.com/wbn-2020/codecoch-ai-java.git
-- Docs: https://github.com/wbn-2020/codecoch-ai-doc.git
+当前目标不是重做业务系统，而是在保留 V1 已有功能的前提下，将现有普通 Element Plus 后台风格升级为：
 
-## Frontend architecture expectations
+> 深色 AI SaaS + 开发者 IDE + AI 面试作战台风格
 
-Act as a senior Vue + TypeScript frontend engineer.
+本仓库是前端仓库：
 
-Expected stack:
-- Vue 3
-- TypeScript
-- Vite
-- Pinia
-- Vue Router
-- Element Plus
-- Axios
+- 前端仓库：`codecoch-ai-vue`
+- 后端仓库：`codecoch-ai-java`
+- 文档仓库：`codecoch-ai-doc`
 
-Keep the current routing, layout, store, and API module structure unless explicitly asked to refactor.
-
-## V1 scope that must remain stable
-
-V1 pages and flows include:
-- Login and registration
-- User profile
-- Question list/detail/answering
-- Favorites
-- Wrong records
-- Resume and project experience management
-- Interview creation
-- Interview room
-- Interview report
-- Interview history
-- Admin dashboard
-- Admin user/role management
-- Admin question/category/tag/group management
-- Admin prompt management
-- Admin AI call logs
-- Admin system configuration
-
-## Non-negotiable rules
-
-1. Do not invent API paths. Use the actual backend controller mappings or existing `src/api/**` files.
-2. Do not add fake mock data to hide backend integration issues unless explicitly requested.
-3. Do not keep adding compatibility hacks in API adapters. Prefer aligning DTOs with backend contracts.
-4. If a response shape is uncertain, stop and inspect the backend contract before changing UI logic.
-5. Do not break role-based navigation:
-   - Admin users can access admin routes.
-   - Normal users cannot see or access admin functions.
-6. Keep user-side and admin-side navigation clearly separated.
-7. For AI interview pages, account for real LLM latency. Do not assume all AI responses return within a few seconds.
-8. Avoid changing global request timeout blindly. Prefer per-API timeout for AI scoring/report generation if needed.
-9. For every UI fix, state the route, component file, API file, and reproduction steps.
-
-## Build and verification commands
-
-Use the actual project scripts if they exist. Otherwise prefer:
+当前前端重构分支：
 
 ```bash
-npm install
-npm run type-check
-npm run build
-npm run dev
+dev-ui
 ```
 
-Check in browser:
-- No old API paths appear in Network.
-- No unexpected 401/403/404.
-- Logout immediately redirects or clears protected state.
-- Admin buttons are hidden for normal users.
-- Interview create → room → answer → follow-up/score → finish → report works.
+前端重构 PRD 位于：
 
-## Required response format for Codex
+```bash
+docs/CodeCoachAI_前端重构PRD_深色AI工作台版.md
+```
 
-When completing a task, report:
+在执行任何前端重构任务前，必须先阅读该 PRD。
 
-1. Task conclusion
-2. Modified files
-3. What changed in each file
-4. Affected route/page
-5. Affected API module
-6. Backend contract assumptions
-7. Verification performed
-8. Remaining risks
-9. Next recommended step
+---
 
-## Documentation sync rule
+## 2. 当前技术栈
 
-If UI behavior changes V1 usage, update or instruct the user to update:
-- V1 user guide
-- API contract notes
-- `PROJECT_STATE.md`
-- `V1_RELEASE_NOTES_DRAFT.md`
+项目当前技术栈：
+
+- Vue 3
+- Vite
+- TypeScript
+- Vue Router
+- Pinia
+- Axios
+- Element Plus
+- ECharts
+- markdown-it
+- Sass / SCSS
+
+允许新增的技术：
+
+- Tailwind CSS：用于深色主题、布局、卡片、间距、响应式、三栏面试房间
+- @vueuse/core：用于主题切换、本地存储、窗口状态等工具能力
+- lucide-vue-next：用于现代线性图标
+- clsx
+- tailwind-merge
+- class-variance-authority
+
+暂缓引入：
+
+- shadcn-vue：后续按需引入，不在第一轮全量替换
+- Monaco Editor：暂缓，等代码练习模块成熟后再接
+
+---
+
+## 3. 重构总原则
+
+### 3.1 第一原则：不破坏 V1 已有功能
+
+本次是前端 UI / 体验 / 布局重构，不是业务逻辑重写。
+
+任何改动都必须保证以下功能不被破坏：
+
+- 登录
+- 退出
+- Token 持久化
+- 路由权限守卫
+- 用户端 / 管理端菜单权限
+- 题库列表
+- 题目详情
+- 收藏题目
+- 错题记录
+- 简历新增、编辑、删除、查看
+- 创建面试
+- 进入面试房间
+- 提交答案
+- AI 评分
+- AI 追问
+- 结束面试
+- 查看面试报告
+- 后台题目管理
+- 后台分类管理
+- 后台标签管理
+- 后台 Prompt 管理
+- 后台 AI 调用日志
+- 后台系统配置
+
+任何页面重构后，都不能只留下静态页面、假按钮、Mock 数据或不可用入口。
+
+---
+
+## 4. 禁止事项
+
+以下行为禁止执行：
+
+1. 禁止大面积删除已有业务代码。
+2. 禁止为了 UI 效果绕过真实接口。
+3. 禁止把真实接口替换成 Mock 数据。
+4. 禁止破坏现有 Axios 封装。
+5. 禁止破坏 Token、用户信息、权限状态的 Pinia 存储逻辑。
+6. 禁止破坏 Vue Router 路由守卫。
+7. 禁止随意改接口路径、请求参数、响应解析逻辑。
+8. 禁止改后端仓库代码。
+9. 禁止一次性引入大量 UI 库。
+10. 禁止第一轮全量替换 Element Plus。
+11. 禁止为了消除 TypeScript 报错使用大量 `any`、`// @ts-ignore`、无意义类型断言。
+12. 禁止提交不能通过 `npm run build` 的代码。
+13. 禁止只做首页大屏，忽略真实业务流程。
+14. 禁止新增无法访问、无法跳转、无数据来源的空页面。
+15. 禁止把用户端和管理端菜单权限混在一起。
+
+---
+
+## 5. UI 重构方向
+
+### 5.1 整体风格
+
+目标风格：
+
+- 深色 AI SaaS
+- 开发者 IDE
+- AI 面试作战台
+- 技术产品展示感
+- 适合作为 Java + AI 全栈作品集截图展示
+
+视觉关键词：
+
+- 深色背景
+- 低饱和边框
+- 半透明卡片
+- 蓝紫色 AI 高亮
+- 类 IDE 面板
+- 数据仪表盘
+- 三栏工作区
+- 清晰的信息层级
+- 现代线性图标
+- 控制台 / 终端 / 代码块质感
+
+不需要做成：
+
+- 普通若依后台
+- 传统白底管理系统
+- 花哨官网
+- 纯静态 Landing Page
+- 与业务无关的大屏炫技页面
+
+---
+
+## 6. 技术边界
+
+### 6.1 Element Plus 使用策略
+
+Element Plus 继续保留，并继续用于：
+
+- 表格
+- 表单
+- 分页
+- 弹窗
+- 抽屉
+- Select
+- DatePicker
+- Upload
+- Message
+- Notification
+- 管理后台 CRUD 页面
+
+不得第一轮全量替换 Element Plus。
+
+需要重点处理：
+
+- Element Plus 暗色模式兼容
+- 表格在深色背景下的边框、hover、斑马纹、分页样式
+- 表单控件在深色主题下的可读性
+- Dialog / Drawer / Popover 在暗色主题下的背景和边框
+
+### 6.2 Tailwind CSS 使用策略
+
+Tailwind 主要用于：
+
+- 页面整体布局
+- 深色背景
+- 卡片
+- 间距
+- 响应式布局
+- 顶部导航
+- 侧边栏
+- 三栏面试房间
+- AI 工作台组件
+- 状态徽章
+- 作品集展示感页面
+
+Tailwind 不用于替代所有 Element Plus 组件。
+
+### 6.3 图标策略
+
+允许使用：
+
+```bash
+lucide-vue-next
+```
+
+用于：
+
+- 菜单图标
+- 工作台卡片图标
+- AI 状态图标
+- 面试房间操作图标
+- 报告页指标图标
+- 管理后台概览图标
+
+避免混用过多图标库。
+
+### 6.4 主题策略
+
+需要支持深色主题基础能力。
+
+建议方向：
+
+- 默认深色主题
+- 使用 CSS variables 管理主题色
+- Tailwind 负责布局和常用样式
+- Element Plus 使用官方暗色变量或自定义变量兼容
+- 后续可扩展浅色主题，但第一轮以深色主题为主
+
+---
+
+## 7. 推荐目录与组件分层
+
+在不破坏现有结构的前提下，可以逐步整理以下目录。
+
+参考结构：
+
+```bash
+src/
+  layouts/
+    UserLayout.vue
+    AdminLayout.vue
+    components/
+      AppSidebar.vue
+      AppHeader.vue
+      AppTabs.vue
+      UserSidebar.vue
+      AdminSidebar.vue
+
+  components/
+    common/
+      AppCard.vue
+      AppSection.vue
+      AppEmpty.vue
+      AppStatusBadge.vue
+      AppMetricCard.vue
+      AppPageHeader.vue
+    ai/
+      AiChatPanel.vue
+      AiScoreCard.vue
+      AiQuestionCard.vue
+      AiFollowUpList.vue
+    interview/
+      InterviewQuestionPanel.vue
+      InterviewAnswerEditor.vue
+      InterviewRoomAside.vue
+      InterviewProgress.vue
+    resume/
+      ResumeCard.vue
+      ResumeOptimizeCompare.vue
+
+  styles/
+    index.scss
+    theme.scss
+    element-dark.scss
+    tailwind.css
+
+  views/
+    user/
+    admin/
+```
+
+注意：
+
+- 如果当前项目已有类似目录，优先复用现有目录。
+- 不要为追求目录整洁大规模移动文件。
+- 每次移动文件必须同步修复 import、路由、组件引用。
+- 页面重构优先保持业务逻辑不变，只替换布局和视觉层。
+
+---
+
+## 8. 页面重构优先级
+
+### 8.1 P0 必须优先完成
+
+P0 是第一轮重构范围。
+
+#### P0-1：新版 AGENTS.md
+
+目标：
+
+- 明确 Codex 执行规则
+- 约束不破坏 V1
+- 明确 UI 风格、技术边界、执行轮次、验收标准
+
+#### P0-2：Tailwind / 暗色主题基础接入
+
+目标：
+
+- 接入 Tailwind CSS
+- 建立全局深色主题基础
+- 建立基础设计 token
+- 保证 `npm run build` 通过
+
+验收：
+
+- Tailwind 生效
+- 全局深色背景生效
+- Element Plus 页面不出现明显白块
+- 原有页面可正常访问
+
+#### P0-3：Element Plus 暗色模式兼容
+
+目标：
+
+- 表格、表单、弹窗、分页、菜单、输入框在深色主题下可读
+- 不影响 Element Plus 原有交互
+
+验收：
+
+- 管理后台表格可正常查看
+- 表单输入清晰
+- Dialog / Drawer 背景正常
+- 分页按钮可见
+
+#### P0-4：UserLayout / AdminLayout
+
+目标：
+
+- 用户端和管理端布局分离
+- 用户端突出 AI 工作台风格
+- 管理端保留后台管理效率
+- 支持侧边栏收缩
+- 顶部展示最近打开菜单或面包屑 / 标签导航
+
+验收：
+
+- 用户端菜单正常
+- 管理端菜单正常
+- 刷新后路由状态正常
+- 权限不丢失
+- 退出登录正常
+- 左侧菜单可收缩
+
+#### P0-5：用户工作台
+
+目标：
+
+- 改造成 AI 求职训练工作台
+- 展示面试训练、简历优化、题库练习、学习计划等入口
+- 显示关键指标，例如面试次数、平均评分、错题数量、简历数量等
+- 保持真实数据优先，没有接口时允许优雅降级，但不得伪造核心业务结果
+
+验收：
+
+- 工作台入口可点击
+- 真实路由跳转正常
+- 数据加载失败有空状态或错误提示
+- 不出现无效按钮
+
+#### P0-6：AI 模拟面试房间
+
+目标：
+
+- 改造成三栏作战台布局
+- 左侧：面试进度 / 题目列表 / 当前状态
+- 中间：当前题目 / 答案输入 / 提交操作
+- 右侧：AI 评分 / AI 追问 / 建议 / 面试信息
+- 保留提交答案、AI 评分、AI 追问、结束面试逻辑
+
+验收：
+
+- 可以进入面试房间
+- 可以看到当前题目
+- 可以提交答案
+- 可以查看评分
+- 可以查看 AI 追问
+- 可以结束面试
+- 页面刷新后不出现严重异常
+- 移除任何假的 AI 展示数据
+
+#### P0-7：创建面试页
+
+目标：
+
+- 优化创建面试流程
+- 清晰展示面试类型、题目范围、难度、数量等配置
+- 创建成功后能进入真实面试房间
+
+验收：
+
+- 表单校验正常
+- 创建接口正常调用
+- 成功后跳转正常
+- 失败时有错误提示
+
+#### P0-8：面试报告页
+
+目标：
+
+- 改造成 AI 分析报告风格
+- 展示总分、维度评分、答题记录、AI 建议、薄弱点
+- 保留真实报告接口和数据解析
+
+验收：
+
+- 报告详情可正常打开
+- 评分数据显示正常
+- Markdown 内容正常渲染
+- 空数据有兜底状态
+
+#### P0-9：简历中心
+
+目标：
+
+- 优化简历列表、详情、编辑入口
+- 做成求职资料管理中心
+- 保留新增、编辑、删除、查看能力
+
+验收：
+
+- 简历列表正常
+- 新增正常
+- 编辑正常
+- 删除正常
+- 查看正常
+- 操作后列表刷新正常
+
+#### P0-10：管理后台首页
+
+目标：
+
+- 改造成后台运营驾驶舱
+- 展示题库、分类、标签、Prompt、AI 日志、系统配置等入口
+- 保持管理后台效率，不要做成纯展示页
+
+验收：
+
+- 管理端首页可访问
+- 管理菜单可跳转
+- 数据卡片不影响真实 CRUD
+- 权限正常
+
+---
+
+## 9. P1 后续范围
+
+P1 不在第一轮强制完成，但设计时需要预留空间。
+
+P1 包括：
+
+1. 简历优化对比页
+2. 学习计划页
+3. 代码练习页基础 UI
+4. Prompt 管理页
+5. AI 调用日志页
+6. 题库管理页视觉优化
+7. Markdown 渲染增强
+
+P1 原则：
+
+- 优先补齐用户端 AI 体验
+- 再优化管理端高频页面
+- 不为视觉效果牺牲 CRUD 稳定性
+
+---
+
+## 10. P2 后续范围
+
+P2 包括：
+
+1. 普通后台 CRUD 页面细节美化
+2. 移动端适配
+3. 作品集截图优化
+
+P2 原则：
+
+- 在 P0 / P1 稳定后再做
+- 不提前消耗时间做大量细节动画
+- 不为了移动端适配破坏桌面端布局
+
+---
+
+## 11. 每轮执行流程
+
+每一轮任务必须按以下流程执行。
+
+### 11.1 开始前检查
+
+执行前先检查：
+
+```bash
+git branch --show-current
+git status --short
+npm run build
+```
+
+要求：
+
+- 当前分支应为 `dev-ui`
+- 工作区应清晰，或者明确说明已有改动
+- 如果 build 已经失败，必须先说明失败原因，不得继续叠加大改动
+
+### 11.2 阅读上下文
+
+每轮开始前必须阅读：
+
+```bash
+docs/CodeCoachAI_前端重构PRD_深色AI工作台版.md
+AGENTS.md
+```
+
+并结合当前代码结构执行，不要凭空重构。
+
+### 11.3 小步提交
+
+每轮只做一个明确主题。
+
+推荐拆分：
+
+1. 基础工程配置
+2. 全局主题
+3. Layout
+4. 工作台
+5. 面试房间
+6. 创建面试
+7. 面试报告
+8. 简历中心
+9. 管理后台首页
+10. 回归修复
+
+不要一次性修改几十个页面。
+
+### 11.4 修改后检查
+
+每轮结束必须执行：
+
+```bash
+npm run build
+```
+
+如果项目有 lint / test 脚本，也应执行：
+
+```bash
+npm run lint
+npm run test
+```
+
+如果没有对应脚本，不要虚构执行结果。
+
+### 11.5 输出变更报告
+
+每轮结束需要输出：
+
+```md
+## 本轮修改范围
+
+- 修改了哪些模块
+- 修改了哪些文件
+- 新增了哪些依赖
+- 是否影响接口
+- 是否影响路由
+- 是否影响权限
+
+## 验收结果
+
+- npm run build：通过 / 失败
+- 登录流程：未测试 / 已测试
+- 用户端菜单：未测试 / 已测试
+- 管理端菜单：未测试 / 已测试
+- 核心业务流程：未测试 / 已测试
+
+## 风险点
+
+- xxx
+
+## 下一轮建议
+
+- xxx
+```
+
+不要只输出“已完成”。
+
+---
+
+## 12. 路由与权限约束
+
+### 12.1 路由守卫
+
+不得破坏现有路由守卫。
+
+必须保证：
+
+- 未登录访问受保护页面时跳转登录页
+- 已登录用户可进入用户端页面
+- 管理员可进入管理端页面
+- 普通用户不能访问管理端页面
+- Token 失效后能回到登录页
+
+### 12.2 菜单权限
+
+用户端和管理端菜单必须区分。
+
+用户端重点：
+
+- 工作台
+- 题库
+- 错题
+- 收藏
+- 简历中心
+- 创建面试
+- 面试记录 / 报告
+- 学习计划
+
+管理端重点：
+
+- 管理后台首页
+- 题目管理
+- 分类管理
+- 标签管理
+- Prompt 管理
+- AI 调用日志
+- 系统配置
+
+不得因为布局重构导致菜单权限失效。
+
+---
+
+## 13. 接口与数据约束
+
+### 13.1 不改接口契约
+
+前端重构默认不修改接口契约。
+
+除非明确发现接口字段与页面需求不匹配，否则不要改：
+
+- API 路径
+- 请求方法
+- 请求参数
+- 响应字段
+- Axios 拦截器
+- Token Header
+- 错误处理逻辑
+
+### 13.2 Mock 数据规则
+
+禁止用 Mock 数据替代已有真实接口。
+
+允许的情况：
+
+- 接口本身不存在
+- 当前页面是后续版本预留
+- 明确标注为占位
+- 不影响 V1 核心业务流程
+
+占位页面必须显示清晰提示，例如：
+
+```text
+该能力将在后续版本接入，目前仅展示入口。
+```
+
+不得伪装成真实 AI 结果。
+
+---
+
+## 14. 组件设计规范
+
+### 14.1 页面组件
+
+页面组件应负责：
+
+- 数据加载
+- 路由参数解析
+- 调用 API
+- 组合业务组件
+- 错误和空状态处理
+
+### 14.2 通用组件
+
+通用组件应负责：
+
+- UI 展示
+- 布局复用
+- 状态展示
+- 轻量交互
+
+通用组件不要直接耦合具体业务接口。
+
+### 14.3 AI 组件
+
+AI 相关组件建议包括：
+
+- AI 评分卡片
+- AI 追问列表
+- AI 建议面板
+- Markdown 渲染区
+- 面试状态面板
+- 答案输入区
+
+AI 组件必须优先展示真实数据。
+
+---
+
+## 15. 样式规范
+
+### 15.1 全局风格
+
+推荐基础色彩方向：
+
+```text
+背景：深黑 / 深蓝黑
+主色：蓝紫色 / 青蓝色
+边框：低透明白色
+卡片：半透明深色
+文字：高对比灰白
+弱文字：低对比灰
+成功：绿色
+警告：黄色 / 橙色
+错误：红色
+```
+
+### 15.2 可读性要求
+
+必须保证：
+
+- 表格文字清晰
+- 表单 label 清晰
+- 输入框文字清晰
+- placeholder 可读
+- 按钮 hover 状态可见
+- 弹窗内容可读
+- Markdown 内容可读
+- 代码块可读
+
+### 15.3 动效要求
+
+允许轻量动效：
+
+- hover
+- transition
+- 卡片阴影变化
+- 菜单展开收起
+- 面板切换
+
+禁止过度动效：
+
+- 大量粒子效果
+- 影响输入的动画
+- 影响表格操作的动画
+- 降低性能的背景动效
+
+---
+
+## 16. 页面验收标准
+
+### 16.1 通用验收
+
+每个页面重构后必须满足：
+
+- 页面能打开
+- 页面无明显控制台报错
+- 接口请求正常
+- 加载状态正常
+- 空状态正常
+- 错误状态正常
+- 路由跳转正常
+- 按钮可点击且有真实行为
+- 表单校验正常
+- `npm run build` 通过
+
+### 16.2 作品集展示标准
+
+重点页面应具备截图展示价值：
+
+- 用户工作台
+- AI 模拟面试房间
+- 面试报告页
+- 简历中心
+- 管理后台首页
+- Prompt 管理页
+- AI 调用日志页
+
+页面应体现：
+
+- Java 面试训练业务
+- AI 能力接入
+- 数据分析能力
+- 工程化后台能力
+- 前后端完整闭环
+
+---
+
+## 17. 推荐执行轮次
+
+### 第一轮：工程基础
+
+目标：
+
+- 更新 AGENTS.md
+- 接入 Tailwind CSS
+- 建立全局深色主题
+- 兼容 Element Plus 暗色模式
+- 保证 build 通过
+
+### 第二轮：布局重构
+
+目标：
+
+- UserLayout
+- AdminLayout
+- 侧边栏收缩
+- 顶部导航
+- 最近打开菜单 / 面包屑 / 标签导航
+- 用户端和管理端菜单分离
+
+### 第三轮：用户工作台
+
+目标：
+
+- 用户首页升级为 AI 求职训练工作台
+- 梳理核心入口
+- 展示真实指标或优雅空状态
+
+### 第四轮：AI 面试核心链路
+
+目标：
+
+- 创建面试页
+- AI 模拟面试房间
+- 提交答案
+- AI 评分
+- AI 追问
+- 结束面试
+- 面试报告页
+
+### 第五轮：简历中心
+
+目标：
+
+- 简历列表
+- 简历详情
+- 新增 / 编辑 / 删除
+- 后续简历优化入口预留
+
+### 第六轮：管理后台首页与重点管理页
+
+目标：
+
+- 管理后台首页
+- Prompt 管理页
+- AI 调用日志页
+- 题库管理页视觉优化
+
+### 第七轮：回归修复
+
+目标：
+
+- 登录回归
+- 权限回归
+- 用户端核心流程回归
+- 管理端 CRUD 回归
+- build 检查
+- 截图检查
+
+---
+
+## 18. Git 与提交规范
+
+每轮任务完成后建议提交一次。
+
+提交信息示例：
+
+```bash
+git add .
+git commit -m "docs: update frontend refactor agents guide"
+git commit -m "feat: add dark theme foundation"
+git commit -m "feat: refactor user and admin layouts"
+git commit -m "feat: redesign interview room workspace"
+git commit -m "feat: redesign interview report page"
+git commit -m "fix: improve element plus dark mode compatibility"
+```
+
+不要把多个大主题混在一个 commit 中。
+
+---
+
+## 19. 出现问题时的处理规则
+
+### 19.1 build 失败
+
+必须先修复 build。
+
+不得在 build 失败状态下继续叠加新功能。
+
+### 19.2 接口异常
+
+先确认：
+
+- 请求路径是否变化
+- Token 是否携带
+- 参数是否正确
+- 后端是否启动
+- 是否跨域
+- 是否权限不足
+
+不要直接改接口封装。
+
+### 19.3 权限异常
+
+先检查：
+
+- Pinia 用户状态
+- Token 持久化
+- 路由 meta
+- 菜单过滤逻辑
+- 管理员角色判断
+
+不要简单删除权限判断。
+
+### 19.4 样式污染
+
+如果 Tailwind 或全局 SCSS 影响 Element Plus：
+
+- 优先收敛全局选择器
+- 避免滥用 `*`
+- 避免全局覆盖 `button`、`input`、`table`
+- 将 Element Plus 暗色兼容样式集中放入 `element-dark.scss`
+
+---
+
+## 20. 最终交付要求
+
+P0 完成后，至少应满足：
+
+- `npm install` 成功
+- `npm run build` 成功
+- 登录 / 退出正常
+- 用户端路由正常
+- 管理端路由正常
+- 权限守卫正常
+- 用户工作台完成深色 AI 工作台风格
+- 创建面试流程可用
+- AI 模拟面试房间可用
+- 提交答案 / AI 评分 / AI 追问 / 结束面试可用
+- 面试报告页可用
+- 简历中心 CRUD 可用
+- 管理后台首页完成视觉升级
+- 没有明显假按钮
+- 没有用 Mock 替代真实 V1 接口
+- 没有破坏 V1 核心功能
+
+---
+
+## 21. 当前优先任务
+
+当前从 P0 第一项开始：
+
+```text
+更新 CodeCoachAI-vue 根目录 AGENTS.md
+```
+
+更新完成后，再进入：
+
+```text
+Tailwind / 暗色主题基础接入
+Element Plus 暗色模式兼容
+UserLayout / AdminLayout 重构
+```
+
+执行时必须保持小步修改、小步验证、每轮 build 通过。
