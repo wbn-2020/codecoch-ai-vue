@@ -221,8 +221,8 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
 const toCreatePayload = (data: InterviewCreateDTO) => ({
   interviewMode: data.interviewMode,
   resumeId: data.resumeId,
-  interviewName: data.interviewName,
-  questionCount: data.questionCount,
+  title: data.interviewName,
+  maxQuestionCount: data.questionCount,
   targetPosition: data.targetPosition,
   experienceLevel: data.experienceLevel,
   industryDirection: data.industryDirection,
