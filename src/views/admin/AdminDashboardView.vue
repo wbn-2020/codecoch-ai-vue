@@ -49,15 +49,20 @@
     <section class="admin-panel dashboard-screen-panel">
       <div class="admin-panel__header dashboard-panel-header">
         <div>
-          <h2>复杂大屏展示区</h2>
-          <p>以下图表全部为演示数据 / 待接入真实统计接口，用于预览后续统计大屏的信息组织方式。</p>
+          <h2>后续统计接入预览</h2>
+          <p>本区域不代表真实运营数据，仅保留少量演示图表预览信息组织方式；真实核心指标只来自概览接口。</p>
         </div>
-        <el-tag type="warning" effect="plain">演示数据 / 待接入真实接口</el-tag>
+        <el-tag type="warning" effect="plain">演示数据 / 待接入真实统计接口</el-tag>
+      </div>
+
+      <div class="dashboard-demo-banner">
+        <AlertTriangle :size="16" />
+        <span>以下趋势、分布、待办均为演示占位，不用于运营判断；上线前需接入真实统计接口后再展示真实数值。</span>
       </div>
 
       <div class="dashboard-chart-grid">
         <article
-          v-for="item in chartCards"
+          v-for="item in chartCards.slice(0, 2)"
           :key="item.title"
           class="dashboard-chart-card"
           :class="{ 'dashboard-chart-card--wide': item.wide }"
@@ -75,6 +80,13 @@
             <span>演示数据，待接入真实统计接口</span>
           </div>
         </article>
+      </div>
+
+      <div class="dashboard-demo-backlog">
+        <span>待接入真实统计后再开放：</span>
+        <el-tag v-for="item in chartCards.slice(2)" :key="item.title" size="small" effect="plain">
+          {{ item.title }}
+        </el-tag>
       </div>
     </section>
 
@@ -267,11 +279,11 @@ const demoModelDistribution = [
 ]
 
 const demoPendingItems = [
-  { label: '待审核 AI 生成题', value: 12, note: '待接入真实审核池接口' },
-  { label: '疑似重复题', value: 7, note: '待接入题库去重接口' },
-  { label: 'Prompt 版本待发布', value: 3, note: '待接入版本发布接口' },
-  { label: 'AI 调用失败排查', value: 5, note: '待接入聚合告警接口' },
-  { label: '简历解析失败', value: 4, note: '待接入解析失败统计接口' }
+  { label: '待审核 AI 生成题', value: '待接入', note: '待接入真实审核池接口' },
+  { label: '疑似重复题', value: '待接入', note: '待接入题库去重接口' },
+  { label: 'Prompt 版本待发布', value: '待接入', note: '待接入版本发布接口' },
+  { label: 'AI 调用失败排查', value: '待接入', note: '待接入聚合告警接口' },
+  { label: '简历解析失败', value: '待接入', note: '待接入解析失败统计接口' }
 ]
 
 const primaryLinks = [
@@ -586,7 +598,32 @@ onBeforeUnmount(() => {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
-    padding: 18px 20px 20px;
+    padding: 12px 20px 16px;
+  }
+
+  .dashboard-demo-banner,
+  .dashboard-demo-backlog {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 20px;
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    background: rgba(120, 53, 15, 0.18);
+    color: #fcd34d;
+    font-size: 12px;
+  }
+
+  .dashboard-demo-banner {
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .dashboard-demo-backlog {
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    padding: 12px;
+    border-radius: 12px;
   }
 
   .dashboard-chart-card {
