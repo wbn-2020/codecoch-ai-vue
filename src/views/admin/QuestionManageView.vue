@@ -1,15 +1,55 @@
 <template>
-  <div class="page-shell">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">题目管理</h1>
-        <p class="page-subtitle">维护 V1 题库基础数据，支持分类、标签、问题组、难度与状态管理。</p>
+  <div class="page-shell admin-console-page">
+    <section class="admin-hero">
+      <div class="admin-hero__content">
+        <div class="admin-eyebrow">
+          <BookOpenCheck :size="16" />
+          <span>Java Question Governance</span>
+        </div>
+        <h1 class="admin-hero__title">题库治理</h1>
+        <p class="admin-hero__desc">
+          维护 Java 面试题库的分类、标签、题组、难度和上下架状态。AI 生成题目审核属于后续能力，
+          当前不伪造审核结果或生成数据。
+        </p>
       </div>
-      <el-button type="primary" @click="openDialog()">新增题目</el-button>
+      <el-button type="primary" @click="openDialog()">
+        <Plus :size="16" />
+        新增题目
+      </el-button>
+    </section>
+
+    <div class="admin-insight-grid">
+      <article class="admin-insight-card">
+        <span>题目总数</span>
+        <strong>{{ total }}</strong>
+        <small>来自题目列表接口 total</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>当前页分类</span>
+        <strong>{{ categoryCount }}</strong>
+        <small>仅统计当前页记录</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>当前页高频题</span>
+        <strong>{{ highFrequencyCount }}</strong>
+        <small>仅统计当前页记录</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>AI 生成审核</span>
+        <strong>待接入</strong>
+        <small>不展示假审核状态</small>
+      </article>
     </div>
 
-    <section class="content-card">
-      <div class="content-card__body">
+    <section class="admin-panel">
+      <div class="admin-panel__header">
+        <div>
+          <h2>题目列表</h2>
+          <p>搜索、分页、新增、编辑、删除、启禁用保留现有后台 CRUD 链路。</p>
+        </div>
+      </div>
+
+      <div class="admin-filter-bar">
         <el-form class="filter-form" :model="query" inline>
           <el-form-item label="关键词">
             <el-input v-model.trim="query.keyword" clearable placeholder="题目标题" />
@@ -42,15 +82,31 @@
         </el-form>
       </div>
 
-      <div class="table-card">
+      <div class="question-distribution">
+        <span>当前页难度分布</span>
+        <el-tag type="success" effect="plain">简单 {{ difficultyStats.EASY }}</el-tag>
+        <el-tag type="warning" effect="plain">中等 {{ difficultyStats.MEDIUM }}</el-tag>
+        <el-tag type="danger" effect="plain">困难 {{ difficultyStats.HARD }}</el-tag>
+      </div>
+
+      <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="questions" row-key="id">
           <el-table-column prop="title" label="题目标题" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="categoryName" label="分类" min-width="130" />
-          <el-table-column label="问题组" min-width="160" show-overflow-tooltip>
+          <el-table-column label="分类" min-width="130">
+            <template #default="{ row }">
+              <el-tag v-if="row.categoryName" type="info" effect="plain">{{ row.categoryName }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="题组" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">{{ row.groupTitle || getGroupNameById(row.groupId) }}</template>
           </el-table-column>
           <el-table-column label="难度" width="110">
-            <template #default="{ row }">{{ getOptionLabel(difficultyOptions, row.difficulty) }}</template>
+            <template #default="{ row }">
+              <el-tag :type="getDifficultyTagType(row.difficulty)" effect="plain">
+                {{ getDifficultyLabel(row.difficulty) }}
+              </el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="标签" min-width="220">
             <template #default="{ row }">
@@ -66,9 +122,12 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="操作" width="180">
+          <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button link type="warning" @click="handleStatus(row)">
+                {{ row.status === 1 ? '禁用' : '启用' }}
+              </el-button>
               <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -106,8 +165,8 @@
             <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="问题组" prop="groupId">
-          <el-select v-model="form.groupId" filterable placeholder="请选择问题组" style="width: 100%">
+        <el-form-item label="题组" prop="groupId">
+          <el-select v-model="form.groupId" filterable placeholder="请选择题组" style="width: 100%">
             <el-option v-for="item in groups" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
@@ -158,13 +217,15 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { BookOpenCheck, Plus } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createAdminQuestionApi,
   deleteAdminQuestionApi,
   getAdminQuestionsApi,
-  updateAdminQuestionApi
+  updateAdminQuestionApi,
+  updateAdminQuestionStatusApi
 } from '@/api/question'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
@@ -182,10 +243,10 @@ import type {
   AdminQuestionVO,
   QuestionCategoryVO,
   QuestionCreateDTO,
+  QuestionDifficulty,
   QuestionGroupVO,
   QuestionTagVO
 } from '@/types/question'
-import { getOptionLabel } from '@/utils/format'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -226,11 +287,32 @@ const form = reactive<QuestionCreateDTO>({
 const rules: FormRules<QuestionCreateDTO> = {
   title: [{ required: true, message: '请输入题目标题', trigger: 'blur' }],
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
-  groupId: [{ required: true, message: '请选择问题组', trigger: 'change' }],
+  groupId: [{ required: true, message: '请选择题组', trigger: 'change' }],
   difficulty: [{ required: true, message: '请选择难度', trigger: 'change' }],
   questionType: [{ required: true, message: '请选择题型', trigger: 'change' }],
   content: [{ required: true, message: '请输入题干', trigger: 'blur' }],
   referenceAnswer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
+}
+
+const categoryCount = computed(() => new Set(questions.value.map((item) => item.categoryId || item.categoryName).filter(Boolean)).size)
+const highFrequencyCount = computed(() => questions.value.filter((item) => item.isHighFrequency === true || item.isHighFrequency === 1).length)
+const difficultyStats = computed(() => ({
+  EASY: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.EASY).length,
+  MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
+  HARD: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.HARD).length
+}))
+
+const getDifficultyLabel = (value?: QuestionDifficulty) => {
+  if (value === QUESTION_DIFFICULTY.EASY) return '简单'
+  if (value === QUESTION_DIFFICULTY.MEDIUM) return '中等'
+  if (value === QUESTION_DIFFICULTY.HARD) return '困难'
+  return value || '-'
+}
+
+const getDifficultyTagType = (value?: QuestionDifficulty) => {
+  if (value === QUESTION_DIFFICULTY.EASY) return 'success'
+  if (value === QUESTION_DIFFICULTY.HARD) return 'danger'
+  return 'warning'
 }
 
 const getGroupNameById = (groupId?: number) => {
@@ -316,6 +398,13 @@ const handleSave = async () => {
   }
 }
 
+const handleStatus = async (row: AdminQuestionVO) => {
+  const nextStatus = row.status === 1 ? 0 : 1
+  await updateAdminQuestionStatusApi(row.id, nextStatus)
+  ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
+  await fetchQuestions()
+}
+
 const handleDelete = async (row: AdminQuestionVO) => {
   await ElMessageBox.confirm(`确认删除题目 ${row.title}？`, '删除确认', { type: 'warning' })
   await deleteAdminQuestionApi(row.id)
@@ -358,6 +447,16 @@ onMounted(async () => {
 
 .dialog-alert {
   margin-bottom: 16px;
+}
+
+.question-distribution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 16px;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .pagination-wrap {

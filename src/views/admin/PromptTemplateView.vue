@@ -1,22 +1,62 @@
 <template>
-  <div class="page-shell">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Prompt 模板</h1>
-        <p class="page-subtitle">维护 V1 面试提问、评分、追问和报告生成模板，不做版本管理或 A/B 测试。</p>
+  <div class="page-shell admin-console-page">
+    <section class="admin-hero">
+      <div class="admin-hero__content">
+        <div class="admin-eyebrow">
+          <MessageSquareCode :size="16" />
+          <span>Prompt Engineering</span>
+        </div>
+        <h1 class="admin-hero__title">Prompt 模板治理</h1>
+        <p class="admin-hero__desc">
+          维护面试提问、答案评分、动态追问和报告生成模板。当前保留 V1 真实 CRUD，
+          版本 diff、灰度发布等能力未接入时只展示待接入状态。
+        </p>
       </div>
-      <el-button type="primary" @click="openDialog()">新增模板</el-button>
+      <el-button type="primary" @click="openDialog()">
+        <Plus :size="16" />
+        新增模板
+      </el-button>
+    </section>
+
+    <div class="admin-insight-grid">
+      <article class="admin-insight-card">
+        <span>模板总数</span>
+        <strong>{{ total }}</strong>
+        <small>来自 Prompt 列表接口 total</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>当前页启用</span>
+        <strong>{{ enabledCount }}</strong>
+        <small>仅统计当前页记录</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>场景类型</span>
+        <strong>{{ sceneCount }}</strong>
+        <small>仅统计当前页记录</small>
+      </article>
+      <article class="admin-insight-card">
+        <span>版本治理</span>
+        <strong>待接入</strong>
+        <small>不伪造版本 diff 或灰度效果</small>
+      </article>
     </div>
 
-    <section class="content-card">
-      <div class="content-card__body">
+    <section class="admin-panel">
+      <div class="admin-panel__header admin-panel__header--toolbar">
+        <div>
+          <h2>模板列表</h2>
+          <p>搜索、启停、新增、编辑、删除均复用现有 Prompt 管理接口。</p>
+        </div>
+      </div>
+
+      <div class="admin-filter-bar">
         <el-form :model="query" inline>
           <el-form-item label="关键词">
             <el-input v-model.trim="query.keyword" clearable placeholder="名称 / 编码" />
           </el-form-item>
-          <el-form-item label="类型">
+          <el-form-item label="场景类型">
             <el-select v-model="query.scene" clearable placeholder="全部类型" style="width: 220px">
-              <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+              <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
@@ -32,12 +72,14 @@
         </el-form>
       </div>
 
-      <div class="table-card">
+      <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="prompts" row-key="id">
           <el-table-column prop="promptName" label="模板名称" min-width="180" show-overflow-tooltip />
           <el-table-column prop="templateCode" label="模板编码" min-width="220" show-overflow-tooltip />
-          <el-table-column label="类型" min-width="210">
-            <template #default="{ row }">{{ getOptionLabel(promptTypeOptions, row.promptType) }}</template>
+          <el-table-column label="场景类型" min-width="210">
+            <template #default="{ row }">
+              <el-tag type="primary" effect="plain">{{ getSceneLabel(row.promptType || row.scene) }}</el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="版本" width="100">
             <template #default="{ row }">{{ row.version || 'V1' }}</template>
@@ -46,7 +88,7 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column label="更新时间" min-width="170">
-            <template #default="{ row }">{{ row.updatedAt || '-' }}</template>
+            <template #default="{ row }">{{ row.updatedAt || row.updateTime || '-' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
@@ -80,7 +122,7 @@
         </el-form-item>
         <el-form-item label="模板类型" prop="scene">
           <el-select v-model="form.scene" style="width: 100%">
-            <el-option v-for="item in promptTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="模板内容" prop="content">
@@ -104,7 +146,8 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { MessageSquareCode, Plus } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createAdminAiPromptApi,
@@ -114,9 +157,16 @@ import {
   updateAdminAiPromptStatusApi
 } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
-import { AI_SCENE, promptTypeOptions } from '@/constants/enums'
-import type { PromptTemplateDTO, PromptTemplateQueryDTO, PromptTemplateVO } from '@/types/ai'
-import { getOptionLabel } from '@/utils/format'
+import { AI_SCENE } from '@/constants/enums'
+import type { AiScene, PromptTemplateDTO, PromptTemplateQueryDTO, PromptTemplateVO } from '@/types/ai'
+
+const sceneOptions = [
+  { label: '八股文提问模板', value: AI_SCENE.INTERVIEW_QUESTION_GENERATE },
+  { label: '项目深挖提问模板', value: AI_SCENE.PROJECT_DEEP_DIVE_QUESTION },
+  { label: '回答评分模板', value: AI_SCENE.INTERVIEW_ANSWER_EVALUATE },
+  { label: '动态追问模板', value: AI_SCENE.INTERVIEW_FOLLOW_UP_GENERATE },
+  { label: '面试报告生成模板', value: AI_SCENE.INTERVIEW_REPORT_GENERATE }
+]
 
 const loading = ref(false)
 const saving = ref(false)
@@ -147,6 +197,11 @@ const rules: FormRules<PromptTemplateDTO> = {
   scene: [{ required: true, message: '请选择模板类型', trigger: 'change' }],
   content: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 }
+
+const enabledCount = computed(() => prompts.value.filter((item) => item.status === 1).length)
+const sceneCount = computed(() => new Set(prompts.value.map((item) => item.promptType || item.scene).filter(Boolean)).size)
+
+const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || value || '-'
 
 const fetchPrompts = async () => {
   loading.value = true
