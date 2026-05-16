@@ -318,10 +318,10 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: '学习计划进度',
     value: '--',
-    hint: '待接入真实能力',
+    hint: '查看真实学习计划',
     icon: Route,
-    tone: 'tone-muted',
-    disabled: true
+    tone: 'tone-purple',
+    path: '/study-plans'
   }
 ])
 
@@ -370,11 +370,10 @@ const actionCards: ActionItem[] = [
   },
   {
     title: '学习计划',
-    desc: '完成报告后生成训练计划',
+    desc: '基于真实面试报告生成训练计划',
     icon: Route,
-    tone: 'tone-muted',
-    badge: '待接入',
-    disabled: true
+    tone: 'tone-purple',
+    path: '/study-plans'
   }
 ]
 
@@ -409,11 +408,10 @@ const trainingPath: ActionItem[] = [
   },
   {
     title: '生成学习计划',
-    desc: '后续版本接入真实学习计划',
+    desc: '进入真实学习计划列表和生成入口',
     icon: Route,
-    tone: 'tone-muted',
-    badge: '待接入',
-    disabled: true
+    tone: 'tone-purple',
+    path: '/study-plans'
   }
 ]
 

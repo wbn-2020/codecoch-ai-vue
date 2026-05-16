@@ -17,6 +17,7 @@ import {
   DocumentChecked,
   Files,
   Medal,
+  Reading,
   Star,
   User
 } from '@element-plus/icons-vue'
@@ -37,6 +38,7 @@ const menuItems = [
   { label: '简历', path: '/resumes', icon: Files },
   { label: '创建面试', path: '/interviews/create', icon: Compass },
   { label: '面试历史', path: '/interviews/history', icon: Medal },
+  { label: '学习计划', path: '/study-plans', icon: Reading },
   { label: '个人资料', path: '/profile', icon: User }
 ]
 
@@ -45,6 +47,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
   if (route.path.startsWith('/resumes')) return '/resumes'
+  if (route.path.startsWith('/study-plans')) return '/study-plans'
   if (route.path.startsWith('/interviews/history')) return '/interviews/history'
   if (route.path.startsWith('/interviews')) return '/interviews/create'
   return route.path

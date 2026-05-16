@@ -167,6 +167,14 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '面试报告'
         }
+      },
+      {
+        path: 'study-plans',
+        name: 'StudyPlans',
+        component: () => import('@/views/study/StudyPlanView.vue'),
+        meta: {
+          title: '学习计划'
+        }
       }
     ]
   },

@@ -213,12 +213,10 @@
             <BookOpenCheck :size="16" />
             练习相关题目
           </el-button>
-          <el-tooltip content="学习计划接口与页面本轮不接入">
-            <el-button disabled>
-              <CalendarClock :size="16" />
-              生成学习计划（待接入）
-            </el-button>
-          </el-tooltip>
+          <el-button type="success" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">
+            <CalendarClock :size="16" />
+            生成学习计划
+          </el-button>
           <el-button @click="router.push('/dashboard')">返回工作台</el-button>
         </div>
       </div>
@@ -234,6 +232,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getInterviewReportApi, retryInterviewReportApi } from '@/api/interview'
+import { generateStudyPlanApi } from '@/api/studyPlan'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
@@ -245,6 +244,7 @@ const router = useRouter()
 const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const retrying = ref(false)
+const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const pollCount = ref(0)
 const pollFailures = ref(0)
@@ -356,6 +356,26 @@ const handleRetry = async () => {
     schedulePolling()
   } finally {
     retrying.value = false
+  }
+}
+
+const handleGenerateStudyPlan = async () => {
+  const reportId = report.value?.reportId || report.value?.id
+  if (!reportId) {
+    ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+    return
+  }
+  studyPlanGenerating.value = true
+  try {
+    const result = await generateStudyPlanApi({ reportId })
+    if (result.planStatus === 'FAILED') {
+      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+    } else {
+      ElMessage.success('学习计划已生成')
+    }
+    await router.push(`/study-plans?planId=${result.planId || ''}`)
+  } finally {
+    studyPlanGenerating.value = false
   }
 }
 
