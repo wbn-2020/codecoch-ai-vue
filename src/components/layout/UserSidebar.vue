@@ -1,10 +1,10 @@
 <template>
-  <el-menu class="layout-menu" :default-active="activePath" router>
+  <el-menu class="layout-menu" :default-active="activePath" :collapse="collapsed" router>
     <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
       <el-icon>
         <component :is="item.icon" />
       </el-icon>
-      <span>{{ item.label }}</span>
+      <template #title>{{ item.label }}</template>
     </el-menu-item>
   </el-menu>
 </template>
@@ -22,6 +22,10 @@ import {
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+
+defineProps<{
+  collapsed?: boolean
+}>()
 
 const route = useRoute()
 
