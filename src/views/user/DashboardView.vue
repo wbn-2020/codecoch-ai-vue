@@ -36,7 +36,7 @@
           <code>
             <span>$ codecoach status</span>
             <span>track: Java Backend Interview</span>
-            <span>mode: resume + question bank + AI mock</span>
+            <span>mode: resume + question bank + AI interview</span>
             <span>next: start-interview --with-real-api</span>
           </code>
         </div>
