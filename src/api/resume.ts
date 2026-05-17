@@ -1,6 +1,8 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
+  ApplyResumeOptimizeResultDTO,
+  ApplyResumeOptimizeResultVO,
   ResumeCreateDTO,
   ResumeAnalysisResultVO,
   ResumeConfirmAnalysisVO,
@@ -158,6 +160,21 @@ export const getResumeOptimizeResultApi = (recordId: number) => {
 }
 
 export const getResumeOptimizeCompareApi = getResumeOptimizeResultApi
+
+export const applyResumeOptimizeResultApi = (
+  recordId: number,
+  data: ApplyResumeOptimizeResultDTO = { applyMode: 'CREATE_DRAFT' }
+) => {
+  return request
+    .post<ApplyResumeOptimizeResultVO, ApplyResumeOptimizeResultVO>(
+      `/resumes/optimize-records/${recordId}/apply`,
+      data
+    )
+    .then((result) => ({
+      ...result,
+      resumeDetail: result.resumeDetail ? normalizeResume(result.resumeDetail) : undefined
+    }))
+}
 
 export const getResumeDetailApi = (id: number) => {
   return request.get<ResumeDetailVO, ResumeDetailVO>(`/resumes/${id}`).then(normalizeResume)

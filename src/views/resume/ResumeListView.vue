@@ -387,8 +387,15 @@
         </div>
         <div class="drawer-actions">
           <el-button @click="optimizeDrawerVisible = false">关闭</el-button>
-          <el-tooltip content="后端暂未提供独立应用优化结果接口，不能自动覆盖简历内容" placement="top">
-            <el-button disabled>应用优化结果 · 待后端应用接口</el-button>
+          <el-tooltip :content="applyOptimizeDisabledReason" placement="top" :disabled="canApplyOptimizeResult">
+            <el-button
+              type="primary"
+              :disabled="!canApplyOptimizeResult"
+              :loading="applyingOptimize"
+              @click="handleApplyOptimizeResult"
+            >
+              应用优化结果 · 创建 AI 草稿
+            </el-button>
           </el-tooltip>
         </div>
       </div>
@@ -420,6 +427,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
+  applyResumeOptimizeResultApi,
   confirmResumeParseResultApi,
   deleteResumeApi,
   getResumeOptimizeRecordsApi,
@@ -459,6 +467,7 @@ const parseResult = ref<ResumeAnalysisResultVO | null>(null)
 const parseDrawerVisible = ref(false)
 const confirmingParse = ref(false)
 const optimizingId = ref<number | null>(null)
+const applyingOptimize = ref(false)
 const optimizeRecords = ref<Record<number, ResumeOptimizeRecordVO[]>>({})
 const optimizeRecordsLoadError = ref(false)
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
@@ -508,6 +517,14 @@ const latestOptimizeStatus = computed(() => {
   if (optimizeRecordsLoadError.value) return '加载失败'
   const latest = allOptimizeRecords.value[0]
   return latest ? optimizeStatusText(latest.optimizeStatus) : '暂无记录'
+})
+
+const canApplyOptimizeResult = computed(() => optimizeDetail.value?.optimizeStatus === 'SUCCESS')
+
+const applyOptimizeDisabledReason = computed(() => {
+  if (!optimizeDetail.value) return '请选择一条优化记录'
+  if (optimizeDetail.value.optimizeStatus !== 'SUCCESS') return '仅成功的优化记录可应用'
+  return ''
 })
 
 const uploadSteps = computed(() => {
@@ -745,6 +762,41 @@ const openOptimizeDetail = async (recordId?: number) => {
   if (!recordId) return
   optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
   optimizeDrawerVisible.value = true
+}
+
+const showApplyResultMessage = async (message?: string, warnings?: string[], newResumeId?: number) => {
+  const warningText = warnings?.length ? `\n\n注意事项：\n${warnings.map((item) => `- ${item}`).join('\n')}` : ''
+  await ElMessageBox.alert(
+    `${message || '已创建新的 AI 优化草稿。'}${warningText}\n\n新简历 ID：${newResumeId || '--'}`,
+    '应用优化结果',
+    { type: warnings?.length ? 'warning' : 'success' }
+  )
+}
+
+const handleApplyOptimizeResult = async () => {
+  if (!optimizeDetail.value || !canApplyOptimizeResult.value) {
+    ElMessage.warning('仅成功的优化记录可应用')
+    return
+  }
+  await ElMessageBox.confirm('将创建一份新的 AI 优化草稿，不会覆盖当前简历。', '应用优化结果', {
+    type: 'warning',
+    confirmButtonText: '创建草稿',
+    cancelButtonText: '取消'
+  })
+  applyingOptimize.value = true
+  try {
+    const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
+      applyMode: 'CREATE_DRAFT'
+    })
+    await showApplyResultMessage(result.message, result.warnings, result.newResumeId)
+    optimizeDrawerVisible.value = false
+    await fetchResumes()
+    if (result.newResumeId) {
+      await router.push(`/resumes/${result.newResumeId}/edit`)
+    }
+  } finally {
+    applyingOptimize.value = false
+  }
 }
 
 const handleSearch = () => {

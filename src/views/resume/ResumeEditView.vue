@@ -254,10 +254,16 @@
                 <p>{{ item.after || item.reason || '后端未返回改写内容' }}</p>
               </article>
             </div>
-            <el-tooltip content="后端暂未提供独立应用优化结果接口，不能自动覆盖简历内容" placement="top">
-              <el-button class="full-button" disabled>
+            <el-tooltip :content="applyOptimizeDisabledReason" placement="top" :disabled="canApplyOptimizeResult">
+              <el-button
+                class="full-button"
+                type="primary"
+                :disabled="!canApplyOptimizeResult"
+                :loading="applyingOptimize"
+                @click="handleApplyOptimizeResult"
+              >
                 <GitCompareArrows :size="16" />
-                应用优化结果 · 待后端应用接口
+                应用优化结果 · 创建 AI 草稿
               </el-button>
             </el-tooltip>
           </div>
@@ -313,6 +319,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  applyResumeOptimizeResultApi,
   createResumeApi,
   createResumeProjectApi,
   deleteResumeProjectApi,
@@ -346,6 +353,7 @@ const loading = ref(false)
 const saving = ref(false)
 const projectSaving = ref(false)
 const optimizing = ref(false)
+const applyingOptimize = ref(false)
 const formRef = ref<FormInstance>()
 const projectFormRef = ref<InstanceType<typeof ResumeProjectForm>>()
 const projectDialogVisible = ref(false)
@@ -395,6 +403,14 @@ const completion = computed(() => {
 })
 
 const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
+
+const canApplyOptimizeResult = computed(() => optimizeDetail.value?.optimizeStatus === 'SUCCESS')
+
+const applyOptimizeDisabledReason = computed(() => {
+  if (!optimizeDetail.value) return '请选择一条优化记录'
+  if (optimizeDetail.value.optimizeStatus !== 'SUCCESS') return '仅成功的优化记录可应用'
+  return ''
+})
 
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
@@ -468,6 +484,41 @@ const handleOptimizeResume = async () => {
     }
   } finally {
     optimizing.value = false
+  }
+}
+
+const showApplyResultMessage = async (message?: string, warnings?: string[], newResumeId?: number) => {
+  const warningText = warnings?.length ? `\n\n注意事项：\n${warnings.map((item) => `- ${item}`).join('\n')}` : ''
+  await ElMessageBox.alert(
+    `${message || '已创建新的 AI 优化草稿。'}${warningText}\n\n新简历 ID：${newResumeId || '--'}`,
+    '应用优化结果',
+    { type: warnings?.length ? 'warning' : 'success' }
+  )
+}
+
+const handleApplyOptimizeResult = async () => {
+  if (!optimizeDetail.value || !canApplyOptimizeResult.value) {
+    ElMessage.warning('仅成功的优化记录可应用')
+    return
+  }
+  await ElMessageBox.confirm('将创建一份新的 AI 优化草稿，不会覆盖当前简历。', '应用优化结果', {
+    type: 'warning',
+    confirmButtonText: '创建草稿',
+    cancelButtonText: '取消'
+  })
+  applyingOptimize.value = true
+  try {
+    const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
+      applyMode: 'CREATE_DRAFT'
+    })
+    await showApplyResultMessage(result.message, result.warnings, result.newResumeId)
+    if (result.newResumeId) {
+      await router.push(`/resumes/${result.newResumeId}/edit`)
+    } else {
+      await fetchDetail()
+    }
+  } finally {
+    applyingOptimize.value = false
   }
 }
 

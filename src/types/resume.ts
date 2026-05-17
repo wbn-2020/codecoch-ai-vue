@@ -213,3 +213,18 @@ export interface ResumeOptimizeRecordVO {
 export interface ResumeOptimizeDetailVO extends ResumeOptimizeRecordVO {
   resultJson?: ResumeOptimizeResultJson | null
 }
+
+export interface ApplyResumeOptimizeResultDTO {
+  applyMode?: 'CREATE_DRAFT'
+}
+
+export interface ApplyResumeOptimizeResultVO {
+  sourceResumeId: number
+  sourceOptimizeRecordId: number
+  newResumeId: number
+  appliedAt?: string
+  applyMode: 'CREATE_DRAFT'
+  message?: string
+  warnings?: string[]
+  resumeDetail?: ResumeDetailVO
+}
