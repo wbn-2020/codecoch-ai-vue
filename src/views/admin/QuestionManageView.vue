@@ -228,6 +228,19 @@
               </div>
             </el-form>
 
+            <div v-if="generateSseEvents.length || generateSseMessage" class="sse-progress">
+              <div class="sse-progress__head">
+                <span>阶段式生成进度</span>
+                <el-tag size="small" effect="plain">{{ generateSseStatus }}</el-tag>
+              </div>
+              <p>{{ generateSseMessage || '等待后端阶段事件返回。' }}</p>
+              <div class="sse-progress__list">
+                <span v-for="(event, index) in generateSseEvents" :key="`${event.type}-${index}`">
+                  {{ event.stage || event.type }} · {{ event.message }}
+                </span>
+              </div>
+            </div>
+
             <div v-if="generateResult" class="generate-result-card">
               <div class="generate-result-card__title">生成结果</div>
               <el-descriptions :column="3" border>
@@ -598,7 +611,7 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { BookOpenCheck, Plus } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import {
   approveQuestionReviewApi,
@@ -615,6 +628,7 @@ import {
   ignoreQuestionDuplicateReviewApi,
   mergeQuestionDuplicateReviewApi,
   rejectQuestionReviewApi,
+  streamAiQuestionGenerateApi,
   updateAdminQuestionApi,
   updateAdminQuestionStatusApi
 } from '@/api/question'
@@ -634,6 +648,7 @@ import type {
   AdminQuestionVO,
   AiQuestionGenerateRequestDTO,
   AiQuestionGenerateResultVO,
+  AiQuestionGenerateSseEvent,
   QuestionDuplicateReviewListVO,
   QuestionDuplicateReviewQueryDTO,
   QuestionCategoryVO,
@@ -673,6 +688,10 @@ const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
+const generateSseEvents = ref<Array<{ type: string; stage?: string; message: string }>>([])
+const generateSseMessage = ref('')
+const generateSseStatus = ref('未开始')
+const generateSseHandle = ref<ReturnType<typeof streamAiQuestionGenerateApi> | null>(null)
 
 const query = reactive<AdminQuestionQueryDTO>({
   keyword: '',
@@ -1059,6 +1078,9 @@ const resetGenerateForm = () => {
     extraRequirements: ''
   })
   generateResult.value = null
+  generateSseEvents.value = []
+  generateSseMessage.value = ''
+  generateSseStatus.value = '未开始'
 }
 
 const normalizeGeneratePayload = (): AiQuestionGenerateRequestDTO => {
@@ -1086,22 +1108,88 @@ const viewGeneratedBatch = async () => {
   await fetchReviews()
 }
 
+const completeGenerateFlow = async (result: AiQuestionGenerateResultVO) => {
+  generateResult.value = result
+  const generatedCount = result.generatedCount ?? result.successCount ?? result.count ?? result.reviewIds?.length ?? 0
+  ElMessage.success(`已生成 ${generatedCount} 条待审核题目`)
+  if (result.batchId) {
+    await viewGeneratedBatch()
+  } else {
+    await fetchReviews()
+  }
+}
+
+const runSyncGenerateFallback = async () => {
+  generateSseStatus.value = '同步 fallback'
+  generateSseMessage.value = 'SSE 未启动成功，已回退到原同步生成接口。'
+  await completeGenerateFlow(await generateAiQuestionsApi(normalizeGeneratePayload()))
+}
+
+const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) => {
+  const messageMap: Record<string, string> = {
+    start: 'AI 题目生成开始',
+    progress: 'AI 题目生成进行中',
+    result: '已收到生成结果',
+    done: 'AI 题目生成完成',
+    error: 'AI 题目生成失败'
+  }
+  const message = data?.message || messageMap[type] || type
+  generateSseStatus.value = type
+  generateSseMessage.value = data?.stage ? `${data.stage}：${message}` : message
+  generateSseEvents.value.push({
+    type,
+    stage: data?.stage,
+    message
+  })
+}
+
 const handleGenerateReviews = async () => {
+  if (generating.value) return
+  generateSseHandle.value?.abort()
   generating.value = true
+  generateResult.value = null
+  generateSseEvents.value = []
+  generateSseMessage.value = '正在启动阶段式生成进度。'
+  generateSseStatus.value = '启动中'
+  let streamStarted = false
+  let latestResult: AiQuestionGenerateResultVO | null = null
+
   try {
-    const result = await generateAiQuestionsApi(normalizeGeneratePayload())
-    generateResult.value = result
-    const generatedCount = result.generatedCount ?? result.successCount ?? result.count ?? result.reviewIds?.length ?? 0
-    ElMessage.success(`已生成 ${generatedCount} 条待审核题目`)
-    if (result.batchId) {
-      await viewGeneratedBatch()
+    generateSseHandle.value = streamAiQuestionGenerateApi(normalizeGeneratePayload(), {
+      onEvent: (event, data) => {
+        if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+          streamStarted = true
+        }
+        pushGenerateSseEvent(event, data)
+        if (event === 'result' || event === 'done') {
+          latestResult = {
+            batchId: data?.batchId || latestResult?.batchId,
+            reviewIds: data?.reviewIds || latestResult?.reviewIds,
+            aiCallLogId: data?.aiCallLogId || latestResult?.aiCallLogId,
+            count: data?.count ?? latestResult?.count,
+            successCount: data?.successCount ?? latestResult?.successCount,
+            generatedCount: data?.successCount ?? data?.count ?? latestResult?.generatedCount,
+            message: data?.message || latestResult?.message
+          }
+          generateResult.value = latestResult
+        }
+      }
+    })
+    await generateSseHandle.value.finished
+    if (latestResult) {
+      await completeGenerateFlow(latestResult)
     } else {
       await fetchReviews()
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'AI 题目生成失败')
+    if (!streamStarted) {
+      await runSyncGenerateFallback()
+    } else {
+      ElMessage.error(error instanceof Error ? error.message : 'AI 题目生成流中断，请稍后手动重试。')
+    }
   } finally {
     generating.value = false
+    generateSseHandle.value = null
   }
 }
 
@@ -1251,6 +1339,10 @@ onMounted(async () => {
   await fetchOptions()
   await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates()])
 })
+
+onUnmounted(() => {
+  generateSseHandle.value?.abort()
+})
 </script>
 
 <style scoped lang="scss">
@@ -1369,6 +1461,43 @@ onMounted(async () => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.sse-progress {
+  padding: 14px;
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.24);
+
+  p {
+    margin: 8px 0 0;
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.sse-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sse-progress__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 
 .generate-result-card {

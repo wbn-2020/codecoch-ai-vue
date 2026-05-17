@@ -300,6 +300,33 @@ export interface AiQuestionGenerateResultVO {
   failedReason?: string
 }
 
+export type AiQuestionGenerateSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+
+export interface AiQuestionGenerateSseParams {
+  targetPosition?: string
+  technologyStack?: string
+  knowledgePoint?: string
+  questionType?: QuestionType | ''
+  difficulty?: QuestionDifficulty | ''
+  experienceYears?: number
+  count?: number
+  extraRequirements?: string
+}
+
+export interface AiQuestionGenerateSseEvent {
+  requestId?: string
+  type?: AiQuestionGenerateSseEventType | string
+  message?: string
+  batchId?: string
+  reviewIds?: number[]
+  aiCallLogId?: number
+  count?: number
+  successCount?: number
+  stage?: string
+  code?: string
+  [key: string]: unknown
+}
+
 export interface QuestionReviewQueryDTO extends PageQuery {
   reviewStatus?: QuestionReviewStatus | ''
   technologyStack?: string
