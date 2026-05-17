@@ -28,9 +28,17 @@
     <section v-if="isGenerating" class="content-card">
       <div class="content-card__body generating-panel">
         <el-icon class="generating-icon"><Loading /></el-icon>
-        <h2>报告生成中，请稍候</h2>
-        <p>系统正在根据真实问答记录生成结构化报告，页面会自动轮询结果。</p>
+        <h2>阶段式报告生成进度</h2>
+        <p>{{ sseMessage || '系统正在根据真实问答记录生成结构化报告，当前展示后端阶段事件。' }}</p>
         <el-progress :percentage="pollProgress" :show-text="false" />
+        <div class="sse-stage-list">
+          <article v-for="item in sseEvents" :key="item.key" class="sse-stage-item">
+            <span>{{ item.event }}</span>
+            <strong>{{ item.stage || item.message || '-' }}</strong>
+            <p>{{ item.message || item.stage || '-' }}</p>
+          </article>
+        </div>
+        <div v-if="sseMetaText" class="sse-meta">{{ sseMetaText }}</div>
       </div>
     </section>
 
@@ -83,7 +91,7 @@
           :description="failureReason"
         />
         <div class="retry-row">
-          <el-button type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+          <el-button type="primary" :loading="retrying || sseGenerating" :disabled="sseGenerating" @click="handleRetry">重新生成报告</el-button>
           <el-button @click="router.push('/interviews/history')">返回历史</el-button>
         </div>
       </div>
@@ -231,12 +239,24 @@ import { BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashb
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getInterviewReportApi, retryInterviewReportApi } from '@/api/interview'
+import {
+  finishInterviewApi,
+  getInterviewReportApi,
+  retryInterviewReportApi,
+  streamInterviewReportApi
+} from '@/api/interview'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
-import type { InterviewMessageVO, InterviewReportVO, RecommendedQuestionVO, StageReportVO } from '@/types/interview'
+import type {
+  InterviewMessageVO,
+  InterviewReportSseEvent,
+  InterviewReportSseEventType,
+  InterviewReportVO,
+  RecommendedQuestionVO,
+  StageReportVO
+} from '@/types/interview'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -248,14 +268,20 @@ const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const pollCount = ref(0)
 const pollFailures = ref(0)
+const sseGenerating = ref(false)
+const sseMessage = ref('')
+const sseReportId = ref<number | undefined>()
+const sseAiCallLogId = ref<number | undefined>()
+const sseEvents = ref<Array<{ key: string; event: string; stage?: string; message?: string }>>([])
 let pollTimer: number | undefined
+let reportSseHandle: ReturnType<typeof streamInterviewReportApi> | null = null
 
 const normalizedStatus = computed(() => {
   const status = report.value?.reportStatus || report.value?.status || ''
   return String(status).toUpperCase()
 })
 
-const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
+const isGenerating = computed(() => sseGenerating.value || ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isGenerated = computed(() => {
   if (['GENERATED', 'COMPLETED'].includes(normalizedStatus.value)) return true
@@ -275,6 +301,12 @@ const qaMessages = computed<InterviewMessageVO[]>(() =>
 )
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
 const failureReason = computed(() => report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage || '请稍后重试')
+const sseMetaText = computed(() => {
+  const items = []
+  if (sseReportId.value) items.push(`reportId: ${sseReportId.value}`)
+  if (sseAiCallLogId.value) items.push(`aiCallLogId: ${sseAiCallLogId.value}`)
+  return items.join(' / ')
+})
 
 const weakPointText = computed(() => {
   const value = report.value?.weakPoints || report.value?.weakKnowledgePoints
@@ -303,6 +335,20 @@ const stopPolling = () => {
     window.clearTimeout(pollTimer)
     pollTimer = undefined
   }
+}
+
+const stopReportSse = () => {
+  reportSseHandle?.abort()
+  reportSseHandle = null
+  sseGenerating.value = false
+}
+
+const resetSseState = () => {
+  sseMessage.value = ''
+  sseReportId.value = undefined
+  sseAiCallLogId.value = undefined
+  sseEvents.value = []
+  pollCount.value = 0
 }
 
 const schedulePolling = () => {
@@ -340,23 +386,138 @@ const fetchReport = async () => {
   }
 }
 
-const handleRetry = async () => {
+const refreshFinalReport = async () => {
   if (!interviewId) return
-  retrying.value = true
+  report.value = await getInterviewReportApi(interviewId)
+  stopPolling()
+}
+
+const runSyncFallback = async (forceRegenerate: boolean) => {
+  if (!interviewId) return
+  const id = interviewId
+  retrying.value = forceRegenerate
   try {
-    await retryInterviewReportApi(interviewId)
-    ElMessage.success('已提交报告重新生成任务')
+    if (forceRegenerate) {
+      await retryInterviewReportApi(id)
+    } else {
+      await finishInterviewApi(id)
+    }
     report.value = {
-      interviewId,
+      interviewId: id,
       reportStatus: 'GENERATING',
       status: 'GENERATING'
     }
-    pollCount.value = 0
     pollFailures.value = 0
     schedulePolling()
   } finally {
     retrying.value = false
   }
+}
+
+const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
+  const message = data?.message || ''
+  const stage = data?.stage ? String(data.stage) : ''
+  if (data?.reportId) sseReportId.value = data.reportId
+  if (data?.aiCallLogId) sseAiCallLogId.value = data.aiCallLogId
+  if (data?.result && typeof data.result === 'object') {
+    const result = data.result as Partial<InterviewReportVO>
+    if (result.reportId || result.id) sseReportId.value = result.reportId || result.id
+  }
+  sseMessage.value = message || stage || sseMessage.value
+  sseEvents.value.push({
+    key: `${Date.now()}-${sseEvents.value.length}`,
+    event,
+    stage,
+    message
+  })
+  pollCount.value = Math.min(30, pollCount.value + (event === 'progress' ? 5 : 2))
+}
+
+const startReportSse = (forceRegenerate = false) => {
+  if (!interviewId || sseGenerating.value) return
+  const id = interviewId
+  stopPolling()
+  stopReportSse()
+  resetSseState()
+  sseGenerating.value = true
+  report.value = {
+    ...(report.value || {}),
+    interviewId: id,
+    reportId: report.value?.reportId || report.value?.id,
+    reportStatus: 'GENERATING',
+    status: 'GENERATING'
+  }
+
+  reportSseHandle = streamInterviewReportApi(
+    {
+      interviewId: id,
+      reportId: report.value?.reportId || report.value?.id,
+      forceRegenerate
+    },
+    {
+      onEvent: async (event, data) => {
+        applySseEvent(event, data)
+        if (event === 'result' && data?.result && typeof data.result === 'object') {
+          report.value = {
+            ...(data.result as InterviewReportVO),
+            interviewId: id,
+            reportStatus: 'GENERATING',
+            status: 'GENERATING'
+          }
+        }
+        if (event === 'done') {
+          sseGenerating.value = false
+          await refreshFinalReport()
+          ElMessage.success('报告生成完成')
+        }
+      },
+      onError: async (error, hasStarted) => {
+        sseGenerating.value = false
+        reportSseHandle = null
+        if (!hasStarted) {
+          ElMessage.warning('SSE 启动失败，已回退到同步报告接口')
+          await runSyncFallback(forceRegenerate)
+          return
+        }
+        report.value = {
+          ...(report.value || {}),
+          interviewId: id,
+          reportStatus: 'FAILED',
+          status: 'FAILED',
+          failedReason: error.message
+        }
+        ElMessage.error(error.message || '报告 SSE 生成失败')
+      },
+      onDone: () => {
+        sseGenerating.value = false
+        reportSseHandle = null
+      }
+    }
+  )
+  void reportSseHandle.finished.catch(() => undefined)
+}
+
+const loadReportOrStartSse = async () => {
+  if (!interviewId) return
+  loading.value = true
+  try {
+    report.value = await getInterviewReportApi(interviewId)
+    pollFailures.value = 0
+    if (isGenerated.value || isFailed.value) {
+      stopPolling()
+      return
+    }
+    startReportSse(false)
+  } catch {
+    startReportSse(false)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleRetry = async () => {
+  if (!interviewId) return
+  startReportSse(true)
 }
 
 const handleGenerateStudyPlan = async () => {
@@ -379,8 +540,11 @@ const handleGenerateStudyPlan = async () => {
   }
 }
 
-onMounted(fetchReport)
-onBeforeUnmount(stopPolling)
+onMounted(loadReportOrStartSse)
+onBeforeUnmount(() => {
+  stopPolling()
+  stopReportSse()
+})
 </script>
 
 <style scoped lang="scss">
@@ -459,6 +623,44 @@ onBeforeUnmount(stopPolling)
   color: var(--app-primary);
   font-size: 36px;
   animation: spin 1.1s linear infinite;
+}
+
+.sse-stage-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.sse-stage-item {
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.38);
+
+  span {
+    color: var(--cc-ai-cyan);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--app-text);
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+  }
+}
+
+.sse-meta {
+  margin-top: 12px;
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 @keyframes spin {

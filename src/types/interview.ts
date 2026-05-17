@@ -12,6 +12,14 @@ export type InterviewStatus =
   | string
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
+export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewReportSseStage =
+  | 'LOAD_INTERVIEW'
+  | 'LOAD_ANSWERS'
+  | 'BUILD_PROMPT'
+  | 'CALL_AI'
+  | 'SAVE_REPORT'
+  | string
 
 export interface IndustryTemplateVO {
   industryTemplateId: number
@@ -161,6 +169,24 @@ export interface RetryReportVO {
   reportStatus: ReportStatus
   reportId?: number
   message?: string
+}
+
+export interface InterviewReportSseParams {
+  interviewId: number
+  reportId?: number
+  forceRegenerate?: boolean
+}
+
+export interface InterviewReportSseEvent {
+  requestId?: string
+  type?: InterviewReportSseEventType | string
+  message?: string
+  interviewId?: number
+  reportId?: number
+  aiCallLogId?: number
+  result?: InterviewReportVO | Record<string, unknown>
+  stage?: InterviewReportSseStage
+  code?: string
 }
 
 export interface InterviewQueryDTO extends PageQuery {
