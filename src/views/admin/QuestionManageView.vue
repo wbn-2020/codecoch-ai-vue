@@ -308,8 +308,12 @@
                 </template>
               </el-table-column>
               <el-table-column prop="createdAt" label="生成时间" min-width="170" />
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="250" fixed="right">
                 <template #default="{ row }">
+                  <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
+                  <el-button link type="success" :disabled="row.reviewStatus !== 'PENDING'" @click="openReviewDrawer(row.id)">
+                    编辑通过
+                  </el-button>
                   <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleApproveReview(row.id)">
                     通过
                   </el-button>
@@ -395,6 +399,134 @@
       </el-tabs>
     </section>
 
+    <el-drawer v-model="reviewDrawerVisible" title="AI 题目审核详情" size="760px" class="review-detail-drawer">
+      <div v-loading="reviewDetailLoading" class="review-detail-content">
+        <template v-if="reviewDetail">
+          <section class="review-detail-section">
+            <div class="review-detail-section__title">AI 原始建议</div>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="题目标题">{{ reviewDetail.questionTitle || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="目标岗位">{{ reviewDetail.targetPosition || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="分类建议">{{ reviewDetail.categorySuggestion || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="题组建议">{{ reviewDetail.groupSuggestion || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="状态">{{ getReviewStatusLabel(reviewDetail.reviewStatus) }}</el-descriptions-item>
+              <el-descriptions-item label="更新时间">{{ reviewDetail.updatedAt || '-' }}</el-descriptions-item>
+            </el-descriptions>
+            <div class="review-json-grid">
+              <div class="review-json-card">
+                <span>题干</span>
+                <pre>{{ reviewDetail.questionContent || '-' }}</pre>
+              </div>
+              <div class="review-json-card">
+                <span>参考答案</span>
+                <pre>{{ reviewDetail.referenceAnswer || '-' }}</pre>
+              </div>
+              <div class="review-json-card">
+                <span>解析</span>
+                <pre>{{ reviewDetail.analysis || '-' }}</pre>
+              </div>
+              <div class="review-json-card">
+                <span>追问建议</span>
+                <pre>{{ formatJsonText(reviewDetail.followUpQuestionsJson) }}</pre>
+              </div>
+              <div class="review-json-card">
+                <span>标签建议</span>
+                <pre>{{ formatJsonText(reviewDetail.tagSuggestionsJson) }}</pre>
+              </div>
+              <div class="review-json-card">
+                <span>AI 原始 JSON</span>
+                <pre>{{ formatJsonText(reviewDetail.rawAiResultJson) }}</pre>
+              </div>
+            </div>
+          </section>
+
+          <section class="review-detail-section">
+            <div class="review-detail-section__title">编辑后通过</div>
+            <el-form :model="reviewApproveForm" label-width="110px">
+              <el-form-item label="题目标题">
+                <el-input v-model.trim="reviewApproveForm.title" />
+              </el-form-item>
+              <el-form-item label="题干">
+                <el-input v-model="reviewApproveForm.content" type="textarea" :rows="4" />
+              </el-form-item>
+              <el-form-item label="参考答案">
+                <el-input v-model="reviewApproveForm.referenceAnswer" type="textarea" :rows="4" />
+              </el-form-item>
+              <el-form-item label="解析">
+                <el-input v-model="reviewApproveForm.analysis" type="textarea" :rows="3" />
+              </el-form-item>
+              <el-row :gutter="14">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="难度">
+                    <el-select v-model="reviewApproveForm.difficulty" style="width: 100%">
+                      <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="题型">
+                    <el-select v-model="reviewApproveForm.questionType" style="width: 100%">
+                      <el-option v-for="item in questionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="分类">
+                    <el-select v-model="reviewApproveForm.categoryId" clearable filterable style="width: 100%">
+                      <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="题组">
+                    <el-select v-model="reviewApproveForm.groupId" clearable filterable style="width: 100%">
+                      <el-option v-for="item in groups" :key="item.id" :label="item.name" :value="item.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="24">
+                  <el-form-item label="标签">
+                    <el-select v-model="reviewApproveForm.tagIds" multiple filterable collapse-tags style="width: 100%">
+                      <el-option v-for="item in tags" :key="item.id" :label="item.name" :value="item.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="状态">
+                    <el-switch v-model="reviewApproveForm.status" :active-value="1" :inactive-value="0" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="高频题">
+                    <el-switch v-model="reviewApproveForm.isHighFrequency" :active-value="1" :inactive-value="0" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="经验要求">
+                    <el-input v-model.trim="reviewApproveForm.experienceLevel" placeholder="例如：3年" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="编辑说明">
+                <el-input v-model="reviewApproveForm.editedReason" type="textarea" :rows="2" maxlength="300" show-word-limit />
+              </el-form-item>
+            </el-form>
+          </section>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="reviewDrawerVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
+          :loading="reviewApproveSaving"
+          @click="handleApproveReviewWithEdit"
+        >
+          编辑后通过
+        </el-button>
+      </template>
+    </el-drawer>
+
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑题目' : '新增题目'" width="760px">
       <el-alert
         v-if="editingId"
@@ -478,6 +610,7 @@ import {
   generateAiQuestionsApi,
   getAdminQuestionsApi,
   getQuestionDuplicateReviewsApi,
+  getQuestionReviewDetailApi,
   getQuestionReviewsApi,
   ignoreQuestionDuplicateReviewApi,
   mergeQuestionDuplicateReviewApi,
@@ -507,6 +640,8 @@ import type {
   QuestionCreateDTO,
   QuestionDifficulty,
   QuestionGroupVO,
+  QuestionReviewApproveDTO,
+  QuestionReviewDetailVO,
   QuestionReviewListVO,
   QuestionReviewQueryDTO,
   QuestionTagVO
@@ -527,8 +662,12 @@ const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
 const generating = ref(false)
 const batchReviewProcessing = ref(false)
+const reviewDetailLoading = ref(false)
+const reviewApproveSaving = ref(false)
+const reviewDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
 const reviews = ref<QuestionReviewListVO[]>([])
+const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const reviewTotal = ref(0)
@@ -558,6 +697,22 @@ const form = reactive<QuestionCreateDTO>({
   isHighFrequency: 0,
   tagIds: [],
   status: 1
+})
+
+const reviewApproveForm = reactive<QuestionReviewApproveDTO>({
+  title: '',
+  content: '',
+  referenceAnswer: '',
+  analysis: '',
+  difficulty: QUESTION_DIFFICULTY.MEDIUM,
+  questionType: QUESTION_TYPE.SHORT_ANSWER,
+  categoryId: undefined,
+  groupId: undefined,
+  tagIds: [],
+  status: 1,
+  isHighFrequency: 0,
+  experienceLevel: '',
+  editedReason: ''
 })
 
 const reviewQuery = reactive<QuestionReviewQueryDTO>({
@@ -670,6 +825,46 @@ const showBatchReviewResult = (result: { successCount?: number; failureCount?: n
   )
 }
 
+const formatJsonText = (value?: string) => {
+  if (!value) return '-'
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+const parseNumberArray = (value?: string): number[] => {
+  if (!value) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && item > 0)
+  } catch {
+    return []
+  }
+}
+
+const resetReviewApproveForm = (detail?: QuestionReviewDetailVO | null) => {
+  Object.assign(reviewApproveForm, {
+    title: detail?.questionTitle || '',
+    content: detail?.questionContent || '',
+    referenceAnswer: detail?.referenceAnswer || '',
+    analysis: detail?.analysis || '',
+    difficulty: detail?.difficulty || QUESTION_DIFFICULTY.MEDIUM,
+    questionType: detail?.questionType || QUESTION_TYPE.SHORT_ANSWER,
+    categoryId: detail?.categoryId,
+    groupId: detail?.groupId,
+    tagIds: parseNumberArray(detail?.tagIdsJson),
+    status: 1,
+    isHighFrequency: 0,
+    experienceLevel: detail?.experienceYears ? `${detail.experienceYears}年` : '',
+    editedReason: '编辑后审核通过'
+  })
+}
+
 const getDuplicateStatusLabel = (status?: string) => {
   if (status === 'PENDING') return '待处理'
   if (status === 'CONFIRMED') return '已合并'
@@ -732,6 +927,22 @@ const fetchReviews = async () => {
     selectedReviewRows.value = []
   } finally {
     reviewLoading.value = false
+  }
+}
+
+const openReviewDrawer = async (id: number) => {
+  reviewDrawerVisible.value = true
+  reviewDetailLoading.value = true
+  reviewDetail.value = null
+  resetReviewApproveForm(null)
+  try {
+    const detail = await getQuestionReviewDetailApi(id)
+    reviewDetail.value = detail
+    resetReviewApproveForm(detail)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '审核详情加载失败')
+  } finally {
+    reviewDetailLoading.value = false
   }
 }
 
@@ -911,6 +1122,34 @@ const handleRejectReview = async (id: number) => {
   await fetchReviews()
 }
 
+const handleApproveReviewWithEdit = async () => {
+  if (!reviewDetail.value) return
+  if (reviewDetail.value.reviewStatus !== 'PENDING') {
+    ElMessage.warning('只有待审核题目可以编辑后通过')
+    return
+  }
+  await ElMessageBox.confirm('确认按当前编辑内容通过该 AI 题目并写入正式题库？', '编辑后通过', { type: 'warning' })
+  reviewApproveSaving.value = true
+  try {
+    await approveQuestionReviewApi(reviewDetail.value.id, {
+      ...reviewApproveForm,
+      title: reviewApproveForm.title?.trim(),
+      content: reviewApproveForm.content?.trim(),
+      referenceAnswer: reviewApproveForm.referenceAnswer?.trim(),
+      analysis: reviewApproveForm.analysis?.trim(),
+      experienceLevel: reviewApproveForm.experienceLevel?.trim(),
+      editedReason: reviewApproveForm.editedReason?.trim() || '编辑后审核通过'
+    })
+    ElMessage.success('题目已编辑并通过审核')
+    reviewDrawerVisible.value = false
+    await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '编辑后通过失败')
+  } finally {
+    reviewApproveSaving.value = false
+  }
+}
+
 const handleBatchApproveReviews = async () => {
   const reviewIds = selectedPendingReviewIds.value
   if (!reviewIds.length) {
@@ -1064,6 +1303,55 @@ onMounted(async () => {
   padding: 0 0 14px;
   color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.review-detail-content {
+  min-height: 420px;
+}
+
+.review-detail-section {
+  margin-bottom: 22px;
+}
+
+.review-detail-section__title {
+  margin-bottom: 12px;
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.review-json-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.review-json-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.review-json-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--app-text);
+  font-weight: 700;
+}
+
+.review-json-card pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  color: var(--app-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .ai-generate-panel {
