@@ -9,7 +9,7 @@
         <h1 class="admin-hero__title">Prompt 模板治理</h1>
         <p class="admin-hero__desc">
           维护面试提问、答案评分、动态追问和报告生成模板。当前保留模板真实 CRUD，
-          Prompt 内容变更已收敛到版本 API，版本管理面板已接入，测试面板待接入。
+          Prompt 内容变更已收敛到版本 API，版本管理与测试面板已接入。
         </p>
       </div>
       <el-button type="primary" @click="openDialog()">
@@ -36,8 +36,8 @@
       </article>
       <article class="admin-insight-card">
         <span>版本治理</span>
-        <strong>面板已接入</strong>
-        <small>测试面板待接入</small>
+        <strong>闭环已接入</strong>
+        <small>版本列表、切换与测试均走真实接口</small>
       </article>
     </div>
 
@@ -232,8 +232,9 @@
           <el-table-column label="更新时间" width="170">
             <template #default="{ row }">{{ row.updatedAt || row.createdAt || '-' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="190" fixed="right">
             <template #default="{ row }">
+              <el-button link type="primary" @click="openTestDialog(row)">测试</el-button>
               <el-button v-if="canActivateVersion(row)" link type="primary" @click="handleActivateVersion(row)">激活</el-button>
               <el-button v-if="canDisableVersion(row)" link type="warning" @click="handleDisableVersion(row)">禁用</el-button>
               <span v-if="!canActivateVersion(row) && !canDisableVersion(row)" class="muted-text">无操作</span>
@@ -254,6 +255,79 @@
         </div>
       </section>
     </el-drawer>
+
+    <el-dialog v-model="testDialogVisible" title="Prompt 版本测试" width="920px" destroy-on-close class="prompt-test-dialog">
+      <section class="test-version-card">
+        <div>
+          <span>当前版本</span>
+          <strong>{{ testingVersion?.versionCode || '-' }}</strong>
+        </div>
+        <div>
+          <span>版本名称</span>
+          <strong>{{ testingVersion?.versionName || '-' }}</strong>
+        </div>
+        <div>
+          <span>状态</span>
+          <el-tag v-if="testingVersion" :type="versionStatusType(testingVersion.status)" effect="plain">
+            {{ versionStatusText(testingVersion.status) }}
+          </el-tag>
+          <strong v-else>-</strong>
+        </div>
+      </section>
+
+      <el-alert
+        class="test-mode-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="callAi=false 只渲染 Prompt；callAi=true 可能真实调用 AI 并写入 AI 调用日志。"
+      />
+
+      <el-form label-position="top">
+        <el-form-item label="inputVariables JSON">
+          <el-input v-model="testInputJson" type="textarea" :rows="8" placeholder='例如：{"position":"Java 后端工程师"}' />
+        </el-form-item>
+        <el-form-item label="是否调用 AI">
+          <el-switch v-model="testCallAi" active-text="callAi=true" inactive-text="callAi=false" />
+        </el-form-item>
+      </el-form>
+
+      <section v-if="testResult" class="test-result-panel">
+        <div class="version-section-head">
+          <div>
+            <h3>测试结果</h3>
+            <p>展示接口真实返回的渲染内容、AI 响应和调用日志信息。</p>
+          </div>
+        </div>
+        <div class="test-result-grid">
+          <article>
+            <span>aiCallLogId</span>
+            <strong>{{ testResult.aiCallLogId || '暂无调用日志' }}</strong>
+          </article>
+          <article>
+            <span>mockMode</span>
+            <strong>{{ formatNullableBoolean(testResult.mockMode) }}</strong>
+          </article>
+        </div>
+        <div class="version-content-preview">
+          <strong>renderedPrompt</strong>
+          <pre>{{ testResult.renderedPrompt || '暂无渲染结果' }}</pre>
+        </div>
+        <div class="version-content-preview">
+          <strong>aiResponse</strong>
+          <pre>{{ testResult.aiResponse || '未调用 AI 或暂无 AI 响应' }}</pre>
+        </div>
+        <div class="version-content-preview">
+          <strong>inputVariables</strong>
+          <pre>{{ formatJson(testResult.inputVariables || {}) }}</pre>
+        </div>
+      </section>
+
+      <template #footer>
+        <el-button @click="testDialogVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="testLoading" @click="handleTestVersion">执行测试</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -271,6 +345,7 @@ import {
   getAdminAiPromptsApi,
   getPromptTemplateVersionsApi,
   disablePromptTemplateVersionApi,
+  testPromptTemplateVersionApi,
   updateAdminAiPromptApi,
   updateAdminAiPromptStatusApi
 } from '@/api/aiAdmin'
@@ -283,7 +358,8 @@ import type {
   PromptTemplateQueryDTO,
   PromptTemplateVersionQuery,
   PromptTemplateVersionVO,
-  PromptTemplateVO
+  PromptTemplateVO,
+  TestPromptTemplateVersionVO
 } from '@/types/ai'
 
 const sceneOptions = [
@@ -307,6 +383,12 @@ const versionSaving = ref(false)
 const versionFormRef = ref<FormInstance>()
 const currentPrompt = ref<PromptTemplateVO | null>(null)
 const versions = ref<PromptTemplateVersionVO[]>([])
+const testDialogVisible = ref(false)
+const testLoading = ref(false)
+const testingVersion = ref<PromptTemplateVersionVO | null>(null)
+const testInputJson = ref('{}')
+const testCallAi = ref(false)
+const testResult = ref<TestPromptTemplateVersionVO | null>(null)
 
 const query = reactive<PromptTemplateQueryDTO>({
   keyword: '',
@@ -457,6 +539,52 @@ const handleCreateVersion = async () => {
   }
 }
 
+const openTestDialog = (row: PromptTemplateVersionVO) => {
+  testingVersion.value = row
+  testInputJson.value = '{}'
+  testCallAi.value = false
+  testResult.value = null
+  testDialogVisible.value = true
+}
+
+const parseInputVariables = () => {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(testInputJson.value || '{}')
+  } catch {
+    ElMessage.error('inputVariables 必须是合法 JSON 对象')
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    ElMessage.error('inputVariables 只接受对象结构')
+    return null
+  }
+  const entries = Object.entries(parsed)
+  if (entries.some(([, value]) => typeof value !== 'string')) {
+    ElMessage.error('inputVariables 的变量值必须是字符串')
+    return null
+  }
+  return Object.fromEntries(entries) as Record<string, string>
+}
+
+const handleTestVersion = async () => {
+  if (!testingVersion.value?.id) return
+  const inputVariables = parseInputVariables()
+  if (!inputVariables) return
+  testLoading.value = true
+  try {
+    testResult.value = await testPromptTemplateVersionApi(testingVersion.value.id, {
+      inputVariables,
+      callAi: testCallAi.value
+    })
+    ElMessage.success('Prompt 版本测试完成')
+  } catch {
+    ElMessage.error('测试失败，请稍后重试')
+  } finally {
+    testLoading.value = false
+  }
+}
+
 const isVersionActive = (row: PromptTemplateVersionVO) => row.isActive === 1 || row.status === 'ACTIVE'
 
 const canActivateVersion = (row: PromptTemplateVersionVO) => !isVersionActive(row)
@@ -561,6 +689,13 @@ const versionStatusType = (status?: string) => {
   return 'info'
 }
 
+const formatJson = (value: unknown) => JSON.stringify(value, null, 2)
+
+const formatNullableBoolean = (value?: boolean) => {
+  if (typeof value !== 'boolean') return '-'
+  return value ? 'true' : 'false'
+}
+
 onMounted(fetchPrompts)
 </script>
 
@@ -601,7 +736,8 @@ onMounted(fetchPrompts)
 }
 
 .version-create-panel,
-.version-list-panel {
+.version-list-panel,
+.test-result-panel {
   margin-bottom: 18px;
   padding: 18px;
   border: 1px solid var(--app-border);
@@ -674,8 +810,46 @@ onMounted(fetchPrompts)
   font-size: 12px;
 }
 
+.test-version-card,
+.test-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+
+  div,
+  article {
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+
+  strong {
+    color: var(--app-text-primary);
+    font-size: 14px;
+  }
+}
+
+.test-result-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.test-mode-alert {
+  margin-bottom: 16px;
+}
+
 @media (max-width: 760px) {
-  .version-form-grid {
+  .version-form-grid,
+  .test-version-card,
+  .test-result-grid {
     grid-template-columns: 1fr;
   }
 }
