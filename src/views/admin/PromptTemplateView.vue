@@ -94,6 +94,7 @@
             <template #default="{ row }">
               <el-button link type="primary" @click="openVersionDrawer(row)">版本管理</el-button>
               <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button link type="primary" @click="openTemplateCallLogs(row)">调用记录</el-button>
               <el-button link type="warning" @click="handleStatus(row)">
                 {{ row.status === 1 ? '禁用' : '启用' }}
               </el-button>
@@ -203,7 +204,10 @@
             <h3>版本列表</h3>
             <p>展示后端返回版本状态，不伪造灰度、Diff 或测试结果。</p>
           </div>
-          <el-button :loading="versionLoading" @click="fetchVersions">刷新</el-button>
+          <div class="version-toolbar">
+            <el-button v-if="currentPrompt" @click="openTemplateCallLogs(currentPrompt)">模板调用记录</el-button>
+            <el-button :loading="versionLoading" @click="fetchVersions">刷新</el-button>
+          </div>
         </div>
 
         <el-table v-loading="versionLoading" :data="versions" row-key="id">
@@ -232,12 +236,14 @@
           <el-table-column label="更新时间" width="170">
             <template #default="{ row }">{{ row.updatedAt || row.createdAt || '-' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
+          <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openTestDialog(row)">测试</el-button>
               <el-button v-if="canActivateVersion(row)" link type="primary" @click="handleActivateVersion(row)">激活</el-button>
+              <el-button v-if="canRollbackVersion(row)" link type="primary" @click="handleRollbackVersion(row)">回滚</el-button>
+              <el-button v-else-if="isVersionActive(row)" link disabled title="当前已是激活版本">回滚</el-button>
               <el-button v-if="canDisableVersion(row)" link type="warning" @click="handleDisableVersion(row)">禁用</el-button>
-              <span v-if="!canActivateVersion(row) && !canDisableVersion(row)" class="muted-text">无操作</span>
+              <el-button link type="primary" @click="openVersionCallLogs(row)">调用记录</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -328,6 +334,86 @@
         <el-button type="primary" :loading="testLoading" @click="handleTestVersion">执行测试</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="callLogDrawerVisible" size="1080px" destroy-on-close class="call-log-drawer">
+      <template #header>
+        <div class="drawer-head">
+          <div>
+            <p>Prompt Call Logs</p>
+            <h2>{{ callLogTitle }}</h2>
+          </div>
+          <el-tag effect="plain">{{ callLogScope === 'template' ? '模板' : '版本' }}</el-tag>
+        </div>
+      </template>
+
+      <section class="version-list-panel">
+        <div class="version-section-head">
+          <div>
+            <h3>调用记录</h3>
+            <p>仅展示后端真实日志；历史日志可能未写入 Prompt 模板或版本字段。</p>
+          </div>
+        </div>
+        <el-form :model="callLogQuery" inline class="call-log-filter">
+          <el-form-item label="success">
+            <el-select v-model="callLogQuery.success" clearable placeholder="全部" style="width: 130px">
+              <el-option label="成功" :value="true" />
+              <el-option label="失败" :value="false" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="scene">
+            <el-select v-model="callLogQuery.scene" clearable placeholder="全部场景" style="width: 240px">
+              <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="handleCallLogSearch">查询</el-button>
+            <el-button @click="handleCallLogReset">重置</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-table v-loading="callLogLoading" :data="callLogs" row-key="id">
+          <el-table-column prop="id" label="ID" width="90" />
+          <el-table-column label="scene" min-width="190" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.scene || row.callType || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="businessId" label="businessId" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="modelName" label="modelName" min-width="150" show-overflow-tooltip />
+          <el-table-column label="success" width="100">
+            <template #default="{ row }">
+              <el-tag :type="isCallLogSuccess(row) ? 'success' : 'danger'" effect="plain">
+                {{ isCallLogSuccess(row) ? '成功' : '失败' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="promptVersion" label="promptVersion" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="promptTemplateId" label="templateId" width="120" />
+          <el-table-column prop="promptTemplateVersionId" label="versionId" width="120" />
+          <el-table-column label="tokens" min-width="170">
+            <template #default="{ row }">{{ formatTokens(row) }}</template>
+          </el-table-column>
+          <el-table-column label="cost" width="110">
+            <template #default="{ row }">{{ row.costTimeMs ?? row.duration ?? row.elapsedMs ?? row.latencyMs ?? '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="errorMessage" label="errorMessage" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="createdAt" label="createdAt" min-width="170" show-overflow-tooltip />
+        </el-table>
+        <el-empty
+          v-if="!callLogLoading && !callLogs.length"
+          description="暂无调用记录，历史日志可能未写入 Prompt 版本字段"
+        />
+        <div class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="callLogQuery.pageNo"
+            v-model:page-size="callLogQuery.pageSize"
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="callLogTotal"
+            :page-sizes="[10, 20, 50]"
+            @change="fetchCallLogs"
+          />
+        </div>
+      </section>
+    </el-drawer>
   </div>
 </template>
 
@@ -343,8 +429,11 @@ import {
   createPromptTemplateVersionApi,
   deleteAdminAiPromptApi,
   getAdminAiPromptsApi,
+  getPromptTemplateCallLogsApi,
+  getPromptTemplateVersionCallLogsApi,
   getPromptTemplateVersionsApi,
   disablePromptTemplateVersionApi,
+  rollbackPromptTemplateVersionApi,
   testPromptTemplateVersionApi,
   updateAdminAiPromptApi,
   updateAdminAiPromptStatusApi
@@ -353,7 +442,9 @@ import StatusTag from '@/components/common/StatusTag.vue'
 import { AI_SCENE } from '@/constants/enums'
 import type {
   AiScene,
+  AiCallLogVO,
   CreatePromptTemplateVersionDTO,
+  PromptCallLogQueryDTO,
   PromptTemplateDTO,
   PromptTemplateQueryDTO,
   PromptTemplateVersionQuery,
@@ -389,6 +480,13 @@ const testingVersion = ref<PromptTemplateVersionVO | null>(null)
 const testInputJson = ref('{}')
 const testCallAi = ref(false)
 const testResult = ref<TestPromptTemplateVersionVO | null>(null)
+const callLogDrawerVisible = ref(false)
+const callLogLoading = ref(false)
+const callLogScope = ref<'template' | 'version'>('template')
+const callLogTargetId = ref<number | null>(null)
+const callLogTitle = ref('')
+const callLogs = ref<AiCallLogVO[]>([])
+const callLogTotal = ref(0)
 
 const query = reactive<PromptTemplateQueryDTO>({
   keyword: '',
@@ -424,6 +522,13 @@ const versionForm = reactive<CreatePromptTemplateVersionDTO>({
   content: '',
   status: 'DRAFT',
   changeLog: ''
+})
+
+const callLogQuery = reactive<PromptCallLogQueryDTO>({
+  success: '',
+  scene: '',
+  pageNo: 1,
+  pageSize: 10
 })
 
 const rules = computed<FormRules<PromptTemplateDTO>>(() => ({
@@ -499,6 +604,61 @@ const openVersionDrawer = async (row: PromptTemplateVO) => {
   resetVersionForm()
   versionDrawerVisible.value = true
   await fetchVersions()
+}
+
+const resetCallLogQuery = () => {
+  Object.assign(callLogQuery, {
+    success: '',
+    scene: '',
+    pageNo: 1,
+    pageSize: 10
+  })
+}
+
+const fetchCallLogs = async () => {
+  if (!callLogTargetId.value) return
+  callLogLoading.value = true
+  try {
+    const api =
+      callLogScope.value === 'template'
+        ? getPromptTemplateCallLogsApi
+        : getPromptTemplateVersionCallLogsApi
+    const result = await api(callLogTargetId.value, callLogQuery)
+    callLogs.value = result.records || []
+    callLogTotal.value = result.total || 0
+  } catch {
+    ElMessage.error('调用记录查询失败，不影响 Prompt 版本管理主功能')
+  } finally {
+    callLogLoading.value = false
+  }
+}
+
+const openTemplateCallLogs = async (row: PromptTemplateVO) => {
+  callLogScope.value = 'template'
+  callLogTargetId.value = row.id
+  callLogTitle.value = `${row.promptName || row.name || 'Prompt 模板'} 调用记录`
+  resetCallLogQuery()
+  callLogDrawerVisible.value = true
+  await fetchCallLogs()
+}
+
+const openVersionCallLogs = async (row: PromptTemplateVersionVO) => {
+  callLogScope.value = 'version'
+  callLogTargetId.value = row.id
+  callLogTitle.value = `${row.versionCode || row.id} 调用记录`
+  resetCallLogQuery()
+  callLogDrawerVisible.value = true
+  await fetchCallLogs()
+}
+
+const handleCallLogSearch = () => {
+  callLogQuery.pageNo = 1
+  fetchCallLogs()
+}
+
+const handleCallLogReset = () => {
+  resetCallLogQuery()
+  fetchCallLogs()
 }
 
 const handleSave = async () => {
@@ -591,6 +751,8 @@ const canActivateVersion = (row: PromptTemplateVersionVO) => !isVersionActive(ro
 
 const canDisableVersion = (row: PromptTemplateVersionVO) => !isVersionActive(row) && row.status !== 'DISABLED'
 
+const canRollbackVersion = (row: PromptTemplateVersionVO) => !isVersionActive(row) && row.status !== 'DISABLED'
+
 const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
   let changeLog: string | undefined
   try {
@@ -610,6 +772,40 @@ const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
     await fetchPrompts()
   } catch {
     ElMessage.error('激活失败，请稍后重试')
+  }
+}
+
+const handleRollbackVersion = async (row: PromptTemplateVersionVO) => {
+  if (isVersionActive(row)) {
+    ElMessage.warning('当前已是激活版本')
+    return
+  }
+  if (row.status === 'DISABLED') {
+    ElMessage.warning('已禁用版本不能回滚')
+    return
+  }
+  let changeLog: string | undefined
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '回滚等价于激活该历史版本，会切换当前模板 activeVersion。可选填写回滚原因。',
+      `回滚版本 ${row.versionCode}`,
+      {
+        confirmButtonText: '确认回滚',
+        cancelButtonText: '取消',
+        inputPlaceholder: '例如：恢复线上稳定 Prompt'
+      }
+    )
+    changeLog = value || undefined
+  } catch {
+    return
+  }
+  try {
+    await rollbackPromptTemplateVersionApi(row.id, { changeLog })
+    ElMessage.success('Prompt 版本已回滚')
+    await fetchVersions()
+    await fetchPrompts()
+  } catch {
+    ElMessage.error('回滚失败，请稍后重试')
   }
 }
 
@@ -696,6 +892,18 @@ const formatNullableBoolean = (value?: boolean) => {
   return value ? 'true' : 'false'
 }
 
+const isCallLogSuccess = (row: AiCallLogVO) => {
+  if (typeof row.status === 'number') return row.status === 1
+  return ['SUCCESS', 'SUCCEEDED', 'true', '1'].includes(String(row.status).toUpperCase())
+}
+
+const formatTokens = (row: AiCallLogVO) => {
+  const prompt = row.promptTokens ?? row.inputTokens ?? '-'
+  const completion = row.completionTokens ?? row.outputTokens ?? '-'
+  const totalTokens = row.totalTokens ?? '-'
+  return `${prompt} / ${completion} / ${totalTokens}`
+}
+
 onMounted(fetchPrompts)
 </script>
 
@@ -777,6 +985,16 @@ onMounted(fetchPrompts)
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.version-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.call-log-filter {
+  margin-bottom: 16px;
 }
 
 .version-content-preview {

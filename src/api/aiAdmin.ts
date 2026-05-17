@@ -6,9 +6,11 @@ import type {
   AiCallLogVO,
   CreatePromptTemplateVersionDTO,
   DisablePromptTemplateVersionDTO,
+  PromptCallLogQueryDTO,
   PromptTemplateDTO,
   PromptTemplateDetailVO,
   PromptTemplateQueryDTO,
+  PromptVersionRollbackDTO,
   PromptTemplateVersionQuery,
   PromptTemplateVersionVO,
   TestPromptTemplateVersionDTO,
@@ -21,6 +23,8 @@ type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   status: string | number
   scene?: AiCallLogVO['callType']
   costMillis?: number
+  costTimeMs?: number
+  duration?: number
   requestBody?: string
   responseBody?: string
   failReason?: string
@@ -45,8 +49,10 @@ const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
   scene: log.scene || log.callType || '',
   callType: log.callType || log.scene || '',
   status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
-  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costMillis,
-  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+  costTimeMs: log.costTimeMs ?? log.duration ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+  duration: log.duration ?? log.costTimeMs ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
   requestPrompt: log.requestPrompt ?? log.promptContent ?? log.requestBody,
   requestParams: log.requestParams ?? log.requestBody ?? log.requestPrompt,
   promptContent: log.promptContent ?? log.requestPrompt,
@@ -156,6 +162,16 @@ export const disablePromptTemplateVersionApi = (
   return request.post<null, null>(`/admin/ai/prompt-template-versions/${versionId}/disable`, data)
 }
 
+export const rollbackPromptTemplateVersionApi = (
+  versionId: number,
+  data?: PromptVersionRollbackDTO
+) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/rollback`,
+    data
+  )
+}
+
 export const testPromptTemplateVersionApi = (versionId: number, data?: TestPromptTemplateVersionDTO) => {
   return request.post<TestPromptTemplateVersionVO, TestPromptTemplateVersionVO>(
     `/admin/ai/prompt-template-versions/${versionId}/test`,
@@ -182,6 +198,28 @@ export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
     {
       params: requestParams
     }
+  )
+  return normalizeAiLogPage(result)
+}
+
+export const getPromptTemplateCallLogsApi = async (
+  templateId: number,
+  params?: PromptCallLogQueryDTO
+) => {
+  const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
+    `/admin/ai/prompt-templates/${templateId}/call-logs`,
+    { params }
+  )
+  return normalizeAiLogPage(result)
+}
+
+export const getPromptTemplateVersionCallLogsApi = async (
+  versionId: number,
+  params?: PromptCallLogQueryDTO
+) => {
+  const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
+    `/admin/ai/prompt-template-versions/${versionId}/call-logs`,
+    { params }
   )
   return normalizeAiLogPage(result)
 }

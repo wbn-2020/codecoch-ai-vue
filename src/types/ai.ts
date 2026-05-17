@@ -87,6 +87,10 @@ export interface ActivatePromptTemplateVersionDTO {
   changeLog?: string
 }
 
+export interface PromptVersionRollbackDTO {
+  changeLog?: string
+}
+
 export interface DisablePromptTemplateVersionDTO {
   changeLog?: string
 }
@@ -120,6 +124,13 @@ export interface AiCallLogQueryDTO extends PageQuery {
   endTime?: string
 }
 
+export interface PromptCallLogQueryDTO extends PageQuery {
+  success?: boolean | ''
+  scene?: AiScene | ''
+  startTime?: string
+  endTime?: string
+}
+
 export interface AiCallLogVO {
   id: number
   userId?: number
@@ -132,6 +143,7 @@ export interface AiCallLogVO {
   provider?: string
   modelName?: string
   promptTemplateId?: number
+  promptTemplateVersionId?: number
   promptVersion?: string
   requestPrompt?: string
   requestParams?: string
@@ -142,6 +154,10 @@ export interface AiCallLogVO {
   errorMessage?: string
   failReason?: string
   latencyMs?: number
+  costTimeMs?: number
+  duration?: number
+  promptTokens?: number
+  completionTokens?: number
   inputTokens?: number
   outputTokens?: number
   totalTokens?: number
