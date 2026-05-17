@@ -3,6 +3,7 @@ import type { PageResult } from '@/types/api'
 import type {
   SseEventName,
   SseEventVO,
+  StudyPlanDailyViewVO,
   StudyPlanDetailVO,
   StudyPlanGenerateDTO,
   StudyPlanGenerateVO,
@@ -80,6 +81,17 @@ export const getStudyPlanDetailApi = (id: number) => {
 
 export const getStudyPlanTasksApi = (id: number) => {
   return request.get<StudyTaskVO[], StudyTaskVO[]>(`/study-plans/${id}/tasks`)
+}
+
+export const getStudyPlanDailyViewApi = (planId: number, date?: string) => {
+  return request
+    .get<StudyPlanDailyViewVO, StudyPlanDailyViewVO>(`/study-plans/${planId}/daily-view`, {
+      params: date ? { date } : undefined
+    })
+    .then((dailyView) => ({
+      ...dailyView,
+      tasks: dailyView.tasks || []
+    }))
 }
 
 export const updateStudyTaskStatusApi = (taskId: number, taskStatus: StudyTaskStatus) => {
