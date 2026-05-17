@@ -871,7 +871,7 @@ const handleMergeDuplicate = async (id: number) => {
     inputPlaceholder: '例如：语义重复，保留主问题并建立重复关系'
   })
   await mergeQuestionDuplicateReviewApi(id, {
-    relationType: 'DUPLICATE',
+    relationType: 'SAME_INTENT',
     reason: value?.trim() || '确认重复'
   })
   ElMessage.success('重复题已合并')

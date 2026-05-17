@@ -217,6 +217,13 @@ export type QuestionDuplicateMatchType =
   | 'CONTENT_SIMILAR'
   | 'MANUAL'
   | string
+export type QuestionRelationType =
+  | 'SAME_INTENT'
+  | 'RELATED'
+  | 'FOLLOW_UP'
+  | 'ADVANCED'
+  | 'PREREQUISITE'
+  | 'COMPARE'
 
 export interface AiQuestionGenerateRequestDTO {
   targetPosition?: string
@@ -371,7 +378,7 @@ export interface QuestionDuplicateReviewDetailVO extends QuestionDuplicateReview
 }
 
 export interface QuestionDuplicateMergeDTO {
-  relationType?: string
+  relationType?: QuestionRelationType
   reason?: string
 }
 
