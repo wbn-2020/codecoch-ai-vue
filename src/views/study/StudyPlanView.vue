@@ -65,6 +65,14 @@
             </el-button>
           </el-form-item>
         </el-form>
+
+        <div v-if="streamStatus" class="stream-panel">
+          <div class="stream-panel__head">
+            <span>{{ streamStatus }}</span>
+            <el-button v-if="generating" link type="warning" @click="cancelStream">取消</el-button>
+          </div>
+          <pre>{{ streamContent || '等待流式事件返回...' }}</pre>
+        </div>
       </div>
     </section>
 
@@ -203,9 +211,11 @@ import {
   generateStudyPlanApi,
   getStudyPlanDetailApi,
   getStudyPlansApi,
+  streamStudyPlanGenerateApi,
   updateStudyTaskStatusApi
 } from '@/api/studyPlan'
 import type {
+  SseEventVO,
   StudyPlanDetailVO,
   StudyPlanGenerateDTO,
   StudyPlanListVO,
@@ -224,6 +234,9 @@ const plans = ref<StudyPlanListVO[]>([])
 const selectedPlan = ref<StudyPlanDetailVO | null>(null)
 const tasks = ref<StudyTaskVO[]>([])
 const pollCount = ref(0)
+const streamContent = ref('')
+const streamStatus = ref('')
+let streamController: AbortController | undefined
 let pollTimer: number | undefined
 
 const query = reactive<StudyPlanQueryDTO>({
@@ -318,7 +331,64 @@ const handleGenerate = async () => {
     return
   }
   generating.value = true
+  streamContent.value = ''
+  streamStatus.value = '正在建立学习计划 SSE 连接'
+  let streamStarted = false
+  let streamPlanId = 0
   try {
+    const payload = {
+      ...generateForm,
+      targetPosition: generateForm.targetPosition || undefined,
+      industryDirection: generateForm.industryDirection || undefined,
+      extraRequirements: generateForm.extraRequirements || undefined
+    }
+    streamController = new AbortController()
+    await streamStudyPlanGenerateApi(
+      payload,
+      {
+        onEvent: (event, data) => {
+          if (event === 'start') {
+            streamStarted = true
+            streamStatus.value = data?.message || '学习计划流式生成中'
+          }
+          if (event === 'metadata') {
+            streamPlanId = resolveStreamPlanId(data) || streamPlanId
+          }
+          if (event === 'done') {
+            streamStatus.value = '学习计划流式生成完成'
+          }
+        },
+        onChunk: (content) => {
+          streamContent.value += content
+        }
+      },
+      streamController.signal
+    )
+    const result = {
+      planId: streamPlanId,
+      planStatus: 'ACTIVE'
+    }
+    ElMessage.success('学习计划已通过 SSE 生成')
+    if (result.planId) {
+      pollCount.value = 0
+      await router.replace({ path: '/study-plans', query: { planId: String(result.planId) } })
+      await fetchPlans()
+      await selectPlan(result.planId, false)
+    } else {
+      await fetchPlans()
+    }
+  } catch (error) {
+    if (streamController?.signal.aborted) {
+      ElMessage.warning('已取消学习计划流式生成')
+      return
+    }
+    if (streamStarted) {
+      streamStatus.value = 'SSE 生成失败，请刷新后查看是否已有生成结果'
+      ElMessage.error(error instanceof Error ? error.message : 'SSE 生成失败')
+      await fetchPlans()
+      return
+    }
+    streamStatus.value = 'SSE 连接失败，已回退到同步生成接口'
     const result = await generateStudyPlanApi({
       ...generateForm,
       targetPosition: generateForm.targetPosition || undefined,
@@ -336,7 +406,19 @@ const handleGenerate = async () => {
     }
   } finally {
     generating.value = false
+    streamController = undefined
   }
+}
+
+const resolveStreamPlanId = (event?: SseEventVO) => {
+  const value = event?.metadata?.planId
+  const id = Number(value || 0)
+  return Number.isFinite(id) && id > 0 ? id : 0
+}
+
+const cancelStream = () => {
+  streamController?.abort()
+  streamController = undefined
 }
 
 const refreshSelectedPlan = async () => {
@@ -411,7 +493,10 @@ const priorityText = (priority: string) => {
 }
 
 onMounted(fetchPlans)
-onBeforeUnmount(clearPoll)
+onBeforeUnmount(() => {
+  clearPoll()
+  cancelStream()
+})
 </script>
 
 <style scoped lang="scss">
@@ -509,6 +594,32 @@ onBeforeUnmount(clearPoll)
 
 .form-actions {
   align-self: end;
+}
+
+.stream-panel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.36);
+
+  pre {
+    max-height: 180px;
+    margin: 10px 0 0;
+    overflow: auto;
+    color: #cbd5e1;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+.stream-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--cc-ai-cyan);
+  font-size: 13px;
 }
 
 .study-layout {

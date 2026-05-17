@@ -28,6 +28,21 @@ export interface StudyPlanGenerateVO {
   failureReason?: string
 }
 
+export type SseEventName = 'start' | 'chunk' | 'delta' | 'metadata' | 'done' | 'error' | string
+
+export interface SseEventVO {
+  requestId?: string
+  sessionId?: number
+  message?: string
+  content?: string
+  index?: number
+  messageId?: number
+  aiCallLogId?: number
+  fullContent?: string
+  code?: string
+  metadata?: Record<string, unknown>
+}
+
 export interface StudyPlanListVO {
   id: number
   reportId: number
