@@ -9,6 +9,9 @@ import type {
   BatchQuestionReviewRejectDTO,
   BatchQuestionReviewResultVO,
   FavoriteQuestionVO,
+  PracticeRecordQueryDTO,
+  PracticeRecordVO,
+  PracticeSubmitDTO,
   QuestionAnswerDTO,
   QuestionAnswerResultVO,
   QuestionCreateDTO,
@@ -287,6 +290,27 @@ export const updateAdminQuestionStatusApi = (id: number, status: number) => {
 
 export const deleteAdminQuestionApi = (id: number) => {
   return request.delete<null, null>(`/admin/questions/${id}`)
+}
+
+export const submitQuestionAnswerReviewApi = (questionId: number, data: PracticeSubmitDTO) => {
+  return request.post<PracticeRecordVO, PracticeRecordVO>(
+    `/questions/${questionId}/answer-review`,
+    data
+  )
+}
+
+export const getQuestionAnswerReviewDetailApi = (recordId: number) => {
+  return request.get<PracticeRecordVO, PracticeRecordVO>(`/questions/answer-reviews/${recordId}`)
+}
+
+export const getQuestionAnswerReviewsApi = (
+  questionId: number,
+  params: Omit<PracticeRecordQueryDTO, 'questionId'>
+) => {
+  return request.get<PageResult<PracticeRecordVO>, PageResult<PracticeRecordVO>>(
+    `/questions/${questionId}/answer-reviews`,
+    { params }
+  )
 }
 
 export const generateAiQuestionsApi = (data: AiQuestionGenerateRequestDTO) => {

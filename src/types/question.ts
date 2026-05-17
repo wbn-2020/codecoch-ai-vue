@@ -4,6 +4,8 @@ export type QuestionDifficulty = 'EASY' | 'MEDIUM' | 'HARD' | string
 export type QuestionType = 'SHORT_ANSWER' | 'SCENARIO' | 'CODING' | string
 export type MasteryStatus = 'MASTERED' | 'VAGUE' | 'UNKNOWN' | string
 export type AnswerResult = 'CORRECT' | 'PARTIAL_CORRECT' | 'WRONG' | string
+export type PracticeReviewStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | string
+export type PracticeSource = 'QUESTION_BANK' | string
 
 export interface QuestionCategoryVO {
   id: number
@@ -116,6 +118,53 @@ export interface QuestionAnswerResultVO {
   wrongRecordGenerated?: boolean
   wrong?: boolean
   answeredAt: string
+}
+
+export interface PracticeSubmitDTO {
+  answerContent: string
+  answerDurationSeconds?: number
+  source?: PracticeSource
+}
+
+export interface PracticeRecordQueryDTO extends PageQuery {
+  questionId?: number
+  reviewStatus?: PracticeReviewStatus | ''
+}
+
+export interface PracticeRecordVO {
+  id: number
+  userId?: number
+  questionId: number
+  questionTitle?: string
+  questionType?: QuestionType
+  difficulty?: QuestionDifficulty
+  knowledgePoint?: string
+  answerContent?: string
+  userAnswer?: string
+  answerDurationSeconds?: number
+  source?: PracticeSource
+  reviewStatus?: PracticeReviewStatus
+  score?: number
+  level?: string
+  masteryStatus?: MasteryStatus
+  summary?: string
+  aiComment?: string
+  suggestions?: string[] | string
+  knowledgePoints?: string[] | string
+  strengths?: string[] | string
+  weaknesses?: string[] | string
+  improvementSuggestions?: string[] | string
+  referenceComparison?: string
+  knowledgeGaps?: string[] | string
+  suggestedFollowUps?: string[] | string
+  referenceAnswer?: string
+  referenceAnswerSnapshot?: string
+  questionSnapshotJson?: string
+  reviewJson?: string
+  aiCallLogId?: number
+  errorMessage?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface FavoriteQuestionVO {
