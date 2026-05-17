@@ -501,11 +501,15 @@ const handleApplyOptimizeResult = async () => {
     ElMessage.warning('仅成功的优化记录可应用')
     return
   }
-  await ElMessageBox.confirm('将创建一份新的 AI 优化草稿，不会覆盖当前简历。', '应用优化结果', {
-    type: 'warning',
-    confirmButtonText: '创建草稿',
-    cancelButtonText: '取消'
-  })
+  try {
+    await ElMessageBox.confirm('将创建一份新的 AI 优化草稿，不会覆盖当前简历。', '应用优化结果', {
+      type: 'warning',
+      confirmButtonText: '创建草稿',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
   applyingOptimize.value = true
   try {
     const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
