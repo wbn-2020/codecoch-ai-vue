@@ -387,8 +387,8 @@
         </div>
         <div class="drawer-actions">
           <el-button @click="optimizeDrawerVisible = false">关闭</el-button>
-          <el-tooltip content="后端当前没有应用优化结果接口，不能自动覆盖简历内容" placement="top">
-            <el-button disabled>应用优化结果 · 待接入真实接口</el-button>
+          <el-tooltip content="后端暂未提供独立应用优化结果接口，不能自动覆盖简历内容" placement="top">
+            <el-button disabled>应用优化结果 · 待后端应用接口</el-button>
           </el-tooltip>
         </div>
       </div>

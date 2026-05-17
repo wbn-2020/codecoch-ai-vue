@@ -254,10 +254,10 @@
                 <p>{{ item.after || item.reason || '后端未返回改写内容' }}</p>
               </article>
             </div>
-            <el-tooltip content="后端当前没有应用优化结果接口，不能自动覆盖简历内容" placement="top">
+            <el-tooltip content="后端暂未提供独立应用优化结果接口，不能自动覆盖简历内容" placement="top">
               <el-button class="full-button" disabled>
                 <GitCompareArrows :size="16" />
-                应用优化结果 · 待接入真实接口
+                应用优化结果 · 待后端应用接口
               </el-button>
             </el-tooltip>
           </div>
