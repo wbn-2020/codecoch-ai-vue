@@ -9,7 +9,7 @@
         <h1 class="admin-hero__title">Prompt 模板治理</h1>
         <p class="admin-hero__desc">
           维护面试提问、答案评分、动态追问和报告生成模板。当前保留模板真实 CRUD，
-          Prompt 内容变更已收敛到版本 API，完整管理面板下一步接入。
+          Prompt 内容变更已收敛到版本 API，版本管理面板已接入，测试面板待接入。
         </p>
       </div>
       <el-button type="primary" @click="openDialog()">
@@ -36,8 +36,8 @@
       </article>
       <article class="admin-insight-card">
         <span>版本治理</span>
-        <strong>API 已接入</strong>
-        <small>管理面板下一步接入</small>
+        <strong>面板已接入</strong>
+        <small>测试面板待接入</small>
       </article>
     </div>
 
@@ -464,18 +464,24 @@ const canActivateVersion = (row: PromptTemplateVersionVO) => !isVersionActive(ro
 const canDisableVersion = (row: PromptTemplateVersionVO) => !isVersionActive(row) && row.status !== 'DISABLED'
 
 const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
+  let changeLog: string | undefined
   try {
     const { value } = await ElMessageBox.prompt('可选：填写激活说明', `激活版本 ${row.versionCode}`, {
       confirmButtonText: '激活',
       cancelButtonText: '取消',
       inputPlaceholder: '例如：上线优化后的 Prompt'
     })
-    await activatePromptTemplateVersionApi(row.id, { changeLog: value || undefined })
+    changeLog = value || undefined
+  } catch {
+    return
+  }
+  try {
+    await activatePromptTemplateVersionApi(row.id, { changeLog })
     ElMessage.success('Prompt 版本已激活')
     await fetchVersions()
     await fetchPrompts()
   } catch {
-    // 用户取消操作时不提示错误。
+    ElMessage.error('激活失败，请稍后重试')
   }
 }
 
@@ -484,17 +490,23 @@ const handleDisableVersion = async (row: PromptTemplateVersionVO) => {
     ElMessage.warning('当前激活版本不能直接禁用')
     return
   }
+  let changeLog: string | undefined
   try {
     const { value } = await ElMessageBox.prompt('可选：填写禁用说明', `禁用版本 ${row.versionCode}`, {
       confirmButtonText: '禁用',
       cancelButtonText: '取消',
       inputPlaceholder: '例如：版本内容过期'
     })
-    await disablePromptTemplateVersionApi(row.id, { changeLog: value || undefined })
+    changeLog = value || undefined
+  } catch {
+    return
+  }
+  try {
+    await disablePromptTemplateVersionApi(row.id, { changeLog })
     ElMessage.success('Prompt 版本已禁用')
     await fetchVersions()
   } catch {
-    // 用户取消操作时不提示错误。
+    ElMessage.error('禁用失败，请稍后重试')
   }
 }
 
