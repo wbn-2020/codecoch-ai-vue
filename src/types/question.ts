@@ -317,6 +317,29 @@ export interface QuestionReviewRejectDTO {
   rejectReason: string
 }
 
+export interface BatchQuestionReviewApproveDTO {
+  reviewIds: number[]
+  approveData?: QuestionReviewApproveDTO
+}
+
+export interface BatchQuestionReviewRejectDTO {
+  reviewIds: number[]
+  rejectReason: string
+}
+
+export interface BatchQuestionReviewFailureVO {
+  reviewId: number
+  reason?: string
+}
+
+export interface BatchQuestionReviewResultVO {
+  total: number
+  successCount: number
+  failureCount: number
+  successIds?: number[]
+  failures?: BatchQuestionReviewFailureVO[]
+}
+
 export interface QuestionDuplicateReviewQueryDTO extends PageQuery {
   questionId?: number
   reviewStatus?: QuestionDuplicateReviewStatus | ''

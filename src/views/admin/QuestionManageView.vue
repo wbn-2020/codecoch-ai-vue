@@ -266,8 +266,36 @@
               </el-form-item>
             </el-form>
           </div>
+          <div class="review-batch-toolbar">
+            <span>已选择 {{ selectedPendingReviewIds.length }} 条待审核记录</span>
+            <el-space>
+              <el-button
+                type="primary"
+                :disabled="selectedPendingReviewIds.length === 0"
+                :loading="batchReviewProcessing"
+                @click="handleBatchApproveReviews"
+              >
+                批量通过
+              </el-button>
+              <el-button
+                type="danger"
+                plain
+                :disabled="selectedPendingReviewIds.length === 0"
+                :loading="batchReviewProcessing"
+                @click="handleBatchRejectReviews"
+              >
+                批量驳回
+              </el-button>
+            </el-space>
+          </div>
           <div class="table-card admin-table-card">
-            <el-table v-loading="reviewLoading" :data="reviews" row-key="id">
+            <el-table
+              v-loading="reviewLoading"
+              :data="reviews"
+              row-key="id"
+              @selection-change="handleReviewSelectionChange"
+            >
+              <el-table-column type="selection" width="48" :selectable="isPendingReview" />
               <el-table-column prop="questionTitle" label="题目" min-width="240" show-overflow-tooltip />
               <el-table-column prop="targetPosition" label="目标岗位" min-width="140" show-overflow-tooltip />
               <el-table-column prop="knowledgePoint" label="知识点" min-width="140" show-overflow-tooltip />
@@ -442,6 +470,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   approveQuestionReviewApi,
+  batchApproveQuestionReviewsApi,
+  batchRejectQuestionReviewsApi,
   checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
@@ -496,8 +526,10 @@ const governanceTab = ref('generate')
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
 const generating = ref(false)
+const batchReviewProcessing = ref(false)
 const duplicateChecking = ref(false)
 const reviews = ref<QuestionReviewListVO[]>([])
+const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
@@ -571,6 +603,11 @@ const difficultyStats = computed(() => ({
   MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
   HARD: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.HARD).length
 }))
+const selectedPendingReviewIds = computed(() =>
+  selectedReviewRows.value
+    .filter((item) => item.reviewStatus === 'PENDING')
+    .map((item) => item.id)
+)
 
 const getDifficultyLabel = (value?: QuestionDifficulty) => {
   if (value === QUESTION_DIFFICULTY.EASY) return '简单'
@@ -607,6 +644,30 @@ const getReviewStatusType = (status?: string) => {
   if (status === 'APPROVED') return 'success'
   if (status === 'REJECTED') return 'danger'
   return 'warning'
+}
+
+const isPendingReview = (row: QuestionReviewListVO) => row.reviewStatus === 'PENDING'
+
+const handleReviewSelectionChange = (rows: QuestionReviewListVO[]) => {
+  selectedReviewRows.value = rows
+}
+
+const showBatchReviewResult = (result: { successCount?: number; failureCount?: number; failures?: Array<{ reviewId: number; reason?: string }> }) => {
+  const failures = result.failures || []
+  if (!failures.length) {
+    ElMessage.success(`批量操作完成：成功 ${result.successCount || 0} 条，失败 ${result.failureCount || 0} 条`)
+    return
+  }
+
+  const failureText = failures
+    .slice(0, 5)
+    .map((item) => `#${item.reviewId}: ${item.reason || '未知原因'}`)
+    .join('\n')
+  ElMessageBox.alert(
+    `成功 ${result.successCount || 0} 条，失败 ${result.failureCount || 0} 条。\n${failureText}`,
+    '批量操作结果',
+    { type: 'warning' }
+  )
 }
 
 const getDuplicateStatusLabel = (status?: string) => {
@@ -668,6 +729,7 @@ const fetchReviews = async () => {
     const result = await getQuestionReviewsApi(reviewQuery)
     reviews.value = result.records || []
     reviewTotal.value = result.total || 0
+    selectedReviewRows.value = []
   } finally {
     reviewLoading.value = false
   }
@@ -849,6 +911,62 @@ const handleRejectReview = async (id: number) => {
   await fetchReviews()
 }
 
+const handleBatchApproveReviews = async () => {
+  const reviewIds = selectedPendingReviewIds.value
+  if (!reviewIds.length) {
+    ElMessage.warning('请先选择待审核记录')
+    return
+  }
+  const { value } = await ElMessageBox.prompt(`确认批量通过 ${reviewIds.length} 条待审核题目？`, '批量通过', {
+    inputPlaceholder: '可选：填写通过说明',
+    inputValue: '批量审核通过'
+  })
+  batchReviewProcessing.value = true
+  try {
+    const result = await batchApproveQuestionReviewsApi({
+      reviewIds,
+      approveData: {
+        status: 1,
+        isHighFrequency: 0,
+        editedReason: value?.trim() || '批量审核通过'
+      }
+    })
+    showBatchReviewResult(result)
+    await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+  } finally {
+    batchReviewProcessing.value = false
+  }
+}
+
+const handleBatchRejectReviews = async () => {
+  const reviewIds = selectedPendingReviewIds.value
+  if (!reviewIds.length) {
+    ElMessage.warning('请先选择待审核记录')
+    return
+  }
+  const { value } = await ElMessageBox.prompt(`请输入 ${reviewIds.length} 条题目的批量驳回原因`, '批量驳回', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：不符合题库质量要求',
+    inputValidator: (value) => {
+      const reason = value?.trim() || ''
+      if (!reason) return '请输入驳回原因'
+      if (reason.length > 500) return '驳回原因不能超过 500 字'
+      return true
+    }
+  })
+  batchReviewProcessing.value = true
+  try {
+    const result = await batchRejectQuestionReviewsApi({
+      reviewIds,
+      rejectReason: value.trim()
+    })
+    showBatchReviewResult(result)
+    await fetchReviews()
+  } finally {
+    batchReviewProcessing.value = false
+  }
+}
+
 const handleCheckDuplicates = async () => {
   const questionIds = questions.value.map((item) => item.id).filter(Boolean)
   if (!questionIds.length) {
@@ -935,6 +1053,17 @@ onMounted(async () => {
 
 .governance-filter {
   padding: 0 0 16px;
+}
+
+.review-batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 14px;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .ai-generate-panel {

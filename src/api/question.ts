@@ -5,6 +5,9 @@ import type {
   AdminQuestionVO,
   AiQuestionGenerateRequestDTO,
   AiQuestionGenerateResultVO,
+  BatchQuestionReviewApproveDTO,
+  BatchQuestionReviewRejectDTO,
+  BatchQuestionReviewResultVO,
   FavoriteQuestionVO,
   QuestionAnswerDTO,
   QuestionAnswerResultVO,
@@ -314,6 +317,20 @@ export const approveQuestionReviewApi = (id: number, data?: QuestionReviewApprov
 export const rejectQuestionReviewApi = (id: number, data: QuestionReviewRejectDTO) => {
   return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
     `/admin/question-reviews/${id}/reject`,
+    data
+  )
+}
+
+export const batchApproveQuestionReviewsApi = (data: BatchQuestionReviewApproveDTO) => {
+  return request.post<BatchQuestionReviewResultVO, BatchQuestionReviewResultVO>(
+    '/admin/question-reviews/batch-approve',
+    data
+  )
+}
+
+export const batchRejectQuestionReviewsApi = (data: BatchQuestionReviewRejectDTO) => {
+  return request.post<BatchQuestionReviewResultVO, BatchQuestionReviewResultVO>(
+    '/admin/question-reviews/batch-reject',
     data
   )
 }
