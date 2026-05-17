@@ -191,6 +191,9 @@ export interface ResumeOptimizeSseEvent {
   result?: ResumeOptimizeResultJson | ResumeOptimizeSubmitVO | Record<string, unknown> | string | null
   stage?: string
   code?: string
+  content?: string
+  index?: number
+  metadata?: Record<string, unknown>
   [key: string]: unknown
 }
 

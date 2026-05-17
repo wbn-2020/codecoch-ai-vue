@@ -481,9 +481,13 @@ const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEv
   const stage = data?.stage ? String(data.stage) : ''
   const stageLabel = stage ? answerReviewStageLabels[stage] || stage : ''
   const message = data?.message || ''
-  if (data?.answerId) answerReviewAnswerId.value = data.answerId
-  if (data?.aiCallLogId) answerReviewAiCallLogId.value = data.aiCallLogId
-  if (data?.followUpAiCallLogId) answerReviewFollowUpAiCallLogId.value = data.followUpAiCallLogId
+  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  const answerId = data?.answerId || Number(metadata.answerId || 0)
+  const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
+  const followUpAiCallLogId = data?.followUpAiCallLogId || Number(metadata.followUpAiCallLogId || 0)
+  if (answerId) answerReviewAnswerId.value = answerId
+  if (aiCallLogId) answerReviewAiCallLogId.value = aiCallLogId
+  if (followUpAiCallLogId) answerReviewFollowUpAiCallLogId.value = followUpAiCallLogId
   answerReviewMessage.value = message || stageLabel || answerReviewMessage.value
   answerReviewEvents.value.push({
     key: `${Date.now()}-${answerReviewEvents.value.length}`,

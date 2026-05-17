@@ -411,7 +411,8 @@ const handleGenerate = async () => {
 }
 
 const resolveStreamPlanId = (event?: SseEventVO) => {
-  const value = event?.metadata?.planId
+  const result = event?.result && typeof event.result === 'object' ? event.result : {}
+  const value = event?.metadata?.planId || event?.planId || ('planId' in result ? result.planId : undefined)
   const id = Number(value || 0)
   return Number.isFinite(id) && id > 0 ? id : 0
 }

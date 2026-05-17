@@ -21,6 +21,7 @@ import {
   Operation,
   PriceTag,
   Setting,
+  Share,
   UserFilled
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
@@ -33,11 +34,15 @@ defineProps<{
 const route = useRoute()
 
 const menuItems = [
-  { label: '\u6587\u4ef6\u6cbb\u7406', path: '/admin/files', icon: Folder },
+  { label: '文件治理', path: '/admin/files', icon: Folder },
   { label: '管理首页', path: '/admin', icon: DataBoard },
   { label: '用户管理', path: '/admin/users', icon: UserFilled },
   { label: '角色管理', path: '/admin/roles', icon: Connection },
   { label: '题目管理', path: '/admin/questions', icon: Collection },
+  { label: 'AI 题目生成', path: '/admin/ai/questions/generate', icon: Operation },
+  { label: '题目审核', path: '/admin/question-reviews', icon: DataAnalysis },
+  { label: '题目去重审核', path: '/admin/question-duplicate-reviews', icon: Connection },
+  { label: '题目关系管理', path: '/admin/question-relations', icon: Share },
   { label: '分类管理', path: '/admin/question-categories', icon: Files },
   { label: '标签管理', path: '/admin/question-tags', icon: PriceTag },
   { label: '问题组管理', path: '/admin/question-groups', icon: List },

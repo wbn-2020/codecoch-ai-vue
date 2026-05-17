@@ -508,6 +508,8 @@ const runSyncOptimizeFallback = async () => {
 const pushOptimizeSseEvent = (type: string, data?: ResumeOptimizeSseEvent) => {
   const messageMap: Record<string, string> = {
     start: '简历优化开始',
+    delta: '简历优化进行中',
+    metadata: '简历优化状态更新',
     progress: '简历优化进行中',
     result: '已收到优化结果',
     done: '简历优化完成',
@@ -521,6 +523,22 @@ const pushOptimizeSseEvent = (type: string, data?: ResumeOptimizeSseEvent) => {
     stage: data?.stage,
     message
   })
+}
+
+const resolveOptimizeRecordId = (data?: ResumeOptimizeSseEvent) => {
+  const result = data?.result
+  const resultRecordId =
+    typeof result === 'object' && result && 'optimizeRecordId' in result
+      ? Number(result.optimizeRecordId)
+      : undefined
+  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  const metadataRecordId =
+    'recordId' in metadata
+      ? Number(metadata.recordId)
+      : 'optimizeRecordId' in metadata
+        ? Number(metadata.optimizeRecordId)
+        : undefined
+  return data?.recordId || resultRecordId || metadataRecordId
 }
 
 const handleOptimizeResume = async () => {
@@ -543,16 +561,11 @@ const handleOptimizeResume = async () => {
       },
       {
         onEvent: (event, data) => {
-          if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+          if (event === 'start' || event === 'delta' || event === 'metadata' || event === 'progress' || event === 'result' || event === 'done') {
             streamStarted = true
           }
           pushOptimizeSseEvent(event, data)
-          const result = data?.result
-          const optimizeRecordId =
-            typeof result === 'object' && result && 'optimizeRecordId' in result
-              ? Number(result.optimizeRecordId)
-              : undefined
-          resultRecordId = data?.recordId || optimizeRecordId || resultRecordId
+          resultRecordId = resolveOptimizeRecordId(data) || resultRecordId
         }
       }
     )

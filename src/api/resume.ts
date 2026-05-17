@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import { appConfig } from '@/config'
 import type { PageResult } from '@/types/api'
 import type {
   ApplyResumeOptimizeResultDTO,
@@ -25,7 +24,7 @@ import type {
   SetDefaultResumeVO
 } from '@/types/resume'
 import { normalizePageResult } from '@/utils/page'
-import { getToken } from '@/utils/token'
+import { buildSseUrl, streamSse } from '@/utils/sse'
 
 const normalizeProject = (project: ResumeProjectVO): ResumeProjectVO => ({
   ...project,
@@ -152,20 +151,6 @@ export const optimizeResumeApi = (resumeId: number, data?: ResumeOptimizeRequest
   )
 }
 
-const buildSseUrl = (path: string, params: Record<string, string>) => {
-  const baseUrl = appConfig.apiBaseUrl || ''
-  const normalizedBase = baseUrl.startsWith('http')
-    ? baseUrl
-    : `${window.location.origin}${baseUrl.startsWith('/') ? baseUrl : `/${baseUrl}`}`
-  const url = new URL(`${normalizedBase.replace(/\/$/, '')}${path}`)
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== '') {
-      url.searchParams.set(key, value)
-    }
-  })
-  return url.toString()
-}
-
 const toResumeOptimizeSseQuery = (params: ResumeOptimizeSseParams) => ({
   resumeId: String(params.resumeId),
   targetPosition: params.targetPosition || '',
@@ -176,25 +161,6 @@ const toResumeOptimizeSseQuery = (params: ResumeOptimizeSseParams) => ({
   industryDirection: params.industryDirection || ''
 })
 
-const parseResumeOptimizeSseBlock = (
-  block: string
-): { event: ResumeOptimizeSseEventType | string; data?: ResumeOptimizeSseEvent } | null => {
-  const lines = block.split(/\r?\n/)
-  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
-  const dataText = lines
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
-    .join('\n')
-
-  if (!dataText) return { event }
-
-  try {
-    return { event, data: JSON.parse(dataText) }
-  } catch {
-    return { event, data: { message: dataText } }
-  }
-}
-
 export const streamResumeOptimizeApi = (
   params: ResumeOptimizeSseParams,
   handlers: {
@@ -204,82 +170,11 @@ export const streamResumeOptimizeApi = (
   },
   signal?: AbortSignal
 ) => {
-  const controller = new AbortController()
-  const abort = () => controller.abort()
-
-  if (signal) {
-    if (signal.aborted) abort()
-    signal.addEventListener('abort', abort, { once: true })
-  }
-
-  let hasStarted = false
-  const finished = (async () => {
-    try {
-      if (!window.fetch || !window.ReadableStream) {
-        throw new Error('当前浏览器不支持 SSE fetch 流式读取')
-      }
-
-      const token = getToken()
-      const response = await fetch(
-        buildSseUrl('/ai/sse/resume-optimize', toResumeOptimizeSseQuery(params)),
-        {
-          method: 'GET',
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          signal: controller.signal
-        }
-      )
-
-      if (!response.ok || !response.body) {
-        throw new Error(`SSE request failed: ${response.status}`)
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split(/\r?\n\r?\n/)
-        buffer = blocks.pop() || ''
-        for (const block of blocks) {
-          const parsed = parseResumeOptimizeSseBlock(block.trim())
-          if (!parsed) continue
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          if (eventName === 'start' || eventName === 'progress') {
-            hasStarted = true
-          }
-          handlers.onEvent?.(eventName, parsed.data)
-          if (eventName === 'error') {
-            throw new Error(parsed.data?.message || 'SSE stream error')
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        const parsed = parseResumeOptimizeSseBlock(buffer.trim())
-        if (parsed) {
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          handlers.onEvent?.(eventName, parsed.data)
-        }
-      }
-
-      handlers.onDone?.()
-    } catch (error) {
-      if (controller.signal.aborted) return
-      handlers.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)
-      throw error
-    } finally {
-      signal?.removeEventListener('abort', abort)
-    }
-  })()
-
-  return {
-    abort,
-    cancel: abort,
-    finished
-  }
+  return streamSse<ResumeOptimizeSseEvent>({
+    url: buildSseUrl('/ai/sse/resume-optimize', toResumeOptimizeSseQuery(params)),
+    signal,
+    handlers
+  })
 }
 
 export const getResumeOptimizeRecordsApi = (resumeId: number) => {

@@ -758,6 +758,22 @@ const runSyncOptimizeFallback = async (row: ResumeVO) => {
   await openLatestOptimizeRecord(result.optimizeRecordId)
 }
 
+const resolveOptimizeRecordId = (data?: ResumeOptimizeSseEvent) => {
+  const result = data?.result
+  const resultRecordId =
+    typeof result === 'object' && result && 'optimizeRecordId' in result
+      ? Number(result.optimizeRecordId)
+      : undefined
+  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  const metadataRecordId =
+    'recordId' in metadata
+      ? Number(metadata.recordId)
+      : 'optimizeRecordId' in metadata
+        ? Number(metadata.optimizeRecordId)
+        : undefined
+  return data?.recordId || resultRecordId || metadataRecordId
+}
+
 const handleOptimize = async (row: ResumeVO) => {
   if (optimizingId.value) return
   optimizeSseHandle.value?.abort()
@@ -772,16 +788,11 @@ const handleOptimize = async (row: ResumeVO) => {
       },
       {
         onEvent: (event, data?: ResumeOptimizeSseEvent) => {
-          if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+          if (event === 'start' || event === 'delta' || event === 'metadata' || event === 'progress' || event === 'result' || event === 'done') {
             streamStarted = true
           }
-          const result = data?.result
-          const optimizeRecordId =
-            typeof result === 'object' && result && 'optimizeRecordId' in result
-              ? Number(result.optimizeRecordId)
-              : undefined
-          resultRecordId = data?.recordId || optimizeRecordId || resultRecordId
-          if (event === 'progress' && data?.message) {
+          resultRecordId = resolveOptimizeRecordId(data) || resultRecordId
+          if ((event === 'progress' || event === 'delta') && data?.message) {
             ElMessage.info(data.stage ? `${data.stage}：${data.message}` : data.message)
           }
         }

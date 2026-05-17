@@ -225,6 +225,51 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'ai/questions/generate',
+        name: 'AdminAiQuestionGenerate',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'generate'
+        },
+        meta: {
+          title: 'AI 题目生成',
+          icon: 'Operation'
+        }
+      },
+      {
+        path: 'question-reviews',
+        name: 'AdminQuestionReviews',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'reviews'
+        },
+        meta: {
+          title: '题目审核',
+          icon: 'DataAnalysis'
+        }
+      },
+      {
+        path: 'question-duplicate-reviews',
+        name: 'AdminQuestionDuplicateReviews',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'duplicates'
+        },
+        meta: {
+          title: '题目去重审核',
+          icon: 'Connection'
+        }
+      },
+      {
+        path: 'question-relations',
+        name: 'AdminQuestionRelations',
+        component: () => import('@/views/admin/QuestionRelationManageView.vue'),
+        meta: {
+          title: '题目关系管理',
+          icon: 'Share'
+        }
+      },
+      {
         path: 'question-categories',
         name: 'AdminQuestionCategories',
         component: () => import('@/views/admin/QuestionCategoryManageView.vue'),

@@ -273,6 +273,27 @@ export type QuestionRelationType =
   | 'ADVANCED'
   | 'PREREQUISITE'
   | 'COMPARE'
+  | string
+
+export interface QuestionRelationVO {
+  id: number
+  sourceQuestionId: number
+  targetQuestionId: number
+  relationType?: QuestionRelationType
+  relationStatus?: string
+  reason?: string
+  similarityScore?: number
+  createdBy?: number
+  createdAt?: string
+  sourceQuestion?: QuestionSummaryVO
+  targetQuestion?: QuestionSummaryVO
+}
+
+export interface QuestionRelationCreateDTO {
+  targetQuestionId: number
+  relationType?: QuestionRelationType | ''
+  reason?: string
+}
 
 export interface AiQuestionGenerateRequestDTO {
   targetPosition?: string
@@ -324,6 +345,10 @@ export interface AiQuestionGenerateSseEvent {
   successCount?: number
   stage?: string
   code?: string
+  content?: string
+  index?: number
+  result?: AiQuestionGenerateResultVO | Record<string, unknown>
+  metadata?: Record<string, unknown>
   [key: string]: unknown
 }
 

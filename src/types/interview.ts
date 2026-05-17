@@ -206,6 +206,7 @@ export interface InterviewAnswerReviewSseEvent {
   code?: string
   result?: InterviewAnswerResultVO | Record<string, unknown>
   metadata?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface InterviewReportSseParams {
@@ -224,6 +225,10 @@ export interface InterviewReportSseEvent {
   result?: InterviewReportVO | Record<string, unknown>
   stage?: InterviewReportSseStage
   code?: string
+  content?: string
+  index?: number
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface InterviewQueryDTO extends PageQuery {

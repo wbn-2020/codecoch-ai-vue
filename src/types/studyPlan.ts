@@ -40,7 +40,9 @@ export interface SseEventVO {
   aiCallLogId?: number
   fullContent?: string
   code?: string
+  result?: unknown
   metadata?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface StudyPlanListVO {

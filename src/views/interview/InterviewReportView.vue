@@ -417,8 +417,11 @@ const runSyncFallback = async (forceRegenerate: boolean) => {
 const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
   const message = data?.message || ''
   const stage = data?.stage ? String(data.stage) : ''
-  if (data?.reportId) sseReportId.value = data.reportId
-  if (data?.aiCallLogId) sseAiCallLogId.value = data.aiCallLogId
+  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  const reportId = data?.reportId || Number(metadata.reportId || 0)
+  const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
+  if (reportId) sseReportId.value = reportId
+  if (aiCallLogId) sseAiCallLogId.value = aiCallLogId
   if (data?.result && typeof data.result === 'object') {
     const result = data.result as Partial<InterviewReportVO>
     if (result.reportId || result.id) sseReportId.value = result.reportId || result.id
@@ -430,7 +433,7 @@ const applySseEvent = (event: InterviewReportSseEventType | string, data?: Inter
     stage,
     message
   })
-  pollCount.value = Math.min(30, pollCount.value + (event === 'progress' ? 5 : 2))
+  pollCount.value = Math.min(30, pollCount.value + (event === 'progress' || event === 'delta' ? 5 : 2))
 }
 
 const startReportSse = (forceRegenerate = false) => {
@@ -457,7 +460,7 @@ const startReportSse = (forceRegenerate = false) => {
     {
       onEvent: async (event, data) => {
         applySseEvent(event, data)
-        if (event === 'result' && data?.result && typeof data.result === 'object') {
+        if ((event === 'result' || event === 'done') && data?.result && typeof data.result === 'object') {
           report.value = {
             ...(data.result as InterviewReportVO),
             interviewId: id,

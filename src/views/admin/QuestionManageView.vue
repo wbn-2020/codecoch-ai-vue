@@ -611,7 +611,7 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { BookOpenCheck, Plus } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import {
   approveQuestionReviewApi,
@@ -662,6 +662,17 @@ import type {
   QuestionTagVO
 } from '@/types/question'
 
+type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
+
+const props = withDefaults(
+  defineProps<{
+    initialGovernanceTab?: GovernanceTab
+  }>(),
+  {
+    initialGovernanceTab: 'generate'
+  }
+)
+
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -672,7 +683,7 @@ const categories = ref<QuestionCategoryVO[]>([])
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
-const governanceTab = ref('generate')
+const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
 const generating = ref(false)
@@ -1128,6 +1139,8 @@ const runSyncGenerateFallback = async () => {
 const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) => {
   const messageMap: Record<string, string> = {
     start: 'AI 题目生成开始',
+    delta: 'AI 题目生成进行中',
+    metadata: 'AI 题目生成状态更新',
     progress: 'AI 题目生成进行中',
     result: '已收到生成结果',
     done: 'AI 题目生成完成',
@@ -1141,6 +1154,36 @@ const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) =
     stage: data?.stage,
     message
   })
+}
+
+const resolveGenerateResult = (
+  data?: AiQuestionGenerateSseEvent,
+  latest?: AiQuestionGenerateResultVO | null
+): AiQuestionGenerateResultVO => {
+  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  const result: Record<string, unknown> =
+    data?.result && typeof data.result === 'object' ? (data.result as Record<string, unknown>) : {}
+  const getValue = (key: string) => {
+    if (data && key in data) return data[key]
+    if (key in metadata) return metadata[key]
+    if (key in result) return result[key]
+    return undefined
+  }
+  const count = Number(getValue('count'))
+  const successCount = Number(getValue('successCount'))
+  return {
+    batchId: String(getValue('batchId') || latest?.batchId || ''),
+    reviewIds: (getValue('reviewIds') as number[] | undefined) || latest?.reviewIds,
+    aiCallLogId: Number(getValue('aiCallLogId') || latest?.aiCallLogId || 0) || undefined,
+    count: Number.isFinite(count) ? count : latest?.count,
+    successCount: Number.isFinite(successCount) ? successCount : latest?.successCount,
+    generatedCount: Number.isFinite(successCount)
+      ? successCount
+      : Number.isFinite(count)
+        ? count
+        : latest?.generatedCount,
+    message: data?.message || latest?.message
+  }
 }
 
 const handleGenerateReviews = async () => {
@@ -1157,20 +1200,12 @@ const handleGenerateReviews = async () => {
   try {
     generateSseHandle.value = streamAiQuestionGenerateApi(normalizeGeneratePayload(), {
       onEvent: (event, data) => {
-        if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+        if (event === 'start' || event === 'delta' || event === 'metadata' || event === 'progress' || event === 'result' || event === 'done') {
           streamStarted = true
         }
         pushGenerateSseEvent(event, data)
-        if (event === 'result' || event === 'done') {
-          latestResult = {
-            batchId: data?.batchId || latestResult?.batchId,
-            reviewIds: data?.reviewIds || latestResult?.reviewIds,
-            aiCallLogId: data?.aiCallLogId || latestResult?.aiCallLogId,
-            count: data?.count ?? latestResult?.count,
-            successCount: data?.successCount ?? latestResult?.successCount,
-            generatedCount: data?.successCount ?? data?.count ?? latestResult?.generatedCount,
-            message: data?.message || latestResult?.message
-          }
+        if (event === 'metadata' || event === 'result' || event === 'done') {
+          latestResult = resolveGenerateResult(data, latestResult)
           generateResult.value = latestResult
         }
       }
@@ -1339,6 +1374,13 @@ onMounted(async () => {
   await fetchOptions()
   await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates()])
 })
+
+watch(
+  () => props.initialGovernanceTab,
+  (tab) => {
+    governanceTab.value = tab
+  }
+)
 
 onUnmounted(() => {
   generateSseHandle.value?.abort()

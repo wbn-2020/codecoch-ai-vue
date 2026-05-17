@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import { appConfig } from '@/config'
 import type { PageResult } from '@/types/api'
 import type {
   FinishInterviewVO,
@@ -21,7 +20,7 @@ import type {
   RetryReportVO
 } from '@/types/interview'
 import { normalizePageResult } from '@/utils/page'
-import { getToken } from '@/utils/token'
+import { buildSseUrl, streamSse } from '@/utils/sse'
 
 const normalizeStage = (stage: any = {}) => ({
   ...stage,
@@ -240,20 +239,6 @@ const toCreatePayload = (data: InterviewCreateDTO) => ({
   basedOnResume: data.basedOnResume ?? Boolean(data.resumeId)
 })
 
-const buildSseUrl = (path: string, params: Record<string, string>) => {
-  const baseUrl = appConfig.apiBaseUrl || ''
-  const normalizedBase = baseUrl.startsWith('http')
-    ? baseUrl
-    : `${window.location.origin}${baseUrl.startsWith('/') ? baseUrl : `/${baseUrl}`}`
-  const url = new URL(`${normalizedBase.replace(/\/$/, '')}${path}`)
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== '') {
-      url.searchParams.set(key, value)
-    }
-  })
-  return url.toString()
-}
-
 const toInterviewReportSseQuery = (params: InterviewReportSseParams) => ({
   interviewId: String(params.interviewId),
   reportId: params.reportId ? String(params.reportId) : '',
@@ -267,44 +252,6 @@ const toAnswerPayload = (data: InterviewAnswerDTO) => ({
   clientSubmitTime: data.clientSubmitTime
 })
 
-const parseInterviewReportSseBlock = (
-  block: string
-): { event: InterviewReportSseEventType | string; data?: InterviewReportSseEvent } | null => {
-  const lines = block.split(/\r?\n/)
-  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
-  const dataText = lines
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
-    .join('\n')
-
-  if (!dataText) return { event }
-
-  try {
-    return { event, data: JSON.parse(dataText) }
-  } catch {
-    return { event, data: { message: dataText } }
-  }
-}
-
-const parseInterviewAnswerReviewSseBlock = (
-  block: string
-): { event: InterviewAnswerReviewSseEventType | string; data?: InterviewAnswerReviewSseEvent } | null => {
-  const lines = block.split(/\r?\n/)
-  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
-  const dataText = lines
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
-    .join('\n')
-
-  if (!dataText) return { event }
-
-  try {
-    return { event, data: JSON.parse(dataText) }
-  } catch {
-    return { event, data: { message: dataText } }
-  }
-}
-
 export const streamInterviewReportApi = (
   params: InterviewReportSseParams,
   handlers: {
@@ -314,82 +261,11 @@ export const streamInterviewReportApi = (
   },
   signal?: AbortSignal
 ) => {
-  const controller = new AbortController()
-  const abort = () => controller.abort()
-
-  if (signal) {
-    if (signal.aborted) abort()
-    signal.addEventListener('abort', abort, { once: true })
-  }
-
-  let hasStarted = false
-  const finished = (async () => {
-    try {
-      if (!window.fetch || !window.ReadableStream) {
-        throw new Error('Current browser does not support fetch SSE streaming')
-      }
-
-      const token = getToken()
-      const response = await fetch(
-        buildSseUrl('/ai/sse/interview-report', toInterviewReportSseQuery(params)),
-        {
-          method: 'GET',
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          signal: controller.signal
-        }
-      )
-
-      if (!response.ok || !response.body) {
-        throw new Error(`SSE request failed: ${response.status}`)
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split(/\r?\n\r?\n/)
-        buffer = blocks.pop() || ''
-        for (const block of blocks) {
-          const parsed = parseInterviewReportSseBlock(block.trim())
-          if (!parsed) continue
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          if (eventName === 'start' || eventName === 'progress' || eventName === 'result') {
-            hasStarted = true
-          }
-          handlers.onEvent?.(eventName, parsed.data)
-          if (eventName === 'error') {
-            throw new Error(parsed.data?.message || 'SSE stream error')
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        const parsed = parseInterviewReportSseBlock(buffer.trim())
-        if (parsed) {
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          handlers.onEvent?.(eventName, parsed.data)
-        }
-      }
-
-      handlers.onDone?.()
-    } catch (error) {
-      if (controller.signal.aborted) return
-      handlers.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)
-      throw error
-    } finally {
-      signal?.removeEventListener('abort', abort)
-    }
-  })()
-
-  return {
-    abort,
-    cancel: abort,
-    finished
-  }
+  return streamSse<InterviewReportSseEvent>({
+    url: buildSseUrl('/ai/sse/interview-report', toInterviewReportSseQuery(params)),
+    signal,
+    handlers
+  })
 }
 
 export const streamInterviewAnswerReviewApi = (
@@ -402,86 +278,13 @@ export const streamInterviewAnswerReviewApi = (
   },
   signal?: AbortSignal
 ) => {
-  const controller = new AbortController()
-  const abort = () => controller.abort()
-
-  if (signal) {
-    if (signal.aborted) abort()
-    signal.addEventListener('abort', abort, { once: true })
-  }
-
-  let hasStarted = false
-  const finished = (async () => {
-    try {
-      if (!window.fetch || !window.ReadableStream) {
-        throw new Error('Current browser does not support fetch SSE streaming')
-      }
-
-      const token = getToken()
-      const response = await fetch(
-        buildSseUrl('/ai/sse/interview-answer-review', { interviewId: String(interviewId) }),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify(toAnswerPayload(data)),
-          signal: controller.signal
-        }
-      )
-
-      if (!response.ok || !response.body) {
-        throw new Error(`SSE request failed: ${response.status}`)
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split(/\r?\n\r?\n/)
-        buffer = blocks.pop() || ''
-        for (const block of blocks) {
-          const parsed = parseInterviewAnswerReviewSseBlock(block.trim())
-          if (!parsed) continue
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          if (eventName === 'start' || eventName === 'progress' || eventName === 'result') {
-            hasStarted = true
-          }
-          handlers.onEvent?.(eventName, parsed.data)
-          if (eventName === 'error') {
-            throw new Error(parsed.data?.message || 'SSE stream error')
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        const parsed = parseInterviewAnswerReviewSseBlock(buffer.trim())
-        if (parsed) {
-          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
-          handlers.onEvent?.(eventName, parsed.data)
-        }
-      }
-
-      handlers.onDone?.()
-    } catch (error) {
-      if (controller.signal.aborted) return
-      handlers.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)
-      throw error
-    } finally {
-      signal?.removeEventListener('abort', abort)
-    }
-  })()
-
-  return {
-    abort,
-    cancel: abort,
-    finished
-  }
+  return streamSse<InterviewAnswerReviewSseEvent>({
+    url: buildSseUrl('/ai/sse/interview-answer-review', { interviewId: String(interviewId) }),
+    method: 'POST',
+    body: toAnswerPayload(data),
+    signal,
+    handlers
+  })
 }
 
 export const createInterviewApi = (data: InterviewCreateDTO) => {
