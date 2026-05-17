@@ -1,10 +1,10 @@
 <template>
-  <el-menu class="layout-menu" :default-active="activePath" router>
+  <el-menu class="layout-menu" :default-active="activePath" :collapse="collapsed" router>
     <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
       <el-icon>
         <component :is="item.icon" />
       </el-icon>
-      <span>{{ item.label }}</span>
+      <template #title>{{ item.label }}</template>
     </el-menu-item>
   </el-menu>
 </template>
@@ -17,11 +17,16 @@ import {
   DocumentChecked,
   Files,
   Medal,
+  Reading,
   Star,
   User
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+
+defineProps<{
+  collapsed?: boolean
+}>()
 
 const route = useRoute()
 
@@ -33,6 +38,7 @@ const menuItems = [
   { label: '简历', path: '/resumes', icon: Files },
   { label: '创建面试', path: '/interviews/create', icon: Compass },
   { label: '面试历史', path: '/interviews/history', icon: Medal },
+  { label: '学习计划', path: '/study-plans', icon: Reading },
   { label: '个人资料', path: '/profile', icon: User }
 ]
 
@@ -41,6 +47,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
   if (route.path.startsWith('/resumes')) return '/resumes'
+  if (route.path.startsWith('/study-plans')) return '/study-plans'
   if (route.path.startsWith('/interviews/history')) return '/interviews/history'
   if (route.path.startsWith('/interviews')) return '/interviews/create'
   return route.path

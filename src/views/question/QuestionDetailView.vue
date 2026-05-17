@@ -37,6 +37,8 @@
             </div>
           </section>
 
+          <QuestionAnswerReviewPanel :question="detail" />
+
           <section class="detail-section">
             <h2>参考答案</h2>
             <MarkdownPreview :content="detail.referenceAnswer || '暂无参考答案'" />
@@ -92,6 +94,7 @@ import {
 } from '@/api/question'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import QuestionAnswerReviewPanel from '@/components/question/QuestionAnswerReviewPanel.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
 import { answerResultOptions, masteryOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { MasteryStatus, QuestionAnswerDTO, QuestionDetailVO, QuestionTagVO } from '@/types/question'

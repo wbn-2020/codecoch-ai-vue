@@ -1,10 +1,20 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
+  ActivatePromptTemplateVersionDTO,
   AiCallLogQueryDTO,
   AiCallLogVO,
+  CreatePromptTemplateVersionDTO,
+  DisablePromptTemplateVersionDTO,
+  PromptCallLogQueryDTO,
   PromptTemplateDTO,
+  PromptTemplateDetailVO,
   PromptTemplateQueryDTO,
+  PromptVersionRollbackDTO,
+  PromptTemplateVersionQuery,
+  PromptTemplateVersionVO,
+  TestPromptTemplateVersionDTO,
+  TestPromptTemplateVersionVO,
   PromptTemplateVO
 } from '@/types/ai'
 import { normalizePageResult } from '@/utils/page'
@@ -13,6 +23,8 @@ type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   status: string | number
   scene?: AiCallLogVO['callType']
   costMillis?: number
+  costTimeMs?: number
+  duration?: number
   requestBody?: string
   responseBody?: string
   failReason?: string
@@ -28,13 +40,19 @@ type BackendPromptTemplateVO = Partial<PromptTemplateVO> & {
   createTime?: string
 }
 
+type BackendPromptTemplateDetailVO = BackendPromptTemplateVO & {
+  activeVersion?: PromptTemplateVersionVO
+}
+
 const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
   ...log,
   scene: log.scene || log.callType || '',
   callType: log.callType || log.scene || '',
   status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
-  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costMillis,
-  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+  costTimeMs: log.costTimeMs ?? log.duration ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+  duration: log.duration ?? log.costTimeMs ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
   requestPrompt: log.requestPrompt ?? log.promptContent ?? log.requestBody,
   requestParams: log.requestParams ?? log.requestBody ?? log.requestPrompt,
   promptContent: log.promptContent ?? log.requestPrompt,
@@ -63,14 +81,20 @@ const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplat
   updatedAt: prompt.updatedAt || prompt.updateTime
 })
 
+const normalizePromptTemplateDetail = (prompt: BackendPromptTemplateDetailVO): PromptTemplateDetailVO => ({
+  ...normalizePromptTemplate(prompt),
+  activeVersion: prompt.activeVersion
+})
+
 const normalizePromptPage = (
   result: PageResult<BackendPromptTemplateVO>
 ): PageResult<PromptTemplateVO> => normalizePageResult(result, undefined, normalizePromptTemplate)
 
-const toBackendPromptDTO = (data: PromptTemplateDTO) => ({
+const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => ({
   scene: data.scene,
   name: data.name,
-  content: data.content,
+  description: data.description,
+  ...(includeContent ? { content: data.content } : {}),
   status: data.status
 })
 
@@ -96,9 +120,63 @@ export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
   return request
     .put<BackendPromptTemplateVO, BackendPromptTemplateVO>(
       `/admin/ai/prompts/${id}`,
-      toBackendPromptDTO(data)
+      toBackendPromptDTO(data, false)
     )
     .then(normalizePromptTemplate)
+}
+
+export const getPromptTemplateDetailApi = (id: number) => {
+  return request
+    .get<BackendPromptTemplateDetailVO, BackendPromptTemplateDetailVO>(`/admin/ai/prompt-templates/${id}`)
+    .then(normalizePromptTemplateDetail)
+}
+
+export const getPromptTemplateVersionsApi = (templateId: number, params?: PromptTemplateVersionQuery) => {
+  return request.get<PageResult<PromptTemplateVersionVO>, PageResult<PromptTemplateVersionVO>>(
+    `/admin/ai/prompt-templates/${templateId}/versions`,
+    { params }
+  )
+}
+
+export const createPromptTemplateVersionApi = (templateId: number, data: CreatePromptTemplateVersionDTO) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-templates/${templateId}/versions`,
+    data
+  )
+}
+
+export const activatePromptTemplateVersionApi = (
+  versionId: number,
+  data?: ActivatePromptTemplateVersionDTO
+) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/activate`,
+    data
+  )
+}
+
+export const disablePromptTemplateVersionApi = (
+  versionId: number,
+  data?: DisablePromptTemplateVersionDTO
+) => {
+  return request.post<null, null>(`/admin/ai/prompt-template-versions/${versionId}/disable`, data)
+}
+
+export const rollbackPromptTemplateVersionApi = (
+  versionId: number,
+  data?: PromptVersionRollbackDTO
+) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/rollback`,
+    data
+  )
+}
+
+export const testPromptTemplateVersionApi = (versionId: number, data?: TestPromptTemplateVersionDTO) => {
+  return request.post<TestPromptTemplateVersionVO, TestPromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/test`,
+    data
+  )
 }
 
 export const deleteAdminAiPromptApi = (id: number) => {
@@ -120,6 +198,28 @@ export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
     {
       params: requestParams
     }
+  )
+  return normalizeAiLogPage(result)
+}
+
+export const getPromptTemplateCallLogsApi = async (
+  templateId: number,
+  params?: PromptCallLogQueryDTO
+) => {
+  const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
+    `/admin/ai/prompt-templates/${templateId}/call-logs`,
+    { params }
+  )
+  return normalizeAiLogPage(result)
+}
+
+export const getPromptTemplateVersionCallLogsApi = async (
+  versionId: number,
+  params?: PromptCallLogQueryDTO
+) => {
+  const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
+    `/admin/ai/prompt-template-versions/${versionId}/call-logs`,
+    { params }
   )
   return normalizeAiLogPage(result)
 }

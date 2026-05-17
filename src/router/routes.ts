@@ -167,6 +167,14 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '面试报告'
         }
+      },
+      {
+        path: 'study-plans',
+        name: 'StudyPlans',
+        component: () => import('@/views/study/StudyPlanView.vue'),
+        meta: {
+          title: '学习计划'
+        }
       }
     ]
   },
@@ -217,6 +225,51 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'ai/questions/generate',
+        name: 'AdminAiQuestionGenerate',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'generate'
+        },
+        meta: {
+          title: 'AI 题目生成',
+          icon: 'Operation'
+        }
+      },
+      {
+        path: 'question-reviews',
+        name: 'AdminQuestionReviews',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'reviews'
+        },
+        meta: {
+          title: '题目审核',
+          icon: 'DataAnalysis'
+        }
+      },
+      {
+        path: 'question-duplicate-reviews',
+        name: 'AdminQuestionDuplicateReviews',
+        component: () => import('@/views/admin/QuestionManageView.vue'),
+        props: {
+          initialGovernanceTab: 'duplicates'
+        },
+        meta: {
+          title: '题目去重审核',
+          icon: 'Connection'
+        }
+      },
+      {
+        path: 'question-relations',
+        name: 'AdminQuestionRelations',
+        component: () => import('@/views/admin/QuestionRelationManageView.vue'),
+        meta: {
+          title: '题目关系管理',
+          icon: 'Share'
+        }
+      },
+      {
         path: 'question-categories',
         name: 'AdminQuestionCategories',
         component: () => import('@/views/admin/QuestionCategoryManageView.vue'),
@@ -241,6 +294,24 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '问题组管理',
           icon: 'List'
+        }
+      },
+      {
+        path: 'industry-templates',
+        name: 'AdminIndustryTemplates',
+        component: () => import('@/views/admin/IndustryTemplateManageView.vue'),
+        meta: {
+          title: '行业模板',
+          icon: 'List'
+        }
+      },
+      {
+        path: 'files',
+        name: 'AdminFiles',
+        component: () => import('@/views/admin/AdminFileManageView.vue'),
+        meta: {
+          title: '\u6587\u4ef6\u6cbb\u7406',
+          icon: 'Folder'
         }
       },
       {

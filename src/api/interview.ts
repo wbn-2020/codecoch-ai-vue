@@ -2,18 +2,25 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
   FinishInterviewVO,
+  IndustryTemplateVO,
   InterviewAnswerDTO,
+  InterviewAnswerReviewSseEvent,
+  InterviewAnswerReviewSseEventType,
   InterviewAnswerResultVO,
   InterviewCreateDTO,
   InterviewCurrentVO,
   InterviewDetailVO,
   InterviewListVO,
   InterviewQueryDTO,
+  InterviewReportSseEvent,
+  InterviewReportSseEventType,
+  InterviewReportSseParams,
   InterviewReportVO,
   InterviewSessionVO,
   RetryReportVO
 } from '@/types/interview'
 import { normalizePageResult } from '@/utils/page'
+import { buildSseUrl, streamSse } from '@/utils/sse'
 
 const normalizeStage = (stage: any = {}) => ({
   ...stage,
@@ -221,20 +228,77 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
 const toCreatePayload = (data: InterviewCreateDTO) => ({
   interviewMode: data.interviewMode,
   resumeId: data.resumeId,
-  interviewName: data.interviewName,
-  questionCount: data.questionCount,
+  title: data.interviewName,
+  maxQuestionCount: data.questionCount,
   targetPosition: data.targetPosition,
   experienceLevel: data.experienceLevel,
+  industryTemplateId: data.industryTemplateId,
   industryDirection: data.industryDirection,
   difficulty: data.difficulty,
   interviewerStyle: data.interviewerStyle,
   basedOnResume: data.basedOnResume ?? Boolean(data.resumeId)
 })
 
+const toInterviewReportSseQuery = (params: InterviewReportSseParams) => ({
+  interviewId: String(params.interviewId),
+  reportId: params.reportId ? String(params.reportId) : '',
+  forceRegenerate: params.forceRegenerate ? 'true' : 'false'
+})
+
+const toAnswerPayload = (data: InterviewAnswerDTO) => ({
+  messageId: data.messageId,
+  answerContent: data.answerContent,
+  answerDurationSeconds: data.answerDurationSeconds,
+  clientSubmitTime: data.clientSubmitTime
+})
+
+export const streamInterviewReportApi = (
+  params: InterviewReportSseParams,
+  handlers: {
+    onEvent?: (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => void
+    onError?: (error: Error, hasStarted: boolean) => void
+    onDone?: () => void
+  },
+  signal?: AbortSignal
+) => {
+  return streamSse<InterviewReportSseEvent>({
+    url: buildSseUrl('/ai/sse/interview-report', toInterviewReportSseQuery(params)),
+    signal,
+    handlers
+  })
+}
+
+export const streamInterviewAnswerReviewApi = (
+  interviewId: number,
+  data: InterviewAnswerDTO,
+  handlers: {
+    onEvent?: (event: InterviewAnswerReviewSseEventType | string, data?: InterviewAnswerReviewSseEvent) => void
+    onError?: (error: Error, hasStarted: boolean) => void
+    onDone?: () => void
+  },
+  signal?: AbortSignal
+) => {
+  return streamSse<InterviewAnswerReviewSseEvent>({
+    url: buildSseUrl('/ai/sse/interview-answer-review', { interviewId: String(interviewId) }),
+    method: 'POST',
+    body: toAnswerPayload(data),
+    signal,
+    handlers
+  })
+}
+
 export const createInterviewApi = (data: InterviewCreateDTO) => {
   return request
     .post<InterviewSessionVO, InterviewSessionVO>('/interviews', toCreatePayload(data))
     .then(normalizeSession)
+}
+
+export const getIndustryTemplatesApi = () => {
+  return request.get<IndustryTemplateVO[], IndustryTemplateVO[]>('/industry-templates')
+}
+
+export const getIndustryTemplateDetailApi = (id: number) => {
+  return request.get<IndustryTemplateVO, IndustryTemplateVO>(`/industry-templates/${id}`)
 }
 
 export const startInterviewApi = (id: number) => {
@@ -250,7 +314,7 @@ export const getCurrentInterviewQuestionApi = (id: number) => {
 export const submitInterviewAnswerApi = (id: number, data: InterviewAnswerDTO) => {
   return request.post<InterviewAnswerResultVO, InterviewAnswerResultVO>(
     `/interviews/${id}/answer`,
-    { answerContent: data.answerContent }
+    toAnswerPayload(data)
   ).then((result) => normalizeAnswerResult(result, id))
 }
 

@@ -5,25 +5,31 @@
         <div class="brand-mark">A</div>
         <div v-show="!appStore.sidebarCollapsed" class="brand-text">
           <strong>CodeCoachAI</strong>
-          <span>后台管理</span>
+          <span>AI 内容治理中心</span>
         </div>
       </div>
       <AdminSidebar :collapsed="appStore.sidebarCollapsed" />
     </el-aside>
 
-    <el-container>
+    <el-container class="app-layout__content">
       <el-header class="app-layout__header">
         <div class="header-left">
-          <el-button class="collapse-button" text @click="appStore.toggleSidebar()">
-            <el-icon>
-              <Expand v-if="appStore.sidebarCollapsed" />
-              <Fold v-else />
-            </el-icon>
-          </el-button>
+          <button class="icon-button" type="button" aria-label="Toggle sidebar" @click="appStore.toggleSidebar()">
+            <PanelLeftOpen v-if="appStore.sidebarCollapsed" :size="18" />
+            <PanelLeftClose v-else :size="18" />
+          </button>
           <AppBreadcrumb />
         </div>
+
         <div class="app-layout__header-actions">
-          <el-button text @click="router.push('/dashboard')">用户端</el-button>
+          <div class="command-search" aria-hidden="true">
+            <Search :size="15" />
+            <span>Search admin console</span>
+          </div>
+          <el-button class="user-entry" text @click="router.push('/dashboard')">
+            <MonitorUp :size="15" />
+            用户端
+          </el-button>
           <el-dropdown trigger="click" @command="handleCommand">
             <button class="user-trigger" type="button">
               <el-avatar :size="30" :src="authStore.userInfo?.avatarUrl || ''">
@@ -51,12 +57,12 @@
 </template>
 
 <script setup lang="ts">
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
+import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -96,20 +102,32 @@ const handleCommand = async (command: string) => {
 <style scoped lang="scss">
 .app-layout {
   min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.08), transparent 26rem),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(2, 6, 23, 0.98));
 }
 
 .app-layout__aside {
   width: var(--app-sidebar-width);
   overflow-x: hidden;
   border-right: 1px solid var(--app-border);
-  background: var(--app-surface);
+  background: rgba(2, 6, 23, 0.9);
   transition: width 0.2s ease;
 }
 
 .admin-layout.is-collapsed {
   .app-layout__aside {
-    width: 64px;
+    width: 72px;
   }
+
+  .app-layout__brand {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+
+.app-layout__content {
+  min-width: 0;
 }
 
 .app-layout__brand {
@@ -138,7 +156,7 @@ const handleCommand = async (command: string) => {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #0f766e;
+  background: linear-gradient(135deg, var(--cc-ai-cyan), var(--cc-ai-blue));
   color: #fff;
   font-weight: 700;
 }
@@ -153,8 +171,8 @@ const handleCommand = async (command: string) => {
   justify-content: space-between;
   height: var(--app-header-height);
   border-bottom: 1px solid var(--app-border);
-  background: rgb(255 255 255 / 92%);
-  backdrop-filter: blur(12px);
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(18px);
 }
 
 .header-left {
@@ -164,31 +182,75 @@ const handleCommand = async (command: string) => {
   gap: 12px;
 }
 
-.collapse-button {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  font-size: 18px;
-}
-
-.app-layout__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
+.icon-button,
 .user-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border: 0;
+  justify-content: center;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--app-text);
   cursor: pointer;
 }
 
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border-color: var(--app-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  &:hover {
+    border-color: rgba(6, 182, 212, 0.5);
+    background: rgba(6, 182, 212, 0.12);
+  }
+}
+
+.app-layout__header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.command-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 210px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.user-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-trigger {
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+
+  &:hover {
+    background: rgba(6, 182, 212, 0.12);
+  }
+}
+
 .app-layout__main {
+  min-width: 0;
+  min-height: calc(100vh - var(--app-header-height) - 38px);
   padding: 24px;
+  overflow: auto;
 }
 
 :deep(.layout-menu) {
@@ -217,6 +279,10 @@ const handleCommand = async (command: string) => {
 
   .app-layout__main {
     padding: 16px;
+  }
+
+  .command-search {
+    display: none;
   }
 }
 </style>

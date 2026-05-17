@@ -3,12 +3,37 @@ import type { PageResult } from '@/types/api'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
+  AiQuestionGenerateRequestDTO,
+  AiQuestionGenerateResultVO,
+  AiQuestionGenerateSseEvent,
+  AiQuestionGenerateSseEventType,
+  AiQuestionGenerateSseParams,
+  BatchQuestionReviewApproveDTO,
+  BatchQuestionReviewRejectDTO,
+  BatchQuestionReviewResultVO,
   FavoriteQuestionVO,
+  PracticeRecordQueryDTO,
+  PracticeRecordVO,
+  PracticeSubmitDTO,
   QuestionAnswerDTO,
   QuestionAnswerResultVO,
   QuestionCreateDTO,
   QuestionDetailVO,
+  QuestionDuplicateCheckDTO,
+  QuestionDuplicateCheckResultVO,
+  QuestionDuplicateIgnoreDTO,
+  QuestionDuplicateMergeDTO,
+  QuestionDuplicateReviewDetailVO,
+  QuestionDuplicateReviewListVO,
+  QuestionDuplicateReviewQueryDTO,
   QuestionQueryDTO,
+  QuestionRelationCreateDTO,
+  QuestionRelationVO,
+  QuestionReviewApproveDTO,
+  QuestionReviewDetailVO,
+  QuestionReviewListVO,
+  QuestionReviewQueryDTO,
+  QuestionReviewRejectDTO,
   QuestionTagVO,
   QuestionVO,
   UpdateMasteryDTO,
@@ -17,6 +42,7 @@ import type {
   WrongQuestionVO
 } from '@/types/question'
 import { normalizePageResult } from '@/utils/page'
+import { buildSseUrl, streamSse } from '@/utils/sse'
 
 type BackendQuestionTag = QuestionTagVO | string | number | null | undefined
 
@@ -270,4 +296,152 @@ export const updateAdminQuestionStatusApi = (id: number, status: number) => {
 
 export const deleteAdminQuestionApi = (id: number) => {
   return request.delete<null, null>(`/admin/questions/${id}`)
+}
+
+export const submitQuestionAnswerReviewApi = (questionId: number, data: PracticeSubmitDTO) => {
+  return request.post<PracticeRecordVO, PracticeRecordVO>(
+    `/questions/${questionId}/answer-review`,
+    data
+  )
+}
+
+export const getQuestionAnswerReviewDetailApi = (recordId: number) => {
+  return request.get<PracticeRecordVO, PracticeRecordVO>(`/questions/answer-reviews/${recordId}`)
+}
+
+export const getQuestionAnswerReviewsApi = (
+  questionId: number,
+  params: Omit<PracticeRecordQueryDTO, 'questionId'>
+) => {
+  return request.get<PageResult<PracticeRecordVO>, PageResult<PracticeRecordVO>>(
+    `/questions/${questionId}/answer-reviews`,
+    { params }
+  )
+}
+
+export const generateAiQuestionsApi = (data: AiQuestionGenerateRequestDTO) => {
+  return request.post<AiQuestionGenerateResultVO, AiQuestionGenerateResultVO>(
+    '/admin/ai/questions/generate',
+    data
+  )
+}
+
+const toAiQuestionGenerateSseQuery = (params: AiQuestionGenerateSseParams) => ({
+  targetPosition: params.targetPosition || '',
+  technologyStack: params.technologyStack || '',
+  knowledgePoint: params.knowledgePoint || '',
+  questionType: params.questionType || '',
+  difficulty: params.difficulty || '',
+  experienceYears: params.experienceYears != null ? String(params.experienceYears) : '',
+  count: params.count != null ? String(params.count) : '',
+  extraRequirements: params.extraRequirements || ''
+})
+
+export const streamAiQuestionGenerateApi = (
+  params: AiQuestionGenerateSseParams,
+  handlers: {
+    onEvent?: (event: AiQuestionGenerateSseEventType | string, data?: AiQuestionGenerateSseEvent) => void
+    onError?: (error: Error, hasStarted: boolean) => void
+    onDone?: () => void
+  },
+  signal?: AbortSignal
+) => {
+  return streamSse<AiQuestionGenerateSseEvent>({
+    url: buildSseUrl('/ai/sse/admin/questions/generate', toAiQuestionGenerateSseQuery(params)),
+    signal,
+    handlers
+  })
+}
+
+export const getQuestionReviewsApi = (params: QuestionReviewQueryDTO) => {
+  return request.get<PageResult<QuestionReviewListVO>, PageResult<QuestionReviewListVO>>(
+    '/admin/question-reviews',
+    { params }
+  )
+}
+
+export const getQuestionReviewDetailApi = (id: number) => {
+  return request.get<QuestionReviewDetailVO, QuestionReviewDetailVO>(`/admin/question-reviews/${id}`)
+}
+
+export const approveQuestionReviewApi = (id: number, data?: QuestionReviewApproveDTO) => {
+  return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
+    `/admin/question-reviews/${id}/approve`,
+    data
+  )
+}
+
+export const rejectQuestionReviewApi = (id: number, data: QuestionReviewRejectDTO) => {
+  return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
+    `/admin/question-reviews/${id}/reject`,
+    data
+  )
+}
+
+export const batchApproveQuestionReviewsApi = (data: BatchQuestionReviewApproveDTO) => {
+  return request.post<BatchQuestionReviewResultVO, BatchQuestionReviewResultVO>(
+    '/admin/question-reviews/batch-approve',
+    data
+  )
+}
+
+export const batchRejectQuestionReviewsApi = (data: BatchQuestionReviewRejectDTO) => {
+  return request.post<BatchQuestionReviewResultVO, BatchQuestionReviewResultVO>(
+    '/admin/question-reviews/batch-reject',
+    data
+  )
+}
+
+export const checkQuestionDuplicateApi = (data: QuestionDuplicateCheckDTO) => {
+  return request.post<QuestionDuplicateCheckResultVO, QuestionDuplicateCheckResultVO>(
+    '/admin/questions/check-duplicate',
+    data
+  )
+}
+
+export const getQuestionDuplicateReviewsApi = (params: QuestionDuplicateReviewQueryDTO) => {
+  return request.get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
+    '/admin/question-duplicate-reviews',
+    { params }
+  )
+}
+
+export const getQuestionDuplicateReviewDetailApi = (id: number) => {
+  return request.get<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}`
+  )
+}
+
+export const mergeQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateMergeDTO) => {
+  return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}/merge`,
+    data
+  )
+}
+
+export const ignoreQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateIgnoreDTO) => {
+  return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}/ignore`,
+    data
+  )
+}
+
+export const getQuestionRelationsApi = (questionId: number) => {
+  return request.get<QuestionRelationVO[], QuestionRelationVO[]>(
+    `/admin/questions/${questionId}/relations`
+  )
+}
+
+export const createQuestionRelationApi = (
+  questionId: number,
+  data: QuestionRelationCreateDTO
+) => {
+  return request.post<QuestionRelationVO, QuestionRelationVO>(
+    `/admin/questions/${questionId}/relations`,
+    data
+  )
+}
+
+export const deleteQuestionRelationApi = (questionId: number, relationId: number) => {
+  return request.delete<null, null>(`/admin/questions/${questionId}/relations/${relationId}`)
 }

@@ -12,6 +12,42 @@ export type InterviewStatus =
   | string
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
+export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewAnswerReviewSseStage =
+  | 'VALIDATE_REQUEST'
+  | 'LOAD_INTERVIEW'
+  | 'SAVE_ANSWER'
+  | 'BUILD_PROMPT'
+  | 'CALL_AI_REVIEW'
+  | 'SAVE_REVIEW'
+  | 'GENERATE_FOLLOW_UP'
+  | 'SAVE_FOLLOW_UP'
+  | string
+export type InterviewReportSseStage =
+  | 'LOAD_INTERVIEW'
+  | 'LOAD_ANSWERS'
+  | 'BUILD_PROMPT'
+  | 'CALL_AI'
+  | 'SAVE_REPORT'
+  | string
+
+export interface IndustryTemplateVO {
+  industryTemplateId: number
+  industryCode?: string
+  industryName: string
+  description?: string
+  targetPositions?: string
+  coreBusinessScenarios?: string
+  keyTechnicalPoints?: string
+  commonQuestionDirections?: string
+  riskPoints?: string
+  promptContext?: string
+  enabled?: number
+  sortOrder?: number
+  createdAt?: string
+  updatedAt?: string
+}
 
 export interface InterviewCreateDTO {
   resumeId?: number
@@ -20,6 +56,7 @@ export interface InterviewCreateDTO {
   interviewMode?: string
   targetPosition?: string
   experienceLevel?: string
+  industryTemplateId?: number
   industryDirection?: string
   difficulty?: string
   interviewerStyle?: string
@@ -40,6 +77,11 @@ export interface InterviewStageVO {
 
 export interface InterviewSessionVO {
   interviewId: number
+  interviewName?: string
+  interviewMode?: string
+  industryTemplateId?: number
+  industryDirection?: string
+  industryContext?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   stageList?: InterviewStageVO[]
@@ -140,6 +182,55 @@ export interface RetryReportVO {
   message?: string
 }
 
+export interface InterviewAnswerReviewSseParams {
+  interviewId: number
+}
+
+export interface InterviewAnswerReviewSseEvent {
+  requestId?: string
+  type?: InterviewAnswerReviewSseEventType | string
+  message?: string
+  interviewId?: number
+  questionId?: number
+  answerId?: number
+  messageId?: number
+  aiCallLogId?: number
+  followUpAiCallLogId?: number
+  score?: number
+  feedback?: string
+  followUpQuestion?: string
+  followUpReason?: string
+  nextAction?: NextAction
+  nextQuestion?: InterviewQuestionVO
+  stage?: InterviewAnswerReviewSseStage
+  code?: string
+  result?: InterviewAnswerResultVO | Record<string, unknown>
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface InterviewReportSseParams {
+  interviewId: number
+  reportId?: number
+  forceRegenerate?: boolean
+}
+
+export interface InterviewReportSseEvent {
+  requestId?: string
+  type?: InterviewReportSseEventType | string
+  message?: string
+  interviewId?: number
+  reportId?: number
+  aiCallLogId?: number
+  result?: InterviewReportVO | Record<string, unknown>
+  stage?: InterviewReportSseStage
+  code?: string
+  content?: string
+  index?: number
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export interface InterviewQueryDTO extends PageQuery {
   status?: InterviewStatus | ''
   reportStatus?: ReportStatus | ''
@@ -152,6 +243,8 @@ export interface InterviewListVO {
   interviewMode: string
   resumeName?: string
   targetPosition?: string
+  industryTemplateId?: number
+  industryDirection?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   totalScore?: number
@@ -197,7 +290,9 @@ export interface InterviewDetailVO {
   interviewMode: string
   targetPosition?: string
   experienceLevel?: string
+  industryTemplateId?: number
   industryDirection?: string
+  industryContext?: string
   difficulty?: string
   interviewerStyle?: string
   status: InterviewStatus
