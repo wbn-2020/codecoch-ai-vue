@@ -71,6 +71,19 @@ export interface StudyPlanDetailVO extends StudyPlanListVO {
   tasks?: StudyTaskVO[]
 }
 
+export interface StudyPlanDailyViewVO {
+  planId: number
+  planTitle?: string
+  date: string
+  dayIndex: number
+  totalTaskCount: number
+  pendingTaskCount: number
+  completedTaskCount: number
+  skippedTaskCount: number
+  completionRate: number
+  tasks: StudyTaskVO[]
+}
+
 export interface StudyTaskVO {
   id: number
   planId: number

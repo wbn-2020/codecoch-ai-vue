@@ -161,6 +161,101 @@
               <el-progress :percentage="selectedPlan.progressPercent || 0" :stroke-width="10" />
             </div>
 
+            <section class="daily-view-panel">
+              <div class="daily-view-panel__head">
+                <div>
+                  <p class="section-kicker">Daily View</p>
+                  <h3>今日任务 / 日报视图</h3>
+                  <span>
+                    {{ dailyView?.date || dailyDate }} · 第 {{ dailyView?.dayIndex || '-' }} 天
+                  </span>
+                </div>
+                <div class="daily-view-panel__actions">
+                  <el-date-picker
+                    v-model="dailyDate"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    placeholder="选择日期"
+                    :clearable="false"
+                    @change="fetchDailyView"
+                  />
+                  <el-button :loading="dailyLoading" @click="fetchDailyView">
+                    <RefreshCcw :size="16" />
+                    刷新日报
+                  </el-button>
+                </div>
+              </div>
+
+              <el-alert
+                v-if="dailyError"
+                class="daily-error"
+                type="error"
+                show-icon
+                :closable="false"
+                title="日报视图加载失败"
+                :description="dailyError"
+              />
+
+              <div v-loading="dailyLoading" class="daily-view-panel__body">
+                <div class="daily-metrics">
+                  <div class="daily-metric">
+                    <span>今日任务</span>
+                    <strong>{{ dailyView?.totalTaskCount ?? 0 }}</strong>
+                  </div>
+                  <div class="daily-metric is-success">
+                    <span>已完成</span>
+                    <strong>{{ dailyView?.completedTaskCount ?? 0 }}</strong>
+                  </div>
+                  <div class="daily-metric is-warning">
+                    <span>待完成</span>
+                    <strong>{{ dailyView?.pendingTaskCount ?? 0 }}</strong>
+                  </div>
+                  <div class="daily-metric is-muted">
+                    <span>已跳过</span>
+                    <strong>{{ dailyView?.skippedTaskCount ?? 0 }}</strong>
+                  </div>
+                  <div class="daily-metric is-primary">
+                    <span>完成率</span>
+                    <strong>{{ dailyView?.completionRate ?? 0 }}%</strong>
+                  </div>
+                </div>
+
+                <div class="daily-task-list">
+                  <template v-if="dailyTasks.length">
+                    <article v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
+                      <div class="task-head">
+                        <div>
+                          <span class="task-stage">{{ task.stageTitle || `阶段 ${task.stageNo || '-'}` }}</span>
+                          <h3>{{ task.taskTitle || '未命名任务' }}</h3>
+                        </div>
+                        <el-tag size="small" :type="taskStatusType(task.taskStatus)" effect="plain">
+                          {{ taskStatusText(task.taskStatus) }}
+                        </el-tag>
+                      </div>
+                      <p>{{ task.taskDescription || '暂无任务描述' }}</p>
+                      <div class="task-tags">
+                        <span v-if="task.taskType">{{ task.taskType }}</span>
+                        <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
+                        <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
+                        <span v-for="questionId in task.relatedQuestionIds || []" :key="questionId">
+                          题目 #{{ questionId }}
+                        </span>
+                        <span v-for="resource in task.resources || []" :key="resource">{{ resource }}</span>
+                      </div>
+                      <div class="task-actions">
+                        <template v-if="isPendingTask(task.taskStatus)">
+                          <el-button size="small" type="success" plain @click="completeTask(task.id)">完成</el-button>
+                          <el-button size="small" plain @click="skipTask(task.id)">跳过</el-button>
+                        </template>
+                        <el-button v-else size="small" plain @click="restoreTask(task.id)">恢复待完成</el-button>
+                      </div>
+                    </article>
+                  </template>
+                  <el-empty v-else description="当前日期暂无任务" />
+                </div>
+              </div>
+            </section>
+
             <div class="task-list" v-loading="detailLoading">
               <template v-if="tasks.length">
                 <article v-for="task in tasks" :key="task.id" class="task-item">
@@ -209,6 +304,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import {
   generateStudyPlanApi,
+  getStudyPlanDailyViewApi,
   getStudyPlanDetailApi,
   getStudyPlansApi,
   streamStudyPlanGenerateApi,
@@ -216,6 +312,7 @@ import {
 } from '@/api/studyPlan'
 import type {
   SseEventVO,
+  StudyPlanDailyViewVO,
   StudyPlanDetailVO,
   StudyPlanGenerateDTO,
   StudyPlanListVO,
@@ -233,6 +330,10 @@ const generating = ref(false)
 const plans = ref<StudyPlanListVO[]>([])
 const selectedPlan = ref<StudyPlanDetailVO | null>(null)
 const tasks = ref<StudyTaskVO[]>([])
+const dailyView = ref<StudyPlanDailyViewVO | null>(null)
+const dailyLoading = ref(false)
+const dailyError = ref('')
+const dailyDate = ref(formatDate(new Date()))
 const pollCount = ref(0)
 const streamContent = ref('')
 const streamStatus = ref('')
@@ -260,6 +361,15 @@ const selectedPlanId = computed(() => {
   const id = Number(route.query.planId || route.query.id || 0)
   return Number.isFinite(id) && id > 0 ? id : 0
 })
+
+const dailyTasks = computed(() => dailyView.value?.tasks || [])
+
+function formatDate(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const clearPoll = () => {
   if (pollTimer) {
@@ -294,6 +404,7 @@ const fetchPlans = async () => {
     } else {
       selectedPlan.value = null
       tasks.value = []
+      dailyView.value = null
     }
   } finally {
     listLoading.value = false
@@ -307,6 +418,7 @@ const selectPlan = async (id: number, updateRoute = true) => {
     const detail = await getStudyPlanDetailApi(id)
     selectedPlan.value = detail
     tasks.value = detail.tasks || []
+    await fetchDailyView()
     if (updateRoute) {
       await router.replace({ path: '/study-plans', query: { planId: String(id) } })
     }
@@ -317,6 +429,24 @@ const selectPlan = async (id: number, updateRoute = true) => {
     }
   } finally {
     detailLoading.value = false
+  }
+}
+
+const fetchDailyView = async () => {
+  const planId = selectedPlan.value?.id
+  if (!planId) {
+    dailyView.value = null
+    return
+  }
+  dailyLoading.value = true
+  dailyError.value = ''
+  try {
+    dailyView.value = await getStudyPlanDailyViewApi(planId, dailyDate.value)
+  } catch (error) {
+    dailyView.value = null
+    dailyError.value = error instanceof Error ? error.message : '请稍后重试'
+  } finally {
+    dailyLoading.value = false
   }
 }
 
@@ -424,7 +554,8 @@ const cancelStream = () => {
 
 const refreshSelectedPlan = async () => {
   if (selectedPlan.value?.id) {
-    await selectPlan(selectedPlan.value.id, false)
+    const planId = selectedPlan.value.id
+    await selectPlan(planId, false)
     await fetchPlans()
   }
 }
@@ -445,6 +576,17 @@ const skipTask = async (taskId: number) => {
   await updateStudyTaskStatusApi(taskId, 'SKIPPED')
   ElMessage.success('任务已跳过')
   await refreshSelectedPlan()
+}
+
+const restoreTask = async (taskId: number) => {
+  await updateStudyTaskStatusApi(taskId, 'TODO')
+  ElMessage.success('任务已恢复为待完成')
+  await refreshSelectedPlan()
+}
+
+const isPendingTask = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  return value === 'TODO' || value === 'DOING' || value === 'PENDING'
 }
 
 const statusText = (status?: string) => {
@@ -728,6 +870,117 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.daily-view-panel {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 16px;
+  background: rgba(8, 13, 31, 0.58);
+}
+
+.daily-view-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+
+  h3 {
+    margin: 4px 0 0;
+    color: #f8fafc;
+    font-size: 17px;
+  }
+
+  span {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+}
+
+.daily-view-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.daily-error {
+  margin-bottom: 12px;
+}
+
+.daily-view-panel__body {
+  min-height: 220px;
+}
+
+.daily-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.daily-metric {
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.64);
+
+  span {
+    display: block;
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: #f8fafc;
+    font-size: 22px;
+  }
+
+  &.is-success strong {
+    color: #86efac;
+  }
+
+  &.is-warning strong {
+    color: #fde68a;
+  }
+
+  &.is-muted strong {
+    color: #cbd5e1;
+  }
+
+  &.is-primary strong {
+    color: #93c5fd;
+  }
+}
+
+.daily-task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-task-item {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.34);
+
+  h3 {
+    margin: 4px 0 0;
+    color: #f8fafc;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 10px 0 0;
+    color: var(--app-text-muted);
+    line-height: 1.6;
+  }
+}
+
 .task-list {
   display: grid;
   gap: 12px;
@@ -794,6 +1047,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 820px) {
   .study-hero,
+  .daily-view-panel__head,
   .section-head,
   .detail-head {
     flex-direction: column;
@@ -806,6 +1060,15 @@ onBeforeUnmount(() => {
 
   .status-filter {
     width: 100%;
+  }
+
+  .daily-view-panel__actions,
+  .daily-view-panel__actions :deep(.el-date-editor) {
+    width: 100%;
+  }
+
+  .daily-metrics {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>
