@@ -219,6 +219,7 @@ export type QuestionDuplicateMatchType =
   | string
 
 export interface AiQuestionGenerateRequestDTO {
+  targetPosition?: string
   technologyStack?: string
   knowledgePoint?: string
   questionType?: QuestionType | ''
@@ -234,9 +235,13 @@ export interface AiQuestionGenerateRequestDTO {
 
 export interface AiQuestionGenerateResultVO {
   batchId?: string
+  count?: number
+  successCount?: number
   generatedCount?: number
   reviewIds?: number[]
   aiCallLogId?: number
+  message?: string
+  failedReason?: string
 }
 
 export interface QuestionReviewQueryDTO extends PageQuery {
@@ -254,6 +259,7 @@ export interface QuestionReviewListVO {
   batchId?: string
   reviewStatus: QuestionReviewStatus
   aiCallLogId?: number
+  targetPosition?: string
   technologyStack?: string
   knowledgePoint?: string
   questionType?: QuestionType

@@ -153,15 +153,105 @@
           <h2>AI 题目审核 / 去重</h2>
           <p>接入后端真实审核池与重复题审核接口，不展示 Mock 结果。</p>
         </div>
-        <el-button :loading="generating" @click="handleGenerateReviews">触发 AI 生成</el-button>
+        <el-button :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
       </div>
 
       <el-tabs v-model="governanceTab" class="governance-tabs">
+        <el-tab-pane label="AI 生成" name="generate">
+          <div class="ai-generate-panel">
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              title="生成结果只进入后端审核池，不在前端伪造题目内容；审核池数据来自 GET /admin/question-reviews。"
+            />
+            <el-form class="ai-generate-form" :model="generateForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="目标岗位">
+                    <el-input v-model.trim="generateForm.targetPosition" clearable placeholder="为空则生成通用 Java 后端题" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="技术栈">
+                    <el-input v-model.trim="generateForm.technologyStack" clearable placeholder="例如：Spring Boot / MySQL / Redis" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="知识点">
+                    <el-input v-model.trim="generateForm.knowledgePoint" clearable placeholder="例如：JVM 垃圾回收" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="题型">
+                    <el-select v-model="generateForm.questionType" clearable placeholder="使用题库已有题型" style="width: 100%">
+                      <el-option v-for="item in questionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="难度">
+                    <el-select v-model="generateForm.difficulty" clearable placeholder="使用题库已有难度" style="width: 100%">
+                      <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="经验年限">
+                    <el-input-number v-model="generateForm.experienceYears" :min="0" :max="20" :step="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="8">
+                  <el-form-item label="生成数量">
+                    <el-input-number v-model="generateForm.count" :min="1" :max="20" :step="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="24">
+                  <el-form-item label="额外要求">
+                    <el-input
+                      v-model="generateForm.extraRequirements"
+                      type="textarea"
+                      :rows="3"
+                      maxlength="500"
+                      show-word-limit
+                      placeholder="可补充场景、侧重点或排除项；不要填写不存在的接口字段。"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <div class="ai-generate-actions">
+                <el-button :loading="generating" type="primary" @click="handleGenerateReviews">生成到审核池</el-button>
+                <el-button @click="resetGenerateForm">重置</el-button>
+                <el-button v-if="generateResult?.batchId" type="success" plain @click="viewGeneratedBatch">
+                  查看本批次审核题
+                </el-button>
+              </div>
+            </el-form>
+
+            <div v-if="generateResult" class="generate-result-card">
+              <div class="generate-result-card__title">生成结果</div>
+              <el-descriptions :column="3" border>
+                <el-descriptions-item label="batchId">{{ generateResult.batchId || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="reviewIds">{{ generateResult.reviewIds?.join(', ') || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="aiCallLogId">{{ generateResult.aiCallLogId || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="generatedCount">
+                  {{ generateResult.generatedCount ?? generateResult.successCount ?? generateResult.count ?? '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="message">{{ generateResult.message || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="failedReason">{{ generateResult.failedReason || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="审核池" name="reviews">
           <div class="admin-filter-bar governance-filter">
             <el-form :model="reviewQuery" inline>
               <el-form-item label="关键词">
                 <el-input v-model.trim="reviewQuery.keyword" clearable placeholder="标题 / 题干 / 知识点" />
+              </el-form-item>
+              <el-form-item label="批次">
+                <el-input v-model.trim="reviewQuery.batchId" clearable placeholder="batchId" style="width: 220px" />
               </el-form-item>
               <el-form-item label="状态">
                 <el-select v-model="reviewQuery.reviewStatus" clearable placeholder="全部" style="width: 130px">
@@ -179,6 +269,7 @@
           <div class="table-card admin-table-card">
             <el-table v-loading="reviewLoading" :data="reviews" row-key="id">
               <el-table-column prop="questionTitle" label="题目" min-width="240" show-overflow-tooltip />
+              <el-table-column prop="targetPosition" label="目标岗位" min-width="140" show-overflow-tooltip />
               <el-table-column prop="knowledgePoint" label="知识点" min-width="140" show-overflow-tooltip />
               <el-table-column prop="difficulty" label="难度" width="110" />
               <el-table-column label="状态" width="110">
@@ -378,6 +469,8 @@ import {
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
+  AiQuestionGenerateRequestDTO,
+  AiQuestionGenerateResultVO,
   QuestionDuplicateReviewListVO,
   QuestionDuplicateReviewQueryDTO,
   QuestionCategoryVO,
@@ -399,7 +492,7 @@ const categories = ref<QuestionCategoryVO[]>([])
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
-const governanceTab = ref('reviews')
+const governanceTab = ref('generate')
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
 const generating = ref(false)
@@ -408,6 +501,7 @@ const reviews = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
+const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
 
 const query = reactive<AdminQuestionQueryDTO>({
   keyword: '',
@@ -437,8 +531,20 @@ const form = reactive<QuestionCreateDTO>({
 const reviewQuery = reactive<QuestionReviewQueryDTO>({
   keyword: '',
   reviewStatus: 'PENDING',
+  batchId: '',
   pageNo: 1,
   pageSize: 10
+})
+
+const generateForm = reactive<AiQuestionGenerateRequestDTO>({
+  targetPosition: '',
+  technologyStack: '',
+  knowledgePoint: '',
+  questionType: QUESTION_TYPE.SHORT_ANSWER,
+  difficulty: QUESTION_DIFFICULTY.MEDIUM,
+  experienceYears: undefined,
+  count: 5,
+  extraRequirements: ''
 })
 
 const duplicateQuery = reactive<QuestionDuplicateReviewQueryDTO>({
@@ -651,6 +757,7 @@ const resetReviewQuery = () => {
   Object.assign(reviewQuery, {
     keyword: '',
     reviewStatus: 'PENDING',
+    batchId: '',
     pageNo: 1,
     pageSize: 10
   })
@@ -667,25 +774,59 @@ const resetDuplicateQuery = () => {
   fetchDuplicates()
 }
 
-const handleGenerateReviews = async () => {
-  const { value } = await ElMessageBox.prompt('请输入生成主题或知识点', '触发 AI 生成题目', {
-    inputPlaceholder: '例如：JVM 垃圾回收',
-    inputValidator: (value) => Boolean(value?.trim()) || '请输入知识点'
+const resetGenerateForm = () => {
+  Object.assign(generateForm, {
+    targetPosition: '',
+    technologyStack: '',
+    knowledgePoint: '',
+    questionType: QUESTION_TYPE.SHORT_ANSWER,
+    difficulty: QUESTION_DIFFICULTY.MEDIUM,
+    experienceYears: undefined,
+    count: 5,
+    extraRequirements: ''
   })
+  generateResult.value = null
+}
+
+const normalizeGeneratePayload = (): AiQuestionGenerateRequestDTO => {
+  const trimValue = (value?: string) => value?.trim() || undefined
+  return {
+    targetPosition: trimValue(generateForm.targetPosition),
+    technologyStack: trimValue(generateForm.technologyStack),
+    knowledgePoint: trimValue(generateForm.knowledgePoint),
+    questionType: generateForm.questionType || undefined,
+    difficulty: generateForm.difficulty || undefined,
+    experienceYears: generateForm.experienceYears,
+    count: Math.min(Math.max(Number(generateForm.count || 5), 1), 20),
+    extraRequirements: trimValue(generateForm.extraRequirements)
+  }
+}
+
+const viewGeneratedBatch = async () => {
+  if (!generateResult.value?.batchId) return
+  Object.assign(reviewQuery, {
+    batchId: generateResult.value.batchId,
+    reviewStatus: 'PENDING',
+    pageNo: 1
+  })
+  governanceTab.value = 'reviews'
+  await fetchReviews()
+}
+
+const handleGenerateReviews = async () => {
   generating.value = true
   try {
-    const result = await generateAiQuestionsApi({
-      knowledgePoint: value.trim(),
-      difficulty: QUESTION_DIFFICULTY.MEDIUM,
-      questionType: QUESTION_TYPE.SHORT_ANSWER,
-      count: 5,
-      generateReferenceAnswer: true,
-      generateFollowUps: true,
-      generateTagSuggestions: true,
-      generateCategorySuggestion: true
-    })
-    ElMessage.success(`已生成 ${result.generatedCount || result.reviewIds?.length || 0} 条待审核题目`)
-    await fetchReviews()
+    const result = await generateAiQuestionsApi(normalizeGeneratePayload())
+    generateResult.value = result
+    const generatedCount = result.generatedCount ?? result.successCount ?? result.count ?? result.reviewIds?.length ?? 0
+    ElMessage.success(`已生成 ${generatedCount} 条待审核题目`)
+    if (result.batchId) {
+      await viewGeneratedBatch()
+    } else {
+      await fetchReviews()
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'AI 题目生成失败')
   } finally {
     generating.value = false
   }
@@ -794,5 +935,36 @@ onMounted(async () => {
 
 .governance-filter {
   padding: 0 0 16px;
+}
+
+.ai-generate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ai-generate-form {
+  padding: 18px 0 4px;
+}
+
+.ai-generate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.generate-result-card {
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.generate-result-card__title {
+  margin-bottom: 12px;
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 700;
 }
 </style>
