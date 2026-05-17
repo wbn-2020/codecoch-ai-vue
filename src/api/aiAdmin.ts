@@ -1,10 +1,18 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
+  ActivatePromptTemplateVersionDTO,
   AiCallLogQueryDTO,
   AiCallLogVO,
+  CreatePromptTemplateVersionDTO,
+  DisablePromptTemplateVersionDTO,
   PromptTemplateDTO,
+  PromptTemplateDetailVO,
   PromptTemplateQueryDTO,
+  PromptTemplateVersionQuery,
+  PromptTemplateVersionVO,
+  TestPromptTemplateVersionDTO,
+  TestPromptTemplateVersionVO,
   PromptTemplateVO
 } from '@/types/ai'
 import { normalizePageResult } from '@/utils/page'
@@ -26,6 +34,10 @@ type BackendPromptTemplateVO = Partial<PromptTemplateVO> & {
   variableDesc?: string
   updateTime?: string
   createTime?: string
+}
+
+type BackendPromptTemplateDetailVO = BackendPromptTemplateVO & {
+  activeVersion?: PromptTemplateVersionVO
 }
 
 const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
@@ -63,14 +75,20 @@ const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplat
   updatedAt: prompt.updatedAt || prompt.updateTime
 })
 
+const normalizePromptTemplateDetail = (prompt: BackendPromptTemplateDetailVO): PromptTemplateDetailVO => ({
+  ...normalizePromptTemplate(prompt),
+  activeVersion: prompt.activeVersion
+})
+
 const normalizePromptPage = (
   result: PageResult<BackendPromptTemplateVO>
 ): PageResult<PromptTemplateVO> => normalizePageResult(result, undefined, normalizePromptTemplate)
 
-const toBackendPromptDTO = (data: PromptTemplateDTO) => ({
+const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => ({
   scene: data.scene,
   name: data.name,
-  content: data.content,
+  description: data.description,
+  ...(includeContent ? { content: data.content } : {}),
   status: data.status
 })
 
@@ -96,9 +114,53 @@ export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
   return request
     .put<BackendPromptTemplateVO, BackendPromptTemplateVO>(
       `/admin/ai/prompts/${id}`,
-      toBackendPromptDTO(data)
+      toBackendPromptDTO(data, false)
     )
     .then(normalizePromptTemplate)
+}
+
+export const getPromptTemplateDetailApi = (id: number) => {
+  return request
+    .get<BackendPromptTemplateDetailVO, BackendPromptTemplateDetailVO>(`/admin/ai/prompt-templates/${id}`)
+    .then(normalizePromptTemplateDetail)
+}
+
+export const getPromptTemplateVersionsApi = (templateId: number, params?: PromptTemplateVersionQuery) => {
+  return request.get<PageResult<PromptTemplateVersionVO>, PageResult<PromptTemplateVersionVO>>(
+    `/admin/ai/prompt-templates/${templateId}/versions`,
+    { params }
+  )
+}
+
+export const createPromptTemplateVersionApi = (templateId: number, data: CreatePromptTemplateVersionDTO) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-templates/${templateId}/versions`,
+    data
+  )
+}
+
+export const activatePromptTemplateVersionApi = (
+  versionId: number,
+  data?: ActivatePromptTemplateVersionDTO
+) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/activate`,
+    data
+  )
+}
+
+export const disablePromptTemplateVersionApi = (
+  versionId: number,
+  data?: DisablePromptTemplateVersionDTO
+) => {
+  return request.post<null, null>(`/admin/ai/prompt-template-versions/${versionId}/disable`, data)
+}
+
+export const testPromptTemplateVersionApi = (versionId: number, data?: TestPromptTemplateVersionDTO) => {
+  return request.post<TestPromptTemplateVersionVO, TestPromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/test`,
+    data
+  )
 }
 
 export const deleteAdminAiPromptApi = (id: number) => {

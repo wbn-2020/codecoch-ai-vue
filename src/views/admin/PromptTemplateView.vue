@@ -8,8 +8,8 @@
         </div>
         <h1 class="admin-hero__title">Prompt 模板治理</h1>
         <p class="admin-hero__desc">
-          维护面试提问、答案评分、动态追问和报告生成模板。当前保留 V1 真实 CRUD，
-          版本 diff、灰度发布等能力未接入时只展示待接入状态。
+          维护面试提问、答案评分、动态追问和报告生成模板。当前保留模板真实 CRUD，
+          Prompt 内容变更已收敛到版本 API，完整管理面板下一步接入。
         </p>
       </div>
       <el-button type="primary" @click="openDialog()">
@@ -36,8 +36,8 @@
       </article>
       <article class="admin-insight-card">
         <span>版本治理</span>
-        <strong>待接入</strong>
-        <small>不伪造版本 diff 或灰度效果</small>
+        <strong>API 已接入</strong>
+        <small>管理面板下一步接入</small>
       </article>
     </div>
 
@@ -126,7 +126,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="模板内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="9" />
+          <el-input
+            v-model="form.content"
+            type="textarea"
+            :rows="9"
+            :readonly="Boolean(editingId)"
+            :placeholder="editingId ? 'Prompt 内容请通过版本管理新增版本修改' : '请输入模板内容'"
+          />
+          <div v-if="editingId" class="field-note">
+            Prompt 内容请通过版本管理新增版本修改，本次保存只更新名称、类型、描述和状态。
+          </div>
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
@@ -192,11 +201,11 @@ const form = reactive<PromptTemplateDTO>({
   description: ''
 })
 
-const rules: FormRules<PromptTemplateDTO> = {
+const rules = computed<FormRules<PromptTemplateDTO>>(() => ({
   name: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
   scene: [{ required: true, message: '请选择模板类型', trigger: 'change' }],
-  content: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
-}
+  content: editingId.value ? [] : [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
+}))
 
 const enabledCount = computed(() => prompts.value.filter((item) => item.status === 1).length)
 const sceneCount = computed(() => new Set(prompts.value.map((item) => item.promptType || item.scene).filter(Boolean)).size)
@@ -284,6 +293,13 @@ onMounted(fetchPrompts)
 </script>
 
 <style scoped lang="scss">
+.field-note {
+  margin-top: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
