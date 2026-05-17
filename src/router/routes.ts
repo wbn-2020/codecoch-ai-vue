@@ -252,6 +252,15 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'industry-templates',
+        name: 'AdminIndustryTemplates',
+        component: () => import('@/views/admin/IndustryTemplateManageView.vue'),
+        meta: {
+          title: '行业模板',
+          icon: 'List'
+        }
+      },
+      {
         path: 'ai/prompts',
         name: 'AdminAiPrompts',
         component: () => import('@/views/admin/PromptTemplateView.vue'),

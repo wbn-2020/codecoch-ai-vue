@@ -39,6 +39,7 @@ const menuItems = [
   { label: '分类管理', path: '/admin/question-categories', icon: Files },
   { label: '标签管理', path: '/admin/question-tags', icon: PriceTag },
   { label: '问题组管理', path: '/admin/question-groups', icon: List },
+  { label: '行业模板', path: '/admin/industry-templates', icon: List },
   { label: 'Prompt 模板', path: '/admin/ai/prompts', icon: Operation },
   { label: 'AI 调用日志', path: '/admin/ai/logs', icon: DataAnalysis },
   { label: '系统配置', path: '/admin/system/configs', icon: Setting }

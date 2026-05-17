@@ -23,6 +23,7 @@ export interface IndustryTemplateVO {
   keyTechnicalPoints?: string
   commonQuestionDirections?: string
   riskPoints?: string
+  promptContext?: string
   enabled?: number
   sortOrder?: number
   createdAt?: string
