@@ -223,6 +223,19 @@
             发起 AI 优化
           </el-button>
 
+          <div v-if="optimizeSseEvents.length || optimizeSseMessage" class="sse-progress">
+            <div class="sse-progress__head">
+              <span>阶段式优化进度</span>
+              <el-tag size="small" effect="plain">{{ optimizeSseStatus }}</el-tag>
+            </div>
+            <p>{{ optimizeSseMessage || '等待后端阶段事件返回。' }}</p>
+            <div class="sse-progress__list">
+              <span v-for="(event, index) in optimizeSseEvents" :key="`${event.type}-${index}`">
+                {{ event.stage || event.type }} · {{ event.message }}
+              </span>
+            </div>
+          </div>
+
           <div class="optimize-records">
             <div class="capability-item">
               <span>最近记录</span>
@@ -315,7 +328,7 @@ import {
   Target,
   UserRound
 } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -327,6 +340,7 @@ import {
   getResumeOptimizeResultApi,
   getResumeDetailApi,
   optimizeResumeApi,
+  streamResumeOptimizeApi,
   setDefaultResumeApi,
   updateResumeApi,
   updateResumeProjectApi
@@ -338,6 +352,7 @@ import type {
   ResumeOptimizeDetailVO,
   ResumeOptimizeRecordVO,
   ResumeOptimizeRequestDTO,
+  ResumeOptimizeSseEvent,
   ResumeProjectDTO,
   ResumeProjectVO
 } from '@/types/resume'
@@ -362,6 +377,10 @@ const editingProject = ref<ResumeProjectVO | null>(null)
 const projects = ref<ResumeProjectVO[]>([])
 const optimizeRecords = ref<ResumeOptimizeRecordVO[]>([])
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
+const optimizeSseEvents = ref<Array<{ type: string; stage?: string; message: string }>>([])
+const optimizeSseMessage = ref('')
+const optimizeSseStatus = ref('未开始')
+const optimizeSseHandle = ref<ReturnType<typeof streamResumeOptimizeApi> | null>(null)
 
 const form = reactive<ResumeCreateDTO>({
   resumeName: '',
@@ -463,27 +482,95 @@ const openOptimizeDetail = async (recordId: number) => {
   optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
 }
 
-const handleOptimizeResume = async () => {
+const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
+  targetPosition: optimizeForm.targetPosition || form.targetPosition,
+  experienceYears: optimizeForm.experienceYears,
+  industryDirection: optimizeForm.industryDirection,
+  selectedProjectIds: projects.value.map((project) => project.projectId).filter(Boolean)
+})
+
+const runSyncOptimizeFallback = async () => {
   if (!resumeId.value) return
+  optimizeSseStatus.value = '同步 fallback'
+  optimizeSseMessage.value = 'SSE 未启动成功，已回退到原同步优化接口。'
+  const result = await optimizeResumeApi(resumeId.value, buildOptimizePayload())
+  if (result.optimizeStatus === 'FAILED') {
+    ElMessage.error(result.errorMessage || 'AI 优化失败')
+  } else {
+    ElMessage.success('AI 优化已完成')
+  }
+  await fetchOptimizeRecords()
+  if (result.optimizeRecordId) {
+    await openOptimizeDetail(result.optimizeRecordId)
+  }
+}
+
+const pushOptimizeSseEvent = (type: string, data?: ResumeOptimizeSseEvent) => {
+  const messageMap: Record<string, string> = {
+    start: '简历优化开始',
+    progress: '简历优化进行中',
+    result: '已收到优化结果',
+    done: '简历优化完成',
+    error: '简历优化失败'
+  }
+  const message = data?.message || messageMap[type] || type
+  optimizeSseStatus.value = type
+  optimizeSseMessage.value = data?.stage ? `${data.stage}：${message}` : message
+  optimizeSseEvents.value.push({
+    type,
+    stage: data?.stage,
+    message
+  })
+}
+
+const handleOptimizeResume = async () => {
+  if (!resumeId.value || optimizing.value) return
+  optimizeSseHandle.value?.abort()
   optimizing.value = true
+  optimizeSseEvents.value = []
+  optimizeSseMessage.value = '正在启动阶段式优化进度。'
+  optimizeSseStatus.value = '启动中'
+  let streamStarted = false
+  let resultRecordId: number | undefined
+
   try {
-    const result = await optimizeResumeApi(resumeId.value, {
-      targetPosition: optimizeForm.targetPosition || form.targetPosition,
-      experienceYears: optimizeForm.experienceYears,
-      industryDirection: optimizeForm.industryDirection,
-      selectedProjectIds: projects.value.map((project) => project.projectId).filter(Boolean)
-    })
-    if (result.optimizeStatus === 'FAILED') {
-      ElMessage.error(result.errorMessage || 'AI 优化失败')
-    } else {
-      ElMessage.success('AI 优化已完成')
-    }
+    optimizeSseHandle.value = streamResumeOptimizeApi(
+      {
+        resumeId: resumeId.value,
+        targetPosition: optimizeForm.targetPosition || form.targetPosition,
+        experienceYears: optimizeForm.experienceYears,
+        industryDirection: optimizeForm.industryDirection
+      },
+      {
+        onEvent: (event, data) => {
+          if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+            streamStarted = true
+          }
+          pushOptimizeSseEvent(event, data)
+          const result = data?.result
+          const optimizeRecordId =
+            typeof result === 'object' && result && 'optimizeRecordId' in result
+              ? Number(result.optimizeRecordId)
+              : undefined
+          resultRecordId = data?.recordId || optimizeRecordId || resultRecordId
+        }
+      }
+    )
+    await optimizeSseHandle.value.finished
     await fetchOptimizeRecords()
-    if (result.optimizeRecordId) {
-      await openOptimizeDetail(result.optimizeRecordId)
+    if (resultRecordId) {
+      await openOptimizeDetail(resultRecordId)
+    }
+    ElMessage.success('AI 优化已完成')
+  } catch (error) {
+    if (!streamStarted) {
+      await runSyncOptimizeFallback()
+    } else {
+      ElMessage.error(error instanceof Error ? error.message : 'AI 优化流中断，请稍后手动重试。')
     }
   } finally {
     optimizing.value = false
+    optimizeSseHandle.value = null
   }
 }
 
@@ -585,6 +672,9 @@ const handleDeleteProject = async (project: ResumeProjectVO) => {
 }
 
 onMounted(fetchDetail)
+onUnmounted(() => {
+  optimizeSseHandle.value?.abort()
+})
 </script>
 
 <style scoped lang="scss">
@@ -916,6 +1006,44 @@ onMounted(fetchDetail)
 .optimize-records {
   margin-top: 16px;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.sse-progress {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.24);
+
+  p {
+    margin: 8px 0 0;
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.sse-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sse-progress__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 
 .record-row {

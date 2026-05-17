@@ -438,6 +438,7 @@ import {
   optimizeResumeApi,
   reparseResumeApi,
   setDefaultResumeApi,
+  streamResumeOptimizeApi,
   uploadResumeFileApi
 } from '@/api/resume'
 import StatusTag from '@/components/common/StatusTag.vue'
@@ -445,6 +446,7 @@ import type {
   ResumeAnalysisResultVO,
   ResumeOptimizeDetailVO,
   ResumeOptimizeRecordVO,
+  ResumeOptimizeSseEvent,
   ResumeParseStatus,
   ResumeParseStatusVO,
   ResumeQueryDTO,
@@ -467,6 +469,7 @@ const parseResult = ref<ResumeAnalysisResultVO | null>(null)
 const parseDrawerVisible = ref(false)
 const confirmingParse = ref(false)
 const optimizingId = ref<number | null>(null)
+const optimizeSseHandle = ref<ReturnType<typeof streamResumeOptimizeApi> | null>(null)
 const applyingOptimize = ref(false)
 const optimizeRecords = ref<Record<number, ResumeOptimizeRecordVO[]>>({})
 const optimizeRecordsLoadError = ref(false)
@@ -736,25 +739,66 @@ const handleConfirmParse = async () => {
   }
 }
 
+const openLatestOptimizeRecord = async (recordId?: number) => {
+  await fetchOptimizeRecords()
+  if (recordId) {
+    await openOptimizeDetail(recordId)
+  }
+}
+
+const runSyncOptimizeFallback = async (row: ResumeVO) => {
+  const result = await optimizeResumeApi(row.id, {
+    targetPosition: row.targetPosition
+  })
+  if (result.optimizeStatus === 'FAILED') {
+    ElMessage.error(result.errorMessage || 'AI 优化失败')
+  } else {
+    ElMessage.success('AI 优化已完成')
+  }
+  await openLatestOptimizeRecord(result.optimizeRecordId)
+}
+
 const handleOptimize = async (row: ResumeVO) => {
+  if (optimizingId.value) return
+  optimizeSseHandle.value?.abort()
   optimizingId.value = row.id
+  let streamStarted = false
+  let resultRecordId: number | undefined
   try {
-    const result = await optimizeResumeApi(row.id, {
-      targetPosition: row.targetPosition
-    })
-    if (result.optimizeStatus === 'FAILED') {
-      ElMessage.error(result.errorMessage || 'AI 优化失败')
-    } else {
-      ElMessage.success('AI 优化已完成')
-    }
-    await fetchOptimizeRecords()
-    if (result.optimizeRecordId) {
-      await openOptimizeDetail(result.optimizeRecordId)
-    }
+    optimizeSseHandle.value = streamResumeOptimizeApi(
+      {
+        resumeId: row.id,
+        targetPosition: row.targetPosition
+      },
+      {
+        onEvent: (event, data?: ResumeOptimizeSseEvent) => {
+          if (event === 'start' || event === 'progress' || event === 'result' || event === 'done') {
+            streamStarted = true
+          }
+          const result = data?.result
+          const optimizeRecordId =
+            typeof result === 'object' && result && 'optimizeRecordId' in result
+              ? Number(result.optimizeRecordId)
+              : undefined
+          resultRecordId = data?.recordId || optimizeRecordId || resultRecordId
+          if (event === 'progress' && data?.message) {
+            ElMessage.info(data.stage ? `${data.stage}：${data.message}` : data.message)
+          }
+        }
+      }
+    )
+    await optimizeSseHandle.value.finished
+    ElMessage.success('AI 优化已完成')
+    await openLatestOptimizeRecord(resultRecordId)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, 'AI 优化失败，请稍后重试。'))
+    if (!streamStarted) {
+      await runSyncOptimizeFallback(row)
+    } else {
+      ElMessage.error(error instanceof Error ? error.message : 'AI 优化流中断，请稍后手动重试。')
+    }
   } finally {
     optimizingId.value = null
+    optimizeSseHandle.value = null
   }
 }
 
@@ -835,6 +879,7 @@ const handleDelete = async (row: ResumeVO) => {
 onMounted(fetchResumes)
 onUnmounted(() => {
   stopParsePolling()
+  optimizeSseHandle.value?.abort()
 })
 </script>
 

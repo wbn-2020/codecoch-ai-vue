@@ -161,9 +161,37 @@ export interface ResumeConfirmAnalysisVO {
 
 export interface ResumeOptimizeRequestDTO {
   targetPosition?: string
+  targetCompany?: string
+  extraRequirements?: string
+  optimizeFocus?: string
   experienceYears?: number
   industryDirection?: string
   selectedProjectIds?: number[]
+}
+
+export type ResumeOptimizeSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+
+export interface ResumeOptimizeSseParams {
+  resumeId: number
+  targetPosition?: string
+  targetCompany?: string
+  extraRequirements?: string
+  optimizeFocus?: string
+  experienceYears?: number
+  industryDirection?: string
+}
+
+export interface ResumeOptimizeSseEvent {
+  requestId?: string
+  type?: ResumeOptimizeSseEventType | string
+  message?: string
+  resumeId?: number
+  recordId?: number
+  aiCallLogId?: number
+  result?: ResumeOptimizeResultJson | ResumeOptimizeSubmitVO | Record<string, unknown> | string | null
+  stage?: string
+  code?: string
+  [key: string]: unknown
 }
 
 export interface ResumeRewriteSuggestion {
