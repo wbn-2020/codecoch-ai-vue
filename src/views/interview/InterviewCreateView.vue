@@ -35,7 +35,7 @@
         <div class="panel-head">
           <div>
             <h2>面试类型</h2>
-            <p>选择后端已支持的训练模式；待接入能力不会进入提交参数。</p>
+            <p>选择后端已支持的训练模式；行业场景会以综合模拟模式携带真实行业模板提交。</p>
           </div>
         </div>
 
@@ -44,10 +44,9 @@
             v-for="item in modeCards"
             :key="item.key"
             class="mode-card"
-            :class="{ active: item.value && form.interviewMode === item.value, disabled: item.disabled }"
+            :class="{ active: selectedModeKey === item.key }"
             type="button"
-            :disabled="item.disabled"
-            @click="selectMode(item.value)"
+            @click="selectMode(item)"
           >
             <component :is="item.icon" :size="20" />
             <strong>{{ item.title }}</strong>
@@ -106,9 +105,50 @@
             </div>
           </div>
 
-          <div class="form-section">
+          <div v-if="isIndustryMode" class="form-section">
             <div class="section-title">
               <span>03</span>
+              行业模板
+            </div>
+            <el-form-item label="行业场景模板" prop="industryTemplateId">
+              <el-select
+                v-model="form.industryTemplateId"
+                v-loading="industryTemplateLoading"
+                placeholder="请选择真实行业模板"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="template in industryTemplates"
+                  :key="template.industryTemplateId"
+                  :label="template.industryName"
+                  :value="template.industryTemplateId"
+                />
+              </el-select>
+              <div v-if="industryTemplateError" class="field-empty">
+                {{ industryTemplateError }}
+              </div>
+              <div v-else-if="!industryTemplateLoading && !industryTemplates.length" class="field-empty">
+                暂无可用行业模板，请确认后端行业模板已初始化并启用。
+              </div>
+            </el-form-item>
+
+            <article v-if="selectedIndustryTemplate" class="template-preview">
+              <div class="template-preview__head">
+                <div>
+                  <strong>{{ selectedIndustryTemplate.industryName }}</strong>
+                  <span>{{ selectedIndustryTemplate.description || '暂无行业说明' }}</span>
+                </div>
+                <el-tag effect="plain">{{ selectedIndustryTemplate.industryCode || 'INDUSTRY' }}</el-tag>
+              </div>
+              <div class="template-tags">
+                <span v-for="item in templateHighlights" :key="item">{{ item }}</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">
+              <span>{{ isIndustryMode ? '04' : '03' }}</span>
               简历上下文
             </div>
             <div class="resume-switch">
@@ -160,7 +200,7 @@
 
         <div class="summary-card primary">
           <span>训练模式</span>
-          <strong>{{ optionLabel(interviewModeOptions, form.interviewMode) }}</strong>
+          <strong>{{ selectedModeTitle }}</strong>
           <p>{{ selectedModeDesc }}</p>
         </div>
 
@@ -171,7 +211,11 @@
           </div>
           <div>
             <span>行业方向</span>
-            <strong>{{ optionLabel(industryDirectionOptions, form.industryDirection) }}</strong>
+            <strong>{{ selectedIndustryTemplate?.industryName || optionLabel(industryDirectionOptions, form.industryDirection) }}</strong>
+          </div>
+          <div v-if="isIndustryMode">
+            <span>行业模板</span>
+            <strong>{{ selectedIndustryTemplate?.industryName || '未选择' }}</strong>
           </div>
           <div>
             <span>难度 / 题量</span>
@@ -186,8 +230,8 @@
         <div class="pending-box">
           <Zap :size="17" />
           <div>
-            <strong>V2 入口标注</strong>
-            <p>行业场景独立模板、学习计划和代码练习将在后续版本接入，本页不会提交未支持字段。</p>
+            <strong>真实行业模板</strong>
+            <p>行业场景会读取后端模板，并以综合模拟模式提交行业模板 ID，不发送后端未支持的模式。</p>
           </div>
         </div>
 
@@ -210,18 +254,17 @@ import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play,
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { createInterviewApi } from '@/api/interview'
+import { createInterviewApi, getIndustryTemplatesApi } from '@/api/interview'
 import { getResumesApi } from '@/api/resume'
 import {
   difficultyOptions,
   experienceLevelOptions,
   industryDirectionOptions,
   INTERVIEW_MODE,
-  interviewModeOptions,
   interviewerStyleOptions,
   targetPositionOptions
 } from '@/constants/enums'
-import type { InterviewCreateDTO } from '@/types/interview'
+import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
 
@@ -229,14 +272,19 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const creating = ref(false)
 const resumeLoading = ref(false)
+const industryTemplateLoading = ref(false)
+const industryTemplateError = ref('')
 const useResume = ref(true)
 const resumes = ref<ResumeVO[]>([])
+const industryTemplates = ref<IndustryTemplateVO[]>([])
+const selectedModeKey = ref('technical')
 
 const form = reactive<InterviewCreateDTO>({
   interviewName: '',
   interviewMode: INTERVIEW_MODE.TECHNICAL_BASIC,
   targetPosition: 'Java 后端开发',
   experienceLevel: '3_YEARS',
+  industryTemplateId: undefined,
   industryDirection: 'GENERAL',
   difficulty: 'MEDIUM',
   interviewerStyle: 'NORMAL',
@@ -272,13 +320,29 @@ const modeCards = [
   {
     key: 'industry',
     title: '行业场景',
-    desc: '电商、金融支付、SaaS 等行业模板入口。',
-    badge: '待接入',
-    value: '',
-    disabled: true,
+    desc: '读取真实行业模板，以综合模拟模式生成场景化追问。',
+    badge: '真实模板',
+    value: INTERVIEW_MODE.COMPREHENSIVE,
+    industry: true,
     icon: Sparkles
   }
 ]
+
+const isIndustryMode = computed(() => selectedModeKey.value === 'industry')
+
+const selectedIndustryTemplate = computed(() =>
+  industryTemplates.value.find((item) => item.industryTemplateId === form.industryTemplateId)
+)
+
+const templateHighlights = computed(() => {
+  const template = selectedIndustryTemplate.value
+  if (!template) return []
+  return [
+    ...parseTemplateItems(template.targetPositions),
+    ...parseTemplateItems(template.coreBusinessScenarios),
+    ...parseTemplateItems(template.keyTechnicalPoints)
+  ].slice(0, 8)
+})
 
 const resumeRequired = computed(
   () =>
@@ -291,6 +355,7 @@ const rules = computed<FormRules<InterviewCreateDTO>>(() => ({
   targetPosition: [{ required: true, message: '请选择目标岗位', trigger: 'change' }],
   experienceLevel: [{ required: true, message: '请选择经验年限', trigger: 'change' }],
   industryDirection: [{ required: true, message: '请选择行业方向', trigger: 'change' }],
+  industryTemplateId: isIndustryMode.value ? [{ required: true, message: '请选择行业模板', trigger: 'change' }] : [],
   difficulty: [{ required: true, message: '请选择难度等级', trigger: 'change' }],
   interviewerStyle: [{ required: true, message: '请选择面试官风格', trigger: 'change' }],
   resumeId: resumeRequired.value || useResume.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
@@ -301,15 +366,45 @@ const selectedResumeName = computed(() => {
   return resumes.value.find((item) => item.id === form.resumeId)?.resumeName || '未选择'
 })
 
-const selectedModeDesc = computed(() => modeCards.find((item) => item.value === form.interviewMode)?.desc || '当前模式')
+const selectedModeDesc = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.desc || '当前模式')
+const selectedModeTitle = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.title || '当前模式')
 
 const optionLabel = (options: SelectOption[], value?: string) => {
   return options.find((item) => item.value === value)?.label || value || '-'
 }
 
-const selectMode = (value?: string) => {
-  if (!value) return
-  form.interviewMode = value
+const parseTemplateItems = (value?: string) => {
+  if (!value) return []
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim()).filter(Boolean)
+    }
+  } catch {
+    // fall back to plain text splitting below
+  }
+  return trimmed
+    .split(/[,\n;；、，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const applyIndustryTemplate = (template?: IndustryTemplateVO) => {
+  if (!template) return
+  form.industryTemplateId = template.industryTemplateId
+  form.industryDirection = template.industryCode || template.industryName || form.industryDirection
+}
+
+const selectMode = (item: (typeof modeCards)[number]) => {
+  selectedModeKey.value = item.key
+  form.interviewMode = item.value
+  if ('industry' in item && item.industry) {
+    applyIndustryTemplate(selectedIndustryTemplate.value || industryTemplates.value[0])
+    return
+  }
+  form.industryTemplateId = undefined
 }
 
 watch(
@@ -330,6 +425,17 @@ watch(useResume, (enabled) => {
   }
 })
 
+watch(
+  () => form.industryTemplateId,
+  (id) => {
+    if (!isIndustryMode.value || !id) return
+    const template = selectedIndustryTemplate.value
+    if (template) {
+      form.industryDirection = template.industryCode || template.industryName || form.industryDirection
+    }
+  }
+)
+
 const fetchResumes = async () => {
   resumeLoading.value = true
   try {
@@ -341,9 +447,30 @@ const fetchResumes = async () => {
   }
 }
 
+const fetchIndustryTemplates = async () => {
+  industryTemplateLoading.value = true
+  industryTemplateError.value = ''
+  try {
+    const result = await getIndustryTemplatesApi()
+    industryTemplates.value = result || []
+    if (isIndustryMode.value && !form.industryTemplateId) {
+      applyIndustryTemplate(industryTemplates.value[0])
+    }
+  } catch {
+    industryTemplates.value = []
+    industryTemplateError.value = '行业模板加载失败，请确认后端服务或权限状态。'
+  } finally {
+    industryTemplateLoading.value = false
+  }
+}
+
 const handleCreate = async () => {
   if (!formRef.value) return
   await formRef.value.validate()
+  if (isIndustryMode.value && !form.industryTemplateId) {
+    ElMessage.warning('请选择真实行业模板后再开始面试')
+    return
+  }
   if (resumeRequired.value && !form.resumeId) {
     ElMessage.warning('项目深挖或综合模拟面试需要先选择简历')
     return
@@ -351,8 +478,14 @@ const handleCreate = async () => {
 
   creating.value = true
   try {
+    const template = selectedIndustryTemplate.value
     const payload: InterviewCreateDTO = {
       ...form,
+      interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
+      industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
+      industryDirection: isIndustryMode.value
+        ? template?.industryCode || template?.industryName || form.industryDirection
+        : form.industryDirection,
       resumeId: useResume.value ? form.resumeId : undefined
     }
     const result = await createInterviewApi(payload)
@@ -365,6 +498,7 @@ const handleCreate = async () => {
 
 onMounted(() => {
   fetchResumes()
+  fetchIndustryTemplates()
 })
 </script>
 
@@ -575,6 +709,49 @@ onMounted(() => {
   margin-top: 8px;
   color: var(--cc-warning);
   font-size: 12px;
+}
+
+.template-preview {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.template-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+
+  strong {
+    display: block;
+    color: #f8fafc;
+  }
+
+  span {
+    display: block;
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+
+  span {
+    padding: 5px 8px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.42);
+    color: #cbd5e1;
+    font-size: 12px;
+  }
 }
 
 .create-alert {

@@ -13,6 +13,22 @@ export type InterviewStatus =
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 
+export interface IndustryTemplateVO {
+  industryTemplateId: number
+  industryCode?: string
+  industryName: string
+  description?: string
+  targetPositions?: string
+  coreBusinessScenarios?: string
+  keyTechnicalPoints?: string
+  commonQuestionDirections?: string
+  riskPoints?: string
+  enabled?: number
+  sortOrder?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface InterviewCreateDTO {
   resumeId?: number
   basedOnResume?: boolean
@@ -20,6 +36,7 @@ export interface InterviewCreateDTO {
   interviewMode?: string
   targetPosition?: string
   experienceLevel?: string
+  industryTemplateId?: number
   industryDirection?: string
   difficulty?: string
   interviewerStyle?: string
@@ -40,6 +57,11 @@ export interface InterviewStageVO {
 
 export interface InterviewSessionVO {
   interviewId: number
+  interviewName?: string
+  interviewMode?: string
+  industryTemplateId?: number
+  industryDirection?: string
+  industryContext?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   stageList?: InterviewStageVO[]
@@ -152,6 +174,8 @@ export interface InterviewListVO {
   interviewMode: string
   resumeName?: string
   targetPosition?: string
+  industryTemplateId?: number
+  industryDirection?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   totalScore?: number
@@ -197,7 +221,9 @@ export interface InterviewDetailVO {
   interviewMode: string
   targetPosition?: string
   experienceLevel?: string
+  industryTemplateId?: number
   industryDirection?: string
+  industryContext?: string
   difficulty?: string
   interviewerStyle?: string
   status: InterviewStatus

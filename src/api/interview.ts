@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
   FinishInterviewVO,
+  IndustryTemplateVO,
   InterviewAnswerDTO,
   InterviewAnswerResultVO,
   InterviewCreateDTO,
@@ -225,6 +226,7 @@ const toCreatePayload = (data: InterviewCreateDTO) => ({
   maxQuestionCount: data.questionCount,
   targetPosition: data.targetPosition,
   experienceLevel: data.experienceLevel,
+  industryTemplateId: data.industryTemplateId,
   industryDirection: data.industryDirection,
   difficulty: data.difficulty,
   interviewerStyle: data.interviewerStyle,
@@ -235,6 +237,14 @@ export const createInterviewApi = (data: InterviewCreateDTO) => {
   return request
     .post<InterviewSessionVO, InterviewSessionVO>('/interviews', toCreatePayload(data))
     .then(normalizeSession)
+}
+
+export const getIndustryTemplatesApi = () => {
+  return request.get<IndustryTemplateVO[], IndustryTemplateVO[]>('/industry-templates')
+}
+
+export const getIndustryTemplateDetailApi = (id: number) => {
+  return request.get<IndustryTemplateVO, IndustryTemplateVO>(`/industry-templates/${id}`)
 }
 
 export const startInterviewApi = (id: number) => {
