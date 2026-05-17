@@ -5,6 +5,8 @@ import type {
   FinishInterviewVO,
   IndustryTemplateVO,
   InterviewAnswerDTO,
+  InterviewAnswerReviewSseEvent,
+  InterviewAnswerReviewSseEventType,
   InterviewAnswerResultVO,
   InterviewCreateDTO,
   InterviewCurrentVO,
@@ -258,9 +260,35 @@ const toInterviewReportSseQuery = (params: InterviewReportSseParams) => ({
   forceRegenerate: params.forceRegenerate ? 'true' : 'false'
 })
 
+const toAnswerPayload = (data: InterviewAnswerDTO) => ({
+  messageId: data.messageId,
+  answerContent: data.answerContent,
+  answerDurationSeconds: data.answerDurationSeconds,
+  clientSubmitTime: data.clientSubmitTime
+})
+
 const parseInterviewReportSseBlock = (
   block: string
 ): { event: InterviewReportSseEventType | string; data?: InterviewReportSseEvent } | null => {
+  const lines = block.split(/\r?\n/)
+  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
+  const dataText = lines
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .join('\n')
+
+  if (!dataText) return { event }
+
+  try {
+    return { event, data: JSON.parse(dataText) }
+  } catch {
+    return { event, data: { message: dataText } }
+  }
+}
+
+const parseInterviewAnswerReviewSseBlock = (
+  block: string
+): { event: InterviewAnswerReviewSseEventType | string; data?: InterviewAnswerReviewSseEvent } | null => {
   const lines = block.split(/\r?\n/)
   const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
   const dataText = lines
@@ -364,6 +392,98 @@ export const streamInterviewReportApi = (
   }
 }
 
+export const streamInterviewAnswerReviewApi = (
+  interviewId: number,
+  data: InterviewAnswerDTO,
+  handlers: {
+    onEvent?: (event: InterviewAnswerReviewSseEventType | string, data?: InterviewAnswerReviewSseEvent) => void
+    onError?: (error: Error, hasStarted: boolean) => void
+    onDone?: () => void
+  },
+  signal?: AbortSignal
+) => {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+
+  if (signal) {
+    if (signal.aborted) abort()
+    signal.addEventListener('abort', abort, { once: true })
+  }
+
+  let hasStarted = false
+  const finished = (async () => {
+    try {
+      if (!window.fetch || !window.ReadableStream) {
+        throw new Error('Current browser does not support fetch SSE streaming')
+      }
+
+      const token = getToken()
+      const response = await fetch(
+        buildSseUrl('/ai/sse/interview-answer-review', { interviewId: String(interviewId) }),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(toAnswerPayload(data)),
+          signal: controller.signal
+        }
+      )
+
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE request failed: ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const blocks = buffer.split(/\r?\n\r?\n/)
+        buffer = blocks.pop() || ''
+        for (const block of blocks) {
+          const parsed = parseInterviewAnswerReviewSseBlock(block.trim())
+          if (!parsed) continue
+          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
+          if (eventName === 'start' || eventName === 'progress' || eventName === 'result') {
+            hasStarted = true
+          }
+          handlers.onEvent?.(eventName, parsed.data)
+          if (eventName === 'error') {
+            throw new Error(parsed.data?.message || 'SSE stream error')
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const parsed = parseInterviewAnswerReviewSseBlock(buffer.trim())
+        if (parsed) {
+          const eventName = parsed.event === 'message' && parsed.data?.type ? parsed.data.type : parsed.event
+          handlers.onEvent?.(eventName, parsed.data)
+        }
+      }
+
+      handlers.onDone?.()
+    } catch (error) {
+      if (controller.signal.aborted) return
+      handlers.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)
+      throw error
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
+  })()
+
+  return {
+    abort,
+    cancel: abort,
+    finished
+  }
+}
+
 export const createInterviewApi = (data: InterviewCreateDTO) => {
   return request
     .post<InterviewSessionVO, InterviewSessionVO>('/interviews', toCreatePayload(data))
@@ -391,7 +511,7 @@ export const getCurrentInterviewQuestionApi = (id: number) => {
 export const submitInterviewAnswerApi = (id: number, data: InterviewAnswerDTO) => {
   return request.post<InterviewAnswerResultVO, InterviewAnswerResultVO>(
     `/interviews/${id}/answer`,
-    { answerContent: data.answerContent }
+    toAnswerPayload(data)
   ).then((result) => normalizeAnswerResult(result, id))
 }
 

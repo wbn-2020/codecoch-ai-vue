@@ -13,6 +13,17 @@ export type InterviewStatus =
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewAnswerReviewSseStage =
+  | 'VALIDATE_REQUEST'
+  | 'LOAD_INTERVIEW'
+  | 'SAVE_ANSWER'
+  | 'BUILD_PROMPT'
+  | 'CALL_AI_REVIEW'
+  | 'SAVE_REVIEW'
+  | 'GENERATE_FOLLOW_UP'
+  | 'SAVE_FOLLOW_UP'
+  | string
 export type InterviewReportSseStage =
   | 'LOAD_INTERVIEW'
   | 'LOAD_ANSWERS'
@@ -169,6 +180,32 @@ export interface RetryReportVO {
   reportStatus: ReportStatus
   reportId?: number
   message?: string
+}
+
+export interface InterviewAnswerReviewSseParams {
+  interviewId: number
+}
+
+export interface InterviewAnswerReviewSseEvent {
+  requestId?: string
+  type?: InterviewAnswerReviewSseEventType | string
+  message?: string
+  interviewId?: number
+  questionId?: number
+  answerId?: number
+  messageId?: number
+  aiCallLogId?: number
+  followUpAiCallLogId?: number
+  score?: number
+  feedback?: string
+  followUpQuestion?: string
+  followUpReason?: string
+  nextAction?: NextAction
+  nextQuestion?: InterviewQuestionVO
+  stage?: InterviewAnswerReviewSseStage
+  code?: string
+  result?: InterviewAnswerResultVO | Record<string, unknown>
+  metadata?: Record<string, unknown>
 }
 
 export interface InterviewReportSseParams {

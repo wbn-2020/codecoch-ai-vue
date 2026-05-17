@@ -158,8 +158,16 @@
               type="info"
               show-icon
               :closable="false"
-              title="AI 正在评分并生成下一步问题，预计需要 5-20 秒。"
+              title="阶段式 AI 点评进度"
+              :description="answerReviewMessage || 'AI 正在评分并生成下一步问题，预计需要 5-20 秒。'"
             />
+            <div v-if="submitting && answerReviewEvents.length" class="review-stage-list">
+              <article v-for="item in answerReviewEvents" :key="item.key" class="review-stage-item">
+                <span>{{ item.event }}</span>
+                <strong>{{ item.stageLabel || item.message || '-' }}</strong>
+                <p>{{ item.message || item.stageLabel || '-' }}</p>
+              </article>
+            </div>
           </div>
         </template>
 
@@ -231,7 +239,8 @@
     <footer class="room-statusbar">
       <span>会话：{{ interviewId || '-' }}</span>
       <span>状态：{{ current?.status || '-' }}</span>
-      <span>接口：{{ submitting ? 'answer 处理中' : loading ? 'current 加载中' : '等待操作' }}</span>
+      <span>接口：{{ submitting ? 'answer SSE 处理中' : loading ? 'current 加载中' : '等待操作' }}</span>
+      <span v-if="answerReviewMetaText">点评：{{ answerReviewMetaText }}</span>
       <span>报告：真实 finish 后跳转报告页轮询</span>
     </footer>
   </div>
@@ -247,12 +256,18 @@ import {
   finishInterviewApi,
   getCurrentInterviewQuestionApi,
   startInterviewApi,
+  streamInterviewAnswerReviewApi,
   submitInterviewAnswerApi
 } from '@/api/interview'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
-import type { InterviewAnswerResultVO, InterviewCurrentVO } from '@/types/interview'
+import type {
+  InterviewAnswerDTO,
+  InterviewAnswerResultVO,
+  InterviewAnswerReviewSseEvent,
+  InterviewCurrentVO
+} from '@/types/interview'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -268,7 +283,24 @@ const answerContent = ref('')
 const lastSubmittedAnswer = ref('')
 const lastAnswerDuration = ref(0)
 const answerStartTime = ref(Date.now())
+const answerReviewMessage = ref('')
+const answerReviewAnswerId = ref<number | undefined>()
+const answerReviewAiCallLogId = ref<number | undefined>()
+const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
+const answerReviewEvents = ref<Array<{ key: string; event: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
+let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
+
+const answerReviewStageLabels: Record<string, string> = {
+  VALIDATE_REQUEST: '校验回答',
+  LOAD_INTERVIEW: '加载面试上下文',
+  SAVE_ANSWER: '保存回答',
+  BUILD_PROMPT: '构建点评提示词',
+  CALL_AI_REVIEW: '调用 AI 点评',
+  SAVE_REVIEW: '保存点评结果',
+  GENERATE_FOLLOW_UP: '生成追问',
+  SAVE_FOLLOW_UP: '保存追问'
+}
 
 const nextActionText = computed(() => {
   switch (lastResult.value?.nextAction) {
@@ -325,6 +357,14 @@ const latestScoreText = computed(() => {
 
 const answerDurationText = computed(() => {
   return lastAnswerDuration.value ? `耗时 ${lastAnswerDuration.value}s` : '最近一次提交'
+})
+
+const answerReviewMetaText = computed(() => {
+  const items = []
+  if (answerReviewAnswerId.value) items.push(`answerId: ${answerReviewAnswerId.value}`)
+  if (answerReviewAiCallLogId.value) items.push(`aiCallLogId: ${answerReviewAiCallLogId.value}`)
+  if (answerReviewFollowUpAiCallLogId.value) items.push(`followUpAiCallLogId: ${answerReviewFollowUpAiCallLogId.value}`)
+  return items.join(' / ')
 })
 
 const fetchCurrent = async () => {
@@ -387,26 +427,147 @@ const startSlowSubmitHint = () => {
   }, 20000)
 }
 
+const stopAnswerReviewSse = () => {
+  answerReviewSseHandle?.abort()
+  answerReviewSseHandle = null
+}
+
+const resetAnswerReviewState = () => {
+  answerReviewMessage.value = ''
+  answerReviewAnswerId.value = undefined
+  answerReviewAiCallLogId.value = undefined
+  answerReviewFollowUpAiCallLogId.value = undefined
+  answerReviewEvents.value = []
+}
+
+const normalizeAnswerReviewResult = (
+  data: InterviewAnswerReviewSseEvent | undefined,
+  payload: InterviewAnswerDTO
+): InterviewAnswerResultVO | null => {
+  const raw = data?.result && typeof data.result === 'object'
+    ? (data.result as Partial<InterviewAnswerResultVO>)
+    : {}
+  if (!data && !Object.keys(raw).length) return null
+  const score = data?.score ?? raw.score ?? raw.evaluation?.score ?? 0
+  const feedback = data?.feedback || raw.comment || raw.evaluation?.comment || ''
+
+  return {
+    ...raw,
+    interviewId: raw.interviewId || data?.interviewId || interviewId || 0,
+    answerMessageId: raw.answerMessageId || data?.answerId || data?.messageId || payload.messageId,
+    score,
+    comment: raw.comment || feedback,
+    evaluation: {
+      ...(raw.evaluation || {}),
+      score,
+      comment: raw.evaluation?.comment || feedback,
+      followUpReason: data?.followUpReason || raw.evaluation?.followUpReason,
+      knowledgePoints: raw.evaluation?.knowledgePoints
+    },
+    nextAction: data?.nextAction || raw.nextAction || 'NEXT_QUESTION',
+    nextQuestion: data?.nextQuestion || raw.nextQuestion,
+    followUpQuestion: data?.followUpQuestion || raw.followUpQuestion || '',
+    followUpReason: data?.followUpReason || raw.followUpReason || '',
+    followUpValid: raw.followUpValid,
+    knowledgePoints: raw.knowledgePoints,
+    currentStage: raw.currentStage,
+    interviewStatus: raw.interviewStatus || 'IN_PROGRESS',
+    reportStatus: raw.reportStatus,
+    progress: raw.progress
+  }
+}
+
+const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEvent) => {
+  const stage = data?.stage ? String(data.stage) : ''
+  const stageLabel = stage ? answerReviewStageLabels[stage] || stage : ''
+  const message = data?.message || ''
+  if (data?.answerId) answerReviewAnswerId.value = data.answerId
+  if (data?.aiCallLogId) answerReviewAiCallLogId.value = data.aiCallLogId
+  if (data?.followUpAiCallLogId) answerReviewFollowUpAiCallLogId.value = data.followUpAiCallLogId
+  answerReviewMessage.value = message || stageLabel || answerReviewMessage.value
+  answerReviewEvents.value.push({
+    key: `${Date.now()}-${answerReviewEvents.value.length}`,
+    event,
+    stage,
+    stageLabel,
+    message
+  })
+}
+
+const submitAnswerFallback = async (id: number, payload: InterviewAnswerDTO) => {
+  const result = await submitInterviewAnswerApi(id, payload)
+  await applyAnswerResult(result)
+}
+
 const handleSubmit = async () => {
-  if (!interviewId || !current.value?.currentQuestion) return
+  if (!interviewId || !current.value?.currentQuestion || submitting.value) return
   if (!answerContent.value.trim()) {
     ElMessage.warning('请先填写回答')
     return
   }
 
+  const id = interviewId
+  const payload: InterviewAnswerDTO = {
+    messageId: current.value.currentQuestion.messageId,
+    answerContent: answerContent.value,
+    answerDurationSeconds: Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000)),
+    clientSubmitTime: new Date().toISOString()
+  }
+
   submitting.value = true
+  lastAnswerDuration.value = payload.answerDurationSeconds || 0
   startSlowSubmitHint()
-  lastAnswerDuration.value = Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000))
+  stopAnswerReviewSse()
+  resetAnswerReviewState()
+
+  let latestResult: InterviewAnswerResultVO | null = null
+  let completedByDone = false
+  answerReviewSseHandle = streamInterviewAnswerReviewApi(
+    id,
+    payload,
+    {
+      onEvent: async (event, data) => {
+        applyAnswerReviewEvent(event, data)
+        if (event === 'result') {
+          latestResult = normalizeAnswerReviewResult(data, payload)
+          if (latestResult) {
+            lastResult.value = latestResult
+          }
+        }
+        if (event === 'done') {
+          completedByDone = true
+          if (!latestResult) {
+            latestResult = normalizeAnswerReviewResult(data, payload)
+          }
+          if (latestResult) {
+            await applyAnswerResult(latestResult)
+          } else {
+            await fetchCurrent()
+          }
+          ElMessage.success('AI 点评完成')
+        }
+      },
+      onError: async (error, hasStarted) => {
+        if (!hasStarted) {
+          ElMessage.warning('SSE 启动失败，已回退到同步答题接口')
+          await submitAnswerFallback(id, payload)
+          return
+        }
+        ElMessage.error(error.message || 'AI 点评 SSE 失败，请刷新当前题状态')
+      },
+      onDone: async () => {
+        if (!completedByDone && latestResult) {
+          await applyAnswerResult(latestResult)
+        }
+      }
+    }
+  )
+
   try {
-    const result = await submitInterviewAnswerApi(interviewId, {
-      messageId: current.value.currentQuestion.messageId,
-      answerContent: answerContent.value,
-      answerDurationSeconds: lastAnswerDuration.value,
-      clientSubmitTime: new Date().toISOString()
-    })
-    await applyAnswerResult(result)
+    await answerReviewSseHandle.finished.catch(() => undefined)
   } finally {
     window.clearTimeout(slowSubmitTimer)
+    answerReviewSseHandle = null
     submitting.value = false
   }
 }
@@ -429,7 +590,10 @@ const handleManualFinish = async () => {
 }
 
 onMounted(fetchCurrent)
-onBeforeUnmount(() => window.clearTimeout(slowSubmitTimer))
+onBeforeUnmount(() => {
+  window.clearTimeout(slowSubmitTimer)
+  stopAnswerReviewSse()
+})
 </script>
 
 <style scoped lang="scss">
@@ -721,6 +885,39 @@ onBeforeUnmount(() => window.clearTimeout(slowSubmitTimer))
 .answer-actions {
   justify-content: flex-end;
   margin-top: 14px;
+}
+
+.review-stage-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.review-stage-item {
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.34);
+
+  span {
+    color: var(--cc-ai-cyan);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--app-text);
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
 }
 
 .score-card {
