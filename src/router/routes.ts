@@ -261,6 +261,15 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'files',
+        name: 'AdminFiles',
+        component: () => import('@/views/admin/AdminFileManageView.vue'),
+        meta: {
+          title: '\u6587\u4ef6\u6cbb\u7406',
+          icon: 'Folder'
+        }
+      },
+      {
         path: 'ai/prompts',
         name: 'AdminAiPrompts',
         component: () => import('@/views/admin/PromptTemplateView.vue'),

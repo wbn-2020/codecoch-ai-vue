@@ -16,6 +16,7 @@ import {
   DataAnalysis,
   DataBoard,
   Files,
+  Folder,
   List,
   Operation,
   PriceTag,
@@ -32,6 +33,7 @@ defineProps<{
 const route = useRoute()
 
 const menuItems = [
+  { label: '\u6587\u4ef6\u6cbb\u7406', path: '/admin/files', icon: Folder },
   { label: '管理首页', path: '/admin', icon: DataBoard },
   { label: '用户管理', path: '/admin/users', icon: UserFilled },
   { label: '角色管理', path: '/admin/roles', icon: Connection },
