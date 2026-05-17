@@ -3,12 +3,26 @@ import type { PageResult } from '@/types/api'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
+  AiQuestionGenerateRequestDTO,
+  AiQuestionGenerateResultVO,
   FavoriteQuestionVO,
   QuestionAnswerDTO,
   QuestionAnswerResultVO,
   QuestionCreateDTO,
   QuestionDetailVO,
+  QuestionDuplicateCheckDTO,
+  QuestionDuplicateCheckResultVO,
+  QuestionDuplicateIgnoreDTO,
+  QuestionDuplicateMergeDTO,
+  QuestionDuplicateReviewDetailVO,
+  QuestionDuplicateReviewListVO,
+  QuestionDuplicateReviewQueryDTO,
   QuestionQueryDTO,
+  QuestionReviewApproveDTO,
+  QuestionReviewDetailVO,
+  QuestionReviewListVO,
+  QuestionReviewQueryDTO,
+  QuestionReviewRejectDTO,
   QuestionTagVO,
   QuestionVO,
   UpdateMasteryDTO,
@@ -270,4 +284,70 @@ export const updateAdminQuestionStatusApi = (id: number, status: number) => {
 
 export const deleteAdminQuestionApi = (id: number) => {
   return request.delete<null, null>(`/admin/questions/${id}`)
+}
+
+export const generateAiQuestionsApi = (data: AiQuestionGenerateRequestDTO) => {
+  return request.post<AiQuestionGenerateResultVO, AiQuestionGenerateResultVO>(
+    '/admin/ai/questions/generate',
+    data
+  )
+}
+
+export const getQuestionReviewsApi = (params: QuestionReviewQueryDTO) => {
+  return request.get<PageResult<QuestionReviewListVO>, PageResult<QuestionReviewListVO>>(
+    '/admin/question-reviews',
+    { params }
+  )
+}
+
+export const getQuestionReviewDetailApi = (id: number) => {
+  return request.get<QuestionReviewDetailVO, QuestionReviewDetailVO>(`/admin/question-reviews/${id}`)
+}
+
+export const approveQuestionReviewApi = (id: number, data?: QuestionReviewApproveDTO) => {
+  return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
+    `/admin/question-reviews/${id}/approve`,
+    data
+  )
+}
+
+export const rejectQuestionReviewApi = (id: number, data: QuestionReviewRejectDTO) => {
+  return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
+    `/admin/question-reviews/${id}/reject`,
+    data
+  )
+}
+
+export const checkQuestionDuplicateApi = (data: QuestionDuplicateCheckDTO) => {
+  return request.post<QuestionDuplicateCheckResultVO, QuestionDuplicateCheckResultVO>(
+    '/admin/questions/check-duplicate',
+    data
+  )
+}
+
+export const getQuestionDuplicateReviewsApi = (params: QuestionDuplicateReviewQueryDTO) => {
+  return request.get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
+    '/admin/question-duplicate-reviews',
+    { params }
+  )
+}
+
+export const getQuestionDuplicateReviewDetailApi = (id: number) => {
+  return request.get<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}`
+  )
+}
+
+export const mergeQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateMergeDTO) => {
+  return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}/merge`,
+    data
+  )
+}
+
+export const ignoreQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateIgnoreDTO) => {
+  return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
+    `/admin/question-duplicate-reviews/${id}/ignore`,
+    data
+  )
 }

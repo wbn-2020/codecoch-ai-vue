@@ -36,8 +36,8 @@
       </article>
       <article class="admin-insight-card">
         <span>AI 生成审核</span>
-        <strong>待接入</strong>
-        <small>不展示假审核状态</small>
+        <strong>{{ reviewTotal }}</strong>
+        <small>来自审核池真实接口</small>
       </article>
     </div>
 
@@ -147,6 +147,135 @@
       </div>
     </section>
 
+    <section class="admin-panel governance-panel">
+      <div class="admin-panel__header">
+        <div>
+          <h2>AI 题目审核 / 去重</h2>
+          <p>接入后端真实审核池与重复题审核接口，不展示 Mock 结果。</p>
+        </div>
+        <el-button :loading="generating" @click="handleGenerateReviews">触发 AI 生成</el-button>
+      </div>
+
+      <el-tabs v-model="governanceTab" class="governance-tabs">
+        <el-tab-pane label="审核池" name="reviews">
+          <div class="admin-filter-bar governance-filter">
+            <el-form :model="reviewQuery" inline>
+              <el-form-item label="关键词">
+                <el-input v-model.trim="reviewQuery.keyword" clearable placeholder="标题 / 题干 / 知识点" />
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="reviewQuery.reviewStatus" clearable placeholder="全部" style="width: 130px">
+                  <el-option label="待审核" value="PENDING" />
+                  <el-option label="已通过" value="APPROVED" />
+                  <el-option label="已驳回" value="REJECTED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="fetchReviews">查询</el-button>
+                <el-button @click="resetReviewQuery">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          <div class="table-card admin-table-card">
+            <el-table v-loading="reviewLoading" :data="reviews" row-key="id">
+              <el-table-column prop="questionTitle" label="题目" min-width="240" show-overflow-tooltip />
+              <el-table-column prop="knowledgePoint" label="知识点" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="difficulty" label="难度" width="110" />
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="getReviewStatusType(row.reviewStatus)" effect="plain">
+                    {{ getReviewStatusLabel(row.reviewStatus) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="createdAt" label="生成时间" min-width="170" />
+              <el-table-column label="操作" width="190" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleApproveReview(row.id)">
+                    通过
+                  </el-button>
+                  <el-button link type="danger" :disabled="row.reviewStatus !== 'PENDING'" @click="handleRejectReview(row.id)">
+                    驳回
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="reviewQuery.pageNo"
+              v-model:page-size="reviewQuery.pageSize"
+              background
+              layout="total, sizes, prev, pager, next"
+              :total="reviewTotal"
+              :page-sizes="[10, 20, 50]"
+              @change="fetchReviews"
+            />
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="重复题审核" name="duplicates">
+          <div class="admin-filter-bar governance-filter">
+            <el-form :model="duplicateQuery" inline>
+              <el-form-item label="关键词">
+                <el-input v-model.trim="duplicateQuery.keyword" clearable placeholder="源题 / 目标题" />
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="duplicateQuery.reviewStatus" clearable placeholder="全部" style="width: 130px">
+                  <el-option label="待处理" value="PENDING" />
+                  <el-option label="已合并" value="CONFIRMED" />
+                  <el-option label="已忽略" value="IGNORED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="fetchDuplicates">查询</el-button>
+                <el-button @click="resetDuplicateQuery">重置</el-button>
+                <el-button :loading="duplicateChecking" @click="handleCheckDuplicates">检测当前页</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          <div class="table-card admin-table-card">
+            <el-table v-loading="duplicateLoading" :data="duplicates" row-key="id">
+              <el-table-column prop="sourceTitle" label="源题" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="targetTitle" label="疑似重复题" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="matchType" label="匹配类型" min-width="150" />
+              <el-table-column label="相似度" width="100">
+                <template #default="{ row }">{{ formatSimilarity(row.similarityScore) }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="getDuplicateStatusType(row.reviewStatus)" effect="plain">
+                    {{ getDuplicateStatusLabel(row.reviewStatus) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="190" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleMergeDuplicate(row.id)">
+                    合并
+                  </el-button>
+                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleIgnoreDuplicate(row.id)">
+                    忽略
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="duplicateQuery.pageNo"
+              v-model:page-size="duplicateQuery.pageSize"
+              background
+              layout="total, sizes, prev, pager, next"
+              :total="duplicateTotal"
+              :page-sizes="[10, 20, 50]"
+              @change="fetchDuplicates"
+            />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
+
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑题目' : '新增题目'" width="760px">
       <el-alert
         v-if="editingId"
@@ -221,9 +350,17 @@ import { BookOpenCheck, Plus } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
+  approveQuestionReviewApi,
+  checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
+  generateAiQuestionsApi,
   getAdminQuestionsApi,
+  getQuestionDuplicateReviewsApi,
+  getQuestionReviewsApi,
+  ignoreQuestionDuplicateReviewApi,
+  mergeQuestionDuplicateReviewApi,
+  rejectQuestionReviewApi,
   updateAdminQuestionApi,
   updateAdminQuestionStatusApi
 } from '@/api/question'
@@ -241,10 +378,14 @@ import {
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
+  QuestionDuplicateReviewListVO,
+  QuestionDuplicateReviewQueryDTO,
   QuestionCategoryVO,
   QuestionCreateDTO,
   QuestionDifficulty,
   QuestionGroupVO,
+  QuestionReviewListVO,
+  QuestionReviewQueryDTO,
   QuestionTagVO
 } from '@/types/question'
 
@@ -258,6 +399,15 @@ const categories = ref<QuestionCategoryVO[]>([])
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
+const governanceTab = ref('reviews')
+const reviewLoading = ref(false)
+const duplicateLoading = ref(false)
+const generating = ref(false)
+const duplicateChecking = ref(false)
+const reviews = ref<QuestionReviewListVO[]>([])
+const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
+const reviewTotal = ref(0)
+const duplicateTotal = ref(0)
 
 const query = reactive<AdminQuestionQueryDTO>({
   keyword: '',
@@ -282,6 +432,20 @@ const form = reactive<QuestionCreateDTO>({
   isHighFrequency: 0,
   tagIds: [],
   status: 1
+})
+
+const reviewQuery = reactive<QuestionReviewQueryDTO>({
+  keyword: '',
+  reviewStatus: 'PENDING',
+  pageNo: 1,
+  pageSize: 10
+})
+
+const duplicateQuery = reactive<QuestionDuplicateReviewQueryDTO>({
+  keyword: '',
+  reviewStatus: 'PENDING',
+  pageNo: 1,
+  pageSize: 10
 })
 
 const rules: FormRules<QuestionCreateDTO> = {
@@ -326,6 +490,37 @@ const getDisplayTags = (row: AdminQuestionVO) => {
     .filter((name) => Boolean(name))
 }
 
+const getReviewStatusLabel = (status?: string) => {
+  if (status === 'PENDING') return '待审核'
+  if (status === 'APPROVED') return '已通过'
+  if (status === 'REJECTED') return '已驳回'
+  return status || '-'
+}
+
+const getReviewStatusType = (status?: string) => {
+  if (status === 'APPROVED') return 'success'
+  if (status === 'REJECTED') return 'danger'
+  return 'warning'
+}
+
+const getDuplicateStatusLabel = (status?: string) => {
+  if (status === 'PENDING') return '待处理'
+  if (status === 'CONFIRMED') return '已合并'
+  if (status === 'IGNORED') return '已忽略'
+  return status || '-'
+}
+
+const getDuplicateStatusType = (status?: string) => {
+  if (status === 'CONFIRMED') return 'success'
+  if (status === 'IGNORED') return 'info'
+  return 'warning'
+}
+
+const formatSimilarity = (value?: number) => {
+  if (value === undefined || value === null) return '-'
+  return `${Math.round(Number(value) * 100)}%`
+}
+
 const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {
   if (!row?.tags?.length) return []
 
@@ -358,6 +553,28 @@ const fetchQuestions = async () => {
     total.value = result.total || 0
   } finally {
     loading.value = false
+  }
+}
+
+const fetchReviews = async () => {
+  reviewLoading.value = true
+  try {
+    const result = await getQuestionReviewsApi(reviewQuery)
+    reviews.value = result.records || []
+    reviewTotal.value = result.total || 0
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+const fetchDuplicates = async () => {
+  duplicateLoading.value = true
+  try {
+    const result = await getQuestionDuplicateReviewsApi(duplicateQuery)
+    duplicates.value = result.records || []
+    duplicateTotal.value = result.total || 0
+  } finally {
+    duplicateLoading.value = false
   }
 }
 
@@ -430,9 +647,111 @@ const handleReset = () => {
   fetchQuestions()
 }
 
+const resetReviewQuery = () => {
+  Object.assign(reviewQuery, {
+    keyword: '',
+    reviewStatus: 'PENDING',
+    pageNo: 1,
+    pageSize: 10
+  })
+  fetchReviews()
+}
+
+const resetDuplicateQuery = () => {
+  Object.assign(duplicateQuery, {
+    keyword: '',
+    reviewStatus: 'PENDING',
+    pageNo: 1,
+    pageSize: 10
+  })
+  fetchDuplicates()
+}
+
+const handleGenerateReviews = async () => {
+  const { value } = await ElMessageBox.prompt('请输入生成主题或知识点', '触发 AI 生成题目', {
+    inputPlaceholder: '例如：JVM 垃圾回收',
+    inputValidator: (value) => Boolean(value?.trim()) || '请输入知识点'
+  })
+  generating.value = true
+  try {
+    const result = await generateAiQuestionsApi({
+      knowledgePoint: value.trim(),
+      difficulty: QUESTION_DIFFICULTY.MEDIUM,
+      questionType: QUESTION_TYPE.SHORT_ANSWER,
+      count: 5,
+      generateReferenceAnswer: true,
+      generateFollowUps: true,
+      generateTagSuggestions: true,
+      generateCategorySuggestion: true
+    })
+    ElMessage.success(`已生成 ${result.generatedCount || result.reviewIds?.length || 0} 条待审核题目`)
+    await fetchReviews()
+  } finally {
+    generating.value = false
+  }
+}
+
+const handleApproveReview = async (id: number) => {
+  await ElMessageBox.confirm('确认通过该 AI 题目并写入正式题库？', '审核通过', { type: 'warning' })
+  await approveQuestionReviewApi(id)
+  ElMessage.success('题目已通过审核')
+  await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+}
+
+const handleRejectReview = async (id: number) => {
+  const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回题目', {
+    inputType: 'textarea',
+    inputValidator: (value) => Boolean(value?.trim()) || '请输入驳回原因'
+  })
+  await rejectQuestionReviewApi(id, { rejectReason: value.trim() })
+  ElMessage.success('题目已驳回')
+  await fetchReviews()
+}
+
+const handleCheckDuplicates = async () => {
+  const questionIds = questions.value.map((item) => item.id).filter(Boolean)
+  if (!questionIds.length) {
+    ElMessage.warning('当前页没有可检测题目')
+    return
+  }
+  duplicateChecking.value = true
+  try {
+    const result = await checkQuestionDuplicateApi({ questionIds })
+    ElMessage.success(`已检测 ${result.checkedCount || questionIds.length} 道题，新增 ${result.createdCount || 0} 条候选`)
+    await fetchDuplicates()
+  } finally {
+    duplicateChecking.value = false
+  }
+}
+
+const handleMergeDuplicate = async (id: number) => {
+  const { value } = await ElMessageBox.prompt('请输入合并原因', '合并重复题', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：语义重复，保留主问题并建立重复关系'
+  })
+  await mergeQuestionDuplicateReviewApi(id, {
+    relationType: 'DUPLICATE',
+    reason: value?.trim() || '确认重复'
+  })
+  ElMessage.success('重复题已合并')
+  await fetchDuplicates()
+}
+
+const handleIgnoreDuplicate = async (id: number) => {
+  const { value } = await ElMessageBox.prompt('请输入忽略原因', '忽略重复候选', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：考察角度不同'
+  })
+  await ignoreQuestionDuplicateReviewApi(id, {
+    ignoredReason: value?.trim() || '确认不是重复题'
+  })
+  ElMessage.success('重复候选已忽略')
+  await fetchDuplicates()
+}
+
 onMounted(async () => {
   await fetchOptions()
-  await fetchQuestions()
+  await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates()])
 })
 </script>
 
@@ -463,5 +782,17 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.governance-panel {
+  margin-top: 18px;
+}
+
+.governance-tabs {
+  padding: 0 20px 20px;
+}
+
+.governance-filter {
+  padding: 0 0 16px;
 }
 </style>

@@ -208,6 +208,171 @@ export interface QuestionCreateDTO {
 
 export type QuestionUpdateDTO = QuestionCreateDTO
 
+export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | string
+export type QuestionDuplicateReviewStatus = 'PENDING' | 'CONFIRMED' | 'IGNORED' | string
+export type QuestionDuplicateMatchType =
+  | 'TITLE_EXACT'
+  | 'TITLE_NORMALIZED_EQUAL'
+  | 'TITLE_SIMILAR'
+  | 'CONTENT_SIMILAR'
+  | 'MANUAL'
+  | string
+
+export interface AiQuestionGenerateRequestDTO {
+  technologyStack?: string
+  knowledgePoint?: string
+  questionType?: QuestionType | ''
+  difficulty?: QuestionDifficulty | ''
+  experienceYears?: number
+  count?: number
+  generateReferenceAnswer?: boolean
+  generateFollowUps?: boolean
+  generateTagSuggestions?: boolean
+  generateCategorySuggestion?: boolean
+  extraRequirements?: string
+}
+
+export interface AiQuestionGenerateResultVO {
+  batchId?: string
+  generatedCount?: number
+  reviewIds?: number[]
+  aiCallLogId?: number
+}
+
+export interface QuestionReviewQueryDTO extends PageQuery {
+  reviewStatus?: QuestionReviewStatus | ''
+  technologyStack?: string
+  knowledgePoint?: string
+  questionType?: QuestionType | ''
+  difficulty?: QuestionDifficulty | ''
+  keyword?: string
+  batchId?: string
+}
+
+export interface QuestionReviewListVO {
+  id: number
+  batchId?: string
+  reviewStatus: QuestionReviewStatus
+  aiCallLogId?: number
+  technologyStack?: string
+  knowledgePoint?: string
+  questionType?: QuestionType
+  difficulty?: QuestionDifficulty
+  experienceYears?: number
+  questionTitle?: string
+  categoryId?: number
+  groupId?: number
+  approvedQuestionId?: number
+  reviewerId?: number
+  reviewedAt?: string
+  createdAt?: string
+}
+
+export interface QuestionReviewDetailVO extends QuestionReviewListVO {
+  createdBy?: number
+  rawAiResultJson?: string
+  questionContent?: string
+  referenceAnswer?: string
+  analysis?: string
+  followUpQuestionsJson?: string
+  tagSuggestionsJson?: string
+  categorySuggestion?: string
+  groupSuggestion?: string
+  tagIdsJson?: string
+  editedContentJson?: string
+  rejectReason?: string
+  updatedAt?: string
+}
+
+export interface QuestionReviewApproveDTO {
+  title?: string
+  content?: string
+  referenceAnswer?: string
+  analysis?: string
+  difficulty?: QuestionDifficulty
+  questionType?: QuestionType
+  categoryId?: number
+  groupId?: number
+  tagIds?: number[]
+  status?: number
+  isHighFrequency?: number
+  experienceLevel?: string
+  editedReason?: string
+}
+
+export interface QuestionReviewRejectDTO {
+  rejectReason: string
+}
+
+export interface QuestionDuplicateReviewQueryDTO extends PageQuery {
+  questionId?: number
+  reviewStatus?: QuestionDuplicateReviewStatus | ''
+  matchType?: QuestionDuplicateMatchType | ''
+  keyword?: string
+}
+
+export interface QuestionDuplicateCheckDTO {
+  questionId?: number
+  questionIds?: number[]
+}
+
+export interface QuestionDuplicateCheckResultVO {
+  checkedCount?: number
+  createdCount?: number
+  reviewIds?: number[]
+}
+
+export interface QuestionDuplicateReviewListVO {
+  id: number
+  sourceQuestionId?: number
+  sourceTitle?: string
+  targetQuestionId?: number
+  targetTitle?: string
+  reviewStatus: QuestionDuplicateReviewStatus
+  matchType?: QuestionDuplicateMatchType
+  similarityScore?: number
+  matchReason?: string
+  sourceGroupId?: number
+  targetGroupId?: number
+  relationId?: number
+  reviewedBy?: number
+  reviewedAt?: string
+  createdAt?: string
+}
+
+export interface QuestionSummaryVO {
+  id: number
+  title?: string
+  content?: string
+  categoryId?: number
+  groupId?: number
+  groupName?: string
+  difficulty?: QuestionDifficulty
+  questionType?: QuestionType
+  status?: number
+}
+
+export interface QuestionDuplicateReviewDetailVO extends QuestionDuplicateReviewListVO {
+  sourceTitleSnapshot?: string
+  targetTitleSnapshot?: string
+  sourceContentSnapshot?: string
+  targetContentSnapshot?: string
+  createdBy?: number
+  ignoredReason?: string
+  updatedAt?: string
+  sourceQuestion?: QuestionSummaryVO
+  targetQuestion?: QuestionSummaryVO
+}
+
+export interface QuestionDuplicateMergeDTO {
+  relationType?: string
+  reason?: string
+}
+
+export interface QuestionDuplicateIgnoreDTO {
+  ignoredReason?: string
+}
+
 export interface QuestionCategoryDTO {
   name: string
   code?: string
