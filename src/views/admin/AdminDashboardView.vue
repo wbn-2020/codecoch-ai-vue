@@ -93,17 +93,17 @@
     <div class="admin-dashboard-grid dashboard-lower-grid">
       <section class="admin-panel">
         <div class="admin-panel__header">
-          <div>
-            <h2>待处理事项</h2>
-            <p>当前无真实聚合待办接口，以下数量为演示数据并标注待接入。</p>
-          </div>
-          <el-tag type="warning" effect="plain">演示数据 / 待接入</el-tag>
+        <div>
+          <h2>待处理事项</h2>
+          <p>AI 题目审核和重复题来自真实治理接口，其余聚合待办等待后端统计接口。</p>
         </div>
-        <div class="admin-work-list dashboard-work-list">
-          <div v-for="item in demoPendingItems" :key="item.label" class="admin-work-item dashboard-work-item">
+          <el-tag type="success" effect="plain">部分真实统计</el-tag>
+      </div>
+      <div class="admin-work-list dashboard-work-list">
+          <div v-for="item in pendingItems" :key="item.label" class="admin-work-item dashboard-work-item">
             <div>
               <span>{{ item.label }}</span>
-              <small>演示数据 · {{ item.note }}</small>
+              <small>{{ item.note }}</small>
             </div>
             <strong>{{ item.value }}</strong>
           </div>
@@ -202,6 +202,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getQuestionDuplicateReviewsApi, getQuestionReviewsApi } from '@/api/question'
 import { getAdminSystemOverviewApi } from '@/api/system'
 import type { AdminOverviewVO } from '@/types/system'
 
@@ -209,6 +210,8 @@ const router = useRouter()
 const loading = ref(false)
 const overviewReady = ref(false)
 const overviewError = ref(false)
+const pendingReviewCount = ref<number | null>(null)
+const pendingDuplicateCount = ref<number | null>(null)
 const overview = ref<AdminOverviewVO>({
   userCount: 0,
   questionCount: 0,
@@ -278,13 +281,21 @@ const demoModelDistribution = [
   { name: 'other', value: 8 }
 ]
 
-const demoPendingItems = [
-  { label: '待审核 AI 生成题', value: '待接入', note: '待接入真实审核池接口' },
-  { label: '疑似重复题', value: '待接入', note: '待接入题库去重接口' },
-  { label: 'Prompt 版本待发布', value: '待接入', note: '待接入版本发布接口' },
+const pendingItems = computed(() => [
+  {
+    label: '待审核 AI 生成题',
+    value: pendingReviewCount.value ?? '加载中',
+    note: '来自 /admin/question-reviews?reviewStatus=PENDING'
+  },
+  {
+    label: '疑似重复题',
+    value: pendingDuplicateCount.value ?? '加载中',
+    note: '来自 /admin/question-duplicate-reviews?reviewStatus=PENDING'
+  },
+  { label: 'Prompt 版本待发布', value: '待接入', note: '待接入版本发布统计接口' },
   { label: 'AI 调用失败排查', value: '待接入', note: '待接入聚合告警接口' },
   { label: '简历解析失败', value: '待接入', note: '待接入解析失败统计接口' }
-]
+])
 
 const primaryLinks = [
   { label: '题目管理', path: '/admin/questions', icon: ListTree },
@@ -517,8 +528,22 @@ const fetchOverview = async () => {
   }
 }
 
+const fetchPendingItems = async () => {
+  try {
+    const [reviewResult, duplicateResult] = await Promise.all([
+      getQuestionReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 }),
+      getQuestionDuplicateReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 })
+    ])
+    pendingReviewCount.value = reviewResult.total || 0
+    pendingDuplicateCount.value = duplicateResult.total || 0
+  } catch {
+    pendingReviewCount.value = null
+    pendingDuplicateCount.value = null
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([fetchOverview(), initCharts()])
+  await Promise.all([fetchOverview(), fetchPendingItems(), initCharts()])
   window.addEventListener('resize', resizeCharts)
 })
 
