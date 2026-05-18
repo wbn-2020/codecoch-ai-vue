@@ -151,7 +151,7 @@
       <div class="admin-panel__header">
         <div>
           <h2>AI 题目审核 / 去重</h2>
-          <p>接入后端真实审核池与重复题审核接口，不展示 Mock 结果。</p>
+          <p>接入后端真实审核池与重复题审核接口，不展示伪造结果。</p>
         </div>
         <el-button :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
       </div>
@@ -236,7 +236,7 @@
               <p>{{ generateSseMessage || '等待后端阶段事件返回。' }}</p>
               <div class="sse-progress__list">
                 <span v-for="(event, index) in generateSseEvents" :key="`${event.type}-${index}`">
-                  {{ event.stage || event.type }} · {{ event.message }}
+                  {{ event.display }}
                 </span>
               </div>
             </div>
@@ -699,7 +699,7 @@ const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
-const generateSseEvents = ref<Array<{ type: string; stage?: string; message: string }>>([])
+const generateSseEvents = ref<Array<{ type: string; stage?: string; message: string; display: string }>>([])
 const generateSseMessage = ref('')
 const generateSseStatus = ref('未开始')
 const generateSseHandle = ref<ReturnType<typeof streamAiQuestionGenerateApi> | null>(null)
@@ -1146,13 +1146,25 @@ const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) =
     done: 'AI 题目生成完成',
     error: 'AI 题目生成失败'
   }
-  const message = data?.message || messageMap[type] || type
+  const message = type === 'delta' ? data?.content || data?.message || messageMap[type] : data?.message || messageMap[type] || type
+  const result = resolveGenerateResult(data, generateResult.value)
+  const metadataParts =
+    type === 'result' || type === 'done'
+      ? [
+          result.batchId ? `batchId=${result.batchId}` : '',
+          result.generatedCount != null ? `count=${result.generatedCount}` : '',
+          result.reviewIds?.length ? `reviewIds=${result.reviewIds.length}` : '',
+          result.aiCallLogId ? `aiCallLogId=${result.aiCallLogId}` : ''
+        ].filter(Boolean)
+      : []
+  const display = [data?.stage, message, ...metadataParts].filter(Boolean).join(' · ')
   generateSseStatus.value = type
-  generateSseMessage.value = data?.stage ? `${data.stage}：${message}` : message
+  generateSseMessage.value = display || message
   generateSseEvents.value.push({
     type,
     stage: data?.stage,
-    message
+    message,
+    display: display || message
   })
 }
 
