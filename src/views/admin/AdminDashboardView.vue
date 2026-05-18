@@ -8,39 +8,42 @@
         </div>
         <h1 class="admin-hero__title">AI 内容治理中心</h1>
         <p class="admin-hero__desc">
-          管理题库、Prompt、AI 调用日志、系统配置和运营数据。核心指标优先读取真实概览接口；
-          趋势、分布和复杂大屏区域当前为演示数据 / 待接入真实统计接口。
+          统计数据来自管理概览接口，按当前数据库实时聚合；接口异常时仅展示异常与空状态，不回退到假数据。
         </p>
         <div class="dashboard-hero__notice">
           <Database :size="16" />
-          <span>真实概览接口：/admin/system/overview</span>
+          <span>{{ dashboard?.dataSourceDesc || 'GET /admin/dashboard/overview' }}</span>
           <span class="notice-divider"></span>
-          <LineChart :size="16" />
-          <span>演示图表占位：待接入真实统计接口</span>
+          <Clock3 :size="16" />
+          <span>生成时间：{{ formatDateTime(dashboard?.generatedAt) }}</span>
         </div>
       </div>
       <div class="admin-hero__actions">
-        <el-button
-          v-for="item in primaryLinks"
-          :key="item.path"
-          type="primary"
-          plain
-          @click="router.push(item.path)"
-        >
+        <el-button v-for="item in primaryLinks" :key="item.path" type="primary" plain @click="router.push(item.path)">
           <component :is="item.icon" :size="15" />
           {{ item.label }}
         </el-button>
       </div>
     </section>
 
+    <el-alert
+      v-if="overviewError"
+      class="dashboard-alert"
+      title="统计接口异常"
+      description="GET /admin/dashboard/overview 请求失败，当前页面不会回退到伪造数据。"
+      type="error"
+      show-icon
+      :closable="false"
+    />
+
     <div class="admin-metric-grid" v-loading="loading">
-      <article v-for="item in metrics" :key="item.label" class="admin-metric-card dashboard-metric-card">
+      <article v-for="item in metrics" :key="item.key" class="admin-metric-card dashboard-metric-card">
         <div class="admin-metric-card__icon" :class="item.tone">
           <component :is="item.icon" :size="18" />
         </div>
         <div>
           <p class="admin-metric-card__label">{{ item.label }}</p>
-          <strong class="admin-metric-card__value">{{ formatMetric(item.value) }}</strong>
+          <strong class="admin-metric-card__value">{{ item.value }}</strong>
           <span class="admin-metric-card__hint">{{ item.hint }}</span>
         </div>
       </article>
@@ -49,97 +52,85 @@
     <section class="admin-panel dashboard-screen-panel">
       <div class="admin-panel__header dashboard-panel-header">
         <div>
-          <h2>后续统计接入预览</h2>
-          <p>本区域不代表真实运营数据，仅保留少量演示图表预览信息组织方式；真实核心指标只来自概览接口。</p>
+          <h2>近 7 日真实趋势</h2>
+          <p>趋势来自后端 trendStats，空数据按 0 展示。</p>
         </div>
-        <el-tag type="warning" effect="plain">演示数据 / 待接入真实统计接口</el-tag>
+        <el-tag type="success" effect="plain">真实接口</el-tag>
       </div>
 
-      <div class="dashboard-demo-banner">
-        <AlertTriangle :size="16" />
-        <span>以下趋势、分布、待办均为演示占位，不用于运营判断；上线前需接入真实统计接口后再展示真实数值。</span>
+      <div v-if="!trendStats.length && !loading" class="dashboard-empty">
+        <LineChart :size="18" />
+        <span>统计接口未返回趋势数据</span>
       </div>
-
-      <div class="dashboard-chart-grid">
-        <article
-          v-for="item in chartCards.slice(0, 2)"
-          :key="item.title"
-          class="dashboard-chart-card"
-          :class="{ 'dashboard-chart-card--wide': item.wide }"
-        >
+      <div v-else class="dashboard-chart-grid">
+        <article class="dashboard-chart-card dashboard-chart-card--wide">
           <div class="dashboard-card-title">
             <div>
-              <h3>{{ item.title }}</h3>
-              <p>{{ item.desc }}</p>
+              <h3>面试 / 简历 / 学习计划趋势</h3>
+              <p>interviewCount、resumeUploadCount、studyPlanGeneratedCount</p>
             </div>
-            <el-tag size="small" type="warning" effect="plain">演示数据</el-tag>
           </div>
-          <div :ref="item.setRef" class="dashboard-chart"></div>
-          <div class="dashboard-demo-note">
-            <AlertTriangle :size="14" />
-            <span>演示数据，待接入真实统计接口</span>
-          </div>
+          <div ref="businessTrendRef" class="dashboard-chart"></div>
         </article>
-      </div>
-
-      <div class="dashboard-demo-backlog">
-        <span>待接入真实统计后再开放：</span>
-        <el-tag v-for="item in chartCards.slice(2)" :key="item.title" size="small" effect="plain">
-          {{ item.title }}
-        </el-tag>
+        <article class="dashboard-chart-card dashboard-chart-card--wide">
+          <div class="dashboard-card-title">
+            <div>
+              <h3>AI 调用与失败趋势</h3>
+              <p>aiCallCount、aiCallFailedCount、questionReviewGeneratedCount</p>
+            </div>
+          </div>
+          <div ref="aiTrendRef" class="dashboard-chart"></div>
+        </article>
       </div>
     </section>
 
     <div class="admin-dashboard-grid dashboard-lower-grid">
       <section class="admin-panel">
         <div class="admin-panel__header">
-        <div>
-          <h2>待处理事项</h2>
-          <p>AI 题目审核和重复题来自真实治理接口，其余聚合待办等待后端统计接口。</p>
-        </div>
-          <el-tag type="success" effect="plain">部分真实统计</el-tag>
-      </div>
-      <div class="admin-work-list dashboard-work-list">
-          <div v-for="item in pendingItems" :key="item.label" class="admin-work-item dashboard-work-item">
-            <div>
-              <span>{{ item.label }}</span>
-              <small>{{ item.note }}</small>
-            </div>
-            <strong>{{ item.value }}</strong>
+          <div>
+            <h2>待处理事项</h2>
+            <p>全部待办来自 pendingItems，unsupported/unknown 状态按原样展示。</p>
           </div>
+          <el-tag type="success" effect="plain">真实待办</el-tag>
+        </div>
+        <div class="admin-work-list dashboard-work-list">
+          <button
+            v-for="item in pendingItems"
+            :key="item.key"
+            class="admin-work-item dashboard-work-item"
+            type="button"
+            @click="goPending(item)"
+          >
+            <div>
+              <span>{{ pendingLabel(item) }}</span>
+              <small>{{ item.reason || item.sourceTable || 'runtime database' }}</small>
+            </div>
+            <strong>{{ item.count ?? 0 }}</strong>
+          </button>
+          <el-empty v-if="!pendingItems.length && !loading" description="统计接口未返回待处理事项" />
         </div>
       </section>
 
       <section class="admin-panel">
         <div class="admin-panel__header">
           <div>
-            <h2>系统状态区</h2>
-            <p>不写死服务健康状态，当前仅展示后台概览接口连接状态。</p>
+            <h2>系统状态</h2>
+            <p>状态来自 systemStatus。UNKNOWN / unsupported 不会被伪装为正常。</p>
           </div>
-          <el-tag :type="overviewStatus.type" effect="plain">{{ overviewStatus.label }}</el-tag>
+          <el-tag :type="statusTagType(systemStatus?.status)" effect="plain">
+            {{ statusText(systemStatus?.status) }}
+          </el-tag>
         </div>
         <div class="dashboard-status-list">
-          <div class="dashboard-status-item">
+          <div v-for="item in services" :key="item.serviceName" class="dashboard-status-item">
             <Server :size="18" />
             <div>
-              <span>后台概览接口</span>
-              <strong>{{ overviewStatus.text }}</strong>
+              <span>{{ serviceLabel(item.serviceName) }}</span>
+              <strong :class="`status-${statusTone(item.status)}`">{{ statusText(item.status) }}</strong>
+              <small>{{ item.reason || item.source || '-' }}</small>
             </div>
           </div>
-          <div class="dashboard-status-item">
-            <Activity :size="18" />
-            <div>
-              <span>系统状态监控</span>
-              <strong>待接入</strong>
-            </div>
-          </div>
-          <div class="dashboard-status-item">
-            <Gauge :size="18" />
-            <div>
-              <span>服务健康检查</span>
-              <strong>待接入</strong>
-            </div>
-          </div>
+          <el-empty v-if="!services.length && !loading" description="统计接口未返回系统状态" />
         </div>
       </section>
     </div>
@@ -148,7 +139,7 @@
       <div class="admin-panel__header">
         <div>
           <h2>快捷入口</h2>
-          <p>全部入口指向 routes.ts 中已存在的管理端路由，不新增路由。</p>
+          <p>全部入口指向当前已存在的管理端路由。</p>
         </div>
       </div>
       <div class="admin-link-grid dashboard-link-grid">
@@ -166,32 +157,21 @@
         </button>
       </div>
     </section>
-
-    <el-alert
-      v-if="overviewError"
-      title="系统运营概览接口暂不可用，核心指标区已保留为空状态。"
-      type="warning"
-      show-icon
-      :closable="false"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import * as echarts from 'echarts'
 import {
-  Activity,
-  AlertTriangle,
   ArrowRight,
   Bot,
   ClipboardList,
+  Clock3,
   Database,
   FileText,
-  Gauge,
   LineChart,
   ListTree,
   MessageSquareCode,
-  PieChart,
   ScrollText,
   Server,
   Settings,
@@ -199,227 +179,105 @@ import {
   Tags,
   Users
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getQuestionDuplicateReviewsApi, getQuestionReviewsApi } from '@/api/question'
-import { getAdminSystemOverviewApi } from '@/api/system'
-import type { AdminOverviewVO } from '@/types/system'
+import { getAdminDashboardOverviewApi } from '@/api/dashboard'
+import type {
+  AdminDashboardOverviewVO,
+  AdminDashboardPendingItemVO,
+  AdminDashboardServiceStatusVO,
+  AdminDashboardTrendStatVO
+} from '@/types/dashboard'
 
 const router = useRouter()
 const loading = ref(false)
-const overviewReady = ref(false)
 const overviewError = ref(false)
-const pendingReviewCount = ref<number | null>(null)
-const pendingDuplicateCount = ref<number | null>(null)
-const overview = ref<AdminOverviewVO>({
-  userCount: 0,
-  questionCount: 0,
-  resumeCount: 0,
-  interviewCount: 0,
-  completedInterviewCount: 0,
-  aiCallCount: 0,
-  aiCallFailedCount: 0,
-  promptCount: 0,
-  todayInterviewCount: 0,
-  todayAiCallCount: 0
-})
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoInterviewTrend = [
-  { day: 'D-6', value: 18 },
-  { day: 'D-5', value: 24 },
-  { day: 'D-4', value: 22 },
-  { day: 'D-3', value: 31 },
-  { day: 'D-2', value: 28 },
-  { day: 'D-1', value: 36 },
-  { day: 'Today', value: 33 }
-]
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoAiCallTrend = [
-  { day: 'D-6', success: 92, failed: 5 },
-  { day: 'D-5', success: 118, failed: 8 },
-  { day: 'D-4', success: 104, failed: 6 },
-  { day: 'D-3', success: 136, failed: 9 },
-  { day: 'D-2', success: 151, failed: 11 },
-  { day: 'D-1', success: 169, failed: 7 },
-  { day: 'Today', success: 142, failed: 10 }
-]
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoQuestionCategoryDistribution = [
-  { name: 'JVM', value: 28 },
-  { name: '并发', value: 24 },
-  { name: 'MySQL', value: 21 },
-  { name: 'Spring', value: 18 },
-  { name: 'Redis', value: 12 }
-]
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoAiCallStatusDistribution = [
-  { name: '成功', value: 86 },
-  { name: '失败', value: 14 }
-]
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoTokenTrend = [
-  { day: 'D-6', value: 32 },
-  { day: 'D-5', value: 41 },
-  { day: 'D-4', value: 38 },
-  { day: 'D-3', value: 52 },
-  { day: 'D-2', value: 57 },
-  { day: 'D-1', value: 61 },
-  { day: 'Today', value: 49 }
-]
-
-// TODO: replace demo data with real analytics API after V2 statistics endpoint is ready.
-const demoModelDistribution = [
-  { name: 'gpt-4o-mini', value: 46 },
-  { name: 'deepseek-chat', value: 30 },
-  { name: 'qwen-plus', value: 16 },
-  { name: 'other', value: 8 }
-]
-
-const pendingItems = computed(() => [
-  {
-    label: '待审核 AI 生成题',
-    value: pendingReviewCount.value ?? '加载中',
-    note: '来自 /admin/question-reviews?reviewStatus=PENDING'
-  },
-  {
-    label: '疑似重复题',
-    value: pendingDuplicateCount.value ?? '加载中',
-    note: '来自 /admin/question-duplicate-reviews?reviewStatus=PENDING'
-  },
-  { label: 'Prompt 版本待发布', value: '待接入', note: '待接入版本发布统计接口' },
-  { label: 'AI 调用失败排查', value: '待接入', note: '待接入聚合告警接口' },
-  { label: '简历解析失败', value: '待接入', note: '待接入解析失败统计接口' }
-])
+const dashboard = ref<AdminDashboardOverviewVO | null>(null)
+const businessTrendRef = ref<HTMLElement>()
+const aiTrendRef = ref<HTMLElement>()
+const charts: echarts.ECharts[] = []
 
 const primaryLinks = [
   { label: '题目管理', path: '/admin/questions', icon: ListTree },
   { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode },
   { label: 'AI 调用日志', path: '/admin/ai/logs', icon: ScrollText },
-  { label: '系统配置', path: '/admin/system/configs', icon: Settings }
+  { label: '文件治理', path: '/admin/files', icon: FileText }
 ]
 
 const quickLinks = [
   { label: '题目管理', path: '/admin/questions', icon: ListTree, desc: '维护 Java 面试题库' },
-  { label: '分类管理', path: '/admin/question-categories', icon: ClipboardList, desc: '治理知识域结构' },
-  { label: '标签管理', path: '/admin/question-tags', icon: Tags, desc: '维护检索标签' },
-  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词' },
-  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查调用链路' },
+  { label: '题目审核', path: '/admin/question-reviews', icon: ClipboardList, desc: '处理 AI 生成题审核池' },
+  { label: '去重审核', path: '/admin/question-duplicate-reviews', icon: Tags, desc: '处理疑似重复题' },
+  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本' },
+  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查失败调用' },
   { label: '系统配置', path: '/admin/system/configs', icon: Settings, desc: '维护运行参数' }
 ]
 
-const metrics = computed(() => [
-  { label: '用户数', value: overview.value.userCount, hint: '来自系统概览接口', icon: Users, tone: 'tone-blue' },
-  { label: '题目数', value: overview.value.questionCount, hint: '来自系统概览接口', icon: ListTree, tone: 'tone-violet' },
-  { label: '简历数', value: overview.value.resumeCount, hint: '来自系统概览接口', icon: FileText, tone: 'tone-cyan' },
-  { label: '面试数', value: overview.value.interviewCount, hint: '来自系统概览接口', icon: ShieldCheck, tone: 'tone-green' },
-  { label: 'AI 调用数', value: overview.value.aiCallCount, hint: '来自系统概览接口', icon: Bot, tone: 'tone-violet' },
-  { label: 'Prompt 数', value: overview.value.promptCount, hint: '来自系统概览接口', icon: MessageSquareCode, tone: 'tone-blue' },
-  { label: 'AI 调用失败数', value: overview.value.aiCallFailedCount, hint: '来自系统概览接口', icon: ScrollText, tone: 'tone-red' }
-])
+const summaryCards = computed(() => dashboard.value?.summaryCards || [])
+const trendStats = computed(() => dashboard.value?.trendStats || [])
+const pendingItems = computed(() => dashboard.value?.pendingItems || [])
+const systemStatus = computed(() => dashboard.value?.systemStatus)
+const services = computed(() => systemStatus.value?.services || [])
 
-const overviewStatus = computed(() => {
-  if (loading.value) {
-    return { label: '连接中', text: '概览接口连接中', type: 'info' as const }
-  }
-  if (overviewReady.value) {
-    return { label: '概览接口可用', text: '概览接口可用', type: 'success' as const }
-  }
-  if (overviewError.value) {
-    return { label: '接口异常', text: '概览接口请求失败', type: 'danger' as const }
-  }
-  return { label: '待检测', text: '等待概览接口返回', type: 'info' as const }
-})
+const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
+  users: { label: '用户数', icon: Users, tone: 'tone-blue' },
+  resumes: { label: '简历数', icon: FileText, tone: 'tone-cyan' },
+  interviews: { label: '面试数', icon: ShieldCheck, tone: 'tone-green' },
+  studyPlans: { label: '学习计划数', icon: ClipboardList, tone: 'tone-violet' },
+  aiCalls: { label: 'AI 调用数', icon: Bot, tone: 'tone-violet' },
+  todayAiCalls: { label: '今日 AI 调用', icon: LineChart, tone: 'tone-blue' },
+  pendingQuestionReviews: { label: '待审 AI 题', icon: ListTree, tone: 'tone-red' },
+  failedResumeParses: { label: '解析失败简历', icon: FileText, tone: 'tone-red' }
+}
 
-const interviewTrendRef = ref<HTMLElement>()
-const aiCallTrendRef = ref<HTMLElement>()
-const categoryRef = ref<HTMLElement>()
-const statusRef = ref<HTMLElement>()
-const tokenRef = ref<HTMLElement>()
-const modelRef = ref<HTMLElement>()
-const charts: echarts.ECharts[] = []
+const pendingRoutes: Record<string, string> = {
+  pendingQuestionReviews: '/admin/question-reviews',
+  duplicateQuestionReviews: '/admin/question-duplicate-reviews',
+  promptVersions: '/admin/ai/prompts',
+  failedAiCalls: '/admin/ai/logs',
+  failedResumeParses: '/admin/files'
+}
 
-const chartCards = [
-  {
-    title: '近 7 日面试趋势',
-    desc: '演示面试发起量走势',
-    wide: true,
-    setRef: (el: unknown) => {
-      interviewTrendRef.value = el as HTMLElement | undefined
+const pendingLabels: Record<string, string> = {
+  pendingQuestionReviews: '待审核 AI 生成题',
+  duplicateQuestionReviews: '疑似重复题',
+  promptVersions: 'Prompt 待发布 / 未激活版本',
+  failedAiCalls: 'AI 调用失败',
+  failedResumeParses: '简历解析失败'
+}
+
+const metrics = computed(() =>
+  summaryCards.value.map((item) => {
+    const meta = cardMeta[item.key] || { label: item.label || item.key, icon: LineChart, tone: 'tone-blue' }
+    return {
+      key: item.key,
+      label: meta.label,
+      value: item.value ?? 0,
+      hint: item.sourceTable ? `来源：${item.sourceTable}` : '来源：管理概览接口',
+      icon: meta.icon,
+      tone: meta.tone
     }
-  },
-  {
-    title: 'AI 调用趋势',
-    desc: '演示成功 / 失败调用走势',
-    wide: true,
-    setRef: (el: unknown) => {
-      aiCallTrendRef.value = el as HTMLElement | undefined
-    }
-  },
-  {
-    title: '题目分类分布',
-    desc: '演示分类占比',
-    wide: false,
-    setRef: (el: unknown) => {
-      categoryRef.value = el as HTMLElement | undefined
-    }
-  },
-  {
-    title: 'AI 调用成功 / 失败分布',
-    desc: '演示状态占比',
-    wide: false,
-    setRef: (el: unknown) => {
-      statusRef.value = el as HTMLElement | undefined
-    }
-  },
-  {
-    title: 'Token 消耗趋势',
-    desc: '演示 Token 消耗走势',
-    wide: true,
-    setRef: (el: unknown) => {
-      tokenRef.value = el as HTMLElement | undefined
-    }
-  },
-  {
-    title: '模型调用分布',
-    desc: '演示模型调用占比',
-    wide: false,
-    setRef: (el: unknown) => {
-      modelRef.value = el as HTMLElement | undefined
-    }
-  }
-]
+  })
+)
 
 const baseChartTextStyle = {
   color: '#94a3b8',
   fontFamily: 'Inter, "Microsoft YaHei", sans-serif'
 }
 
-const buildLineOption = (
-  xAxisData: string[],
-  series: echarts.SeriesOption[],
-  legendData?: string[]
-): echarts.EChartsOption => ({
+const numberList = (key: keyof AdminDashboardTrendStatVO) =>
+  trendStats.value.map((item) => Number(item[key] || 0))
+
+const buildLineOption = (legendData: string[], series: echarts.SeriesOption[]): echarts.EChartsOption => ({
   backgroundColor: 'transparent',
-  color: ['#60a5fa', '#f87171', '#a78bfa'],
+  color: ['#60a5fa', '#22d3ee', '#a78bfa', '#f87171'],
   tooltip: { trigger: 'axis' },
-  legend: legendData
-    ? {
-        data: legendData,
-        right: 8,
-        top: 0,
-        textStyle: baseChartTextStyle
-      }
-    : undefined,
-  grid: { left: 10, right: 14, top: legendData ? 34 : 18, bottom: 8, containLabel: true },
+  legend: { data: legendData, right: 8, top: 0, textStyle: baseChartTextStyle },
+  grid: { left: 10, right: 14, top: 34, bottom: 8, containLabel: true },
   xAxis: {
     type: 'category',
-    data: xAxisData,
+    data: trendStats.value.map((item) => item.date),
     boundaryGap: false,
     axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } },
     axisLabel: baseChartTextStyle
@@ -432,124 +290,127 @@ const buildLineOption = (
   series
 })
 
-const buildPieOption = (data: { name: string; value: number }[]): echarts.EChartsOption => ({
-  backgroundColor: 'transparent',
-  color: ['#60a5fa', '#a78bfa', '#22d3ee', '#34d399', '#fbbf24', '#f87171'],
-  tooltip: { trigger: 'item' },
-  legend: {
-    bottom: 0,
-    left: 'center',
-    textStyle: baseChartTextStyle
-  },
-  series: [
-    {
-      type: 'pie',
-      radius: ['44%', '68%'],
-      center: ['50%', '42%'],
-      avoidLabelOverlap: true,
-      label: { color: '#cbd5e1' },
-      data
-    }
-  ]
-})
-
-const initChart = (el: HTMLElement | undefined, option: echarts.EChartsOption) => {
-  if (!el) return
-  const chart = echarts.init(el)
-  chart.setOption(option)
-  charts.push(chart)
+const disposeCharts = () => {
+  charts.splice(0).forEach((chart) => chart.dispose())
 }
 
-const initCharts = async () => {
+const renderCharts = async () => {
   await nextTick()
-  initChart(
-    interviewTrendRef.value,
-    buildLineOption(
-      demoInterviewTrend.map((item) => item.day),
-      [
-        {
-          name: '面试场次',
-          type: 'line',
-          smooth: true,
-          areaStyle: { color: 'rgba(96, 165, 250, 0.14)' },
-          data: demoInterviewTrend.map((item) => item.value)
-        }
-      ],
-      ['面试场次']
+  disposeCharts()
+  if (!trendStats.value.length) return
+  if (businessTrendRef.value) {
+    const chart = echarts.init(businessTrendRef.value)
+    chart.setOption(
+      buildLineOption(
+        ['面试数', '简历上传', '学习计划'],
+        [
+          { name: '面试数', type: 'line', smooth: true, data: numberList('interviewCount') },
+          { name: '简历上传', type: 'line', smooth: true, data: numberList('resumeUploadCount') },
+          { name: '学习计划', type: 'line', smooth: true, data: numberList('studyPlanGeneratedCount') }
+        ]
+      )
     )
-  )
-  initChart(
-    aiCallTrendRef.value,
-    buildLineOption(
-      demoAiCallTrend.map((item) => item.day),
-      [
-        { name: '成功调用', type: 'line', smooth: true, data: demoAiCallTrend.map((item) => item.success) },
-        { name: '失败调用', type: 'line', smooth: true, data: demoAiCallTrend.map((item) => item.failed) }
-      ],
-      ['成功调用', '失败调用']
+    charts.push(chart)
+  }
+  if (aiTrendRef.value) {
+    const chart = echarts.init(aiTrendRef.value)
+    chart.setOption(
+      buildLineOption(
+        ['AI 调用', 'AI 失败', '题目审核生成'],
+        [
+          { name: 'AI 调用', type: 'line', smooth: true, data: numberList('aiCallCount') },
+          { name: 'AI 失败', type: 'line', smooth: true, data: numberList('aiCallFailedCount') },
+          { name: '题目审核生成', type: 'line', smooth: true, data: numberList('questionReviewGeneratedCount') }
+        ]
+      )
     )
-  )
-  initChart(categoryRef.value, buildPieOption(demoQuestionCategoryDistribution))
-  initChart(statusRef.value, buildPieOption(demoAiCallStatusDistribution))
-  initChart(
-    tokenRef.value,
-    buildLineOption(
-      demoTokenTrend.map((item) => item.day),
-      [
-        {
-          name: 'Token 消耗',
-          type: 'bar',
-          barWidth: 18,
-          itemStyle: { borderRadius: [8, 8, 0, 0] },
-          data: demoTokenTrend.map((item) => item.value)
-        }
-      ],
-      ['Token 消耗']
-    )
-  )
-  initChart(modelRef.value, buildPieOption(demoModelDistribution))
+    charts.push(chart)
+  }
 }
-
-const resizeCharts = () => charts.forEach((chart) => chart.resize())
-
-const formatMetric = (value: number) => (overviewReady.value ? value : '--')
 
 const fetchOverview = async () => {
   loading.value = true
   overviewError.value = false
   try {
-    overview.value = await getAdminSystemOverviewApi()
-    overviewReady.value = true
+    dashboard.value = await getAdminDashboardOverviewApi()
   } catch {
-    overviewReady.value = false
+    dashboard.value = null
     overviewError.value = true
   } finally {
     loading.value = false
   }
 }
 
-const fetchPendingItems = async () => {
-  try {
-    const [reviewResult, duplicateResult] = await Promise.all([
-      getQuestionReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 }),
-      getQuestionDuplicateReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 })
-    ])
-    pendingReviewCount.value = reviewResult.total || 0
-    pendingDuplicateCount.value = duplicateResult.total || 0
-  } catch {
-    pendingReviewCount.value = null
-    pendingDuplicateCount.value = null
-  }
+const formatDateTime = (value?: string) => {
+  if (!value) return '--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+const statusText = (status?: string) => {
+  const value = String(status || 'UNKNOWN').toUpperCase()
+  const map: Record<string, string> = {
+    HEALTHY: '正常',
+    DEGRADED: '降级',
+    DOWN: '不可用',
+    UNKNOWN: '未知 / 暂不支持',
+    SUPPORTED: '已支持'
+  }
+  return map[value] || status || '未知 / 暂不支持'
+}
+
+const statusTone = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  if (value === 'HEALTHY' || value === 'SUPPORTED') return 'healthy'
+  if (value === 'DEGRADED') return 'degraded'
+  if (value === 'DOWN' || value === 'ERROR') return 'down'
+  return 'unknown'
+}
+
+const statusTagType = (status?: string) => {
+  const tone = statusTone(status)
+  if (tone === 'healthy') return 'success'
+  if (tone === 'degraded' || tone === 'unknown') return 'warning'
+  return 'danger'
+}
+
+const serviceLabel = (value: string) => {
+  const map: Record<string, string> = {
+    overview: '概览接口',
+    database: '数据库',
+    'codecoachai-gateway': 'Gateway',
+    'codecoachai-auth': 'Auth 服务',
+    'codecoachai-user': 'User 服务',
+    'codecoachai-resume': 'Resume 服务',
+    'codecoachai-interview': 'Interview 服务',
+    'codecoachai-question': 'Question 服务',
+    'codecoachai-ai': 'AI 服务',
+    'codecoachai-file': 'File 服务'
+  }
+  return map[value] || value
+}
+
+const pendingLabel = (item: AdminDashboardPendingItemVO) => pendingLabels[item.key] || item.label || item.key
+
+const goPending = (item: AdminDashboardPendingItemVO) => {
+  const path = pendingRoutes[item.key]
+  if (path) router.push(path)
+}
+
+const resizeCharts = () => charts.forEach((chart) => chart.resize())
+
+watch(trendStats, renderCharts, { deep: true })
+
 onMounted(async () => {
-  await Promise.all([fetchOverview(), fetchPendingItems(), initCharts()])
+  await fetchOverview()
+  await renderCharts()
   window.addEventListener('resize', resizeCharts)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
-  charts.forEach((chart) => chart.dispose())
+  disposeCharts()
 })
 </script>
 
@@ -578,6 +439,10 @@ onBeforeUnmount(() => {
     width: 1px;
     height: 14px;
     background: rgba(148, 163, 184, 0.22);
+  }
+
+  .dashboard-alert {
+    margin-bottom: 16px;
   }
 
   .dashboard-metric-card {
@@ -619,36 +484,19 @@ onBeforeUnmount(() => {
     align-items: center;
   }
 
-  .dashboard-chart-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    padding: 12px 20px 16px;
-  }
-
-  .dashboard-demo-banner,
-  .dashboard-demo-backlog {
+  .dashboard-empty {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 20px;
-    border: 1px solid rgba(245, 158, 11, 0.22);
-    background: rgba(120, 53, 15, 0.18);
-    color: #fcd34d;
-    font-size: 12px;
+    padding: 20px;
+    color: var(--app-text-muted);
   }
 
-  .dashboard-demo-banner {
-    margin-top: 16px;
-    padding: 10px 12px;
-    border-radius: 12px;
-  }
-
-  .dashboard-demo-backlog {
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-    padding: 12px;
-    border-radius: 12px;
+  .dashboard-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    padding: 12px 20px 20px;
   }
 
   .dashboard-chart-card {
@@ -657,25 +505,6 @@ onBeforeUnmount(() => {
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: var(--app-radius);
     background: rgba(2, 6, 23, 0.34);
-    transition:
-      border-color 0.18s ease,
-      background 0.18s ease;
-  }
-
-  .dashboard-chart-card:hover {
-    border-color: rgba(129, 140, 248, 0.38);
-    background: rgba(15, 23, 42, 0.54);
-  }
-
-  .dashboard-chart-card--wide {
-    grid-column: span 2;
-  }
-
-  .dashboard-card-title {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
   }
 
   .dashboard-card-title h3 {
@@ -691,18 +520,8 @@ onBeforeUnmount(() => {
 
   .dashboard-chart {
     width: 100%;
-    height: 240px;
+    height: 260px;
     margin-top: 10px;
-  }
-
-  .dashboard-demo-note {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(148, 163, 184, 0.1);
-    color: #fbbf24;
-    font-size: 12px;
   }
 
   .dashboard-lower-grid {
@@ -715,6 +534,11 @@ onBeforeUnmount(() => {
 
   .dashboard-work-item {
     align-items: flex-start;
+    width: 100%;
+    border: 0;
+    color: var(--app-text);
+    text-align: left;
+    cursor: pointer;
   }
 
   .dashboard-work-item small {
@@ -737,7 +561,7 @@ onBeforeUnmount(() => {
 
   .dashboard-status-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     padding: 14px;
     border: 1px solid rgba(148, 163, 184, 0.14);
@@ -750,7 +574,8 @@ onBeforeUnmount(() => {
     color: #93c5fd;
   }
 
-  .dashboard-status-item span {
+  .dashboard-status-item span,
+  .dashboard-status-item small {
     display: block;
     color: var(--app-text-muted);
     font-size: 12px;
@@ -758,9 +583,21 @@ onBeforeUnmount(() => {
 
   .dashboard-status-item strong {
     display: block;
-    margin-top: 4px;
-    color: var(--app-text);
+    margin: 4px 0;
     font-size: 14px;
+  }
+
+  .status-healthy {
+    color: #86efac;
+  }
+
+  .status-degraded,
+  .status-unknown {
+    color: #fde68a;
+  }
+
+  .status-down {
+    color: #fca5a5;
   }
 
   .dashboard-link-grid {
@@ -775,7 +612,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1200px) {
   .admin-dashboard-page {
     .dashboard-chart-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
     }
 
     .dashboard-link-grid {
@@ -794,14 +631,9 @@ onBeforeUnmount(() => {
       display: none;
     }
 
-    .dashboard-chart-grid,
     .dashboard-lower-grid,
     .dashboard-link-grid {
       grid-template-columns: 1fr;
-    }
-
-    .dashboard-chart-card--wide {
-      grid-column: span 1;
     }
 
     .dashboard-chart {

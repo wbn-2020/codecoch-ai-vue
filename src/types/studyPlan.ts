@@ -88,6 +88,7 @@ export interface StudyTaskVO {
   id: number
   planId: number
   stageNo?: number
+  plannedDate?: string
   stageTitle?: string
   taskOrder?: number
   knowledgePoint?: string

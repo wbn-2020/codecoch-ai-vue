@@ -14,6 +14,7 @@ export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILE
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewQuestionSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseStage =
   | 'VALIDATE_REQUEST'
   | 'LOAD_INTERVIEW'
@@ -227,6 +228,21 @@ export interface InterviewReportSseEvent {
   code?: string
   content?: string
   index?: number
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface InterviewQuestionSseEvent {
+  requestId?: string
+  type?: InterviewQuestionSseEventType | string
+  message?: string
+  interviewId?: number
+  sessionId?: number
+  status?: InterviewStatus
+  question?: InterviewQuestionVO
+  result?: InterviewCurrentVO | Record<string, unknown>
+  stage?: string
+  code?: string
   metadata?: Record<string, unknown>
   [key: string]: unknown
 }

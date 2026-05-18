@@ -165,9 +165,9 @@
               <div class="daily-view-panel__head">
                 <div>
                   <p class="section-kicker">Daily View</p>
-                  <h3>今日任务 / 日报视图</h3>
+                  <h3>plannedDate 日任务 / 日报视图</h3>
                   <span>
-                    {{ dailyView?.date || dailyDate }} · 第 {{ dailyView?.dayIndex || '-' }} 天
+                    {{ dailyView?.date || dailyDate }} · 优先按 plannedDate 匹配任务
                   </span>
                 </div>
                 <div class="daily-view-panel__actions">
@@ -235,6 +235,7 @@
                       <p>{{ task.taskDescription || '暂无任务描述' }}</p>
                       <div class="task-tags">
                         <span v-if="task.taskType">{{ task.taskType }}</span>
+                        <span>{{ formatPlannedDate(task.plannedDate) }}</span>
                         <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
                         <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
                         <span v-for="questionId in task.relatedQuestionIds || []" :key="questionId">
@@ -271,6 +272,7 @@
                   <p>{{ task.taskDescription || '暂无任务描述' }}</p>
                   <div class="task-tags">
                     <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
+                    <span>{{ formatPlannedDate(task.plannedDate) }}</span>
                     <span v-if="task.priority">{{ priorityText(task.priority) }}</span>
                     <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
                     <span v-for="tag in task.relatedTags || []" :key="tag">{{ tag }}</span>
@@ -634,6 +636,8 @@ const priorityText = (priority: string) => {
   }
   return map[String(priority).toUpperCase()] || priority
 }
+
+const formatPlannedDate = (value?: string) => value || '未规划日期'
 
 onMounted(fetchPlans)
 onBeforeUnmount(() => {

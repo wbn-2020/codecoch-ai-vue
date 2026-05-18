@@ -12,6 +12,8 @@ import type {
   InterviewDetailVO,
   InterviewListVO,
   InterviewQueryDTO,
+  InterviewQuestionSseEvent,
+  InterviewQuestionSseEventType,
   InterviewReportSseEvent,
   InterviewReportSseEventType,
   InterviewReportSseParams,
@@ -282,6 +284,22 @@ export const streamInterviewAnswerReviewApi = (
     url: buildSseUrl('/ai/sse/interview-answer-review', { interviewId: String(interviewId) }),
     method: 'POST',
     body: toAnswerPayload(data),
+    signal,
+    handlers
+  })
+}
+
+export const streamInterviewQuestionApi = (
+  interviewId: number,
+  handlers: {
+    onEvent?: (event: InterviewQuestionSseEventType | string, data?: InterviewQuestionSseEvent) => void
+    onError?: (error: Error, hasStarted: boolean) => void
+    onDone?: () => void
+  },
+  signal?: AbortSignal
+) => {
+  return streamSse<InterviewQuestionSseEvent>({
+    url: buildSseUrl('/ai/sse/interview-question', { interviewId: String(interviewId) }),
     signal,
     handlers
   })
