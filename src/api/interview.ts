@@ -290,7 +290,7 @@ export const streamInterviewAnswerReviewApi = (
 }
 
 export const streamInterviewQuestionApi = (
-  interviewId: number,
+  sessionId: number,
   handlers: {
     onEvent?: (event: InterviewQuestionSseEventType | string, data?: InterviewQuestionSseEvent) => void
     onError?: (error: Error, hasStarted: boolean) => void
@@ -299,7 +299,7 @@ export const streamInterviewQuestionApi = (
   signal?: AbortSignal
 ) => {
   return streamSse<InterviewQuestionSseEvent>({
-    url: buildSseUrl('/ai/sse/interview-question', { interviewId: String(interviewId) }),
+    url: buildSseUrl('/ai/sse/interview-question', { sessionId: String(sessionId) }),
     signal,
     handlers
   })
