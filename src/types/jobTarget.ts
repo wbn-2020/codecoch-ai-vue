@@ -1,6 +1,6 @@
 import type { PageQuery } from './api'
 
-export type TargetJobParseStatus = 'NOT_PARSED' | 'PARSING' | 'SUCCESS' | 'FAILED' | string
+export type TargetJobParseStatus = 'NOT_PARSED' | 'PARSING' | 'PARSED' | 'FAILED' | string
 
 export interface TargetJobQueryDTO extends PageQuery {
   keyword?: string

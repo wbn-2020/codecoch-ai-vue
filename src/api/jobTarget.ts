@@ -16,7 +16,7 @@ export const createJobTargetApi = (data: TargetJobSaveDTO) => {
 }
 
 export const getCurrentJobTargetApi = () => {
-  return request.get<TargetJobVO, TargetJobVO>('/job-targets/current')
+  return request.get<TargetJobVO | null, TargetJobVO | null>('/job-targets/current')
 }
 
 export const getJobTargetDetailApi = (id: number) => {
@@ -43,7 +43,7 @@ export const parseJobDescriptionApi = (id: number, data?: JobDescriptionParseDTO
 }
 
 export const getJobDescriptionAnalysisApi = (id: number) => {
-  return request.get<JobDescriptionAnalysisVO, JobDescriptionAnalysisVO>(
+  return request.get<JobDescriptionAnalysisVO | null, JobDescriptionAnalysisVO | null>(
     `/job-targets/${id}/analysis`
   )
 }
