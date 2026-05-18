@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import { getCurrentUserApi, loginApi, logoutApi, registerApi } from '@/api/auth'
+import { clearAllRequestCache } from '@/composables/useRequestCache'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { CurrentUserVO, LoginDTO, LoginVO, RegisterDTO } from '@/types/auth'
 import type { RoleCode } from '@/types/common'
@@ -108,6 +109,7 @@ export const useAuthStore = defineStore('auth', {
       removeToken()
       storage.remove(STORAGE_KEYS.userInfo)
       storage.remove(STORAGE_KEYS.roles)
+      clearAllRequestCache()
     }
   }
 })

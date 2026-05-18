@@ -9,6 +9,7 @@ import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
 import App from './App.vue'
+import { permission } from './directives/permission'
 import router from './router'
 
 document.documentElement.classList.add('dark')
@@ -18,5 +19,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus)
+
+app.directive('permission', permission)
 
 app.mount('#app')
