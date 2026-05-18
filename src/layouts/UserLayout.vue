@@ -1,17 +1,17 @@
 <template>
-  <el-container class="app-layout user-layout" :class="{ 'is-collapsed': sidebarCollapsed }">
+  <el-container class="app-layout user-layout" :class="{ 'is-collapsed': appStore.sidebarCollapsed }">
     <el-aside class="app-layout__aside">
       <div class="app-layout__brand">
         <div class="brand-mark">C</div>
-        <div v-show="!sidebarCollapsed" class="brand-text">
+        <div v-show="!appStore.sidebarCollapsed" class="brand-text">
           <strong>CodeCoachAI</strong>
           <span>AI Java 面试训练台</span>
         </div>
       </div>
 
-      <UserSidebar :collapsed="sidebarCollapsed" />
+      <UserSidebar :collapsed="appStore.sidebarCollapsed" />
 
-      <div v-show="!sidebarCollapsed" class="sidebar-status">
+      <div v-show="!appStore.sidebarCollapsed" class="sidebar-status">
         <span class="status-dot"></span>
         <span>AI Workspace</span>
       </div>
@@ -20,14 +20,11 @@
     <el-container class="app-layout__content">
       <el-header class="app-layout__header">
         <div class="header-left">
-          <button class="icon-button" type="button" aria-label="Toggle sidebar" @click="toggleSidebar">
-            <PanelLeftClose v-if="!sidebarCollapsed" :size="18" />
+          <button class="icon-button" type="button" aria-label="Toggle sidebar" @click="appStore.toggleSidebar()">
+            <PanelLeftClose v-if="!appStore.sidebarCollapsed" :size="18" />
             <PanelLeftOpen v-else :size="18" />
           </button>
-          <div class="header-title-group">
-            <div class="header-kicker">CodeCoachAI</div>
-            <div class="app-layout__header-title">{{ route.meta.title || '工作台' }}</div>
-          </div>
+          <AppBreadcrumb root-path="/dashboard" root-title="工作台" />
         </div>
 
         <div class="app-layout__header-actions">
@@ -35,6 +32,11 @@
             <Search :size="15" />
             <span>Search workspace</span>
           </div>
+          <el-tooltip content="通知中心 V3 接入" placement="bottom">
+            <button class="icon-button icon-button--ghost" type="button" aria-label="通知中心" disabled>
+              <Bell :size="16" />
+            </button>
+          </el-tooltip>
           <el-button v-if="authStore.isAdmin" class="admin-entry" text @click="router.push('/admin')">
             <Shield :size="15" />
             管理端
@@ -57,6 +59,8 @@
         </div>
       </el-header>
 
+      <TagsView scope="user" />
+
       <el-main class="app-layout__main">
         <RouterView />
       </el-main>
@@ -65,27 +69,33 @@
 </template>
 
 <script setup lang="ts">
-import { useStorage } from '@vueuse/core'
-import { PanelLeftClose, PanelLeftOpen, Search, Shield } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { Bell, PanelLeftClose, PanelLeftOpen, Search, Shield } from 'lucide-vue-next'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
+import TagsView from '@/components/layout/TagsView.vue'
 import UserSidebar from '@/components/layout/UserSidebar.vue'
+import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useTagsViewStore } from '@/stores/tagsView'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const sidebarCollapsed = useStorage('codecoachai-user-sidebar-collapsed', false)
+const appStore = useAppStore()
+const tagsStore = useTagsViewStore()
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 
-const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-}
+watch(
+  () => route.fullPath,
+  () => tagsStore.addVisitedView(route),
+  { immediate: true }
+)
 
 const handleCommand = async (command: string) => {
   if (command === 'profile') {
@@ -99,6 +109,7 @@ const handleCommand = async (command: string) => {
   }
 
   if (command === 'logout') {
+    tagsStore.clearVisitedViews()
     await authStore.logout()
     await router.push('/login')
   }
@@ -187,26 +198,6 @@ const handleCommand = async (command: string) => {
   gap: 12px;
 }
 
-.header-title-group {
-  min-width: 0;
-}
-
-.header-kicker {
-  color: var(--cc-ai-cyan);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.app-layout__header-title {
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 700;
-}
-
 .app-layout__header-actions {
   display: flex;
   flex: 0 0 auto;
@@ -238,6 +229,21 @@ const handleCommand = async (command: string) => {
   &:hover {
     border-color: rgba(129, 140, 248, 0.5);
     background: rgba(99, 102, 241, 0.14);
+  }
+
+  &--ghost {
+    background: transparent;
+    color: var(--app-text-muted);
+  }
+
+  &--ghost:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &--ghost:disabled:hover {
+    border-color: var(--app-border);
+    background: transparent;
   }
 }
 
@@ -294,7 +300,7 @@ const handleCommand = async (command: string) => {
 
 .app-layout__main {
   min-width: 0;
-  min-height: calc(100vh - var(--app-header-height));
+  min-height: calc(100vh - var(--app-header-height) - 38px);
   padding: 24px;
   overflow: auto;
 }

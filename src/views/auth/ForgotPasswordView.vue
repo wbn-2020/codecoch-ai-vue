@@ -3,11 +3,22 @@
     <section class="auth-card">
       <div class="auth-card__intro">
         <div class="auth-card__brand">CodeCoachAI</div>
-        <h1>登录账号</h1>
-        <p>进入 Java 面试训练工作台，继续管理你的题库、简历和模拟面试准备。</p>
+        <h1>找回密码</h1>
+        <p>输入注册时使用的邮箱地址，我们将发送密码重置链接到你的邮箱。</p>
       </div>
 
+      <el-alert
+        v-if="sent"
+        type="success"
+        show-icon
+        :closable="false"
+        title="重置链接已发送"
+        :description="`请检查 ${form.email} 的收件箱（含垃圾邮件），点击链接完成密码重置。`"
+        class="sent-alert"
+      />
+
       <el-form
+        v-if="!sent"
         ref="formRef"
         class="auth-form"
         :model="form"
@@ -15,28 +26,38 @@
         label-position="top"
         @keyup.enter="handleSubmit"
       >
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model.trim="form.username" size="large" placeholder="请输入用户名" />
-        </el-form-item>
-        <el-form-item label="密码" prop="password">
+        <el-form-item label="邮箱地址" prop="email">
           <el-input
-            v-model="form.password"
+            v-model.trim="form.email"
             size="large"
-            type="password"
-            placeholder="请输入密码"
-            show-password
+            placeholder="请输入注册邮箱"
+            type="email"
           />
         </el-form-item>
-        <el-button class="auth-form__submit" type="primary" size="large" :loading="loading" @click="handleSubmit">
-          登录
+        <el-button
+          class="auth-form__submit"
+          type="primary"
+          size="large"
+          :loading="loading"
+          @click="handleSubmit"
+        >
+          发送重置链接
         </el-button>
       </el-form>
 
+      <el-button
+        v-if="sent"
+        class="auth-form__submit"
+        type="primary"
+        size="large"
+        @click="sent = false"
+      >
+        重新发送
+      </el-button>
+
       <div class="auth-card__footer">
-        <span>还没有账号？</span>
-        <el-button link type="primary" @click="router.push('/register')">去注册</el-button>
-        <span class="footer-divider"></span>
-        <el-button link type="primary" @click="router.push('/forgot-password')">忘记密码</el-button>
+        <span>想起密码了？</span>
+        <el-button link type="primary" @click="router.push('/login')">返回登录</el-button>
       </div>
     </section>
   </main>
@@ -46,27 +67,23 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
-import { useAuthStore } from '@/stores/auth'
-import type { LoginDTO } from '@/types/auth'
+import { forgotPasswordApi, type ForgotPasswordDTO } from '@/api/auth'
 
 const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const sent = ref(false)
 
-const form = reactive<LoginDTO>({
-  username: '',
-  password: ''
+const form = reactive<ForgotPasswordDTO>({
+  email: ''
 })
 
-const rules: FormRules<LoginDTO> = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' }
+const rules: FormRules<ForgotPasswordDTO> = {
+  email: [
+    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
   ]
 }
 
@@ -78,10 +95,11 @@ const handleSubmit = async () => {
 
     loading.value = true
     try {
-      await authStore.login(form)
-      ElMessage.success('登录成功')
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-      await router.replace(redirect || '/dashboard')
+      await forgotPasswordApi(form)
+      sent.value = true
+      ElMessage.success('重置链接已发送，请查收邮箱')
+    } catch (error: unknown) {
+      // 接口可能返回"邮箱不存在"等错误，由全局拦截器处理
     } finally {
       loading.value = false
     }
@@ -139,6 +157,10 @@ const handleSubmit = async () => {
   margin-top: 6px;
 }
 
+.sent-alert {
+  margin-top: 24px;
+}
+
 .auth-card__footer {
   display: flex;
   align-items: center;
@@ -147,12 +169,5 @@ const handleSubmit = async () => {
   margin-top: 22px;
   color: var(--app-text-muted);
   font-size: 14px;
-}
-
-.footer-divider {
-  width: 1px;
-  height: 14px;
-  margin: 0 6px;
-  background: var(--app-border);
 }
 </style>

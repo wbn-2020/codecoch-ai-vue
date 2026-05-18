@@ -427,3 +427,152 @@ a {
     }
   }
 }
+
+/* ============================================================
+   通用原子工具类（深色 AI 工作台基础原子）
+   后续 UI 重构可以直接复用，不必每个组件都自己写
+   ============================================================ */
+
+/* 玻璃面板：低饱和半透明卡片 */
+.cc-glass {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
+  backdrop-filter: blur(16px);
+}
+
+.cc-glass--soft {
+  background: var(--app-surface-soft);
+}
+
+.cc-glass--ai {
+  border-color: rgba(99, 102, 241, 0.32);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(6, 182, 212, 0.06)),
+    var(--app-surface);
+}
+
+/* 状态徽章 —— SSE / 任务 / AI 调用流转可视化 */
+.cc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.7);
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.cc-badge__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.cc-badge--idle {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(71, 85, 105, 0.4);
+  color: #cbd5e1;
+}
+
+.cc-badge--thinking {
+  border-color: rgba(99, 102, 241, 0.42);
+  background: rgba(99, 102, 241, 0.16);
+  color: #c7d2fe;
+}
+
+.cc-badge--thinking .cc-badge__dot {
+  animation: cc-pulse 1.2s ease-in-out infinite;
+}
+
+.cc-badge--streaming {
+  border-color: rgba(6, 182, 212, 0.42);
+  background: rgba(6, 182, 212, 0.14);
+  color: #67e8f9;
+}
+
+.cc-badge--streaming .cc-badge__dot {
+  animation: cc-pulse 0.8s ease-in-out infinite;
+}
+
+.cc-badge--success {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: var(--app-success-soft);
+  color: #86efac;
+}
+
+.cc-badge--warning {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: var(--app-warning-soft);
+  color: #fcd34d;
+}
+
+.cc-badge--danger {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: var(--app-danger-soft);
+  color: #fca5a5;
+}
+
+@keyframes cc-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+/* AI 高亮文字渐变 —— 标题用 */
+.cc-text-gradient {
+  background: linear-gradient(135deg, var(--cc-ai-blue), var(--cc-ai));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* 终端 / 代码块质感 */
+.cc-terminal {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md, 10px);
+  background: rgba(2, 6, 23, 0.92);
+  color: #e2e8f0;
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", Menlo, monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+/* 滚动条（暗色） */
+.cc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.36) transparent;
+}
+
+.cc-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cc-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 999px;
+}
+
+.cc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}

@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+/* ============================================================
+   Tailwind v4 主题 token —— 将 variables.scss 中的 CSS 变量
+   暴露为 Tailwind 工具类（bg-app-surface / text-app-text 等）
+   命名规则：保留 --app-* / --cc-* 语义，前缀映射为 Tailwind 类
+   ============================================================ */
+@theme {
+  /* 背景色 */
+  --color-app-bg: var(--cc-bg);
+  --color-app-bg-soft: var(--cc-bg-soft);
+  --color-app-surface: var(--cc-bg-panel);
+  --color-app-surface-soft: rgba(15, 23, 42, 0.7);
+  --color-app-elevated: var(--cc-bg-elevated);
+
+  /* 边框 */
+  --color-app-border: var(--cc-border);
+  --color-app-border-strong: var(--cc-border-strong);
+
+  /* 文字 */
+  --color-app-text: var(--cc-text);
+  --color-app-text-muted: var(--cc-text-muted);
+
+  /* 品牌 / AI */
+  --color-brand: var(--cc-primary);
+  --color-brand-hover: var(--cc-primary-hover);
+  --color-brand-soft: var(--cc-primary-soft);
+  --color-ai: var(--cc-ai);
+  --color-ai-blue: var(--cc-ai-blue);
+  --color-ai-cyan: var(--cc-ai-cyan);
+
+  /* 状态色 */
+  --color-app-success: var(--cc-success);
+  --color-app-warning: var(--cc-warning);
+  --color-app-danger: var(--cc-danger);
+
+  /* 圆角 */
+  --radius-app: var(--cc-radius-lg);
+  --radius-app-md: var(--cc-radius-md);
+  --radius-app-xl: var(--cc-radius-xl);
+
+  /* 阴影 */
+  --shadow-app: 0 20px 60px rgba(2, 6, 23, 0.42);
+  --shadow-app-soft: 0 12px 30px rgba(2, 6, 23, 0.28);
+
+  /* 字体 */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Cascadia Code",
+    Menlo, monospace;
+}

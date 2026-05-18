@@ -26,6 +26,11 @@
             <Search :size="15" />
             <span>Search admin console</span>
           </div>
+          <el-tooltip content="通知中心 V3 接入" placement="bottom">
+            <button class="icon-button icon-button--ghost" type="button" aria-label="通知中心" disabled>
+              <Bell :size="16" />
+            </button>
+          </el-tooltip>
           <el-button class="user-entry" text @click="router.push('/dashboard')">
             <MonitorUp :size="15" />
             用户端
@@ -47,7 +52,7 @@
         </div>
       </el-header>
 
-      <TagsView />
+      <TagsView scope="admin" />
 
       <el-main class="app-layout__main">
         <RouterView />
@@ -57,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
+import { Bell, MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -206,6 +211,21 @@ const handleCommand = async (command: string) => {
   &:hover {
     border-color: rgba(6, 182, 212, 0.5);
     background: rgba(6, 182, 212, 0.12);
+  }
+
+  &--ghost {
+    background: transparent;
+    color: var(--app-text-muted);
+  }
+
+  &--ghost:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &--ghost:disabled:hover {
+    border-color: var(--app-border);
+    background: transparent;
   }
 }
 

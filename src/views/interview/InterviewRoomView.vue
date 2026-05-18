@@ -1,6 +1,6 @@
 <template>
   <div class="interview-room">
-    <section class="room-topbar">
+    <section class="room-topbar cc-glass">
       <div>
         <div class="eyebrow">
           <Bot :size="16" />
@@ -10,6 +10,10 @@
         <p>保留真实面试 current、answer、finish 接口，以三栏作战台组织进度、作答和实时评估。</p>
       </div>
       <div class="topbar-actions">
+        <span class="cc-badge" :class="sseStatusBadgeClass">
+          <span class="cc-badge__dot"></span>
+          {{ sseStatusLabel }}
+        </span>
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
           工作台
@@ -25,7 +29,7 @@
       </div>
     </section>
 
-    <section class="war-room" v-loading="loading">
+    <section class="war-room cc-glass" v-loading="loading">
       <aside class="progress-panel">
         <div class="panel-title">
           <span>面试进度</span>
@@ -236,9 +240,10 @@
       </aside>
     </section>
 
-    <footer class="room-statusbar">
+    <footer class="room-statusbar cc-glass">
       <span>会话：{{ interviewId || '-' }}</span>
       <span>状态：{{ current?.status || '-' }}</span>
+      <span>计时：{{ elapsedText }}</span>
       <span>接口：{{ submitting ? 'answer SSE 处理中' : loading ? 'current 加载中' : '等待操作' }}</span>
       <span v-if="answerReviewMetaText">点评：{{ answerReviewMetaText }}</span>
       <span>报告：真实 finish 后跳转报告页轮询</span>
@@ -290,6 +295,8 @@ const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
 const answerReviewEvents = ref<Array<{ key: string; event: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
+let elapsedTimer: number | undefined
+const elapsedSeconds = ref(0)
 
 const answerReviewStageLabels: Record<string, string> = {
   VALIDATE_REQUEST: '校验回答',
@@ -300,6 +307,46 @@ const answerReviewStageLabels: Record<string, string> = {
   SAVE_REVIEW: '保存点评结果',
   GENERATE_FOLLOW_UP: '生成追问',
   SAVE_FOLLOW_UP: '保存追问'
+}
+
+// SSE 四态徽章
+const sseStatusLabel = computed(() => {
+  if (submitting.value && answerReviewEvents.value.length > 0) return '流式输出中'
+  if (submitting.value) return 'AI 思考中'
+  if (current.value?.status === 'COMPLETED' || current.value?.status === 'REPORT_GENERATING') return '已完成'
+  if (current.value?.status === 'NOT_STARTED') return '待开始'
+  return '等待操作'
+})
+
+const sseStatusBadgeClass = computed(() => {
+  if (submitting.value && answerReviewEvents.value.length > 0) return 'cc-badge--streaming'
+  if (submitting.value) return 'cc-badge--thinking'
+  if (current.value?.status === 'COMPLETED' || current.value?.status === 'REPORT_GENERATING') return 'cc-badge--success'
+  if (current.value?.status === 'NOT_STARTED') return 'cc-badge--idle'
+  return 'cc-badge--idle'
+})
+
+// 答题计时器
+const elapsedText = computed(() => {
+  const s = elapsedSeconds.value
+  const min = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+})
+
+const startElapsedTimer = () => {
+  stopElapsedTimer()
+  elapsedSeconds.value = 0
+  elapsedTimer = window.setInterval(() => {
+    elapsedSeconds.value++
+  }, 1000)
+}
+
+const stopElapsedTimer = () => {
+  if (elapsedTimer) {
+    window.clearInterval(elapsedTimer)
+    elapsedTimer = undefined
+  }
 }
 
 const nextActionText = computed(() => {
@@ -373,6 +420,9 @@ const fetchCurrent = async () => {
   try {
     current.value = await getCurrentInterviewQuestionApi(interviewId)
     answerStartTime.value = Date.now()
+    if (current.value?.currentQuestion) {
+      startElapsedTimer()
+    }
   } finally {
     loading.value = false
   }
@@ -412,6 +462,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
       currentQuestion: result.nextQuestion
     }
     answerStartTime.value = Date.now()
+    startElapsedTimer()
     return
   }
 
@@ -520,6 +571,7 @@ const handleSubmit = async () => {
 
   submitting.value = true
   lastAnswerDuration.value = payload.answerDurationSeconds || 0
+  stopElapsedTimer()
   startSlowSubmitHint()
   stopAnswerReviewSse()
   resetAnswerReviewState()
@@ -597,6 +649,7 @@ onMounted(fetchCurrent)
 onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
+  stopElapsedTimer()
 })
 </script>
 
@@ -611,11 +664,8 @@ onBeforeUnmount(() => {
 .room-topbar,
 .war-room,
 .room-statusbar {
-  border: 1px solid var(--app-border);
   border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
 .room-topbar {

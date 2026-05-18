@@ -20,6 +20,24 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/auth/ForgotPasswordView.vue'),
+    meta: {
+      public: true,
+      title: '找回密码'
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/auth/ResetPasswordView.vue'),
+    meta: {
+      public: true,
+      title: '重置密码'
+    }
+  },
+  {
     path: '/403',
     name: 'Forbidden',
     component: () => import('@/views/error/ForbiddenView.vue'),

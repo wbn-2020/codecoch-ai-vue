@@ -303,3 +303,354 @@ html.dark {
   background: rgba(30, 41, 59, 0.42);
   color: #64748b;
 }
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+.el-tabs {
+  --el-tabs-header-height: 44px;
+}
+
+.el-tabs__nav-wrap::after {
+  background-color: var(--app-border);
+}
+
+.el-tabs__item {
+  color: var(--app-text-muted);
+}
+
+.el-tabs__item.is-active,
+.el-tabs__item:hover {
+  color: var(--cc-primary-hover);
+}
+
+.el-tabs__active-bar {
+  background-color: var(--cc-primary);
+}
+
+.el-tabs--card > .el-tabs__header .el-tabs__nav,
+.el-tabs--border-card > .el-tabs__header {
+  border-color: var(--app-border);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.el-tabs--card > .el-tabs__header .el-tabs__item.is-active,
+.el-tabs--border-card > .el-tabs__header .el-tabs__item.is-active {
+  border-color: var(--app-border);
+  background: rgba(99, 102, 241, 0.14);
+  color: #ffffff;
+}
+
+/* ============================================================
+   Tag
+   ============================================================ */
+.el-tag {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.7);
+  color: var(--app-text);
+}
+
+.el-tag.el-tag--primary {
+  border-color: rgba(99, 102, 241, 0.42);
+  background: rgba(99, 102, 241, 0.18);
+  color: #c7d2fe;
+}
+
+.el-tag.el-tag--success {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: var(--app-success-soft);
+  color: #86efac;
+}
+
+.el-tag.el-tag--warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: var(--app-warning-soft);
+  color: #fcd34d;
+}
+
+.el-tag.el-tag--danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: var(--app-danger-soft);
+  color: #fca5a5;
+}
+
+.el-tag.el-tag--info {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(71, 85, 105, 0.4);
+  color: #cbd5e1;
+}
+
+/* ============================================================
+   Alert
+   ============================================================ */
+.el-alert {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.el-alert.el-alert--success {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: var(--app-success-soft);
+}
+
+.el-alert.el-alert--warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: var(--app-warning-soft);
+}
+
+.el-alert.el-alert--error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: var(--app-danger-soft);
+}
+
+.el-alert.el-alert--info {
+  border-color: rgba(99, 102, 241, 0.32);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.el-alert__title,
+.el-alert__description,
+.el-alert__content {
+  color: var(--app-text);
+}
+
+/* ============================================================
+   Switch / Radio Group
+   ============================================================ */
+.el-switch__core {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.el-switch.is-checked .el-switch__core {
+  border-color: var(--cc-primary);
+  background: var(--cc-primary);
+}
+
+.el-radio-group .el-radio-button__inner {
+  border-color: var(--app-border);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--app-text-muted);
+  box-shadow: -1px 0 0 0 var(--app-border);
+}
+
+.el-radio-button:first-child .el-radio-button__inner {
+  border-left-color: var(--app-border);
+}
+
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  border-color: var(--cc-primary);
+  background: rgba(99, 102, 241, 0.2);
+  color: #ffffff;
+  box-shadow: -1px 0 0 0 var(--cc-primary);
+}
+
+/* ============================================================
+   Notification / Message / MessageBox / Loading
+   ============================================================ */
+.el-notification,
+.el-message {
+  border: 1px solid var(--app-border);
+  background: rgba(15, 23, 42, 0.96);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow);
+}
+
+.el-notification__title,
+.el-message__content {
+  color: var(--app-text);
+}
+
+.el-notification__content {
+  color: var(--app-text-muted);
+}
+
+.el-loading-mask {
+  background-color: rgba(2, 6, 23, 0.72);
+}
+
+.el-loading-spinner .el-loading-text,
+.el-loading-spinner .path {
+  color: var(--cc-primary-hover);
+  stroke: var(--cc-primary-hover);
+}
+
+/* ============================================================
+   Tree / Steps / Checkbox-button
+   ============================================================ */
+.el-tree {
+  background: transparent;
+  color: var(--app-text);
+}
+
+.el-tree-node__content:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.el-tree-node.is-current > .el-tree-node__content {
+  background: rgba(99, 102, 241, 0.18);
+  color: #ffffff;
+}
+
+.el-step__title,
+.el-step__description {
+  color: var(--app-text-muted);
+}
+
+.el-step__title.is-process,
+.el-step__title.is-finish {
+  color: var(--app-text);
+}
+
+.el-step__head.is-process,
+.el-step__head.is-finish {
+  color: var(--cc-primary);
+  border-color: var(--cc-primary);
+}
+
+.el-step__line {
+  background-color: rgba(148, 163, 184, 0.18);
+}
+
+.el-checkbox-button__inner {
+  border-color: var(--app-border);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--app-text-muted);
+}
+
+.el-checkbox-button.is-checked .el-checkbox-button__inner {
+  border-color: var(--cc-primary);
+  background: rgba(99, 102, 241, 0.2);
+  color: #ffffff;
+}
+
+/* ============================================================
+   Progress / Slider / Skeleton
+   ============================================================ */
+.el-progress__text {
+  color: var(--app-text);
+}
+
+.el-progress-bar__outer {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.el-slider__runway {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.el-skeleton {
+  --el-skeleton-color: rgba(30, 41, 59, 0.6);
+  --el-skeleton-to-color: rgba(51, 65, 85, 0.6);
+}
+
+/* ============================================================
+   Upload / Empty
+   ============================================================ */
+.el-upload-dragger {
+  border-color: var(--app-border);
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--app-text);
+}
+
+.el-upload-dragger:hover {
+  border-color: var(--cc-primary-hover);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.el-upload__text em {
+  color: var(--cc-primary-hover);
+}
+
+.el-empty__description p {
+  color: var(--app-text-muted);
+}
+
+/* ============================================================
+   Drawer / Dialog header & footer border
+   ============================================================ */
+.el-dialog__header,
+.el-drawer__header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  margin-bottom: 0;
+  padding-bottom: 16px;
+}
+
+.el-dialog__footer,
+.el-drawer__footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 16px;
+}
+
+/* ============================================================
+   Table striped rows (admin pages)
+   ============================================================ */
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.el-table--border .el-table__inner-wrapper::after,
+.el-table--border::before,
+.el-table--border::after,
+.el-table__border-left-patch {
+  background-color: rgba(148, 163, 184, 0.14);
+}
+
+/* ============================================================
+   Tooltip / Popconfirm
+   ============================================================ */
+.el-tooltip__popper.is-dark {
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+}
+
+.el-popconfirm {
+  --el-popconfirm-font-size: 13px;
+}
+
+/* ============================================================
+   Badge / Collapse / Timeline
+   ============================================================ */
+.el-badge__content {
+  border-color: transparent;
+}
+
+.el-collapse {
+  --el-collapse-border-color: var(--app-border);
+  --el-collapse-header-bg-color: rgba(15, 23, 42, 0.6);
+  --el-collapse-content-bg-color: rgba(15, 23, 42, 0.4);
+}
+
+.el-collapse-item__header,
+.el-collapse-item__content {
+  color: var(--app-text);
+}
+
+.el-timeline-item__tail {
+  border-left-color: rgba(148, 163, 184, 0.2);
+}
+
+.el-timeline-item__node {
+  background: var(--cc-primary);
+}
+
+.el-timeline-item__content {
+  color: var(--app-text);
+}
+
+.el-timeline-item__timestamp {
+  color: var(--app-text-muted);
+}
+
+/* ============================================================
+   Admin table action buttons (compact)
+   ============================================================ */
+.admin-console-page .el-table .el-button--small {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.admin-console-page .el-table .el-button + .el-button {
+  margin-left: 4px;
+}
