@@ -57,6 +57,14 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'dashboard/v3',
+        name: 'V3Dashboard',
+        component: () => import('@/views/v3/V3DashboardView.vue'),
+        meta: {
+          title: 'V3 驾驶舱'
+        }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/user/ProfileView.vue'),
@@ -97,11 +105,51 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'questions/recommendations',
+        name: 'QuestionRecommendations',
+        component: () => import('@/views/v3/QuestionRecommendationsView.vue'),
+        meta: {
+          title: '推荐题目'
+        }
+      },
+      {
         path: 'questions/:id',
         name: 'QuestionDetail',
         component: () => import('@/views/question/QuestionDetailView.vue'),
         meta: {
           title: '题目详情'
+        }
+      },
+      {
+        path: 'job-targets',
+        name: 'JobTargets',
+        component: () => import('@/views/v3/JobTargetListView.vue'),
+        meta: {
+          title: '岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/create',
+        name: 'JobTargetCreate',
+        component: () => import('@/views/v3/JobTargetEditView.vue'),
+        meta: {
+          title: '创建岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/:id/edit',
+        name: 'JobTargetEdit',
+        component: () => import('@/views/v3/JobTargetEditView.vue'),
+        meta: {
+          title: '编辑岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/:id/analysis',
+        name: 'JobTargetAnalysis',
+        component: () => import('@/views/v3/JobTargetAnalysisView.vue'),
+        meta: {
+          title: 'JD 分析'
         }
       },
       {
@@ -126,6 +174,30 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/resume/ResumeEditView.vue'),
         meta: {
           title: '编辑简历'
+        }
+      },
+      {
+        path: 'resume-match',
+        name: 'ResumeMatch',
+        component: () => import('@/views/v3/ResumeMatchView.vue'),
+        meta: {
+          title: '简历匹配'
+        }
+      },
+      {
+        path: 'resume-match/:id',
+        name: 'ResumeMatchDetail',
+        component: () => import('@/views/v3/ResumeMatchDetailView.vue'),
+        meta: {
+          title: '匹配报告详情'
+        }
+      },
+      {
+        path: 'skill-profile',
+        name: 'SkillProfile',
+        component: () => import('@/views/v3/SkillProfileView.vue'),
+        meta: {
+          title: '能力画像'
         }
       },
       {
@@ -166,6 +238,14 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/interview/InterviewReportView.vue'),
         meta: {
           title: '面试报告'
+        }
+      },
+      {
+        path: 'study-plans/from-gap',
+        name: 'StudyPlansFromGap',
+        component: () => import('@/views/v3/StudyPlanFromGapView.vue'),
+        meta: {
+          title: '差距学习计划'
         }
       },
       {

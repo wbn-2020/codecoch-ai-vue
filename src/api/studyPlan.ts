@@ -5,10 +5,14 @@ import type {
   SseEventVO,
   StudyPlanDailyViewVO,
   StudyPlanDetailVO,
+  StudyPlanGenerateFromGapDTO,
+  StudyPlanGenerateFromMatchReportDTO,
   StudyPlanGenerateDTO,
   StudyPlanGenerateVO,
   StudyPlanListVO,
   StudyPlanQueryDTO,
+  StudyPlanSkillRelationVO,
+  StudyPlanSourceTypeVO,
   StudyTaskStatus,
   StudyTaskVO
 } from '@/types/studyPlan'
@@ -31,6 +35,22 @@ const normalizePlanDetail = (detail: StudyPlanDetailVO): StudyPlanDetailVO => ({
 
 export const generateStudyPlanApi = (data: StudyPlanGenerateDTO) => {
   return request.post<StudyPlanGenerateVO, StudyPlanGenerateVO>('/study-plans/generate', data)
+}
+
+export const generateStudyPlanFromGapApi = (data: StudyPlanGenerateFromGapDTO) => {
+  return request.post<StudyPlanGenerateVO, StudyPlanGenerateVO>(
+    '/study-plans/generate-from-gap',
+    data
+  )
+}
+
+export const generateStudyPlanFromMatchReportApi = (
+  data: StudyPlanGenerateFromMatchReportDTO
+) => {
+  return request.post<StudyPlanGenerateVO, StudyPlanGenerateVO>(
+    '/study-plans/generate-from-match-report',
+    data
+  )
 }
 
 const toStudyPlanSseParams = (data: StudyPlanGenerateDTO) => ({
@@ -81,6 +101,18 @@ export const getStudyPlanDetailApi = (id: number) => {
 
 export const getStudyPlanTasksApi = (id: number) => {
   return request.get<StudyTaskVO[], StudyTaskVO[]>(`/study-plans/${id}/tasks`)
+}
+
+export const getStudyPlanSkillRelationsApi = (id: number) => {
+  return request.get<StudyPlanSkillRelationVO[], StudyPlanSkillRelationVO[]>(
+    `/study-plans/${id}/skill-relations`
+  )
+}
+
+export const getStudyPlanSourceTypesApi = () => {
+  return request.get<StudyPlanSourceTypeVO[], StudyPlanSourceTypeVO[]>(
+    '/study-plans/source-types'
+  )
 }
 
 export const getStudyPlanDailyViewApi = (planId: number, date?: string) => {

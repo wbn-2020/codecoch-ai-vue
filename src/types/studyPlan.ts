@@ -13,6 +13,23 @@ export interface StudyPlanGenerateDTO {
   extraRequirements?: string
 }
 
+export interface StudyPlanGenerateFromGapDTO {
+  profileId: number
+  gapItemIds?: number[]
+  days: number
+  dailyMinutes?: number
+  startDate?: string
+  planTitle?: string
+}
+
+export interface StudyPlanGenerateFromMatchReportDTO {
+  matchReportId: number
+  days: number
+  dailyMinutes?: number
+  startDate?: string
+  planTitle?: string
+}
+
 export interface StudyPlanQueryDTO extends PageQuery {
   planStatus?: StudyPlanStatus | ''
 }
@@ -25,6 +42,7 @@ export interface StudyPlanGenerateVO {
   planId: number
   planStatus: StudyPlanStatus
   planTitle?: string
+  taskCount?: number
   failureReason?: string
 }
 
@@ -101,6 +119,28 @@ export interface StudyTaskVO {
   relatedQuestionIds?: number[]
   relatedTags?: string[]
   resources?: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface StudyPlanSourceTypeVO {
+  code: string
+  description?: string
+}
+
+export interface StudyPlanSkillRelationVO {
+  id: number
+  studyPlanId: number
+  studyTaskId?: number
+  targetJobId?: number
+  skillProfileId?: number
+  skillGapItemId?: number
+  skillName?: string
+  category?: string
+  severity?: string
+  sourceType?: string
+  sourceBizId?: number
+  priority?: number
   createdAt?: string
   updatedAt?: string
 }
