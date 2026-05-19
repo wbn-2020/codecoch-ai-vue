@@ -35,6 +35,8 @@
       <div class="auth-card__footer">
         <span>还没有账号？</span>
         <el-button link type="primary" @click="router.push('/register')">去注册</el-button>
+        <span class="footer-divider"></span>
+        <el-button link type="primary" @click="router.push('/forgot-password')">忘记密码</el-button>
       </div>
     </section>
   </main>
@@ -145,5 +147,12 @@ const handleSubmit = async () => {
   margin-top: 22px;
   color: var(--app-text-muted);
   font-size: 14px;
+}
+
+.footer-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 6px;
+  background: var(--app-border);
 }
 </style>

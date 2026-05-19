@@ -1,6 +1,6 @@
 <template>
   <div class="interview-room">
-    <section class="room-topbar">
+    <section class="room-topbar cc-glass">
       <div>
         <div class="eyebrow">
           <Bot :size="16" />
@@ -10,6 +10,10 @@
         <p>保留真实面试 current、answer、finish 接口，以三栏作战台组织进度、作答和实时评估。</p>
       </div>
       <div class="topbar-actions">
+        <span class="cc-badge" :class="sseStatusBadgeClass">
+          <span class="cc-badge__dot"></span>
+          {{ sseStatusLabel }}
+        </span>
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
           工作台
@@ -25,7 +29,7 @@
       </div>
     </section>
 
-    <section class="war-room" v-loading="loading">
+    <section class="war-room cc-glass" v-loading="loading">
       <aside class="progress-panel">
         <div class="panel-title">
           <span>面试进度</span>
@@ -54,6 +58,25 @@
               <p>{{ item.desc }}</p>
             </div>
           </article>
+        </div>
+
+        <div v-if="outlineStages.length" class="outline-section">
+          <div class="outline-title">面试大纲</div>
+          <div class="outline-list">
+            <div
+              v-for="stage in outlineStages"
+              :key="stage.stageOrder"
+              class="outline-item"
+              :class="outlineStageState(stage)"
+            >
+              <span class="outline-order">{{ stage.stageOrder }}</span>
+              <div class="outline-info">
+                <strong>{{ stage.stageName }}</strong>
+                <span v-if="stage.expectedQuestionCount">{{ stage.expectedQuestionCount }} 题</span>
+                <span v-if="stage.estimatedMinutes">~{{ stage.estimatedMinutes }}min</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <el-empty v-if="!current && !loading" description="未找到面试会话" />
@@ -236,9 +259,10 @@
       </aside>
     </section>
 
-    <footer class="room-statusbar">
+    <footer class="room-statusbar cc-glass">
       <span>会话：{{ interviewId || '-' }}</span>
       <span>状态：{{ current?.status || '-' }}</span>
+      <span>计时：{{ elapsedText }}</span>
       <span>接口：{{ submitting ? 'answer SSE 处理中' : loading ? 'current 加载中' : '等待操作' }}</span>
       <span v-if="answerReviewMetaText">点评：{{ answerReviewMetaText }}</span>
       <span>报告：真实 finish 后跳转报告页轮询</span>
@@ -290,6 +314,8 @@ const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
 const answerReviewEvents = ref<Array<{ key: string; event: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
+let elapsedTimer: number | undefined
+const elapsedSeconds = ref(0)
 
 const answerReviewStageLabels: Record<string, string> = {
   VALIDATE_REQUEST: '校验回答',
@@ -300,6 +326,46 @@ const answerReviewStageLabels: Record<string, string> = {
   SAVE_REVIEW: '保存点评结果',
   GENERATE_FOLLOW_UP: '生成追问',
   SAVE_FOLLOW_UP: '保存追问'
+}
+
+// SSE 四态徽章
+const sseStatusLabel = computed(() => {
+  if (submitting.value && answerReviewEvents.value.length > 0) return '流式输出中'
+  if (submitting.value) return 'AI 思考中'
+  if (current.value?.status === 'COMPLETED' || current.value?.status === 'REPORT_GENERATING') return '已完成'
+  if (current.value?.status === 'NOT_STARTED') return '待开始'
+  return '等待操作'
+})
+
+const sseStatusBadgeClass = computed(() => {
+  if (submitting.value && answerReviewEvents.value.length > 0) return 'cc-badge--streaming'
+  if (submitting.value) return 'cc-badge--thinking'
+  if (current.value?.status === 'COMPLETED' || current.value?.status === 'REPORT_GENERATING') return 'cc-badge--success'
+  if (current.value?.status === 'NOT_STARTED') return 'cc-badge--idle'
+  return 'cc-badge--idle'
+})
+
+// 答题计时器
+const elapsedText = computed(() => {
+  const s = elapsedSeconds.value
+  const min = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+})
+
+const startElapsedTimer = () => {
+  stopElapsedTimer()
+  elapsedSeconds.value = 0
+  elapsedTimer = window.setInterval(() => {
+    elapsedSeconds.value++
+  }, 1000)
+}
+
+const stopElapsedTimer = () => {
+  if (elapsedTimer) {
+    window.clearInterval(elapsedTimer)
+    elapsedTimer = undefined
+  }
 }
 
 const nextActionText = computed(() => {
@@ -326,6 +392,17 @@ const nextActionAlertType = computed(() => {
 const answerDisabled = computed(() => {
   return !current.value?.currentQuestion || ['COMPLETED', 'REPORT_GENERATING', 'FAILED'].includes(current.value.status)
 })
+
+const outlineStages = computed(() => current.value?.outline || [])
+
+const outlineStageState = (stage: { stageOrder: number; status?: string }) => {
+  if (stage.status === 'COMPLETED') return 'completed'
+  if (stage.status === 'IN_PROGRESS') return 'active'
+  const currentOrder = current.value?.currentStage?.stageOrder
+  if (currentOrder && stage.stageOrder < currentOrder) return 'completed'
+  if (currentOrder && stage.stageOrder === currentOrder) return 'active'
+  return 'pending'
+}
 
 const progressItems = computed(() => [
   {
@@ -373,6 +450,9 @@ const fetchCurrent = async () => {
   try {
     current.value = await getCurrentInterviewQuestionApi(interviewId)
     answerStartTime.value = Date.now()
+    if (current.value?.currentQuestion) {
+      startElapsedTimer()
+    }
   } finally {
     loading.value = false
   }
@@ -412,6 +492,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
       currentQuestion: result.nextQuestion
     }
     answerStartTime.value = Date.now()
+    startElapsedTimer()
     return
   }
 
@@ -520,6 +601,7 @@ const handleSubmit = async () => {
 
   submitting.value = true
   lastAnswerDuration.value = payload.answerDurationSeconds || 0
+  stopElapsedTimer()
   startSlowSubmitHint()
   stopAnswerReviewSse()
   resetAnswerReviewState()
@@ -597,6 +679,7 @@ onMounted(fetchCurrent)
 onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
+  stopElapsedTimer()
 })
 </script>
 
@@ -611,11 +694,8 @@ onBeforeUnmount(() => {
 .room-topbar,
 .war-room,
 .room-statusbar {
-  border: 1px solid var(--app-border);
   border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
+  overflow: hidden;
 }
 
 .room-topbar {
@@ -739,6 +819,95 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   margin-top: 16px;
+}
+
+.outline-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border);
+}
+
+.outline-title {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: background 0.15s;
+
+  &.active {
+    background: rgba(99, 102, 241, 0.12);
+
+    .outline-order {
+      background: var(--cc-primary);
+      color: #fff;
+    }
+
+    strong {
+      color: #f8fafc;
+    }
+  }
+
+  &.completed {
+    opacity: 0.6;
+
+    .outline-order {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+  }
+
+  &.pending {
+    opacity: 0.5;
+  }
+}
+
+.outline-order {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--app-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.outline-info {
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    display: block;
+    font-size: 12px;
+    color: var(--app-text-muted);
+  }
+
+  span {
+    font-size: 11px;
+    color: var(--app-text-muted);
+    opacity: 0.7;
+    margin-right: 6px;
+  }
 }
 
 .progress-item {

@@ -20,6 +20,24 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/auth/ForgotPasswordView.vue'),
+    meta: {
+      public: true,
+      title: '找回密码'
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/auth/ResetPasswordView.vue'),
+    meta: {
+      public: true,
+      title: '重置密码'
+    }
+  },
+  {
     path: '/403',
     name: 'Forbidden',
     component: () => import('@/views/error/ForbiddenView.vue'),
@@ -57,6 +75,14 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'dashboard/v3',
+        name: 'V3Dashboard',
+        component: () => import('@/views/v3/V3DashboardView.vue'),
+        meta: {
+          title: 'V3 驾驶舱'
+        }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/user/ProfileView.vue'),
@@ -73,11 +99,43 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/user/NotificationCenterView.vue'),
+        meta: {
+          title: '通知中心'
+        }
+      },
+      {
+        path: 'weakness-analysis',
+        name: 'WeaknessAnalysis',
+        component: () => import('@/views/user/WeaknessAnalysisView.vue'),
+        meta: {
+          title: '薄弱知识点分析'
+        }
+      },
+      {
+        path: 'projects',
+        name: 'ProjectExperience',
+        component: () => import('@/views/user/ProjectExperienceView.vue'),
+        meta: {
+          title: '项目经历'
+        }
+      },
+      {
         path: 'questions',
         name: 'QuestionList',
         component: () => import('@/views/question/QuestionListView.vue'),
         meta: {
           title: '题库'
+        }
+      },
+      {
+        path: 'questions/practice',
+        name: 'QuestionPractice',
+        component: () => import('@/views/question/PracticeModeView.vue'),
+        meta: {
+          title: '刷题练习'
         }
       },
       {
@@ -97,11 +155,51 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'questions/recommendations',
+        name: 'QuestionRecommendations',
+        component: () => import('@/views/v3/QuestionRecommendationsView.vue'),
+        meta: {
+          title: '推荐题目'
+        }
+      },
+      {
         path: 'questions/:id',
         name: 'QuestionDetail',
         component: () => import('@/views/question/QuestionDetailView.vue'),
         meta: {
           title: '题目详情'
+        }
+      },
+      {
+        path: 'job-targets',
+        name: 'JobTargets',
+        component: () => import('@/views/v3/JobTargetListView.vue'),
+        meta: {
+          title: '岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/create',
+        name: 'JobTargetCreate',
+        component: () => import('@/views/v3/JobTargetEditView.vue'),
+        meta: {
+          title: '创建岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/:id/edit',
+        name: 'JobTargetEdit',
+        component: () => import('@/views/v3/JobTargetEditView.vue'),
+        meta: {
+          title: '编辑岗位目标'
+        }
+      },
+      {
+        path: 'job-targets/:id/analysis',
+        name: 'JobTargetAnalysis',
+        component: () => import('@/views/v3/JobTargetAnalysisView.vue'),
+        meta: {
+          title: 'JD 分析'
         }
       },
       {
@@ -126,6 +224,30 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/resume/ResumeEditView.vue'),
         meta: {
           title: '编辑简历'
+        }
+      },
+      {
+        path: 'resume-match',
+        name: 'ResumeMatch',
+        component: () => import('@/views/v3/ResumeMatchView.vue'),
+        meta: {
+          title: '简历匹配'
+        }
+      },
+      {
+        path: 'resume-match/:id',
+        name: 'ResumeMatchDetail',
+        component: () => import('@/views/v3/ResumeMatchDetailView.vue'),
+        meta: {
+          title: '匹配报告详情'
+        }
+      },
+      {
+        path: 'skill-profile',
+        name: 'SkillProfile',
+        component: () => import('@/views/v3/SkillProfileView.vue'),
+        meta: {
+          title: '能力画像'
         }
       },
       {
@@ -169,11 +291,27 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'study-plans/from-gap',
+        name: 'StudyPlansFromGap',
+        component: () => import('@/views/v3/StudyPlanFromGapView.vue'),
+        meta: {
+          title: '差距学习计划'
+        }
+      },
+      {
         path: 'study-plans',
         name: 'StudyPlans',
         component: () => import('@/views/study/StudyPlanView.vue'),
         meta: {
           title: '学习计划'
+        }
+      },
+      {
+        path: 'daily-tasks',
+        name: 'DailyTasks',
+        component: () => import('@/views/study/DailyTaskView.vue'),
+        meta: {
+          title: '每日任务'
         }
       }
     ]
@@ -339,6 +477,78 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统配置',
           icon: 'Setting'
+        }
+      },
+      {
+        path: 'ai/models',
+        name: 'AdminAiModels',
+        component: () => import('@/views/admin/AiModelConfigView.vue'),
+        meta: {
+          title: 'AI 模型配置',
+          icon: 'Operation'
+        }
+      },
+      {
+        path: 'menus',
+        name: 'AdminMenus',
+        component: () => import('@/views/admin/MenuPermissionView.vue'),
+        meta: {
+          title: '菜单权限',
+          icon: 'Lock'
+        }
+      },
+      {
+        path: 'notices',
+        name: 'AdminNotices',
+        component: () => import('@/views/admin/NotificationManageView.vue'),
+        meta: {
+          title: '通知管理',
+          icon: 'Bell'
+        }
+      },
+      {
+        path: 'operation-logs',
+        name: 'AdminOperationLogs',
+        component: () => import('@/views/admin/OperationLogView.vue'),
+        meta: {
+          title: '操作日志',
+          icon: 'Document'
+        }
+      },
+      {
+        path: 'login-logs',
+        name: 'AdminLoginLogs',
+        component: () => import('@/views/admin/LoginLogView.vue'),
+        meta: {
+          title: '登录日志',
+          icon: 'Key'
+        }
+      },
+      {
+        path: 'interviews',
+        name: 'AdminInterviews',
+        component: () => import('@/views/admin/InterviewManageView.vue'),
+        meta: {
+          title: '面试记录管理',
+          icon: 'ChatDotRound'
+        }
+      },
+      {
+        path: 'interview-reports',
+        name: 'AdminInterviewReports',
+        component: () => import('@/views/admin/InterviewReportManageView.vue'),
+        meta: {
+          title: '面试报告管理',
+          icon: 'Document'
+        }
+      },
+      {
+        path: 'async-tasks',
+        name: 'AdminAsyncTasks',
+        component: () => import('@/views/admin/AsyncTaskView.vue'),
+        meta: {
+          title: '异步任务',
+          icon: 'Timer'
         }
       }
     ]

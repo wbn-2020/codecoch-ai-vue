@@ -1,6 +1,6 @@
 <template>
   <div class="resume-center page-shell">
-    <section class="resume-hero">
+    <section class="resume-hero cc-glass--ai">
       <div class="hero-copy">
         <div class="hero-kicker">
           <FileText :size="16" />
@@ -63,7 +63,7 @@
       </article>
     </section>
 
-    <section class="content-card upload-workbench">
+    <section class="content-card cc-glass upload-workbench">
       <div class="upload-panel">
         <div>
           <div class="section-title">
@@ -136,7 +136,7 @@
       </div>
     </section>
 
-    <section class="content-card resume-workspace">
+    <section class="content-card cc-glass resume-workspace">
       <div class="content-card__body workspace-toolbar">
         <div>
           <h2>求职资料库</h2>
@@ -369,11 +369,11 @@
               <el-tag v-if="item.fabricationRisk" type="warning" effect="plain">需核实真实性</el-tag>
             </div>
             <div class="diff-grid">
-              <div>
+              <div class="diff-before">
                 <span>优化前</span>
                 <p>{{ item.before || '后端未返回原文片段' }}</p>
               </div>
-              <div>
+              <div class="diff-after">
                 <span>优化后</span>
                 <p>{{ item.after || '后端未返回改写建议' }}</p>
               </div>
@@ -904,13 +904,7 @@ onUnmounted(() => {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
   padding: 28px;
-  border: 1px solid rgba(129, 140, 248, 0.28);
   border-radius: var(--cc-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.08)),
-    rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
 }
 
 .hero-kicker,
@@ -1517,9 +1511,27 @@ onUnmounted(() => {
     background: rgba(15, 23, 42, 0.52);
   }
 
+  .diff-before {
+    border-color: rgba(239, 68, 68, 0.28);
+    background: rgba(127, 29, 29, 0.18);
+  }
+
+  .diff-after {
+    border-color: rgba(34, 197, 94, 0.32);
+    background: rgba(20, 83, 45, 0.18);
+  }
+
   span {
     color: var(--app-text-muted);
     font-size: 12px;
+  }
+
+  .diff-before span {
+    color: #fca5a5;
+  }
+
+  .diff-after span {
+    color: #86efac;
   }
 
   p {

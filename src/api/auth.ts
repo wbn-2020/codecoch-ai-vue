@@ -20,3 +20,21 @@ export const getCurrentUserApi = () => {
 export const refreshTokenApi = () => {
   return request.post<LoginVO, LoginVO>('/auth/refresh-token')
 }
+
+export interface ForgotPasswordDTO {
+  email: string
+}
+
+export interface ResetPasswordDTO {
+  token: string
+  newPassword: string
+  confirmPassword: string
+}
+
+export const forgotPasswordApi = (data: ForgotPasswordDTO) => {
+  return request.post<{ message: string }, { message: string }>('/auth/forgot-password', data)
+}
+
+export const resetPasswordApi = (data: ResetPasswordDTO) => {
+  return request.post<{ message: string }, { message: string }>('/auth/reset-password', data)
+}

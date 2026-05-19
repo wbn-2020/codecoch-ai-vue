@@ -20,6 +20,14 @@ export const updateUserProfileApi = (data: UserProfileUpdateDTO) => {
   return request.put<UserProfileVO, UserProfileVO>('/users/profile', data)
 }
 
+export const uploadAvatarApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<{ url: string }, { url: string }>('/users/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export const updatePasswordApi = (data: PasswordUpdateDTO) => {
   return request.put<null, null>('/users/password', data)
 }

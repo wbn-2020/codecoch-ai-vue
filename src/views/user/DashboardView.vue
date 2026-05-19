@@ -1,6 +1,7 @@
 <template>
   <div class="dashboard-page">
-    <section class="dashboard-hero">
+    <!-- Hero -->
+    <section class="cc-glass dashboard-hero">
       <div class="hero-copy">
         <div class="hero-eyebrow">
           <Sparkles :size="16" />
@@ -25,13 +26,14 @@
       <div class="hero-panel">
         <div class="panel-header">
           <span>Dashboard Overview</span>
-          <span class="status-pill status-pill--info">真实用户数据</span>
+          <span class="cc-badge cc-badge--streaming">
+            <span class="cc-badge__dot"></span>
+            真实用户数据
+          </span>
         </div>
-        <div class="terminal-card">
+        <div class="cc-terminal">
           <div class="terminal-dots" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
+            <span></span><span></span><span></span>
           </div>
           <code>
             <span>$ codecoach dashboard --user=current</span>
@@ -44,17 +46,19 @@
       </div>
     </section>
 
-    <section v-if="overviewError" class="dashboard-alert">
+    <!-- Error alert -->
+    <section v-if="overviewError" class="cc-glass dashboard-alert">
       <AlertTriangle :size="18" />
       <span>工作台概览接口异常，当前页面不会回退到假数据。</span>
       <el-button text @click="fetchOverview">重试</el-button>
     </section>
 
+    <!-- Metrics -->
     <section class="metric-grid dashboard-metrics" v-loading="overviewLoading">
       <button
         v-for="item in metrics"
         :key="item.label"
-        class="metric-card metric-card--interactive"
+        class="cc-glass metric-card metric-card--interactive"
         type="button"
         :disabled="item.disabled"
         @click="item.path && go(item.path)"
@@ -68,7 +72,8 @@
       </button>
     </section>
 
-    <section class="dashboard-section">
+    <!-- Quick Actions -->
+    <section class="cc-glass dashboard-section">
       <div class="section-heading">
         <div>
           <p class="section-kicker">Quick Actions</p>
@@ -86,13 +91,14 @@
             <strong>{{ item.title }}</strong>
             <span>{{ item.desc }}</span>
           </span>
-          <span class="status-pill">{{ item.badge }}</span>
+          <span class="cc-badge" :class="badgeClass(item.badge)">{{ item.badge }}</span>
         </button>
       </div>
     </section>
 
+    <!-- Main grid: Resume + Study Plan -->
     <div class="dashboard-main-grid">
-      <section class="dashboard-section">
+      <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
             <p class="section-kicker">Resume</p>
@@ -121,7 +127,7 @@
         </div>
       </section>
 
-      <section class="dashboard-section">
+      <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
             <p class="section-kicker">Study Plan</p>
@@ -148,8 +154,9 @@
       </section>
     </div>
 
+    <!-- Main grid: Recent Interview + Wrong Questions -->
     <div class="dashboard-main-grid">
-      <section class="dashboard-section">
+      <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
             <p class="section-kicker">Recent Interview</p>
@@ -190,27 +197,57 @@
         </div>
       </section>
 
-      <section class="dashboard-section">
+      <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Entry Status</p>
-            <h2>推荐入口状态</h2>
+            <p class="section-kicker">Wrong Questions</p>
+            <h2>待复习错题</h2>
           </div>
+          <el-button text @click="go('/questions/wrong-records')">查看全部</el-button>
         </div>
 
-        <div class="entry-list">
-          <article v-for="item in entryStatuses" :key="item.key" class="entry-item">
-            <Route :size="18" />
+        <div v-if="wrongQuestionsLoading" v-loading="true" class="loading-placeholder"></div>
+        <div v-else-if="wrongQuestions.length" class="info-list">
+          <button
+            v-for="item in wrongQuestions"
+            :key="item.wrongRecordId"
+            class="info-item info-item--button"
+            type="button"
+            @click="go(`/questions/${item.questionId}`)"
+          >
+            <AlertTriangle :size="16" />
             <div>
-              <strong>{{ entryLabel(item.key) }}</strong>
-              <span>{{ entryStatusText(item.status) }}</span>
-              <small>{{ item.reason || '-' }}</small>
+              <strong>{{ item.title || `题目 #${item.questionId}` }}</strong>
+              <span>错误次数 {{ item.wrongCount ?? 1 }} · {{ formatDateTime(item.lastWrongAt) }}</span>
             </div>
-          </article>
-          <el-empty v-if="!entryStatuses.length" description="概览接口未返回推荐入口状态" />
+            <span class="cc-badge cc-badge--warning">待复习</span>
+          </button>
         </div>
+        <el-empty v-else description="暂无待复习错题" />
       </section>
     </div>
+
+    <!-- Entry Status -->
+    <section class="cc-glass dashboard-section">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Entry Status</p>
+          <h2>推荐入口状态</h2>
+        </div>
+      </div>
+
+      <div class="entry-list">
+        <article v-for="item in entryStatuses" :key="item.key" class="entry-item">
+          <Route :size="18" />
+          <div>
+            <strong>{{ entryLabel(item.key) }}</strong>
+            <span>{{ entryStatusText(item.status) }}</span>
+            <small>{{ item.reason || '-' }}</small>
+          </div>
+        </article>
+        <el-empty v-if="!entryStatuses.length" description="概览接口未返回推荐入口状态" />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -234,8 +271,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
+import { getWrongQuestionsApi } from '@/api/question'
 import { useAuthStore } from '@/stores/auth'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
+import type { WrongQuestionVO } from '@/types/question'
 
 interface MetricItem {
   label: string
@@ -252,6 +291,9 @@ const authStore = useAuthStore()
 const overviewLoading = ref(false)
 const overviewError = ref(false)
 const overview = ref<UserDashboardOverviewVO | null>(null)
+
+const wrongQuestionsLoading = ref(false)
+const wrongQuestions = ref<WrongQuestionVO[]>([])
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
@@ -298,12 +340,12 @@ const metrics = computed<MetricItem[]>(() => [
     disabled: !overview.value?.recentReport
   },
   {
-    label: '最近解析',
-    value: overview.value?.recentResumeParse?.parseStatus || '--',
-    hint: overview.value?.recentResumeParse?.fileName || '暂无解析记录',
+    label: '待复习错题',
+    value: wrongQuestions.value.length,
+    hint: '需要复习的错题数',
     icon: RefreshCcw,
     tone: 'tone-amber',
-    path: '/resumes'
+    path: '/questions/wrong-records'
   }
 ])
 
@@ -334,11 +376,11 @@ const actionCards = computed(() => [
   },
   {
     title: '错题复盘',
-    desc: '查看真实错题记录',
+    desc: `${wrongQuestions.value.length} 道待复习`,
     icon: RefreshCcw,
     tone: 'tone-amber',
     path: '/questions/wrong-records',
-    badge: '可用'
+    badge: wrongQuestions.value.length > 0 ? '待复习' : '可用'
   },
   {
     title: '收藏题目',
@@ -403,6 +445,13 @@ const formatStatus = (status?: string) => {
 
 const entryStatusText = (status?: string) => formatStatus(status || 'TODO')
 
+const badgeClass = (badge: string) => {
+  if (badge === '可用') return 'cc-badge--success'
+  if (badge === '待复习') return 'cc-badge--warning'
+  if (badge === '失败') return 'cc-badge--danger'
+  return ''
+}
+
 const entryLabel = (key: string) => {
   const map: Record<string, string> = {
     resume: '简历入口',
@@ -432,7 +481,22 @@ const fetchOverview = async () => {
   }
 }
 
-onMounted(fetchOverview)
+const fetchWrongQuestions = async () => {
+  wrongQuestionsLoading.value = true
+  try {
+    const result = await getWrongQuestionsApi({ pageNum: 1, pageSize: 5 })
+    wrongQuestions.value = result.records || []
+  } catch {
+    wrongQuestions.value = []
+  } finally {
+    wrongQuestionsLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchOverview()
+  fetchWrongQuestions()
+})
 </script>
 
 <style scoped lang="scss">
@@ -442,18 +506,6 @@ onMounted(fetchOverview)
   gap: 18px;
 }
 
-.dashboard-hero,
-.dashboard-section,
-.dashboard-alert {
-  border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.64)),
-    rgba(15, 23, 42, 0.76);
-  box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
-}
-
 .dashboard-hero {
   position: relative;
   display: grid;
@@ -461,6 +513,18 @@ onMounted(fetchOverview)
   gap: 24px;
   overflow: hidden;
   padding: 28px;
+}
+
+.dashboard-section {
+  padding: 20px;
+}
+
+.dashboard-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: #fed7aa;
 }
 
 .hero-copy h1 {
@@ -528,14 +592,6 @@ onMounted(fetchOverview)
   font-size: 12px;
 }
 
-.terminal-card {
-  min-height: 180px;
-  padding: 16px;
-  border: 1px solid rgba(34, 211, 238, 0.2);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.72);
-}
-
 .terminal-dots {
   display: flex;
   gap: 6px;
@@ -561,22 +617,13 @@ onMounted(fetchOverview)
   background: #34d399;
 }
 
-.terminal-card code {
+.cc-terminal code {
   display: grid;
   gap: 10px;
   color: #a7f3d0;
-  font-family: Consolas, Monaco, monospace;
   font-size: 13px;
   line-height: 1.6;
   white-space: normal;
-}
-
-.dashboard-alert {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  color: #fed7aa;
 }
 
 .dashboard-metrics {
@@ -588,14 +635,21 @@ onMounted(fetchOverview)
   min-height: 166px;
   flex-direction: column;
   align-items: flex-start;
-  border: 1px solid var(--app-border);
   color: var(--app-text);
   text-align: left;
   cursor: pointer;
+  padding: 18px;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.metric-card--interactive:hover:not(:disabled) {
+  border-color: rgba(129, 140, 248, 0.45);
+  transform: translateY(-2px);
 }
 
 .metric-card--interactive:disabled {
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .metric-card__icon,
@@ -607,6 +661,14 @@ onMounted(fetchOverview)
 
 .metric-card__label {
   margin-top: 16px;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.metric-card__value {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 700;
 }
 
 .metric-card__hint {
@@ -614,10 +676,6 @@ onMounted(fetchOverview)
   color: var(--app-text-muted);
   font-size: 12px;
   line-height: 1.5;
-}
-
-.dashboard-section {
-  padding: 20px;
 }
 
 .section-heading {
@@ -661,6 +719,7 @@ onMounted(fetchOverview)
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.58);
   color: var(--app-text);
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .action-card {
@@ -668,6 +727,11 @@ onMounted(fetchOverview)
   padding: 16px;
   text-align: left;
   cursor: pointer;
+}
+
+.action-card:hover {
+  border-color: rgba(129, 140, 248, 0.4);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .action-card__content {
@@ -693,27 +757,6 @@ onMounted(fetchOverview)
   line-height: 1.55;
 }
 
-.status-pill {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.72);
-  color: #cbd5e1;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.status-pill--info {
-  border-color: rgba(34, 211, 238, 0.28);
-  background: rgba(6, 182, 212, 0.12);
-  color: #67e8f9;
-}
-
 .dashboard-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
@@ -736,6 +779,11 @@ onMounted(fetchOverview)
 .active-plan {
   text-align: left;
   cursor: pointer;
+}
+
+.info-item--button:hover {
+  border-color: rgba(129, 140, 248, 0.4);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .info-item div,
@@ -777,6 +825,10 @@ onMounted(fetchOverview)
   margin-top: 6px;
   color: #f8fafc;
   font-size: 24px;
+}
+
+.loading-placeholder {
+  min-height: 120px;
 }
 
 .tone-blue {

@@ -99,6 +99,12 @@
                   <el-option v-for="item in interviewerStyleOptions" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
               </el-form-item>
+              <el-form-item label="面试模式">
+                <el-select v-model="form.practiceMode" style="width: 100%">
+                  <el-option v-for="item in interviewPracticeModeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+                <div class="field-hint">正式模式：面试结束后统一生成报告；练习模式：每题后可查看详细点评。</div>
+              </el-form-item>
               <el-form-item label="题目数量">
                 <el-input-number v-model="form.questionCount" :min="1" :max="20" />
               </el-form-item>
@@ -262,6 +268,7 @@ import {
   industryDirectionOptions,
   INTERVIEW_MODE,
   interviewerStyleOptions,
+  interviewPracticeModeOptions,
   targetPositionOptions
 } from '@/constants/enums'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
@@ -288,6 +295,7 @@ const form = reactive<InterviewCreateDTO>({
   industryDirection: 'GENERAL',
   difficulty: 'MEDIUM',
   interviewerStyle: 'NORMAL',
+  practiceMode: 'FORMAL',
   resumeId: undefined,
   questionCount: 8
 })
@@ -482,6 +490,7 @@ const handleCreate = async () => {
     const payload: InterviewCreateDTO = {
       ...form,
       interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
+      practiceMode: form.practiceMode,
       industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
       industryDirection: isIndustryMode.value
         ? template?.industryCode || template?.industryName || form.industryDirection

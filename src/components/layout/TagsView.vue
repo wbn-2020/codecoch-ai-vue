@@ -3,7 +3,7 @@
     <el-scrollbar>
       <div class="tags-view__inner">
         <button
-          v-for="tag in tagsStore.visitedTags"
+          v-for="tag in displayedTags"
           :key="tag.path"
           class="tag-item"
           :class="{ 'is-active': tag.path === route.path }"
@@ -19,23 +19,45 @@
       </div>
     </el-scrollbar>
 
-    <div v-if="menu.visible" class="tag-menu" :style="{ left: `${menu.left}px`, top: `${menu.top}px` }">
+    <div
+      v-if="menu.visible"
+      class="tag-menu"
+      :style="{ left: `${menu.left}px`, top: `${menu.top}px` }"
+    >
       <button type="button" @click="closeCurrent">关闭当前</button>
       <button type="button" @click="closeOthers">关闭其他</button>
+      <button type="button" @click="closeAll">关闭全部</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Close } from '@element-plus/icons-vue'
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { useTagsViewStore, type VisitedTag } from '@/stores/tagsView'
+import {
+  getHomeTag,
+  useTagsViewStore,
+  type TagScope,
+  type VisitedTag
+} from '@/stores/tagsView'
+
+const props = withDefaults(
+  defineProps<{
+    scope?: TagScope
+  }>(),
+  {
+    scope: 'admin'
+  }
+)
 
 const route = useRoute()
 const router = useRouter()
 const tagsStore = useTagsViewStore()
+
+const displayedTags = computed(() => tagsStore.tagsByScope(props.scope))
+const homeTag = computed(() => getHomeTag(props.scope))
 
 const menu = reactive({
   visible: false,
@@ -48,9 +70,10 @@ const goTag = async (tag: VisitedTag) => {
   await router.push(tag.fullPath || tag.path)
 }
 
-const getFallbackTag = (closedPath: string) => {
-  const currentIndex = tagsStore.visitedTags.findIndex((item) => item.path === closedPath)
-  return tagsStore.visitedTags[currentIndex - 1] || tagsStore.visitedTags[currentIndex + 1] || tagsStore.visitedTags[0]
+const getFallbackTag = (closedPath: string): VisitedTag | undefined => {
+  const list = displayedTags.value
+  const currentIndex = list.findIndex((item) => item.path === closedPath)
+  return list[currentIndex - 1] || list[currentIndex + 1] || homeTag.value
 }
 
 const closeTag = async (tag: VisitedTag) => {
@@ -58,7 +81,7 @@ const closeTag = async (tag: VisitedTag) => {
   const fallback = getFallbackTag(tag.path)
   tagsStore.closeTag(tag.path)
   if (route.path === tag.path) {
-    await router.push(fallback?.fullPath || '/admin')
+    await router.push(fallback?.fullPath || homeTag.value.fullPath)
   }
 }
 
@@ -82,10 +105,20 @@ const closeCurrent = async () => {
 }
 
 const closeOthers = async () => {
-  const target = menu.tag || tagsStore.visitedTags.find((item) => item.path === route.path)
-  if (!target) return
+  const target =
+    menu.tag || displayedTags.value.find((item) => item.path === route.path)
+  if (!target) {
+    closeMenu()
+    return
+  }
   tagsStore.closeOtherTags(target.path)
   await router.push(target.fullPath || target.path)
+  closeMenu()
+}
+
+const closeAll = async () => {
+  tagsStore.clearVisitedViews(props.scope)
+  await router.push(homeTag.value.fullPath)
   closeMenu()
 }
 </script>
@@ -119,6 +152,10 @@ const closeOthers = async () => {
   color: var(--app-text-muted);
   font-size: 12px;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 
   span {
     overflow: hidden;
@@ -126,10 +163,15 @@ const closeOthers = async () => {
     white-space: nowrap;
   }
 
+  &:hover {
+    border-color: rgba(129, 140, 248, 0.45);
+    color: var(--app-text);
+  }
+
   &.is-active {
     border-color: var(--app-primary);
     background: var(--app-primary-soft);
-    color: var(--app-primary);
+    color: #ffffff;
   }
 }
 
