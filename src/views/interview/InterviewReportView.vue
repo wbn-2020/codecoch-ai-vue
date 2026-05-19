@@ -151,6 +151,36 @@
         />
         <el-empty v-else description="暂无项目表达问题" />
       </article>
+
+      <article class="analysis-card">
+        <div class="section-head">
+          <h2>简历修改建议</h2>
+        </div>
+        <MarkdownPreview v-if="report.resumeSuggestions || report.resumeAdvice" :content="report.resumeSuggestions || report.resumeAdvice" />
+        <el-empty v-else description="暂无简历修改建议" />
+      </article>
+
+      <article class="analysis-card">
+        <div class="section-head">
+          <h2>推荐练习题目</h2>
+        </div>
+        <div v-if="recommendedQuestions.length" class="recommended-list">
+          <button
+            v-for="item in recommendedQuestions"
+            :key="item.questionId || item.id"
+            class="recommended-item"
+            type="button"
+            @click="router.push(`/questions/${item.questionId || item.id}`)"
+          >
+            <div>
+              <strong>{{ item.title || item.questionTitle || '推荐题目' }}</strong>
+              <span v-if="item.reason || item.recommendReason">{{ item.reason || item.recommendReason }}</span>
+            </div>
+            <el-tag v-if="item.difficulty" size="small" effect="plain">{{ item.difficulty }}</el-tag>
+          </button>
+        </div>
+        <el-empty v-else description="暂无推荐题目" />
+      </article>
     </section>
 
     <section v-if="stageReports.length && isGenerated" class="content-card">
@@ -590,6 +620,46 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.recommended-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recommended-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.46);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+
+  &:hover {
+    border-color: rgba(129, 140, 248, 0.42);
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  span {
+    display: block;
+    margin-top: 4px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 
 .eyebrow {

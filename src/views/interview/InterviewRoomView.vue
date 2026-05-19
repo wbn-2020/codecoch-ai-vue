@@ -60,6 +60,25 @@
           </article>
         </div>
 
+        <div v-if="outlineStages.length" class="outline-section">
+          <div class="outline-title">面试大纲</div>
+          <div class="outline-list">
+            <div
+              v-for="stage in outlineStages"
+              :key="stage.stageOrder"
+              class="outline-item"
+              :class="outlineStageState(stage)"
+            >
+              <span class="outline-order">{{ stage.stageOrder }}</span>
+              <div class="outline-info">
+                <strong>{{ stage.stageName }}</strong>
+                <span v-if="stage.expectedQuestionCount">{{ stage.expectedQuestionCount }} 题</span>
+                <span v-if="stage.estimatedMinutes">~{{ stage.estimatedMinutes }}min</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <el-empty v-if="!current && !loading" description="未找到面试会话" />
 
         <div class="side-actions">
@@ -373,6 +392,17 @@ const nextActionAlertType = computed(() => {
 const answerDisabled = computed(() => {
   return !current.value?.currentQuestion || ['COMPLETED', 'REPORT_GENERATING', 'FAILED'].includes(current.value.status)
 })
+
+const outlineStages = computed(() => current.value?.outline || [])
+
+const outlineStageState = (stage: { stageOrder: number; status?: string }) => {
+  if (stage.status === 'COMPLETED') return 'completed'
+  if (stage.status === 'IN_PROGRESS') return 'active'
+  const currentOrder = current.value?.currentStage?.stageOrder
+  if (currentOrder && stage.stageOrder < currentOrder) return 'completed'
+  if (currentOrder && stage.stageOrder === currentOrder) return 'active'
+  return 'pending'
+}
 
 const progressItems = computed(() => [
   {
@@ -789,6 +819,95 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   margin-top: 16px;
+}
+
+.outline-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border);
+}
+
+.outline-title {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: background 0.15s;
+
+  &.active {
+    background: rgba(99, 102, 241, 0.12);
+
+    .outline-order {
+      background: var(--cc-primary);
+      color: #fff;
+    }
+
+    strong {
+      color: #f8fafc;
+    }
+  }
+
+  &.completed {
+    opacity: 0.6;
+
+    .outline-order {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+  }
+
+  &.pending {
+    opacity: 0.5;
+  }
+}
+
+.outline-order {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--app-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.outline-info {
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    display: block;
+    font-size: 12px;
+    color: var(--app-text-muted);
+  }
+
+  span {
+    font-size: 11px;
+    color: var(--app-text-muted);
+    opacity: 0.7;
+    margin-right: 6px;
+  }
 }
 
 .progress-item {

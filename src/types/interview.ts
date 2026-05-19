@@ -61,6 +61,7 @@ export interface InterviewCreateDTO {
   industryDirection?: string
   difficulty?: string
   interviewerStyle?: string
+  practiceMode?: string
   questionCount?: number
 }
 
@@ -117,6 +118,16 @@ export interface InterviewCurrentVO {
   currentStage?: InterviewStageVO
   currentQuestion?: InterviewQuestionVO
   startedAt?: string
+  outline?: InterviewOutlineStageVO[]
+}
+
+export interface InterviewOutlineStageVO {
+  stageOrder: number
+  stageName: string
+  stageType?: string
+  expectedQuestionCount?: number
+  estimatedMinutes?: number
+  status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'
 }
 
 export interface InterviewAnswerDTO {
@@ -335,8 +346,10 @@ export interface RecommendedQuestionVO {
   id?: number
   questionId?: number
   title?: string
+  questionTitle?: string
   difficulty?: string
   reason?: string
+  recommendReason?: string
 }
 
 export interface InterviewReportVO {
@@ -360,6 +373,8 @@ export interface InterviewReportVO {
   weakKnowledgePoints?: string
   projectProblems?: string
   projectExpressionProblems?: string
+  resumeSuggestions?: string
+  resumeAdvice?: string
   recommendedQuestions?: RecommendedQuestionVO[]
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]

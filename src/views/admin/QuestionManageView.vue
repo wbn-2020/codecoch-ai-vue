@@ -16,6 +16,14 @@
         <Plus :size="16" />
         新增题目
       </el-button>
+      <el-button @click="handleExport">
+        <Download :size="16" />
+        导出题目
+      </el-button>
+      <el-button @click="importDialogVisible = true">
+        <Upload :size="16" />
+        批量导入
+      </el-button>
     </section>
 
     <div class="admin-insight-grid">
@@ -604,13 +612,38 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="importDialogVisible" title="批量导入题目" width="500px">
+      <div class="import-dialog-body">
+        <p>支持 Excel (.xlsx) 格式，请按模板格式填写题目数据。</p>
+        <el-upload
+          ref="importUploadRef"
+          :auto-upload="false"
+          :limit="1"
+          accept=".xlsx,.xls"
+          :on-change="handleImportFileChange"
+        >
+          <template #trigger>
+            <el-button type="primary">选择文件</el-button>
+          </template>
+          <template #tip>
+            <div class="el-upload__tip">仅支持 .xlsx / .xls 文件，单次最多 500 条</div>
+          </template>
+        </el-upload>
+        <el-button class="import-template-btn" link type="primary" @click="handleDownloadTemplate">下载导入模板</el-button>
+      </div>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BookOpenCheck, Plus } from 'lucide-vue-next'
+import { BookOpenCheck, Download, Plus, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import {
@@ -620,12 +653,15 @@ import {
   checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
+  downloadQuestionImportTemplate,
+  exportAdminQuestionsApi,
   generateAiQuestionsApi,
   getAdminQuestionsApi,
   getQuestionDuplicateReviewsApi,
   getQuestionReviewDetailApi,
   getQuestionReviewsApi,
   ignoreQuestionDuplicateReviewApi,
+  importAdminQuestionsApi,
   mergeQuestionDuplicateReviewApi,
   rejectQuestionReviewApi,
   streamAiQuestionGenerateApi,
@@ -1380,6 +1416,54 @@ const handleIgnoreDuplicate = async (id: number) => {
   })
   ElMessage.success('重复候选已忽略')
   await fetchDuplicates()
+}
+
+// ============ 批量导入/导出 ============
+const importDialogVisible = ref(false)
+const importing = ref(false)
+const importFile = ref<File | null>(null)
+const importUploadRef = ref()
+
+const handleImportFileChange = (file: { raw: File }) => {
+  importFile.value = file.raw
+}
+
+const handleImport = async () => {
+  if (!importFile.value) return
+  importing.value = true
+  try {
+    await importAdminQuestionsApi(importFile.value)
+    ElMessage.success('导入成功')
+    importDialogVisible.value = false
+    importFile.value = null
+    fetchQuestions()
+  } catch {
+    ElMessage.error('导入失败')
+  } finally {
+    importing.value = false
+  }
+}
+
+const handleExport = async () => {
+  try {
+    const res = await exportAdminQuestionsApi({ ...query })
+    const blob = new Blob([res as unknown as BlobPart], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `questions_export_${Date.now()}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch {
+    ElMessage.error('导出失败')
+  }
+}
+
+const handleDownloadTemplate = () => {
+  downloadQuestionImportTemplate()
 }
 
 onMounted(async () => {

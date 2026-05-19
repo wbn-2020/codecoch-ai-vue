@@ -126,9 +126,16 @@ export const industryDirectionOptions: SelectOption[] = [
 ]
 
 export const interviewerStyleOptions: SelectOption[] = [
-  { label: '普通', value: 'NORMAL' },
-  { label: '严厉', value: 'STRICT' },
-  { label: '项目深挖', value: 'PROJECT_DEEP_DIVE' }
+  { label: '普通技术面试官', value: 'NORMAL' },
+  { label: '严厉面试官', value: 'STRICT' },
+  { label: '项目深挖面试官', value: 'PROJECT_DEEP_DIVE' },
+  { label: '架构面试官', value: 'ARCHITECTURE' },
+  { label: '引导型面试官', value: 'GUIDING' }
+]
+
+export const interviewPracticeModeOptions: SelectOption[] = [
+  { label: '正式模式', value: 'FORMAL' },
+  { label: '练习模式', value: 'PRACTICE' }
 ]
 
 export const promptTypeOptions: SelectOption[] = [

@@ -1,5 +1,7 @@
 import request from '@/utils/request'
+import { appConfig } from '@/config'
 import type { PageResult } from '@/types/api'
+import { getToken } from '@/utils/token'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
@@ -178,6 +180,28 @@ export const updateAdminQuestionStatusApi = (id: number, status: number) => {
 
 export const deleteAdminQuestionApi = (id: number) => {
   return request.delete<null, null>(`/admin/questions/${id}`)
+}
+
+export const importAdminQuestionsApi = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<unknown, unknown>('/admin/questions/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const exportAdminQuestionsApi = (params: AdminQuestionQueryDTO) => {
+  return request.get<Blob, Blob>('/admin/questions/export', {
+    params,
+    responseType: 'blob'
+  })
+}
+
+export const downloadQuestionImportTemplate = () => {
+  const url = `${appConfig.apiBaseUrl}/admin/questions/import-template`
+  const token = getToken()
+  const separator = url.includes('?') ? '&' : '?'
+  window.open(token ? `${url}${separator}token=${encodeURIComponent(token)}` : url, '_blank')
 }
 
 export const submitQuestionAnswerReviewApi = (questionId: number, data: PracticeSubmitDTO) => {

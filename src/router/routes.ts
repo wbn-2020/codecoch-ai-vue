@@ -99,11 +99,43 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/user/NotificationCenterView.vue'),
+        meta: {
+          title: '通知中心'
+        }
+      },
+      {
+        path: 'weakness-analysis',
+        name: 'WeaknessAnalysis',
+        component: () => import('@/views/user/WeaknessAnalysisView.vue'),
+        meta: {
+          title: '薄弱知识点分析'
+        }
+      },
+      {
+        path: 'projects',
+        name: 'ProjectExperience',
+        component: () => import('@/views/user/ProjectExperienceView.vue'),
+        meta: {
+          title: '项目经历'
+        }
+      },
+      {
         path: 'questions',
         name: 'QuestionList',
         component: () => import('@/views/question/QuestionListView.vue'),
         meta: {
           title: '题库'
+        }
+      },
+      {
+        path: 'questions/practice',
+        name: 'QuestionPractice',
+        component: () => import('@/views/question/PracticeModeView.vue'),
+        meta: {
+          title: '刷题练习'
         }
       },
       {
@@ -273,6 +305,14 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '学习计划'
         }
+      },
+      {
+        path: 'daily-tasks',
+        name: 'DailyTasks',
+        component: () => import('@/views/study/DailyTaskView.vue'),
+        meta: {
+          title: '每日任务'
+        }
       }
     ]
   },
@@ -437,6 +477,78 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统配置',
           icon: 'Setting'
+        }
+      },
+      {
+        path: 'ai/models',
+        name: 'AdminAiModels',
+        component: () => import('@/views/admin/AiModelConfigView.vue'),
+        meta: {
+          title: 'AI 模型配置',
+          icon: 'Operation'
+        }
+      },
+      {
+        path: 'menus',
+        name: 'AdminMenus',
+        component: () => import('@/views/admin/MenuPermissionView.vue'),
+        meta: {
+          title: '菜单权限',
+          icon: 'Lock'
+        }
+      },
+      {
+        path: 'notices',
+        name: 'AdminNotices',
+        component: () => import('@/views/admin/NotificationManageView.vue'),
+        meta: {
+          title: '通知管理',
+          icon: 'Bell'
+        }
+      },
+      {
+        path: 'operation-logs',
+        name: 'AdminOperationLogs',
+        component: () => import('@/views/admin/OperationLogView.vue'),
+        meta: {
+          title: '操作日志',
+          icon: 'Document'
+        }
+      },
+      {
+        path: 'login-logs',
+        name: 'AdminLoginLogs',
+        component: () => import('@/views/admin/LoginLogView.vue'),
+        meta: {
+          title: '登录日志',
+          icon: 'Key'
+        }
+      },
+      {
+        path: 'interviews',
+        name: 'AdminInterviews',
+        component: () => import('@/views/admin/InterviewManageView.vue'),
+        meta: {
+          title: '面试记录管理',
+          icon: 'ChatDotRound'
+        }
+      },
+      {
+        path: 'interview-reports',
+        name: 'AdminInterviewReports',
+        component: () => import('@/views/admin/InterviewReportManageView.vue'),
+        meta: {
+          title: '面试报告管理',
+          icon: 'Document'
+        }
+      },
+      {
+        path: 'async-tasks',
+        name: 'AdminAsyncTasks',
+        component: () => import('@/views/admin/AsyncTaskView.vue'),
+        meta: {
+          title: '异步任务',
+          icon: 'Timer'
         }
       }
     ]

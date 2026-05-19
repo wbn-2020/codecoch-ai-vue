@@ -32,9 +32,10 @@
             <Search :size="15" />
             <span>Search workspace</span>
           </div>
-          <el-tooltip content="通知中心 V3 接入" placement="bottom">
-            <button class="icon-button icon-button--ghost" type="button" aria-label="通知中心" disabled>
+          <el-tooltip :content="notificationTooltip" placement="bottom">
+            <button class="icon-button icon-button--ghost notification-bell" type="button" aria-label="通知中心" @click="router.push('/notifications')">
               <Bell :size="16" />
+              <span v-if="unreadAvailable && unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
             </button>
           </el-tooltip>
           <el-button v-if="authStore.isAdmin" class="admin-entry" text @click="router.push('/admin')">
@@ -70,9 +71,10 @@
 
 <script setup lang="ts">
 import { Bell, PanelLeftClose, PanelLeftOpen, Search, Shield } from 'lucide-vue-next'
-import { computed, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getUnreadCountApi } from '@/api/notification'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import UserSidebar from '@/components/layout/UserSidebar.vue'
@@ -90,6 +92,21 @@ const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+
+const unreadCount = ref(0)
+const unreadAvailable = ref(true)
+const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（未读数暂不可用）')
+const fetchUnreadCount = async () => {
+  try {
+    const result = await getUnreadCountApi()
+    unreadCount.value = result.total || 0
+    unreadAvailable.value = true
+  } catch {
+    unreadAvailable.value = false
+  }
+}
+
+onMounted(fetchUnreadCount)
 
 watch(
   () => route.fullPath,
@@ -214,6 +231,28 @@ const handleCommand = async (command: string) => {
   background: transparent;
   color: var(--app-text);
   cursor: pointer;
+}
+
+.notification-bell {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .icon-button {
