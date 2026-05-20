@@ -61,8 +61,10 @@
 import { ElMessage } from 'element-plus'
 import { BookOpenCheck, Radar, Route as RouteIcon, Sparkles } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
+import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getCurrentJobTargetApi } from '@/api/jobTarget'
 import { getSkillProfileByJobTargetApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { generateStudyPlanFromGapApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
@@ -75,11 +77,21 @@ const loading = ref(false)
 const generating = ref(false)
 const loadError = ref('')
 const loadedProfileId = ref<number | undefined>()
+const loadedTargetJobId = ref<number | undefined>()
 const gapItems = ref<SkillGapItemVO[]>([])
 
 const profileId = computed(() => Number(route.query.profileId) || loadedProfileId.value)
-const targetJobId = computed(() => Number(route.query.targetJobId) || undefined)
+const targetJobId = computed(() => Number(route.query.targetJobId) || loadedTargetJobId.value)
 const canGenerate = computed(() => Boolean(profileId.value && form.gapItemIds.length && !generating.value))
+const buildContextQuery = (extra: Record<string, unknown>): LocationQueryRaw => {
+  const query: LocationQueryRaw = {}
+  Object.entries(extra).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query[key] = String(value)
+    }
+  })
+  return query
+}
 
 const form = reactive({
   gapItemIds: [] as number[],
@@ -93,8 +105,13 @@ const loadProfile = async () => {
   loading.value = true
   loadError.value = ''
   try {
+    if (!targetJobId.value && !profileId.value) {
+      const currentTarget = await getCurrentJobTargetApi().catch(() => null)
+      loadedTargetJobId.value = currentTarget?.id
+    }
     const overview = await getSkillProfileOverviewApi(targetJobId.value)
     loadedProfileId.value = Number(route.query.profileId) || overview.profileId
+    loadedTargetJobId.value = targetJobId.value || overview.targetJobId
     if (targetJobId.value) {
       try {
         const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
@@ -127,7 +144,16 @@ const generatePlan = async () => {
       planTitle: form.planTitle || undefined
     })
     ElMessage.success(result.planStatus === 'FAILED' ? '学习计划生成返回失败状态' : '学习计划已生成')
-    await router.push(`/study-plans?planId=${result.planId}`)
+    await router.push({
+      path: '/questions/recommendations',
+      query: buildContextQuery({
+        studyPlanId: result.planId,
+        profileId: profileId.value,
+        targetJobId: targetJobId.value,
+        matchReportId: Number(route.query.matchReportId) || undefined,
+        resumeId: Number(route.query.resumeId) || undefined
+      })
+    })
   } finally {
     generating.value = false
   }

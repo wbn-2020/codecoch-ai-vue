@@ -164,7 +164,7 @@
               </div>
               <el-switch v-model="useResume" />
             </div>
-            <el-form-item v-if="useResume" label="选择简历" prop="resumeId">
+            <el-form-item v-if="useResume || isJobTargetFlow" label="选择简历" prop="resumeId">
               <el-select
                 v-model="form.resumeId"
                 filterable
@@ -186,12 +186,12 @@
           </div>
 
           <el-alert
-            v-if="resumeRequired"
+            v-if="resumeRequired || isJobTargetFlow"
             class="create-alert"
             type="warning"
             :closable="false"
             show-icon
-            title="当前面试模式建议选择简历，便于进行项目深挖和综合追问。"
+            :title="isJobTargetFlow ? '目标岗位链路需要选择简历，并会使用 targetJobId 创建岗位面试。' : '当前面试模式建议选择简历，便于进行项目深挖和综合追问。'"
           />
         </el-form>
       </section>
@@ -260,8 +260,9 @@ import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play,
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getIndustryTemplatesApi } from '@/api/interview'
-import { getJobTargetDetailApi } from '@/api/jobTarget'
+import { createInterviewApi, createInterviewByJobTargetApi, getIndustryTemplatesApi } from '@/api/interview'
+import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
+import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { getResumesApi } from '@/api/resume'
 import {
   difficultyOptions,
@@ -275,7 +276,6 @@ import {
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
-import request from '@/utils/request'
 
 const router = useRouter()
 const route = useRoute()
@@ -362,6 +362,16 @@ const resumeRequired = computed(
     form.interviewMode === INTERVIEW_MODE.COMPREHENSIVE
 )
 
+const isJobTargetFlow = computed(() => {
+  const source = getQueryString('source')?.toLowerCase()
+  return Boolean(
+    sourceTargetJobId.value ||
+    getQueryNumber('targetJobId') ||
+    source === 'job-target' ||
+    source === 'v3'
+  )
+})
+
 const rules = computed<FormRules<InterviewCreateDTO>>(() => ({
   interviewMode: [{ required: true, message: '请选择面试模式', trigger: 'change' }],
   targetPosition: [{ required: true, message: '请选择目标岗位', trigger: 'change' }],
@@ -370,11 +380,11 @@ const rules = computed<FormRules<InterviewCreateDTO>>(() => ({
   industryTemplateId: isIndustryMode.value ? [{ required: true, message: '请选择行业模板', trigger: 'change' }] : [],
   difficulty: [{ required: true, message: '请选择难度等级', trigger: 'change' }],
   interviewerStyle: [{ required: true, message: '请选择面试官风格', trigger: 'change' }],
-  resumeId: resumeRequired.value || useResume.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
+  resumeId: resumeRequired.value || useResume.value || isJobTargetFlow.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
 }))
 
 const selectedResumeName = computed(() => {
-  if (!useResume.value) return '不使用简历'
+  if (!useResume.value && !isJobTargetFlow.value) return '不使用简历'
   return resumes.value.find((item) => item.id === form.resumeId)?.resumeName || '未选择'
 })
 
@@ -491,8 +501,9 @@ const fetchIndustryTemplates = async () => {
 }
 
 const applyRouteContext = async () => {
-  const source = getQueryString('source')
-  const targetJobId = getQueryNumber('targetJobId')
+  const source = getQueryString('source')?.toLowerCase()
+  const isV3Source = source === 'job-target' || source === 'v3'
+  let targetJobId = getQueryNumber('targetJobId')
   const resumeId = getQueryNumber('resumeId')
   const skillProfileId = getQueryNumber('skillProfileId')
   const matchReportId = getQueryNumber('matchReportId')
@@ -502,7 +513,11 @@ const applyRouteContext = async () => {
     form.resumeId = resumeId
   }
 
-  if (source !== 'job-target' && !targetJobId) return
+  if (isV3Source && !targetJobId) {
+    const currentTarget = await getCurrentJobTargetApi().catch(() => null)
+    targetJobId = currentTarget?.id
+  }
+  if (!isV3Source && !targetJobId) return
 
   selectedModeKey.value = 'comprehensive'
   form.interviewMode = INTERVIEW_MODE.COMPREHENSIVE
@@ -525,31 +540,42 @@ const applyRouteContext = async () => {
 }
 
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
-  const extraPayload = {
-    interviewMode: payload.interviewMode,
-    mode: payload.interviewMode,
-    resumeId: payload.resumeId,
-    targetJobId: sourceTargetJobId.value,
+  let targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId')
+  const source = getQueryString('source')?.toLowerCase()
+  const shouldUseJobTargetApi = Boolean(targetJobId || source === 'job-target' || source === 'v3')
+
+  if (!shouldUseJobTargetApi) {
+    return createInterviewApi(payload)
+  }
+
+  if (!targetJobId) {
+    const currentTarget = await getCurrentJobTargetApi().catch(() => null)
+    targetJobId = currentTarget?.id
+  }
+
+  let resumeId = payload.resumeId
+  if (!resumeId) {
+    resumeId = resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
+  }
+
+  let matchReportId = getQueryNumber('matchReportId')
+  if (!matchReportId && resumeId && targetJobId) {
+    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId).catch(() => null)
+    matchReportId = latestMatch?.reportId
+  }
+
+  if (!resumeId || !targetJobId) {
+    ElMessage.warning('目标岗位链路创建面试需要有效的 resumeId 和 targetJobId')
+    throw new Error('Missing resumeId or targetJobId for job target interview creation')
+  }
+
+  return createInterviewByJobTargetApi({
+    ...payload,
+    resumeId,
+    targetJobId,
     skillProfileId: getQueryNumber('skillProfileId'),
-    matchReportId: getQueryNumber('matchReportId'),
-    title: payload.interviewName,
-    maxQuestionCount: payload.questionCount,
-    targetPosition: payload.targetPosition,
-    experienceLevel: payload.experienceLevel,
-    industryTemplateId: payload.industryTemplateId,
-    industryDirection: payload.industryDirection,
-    difficulty: payload.difficulty,
-    interviewerStyle: payload.interviewerStyle,
-    basedOnResume: payload.basedOnResume ?? Boolean(payload.resumeId)
-  }
-  const result = await request.post<Record<string, unknown>, Record<string, unknown>>(
-    '/interviews',
-    extraPayload
-  )
-  return {
-    ...result,
-    interviewId: Number(result.interviewId || result.id || result.sessionId)
-  }
+    matchReportId
+  })
 }
 
 const handleCreate = async () => {
@@ -563,8 +589,8 @@ const handleCreate = async () => {
     ElMessage.warning('请选择真实行业模板后再开始面试')
     return
   }
-  if (resumeRequired.value && !form.resumeId) {
-    ElMessage.warning('项目深挖或综合模拟面试需要先选择简历')
+  if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {
+    ElMessage.warning(isJobTargetFlow.value ? '目标岗位链路创建面试需要先选择简历' : '项目深挖或综合模拟面试需要先选择简历')
     return
   }
 
@@ -579,7 +605,7 @@ const handleCreate = async () => {
       industryDirection: isIndustryMode.value
         ? template?.industryCode || template?.industryName || form.industryDirection
         : form.industryDirection,
-      resumeId: useResume.value ? form.resumeId : undefined
+      resumeId: useResume.value || isJobTargetFlow.value ? form.resumeId : undefined
     }
     const result = await createInterviewWithRouteContext(payload)
     ElMessage.success('面试已创建')

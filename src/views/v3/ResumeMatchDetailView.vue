@@ -51,11 +51,14 @@
           <el-button type="primary" :loading="profileGenerating" :disabled="report.status !== 'SUCCESS'" @click="generateProfile">
             <Radar :size="16" /> 生成/刷新能力画像
           </el-button>
-          <el-button :disabled="report.status !== 'SUCCESS'" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId } })">
+          <el-button :disabled="report.status !== 'SUCCESS'" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
             查看能力画像
           </el-button>
-          <el-button :disabled="report.status !== 'SUCCESS'" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId } })">
+          <el-button :disabled="report.status !== 'SUCCESS'" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
             <RouteIcon :size="16" /> 差距学习计划
+          </el-button>
+          <el-button :disabled="report.status !== 'SUCCESS'" @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId } })">
+            创建岗位面试
           </el-button>
         </aside>
       </section>
@@ -144,7 +147,7 @@ const generateProfile = async () => {
   try {
     const result = await generateSkillProfileApi({ matchReportId: report.value.reportId })
     ElMessage.success(result.status === 'FAILED' ? '能力画像生成返回失败状态' : '能力画像任务已提交')
-    await router.push({ path: '/skill-profile', query: { profileId: result.profileId, matchReportId: report.value.reportId, targetJobId: report.value.targetJobId } })
+    await router.push({ path: '/skill-profile', query: { profileId: result.profileId, matchReportId: report.value.reportId, targetJobId: report.value.targetJobId, resumeId: report.value.resumeId } })
   } finally {
     profileGenerating.value = false
   }

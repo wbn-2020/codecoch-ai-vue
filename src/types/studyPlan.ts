@@ -32,6 +32,9 @@ export interface StudyPlanGenerateFromMatchReportDTO {
 
 export interface StudyPlanQueryDTO extends PageQuery {
   planStatus?: StudyPlanStatus | ''
+  targetJobId?: number
+  matchReportId?: number
+  skillProfileId?: number
 }
 
 export interface StudyTaskStatusUpdateDTO {

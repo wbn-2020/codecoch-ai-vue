@@ -7,6 +7,7 @@ import type {
   InterviewAnswerReviewSseEvent,
   InterviewAnswerReviewSseEventType,
   InterviewAnswerResultVO,
+  InterviewCreateByJobTargetDTO,
   InterviewCreateDTO,
   InterviewCurrentVO,
   InterviewDetailVO,
@@ -227,7 +228,7 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
   }
 }
 
-const toCreatePayload = (data: InterviewCreateDTO) => ({
+const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDTO) => ({
   interviewMode: data.interviewMode,
   resumeId: data.resumeId,
   title: data.interviewName,
@@ -238,7 +239,12 @@ const toCreatePayload = (data: InterviewCreateDTO) => ({
   industryDirection: data.industryDirection,
   difficulty: data.difficulty,
   interviewerStyle: data.interviewerStyle,
-  basedOnResume: data.basedOnResume ?? Boolean(data.resumeId)
+  basedOnResume: data.basedOnResume ?? Boolean(data.resumeId),
+  ...('targetJobId' in data ? {
+    targetJobId: data.targetJobId,
+    skillProfileId: data.skillProfileId,
+    matchReportId: data.matchReportId
+  } : {})
 })
 
 const toInterviewReportSseQuery = (params: InterviewReportSseParams) => ({
@@ -308,6 +314,12 @@ export const streamInterviewQuestionApi = (
 export const createInterviewApi = (data: InterviewCreateDTO) => {
   return request
     .post<InterviewSessionVO, InterviewSessionVO>('/interviews', toCreatePayload(data))
+    .then(normalizeSession)
+}
+
+export const createInterviewByJobTargetApi = (data: InterviewCreateByJobTargetDTO) => {
+  return request
+    .post<InterviewSessionVO, InterviewSessionVO>('/interviews/create-by-job-target', toCreatePayload(data))
     .then(normalizeSession)
 }
 

@@ -55,10 +55,10 @@
         <aside class="content-panel action-panel">
           <h2>下一步动作</h2>
           <ActionList :value="overview?.nextActions" />
-          <el-button type="primary" :disabled="!profileId" @click="router.push({ path: '/study-plans/from-gap', query: { profileId, targetJobId } })">
+          <el-button type="primary" :disabled="!profileId" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">
             <RouteIcon :size="16" /> 生成差距学习计划
           </el-button>
-          <el-button :disabled="!profileId" @click="router.push({ path: '/questions/recommendations', query: { skillProfileId: profileId } })">
+          <el-button :disabled="!profileId" @click="router.push({ path: '/questions/recommendations', query: buildContextQuery({ skillProfileId: profileId, targetJobId, matchReportId, resumeId }) })">
             <ListChecks :size="16" /> 查看推荐题
           </el-button>
         </aside>
@@ -102,6 +102,17 @@ const detail = ref<SkillProfileDetailVO | null>(null)
 const matchReportId = computed(() => Number(route.query.matchReportId) || detail.value?.matchReportId || undefined)
 const targetJobId = computed(() => Number(route.query.targetJobId) || overview.value?.targetJobId || detail.value?.targetJobId || undefined)
 const profileId = computed(() => Number(route.query.profileId) || overview.value?.profileId || detail.value?.profileId || undefined)
+const resumeId = computed(() => Number(route.query.resumeId) || undefined)
+const buildContextQuery = (extra: Record<string, unknown>) => Object.fromEntries(
+  Object.entries(extra)
+    .map(([key, value]) => [
+      key,
+      typeof value === 'object' && value && 'value' in value
+        ? (value as { value?: unknown }).value
+        : value
+    ])
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+)
 const radarItems = computed(() => overview.value?.radarData || [])
 const gapItems = computed<SkillGapItemVO[]>(() => overview.value?.topGaps?.length ? overview.value.topGaps : detail.value?.gapItems || [])
 const isEmpty = computed(() => overview.value?.empty || (!overview.value && !detail.value))

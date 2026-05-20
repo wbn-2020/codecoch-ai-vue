@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { AdminDashboardOverviewVO, UserDashboardOverviewVO } from '@/types/dashboard'
+import type { AdminDashboardOverviewVO, UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 
 const normalizeAdminDashboardOverview = (data: Partial<AdminDashboardOverviewVO> = {}): AdminDashboardOverviewVO => ({
   summaryCards: data.summaryCards || [],
@@ -36,6 +36,20 @@ export const getAdminDashboardOverviewApi = () => {
     .then(normalizeAdminDashboardOverview)
 }
 
+const normalizeV3DashboardOverview = (data: Partial<V3DashboardOverviewVO> = {}): V3DashboardOverviewVO => {
+  const userOverview = normalizeUserDashboardOverview(data)
+  return {
+    ...data,
+    ...userOverview,
+    activeStudyPlan: data.activeStudyPlan || data.studyProgress || userOverview.activeStudyPlan,
+    currentTargetJob: data.currentTargetJob || null,
+    latestMatch: data.latestMatch || null,
+    studyProgress: data.studyProgress || data.activeStudyPlan || null,
+    recommendedQuestions: data.recommendedQuestions || null,
+    nextActions: data.nextActions || []
+  }
+}
+
 export const getUserDashboardOverviewApi = async () => {
   try {
     const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/dashboard/overview')
@@ -44,4 +58,10 @@ export const getUserDashboardOverviewApi = async () => {
     const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/users/dashboard/overview')
     return normalizeUserDashboardOverview(data)
   }
+}
+
+export const getV3DashboardOverviewApi = () => {
+  return request
+    .get<V3DashboardOverviewVO, V3DashboardOverviewVO>('/dashboard/v3/overview')
+    .then(normalizeV3DashboardOverview)
 }

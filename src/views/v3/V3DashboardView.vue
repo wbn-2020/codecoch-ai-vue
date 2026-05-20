@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><LayoutDashboard :size="16" /> V3 Dashboard</div>
         <h1>V3 求职闭环驾驶舱</h1>
-        <p>聚合工作台概览、能力画像和通知状态；任一接口缺数据时降级展示，不阻断其他模块。</p>
+        <p>聚合当前岗位目标、最近匹配、学习进度、推荐题和下一步动作；任一接口缺数据时降级展示。</p>
       </div>
       <div class="hero-actions">
         <el-button :loading="loading" @click="loadDashboard"><RefreshCw :size="16" /> 刷新</el-button>
@@ -26,6 +26,29 @@
     </section>
 
     <section class="dashboard-grid">
+      <div class="content-panel loop-card">
+        <div class="section-head"><div><h2>当前岗位目标</h2><p>来自 GET /dashboard/v3/overview.currentTargetJob。</p></div><el-button text @click="router.push('/job-targets')">管理</el-button></div>
+        <AppState v-if="!overview?.currentTargetJob" type="empty" title="暂无当前岗位目标" description="请先创建或设置当前目标岗位。" />
+        <div v-else class="loop-summary">
+          <strong>{{ overview.currentTargetJob.jobTitle || `岗位 #${overview.currentTargetJob.targetJobId || overview.currentTargetJob.id}` }}</strong>
+          <span>{{ overview.currentTargetJob.companyName || '未填写公司' }} · {{ overview.currentTargetJob.jobLevel || '未填写级别' }}</span>
+          <el-tag effect="plain">{{ overview.currentTargetJob.parseStatus || 'UNKNOWN' }}</el-tag>
+          <el-button type="primary" @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">继续简历匹配</el-button>
+        </div>
+      </div>
+
+      <div class="content-panel loop-card">
+        <div class="section-head"><div><h2>最近匹配报告</h2><p>来自 latestMatch。</p></div><el-button text @click="router.push('/resume-match')">查看</el-button></div>
+        <AppState v-if="!overview?.latestMatch" type="empty" title="暂无匹配报告" description="完成简历与岗位匹配后会展示最近结果。" />
+        <div v-else class="loop-summary">
+          <strong>{{ overview.latestMatch.overallScore ?? '--' }} 分</strong>
+          <span>{{ overview.latestMatch.summary || overview.latestMatch.status || '暂无摘要' }}</span>
+          <el-button type="primary" @click="router.push({ path: '/skill-profile', query: compactQuery({ matchReportId: latestMatchReportId, targetJobId: overview?.latestMatch?.targetJobId || currentTargetJobId }) })">生成/查看能力画像</el-button>
+        </div>
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
       <div class="content-panel">
         <div class="section-head"><div><h2>能力画像</h2><p>来自 GET /skill-profiles/overview。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
         <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
@@ -39,13 +62,36 @@
       </div>
 
       <div class="content-panel">
-        <div class="section-head"><div><h2>学习计划</h2><p>来自用户工作台 activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
-        <div v-if="overview?.activeStudyPlan" class="active-plan" @click="router.push(`/study-plans?planId=${overview.activeStudyPlan.planId}`)">
-          <strong>{{ overview.activeStudyPlan.planTitle || `学习计划 #${overview.activeStudyPlan.planId}` }}</strong>
-          <span>{{ overview.activeStudyPlan.doneTaskCount || 0 }}/{{ overview.activeStudyPlan.totalTaskCount || 0 }} · {{ overview.activeStudyPlan.progressPercent || 0 }}%</span>
-          <el-progress :percentage="overview.activeStudyPlan.progressPercent || 0" />
+        <div class="section-head"><div><h2>学习计划</h2><p>来自 studyProgress/activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
+        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(`/study-plans?planId=${activeStudyProgress.planId}`)">
+          <strong>{{ activeStudyProgress.planTitle || `学习计划 #${activeStudyProgress.planId}` }}</strong>
+          <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
+          <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
         </div>
         <AppState v-else type="empty" title="暂无进行中的学习计划" description="可从能力短板生成学习计划。" />
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
+      <div class="content-panel loop-card">
+        <div class="section-head"><div><h2>推荐题批次</h2><p>来自 recommendedQuestions。</p></div><el-button text @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">查看</el-button></div>
+        <AppState v-if="!overview?.recommendedQuestions" type="empty" title="暂无推荐题批次" description="可从能力短板或学习计划生成推荐题。" />
+        <div v-else class="loop-summary">
+          <strong>{{ overview.recommendedQuestions.questionCount ?? '--' }} 题</strong>
+          <span>{{ overview.recommendedQuestions.sourceType || 'UNKNOWN' }} · {{ overview.recommendedQuestions.status || 'UNKNOWN' }}</span>
+          <el-button type="primary" @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">继续刷题</el-button>
+        </div>
+      </div>
+
+      <div class="content-panel loop-card">
+        <div class="section-head"><div><h2>下一步动作</h2><p>来自 nextActions。</p></div></div>
+        <div v-if="nextActionItems.length" class="next-action-list">
+          <button v-for="action in nextActionItems" :key="action.title" type="button" @click="router.push(action.path)">
+            <strong>{{ action.title }}</strong>
+            <span>{{ action.desc }}</span>
+          </button>
+        </div>
+        <AppState v-else type="empty" title="暂无下一步动作" description="完成更多 V3 环节后会展示建议动作。" />
       </div>
     </section>
 
@@ -79,13 +125,13 @@
 <script setup lang="ts">
 import { Bell, BookOpenCheck, Crosshair, FileText, GitCompareArrows, LayoutDashboard, ListChecks, Radar, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, type LocationQueryRaw } from 'vue-router'
 
-import { getUserDashboardOverviewApi } from '@/api/dashboard'
+import { getV3DashboardOverviewApi } from '@/api/dashboard'
 import { getNotificationsApi, type NotificationVO } from '@/api/notification'
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
-import type { UserDashboardOverviewVO } from '@/types/dashboard'
+import type { V3DashboardNextActionVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
 
@@ -96,30 +142,71 @@ const notificationLoading = ref(false)
 const overviewError = ref('')
 const skillError = ref('')
 const notificationError = ref('')
-const overview = ref<UserDashboardOverviewVO | null>(null)
+const overview = ref<V3DashboardOverviewVO | null>(null)
 const skillOverview = ref<SkillProfileOverviewVO | null>(null)
 const notifications = ref<NotificationVO[]>([])
 
 const loading = computed(() => overviewLoading.value || skillLoading.value || notificationLoading.value)
 const errors = computed(() => [overviewError.value, skillError.value, notificationError.value].filter(Boolean))
+const currentTargetJobId = computed(() => overview.value?.currentTargetJob?.targetJobId || overview.value?.currentTargetJob?.id)
+const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchReportId || overview.value?.latestMatch?.reportId)
+const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
+const compactQuery = (query: Record<string, unknown>): LocationQueryRaw => Object.fromEntries(
+  Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
+) as LocationQueryRaw
+const recommendationQuery = computed(() => compactQuery({
+  studyPlanId: activeStudyProgress.value?.planId,
+  matchReportId: activeStudyProgress.value?.planId ? undefined : latestMatchReportId.value,
+  targetJobId: currentTargetJobId.value
+}))
+const normalizeActionPath = (path: string) => {
+  if (!path.startsWith('/interviews/create')) return path
+  const hasQuery = path.includes('?')
+  const params = new URLSearchParams(hasQuery ? path.slice(path.indexOf('?') + 1) : '')
+  if (!params.get('source')) params.set('source', 'v3')
+  if (currentTargetJobId.value && !params.get('targetJobId')) params.set('targetJobId', String(currentTargetJobId.value))
+  if (latestMatchReportId.value && !params.get('matchReportId')) params.set('matchReportId', String(latestMatchReportId.value))
+  if (overview.value?.latestMatch?.resumeId && !params.get('resumeId')) params.set('resumeId', String(overview.value.latestMatch.resumeId))
+  return `/interviews/create?${params.toString()}`
+}
+const normalizeNextActions = (value: V3DashboardOverviewVO['nextActions']) => {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split('\n').filter(Boolean)
+      : []
+  return rawItems.map((item, index) => {
+    if (typeof item === 'string') {
+      return { title: item, desc: '继续完成 V3 求职闭环', path: '/dashboard/v3' }
+    }
+    const action = item as V3DashboardNextActionVO
+    return {
+      title: action.title || action.type || `下一步 ${index + 1}`,
+      desc: action.desc || action.description || '继续完成 V3 求职闭环',
+      path: normalizeActionPath(action.path || action.actionUrl || '/dashboard/v3')
+    }
+  })
+}
 const metrics = computed(() => [
   { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
   { label: '面试', value: overview.value?.interviewCount ?? 0, hint: '模拟面试记录', path: '/interviews/history', icon: Bell },
   { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
   { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
 ])
-const entries = [
+const nextActionItems = computed(() => normalizeNextActions(overview.value?.nextActions))
+const entries = computed(() => [
   { title: '岗位目标', desc: '维护当前主目标和 JD', path: '/job-targets', icon: Crosshair },
-  { title: '简历匹配', desc: '生成匹配报告', path: '/resume-match', icon: GitCompareArrows },
-  { title: '能力画像', desc: '查看短板和动作', path: '/skill-profile', icon: Radar },
-  { title: '推荐题目', desc: '按短板练习', path: '/questions/recommendations', icon: ListChecks }
-]
+  { title: '简历匹配', desc: '生成匹配报告', path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }, icon: GitCompareArrows },
+  { title: '能力画像', desc: '查看短板和动作', path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }, icon: Radar },
+  { title: '推荐题目', desc: '按短板练习', path: { path: '/questions/recommendations', query: recommendationQuery.value }, icon: ListChecks },
+  { title: '模拟面试', desc: '按岗位目标创建面试', path: { path: '/interviews/create', query: compactQuery({ source: 'v3', targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value, resumeId: overview.value?.latestMatch?.resumeId }) }, icon: Bell }
+])
 
 const loadOverview = async () => {
   overviewLoading.value = true
   overviewError.value = ''
   try {
-    overview.value = await getUserDashboardOverviewApi()
+    overview.value = await getV3DashboardOverviewApi()
   } catch (error) {
     overview.value = null
     overviewError.value = getErrorMessage(error, '工作台概览接口不可用，已降级展示入口。')
@@ -180,8 +267,14 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .skill-summary strong { font-size: 42px; }
 .skill-summary span, .active-plan span { display: block; margin: 8px 0; color: var(--app-text-muted); }
 .active-plan { cursor: pointer; }
-.notification-list { display: grid; gap: 12px; }
-.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list, .next-action-list, .loop-summary { display: grid; gap: 12px; }
+.loop-summary strong { font-size: 24px; }
+.loop-summary span { color: var(--app-text-muted); line-height: 1.5; }
+.notification-list article, .entry-grid button, .next-action-list button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list article { display: block; }
+.next-action-list button { color: var(--app-text); text-align: left; cursor: pointer; }
+.next-action-list strong, .next-action-list span { display: block; }
+.next-action-list span { margin-top: 6px; color: var(--app-text-muted); }
 .notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
 .entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .entry-grid button { color: var(--app-text); text-align: left; cursor: pointer; }
