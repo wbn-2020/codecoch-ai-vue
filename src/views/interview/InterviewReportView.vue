@@ -166,16 +166,19 @@
         </div>
         <div v-if="recommendedQuestions.length" class="recommended-list">
           <button
-            v-for="item in recommendedQuestions"
-            :key="item.questionId || item.id"
+            v-for="(item, index) in recommendedQuestions"
+            :key="item.questionId || `${item.title}-${index}`"
             class="recommended-item"
+            :class="{ 'recommended-item--disabled': !item.questionId }"
             type="button"
-            @click="router.push(`/questions/${item.questionId || item.id}`)"
+            @click="openRecommendedQuestion(item)"
           >
             <div>
               <strong>{{ item.title || item.questionTitle || '推荐题目' }}</strong>
               <span v-if="item.reason || item.recommendReason">{{ item.reason || item.recommendReason }}</span>
             </div>
+            <el-tag v-if="item.questionId" size="small" type="success" effect="plain">可练习</el-tag>
+            <el-tag v-else size="small" type="warning" effect="plain">仅建议</el-tag>
             <el-tag v-if="item.difficulty" size="small" effect="plain">{{ item.difficulty }}</el-tag>
           </button>
         </div>
@@ -318,14 +321,31 @@ const isGenerated = computed(() => {
   return Boolean(report.value?.totalScore || report.value?.summary || report.value?.reportContent)
 })
 
+type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
+
 const objectItems = <T>(value: unknown): T[] => {
   return Array.isArray(value)
     ? (value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as T[])
     : []
 }
 
+const normalizeRecommendedQuestions = (value: unknown): DisplayRecommendedQuestion[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { title: item }
+      }
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        return item as DisplayRecommendedQuestion
+      }
+      return null
+    })
+    .filter((item): item is DisplayRecommendedQuestion => Boolean(item))
+}
+
 const stageReports = computed<StageReportVO[]>(() => objectItems<StageReportVO>(report.value?.stageReports || report.value?.stageScores))
-const recommendedQuestions = computed<RecommendedQuestionVO[]>(() => objectItems<RecommendedQuestionVO>(report.value?.recommendedQuestions))
+const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normalizeRecommendedQuestions(report.value?.recommendedQuestions))
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
@@ -347,10 +367,25 @@ const weakPointText = computed(() => {
 })
 
 const firstRecommendedQuestionPath = computed(() => {
-  const first = recommendedQuestions.value.find((item) => item.questionId || item.id)
-  const id = first?.questionId || first?.id
+  const first = recommendedQuestions.value.find((item) => item.questionId)
+  const id = first?.questionId
   return id ? `/questions/${id}` : ''
 })
+
+const openRecommendedQuestion = async (item: DisplayRecommendedQuestion) => {
+  if (!item.questionId) {
+    ElMessage.warning('该推荐项尚未匹配到正式题库，不能作为题目 ID 跳转')
+    return
+  }
+  const query: Record<string, string> = { source: 'interviewReport' }
+  if (interviewId) query.interviewId = String(interviewId)
+  const reportId = report.value?.reportId || report.value?.id
+  if (reportId) query.reportId = String(reportId)
+  await router.push({
+    path: `/questions/${item.questionId}`,
+    query
+  })
+}
 
 const goPracticeQuestion = async () => {
   if (!firstRecommendedQuestionPath.value) {
@@ -660,6 +695,11 @@ onBeforeUnmount(() => {
     font-size: 12px;
     line-height: 1.5;
   }
+}
+
+.recommended-item--disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
 }
 
 .eyebrow {

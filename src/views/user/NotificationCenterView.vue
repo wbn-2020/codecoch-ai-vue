@@ -175,6 +175,8 @@ const handleClickNotification = async (item: NotificationVO) => {
     router.push('/resumes')
   } else if (item.relatedType === 'STUDY_PLAN' && item.relatedId) {
     router.push('/study-plans')
+  } else if (item.relatedType) {
+    ElMessage.info('该通知暂未配置业务跳转入口')
   }
 }
 

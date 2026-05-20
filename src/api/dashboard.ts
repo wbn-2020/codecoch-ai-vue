@@ -38,6 +38,14 @@ export const getAdminDashboardOverviewApi = () => {
 
 const normalizeV3DashboardOverview = (data: Partial<V3DashboardOverviewVO> = {}): V3DashboardOverviewVO => {
   const userOverview = normalizeUserDashboardOverview(data)
+  const recommendedQuestions = Array.isArray(data.recommendedQuestions)
+    ? (data.recommendedQuestions.length
+        ? {
+            questionCount: data.recommendedQuestions.length,
+            items: data.recommendedQuestions as Array<Record<string, unknown>>
+          }
+        : null)
+    : data.recommendedQuestions || null
   return {
     ...data,
     ...userOverview,
@@ -45,7 +53,7 @@ const normalizeV3DashboardOverview = (data: Partial<V3DashboardOverviewVO> = {})
     currentTargetJob: data.currentTargetJob || null,
     latestMatch: data.latestMatch || null,
     studyProgress: data.studyProgress || data.activeStudyPlan || null,
-    recommendedQuestions: data.recommendedQuestions || null,
+    recommendedQuestions,
     nextActions: data.nextActions || []
   }
 }

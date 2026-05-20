@@ -126,23 +126,30 @@ export interface V3DashboardStudyProgressVO extends UserDashboardActiveStudyPlan
 
 export interface V3DashboardRecommendedQuestionsVO {
   batchId?: number
+  targetJobId?: number
   status?: string
   questionCount?: number
+  canPracticeCount?: number
+  pendingPracticeCount?: number
   sourceType?: string
   sourceId?: number
   matchReportId?: number
   skillProfileId?: number
   studyPlanId?: number
   updatedAt?: string
+  items?: Array<Record<string, unknown>>
 }
 
 export interface V3DashboardNextActionVO {
+  actionType?: string
   title?: string
   desc?: string
   description?: string
   path?: string
   actionUrl?: string
+  targetPath?: string
   type?: string
+  priority?: number
 }
 
 export interface V3DashboardOverviewVO extends UserDashboardOverviewVO {

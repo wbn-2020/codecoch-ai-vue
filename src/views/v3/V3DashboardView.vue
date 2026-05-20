@@ -208,9 +208,9 @@ const normalizeNextActions = (value: V3DashboardOverviewVO['nextActions']) => {
     }
     const action = item as V3DashboardNextActionVO
     return {
-      title: action.title || action.type || `下一步 ${index + 1}`,
+      title: action.title || action.actionType || action.type || `下一步 ${index + 1}`,
       desc: action.desc || action.description || '继续完成 V3 求职闭环',
-      path: normalizeActionPath(action.path || action.actionUrl || '/dashboard/v3')
+      path: normalizeActionPath(action.path || action.actionUrl || action.targetPath || '/dashboard/v3')
     }
   })
 }

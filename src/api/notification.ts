@@ -9,9 +9,9 @@ export interface NotificationVO {
   isRead: number
   readStatus?: number | string
   createdAt: string
-  relatedId?: number
+  relatedId?: number | string
   relatedType?: string
-  bizId?: number
+  bizId?: number | string
   bizType?: string
 }
 
@@ -28,7 +28,7 @@ export interface UnreadCountVO {
 
 type BackendNotificationVO = NotificationVO & {
   readStatus?: number | string
-  bizId?: number
+  bizId?: number | string
   bizType?: string
 }
 
@@ -37,12 +37,21 @@ const normalizeReadFlag = (value: unknown) => {
   return 0
 }
 
+const normalizeRelatedType = (value?: string) => {
+  if (!value) return undefined
+  const token = value.replace(/[.-]/g, '_').toUpperCase()
+  if (token.includes('INTERVIEW') && token.includes('REPORT')) return 'INTERVIEW_REPORT'
+  if (token.includes('RESUME') && token.includes('PARSE')) return 'RESUME_PARSE'
+  if (token.includes('STUDY') && token.includes('PLAN')) return 'STUDY_PLAN'
+  return token
+}
+
 const normalizeNotification = (item: BackendNotificationVO): NotificationVO => ({
   ...item,
   type: item.type || item.bizType || 'SYSTEM',
   isRead: item.isRead ?? normalizeReadFlag(item.readStatus),
   relatedId: item.relatedId ?? item.bizId,
-  relatedType: item.relatedType ?? item.bizType
+  relatedType: normalizeRelatedType(item.relatedType ?? item.bizType)
 })
 
 export const getNotificationsApi = (params: NotificationQueryDTO) => {

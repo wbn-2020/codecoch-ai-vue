@@ -47,7 +47,7 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.isAdmin) {
+    if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.canAccessAdmin) {
       return '/403'
     }
 
@@ -56,6 +56,14 @@ export const setupRouterGuards = (router: Router) => {
       return Array.isArray(roles) ? roles.map(String) : []
     })
     if (requiredRoles.length > 0 && !authStore.hasAnyRole(requiredRoles)) {
+      return '/403'
+    }
+
+    const requiredPermissions = to.matched.flatMap((record) => {
+      const permissions = record.meta.requiredPermissions
+      return Array.isArray(permissions) ? permissions.map(String) : []
+    })
+    if (requiredPermissions.length > 0 && !authStore.hasAnyPermission(requiredPermissions)) {
       return '/403'
     }
 

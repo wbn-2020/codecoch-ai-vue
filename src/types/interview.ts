@@ -382,7 +382,7 @@ export interface InterviewReportVO {
   projectExpressionProblems?: string
   resumeSuggestions?: string
   resumeAdvice?: string
-  recommendedQuestions?: RecommendedQuestionVO[]
+  recommendedQuestions?: Array<RecommendedQuestionVO | string>
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]
