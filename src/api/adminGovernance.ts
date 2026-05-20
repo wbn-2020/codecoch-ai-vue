@@ -18,108 +18,142 @@ import { normalizePageResult } from '@/utils/page'
 
 const normalizeId = (item: any) => Number(item.id || item.menuId || item.roleId || item.reportId || item.interviewId || 0)
 
+const pick = <T = any>(item: any, ...keys: string[]): T | undefined => {
+  for (const key of keys) {
+    const value = item?.[key]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return undefined
+}
+
+const cleanParams = (params: Record<string, any>) =>
+  Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+
+const withCommonParams = (params: AdminListQuery) => cleanParams({
+  pageNo: params.pageNo,
+  pageSize: params.pageSize,
+  keyword: params.keyword,
+  status: params.status,
+  type: params.type,
+  userId: params.userId,
+  startTime: params.startTime,
+  endTime: params.endTime
+})
+
 const normalizeTask = (item: any): AsyncTaskVO => ({
   ...item,
   id: normalizeId(item),
-  taskId: item.taskId || item.id,
-  taskType: item.taskType || item.type,
-  taskName: item.taskName || item.name || item.taskType || item.type,
-  status: item.status || item.taskStatus || 'UNKNOWN',
-  deadLetter: item.deadLetter ?? item.isDeadLetter ?? item.deadLetterFlag,
-  errorMessage: item.errorMessage || item.failReason || item.failureReason,
-  createdAt: item.createdAt || item.createTime,
-  updatedAt: item.updatedAt || item.updateTime,
-  finishedAt: item.finishedAt || item.finishTime
+  taskId: pick(item, 'taskId', 'messageId', 'message_id', 'id'),
+  taskType: pick(item, 'taskType', 'type', 'bizType', 'biz_type'),
+  taskName: pick(item, 'taskName', 'name', 'taskType', 'type', 'bizType', 'biz_type'),
+  status: pick(item, 'status', 'taskStatus', 'task_status') || 'UNKNOWN',
+  deadLetter: item.deadLetter ?? item.isDeadLetter ?? item.deadLetterFlag ?? item.dead_letter,
+  errorMessage: pick(item, 'errorMessage', 'failReason', 'failureReason', 'failure_reason'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
+  updatedAt: pick(item, 'updatedAt', 'updateTime', 'updated_at'),
+  finishedAt: pick(item, 'finishedAt', 'finishTime', 'completedAt', 'completed_at')
 })
 
 const normalizeNotice = (item: any): AdminNotificationVO => ({
   ...item,
   id: normalizeId(item),
-  title: item.title || item.noticeTitle || '',
-  content: item.content || item.noticeContent || '',
-  type: item.type || item.bizType || 'SYSTEM',
-  targetType: item.targetType || (item.targetUserId || item.userId ? 'USER' : 'ALL'),
-  targetUserId: item.targetUserId || item.userId,
-  createdAt: item.createdAt || item.createTime,
-  publishedAt: item.publishedAt || item.publishTime
+  title: pick(item, 'title', 'noticeTitle') || '',
+  content: pick(item, 'content', 'noticeContent') || '',
+  type: pick(item, 'type', 'bizType', 'biz_type') || 'SYSTEM',
+  targetType: pick(item, 'targetType', 'target_type') || (pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id') ? 'USER' : 'ALL'),
+  targetUserId: pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
+  publishedAt: pick(item, 'publishedAt', 'publishTime', 'published_at')
 })
 
 const normalizeOperationLog = (item: any): OperationLogVO => ({
   ...item,
   id: normalizeId(item),
-  username: item.username || item.operatorName || item.nickName,
-  module: item.module || item.businessModule,
-  operation: item.operation || item.operationType || item.action,
-  requestUri: item.requestUri || item.uri || item.path,
-  ip: item.ip || item.ipAddress,
-  costTime: item.costTime || item.costMillis || item.duration,
-  createdAt: item.createdAt || item.operationTime || item.createTime
+  username: pick(item, 'username', 'operatorName', 'operator_name', 'nickName', 'nick_name'),
+  module: pick(item, 'module', 'businessModule', 'business_module'),
+  operation: pick(item, 'operation', 'operationType', 'operation_type', 'action'),
+  requestUri: pick(item, 'requestUri', 'request_uri', 'uri', 'path'),
+  ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
+  costTime: pick(item, 'costTime', 'costMillis', 'costMs', 'cost_ms', 'duration'),
+  createdAt: pick(item, 'createdAt', 'operationTime', 'createTime', 'created_at')
 })
 
 const normalizeLoginLog = (item: any): LoginLogVO => ({
   ...item,
   id: normalizeId(item),
-  username: item.username || item.loginName || item.nickName,
-  ip: item.ip || item.ipAddress,
-  message: item.message || item.errorMessage || item.reason,
-  loginTime: item.loginTime || item.createdAt || item.createTime,
-  createdAt: item.createdAt || item.loginTime || item.createTime
+  username: pick(item, 'username', 'loginName', 'login_name', 'nickName', 'nick_name'),
+  ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
+  message: pick(item, 'message', 'errorMessage', 'failReason', 'fail_reason', 'reason'),
+  loginTime: pick(item, 'loginTime', 'login_time', 'createdAt', 'createTime', 'created_at'),
+  createdAt: pick(item, 'createdAt', 'loginTime', 'login_time', 'createTime', 'created_at')
 })
 
 const normalizeMenu = (item: any): MenuVO => ({
   ...item,
   id: normalizeId(item),
-  parentId: item.parentId || item.pid || 0,
-  menuName: item.menuName || item.name || item.title || '',
-  name: item.name || item.menuName || item.title,
-  sortOrder: item.sortOrder ?? item.sort ?? item.orderNum,
-  type: item.type || item.menuType || 'MENU',
+  parentId: pick(item, 'parentId', 'parent_id', 'pid') || 0,
+  menuName: pick(item, 'menuName', 'menu_name', 'name', 'title') || '',
+  name: pick(item, 'name', 'menuName', 'menu_name', 'title'),
+  sortOrder: pick(item, 'sortOrder', 'sort_order', 'sort', 'orderNum', 'order_num'),
+  type: pick(item, 'type', 'menuType', 'menu_type') || 'MENU',
   children: (item.children || []).map(normalizeMenu)
 })
 
 const normalizeAiModel = (item: any): AiModelConfigVO => ({
   ...item,
   id: normalizeId(item),
-  provider: item.provider || item.platform || '',
-  modelName: item.modelName || item.name || '',
-  displayName: item.displayName || item.modelAlias || item.name,
-  apiBaseUrl: item.apiBaseUrl || item.baseUrl,
-  apiKeyMasked: item.apiKeyMasked || item.maskedApiKey || item.apiKey,
+  provider: pick(item, 'provider', 'platform') || '',
+  modelCode: pick(item, 'modelCode', 'model_code'),
+  modelName: pick(item, 'modelCode', 'model_code', 'modelName', 'model_name', 'name') || '',
+  displayName: pick(item, 'displayName', 'display_name', 'modelAlias', 'model_alias', 'modelName', 'model_name', 'name'),
+  apiBaseUrl: pick(item, 'apiBaseUrl', 'api_base_url', 'baseUrl', 'base_url'),
+  apiKeyMasked: pick(item, 'apiKeyMasked', 'api_key_masked', 'maskedApiKey', 'masked_api_key', 'apiKey', 'api_key'),
   enabled: item.enabled ?? item.status ?? 1,
-  isDefault: item.isDefault ?? item.defaultModel ?? item.defaultFlag ?? 0,
-  createdAt: item.createdAt || item.createTime,
-  updatedAt: item.updatedAt || item.updateTime
+  isDefault: item.isDefault ?? item.is_default ?? item.defaultModel ?? item.default_model ?? item.defaultFlag ?? 0,
+  temperature: pick(item, 'temperature'),
+  maxTokens: pick(item, 'maxTokens', 'max_tokens'),
+  description: pick(item, 'description', 'remark'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
+  updatedAt: pick(item, 'updatedAt', 'updateTime', 'updated_at')
 })
 
 const normalizeInterview = (item: any): AdminInterviewVO => ({
   ...item,
-  interviewId: item.interviewId || item.id,
-  username: item.username || item.userName || item.nickName,
-  interviewName: item.interviewName || item.title,
-  interviewMode: item.interviewMode || item.mode,
-  questionCount: item.questionCount || item.answeredQuestionCount,
-  createdAt: item.createdAt || item.createTime,
-  startedAt: item.startedAt || item.startTime,
-  finishedAt: item.finishedAt || item.endTime
+  interviewId: pick(item, 'interviewId', 'interview_id', 'id') || 0,
+  userId: pick(item, 'userId', 'user_id'),
+  username: pick(item, 'username', 'userName', 'user_name', 'nickName', 'nick_name'),
+  interviewName: pick(item, 'interviewName', 'interview_name', 'title'),
+  interviewMode: pick(item, 'interviewMode', 'interview_mode', 'mode'),
+  targetPosition: pick(item, 'targetPosition', 'target_position'),
+  reportStatus: pick(item, 'reportStatus', 'report_status'),
+  totalScore: pick(item, 'totalScore', 'total_score'),
+  questionCount: pick(item, 'questionCount', 'question_count', 'answeredQuestionCount', 'answered_question_count'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at', 'updatedAt', 'updated_at'),
+  startedAt: pick(item, 'startedAt', 'startTime', 'start_time'),
+  finishedAt: pick(item, 'finishedAt', 'endTime', 'end_time')
 })
 
 const normalizeReport = (item: any): AdminInterviewReportVO => ({
   ...item,
-  id: item.id || item.reportId,
-  reportId: item.reportId || item.id,
-  interviewId: item.interviewId || item.sessionId,
-  username: item.username || item.userName || item.nickName,
-  interviewName: item.interviewName || item.title,
-  reportStatus: item.reportStatus || item.status,
-  summary: item.summary || item.reportContent,
-  failedReason: item.failedReason || item.failureReason || item.errorMessage,
-  generatedAt: item.generatedAt || item.createdAt || item.createTime,
-  createdAt: item.createdAt || item.createTime
+  id: pick(item, 'id', 'reportId', 'report_id'),
+  reportId: pick(item, 'reportId', 'report_id', 'id'),
+  interviewId: pick(item, 'interviewId', 'interview_id', 'sessionId', 'session_id') || 0,
+  userId: pick(item, 'userId', 'user_id'),
+  username: pick(item, 'username', 'userName', 'user_name', 'nickName', 'nick_name'),
+  interviewName: pick(item, 'interviewName', 'interview_name', 'interviewTitle', 'interview_title', 'title'),
+  reportStatus: pick(item, 'reportStatus', 'report_status', 'status'),
+  totalScore: pick(item, 'totalScore', 'total_score'),
+  summary: pick(item, 'summary', 'reportContent', 'report_content'),
+  failedReason: pick(item, 'failedReason', 'failureReason', 'failure_reason', 'errorMessage', 'error_message'),
+  generatedAt: pick(item, 'generatedAt', 'generated_at', 'createdAt', 'createTime', 'created_at'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at')
 })
 
 export const getAdminTasksApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/tasks', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/tasks', {
+      params: cleanParams({ ...withCommonParams(params), bizType: params.type })
+    })
     .then((result) => normalizePageResult(result, params, normalizeTask))
 
 export const getAdminTaskDetailApi = (id: number) =>
@@ -132,7 +166,9 @@ export const retryAdminDeadLetterTaskApi = (id: number) =>
 
 export const getAdminNotificationsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/notifications', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/notifications', {
+      params: cleanParams({ ...withCommonParams(params), readStatus: params.status })
+    })
     .then((result) => normalizePageResult(result, params, normalizeNotice))
 
 export const sendAdminNotificationApi = (data: NotificationSendDTO) =>
@@ -146,12 +182,14 @@ export const deleteAdminNotificationApi = (id: number) =>
 
 export const getAdminOperationLogsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/operation-logs', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/operation-logs', { params: withCommonParams(params) })
     .then((result) => normalizePageResult(result, params, normalizeOperationLog))
 
 export const getAdminLoginLogsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/login-logs', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/login-logs', {
+      params: cleanParams({ ...withCommonParams(params), loginStatus: params.status })
+    })
     .then((result) => normalizePageResult(result, params, normalizeLoginLog))
 
 export const getAdminMenusApi = () => request.get<any[], any[]>('/admin/menus').then((items) => items.map(normalizeMenu))
@@ -166,7 +204,9 @@ export const grantAdminRoleMenusApi = (roleId: number, data: RoleMenuGrantDTO) =
 
 export const getAdminAiModelsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/ai/models', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/ai/models', {
+      params: cleanParams({ ...withCommonParams(params), enabled: params.status })
+    })
     .then((result) => normalizePageResult(result, params, normalizeAiModel))
 
 export const createAdminAiModelApi = (data: AiModelConfigDTO) =>
@@ -185,7 +225,7 @@ export const deleteAdminAiModelApi = (id: number) => request.delete<null, null>(
 
 export const getAdminInterviewsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interviews', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interviews', { params: withCommonParams(params) })
     .then((result) => normalizePageResult(result, params, normalizeInterview))
 
 export const getAdminInterviewDetailApi = (id: number) =>
@@ -193,7 +233,7 @@ export const getAdminInterviewDetailApi = (id: number) =>
 
 export const getAdminInterviewReportsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interview-reports', { params })
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interview-reports', { params: withCommonParams(params) })
     .then((result) => normalizePageResult(result, params, normalizeReport))
 
 export const getAdminInterviewReportDetailApi = (id: number) =>

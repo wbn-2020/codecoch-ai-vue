@@ -99,6 +99,7 @@ export interface RoleMenuGrantDTO {
 export interface AiModelConfigVO {
   id: number
   provider: string
+  modelCode?: string
   modelName: string
   displayName?: string
   apiBaseUrl?: string
@@ -115,6 +116,7 @@ export interface AiModelConfigVO {
 
 export interface AiModelConfigDTO {
   provider: string
+  modelCode?: string
   modelName: string
   displayName?: string
   apiBaseUrl?: string
