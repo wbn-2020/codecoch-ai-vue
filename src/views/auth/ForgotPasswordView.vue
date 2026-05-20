@@ -13,7 +13,16 @@
         show-icon
         :closable="false"
         title="重置链接已发送"
-        :description="`请检查 ${form.email} 的收件箱（含垃圾邮件），点击链接完成密码重置。`"
+        :description="successMessage"
+        class="sent-alert"
+      />
+
+      <el-alert
+        v-if="errorMessage"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="errorMessage"
         class="sent-alert"
       />
 
@@ -75,6 +84,8 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const sent = ref(false)
+const successMessage = ref('')
+const errorMessage = ref('')
 
 const form = reactive<ForgotPasswordDTO>({
   email: ''
@@ -87,6 +98,14 @@ const rules: FormRules<ForgotPasswordDTO> = {
   ]
 }
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error && typeof error === 'object') {
+    const payload = error as { message?: string; response?: { data?: { message?: string } } }
+    return payload.response?.data?.message || payload.message || fallback
+  }
+  return fallback
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -94,12 +113,20 @@ const handleSubmit = async () => {
     if (!valid) return
 
     loading.value = true
+    errorMessage.value = ''
+    successMessage.value = ''
     try {
-      await forgotPasswordApi(form)
+      const result = await forgotPasswordApi(form)
       sent.value = true
+      successMessage.value =
+        result.message ||
+        `请检查 ${form.email} 的收件箱（含垃圾邮件），点击链接完成密码重置。`
+      if (result.resetToken) {
+        successMessage.value = `${successMessage.value} 测试环境 resetToken：${result.resetToken}`
+      }
       ElMessage.success('重置链接已发送，请查收邮箱')
     } catch (error: unknown) {
-      // 接口可能返回"邮箱不存在"等错误，由全局拦截器处理
+      errorMessage.value = getErrorMessage(error, '重置链接发送失败，请稍后重试')
     } finally {
       loading.value = false
     }

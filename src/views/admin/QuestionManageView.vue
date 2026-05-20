@@ -963,14 +963,20 @@ const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {
 }
 
 const fetchOptions = async () => {
-  const [categoryResult, tagResult, groupResult] = await Promise.all([
-    getQuestionCategoriesApi(),
-    getQuestionTagsApi(),
-    getQuestionGroupsApi({ status: 1 })
-  ])
-  categories.value = categoryResult
-  tags.value = tagResult
-  groups.value = groupResult
+  try {
+    const [categoryResult, tagResult, groupResult] = await Promise.all([
+      getQuestionCategoriesApi(),
+      getQuestionTagsApi(),
+      getQuestionGroupsApi({ status: 1 })
+    ])
+    categories.value = categoryResult
+    tags.value = tagResult
+    groups.value = groupResult
+  } catch {
+    categories.value = []
+    tags.value = []
+    groups.value = []
+  }
 }
 
 const fetchQuestions = async () => {
@@ -979,6 +985,9 @@ const fetchQuestions = async () => {
     const result = await getAdminQuestionsApi(query)
     questions.value = result.records || []
     total.value = result.total || 0
+  } catch {
+    questions.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -990,6 +999,10 @@ const fetchReviews = async () => {
     const result = await getQuestionReviewsApi(reviewQuery)
     reviews.value = result.records || []
     reviewTotal.value = result.total || 0
+    selectedReviewRows.value = []
+  } catch {
+    reviews.value = []
+    reviewTotal.value = 0
     selectedReviewRows.value = []
   } finally {
     reviewLoading.value = false
@@ -1018,6 +1031,9 @@ const fetchDuplicates = async () => {
     const result = await getQuestionDuplicateReviewsApi(duplicateQuery)
     duplicates.value = result.records || []
     duplicateTotal.value = result.total || 0
+  } catch {
+    duplicates.value = []
+    duplicateTotal.value = 0
   } finally {
     duplicateLoading.value = false
   }
@@ -1044,7 +1060,11 @@ const openDialog = (row?: AdminQuestionVO) => {
 
 const handleSave = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
     if (editingId.value) {
@@ -1462,8 +1482,22 @@ const handleExport = async () => {
   }
 }
 
-const handleDownloadTemplate = () => {
-  downloadQuestionImportTemplate()
+const handleDownloadTemplate = async () => {
+  try {
+    const res = await downloadQuestionImportTemplate()
+    const blob = new Blob([res as unknown as BlobPart], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'question_import_template.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('模板下载成功')
+  } catch {
+    ElMessage.error('模板下载失败')
+  }
 }
 
 onMounted(async () => {

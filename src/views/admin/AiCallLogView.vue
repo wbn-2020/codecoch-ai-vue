@@ -139,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { Activity } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
@@ -185,14 +186,21 @@ const fetchLogs = async () => {
     const result = await getAdminAiLogsApi(query)
     logs.value = result.records || []
     total.value = result.total || 0
+  } catch {
+    logs.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
 const openDetail = async (row: AiCallLogVO) => {
-  detail.value = await getAdminAiLogDetailApi(row.id)
-  drawerVisible.value = true
+  try {
+    detail.value = await getAdminAiLogDetailApi(row.id)
+    drawerVisible.value = true
+  } catch {
+    ElMessage.error('AI 调用日志详情加载失败')
+  }
 }
 
 const handleSearch = () => {

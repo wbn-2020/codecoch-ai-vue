@@ -553,6 +553,9 @@ const fetchPrompts = async () => {
     const result = await getAdminAiPromptsApi(query)
     prompts.value = result.records || []
     total.value = result.total || 0
+  } catch {
+    prompts.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -577,6 +580,9 @@ const fetchVersions = async () => {
     versions.value = result.records || []
     versionPagination.total = result.total || 0
     versionPagination.pageSize = result.pageSize || versionQuery.pageSize || 10
+  } catch {
+    versions.value = []
+    versionPagination.total = 0
   } finally {
     versionLoading.value = false
   }

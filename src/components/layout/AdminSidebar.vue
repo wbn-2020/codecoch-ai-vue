@@ -11,17 +11,23 @@
 
 <script setup lang="ts">
 import {
+  Bell,
+  ChatDotRound,
   Collection,
   Connection,
   DataAnalysis,
   DataBoard,
+  Document,
   Files,
   Folder,
+  Key,
   List,
+  Lock,
   Operation,
   PriceTag,
   Setting,
   Share,
+  Timer,
   UserFilled
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
@@ -49,6 +55,14 @@ const menuItems = [
   { label: '行业模板', path: '/admin/industry-templates', icon: List },
   { label: 'Prompt 模板', path: '/admin/ai/prompts', icon: Operation },
   { label: 'AI 调用日志', path: '/admin/ai/logs', icon: DataAnalysis },
+  { label: 'AI 模型配置', path: '/admin/ai/models', icon: Operation },
+  { label: '菜单权限', path: '/admin/menus', icon: Lock },
+  { label: '通知管理', path: '/admin/notices', icon: Bell },
+  { label: '操作日志', path: '/admin/operation-logs', icon: Document },
+  { label: '登录日志', path: '/admin/login-logs', icon: Key },
+  { label: '面试记录', path: '/admin/interviews', icon: ChatDotRound },
+  { label: '面试报告', path: '/admin/interview-reports', icon: Document },
+  { label: '任务中心', path: '/admin/async-tasks', icon: Timer },
   { label: '系统配置', path: '/admin/system/configs', icon: Setting }
 ]
 

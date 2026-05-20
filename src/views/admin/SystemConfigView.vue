@@ -149,6 +149,9 @@ const fetchConfigs = async () => {
     const result = await getSystemConfigsApi(query)
     configs.value = result.records || []
     total.value = result.total || 0
+  } catch {
+    configs.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

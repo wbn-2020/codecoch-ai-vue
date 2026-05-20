@@ -131,6 +131,9 @@ const fetchQuestions = async () => {
     const result = await getQuestionsApi(query)
     questions.value = result.records || []
     total.value = result.total || 0
+  } catch {
+    questions.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

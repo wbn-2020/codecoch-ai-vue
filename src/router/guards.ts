@@ -2,6 +2,7 @@ import type { Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { useAuthStore } from '@/stores/auth'
+import { getToken } from '@/utils/token'
 
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
@@ -11,6 +12,10 @@ export const setupRouterGuards = (router: Router) => {
 
     const isPublic = Boolean(to.meta.public)
     const isAuthPage = to.path === '/login' || to.path === '/register'
+
+    if (authStore.isLoggedIn && !getToken()) {
+      authStore.clearAuth()
+    }
 
     if (isAuthPage && authStore.isLoggedIn) {
       return '/dashboard'

@@ -25,16 +25,26 @@ export interface ForgotPasswordDTO {
   email: string
 }
 
+export interface ForgotPasswordVO {
+  message?: string
+  resetToken?: string
+  expiresInSeconds?: number
+}
+
 export interface ResetPasswordDTO {
   token: string
   newPassword: string
   confirmPassword: string
 }
 
+export interface ResetPasswordVO {
+  message?: string
+}
+
 export const forgotPasswordApi = (data: ForgotPasswordDTO) => {
-  return request.post<{ message: string }, { message: string }>('/auth/forgot-password', data)
+  return request.post<ForgotPasswordVO, ForgotPasswordVO>('/auth/forgot-password', data)
 }
 
 export const resetPasswordApi = (data: ResetPasswordDTO) => {
-  return request.post<{ message: string }, { message: string }>('/auth/reset-password', data)
+  return request.post<ResetPasswordVO, ResetPasswordVO>('/auth/reset-password', data)
 }

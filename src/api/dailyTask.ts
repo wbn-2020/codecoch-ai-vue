@@ -24,6 +24,9 @@ export interface DailyTaskListVO {
 export interface CheckinVO {
   streak: number
   message: string
+  planId?: number
+  studyMinutes?: number
+  note?: string
 }
 
 export const getDailyTasksApi = (planId: number, date?: string) => {
@@ -40,6 +43,6 @@ export const skipTaskApi = (taskId: number) => {
   return request.post<DailyTaskVO, DailyTaskVO>(`/study-tasks/${taskId}/skip`)
 }
 
-export const checkinApi = () => {
-  return request.post<CheckinVO, CheckinVO>('/study-checkins')
+export const checkinApi = (data?: { planId?: number; studyMinutes?: number; note?: string }) => {
+  return request.post<CheckinVO, CheckinVO>('/study-checkins', data || {})
 }
