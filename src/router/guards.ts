@@ -34,7 +34,7 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (!authStore.userInfo) {
+    if (!authStore.userInfo || authStore.roles.length === 0) {
       try {
         await authStore.fetchCurrentUser()
       } catch {
@@ -48,6 +48,14 @@ export const setupRouterGuards = (router: Router) => {
     }
 
     if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.isAdmin) {
+      return '/403'
+    }
+
+    const requiredRoles = to.matched.flatMap((record) => {
+      const roles = record.meta.requiredRoles
+      return Array.isArray(roles) ? roles.map(String) : []
+    })
+    if (requiredRoles.length > 0 && !authStore.hasAnyRole(requiredRoles)) {
       return '/403'
     }
 

@@ -78,6 +78,8 @@ export interface UserDashboardRecentReportVO {
   status?: string
   totalScore?: number
   generatedAt?: string
+  weakPoints?: string[]
+  suggestions?: string[]
 }
 
 export interface UserDashboardActiveStudyPlanVO {
@@ -127,6 +129,10 @@ export interface V3DashboardRecommendedQuestionsVO {
   status?: string
   questionCount?: number
   sourceType?: string
+  sourceId?: number
+  matchReportId?: number
+  skillProfileId?: number
+  studyPlanId?: number
   updatedAt?: string
 }
 

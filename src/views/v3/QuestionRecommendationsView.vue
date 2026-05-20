@@ -33,13 +33,24 @@
       <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
       <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" description="当前来源还没有推荐题，可以先生成推荐批次。" />
       <div v-else class="question-list">
-        <button v-for="item in items" :key="item.id" class="question-card" type="button" @click="openQuestion(item)">
+        <button
+          v-for="item in items"
+          :key="item.id"
+          class="question-card"
+          :class="{ 'question-card--disabled': !item.questionId }"
+          type="button"
+          @click="openQuestion(item)"
+        >
           <span class="question-main">
-            <strong>{{ item.questionTitle || `题目 #${item.questionId || item.id}` }}</strong>
+            <strong>{{ item.questionTitle || `推荐项 #${item.id}` }}</strong>
             <small>{{ item.skillName || item.skillCode || '--' }} · {{ item.difficulty || '--' }} · {{ item.questionType || '--' }}</small>
             <em>{{ item.recommendReason || item.questionContent || '暂无推荐理由' }}</em>
           </span>
-          <el-tag :type="severityTag(item.gapSeverity)">{{ item.gapSeverity || 'NORMAL' }}</el-tag>
+          <span class="question-tags">
+            <el-tag :type="severityTag(item.gapSeverity)">{{ item.gapSeverity || 'NORMAL' }}</el-tag>
+            <el-tag v-if="item.questionId" type="success" effect="plain">可练习</el-tag>
+            <el-tag v-else type="warning" effect="plain">待入库/待审核</el-tag>
+          </span>
         </button>
       </div>
     </section>
@@ -64,7 +75,7 @@ import {
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
-import type { QuestionRecommendationItemVO } from '@/types/questionRecommendation'
+import { QUESTION_RECOMMENDATION_SOURCE_TYPE, type QuestionRecommendationItemVO } from '@/types/questionRecommendation'
 import { getErrorMessage } from '@/utils/error'
 
 type Source = 'gap' | 'matchReport' | 'studyPlan'
@@ -106,6 +117,30 @@ const getQueryNumber = (name: string) => {
 }
 
 const severityTag = (severity?: string) => severity === 'HIGH' || severity === 'CRITICAL' ? 'danger' : severity === 'MEDIUM' ? 'warning' : 'info'
+const sourceTypeBySource: Record<Source, string> = {
+  gap: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP,
+  matchReport: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH,
+  studyPlan: QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN
+}
+
+const buildPracticeQuery = (item: QuestionRecommendationItemVO) => {
+  const skillProfileId = query.source === 'gap'
+    ? query.sourceId
+    : getQueryNumber('skillProfileId') || getQueryNumber('profileId')
+  const matchReportId = query.source === 'matchReport' ? query.sourceId : getQueryNumber('matchReportId')
+  const studyPlanId = query.source === 'studyPlan' ? query.sourceId : getQueryNumber('studyPlanId')
+  return {
+    recommendationItemId: String(item.id),
+    batchId: String(item.batchId),
+    sourceType: item.sourceType || sourceTypeBySource[query.source],
+    sourceId: item.sourceId || query.sourceId ? String(item.sourceId || query.sourceId) : undefined,
+    skillProfileId: skillProfileId ? String(skillProfileId) : undefined,
+    matchReportId: matchReportId ? String(matchReportId) : undefined,
+    studyPlanId: studyPlanId ? String(studyPlanId) : undefined,
+    targetJobId: getQueryNumber('targetJobId') ? String(getQueryNumber('targetJobId')) : undefined,
+    resumeId: getQueryNumber('resumeId') ? String(getQueryNumber('resumeId')) : undefined
+  }
+}
 
 const hydrateContext = async () => {
   const routeSourceId =
@@ -199,8 +234,14 @@ const generateRecommendations = async () => {
 }
 
 const openQuestion = (item: QuestionRecommendationItemVO) => {
-  const id = item.questionId || item.id
-  if (id) router.push(`/questions/${id}`)
+  if (!item.questionId) {
+    ElMessage.warning('该推荐项尚未匹配到正式题库，待入库/审核后才能进入练习')
+    return
+  }
+  router.push({
+    path: `/questions/${item.questionId}`,
+    query: buildPracticeQuery(item)
+  })
 }
 
 onMounted(loadRecommendations)
@@ -220,6 +261,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .field-hint { margin-top: 6px; color: var(--app-text-muted); font-size: 12px; }
 .question-list { display: grid; gap: 12px; }
 .question-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); text-align: left; cursor: pointer; }
+.question-card--disabled { cursor: not-allowed; opacity: 0.78; }
+.question-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .question-main strong, .question-main small, .question-main em { display: block; overflow-wrap: anywhere; }
 .question-main small { margin-top: 5px; color: var(--app-text-muted); }
 .question-main em { margin-top: 8px; font-style: normal; line-height: 1.6; }

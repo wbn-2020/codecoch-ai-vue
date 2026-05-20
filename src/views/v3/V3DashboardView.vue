@@ -96,6 +96,21 @@
     </section>
 
     <section class="dashboard-grid">
+      <div class="content-panel loop-card">
+        <div class="section-head"><div><h2>最近面试报告</h2><p>面试结果回流到学习计划、推荐题和再次面试。</p></div><el-button text @click="router.push('/interviews/history')">面试记录</el-button></div>
+        <AppState v-if="!overview?.recentReport && !overview?.recentInterview" type="empty" title="暂无面试报告" description="完成目标岗位面试并生成报告后会展示回流建议。" />
+        <div v-else class="loop-summary">
+          <strong>{{ overview?.recentReport?.totalScore ?? '--' }} 分</strong>
+          <span>{{ overview?.recentInterview?.title || `面试 #${overview?.recentReport?.interviewId || overview?.recentInterview?.interviewId}` }} · {{ overview?.recentReport?.status || overview?.recentInterview?.reportStatus || 'UNKNOWN' }}</span>
+          <small v-if="reportInsightText">{{ reportInsightText }}</small>
+          <div class="inline-actions">
+            <el-button type="primary" @click="router.push(`/interviews/${overview?.recentReport?.interviewId}/report`)" :disabled="!overview?.recentReport?.interviewId">查看报告</el-button>
+            <el-button @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">继续练习</el-button>
+            <el-button @click="router.push({ path: '/interviews/create', query: interviewRetryQuery })">再次面试</el-button>
+          </div>
+        </div>
+      </div>
+
       <div class="content-panel">
         <div class="section-head"><div><h2>最近通知</h2><p>来自 GET /notifications。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
         <AppState v-if="notificationLoading" type="loading" title="正在读取通知" />
@@ -155,9 +170,21 @@ const compactQuery = (query: Record<string, unknown>): LocationQueryRaw => Objec
   Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
 ) as LocationQueryRaw
 const recommendationQuery = computed(() => compactQuery({
+  batchId: overview.value?.recommendedQuestions?.batchId,
   studyPlanId: activeStudyProgress.value?.planId,
-  matchReportId: activeStudyProgress.value?.planId ? undefined : latestMatchReportId.value,
+  matchReportId: overview.value?.recommendedQuestions?.matchReportId || (activeStudyProgress.value?.planId ? undefined : latestMatchReportId.value),
+  skillProfileId: overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId,
+  sourceType: overview.value?.recommendedQuestions?.sourceType,
+  sourceId: overview.value?.recommendedQuestions?.sourceId,
   targetJobId: currentTargetJobId.value
+}))
+const interviewRetryQuery = computed(() => compactQuery({
+  source: 'v3',
+  targetJobId: currentTargetJobId.value,
+  matchReportId: latestMatchReportId.value,
+  resumeId: overview.value?.latestMatch?.resumeId,
+  fromInterviewId: overview.value?.recentReport?.interviewId || overview.value?.recentInterview?.interviewId,
+  fromReportId: overview.value?.recentReport?.reportId
 }))
 const normalizeActionPath = (path: string) => {
   if (!path.startsWith('/interviews/create')) return path
@@ -194,12 +221,17 @@ const metrics = computed(() => [
   { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
 ])
 const nextActionItems = computed(() => normalizeNextActions(overview.value?.nextActions))
+const reportInsightText = computed(() => {
+  const weakPoints = overview.value?.recentReport?.weakPoints || []
+  const suggestions = overview.value?.recentReport?.suggestions || []
+  return [...weakPoints.slice(0, 2), ...suggestions.slice(0, 1)].filter(Boolean).join(' · ')
+})
 const entries = computed(() => [
   { title: '岗位目标', desc: '维护当前主目标和 JD', path: '/job-targets', icon: Crosshair },
   { title: '简历匹配', desc: '生成匹配报告', path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }, icon: GitCompareArrows },
   { title: '能力画像', desc: '查看短板和动作', path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }, icon: Radar },
   { title: '推荐题目', desc: '按短板练习', path: { path: '/questions/recommendations', query: recommendationQuery.value }, icon: ListChecks },
-  { title: '模拟面试', desc: '按岗位目标创建面试', path: { path: '/interviews/create', query: compactQuery({ source: 'v3', targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value, resumeId: overview.value?.latestMatch?.resumeId }) }, icon: Bell }
+  { title: '模拟面试', desc: '按岗位目标创建面试', path: { path: '/interviews/create', query: interviewRetryQuery.value }, icon: Bell }
 ])
 
 const loadOverview = async () => {
@@ -269,7 +301,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .active-plan { cursor: pointer; }
 .notification-list, .next-action-list, .loop-summary { display: grid; gap: 12px; }
 .loop-summary strong { font-size: 24px; }
-.loop-summary span { color: var(--app-text-muted); line-height: 1.5; }
+.loop-summary span, .loop-summary small { color: var(--app-text-muted); line-height: 1.5; }
+.inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .notification-list article, .entry-grid button, .next-action-list button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .notification-list article { display: block; }
 .next-action-list button { color: var(--app-text); text-align: left; cursor: pointer; }

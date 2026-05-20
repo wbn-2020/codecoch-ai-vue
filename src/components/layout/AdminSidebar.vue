@@ -32,14 +32,16 @@ import {
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 defineProps<{
   collapsed?: boolean
 }>()
 
 const route = useRoute()
+const authStore = useAuthStore()
 
-const menuItems = [
+const allMenuItems = [
   { label: '文件治理', path: '/admin/files', icon: Folder },
   { label: '管理首页', path: '/admin', icon: DataBoard },
   { label: '用户管理', path: '/admin/users', icon: UserFilled },
@@ -66,8 +68,10 @@ const menuItems = [
   { label: '系统配置', path: '/admin/system/configs', icon: Setting }
 ]
 
+const menuItems = computed(() => allMenuItems.filter(() => authStore.isAdmin))
+
 const activePath = computed(() => {
-  const matched = [...menuItems]
+  const matched = [...menuItems.value]
     .sort((a, b) => b.path.length - a.path.length)
     .find((item) => route.path === item.path || route.path.startsWith(`${item.path}/`))
   return matched?.path || route.path

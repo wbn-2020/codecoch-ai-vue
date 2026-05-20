@@ -261,10 +261,30 @@
               <strong>{{ optimizeDetail.resultJson?.overallScore ?? '--' }}</strong>
             </div>
             <p>{{ optimizeDetail.resultJson?.overallComment || optimizeDetail.errorMessage || '后端未返回整体评价。' }}</p>
-            <div v-if="optimizeDetail.resultJson?.rewriteSuggestions?.length" class="rewrite-list">
-              <article v-for="(item, index) in optimizeDetail.resultJson.rewriteSuggestions.slice(0, 3)" :key="index">
-                <span>{{ item.projectName || item.section || `建议 ${index + 1}` }}</span>
-                <p>{{ item.after || item.reason || '后端未返回改写内容' }}</p>
+            <div v-if="optimizeSuggestions.length" class="rewrite-toolbar">
+              <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
+              <el-button text size="small" @click="selectAllOptimizeSuggestions">全选</el-button>
+              <el-button text size="small" @click="selectedOptimizeSuggestionIndexes = []">清空</el-button>
+            </div>
+            <div v-if="optimizeSuggestions.length" class="rewrite-list">
+              <article v-for="(item, index) in optimizeSuggestions" :key="index">
+                <div class="rewrite-head">
+                  <el-checkbox v-model="selectedOptimizeSuggestionIndexes" :label="index">
+                    {{ getOptimizeSuggestionFieldName(item, index) }}
+                  </el-checkbox>
+                  <el-tag v-if="item.fabricationRisk" type="warning" effect="plain">需核实真实性</el-tag>
+                </div>
+                <div class="rewrite-diff">
+                  <div>
+                    <span>优化前</span>
+                    <p>{{ item.before || '后端未返回原文片段' }}</p>
+                  </div>
+                  <div>
+                    <span>优化后</span>
+                    <p>{{ item.after || '后端未返回改写内容' }}</p>
+                  </div>
+                </div>
+                <p v-if="item.reason" class="rewrite-reason">{{ item.reason }}</p>
               </article>
             </div>
             <el-tooltip :content="applyOptimizeDisabledReason" placement="top" :disabled="canApplyOptimizeResult">
@@ -352,6 +372,7 @@ import type {
   ResumeOptimizeDetailVO,
   ResumeOptimizeRecordVO,
   ResumeOptimizeRequestDTO,
+  ResumeRewriteSuggestion,
   ResumeOptimizeSseEvent,
   ResumeProjectDTO,
   ResumeProjectVO
@@ -377,6 +398,7 @@ const editingProject = ref<ResumeProjectVO | null>(null)
 const projects = ref<ResumeProjectVO[]>([])
 const optimizeRecords = ref<ResumeOptimizeRecordVO[]>([])
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
+const selectedOptimizeSuggestionIndexes = ref<number[]>([])
 const optimizeSseEvents = ref<Array<{ type: string; stage?: string; message: string }>>([])
 const optimizeSseMessage = ref('')
 const optimizeSseStatus = ref('未开始')
@@ -423,13 +445,36 @@ const completion = computed(() => {
 
 const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
 
-const canApplyOptimizeResult = computed(() => optimizeDetail.value?.optimizeStatus === 'SUCCESS')
+const optimizeSuggestions = computed(() => optimizeDetail.value?.resultJson?.rewriteSuggestions || [])
+
+const canApplyOptimizeResult = computed(() =>
+  optimizeDetail.value?.optimizeStatus === 'SUCCESS' && selectedOptimizeSuggestionIndexes.value.length > 0
+)
 
 const applyOptimizeDisabledReason = computed(() => {
   if (!optimizeDetail.value) return '请选择一条优化记录'
   if (optimizeDetail.value.optimizeStatus !== 'SUCCESS') return '仅成功的优化记录可应用'
+  if (!selectedOptimizeSuggestionIndexes.value.length) return '请至少选择一个字段建议'
   return ''
 })
+
+const getOptimizeSuggestionFieldName = (item: ResumeRewriteSuggestion, index: number) =>
+  item.fieldName || item.fieldKey || item.projectName || item.section || `建议 ${index + 1}`
+
+const getOptimizeSuggestionFieldKey = (item: ResumeRewriteSuggestion) =>
+  item.fieldKey || item.section || item.fieldName || (item.projectName ? 'project' : undefined)
+
+const selectAllOptimizeSuggestions = () => {
+  selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
+}
+
+const getSelectedOptimizeSuggestions = () =>
+  selectedOptimizeSuggestionIndexes.value
+    .filter((index) => index >= 0 && index < optimizeSuggestions.value.length)
+    .map((index) => ({
+      index,
+      item: optimizeSuggestions.value[index]
+    }))
 
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
@@ -478,6 +523,7 @@ const fetchOptimizeRecords = async () => {
     optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
     if (!optimizeDetail.value && optimizeRecords.value[0]) {
       optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+      selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
     }
   } catch {
     optimizeRecords.value = []
@@ -486,6 +532,7 @@ const fetchOptimizeRecords = async () => {
 
 const openOptimizeDetail = async (recordId: number) => {
   optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
+  selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
 }
 
 const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
@@ -604,11 +651,15 @@ const showApplyResultMessage = async (message?: string, warnings?: string[], new
 
 const handleApplyOptimizeResult = async () => {
   if (!optimizeDetail.value || !canApplyOptimizeResult.value) {
-    ElMessage.warning('仅成功的优化记录可应用')
+    ElMessage.warning(applyOptimizeDisabledReason.value || '仅成功的优化记录可应用')
     return
   }
+  const selectedSuggestions = getSelectedOptimizeSuggestions()
+  const selectedFields = selectedSuggestions
+    .map(({ item }) => getOptimizeSuggestionFieldKey(item))
+    .filter((field): field is string => Boolean(field))
   try {
-    await ElMessageBox.confirm('将创建一份新的 AI 优化草稿，不会覆盖当前简历。', '应用优化结果', {
+    await ElMessageBox.confirm(`将应用 ${selectedSuggestions.length} 个字段建议并创建一份新的 AI 优化草稿，不会覆盖当前简历。`, '应用优化结果', {
       type: 'warning',
       confirmButtonText: '创建草稿',
       cancelButtonText: '取消'
@@ -619,7 +670,9 @@ const handleApplyOptimizeResult = async () => {
   applyingOptimize.value = true
   try {
     const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
-      applyMode: 'CREATE_DRAFT'
+      applyMode: 'CREATE_DRAFT',
+      selectedSuggestionIndexes: selectedSuggestions.map(({ index }) => index),
+      selectedFields
     })
     await showApplyResultMessage(result.message, result.warnings, result.newResumeId)
     if (result.newResumeId) {
@@ -1151,6 +1204,47 @@ onUnmounted(() => {
     font-size: 12px;
     line-height: 1.6;
   }
+}
+
+.rewrite-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.rewrite-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  :deep(.el-checkbox__label) {
+    color: #dbeafe;
+    font-weight: 700;
+  }
+}
+
+.rewrite-diff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+
+  div {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.42);
+  }
+}
+
+.rewrite-reason {
+  color: #cbd5e1 !important;
 }
 
 @media (max-width: 1120px) {

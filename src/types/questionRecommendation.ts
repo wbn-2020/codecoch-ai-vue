@@ -88,6 +88,8 @@ export interface QuestionRecommendationItemVO {
   evaluatePoints?: string
   sortOrder?: number
   practiceStatus?: string
+  sourceType?: QuestionRecommendationSourceType
+  sourceId?: number
   createdAt?: string
   updatedAt?: string
 }

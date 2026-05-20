@@ -34,12 +34,9 @@ function checkPermission(el: HTMLElement, binding: DirectiveBinding<RoleCode | R
   const authStore = useAuthStore()
   const requiredRoles = Array.isArray(value) ? value : [value]
 
-  const hasPermission = requiredRoles.some((role) => authStore.roles.includes(role))
-
-  if (!hasPermission) {
-    // 从 DOM 中移除元素
-    el.parentNode?.removeChild(el)
-  }
+  const hasPermission = authStore.hasAnyRole(requiredRoles)
+  el.style.display = hasPermission ? '' : 'none'
+  el.setAttribute('aria-hidden', String(!hasPermission))
 }
 
 export default permission

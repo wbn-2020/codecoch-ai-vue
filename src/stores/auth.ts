@@ -14,21 +14,33 @@ interface AuthState {
   roles: RoleCode[]
 }
 
+const normalizeRoleCode = (role: unknown): RoleCode | null => {
+  if (typeof role !== 'string') return null
+  const normalized = role.trim().replace(/^ROLE_/i, '').toUpperCase()
+  return normalized ? normalized : null
+}
+
+const normalizeRoles = (roles?: unknown[]): RoleCode[] => {
+  return Array.from(new Set((roles || []).map(normalizeRoleCode).filter(Boolean))) as RoleCode[]
+}
+
 const normalizeUser = (loginResult: LoginVO): CurrentUserVO | null => {
   if (loginResult.userInfo) {
+    const roles = normalizeRoles(loginResult.userInfo.roles?.length ? loginResult.userInfo.roles : loginResult.roles)
     return {
       ...loginResult.userInfo,
-      roles: loginResult.userInfo.roles?.length ? loginResult.userInfo.roles : loginResult.roles || []
+      roles
     }
   }
 
   if (loginResult.username) {
+    const roles = normalizeRoles(loginResult.roles)
     return {
       id: loginResult.userId,
       userId: loginResult.userId,
       username: loginResult.username,
       nickname: loginResult.nickname,
-      roles: loginResult.roles || []
+      roles
     }
   }
 
@@ -39,14 +51,23 @@ export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     token: getToken(),
     userInfo: storage.get<CurrentUserVO>(STORAGE_KEYS.userInfo),
-    roles: storage.get<RoleCode[]>(STORAGE_KEYS.roles, []) || []
+    roles: normalizeRoles(storage.get<RoleCode[]>(STORAGE_KEYS.roles, []) || [])
   }),
 
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
     isAdmin: (state) => state.roles.includes('ADMIN'),
     hasRole: (state) => {
-      return (roleCode: RoleCode) => state.roles.includes(roleCode)
+      return (roleCode: RoleCode) => {
+        const normalized = normalizeRoleCode(roleCode)
+        return normalized ? state.roles.includes(normalized) : false
+      }
+    },
+    hasAnyRole: (state) => {
+      return (roleCodes: RoleCode[]) => roleCodes.some((roleCode) => {
+        const normalized = normalizeRoleCode(roleCode)
+        return normalized ? state.roles.includes(normalized) : false
+      })
     }
   },
 
@@ -57,11 +78,12 @@ export const useAuthStore = defineStore('auth', {
     },
 
     setUserInfo(userInfo: CurrentUserVO | null) {
-      this.userInfo = userInfo
-      this.roles = userInfo?.roles || []
+      const roles = normalizeRoles(userInfo?.roles)
+      this.userInfo = userInfo ? { ...userInfo, roles } : null
+      this.roles = roles
 
-      if (userInfo) {
-        storage.set(STORAGE_KEYS.userInfo, userInfo)
+      if (this.userInfo) {
+        storage.set(STORAGE_KEYS.userInfo, this.userInfo)
         storage.set(STORAGE_KEYS.roles, this.roles)
       } else {
         storage.remove(STORAGE_KEYS.userInfo)

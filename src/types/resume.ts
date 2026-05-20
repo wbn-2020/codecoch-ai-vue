@@ -198,6 +198,8 @@ export interface ResumeOptimizeSseEvent {
 }
 
 export interface ResumeRewriteSuggestion {
+  fieldKey?: string
+  fieldName?: string
   section?: string
   projectName?: string
   before?: string
@@ -243,10 +245,15 @@ export interface ResumeOptimizeRecordVO {
 
 export interface ResumeOptimizeDetailVO extends ResumeOptimizeRecordVO {
   resultJson?: ResumeOptimizeResultJson | null
+  fieldPatches?: Record<string, unknown> | null
 }
 
 export interface ApplyResumeOptimizeResultDTO {
-  applyMode?: 'CREATE_DRAFT'
+  applyMode?: 'CREATE_DRAFT' | 'STRUCTURED_PATCH'
+  selectedSuggestionIndexes?: number[]
+  selectedFields?: string[]
+  fieldPatches?: Record<string, unknown>
+  applyAll?: boolean
 }
 
 export interface ApplyResumeOptimizeResultVO {
@@ -254,8 +261,11 @@ export interface ApplyResumeOptimizeResultVO {
   sourceOptimizeRecordId: number
   newResumeId: number
   appliedAt?: string
-  applyMode: 'CREATE_DRAFT'
+  applyMode: 'CREATE_DRAFT' | 'STRUCTURED_PATCH'
   message?: string
+  appliedFields?: string[]
+  skippedFields?: string[]
+  fieldDiff?: Record<string, { before?: string; after?: string }>
   warnings?: string[]
   resumeDetail?: ResumeDetailVO
 }
