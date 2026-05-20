@@ -63,7 +63,9 @@
       <TagsView scope="user" />
 
       <el-main class="app-layout__main">
-        <RouterView />
+        <RouteErrorBoundary fallback-path="/dashboard">
+          <RouterView />
+        </RouteErrorBoundary>
       </el-main>
     </el-container>
   </el-container>
@@ -76,6 +78,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
+import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import UserSidebar from '@/components/layout/UserSidebar.vue'
 import { useAppStore } from '@/stores/app'

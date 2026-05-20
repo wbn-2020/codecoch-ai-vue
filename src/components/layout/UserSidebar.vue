@@ -11,14 +11,18 @@
 
 <script setup lang="ts">
 import {
+  Bell,
+  Calendar,
   Collection,
   Compass,
   DataBoard,
   DocumentChecked,
   Files,
+  Key,
   Medal,
   Reading,
   Star,
+  TrendCharts,
   User
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
@@ -42,9 +46,14 @@ const menuItems = [
   { label: '错题本', path: '/questions/wrong-records', icon: DocumentChecked },
   { label: '收藏题目', path: '/questions/favorites', icon: Star },
   { label: '简历', path: '/resumes', icon: Files },
+  { label: '项目经历', path: '/projects', icon: Files },
   { label: '创建面试', path: '/interviews/create', icon: Compass },
   { label: '面试历史', path: '/interviews/history', icon: Medal },
   { label: '学习计划', path: '/study-plans', icon: Reading },
+  { label: '每日任务', path: '/daily-tasks', icon: Calendar },
+  { label: '薄弱点分析', path: '/weakness-analysis', icon: TrendCharts },
+  { label: '通知中心', path: '/notifications', icon: Bell },
+  { label: '修改密码', path: '/password', icon: Key },
   { label: '个人资料', path: '/profile', icon: User }
 ]
 
@@ -59,7 +68,12 @@ const activePath = computed(() => {
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
   if (route.path.startsWith('/resumes')) return '/resumes'
+  if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/study-plans')) return '/study-plans'
+  if (route.path.startsWith('/daily-tasks')) return '/daily-tasks'
+  if (route.path.startsWith('/weakness-analysis')) return '/weakness-analysis'
+  if (route.path.startsWith('/notifications')) return '/notifications'
+  if (route.path.startsWith('/password')) return '/password'
   if (route.path.startsWith('/interviews/history')) return '/interviews/history'
   if (route.path.startsWith('/interviews')) return '/interviews/create'
   return route.path

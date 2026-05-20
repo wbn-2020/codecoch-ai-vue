@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="interview-report page-shell">
     <section class="report-top">
       <div>
@@ -6,8 +6,8 @@
           <ChartNoAxesCombined :size="16" />
           AI Interview Report
         </div>
-        <h1>结构化 AI 面试报告</h1>
-        <p>报告内容全部来自后端 report 接口；缺失维度显示空状态，不在前端补造评分或建议。</p>
+        <h1>缁撴瀯鍖?AI 闈㈣瘯鎶ュ憡</h1>
+        <p>报告内容来自后端 report 接口，缺失维度展示为空状态。</p>
       </div>
       <div class="report-actions">
         <el-button @click="router.push('/dashboard')">
@@ -16,11 +16,11 @@
         </el-button>
         <el-button @click="router.push('/interviews/history')">
           <History :size="16" />
-          返回历史
+          杩斿洖鍘嗗彶
         </el-button>
         <el-button v-if="interviewId" type="primary" @click="router.push('/interviews/create')">
           <RotateCcw :size="16" />
-          重新面试
+          閲嶆柊闈㈣瘯
         </el-button>
       </div>
     </section>
@@ -28,8 +28,8 @@
     <section v-if="isGenerating" class="content-card">
       <div class="content-card__body generating-panel">
         <el-icon class="generating-icon"><Loading /></el-icon>
-        <h2>阶段式报告生成进度</h2>
-        <p>{{ sseMessage || '系统正在根据真实问答记录生成结构化报告，当前展示后端阶段事件。' }}</p>
+        <h2>报告生成进度</h2>
+        <p>{{ sseMessage || '系统正在根据真实问答记录生成结构化报告。' }}</p>
         <el-progress :percentage="pollProgress" :show-text="false" />
         <div class="sse-stage-list">
           <article v-for="item in sseEvents" :key="item.key" class="sse-stage-item">
@@ -46,20 +46,20 @@
       <div v-if="report && isGenerated" class="content-card__body">
         <div class="overview-grid">
           <div class="score-hero">
-            <span>综合得分</span>
+            <span>缁煎悎寰楀垎</span>
             <strong>{{ report.totalScore ?? 0 }}</strong>
             <StatusTag :status="report.reportStatus" />
           </div>
           <div class="overview-card">
-            <span>面试编号</span>
+            <span>闈㈣瘯缂栧彿</span>
             <strong>#{{ report.interviewId || interviewId }}</strong>
           </div>
           <div class="overview-card">
-            <span>生成时间</span>
+            <span>鐢熸垚鏃堕棿</span>
             <strong>{{ report.generatedAt || report.createdAt || '-' }}</strong>
           </div>
           <div class="overview-card">
-            <span>题目明细</span>
+            <span>棰樼洰鏄庣粏</span>
             <strong>{{ qaMessages.length }} 条</strong>
           </div>
         </div>
@@ -69,16 +69,16 @@
           type="info"
           show-icon
           :closable="false"
-          title="总分来源于后端面试报告 totalScore 字段；为空时按 0 分展示，不在前端重新计算。"
+          title="总分来源于后端面试报告 totalScore 字段。"
         />
 
         <div class="dimension-section">
           <div class="section-head">
-            <h2>评分维度</h2>
-            <p>优先展示后端 stageReports/stageScores；无拆分维度时显示空状态。</p>
+            <h2>璇勫垎缁村害</h2>
+            <p>优先展示后端 stageReports/stageScores，无拆分维度时展示空状态。</p>
           </div>
           <ReportChart v-if="stageReports.length" :stages="stageReports" />
-          <el-empty v-else description="暂无维度评分数据" />
+          <el-empty v-else description="鏆傛棤缁村害璇勫垎鏁版嵁" />
         </div>
       </div>
 
@@ -87,50 +87,50 @@
           type="error"
           show-icon
           :closable="false"
-          title="报告生成失败"
+          title="鎶ュ憡鐢熸垚澶辫触"
           :description="failureReason"
         />
         <div class="retry-row">
-          <el-button type="primary" :loading="retrying || sseGenerating" :disabled="sseGenerating" @click="handleRetry">重新生成报告</el-button>
-          <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+          <el-button type="primary" :loading="retrying || sseGenerating" :disabled="sseGenerating" @click="handleRetry">閲嶆柊鐢熸垚鎶ュ憡</el-button>
+          <el-button @click="router.push('/interviews/history')">杩斿洖鍘嗗彶</el-button>
         </div>
       </div>
 
-      <el-empty v-else-if="!loading" description="报告暂不可用，可能仍在生成中" />
+      <el-empty v-else-if="!loading" description="鎶ュ憡鏆備笉鍙敤锛屽彲鑳戒粛鍦ㄧ敓鎴愪腑" />
     </section>
 
     <section v-if="report && isGenerated" class="analysis-grid">
       <article class="analysis-card wide">
         <div class="section-head">
-          <h2>AI 总结</h2>
-          <p>整体评价 / 报告正文</p>
+          <h2>AI 鎬荤粨</h2>
+          <p>鏁翠綋璇勪环 / 鎶ュ憡姝ｆ枃</p>
         </div>
         <MarkdownPreview v-if="report.reportContent || report.summary" :content="report.reportContent || report.summary" />
-        <el-empty v-else description="暂无总结" />
+        <el-empty v-else description="鏆傛棤鎬荤粨" />
       </article>
 
       <article class="analysis-card">
         <div class="section-head">
-          <h2>表现亮点</h2>
+          <h2>琛ㄧ幇浜偣</h2>
         </div>
         <MarkdownPreview v-if="report.strengths" :content="report.strengths" />
-        <el-empty v-else description="暂无亮点数据" />
+        <el-empty v-else description="鏆傛棤浜偣鏁版嵁" />
       </article>
 
       <article class="analysis-card">
         <div class="section-head">
-          <h2>明显短板</h2>
+          <h2>鏄庢樉鐭澘</h2>
         </div>
         <MarkdownPreview v-if="report.mainProblems || report.weaknesses" :content="report.mainProblems || report.weaknesses" />
-        <el-empty v-else description="暂无短板数据" />
+        <el-empty v-else description="鏆傛棤鐭澘鏁版嵁" />
       </article>
 
       <article class="analysis-card">
         <div class="section-head">
-          <h2>建议提升方向</h2>
+          <h2>寤鸿鎻愬崌鏂瑰悜</h2>
         </div>
         <MarkdownPreview v-if="report.reviewSuggestions || report.suggestions" :content="report.reviewSuggestions || report.suggestions" />
-        <el-empty v-else description="暂无建议数据" />
+        <el-empty v-else description="鏆傛棤寤鸿鏁版嵁" />
       </article>
 
       <article class="analysis-card">
@@ -143,13 +143,13 @@
 
       <article class="analysis-card">
         <div class="section-head">
-          <h2>项目表达问题</h2>
+          <h2>椤圭洰琛ㄨ揪闂</h2>
         </div>
         <MarkdownPreview
           v-if="report.projectProblems || report.projectExpressionProblems"
           :content="report.projectProblems || report.projectExpressionProblems"
         />
-        <el-empty v-else description="暂无项目表达问题" />
+        <el-empty v-else description="鏆傛棤椤圭洰琛ㄨ揪闂" />
       </article>
 
       <article class="analysis-card">
@@ -162,7 +162,7 @@
 
       <article class="analysis-card">
         <div class="section-head">
-          <h2>推荐练习题目</h2>
+          <h2>鎺ㄨ崘缁冧範棰樼洰</h2>
         </div>
         <div v-if="recommendedQuestions.length" class="recommended-list">
           <button
@@ -173,29 +173,29 @@
             @click="router.push(`/questions/${item.questionId || item.id}`)"
           >
             <div>
-              <strong>{{ item.title || item.questionTitle || '推荐题目' }}</strong>
+              <strong>{{ item.title || item.questionTitle || '鎺ㄨ崘棰樼洰' }}</strong>
               <span v-if="item.reason || item.recommendReason">{{ item.reason || item.recommendReason }}</span>
             </div>
             <el-tag v-if="item.difficulty" size="small" effect="plain">{{ item.difficulty }}</el-tag>
           </button>
         </div>
-        <el-empty v-else description="暂无推荐题目" />
+        <el-empty v-else description="鏆傛棤鎺ㄨ崘棰樼洰" />
       </article>
     </section>
 
     <section v-if="stageReports.length && isGenerated" class="content-card">
       <div class="content-card__body">
         <div class="section-head">
-          <h2>阶段得分</h2>
-          <p>阶段名、类型、得分、总结、短板与建议均来自后端报告。</p>
+          <h2>闃舵寰楀垎</h2>
+          <p>阶段名称、类型、得分、总结、短板与建议均来自后端报告。</p>
         </div>
         <el-table :data="stageReports" row-key="stageId">
-          <el-table-column prop="stageName" label="阶段" min-width="160" />
-          <el-table-column prop="stageType" label="类型" min-width="140" />
-          <el-table-column prop="score" label="得分" width="90" />
-          <el-table-column prop="summary" label="总结" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="weaknesses" label="短板" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="suggestions" label="建议" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="stageName" label="闃舵" min-width="160" />
+          <el-table-column prop="stageType" label="绫诲瀷" min-width="140" />
+          <el-table-column prop="score" label="寰楀垎" width="90" />
+          <el-table-column prop="summary" label="鎬荤粨" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="weaknesses" label="鐭澘" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="suggestions" label="寤鸿" min-width="220" show-overflow-tooltip />
         </el-table>
       </div>
     </section>
@@ -203,7 +203,7 @@
     <section v-if="qaMessages.length && isGenerated" class="content-card">
       <div class="content-card__body">
         <div class="section-head">
-          <h2>题目明细</h2>
+          <h2>棰樼洰鏄庣粏</h2>
           <p>展示后端返回的问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
         </div>
         <div class="qa-list">
@@ -211,24 +211,24 @@
             <div class="qa-head">
               <div>
                 <strong>{{ message.questionContent ? '面试题' : message.role }}</strong>
-                <el-tag v-if="message.isFollowUp" size="small" type="warning" effect="plain">追问</el-tag>
+                <el-tag v-if="message.isFollowUp" size="small" type="warning" effect="plain">杩介棶</el-tag>
               </div>
               <span>{{ message.score ?? '-' }} 分</span>
             </div>
             <div class="qa-block">
-              <label>问题</label>
-              <MarkdownPreview :content="message.questionContent || message.content || '暂无问题内容'" />
+              <label>闂</label>
+              <MarkdownPreview :content="message.questionContent || message.content || '鏆傛棤闂鍐呭'" />
             </div>
             <div v-if="message.userAnswer" class="qa-block">
-              <label>用户回答</label>
+              <label>鐢ㄦ埛鍥炵瓟</label>
               <p>{{ message.userAnswer }}</p>
             </div>
             <div v-if="message.aiComment" class="qa-block">
-              <label>AI 点评</label>
+              <label>AI 鐐硅瘎</label>
               <MarkdownPreview :content="message.aiComment" />
             </div>
             <div v-if="message.followUpReason" class="qa-block">
-              <label>追问记录</label>
+              <label>杩介棶璁板綍</label>
               <p>{{ message.followUpReason }}</p>
             </div>
           </article>
@@ -240,20 +240,20 @@
       <div class="content-card__body action-zone">
         <div>
           <h2>下一步行动</h2>
-          <p>仅启用已有真实路由；未接入能力明确标注待接入。</p>
+          <p>报告已生成，可继续发起新面试、进入题库练习或生成学习计划。</p>
         </div>
         <div class="action-buttons">
           <el-button type="primary" @click="router.push('/interviews/create')">
             <RotateCcw :size="16" />
-            重新面试
+            閲嶆柊闈㈣瘯
           </el-button>
           <el-button :disabled="!firstRecommendedQuestionPath" @click="goPracticeQuestion">
             <BookOpenCheck :size="16" />
-            练习相关题目
+            缁冧範鐩稿叧棰樼洰
           </el-button>
           <el-button type="success" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">
             <CalendarClock :size="16" />
-            生成学习计划
+            鐢熸垚瀛︿範璁″垝
           </el-button>
           <el-button @click="router.push('/dashboard')">返回工作台</el-button>
         </div>
@@ -354,7 +354,7 @@ const firstRecommendedQuestionPath = computed(() => {
 
 const goPracticeQuestion = async () => {
   if (!firstRecommendedQuestionPath.value) {
-    ElMessage.info('暂无可跳转的推荐题目')
+    ElMessage.info('鏆傛棤鍙烦杞殑鎺ㄨ崘棰樼洰')
     return
   }
   await router.push(firstRecommendedQuestionPath.value)
@@ -385,7 +385,7 @@ const schedulePolling = () => {
   stopPolling()
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
-    ElMessage.warning('报告生成时间较长，请稍后刷新查看')
+    ElMessage.warning('鎶ュ憡鐢熸垚鏃堕棿杈冮暱锛岃绋嶅悗鍒锋柊鏌ョ湅')
     return
   }
   pollTimer = window.setTimeout(fetchReport, 2000)
@@ -501,7 +501,7 @@ const startReportSse = (forceRegenerate = false) => {
         if (event === 'done') {
           sseGenerating.value = false
           await refreshFinalReport()
-          ElMessage.success('报告生成完成')
+          ElMessage.success('鎶ュ憡鐢熸垚瀹屾垚')
         }
       },
       onError: async (error, hasStarted) => {
@@ -519,7 +519,7 @@ const startReportSse = (forceRegenerate = false) => {
           status: 'FAILED',
           failedReason: error.message
         }
-        ElMessage.error(error.message || '报告 SSE 生成失败')
+        ElMessage.error(error.message || '鎶ュ憡 SSE 鐢熸垚澶辫触')
       },
       onDone: () => {
         sseGenerating.value = false
@@ -563,7 +563,7 @@ const handleGenerateStudyPlan = async () => {
   try {
     const result = await generateStudyPlanApi({ reportId })
     if (result.planStatus === 'FAILED') {
-      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+      ElMessage.error(result.failureReason || '瀛︿範璁″垝鐢熸垚澶辫触锛岃绋嶅悗閲嶈瘯')
     } else {
       ElMessage.success('学习计划已生成')
     }

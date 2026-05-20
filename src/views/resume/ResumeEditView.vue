@@ -456,6 +456,8 @@ const fetchDetail = async () => {
   try {
     applyDetail(await getResumeDetailApi(resumeId.value))
     await fetchOptimizeRecords()
+  } catch {
+    ElMessage.error('简历详情加载失败，请返回列表重试')
   } finally {
     loading.value = false
   }
@@ -472,9 +474,13 @@ const optimizeStatusText = (status?: string) => {
 
 const fetchOptimizeRecords = async () => {
   if (!resumeId.value) return
-  optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
-  if (!optimizeDetail.value && optimizeRecords.value[0]) {
-    optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+  try {
+    optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
+    if (!optimizeDetail.value && optimizeRecords.value[0]) {
+      optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+    }
+  } catch {
+    optimizeRecords.value = []
   }
 }
 
@@ -628,7 +634,11 @@ const handleApplyOptimizeResult = async () => {
 
 const handleSave = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
     if (resumeId.value) {
@@ -659,7 +669,7 @@ const openProjectDialog = (project?: ResumeProjectVO) => {
 
 const handleSaveProject = async () => {
   if (!resumeId.value || !projectFormRef.value) return
-  const payload = (await projectFormRef.value.validate()) as ResumeProjectDTO | false
+  const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
   if (!payload) return
   projectSaving.value = true
   try {

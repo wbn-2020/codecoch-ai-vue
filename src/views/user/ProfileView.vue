@@ -12,20 +12,9 @@
         <div class="profile-summary">
           <div class="avatar-wrapper">
             <el-avatar :size="72" :src="form.avatarUrl || ''">{{ avatarText }}</el-avatar>
-            <label class="avatar-upload-btn" title="上传头像">
-              <Camera :size="14" />
-              <input
-                ref="avatarInputRef"
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                class="sr-only"
-                @change="handleAvatarChange"
-              />
-            </label>
           </div>
           <strong>{{ form.username || '-' }}</strong>
           <span>{{ rolesText }}</span>
-          <el-tag v-if="uploadingAvatar" type="info" size="small">上传中...</el-tag>
         </div>
 
         <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
@@ -36,7 +25,7 @@
             <el-input v-model.trim="form.nickname" maxlength="50" show-word-limit />
           </el-form-item>
           <el-form-item label="头像地址" prop="avatarUrl">
-            <el-input v-model.trim="form.avatarUrl" maxlength="255" placeholder="上传头像或粘贴图片 URL" />
+            <el-input v-model.trim="form.avatarUrl" maxlength="500" placeholder="请输入图片 URL" />
           </el-form-item>
           <el-form-item label="邮箱" prop="email">
             <el-input v-model.trim="form.email" maxlength="100" />
@@ -53,19 +42,17 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { Camera } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { getUserProfileApi, updateUserProfileApi, uploadAvatarApi } from '@/api/user'
+import { getUserProfileApi, updateAvatarApi, updateUserProfileApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import type { UserProfileUpdateDTO, UserProfileVO } from '@/types/user'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
-const avatarInputRef = ref<HTMLInputElement>()
 const loading = ref(false)
 const saving = ref(false)
-const uploadingAvatar = ref(false)
+const originalAvatarUrl = ref('')
 
 const form = reactive<UserProfileVO>({
   username: '',
@@ -76,6 +63,13 @@ const form = reactive<UserProfileVO>({
 })
 
 const rules: FormRules<UserProfileUpdateDTO> = {
+  avatarUrl: [
+    {
+      type: 'url',
+      message: '请输入有效的头像 URL',
+      trigger: 'blur'
+    }
+  ],
   email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }]
 }
 
@@ -90,6 +84,7 @@ const assignForm = (data: UserProfileVO) => {
     email: data.email || '',
     roles: data.roles || []
   })
+  originalAvatarUrl.value = data.avatarUrl || ''
 }
 
 const fetchProfile = async () => {
@@ -102,36 +97,6 @@ const fetchProfile = async () => {
   }
 }
 
-const handleAvatarChange = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-
-  if (file.size > 2 * 1024 * 1024) {
-    ElMessage.warning('头像文件不能超过 2MB')
-    return
-  }
-  const allowedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-  if (!allowedTypes.includes(file.type)) {
-    ElMessage.warning('仅支持 PNG、JPG、GIF 或 WebP 图片')
-    return
-  }
-
-  uploadingAvatar.value = true
-  try {
-    const result = await uploadAvatarApi(file)
-    form.avatarUrl = result.url
-    ElMessage.success('头像已上传，请保存资料后生效')
-  } catch {
-    ElMessage.error('头像上传失败')
-  } finally {
-    uploadingAvatar.value = false
-    if (avatarInputRef.value) {
-      avatarInputRef.value.value = ''
-    }
-  }
-}
-
 const handleSave = async () => {
   if (!formRef.value) return
 
@@ -140,6 +105,9 @@ const handleSave = async () => {
 
     saving.value = true
     try {
+      if (form.avatarUrl && form.avatarUrl !== originalAvatarUrl.value) {
+        await updateAvatarApi(form.avatarUrl || '')
+      }
       const data = await updateUserProfileApi({
         nickname: form.nickname,
         avatarUrl: form.avatarUrl || undefined,
@@ -190,39 +158,6 @@ onMounted(fetchProfile)
 
 .avatar-wrapper {
   position: relative;
-}
-
-.avatar-upload-btn {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 2px solid var(--app-surface);
-  border-radius: 50%;
-  background: var(--cc-primary);
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: #6366f1;
-  }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 @media (max-width: 760px) {

@@ -1,34 +1,191 @@
 <template>
-  <V3FoundationShell
-    title="V3 求职驾驶舱"
-    eyebrow="V3 Dashboard"
-    description="聚合当前目标岗位、简历匹配、能力画像、学习计划和题目推荐的 V3 总入口。本阶段只建立路由和入口，等待后端 V3 聚合接口接入。"
-    status-label="待后端聚合接口"
-    :api-items="apiItems"
-    :scope-items="scopeItems"
-    :actions="actions"
-    :icon="LayoutDashboard"
-    state-title="驾驶舱数据待接入"
-    state-description="文档规划为 GET /dashboard/v3/overview，当前后端只确认 GET /dashboard/overview，本页不使用模拟指标。"
-  />
+  <div class="v3-page">
+    <section class="page-hero">
+      <div>
+        <div class="hero-kicker"><LayoutDashboard :size="16" /> V3 Dashboard</div>
+        <h1>V3 求职闭环驾驶舱</h1>
+        <p>聚合工作台概览、能力画像和通知状态；任一接口缺数据时降级展示，不阻断其他模块。</p>
+      </div>
+      <div class="hero-actions">
+        <el-button :loading="loading" @click="loadDashboard"><RefreshCw :size="16" /> 刷新</el-button>
+        <el-button type="primary" @click="router.push('/job-targets')"><Crosshair :size="16" /> 岗位目标</el-button>
+      </div>
+    </section>
+
+    <section v-if="errors.length" class="content-panel error-strip">
+      <el-alert v-for="error in errors" :key="error" type="warning" show-icon :closable="false" :title="error" />
+    </section>
+
+    <section class="metric-grid" v-loading="overviewLoading">
+      <button v-for="item in metrics" :key="item.label" class="metric-card" type="button" @click="router.push(item.path)">
+        <component :is="item.icon" :size="20" />
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+        <small>{{ item.hint }}</small>
+      </button>
+    </section>
+
+    <section class="dashboard-grid">
+      <div class="content-panel">
+        <div class="section-head"><div><h2>能力画像</h2><p>来自 GET /skill-profiles/overview。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
+        <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
+        <AppState v-else-if="!skillOverview || skillOverview.empty" type="empty" title="暂无能力画像" description="完成匹配报告后可生成能力画像。" />
+        <div v-else class="skill-summary">
+          <strong>{{ skillOverview.overallScore ?? '--' }}</strong>
+          <span>{{ skillOverview.profileName || '当前能力画像' }}</span>
+          <p>{{ skillOverview.summary || '暂无画像摘要。' }}</p>
+          <el-progress :percentage="Number(skillOverview.overallScore || 0)" :stroke-width="10" />
+        </div>
+      </div>
+
+      <div class="content-panel">
+        <div class="section-head"><div><h2>学习计划</h2><p>来自用户工作台 activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
+        <div v-if="overview?.activeStudyPlan" class="active-plan" @click="router.push(`/study-plans?planId=${overview.activeStudyPlan.planId}`)">
+          <strong>{{ overview.activeStudyPlan.planTitle || `学习计划 #${overview.activeStudyPlan.planId}` }}</strong>
+          <span>{{ overview.activeStudyPlan.doneTaskCount || 0 }}/{{ overview.activeStudyPlan.totalTaskCount || 0 }} · {{ overview.activeStudyPlan.progressPercent || 0 }}%</span>
+          <el-progress :percentage="overview.activeStudyPlan.progressPercent || 0" />
+        </div>
+        <AppState v-else type="empty" title="暂无进行中的学习计划" description="可从能力短板生成学习计划。" />
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
+      <div class="content-panel">
+        <div class="section-head"><div><h2>最近通知</h2><p>来自 GET /notifications。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
+        <AppState v-if="notificationLoading" type="loading" title="正在读取通知" />
+        <div v-else-if="notifications.length" class="notification-list">
+          <article v-for="item in notifications" :key="item.id">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.content || item.type }} · {{ item.createdAt }}</span>
+          </article>
+        </div>
+        <AppState v-else type="empty" title="暂无通知" description="通知接口未返回记录。" />
+      </div>
+
+      <div class="content-panel">
+        <div class="section-head"><div><h2>闭环入口</h2><p>按真实数据状态引导下一步。</p></div></div>
+        <div class="entry-grid">
+          <button v-for="entry in entries" :key="entry.title" type="button" @click="router.push(entry.path)">
+            <component :is="entry.icon" :size="18" />
+            <strong>{{ entry.title }}</strong>
+            <span>{{ entry.desc }}</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { LayoutDashboard } from 'lucide-vue-next'
+import { Bell, BookOpenCheck, Crosshair, FileText, GitCompareArrows, LayoutDashboard, ListChecks, Radar, RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-import V3FoundationShell from './components/V3FoundationShell.vue'
-import type { V3FoundationAction } from './foundation'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
+import { getNotificationsApi, type NotificationVO } from '@/api/notification'
+import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import AppState from '@/components/common/AppState.vue'
+import type { UserDashboardOverviewVO } from '@/types/dashboard'
+import type { SkillProfileOverviewVO } from '@/types/skillProfile'
+import { getErrorMessage } from '@/utils/error'
 
-const apiItems = ['规划接口：GET /dashboard/v3/overview', '当前可用：GET /dashboard/overview']
+const router = useRouter()
+const overviewLoading = ref(false)
+const skillLoading = ref(false)
+const notificationLoading = ref(false)
+const overviewError = ref('')
+const skillError = ref('')
+const notificationError = ref('')
+const overview = ref<UserDashboardOverviewVO | null>(null)
+const skillOverview = ref<SkillProfileOverviewVO | null>(null)
+const notifications = ref<NotificationVO[]>([])
 
-const scopeItems = [
-  '展示 V3 求职闭环入口，不拼接假概览数据',
-  '后续接入当前目标、匹配度、能力雷达和下一步行动',
-  '无数据时引导到真实岗位目标创建入口'
+const loading = computed(() => overviewLoading.value || skillLoading.value || notificationLoading.value)
+const errors = computed(() => [overviewError.value, skillError.value, notificationError.value].filter(Boolean))
+const metrics = computed(() => [
+  { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
+  { label: '面试', value: overview.value?.interviewCount ?? 0, hint: '模拟面试记录', path: '/interviews/history', icon: Bell },
+  { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
+  { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
+])
+const entries = [
+  { title: '岗位目标', desc: '维护当前主目标和 JD', path: '/job-targets', icon: Crosshair },
+  { title: '简历匹配', desc: '生成匹配报告', path: '/resume-match', icon: GitCompareArrows },
+  { title: '能力画像', desc: '查看短板和动作', path: '/skill-profile', icon: Radar },
+  { title: '推荐题目', desc: '按短板练习', path: '/questions/recommendations', icon: ListChecks }
 ]
 
-const actions: V3FoundationAction[] = [
-  { label: '创建岗位目标', to: '/job-targets/create', type: 'primary' },
-  { label: '查看岗位目标', to: '/job-targets' }
-]
+const loadOverview = async () => {
+  overviewLoading.value = true
+  overviewError.value = ''
+  try {
+    overview.value = await getUserDashboardOverviewApi()
+  } catch (error) {
+    overview.value = null
+    overviewError.value = getErrorMessage(error, '工作台概览接口不可用，已降级展示入口。')
+  } finally {
+    overviewLoading.value = false
+  }
+}
+
+const loadSkill = async () => {
+  skillLoading.value = true
+  skillError.value = ''
+  try {
+    skillOverview.value = await getSkillProfileOverviewApi()
+  } catch (error) {
+    skillOverview.value = null
+    skillError.value = getErrorMessage(error, '能力画像概览接口不可用。')
+  } finally {
+    skillLoading.value = false
+  }
+}
+
+const loadNotifications = async () => {
+  notificationLoading.value = true
+  notificationError.value = ''
+  try {
+    const page = await getNotificationsApi({ pageNo: 1, pageSize: 5 })
+    notifications.value = page.records || []
+  } catch (error) {
+    notifications.value = []
+    notificationError.value = getErrorMessage(error, '通知接口不可用。')
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+const loadDashboard = () => Promise.all([loadOverview(), loadSkill(), loadNotifications()])
+
+onMounted(loadDashboard)
 </script>
+
+<style scoped lang="scss">
+.v3-page { display: flex; flex-direction: column; gap: 18px; }
+.page-hero, .content-panel, .metric-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
+.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
+.hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+h1, h2, p { margin: 0; }
+h1 { margin-top: 10px; font-size: 30px; }
+p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
+.content-panel { padding: 20px; min-width: 0; }
+.error-strip { display: grid; gap: 10px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 14px; }
+.metric-card { padding: 16px; color: var(--app-text); text-align: left; cursor: pointer; }
+.metric-card span, .metric-card small { display: block; margin-top: 8px; color: var(--app-text-muted); }
+.metric-card strong { display: block; margin-top: 8px; font-size: 28px; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.section-head { justify-content: space-between; margin-bottom: 16px; }
+.skill-summary strong { font-size: 42px; }
+.skill-summary span, .active-plan span { display: block; margin: 8px 0; color: var(--app-text-muted); }
+.active-plan { cursor: pointer; }
+.notification-list { display: grid; gap: 12px; }
+.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
+.entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.entry-grid button { color: var(--app-text); text-align: left; cursor: pointer; }
+.entry-grid strong, .entry-grid span { display: block; margin-top: 8px; }
+.entry-grid span { color: var(--app-text-muted); line-height: 1.5; }
+@media (max-width: 900px) { .page-hero, .dashboard-grid, .metric-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions, .section-head { flex-wrap: wrap; } }
+</style>

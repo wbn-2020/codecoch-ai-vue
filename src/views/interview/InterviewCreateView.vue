@@ -258,9 +258,10 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play, Sparkles, Target, Zap } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
-import { createInterviewApi, getIndustryTemplatesApi } from '@/api/interview'
+import { getIndustryTemplatesApi } from '@/api/interview'
+import { getJobTargetDetailApi } from '@/api/jobTarget'
 import { getResumesApi } from '@/api/resume'
 import {
   difficultyOptions,
@@ -274,8 +275,10 @@ import {
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
+import request from '@/utils/request'
 
 const router = useRouter()
+const route = useRoute()
 const formRef = ref<FormInstance>()
 const creating = ref(false)
 const resumeLoading = ref(false)
@@ -285,6 +288,7 @@ const useResume = ref(true)
 const resumes = ref<ResumeVO[]>([])
 const industryTemplates = ref<IndustryTemplateVO[]>([])
 const selectedModeKey = ref('technical')
+const sourceTargetJobId = ref<number>()
 
 const form = reactive<InterviewCreateDTO>({
   interviewName: '',
@@ -381,6 +385,16 @@ const optionLabel = (options: SelectOption[], value?: string) => {
   return options.find((item) => item.value === value)?.label || value || '-'
 }
 
+const getQueryString = (name: string) => {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+const getQueryNumber = (name: string) => {
+  const value = Number(getQueryString(name))
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
 const parseTemplateItems = (value?: string) => {
   if (!value) return []
   const trimmed = value.trim()
@@ -449,7 +463,11 @@ const fetchResumes = async () => {
   try {
     const result = await getResumesApi({ pageNo: 1, pageSize: 50 })
     resumes.value = result.records || []
-    form.resumeId = resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
+    const queryResumeId = getQueryNumber('resumeId')
+    form.resumeId =
+      (queryResumeId && resumes.value.some((item) => item.id === queryResumeId) ? queryResumeId : undefined) ||
+      resumes.value.find((item) => item.isDefault === 1)?.id ||
+      resumes.value[0]?.id
   } finally {
     resumeLoading.value = false
   }
@@ -472,9 +490,75 @@ const fetchIndustryTemplates = async () => {
   }
 }
 
+const applyRouteContext = async () => {
+  const source = getQueryString('source')
+  const targetJobId = getQueryNumber('targetJobId')
+  const resumeId = getQueryNumber('resumeId')
+  const skillProfileId = getQueryNumber('skillProfileId')
+  const matchReportId = getQueryNumber('matchReportId')
+
+  if (resumeId) {
+    useResume.value = true
+    form.resumeId = resumeId
+  }
+
+  if (source !== 'job-target' && !targetJobId) return
+
+  selectedModeKey.value = 'comprehensive'
+  form.interviewMode = INTERVIEW_MODE.COMPREHENSIVE
+  sourceTargetJobId.value = targetJobId
+
+  if (targetJobId) {
+    try {
+      const targetJob = await getJobTargetDetailApi(targetJobId)
+      form.targetPosition = targetJob.jobTitle || form.targetPosition
+      form.interviewName =
+        form.interviewName || `${targetJob.jobTitle || '目标岗位'}模拟面试`
+    } catch {
+      ElMessage.warning('目标岗位信息加载失败，将使用当前面试配置创建')
+    }
+  }
+
+  if (skillProfileId || matchReportId) {
+    form.interviewName = form.interviewName || '目标岗位模拟面试'
+  }
+}
+
+const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
+  const extraPayload = {
+    interviewMode: payload.interviewMode,
+    mode: payload.interviewMode,
+    resumeId: payload.resumeId,
+    targetJobId: sourceTargetJobId.value,
+    skillProfileId: getQueryNumber('skillProfileId'),
+    matchReportId: getQueryNumber('matchReportId'),
+    title: payload.interviewName,
+    maxQuestionCount: payload.questionCount,
+    targetPosition: payload.targetPosition,
+    experienceLevel: payload.experienceLevel,
+    industryTemplateId: payload.industryTemplateId,
+    industryDirection: payload.industryDirection,
+    difficulty: payload.difficulty,
+    interviewerStyle: payload.interviewerStyle,
+    basedOnResume: payload.basedOnResume ?? Boolean(payload.resumeId)
+  }
+  const result = await request.post<Record<string, unknown>, Record<string, unknown>>(
+    '/interviews',
+    extraPayload
+  )
+  return {
+    ...result,
+    interviewId: Number(result.interviewId || result.id || result.sessionId)
+  }
+}
+
 const handleCreate = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
   if (isIndustryMode.value && !form.industryTemplateId) {
     ElMessage.warning('请选择真实行业模板后再开始面试')
     return
@@ -497,7 +581,7 @@ const handleCreate = async () => {
         : form.industryDirection,
       resumeId: useResume.value ? form.resumeId : undefined
     }
-    const result = await createInterviewApi(payload)
+    const result = await createInterviewWithRouteContext(payload)
     ElMessage.success('面试已创建')
     await router.push(`/interviews/room/${result.interviewId}`)
   } finally {
@@ -505,9 +589,9 @@ const handleCreate = async () => {
   }
 }
 
-onMounted(() => {
-  fetchResumes()
-  fetchIndustryTemplates()
+onMounted(async () => {
+  await Promise.all([fetchResumes(), fetchIndustryTemplates()])
+  await applyRouteContext()
 })
 </script>
 

@@ -1,40 +1,157 @@
 <template>
-  <V3FoundationShell
-    title="推荐题目"
-    eyebrow="Question Recommendations"
-    description="按能力短板、匹配报告或学习计划生成推荐题目批次。页面路由保留文档规划入口，API 封装以后端真实批次接口为准。"
-    status-label="推荐批次待展示"
-    :api-items="apiItems"
-    :scope-items="scopeItems"
-    :actions="actions"
-    :icon="ListChecks"
-    state-title="题目推荐列表待接入"
-    state-description="文档规划的 /questions/recommendations/by-* 未在后端确认；当前真实接口为 /question-recommendations/**。"
-  />
+  <div class="v3-page">
+    <section class="page-hero">
+      <div>
+        <div class="hero-kicker"><ListChecks :size="16" /> Question Recommendations</div>
+        <h1>推荐题目</h1>
+        <p>按能力画像、匹配报告或学习计划读取真实推荐题；没有 V3 by-* 接口时回退到推荐批次接口。</p>
+      </div>
+      <div class="hero-actions">
+        <el-button :loading="loading" @click="loadRecommendations"><RefreshCw :size="16" /> 刷新</el-button>
+        <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">
+          <Sparkles :size="16" /> 生成推荐
+        </el-button>
+      </div>
+    </section>
+
+    <section class="content-panel">
+      <el-form class="filter-form" :model="query" inline>
+        <el-form-item label="来源">
+          <el-segmented v-model="query.source" :options="sourceOptions" />
+        </el-form-item>
+        <el-form-item label="业务 ID">
+          <el-input-number v-model="query.sourceId" :min="1" />
+        </el-form-item>
+        <el-form-item label="题目数量">
+          <el-input-number v-model="query.questionCount" :min="3" :max="50" />
+        </el-form-item>
+      </el-form>
+    </section>
+
+    <section class="content-panel" v-loading="loading">
+      <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
+      <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" description="当前来源还没有推荐题，可以先生成推荐批次。" />
+      <div v-else class="question-list">
+        <button v-for="item in items" :key="item.id" class="question-card" type="button" @click="openQuestion(item)">
+          <span class="question-main">
+            <strong>{{ item.questionTitle || `题目 #${item.questionId || item.id}` }}</strong>
+            <small>{{ item.skillName || item.skillCode || '--' }} · {{ item.difficulty || '--' }} · {{ item.questionType || '--' }}</small>
+            <em>{{ item.recommendReason || item.questionContent || '暂无推荐理由' }}</em>
+          </span>
+          <el-tag :type="severityTag(item.gapSeverity)">{{ item.gapSeverity || 'NORMAL' }}</el-tag>
+        </button>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ListChecks } from 'lucide-vue-next'
+import { ElMessage } from 'element-plus'
+import { ListChecks, RefreshCw, Sparkles } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-import V3FoundationShell from './components/V3FoundationShell.vue'
-import type { V3FoundationAction } from './foundation'
+import {
+  generateQuestionRecommendationsFromGapApi,
+  generateQuestionRecommendationsFromMatchReportApi,
+  generateQuestionRecommendationsFromStudyPlanApi,
+  getQuestionRecommendationsByGapApi,
+  getQuestionRecommendationsByMatchReportApi,
+  getQuestionRecommendationsByStudyPlanApi
+} from '@/api/questionRecommendation'
+import AppState from '@/components/common/AppState.vue'
+import type { QuestionRecommendationItemVO } from '@/types/questionRecommendation'
+import { getErrorMessage } from '@/utils/error'
 
-const apiItems = [
-  'POST /question-recommendations/generate-from-gap',
-  'POST /question-recommendations/generate-from-match-report',
-  'POST /question-recommendations/generate-from-study-plan',
-  'GET /question-recommendations/batches',
-  'GET /question-recommendations/batches/{batchId}/items'
+type Source = 'gap' | 'matchReport' | 'studyPlan'
+
+const route = useRoute()
+const router = useRouter()
+const loading = ref(false)
+const generating = ref(false)
+const loadError = ref('')
+const items = ref<QuestionRecommendationItemVO[]>([])
+
+const query = reactive({
+  source: (route.query.matchReportId ? 'matchReport' : route.query.studyPlanId ? 'studyPlan' : 'gap') as Source,
+  sourceId: Number(route.query.skillProfileId || route.query.matchReportId || route.query.studyPlanId) || undefined as number | undefined,
+  questionCount: 10
+})
+
+const sourceOptions = [
+  { label: '能力短板', value: 'gap' },
+  { label: '匹配报告', value: 'matchReport' },
+  { label: '学习计划', value: 'studyPlan' }
 ]
+const canGenerate = computed(() => Boolean(query.sourceId && !generating.value))
 
-const scopeItems = [
-  '后续只展示真实推荐批次和真实题目 ID',
-  '点击题目时跳转现有 /questions/:id 详情',
-  '不伪造推荐原因或题目内容'
-]
+const severityTag = (severity?: string) => severity === 'HIGH' || severity === 'CRITICAL' ? 'danger' : severity === 'MEDIUM' ? 'warning' : 'info'
 
-const actions: V3FoundationAction[] = [
-  { label: '题库', to: '/questions' },
-  { label: '目标岗位面试', to: { path: '/interviews/create', query: { source: 'job-target' } }, type: 'primary' }
-]
+const loadRecommendations = async () => {
+  if (!query.sourceId) {
+    items.value = []
+    loadError.value = ''
+    return
+  }
+  loading.value = true
+  loadError.value = ''
+  try {
+    if (query.source === 'gap') {
+      items.value = await getQuestionRecommendationsByGapApi({ skillProfileId: query.sourceId })
+    } else if (query.source === 'matchReport') {
+      items.value = await getQuestionRecommendationsByMatchReportApi(query.sourceId)
+    } else {
+      items.value = await getQuestionRecommendationsByStudyPlanApi(query.sourceId)
+    }
+  } catch (error) {
+    items.value = []
+    loadError.value = getErrorMessage(error, '读取推荐题失败。')
+  } finally {
+    loading.value = false
+  }
+}
+
+const generateRecommendations = async () => {
+  if (!query.sourceId) return
+  generating.value = true
+  try {
+    if (query.source === 'gap') {
+      await generateQuestionRecommendationsFromGapApi({ skillProfileId: query.sourceId, questionCount: query.questionCount })
+    } else if (query.source === 'matchReport') {
+      await generateQuestionRecommendationsFromMatchReportApi({ matchReportId: query.sourceId, questionCount: query.questionCount })
+    } else {
+      await generateQuestionRecommendationsFromStudyPlanApi({ studyPlanId: query.sourceId, questionCount: query.questionCount })
+    }
+    ElMessage.success('推荐题生成任务已提交')
+    await loadRecommendations()
+  } finally {
+    generating.value = false
+  }
+}
+
+const openQuestion = (item: QuestionRecommendationItemVO) => {
+  const id = item.questionId || item.id
+  if (id) router.push(`/questions/${id}`)
+}
+
+onMounted(loadRecommendations)
 </script>
+
+<style scoped lang="scss">
+.v3-page { display: flex; flex-direction: column; gap: 18px; }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
+.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.hero-kicker, .hero-actions { display: flex; align-items: center; gap: 10px; }
+.hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+h1, p { margin: 0; }
+h1 { margin-top: 10px; font-size: 30px; }
+p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
+.content-panel { padding: 20px; min-width: 0; }
+.filter-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.question-list { display: grid; gap: 12px; }
+.question-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); text-align: left; cursor: pointer; }
+.question-main strong, .question-main small, .question-main em { display: block; overflow-wrap: anywhere; }
+.question-main small { margin-top: 5px; color: var(--app-text-muted); }
+.question-main em { margin-top: 8px; font-style: normal; line-height: 1.6; }
+@media (max-width: 760px) { .page-hero { flex-direction: column; } .hero-actions { flex-wrap: wrap; } .question-card { grid-template-columns: 1fr; } }
+</style>

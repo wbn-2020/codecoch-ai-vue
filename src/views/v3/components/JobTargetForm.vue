@@ -101,7 +101,7 @@ watch(
 )
 
 const submit = async () => {
-  const valid = await formRef.value?.validate()
+  const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   emit('submit', { ...form })
 }

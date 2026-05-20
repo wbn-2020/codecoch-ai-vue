@@ -23,7 +23,16 @@
         show-icon
         :closable="false"
         title="密码重置成功"
-        description="新密码已生效，即将跳转到登录页..."
+        :description="successMessage"
+        class="token-alert"
+      />
+
+      <el-alert
+        v-if="errorMessage"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="errorMessage"
         class="token-alert"
       />
 
@@ -85,6 +94,8 @@ const route = useRoute()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const success = ref(false)
+const successMessage = ref('新密码已生效，即将跳转到登录页...')
+const errorMessage = ref('')
 
 const token = computed(() => {
   const t = route.query.token
@@ -115,6 +126,14 @@ const rules: FormRules = {
   ]
 }
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error && typeof error === 'object') {
+    const payload = error as { message?: string; response?: { data?: { message?: string } } }
+    return payload.response?.data?.message || payload.message || fallback
+  }
+  return fallback
+}
+
 const handleSubmit = async () => {
   if (!formRef.value || !token.value) return
 
@@ -122,18 +141,22 @@ const handleSubmit = async () => {
     if (!valid) return
 
     loading.value = true
+    errorMessage.value = ''
     try {
       const data: ResetPasswordDTO = {
         token: token.value,
         newPassword: form.newPassword,
         confirmPassword: form.confirmPassword
       }
-      await resetPasswordApi(data)
+      const result = await resetPasswordApi(data)
       success.value = true
+      successMessage.value = result.message || '新密码已生效，即将跳转到登录页...'
       ElMessage.success('密码重置成功，即将跳转登录页')
       setTimeout(() => {
         router.push('/login')
       }, 2000)
+    } catch (error: unknown) {
+      errorMessage.value = getErrorMessage(error, '密码重置失败，请确认链接是否有效')
     } finally {
       loading.value = false
     }
