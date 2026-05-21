@@ -21,6 +21,7 @@ export interface CurrentUserVO {
   avatarUrl?: string | null
   email?: string | null
   roles: RoleCode[]
+  permissions?: string[]
 }
 
 export interface LoginVO {
@@ -32,6 +33,7 @@ export interface LoginVO {
   username?: string
   nickname?: string
   roles: RoleCode[]
+  permissions?: string[]
 }
 
 export interface RegisterVO {

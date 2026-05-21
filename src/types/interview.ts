@@ -65,6 +65,13 @@ export interface InterviewCreateDTO {
   questionCount?: number
 }
 
+export interface InterviewCreateByJobTargetDTO extends InterviewCreateDTO {
+  resumeId: number
+  targetJobId: number
+  skillProfileId?: number
+  matchReportId?: number
+}
+
 export interface InterviewStageVO {
   stageId: number
   stageType?: string
@@ -375,7 +382,7 @@ export interface InterviewReportVO {
   projectExpressionProblems?: string
   resumeSuggestions?: string
   resumeAdvice?: string
-  recommendedQuestions?: RecommendedQuestionVO[]
+  recommendedQuestions?: Array<RecommendedQuestionVO | string>
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]

@@ -1,15 +1,16 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
-import type {
-  QuestionRecommendationBatchDetailVO,
-  QuestionRecommendationBatchListVO,
-  QuestionRecommendationGenerateFromGapDTO,
-  QuestionRecommendationGenerateFromMatchReportDTO,
-  QuestionRecommendationGenerateFromStudyPlanDTO,
-  QuestionRecommendationGenerateVO,
-  QuestionRecommendationItemVO,
-  QuestionRecommendationQueryDTO,
-  QuestionRecommendationSourceTypeVO
+import {
+  QUESTION_RECOMMENDATION_SOURCE_TYPE,
+  type QuestionRecommendationBatchDetailVO,
+  type QuestionRecommendationBatchListVO,
+  type QuestionRecommendationGenerateFromGapDTO,
+  type QuestionRecommendationGenerateFromMatchReportDTO,
+  type QuestionRecommendationGenerateFromStudyPlanDTO,
+  type QuestionRecommendationGenerateVO,
+  type QuestionRecommendationItemVO,
+  type QuestionRecommendationQueryDTO,
+  type QuestionRecommendationSourceTypeVO
 } from '@/types/questionRecommendation'
 import { normalizePageResult } from '@/utils/page'
 
@@ -67,77 +68,30 @@ export const getQuestionRecommendationBatchItemsApi = (batchId: number) => {
   )
 }
 
-const normalizeRecommendationItems = (
-  data:
-    | QuestionRecommendationItemVO[]
-    | QuestionRecommendationBatchDetailVO
-    | PageResult<QuestionRecommendationItemVO>
-    | null
-    | undefined
-) => {
-  if (!data) return []
-  if (Array.isArray(data)) return data
-  if ('items' in data && Array.isArray(data.items)) return data.items
-  if ('records' in data && Array.isArray(data.records)) return data.records
-  return []
+const getLatestBatchItems = async (params: QuestionRecommendationQueryDTO) => {
+  const page = await getQuestionRecommendationBatchesApi({
+    ...params,
+    pageNo: 1,
+    pageSize: 1
+  })
+  const batch = page.records?.[0]
+  return batch ? getQuestionRecommendationBatchItemsApi(batch.batchId) : []
 }
 
-export const getQuestionRecommendationsByGapApi = async (params: {
+export const getQuestionRecommendationItemsFromGapBatchApi = (params: {
   skillProfileId: number
   gapItemIds?: number[]
-}) => {
-  try {
-    const data = await request.get<
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>,
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>
-    >('/questions/recommendations/by-gap', { params })
-    return normalizeRecommendationItems(data)
-  } catch {
-    const page = await getQuestionRecommendationBatchesApi({
-      pageNo: 1,
-      pageSize: 1,
-      skillProfileId: params.skillProfileId,
-      sourceType: 'GAP'
-    })
-    const batch = page.records?.[0]
-    return batch ? getQuestionRecommendationBatchItemsApi(batch.batchId) : []
-  }
-}
+}) => getLatestBatchItems({
+  skillProfileId: params.skillProfileId,
+  sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP
+})
 
-export const getQuestionRecommendationsByMatchReportApi = async (matchReportId: number) => {
-  try {
-    const data = await request.get<
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>,
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>
-    >('/questions/recommendations/by-match-report', { params: { matchReportId } })
-    return normalizeRecommendationItems(data)
-  } catch {
-    const page = await getQuestionRecommendationBatchesApi({
-      pageNo: 1,
-      pageSize: 1,
-      matchReportId,
-      sourceType: 'MATCH_REPORT'
-    })
-    const batch = page.records?.[0]
-    return batch ? getQuestionRecommendationBatchItemsApi(batch.batchId) : []
-  }
-}
+export const getQuestionRecommendationItemsFromMatchReportBatchApi = (matchReportId: number) => getLatestBatchItems({
+  matchReportId,
+  sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH
+})
 
-export const getQuestionRecommendationsByStudyPlanApi = async (studyPlanId: number) => {
-  try {
-    const data = await request.get<
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>,
-      QuestionRecommendationItemVO[] | QuestionRecommendationBatchDetailVO | PageResult<QuestionRecommendationItemVO>
-    >('/questions/recommendations/by-study-plan', { params: { studyPlanId } })
-    return normalizeRecommendationItems(data)
-  } catch {
-    const page = await getQuestionRecommendationBatchesApi({
-      pageNo: 1,
-      pageSize: 1,
-      studyPlanId,
-      sourceType: 'STUDY_PLAN'
-    })
-    const batch = page.records?.[0]
-    return batch ? getQuestionRecommendationBatchItemsApi(batch.batchId) : []
-  }
-}
+export const getQuestionRecommendationItemsFromStudyPlanBatchApi = (studyPlanId: number) => getLatestBatchItems({
+  studyPlanId,
+  sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN
+})

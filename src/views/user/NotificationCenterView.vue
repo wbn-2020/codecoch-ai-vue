@@ -147,7 +147,7 @@ const fetchNotifications = async () => {
 const fetchUnreadCount = async () => {
   try {
     const result = await getUnreadCountApi()
-    unreadCount.value = result.total || 0
+    unreadCount.value = result.unreadCount ?? result.total ?? 0
   } catch {
     // 未读数失败时不伪装成 0，由列表错误态提示。
   }
@@ -175,6 +175,8 @@ const handleClickNotification = async (item: NotificationVO) => {
     router.push('/resumes')
   } else if (item.relatedType === 'STUDY_PLAN' && item.relatedId) {
     router.push('/study-plans')
+  } else if (item.relatedType) {
+    ElMessage.info('该通知暂未配置业务跳转入口')
   }
 }
 

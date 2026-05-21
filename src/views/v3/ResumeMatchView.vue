@@ -79,7 +79,7 @@
             <el-button type="primary" @click="loadReports">重试</el-button>
           </AppState>
           <AppState v-else-if="!reports.length" type="empty" title="暂无匹配报告" description="提交一次真实匹配后，这里会显示最新报告。" />
-          <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push(`/resume-match/${report.reportId}`)">
+          <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: { resumeId: report.resumeId, targetJobId: report.targetJobId } })">
             <span>
               <strong>{{ report.jobTitle || `岗位 #${report.targetJobId}` }}</strong>
               <small>{{ report.resumeTitle || `简历 #${report.resumeId}` }} · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
@@ -180,7 +180,7 @@ const submitMatch = async () => {
       forceRefresh: form.forceRefresh
     })
     ElMessage.success(result.status === 'FAILED' ? '报告生成返回失败状态，请查看详情' : '匹配报告已提交')
-    await router.push(`/resume-match/${result.reportId}`)
+    await router.push({ path: `/resume-match/${result.reportId}`, query: { resumeId: form.resumeId, targetJobId: form.targetJobId } })
   } finally {
     submitting.value = false
   }

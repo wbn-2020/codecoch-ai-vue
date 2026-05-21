@@ -332,7 +332,8 @@ export const routes: RouteRecordRaw[] = [
         meta: {
           title: '管理首页',
           icon: 'DataBoard',
-          affix: true
+          affix: true,
+          requiredPermissions: ['admin:v3']
         }
       },
       {
@@ -341,7 +342,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/UserManageView.vue'),
         meta: {
           title: '用户管理',
-          icon: 'UserFilled'
+          icon: 'UserFilled',
+          requiredPermissions: ['admin:user:list']
         }
       },
       {
@@ -350,7 +352,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/RoleManageView.vue'),
         meta: {
           title: '角色管理',
-          icon: 'Connection'
+          icon: 'Connection',
+          requiredPermissions: ['admin:role:list']
         }
       },
       {
@@ -359,7 +362,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/QuestionManageView.vue'),
         meta: {
           title: '题目管理',
-          icon: 'Collection'
+          icon: 'Collection',
+          requiredPermissions: ['admin:question:list']
         }
       },
       {
@@ -371,7 +375,8 @@ export const routes: RouteRecordRaw[] = [
         },
         meta: {
           title: 'AI 题目生成',
-          icon: 'Operation'
+          icon: 'Operation',
+          requiredPermissions: ['admin:question:generate']
         }
       },
       {
@@ -383,7 +388,8 @@ export const routes: RouteRecordRaw[] = [
         },
         meta: {
           title: '题目审核',
-          icon: 'DataAnalysis'
+          icon: 'DataAnalysis',
+          requiredPermissions: ['admin:question:review']
         }
       },
       {
@@ -395,7 +401,8 @@ export const routes: RouteRecordRaw[] = [
         },
         meta: {
           title: '题目去重审核',
-          icon: 'Connection'
+          icon: 'Connection',
+          requiredPermissions: ['admin:question:dedupe']
         }
       },
       {
@@ -404,7 +411,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/QuestionRelationManageView.vue'),
         meta: {
           title: '题目关系管理',
-          icon: 'Share'
+          icon: 'Share',
+          requiredPermissions: ['admin:question:relation']
         }
       },
       {
@@ -413,7 +421,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/QuestionCategoryManageView.vue'),
         meta: {
           title: '分类管理',
-          icon: 'Files'
+          icon: 'Files',
+          requiredPermissions: ['admin:question:category']
         }
       },
       {
@@ -422,7 +431,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/QuestionTagManageView.vue'),
         meta: {
           title: '标签管理',
-          icon: 'PriceTag'
+          icon: 'PriceTag',
+          requiredPermissions: ['admin:question:tag']
         }
       },
       {
@@ -431,7 +441,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/QuestionGroupManageView.vue'),
         meta: {
           title: '问题组管理',
-          icon: 'List'
+          icon: 'List',
+          requiredPermissions: ['admin:question:group']
         }
       },
       {
@@ -440,7 +451,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/IndustryTemplateManageView.vue'),
         meta: {
           title: '行业模板',
-          icon: 'List'
+          icon: 'List',
+          requiredPermissions: ['admin:industry-template:list']
         }
       },
       {
@@ -449,7 +461,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AdminFileManageView.vue'),
         meta: {
           title: '\u6587\u4ef6\u6cbb\u7406',
-          icon: 'Folder'
+          icon: 'Folder',
+          requiredPermissions: ['admin:file:list']
         }
       },
       {
@@ -458,7 +471,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/PromptTemplateView.vue'),
         meta: {
           title: 'Prompt 模板',
-          icon: 'Operation'
+          icon: 'Operation',
+          requiredPermissions: ['admin:ai:prompt:list']
         }
       },
       {
@@ -467,7 +481,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AiCallLogView.vue'),
         meta: {
           title: 'AI 调用日志',
-          icon: 'DataAnalysis'
+          icon: 'DataAnalysis',
+          requiredPermissions: ['admin:ai:log:list']
         }
       },
       {
@@ -476,7 +491,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/SystemConfigView.vue'),
         meta: {
           title: '系统配置',
-          icon: 'Setting'
+          icon: 'Setting',
+          requiredPermissions: ['admin:system:config:list']
         }
       },
       {
@@ -485,7 +501,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AiModelConfigView.vue'),
         meta: {
           title: 'AI 模型配置',
-          icon: 'Operation'
+          icon: 'Operation',
+          requiredPermissions: ['admin:ai:model:list']
         }
       },
       {
@@ -494,7 +511,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/MenuPermissionView.vue'),
         meta: {
           title: '菜单权限',
-          icon: 'Lock'
+          icon: 'Lock',
+          requiredPermissions: ['admin:menu:list']
         }
       },
       {
@@ -503,7 +521,15 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/NotificationManageView.vue'),
         meta: {
           title: '通知管理',
-          icon: 'Bell'
+          icon: 'Bell',
+          requiredPermissions: ['admin:notice:list']
+        }
+      },
+      {
+        path: 'notifications',
+        redirect: '/admin/notices',
+        meta: {
+          hidden: true
         }
       },
       {
@@ -512,7 +538,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/OperationLogView.vue'),
         meta: {
           title: '操作日志',
-          icon: 'Document'
+          icon: 'Document',
+          requiredPermissions: ['admin:audit:operation-log']
         }
       },
       {
@@ -521,7 +548,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/LoginLogView.vue'),
         meta: {
           title: '登录日志',
-          icon: 'Key'
+          icon: 'Key',
+          requiredPermissions: ['admin:audit:login-log']
         }
       },
       {
@@ -530,7 +558,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/InterviewManageView.vue'),
         meta: {
           title: '面试记录管理',
-          icon: 'ChatDotRound'
+          icon: 'ChatDotRound',
+          requiredPermissions: ['admin:interview:list']
         }
       },
       {
@@ -539,7 +568,8 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/InterviewReportManageView.vue'),
         meta: {
           title: '面试报告管理',
-          icon: 'Document'
+          icon: 'Document',
+          requiredPermissions: ['admin:interview:report']
         }
       },
       {
@@ -548,7 +578,15 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AsyncTaskView.vue'),
         meta: {
           title: '异步任务',
-          icon: 'Timer'
+          icon: 'Timer',
+          requiredPermissions: ['admin:task:list']
+        }
+      },
+      {
+        path: 'tasks',
+        redirect: '/admin/async-tasks',
+        meta: {
+          hidden: true
         }
       }
     ]

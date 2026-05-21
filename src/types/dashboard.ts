@@ -78,6 +78,8 @@ export interface UserDashboardRecentReportVO {
   status?: string
   totalScore?: number
   generatedAt?: string
+  weakPoints?: string[]
+  suggestions?: string[]
 }
 
 export interface UserDashboardActiveStudyPlanVO {
@@ -95,6 +97,67 @@ export interface UserDashboardEntryStatusVO {
   status: string
   reason?: string
   relatedId?: number
+}
+
+export interface V3DashboardTargetJobVO {
+  targetJobId?: number
+  id?: number
+  jobTitle?: string
+  companyName?: string
+  jobLevel?: string
+  parseStatus?: string
+  updatedAt?: string
+}
+
+export interface V3DashboardLatestMatchVO {
+  matchReportId?: number
+  reportId?: number
+  resumeId?: number
+  targetJobId?: number
+  overallScore?: number
+  status?: string
+  summary?: string
+  updatedAt?: string
+}
+
+export interface V3DashboardStudyProgressVO extends UserDashboardActiveStudyPlanVO {
+  planId: number
+}
+
+export interface V3DashboardRecommendedQuestionsVO {
+  batchId?: number
+  targetJobId?: number
+  status?: string
+  questionCount?: number
+  canPracticeCount?: number
+  pendingPracticeCount?: number
+  sourceType?: string
+  sourceId?: number
+  matchReportId?: number
+  skillProfileId?: number
+  studyPlanId?: number
+  updatedAt?: string
+  items?: Array<Record<string, unknown>>
+}
+
+export interface V3DashboardNextActionVO {
+  actionType?: string
+  title?: string
+  desc?: string
+  description?: string
+  path?: string
+  actionUrl?: string
+  targetPath?: string
+  type?: string
+  priority?: number
+}
+
+export interface V3DashboardOverviewVO extends UserDashboardOverviewVO {
+  currentTargetJob?: V3DashboardTargetJobVO | null
+  latestMatch?: V3DashboardLatestMatchVO | null
+  studyProgress?: V3DashboardStudyProgressVO | null
+  recommendedQuestions?: V3DashboardRecommendedQuestionsVO | null
+  nextActions?: V3DashboardNextActionVO[] | string[] | string | null
 }
 
 export interface UserDashboardOverviewVO {

@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">文件治理</h1>
         <p class="admin-hero__desc">
-          基于真实 /admin/files 接口查看上传文件元数据和简历解析联动状态。本页不新增下载、删除或重试解析操作。
+          基于真实 /admin/files 接口查看上传文件元数据、下载鉴权和简历解析联动状态。
         </p>
       </div>
     </section>
@@ -110,9 +110,19 @@
           <el-table-column prop="storageProvider" label="存储" width="100" />
           <el-table-column prop="createdAt" label="上传时间" min-width="170" show-overflow-tooltip />
           <el-table-column prop="updatedAt" label="更新时间" min-width="170" show-overflow-tooltip />
-          <el-table-column label="操作" width="100" fixed="right">
+          <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row.id)">详情</el-button>
+              <el-button
+                link
+                type="primary"
+                :icon="Download"
+                :loading="isDownloading(row.id)"
+                :disabled="!canDownload(row)"
+                @click="downloadFile(row)"
+              >
+                下载
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -139,6 +149,19 @@
       <div v-loading="detailLoading" class="file-detail">
         <el-empty v-if="!detail" description="暂无文件详情" />
         <template v-else>
+          <div class="file-detail__actions">
+            <el-button
+              type="primary"
+              :icon="Download"
+              :loading="isDownloading(detail.id)"
+              :disabled="!canDownload(detail)"
+              @click="downloadFile(detail)"
+            >
+              下载文件
+            </el-button>
+            <span v-if="!canDownload(detail)" class="muted-value">当前文件状态不可下载</span>
+          </div>
+
           <el-descriptions :column="1" border>
             <el-descriptions-item label="文件 ID">{{ detail.id }}</el-descriptions-item>
             <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
@@ -192,10 +215,11 @@
 </template>
 
 <script setup lang="ts">
-import { FolderSearch } from 'lucide-vue-next'
+import { Download, FolderSearch } from 'lucide-vue-next'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { getAdminFileDetailApi, getAdminFilesApi } from '@/api/file'
+import { downloadAdminFileApi, getAdminFileDetailApi, getAdminFilesApi } from '@/api/file'
 import type { AdminFileQueryDTO, FileInfoVO } from '@/types/file'
 
 const loading = ref(false)
@@ -205,6 +229,7 @@ const loadError = ref('')
 const files = ref<FileInfoVO[]>([])
 const detail = ref<FileInfoVO | null>(null)
 const total = ref(0)
+const downloadingIds = ref<Set<number>>(new Set())
 
 const query = reactive<AdminFileQueryDTO>({
   userId: undefined,
@@ -260,6 +285,11 @@ const formatConfirmed = (value?: boolean | null) => {
 
 const hasParseRecord = (row: FileInfoVO) =>
   Boolean(row.resumeAnalysisRecordId || row.resumeId || row.parseStatus || row.parseErrorMessage)
+
+const canDownload = (row?: FileInfoVO | null): row is FileInfoVO =>
+  Boolean(row?.id && row.status === 'AVAILABLE')
+
+const isDownloading = (id?: number) => Boolean(id && downloadingIds.value.has(id))
 
 const formatFileSize = (value?: number) => {
   const size = Number(value || 0)
@@ -325,6 +355,29 @@ const openDetail = async (id: number) => {
   }
 }
 
+const downloadFile = async (row?: FileInfoVO | null) => {
+  if (!canDownload(row)) {
+    ElMessage.warning('当前文件状态不可下载')
+    return
+  }
+  downloadingIds.value = new Set(downloadingIds.value).add(row.id)
+  try {
+    const blob = await downloadAdminFileApi(row.id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = row.originalFilename || `file_${row.id}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } finally {
+    const next = new Set(downloadingIds.value)
+    next.delete(row.id)
+    downloadingIds.value = next
+  }
+}
+
 onMounted(fetchFiles)
 </script>
 
@@ -337,6 +390,13 @@ onMounted(fetchFiles)
 
 .file-detail {
   min-height: 240px;
+}
+
+.file-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .muted-value {

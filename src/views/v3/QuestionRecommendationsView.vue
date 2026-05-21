@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><ListChecks :size="16" /> Question Recommendations</div>
         <h1>推荐题目</h1>
-        <p>按能力画像、匹配报告或学习计划读取真实推荐题；没有 V3 by-* 接口时回退到推荐批次接口。</p>
+        <p>按能力画像、匹配报告或学习计划读取推荐批次；缺少 URL 参数时自动使用最近上下文。</p>
       </div>
       <div class="hero-actions">
         <el-button :loading="loading" @click="loadRecommendations"><RefreshCw :size="16" /> 刷新</el-button>
@@ -20,7 +20,8 @@
           <el-segmented v-model="query.source" :options="sourceOptions" />
         </el-form-item>
         <el-form-item label="业务 ID">
-          <el-input-number v-model="query.sourceId" :min="1" />
+          <el-input-number v-model="query.sourceId" :min="1" disabled />
+          <div class="field-hint">由上游 URL 或最近上下文自动填充，无需手动输入。</div>
         </el-form-item>
         <el-form-item label="题目数量">
           <el-input-number v-model="query.questionCount" :min="3" :max="50" />
@@ -32,13 +33,24 @@
       <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
       <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" description="当前来源还没有推荐题，可以先生成推荐批次。" />
       <div v-else class="question-list">
-        <button v-for="item in items" :key="item.id" class="question-card" type="button" @click="openQuestion(item)">
+        <button
+          v-for="item in items"
+          :key="item.id"
+          class="question-card"
+          :class="{ 'question-card--disabled': !item.questionId }"
+          type="button"
+          @click="openQuestion(item)"
+        >
           <span class="question-main">
-            <strong>{{ item.questionTitle || `题目 #${item.questionId || item.id}` }}</strong>
+            <strong>{{ item.questionTitle || `推荐项 #${item.id}` }}</strong>
             <small>{{ item.skillName || item.skillCode || '--' }} · {{ item.difficulty || '--' }} · {{ item.questionType || '--' }}</small>
             <em>{{ item.recommendReason || item.questionContent || '暂无推荐理由' }}</em>
           </span>
-          <el-tag :type="severityTag(item.gapSeverity)">{{ item.gapSeverity || 'NORMAL' }}</el-tag>
+          <span class="question-tags">
+            <el-tag :type="severityTag(item.gapSeverity)">{{ item.gapSeverity || 'NORMAL' }}</el-tag>
+            <el-tag v-if="item.questionId" type="success" effect="plain">可练习</el-tag>
+            <el-tag v-else type="warning" effect="plain">待入库/待审核</el-tag>
+          </span>
         </button>
       </div>
     </section>
@@ -51,16 +63,19 @@ import { ListChecks, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
 import {
   generateQuestionRecommendationsFromGapApi,
   generateQuestionRecommendationsFromMatchReportApi,
   generateQuestionRecommendationsFromStudyPlanApi,
-  getQuestionRecommendationsByGapApi,
-  getQuestionRecommendationsByMatchReportApi,
-  getQuestionRecommendationsByStudyPlanApi
+  getQuestionRecommendationItemsFromGapBatchApi,
+  getQuestionRecommendationItemsFromMatchReportBatchApi,
+  getQuestionRecommendationItemsFromStudyPlanBatchApi
 } from '@/api/questionRecommendation'
+import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
-import type { QuestionRecommendationItemVO } from '@/types/questionRecommendation'
+import { QUESTION_RECOMMENDATION_SOURCE_TYPE, type QuestionRecommendationItemVO } from '@/types/questionRecommendation'
 import { getErrorMessage } from '@/utils/error'
 
 type Source = 'gap' | 'matchReport' | 'studyPlan'
@@ -72,9 +87,18 @@ const generating = ref(false)
 const loadError = ref('')
 const items = ref<QuestionRecommendationItemVO[]>([])
 
+const initialSource = (route.query.studyPlanId ? 'studyPlan' : route.query.matchReportId ? 'matchReport' : 'gap') as Source
+const initialSourceId = Number(
+  initialSource === 'studyPlan'
+    ? route.query.studyPlanId
+    : initialSource === 'matchReport'
+      ? route.query.matchReportId
+      : route.query.skillProfileId || route.query.profileId
+)
+
 const query = reactive({
-  source: (route.query.matchReportId ? 'matchReport' : route.query.studyPlanId ? 'studyPlan' : 'gap') as Source,
-  sourceId: Number(route.query.skillProfileId || route.query.matchReportId || route.query.studyPlanId) || undefined as number | undefined,
+  source: initialSource,
+  sourceId: (Number.isFinite(initialSourceId) && initialSourceId > 0 ? initialSourceId : undefined) as number | undefined,
   questionCount: 10
 })
 
@@ -83,25 +107,99 @@ const sourceOptions = [
   { label: '匹配报告', value: 'matchReport' },
   { label: '学习计划', value: 'studyPlan' }
 ]
-const canGenerate = computed(() => Boolean(query.sourceId && !generating.value))
+const canGenerate = computed(() => !generating.value)
+
+const getQueryNumber = (name: string) => {
+  const value = route.query[name]
+  const raw = Array.isArray(value) ? value[0] : value
+  const numberValue = Number(raw)
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined
+}
 
 const severityTag = (severity?: string) => severity === 'HIGH' || severity === 'CRITICAL' ? 'danger' : severity === 'MEDIUM' ? 'warning' : 'info'
+const sourceTypeBySource: Record<Source, string> = {
+  gap: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP,
+  matchReport: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH,
+  studyPlan: QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN
+}
 
-const loadRecommendations = async () => {
-  if (!query.sourceId) {
-    items.value = []
-    loadError.value = ''
+const buildPracticeQuery = (item: QuestionRecommendationItemVO) => {
+  const skillProfileId = query.source === 'gap'
+    ? query.sourceId
+    : getQueryNumber('skillProfileId') || getQueryNumber('profileId')
+  const matchReportId = query.source === 'matchReport' ? query.sourceId : getQueryNumber('matchReportId')
+  const studyPlanId = query.source === 'studyPlan' ? query.sourceId : getQueryNumber('studyPlanId')
+  return {
+    recommendationItemId: String(item.id),
+    batchId: String(item.batchId),
+    sourceType: item.sourceType || sourceTypeBySource[query.source],
+    sourceId: item.sourceId || query.sourceId ? String(item.sourceId || query.sourceId) : undefined,
+    skillProfileId: skillProfileId ? String(skillProfileId) : undefined,
+    matchReportId: matchReportId ? String(matchReportId) : undefined,
+    studyPlanId: studyPlanId ? String(studyPlanId) : undefined,
+    targetJobId: getQueryNumber('targetJobId') ? String(getQueryNumber('targetJobId')) : undefined,
+    resumeId: getQueryNumber('resumeId') ? String(getQueryNumber('resumeId')) : undefined
+  }
+}
+
+const hydrateContext = async () => {
+  const routeSourceId =
+    query.source === 'studyPlan'
+      ? getQueryNumber('studyPlanId')
+      : query.source === 'matchReport'
+        ? getQueryNumber('matchReportId')
+        : getQueryNumber('skillProfileId') || getQueryNumber('profileId')
+  if (routeSourceId) {
+    query.sourceId = routeSourceId
     return
   }
+
+  if (query.source === 'gap') {
+    const overview = await getSkillProfileOverviewApi(getQueryNumber('targetJobId'))
+    query.sourceId = overview.profileId
+    return
+  }
+
+  if (query.source === 'matchReport') {
+    const page = await getResumeJobMatchReportsApi({
+      pageNo: 1,
+      pageSize: 1,
+      targetJobId: getQueryNumber('targetJobId'),
+      resumeId: getQueryNumber('resumeId'),
+      status: 'SUCCESS'
+    })
+    query.sourceId = page.records?.[0]?.reportId
+    return
+  }
+
+  const plans = await getStudyPlansApi({
+    pageNo: 1,
+    pageSize: 1,
+    planStatus: 'ACTIVE',
+    targetJobId: getQueryNumber('targetJobId'),
+    matchReportId: getQueryNumber('matchReportId'),
+    skillProfileId: getQueryNumber('skillProfileId') || getQueryNumber('profileId')
+  })
+  query.sourceId = plans.records?.[0]?.id || plans.records?.[0]?.reportId
+}
+
+const loadRecommendations = async () => {
   loading.value = true
   loadError.value = ''
   try {
+    if (!query.sourceId) {
+      await hydrateContext()
+    }
+    if (!query.sourceId) {
+      items.value = []
+      return
+    }
     if (query.source === 'gap') {
-      items.value = await getQuestionRecommendationsByGapApi({ skillProfileId: query.sourceId })
+      items.value = await getQuestionRecommendationItemsFromGapBatchApi({ skillProfileId: query.sourceId })
     } else if (query.source === 'matchReport') {
-      items.value = await getQuestionRecommendationsByMatchReportApi(query.sourceId)
+      items.value = await getQuestionRecommendationItemsFromMatchReportBatchApi(query.sourceId)
     } else {
-      items.value = await getQuestionRecommendationsByStudyPlanApi(query.sourceId)
+      items.value = await getQuestionRecommendationItemsFromStudyPlanBatchApi(query.sourceId)
     }
   } catch (error) {
     items.value = []
@@ -112,9 +210,15 @@ const loadRecommendations = async () => {
 }
 
 const generateRecommendations = async () => {
-  if (!query.sourceId) return
   generating.value = true
   try {
+    if (!query.sourceId) {
+      await hydrateContext()
+    }
+    if (!query.sourceId) {
+      ElMessage.warning('未找到可用上下文，无法生成推荐题')
+      return
+    }
     if (query.source === 'gap') {
       await generateQuestionRecommendationsFromGapApi({ skillProfileId: query.sourceId, questionCount: query.questionCount })
     } else if (query.source === 'matchReport') {
@@ -130,8 +234,14 @@ const generateRecommendations = async () => {
 }
 
 const openQuestion = (item: QuestionRecommendationItemVO) => {
-  const id = item.questionId || item.id
-  if (id) router.push(`/questions/${id}`)
+  if (!item.questionId) {
+    ElMessage.warning('该推荐项尚未匹配到正式题库，待入库/审核后才能进入练习')
+    return
+  }
+  router.push({
+    path: `/questions/${item.questionId}`,
+    query: buildPracticeQuery(item)
+  })
 }
 
 onMounted(loadRecommendations)
@@ -148,8 +258,11 @@ h1 { margin-top: 10px; font-size: 30px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .content-panel { padding: 20px; min-width: 0; }
 .filter-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.field-hint { margin-top: 6px; color: var(--app-text-muted); font-size: 12px; }
 .question-list { display: grid; gap: 12px; }
 .question-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); text-align: left; cursor: pointer; }
+.question-card--disabled { cursor: not-allowed; opacity: 0.78; }
+.question-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .question-main strong, .question-main small, .question-main em { display: block; overflow-wrap: anywhere; }
 .question-main small { margin-top: 5px; color: var(--app-text-muted); }
 .question-main em { margin-top: 8px; font-style: normal; line-height: 1.6; }

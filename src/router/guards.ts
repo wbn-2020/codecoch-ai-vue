@@ -17,11 +17,15 @@ export const setupRouterGuards = (router: Router) => {
       authStore.clearAuth()
     }
 
-    if (isAuthPage && authStore.isLoggedIn) {
-      return '/dashboard'
-    }
-
     if (isPublic) {
+      if (isAuthPage && authStore.isLoggedIn) {
+        try {
+          await authStore.verifyToken()
+          return '/dashboard'
+        } catch {
+          return true
+        }
+      }
       return true
     }
 
@@ -34,9 +38,9 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (!authStore.userInfo) {
+    if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
       try {
-        await authStore.fetchCurrentUser()
+        await authStore.verifyToken()
       } catch {
         return {
           path: '/login',
@@ -47,7 +51,23 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.isAdmin) {
+    if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.canAccessAdmin) {
+      return '/403'
+    }
+
+    const requiredRoles = to.matched.flatMap((record) => {
+      const roles = record.meta.requiredRoles
+      return Array.isArray(roles) ? roles.map(String) : []
+    })
+    if (requiredRoles.length > 0 && !authStore.hasAnyRole(requiredRoles)) {
+      return '/403'
+    }
+
+    const requiredPermissions = to.matched.flatMap((record) => {
+      const permissions = record.meta.requiredPermissions
+      return Array.isArray(permissions) ? permissions.map(String) : []
+    })
+    if (requiredPermissions.length > 0 && !authStore.hasAnyPermission(requiredPermissions)) {
       return '/403'
     }
 

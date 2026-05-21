@@ -13,3 +13,9 @@ export const getAdminFilesApi = async (params: AdminFileQueryDTO) => {
 export const getAdminFileDetailApi = (id: number) => {
   return request.get<FileInfoVO, FileInfoVO>(`/admin/files/${id}`)
 }
+
+export const downloadAdminFileApi = (id: number) => {
+  return request.get<Blob, Blob>(`/admin/files/${id}/download`, {
+    responseType: 'blob'
+  })
+}
