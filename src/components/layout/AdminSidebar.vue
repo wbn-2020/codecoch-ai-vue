@@ -69,7 +69,7 @@ const allMenuItems = [
   { label: 'AI Ops 看板', path: '/admin/analytics/ai', icon: DataAnalysis, permissions: ['admin:analytics:ai'] },
   { label: 'Metric Dictionary', path: '/admin/analytics/metrics', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
   { label: 'Analytics Jobs', path: '/admin/analytics/jobs', icon: Timer, permissions: ['admin:analytics:agent'] },
-  { label: 'Prompt Regression', path: '/admin/ai/prompt-regression', icon: Operation, permissions: ['admin:ai:prompt:list'] },
+  { label: 'Prompt Regression', path: '/admin/ai/prompt-regression', icon: Operation, permissions: ['admin:agent:prompt-regression:list'] },
   { label: '菜单权限', path: '/admin/menus', icon: Lock, permissions: ['admin:menu:list'] },
   { label: '通知管理', path: '/admin/notices', icon: Bell, permissions: ['admin:notice:list'] },
   { label: '操作日志', path: '/admin/operation-logs', icon: Document, permissions: ['admin:audit:operation-log'] },

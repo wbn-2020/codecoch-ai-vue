@@ -52,7 +52,7 @@
             <el-table-column prop="finishedAt" label="Finished" width="180" />
             <el-table-column label="Action" width="120" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" :loading="rerunningId === row.id" @click="rerun(row.id)">Rerun</el-button>
+                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerun(row.id)">Rerun</el-button>
               </template>
             </el-table-column>
             <template #empty>

@@ -7,7 +7,7 @@
         <p class="admin-hero__desc">Load fixed regression cases and results, then trigger a backend regression run for a case and prompt version.</p>
       </div>
       <div class="admin-hero__actions">
-        <el-button type="primary" @click="runDialogVisible = true">Run case</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="runDialogVisible = true">Run case</el-button>
         <el-button :loading="loading" @click="loadPage">Refresh</el-button>
       </div>
     </section>
@@ -48,7 +48,7 @@
               <el-table-column prop="expectedSchemaJson" label="Expected schema" min-width="260" show-overflow-tooltip />
               <el-table-column label="Action" width="120" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openRun(row.id)">Run</el-button>
+                  <el-button v-permission="'admin:agent:prompt-regression:run'" link type="primary" @click="openRun(row.id)">Run</el-button>
                 </template>
               </el-table-column>
               <template #empty>
@@ -89,7 +89,7 @@
       </el-form>
       <template #footer>
         <el-button @click="runDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="running" @click="runRegression">Run</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" :loading="running" @click="runRegression">Run</el-button>
       </template>
     </el-dialog>
   </div>

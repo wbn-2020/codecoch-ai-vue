@@ -97,7 +97,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'ai/ops', redirect: '/admin/analytics/ai', meta: { hidden: true } },
       { path: 'analytics/metrics', name: 'AdminAnalyticsMetrics', component: () => import('@/views/admin/AdminAnalyticsMetricsView.vue'), meta: { title: 'Metric dictionary', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:agent'] } },
       { path: 'analytics/jobs', name: 'AdminAnalyticsJobs', component: () => import('@/views/admin/AdminAnalyticsJobsView.vue'), meta: { title: 'Analytics jobs', icon: 'Timer', requiredPermissions: ['admin:analytics:agent'] } },
-      { path: 'ai/prompt-regression', name: 'AdminPromptRegression', component: () => import('@/views/admin/AdminPromptRegressionView.vue'), meta: { title: 'Prompt regression', icon: 'Operation', requiredPermissions: ['admin:ai:prompt:list'] } },
+      { path: 'ai/prompt-regression', name: 'AdminPromptRegression', component: () => import('@/views/admin/AdminPromptRegressionView.vue'), meta: { title: 'Prompt regression', icon: 'Operation', requiredPermissions: ['admin:agent:prompt-regression:list'] } },
       { path: 'agent/runs', name: 'AdminAgentRuns', component: () => import('@/views/admin/AdminAgentRunView.vue'), meta: { title: 'Agent runs', icon: 'DataAnalysis', requiredPermissions: ['admin:agent:run:list'] } },
       { path: 'agent/tasks', name: 'AdminAgentTasks', component: () => import('@/views/admin/AdminAgentTaskView.vue'), meta: { title: 'Agent tasks', icon: 'Timer', requiredPermissions: ['admin:agent:task:list'] } },
       { path: 'async-tasks', name: 'AdminAsyncTasks', component: () => import('@/views/admin/AsyncTaskView.vue'), meta: { title: 'Async tasks', icon: 'Timer', requiredPermissions: ['admin:task:list'] } },

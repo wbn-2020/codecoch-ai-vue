@@ -180,7 +180,9 @@ export const getGrowthReadinessTrendApi = (params?: { days?: number }) =>
     .then((data) => data || [])
 
 export const getAgentMemoriesApi = (params?: { pageNo?: number; pageSize?: number; memoryType?: string; enabled?: number }) =>
-  request.get<PageResult<AgentMemoryVO>, PageResult<AgentMemoryVO>>('/agent/memories', { params })
+  request
+    .get<PageResult<AgentMemoryVO> | AgentMemoryVO[], PageResult<AgentMemoryVO> | AgentMemoryVO[]>('/agent/memories', { params })
+    .then((result) => normalizePageResult(result, params))
 
 export const createAgentMemoryApi = (data: Partial<AgentMemoryVO>) =>
   request.post<AgentMemoryVO, AgentMemoryVO>('/agent/memories', data)
@@ -233,7 +235,7 @@ export const createKnowledgeDocumentApi = (data: KnowledgeDocumentCreateDTO) =>
 
 export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number }) =>
   request
-    .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents')
+    .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
     .then((result) => normalizePageResult(result, params))
 
 export const getKnowledgeDocumentDetailApi = (id: number) =>

@@ -127,6 +127,10 @@ export const getAdminAiFailuresApi = (params?: AnalyticsRangeQuery) =>
 
 export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQuery) => {
   const requestParams = {
+    pageNo: params?.pageNo,
+    pageNum: params?.pageNum,
+    pageSize: params?.pageSize,
+    keyword: params?.keyword || undefined,
     category: params?.category || undefined,
     enabled: params?.enabled === '' ? undefined : params?.enabled
   }
