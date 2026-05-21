@@ -13,6 +13,7 @@ interface AuthState {
   userInfo: CurrentUserVO | null
   roles: RoleCode[]
   permissions: string[]
+  tokenVerified: boolean
 }
 
 const normalizeRoleCode = (role: unknown): RoleCode | null => {
@@ -69,7 +70,8 @@ export const useAuthStore = defineStore('auth', {
     token: getToken(),
     userInfo: storage.get<CurrentUserVO>(STORAGE_KEYS.userInfo),
     roles: normalizeRoles(storage.get<RoleCode[]>(STORAGE_KEYS.roles, []) || []),
-    permissions: normalizePermissions(storage.get<string[]>(STORAGE_KEYS.permissions, []) || [])
+    permissions: normalizePermissions(storage.get<string[]>(STORAGE_KEYS.permissions, []) || []),
+    tokenVerified: false
   }),
 
   getters: {
@@ -123,6 +125,7 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     setToken(token: string) {
       this.token = token
+      this.tokenVerified = false
       persistToken(token)
     },
 
@@ -149,6 +152,7 @@ export const useAuthStore = defineStore('auth', {
       this.setToken(result.token)
       const userInfo = normalizeUser(result)
       this.setUserInfo(userInfo)
+      this.tokenVerified = true
       return result
     },
 
@@ -170,6 +174,7 @@ export const useAuthStore = defineStore('auth', {
       try {
         const userInfo = await getCurrentUserApi()
         this.setUserInfo(userInfo)
+        this.tokenVerified = true
         return userInfo
       } catch (error) {
         this.clearAuth()
@@ -177,11 +182,25 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async verifyToken() {
+      if (!this.token) {
+        this.clearAuth()
+        return null
+      }
+
+      if (this.tokenVerified && this.userInfo) {
+        return this.userInfo
+      }
+
+      return this.fetchCurrentUser()
+    },
+
     clearAuth() {
       this.token = ''
       this.userInfo = null
       this.roles = []
       this.permissions = []
+      this.tokenVerified = false
       removeToken()
       storage.remove(STORAGE_KEYS.userInfo)
       storage.remove(STORAGE_KEYS.roles)

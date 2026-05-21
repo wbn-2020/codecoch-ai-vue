@@ -76,7 +76,9 @@
           ref="uploadRef"
           class="resume-upload"
           drag
+          :accept="RESUME_UPLOAD_ACCEPT"
           :auto-upload="false"
+          :before-upload="beforeResumeUpload"
           :limit="1"
           :show-file-list="false"
           :on-change="handleFileChange"
@@ -411,7 +413,7 @@
 </template>
 
 <script setup lang="ts">
-import type { UploadFile, UploadInstance } from 'element-plus'
+import type { UploadFile, UploadInstance, UploadRawFile } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
@@ -484,6 +486,28 @@ const optimizeRecordsLoadError = ref(false)
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 const optimizeDrawerVisible = ref(false)
 const selectedOptimizeSuggestionIndexes = ref<number[]>([])
+
+const MAX_RESUME_UPLOAD_SIZE = 50 * 1024 * 1024
+const RESUME_UPLOAD_ACCEPT = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.md',
+  '.txt',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/markdown',
+  'text/plain'
+].join(',')
+const RESUME_UPLOAD_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'md', 'txt'])
+const RESUME_UPLOAD_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/markdown',
+  'text/plain'
+])
 
 const query = reactive<ResumeQueryDTO>({
   keyword: '',
@@ -674,10 +698,27 @@ const triggerUpload = () => {
   uploadRef.value?.$el.querySelector('input[type="file"]')?.click()
 }
 
+const beforeResumeUpload = (file: UploadRawFile) => {
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  const isAllowedType = RESUME_UPLOAD_EXTENSIONS.has(extension) || RESUME_UPLOAD_MIME_TYPES.has(file.type)
+  if (!isAllowedType) {
+    ElMessage.warning('仅支持上传 PDF、DOC、DOCX、MD、TXT 格式的简历文件')
+    return false
+  }
+
+  if (file.size > MAX_RESUME_UPLOAD_SIZE) {
+    ElMessage.warning('简历文件大小不能超过 50MB')
+    return false
+  }
+
+  return true
+}
+
 const handleFileChange = async (uploadFile: UploadFile) => {
   const file = uploadFile.raw
   uploadRef.value?.clearFiles()
   if (!file) return
+  if (!beforeResumeUpload(file)) return
   uploading.value = true
   uploadError.value = ''
   parseTask.value = null

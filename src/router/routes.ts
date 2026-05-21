@@ -526,6 +526,13 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'notifications',
+        redirect: '/admin/notices',
+        meta: {
+          hidden: true
+        }
+      },
+      {
         path: 'operation-logs',
         name: 'AdminOperationLogs',
         component: () => import('@/views/admin/OperationLogView.vue'),
@@ -573,6 +580,13 @@ export const routes: RouteRecordRaw[] = [
           title: '异步任务',
           icon: 'Timer',
           requiredPermissions: ['admin:task:list']
+        }
+      },
+      {
+        path: 'tasks',
+        redirect: '/admin/async-tasks',
+        meta: {
+          hidden: true
         }
       }
     ]

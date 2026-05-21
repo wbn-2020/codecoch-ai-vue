@@ -109,7 +109,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
 
   if (signal) {
     if (signal.aborted) abort()
-    signal.addEventListener('abort', abort, { once: true })
+    else signal.addEventListener('abort', abort, { once: true })
   }
 
   let hasStarted = false
@@ -117,6 +117,8 @@ export const streamSse = <T extends SseEventData = SseEventData>({
 
   const finished = (async () => {
     try {
+      if (controller.signal.aborted) return
+
       if (!window.fetch || !window.ReadableStream) {
         throw new Error('Current browser does not support fetch SSE streaming')
       }

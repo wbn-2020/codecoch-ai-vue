@@ -14,4 +14,5 @@ export const clearLocalAuth = (): void => {
   localStorage.removeItem(STORAGE_KEYS.token)
   localStorage.removeItem(STORAGE_KEYS.userInfo)
   localStorage.removeItem(STORAGE_KEYS.roles)
+  localStorage.removeItem(STORAGE_KEYS.permissions)
 }

@@ -17,11 +17,15 @@ export const setupRouterGuards = (router: Router) => {
       authStore.clearAuth()
     }
 
-    if (isAuthPage && authStore.isLoggedIn) {
-      return '/dashboard'
-    }
-
     if (isPublic) {
+      if (isAuthPage && authStore.isLoggedIn) {
+        try {
+          await authStore.verifyToken()
+          return '/dashboard'
+        } catch {
+          return true
+        }
+      }
       return true
     }
 
@@ -34,9 +38,9 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (!authStore.userInfo || authStore.roles.length === 0) {
+    if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
       try {
-        await authStore.fetchCurrentUser()
+        await authStore.verifyToken()
       } catch {
         return {
           path: '/login',

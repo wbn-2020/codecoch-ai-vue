@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import type { AxiosError } from 'axios'
 
 export interface NotificationVO {
   id: number
@@ -24,6 +25,7 @@ export interface NotificationQueryDTO {
 
 export interface UnreadCountVO {
   total: number
+  unreadCount?: number
 }
 
 type BackendNotificationVO = NotificationVO & {
@@ -54,6 +56,19 @@ const normalizeNotification = (item: BackendNotificationVO): NotificationVO => (
   relatedType: normalizeRelatedType(item.relatedType ?? item.bizType)
 })
 
+const normalizeUnreadCount = (result: UnreadCountVO | number) => {
+  if (typeof result === 'number') {
+    return { total: result, unreadCount: result }
+  }
+
+  const total = result.total ?? result.unreadCount ?? 0
+  return {
+    ...result,
+    total,
+    unreadCount: result.unreadCount ?? total
+  }
+}
+
 export const getNotificationsApi = (params: NotificationQueryDTO) => {
   const query: Record<string, unknown> = { ...params }
   if (params.isRead !== undefined && params.isRead !== '') {
@@ -71,11 +86,17 @@ export const getNotificationsApi = (params: NotificationQueryDTO) => {
 
 export const getUnreadCountApi = () => {
   return request.get<UnreadCountVO | number, UnreadCountVO | number>('/notifications/unread-count')
-    .then((result) => typeof result === 'number' ? { total: result } : result)
+    .then(normalizeUnreadCount)
 }
 
 export const markNotificationReadApi = (id: number) => {
-  return request.post<null, null>(`/notifications/${id}/read`)
+  return request.put<null, null>(`/notifications/${id}/read`).catch((error: AxiosError) => {
+    const status = error.response?.status
+    if (status === 404 || status === 405) {
+      return request.post<null, null>(`/notifications/${id}/read`)
+    }
+    throw error
+  })
 }
 
 export const markAllNotificationsReadApi = () => {

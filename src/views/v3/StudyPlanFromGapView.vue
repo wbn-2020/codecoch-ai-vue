@@ -143,12 +143,20 @@ const generatePlan = async () => {
       startDate: form.startDate || undefined,
       planTitle: form.planTitle || undefined
     })
-    ElMessage.success(result.planStatus === 'FAILED' ? '学习计划生成返回失败状态' : '学习计划已生成')
+    if (result.planStatus === 'FAILED') {
+      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+      return
+    }
+    if (!result.planId) {
+      ElMessage.error('学习计划生成失败：后端未返回 planId')
+      return
+    }
+    ElMessage.success('学习计划已生成')
     await router.push({
-      path: '/questions/recommendations',
+      path: '/study-plans',
       query: buildContextQuery({
-        studyPlanId: result.planId,
-        profileId: profileId.value,
+        planId: result.planId,
+        skillProfileId: profileId.value,
         targetJobId: targetJobId.value,
         matchReportId: Number(route.query.matchReportId) || undefined,
         resumeId: Number(route.query.resumeId) || undefined

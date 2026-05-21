@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 
 export type SseStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error'
 
@@ -93,6 +93,13 @@ export const useSseState = (options: UseSseStateOptions = {}) => {
       timestamp: Date.now()
     })
   }
+
+  onBeforeUnmount(() => {
+    if (clearErrorTimer) {
+      clearTimeout(clearErrorTimer)
+      clearErrorTimer = undefined
+    }
+  })
 
   return {
     /** 当前 SSE 状态 */
