@@ -1,598 +1,108 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 export const routes: RouteRecordRaw[] = [
-  {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/auth/LoginView.vue'),
-    meta: {
-      public: true,
-      title: '登录'
-    }
-  },
-  {
-    path: '/register',
-    name: 'Register',
-    component: () => import('@/views/auth/RegisterView.vue'),
-    meta: {
-      public: true,
-      title: '注册'
-    }
-  },
-  {
-    path: '/forgot-password',
-    name: 'ForgotPassword',
-    component: () => import('@/views/auth/ForgotPasswordView.vue'),
-    meta: {
-      public: true,
-      title: '找回密码'
-    }
-  },
-  {
-    path: '/reset-password',
-    name: 'ResetPassword',
-    component: () => import('@/views/auth/ResetPasswordView.vue'),
-    meta: {
-      public: true,
-      title: '重置密码'
-    }
-  },
-  {
-    path: '/403',
-    name: 'Forbidden',
-    component: () => import('@/views/error/ForbiddenView.vue'),
-    meta: {
-      public: true,
-      title: '无权限'
-    }
-  },
-  {
-    path: '/404',
-    name: 'NotFound',
-    component: () => import('@/views/error/NotFoundView.vue'),
-    meta: {
-      public: true,
-      title: '页面不存在'
-    }
-  },
+  { path: '/login', name: 'Login', component: () => import('@/views/auth/LoginView.vue'), meta: { public: true, title: 'Login' } },
+  { path: '/register', name: 'Register', component: () => import('@/views/auth/RegisterView.vue'), meta: { public: true, title: 'Register' } },
+  { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/auth/ForgotPasswordView.vue'), meta: { public: true, title: 'Forgot password' } },
+  { path: '/reset-password', name: 'ResetPassword', component: () => import('@/views/auth/ResetPasswordView.vue'), meta: { public: true, title: 'Reset password' } },
+  { path: '/403', name: 'Forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { public: true, title: 'Forbidden' } },
+  { path: '/404', name: 'NotFound', component: () => import('@/views/error/NotFoundView.vue'), meta: { public: true, title: 'Not found' } },
   {
     path: '/',
     component: () => import('@/layouts/UserLayout.vue'),
-    meta: {
-      requiresAuth: true
-    },
+    meta: { requiresAuth: true },
     children: [
-      {
-        path: '',
-        redirect: '/dashboard'
-      },
-      {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/user/DashboardView.vue'),
-        meta: {
-          title: '工作台'
-        }
-      },
-      {
-        path: 'dashboard/v3',
-        name: 'V3Dashboard',
-        component: () => import('@/views/v3/V3DashboardView.vue'),
-        meta: {
-          title: 'V3 驾驶舱'
-        }
-      },
-      {
-        path: 'profile',
-        name: 'Profile',
-        component: () => import('@/views/user/ProfileView.vue'),
-        meta: {
-          title: '个人资料'
-        }
-      },
-      {
-        path: 'password',
-        name: 'Password',
-        component: () => import('@/views/user/PasswordView.vue'),
-        meta: {
-          title: '修改密码'
-        }
-      },
-      {
-        path: 'notifications',
-        name: 'Notifications',
-        component: () => import('@/views/user/NotificationCenterView.vue'),
-        meta: {
-          title: '通知中心'
-        }
-      },
-      {
-        path: 'weakness-analysis',
-        name: 'WeaknessAnalysis',
-        component: () => import('@/views/user/WeaknessAnalysisView.vue'),
-        meta: {
-          title: '薄弱知识点分析'
-        }
-      },
-      {
-        path: 'projects',
-        name: 'ProjectExperience',
-        component: () => import('@/views/user/ProjectExperienceView.vue'),
-        meta: {
-          title: '项目经历'
-        }
-      },
-      {
-        path: 'questions',
-        name: 'QuestionList',
-        component: () => import('@/views/question/QuestionListView.vue'),
-        meta: {
-          title: '题库'
-        }
-      },
-      {
-        path: 'questions/practice',
-        name: 'QuestionPractice',
-        component: () => import('@/views/question/PracticeModeView.vue'),
-        meta: {
-          title: '刷题练习'
-        }
-      },
-      {
-        path: 'questions/wrong-records',
-        name: 'WrongQuestions',
-        component: () => import('@/views/question/WrongQuestionView.vue'),
-        meta: {
-          title: '错题本'
-        }
-      },
-      {
-        path: 'questions/favorites',
-        name: 'FavoriteQuestions',
-        component: () => import('@/views/question/FavoriteQuestionView.vue'),
-        meta: {
-          title: '收藏题目'
-        }
-      },
-      {
-        path: 'questions/recommendations',
-        name: 'QuestionRecommendations',
-        component: () => import('@/views/v3/QuestionRecommendationsView.vue'),
-        meta: {
-          title: '推荐题目'
-        }
-      },
-      {
-        path: 'questions/:id',
-        name: 'QuestionDetail',
-        component: () => import('@/views/question/QuestionDetailView.vue'),
-        meta: {
-          title: '题目详情'
-        }
-      },
-      {
-        path: 'job-targets',
-        name: 'JobTargets',
-        component: () => import('@/views/v3/JobTargetListView.vue'),
-        meta: {
-          title: '岗位目标'
-        }
-      },
-      {
-        path: 'job-targets/create',
-        name: 'JobTargetCreate',
-        component: () => import('@/views/v3/JobTargetEditView.vue'),
-        meta: {
-          title: '创建岗位目标'
-        }
-      },
-      {
-        path: 'job-targets/:id/edit',
-        name: 'JobTargetEdit',
-        component: () => import('@/views/v3/JobTargetEditView.vue'),
-        meta: {
-          title: '编辑岗位目标'
-        }
-      },
-      {
-        path: 'job-targets/:id/analysis',
-        name: 'JobTargetAnalysis',
-        component: () => import('@/views/v3/JobTargetAnalysisView.vue'),
-        meta: {
-          title: 'JD 分析'
-        }
-      },
-      {
-        path: 'resumes',
-        name: 'ResumeList',
-        component: () => import('@/views/resume/ResumeListView.vue'),
-        meta: {
-          title: '简历'
-        }
-      },
-      {
-        path: 'resumes/create',
-        name: 'ResumeCreate',
-        component: () => import('@/views/resume/ResumeEditView.vue'),
-        meta: {
-          title: '新建简历'
-        }
-      },
-      {
-        path: 'resumes/:id/edit',
-        name: 'ResumeEdit',
-        component: () => import('@/views/resume/ResumeEditView.vue'),
-        meta: {
-          title: '编辑简历'
-        }
-      },
-      {
-        path: 'resume-match',
-        name: 'ResumeMatch',
-        component: () => import('@/views/v3/ResumeMatchView.vue'),
-        meta: {
-          title: '简历匹配'
-        }
-      },
-      {
-        path: 'resume-match/:id',
-        name: 'ResumeMatchDetail',
-        component: () => import('@/views/v3/ResumeMatchDetailView.vue'),
-        meta: {
-          title: '匹配报告详情'
-        }
-      },
-      {
-        path: 'skill-profile',
-        name: 'SkillProfile',
-        component: () => import('@/views/v3/SkillProfileView.vue'),
-        meta: {
-          title: '能力画像'
-        }
-      },
-      {
-        path: 'interviews/create',
-        name: 'InterviewCreate',
-        component: () => import('@/views/interview/InterviewCreateView.vue'),
-        meta: {
-          title: '创建面试'
-        }
-      },
-      {
-        path: 'interviews/room/:id',
-        name: 'InterviewRoom',
-        component: () => import('@/views/interview/InterviewRoomView.vue'),
-        meta: {
-          title: '面试房间'
-        }
-      },
-      {
-        path: 'interviews/history',
-        name: 'InterviewHistory',
-        component: () => import('@/views/interview/InterviewHistoryView.vue'),
-        meta: {
-          title: '面试历史'
-        }
-      },
-      {
-        path: 'interviews/:id',
-        name: 'InterviewDetail',
-        component: () => import('@/views/interview/InterviewDetailView.vue'),
-        meta: {
-          title: '面试详情'
-        }
-      },
-      {
-        path: 'interviews/:id/report',
-        name: 'InterviewReport',
-        component: () => import('@/views/interview/InterviewReportView.vue'),
-        meta: {
-          title: '面试报告'
-        }
-      },
-      {
-        path: 'study-plans/from-gap',
-        name: 'StudyPlansFromGap',
-        component: () => import('@/views/v3/StudyPlanFromGapView.vue'),
-        meta: {
-          title: '差距学习计划'
-        }
-      },
-      {
-        path: 'study-plans',
-        name: 'StudyPlans',
-        component: () => import('@/views/study/StudyPlanView.vue'),
-        meta: {
-          title: '学习计划'
-        }
-      },
-      {
-        path: 'daily-tasks',
-        name: 'DailyTasks',
-        component: () => import('@/views/study/DailyTaskView.vue'),
-        meta: {
-          title: '每日任务'
-        }
-      }
+      { path: '', redirect: '/dashboard' },
+      { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/user/DashboardView.vue'), meta: { title: 'Workspace' } },
+      { path: 'dashboard/v3', name: 'V3Dashboard', component: () => import('@/views/v3/V3DashboardView.vue'), meta: { title: 'V3 cockpit' } },
+      { path: 'profile', name: 'Profile', component: () => import('@/views/user/ProfileView.vue'), meta: { title: 'Profile' } },
+      { path: 'password', name: 'Password', component: () => import('@/views/user/PasswordView.vue'), meta: { title: 'Password' } },
+      { path: 'notifications', name: 'Notifications', component: () => import('@/views/user/NotificationCenterView.vue'), meta: { title: 'Notifications' } },
+      { path: 'weakness-analysis', name: 'WeaknessAnalysis', component: () => import('@/views/user/WeaknessAnalysisView.vue'), meta: { title: 'Weakness analysis' } },
+      { path: 'projects', name: 'ProjectExperience', component: () => import('@/views/user/ProjectExperienceView.vue'), meta: { title: 'Project experience' } },
+      { path: 'questions', name: 'QuestionList', component: () => import('@/views/question/QuestionListView.vue'), meta: { title: 'Question bank' } },
+      { path: 'questions/practice', name: 'QuestionPractice', component: () => import('@/views/question/PracticeModeView.vue'), meta: { title: 'Practice' } },
+      { path: 'questions/wrong-records', name: 'WrongQuestions', component: () => import('@/views/question/WrongQuestionView.vue'), meta: { title: 'Wrong records' } },
+      { path: 'questions/favorites', name: 'FavoriteQuestions', component: () => import('@/views/question/FavoriteQuestionView.vue'), meta: { title: 'Favorites' } },
+      { path: 'questions/recommendations', name: 'QuestionRecommendations', component: () => import('@/views/v3/QuestionRecommendationsView.vue'), meta: { title: 'Question recommendations' } },
+      { path: 'questions/:id', name: 'QuestionDetail', component: () => import('@/views/question/QuestionDetailView.vue'), meta: { title: 'Question detail' } },
+      { path: 'job-targets', name: 'JobTargets', component: () => import('@/views/v3/JobTargetListView.vue'), meta: { title: 'Job targets' } },
+      { path: 'job-targets/create', name: 'JobTargetCreate', component: () => import('@/views/v3/JobTargetEditView.vue'), meta: { title: 'Create job target' } },
+      { path: 'job-targets/:id/edit', name: 'JobTargetEdit', component: () => import('@/views/v3/JobTargetEditView.vue'), meta: { title: 'Edit job target' } },
+      { path: 'job-targets/:id/analysis', name: 'JobTargetAnalysis', component: () => import('@/views/v3/JobTargetAnalysisView.vue'), meta: { title: 'JD analysis' } },
+      { path: 'resumes', name: 'ResumeList', component: () => import('@/views/resume/ResumeListView.vue'), meta: { title: 'Resumes' } },
+      { path: 'resumes/create', name: 'ResumeCreate', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: 'Create resume' } },
+      { path: 'resumes/:id/edit', name: 'ResumeEdit', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: 'Edit resume' } },
+      { path: 'resumes/:id/versions', name: 'ResumeVersionsByResume', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: 'Resume versions' } },
+      { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: 'Resume match' } },
+      { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: 'Resume match detail' } },
+      { path: 'skill-profile', name: 'SkillProfile', component: () => import('@/views/v3/SkillProfileView.vue'), meta: { title: 'Skill profile' } },
+      { path: 'interviews/create', name: 'InterviewCreate', component: () => import('@/views/interview/InterviewCreateView.vue'), meta: { title: 'Create interview' } },
+      { path: 'interviews/room/:id', name: 'InterviewRoom', component: () => import('@/views/interview/InterviewRoomView.vue'), meta: { title: 'Interview room' } },
+      { path: 'interviews/history', name: 'InterviewHistory', component: () => import('@/views/interview/InterviewHistoryView.vue'), meta: { title: 'Interview history' } },
+      { path: 'interviews/:id', name: 'InterviewDetail', component: () => import('@/views/interview/InterviewDetailView.vue'), meta: { title: 'Interview detail' } },
+      { path: 'interviews/:id/report', name: 'InterviewReport', component: () => import('@/views/interview/InterviewReportView.vue'), meta: { title: 'Interview report' } },
+      { path: 'study-plans/from-gap', name: 'StudyPlansFromGap', component: () => import('@/views/v3/StudyPlanFromGapView.vue'), meta: { title: 'Gap study plan' } },
+      { path: 'study-plans', name: 'StudyPlans', component: () => import('@/views/study/StudyPlanView.vue'), meta: { title: 'Study plans' } },
+      { path: 'daily-tasks', name: 'DailyTasks', component: () => import('@/views/study/DailyTaskView.vue'), meta: { title: 'Daily tasks' } },
+      { path: 'analytics/personal', name: 'PersonalAnalytics', component: () => import('@/views/analytics/PersonalAnalyticsView.vue'), meta: { title: 'Personal analytics' } },
+      { path: 'agent/reviews', name: 'AgentReviews', component: () => import('@/views/v4/AgentReviewView.vue'), meta: { title: 'Agent reviews' } },
+      { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: 'Growth profile' } },
+      { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: 'Skill trend' } },
+      { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: 'Readiness trend' } },
+      { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: { title: 'Agent memory' } },
+      { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: 'Personal knowledge base' } },
+      { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: 'Resume versions' } },
+      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: 'Job applications' } },
+      { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: 'JobCoachAgent today' } },
+      { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: 'Agent tasks' } },
+      { path: 'agent/runs/:id', name: 'AgentRunDetail', component: () => import('@/views/agent/AgentRunDetailView.vue'), meta: { title: 'Agent run detail' } }
     ]
   },
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: '后台管理'
-    },
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Admin' },
     children: [
-      {
-        path: '',
-        name: 'AdminDashboard',
-        component: () => import('@/views/admin/AdminDashboardView.vue'),
-        meta: {
-          title: '管理首页',
-          icon: 'DataBoard',
-          affix: true,
-          requiredPermissions: ['admin:v3']
-        }
-      },
-      {
-        path: 'users',
-        name: 'AdminUsers',
-        component: () => import('@/views/admin/UserManageView.vue'),
-        meta: {
-          title: '用户管理',
-          icon: 'UserFilled',
-          requiredPermissions: ['admin:user:list']
-        }
-      },
-      {
-        path: 'roles',
-        name: 'AdminRoles',
-        component: () => import('@/views/admin/RoleManageView.vue'),
-        meta: {
-          title: '角色管理',
-          icon: 'Connection',
-          requiredPermissions: ['admin:role:list']
-        }
-      },
-      {
-        path: 'questions',
-        name: 'AdminQuestions',
-        component: () => import('@/views/admin/QuestionManageView.vue'),
-        meta: {
-          title: '题目管理',
-          icon: 'Collection',
-          requiredPermissions: ['admin:question:list']
-        }
-      },
-      {
-        path: 'ai/questions/generate',
-        name: 'AdminAiQuestionGenerate',
-        component: () => import('@/views/admin/QuestionManageView.vue'),
-        props: {
-          initialGovernanceTab: 'generate'
-        },
-        meta: {
-          title: 'AI 题目生成',
-          icon: 'Operation',
-          requiredPermissions: ['admin:question:generate']
-        }
-      },
-      {
-        path: 'question-reviews',
-        name: 'AdminQuestionReviews',
-        component: () => import('@/views/admin/QuestionManageView.vue'),
-        props: {
-          initialGovernanceTab: 'reviews'
-        },
-        meta: {
-          title: '题目审核',
-          icon: 'DataAnalysis',
-          requiredPermissions: ['admin:question:review']
-        }
-      },
-      {
-        path: 'question-duplicate-reviews',
-        name: 'AdminQuestionDuplicateReviews',
-        component: () => import('@/views/admin/QuestionManageView.vue'),
-        props: {
-          initialGovernanceTab: 'duplicates'
-        },
-        meta: {
-          title: '题目去重审核',
-          icon: 'Connection',
-          requiredPermissions: ['admin:question:dedupe']
-        }
-      },
-      {
-        path: 'question-relations',
-        name: 'AdminQuestionRelations',
-        component: () => import('@/views/admin/QuestionRelationManageView.vue'),
-        meta: {
-          title: '题目关系管理',
-          icon: 'Share',
-          requiredPermissions: ['admin:question:relation']
-        }
-      },
-      {
-        path: 'question-categories',
-        name: 'AdminQuestionCategories',
-        component: () => import('@/views/admin/QuestionCategoryManageView.vue'),
-        meta: {
-          title: '分类管理',
-          icon: 'Files',
-          requiredPermissions: ['admin:question:category']
-        }
-      },
-      {
-        path: 'question-tags',
-        name: 'AdminQuestionTags',
-        component: () => import('@/views/admin/QuestionTagManageView.vue'),
-        meta: {
-          title: '标签管理',
-          icon: 'PriceTag',
-          requiredPermissions: ['admin:question:tag']
-        }
-      },
-      {
-        path: 'question-groups',
-        name: 'AdminQuestionGroups',
-        component: () => import('@/views/admin/QuestionGroupManageView.vue'),
-        meta: {
-          title: '问题组管理',
-          icon: 'List',
-          requiredPermissions: ['admin:question:group']
-        }
-      },
-      {
-        path: 'industry-templates',
-        name: 'AdminIndustryTemplates',
-        component: () => import('@/views/admin/IndustryTemplateManageView.vue'),
-        meta: {
-          title: '行业模板',
-          icon: 'List',
-          requiredPermissions: ['admin:industry-template:list']
-        }
-      },
-      {
-        path: 'files',
-        name: 'AdminFiles',
-        component: () => import('@/views/admin/AdminFileManageView.vue'),
-        meta: {
-          title: '\u6587\u4ef6\u6cbb\u7406',
-          icon: 'Folder',
-          requiredPermissions: ['admin:file:list']
-        }
-      },
-      {
-        path: 'ai/prompts',
-        name: 'AdminAiPrompts',
-        component: () => import('@/views/admin/PromptTemplateView.vue'),
-        meta: {
-          title: 'Prompt 模板',
-          icon: 'Operation',
-          requiredPermissions: ['admin:ai:prompt:list']
-        }
-      },
-      {
-        path: 'ai/logs',
-        name: 'AdminAiLogs',
-        component: () => import('@/views/admin/AiCallLogView.vue'),
-        meta: {
-          title: 'AI 调用日志',
-          icon: 'DataAnalysis',
-          requiredPermissions: ['admin:ai:log:list']
-        }
-      },
-      {
-        path: 'system/configs',
-        name: 'AdminSystemConfigs',
-        component: () => import('@/views/admin/SystemConfigView.vue'),
-        meta: {
-          title: '系统配置',
-          icon: 'Setting',
-          requiredPermissions: ['admin:system:config:list']
-        }
-      },
-      {
-        path: 'ai/models',
-        name: 'AdminAiModels',
-        component: () => import('@/views/admin/AiModelConfigView.vue'),
-        meta: {
-          title: 'AI 模型配置',
-          icon: 'Operation',
-          requiredPermissions: ['admin:ai:model:list']
-        }
-      },
-      {
-        path: 'menus',
-        name: 'AdminMenus',
-        component: () => import('@/views/admin/MenuPermissionView.vue'),
-        meta: {
-          title: '菜单权限',
-          icon: 'Lock',
-          requiredPermissions: ['admin:menu:list']
-        }
-      },
-      {
-        path: 'notices',
-        name: 'AdminNotices',
-        component: () => import('@/views/admin/NotificationManageView.vue'),
-        meta: {
-          title: '通知管理',
-          icon: 'Bell',
-          requiredPermissions: ['admin:notice:list']
-        }
-      },
-      {
-        path: 'notifications',
-        redirect: '/admin/notices',
-        meta: {
-          hidden: true
-        }
-      },
-      {
-        path: 'operation-logs',
-        name: 'AdminOperationLogs',
-        component: () => import('@/views/admin/OperationLogView.vue'),
-        meta: {
-          title: '操作日志',
-          icon: 'Document',
-          requiredPermissions: ['admin:audit:operation-log']
-        }
-      },
-      {
-        path: 'login-logs',
-        name: 'AdminLoginLogs',
-        component: () => import('@/views/admin/LoginLogView.vue'),
-        meta: {
-          title: '登录日志',
-          icon: 'Key',
-          requiredPermissions: ['admin:audit:login-log']
-        }
-      },
-      {
-        path: 'interviews',
-        name: 'AdminInterviews',
-        component: () => import('@/views/admin/InterviewManageView.vue'),
-        meta: {
-          title: '面试记录管理',
-          icon: 'ChatDotRound',
-          requiredPermissions: ['admin:interview:list']
-        }
-      },
-      {
-        path: 'interview-reports',
-        name: 'AdminInterviewReports',
-        component: () => import('@/views/admin/InterviewReportManageView.vue'),
-        meta: {
-          title: '面试报告管理',
-          icon: 'Document',
-          requiredPermissions: ['admin:interview:report']
-        }
-      },
-      {
-        path: 'async-tasks',
-        name: 'AdminAsyncTasks',
-        component: () => import('@/views/admin/AsyncTaskView.vue'),
-        meta: {
-          title: '异步任务',
-          icon: 'Timer',
-          requiredPermissions: ['admin:task:list']
-        }
-      },
-      {
-        path: 'tasks',
-        redirect: '/admin/async-tasks',
-        meta: {
-          hidden: true
-        }
-      }
+      { path: '', name: 'AdminDashboard', component: () => import('@/views/admin/AdminDashboardView.vue'), meta: { title: 'Admin dashboard', icon: 'DataBoard', affix: true, requiredPermissions: ['admin:v3'] } },
+      { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManageView.vue'), meta: { title: 'Users', icon: 'UserFilled', requiredPermissions: ['admin:user:list'] } },
+      { path: 'roles', name: 'AdminRoles', component: () => import('@/views/admin/RoleManageView.vue'), meta: { title: 'Roles', icon: 'Connection', requiredPermissions: ['admin:role:list'] } },
+      { path: 'questions', name: 'AdminQuestions', component: () => import('@/views/admin/QuestionManageView.vue'), meta: { title: 'Questions', icon: 'Collection', requiredPermissions: ['admin:question:list'] } },
+      { path: 'ai/questions/generate', name: 'AdminAiQuestionGenerate', component: () => import('@/views/admin/QuestionManageView.vue'), props: { initialGovernanceTab: 'generate' }, meta: { title: 'AI question generation', icon: 'Operation', requiredPermissions: ['admin:question:generate'] } },
+      { path: 'question-reviews', name: 'AdminQuestionReviews', component: () => import('@/views/admin/QuestionManageView.vue'), props: { initialGovernanceTab: 'reviews' }, meta: { title: 'Question reviews', icon: 'DataAnalysis', requiredPermissions: ['admin:question:review'] } },
+      { path: 'question-duplicate-reviews', name: 'AdminQuestionDuplicateReviews', component: () => import('@/views/admin/QuestionManageView.vue'), props: { initialGovernanceTab: 'duplicates' }, meta: { title: 'Duplicate reviews', icon: 'Connection', requiredPermissions: ['admin:question:dedupe'] } },
+      { path: 'question-relations', name: 'AdminQuestionRelations', component: () => import('@/views/admin/QuestionRelationManageView.vue'), meta: { title: 'Question relations', icon: 'Share', requiredPermissions: ['admin:question:relation'] } },
+      { path: 'question-categories', name: 'AdminQuestionCategories', component: () => import('@/views/admin/QuestionCategoryManageView.vue'), meta: { title: 'Question categories', icon: 'Files', requiredPermissions: ['admin:question:category'] } },
+      { path: 'question-tags', name: 'AdminQuestionTags', component: () => import('@/views/admin/QuestionTagManageView.vue'), meta: { title: 'Question tags', icon: 'PriceTag', requiredPermissions: ['admin:question:tag'] } },
+      { path: 'question-groups', name: 'AdminQuestionGroups', component: () => import('@/views/admin/QuestionGroupManageView.vue'), meta: { title: 'Question groups', icon: 'List', requiredPermissions: ['admin:question:group'] } },
+      { path: 'industry-templates', name: 'AdminIndustryTemplates', component: () => import('@/views/admin/IndustryTemplateManageView.vue'), meta: { title: 'Industry templates', icon: 'List', requiredPermissions: ['admin:industry-template:list'] } },
+      { path: 'files', name: 'AdminFiles', component: () => import('@/views/admin/AdminFileManageView.vue'), meta: { title: 'Files', icon: 'Folder', requiredPermissions: ['admin:file:list'] } },
+      { path: 'ai/prompts', name: 'AdminAiPrompts', component: () => import('@/views/admin/PromptTemplateView.vue'), meta: { title: 'Prompt templates', icon: 'Operation', requiredPermissions: ['admin:ai:prompt:list'] } },
+      { path: 'agent/prompts', redirect: '/admin/ai/prompts', meta: { hidden: true } },
+      { path: 'ai/logs', name: 'AdminAiLogs', component: () => import('@/views/admin/AiCallLogView.vue'), meta: { title: 'AI call logs', icon: 'DataAnalysis', requiredPermissions: ['admin:ai:log:list'] } },
+      { path: 'ai/models', name: 'AdminAiModels', component: () => import('@/views/admin/AiModelConfigView.vue'), meta: { title: 'AI models', icon: 'Operation', requiredPermissions: ['admin:ai:model:list'] } },
+      { path: 'system/configs', name: 'AdminSystemConfigs', component: () => import('@/views/admin/SystemConfigView.vue'), meta: { title: 'System configs', icon: 'Setting', requiredPermissions: ['admin:system:config:list'] } },
+      { path: 'menus', name: 'AdminMenus', component: () => import('@/views/admin/MenuPermissionView.vue'), meta: { title: 'Menus', icon: 'Lock', requiredPermissions: ['admin:menu:list'] } },
+      { path: 'notices', name: 'AdminNotices', component: () => import('@/views/admin/NotificationManageView.vue'), meta: { title: 'Notices', icon: 'Bell', requiredPermissions: ['admin:notice:list'] } },
+      { path: 'notifications', redirect: '/admin/notices', meta: { hidden: true } },
+      { path: 'operation-logs', name: 'AdminOperationLogs', component: () => import('@/views/admin/OperationLogView.vue'), meta: { title: 'Operation logs', icon: 'Document', requiredPermissions: ['admin:audit:operation-log'] } },
+      { path: 'login-logs', name: 'AdminLoginLogs', component: () => import('@/views/admin/LoginLogView.vue'), meta: { title: 'Login logs', icon: 'Key', requiredPermissions: ['admin:audit:login-log'] } },
+      { path: 'interviews', name: 'AdminInterviews', component: () => import('@/views/admin/InterviewManageView.vue'), meta: { title: 'Interviews', icon: 'ChatDotRound', requiredPermissions: ['admin:interview:list'] } },
+      { path: 'interview-reports', name: 'AdminInterviewReports', component: () => import('@/views/admin/InterviewReportManageView.vue'), meta: { title: 'Interview reports', icon: 'Document', requiredPermissions: ['admin:interview:report'] } },
+      { path: 'analytics/agent', name: 'AdminAgentAnalytics', component: () => import('@/views/admin/AdminAgentAnalyticsView.vue'), meta: { title: 'Agent analytics', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:agent'] } },
+      { path: 'agent/analytics', redirect: '/admin/analytics/agent', meta: { hidden: true } },
+      { path: 'analytics/overview', redirect: '/admin/analytics/agent', meta: { hidden: true } },
+      { path: 'analytics/training', redirect: '/admin/analytics/agent', meta: { hidden: true } },
+      { path: 'analytics/ai', name: 'AdminAiOpsAnalytics', component: () => import('@/views/admin/AdminAiOpsAnalyticsView.vue'), meta: { title: 'AI Ops analytics', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:ai'] } },
+      { path: 'ai/ops', redirect: '/admin/analytics/ai', meta: { hidden: true } },
+      { path: 'analytics/metrics', name: 'AdminAnalyticsMetrics', component: () => import('@/views/admin/AdminAnalyticsMetricsView.vue'), meta: { title: 'Metric dictionary', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:agent'] } },
+      { path: 'analytics/jobs', name: 'AdminAnalyticsJobs', component: () => import('@/views/admin/AdminAnalyticsJobsView.vue'), meta: { title: 'Analytics jobs', icon: 'Timer', requiredPermissions: ['admin:analytics:agent'] } },
+      { path: 'ai/prompt-regression', name: 'AdminPromptRegression', component: () => import('@/views/admin/AdminPromptRegressionView.vue'), meta: { title: 'Prompt regression', icon: 'Operation', requiredPermissions: ['admin:ai:prompt:list'] } },
+      { path: 'agent/runs', name: 'AdminAgentRuns', component: () => import('@/views/admin/AdminAgentRunView.vue'), meta: { title: 'Agent runs', icon: 'DataAnalysis', requiredPermissions: ['admin:agent:run:list'] } },
+      { path: 'agent/tasks', name: 'AdminAgentTasks', component: () => import('@/views/admin/AdminAgentTaskView.vue'), meta: { title: 'Agent tasks', icon: 'Timer', requiredPermissions: ['admin:agent:task:list'] } },
+      { path: 'async-tasks', name: 'AdminAsyncTasks', component: () => import('@/views/admin/AsyncTaskView.vue'), meta: { title: 'Async tasks', icon: 'Timer', requiredPermissions: ['admin:task:list'] } },
+      { path: 'tasks', redirect: '/admin/async-tasks', meta: { hidden: true } }
     ]
   },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/404'
-  }
+  { path: '/:pathMatch(.*)*', redirect: '/404' }
 ]
