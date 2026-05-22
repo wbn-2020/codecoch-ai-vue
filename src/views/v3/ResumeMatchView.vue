@@ -58,6 +58,22 @@
           </div>
         </el-form>
 
+        <div v-if="matchSseStatus !== 'idle' || matchSseEvents.length" class="match-stream">
+          <div class="match-stream__head">
+            <span class="cc-badge" :class="sseBadgeClass(matchSseStatus)">
+              <i class="cc-badge__dot" />
+              {{ sseStatusLabel(matchSseStatus) }}
+            </span>
+            <strong>{{ latestMatchSseMessage }}</strong>
+          </div>
+          <p v-if="matchSseError">{{ matchSseError }}</p>
+          <div v-if="recentMatchSseEvents.length" class="match-stream__events">
+            <span v-for="item in recentMatchSseEvents" :key="item.key">
+              {{ item.message || item.event }}
+            </span>
+          </div>
+        </div>
+
         <AppState
           v-if="!loading && (!resumes.length || !targets.length)"
           type="empty"
@@ -96,18 +112,29 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { Crosshair, FileText, GitCompareArrows, RefreshCw, Sparkles } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import { getResumesApi } from '@/api/resume'
-import { createResumeJobMatchReportApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
+import {
+  createResumeJobMatchReportApi,
+  getResumeJobMatchReportsApi,
+  streamCreateResumeJobMatchReportApi
+} from '@/api/resumeJobMatch'
 import AppState from '@/components/common/AppState.vue'
+import { useSseState } from '@/composables/useSseState'
 import type { TargetJobVO } from '@/types/jobTarget'
 import type { ResumeVO } from '@/types/resume'
-import type { ResumeJobMatchReportListVO } from '@/types/resumeJobMatch'
+import type {
+  ResumeJobMatchCreateDTO,
+  ResumeJobMatchReportListVO,
+  ResumeJobMatchSseEvent,
+  ResumeJobMatchSseEventType
+} from '@/types/resumeJobMatch'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
+import type { StreamSseHandle } from '@/utils/sse'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +147,18 @@ const resumes = ref<ResumeVO[]>([])
 const targets = ref<TargetJobVO[]>([])
 const currentTarget = ref<TargetJobVO | null>(null)
 const reports = ref<ResumeJobMatchReportListVO[]>([])
+const {
+  status: matchSseStatus,
+  error: matchSseError,
+  events: matchSseEvents,
+  reset: resetMatchSse,
+  setConnecting: setMatchSseConnecting,
+  setDone: setMatchSseDone,
+  setError: setMatchSseError,
+  addEvent: addMatchSseEvent
+} = useSseState()
+let matchSseHandle: StreamSseHandle | null = null
+let navigatingToReport = false
 
 const form = reactive({
   resumeId: undefined as number | undefined,
@@ -128,12 +167,34 @@ const form = reactive({
 })
 
 const canSubmit = computed(() => Boolean(form.resumeId && form.targetJobId && !submitting.value))
+const recentMatchSseEvents = computed(() => matchSseEvents.value.slice(-3))
+const latestMatchSseMessage = computed(() => {
+  const recent = recentMatchSseEvents.value
+  const latest = recent[recent.length - 1]
+  return latest?.message || '正在提交简历岗位匹配任务'
+})
 
 const statusTag = (status?: string) => {
   if (status === 'SUCCESS') return 'success'
   if (status === 'FAILED') return 'danger'
   if (status === 'PROCESSING' || status === 'PENDING') return 'warning'
   return 'info'
+}
+
+const sseStatusLabel = (status: string) => {
+  if (status === 'connecting') return '连接中'
+  if (status === 'streaming') return '生成中'
+  if (status === 'done') return '已提交'
+  if (status === 'error') return '失败'
+  return '待开始'
+}
+
+const sseBadgeClass = (status: string) => {
+  if (status === 'connecting') return 'cc-badge--thinking'
+  if (status === 'streaming') return 'cc-badge--streaming'
+  if (status === 'done') return 'cc-badge--success'
+  if (status === 'error') return 'cc-badge--danger'
+  return 'cc-badge--idle'
 }
 
 const loadInitial = async () => {
@@ -172,23 +233,97 @@ const loadReports = async () => {
 
 const submitMatch = async () => {
   if (!form.resumeId || !form.targetJobId) return
+  const payload: ResumeJobMatchCreateDTO = {
+    resumeId: form.resumeId,
+    targetJobId: form.targetJobId,
+    forceRefresh: form.forceRefresh
+  }
+  startMatchSse(payload)
+}
+
+const routeToReport = async (reportId?: number, payload?: ResumeJobMatchCreateDTO) => {
+  if (!reportId || !payload || navigatingToReport) return
+  navigatingToReport = true
+  await router.push({
+    path: `/resume-match/${reportId}`,
+    query: { resumeId: payload.resumeId, targetJobId: payload.targetJobId }
+  })
+}
+
+const runMatchFallback = async (payload: ResumeJobMatchCreateDTO) => {
   submitting.value = true
   try {
-    const result = await createResumeJobMatchReportApi({
-      resumeId: form.resumeId,
-      targetJobId: form.targetJobId,
-      forceRefresh: form.forceRefresh
-    })
-    ElMessage.success(result.status === 'FAILED' ? '报告生成返回失败状态，请查看详情' : '匹配报告已提交')
-    await router.push({ path: `/resume-match/${result.reportId}`, query: { resumeId: form.resumeId, targetJobId: form.targetJobId } })
+    const result = await createResumeJobMatchReportApi(payload)
+    setMatchSseDone()
+    ElMessage.success(result.status === 'FAILED' ? '报告生成返回失败状态，请查看详情' : '匹配报告任务已提交')
+    await routeToReport(result.reportId, payload)
+  } catch (error) {
+    const message = getErrorMessage(error, '提交匹配报告失败。')
+    setMatchSseError(message)
+    ElMessage.error(message)
   } finally {
     submitting.value = false
   }
 }
 
+const applyMatchSseEvent = (
+  event: ResumeJobMatchSseEventType,
+  data: ResumeJobMatchSseEvent | undefined,
+  payload: ResumeJobMatchCreateDTO
+) => {
+  const message = data?.message || data?.content || data?.stage || event
+  addMatchSseEvent(event, message)
+  const reportId = data?.result?.reportId || data?.bizId
+  if ((event === 'result' || event === 'done') && reportId) {
+    setMatchSseDone()
+    ElMessage.success('匹配报告任务已提交')
+    void routeToReport(reportId, payload)
+  }
+}
+
+const stopMatchSse = () => {
+  matchSseHandle?.abort()
+  matchSseHandle = null
+}
+
+const startMatchSse = (payload: ResumeJobMatchCreateDTO) => {
+  stopMatchSse()
+  resetMatchSse()
+  navigatingToReport = false
+  setMatchSseConnecting()
+  submitting.value = true
+  matchSseHandle = streamCreateResumeJobMatchReportApi(
+    payload,
+    {
+      onEvent: (event, data) => applyMatchSseEvent(event, data, payload),
+      onError: (error, hasStarted) => {
+        matchSseHandle = null
+        if (!hasStarted) {
+          addMatchSseEvent('fallback', 'SSE 未启动，切换同步提交')
+          ElMessage.warning('匹配生成流未启动，已回退到同步提交')
+          void runMatchFallback(payload)
+          return
+        }
+        submitting.value = false
+        setMatchSseError(error, true)
+        ElMessage.error(error.message || '匹配生成流中断')
+      },
+      onDone: () => {
+        matchSseHandle = null
+        submitting.value = false
+        if (matchSseStatus.value !== 'error') {
+          setMatchSseDone()
+        }
+      }
+    }
+  )
+  void matchSseHandle.finished.catch(() => undefined)
+}
+
 onMounted(async () => {
   await Promise.all([loadInitial(), loadReports()])
 })
+onBeforeUnmount(stopMatchSse)
 </script>
 
 <style scoped lang="scss">
@@ -205,6 +340,13 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .section-head { justify-content: space-between; margin-bottom: 18px; }
 .full { width: 100%; }
 .submit-row { flex-wrap: wrap; margin-top: 18px; }
+.match-stream { display: grid; gap: 10px; margin-top: 18px; padding: 12px; border: 1px solid rgba(99, 102, 241, 0.24); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.match-stream p { margin: 0; color: #fca5a5; font-size: 12px; }
+.match-stream__head, .match-stream__events { display: flex; align-items: center; gap: 8px; }
+.match-stream__head { align-items: flex-start; flex-direction: column; }
+.match-stream__head strong { color: #dbeafe; font-size: 13px; line-height: 1.5; }
+.match-stream__events { flex-wrap: wrap; }
+.match-stream__events span { max-width: 100%; padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); color: var(--app-text-muted); font-size: 11px; overflow-wrap: anywhere; }
 .report-list { min-height: 220px; display: grid; gap: 12px; }
 .report-card { display: grid; grid-template-columns: minmax(0, 1fr) auto 54px; gap: 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.34); color: var(--app-text); text-align: left; cursor: pointer; }
 .report-card strong, .report-card small { display: block; overflow-wrap: anywhere; }

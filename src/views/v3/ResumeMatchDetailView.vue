@@ -22,6 +22,17 @@
       <section v-if="report.status === 'FAILED'" class="content-panel">
         <el-alert type="error" show-icon :closable="false" title="后端生成失败" :description="report.errorMessage || '接口返回 FAILED，但未给出失败原因。'" />
       </section>
+      <section v-else-if="isTrackingReport" class="content-panel report-tracker">
+        <div>
+          <span class="cc-badge cc-badge--streaming">
+            <i class="cc-badge__dot" />
+            {{ report.status }}
+          </span>
+          <h2>匹配报告生成中</h2>
+          <p>报告任务已进入后端异步链路，页面会自动追踪终态并刷新报告详情。</p>
+        </div>
+        <el-button :loading="loading" @click="loadReport">立即刷新</el-button>
+      </section>
 
       <section class="score-grid">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
@@ -81,7 +92,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, FileChartColumn, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
-import { computed, defineComponent, h, onMounted, ref } from 'vue'
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
@@ -96,8 +107,13 @@ const loading = ref(false)
 const profileGenerating = ref(false)
 const loadError = ref('')
 const report = ref<ResumeJobMatchReportDetailVO | null>(null)
+let reportPollTimer: ReturnType<typeof setTimeout> | undefined
 
 const reportId = computed(() => Number(route.params.id) || 0)
+const isTrackingReport = computed(() => {
+  const status = report.value?.status
+  return status === 'PENDING' || status === 'PROCESSING'
+})
 const scoreCards = computed(() => [
   { label: '综合匹配', value: report.value?.overallScore },
   { label: '技术栈', value: report.value?.techStackScore },
@@ -124,21 +140,47 @@ const DataBlock = defineComponent({
   }
 })
 
-const loadReport = async () => {
+const loadReport = async (silent = false) => {
   if (!reportId.value) {
     loadError.value = '报告 ID 无效。'
     return
   }
-  loading.value = true
-  loadError.value = ''
+  if (!silent) {
+    loading.value = true
+    loadError.value = ''
+  }
   try {
     report.value = await getResumeJobMatchReportDetailApi(reportId.value)
+    loadError.value = ''
+    if (isTrackingReport.value) {
+      scheduleReportPoll()
+    } else {
+      stopReportPoll()
+    }
   } catch (error) {
-    report.value = null
-    loadError.value = getErrorMessage(error, '读取匹配报告详情失败。')
+    if (!silent) {
+      report.value = null
+      loadError.value = getErrorMessage(error, '读取匹配报告详情失败。')
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
+}
+
+const stopReportPoll = () => {
+  if (reportPollTimer) {
+    clearTimeout(reportPollTimer)
+    reportPollTimer = undefined
+  }
+}
+
+const scheduleReportPoll = () => {
+  stopReportPoll()
+  reportPollTimer = setTimeout(() => {
+    void loadReport(true)
+  }, 2500)
 }
 
 const generateProfile = async () => {
@@ -154,6 +196,7 @@ const generateProfile = async () => {
 }
 
 onMounted(loadReport)
+onBeforeUnmount(stopReportPoll)
 </script>
 
 <style scoped lang="scss">
@@ -166,6 +209,9 @@ h1, h2, h3, p { margin: 0; }
 h1 { margin-top: 10px; font-size: 30px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .content-panel { padding: 20px; min-width: 0; }
+.report-tracker { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.report-tracker h2 { margin-top: 12px; font-size: 18px; }
+.report-tracker p { max-width: 640px; font-size: 13px; }
 .score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 14px; }
 .score-card { padding: 16px; }
 .score-card span { color: var(--app-text-muted); font-size: 13px; }
@@ -178,5 +224,5 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
 @media (max-width: 1080px) { .score-grid, .detail-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 760px) { .page-hero, .detail-grid, .score-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } }
+@media (max-width: 760px) { .page-hero, .detail-grid, .score-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } .report-tracker { align-items: flex-start; flex-direction: column; } }
 </style>
