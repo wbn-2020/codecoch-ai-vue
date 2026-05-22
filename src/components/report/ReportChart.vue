@@ -8,10 +8,10 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { StageReportVO } from '@/types/interview'
+import echarts, { type ECharts } from '@/utils/echarts'
 
 const props = defineProps<{
   stages?: StageReportVO[]
@@ -19,8 +19,8 @@ const props = defineProps<{
 
 const radarRef = ref<HTMLDivElement>()
 const barRef = ref<HTMLDivElement>()
-let radarChart: echarts.ECharts | null = null
-let barChart: echarts.ECharts | null = null
+let radarChart: ECharts | null = null
+let barChart: ECharts | null = null
 
 const baseTextStyle = {
   color: '#94a3b8',

@@ -24,7 +24,7 @@
         <div class="app-layout__header-actions">
           <div class="command-search" aria-hidden="true">
             <Search :size="15" />
-            <span>Search admin console</span>
+            <span>搜索管理后台</span>
           </div>
           <el-tooltip content="通知中心 V3 接入" placement="bottom">
             <button class="icon-button icon-button--ghost" type="button" aria-label="通知中心" disabled>
@@ -116,11 +116,16 @@ const handleCommand = async (command: string) => {
 }
 
 .app-layout__aside {
+  position: sticky;
+  top: 0;
   width: var(--app-sidebar-width);
+  height: 100vh;
   overflow-x: hidden;
+  overflow-y: auto;
   border-right: 1px solid var(--app-border);
   background: rgba(2, 6, 23, 0.9);
   transition: width 0.2s ease;
+  scrollbar-width: thin;
 }
 
 .admin-layout.is-collapsed {

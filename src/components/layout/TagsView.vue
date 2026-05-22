@@ -26,7 +26,9 @@
     >
       <button type="button" @click="closeCurrent">关闭当前</button>
       <button type="button" @click="closeOthers">关闭其他</button>
-      <button type="button" @click="closeAll">关闭全部</button>
+      <button type="button" @click="closeLeftTarget">关闭左侧</button>
+      <button type="button" @click="closeRightTarget">关闭右侧</button>
+      <button type="button" @click="closeAll">全部关闭</button>
     </div>
   </div>
 </template>
@@ -58,6 +60,9 @@ const tagsStore = useTagsViewStore()
 
 const displayedTags = computed(() => tagsStore.tagsByScope(props.scope))
 const homeTag = computed(() => getHomeTag(props.scope))
+const currentTag = computed(() =>
+  displayedTags.value.find((item) => item.path === route.path) || homeTag.value
+)
 
 const menu = reactive({
   visible: false,
@@ -105,14 +110,21 @@ const closeCurrent = async () => {
 }
 
 const closeOthers = async () => {
-  const target =
-    menu.tag || displayedTags.value.find((item) => item.path === route.path)
-  if (!target) {
-    closeMenu()
-    return
-  }
+  const target = menu.tag || currentTag.value
   tagsStore.closeOtherTags(target.path)
   await router.push(target.fullPath || target.path)
+  closeMenu()
+}
+
+const closeLeftTarget = () => {
+  const target = menu.tag || currentTag.value
+  tagsStore.closeLeftTags(target.path)
+  closeMenu()
+}
+
+const closeRightTarget = () => {
+  const target = menu.tag || currentTag.value
+  tagsStore.closeRightTags(target.path)
   closeMenu()
 }
 
@@ -126,9 +138,16 @@ const closeAll = async () => {
 <style scoped lang="scss">
 .tags-view {
   position: relative;
+  display: flex;
+  align-items: center;
   height: 38px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
+}
+
+.tags-view :deep(.el-scrollbar) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tags-view__inner {

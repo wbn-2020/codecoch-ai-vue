@@ -31,7 +31,10 @@
 
     <section class="content-panel" v-loading="loading">
       <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
-      <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" description="当前来源还没有推荐题，可以先生成推荐批次。" />
+      <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" description="当前来源还没有推荐题，可以先生成推荐批次。">
+        <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">生成推荐</el-button>
+        <el-button @click="router.push('/dashboard/v3')">回到仪表盘</el-button>
+      </AppState>
       <div v-else class="question-list">
         <button
           v-for="item in items"

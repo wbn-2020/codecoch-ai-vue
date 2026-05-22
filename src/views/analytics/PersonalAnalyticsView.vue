@@ -71,7 +71,6 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import { CheckCircle2, Clock3, LineChart, RefreshCw, Sparkles, Target, Timer } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -82,6 +81,7 @@ import {
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import type { MetricPointVO, PersonalAgentOverviewVO, TrendPointVO } from '@/types/analytics'
+import echarts, { type ECharts } from '@/utils/echarts'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -90,7 +90,7 @@ const overview = ref<PersonalAgentOverviewVO>()
 const trend = ref<TrendPointVO[]>([])
 const skillDistribution = ref<MetricPointVO[]>([])
 const trendChartRef = ref<HTMLElement>()
-let trendChart: echarts.ECharts | null = null
+let trendChart: ECharts | null = null
 
 const rangeOptions = [
   { label: '近 7 天', value: 7 },

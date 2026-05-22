@@ -35,7 +35,10 @@
               <strong>{{ plan.planTitle || `学习计划 #${plan.id}` }}</strong>
               <span>{{ plan.doneTaskCount || 0 }}/{{ plan.totalTaskCount || 0 }} 已完成</span>
             </button>
-            <AppState v-if="!plansLoading && !plans.length" type="empty" title="暂无学习计划" description="可以先从面试报告或能力短板生成学习计划。" />
+            <AppState v-if="!plansLoading && !plans.length" type="empty" title="暂无学习计划" description="可以先从面试报告或能力短板生成学习计划。">
+              <el-button type="primary" @click="router.push('/study-plans')">创建学习计划</el-button>
+              <el-button @click="router.push('/skill-profile')">查看能力画像</el-button>
+            </AppState>
           </div>
         </div>
       </section>
@@ -53,7 +56,9 @@
           <AppState v-if="loadError" type="error" title="任务加载失败" :description="loadError">
             <el-button type="primary" @click="loadDailyView">重试</el-button>
           </AppState>
-          <AppState v-else-if="!selectedPlanId" type="empty" title="请选择学习计划" description="选择左侧计划后查看对应日期的任务。" />
+          <AppState v-else-if="!selectedPlanId" type="empty" title="请选择学习计划" description="选择左侧计划后查看对应日期的任务。">
+            <el-button type="primary" @click="router.push('/study-plans')">学习计划</el-button>
+          </AppState>
           <div v-else v-loading="loading">
             <div class="metric-grid">
               <div class="metric"><span>总任务</span><strong>{{ dailyView?.totalTaskCount ?? 0 }}</strong></div>
@@ -82,7 +87,9 @@
                   <el-button size="small" plain :disabled="task.taskStatus === 'SKIPPED'" @click="changeTask(task.id, 'skip')">跳过</el-button>
                 </div>
               </article>
-              <AppState v-if="!tasks.length" type="empty" title="当日暂无任务" description="可切换日期或到学习计划详情查看全部任务。" />
+              <AppState v-if="!tasks.length" type="empty" title="当日暂无任务" description="可切换日期或到学习计划详情查看全部任务。">
+                <el-button @click="router.push('/study-plans')">查看学习计划</el-button>
+              </AppState>
             </div>
           </div>
         </div>

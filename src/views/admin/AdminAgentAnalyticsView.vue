@@ -68,13 +68,13 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import { Activity, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { getAdminAgentOverviewApi, getAdminAgentTasksApi, getAdminAgentTrendApi } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import type { AdminAgentOverviewVO, AdminAgentTaskStatsVO, MetricPointVO, TrendPointVO } from '@/types/analytics'
+import echarts, { type ECharts, type EChartsOption } from '@/utils/echarts'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -92,7 +92,7 @@ const trend = ref<TrendPointVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 const typeChartRef = ref<HTMLElement>()
 const priorityChartRef = ref<HTMLElement>()
-let charts: echarts.ECharts[] = []
+let charts: ECharts[] = []
 
 const rangeOptions = [
   { label: '近 7 天', value: 7 },
@@ -119,7 +119,7 @@ const disposeCharts = () => {
   charts = []
 }
 
-const pieOption = (title: string, data: MetricPointVO[]): echarts.EChartsOption => ({
+const pieOption = (title: string, data: MetricPointVO[]): EChartsOption => ({
   color: ['#60a5fa', '#34d399', '#f59e0b', '#f87171', '#a78bfa', '#22d3ee'],
   tooltip: { trigger: 'item' },
   legend: { bottom: 0, textStyle: { color: '#94a3b8' } },
