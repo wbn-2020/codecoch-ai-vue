@@ -72,6 +72,22 @@
             </el-button>
           </div>
 
+          <div v-if="parseSseStatus !== 'idle' || parseSseEvents.length" class="sse-progress">
+            <div class="sse-progress__head">
+              <span class="cc-badge" :class="sseBadgeClass(parseSseStatus)">
+                <i class="cc-badge__dot" />
+                {{ sseStatusLabel(parseSseStatus) }}
+              </span>
+              <strong>{{ latestParseSseMessage }}</strong>
+            </div>
+            <p v-if="parseSseError">{{ parseSseError }}</p>
+            <div v-if="recentParseSseEvents.length" class="sse-progress__events">
+              <span v-for="item in recentParseSseEvents" :key="item.key">
+                {{ item.message || item.event }}
+              </span>
+            </div>
+          </div>
+
           <el-alert
             v-if="target?.parseErrorMessage || analysis?.parseErrorMessage"
             class="side-alert"
@@ -155,17 +171,26 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Files, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
   getJobDescriptionAnalysisApi,
   getJobTargetDetailApi,
-  parseJobDescriptionApi
+  parseJobDescriptionApi,
+  streamJobDescriptionParseApi
 } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
-import type { JobDescriptionAnalysisVO, TargetJobVO } from '@/types/jobTarget'
+import { useSseState } from '@/composables/useSseState'
+import type {
+  JobDescriptionAnalysisVO,
+  JobDescriptionParseDTO,
+  JobTargetParseSseEvent,
+  JobTargetParseSseEventType,
+  TargetJobVO
+} from '@/types/jobTarget'
 import { formatDateTime } from '@/utils/format'
+import type { StreamSseHandle } from '@/utils/sse'
 
 import JobTargetAnalysisPanel from './components/JobTargetAnalysisPanel.vue'
 import JobTargetStatusTag from './components/JobTargetStatusTag.vue'
@@ -177,6 +202,17 @@ const parsing = ref(false)
 const loadError = ref('')
 const target = ref<TargetJobVO | null>(null)
 const analysis = ref<JobDescriptionAnalysisVO | null>(null)
+const {
+  status: parseSseStatus,
+  error: parseSseError,
+  events: parseSseEvents,
+  reset: resetParseSse,
+  setConnecting: setParseSseConnecting,
+  setDone: setParseSseDone,
+  setError: setParseSseError,
+  addEvent: addParseSseEvent
+} = useSseState()
+let parseSseHandle: StreamSseHandle | null = null
 
 const targetId = computed(() => {
   const raw = route.params.id
@@ -187,6 +223,12 @@ const targetId = computed(() => {
 const targetSubtitle = computed(() => {
   if (!target.value) return '读取岗位详情后展示 JD 原文、解析状态和结构化分析结果。'
   return `${target.value.companyName || '--'} · ${target.value.jobLevel || '--'}`
+})
+const recentParseSseEvents = computed(() => parseSseEvents.value.slice(-3))
+const latestParseSseMessage = computed(() => {
+  const recent = recentParseSseEvents.value
+  const latest = recent[recent.length - 1]
+  return latest?.message || '等待 DeepSeek 返回 JD 解析进度'
 })
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -220,6 +262,87 @@ const loadAll = async () => {
   }
 }
 
+const sseStatusLabel = (status: string) => {
+  if (status === 'connecting') return '连接中'
+  if (status === 'streaming') return '解析中'
+  if (status === 'done') return '已完成'
+  if (status === 'error') return '失败'
+  return '待开始'
+}
+
+const sseBadgeClass = (status: string) => {
+  if (status === 'connecting') return 'cc-badge--thinking'
+  if (status === 'streaming') return 'cc-badge--streaming'
+  if (status === 'done') return 'cc-badge--success'
+  if (status === 'error') return 'cc-badge--danger'
+  return 'cc-badge--idle'
+}
+
+const stopParseSse = () => {
+  parseSseHandle?.abort()
+  parseSseHandle = null
+}
+
+const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => {
+  try {
+    analysis.value = await parseJobDescriptionApi(id, payload)
+    setParseSseDone()
+    ElMessage.success(analysis.value.parseStatus === 'FAILED' ? 'JD 解析已返回失败状态' : 'JD 解析已完成')
+    await loadAll()
+  } catch (error) {
+    const message = getErrorMessage(error, 'JD 解析失败，请稍后重试。')
+    setParseSseError(message)
+    ElMessage.error(message)
+  } finally {
+    parsing.value = false
+  }
+}
+
+const applyParseSseEvent = (event: JobTargetParseSseEventType, data?: JobTargetParseSseEvent) => {
+  const message = data?.message || data?.content || data?.stage || event
+  addParseSseEvent(event, message)
+  if (data?.result) {
+    analysis.value = data.result
+  }
+  if (event === 'done') {
+    setParseSseDone()
+  }
+}
+
+const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
+  stopParseSse()
+  resetParseSse()
+  setParseSseConnecting()
+  parsing.value = true
+  parseSseHandle = streamJobDescriptionParseApi(
+    id,
+    payload,
+    {
+      onEvent: applyParseSseEvent,
+      onError: (error, hasStarted) => {
+        parseSseHandle = null
+        if (!hasStarted) {
+          addParseSseEvent('fallback', 'SSE 未启动，切换同步解析')
+          ElMessage.warning('JD 解析流未启动，已回退到同步接口')
+          void runParseFallback(id, payload)
+          return
+        }
+        parsing.value = false
+        setParseSseError(error, true)
+        ElMessage.error(error.message || 'JD 解析流中断')
+      },
+      onDone: () => {
+        parseSseHandle = null
+        parsing.value = false
+        if (parseSseStatus.value === 'error') return
+        setParseSseDone()
+        void loadAll().then(() => ElMessage.success('JD 解析已完成'))
+      }
+    }
+  )
+  void parseSseHandle.finished.catch(() => undefined)
+}
+
 const handleParse = async () => {
   if (!target.value) return
   if (!target.value.jdText) {
@@ -238,14 +361,7 @@ const handleParse = async () => {
       return
     }
   }
-  parsing.value = true
-  try {
-    analysis.value = await parseJobDescriptionApi(target.value.id, { forceRefresh })
-    ElMessage.success(analysis.value.parseStatus === 'FAILED' ? 'JD 解析已返回失败状态' : 'JD 解析已完成')
-    await loadAll()
-  } finally {
-    parsing.value = false
-  }
+  startParseSse(target.value.id, { forceRefresh })
 }
 
 const goResumeMatch = () => {
@@ -266,6 +382,7 @@ watch(
 )
 
 onMounted(loadAll)
+onBeforeUnmount(stopParseSse)
 </script>
 
 <style scoped lang="scss">
@@ -377,6 +494,56 @@ onMounted(loadAll)
 
 .side-alert {
   margin-top: 16px;
+}
+
+.sse-progress {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.42);
+
+  p {
+    margin: 0;
+    color: #fca5a5;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.sse-progress__head,
+.sse-progress__events {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sse-progress__head {
+  align-items: flex-start;
+  flex-direction: column;
+
+  strong {
+    color: #dbeafe;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.sse-progress__events {
+  flex-wrap: wrap;
+
+  span {
+    max-width: 100%;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--app-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
 }
 
 .state-wrap {

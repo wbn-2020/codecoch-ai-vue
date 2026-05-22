@@ -79,6 +79,17 @@ export interface AdminAnalyticsMetricDefinitionVO {
   updatedAt?: string
 }
 
+export interface AdminAnalyticsMetricSaveDTO {
+  id?: number
+  metricCode?: string
+  metricName?: string
+  category?: string
+  definition?: string
+  dataSource?: string
+  refreshFrequency?: string
+  enabled?: number
+}
+
 export interface AdminAnalyticsJobLogVO {
   id: number
   jobCode?: string
@@ -92,6 +103,40 @@ export interface AdminAnalyticsJobLogVO {
   outputJson?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AnalyticsJobRunDTO {
+  jobCode?: string
+  jobName?: string
+  statDate?: string
+  userIds?: number[]
+  targetJobId?: number
+  taskCount?: number
+  maxTotalMinutes?: number
+}
+
+export interface AgentFeedbackStatsVO {
+  totalFeedbackCount?: number
+  adoptedCount?: number
+  ignoredCount?: number
+  likedCount?: number
+  dislikedCount?: number
+  adoptionRate?: number
+  typeDistribution?: Array<{
+    feedbackType?: string
+    count?: number
+  }>
+}
+
+export interface AdminAnalyticsOverviewVO {
+  agent?: AdminAgentOverviewVO
+  ai?: AdminAiOverviewVO
+  feedback?: AgentFeedbackStatsVO
+}
+
+export interface AdminAnalyticsTrainingVO {
+  taskStats?: AdminAgentTaskStatsVO
+  agentTrend?: TrendPointVO[]
 }
 
 export interface AdminAnalyticsDictionaryQuery {
@@ -124,6 +169,15 @@ export interface PromptRegressionCaseVO {
   updatedAt?: string
 }
 
+export interface PromptRegressionCaseSaveDTO {
+  id?: number
+  caseName?: string
+  promptType?: string
+  inputJson?: string
+  expectedSchemaJson?: string
+  enabled?: number
+}
+
 export interface PromptRegressionResultVO {
   id: number
   caseId?: number
@@ -140,6 +194,7 @@ export interface PromptRegressionQuery {
   pageNo?: number
   pageNum?: number
   pageSize?: number
+  caseId?: number
   promptType?: string
   enabled?: number | ''
 }

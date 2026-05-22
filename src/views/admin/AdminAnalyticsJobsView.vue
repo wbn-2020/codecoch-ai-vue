@@ -7,6 +7,7 @@
         <p class="admin-hero__desc">Inspect V4 aggregation job logs and rerun a failed or stale job when the backend exposes the rerun API.</p>
       </div>
       <div class="admin-hero__actions">
+        <el-button v-permission="'admin:analytics:job:run'" type="primary" @click="openManualRun">Run daily plan</el-button>
         <el-button :loading="loading" @click="fetchJobs">Refresh</el-button>
       </div>
     </section>
@@ -48,6 +49,11 @@
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
             <el-table-column prop="errorMessage" label="Error" min-width="220" show-overflow-tooltip />
+            <el-table-column label="Output" width="110">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openOutput(row.outputJson)">View</el-button>
+              </template>
+            </el-table-column>
             <el-table-column prop="startedAt" label="Started" width="180" />
             <el-table-column prop="finishedAt" label="Finished" width="180" />
             <el-table-column label="Action" width="120" fixed="right">
@@ -73,6 +79,36 @@
         </div>
       </template>
     </section>
+
+    <el-dialog v-model="manualDialogVisible" title="Run agent daily plan aggregation" width="620px">
+      <el-form :model="manualForm" label-position="top">
+        <div class="form-grid">
+          <el-form-item label="Stat date">
+            <el-date-picker v-model="manualForm.statDate" type="date" value-format="YYYY-MM-DD" placeholder="Select date" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="Target job ID">
+            <el-input-number v-model="manualForm.targetJobId" :min="1" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="Task count">
+            <el-input-number v-model="manualForm.taskCount" :min="1" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="Max total minutes">
+            <el-input-number v-model="manualForm.maxTotalMinutes" :min="1" controls-position="right" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="User IDs">
+          <el-input v-model.trim="manualUserIds" placeholder="Comma separated, optional" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualDialogVisible = false">Cancel</el-button>
+        <el-button v-permission="'admin:analytics:job:run'" type="primary" :loading="manualRunning" @click="runDailyPlan">Run</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="outputDialogVisible" title="Job output" width="720px">
+      <pre class="json-preview">{{ outputDialogContent || '--' }}</pre>
+    </el-dialog>
   </div>
 </template>
 
@@ -80,7 +116,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAdminAnalyticsJobsApi, rerunAdminAnalyticsJobApi } from '@/api/analytics'
+import { getAdminAnalyticsJobsApi, rerunAdminAnalyticsJobApi, runAdminAnalyticsDailyPlanApi } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsJobLogVO, AdminAnalyticsJobQuery } from '@/types/analytics'
@@ -91,12 +127,24 @@ const errorMessage = ref('')
 const jobs = ref<AdminAnalyticsJobLogVO[]>([])
 const total = ref(0)
 const rerunningId = ref<number>()
+const manualDialogVisible = ref(false)
+const manualRunning = ref(false)
+const manualUserIds = ref('')
+const outputDialogVisible = ref(false)
+const outputDialogContent = ref('')
 
 const query = reactive<AdminAnalyticsJobQuery>({
   pageNo: 1,
   pageSize: 10,
   jobCode: '',
   status: ''
+})
+
+const manualForm = reactive({
+  statDate: '',
+  targetJobId: undefined as number | undefined,
+  taskCount: undefined as number | undefined,
+  maxTotalMinutes: undefined as number | undefined
 })
 
 const getErrorMessage = (error: unknown) => {
@@ -137,8 +185,54 @@ const handleReset = () => {
   fetchJobs()
 }
 
+const openManualRun = () => {
+  Object.assign(manualForm, {
+    statDate: '',
+    targetJobId: undefined,
+    taskCount: undefined,
+    maxTotalMinutes: undefined
+  })
+  manualUserIds.value = ''
+  manualDialogVisible.value = true
+}
+
+const parseUserIds = () =>
+  manualUserIds.value
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0)
+
+const runDailyPlan = async () => {
+  manualRunning.value = true
+  try {
+    await runAdminAnalyticsDailyPlanApi({
+      jobCode: 'AGENT_DAILY_PLAN',
+      jobName: 'Agent daily plan aggregation',
+      statDate: manualForm.statDate || undefined,
+      userIds: parseUserIds(),
+      targetJobId: manualForm.targetJobId,
+      taskCount: manualForm.taskCount,
+      maxTotalMinutes: manualForm.maxTotalMinutes
+    })
+    ElMessage.success('Daily plan job requested')
+    manualDialogVisible.value = false
+    await fetchJobs()
+  } finally {
+    manualRunning.value = false
+  }
+}
+
+const openOutput = (content?: string) => {
+  outputDialogContent.value = content || ''
+  outputDialogVisible.value = true
+}
+
 const rerun = async (id: number) => {
-  await ElMessageBox.confirm('Confirm rerun this analytics job?', 'Rerun confirmation', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm('Confirm rerun this analytics job?', 'Rerun confirmation', { type: 'warning' })
+  } catch {
+    return
+  }
   rerunningId.value = id
   try {
     await rerunAdminAnalyticsJobApi(id)
@@ -157,5 +251,32 @@ onMounted(fetchJobs)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.json-preview {
+  max-height: 520px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

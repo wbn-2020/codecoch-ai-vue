@@ -3,14 +3,20 @@ import type { PageResult } from '@/types/api'
 import { normalizePageResult } from '@/utils/page'
 import type {
   AdminAnalyticsDictionaryQuery,
+  AdminAnalyticsMetricSaveDTO,
   AdminAnalyticsJobLogVO,
   AdminAnalyticsJobQuery,
   AdminAnalyticsMetricDefinitionVO,
+  AdminAnalyticsOverviewVO,
+  AdminAnalyticsTrainingVO,
   AdminAgentOverviewVO,
   AdminAgentTaskStatsVO,
   AdminAiOverviewVO,
+  AgentFeedbackStatsVO,
+  AnalyticsJobRunDTO,
   AnalyticsRangeQuery,
   MetricPointVO,
+  PromptRegressionCaseSaveDTO,
   PersonalAgentOverviewVO,
   PromptRegressionCaseVO,
   PromptRegressionQuery,
@@ -125,6 +131,15 @@ export const getAdminAiFailuresApi = (params?: AnalyticsRangeQuery) =>
     .get<MetricPointVO[], MetricPointVO[]>('/admin/analytics/ai/failures', { params })
     .then(normalizeMetricList)
 
+export const getAdminAnalyticsOverviewApi = (params?: AnalyticsRangeQuery) =>
+  request.get<AdminAnalyticsOverviewVO, AdminAnalyticsOverviewVO>('/admin/analytics/overview', { params })
+
+export const getAdminAnalyticsTrainingApi = (params?: AnalyticsRangeQuery) =>
+  request.get<AdminAnalyticsTrainingVO, AdminAnalyticsTrainingVO>('/admin/analytics/training', { params })
+
+export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
+  request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
+
 export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQuery) => {
   const requestParams = {
     pageNo: params?.pageNo,
@@ -142,6 +157,12 @@ export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQue
     .then((result) => normalizePageResult(result, params))
 }
 
+export const createAdminAnalyticsMetricApi = (data: AdminAnalyticsMetricSaveDTO) =>
+  request.post<AdminAnalyticsMetricDefinitionVO, AdminAnalyticsMetricDefinitionVO>('/admin/analytics/metrics', data)
+
+export const updateAdminAnalyticsMetricApi = (id: number, data: AdminAnalyticsMetricSaveDTO) =>
+  request.put<AdminAnalyticsMetricDefinitionVO, AdminAnalyticsMetricDefinitionVO>(`/admin/analytics/metrics/${id}`, data)
+
 export const getAdminAnalyticsJobsApi = (params?: AdminAnalyticsJobQuery) =>
   request
     .get<PageResult<AdminAnalyticsJobLogVO>, PageResult<AdminAnalyticsJobLogVO>>(
@@ -152,6 +173,9 @@ export const getAdminAnalyticsJobsApi = (params?: AdminAnalyticsJobQuery) =>
 
 export const rerunAdminAnalyticsJobApi = (id: number) =>
   request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>(`/admin/analytics/jobs/${id}/rerun`)
+
+export const runAdminAnalyticsDailyPlanApi = (data?: AnalyticsJobRunDTO) =>
+  request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>('/admin/analytics/jobs/agent-daily-plan/run', data || {})
 
 export const getPromptRegressionCasesApi = (params?: PromptRegressionQuery) =>
   request
@@ -168,6 +192,12 @@ export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
       { params }
     )
     .then((result) => normalizePageResult(result, params))
+
+export const createPromptRegressionCaseApi = (data: PromptRegressionCaseSaveDTO) =>
+  request.post<PromptRegressionCaseVO, PromptRegressionCaseVO>('/admin/agent/prompt-regression/cases', data)
+
+export const updatePromptRegressionCaseApi = (id: number, data: PromptRegressionCaseSaveDTO) =>
+  request.put<PromptRegressionCaseVO, PromptRegressionCaseVO>(`/admin/agent/prompt-regression/cases/${id}`, data)
 
 export const runPromptRegressionApi = (data?: PromptRegressionRunDTO) =>
   request.post<PromptRegressionResultVO, PromptRegressionResultVO>(

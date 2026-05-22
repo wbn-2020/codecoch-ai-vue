@@ -71,3 +71,27 @@ export interface ResumeJobMatchReportDetailVO extends ResumeJobMatchReportListVO
   aiCallLogId?: number
   details?: ResumeJobMatchDetailItemVO[]
 }
+
+export type ResumeJobMatchSseEventType =
+  | 'start'
+  | 'delta'
+  | 'metadata'
+  | 'progress'
+  | 'result'
+  | 'done'
+  | 'error'
+  | string
+
+export interface ResumeJobMatchSseEvent {
+  requestId?: string
+  workflow?: string
+  bizId?: number
+  aiCallLogId?: number
+  message?: string
+  content?: string
+  stage?: string
+  code?: string
+  result?: ResumeJobMatchReportDetailVO
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
+}

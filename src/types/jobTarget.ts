@@ -64,3 +64,27 @@ export interface JobDescriptionAnalysisVO {
   createdAt?: string
   updatedAt?: string
 }
+
+export type JobTargetParseSseEventType =
+  | 'start'
+  | 'delta'
+  | 'metadata'
+  | 'progress'
+  | 'result'
+  | 'done'
+  | 'error'
+  | string
+
+export interface JobTargetParseSseEvent {
+  requestId?: string
+  workflow?: string
+  bizId?: number
+  aiCallLogId?: number
+  message?: string
+  content?: string
+  stage?: string
+  code?: string
+  result?: JobDescriptionAnalysisVO
+  metadata?: Record<string, unknown>
+  [key: string]: unknown
+}

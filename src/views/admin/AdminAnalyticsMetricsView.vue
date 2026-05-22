@@ -7,6 +7,7 @@
         <p class="admin-hero__desc">Read the metric code, definition, data source, and refresh frequency from the V4 analytics dictionary API.</p>
       </div>
       <div class="admin-hero__actions">
+        <el-button v-permission="'admin:analytics:metric:write'" type="primary" @click="openMetricDialog()">New metric</el-button>
         <el-button :loading="loading" @click="fetchMetrics">Refresh</el-button>
       </div>
     </section>
@@ -51,6 +52,11 @@
                 <StatusTag :status="row.enabled" />
               </template>
             </el-table-column>
+            <el-table-column label="Action" width="100" fixed="right">
+              <template #default="{ row }">
+                <el-button v-permission="'admin:analytics:metric:write'" link type="primary" @click="openMetricDialog(row)">Edit</el-button>
+              </template>
+            </el-table-column>
             <template #empty>
               <el-empty description="No metric definitions" />
             </template>
@@ -64,27 +70,61 @@
             layout="total, sizes, prev, pager, next"
             :total="total"
             :page-sizes="[10, 20, 50]"
-            @change="applyMetrics"
+            @change="fetchMetrics"
           />
         </div>
       </template>
     </section>
+
+    <el-dialog v-model="metricDialogVisible" :title="metricForm.id ? 'Edit metric' : 'New metric'" width="680px">
+      <el-form :model="metricForm" label-position="top">
+        <div class="form-grid">
+          <el-form-item label="Metric code" required>
+            <el-input v-model.trim="metricForm.metricCode" placeholder="AGENT_SUCCESS_RATE" />
+          </el-form-item>
+          <el-form-item label="Metric name" required>
+            <el-input v-model.trim="metricForm.metricName" placeholder="Agent success rate" />
+          </el-form-item>
+          <el-form-item label="Category">
+            <el-input v-model.trim="metricForm.category" placeholder="AGENT / AI / TRAINING" />
+          </el-form-item>
+          <el-form-item label="Refresh frequency">
+            <el-input v-model.trim="metricForm.refreshFrequency" placeholder="DAILY" />
+          </el-form-item>
+        </div>
+        <el-form-item label="Definition">
+          <el-input v-model="metricForm.definition" type="textarea" :rows="4" placeholder="Metric definition" />
+        </el-form-item>
+        <el-form-item label="Data source">
+          <el-input v-model.trim="metricForm.dataSource" placeholder="agent_run / agent_task / ai_call_log" />
+        </el-form-item>
+        <el-form-item label="Enabled">
+          <el-switch v-model="metricEnabled" active-text="Enabled" inactive-text="Disabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="metricDialogVisible = false">Cancel</el-button>
+        <el-button v-permission="'admin:analytics:metric:write'" type="primary" :loading="savingMetric" @click="saveMetric">Save</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
 
-import { getAdminAnalyticsMetricsApi } from '@/api/analytics'
+import { createAdminAnalyticsMetricApi, getAdminAnalyticsMetricsApi, updateAdminAnalyticsMetricApi } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsDictionaryQuery, AdminAnalyticsMetricDefinitionVO } from '@/types/analytics'
 
 const loading = ref(false)
 const errorMessage = ref('')
-const allMetrics = ref<AdminAnalyticsMetricDefinitionVO[]>([])
 const metrics = ref<AdminAnalyticsMetricDefinitionVO[]>([])
 const total = ref(0)
+const metricDialogVisible = ref(false)
+const savingMetric = ref(false)
 
 const query = reactive<AdminAnalyticsDictionaryQuery>({
   pageNo: 1,
@@ -94,6 +134,24 @@ const query = reactive<AdminAnalyticsDictionaryQuery>({
   enabled: ''
 })
 
+const metricForm = reactive({
+  id: undefined as number | undefined,
+  metricCode: '',
+  metricName: '',
+  category: '',
+  definition: '',
+  dataSource: '',
+  refreshFrequency: '',
+  enabled: 1
+})
+
+const metricEnabled = computed({
+  get: () => metricForm.enabled === 1,
+  set: (value: boolean) => {
+    metricForm.enabled = value ? 1 : 0
+  }
+})
+
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
     return String((error as { message?: unknown }).message || 'API request failed')
@@ -101,36 +159,62 @@ const getErrorMessage = (error: unknown) => {
   return 'API request failed'
 }
 
-const applyMetrics = () => {
-  const keyword = String(query.keyword || '').trim().toLowerCase()
-  const filtered = keyword
-    ? allMetrics.value.filter((item) =>
-        [item.metricCode, item.metricName, item.definition]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(keyword))
-      )
-    : allMetrics.value
-  const pageNo = query.pageNo || 1
-  const pageSize = query.pageSize || 10
-  const start = (pageNo - 1) * pageSize
-  metrics.value = filtered.slice(start, start + pageSize)
-  total.value = filtered.length
-}
-
 const fetchMetrics = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     const page = await getAdminAnalyticsMetricsApi(query)
-    allMetrics.value = page.records || []
-    applyMetrics()
+    metrics.value = page.records || []
+    total.value = page.total || 0
   } catch (error) {
-    allMetrics.value = []
     metrics.value = []
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
+  }
+}
+
+const openMetricDialog = (row?: AdminAnalyticsMetricDefinitionVO) => {
+  Object.assign(metricForm, {
+    id: row?.id,
+    metricCode: row?.metricCode || '',
+    metricName: row?.metricName || '',
+    category: row?.category || '',
+    definition: row?.definition || '',
+    dataSource: row?.dataSource || '',
+    refreshFrequency: row?.refreshFrequency || '',
+    enabled: row?.enabled ?? 1
+  })
+  metricDialogVisible.value = true
+}
+
+const saveMetric = async () => {
+  if (!metricForm.metricCode.trim() || !metricForm.metricName.trim()) {
+    ElMessage.warning('Metric code and name are required')
+    return
+  }
+  savingMetric.value = true
+  try {
+    const payload = {
+      metricCode: metricForm.metricCode.trim(),
+      metricName: metricForm.metricName.trim(),
+      category: metricForm.category.trim(),
+      definition: metricForm.definition,
+      dataSource: metricForm.dataSource.trim(),
+      refreshFrequency: metricForm.refreshFrequency.trim(),
+      enabled: metricForm.enabled
+    }
+    if (metricForm.id) {
+      await updateAdminAnalyticsMetricApi(metricForm.id, payload)
+    } else {
+      await createAdminAnalyticsMetricApi(payload)
+    }
+    ElMessage.success('Metric saved')
+    metricDialogVisible.value = false
+    await fetchMetrics()
+  } finally {
+    savingMetric.value = false
   }
 }
 
@@ -158,5 +242,17 @@ onMounted(fetchMetrics)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

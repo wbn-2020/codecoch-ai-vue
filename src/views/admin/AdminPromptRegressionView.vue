@@ -7,6 +7,7 @@
         <p class="admin-hero__desc">Load fixed regression cases and results, then trigger a backend regression run for a case and prompt version.</p>
       </div>
       <div class="admin-hero__actions">
+        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" @click="openCaseDialog()">New case</el-button>
         <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="runDialogVisible = true">Run case</el-button>
         <el-button :loading="loading" @click="loadPage">Refresh</el-button>
       </div>
@@ -44,10 +45,23 @@
               <el-table-column label="Enabled" width="110">
                 <template #default="{ row }"><StatusTag :status="row.enabled" /></template>
               </el-table-column>
-              <el-table-column prop="inputJson" label="Input" min-width="260" show-overflow-tooltip />
-              <el-table-column prop="expectedSchemaJson" label="Expected schema" min-width="260" show-overflow-tooltip />
-              <el-table-column label="Action" width="120" fixed="right">
+              <el-table-column label="Input" min-width="180">
                 <template #default="{ row }">
+                  <el-button link type="primary" @click="openJsonDetail('Input JSON', row.inputJson)">View</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="Expected schema" min-width="180">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openJsonDetail('Expected schema JSON', row.expectedSchemaJson)">View</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="Updated" width="180">
+                <template #default="{ row }">{{ row.updatedAt || '--' }}</template>
+              </el-table-column>
+              <el-table-column label="Action" width="230" fixed="right">
+                <template #default="{ row }">
+                  <el-button v-permission="'admin:agent:prompt-regression:write'" link type="primary" @click="openCaseDialog(row)">Edit</el-button>
+                  <el-button link type="primary" @click="viewCaseResults(row.id)">Results</el-button>
                   <el-button v-permission="'admin:agent:prompt-regression:run'" link type="primary" @click="openRun(row.id)">Run</el-button>
                 </template>
               </el-table-column>
@@ -67,12 +81,23 @@
                 <template #default="{ row }"><StatusTag :status="row.status" /></template>
               </el-table-column>
               <el-table-column prop="score" label="Score" width="100" />
-              <el-table-column prop="errorMessage" label="Error" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="outputJson" label="Output" min-width="280" show-overflow-tooltip />
+              <el-table-column prop="errorMessage" label="Error" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.errorMessage || '--' }}</template>
+              </el-table-column>
+              <el-table-column label="Output" min-width="160">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openJsonDetail('Regression output JSON', row.outputJson)">View</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column prop="createdAt" label="Created" width="180" />
               <template #empty>
                 <el-empty description="No regression results" />
               </template>
             </el-table>
+          </div>
+          <div v-if="resultCaseId" class="result-filter-note">
+            Showing results for case #{{ resultCaseId }}
+            <el-button link type="primary" @click="clearResultFilter">Show all</el-button>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -92,17 +117,49 @@
         <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" :loading="running" @click="runRegression">Run</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="caseDialogVisible" :title="caseForm.id ? 'Edit regression case' : 'New regression case'" width="760px">
+      <el-form :model="caseForm" label-position="top">
+        <div class="form-grid">
+          <el-form-item label="Case name" required>
+            <el-input v-model.trim="caseForm.caseName" placeholder="Daily plan schema check" />
+          </el-form-item>
+          <el-form-item label="Prompt type" required>
+            <el-input v-model.trim="caseForm.promptType" placeholder="JOB_COACH_DAILY_PLAN" />
+          </el-form-item>
+        </div>
+        <el-form-item label="Input JSON" required>
+          <el-input v-model="caseForm.inputJson" type="textarea" :rows="8" placeholder="{...}" />
+        </el-form-item>
+        <el-form-item label="Expected schema JSON" required>
+          <el-input v-model="caseForm.expectedSchemaJson" type="textarea" :rows="8" placeholder="{...}" />
+        </el-form-item>
+        <el-form-item label="Enabled">
+          <el-switch v-model="caseEnabled" active-text="Enabled" inactive-text="Disabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="caseDialogVisible = false">Cancel</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" :loading="savingCase" @click="saveCase">Save</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="jsonDialogVisible" :title="jsonDialogTitle" width="720px">
+      <pre class="json-preview">{{ jsonDialogContent || '--' }}</pre>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
+  createPromptRegressionCaseApi,
   getPromptRegressionCasesApi,
   getPromptRegressionResultsApi,
-  runPromptRegressionApi
+  runPromptRegressionApi,
+  updatePromptRegressionCaseApi
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
@@ -114,7 +171,13 @@ const errorMessage = ref('')
 const activeTab = ref('cases')
 const cases = ref<PromptRegressionCaseVO[]>([])
 const results = ref<PromptRegressionResultVO[]>([])
+const resultCaseId = ref<number>()
 const runDialogVisible = ref(false)
+const caseDialogVisible = ref(false)
+const savingCase = ref(false)
+const jsonDialogVisible = ref(false)
+const jsonDialogTitle = ref('')
+const jsonDialogContent = ref('')
 
 const query = reactive<PromptRegressionQuery>({
   pageNo: 1,
@@ -126,6 +189,22 @@ const query = reactive<PromptRegressionQuery>({
 const runForm = reactive({
   caseId: undefined as number | undefined,
   promptVersionId: undefined as number | undefined
+})
+
+const caseForm = reactive({
+  id: undefined as number | undefined,
+  caseName: '',
+  promptType: '',
+  inputJson: '',
+  expectedSchemaJson: '',
+  enabled: 1
+})
+
+const caseEnabled = computed({
+  get: () => caseForm.enabled === 1,
+  set: (value: boolean) => {
+    caseForm.enabled = value ? 1 : 0
+  }
 })
 
 const getErrorMessage = (error: unknown) => {
@@ -141,7 +220,7 @@ const loadPage = async () => {
   try {
     const [casePage, resultPage] = await Promise.all([
       getPromptRegressionCasesApi(query),
-      getPromptRegressionResultsApi({ pageNo: 1, pageSize: 20, promptType: query.promptType })
+      getPromptRegressionResultsApi({ pageNo: 1, pageSize: 20, caseId: resultCaseId.value })
     ])
     cases.value = casePage.records || []
     results.value = resultPage.records || []
@@ -175,6 +254,79 @@ const openRun = (caseId: number) => {
   runDialogVisible.value = true
 }
 
+const viewCaseResults = async (caseId: number) => {
+  resultCaseId.value = caseId
+  activeTab.value = 'results'
+  await loadPage()
+}
+
+const clearResultFilter = async () => {
+  resultCaseId.value = undefined
+  await loadPage()
+}
+
+const openCaseDialog = (row?: PromptRegressionCaseVO) => {
+  Object.assign(caseForm, {
+    id: row?.id,
+    caseName: row?.caseName || '',
+    promptType: row?.promptType || '',
+    inputJson: row?.inputJson || '',
+    expectedSchemaJson: row?.expectedSchemaJson || '',
+    enabled: row?.enabled ?? 1
+  })
+  caseDialogVisible.value = true
+}
+
+const openJsonDetail = (title: string, content?: string) => {
+  jsonDialogTitle.value = title
+  jsonDialogContent.value = content || ''
+  jsonDialogVisible.value = true
+}
+
+const validateJson = (value: string, label: string) => {
+  if (!value.trim()) {
+    ElMessage.warning(`${label} is required`)
+    return false
+  }
+  try {
+    JSON.parse(value)
+    return true
+  } catch {
+    ElMessage.warning(`${label} must be valid JSON`)
+    return false
+  }
+}
+
+const saveCase = async () => {
+  if (!caseForm.caseName.trim() || !caseForm.promptType.trim()) {
+    ElMessage.warning('Case name and prompt type are required')
+    return
+  }
+  if (!validateJson(caseForm.inputJson, 'Input JSON') || !validateJson(caseForm.expectedSchemaJson, 'Expected schema JSON')) {
+    return
+  }
+  savingCase.value = true
+  try {
+    const payload = {
+      caseName: caseForm.caseName.trim(),
+      promptType: caseForm.promptType.trim(),
+      inputJson: caseForm.inputJson,
+      expectedSchemaJson: caseForm.expectedSchemaJson,
+      enabled: caseForm.enabled
+    }
+    if (caseForm.id) {
+      await updatePromptRegressionCaseApi(caseForm.id, payload)
+    } else {
+      await createPromptRegressionCaseApi(payload)
+    }
+    ElMessage.success('Regression case saved')
+    caseDialogVisible.value = false
+    await loadPage()
+  } finally {
+    savingCase.value = false
+  }
+}
+
 const runRegression = async () => {
   if (!runForm.caseId || !runForm.promptVersionId) {
     ElMessage.warning('Case ID and prompt version ID are required')
@@ -201,5 +353,41 @@ onMounted(loadPage)
 <style scoped lang="scss">
 .regression-tabs {
   padding: 0 20px 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.json-preview {
+  max-height: 520px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result-filter-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
