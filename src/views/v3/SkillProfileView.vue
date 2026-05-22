@@ -20,6 +20,7 @@
     </section>
     <section v-else-if="isEmpty" class="content-panel">
       <AppState type="empty" title="暂无能力画像" description="可以从匹配报告详情页进入，或在 URL 带上 matchReportId 后生成画像。">
+        <el-button type="primary" :loading="generating" :disabled="!matchReportId" @click="generateFromReport">生成画像</el-button>
         <el-button @click="router.push('/resume-match')">去简历匹配</el-button>
       </AppState>
     </section>
@@ -52,7 +53,9 @@
             </article>
             </div>
           </div>
-          <AppState v-else type="empty" title="暂无雷达数据" description="后端 overview 暂未返回 radarData。" />
+          <AppState v-else type="empty" title="暂无雷达数据" description="当前画像暂无可视化雷达数据。">
+            <el-button :loading="loading" @click="loadAll">刷新画像</el-button>
+          </AppState>
         </div>
 
         <aside class="content-panel action-panel">
@@ -77,14 +80,15 @@
           <el-table-column prop="targetLevel" label="目标" width="90" />
           <el-table-column prop="gapDescription" label="差距说明" min-width="240" show-overflow-tooltip />
         </el-table>
-        <AppState v-else type="empty" title="暂无短板项" description="当前画像没有返回 gapItems/topGaps。" />
+        <AppState v-else type="empty" title="暂无短板项" description="当前画像暂未识别出能力短板。">
+          <el-button type="primary" :disabled="!profileId" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">生成学习计划</el-button>
+        </AppState>
       </section>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { ListChecks, Radar, RefreshCw, Route as RouteIcon, Sparkles } from 'lucide-vue-next'
 import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -93,6 +97,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { generateSkillProfileApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
 import type { SkillGapItemVO, SkillProfileDetailVO, SkillProfileOverviewVO } from '@/types/skillProfile'
+import echarts, { type ECharts } from '@/utils/echarts'
 import { getErrorMessage } from '@/utils/error'
 
 const route = useRoute()
@@ -103,7 +108,7 @@ const loadError = ref('')
 const overview = ref<SkillProfileOverviewVO | null>(null)
 const detail = ref<SkillProfileDetailVO | null>(null)
 const radarChartRef = ref<HTMLDivElement>()
-let radarChart: echarts.ECharts | null = null
+let radarChart: ECharts | null = null
 
 const matchReportId = computed(() => Number(route.query.matchReportId) || detail.value?.matchReportId || undefined)
 const targetJobId = computed(() => Number(route.query.targetJobId) || overview.value?.targetJobId || detail.value?.targetJobId || undefined)

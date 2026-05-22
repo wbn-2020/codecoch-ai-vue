@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <ShieldCheck :size="16" />
-          <span>Admin AI Governance</span>
+          <span>AI 治理后台</span>
         </div>
         <h1 class="admin-hero__title">AI 内容治理中心</h1>
         <p class="admin-hero__desc">
@@ -85,7 +85,7 @@
     </section>
 
     <div class="admin-dashboard-grid dashboard-lower-grid">
-      <section class="admin-panel">
+      <section class="admin-panel dashboard-pending-panel">
         <div class="admin-panel__header">
           <div>
             <h2>待处理事项</h2>
@@ -103,7 +103,7 @@
           >
             <div>
               <span>{{ pendingLabel(item) }}</span>
-              <small>{{ item.reason || item.sourceTable || 'runtime database' }}</small>
+              <small>{{ item.reason || item.sourceTable || '运行数据库' }}</small>
             </div>
             <strong>{{ item.count ?? 0 }}</strong>
           </button>
@@ -111,7 +111,7 @@
         </div>
       </section>
 
-      <section class="admin-panel">
+      <section class="admin-panel dashboard-status-panel">
         <div class="admin-panel__header">
           <div>
             <h2>系统状态</h2>
@@ -161,7 +161,6 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import {
   ArrowRight,
   Bot,
@@ -189,6 +188,7 @@ import type {
   AdminDashboardServiceStatusVO,
   AdminDashboardTrendStatVO
 } from '@/types/dashboard'
+import echarts, { type ECharts, type EChartsOption, type SeriesOption } from '@/utils/echarts'
 
 const router = useRouter()
 const loading = ref(false)
@@ -196,7 +196,7 @@ const overviewError = ref(false)
 const dashboard = ref<AdminDashboardOverviewVO | null>(null)
 const businessTrendRef = ref<HTMLElement>()
 const aiTrendRef = ref<HTMLElement>()
-const charts: echarts.ECharts[] = []
+const charts: ECharts[] = []
 
 const primaryLinks = [
   { label: '题目管理', path: '/admin/questions', icon: ListTree },
@@ -269,7 +269,7 @@ const baseChartTextStyle = {
 const numberList = (key: keyof AdminDashboardTrendStatVO) =>
   trendStats.value.map((item) => Number(item[key] || 0))
 
-const buildLineOption = (legendData: string[], series: echarts.SeriesOption[]): echarts.EChartsOption => ({
+const buildLineOption = (legendData: string[], series: SeriesOption[]): EChartsOption => ({
   backgroundColor: 'transparent',
   color: ['#60a5fa', '#22d3ee', '#a78bfa', '#f87171'],
   tooltip: { trigger: 'axis' },
@@ -525,20 +525,42 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-lower-grid {
-    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+  }
+
+  .dashboard-pending-panel,
+  .dashboard-status-panel {
+    align-self: start;
+  }
+
+  .dashboard-pending-panel {
+    min-height: 0;
   }
 
   .dashboard-work-list {
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .dashboard-work-item {
     align-items: flex-start;
     width: 100%;
-    border: 0;
+    min-height: 86px;
+    border-color: rgba(148, 163, 184, 0.13);
     color: var(--app-text);
     text-align: left;
     cursor: pointer;
+    transition:
+      border-color 0.18s ease,
+      background 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  .dashboard-work-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(96, 165, 250, 0.34);
+    background: rgba(30, 41, 59, 0.68);
   }
 
   .dashboard-work-item small {
@@ -550,22 +572,27 @@ onBeforeUnmount(() => {
 
   .dashboard-work-item strong {
     color: #fbbf24;
-    font-size: 18px;
+    font-size: 22px;
+    line-height: 1;
   }
 
   .dashboard-status-list {
     display: grid;
-    gap: 12px;
-    padding: 18px 20px 20px;
+    gap: 10px;
+    max-height: 520px;
+    overflow: auto;
+    padding: 14px 16px 16px;
+    scrollbar-width: thin;
   }
 
   .dashboard-status-item {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px;
+    align-items: center;
+    gap: 10px;
+    min-height: 76px;
+    padding: 12px;
     border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 10px;
+    border-radius: 8px;
     background: rgba(15, 23, 42, 0.56);
   }
 
@@ -579,12 +606,14 @@ onBeforeUnmount(() => {
     display: block;
     color: var(--app-text-muted);
     font-size: 12px;
+    line-height: 1.4;
   }
 
   .dashboard-status-item strong {
     display: block;
-    margin: 4px 0;
+    margin: 3px 0;
     font-size: 14px;
+    line-height: 1.25;
   }
 
   .status-healthy {
@@ -617,6 +646,10 @@ onBeforeUnmount(() => {
 
     .dashboard-link-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .dashboard-work-list {
+      grid-template-columns: 1fr;
     }
   }
 }

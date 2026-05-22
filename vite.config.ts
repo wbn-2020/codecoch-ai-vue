@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             vue: ['vue', 'vue-router', 'pinia'],
             elementPlus: ['element-plus', '@element-plus/icons-vue'],
+            charts: ['echarts'],
+            markdown: ['markdown-it'],
+            icons: ['lucide-vue-next'],
             axios: ['axios']
           }
         }

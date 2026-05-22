@@ -184,7 +184,6 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bot, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -210,6 +209,7 @@ import type {
   MetricPointVO,
   TrendPointVO
 } from '@/types/analytics'
+import echarts, { type ECharts } from '@/utils/echarts'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -226,7 +226,7 @@ const manualDialogVisible = ref(false)
 const manualRunning = ref(false)
 const manualUserIds = ref('')
 const successChartRef = ref<HTMLElement>()
-let successChart: echarts.ECharts | null = null
+let successChart: ECharts | null = null
 
 const rangeOptions = [
   { label: '近 7 天', value: 7 },

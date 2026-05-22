@@ -14,19 +14,19 @@
         <div class="admin-panel__header"><div><h2>角色</h2><p>来自 `/admin/roles`</p></div></div>
         <div class="role-list" v-loading="roleLoading">
           <button v-for="role in roles" :key="role.roleId" class="role-item" :class="{ active: selectedRoleId === role.roleId }" type="button" @click="selectRole(role.roleId)">
-            <span>{{ role.roleName || role.roleCode }}</span><small>{{ role.roleCode }}</small>
+            <span>{{ displayRoleName(role) }}</span><small>{{ role.roleCode }}</small>
           </button>
           <el-empty v-if="!roles.length && !roleLoading" description="暂无角色" />
         </div>
       </section>
 
       <section class="admin-panel">
-        <div class="admin-panel__header"><div><h2>菜单树</h2><p>勾选后提交到角色菜单授权接口</p></div><el-tag v-if="selectedRoleId" type="success" effect="plain">Role #{{ selectedRoleId }}</el-tag></div>
+        <div class="admin-panel__header"><div><h2>菜单树</h2><p>勾选后提交到角色菜单授权接口</p></div><el-tag v-if="selectedRoleId" type="success" effect="plain">{{ selectedRoleLabel }}</el-tag></div>
         <div class="tree-wrap" v-loading="menuLoading">
           <el-tree ref="treeRef" :data="menus" node-key="id" show-checkbox default-expand-all :props="{ label: 'menuName', children: 'children' }">
             <template #default="{ data }">
               <div class="menu-node">
-                <span>{{ data.menuName }}</span>
+                <span>{{ displayMenuName(data) }}</span>
                 <small>{{ data.path || data.permission || data.type }}</small>
               </div>
             </template>
@@ -41,7 +41,7 @@
 import type { ElTree } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { ShieldCheck } from 'lucide-vue-next'
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import { getAdminMenusApi, getAdminRoleMenusApi, grantAdminRoleMenusApi } from '@/api/adminGovernance'
 import { getAdminRolesApi } from '@/api/user'
@@ -55,6 +55,81 @@ const roles = ref<RoleVO[]>([])
 const menus = ref<MenuVO[]>([])
 const selectedRoleId = ref<number>()
 const treeRef = ref<InstanceType<typeof ElTree>>()
+
+const roleNameMap: Record<string, string> = {
+  USER: '普通用户',
+  ADMIN: '管理员',
+  SUPER_ADMIN: '超级管理员'
+}
+
+const menuNameMap: Record<string, string> = {
+  'V3 Governance': 'V3 管理后台',
+  'AI Models': 'AI 模型配置',
+  Menus: '菜单权限',
+  Interviews: '面试记录',
+  'Prompt Template': 'Prompt 模板',
+  'V4 Agent Analytics': 'Agent 效果分析',
+  'V4 AI Ops Analytics': 'AI Ops 看板',
+  'V4 Agent Runs': 'Agent 运行',
+  'V4 Agent Tasks': 'Agent 任务',
+  'V4 Analytics Metric Write': '指标字典',
+  'V4 Analytics Job Run': '聚合任务',
+  'V4 Prompt Regression List': 'Prompt 回归列表',
+  'V4 Prompt Regression Write': 'Prompt 回归写入',
+  'V4 Prompt Regression Run': 'Prompt 回归运行'
+}
+
+const menuPathMap: Record<string, string> = {
+  '/admin': '管理首页',
+  '/admin/v3': 'V3 管理后台',
+  '/admin/users': '用户管理',
+  '/admin/roles': '角色管理',
+  '/admin/menus': '菜单权限',
+  '/admin/files': '文件治理',
+  '/admin/questions': '题目管理',
+  '/admin/ai/questions/generate': 'AI 题目生成',
+  '/admin/question-reviews': '题目审核',
+  '/admin/question-duplicate-reviews': '题目去重审核',
+  '/admin/question-relations': '题目关系',
+  '/admin/question-categories': '分类管理',
+  '/admin/question-tags': '标签管理',
+  '/admin/question-groups': '题组管理',
+  '/admin/industry-templates': '行业模板',
+  '/admin/ai/prompts': 'Prompt 模板',
+  '/admin/ai/logs': 'AI 调用日志',
+  '/admin/ai/models': 'AI 模型配置',
+  '/admin/ai/prompt-regression': 'Prompt 回归',
+  '/admin/ops/overview': '运维监控',
+  '/admin/analytics/ai': 'AI Ops 看板',
+  '/admin/analytics/agent': 'Agent 效果分析',
+  '/admin/analytics/metrics': '指标字典',
+  '/admin/analytics/jobs': '聚合任务',
+  '/admin/async-tasks': '任务中心',
+  '/admin/agent/runs': 'Agent 运行',
+  '/admin/agent/tasks': 'Agent 任务',
+  '/admin/interviews': '面试记录',
+  '/admin/interview-reports': '面试报告',
+  '/admin/notices': '通知管理',
+  '/admin/operation-logs': '操作日志',
+  '/admin/login-logs': '登录日志',
+  '/admin/system/configs': '系统配置'
+}
+
+const selectedRoleLabel = computed(() => {
+  const role = roles.value.find((item) => item.roleId === selectedRoleId.value)
+  return role ? displayRoleName(role) : `角色 #${selectedRoleId.value}`
+})
+
+const displayRoleName = (role: RoleVO) => {
+  const roleCode = String(role.roleCode || '').toUpperCase()
+  return roleNameMap[roleCode] || role.roleName || role.roleCode
+}
+
+const displayMenuName = (menu: MenuVO) => {
+  const pathLabel = menu.path ? menuPathMap[menu.path] : ''
+  const rawName = menu.menuName || menu.name || ''
+  return pathLabel || menuNameMap[rawName] || rawName || menu.permission || `菜单 #${menu.id}`
+}
 
 const fetchRoles = async () => {
   roleLoading.value = true
