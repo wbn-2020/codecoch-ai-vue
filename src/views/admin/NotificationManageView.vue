@@ -2,7 +2,7 @@
   <div class="page-shell admin-console-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow"><Bell :size="16" /><span>Notification Ops</span></div>
+        <div class="admin-eyebrow"><Bell :size="16" /><span>通知运营</span></div>
         <h1 class="admin-hero__title">通知管理</h1>
         <p class="admin-hero__desc">查询系统通知，支持定向发送、全站广播和删除。</p>
       </div>

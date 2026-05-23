@@ -6,7 +6,7 @@
         <h1 class="admin-hero__title">AI 模型配置</h1>
         <p class="admin-hero__desc">维护模型供应商、调用地址、默认模型和启停状态。</p>
       </div>
-      <div class="admin-hero__actions"><el-button type="primary" @click="openDialog()">新增模型</el-button></div>
+      <div class="admin-hero__actions"><el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增模型</el-button></div>
     </section>
     <section class="admin-panel">
       <div class="admin-filter-bar">
@@ -23,13 +23,13 @@
           <el-table-column prop="displayName" label="显示名" min-width="160" show-overflow-tooltip />
           <el-table-column prop="apiBaseUrl" label="Base URL" min-width="220" show-overflow-tooltip />
           <el-table-column label="默认" width="90"><template #default="{ row }"><el-tag v-if="row.isDefault === 1" type="success">默认</el-tag><span v-else>-</span></template></el-table-column>
-          <el-table-column label="状态" width="100"><template #default="{ row }"><el-switch :model-value="row.enabled ?? row.status" :active-value="1" :inactive-value="0" @change="(value: string | number | boolean) => handleStatus(row, Number(value))" /></template></el-table-column>
+          <el-table-column label="状态" width="100"><template #default="{ row }"><el-switch v-permission="'ADMIN'" :model-value="row.enabled ?? row.status" :active-value="1" :inactive-value="0" @change="(value: string | number | boolean) => handleStatus(row, Number(value))" /></template></el-table-column>
           <el-table-column prop="updatedAt" label="更新时间" min-width="170" />
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="success" :disabled="row.isDefault === 1" @click="handleDefault(row)">设默认</el-button>
-              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+              <el-button v-permission="'ADMIN'" link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button v-permission="'ADMIN'" link type="success" :disabled="row.isDefault === 1" @click="handleDefault(row)">设默认</el-button>
+              <el-button v-permission="'ADMIN'" link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -48,7 +48,7 @@
         <el-form-item label="Max Tokens"><el-input-number v-model="form.maxTokens" :min="1" :step="512" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="handleSave">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

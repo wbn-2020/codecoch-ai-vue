@@ -164,7 +164,7 @@
             <section class="daily-view-panel">
               <div class="daily-view-panel__head">
                 <div>
-                  <p class="section-kicker">Daily View</p>
+                  <p class="section-kicker">日视图</p>
                   <h3>plannedDate 日任务 / 日报视图</h3>
                   <span>
                     {{ dailyView?.date || dailyDate }} · 优先按 plannedDate 匹配任务

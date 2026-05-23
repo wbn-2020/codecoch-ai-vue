@@ -75,6 +75,7 @@ const normalizeOperationLog = (item: any): OperationLogVO => ({
   requestUri: pick(item, 'requestUri', 'request_uri', 'uri', 'path'),
   ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
   costTime: pick(item, 'costTime', 'costMillis', 'costMs', 'cost_ms', 'duration'),
+  errorMessage: pick(item, 'errorMessage', 'errorMsg', 'error_msg'),
   createdAt: pick(item, 'createdAt', 'operationTime', 'createTime', 'created_at')
 })
 
@@ -83,7 +84,9 @@ const normalizeLoginLog = (item: any): LoginLogVO => ({
   id: normalizeId(item),
   username: pick(item, 'username', 'loginName', 'login_name', 'nickName', 'nick_name'),
   ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
-  message: pick(item, 'message', 'errorMessage', 'failReason', 'fail_reason', 'reason'),
+  location: pick(item, 'location', 'region', 'address'),
+  status: pick(item, 'status', 'loginStatus', 'login_status'),
+  message: pick(item, 'message', 'errorMessage', 'failReason', 'fail_reason', 'failureReason', 'failure_reason', 'reason'),
   loginTime: pick(item, 'loginTime', 'login_time', 'createdAt', 'createTime', 'created_at'),
   createdAt: pick(item, 'createdAt', 'loginTime', 'login_time', 'createTime', 'created_at')
 })

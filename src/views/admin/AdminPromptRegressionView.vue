@@ -2,145 +2,145 @@
   <div class="page-shell admin-console-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow">Prompt Regression</div>
-        <h1 class="admin-hero__title">Prompt regression tests</h1>
-        <p class="admin-hero__desc">Load fixed regression cases and results, then trigger a backend regression run for a case and prompt version.</p>
+        <div class="admin-eyebrow">Prompt 回归</div>
+        <h1 class="admin-hero__title">Prompt 回归测试</h1>
+        <p class="admin-hero__desc">加载固定回归用例和执行结果，并按用例与 Prompt 版本触发后端回归运行。</p>
       </div>
       <div class="admin-hero__actions">
-        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" @click="openCaseDialog()">New case</el-button>
-        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="runDialogVisible = true">Run case</el-button>
-        <el-button :loading="loading" @click="loadPage">Refresh</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" @click="openCaseDialog()">新增用例</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="runDialogVisible = true">运行用例</el-button>
+        <el-button :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
 
     <section class="admin-panel">
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
-          <el-form-item label="Prompt type">
+          <el-form-item label="Prompt 类型">
             <el-input v-model.trim="query.promptType" clearable placeholder="JOB_COACH_DAILY_PLAN" style="width: 240px" />
           </el-form-item>
-          <el-form-item label="Enabled">
-            <el-select v-model="query.enabled" clearable placeholder="All" style="width: 120px">
-              <el-option label="Enabled" :value="1" />
-              <el-option label="Disabled" :value="0" />
+          <el-form-item label="状态">
+            <el-select v-model="query.enabled" clearable placeholder="全部" style="width: 120px">
+              <el-option label="启用" :value="1" />
+              <el-option label="禁用" :value="0" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">Search</el-button>
-            <el-button @click="handleReset">Reset</el-button>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
 
-      <AppState v-if="errorMessage" type="error" title="Prompt regression data failed to load" :description="errorMessage">
-        <el-button type="primary" @click="loadPage">Retry</el-button>
+      <AppState v-if="errorMessage" type="error" title="Prompt 回归数据加载失败" :description="errorMessage">
+        <el-button type="primary" @click="loadPage">重试</el-button>
       </AppState>
 
       <el-tabs v-else v-model="activeTab" class="regression-tabs">
-        <el-tab-pane label="Cases" name="cases">
+        <el-tab-pane label="用例" name="cases">
           <div class="table-card admin-table-card">
             <el-table v-loading="loading" :data="cases" row-key="id">
-              <el-table-column prop="caseName" label="Case" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="promptType" label="Prompt type" min-width="220" show-overflow-tooltip />
-              <el-table-column label="Enabled" width="110">
+              <el-table-column prop="caseName" label="用例" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="promptType" label="Prompt 类型" min-width="220" show-overflow-tooltip />
+              <el-table-column label="状态" width="110">
                 <template #default="{ row }"><StatusTag :status="row.enabled" /></template>
               </el-table-column>
-              <el-table-column label="Input" min-width="180">
+              <el-table-column label="输入" min-width="180">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openJsonDetail('Input JSON', row.inputJson)">View</el-button>
+                  <el-button link type="primary" @click="openJsonDetail('输入 JSON', row.inputJson)">查看</el-button>
                 </template>
               </el-table-column>
-              <el-table-column label="Expected schema" min-width="180">
+              <el-table-column label="预期 Schema" min-width="180">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openJsonDetail('Expected schema JSON', row.expectedSchemaJson)">View</el-button>
+                  <el-button link type="primary" @click="openJsonDetail('预期 Schema JSON', row.expectedSchemaJson)">查看</el-button>
                 </template>
               </el-table-column>
-              <el-table-column label="Updated" width="180">
+              <el-table-column label="更新时间" width="180">
                 <template #default="{ row }">{{ row.updatedAt || '--' }}</template>
               </el-table-column>
-              <el-table-column label="Action" width="230" fixed="right">
+              <el-table-column label="操作" width="230" fixed="right">
                 <template #default="{ row }">
-                  <el-button v-permission="'admin:agent:prompt-regression:write'" link type="primary" @click="openCaseDialog(row)">Edit</el-button>
-                  <el-button link type="primary" @click="viewCaseResults(row.id)">Results</el-button>
-                  <el-button v-permission="'admin:agent:prompt-regression:run'" link type="primary" @click="openRun(row.id)">Run</el-button>
+                  <el-button v-permission="'admin:agent:prompt-regression:write'" link type="primary" @click="openCaseDialog(row)">编辑</el-button>
+                  <el-button link type="primary" @click="viewCaseResults(row.id)">结果</el-button>
+                  <el-button v-permission="'admin:agent:prompt-regression:run'" link type="primary" @click="openRun(row.id)">运行</el-button>
                 </template>
               </el-table-column>
               <template #empty>
-                <el-empty description="No regression cases" />
+                <el-empty description="暂无回归用例" />
               </template>
             </el-table>
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="Results" name="results">
+        <el-tab-pane label="结果" name="results">
           <div class="table-card admin-table-card">
             <el-table v-loading="loading" :data="results" row-key="id">
-              <el-table-column prop="caseId" label="Case ID" width="110" />
-              <el-table-column prop="promptVersionId" label="Version ID" width="120" />
-              <el-table-column label="Status" width="120">
+              <el-table-column prop="caseId" label="用例 ID" width="110" />
+              <el-table-column prop="promptVersionId" label="版本 ID" width="120" />
+              <el-table-column label="状态" width="120">
                 <template #default="{ row }"><StatusTag :status="row.status" /></template>
               </el-table-column>
-              <el-table-column prop="score" label="Score" width="100" />
-              <el-table-column prop="errorMessage" label="Error" min-width="220" show-overflow-tooltip>
+              <el-table-column prop="score" label="分数" width="100" />
+              <el-table-column prop="errorMessage" label="错误信息" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.errorMessage || '--' }}</template>
               </el-table-column>
-              <el-table-column label="Output" min-width="160">
+              <el-table-column label="输出" min-width="160">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openJsonDetail('Regression output JSON', row.outputJson)">View</el-button>
+                  <el-button link type="primary" @click="openJsonDetail('回归输出 JSON', row.outputJson)">查看</el-button>
                 </template>
               </el-table-column>
-              <el-table-column prop="createdAt" label="Created" width="180" />
+              <el-table-column prop="createdAt" label="创建时间" width="180" />
               <template #empty>
-                <el-empty description="No regression results" />
+                <el-empty description="暂无回归结果" />
               </template>
             </el-table>
           </div>
           <div v-if="resultCaseId" class="result-filter-note">
-            Showing results for case #{{ resultCaseId }}
-            <el-button link type="primary" @click="clearResultFilter">Show all</el-button>
+            当前仅展示用例 #{{ resultCaseId }} 的结果
+            <el-button link type="primary" @click="clearResultFilter">显示全部</el-button>
           </div>
         </el-tab-pane>
       </el-tabs>
     </section>
 
-    <el-dialog v-model="runDialogVisible" title="Run prompt regression" width="460px">
+    <el-dialog v-model="runDialogVisible" title="运行 Prompt 回归" width="460px">
       <el-form label-position="top">
-        <el-form-item label="Case ID">
+        <el-form-item label="用例 ID">
           <el-input-number v-model="runForm.caseId" :min="1" controls-position="right" />
         </el-form-item>
-        <el-form-item label="Prompt version ID">
+        <el-form-item label="Prompt 版本 ID">
           <el-input-number v-model="runForm.promptVersionId" :min="1" controls-position="right" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="runDialogVisible = false">Cancel</el-button>
-        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" :loading="running" @click="runRegression">Run</el-button>
+        <el-button @click="runDialogVisible = false">取消</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:run'" type="primary" :loading="running" @click="runRegression">运行</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="caseDialogVisible" :title="caseForm.id ? 'Edit regression case' : 'New regression case'" width="760px">
+    <el-dialog v-model="caseDialogVisible" :title="caseForm.id ? '编辑回归用例' : '新增回归用例'" width="760px">
       <el-form :model="caseForm" label-position="top">
         <div class="form-grid">
-          <el-form-item label="Case name" required>
-            <el-input v-model.trim="caseForm.caseName" placeholder="Daily plan schema check" />
+          <el-form-item label="用例名称" required>
+            <el-input v-model.trim="caseForm.caseName" placeholder="每日计划 Schema 校验" />
           </el-form-item>
-          <el-form-item label="Prompt type" required>
+          <el-form-item label="Prompt 类型" required>
             <el-input v-model.trim="caseForm.promptType" placeholder="JOB_COACH_DAILY_PLAN" />
           </el-form-item>
         </div>
-        <el-form-item label="Input JSON" required>
+        <el-form-item label="输入 JSON" required>
           <el-input v-model="caseForm.inputJson" type="textarea" :rows="8" placeholder="{...}" />
         </el-form-item>
-        <el-form-item label="Expected schema JSON" required>
+        <el-form-item label="预期 Schema JSON" required>
           <el-input v-model="caseForm.expectedSchemaJson" type="textarea" :rows="8" placeholder="{...}" />
         </el-form-item>
-        <el-form-item label="Enabled">
-          <el-switch v-model="caseEnabled" active-text="Enabled" inactive-text="Disabled" />
+        <el-form-item label="状态">
+          <el-switch v-model="caseEnabled" active-text="启用" inactive-text="禁用" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="caseDialogVisible = false">Cancel</el-button>
-        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" :loading="savingCase" @click="saveCase">Save</el-button>
+        <el-button @click="caseDialogVisible = false">取消</el-button>
+        <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" :loading="savingCase" @click="saveCase">保存</el-button>
       </template>
     </el-dialog>
 
@@ -209,9 +209,9 @@ const caseEnabled = computed({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const loadPage = async () => {
@@ -285,24 +285,24 @@ const openJsonDetail = (title: string, content?: string) => {
 
 const validateJson = (value: string, label: string) => {
   if (!value.trim()) {
-    ElMessage.warning(`${label} is required`)
+    ElMessage.warning(`请填写${label}`)
     return false
   }
   try {
     JSON.parse(value)
     return true
   } catch {
-    ElMessage.warning(`${label} must be valid JSON`)
+    ElMessage.warning(`${label}必须是合法 JSON`)
     return false
   }
 }
 
 const saveCase = async () => {
   if (!caseForm.caseName.trim() || !caseForm.promptType.trim()) {
-    ElMessage.warning('Case name and prompt type are required')
+    ElMessage.warning('请填写用例名称和 Prompt 类型')
     return
   }
-  if (!validateJson(caseForm.inputJson, 'Input JSON') || !validateJson(caseForm.expectedSchemaJson, 'Expected schema JSON')) {
+  if (!validateJson(caseForm.inputJson, '输入 JSON') || !validateJson(caseForm.expectedSchemaJson, '预期 Schema JSON')) {
     return
   }
   savingCase.value = true
@@ -319,7 +319,7 @@ const saveCase = async () => {
     } else {
       await createPromptRegressionCaseApi(payload)
     }
-    ElMessage.success('Regression case saved')
+    ElMessage.success('回归用例已保存')
     caseDialogVisible.value = false
     await loadPage()
   } finally {
@@ -329,7 +329,7 @@ const saveCase = async () => {
 
 const runRegression = async () => {
   if (!runForm.caseId || !runForm.promptVersionId) {
-    ElMessage.warning('Case ID and prompt version ID are required')
+    ElMessage.warning('请填写用例 ID 和 Prompt 版本 ID')
     return
   }
   running.value = true
@@ -339,7 +339,7 @@ const runRegression = async () => {
       promptVersionId: runForm.promptVersionId
     })
     runDialogVisible.value = false
-    ElMessage.success('Regression run requested')
+    ElMessage.success('回归运行请求已提交')
     activeTab.value = 'results'
     await loadPage()
   } finally {

@@ -2,19 +2,19 @@
   <div class="page-shell v4-version-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 Resume Version</div>
-        <h1>Resume versions</h1>
-        <p>Create snapshots, copy versions, compare version pairs, roll back, and apply AI suggestions.</p>
+        <div class="v4-eyebrow">V4 简历版本</div>
+        <h1>简历版本</h1>
+        <p>创建快照、复制版本、对比版本差异、回滚版本，并记录 AI 优化建议采纳情况。</p>
       </div>
       <div class="v4-actions">
         <el-input-number v-model="resumeId" :min="1" controls-position="right" />
-        <el-button :loading="loading" @click="load">Load</el-button>
-        <el-button type="primary" :loading="saving" @click="create">Create version</el-button>
+        <el-button :loading="loading" @click="load">加载</el-button>
+        <el-button type="primary" :loading="saving" @click="create">创建版本</el-button>
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="Resume versions failed to load" :description="errorMessage">
-      <el-button type="primary" @click="load">Retry</el-button>
+    <AppState v-if="errorMessage" type="error" title="简历版本加载失败" :description="errorMessage">
+      <el-button type="primary" @click="load">重试</el-button>
     </AppState>
 
     <template v-else>
@@ -22,27 +22,27 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Versions</p>
-              <h2>Version list</h2>
+              <p class="section-kicker">版本</p>
+              <h2>版本列表</h2>
             </div>
           </div>
           <div class="v4-list" v-loading="loading">
             <article v-for="item in versions" :key="item.id" class="v4-row">
               <div class="v4-row-head">
                 <div>
-                  <strong>V{{ item.versionNo ?? '--' }} · {{ item.versionName || `Version #${item.id}` }}</strong>
+                  <strong>V{{ item.versionNo ?? '--' }} · {{ item.versionName || `版本 #${item.id}` }}</strong>
                   <p class="muted">{{ item.sourceType || '--' }} · {{ item.createdAt || '--' }}</p>
                 </div>
                 <div class="v4-actions">
-                  <el-tag v-if="item.currentFlag" type="success">Current</el-tag>
-                  <el-button link type="primary" @click="showCurrentDiff(item.id)">Diff current</el-button>
-                  <el-button link type="primary" @click="openCopy(item)">Copy</el-button>
-                  <el-button link type="success" @click="openSuggestion(item)">Apply suggestion</el-button>
-                  <el-button link type="warning" @click="rollback(item.id)">Rollback</el-button>
+                  <el-tag v-if="item.currentFlag" type="success">当前版本</el-tag>
+                  <el-button link type="primary" @click="showCurrentDiff(item.id)">对比当前</el-button>
+                  <el-button link type="primary" @click="openCopy(item)">复制</el-button>
+                  <el-button link type="success" @click="openSuggestion(item)">应用建议</el-button>
+                  <el-button link type="warning" @click="rollback(item.id)">回滚</el-button>
                 </div>
               </div>
             </article>
-            <el-empty v-if="!versions.length && !loading" description="No versions. Enter a resume ID and create a snapshot." />
+            <el-empty v-if="!versions.length && !loading" description="暂无版本，请输入简历 ID 后创建快照。" />
           </div>
         </div>
       </section>
@@ -51,73 +51,73 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Pair diff</p>
-              <h2>Compare two versions</h2>
+              <p class="section-kicker">双版本对比</p>
+              <h2>对比两个版本</h2>
             </div>
           </div>
           <div class="pair-diff-bar">
-            <el-select v-model="sourceVersionId" clearable placeholder="Source version" style="width: 220px">
+            <el-select v-model="sourceVersionId" clearable placeholder="来源版本" style="width: 220px">
               <el-option v-for="item in versions" :key="item.id" :label="versionLabel(item)" :value="item.id" />
             </el-select>
-            <el-select v-model="targetVersionId" clearable placeholder="Target version" style="width: 220px">
+            <el-select v-model="targetVersionId" clearable placeholder="目标版本" style="width: 220px">
               <el-option v-for="item in versions" :key="item.id" :label="versionLabel(item)" :value="item.id" />
             </el-select>
-            <el-button type="primary" :disabled="!sourceVersionId || !targetVersionId" @click="showPairDiff">Compare</el-button>
+            <el-button type="primary" :disabled="!sourceVersionId || !targetVersionId" @click="showPairDiff">对比</el-button>
           </div>
         </div>
       </section>
     </template>
 
-    <el-dialog v-model="diffVisible" title="Version diff" width="820px">
+    <el-dialog v-model="diffVisible" title="版本差异" width="820px">
       <div class="diff-grid">
         <div class="diff-row diff-row--head">
-          <strong>Field</strong>
-          <strong>{{ diff?.sourceLabel || 'Current/source' }}</strong>
-          <strong>{{ diff?.targetLabel || 'Version/target' }}</strong>
+          <strong>字段</strong>
+          <strong>{{ diff?.sourceLabel || '当前/来源' }}</strong>
+          <strong>{{ diff?.targetLabel || '版本/目标' }}</strong>
         </div>
         <div v-for="field in diff?.fields || []" :key="field.field" class="diff-row" :class="{ changed: field.changed }">
           <strong>{{ field.field }}</strong>
           <span>{{ formatValue(field.sourceValue ?? field.currentValue) }}</span>
           <span>{{ formatValue(field.targetValue ?? field.versionValue) }}</span>
         </div>
-        <el-empty v-if="!(diff?.fields || []).length" description="No diff fields" />
+        <el-empty v-if="!(diff?.fields || []).length" description="暂无差异字段" />
       </div>
     </el-dialog>
 
-    <el-dialog v-model="copyVisible" title="Copy version" width="460px">
+    <el-dialog v-model="copyVisible" title="复制版本" width="460px">
       <el-form label-position="top">
-        <el-form-item label="Version name">
+        <el-form-item label="版本名称">
           <el-input v-model.trim="copyName" maxlength="80" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="copyVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="saving" @click="copyVersion">Copy</el-button>
+        <el-button @click="copyVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="copyVersion">复制</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="suggestionVisible" title="Apply AI suggestion" width="520px">
+    <el-dialog v-model="suggestionVisible" title="应用 AI 建议" width="520px">
       <el-form label-position="top">
-        <el-form-item label="Optimize record ID">
+        <el-form-item label="优化记录 ID">
           <el-input-number v-model="suggestionForm.optimizeRecordId" :min="1" controls-position="right" />
         </el-form-item>
-        <el-form-item label="Suggestion type">
+        <el-form-item label="建议类型">
           <el-input v-model.trim="suggestionForm.suggestionType" placeholder="PROJECT_DEPTH / KEYWORD / CUSTOM" />
         </el-form-item>
-        <el-form-item label="Status">
+        <el-form-item label="状态">
           <el-select v-model="suggestionForm.status" style="width: 100%">
-            <el-option label="APPLIED" value="APPLIED" />
-            <el-option label="REJECTED" value="REJECTED" />
-            <el-option label="PARTIAL" value="PARTIAL" />
+            <el-option label="已采纳" value="APPLIED" />
+            <el-option label="已拒绝" value="REJECTED" />
+            <el-option label="部分采纳" value="PARTIAL" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Note">
+        <el-form-item label="备注">
           <el-input v-model="suggestionForm.note" type="textarea" :rows="3" maxlength="300" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="suggestionVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="saving" @click="applySuggestion">Apply</el-button>
+        <el-button @click="suggestionVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="applySuggestion">应用</el-button>
       </template>
     </el-dialog>
   </div>
@@ -167,9 +167,9 @@ const suggestionForm = reactive({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const versionLabel = (item: ResumeVersionVO) =>
@@ -198,7 +198,7 @@ const create = async () => {
   saving.value = true
   try {
     await createResumeVersionApi(resumeId.value, { versionName: `V${versions.value.length + 1}` })
-    ElMessage.success('Version created')
+    ElMessage.success('版本已创建')
     await load()
   } finally {
     saving.value = false
@@ -207,7 +207,7 @@ const create = async () => {
 
 const openCopy = (item: ResumeVersionVO) => {
   copySource.value = item
-  copyName.value = `${item.versionName || `V${item.versionNo ?? item.id}`} copy`
+  copyName.value = `${item.versionName || `V${item.versionNo ?? item.id}`} 副本`
   copyVisible.value = true
 }
 
@@ -217,7 +217,7 @@ const copyVersion = async () => {
   try {
     await copyResumeVersionApi(resumeId.value, copySource.value.id, { versionName: copyName.value || undefined })
     copyVisible.value = false
-    ElMessage.success('Version copied')
+    ElMessage.success('版本已复制')
     await load()
   } finally {
     saving.value = false
@@ -236,9 +236,9 @@ const showPairDiff = async () => {
 }
 
 const rollback = async (versionId: number) => {
-  await ElMessageBox.confirm('Confirm rollback to this version?', 'Rollback confirmation', { type: 'warning' })
+  await ElMessageBox.confirm('确认回滚到该版本？', '回滚确认', { type: 'warning' })
   await rollbackResumeVersionApi(resumeId.value, versionId)
-  ElMessage.success('Version rolled back')
+  ElMessage.success('版本已回滚')
   await load()
 }
 
@@ -264,7 +264,7 @@ const applySuggestion = async () => {
       note: suggestionForm.note || undefined
     })
     suggestionVisible.value = false
-    ElMessage.success('Suggestion adoption saved')
+    ElMessage.success('建议采纳记录已保存')
   } finally {
     saving.value = false
   }

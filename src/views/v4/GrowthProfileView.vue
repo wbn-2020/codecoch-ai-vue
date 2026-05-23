@@ -2,36 +2,36 @@
   <div class="page-shell v4-growth-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 Growth</div>
-        <h1>Growth profile</h1>
-        <p>Readiness, task completion, skill trend, and long-term Agent signals from real V4 APIs.</p>
+        <div class="v4-eyebrow">V4 成长画像</div>
+        <h1>成长画像</h1>
+        <p>从真实 V4 接口读取准备度、任务完成率、技能趋势和长期 Agent 信号。</p>
       </div>
       <div class="v4-actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="load" />
-        <el-button :loading="loading" @click="load">Refresh</el-button>
+        <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="Growth data failed to load" :description="errorMessage">
-      <el-button type="primary" @click="load">Retry</el-button>
+    <AppState v-if="errorMessage" type="error" title="成长数据加载失败" :description="errorMessage">
+      <el-button type="primary" @click="load">重试</el-button>
     </AppState>
 
     <template v-else>
       <section class="v4-grid" v-loading="loading">
         <article class="v4-card">
-          <span>Readiness</span>
+          <span>准备度</span>
           <strong>{{ overview?.readinessScore ?? 0 }}</strong>
         </article>
         <article class="v4-card">
-          <span>Task completion</span>
+          <span>任务完成率</span>
           <strong>{{ overview?.taskCompletionRate ?? 0 }}%</strong>
         </article>
         <article class="v4-card">
-          <span>Agent success</span>
+          <span>Agent 成功率</span>
           <strong>{{ overview?.agentSuccessRate ?? 0 }}%</strong>
         </article>
         <article class="v4-card">
-          <span>Enabled memories</span>
+          <span>启用记忆数</span>
           <strong>{{ overview?.totalMemoryCount ?? 0 }}</strong>
         </article>
       </section>
@@ -40,25 +40,25 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Skills</p>
-              <h2>Top skills and trend</h2>
+              <p class="section-kicker">技能</p>
+              <h2>重点技能与趋势</h2>
             </div>
           </div>
           <div class="skill-strip">
             <el-tag v-for="item in overview?.topSkills || []" :key="item.name" effect="plain">
               {{ item.name }} · {{ item.value }}
             </el-tag>
-            <el-empty v-if="!(overview?.topSkills || []).length && !loading" description="No top skill data" />
+            <el-empty v-if="!(overview?.topSkills || []).length && !loading" description="暂无重点技能数据" />
           </div>
           <div class="trend-list">
             <article v-for="item in skillTrend" :key="`${item.snapshotDate}-${item.skillCode || item.id}`" class="trend-row">
               <div>
-                <strong>{{ item.skillName || item.skillCode || 'UNKNOWN' }}</strong>
-                <span>{{ item.snapshotDate || '--' }} · tasks {{ item.taskCount ?? 0 }} · done {{ item.doneCount ?? 0 }}</span>
+                <strong>{{ item.skillName || item.skillCode || '未知技能' }}</strong>
+                <span>{{ item.snapshotDate || '--' }} · 任务 {{ item.taskCount ?? 0 }} · 完成 {{ item.doneCount ?? 0 }}</span>
               </div>
               <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
             </article>
-            <el-empty v-if="!skillTrend.length && !loading" description="No skill trend data" />
+            <el-empty v-if="!skillTrend.length && !loading" description="暂无技能趋势数据" />
           </div>
         </div>
       </section>
@@ -67,8 +67,8 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Readiness</p>
-              <h2>Readiness trend</h2>
+              <p class="section-kicker">准备度</p>
+              <h2>准备度趋势</h2>
             </div>
           </div>
           <div class="trend-list">
@@ -76,12 +76,12 @@
               <div>
                 <strong>{{ item.scoreDate || '--' }}</strong>
                 <span>
-                  completion {{ item.taskCompletionRate ?? 0 }}% · agent {{ item.agentSuccessRate ?? 0 }}%
+                  完成率 {{ item.taskCompletionRate ?? 0 }}% · Agent {{ item.agentSuccessRate ?? 0 }}%
                 </span>
               </div>
               <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
             </article>
-            <el-empty v-if="!readinessTrend.length && !loading" description="No readiness trend data" />
+            <el-empty v-if="!readinessTrend.length && !loading" description="暂无准备度趋势数据" />
           </div>
         </div>
       </section>
@@ -110,18 +110,18 @@ const skillTrend = ref<SkillGrowthSnapshotVO[]>([])
 const readinessTrend = ref<ReadinessScoreRecordVO[]>([])
 
 const rangeOptions = [
-  { label: '7 days', value: 7 },
-  { label: '30 days', value: 30 },
-  { label: '90 days', value: 90 }
+  { label: '7 天', value: 7 },
+  { label: '30 天', value: 30 },
+  { label: '90 天', value: 90 }
 ]
 
 const boundedPercent = (value?: number) => Math.max(0, Math.min(100, Number(value || 0)))
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const load = async () => {

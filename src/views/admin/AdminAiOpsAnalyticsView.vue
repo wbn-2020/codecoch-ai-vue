@@ -4,14 +4,14 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <Bot :size="16" />
-          <span>AI Ops Analytics</span>
+          <span>AI Ops 分析</span>
         </div>
         <h1 class="admin-hero__title">AI Ops 基础看板</h1>
         <p class="admin-hero__desc">聚合 AI 调用成功率、耗时、Token 使用量和失败原因，支撑 V4 的 Agent 可观测能力。</p>
       </div>
       <div class="admin-hero__actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
-        <el-button v-permission="'admin:analytics:job:run'" type="primary" @click="openManualRun">Run daily plan</el-button>
+        <el-button v-permission="'admin:analytics:job:run'" type="primary" @click="openManualRun">运行每日计划</el-button>
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
@@ -50,7 +50,7 @@
           </div>
           <div class="failure-list">
             <div v-for="item in failures" :key="item.name" class="failure-row">
-              <span>{{ item.name }}</span>
+              <span>{{ translateFailureReason(item.name) }}</span>
               <strong>{{ item.value }}</strong>
             </div>
             <el-empty v-if="!failures.length && !loading" description="暂无失败调用数据" />
@@ -62,7 +62,7 @@
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2>Agent feedback</h2>
+              <h2>Agent 反馈</h2>
               <p>采用、忽略、点赞和点踩反馈聚合。</p>
             </div>
             <el-tag effect="plain">agent feedback</el-tag>
@@ -75,7 +75,7 @@
           </div>
           <div class="failure-list">
             <div v-for="item in feedbackTypes" :key="item.name" class="failure-row">
-              <span>{{ item.name }}</span>
+              <span>{{ translateFeedbackType(item.name) }}</span>
               <strong>{{ item.value }}</strong>
             </div>
             <el-empty v-if="!feedbackTypes.length && !loading" description="暂无反馈类型数据" />
@@ -85,7 +85,7 @@
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2>Training snapshot</h2>
+              <h2>训练快照</h2>
               <p>任务训练统计与 Agent 趋势摘要。</p>
             </div>
             <el-tag effect="plain">/training</el-tag>
@@ -100,7 +100,7 @@
             <div v-for="item in trainingTrend" :key="item.date" class="trend-row">
               <span>{{ item.date || '--' }}</span>
               <strong>{{ item.runCount ?? 0 }}</strong>
-              <small>success {{ item.successRunCount ?? 0 }} / failed {{ item.failedRunCount ?? 0 }}</small>
+              <small>成功 {{ item.successRunCount ?? 0 }} / 失败 {{ item.failedRunCount ?? 0 }}</small>
             </div>
             <el-empty v-if="!trainingTrend.length && !loading" description="暂无训练趋势数据" />
           </div>
@@ -111,15 +111,20 @@
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2>Metric dictionary</h2>
-              <p>展示 V4 指标定义，完整编辑入口在 Metric Dictionary 页面。</p>
+              <h2>指标字典</h2>
+              <p>展示 V4 指标定义，完整编辑入口在指标字典页面。</p>
             </div>
-            <el-button link type="primary" @click="$router.push('/admin/analytics/metrics')">Open</el-button>
+            <el-button link type="primary" @click="$router.push('/admin/analytics/metrics')">打开</el-button>
           </div>
           <el-table :data="metricDefs" row-key="id">
-            <el-table-column prop="metricCode" label="Code" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="category" label="Category" width="120" />
-            <el-table-column label="Enabled" width="100">
+            <el-table-column prop="metricCode" label="指标编码" min-width="180" show-overflow-tooltip />
+            <el-table-column label="指标名称" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateMetricName(row.metricName) }}</template>
+            </el-table-column>
+            <el-table-column label="分类" width="120">
+              <template #default="{ row }">{{ translateMetricCategory(row.category) }}</template>
+            </el-table-column>
+            <el-table-column label="启用状态" width="100">
               <template #default="{ row }"><StatusTag :status="row.enabled" /></template>
             </el-table-column>
             <template #empty>
@@ -131,20 +136,23 @@
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
-              <h2>Recent jobs</h2>
+              <h2>最近聚合任务</h2>
               <p>最近聚合任务，支持重跑单条日志。</p>
             </div>
-            <el-button link type="primary" @click="$router.push('/admin/analytics/jobs')">Open</el-button>
+            <el-button link type="primary" @click="$router.push('/admin/analytics/jobs')">打开</el-button>
           </div>
           <el-table :data="jobs" row-key="id">
-            <el-table-column prop="jobCode" label="Job" min-width="160" show-overflow-tooltip />
-            <el-table-column label="Status" width="110">
+            <el-table-column prop="jobCode" label="任务编码" min-width="160" show-overflow-tooltip />
+            <el-table-column label="任务名称" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateJobName(row.jobName || row.jobCode) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
               <template #default="{ row }"><StatusTag :status="row.status" /></template>
             </el-table-column>
-            <el-table-column prop="statDate" label="Date" width="120" />
-            <el-table-column label="Action" width="100">
+            <el-table-column prop="statDate" label="统计日期" width="120" />
+            <el-table-column label="操作" width="100">
               <template #default="{ row }">
-                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerunJob(row.id)">Rerun</el-button>
+                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerunJob(row.id)">重跑</el-button>
               </template>
             </el-table-column>
             <template #empty>
@@ -155,29 +163,29 @@
       </div>
     </template>
 
-    <el-dialog v-model="manualDialogVisible" title="Run agent daily plan aggregation" width="620px">
+    <el-dialog v-model="manualDialogVisible" title="运行 Agent 每日计划聚合" width="620px">
       <el-form :model="manualForm" label-position="top">
         <div class="manual-grid">
-          <el-form-item label="Stat date">
-            <el-date-picker v-model="manualForm.statDate" type="date" value-format="YYYY-MM-DD" placeholder="Select date" style="width: 100%" />
+          <el-form-item label="统计日期">
+            <el-date-picker v-model="manualForm.statDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="Target job ID">
+          <el-form-item label="目标岗位 ID">
             <el-input-number v-model="manualForm.targetJobId" :min="1" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="Task count">
+          <el-form-item label="任务数量">
             <el-input-number v-model="manualForm.taskCount" :min="1" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="Max total minutes">
+          <el-form-item label="最大总分钟数">
             <el-input-number v-model="manualForm.maxTotalMinutes" :min="1" controls-position="right" style="width: 100%" />
           </el-form-item>
         </div>
-        <el-form-item label="User IDs">
-          <el-input v-model.trim="manualUserIds" placeholder="Comma separated, optional" />
+        <el-form-item label="用户 ID">
+          <el-input v-model.trim="manualUserIds" placeholder="多个 ID 用英文逗号分隔，可选" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="manualDialogVisible = false">Cancel</el-button>
-        <el-button v-permission="'admin:analytics:job:run'" type="primary" :loading="manualRunning" @click="runDailyPlan">Run</el-button>
+        <el-button @click="manualDialogVisible = false">取消</el-button>
+        <el-button v-permission="'admin:analytics:job:run'" type="primary" :loading="manualRunning" @click="runDailyPlan">运行</el-button>
       </template>
     </el-dialog>
   </div>
@@ -209,6 +217,13 @@ import type {
   MetricPointVO,
   TrendPointVO
 } from '@/types/analytics'
+import {
+  translateFailureReason,
+  translateFeedbackType,
+  translateJobName,
+  translateMetricCategory,
+  translateMetricName
+} from '@/utils/adminDisplay'
 import echarts, { type ECharts } from '@/utils/echarts'
 
 const loading = ref(false)
@@ -242,10 +257,10 @@ const metrics = computed(() => [
 ])
 
 const feedbackMetrics = computed(() => [
-  { key: 'total', label: 'Feedback total', value: feedback.value?.totalFeedbackCount ?? '--' },
-  { key: 'adopted', label: 'Adopted', value: feedback.value?.adoptedCount ?? '--' },
-  { key: 'ignored', label: 'Ignored', value: feedback.value?.ignoredCount ?? '--' },
-  { key: 'rate', label: 'Adoption rate', value: feedback.value?.adoptionRate == null ? '--' : `${feedback.value.adoptionRate}%` }
+  { key: 'total', label: '反馈总数', value: feedback.value?.totalFeedbackCount ?? '--' },
+  { key: 'adopted', label: '已采纳', value: feedback.value?.adoptedCount ?? '--' },
+  { key: 'ignored', label: '已忽略', value: feedback.value?.ignoredCount ?? '--' },
+  { key: 'rate', label: '采纳率', value: feedback.value?.adoptionRate == null ? '--' : `${feedback.value.adoptionRate}%` }
 ])
 
 const feedbackTypes = computed(() =>
@@ -256,10 +271,10 @@ const feedbackTypes = computed(() =>
 )
 
 const trainingMetrics = computed(() => [
-  { key: 'tasks', label: 'Agent tasks', value: trainingTaskStats.value.totalAgentTasks || 0 },
-  { key: 'done', label: 'Done', value: trainingTaskStats.value.doneTaskCount || 0 },
-  { key: 'skipped', label: 'Skipped', value: trainingTaskStats.value.skippedTaskCount || 0 },
-  { key: 'rate', label: 'Completion rate', value: `${trainingTaskStats.value.taskCompletionRate || 0}%` }
+  { key: 'tasks', label: 'Agent 任务', value: trainingTaskStats.value.totalAgentTasks || 0 },
+  { key: 'done', label: '已完成', value: trainingTaskStats.value.doneTaskCount || 0 },
+  { key: 'skipped', label: '已跳过', value: trainingTaskStats.value.skippedTaskCount || 0 },
+  { key: 'rate', label: '完成率', value: `${trainingTaskStats.value.taskCompletionRate || 0}%` }
 ])
 
 const manualForm = ref({
@@ -367,14 +382,14 @@ const runDailyPlan = async () => {
   try {
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
-      jobName: 'Agent daily plan aggregation',
+      jobName: 'Agent 每日计划聚合',
       statDate: manualForm.value.statDate || undefined,
       userIds: parseUserIds(),
       targetJobId: manualForm.value.targetJobId,
       taskCount: manualForm.value.taskCount,
       maxTotalMinutes: manualForm.value.maxTotalMinutes
     })
-    ElMessage.success('Daily plan job requested')
+    ElMessage.success('每日计划聚合任务已提交')
     manualDialogVisible.value = false
     await loadPage()
   } finally {
@@ -384,14 +399,14 @@ const runDailyPlan = async () => {
 
 const rerunJob = async (id: number) => {
   try {
-    await ElMessageBox.confirm('Confirm rerun this analytics job?', 'Rerun confirmation', { type: 'warning' })
+    await ElMessageBox.confirm('确认重跑该聚合任务？', '重跑确认', { type: 'warning' })
   } catch {
     return
   }
   rerunningId.value = id
   try {
     await rerunAdminAnalyticsJobApi(id)
-    ElMessage.success('Rerun requested')
+    ElMessage.success('重跑请求已提交')
     await loadPage()
   } finally {
     rerunningId.value = undefined

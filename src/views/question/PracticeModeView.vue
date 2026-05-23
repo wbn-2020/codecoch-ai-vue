@@ -189,7 +189,7 @@ import {
   updateQuestionMasteryApi
 } from '@/api/question'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
-import type { QuestionDetailVO } from '@/types/question'
+import type { FavoriteQuestionVO, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
 
 interface PracticeAnswerResult {
   isCorrect?: boolean
@@ -200,6 +200,36 @@ interface PracticeAnswerResult {
   analysis?: string
   answerResult?: string
   masteryStatus?: string
+}
+
+type PracticeQuestionRecord = QuestionDetailVO | FavoriteQuestionVO | WrongQuestionVO
+
+const isWrongQuestionRecord = (record: PracticeQuestionRecord): record is WrongQuestionVO => {
+  return 'wrongRecordId' in record && 'questionId' in record
+}
+
+const isFavoriteQuestionRecord = (record: PracticeQuestionRecord): record is FavoriteQuestionVO => {
+  return 'favoriteId' in record || ('questionId' in record && !('content' in record))
+}
+
+const normalizePracticeQuestion = (record: PracticeQuestionRecord): QuestionDetailVO => {
+  const questionId = isWrongQuestionRecord(record) || isFavoriteQuestionRecord(record)
+    ? record.questionId
+    : record.id
+
+  return {
+    ...record,
+    id: questionId || ('id' in record ? record.id : undefined) || 0,
+    title: record.title,
+    content: 'content' in record ? record.content : '',
+    difficulty: record.difficulty,
+    categoryName: record.categoryName,
+    tags: record.tags,
+    favorite: 'favorite' in record ? record.favorite : isFavoriteQuestionRecord(record),
+    masteryStatus: 'masteryStatus' in record ? record.masteryStatus : undefined,
+    lastAnswer: 'lastAnswer' in record ? record.lastAnswer : undefined,
+    lastAnswerResult: 'lastAnswerResult' in record ? record.lastAnswerResult : undefined
+  }
 }
 
 const router = useRouter()
@@ -274,13 +304,13 @@ const fetchQuestions = async () => {
 
     if (config.mode === 'wrong') {
       const result = await getWrongQuestionsApi({ pageNo: 1, pageSize: config.count })
-      records = (result.records || []) as unknown as QuestionDetailVO[]
+      records = (result.records || []).map(normalizePracticeQuestion)
     } else if (config.mode === 'favorite') {
       const result = await getFavoriteQuestionsApi(params)
-      records = (result.records || []) as unknown as QuestionDetailVO[]
+      records = (result.records || []).map(normalizePracticeQuestion)
     } else {
       const result = await getQuestionsApi(params)
-      records = (result.records || []) as unknown as QuestionDetailVO[]
+      records = (result.records || []).map(normalizePracticeQuestion)
     }
 
     if (config.mode === 'random') {

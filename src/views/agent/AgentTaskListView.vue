@@ -49,8 +49,8 @@
         <el-table-column label="任务" min-width="260" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="task-cell">
-              <strong>{{ row.title || `Agent 任务 #${row.id}` }}</strong>
-              <span>{{ row.description || '暂无描述' }}</span>
+              <strong>{{ displayTaskTitle(row) }}</strong>
+              <span>{{ displayTaskDescription(row) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -74,11 +74,11 @@
         </el-table-column>
         <el-table-column label="操作" width="310" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :disabled="row.status !== 'TODO'" @click="handleStartTask(row)">Start</el-button>
+            <el-button link type="primary" :disabled="row.status !== 'TODO'" @click="handleStartTask(row)">开始</el-button>
             <el-button link type="primary" :disabled="row.status === 'DONE'" @click="openCompleteDialog(row)">完成</el-button>
             <el-button link type="info" :disabled="row.status === 'DONE' || row.status === 'SKIPPED'" @click="openSkipDialog(row)">跳过</el-button>
-            <el-button link type="warning" :disabled="row.status !== 'SKIPPED'" @click="handleRestoreTask(row)">Restore</el-button>
-            <el-button link type="info" @click="openFeedbackDialog(row)">Feedback</el-button>
+            <el-button link type="warning" :disabled="row.status !== 'SKIPPED'" @click="handleRestoreTask(row)">恢复</el-button>
+            <el-button link type="info" @click="openFeedbackDialog(row)">反馈</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -106,20 +106,20 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="feedbackDialogVisible" title="Agent feedback" width="460px">
+    <el-dialog v-model="feedbackDialogVisible" title="Agent 反馈" width="460px">
       <el-form label-position="top">
-        <el-form-item label="Feedback type">
+        <el-form-item label="反馈类型">
           <el-select v-model="feedbackForm.feedbackType" style="width: 100%">
             <el-option v-for="item in feedbackTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Comment">
+        <el-form-item label="备注">
           <el-input v-model="feedbackForm.comment" type="textarea" :rows="4" maxlength="300" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="feedbackDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitFeedback">Submit</el-button>
+        <el-button @click="feedbackDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mutating" @click="submitFeedback">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -178,7 +178,8 @@ const taskTypeOptions = [
   { label: '简历优化', value: 'RESUME_OPTIMIZE' },
   { label: '学习任务', value: 'STUDY_TASK' },
   { label: '报告复盘', value: 'REPORT_REVIEW' },
-  { label: '技能复习', value: 'SKILL_REVIEW' }
+  { label: '技能复习', value: 'SKILL_REVIEW' },
+  { label: '知识复盘', value: 'KNOWLEDGE_REVIEW' }
 ]
 
 const statusOptions = [
@@ -192,11 +193,11 @@ const statusOptions = [
 const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
 const priorityMap: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 const feedbackTypeOptions = [
-  { label: 'Helpful', value: 'HELPFUL' },
-  { label: 'Not helpful', value: 'NOT_HELPFUL' },
-  { label: 'Too hard', value: 'TOO_HARD' },
-  { label: 'Too easy', value: 'TOO_EASY' },
-  { label: 'Irrelevant', value: 'IRRELEVANT' }
+  { label: '有帮助', value: 'HELPFUL' },
+  { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '太难', value: 'TOO_HARD' },
+  { label: '太简单', value: 'TOO_EASY' },
+  { label: '不相关', value: 'IRRELEVANT' }
 ]
 
 watch(dateRange, (value) => {
@@ -209,6 +210,38 @@ const getErrorMessage = (error: unknown) => {
     return String((error as { message?: unknown }).message || '接口请求失败')
   }
   return '接口请求失败'
+}
+
+const skillFromText = (value?: string) =>
+  value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const displayTaskTitle = (row: AgentTaskVO) => {
+  const skill = row.relatedSkillName || skillFromText(row.title) || row.targetJobTitle || '目标技能'
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: `${skill} 面试题练习`,
+    WRONG_QUESTION_REVIEW: `${skill} 错题复习`,
+    INTERVIEW: '目标岗位模拟面试',
+    RESUME_OPTIMIZE: `${skill} 简历证据优化`,
+    STUDY_TASK: `${skill} 学习任务`,
+    REPORT_REVIEW: '面试报告复盘',
+    SKILL_REVIEW: `${skill} 核心概念复习`,
+    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+  }
+  return map[row.taskType || ''] || row.title || `Agent 任务 #${row.id}`
+}
+
+const displayTaskDescription = (row: AgentTaskVO) => {
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: '完成一组聚焦题目练习，并记录薄弱点。',
+    WRONG_QUESTION_REVIEW: '复盘历史错题，确认相关知识点是否已经掌握。',
+    INTERVIEW: '围绕目标岗位进行项目深挖和技术追问练习。',
+    RESUME_OPTIMIZE: '检查项目经历是否清楚证明目标技能和业务影响。',
+    STUDY_TASK: '完成学习计划中的阶段任务。',
+    REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
+    SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
+    KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
+  }
+  return map[row.taskType || ''] || row.description || '暂无描述'
 }
 
 const getTaskTypeLabel = (value?: string) => taskTypeOptions.find((item) => item.value === value)?.label || value || '--'
@@ -285,7 +318,7 @@ const handleStartTask = async (task: AgentTaskVO) => {
   mutating.value = true
   try {
     await startAgentTaskApi(task.id)
-    ElMessage.success('Task started')
+    ElMessage.success('任务已开始')
     await fetchTasks()
   } finally {
     mutating.value = false
@@ -296,7 +329,7 @@ const handleRestoreTask = async (task: AgentTaskVO) => {
   mutating.value = true
   try {
     await restoreAgentTaskApi(task.id)
-    ElMessage.success('Task restored')
+    ElMessage.success('任务已恢复')
     await fetchTasks()
   } finally {
     mutating.value = false
@@ -323,7 +356,7 @@ const submitFeedback = async () => {
       comment: feedbackForm.comment || undefined
     })
     feedbackDialogVisible.value = false
-    ElMessage.success('Feedback submitted')
+    ElMessage.success('反馈已提交')
   } finally {
     mutating.value = false
   }

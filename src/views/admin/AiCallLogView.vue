@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <Activity :size="16" />
-          <span>AI Observability</span>
+          <span>AI 可观测</span>
         </div>
         <h1 class="admin-hero__title">AI 调用日志</h1>
         <p class="admin-hero__desc">
@@ -56,7 +56,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="业务 ID">
-            <el-input v-model.trim="query.businessId" clearable placeholder="businessId" />
+            <el-input v-model.trim="query.businessId" clearable placeholder="输入业务 ID" />
           </el-form-item>
           <el-form-item label="模型">
             <el-input v-model.trim="query.modelName" clearable placeholder="模型名称" />
@@ -91,7 +91,7 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column label="失败原因" min-width="180" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.failReason || row.errorMessage || '-' }}</template>
+            <template #default="{ row }">{{ translateFailureReason(row.failReason || row.errorMessage) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
@@ -124,7 +124,7 @@
           <el-descriptions-item label="业务 ID">{{ detail.businessId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="Token">{{ detail.totalTokens ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ detail.elapsedMs ?? detail.latencyMs ?? '-' }} ms</el-descriptions-item>
-          <el-descriptions-item label="失败原因">{{ detail.failReason || detail.errorMessage || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="失败原因">{{ translateFailureReason(detail.failReason || detail.errorMessage) }}</el-descriptions-item>
         </el-descriptions>
 
         <h3>请求 Prompt</h3>
@@ -147,6 +147,7 @@ import { getAdminAiLogDetailApi, getAdminAiLogsApi } from '@/api/aiAdmin'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { AI_SCENE } from '@/constants/enums'
 import type { AiCallLogQueryDTO, AiCallLogVO, AiScene } from '@/types/ai'
+import { translateFailureReason } from '@/utils/adminDisplay'
 
 const sceneOptions = [
   { label: '八股文提问', value: AI_SCENE.INTERVIEW_QUESTION_GENERATE },

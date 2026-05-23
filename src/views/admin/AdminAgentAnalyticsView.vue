@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <Activity :size="16" />
-          <span>Agent Analytics</span>
+          <span>Agent 分析</span>
         </div>
         <h1 class="admin-hero__title">Agent 效果分析</h1>
         <p class="admin-hero__desc">围绕 Agent 运行成功率、任务生成、完成率和任务结构做基础 BI 观测。</p>

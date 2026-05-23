@@ -2,34 +2,34 @@
   <div class="page-shell v4-knowledge-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 Knowledge</div>
-        <h1>Personal knowledge base</h1>
-        <p>Manage indexed personal documents and search real knowledge chunks from the V4 knowledge APIs.</p>
+        <div class="v4-eyebrow">V4 知识库</div>
+        <h1>个人知识库</h1>
+        <p>管理已索引的个人文档，并通过 V4 知识库接口检索真实知识片段。</p>
       </div>
       <div class="v4-actions">
-        <el-button :loading="loading" @click="loadDocuments">Refresh</el-button>
-        <el-button type="primary" @click="openCreate">New document</el-button>
+        <el-button :loading="loading" @click="loadDocuments">刷新</el-button>
+        <el-button type="primary" @click="openCreate">新增文档</el-button>
       </div>
     </section>
 
     <section class="content-card">
       <div class="content-card__body">
         <el-form class="knowledge-search" inline @submit.prevent>
-          <el-form-item label="Keyword">
-            <el-input v-model.trim="keyword" clearable placeholder="Search indexed chunks" style="width: 260px" />
+          <el-form-item label="关键词">
+            <el-input v-model.trim="keyword" clearable placeholder="搜索已索引片段" style="width: 260px" />
           </el-form-item>
-          <el-form-item label="Limit">
+          <el-form-item label="数量">
             <el-input-number v-model="limit" :min="1" :max="50" controls-position="right" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :loading="searching" @click="handleSearch">Search</el-button>
+            <el-button type="primary" :loading="searching" @click="handleSearch">搜索</el-button>
           </el-form-item>
         </el-form>
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="Knowledge data failed to load" :description="errorMessage">
-      <el-button type="primary" @click="loadDocuments">Retry</el-button>
+    <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
+      <el-button type="primary" @click="loadDocuments">重试</el-button>
     </AppState>
 
     <template v-else>
@@ -37,22 +37,22 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Documents</p>
-              <h2>Indexed documents</h2>
+              <p class="section-kicker">文档</p>
+              <h2>已索引文档</h2>
             </div>
           </div>
             <el-table v-loading="loading" :data="documents" row-key="id">
-            <el-table-column prop="title" label="Title" min-width="220" show-overflow-tooltip />
-            <el-table-column label="Source" width="140">
+            <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
+            <el-table-column label="来源" width="140">
               <template #default="{ row }">{{ row.documentType || '--' }}</template>
             </el-table-column>
-            <el-table-column prop="chunkCount" label="Chunks" width="110" />
-            <el-table-column prop="status" label="Status" width="120" />
-            <el-table-column label="Updated" width="180">
+            <el-table-column prop="chunkCount" label="片段数" width="110" />
+            <el-table-column prop="status" label="状态" width="120" />
+            <el-table-column label="更新时间" width="180">
               <template #default="{ row }">{{ row.updatedAt || '--' }}</template>
             </el-table-column>
             <template #empty>
-              <el-empty description="No knowledge documents" />
+              <el-empty description="暂无知识库文档" />
             </template>
           </el-table>
           <div class="pagination-wrap">
@@ -73,39 +73,39 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Search</p>
-              <h2>Search results</h2>
+              <p class="section-kicker">搜索</p>
+              <h2>搜索结果</h2>
             </div>
           </div>
           <div class="result-list" v-loading="searching">
             <article v-for="item in searchResults" :key="`${item.documentId}-${item.chunkId || 'doc'}`" class="result-row">
               <div>
-                <strong>{{ item.title || `Document #${item.documentId || '--'}` }}</strong>
+                <strong>{{ item.title || `文档 #${item.documentId || '--'}` }}</strong>
                 <p>{{ item.snippet || '--' }}</p>
               </div>
               <el-tag effect="plain">{{ item.sourceRef || item.documentType || '--' }}</el-tag>
             </article>
-            <el-empty v-if="!searchResults.length && !searching" description="No search results" />
+            <el-empty v-if="!searchResults.length && !searching" description="暂无搜索结果" />
           </div>
         </div>
       </section>
     </template>
 
-    <el-dialog v-model="dialogVisible" title="New knowledge document" width="620px">
+    <el-dialog v-model="dialogVisible" title="新增知识文档" width="620px">
       <el-form label-position="top">
-        <el-form-item label="Title" required>
+        <el-form-item label="标题" required>
           <el-input v-model.trim="form.title" maxlength="120" show-word-limit />
         </el-form-item>
-        <el-form-item label="Source type">
+        <el-form-item label="来源类型">
           <el-input v-model.trim="form.documentType" placeholder="NOTE" />
         </el-form-item>
-        <el-form-item label="Content" required>
+        <el-form-item label="内容" required>
           <el-input v-model="form.content" type="textarea" :rows="8" maxlength="10000" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="saving" @click="createDocument">Save</el-button>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="createDocument">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -149,9 +149,9 @@ const form = reactive({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const applyDocumentPage = () => {
@@ -203,7 +203,7 @@ const openCreate = () => {
 
 const createDocument = async () => {
   if (!form.title || !form.content) {
-    ElMessage.warning('Title and content are required')
+    ElMessage.warning('请填写标题和内容')
     return
   }
   saving.value = true
@@ -214,7 +214,7 @@ const createDocument = async () => {
       content: form.content
     })
     dialogVisible.value = false
-    ElMessage.success('Document indexed')
+    ElMessage.success('文档已索引')
     await loadDocuments()
   } finally {
     saving.value = false

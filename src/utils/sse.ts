@@ -62,7 +62,7 @@ const parseSseBlock = <T extends SseEventData>(block: string): SseParsedEvent<T>
   const rawEvent = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
   const dataText = lines
     .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
+    .map((line) => line.slice(5).replace(/^ /, ''))
     .join('\n')
 
   if (!dataText) {
@@ -146,7 +146,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       let buffer = ''
 
       const emitBlock = (block: string) => {
-        const parsed = parseSseBlock<T>(block.trim())
+        const parsed = parseSseBlock<T>(block.replace(/\r?\n$/, ''))
         if (!parsed) return
 
         const key = getDedupeKey(parsed.event, parsed.data)
@@ -171,7 +171,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
         blocks.forEach(emitBlock)
       }
 
-      if (buffer.trim()) {
+      if (buffer) {
         emitBlock(buffer)
       }
 

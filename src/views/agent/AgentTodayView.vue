@@ -44,7 +44,7 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Plan</p>
+              <p class="section-kicker">计划</p>
               <h2>{{ plan?.targetJobTitle || '今日计划' }}</h2>
               <span>{{ plan?.date || queryDate }}</span>
             </div>
@@ -70,10 +70,10 @@
                 <article v-for="task in taskList" :key="task.id" class="agent-task-card">
                   <div class="task-main">
                     <div class="task-title-row">
-                      <h3>{{ task.title || `Agent 任务 #${task.id}` }}</h3>
+                      <h3>{{ displayTaskTitle(task) }}</h3>
                       <StatusTag :status="task.status" :map="taskStatusMap" />
                     </div>
-                    <p>{{ task.description || '暂无任务描述' }}</p>
+                    <p>{{ displayTaskDescription(task) }}</p>
                     <div class="task-meta">
                       <span>{{ taskTypeMap[task.taskType || ''] || task.taskType || '未分类' }}</span>
                       <span>{{ priorityMap[task.priority || ''] || task.priority || '无优先级' }}</span>
@@ -84,11 +84,11 @@
                   </div>
                   <div class="task-actions">
                     <el-button v-if="task.actionUrl" size="small" :icon="ExternalLink" @click="goAction(task.actionUrl)">去处理</el-button>
-                    <el-button size="small" type="primary" plain :disabled="task.status !== 'TODO'" @click="handleStartTask(task)">Start</el-button>
+                    <el-button size="small" type="primary" plain :disabled="task.status !== 'TODO'" @click="handleStartTask(task)">开始</el-button>
                     <el-button size="small" type="success" plain :disabled="task.status === 'DONE'" @click="openCompleteDialog(task)">完成</el-button>
                     <el-button size="small" plain :disabled="task.status === 'DONE' || task.status === 'SKIPPED'" @click="openSkipDialog(task)">跳过</el-button>
-                    <el-button size="small" type="warning" plain :disabled="task.status !== 'SKIPPED'" @click="handleRestoreTask(task)">Restore</el-button>
-                    <el-button size="small" :icon="MessageSquare" @click="openFeedbackDialog(task)">Feedback</el-button>
+                    <el-button size="small" type="warning" plain :disabled="task.status !== 'SKIPPED'" @click="handleRestoreTask(task)">恢复</el-button>
+                    <el-button size="small" :icon="MessageSquare" @click="openFeedbackDialog(task)">反馈</el-button>
                   </div>
                 </article>
                 <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="没有从今日任务接口读取到任务。" />
@@ -131,20 +131,20 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="feedbackDialogVisible" title="Agent feedback" width="460px">
+    <el-dialog v-model="feedbackDialogVisible" title="Agent 反馈" width="460px">
       <el-form label-position="top">
-        <el-form-item label="Feedback type">
+        <el-form-item label="反馈类型">
           <el-select v-model="feedbackForm.feedbackType" style="width: 100%">
             <el-option v-for="item in feedbackTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Comment">
+        <el-form-item label="备注">
           <el-input v-model="feedbackForm.comment" type="textarea" :rows="4" maxlength="300" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="feedbackDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitFeedback">Submit</el-button>
+        <el-button @click="feedbackDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mutating" @click="submitFeedback">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -216,7 +216,8 @@ const taskTypeMap: Record<string, string> = {
   RESUME_OPTIMIZE: '简历优化',
   STUDY_TASK: '学习任务',
   REPORT_REVIEW: '报告复盘',
-  SKILL_REVIEW: '技能复习'
+  SKILL_REVIEW: '技能复习',
+  KNOWLEDGE_REVIEW: '知识复盘'
 }
 
 const priorityMap: Record<string, string> = {
@@ -226,11 +227,11 @@ const priorityMap: Record<string, string> = {
 }
 
 const feedbackTypeOptions = [
-  { label: 'Helpful', value: 'HELPFUL' },
-  { label: 'Not helpful', value: 'NOT_HELPFUL' },
-  { label: 'Too hard', value: 'TOO_HARD' },
-  { label: 'Too easy', value: 'TOO_EASY' },
-  { label: 'Irrelevant', value: 'IRRELEVANT' }
+  { label: '有帮助', value: 'HELPFUL' },
+  { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '太难', value: 'TOO_HARD' },
+  { label: '太简单', value: 'TOO_EASY' },
+  { label: '不相关', value: 'IRRELEVANT' }
 ]
 
 const focusSkills = computed(() => plan.value?.focusSkills || [])
@@ -244,6 +245,38 @@ const getErrorMessage = (error: unknown) => {
     return String((error as { message?: unknown }).message || '接口请求失败')
   }
   return '接口请求失败'
+}
+
+const skillFromText = (value?: string) =>
+  value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const displayTaskTitle = (task: AgentTaskVO) => {
+  const skill = task.relatedSkillName || skillFromText(task.title) || task.targetJobTitle || '目标技能'
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: `${skill} 面试题练习`,
+    WRONG_QUESTION_REVIEW: `${skill} 错题复习`,
+    INTERVIEW: '目标岗位模拟面试',
+    RESUME_OPTIMIZE: `${skill} 简历证据优化`,
+    STUDY_TASK: `${skill} 学习任务`,
+    REPORT_REVIEW: '面试报告复盘',
+    SKILL_REVIEW: `${skill} 核心概念复习`,
+    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+  }
+  return map[task.taskType || ''] || task.title || `Agent 任务 #${task.id}`
+}
+
+const displayTaskDescription = (task: AgentTaskVO) => {
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: '完成一组聚焦题目练习，并记录薄弱点。',
+    WRONG_QUESTION_REVIEW: '复盘历史错题，确认相关知识点是否已经掌握。',
+    INTERVIEW: '围绕目标岗位进行项目深挖和技术追问练习。',
+    RESUME_OPTIMIZE: '检查项目经历是否清楚证明目标技能和业务影响。',
+    STUDY_TASK: '完成学习计划中的阶段任务。',
+    REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
+    SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
+    KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
+  }
+  return map[task.taskType || ''] || task.description || '暂无任务描述'
 }
 
 const loadPage = async () => {
@@ -323,7 +356,7 @@ const handleStartTask = async (task: AgentTaskVO) => {
   mutating.value = true
   try {
     await startAgentTaskApi(task.id)
-    ElMessage.success('Task started')
+    ElMessage.success('任务已开始')
     await loadPage()
   } finally {
     mutating.value = false
@@ -334,7 +367,7 @@ const handleRestoreTask = async (task: AgentTaskVO) => {
   mutating.value = true
   try {
     await restoreAgentTaskApi(task.id)
-    ElMessage.success('Task restored')
+    ElMessage.success('任务已恢复')
     await loadPage()
   } finally {
     mutating.value = false
@@ -361,7 +394,7 @@ const submitFeedback = async () => {
       comment: feedbackForm.comment || undefined
     })
     feedbackDialogVisible.value = false
-    ElMessage.success('Feedback submitted')
+    ElMessage.success('反馈已提交')
   } finally {
     mutating.value = false
   }

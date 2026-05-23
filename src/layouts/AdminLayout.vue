@@ -14,7 +14,7 @@
     <el-container class="app-layout__content">
       <el-header class="app-layout__header">
         <div class="header-left">
-          <button class="icon-button" type="button" aria-label="Toggle sidebar" @click="appStore.toggleSidebar()">
+          <button class="icon-button" type="button" aria-label="切换侧边栏" @click="appStore.toggleSidebar()">
             <PanelLeftOpen v-if="appStore.sidebarCollapsed" :size="18" />
             <PanelLeftClose v-else :size="18" />
           </button>
@@ -26,8 +26,8 @@
             <Search :size="15" />
             <span>搜索管理后台</span>
           </div>
-          <el-tooltip content="通知中心 V3 接入" placement="bottom">
-            <button class="icon-button icon-button--ghost" type="button" aria-label="通知中心" disabled>
+          <el-tooltip content="通知管理" placement="bottom">
+            <button class="icon-button icon-button--ghost" type="button" aria-label="通知管理" @click="router.push('/admin/notices')">
               <Bell :size="16" />
             </button>
           </el-tooltip>
@@ -226,15 +226,6 @@ const handleCommand = async (command: string) => {
     color: var(--app-text-muted);
   }
 
-  &--ghost:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-  }
-
-  &--ghost:disabled:hover {
-    border-color: var(--app-border);
-    background: transparent;
-  }
 }
 
 .app-layout__header-actions {

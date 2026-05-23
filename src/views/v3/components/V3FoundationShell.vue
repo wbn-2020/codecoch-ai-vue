@@ -30,7 +30,7 @@
     <div class="v3-grid">
       <section class="v3-section">
         <div class="v3-section__head">
-          <span>Backend Contract</span>
+          <span>后端契约</span>
           <el-tag effect="plain" type="success">真实接口</el-tag>
         </div>
         <ul class="v3-api-list">
@@ -42,7 +42,7 @@
 
       <section class="v3-section">
         <div class="v3-section__head">
-          <span>Current Scope</span>
+          <span>当前范围</span>
           <el-tag effect="plain" type="warning">待实现业务区块</el-tag>
         </div>
         <ul class="v3-scope-list">

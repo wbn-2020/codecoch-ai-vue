@@ -1,10 +1,17 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
+import { STORAGE_KEYS } from '@/constants/storage'
 import type { ApiResult, RequestErrorPayload } from '@/types/api'
-import { clearLocalAuth, getToken } from '@/utils/token'
+import type { LoginVO } from '@/types/auth'
+import { clearLocalAuth, getToken, setToken } from '@/utils/token'
+import { storage } from '@/utils/storage'
+
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean
+}
 
 const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
@@ -19,6 +26,80 @@ const handleTokenExpired = () => {
   }
 }
 
+const normalizeAuthArray = <T>(items?: T[]): T[] => Array.from(new Set(items || []))
+
+const persistRefreshResult = (result: LoginVO) => {
+  setToken(result.token)
+
+  const userInfo = result.userInfo
+    ? {
+        ...result.userInfo,
+        roles: normalizeAuthArray(result.userInfo.roles?.length ? result.userInfo.roles : result.roles),
+        permissions: normalizeAuthArray(
+          result.userInfo.permissions?.length ? result.userInfo.permissions : result.permissions
+        )
+      }
+    : null
+
+  if (userInfo) {
+    storage.set(STORAGE_KEYS.userInfo, userInfo)
+    storage.set(STORAGE_KEYS.roles, userInfo.roles)
+    storage.set(STORAGE_KEYS.permissions, userInfo.permissions || [])
+  } else {
+    storage.set(STORAGE_KEYS.roles, normalizeAuthArray(result.roles))
+    storage.set(STORAGE_KEYS.permissions, normalizeAuthArray(result.permissions))
+  }
+}
+
+const refreshClient = axios.create({
+  baseURL: appConfig.apiBaseUrl,
+  timeout: appConfig.requestTimeout
+})
+
+let refreshingToken: Promise<string> | null = null
+
+const refreshToken = async () => {
+  if (!refreshingToken) {
+    refreshingToken = refreshClient
+      .post<ApiResult<LoginVO>>('/auth/refresh-token', null, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`
+        }
+      })
+      .then((response) => {
+        const result = response.data
+        if (result.code !== HTTP_STATUS_CODE.SUCCESS || !result.data?.token) {
+          throw new Error(result.message || 'refresh token failed')
+        }
+        persistRefreshResult(result.data)
+        return result.data.token
+      })
+      .finally(() => {
+        refreshingToken = null
+      })
+  }
+
+  return refreshingToken
+}
+
+const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
+  if (!config || config._retry) {
+    handleTokenExpired()
+    return Promise.reject(new Error('Token expired'))
+  }
+
+  config._retry = true
+
+  try {
+    const token = await refreshToken()
+    config.headers.Authorization = `Bearer ${token}`
+    return request(config)
+  } catch (error) {
+    handleTokenExpired()
+    return Promise.reject(error)
+  }
+}
+
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getToken()
 
@@ -29,8 +110,7 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-request.interceptors.response.use(
-  (response) => {
+const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
     const result = response.data as ApiResult
 
     if (!result || typeof result.code !== 'number') {
@@ -45,8 +125,7 @@ request.interceptors.response.use(
       result.code === HTTP_STATUS_CODE.UNAUTHENTICATED ||
       result.code === HTTP_STATUS_CODE.TOKEN_INVALID
     ) {
-      handleTokenExpired()
-      return Promise.reject(result)
+      return retryAfterRefresh(response.config as RetryableRequestConfig)
     }
 
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
@@ -59,12 +138,14 @@ request.interceptors.response.use(
 
     ElMessage.error(result.message || '请求失败，请稍后重试')
     return Promise.reject(result)
-  },
+}
+
+request.interceptors.response.use(
+  unwrapResponse as never,
   (error: AxiosError<RequestErrorPayload>) => {
     // HTTP 层面的 401（非业务 code）
     if (error.response?.status === 401) {
-      handleTokenExpired()
-      return Promise.reject(error)
+      return retryAfterRefresh(error.config as RetryableRequestConfig | undefined)
     }
 
     const message = error.response?.data?.message || error.message || '网络异常，请稍后重试'
