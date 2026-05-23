@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">Prompt 回归</div>
         <h1 class="admin-hero__title">Prompt 回归测试</h1>
-        <p class="admin-hero__desc">加载固定回归用例和执行结果，并按用例与 Prompt 版本触发后端回归运行。</p>
+        <p class="admin-hero__desc">加载固定回归用例和执行结果，按用例与 Prompt 版本触发后端回归运行。</p>
       </div>
       <div class="admin-hero__actions">
         <el-button v-permission="'admin:agent:prompt-regression:write'" type="primary" @click="openCaseDialog()">新增用例</el-button>
