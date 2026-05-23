@@ -4,7 +4,7 @@
       <div>
         <div class="analytics-eyebrow">
           <LineChart :size="16" />
-          <span>V4 Analytics</span>
+          <span>V4 分析</span>
         </div>
         <h1>个人训练分析</h1>
         <p>汇总 JobCoachAgent 任务、完成率、训练耗时和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
@@ -35,7 +35,7 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Trend</p>
+              <p class="section-kicker">趋势</p>
               <h2>任务完成趋势</h2>
               <span>按日期展示生成、完成、跳过和训练耗时</span>
             </div>
@@ -51,7 +51,7 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Skills</p>
+              <p class="section-kicker">技能</p>
               <h2>重点训练技能</h2>
               <span>来自 Agent 任务关联技能 Top 分布</span>
             </div>

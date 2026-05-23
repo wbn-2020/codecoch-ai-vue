@@ -2,7 +2,7 @@
   <div class="page-shell admin-console-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow"><KeyRound :size="16" /><span>Login Audit</span></div>
+        <div class="admin-eyebrow"><KeyRound :size="16" /><span>登录审计</span></div>
         <h1 class="admin-hero__title">登录日志</h1>
         <p class="admin-hero__desc">追踪登录成功、失败、来源 IP 和客户端信息。</p>
       </div>
@@ -12,7 +12,7 @@
         <el-form :model="query" inline>
           <el-form-item label="关键词"><el-input v-model.trim="query.keyword" clearable placeholder="用户名 / IP" /></el-form-item>
           <el-form-item label="用户 ID"><el-input-number v-model="query.userId" :min="1" controls-position="right" /></el-form-item>
-          <el-form-item label="状态"><el-select v-model="query.status" clearable placeholder="全部" style="width: 120px"><el-option label="成功" :value="1" /><el-option label="失败" :value="0" /></el-select></el-form-item>
+          <el-form-item label="状态"><el-select v-model="query.status" clearable placeholder="全部" style="width: 120px"><el-option label="成功" value="SUCCESS" /><el-option label="失败" value="FAILED" /></el-select></el-form-item>
           <el-form-item><el-button type="primary" @click="handleSearch">查询</el-button><el-button @click="handleReset">重置</el-button></el-form-item>
         </el-form>
       </div>
@@ -23,7 +23,7 @@
           <el-table-column prop="ip" label="IP" min-width="130" />
           <el-table-column prop="location" label="位置" min-width="150" show-overflow-tooltip />
           <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag :type="isSuccess(row.status) ? 'success' : 'danger'">{{ isSuccess(row.status) ? '成功' : '失败' }}</el-tag></template></el-table-column>
-          <el-table-column prop="message" label="消息" min-width="180" show-overflow-tooltip />
+          <el-table-column label="消息" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.message || (isSuccess(row.status) ? '登录成功' : '-') }}</template></el-table-column>
           <el-table-column prop="userAgent" label="客户端" min-width="260" show-overflow-tooltip />
         </el-table>
       </div>

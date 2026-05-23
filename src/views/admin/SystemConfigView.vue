@@ -5,7 +5,7 @@
         <h1 class="page-title">系统配置</h1>
         <p class="page-subtitle">维护 V1 基础配置项，例如追问次数、每场题数和 AI 超时时间。</p>
       </div>
-      <el-button type="primary" @click="openDialog()">新增配置</el-button>
+      <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增配置</el-button>
     </div>
 
     <section class="content-card">
@@ -42,8 +42,8 @@
           <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="danger" :disabled="row.editable !== 1" @click="handleDelete(row)">删除</el-button>
+              <el-button v-permission="'ADMIN'" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
+              <el-button v-permission="'ADMIN'" link type="danger" :disabled="row.editable !== 1" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -93,7 +93,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>

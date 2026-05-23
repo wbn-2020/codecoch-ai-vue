@@ -5,6 +5,7 @@ import '@/styles/index.scss'
 import '@/styles/element-dark.scss'
 
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
@@ -18,7 +19,7 @@ const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+app.use(ElementPlus, { locale: zhCn })
 
 app.directive('permission', permission)
 

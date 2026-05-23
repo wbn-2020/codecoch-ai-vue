@@ -15,7 +15,7 @@
       <div class="admin-panel__header">
         <div>
           <h2>任务明细</h2>
-          <p>按用户、日期、类型、优先级和状态筛选 Agent task。</p>
+          <p>按用户、日期、类型、优先级和状态筛选 Agent 任务。</p>
         </div>
       </div>
 
@@ -63,8 +63,8 @@
             <el-table-column label="任务" min-width="260" show-overflow-tooltip>
               <template #default="{ row }">
                 <div class="task-cell">
-                  <strong>{{ row.title || `Agent 任务 #${row.id}` }}</strong>
-                  <span>{{ row.description || '暂无描述' }}</span>
+                  <strong>{{ displayTaskTitle(row) }}</strong>
+                  <span>{{ displayTaskDescription(row) }}</span>
                 </div>
               </template>
             </el-table-column>
@@ -72,15 +72,15 @@
             <el-table-column label="状态" width="110">
               <template #default="{ row }"><StatusTag :status="row.status" :map="statusMap" /></template>
             </el-table-column>
-            <el-table-column prop="priority" label="优先级" width="100" />
-            <el-table-column prop="taskType" label="类型" width="150" show-overflow-tooltip />
+            <el-table-column label="优先级" width="100"><template #default="{ row }">{{ priorityLabel(row.priority) }}</template></el-table-column>
+            <el-table-column label="类型" width="150" show-overflow-tooltip><template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template></el-table-column>
             <el-table-column label="耗时" width="90">
               <template #default="{ row }">{{ row.estimatedMinutes ?? '--' }}m</template>
             </el-table-column>
             <el-table-column prop="dueDate" label="日期" width="120" />
             <el-table-column label="运行" width="100">
               <template #default="{ row }">
-                <el-button v-if="row.agentRunId" link type="primary" @click="openRun(row.agentRunId)">Run</el-button>
+                <el-button v-if="row.agentRunId" link type="primary" @click="openRun(row.agentRunId)">详情</el-button>
                 <span v-else>--</span>
               </template>
             </el-table-column>
@@ -142,6 +142,8 @@ const taskTypeOptions = [
   { label: '报告复盘', value: 'REPORT_REVIEW' },
   { label: '技能复习', value: 'SKILL_REVIEW' }
 ]
+const taskTypeMap = Object.fromEntries(taskTypeOptions.map((item) => [item.value, item.label]))
+const priorityMap: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' }
 
 const statusOptions = [
   { label: '待完成', value: 'TODO' },
@@ -152,6 +154,41 @@ const statusOptions = [
 ]
 
 const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
+
+const skillFromText = (value?: string) =>
+  value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const displayTaskTitle = (row: AgentTaskVO) => {
+  const skill = row.relatedSkillName || skillFromText(row.title) || row.targetJobTitle || '目标技能'
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: `${skill} 面试题练习`,
+    WRONG_QUESTION_REVIEW: `${skill} 错题复习`,
+    INTERVIEW: '目标岗位模拟面试',
+    RESUME_OPTIMIZE: `${skill} 简历证据优化`,
+    STUDY_TASK: `${skill} 学习任务`,
+    REPORT_REVIEW: '面试报告复盘',
+    SKILL_REVIEW: `${skill} 核心概念复习`,
+    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+  }
+  return map[row.taskType || ''] || row.title || `Agent 任务 #${row.id}`
+}
+
+const displayTaskDescription = (row: AgentTaskVO) => {
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: '完成一组聚焦题目练习，并记录薄弱点。',
+    WRONG_QUESTION_REVIEW: '复盘历史错题，确认相关知识点是否已经掌握。',
+    INTERVIEW: '围绕目标岗位进行项目深挖和技术追问练习。',
+    RESUME_OPTIMIZE: '检查项目经历是否清楚证明目标技能和业务影响。',
+    STUDY_TASK: '完成学习计划中的阶段任务。',
+    REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
+    SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
+    KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
+  }
+  return map[row.taskType || ''] || row.description || '暂无描述'
+}
+
+const taskTypeLabel = (value?: string) => taskTypeMap[value || ''] || value || '--'
+const priorityLabel = (value?: string) => priorityMap[value || ''] || value || '--'
 
 watch(dateRange, (value) => {
   query.startDate = Array.isArray(value) ? value[0] : ''

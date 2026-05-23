@@ -12,7 +12,7 @@
         </p>
         <div class="dashboard-hero__notice">
           <Database :size="16" />
-          <span>{{ dashboard?.dataSourceDesc || 'GET /admin/dashboard/overview' }}</span>
+          <span>{{ dashboard?.dataSourceDesc || '管理概览接口实时聚合' }}</span>
           <span class="notice-divider"></span>
           <Clock3 :size="16" />
           <span>生成时间：{{ formatDateTime(dashboard?.generatedAt) }}</span>
@@ -67,7 +67,7 @@
           <div class="dashboard-card-title">
             <div>
               <h3>面试 / 简历 / 学习计划趋势</h3>
-              <p>interviewCount、resumeUploadCount、studyPlanGeneratedCount</p>
+              <p>面试、简历上传和学习计划生成数量</p>
             </div>
           </div>
           <div ref="businessTrendRef" class="dashboard-chart"></div>
@@ -76,7 +76,7 @@
           <div class="dashboard-card-title">
             <div>
               <h3>AI 调用与失败趋势</h3>
-              <p>aiCallCount、aiCallFailedCount、questionReviewGeneratedCount</p>
+              <p>AI 调用、失败调用和题目审核生成数量</p>
             </div>
           </div>
           <div ref="aiTrendRef" class="dashboard-chart"></div>
@@ -85,37 +85,62 @@
     </section>
 
     <div class="admin-dashboard-grid dashboard-lower-grid">
-      <section class="admin-panel dashboard-pending-panel">
-        <div class="admin-panel__header">
-          <div>
-            <h2>待处理事项</h2>
-            <p>全部待办来自 pendingItems，unsupported/unknown 状态按原样展示。</p>
-          </div>
-          <el-tag type="success" effect="plain">真实待办</el-tag>
-        </div>
-        <div class="admin-work-list dashboard-work-list">
-          <button
-            v-for="item in pendingItems"
-            :key="item.key"
-            class="admin-work-item dashboard-work-item"
-            type="button"
-            @click="goPending(item)"
-          >
+      <div class="dashboard-left-stack">
+        <section class="admin-panel dashboard-pending-panel">
+          <div class="admin-panel__header">
             <div>
-              <span>{{ pendingLabel(item) }}</span>
-              <small>{{ item.reason || item.sourceTable || '运行数据库' }}</small>
+              <h2>待处理事项</h2>
+              <p>来自当前数据库的待审核、失败和待发布事项。</p>
             </div>
-            <strong>{{ item.count ?? 0 }}</strong>
-          </button>
-          <el-empty v-if="!pendingItems.length && !loading" description="统计接口未返回待处理事项" />
-        </div>
-      </section>
+            <el-tag type="success" effect="plain">真实待办</el-tag>
+          </div>
+          <div class="admin-work-list dashboard-work-list">
+            <button
+              v-for="item in pendingItems"
+              :key="item.key"
+              class="admin-work-item dashboard-work-item"
+              type="button"
+              @click="goPending(item)"
+            >
+              <div>
+                <span>{{ pendingLabel(item) }}</span>
+                <small>{{ pendingSourceLabel(item) }}</small>
+              </div>
+              <strong>{{ item.count ?? 0 }}</strong>
+            </button>
+            <el-empty v-if="!pendingItems.length && !loading" description="统计接口未返回待处理事项" />
+          </div>
+        </section>
+
+        <section class="admin-panel dashboard-links-panel">
+          <div class="admin-panel__header">
+            <div>
+              <h2>快捷入口</h2>
+              <p>全部入口指向当前已存在的管理端路由。</p>
+            </div>
+          </div>
+          <div class="admin-link-grid dashboard-link-grid">
+            <button
+              v-for="item in quickLinks"
+              :key="item.path"
+              class="admin-link-card"
+              type="button"
+              @click="router.push(item.path)"
+            >
+              <component :is="item.icon" :size="20" />
+              <span>{{ item.label }}</span>
+              <small>{{ item.desc }}</small>
+              <ArrowRight :size="14" class="dashboard-link-arrow" />
+            </button>
+          </div>
+        </section>
+      </div>
 
       <section class="admin-panel dashboard-status-panel">
         <div class="admin-panel__header">
           <div>
             <h2>系统状态</h2>
-            <p>状态来自 systemStatus。UNKNOWN / unsupported 不会被伪装为正常。</p>
+            <p>展示概览接口、数据库和已纳入探测范围的服务状态。</p>
           </div>
           <el-tag :type="statusTagType(systemStatus?.status)" effect="plain">
             {{ statusText(systemStatus?.status) }}
@@ -127,36 +152,13 @@
             <div>
               <span>{{ serviceLabel(item.serviceName) }}</span>
               <strong :class="`status-${statusTone(item.status)}`">{{ statusText(item.status) }}</strong>
-              <small>{{ item.reason || item.source || '-' }}</small>
+              <small>{{ serviceReasonLabel(item) }}</small>
             </div>
           </div>
           <el-empty v-if="!services.length && !loading" description="统计接口未返回系统状态" />
         </div>
       </section>
     </div>
-
-    <section class="admin-panel">
-      <div class="admin-panel__header">
-        <div>
-          <h2>快捷入口</h2>
-          <p>全部入口指向当前已存在的管理端路由。</p>
-        </div>
-      </div>
-      <div class="admin-link-grid dashboard-link-grid">
-        <button
-          v-for="item in quickLinks"
-          :key="item.path"
-          class="admin-link-card"
-          type="button"
-          @click="router.push(item.path)"
-        >
-          <component :is="item.icon" :size="20" />
-          <span>{{ item.label }}</span>
-          <small>{{ item.desc }}</small>
-          <ArrowRight :size="14" class="dashboard-link-arrow" />
-        </button>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -354,10 +356,11 @@ const statusText = (status?: string) => {
     HEALTHY: '正常',
     DEGRADED: '降级',
     DOWN: '不可用',
-    UNKNOWN: '未知 / 暂不支持',
+    UNKNOWN: '未接入探测',
+    UNSUPPORTED: '未接入探测',
     SUPPORTED: '已支持'
   }
-  return map[value] || status || '未知 / 暂不支持'
+  return map[value] || status || '未接入探测'
 }
 
 const statusTone = (status?: string) => {
@@ -392,6 +395,20 @@ const serviceLabel = (value: string) => {
 }
 
 const pendingLabel = (item: AdminDashboardPendingItemVO) => pendingLabels[item.key] || item.label || item.key
+
+const pendingSourceLabel = (item: AdminDashboardPendingItemVO) => {
+  if (item.reason) return item.reason
+  if (item.sourceTable) return `来源：${item.sourceTable}`
+  return '来源：运行数据库'
+}
+
+const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
+  if (item.reason) return item.reason
+  if (item.source) return item.source
+  const value = String(item.status || '').toUpperCase()
+  if (value === 'UNKNOWN' || value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
+  return '来自管理概览接口'
+}
 
 const goPending = (item: AdminDashboardPendingItemVO) => {
   const path = pendingRoutes[item.key]
@@ -526,11 +543,17 @@ onBeforeUnmount(() => {
 
   .dashboard-lower-grid {
     align-items: start;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+    grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.75fr);
+  }
+
+  .dashboard-left-stack {
+    display: grid;
+    gap: 16px;
   }
 
   .dashboard-pending-panel,
-  .dashboard-status-panel {
+  .dashboard-status-panel,
+  .dashboard-links-panel {
     align-self: start;
   }
 
@@ -630,7 +653,7 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-link-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-link-arrow {
@@ -665,6 +688,7 @@ onBeforeUnmount(() => {
     }
 
     .dashboard-lower-grid,
+    .dashboard-left-stack,
     .dashboard-link-grid {
       grid-template-columns: 1fr;
     }

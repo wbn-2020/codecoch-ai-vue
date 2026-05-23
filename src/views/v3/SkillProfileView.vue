@@ -200,13 +200,13 @@ const renderRadarChart = async () => {
         data: [
           {
             value: currentValues,
-            name: 'Current',
+            name: '当前',
             areaStyle: { color: 'rgba(56, 189, 248, 0.18)' },
             lineStyle: { width: 2 }
           },
           {
             value: targetValues,
-            name: 'Target',
+            name: '目标',
             areaStyle: { color: 'rgba(34, 197, 94, 0.1)' },
             lineStyle: { width: 2, type: 'dashed' }
           }

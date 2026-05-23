@@ -4,7 +4,7 @@
       <div class="hero-copy">
         <div class="eyebrow">
           <Bell :size="16" />
-          Notification Center
+          通知中心
         </div>
         <h1>通知中心</h1>
         <p>查看系统通知、报告完成提醒、任务提醒和公告。</p>
@@ -168,7 +168,7 @@ const handleClickNotification = async (item: NotificationVO) => {
       // silent
     }
   }
-  // Navigate to related resource if available
+  // 仅在通知携带可识别业务类型时跳转，其他类型保持列表内已读反馈。
   if (item.relatedType === 'INTERVIEW_REPORT' && item.relatedId) {
     router.push(`/interviews/${item.relatedId}/report`)
   } else if (item.relatedType === 'RESUME_PARSE' && item.relatedId) {

@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <Activity :size="16" />
-          <span>Agent Observability</span>
+          <span>Agent 可观测</span>
         </div>
         <h1 class="admin-hero__title">Agent 运行记录</h1>
         <p class="admin-hero__desc">查询 JobCoachAgent 运行状态、触发方式、模型、耗时和错误信息，数据来自管理端真实列表接口。</p>
@@ -78,7 +78,7 @@
       <template v-else>
         <div class="table-card admin-table-card">
           <el-table v-loading="loading" :data="runs" row-key="id">
-            <el-table-column prop="id" label="Run ID" width="100" />
+            <el-table-column prop="id" label="运行 ID" width="100" />
             <el-table-column prop="userId" label="用户 ID" width="100" />
             <el-table-column prop="agentType" label="Agent" min-width="130" show-overflow-tooltip />
             <el-table-column prop="targetJobTitle" label="目标岗位" min-width="180" show-overflow-tooltip />
@@ -124,7 +124,7 @@
         <template v-else-if="detail">
           <div class="run-detail-head">
             <div>
-              <span>Run #{{ detail.id }}</span>
+              <span>运行 #{{ detail.id }}</span>
               <h3>{{ detail.targetJobTitle || detail.agentType || 'JobCoachAgent' }}</h3>
             </div>
             <StatusTag :status="detail.status" :map="runStatusMap" />

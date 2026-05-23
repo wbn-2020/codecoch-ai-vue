@@ -8,8 +8,7 @@
         </div>
         <h1 class="admin-hero__title">运维监控</h1>
         <p class="admin-hero__desc">
-          聚合 AI 调用、Agent 运行、系统状态和失败分布。主机级 CPU、内存、缓存命中率等指标待后端接入
-          Actuator 或监控采集后自动替换。
+          聚合 AI 调用、Agent 运行、系统状态和失败分布。已接入服务健康探测；QPS、TPS、CPU、内存和缓存命中率等待后端指标采集后自动替换。
         </p>
       </div>
       <div class="admin-hero__actions">
@@ -67,7 +66,7 @@
           <div class="ops-model-list">
             <div v-for="item in failurePoints" :key="item.name" class="ops-model-row">
               <div>
-                <strong>{{ item.name }}</strong>
+                <strong>{{ translateFailureReason(item.name) }}</strong>
                 <span>{{ item.value }} 次失败</span>
               </div>
               <el-progress :percentage="failurePercent(item.value)" :stroke-width="8" :show-text="false" />
@@ -90,7 +89,7 @@
               <span :class="`ops-dot ops-dot--${statusTone(item.status)}`"></span>
               <div>
                 <strong>{{ serviceLabel(item.serviceName) }}</strong>
-                <small>{{ item.reason || item.source || '--' }}</small>
+                <small>{{ serviceReasonLabel(item) }}</small>
               </div>
               <em :class="`status-${statusTone(item.status)}`">{{ statusText(item.status) }}</em>
             </div>
@@ -102,17 +101,17 @@
           <div class="ops-panel__head">
             <div>
               <h2>最近聚合任务</h2>
-              <p>Analytics jobs 最近执行情况</p>
+              <p>聚合任务最近执行情况</p>
             </div>
           </div>
           <div class="ops-job-list">
             <div v-for="job in jobs" :key="job.id" class="ops-job-row">
               <div>
-                <strong>{{ job.jobName || job.jobCode || `Job #${job.id}` }}</strong>
+                <strong>{{ translateJobName(job.jobName || job.jobCode || `Job #${job.id}`) }}</strong>
                 <small>{{ job.statDate || job.createdAt || '--' }}</small>
               </div>
               <el-tag :type="job.status === 'SUCCESS' ? 'success' : job.status === 'FAILED' ? 'danger' : 'warning'" effect="plain">
-                {{ job.status || 'UNKNOWN' }}
+                {{ jobStatusLabel(job.status) }}
               </el-tag>
             </div>
             <el-empty v-if="!jobs.length && !loading" description="暂无聚合任务" />
@@ -138,6 +137,7 @@ import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
 import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, TrendPointVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
+import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import echarts, { type ECharts } from '@/utils/echarts'
 
 const loading = ref(false)
@@ -152,12 +152,12 @@ const jobs = ref<AdminAnalyticsJobLogVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 let trendChart: ECharts | null = null
 
-const waiting = '待接入'
+const waiting = '待接入指标'
 
 const rangeOptions = [
-  { label: '7D', value: 7 },
-  { label: '30D', value: 30 },
-  { label: '90D', value: 90 }
+  { label: '7 天', value: 7 },
+  { label: '30 天', value: 30 },
+  { label: '90 天', value: 90 }
 ]
 
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
@@ -200,8 +200,8 @@ const metricGroups = computed(() => [
     icon: Gauge,
     tone: 'tone-cyan',
     metrics: [
-      { label: 'QPS', value: waiting, hint: '需要网关指标' },
-      { label: 'TPS', value: waiting, hint: '需要事务指标' },
+      { label: 'QPS', value: waiting, hint: '等待接入网关指标' },
+      { label: 'TPS', value: waiting, hint: '等待接入事务指标' },
       { label: 'RPM', value: compact(aiOverview.value?.totalAiCalls), hint: `近 ${rangeDays.value} 天调用` },
       { label: 'TPM', value: compact(aiOverview.value?.totalTokens), hint: `近 ${rangeDays.value} 天 Token` }
     ]
@@ -213,9 +213,9 @@ const metricGroups = computed(() => [
     icon: Server,
     tone: 'tone-violet',
     metrics: [
-      { label: 'CPU', value: waiting, hint: 'Actuator metrics' },
-      { label: '内存', value: waiting, hint: 'Actuator metrics' },
-      { label: '服务数', value: services.value.length, hint: 'dashboard services' },
+      { label: 'CPU', value: waiting, hint: '等待接入 Actuator 指标' },
+      { label: '内存', value: waiting, hint: '等待接入 Actuator 指标' },
+      { label: '服务数', value: services.value.length, hint: '来自管理驾驶舱' },
       { label: '数据库', value: statusText(services.value.find((item) => item.serviceName === 'database')?.status), hint: 'SELECT 1' }
     ]
   },
@@ -228,8 +228,8 @@ const metricGroups = computed(() => [
     metrics: [
       { label: 'AI 成功率', value: formatPercent(aiOverview.value?.aiSuccessRate), hint: `平均 ${formatMs(aiOverview.value?.avgElapsedMs)}` },
       { label: 'Agent 成功率', value: formatPercent(agentOverview.value?.agentSuccessRate), hint: `平均 ${formatMs(agentOverview.value?.avgDurationMs)}` },
-      { label: '缓存命中', value: waiting, hint: 'Redis metrics' },
-      { label: '错误率', value: formatPercent(errorRate.value), hint: `${aiOverview.value?.failedAiCalls || 0} failed` }
+      { label: '缓存命中', value: waiting, hint: '等待接入 Redis 指标' },
+      { label: '错误率', value: formatPercent(errorRate.value), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` }
     ]
   }
 ])
@@ -243,10 +243,10 @@ const statusText = (status?: DashboardStatus) => {
     SUPPORTED: '正常',
     DEGRADED: '降级',
     DOWN: '不可用',
-    UNKNOWN: waiting,
-    UNSUPPORTED: waiting
+    UNKNOWN: '未探测到',
+    UNSUPPORTED: '未接入探测'
   }
-  return map[value] || String(status || waiting)
+  return map[value] || String(status || '未探测到')
 }
 
 const statusTone = (status?: DashboardStatus) => {
@@ -271,6 +271,26 @@ const serviceLabel = (value: string) => {
     'codecoachai-file': 'File 服务'
   }
   return map[value] || value
+}
+
+const serviceReasonLabel = (item: { status?: DashboardStatus; reason?: string; source?: string }) => {
+  if (item.reason) return item.reason
+  if (item.source) return item.source
+  const value = String(item.status || '').toUpperCase()
+  if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
+  if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
+  return '来自管理驾驶舱'
+}
+
+const jobStatusLabel = (status?: string) => {
+  const map: Record<string, string> = {
+    PENDING: '待执行',
+    RUNNING: '执行中',
+    SUCCESS: '成功',
+    FAILED: '失败',
+    CANCELED: '已取消'
+  }
+  return map[String(status || 'UNKNOWN').toUpperCase()] || '未知'
 }
 
 const disposeChart = () => {

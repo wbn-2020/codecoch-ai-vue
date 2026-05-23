@@ -2,21 +2,21 @@
   <div class="page-shell v4-application-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 Application</div>
-        <h1>Job-search progress</h1>
-        <p>Track saved jobs, applications, interview stages, follow-ups, and structured application events.</p>
+        <div class="v4-eyebrow">V4 求职进度</div>
+        <h1>求职进度</h1>
+        <p>跟踪收藏岗位、投递记录、面试阶段、跟进事项和结构化求职事件。</p>
       </div>
       <div class="v4-actions">
-        <el-select v-model="status" clearable placeholder="All status" style="width: 180px" @change="load">
+        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="load">
           <el-option v-for="item in statuses" :key="item" :label="item" :value="item" />
         </el-select>
-        <el-button type="primary" @click="openCreate">New application</el-button>
-        <el-button :loading="loading" @click="load">Refresh</el-button>
+        <el-button type="primary" @click="openCreate">新增进度</el-button>
+        <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="Applications failed to load" :description="errorMessage">
-      <el-button type="primary" @click="load">Retry</el-button>
+    <AppState v-if="errorMessage" type="error" title="求职进度加载失败" :description="errorMessage">
+      <el-button type="primary" @click="load">重试</el-button>
     </AppState>
 
     <section v-else class="content-card">
@@ -26,57 +26,57 @@
             <div>
               <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
               <p class="muted">
-                {{ item.source || 'CUSTOM' }} · applied {{ item.appliedAt || '--' }} · follow-up {{ item.nextFollowUpAt || '--' }}
+                {{ item.source || 'CUSTOM' }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
               </p>
               <p class="muted">{{ item.note || '--' }}</p>
             </div>
             <div class="v4-actions">
               <el-tag>{{ item.status || '--' }}</el-tag>
-              <el-button link type="primary" @click="openEvents(item)">Events</el-button>
-              <el-button link type="primary" @click="openEdit(item)">Edit</el-button>
+              <el-button link type="primary" @click="openEvents(item)">事件</el-button>
+              <el-button link type="primary" @click="openEdit(item)">编辑</el-button>
             </div>
           </div>
         </article>
-        <el-empty v-if="!applications.length && !loading" description="No job-search progress records" />
+        <el-empty v-if="!applications.length && !loading" description="暂无求职进度记录" />
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" title="Job-search progress" width="620px">
+    <el-dialog v-model="dialogVisible" title="求职进度" width="620px">
       <el-form label-position="top">
-        <el-form-item label="Company">
+        <el-form-item label="公司">
           <el-input v-model.trim="form.companyName" />
         </el-form-item>
-        <el-form-item label="Job title">
+        <el-form-item label="岗位名称">
           <el-input v-model.trim="form.jobTitle" />
         </el-form-item>
-        <el-form-item label="Status">
+        <el-form-item label="状态">
           <el-select v-model="form.status" style="width: 100%">
             <el-option v-for="item in statuses" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Source">
+        <el-form-item label="来源">
           <el-input v-model.trim="form.source" placeholder="BOSS / LinkedIn / Referral / CUSTOM" />
         </el-form-item>
-        <el-form-item label="Resume version ID">
+        <el-form-item label="简历版本 ID">
           <el-input-number v-model="form.resumeVersionId" :min="1" controls-position="right" />
         </el-form-item>
-        <el-form-item label="Next follow-up time">
+        <el-form-item label="下次跟进时间">
           <el-date-picker v-model="form.nextFollowUpAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" />
         </el-form-item>
-        <el-form-item label="Note">
+        <el-form-item label="备注">
           <el-input v-model="form.note" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="saving" @click="save">Save</el-button>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
 
-    <el-drawer v-model="eventsVisible" title="Application events" size="560px">
+    <el-drawer v-model="eventsVisible" title="求职事件" size="560px">
       <div class="drawer-actions">
-        <el-button type="primary" @click="openEventCreate">New event</el-button>
-        <el-button :loading="eventsLoading" @click="loadEvents">Refresh</el-button>
+        <el-button type="primary" @click="openEventCreate">新增事件</el-button>
+        <el-button :loading="eventsLoading" @click="loadEvents">刷新</el-button>
       </div>
       <div class="event-list" v-loading="eventsLoading">
         <article v-for="item in events" :key="item.id" class="event-row">
@@ -87,19 +87,19 @@
           <p>{{ item.summary || '--' }}</p>
           <pre v-if="item.reviewJson || item.review">{{ item.reviewJson || JSON.stringify(item.review, null, 2) }}</pre>
         </article>
-        <el-empty v-if="!events.length && !eventsLoading" description="No events for this application" />
+        <el-empty v-if="!events.length && !eventsLoading" description="当前进度暂无事件" />
       </div>
     </el-drawer>
 
-    <el-dialog v-model="eventDialogVisible" title="New application event" width="560px">
+    <el-dialog v-model="eventDialogVisible" title="新增求职事件" width="560px">
       <el-form label-position="top">
-        <el-form-item label="Event type">
+        <el-form-item label="事件类型">
           <el-input v-model.trim="eventForm.eventType" placeholder="FOLLOW_UP / INTERVIEW / OFFER / NOTE" />
         </el-form-item>
-        <el-form-item label="Event time">
+        <el-form-item label="事件时间">
           <el-date-picker v-model="eventForm.eventTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" />
         </el-form-item>
-        <el-form-item label="Summary">
+        <el-form-item label="摘要">
           <el-input v-model="eventForm.summary" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
         <el-form-item label="Review JSON">
@@ -107,8 +107,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="eventDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="saving" @click="createEvent">Save event</el-button>
+        <el-button @click="eventDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="createEvent">保存事件</el-button>
       </template>
     </el-dialog>
   </div>
@@ -161,9 +161,9 @@ const eventForm = reactive<Partial<JobApplicationEventVO>>({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const load = async () => {
@@ -208,7 +208,7 @@ const save = async () => {
       await createApplicationApi(form)
     }
     dialogVisible.value = false
-    ElMessage.success('Saved')
+    ElMessage.success('已保存')
     await load()
   } finally {
     saving.value = false
@@ -252,7 +252,7 @@ const createEvent = async () => {
       reviewJson: eventForm.reviewJson || undefined
     })
     eventDialogVisible.value = false
-    ElMessage.success('Event saved')
+    ElMessage.success('事件已保存')
     await loadEvents()
   } finally {
     saving.value = false

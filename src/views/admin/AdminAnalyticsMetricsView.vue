@@ -2,63 +2,73 @@
   <div class="page-shell admin-console-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow">Analytics Dictionary</div>
-        <h1 class="admin-hero__title">Metric dictionary</h1>
-        <p class="admin-hero__desc">Read the metric code, definition, data source, and refresh frequency from the V4 analytics dictionary API.</p>
+        <div class="admin-eyebrow">指标字典</div>
+        <h1 class="admin-hero__title">指标字典</h1>
+        <p class="admin-hero__desc">从 V4 分析指标字典接口读取指标编码、定义、数据来源和刷新频率。</p>
       </div>
       <div class="admin-hero__actions">
-        <el-button v-permission="'admin:analytics:metric:write'" type="primary" @click="openMetricDialog()">New metric</el-button>
-        <el-button :loading="loading" @click="fetchMetrics">Refresh</el-button>
+        <el-button v-permission="'admin:analytics:metric:write'" type="primary" @click="openMetricDialog()">新增指标</el-button>
+        <el-button :loading="loading" @click="fetchMetrics">刷新</el-button>
       </div>
     </section>
 
     <section class="admin-panel">
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
-          <el-form-item label="Keyword">
-            <el-input v-model.trim="query.keyword" clearable placeholder="metric code or name" style="width: 220px" />
+          <el-form-item label="关键词">
+            <el-input v-model.trim="query.keyword" clearable placeholder="指标编码或名称" style="width: 220px" />
           </el-form-item>
-          <el-form-item label="Category">
-            <el-input v-model.trim="query.category" clearable placeholder="AGENT / AI / TRAINING" style="width: 180px" />
+          <el-form-item label="分类">
+            <el-select v-model="query.category" clearable placeholder="全部分类" style="width: 180px">
+              <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
           </el-form-item>
-          <el-form-item label="Enabled">
-            <el-select v-model="query.enabled" clearable placeholder="All" style="width: 120px">
-              <el-option label="Enabled" :value="1" />
-              <el-option label="Disabled" :value="0" />
+          <el-form-item label="状态">
+            <el-select v-model="query.enabled" clearable placeholder="全部" style="width: 120px">
+              <el-option label="启用" :value="1" />
+              <el-option label="禁用" :value="0" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">Search</el-button>
-            <el-button @click="handleReset">Reset</el-button>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
 
-      <AppState v-if="errorMessage" type="error" title="Metric dictionary failed to load" :description="errorMessage">
-        <el-button type="primary" @click="fetchMetrics">Retry</el-button>
+      <AppState v-if="errorMessage" type="error" title="指标字典加载失败" :description="errorMessage">
+        <el-button type="primary" @click="fetchMetrics">重试</el-button>
       </AppState>
 
       <template v-else>
         <div class="table-card admin-table-card">
           <el-table v-loading="loading" :data="metrics" row-key="id">
-            <el-table-column prop="metricCode" label="Metric code" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="metricName" label="Name" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="category" label="Category" width="130" />
-            <el-table-column prop="definition" label="Definition" min-width="260" show-overflow-tooltip />
-            <el-table-column prop="dataSource" label="Data source" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="refreshFrequency" label="Refresh" width="140" />
-            <el-table-column label="Enabled" width="110">
+            <el-table-column prop="metricCode" label="指标编码" min-width="180" show-overflow-tooltip />
+            <el-table-column label="指标名称" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateMetricName(row.metricName) }}</template>
+            </el-table-column>
+            <el-table-column label="分类" width="130">
+              <template #default="{ row }">{{ translateMetricCategory(row.category) }}</template>
+            </el-table-column>
+            <el-table-column label="定义" min-width="260" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateMetricDefinition(row.definition) }}</template>
+            </el-table-column>
+            <el-table-column prop="dataSource" label="数据来源" min-width="160" show-overflow-tooltip />
+            <el-table-column label="刷新频率" width="140">
+              <template #default="{ row }">{{ translateRefreshFrequency(row.refreshFrequency) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
               <template #default="{ row }">
                 <StatusTag :status="row.enabled" />
               </template>
             </el-table-column>
-            <el-table-column label="Action" width="100" fixed="right">
+            <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'admin:analytics:metric:write'" link type="primary" @click="openMetricDialog(row)">Edit</el-button>
+                <el-button v-permission="'admin:analytics:metric:write'" link type="primary" @click="openMetricDialog(row)">编辑</el-button>
               </template>
             </el-table-column>
             <template #empty>
-              <el-empty description="No metric definitions" />
+              <el-empty description="暂无指标定义" />
             </template>
           </el-table>
         </div>
@@ -76,35 +86,37 @@
       </template>
     </section>
 
-    <el-dialog v-model="metricDialogVisible" :title="metricForm.id ? 'Edit metric' : 'New metric'" width="680px">
+    <el-dialog v-model="metricDialogVisible" :title="metricForm.id ? '编辑指标' : '新增指标'" width="680px">
       <el-form :model="metricForm" label-position="top">
         <div class="form-grid">
-          <el-form-item label="Metric code" required>
+          <el-form-item label="指标编码" required>
             <el-input v-model.trim="metricForm.metricCode" placeholder="AGENT_SUCCESS_RATE" />
           </el-form-item>
-          <el-form-item label="Metric name" required>
-            <el-input v-model.trim="metricForm.metricName" placeholder="Agent success rate" />
+          <el-form-item label="指标名称" required>
+            <el-input v-model.trim="metricForm.metricName" placeholder="Agent 成功率" />
           </el-form-item>
-          <el-form-item label="Category">
-            <el-input v-model.trim="metricForm.category" placeholder="AGENT / AI / TRAINING" />
+          <el-form-item label="分类">
+            <el-select v-model="metricForm.category" clearable placeholder="选择分类">
+              <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
           </el-form-item>
-          <el-form-item label="Refresh frequency">
+          <el-form-item label="刷新频率">
             <el-input v-model.trim="metricForm.refreshFrequency" placeholder="DAILY" />
           </el-form-item>
         </div>
-        <el-form-item label="Definition">
-          <el-input v-model="metricForm.definition" type="textarea" :rows="4" placeholder="Metric definition" />
+        <el-form-item label="定义">
+          <el-input v-model="metricForm.definition" type="textarea" :rows="4" placeholder="指标定义" />
         </el-form-item>
-        <el-form-item label="Data source">
+        <el-form-item label="数据来源">
           <el-input v-model.trim="metricForm.dataSource" placeholder="agent_run / agent_task / ai_call_log" />
         </el-form-item>
-        <el-form-item label="Enabled">
-          <el-switch v-model="metricEnabled" active-text="Enabled" inactive-text="Disabled" />
+        <el-form-item label="状态">
+          <el-switch v-model="metricEnabled" active-text="启用" inactive-text="禁用" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="metricDialogVisible = false">Cancel</el-button>
-        <el-button v-permission="'admin:analytics:metric:write'" type="primary" :loading="savingMetric" @click="saveMetric">Save</el-button>
+        <el-button @click="metricDialogVisible = false">取消</el-button>
+        <el-button v-permission="'admin:analytics:metric:write'" type="primary" :loading="savingMetric" @click="saveMetric">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -118,6 +130,12 @@ import { createAdminAnalyticsMetricApi, getAdminAnalyticsMetricsApi, updateAdmin
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsDictionaryQuery, AdminAnalyticsMetricDefinitionVO } from '@/types/analytics'
+import {
+  translateMetricCategory,
+  translateMetricDefinition,
+  translateMetricName,
+  translateRefreshFrequency
+} from '@/utils/adminDisplay'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -125,6 +143,14 @@ const metrics = ref<AdminAnalyticsMetricDefinitionVO[]>([])
 const total = ref(0)
 const metricDialogVisible = ref(false)
 const savingMetric = ref(false)
+
+const categoryOptions = [
+  { label: 'Agent', value: 'AGENT' },
+  { label: 'AI', value: 'AI' },
+  { label: 'AI Ops', value: 'AI_OPS' },
+  { label: '训练', value: 'TRAINING' },
+  { label: '通用', value: 'GENERAL' }
+]
 
 const query = reactive<AdminAnalyticsDictionaryQuery>({
   pageNo: 1,
@@ -154,9 +180,9 @@ const metricEnabled = computed({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || 'API request failed')
+    return String((error as { message?: unknown }).message || '接口请求失败')
   }
-  return 'API request failed'
+  return '接口请求失败'
 }
 
 const fetchMetrics = async () => {
@@ -191,7 +217,7 @@ const openMetricDialog = (row?: AdminAnalyticsMetricDefinitionVO) => {
 
 const saveMetric = async () => {
   if (!metricForm.metricCode.trim() || !metricForm.metricName.trim()) {
-    ElMessage.warning('Metric code and name are required')
+    ElMessage.warning('请填写指标编码和指标名称')
     return
   }
   savingMetric.value = true
@@ -210,7 +236,7 @@ const saveMetric = async () => {
     } else {
       await createAdminAnalyticsMetricApi(payload)
     }
-    ElMessage.success('Metric saved')
+    ElMessage.success('指标已保存')
     metricDialogVisible.value = false
     await fetchMetrics()
   } finally {
