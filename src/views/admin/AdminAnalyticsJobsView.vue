@@ -16,7 +16,7 @@
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
           <el-form-item label="任务编码">
-            <el-input v-model.trim="query.jobCode" clearable placeholder="DAILY_AGENT_METRIC" style="width: 220px" />
+            <el-input v-model.trim="query.jobCode" clearable placeholder="如 AGENT_DAILY_PLAN" style="width: 220px" />
           </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable placeholder="全部" style="width: 150px">
@@ -38,7 +38,9 @@
         <div class="table-card admin-table-card">
           <el-table v-loading="loading" :data="jobs" row-key="id">
             <el-table-column prop="jobCode" label="任务编码" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="jobName" label="任务名称" min-width="180" show-overflow-tooltip />
+            <el-table-column label="任务名称" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateJobName(row.jobName || row.jobCode) }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="120">
               <template #default="{ row }">
                 <StatusTag :status="row.status" />
@@ -48,7 +50,9 @@
             <el-table-column prop="durationMs" label="耗时" width="120">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
-            <el-table-column prop="errorMessage" label="错误信息" min-width="220" show-overflow-tooltip />
+            <el-table-column label="错误信息" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ translateFailureReason(row.errorMessage) }}</template>
+            </el-table-column>
             <el-table-column label="输出" width="110">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openOutput(row.outputJson)">查看</el-button>
@@ -120,6 +124,7 @@ import { getAdminAnalyticsJobsApi, rerunAdminAnalyticsJobApi, runAdminAnalyticsD
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsJobLogVO, AdminAnalyticsJobQuery } from '@/types/analytics'
+import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 
 const statusOptions = [
   { label: '待执行', value: 'PENDING' },
@@ -213,7 +218,7 @@ const runDailyPlan = async () => {
   try {
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
-      jobName: 'Agent daily plan aggregation',
+      jobName: 'Agent 每日计划聚合',
       statDate: manualForm.statDate || undefined,
       userIds: parseUserIds(),
       targetJobId: manualForm.targetJobId,
