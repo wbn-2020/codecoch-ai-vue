@@ -268,6 +268,7 @@ const serviceLabel = (value: string) => {
     'codecoachai-interview': 'Interview 服务',
     'codecoachai-question': 'Question 服务',
     'codecoachai-ai': 'AI 服务',
+    'codecoachai-task': 'Task 服务',
     'codecoachai-file': 'File 服务'
   }
   return map[value] || value

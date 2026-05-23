@@ -29,12 +29,15 @@ const frequencyMap: Record<string, string> = {
 
 const jobNameMap: Record<string, string> = {
   'Agent daily plan batch': 'Agent 每日计划批处理',
-  'Agent daily plan aggregation': 'Agent 每日计划聚合'
+  'Agent daily plan aggregation': 'Agent 每日计划聚合',
+  'Agent 每日计划聚合': 'Agent 每日计划聚合'
 }
 
 const feedbackTypeMap: Record<string, string> = {
   ADOPTED: '已采纳',
+  ADOPT: '采纳',
   IGNORED: '已忽略',
+  IGNORE: '忽略',
   LIKE: '点赞',
   LIKED: '点赞',
   DISLIKE: '点踩',
