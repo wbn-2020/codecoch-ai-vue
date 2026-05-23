@@ -85,7 +85,7 @@
     </section>
 
     <div class="admin-dashboard-grid dashboard-lower-grid">
-      <div class="dashboard-left-stack">
+      <div ref="dashboardLeftStackRef" class="dashboard-left-stack">
         <section class="admin-panel dashboard-pending-panel">
           <div class="admin-panel__header">
             <div>
@@ -136,7 +136,7 @@
         </section>
       </div>
 
-      <section class="admin-panel dashboard-status-panel">
+      <section class="admin-panel dashboard-status-panel" :style="statusPanelStyle">
         <div class="admin-panel__header">
           <div>
             <h2>系统状态</h2>
@@ -198,7 +198,10 @@ const overviewError = ref(false)
 const dashboard = ref<AdminDashboardOverviewVO | null>(null)
 const businessTrendRef = ref<HTMLElement>()
 const aiTrendRef = ref<HTMLElement>()
+const dashboardLeftStackRef = ref<HTMLElement>()
+const statusPanelHeight = ref<number>()
 const charts: ECharts[] = []
+let dashboardLayoutObserver: ResizeObserver | null = null
 
 const primaryLinks = [
   { label: '题目管理', path: '/admin/questions', icon: ListTree },
@@ -221,6 +224,7 @@ const trendStats = computed(() => dashboard.value?.trendStats || [])
 const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
 const services = computed(() => systemStatus.value?.services || [])
+const statusPanelStyle = computed(() => statusPanelHeight.value ? { height: statusPanelHeight.value + 'px' } : undefined)
 
 const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
   users: { label: '用户数', icon: Users, tone: 'tone-blue' },
@@ -382,13 +386,14 @@ const serviceLabel = (value: string) => {
   const map: Record<string, string> = {
     overview: '概览接口',
     database: '数据库',
-    'codecoachai-gateway': 'Gateway',
+    'codecoachai-gateway': 'Gateway 服务',
     'codecoachai-auth': 'Auth 服务',
     'codecoachai-user': 'User 服务',
     'codecoachai-resume': 'Resume 服务',
     'codecoachai-interview': 'Interview 服务',
     'codecoachai-question': 'Question 服务',
     'codecoachai-ai': 'AI 服务',
+    'codecoachai-task': 'Task 服务',
     'codecoachai-file': 'File 服务'
   }
   return map[value] || value
@@ -406,7 +411,8 @@ const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
   if (item.reason) return item.reason
   if (item.source) return item.source
   const value = String(item.status || '').toUpperCase()
-  if (value === 'UNKNOWN' || value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
+  if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
+  if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
   return '来自管理概览接口'
 }
 
@@ -415,18 +421,40 @@ const goPending = (item: AdminDashboardPendingItemVO) => {
   if (path) router.push(path)
 }
 
+const syncDashboardPanelHeight = () => {
+  const leftStack = dashboardLeftStackRef.value
+  if (!leftStack || window.innerWidth <= 760) {
+    statusPanelHeight.value = undefined
+    return
+  }
+  statusPanelHeight.value = Math.ceil(leftStack.getBoundingClientRect().height)
+}
+
 const resizeCharts = () => charts.forEach((chart) => chart.resize())
+
+const resizeDashboard = () => {
+  resizeCharts()
+  syncDashboardPanelHeight()
+}
 
 watch(trendStats, renderCharts, { deep: true })
 
 onMounted(async () => {
   await fetchOverview()
   await renderCharts()
-  window.addEventListener('resize', resizeCharts)
+  await nextTick()
+  syncDashboardPanelHeight()
+  if (dashboardLeftStackRef.value) {
+    dashboardLayoutObserver = new ResizeObserver(syncDashboardPanelHeight)
+    dashboardLayoutObserver.observe(dashboardLeftStackRef.value)
+  }
+  window.addEventListener('resize', resizeDashboard)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeCharts)
+  window.removeEventListener('resize', resizeDashboard)
+  dashboardLayoutObserver?.disconnect()
+  dashboardLayoutObserver = null
   disposeCharts()
 })
 </script>
@@ -548,11 +576,18 @@ onBeforeUnmount(() => {
 
   .dashboard-left-stack {
     display: grid;
+    align-self: start;
     gap: 16px;
   }
 
+  .dashboard-status-panel {
+    display: flex;
+    align-self: start;
+    min-height: 0;
+    flex-direction: column;
+  }
+
   .dashboard-pending-panel,
-  .dashboard-status-panel,
   .dashboard-links-panel {
     align-self: start;
   }
@@ -601,8 +636,10 @@ onBeforeUnmount(() => {
 
   .dashboard-status-list {
     display: grid;
+    flex: 1;
+    align-content: start;
     gap: 10px;
-    max-height: 520px;
+    min-height: 0;
     overflow: auto;
     padding: 14px 16px 16px;
     scrollbar-width: thin;
@@ -691,6 +728,10 @@ onBeforeUnmount(() => {
     .dashboard-left-stack,
     .dashboard-link-grid {
       grid-template-columns: 1fr;
+    }
+
+    .dashboard-status-panel {
+      height: auto !important;
     }
 
     .dashboard-chart {

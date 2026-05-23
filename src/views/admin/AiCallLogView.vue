@@ -150,6 +150,7 @@ import type { AiCallLogQueryDTO, AiCallLogVO, AiScene } from '@/types/ai'
 import { translateFailureReason } from '@/utils/adminDisplay'
 
 const sceneOptions = [
+  { label: 'AI 题目生成', value: 'AI_QUESTION_GENERATE' },
   { label: '八股文提问', value: AI_SCENE.INTERVIEW_QUESTION_GENERATE },
   { label: '项目深挖提问', value: AI_SCENE.PROJECT_DEEP_DIVE_QUESTION },
   { label: '回答评分', value: AI_SCENE.INTERVIEW_ANSWER_EVALUATE },
