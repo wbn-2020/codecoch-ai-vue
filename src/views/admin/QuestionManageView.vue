@@ -1,6 +1,6 @@
 <template>
   <div class="page-shell admin-console-page">
-    <section class="admin-hero">
+    <section v-if="showQuestionManagement" class="admin-hero">
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <BookOpenCheck :size="16" />
@@ -26,7 +26,7 @@
       </el-button>
     </section>
 
-    <div class="admin-insight-grid">
+    <div v-if="showQuestionManagement" class="admin-insight-grid">
       <article class="admin-insight-card">
         <span>题目总数</span>
         <strong>{{ total }}</strong>
@@ -49,7 +49,7 @@
       </article>
     </div>
 
-    <section class="admin-panel">
+    <section v-if="showQuestionManagement" class="admin-panel">
       <div class="admin-panel__header">
         <div>
           <h2>题目列表</h2>
@@ -155,17 +155,17 @@
       </div>
     </section>
 
-    <section class="admin-panel governance-panel">
+    <section v-if="showGovernancePanel" class="admin-panel governance-panel">
       <div class="admin-panel__header">
         <div>
-          <h2>AI 题目审核 / 去重</h2>
-          <p>接入后端真实审核池与重复题审核接口，不展示伪造结果。</p>
+          <h2>{{ governancePageTitle }}</h2>
+          <p>{{ governancePageDesc }}</p>
         </div>
-        <el-button :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
+        <el-button v-if="!props.governanceOnly" :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
       </div>
 
-      <el-tabs v-model="governanceTab" class="governance-tabs">
-        <el-tab-pane label="AI 生成" name="generate">
+      <el-tabs v-model="governanceTab" :class="['governance-tabs', { 'governance-tabs--single': props.governanceOnly }]">
+        <el-tab-pane v-if="showGeneratePane" label="AI 生成" name="generate">
           <div class="ai-generate-panel">
             <el-alert
               type="info"
@@ -265,7 +265,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="审核池" name="reviews">
+        <el-tab-pane v-if="showReviewsPane" label="审核池" name="reviews">
           <div class="admin-filter-bar governance-filter">
             <el-form :model="reviewQuery" inline>
               <el-form-item label="关键词">
@@ -358,7 +358,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="重复题审核" name="duplicates">
+        <el-tab-pane v-if="showDuplicatesPane" label="重复题审核" name="duplicates">
           <div class="admin-filter-bar governance-filter">
             <el-form :model="duplicateQuery" inline>
               <el-form-item label="关键词">
@@ -703,9 +703,11 @@ type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
 const props = withDefaults(
   defineProps<{
     initialGovernanceTab?: GovernanceTab
+    governanceOnly?: boolean
   }>(),
   {
-    initialGovernanceTab: 'generate'
+    initialGovernanceTab: 'generate',
+    governanceOnly: false
   }
 )
 
@@ -829,6 +831,21 @@ const selectedPendingReviewIds = computed(() =>
     .filter((item) => item.reviewStatus === 'PENDING')
     .map((item) => item.id)
 )
+const showQuestionManagement = computed(() => !props.governanceOnly)
+const showGovernancePanel = computed(() => props.governanceOnly || !showQuestionManagement.value)
+const showGeneratePane = computed(() => !props.governanceOnly || governanceTab.value === 'generate')
+const showReviewsPane = computed(() => !props.governanceOnly || governanceTab.value === 'reviews')
+const showDuplicatesPane = computed(() => !props.governanceOnly || governanceTab.value === 'duplicates')
+const governancePageTitle = computed(() => {
+  if (governanceTab.value === 'generate') return 'AI 题目生成'
+  if (governanceTab.value === 'reviews') return '题目审核'
+  return '重复题审核'
+})
+const governancePageDesc = computed(() => {
+  if (governanceTab.value === 'generate') return '生成结果进入后端审核池，不在前端伪造题目内容。'
+  if (governanceTab.value === 'reviews') return '处理 AI 生成题目的审核、编辑通过和批量驳回。'
+  return '处理疑似重复题的合并和忽略，保持题库质量。'
+})
 
 const getDifficultyLabel = (value?: QuestionDifficulty) => {
   if (value === QUESTION_DIFFICULTY.EASY) return '简单'
@@ -1552,6 +1569,14 @@ onUnmounted(() => {
 
 .governance-tabs {
   padding: 0 20px 20px;
+}
+
+.governance-tabs--single {
+  padding-top: 20px;
+
+  :deep(.el-tabs__header) {
+    display: none;
+  }
 }
 
 .governance-filter {

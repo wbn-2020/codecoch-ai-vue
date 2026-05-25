@@ -94,14 +94,22 @@ const sections: AdminMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '题目管理', path: '/admin/questions', icon: Collection, permissions: ['admin:question:list'] },
-      { label: 'AI 题目生成', path: '/admin/ai/questions/generate', icon: Operation, permissions: ['admin:question:generate'] },
-      { label: '题目审核', path: '/admin/question-reviews', icon: DataAnalysis, permissions: ['admin:question:review'] },
-      { label: '题目去重审核', path: '/admin/question-duplicate-reviews', icon: Connection, permissions: ['admin:question:dedupe'] },
       { label: '题目关系', path: '/admin/question-relations', icon: Share, permissions: ['admin:question:relation'] },
       { label: '分类管理', path: '/admin/question-categories', icon: Files, permissions: ['admin:question:category'] },
       { label: '标签管理', path: '/admin/question-tags', icon: PriceTag, permissions: ['admin:question:tag'] },
       { label: '问题组管理', path: '/admin/question-groups', icon: List, permissions: ['admin:question:group'] },
       { label: '行业模板', path: '/admin/industry-templates', icon: List, permissions: ['admin:industry-template:list'] }
+    ]
+  },
+  {
+    key: 'question-review',
+    label: '题目审核',
+    icon: DataAnalysis,
+    forceGroup: true,
+    children: [
+      { label: 'AI 题目生成', path: '/admin/ai/questions/generate', icon: Operation, permissions: ['admin:question:generate'] },
+      { label: '题目审核', path: '/admin/question-reviews', icon: DataAnalysis, permissions: ['admin:question:review'] },
+      { label: '重复题审核', path: '/admin/question-duplicate-reviews', icon: Connection, permissions: ['admin:question:dedupe'] }
     ]
   },
   {
