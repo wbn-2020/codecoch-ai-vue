@@ -484,7 +484,7 @@ const fetchOverview = async () => {
 const fetchWrongQuestions = async () => {
   wrongQuestionsLoading.value = true
   try {
-    const result = await getWrongQuestionsApi({ pageNum: 1, pageSize: 5 })
+    const result = await getWrongQuestionsApi({ pageNum: 1, pageSize: 5 }, { silentError: true })
     wrongQuestions.value = result.records || []
   } catch {
     wrongQuestions.value = []

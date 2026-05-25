@@ -1,3 +1,5 @@
+import type { AxiosRequestConfig } from 'axios'
+
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
@@ -109,12 +111,12 @@ export const getFavoriteQuestionsApi = (params: QuestionQueryDTO) => {
     .then(normalizeFavoritePage)
 }
 
-export const getWrongQuestionsApi = (params: WrongQuestionQueryDTO) => {
+export const getWrongQuestionsApi = (params: WrongQuestionQueryDTO, config: AxiosRequestConfig = {}) => {
   return request
     .get<
       PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>,
       PageResult<Omit<WrongQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
-    >('/questions/wrong-records', { params })
+    >('/questions/wrong-records', { ...config, params })
     .then(normalizeWrongPage)
 }
 

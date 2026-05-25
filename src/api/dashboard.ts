@@ -60,10 +60,14 @@ const normalizeV3DashboardOverview = (data: Partial<V3DashboardOverviewVO> = {})
 
 export const getUserDashboardOverviewApi = async () => {
   try {
-    const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/dashboard/overview')
+    const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/users/dashboard/overview', {
+      silentError: true
+    })
     return normalizeUserDashboardOverview(data)
   } catch (error) {
-    const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/users/dashboard/overview')
+    const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/dashboard/overview', {
+      silentError: true
+    })
     return normalizeUserDashboardOverview(data)
   }
 }

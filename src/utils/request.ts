@@ -9,6 +9,16 @@ import type { LoginVO } from '@/types/auth'
 import { clearLocalAuth, getToken, setToken } from '@/utils/token'
 import { storage } from '@/utils/storage'
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silentError?: boolean
+  }
+
+  export interface InternalAxiosRequestConfig {
+    silentError?: boolean
+  }
+}
+
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
@@ -112,6 +122,7 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
     const result = response.data as ApiResult
+    const silentError = (response.config as RetryableRequestConfig).silentError
 
     if (!result || typeof result.code !== 'number') {
       return response.data
@@ -129,14 +140,18 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
     }
 
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
-      ElMessage.error(result.message || '无访问权限')
+      if (!silentError) {
+        ElMessage.error(result.message || '无访问权限')
+      }
       if (window.location.pathname !== '/403') {
         window.location.href = '/403'
       }
       return Promise.reject(result)
     }
 
-    ElMessage.error(result.message || '请求失败，请稍后重试')
+    if (!silentError) {
+      ElMessage.error(result.message || '请求失败，请稍后重试')
+    }
     return Promise.reject(result)
 }
 
@@ -148,8 +163,11 @@ request.interceptors.response.use(
       return retryAfterRefresh(error.config as RetryableRequestConfig | undefined)
     }
 
+    const silentError = (error.config as RetryableRequestConfig | undefined)?.silentError
     const message = error.response?.data?.message || error.message || '网络异常，请稍后重试'
-    ElMessage.error(message)
+    if (!silentError) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )
