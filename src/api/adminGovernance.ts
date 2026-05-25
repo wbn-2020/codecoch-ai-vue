@@ -3,6 +3,7 @@ import type { PageResult } from '@/types/api'
 import type {
   AdminInterviewReportVO,
   AdminInterviewVO,
+  AdminLogSummaryVO,
   AdminListQuery,
   AdminNotificationVO,
   AiModelConfigDTO,
@@ -36,6 +37,11 @@ const withCommonParams = (params: AdminListQuery) => cleanParams({
   status: params.status,
   type: params.type,
   userId: params.userId,
+  username: params.username,
+  module: params.module,
+  action: params.action,
+  traceId: params.traceId,
+  loginType: params.loginType,
   startTime: params.startTime,
   endTime: params.endTime
 })
@@ -72,7 +78,11 @@ const normalizeOperationLog = (item: any): OperationLogVO => ({
   username: pick(item, 'username', 'operatorName', 'operator_name', 'nickName', 'nick_name'),
   module: pick(item, 'module', 'businessModule', 'business_module'),
   operation: pick(item, 'operation', 'operationType', 'operation_type', 'action'),
+  action: pick(item, 'action', 'operation', 'operationType', 'operation_type'),
+  traceId: pick(item, 'traceId', 'trace_id'),
   requestUri: pick(item, 'requestUri', 'request_uri', 'uri', 'path'),
+  requestArgs: pick(item, 'requestArgs', 'request_args'),
+  response: pick(item, 'response'),
   ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
   costTime: pick(item, 'costTime', 'costMillis', 'costMs', 'cost_ms', 'duration'),
   errorMessage: pick(item, 'errorMessage', 'errorMsg', 'error_msg'),
@@ -84,6 +94,8 @@ const normalizeLoginLog = (item: any): LoginLogVO => ({
   id: normalizeId(item),
   username: pick(item, 'username', 'loginName', 'login_name', 'nickName', 'nick_name'),
   ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
+  traceId: pick(item, 'traceId', 'trace_id'),
+  loginType: pick(item, 'loginType', 'login_type'),
   location: pick(item, 'location', 'region', 'address'),
   status: pick(item, 'status', 'loginStatus', 'login_status'),
   message: pick(item, 'message', 'errorMessage', 'failReason', 'fail_reason', 'failureReason', 'failure_reason', 'reason'),
@@ -187,6 +199,9 @@ export const getAdminOperationLogsApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/operation-logs', { params: withCommonParams(params) })
     .then((result) => normalizePageResult(result, params, normalizeOperationLog))
+
+export const getAdminLogSummaryApi = () =>
+  request.get<AdminLogSummaryVO, AdminLogSummaryVO>('/admin/logs/summary')
 
 export const getAdminLoginLogsApi = (params: AdminListQuery) =>
   request

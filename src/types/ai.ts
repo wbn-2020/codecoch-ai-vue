@@ -120,6 +120,7 @@ export interface AiCallLogQueryDTO extends PageQuery {
   status?: number | ''
   modelName?: string
   businessId?: string
+  traceId?: string
   startTime?: string
   endTime?: string
 }
@@ -142,6 +143,7 @@ export interface AiCallLogVO {
   status: string | number
   provider?: string
   modelName?: string
+  traceId?: string
   promptTemplateId?: number
   promptTemplateVersionId?: number
   promptVersion?: string

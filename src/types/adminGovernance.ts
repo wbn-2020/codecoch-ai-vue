@@ -8,6 +8,24 @@ export interface AdminListQuery extends PageQuery {
   endTime?: string
   userId?: number
   roleId?: number
+  username?: string
+  module?: string
+  action?: string
+  traceId?: string
+  loginType?: string
+}
+
+export interface AdminLogSummaryVO {
+  totalOperationLogs: number
+  todayOperationLogs: number
+  failedOperationLogs: number
+  todayFailedOperationLogs: number
+  latestOperationAt?: string
+  totalLoginLogs: number
+  todayLoginLogs: number
+  failedLoginLogs: number
+  todayFailedLoginLogs: number
+  latestLoginAt?: string
 }
 
 export interface AsyncTaskVO {
@@ -55,8 +73,12 @@ export interface OperationLogVO {
   username?: string
   module?: string
   operation?: string
+  action?: string
+  traceId?: string
   method?: string
   requestUri?: string
+  requestArgs?: string
+  response?: string
   ip?: string
   status?: string | number
   costTime?: number
@@ -71,6 +93,8 @@ export interface LoginLogVO {
   ip?: string
   location?: string
   userAgent?: string
+  traceId?: string
+  loginType?: string
   status?: string | number
   message?: string
   loginTime?: string

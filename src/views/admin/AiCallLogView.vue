@@ -8,8 +8,7 @@
         </div>
         <h1 class="admin-hero__title">AI 调用日志</h1>
         <p class="admin-hero__desc">
-          查询 AI 调用场景、模型、Token、耗时、状态和失败原因。聚合指标仅基于真实列表字段展示，
-          没有聚合接口时不写死调用趋势。
+          查询 AI 调用场景、模型、Token、耗时、状态、失败原因和 traceId，便于把一次后台操作和对应 AI 调用串起来排查。
         </p>
       </div>
     </section>
@@ -41,7 +40,7 @@
       <div class="admin-panel__header">
         <div>
           <h2>调用明细</h2>
-          <p>筛选条件和详情抽屉沿用现有 AI 日志接口。</p>
+          <p>支持按用户、场景、模型、状态和 traceId 定位 AI 调用。</p>
         </div>
       </div>
 
@@ -61,6 +60,9 @@
           <el-form-item label="模型">
             <el-input v-model.trim="query.modelName" clearable placeholder="模型名称" />
           </el-form-item>
+          <el-form-item label="traceId">
+            <el-input v-model.trim="query.traceId" clearable placeholder="链路 ID" />
+          </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
               <el-option label="成功" :value="1" />
@@ -78,6 +80,7 @@
         <el-table v-loading="loading" :data="logs" row-key="id">
           <el-table-column prop="createdAt" label="调用时间" min-width="170" />
           <el-table-column prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="traceId" label="traceId" min-width="150" show-overflow-tooltip />
           <el-table-column label="场景 / 类型" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">{{ getSceneLabel(row.scene || row.callType) }}</template>
           </el-table-column>
@@ -118,6 +121,7 @@
       <div v-if="detail" class="log-detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="日志 ID">{{ detail.id }}</el-descriptions-item>
+          <el-descriptions-item label="traceId">{{ detail.traceId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="调用场景">{{ getSceneLabel(detail.scene || detail.callType) }}</el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
@@ -169,6 +173,7 @@ const query = reactive<AiCallLogQueryDTO>({
   scene: '',
   businessId: '',
   modelName: '',
+  traceId: '',
   status: '',
   pageNo: 1,
   pageSize: 10
@@ -216,6 +221,7 @@ const handleReset = () => {
     scene: '',
     businessId: '',
     modelName: '',
+    traceId: '',
     status: '',
     pageNo: 1,
     pageSize: 10
