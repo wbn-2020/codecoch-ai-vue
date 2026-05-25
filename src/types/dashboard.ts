@@ -36,7 +36,25 @@ export interface AdminDashboardServiceStatusVO {
 export interface AdminDashboardSystemStatusVO {
   status: DashboardStatus
   services: AdminDashboardServiceStatusVO[]
+  opsMetrics?: AdminDashboardOpsMetricsVO
   generatedAt?: string
+}
+
+export interface AdminDashboardOpsMetricsVO {
+  qps?: number
+  tps?: number
+  rpm?: number
+  tpm?: number
+  processCpuUsage?: number
+  systemCpuUsage?: number
+  heapUsedMb?: number
+  heapMaxMb?: number
+  heapUsage?: number
+  redisHitRate?: number
+  redisKeyspaceHits?: number
+  redisKeyspaceMisses?: number
+  redisConnectedClients?: number
+  metricsSource?: string
 }
 
 export interface AdminDashboardOverviewVO {

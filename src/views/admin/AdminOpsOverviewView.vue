@@ -152,8 +152,6 @@ const jobs = ref<AdminAnalyticsJobLogVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 let trendChart: ECharts | null = null
 
-const waiting = '待接入指标'
-
 const rangeOptions = [
   { label: '7 天', value: 7 },
   { label: '30 天', value: 30 },
@@ -161,10 +159,13 @@ const rangeOptions = [
 ]
 
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
+const opsMetrics = computed(() => dashboard.value?.systemStatus?.opsMetrics)
 const totalFailures = computed(() => Math.max(...failurePoints.value.map((item) => item.value || 0), 1))
 
 const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
 const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
+const formatMetric = (value?: number, digits = 2) => Number(value ?? 0).toFixed(digits)
+const formatMb = (value?: number) => `${Math.round(Number(value || 0))} MB`
 const compact = (value?: number) => {
   const num = Number(value || 0)
   if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`
@@ -200,10 +201,10 @@ const metricGroups = computed(() => [
     icon: Gauge,
     tone: 'tone-cyan',
     metrics: [
-      { label: 'QPS', value: waiting, hint: '等待接入网关指标' },
-      { label: 'TPS', value: waiting, hint: '等待接入事务指标' },
-      { label: 'RPM', value: compact(aiOverview.value?.totalAiCalls), hint: `近 ${rangeDays.value} 天调用` },
-      { label: 'TPM', value: compact(aiOverview.value?.totalTokens), hint: `近 ${rangeDays.value} 天 Token` }
+      { label: 'QPS', value: formatMetric(opsMetrics.value?.qps), hint: '最近 1 分钟请求均值' },
+      { label: 'TPS', value: formatMetric(opsMetrics.value?.tps), hint: '最近 1 分钟业务写入均值' },
+      { label: 'RPM', value: compact(opsMetrics.value?.rpm || aiOverview.value?.totalAiCalls), hint: '最近 1 分钟请求数' },
+      { label: 'TPM', value: compact(opsMetrics.value?.tpm || aiOverview.value?.totalTokens), hint: '最近 1 分钟 Token' }
     ]
   },
   {
@@ -213,8 +214,8 @@ const metricGroups = computed(() => [
     icon: Server,
     tone: 'tone-violet',
     metrics: [
-      { label: 'CPU', value: waiting, hint: '等待接入 Actuator 指标' },
-      { label: '内存', value: waiting, hint: '等待接入 Actuator 指标' },
+      { label: 'CPU', value: formatPercent(opsMetrics.value?.processCpuUsage), hint: `系统 ${formatPercent(opsMetrics.value?.systemCpuUsage)}` },
+      { label: '内存', value: formatMb(opsMetrics.value?.heapUsedMb), hint: `JVM ${formatPercent(opsMetrics.value?.heapUsage)} / ${formatMb(opsMetrics.value?.heapMaxMb)}` },
       { label: '服务数', value: services.value.length, hint: '来自管理驾驶舱' },
       { label: '数据库', value: statusText(services.value.find((item) => item.serviceName === 'database')?.status), hint: 'SELECT 1' }
     ]
@@ -228,7 +229,7 @@ const metricGroups = computed(() => [
     metrics: [
       { label: 'AI 成功率', value: formatPercent(aiOverview.value?.aiSuccessRate), hint: `平均 ${formatMs(aiOverview.value?.avgElapsedMs)}` },
       { label: 'Agent 成功率', value: formatPercent(agentOverview.value?.agentSuccessRate), hint: `平均 ${formatMs(agentOverview.value?.avgDurationMs)}` },
-      { label: '缓存命中', value: waiting, hint: '等待接入 Redis 指标' },
+      { label: '缓存命中', value: formatPercent(opsMetrics.value?.redisHitRate), hint: `hits ${compact(opsMetrics.value?.redisKeyspaceHits)} / misses ${compact(opsMetrics.value?.redisKeyspaceMisses)}` },
       { label: '错误率', value: formatPercent(errorRate.value), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` }
     ]
   }
