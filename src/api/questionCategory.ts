@@ -1,5 +1,7 @@
 import request from '@/utils/request'
+import type { PageResult } from '@/types/api'
 import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendQuestionCategoryVO = Partial<QuestionCategoryVO> & {
   categoryName?: string
@@ -34,10 +36,10 @@ const toBackendCategoryDTO = (data: QuestionCategoryDTO) => ({
 
 export const getQuestionCategoriesApi = (params?: { status?: number | ''; keyword?: string }) => {
   return request
-    .get<BackendQuestionCategoryVO[], BackendQuestionCategoryVO[]>('/admin/question-categories', {
+    .get<BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>, BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>>('/admin/question-categories', {
       params
     })
-    .then(normalizeCategoryList)
+    .then((result) => normalizeCategoryList(normalizePageResult(result).records))
 }
 
 export const createQuestionCategoryApi = (data: QuestionCategoryDTO) => {

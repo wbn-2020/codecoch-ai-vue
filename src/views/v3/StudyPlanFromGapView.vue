@@ -24,9 +24,9 @@
           <label v-for="gap in gapItems" :key="gap.id" class="gap-card">
             <el-checkbox :value="gap.id" />
             <span>
-              <strong>{{ gap.skillName || `短板 #${gap.id}` }}</strong>
-              <small>{{ gap.category || '--' }} · {{ gap.severity || 'NORMAL' }} · 差距 {{ gap.gapLevel ?? '--' }}</small>
-              <em>{{ gap.gapDescription || '暂无差距说明' }}</em>
+              <strong>{{ gapTitle(gap) }}</strong>
+              <small>{{ gapMeta(gap) }}</small>
+              <em>{{ gapDescription(gap) }}</em>
             </span>
           </label>
         </el-checkbox-group>
@@ -101,6 +101,18 @@ const form = reactive({
   planTitle: ''
 })
 
+const gapTitle = (gap: SkillGapItemVO) => gap.skillName || `短板 #${gap.id}`
+
+const gapMeta = (gap: SkillGapItemVO) => {
+  const category = gap.category || '未分类'
+  const severity = gap.severity || 'NORMAL'
+  const gapLevel = gap.gapLevel ?? '--'
+  return `${category} · ${severity} · 差距 ${gapLevel}`
+}
+
+const gapDescription = (gap: SkillGapItemVO) =>
+  gap.gapDescription || '暂无差距说明，可先生成或刷新能力画像补全短板描述。'
+
 const loadProfile = async () => {
   loading.value = true
   loadError.value = ''
@@ -115,7 +127,7 @@ const loadProfile = async () => {
     if (targetJobId.value) {
       try {
         const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
-        gapItems.value = detail.gapItems?.length ? detail.gapItems : overview.topGaps || []
+        gapItems.value = detail?.gapItems?.length ? detail.gapItems : overview.topGaps || []
       } catch {
         gapItems.value = overview.topGaps || []
       }

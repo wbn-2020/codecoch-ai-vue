@@ -210,6 +210,8 @@ const save = async () => {
     dialogVisible.value = false
     ElMessage.success('已保存')
     await load()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
     saving.value = false
   }

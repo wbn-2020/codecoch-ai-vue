@@ -240,6 +240,9 @@ const saveProject = async () => {
     }
     dialogVisible.value = false
     await loadSelectedResume()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '项目保存失败，请检查必填项后重试'
+    ElMessage.error(message)
   } finally {
     saving.value = false
   }
