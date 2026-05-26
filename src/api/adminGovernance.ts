@@ -227,7 +227,7 @@ export const getAdminLoginLogsApi = (params: AdminListQuery) =>
 
 export const getAdminSlowSqlLogsApi = (params: AdminListQuery) =>
   request
-    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/slow-sql-logs', {
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/logs/slow-sql', {
       params: cleanParams({
         ...withCommonParams(params),
         mapperId: params.mapperId,
