@@ -80,13 +80,53 @@
         />
       </div>
     </section>
+
+    <el-dialog
+      v-model="detailVisible"
+      class="notification-dialog"
+      width="560px"
+      :title="selectedNotification?.title || '通知详情'"
+    >
+      <div v-if="selectedNotification" class="notification-detail">
+        <div class="detail-meta">
+          <el-tag effect="plain">{{ typeLabel(selectedNotification.type) }}</el-tag>
+          <span>{{ selectedNotification.createdAt || '--' }}</span>
+        </div>
+        <p class="detail-content">{{ selectedNotification.content || '这条通知暂无正文内容。' }}</p>
+        <el-alert
+          v-if="notificationTarget"
+          type="info"
+          :closable="false"
+          show-icon
+          :title="`关联业务：${notificationTarget.label}`"
+        />
+        <el-alert
+          v-else
+          type="warning"
+          :closable="false"
+          show-icon
+          title="这条通知没有配置可跳转的业务页面，可以仅查看并关闭。"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">仅查看，不跳转</el-button>
+        <el-button
+          v-if="notificationTarget"
+          type="primary"
+          @click="jumpToNotificationTarget"
+        >
+          <ExternalLink :size="16" />
+          跳转查看
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Bell, BellOff, CheckCheck, LayoutDashboard } from 'lucide-vue-next'
-import { onMounted, reactive, ref } from 'vue'
+import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -106,6 +146,8 @@ const notifications = ref<NotificationVO[]>([])
 const total = ref(0)
 const unreadCount = ref(0)
 const errorMessage = ref('')
+const detailVisible = ref(false)
+const selectedNotification = ref<NotificationVO>()
 
 const query = reactive<NotificationQueryDTO>({
   pageNo: 1,
@@ -124,6 +166,45 @@ const typeLabels: Record<string, string> = {
 }
 
 const typeLabel = (type: string) => typeLabels[type] || type || '通知'
+
+const pickRelatedId = (item?: NotificationVO) => {
+  const value = item?.relatedId ?? item?.bizId
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
+const notificationTarget = computed(() => {
+  const item = selectedNotification.value
+  if (!item) return null
+  const relatedType = (item.relatedType || item.bizType || item.type || '').toUpperCase()
+  const id = pickRelatedId(item)
+
+  if ((relatedType.includes('INTERVIEW') && relatedType.includes('REPORT')) || relatedType === 'REPORT_DONE') {
+    return id ? { label: '面试报告', path: `/interviews/${id}/report` } : { label: '面试历史', path: '/interviews/history' }
+  }
+  if (relatedType.includes('INTERVIEW')) {
+    return id ? { label: '面试详情', path: `/interviews/${id}` } : { label: '面试历史', path: '/interviews/history' }
+  }
+  if (relatedType.includes('RESUME') && relatedType.includes('MATCH')) {
+    return id ? { label: '简历匹配详情', path: `/resume-match/${id}` } : { label: '简历匹配', path: '/resume-match' }
+  }
+  if (relatedType.includes('RESUME')) {
+    return { label: '简历中心', path: '/resumes' }
+  }
+  if (relatedType.includes('STUDY') || relatedType.includes('PLAN')) {
+    return { label: '学习计划', path: '/study-plans' }
+  }
+  if (relatedType.includes('QUESTION')) {
+    return id ? { label: '题目详情', path: `/questions/${id}` } : { label: '题库', path: '/questions' }
+  }
+  if (relatedType.includes('AGENT_RUN')) {
+    return id ? { label: 'Agent 运行详情', path: `/agent/runs/${id}` } : { label: 'Agent 任务', path: '/agent/tasks' }
+  }
+  if (relatedType.includes('TASK')) {
+    return { label: '每日任务', path: '/daily-tasks' }
+  }
+  return null
+})
 
 const fetchNotifications = async () => {
   loading.value = true
@@ -168,16 +249,14 @@ const handleClickNotification = async (item: NotificationVO) => {
       // silent
     }
   }
-  // 仅在通知携带可识别业务类型时跳转，其他类型保持列表内已读反馈。
-  if (item.relatedType === 'INTERVIEW_REPORT' && item.relatedId) {
-    router.push(`/interviews/${item.relatedId}/report`)
-  } else if (item.relatedType === 'RESUME_PARSE' && item.relatedId) {
-    router.push('/resumes')
-  } else if (item.relatedType === 'STUDY_PLAN' && item.relatedId) {
-    router.push('/study-plans')
-  } else if (item.relatedType) {
-    ElMessage.info('该通知暂未配置业务跳转入口')
-  }
+  selectedNotification.value = item
+  detailVisible.value = true
+}
+
+const jumpToNotificationTarget = async () => {
+  if (!notificationTarget.value) return
+  detailVisible.value = false
+  await router.push(notificationTarget.value.path)
 }
 
 const handleMarkAllRead = async () => {
@@ -347,6 +426,27 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   padding: 0 20px 20px;
+}
+
+.notification-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.detail-content {
+  margin: 0;
+  color: var(--app-text);
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 760px) {

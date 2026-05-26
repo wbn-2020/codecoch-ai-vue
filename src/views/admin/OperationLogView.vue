@@ -7,7 +7,7 @@
           <span>操作审计</span>
         </div>
         <h1 class="admin-hero__title">操作日志</h1>
-        <p class="admin-hero__desc">按用户、模块、动作、状态和 traceId 定位后台关键操作。</p>
+        <p class="admin-hero__desc">按用户、模块、动作、状态和 traceId 定位管理端与用户端操作。</p>
       </div>
       <div class="admin-hero__actions">
         <el-button :icon="RefreshCw" :loading="loading || summaryLoading" @click="loadPage">刷新</el-button>
@@ -157,10 +157,20 @@ const query = reactive<AdminListQuery>({
 })
 
 const moduleOptions = [
+  { label: '其他管理端', value: 'admin' },
   { label: '系统管理', value: 'system' },
+  { label: '登录认证', value: 'auth' },
   { label: '用户权限', value: 'user' },
+  { label: '简历中心', value: 'resume' },
+  { label: '岗位目标', value: 'job' },
   { label: '题库管理', value: 'question' },
+  { label: '面试训练', value: 'interview' },
+  { label: '学习计划', value: 'study' },
   { label: 'AI 管理', value: 'ai' },
+  { label: 'Agent', value: 'agent' },
+  { label: '文件知识库', value: 'file' },
+  { label: '通知中心', value: 'notification' },
+  { label: '数据分析', value: 'analytics' },
   { label: '任务中心', value: 'task' },
   { label: '搜索管理', value: 'search' }
 ]
@@ -176,7 +186,13 @@ const operationLabels: Record<string, string> = {
   CREATE_CONFIG: '新增系统配置',
   UPDATE_CONFIG: '编辑系统配置',
   UPDATE_CONFIG_STATUS: '切换配置状态',
-  DELETE_CONFIG: '删除系统配置'
+  DELETE_CONFIG: '删除系统配置',
+  QUERY: '查询',
+  VIEW: '查看详情',
+  CREATE_OR_EXECUTE: '新增/执行',
+  UPDATE: '编辑',
+  DELETE: '删除',
+  QUERY_SLOW_SQL_LOG: '查询慢 SQL 日志'
 }
 
 const isSuccess = (status?: string | number) => status === 1 || status === '1' || String(status).toUpperCase() === 'SUCCESS'

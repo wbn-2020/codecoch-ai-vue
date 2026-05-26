@@ -13,7 +13,8 @@ import type {
   MenuVO,
   NotificationSendDTO,
   OperationLogVO,
-  RoleMenuGrantDTO
+  RoleMenuGrantDTO,
+  SlowSqlLogVO
 } from '@/types/adminGovernance'
 import { normalizePageResult } from '@/utils/page'
 
@@ -101,6 +102,20 @@ const normalizeLoginLog = (item: any): LoginLogVO => ({
   message: pick(item, 'message', 'errorMessage', 'failReason', 'fail_reason', 'failureReason', 'failure_reason', 'reason'),
   loginTime: pick(item, 'loginTime', 'login_time', 'createdAt', 'createTime', 'created_at'),
   createdAt: pick(item, 'createdAt', 'loginTime', 'login_time', 'createTime', 'created_at')
+})
+
+const normalizeSlowSqlLog = (item: any): SlowSqlLogVO => ({
+  ...item,
+  id: normalizeId(item),
+  mapperId: pick(item, 'mapperId', 'mapper_id'),
+  sqlCommandType: pick(item, 'sqlCommandType', 'sql_command_type'),
+  sqlText: pick(item, 'sqlText', 'sql_text'),
+  parameterSummary: pick(item, 'parameterSummary', 'parameter_summary'),
+  databaseName: pick(item, 'databaseName', 'database_name'),
+  costMs: pick(item, 'costMs', 'cost_ms', 'costTime', 'duration'),
+  thresholdMs: pick(item, 'thresholdMs', 'threshold_ms'),
+  resultSize: pick(item, 'resultSize', 'result_size'),
+  createdAt: pick(item, 'createdAt', 'createTime', 'created_at')
 })
 
 const normalizeMenu = (item: any): MenuVO => ({
@@ -209,6 +224,18 @@ export const getAdminLoginLogsApi = (params: AdminListQuery) =>
       params: cleanParams({ ...withCommonParams(params), loginStatus: params.status })
     })
     .then((result) => normalizePageResult(result, params, normalizeLoginLog))
+
+export const getAdminSlowSqlLogsApi = (params: AdminListQuery) =>
+  request
+    .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/slow-sql-logs', {
+      params: cleanParams({
+        ...withCommonParams(params),
+        mapperId: params.mapperId,
+        sqlCommandType: params.sqlCommandType,
+        minCostMs: params.minCostMs
+      })
+    })
+    .then((result) => normalizePageResult(result, params, normalizeSlowSqlLog))
 
 export const getAdminMenusApi = () => request.get<any[], any[]>('/admin/menus').then((items) => items.map(normalizeMenu))
 

@@ -65,7 +65,7 @@ import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getCurrentJobTargetApi } from '@/api/jobTarget'
-import { getSkillProfileByJobTargetApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { generateStudyPlanFromGapApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import type { SkillGapItemVO } from '@/types/skillProfile'
@@ -101,13 +101,22 @@ const form = reactive({
   planTitle: ''
 })
 
-const gapTitle = (gap: SkillGapItemVO) => gap.skillName || `短板 #${gap.id}`
+const severityLabels: Record<string, string> = {
+  HIGH: '高优先级',
+  MEDIUM: '中优先级',
+  LOW: '低优先级',
+  NORMAL: '普通'
+}
+
+const gapTitle = (gap: SkillGapItemVO) => gap.skillName || gap.category || `短板 #${gap.id}`
 
 const gapMeta = (gap: SkillGapItemVO) => {
   const category = gap.category || '未分类'
-  const severity = gap.severity || 'NORMAL'
+  const severity = severityLabels[String(gap.severity || 'NORMAL').toUpperCase()] || gap.severity || '普通'
   const gapLevel = gap.gapLevel ?? '--'
-  return `${category} · ${severity} · 差距 ${gapLevel}`
+  const current = gap.currentLevel ?? '--'
+  const target = gap.targetLevel ?? '--'
+  return `${category} · ${severity} · 当前 ${current} / 目标 ${target} · 差距 ${gapLevel}`
 }
 
 const gapDescription = (gap: SkillGapItemVO) =>
@@ -121,18 +130,26 @@ const loadProfile = async () => {
       const currentTarget = await getCurrentJobTargetApi().catch(() => null)
       loadedTargetJobId.value = currentTarget?.id
     }
-    const overview = await getSkillProfileOverviewApi(targetJobId.value)
-    loadedProfileId.value = Number(route.query.profileId) || overview.profileId
-    loadedTargetJobId.value = targetJobId.value || overview.targetJobId
-    if (targetJobId.value) {
-      try {
-        const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
-        gapItems.value = detail?.gapItems?.length ? detail.gapItems : overview.topGaps || []
-      } catch {
+    const routeProfileId = Number(route.query.profileId) || undefined
+    if (routeProfileId) {
+      const detail = await getSkillProfileByIdApi(routeProfileId)
+      loadedProfileId.value = detail?.profileId || routeProfileId
+      loadedTargetJobId.value = detail?.targetJobId
+      gapItems.value = detail?.gapItems || []
+    } else {
+      const overview = await getSkillProfileOverviewApi(targetJobId.value)
+      loadedProfileId.value = overview.profileId
+      loadedTargetJobId.value = targetJobId.value || overview.targetJobId
+      if (targetJobId.value) {
+        try {
+          const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
+          gapItems.value = detail?.gapItems?.length ? detail.gapItems : overview.topGaps || []
+        } catch {
+          gapItems.value = overview.topGaps || []
+        }
+      } else {
         gapItems.value = overview.topGaps || []
       }
-    } else {
-      gapItems.value = overview.topGaps || []
     }
     form.gapItemIds = gapItems.value.slice(0, 5).map((item) => item.id)
   } catch (error) {
@@ -195,8 +212,9 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .content-panel { padding: 20px; min-width: 0; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
 .gap-list { display: grid; gap: 12px; }
-.gap-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); cursor: pointer; }
+.gap-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); cursor: pointer; }
 .gap-card strong, .gap-card small, .gap-card em { display: block; overflow-wrap: anywhere; }
+.gap-card strong { color: var(--app-text); font-size: 15px; line-height: 1.45; }
 .gap-card small { margin-top: 4px; color: var(--app-text-muted); }
 .gap-card em { margin-top: 8px; color: var(--app-text); font-style: normal; line-height: 1.6; }
 .form-panel { display: flex; flex-direction: column; gap: 14px; align-self: start; }

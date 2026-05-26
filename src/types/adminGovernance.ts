@@ -13,6 +13,9 @@ export interface AdminListQuery extends PageQuery {
   action?: string
   traceId?: string
   loginType?: string
+  mapperId?: string
+  sqlCommandType?: string
+  minCostMs?: number
 }
 
 export interface AdminLogSummaryVO {
@@ -98,6 +101,19 @@ export interface LoginLogVO {
   status?: string | number
   message?: string
   loginTime?: string
+  createdAt?: string
+}
+
+export interface SlowSqlLogVO {
+  id: number
+  mapperId?: string
+  sqlCommandType?: string
+  sqlText?: string
+  parameterSummary?: string
+  databaseName?: string
+  costMs?: number
+  thresholdMs?: number
+  resultSize?: number
   createdAt?: string
 }
 

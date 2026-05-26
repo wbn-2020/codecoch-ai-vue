@@ -171,6 +171,7 @@ const sections: AdminMenuSection[] = [
       { label: '通知管理', path: '/admin/notices', icon: Bell, permissions: ['admin:notice:list'] },
       { label: '操作日志', path: '/admin/operation-logs', icon: Document, permissions: ['admin:audit:operation-log'] },
       { label: '登录日志', path: '/admin/login-logs', icon: Key, permissions: ['admin:audit:login-log'] },
+      { label: '慢 SQL 查询', path: '/admin/slow-sql-logs', icon: DataAnalysis, permissions: ['admin:audit:slow-sql-log'] },
       { label: '系统配置', path: '/admin/system/configs', icon: Setting, permissions: ['admin:system:config:list'] }
     ]
   }

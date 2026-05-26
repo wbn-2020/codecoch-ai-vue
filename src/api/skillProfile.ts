@@ -135,6 +135,14 @@ export const getSkillProfileByJobTargetApi = (targetJobId: number) => {
     .then(normalizeSkillProfileDetail)
 }
 
+export const getSkillProfileByIdApi = (profileId: number) => {
+  return request
+    .get<BackendSkillProfileDetail | null, BackendSkillProfileDetail | null>(
+      `/skill-profiles/${profileId}`
+    )
+    .then(normalizeSkillProfileDetail)
+}
+
 export const getSkillProfileOverviewApi = (targetJobId?: number) => {
   return request
     .get<BackendSkillProfileOverview, BackendSkillProfileOverview>('/skill-profiles/overview', {
