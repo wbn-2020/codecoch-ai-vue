@@ -7,9 +7,24 @@
         <p>创建快照、复制版本、对比版本差异、回滚版本，并记录 AI 优化建议采纳情况。</p>
       </div>
       <div class="v4-actions">
-        <el-input-number v-model="resumeId" :min="1" controls-position="right" />
-        <el-button :loading="loading" @click="load">加载</el-button>
-        <el-button type="primary" :loading="saving" @click="create">创建版本</el-button>
+        <el-select
+          v-model="resumeId"
+          filterable
+          clearable
+          placeholder="选择简历"
+          style="width: 260px"
+          :loading="resumeLoading"
+          @change="load"
+        >
+          <el-option
+            v-for="item in resumes"
+            :key="item.id"
+            :label="resumeLabel(item)"
+            :value="item.id"
+          />
+        </el-select>
+        <el-button :loading="loading || resumeLoading" @click="load">加载</el-button>
+        <el-button type="primary" :disabled="!resumeId" :loading="saving" @click="create">创建版本</el-button>
       </div>
     </section>
 
@@ -128,6 +143,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { getResumesApi } from '@/api/resume'
 import {
   applyResumeVersionSuggestionApi,
   copyResumeVersionApi,
@@ -140,11 +156,14 @@ import {
   type ResumeVersionVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import type { ResumeVO } from '@/types/resume'
 
 const route = useRoute()
-const initialResumeId = Number(route.params.id || 1)
-const resumeId = ref<number>(Number.isFinite(initialResumeId) && initialResumeId > 0 ? initialResumeId : 1)
+const initialResumeId = Number(route.params.id)
+const resumeId = ref<number | undefined>(Number.isFinite(initialResumeId) && initialResumeId > 0 ? initialResumeId : undefined)
+const resumes = ref<ResumeVO[]>([])
 const loading = ref(false)
+const resumeLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
 const versions = ref<ResumeVersionVO[]>([])
@@ -175,6 +194,9 @@ const getErrorMessage = (error: unknown) => {
 const versionLabel = (item: ResumeVersionVO) =>
   `V${item.versionNo ?? '--'} · ${item.versionName || `#${item.id}`}`
 
+const resumeLabel = (item: ResumeVO) =>
+  `${item.resumeName || item.title || `简历 #${item.id}`}${item.targetPosition ? ` / ${item.targetPosition}` : ''}`
+
 const formatValue = (value: unknown) => {
   if (value === undefined || value === null || value === '') return '--'
   if (typeof value === 'string') return value
@@ -185,7 +207,11 @@ const load = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    versions.value = await getResumeVersionsApi(resumeId.value)
+    if (!(await ensureResumeId())) {
+      versions.value = []
+      return
+    }
+    versions.value = await getResumeVersionsApi(resumeId.value as number)
   } catch (error) {
     versions.value = []
     errorMessage.value = getErrorMessage(error)
@@ -195,9 +221,10 @@ const load = async () => {
 }
 
 const create = async () => {
+  if (!(await ensureResumeId())) return
   saving.value = true
   try {
-    await createResumeVersionApi(resumeId.value, { versionName: `V${versions.value.length + 1}` })
+    await createResumeVersionApi(resumeId.value as number, { versionName: `V${versions.value.length + 1}` })
     ElMessage.success('版本已创建')
     await load()
   } finally {
@@ -215,7 +242,7 @@ const copyVersion = async () => {
   if (!copySource.value) return
   saving.value = true
   try {
-    await copyResumeVersionApi(resumeId.value, copySource.value.id, { versionName: copyName.value || undefined })
+    await copyResumeVersionApi(resumeId.value as number, copySource.value.id, { versionName: copyName.value || undefined })
     copyVisible.value = false
     ElMessage.success('版本已复制')
     await load()
@@ -225,7 +252,8 @@ const copyVersion = async () => {
 }
 
 const showCurrentDiff = async (versionId: number) => {
-  diff.value = await getResumeVersionDiffApi(resumeId.value, versionId)
+  if (!(await ensureResumeId())) return
+  diff.value = await getResumeVersionDiffApi(resumeId.value as number, versionId)
   diffVisible.value = true
 }
 
@@ -237,7 +265,8 @@ const showPairDiff = async () => {
 
 const rollback = async (versionId: number) => {
   await ElMessageBox.confirm('确认回滚到该版本？', '回滚确认', { type: 'warning' })
-  await rollbackResumeVersionApi(resumeId.value, versionId)
+  if (!(await ensureResumeId())) return
+  await rollbackResumeVersionApi(resumeId.value as number, versionId)
   ElMessage.success('版本已回滚')
   await load()
 }
@@ -270,7 +299,38 @@ const applySuggestion = async () => {
   }
 }
 
-onMounted(load)
+const loadResumeOptions = async () => {
+  resumeLoading.value = true
+  try {
+    const result = await getResumesApi({ pageNo: 1, pageSize: 100 })
+    resumes.value = result.records || []
+    if (!resumeId.value && resumes.value.length) {
+      const defaultResume = resumes.value.find((item) => item.isDefault === 1) || resumes.value[0]
+      resumeId.value = defaultResume.id
+    }
+  } finally {
+    resumeLoading.value = false
+  }
+}
+
+const ensureResumeId = async () => {
+  if (resumeId.value) {
+    return true
+  }
+  if (!resumes.value.length) {
+    await loadResumeOptions()
+  }
+  if (!resumeId.value) {
+    errorMessage.value = '请先创建一份简历，再使用简历版本功能'
+    return false
+  }
+  return true
+}
+
+onMounted(async () => {
+  await loadResumeOptions()
+  await load()
+})
 </script>
 
 <style scoped lang="scss">
