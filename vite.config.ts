@@ -13,9 +13,10 @@ const createAssetVersionPlugin = (version: string) => {
 
   const processFile = (filePath: string) => {
     const source = readFileSync(filePath, 'utf-8')
+    const isHtml = filePath.endsWith('.html')
     const updated = source
       .replace(/((?:src|href)=["']\/assets\/[^"']+\.(?:js|css))(["'])/g, (_, pathPart, quote) => {
-        return `${appendVersion(pathPart)}${quote}`
+        return isHtml ? `${appendVersion(pathPart)}${quote}` : `${pathPart}${quote}`
       })
       .replace(/(from\s*["']\.\/[^"']+\.js)(["'])/g, (_, pathPart, quote) => {
         return `${appendVersion(pathPart)}${quote}`
@@ -23,7 +24,7 @@ const createAssetVersionPlugin = (version: string) => {
       .replace(/(import\(\s*["']\.\/[^"']+\.js)(["']\s*\))/g, (_, pathPart, suffix) => {
         return `${appendVersion(pathPart)}${suffix}`
       })
-      .replace(/(assets\/[^"']+\.(?:js|css))(?!\?v=)/g, (assetPath) => appendVersion(assetPath))
+      .replace(/(assets\/[^"']+\.js)(?!\?v=)/g, (assetPath) => appendVersion(assetPath))
 
     if (updated !== source) {
       writeFileSync(filePath, updated, 'utf-8')
