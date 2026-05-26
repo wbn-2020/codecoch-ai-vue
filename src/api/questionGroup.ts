@@ -1,5 +1,7 @@
 import request from '@/utils/request'
+import type { PageResult } from '@/types/api'
 import type { QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
+import { normalizePageResult } from '@/utils/page'
 
 type BackendQuestionGroupVO = Partial<QuestionGroupVO> & {
   groupName?: string
@@ -43,8 +45,8 @@ export const getQuestionGroupsApi = (params?: {
   status?: number | ''
 }) => {
   return request
-    .get<BackendQuestionGroupVO[], BackendQuestionGroupVO[]>('/admin/question-groups', { params })
-    .then(normalizeGroupList)
+    .get<BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>, BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>>('/admin/question-groups', { params })
+    .then((result) => normalizeGroupList(normalizePageResult(result).records))
 }
 
 export const createQuestionGroupApi = (data: QuestionGroupDTO) => {
