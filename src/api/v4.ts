@@ -138,6 +138,9 @@ export interface KnowledgeDocumentVO {
   documentType?: string
   status?: string
   chunkCount?: number
+  duplicateChunkCount?: number
+  duplicateDocumentId?: number
+  duplicateDocument?: boolean
   content?: string
   createdAt?: string
   updatedAt?: string
@@ -173,6 +176,7 @@ export interface KnowledgeVectorRebuildVO {
   documentCount?: number
   chunkCount?: number
   vectorUpdated?: number
+  duplicateChunkCount?: number
   failedDocuments?: number[]
   errors?: string[]
 }

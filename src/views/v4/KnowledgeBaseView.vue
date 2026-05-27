@@ -234,6 +234,10 @@
             <span>向量</span>
             <strong>{{ rebuildResult.vectorUpdated || 0 }}</strong>
           </article>
+          <article class="rebuild-stat">
+            <span>重复片段</span>
+            <strong>{{ rebuildResult.duplicateChunkCount || 0 }}</strong>
+          </article>
         </div>
         <p class="rebuild-tip">失败文档：{{ rebuildResult.failedDocuments?.length || 0 }}</p>
         <p class="rebuild-tip" v-if="rebuildResult.failedDocuments?.length">
@@ -391,7 +395,13 @@ const createDocument = async () => {
       content: form.content
     })
     dialogVisible.value = false
-    ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个语义片段`)
+    if (result.duplicateDocument) {
+      ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
+    } else if (result.duplicateChunkCount) {
+      ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个片段，跳过 ${result.duplicateChunkCount} 个重复片段`)
+    } else {
+      ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个语义片段`)
+    }
     await loadDocuments()
   } finally {
     saving.value = false
@@ -404,7 +414,8 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
   try {
     const result = await rebuildKnowledgeVectorsApi(documentId)
     rebuildResult.value = result
-    const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条`
+    const duplicateSummary = result.duplicateChunkCount ? `，重复片段 ${result.duplicateChunkCount || 0} 个` : ''
+    const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条${duplicateSummary}`
     rebuildDialogVisible.value = true
     if ((result.errors || []).length || (result.failedDocuments || []).length) {
       ElMessage.warning(summary)
