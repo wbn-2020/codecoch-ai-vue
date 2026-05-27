@@ -87,6 +87,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'notifications', redirect: '/admin/notices', meta: { hidden: true } },
       { path: 'operation-logs', name: 'AdminOperationLogs', component: () => import('@/views/admin/OperationLogView.vue'), meta: { title: '操作日志', icon: 'Document', requiredPermissions: ['admin:audit:operation-log'] } },
       { path: 'login-logs', name: 'AdminLoginLogs', component: () => import('@/views/admin/LoginLogView.vue'), meta: { title: '登录日志', icon: 'Key', requiredPermissions: ['admin:audit:login-log'] } },
+      { path: 'slow-sql-logs', name: 'AdminSlowSqlLogs', component: () => import('@/views/admin/SlowSqlLogView.vue'), meta: { title: '慢 SQL 查询', icon: 'DataAnalysis', requiredPermissions: ['admin:audit:slow-sql-log'] } },
       { path: 'interviews', name: 'AdminInterviews', component: () => import('@/views/admin/InterviewManageView.vue'), meta: { title: '面试记录', icon: 'ChatDotRound', requiredPermissions: ['admin:interview:list'] } },
       { path: 'interview-reports', name: 'AdminInterviewReports', component: () => import('@/views/admin/InterviewReportManageView.vue'), meta: { title: '面试报告', icon: 'Document', requiredPermissions: ['admin:interview:report'] } },
       { path: 'analytics/agent', name: 'AdminAgentAnalytics', component: () => import('@/views/admin/AdminAgentAnalyticsView.vue'), meta: { title: 'Agent 效果分析', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:agent'] } },

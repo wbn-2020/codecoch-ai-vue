@@ -50,6 +50,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/admin/notices': '通知管理',
   '/admin/operation-logs': '操作日志',
   '/admin/login-logs': '登录日志',
+  '/admin/slow-sql-logs': '慢 SQL 查询',
   '/admin/interviews': '面试记录',
   '/admin/interview-reports': '面试报告',
   '/admin/agent/runs': 'Agent 运行',
