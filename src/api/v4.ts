@@ -193,6 +193,7 @@ export interface KnowledgeStatsVO {
   vectorEnabled?: boolean
   retrievalMode?: string
   chunkStrategy?: string
+  documentTypeCounts?: Record<string, number>
 }
 
 export interface KnowledgeConfigVO {

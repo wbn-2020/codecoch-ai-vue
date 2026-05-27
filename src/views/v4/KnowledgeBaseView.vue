@@ -39,6 +39,10 @@
         <span>{{ retrievalModeLabel }}</span>
         <strong>{{ chunkStrategyLabel }}</strong>
       </article>
+      <article class="summary-item">
+        <span>类型分布</span>
+        <strong>{{ documentTypeSummary }}</strong>
+      </article>
     </section>
 
     <section class="config-strip">
@@ -746,6 +750,16 @@ const chunkTotal = computed(() =>
 const documentTotal = computed(() => knowledgeStats.value?.documentCount ?? total.value)
 
 const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkCount ?? 0)
+
+const documentTypeSummary = computed(() => {
+  const counts = knowledgeStats.value?.documentTypeCounts || {}
+  const items = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+  if (!items.length) return '--'
+  return items.map(([type, count]) => `${type}:${count}`).join(' / ')
+})
 
 const retrievalModeLabel = computed(() => {
   const mode = knowledgeStats.value?.retrievalMode
@@ -1591,7 +1605,7 @@ onMounted(loadDocuments)
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .config-strip {
