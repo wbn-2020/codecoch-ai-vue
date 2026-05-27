@@ -427,6 +427,15 @@
               <strong>v{{ item.versionNo || 0 }}</strong>
               <el-tag size="small" effect="plain">{{ item.documentType || 'NOTE' }}</el-tag>
               <small>{{ item.createdAt || '--' }} · {{ item.chunkCount || 0 }} chunks</small>
+              <el-button
+                link
+                size="small"
+                type="primary"
+                :loading="restoringVersionId === item.id"
+                @click="handleRestoreVersion(item)"
+              >
+                恢复
+              </el-button>
             </div>
             <div class="version-row__title">{{ item.title || '--' }}</div>
             <p>{{ item.content || '--' }}</p>
@@ -458,6 +467,7 @@ import {
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
+  restoreKnowledgeDocumentVersionApi,
   searchKnowledgeApi,
   updateKnowledgeDocumentApi,
   uploadKnowledgeDocumentApi,
@@ -483,6 +493,7 @@ const chunksLoading = ref(false)
 const duplicateReviewLoading = ref(false)
 const editingLoadingId = ref<number | null>(null)
 const versionsLoadingId = ref<number | null>(null)
+const restoringVersionId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
@@ -757,6 +768,25 @@ const openVersionsDrawer = async (row: KnowledgeDocumentVO) => {
     documentVersions.value = await getKnowledgeDocumentVersionsApi(row.id)
   } finally {
     versionsLoadingId.value = null
+  }
+}
+
+const handleRestoreVersion = async (version: KnowledgeDocumentVersionVO) => {
+  if (!versionDocument.value?.id || !version.id) return
+  await ElMessageBox.confirm(
+    `确认恢复到 v${version.versionNo || 0}？当前内容会先保存为新的历史版本，然后重建片段和向量索引。`,
+    '恢复历史版本',
+    { type: 'warning' }
+  )
+  restoringVersionId.value = version.id
+  try {
+    const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id)
+    ElMessage.success(`已恢复到 v${version.versionNo || 0}`)
+    versionDocument.value = result
+    documentVersions.value = await getKnowledgeDocumentVersionsApi(result.id)
+    await loadDocuments()
+  } finally {
+    restoringVersionId.value = null
   }
 }
 

@@ -361,6 +361,9 @@ export const getKnowledgeDocumentVersionsApi = (id: number) =>
     .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
     .then((data) => data || [])
 
+export const restoreKnowledgeDocumentVersionApi = (id: number, versionId: number) =>
+  request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}/versions/${versionId}/restore`)
+
 export const getKnowledgeDocumentChunksApi = (id: number) =>
   request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
 
