@@ -77,7 +77,7 @@
       <div class="dedup-actions">
         <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" />
         <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
-        <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates">完全重复</el-button>
+        <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates()">完全重复</el-button>
       </div>
     </section>
 
@@ -89,10 +89,12 @@
       <article>
         <span>Duplicate Types</span>
         <strong>{{ duplicateTypeSummary }}</strong>
+        <el-button v-if="topDuplicateType" link type="primary" @click="loadExactDuplicates(undefined, topDuplicateType)">Review</el-button>
       </article>
       <article>
         <span>Top Hotspot</span>
         <strong>{{ topDuplicateHotspotLabel }}</strong>
+        <el-button v-if="topDuplicateHotspotId" link type="primary" @click="loadExactDuplicates(topDuplicateHotspotId)">Review</el-button>
       </article>
       <article>
         <span>Cleanup Candidates</span>
@@ -503,6 +505,10 @@
           <div>
             <strong>{{ exactDuplicateGroups.length }}</strong>
             <small>duplicate groups</small>
+            <small>{{ exactDuplicateScopeLabel }}</small>
+          </div>
+          <div class="exact-scope-actions">
+            <el-button v-if="exactDuplicateScopeDocumentId || exactDuplicateScopeType" link @click="loadExactDuplicates()">View all</el-button>
           </div>
           <el-button type="danger" :loading="exactDuplicateCleanupLoading" @click="handleCleanupExactDuplicates">
             清理完全重复
@@ -715,6 +721,8 @@ const selectedChunkDetail = ref<KnowledgeChunkVO | null>(null)
 const selectedChunkSource = ref<KnowledgeSearchResultVO | null>(null)
 const exactDuplicateGroups = ref<KnowledgeExactDuplicateGroupVO[]>([])
 const exactDuplicateCleanup = ref<KnowledgeDuplicateCleanupVO | null>(null)
+const exactDuplicateScopeDocumentId = ref<number | undefined>()
+const exactDuplicateScopeType = ref('')
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
@@ -786,6 +794,13 @@ const duplicateTypeSummary = computed(() => {
   return items.map(([type, count]) => `${type}:${count}`).join(' / ')
 })
 
+const topDuplicateType = computed(() => {
+  const counts = knowledgeStats.value?.duplicateTypeCounts || {}
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])[0]?.[0]
+})
+
 const duplicateDocumentHotspots = computed(() => knowledgeStats.value?.duplicateDocumentHotspots || [])
 
 const hasDuplicateHotspots = computed(() => duplicateChunkTotal.value > 0 || duplicateDocumentHotspots.value.length > 0)
@@ -797,6 +812,23 @@ const topDuplicateHotspotLabel = computed(() => {
   const duplicateCount = hotspot.duplicateChunkCount || 0
   const ratio = typeof hotspot.duplicateRatio === 'number' ? `, ${hotspot.duplicateRatio}%` : ''
   return `${title} (${duplicateCount}${ratio})`
+})
+
+const topDuplicateHotspotId = computed(() => duplicateDocumentHotspots.value[0]?.documentId)
+
+const exactDuplicateScopeLabel = computed(() => {
+  if (exactDuplicateScopeDocumentId.value) {
+    const item = documentOptions.value.find((option) => option.id === exactDuplicateScopeDocumentId.value)
+    return `scope: ${item?.title || `#${exactDuplicateScopeDocumentId.value}`}`
+  }
+  if (exactDuplicateScopeType.value) return `scope: ${exactDuplicateScopeType.value}`
+  return 'scope: all documents'
+})
+
+const exactDuplicateScopeParams = () => ({
+  limit: 20,
+  documentId: exactDuplicateScopeDocumentId.value,
+  documentType: exactDuplicateScopeType.value || undefined
 })
 
 const retrievalModeLabel = computed(() => {
@@ -1131,11 +1163,13 @@ const handleDeleteDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewIt
   }
 }
 
-const loadExactDuplicates = async () => {
+const loadExactDuplicates = async (documentId?: number, documentType?: string) => {
+  exactDuplicateScopeDocumentId.value = documentId
+  exactDuplicateScopeType.value = documentType || ''
   exactDuplicateVisible.value = true
   exactDuplicateLoading.value = true
   try {
-    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(20)
+    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(exactDuplicateScopeParams())
     if (!exactDuplicateGroups.value.length) {
       ElMessage.success('暂未发现完全重复片段')
     }
@@ -1147,7 +1181,7 @@ const loadExactDuplicates = async () => {
 const handleCleanupExactDuplicates = async () => {
   exactDuplicateCleanupLoading.value = true
   try {
-    const preview = await cleanupKnowledgeExactDuplicatesApi({ dryRun: true, limit: 20 })
+    const preview = await cleanupKnowledgeExactDuplicatesApi({ dryRun: true, ...exactDuplicateScopeParams() })
     exactDuplicateCleanup.value = preview
     if (!preview.deleteCandidateCount) {
       ElMessage.success('暂无需要清理的完全重复片段')
@@ -1158,10 +1192,10 @@ const handleCleanupExactDuplicates = async () => {
       '清理完全重复片段',
       { type: 'warning' }
     )
-    const result = await cleanupKnowledgeExactDuplicatesApi({ dryRun: false, limit: 20 })
+    const result = await cleanupKnowledgeExactDuplicatesApi({ dryRun: false, ...exactDuplicateScopeParams() })
     exactDuplicateCleanup.value = result
     ElMessage.success(`已清理 ${result.deletedCount || 0} 个重复片段`)
-    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(20)
+    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(exactDuplicateScopeParams())
     await loadDocuments()
   } finally {
     exactDuplicateCleanupLoading.value = false

@@ -423,12 +423,12 @@ export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
 export const getKnowledgeDuplicateReviewApi = (params?: { limit?: number; threshold?: number }) =>
   request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params })
 
-export const getKnowledgeExactDuplicatesApi = (limit?: number) =>
+export const getKnowledgeExactDuplicatesApi = (params?: { limit?: number; documentId?: number; documentType?: string }) =>
   request
-    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: { limit } })
+    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params })
     .then((data) => data || [])
 
-export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number }) =>
+export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number; documentId?: number; documentType?: string }) =>
   request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
     params
   })
