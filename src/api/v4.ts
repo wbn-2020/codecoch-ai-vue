@@ -259,6 +259,8 @@ export interface KnowledgeAskVO {
   question?: string
   answer?: string
   references?: KnowledgeSearchResultVO[]
+  referenceCount?: number
+  topReferenceScore?: number
   insufficientReferences?: boolean
   minReferenceScore?: number
   aiCallLogId?: number

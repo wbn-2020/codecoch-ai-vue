@@ -288,6 +288,11 @@
                 :closable="false"
                 title="引用不足，回答仅供参考"
               />
+              <div class="answer-quality">
+                <span>引用 {{ askReferenceCount }} 条</span>
+                <span>最高分 {{ scoreLabel(askTopReferenceScore) }}</span>
+                <span>最低分 {{ scoreLabel(askMinReferenceScore) }}</span>
+              </div>
               <p>{{ answer }}</p>
             </div>
           </div>
@@ -630,6 +635,9 @@ const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
 const duplicateReview = ref<KnowledgeDuplicateReviewVO | null>(null)
 const answer = ref('')
 const askInsufficientReferences = ref(false)
+const askReferenceCount = ref(0)
+const askTopReferenceScore = ref<number | undefined>()
+const askMinReferenceScore = ref<number | undefined>()
 const total = ref(0)
 const keyword = ref('')
 const question = ref('')
@@ -837,6 +845,9 @@ const handleAsk = async () => {
   answer.value = ''
   askInsufficientReferences.value = false
   askReferences.value = []
+  askReferenceCount.value = 0
+  askTopReferenceScore.value = undefined
+  askMinReferenceScore.value = undefined
   try {
     const result = await askKnowledgeApi({
       question: question.value.trim(),
@@ -846,6 +857,9 @@ const handleAsk = async () => {
     answer.value = result.answer || ''
     askInsufficientReferences.value = !!result.insufficientReferences
     askReferences.value = result.references || []
+    askReferenceCount.value = result.referenceCount ?? askReferences.value.length
+    askTopReferenceScore.value = result.topReferenceScore
+    askMinReferenceScore.value = result.minReferenceScore
   } finally {
     asking.value = false
   }
@@ -1132,6 +1146,9 @@ const handleDelete = async (row: KnowledgeDocumentVO) => {
     askReferences.value = []
     askInsufficientReferences.value = false
     answer.value = ''
+    askReferenceCount.value = 0
+    askTopReferenceScore.value = undefined
+    askMinReferenceScore.value = undefined
     await loadDocuments()
   } finally {
     deletingId.value = null
@@ -1679,6 +1696,21 @@ onMounted(loadDocuments)
 .answer-box,
 .reference-row {
   padding: 14px;
+}
+
+.answer-quality {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.answer-quality span {
+  padding: 3px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .answer-box p {
