@@ -225,7 +225,7 @@
               </el-form-item>
               <el-form-item label="资料">
                 <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料" style="width: 220px">
-                  <el-option v-for="item in allDocuments" :key="`search-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
+                  <el-option v-for="item in documentOptions" :key="`search-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -293,7 +293,7 @@
               </el-form-item>
               <el-form-item label="资料范围">
                 <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料">
-                  <el-option v-for="item in allDocuments" :key="`ask-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
+                  <el-option v-for="item in documentOptions" :key="`ask-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
                 </el-select>
               </el-form-item>
             </el-form>
@@ -597,6 +597,7 @@ import {
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
+  getKnowledgeDocumentOptionsApi,
   getKnowledgeDocumentTypesApi,
   getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
@@ -610,6 +611,7 @@ import {
   uploadKnowledgeDocumentApi,
   type KnowledgeChunkVO,
   type KnowledgeConfigVO,
+  type KnowledgeDocumentOptionVO,
   type KnowledgeDocumentVO,
   type KnowledgeDocumentVersionVO,
   type KnowledgeDuplicateCleanupVO,
@@ -642,6 +644,7 @@ const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
+const documentOptions = ref<KnowledgeDocumentOptionVO[]>([])
 const documentTypeOptions = ref<string[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
@@ -811,20 +814,23 @@ const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [page, stats, config, types] = await Promise.all([
+    const [page, stats, config, types, options] = await Promise.all([
       getKnowledgeDocumentsApi(documentQueryParams()),
       getKnowledgeStatsApi(),
       getKnowledgeConfigApi(),
-      getKnowledgeDocumentTypesApi()
+      getKnowledgeDocumentTypesApi(),
+      getKnowledgeDocumentOptionsApi()
     ])
     allDocuments.value = page.records || []
     knowledgeStats.value = stats || null
     knowledgeConfig.value = config || null
     documentTypeOptions.value = types || []
+    documentOptions.value = options || []
     applyDocumentPage()
   } catch (error) {
     allDocuments.value = []
     documents.value = []
+    documentOptions.value = []
     documentTypeOptions.value = []
     knowledgeStats.value = null
     knowledgeConfig.value = null

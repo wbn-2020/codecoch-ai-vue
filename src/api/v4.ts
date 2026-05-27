@@ -148,6 +148,13 @@ export interface KnowledgeDocumentVO {
   updatedAt?: string
 }
 
+export interface KnowledgeDocumentOptionVO {
+  id: number
+  title?: string
+  documentType?: string
+  status?: string
+}
+
 export interface KnowledgeDocumentVersionVO {
   id: number
   documentId?: number
@@ -369,6 +376,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
 
 export const getKnowledgeDocumentTypesApi = () =>
   request.get<string[], string[]>('/agent/knowledge/documents/types').then((data) => data || [])
+
+export const getKnowledgeDocumentOptionsApi = () =>
+  request.get<KnowledgeDocumentOptionVO[], KnowledgeDocumentOptionVO[]>('/agent/knowledge/documents/options').then((data) => data || [])
 
 export const getKnowledgeStatsApi = () =>
   request.get<KnowledgeStatsVO, KnowledgeStatsVO>('/agent/knowledge/stats')
