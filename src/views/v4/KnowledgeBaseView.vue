@@ -67,6 +67,15 @@
                   <el-button
                     link
                     type="primary"
+                    :icon="Files"
+                    :loading="chunksLoading && selectedDocument?.id === row.id"
+                    @click="openChunksDrawer(row)"
+                  >
+                    片段
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
                     :icon="Refresh"
                     :loading="rebuilding"
                     @click="handleRebuildVectors(row.id, row.title)"
@@ -254,11 +263,42 @@
         <el-button @click="rebuildDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="chunksDrawerVisible" size="720px" :title="selectedDocument?.title || '资料片段'">
+      <div class="chunk-drawer" v-loading="chunksLoading">
+        <div class="chunk-summary">
+          <article>
+            <span>片段</span>
+            <strong>{{ documentChunks.length }}</strong>
+          </article>
+          <article>
+            <span>重复</span>
+            <strong>{{ selectedDuplicateChunkCount }}</strong>
+          </article>
+          <article>
+            <span>类型</span>
+            <strong>{{ selectedDocument?.documentType || 'NOTE' }}</strong>
+          </article>
+        </div>
+        <div class="chunk-list">
+          <article v-for="chunk in documentChunks" :key="chunk.id" class="chunk-row">
+            <div class="chunk-row__head">
+              <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
+              <el-tag v-if="chunk.duplicateInDocument" size="small" type="warning" effect="light">重复</el-tag>
+              <span>{{ chunk.sourceRef || '--' }}</span>
+            </div>
+            <p>{{ chunk.content || '--' }}</p>
+            <small>{{ shortHash(chunk.chunkHash) }}</small>
+          </article>
+          <el-empty v-if="!documentChunks.length && !chunksLoading" description="暂无片段" />
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ChatDotRound, Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
@@ -266,9 +306,11 @@ import {
   askKnowledgeApi,
   createKnowledgeDocumentApi,
   deleteKnowledgeDocumentApi,
+  getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentsApi,
   rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
+  type KnowledgeChunkVO,
   type KnowledgeDocumentVO,
   type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
@@ -280,12 +322,15 @@ const searching = ref(false)
 const asking = ref(false)
 const saving = ref(false)
 const rebuilding = ref(false)
+const chunksLoading = ref(false)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
+const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
+const documentChunks = ref<KnowledgeChunkVO[]>([])
 const answer = ref('')
 const total = ref(0)
 const keyword = ref('')
@@ -293,6 +338,7 @@ const question = ref('')
 const limit = ref(10)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
+const chunksDrawerVisible = ref(false)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
 
@@ -309,6 +355,10 @@ const form = reactive({
 
 const chunkTotal = computed(() =>
   allDocuments.value.reduce((sum, item) => sum + (Number(item.chunkCount) || 0), 0)
+)
+
+const selectedDuplicateChunkCount = computed(() =>
+  documentChunks.value.filter((item) => item.duplicateInDocument).length
 )
 
 const getErrorMessage = (error: unknown) => {
@@ -370,6 +420,17 @@ const handleAsk = async () => {
     askReferences.value = result.references || []
   } finally {
     asking.value = false
+  }
+}
+
+const openChunksDrawer = async (row: KnowledgeDocumentVO) => {
+  selectedDocument.value = row
+  chunksDrawerVisible.value = true
+  chunksLoading.value = true
+  try {
+    documentChunks.value = await getKnowledgeDocumentChunksApi(row.id)
+  } finally {
+    chunksLoading.value = false
   }
 }
 
@@ -459,6 +520,11 @@ const matchLabel = (value?: string) => {
 const scoreLabel = (score?: number) => {
   if (score === undefined || score === null) return '--'
   return `${Math.round(score * 100)}%`
+}
+
+const shortHash = (hash?: string) => {
+  if (!hash) return '--'
+  return hash.length > 16 ? `${hash.slice(0, 8)}...${hash.slice(-6)}` : hash
 }
 
 const statusType = (status?: string) => {
@@ -577,6 +643,65 @@ onMounted(loadDocuments)
 .rebuild-errors ul {
   margin: 10px 0 0;
   padding-left: 18px;
+}
+
+.chunk-drawer,
+.chunk-list {
+  display: grid;
+  gap: 14px;
+}
+
+.chunk-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chunk-summary article,
+.chunk-row {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.chunk-summary article {
+  padding: 14px;
+}
+
+.chunk-summary span,
+.chunk-row small,
+.chunk-row__head span {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.chunk-summary strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.chunk-row {
+  padding: 14px;
+}
+
+.chunk-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chunk-row__head strong {
+  color: var(--app-text);
+}
+
+.chunk-row p {
+  margin: 10px 0 8px;
+  color: var(--app-text-muted);
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .summary-grid {

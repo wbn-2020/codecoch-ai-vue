@@ -152,6 +152,18 @@ export interface KnowledgeDocumentCreateDTO {
   content: string
 }
 
+export interface KnowledgeChunkVO {
+  id: number
+  documentId?: number
+  chunkIndex?: number
+  content?: string
+  chunkHash?: string
+  sourceRef?: string
+  duplicateInDocument?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface KnowledgeSearchResultVO {
   documentId?: number
   chunkId?: number
@@ -263,6 +275,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
 
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
+
+export const getKnowledgeDocumentChunksApi = (id: number) =>
+  request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
