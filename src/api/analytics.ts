@@ -22,7 +22,8 @@ import type {
   PromptRegressionQuery,
   PromptRegressionResultVO,
   PromptRegressionRunDTO,
-  TrendPointVO
+  TrendPointVO,
+  VectorStoreHealthVO
 } from '@/types/analytics'
 
 const normalizeMetricList = (items?: MetricPointVO[]): MetricPointVO[] =>
@@ -139,6 +140,9 @@ export const getAdminAnalyticsTrainingApi = (params?: AnalyticsRangeQuery) =>
 
 export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
   request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
+
+export const getAdminVectorStoreHealthApi = () =>
+  request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/vector-store/health')
 
 export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQuery) => {
   const requestParams = {

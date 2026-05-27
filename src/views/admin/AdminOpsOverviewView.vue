@@ -93,6 +93,14 @@
               </div>
               <em :class="`status-${statusTone(item.status)}`">{{ statusText(item.status) }}</em>
             </div>
+            <div v-for="item in vectorCollections" :key="item.collectionName" class="ops-service-row">
+              <span :class="`ops-dot ops-dot--${vectorTone(item)}`"></span>
+              <div>
+                <strong>{{ vectorCollectionLabel(item.collectionName) }}</strong>
+                <small>{{ vectorCollectionHint(item) }}</small>
+              </div>
+              <em :class="`status-${vectorTone(item)}`">{{ vectorCollectionStatus(item) }}</em>
+            </div>
             <el-empty v-if="!services.length && !loading" description="暂无服务状态" />
           </div>
         </article>
@@ -131,11 +139,12 @@ import {
   getAdminAgentTrendApi,
   getAdminAiFailuresApi,
   getAdminAiOverviewApi,
-  getAdminAnalyticsJobsApi
+  getAdminAnalyticsJobsApi,
+  getAdminVectorStoreHealthApi
 } from '@/api/analytics'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
-import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, TrendPointVO } from '@/types/analytics'
+import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, TrendPointVO, VectorCollectionInfoVO, VectorStoreHealthVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import echarts, { type ECharts } from '@/utils/echarts'
@@ -146,6 +155,7 @@ const rangeDays = ref(7)
 const aiOverview = ref<AdminAiOverviewVO>()
 const agentOverview = ref<AdminAgentOverviewVO>()
 const dashboard = ref<AdminDashboardOverviewVO>()
+const vectorHealth = ref<VectorStoreHealthVO>()
 const trendPoints = ref<TrendPointVO[]>([])
 const failurePoints = ref<MetricPointVO[]>([])
 const jobs = ref<AdminAnalyticsJobLogVO[]>([])
@@ -159,6 +169,7 @@ const rangeOptions = [
 ]
 
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
+const vectorCollections = computed(() => vectorHealth.value?.collections || [])
 const opsMetrics = computed(() => dashboard.value?.systemStatus?.opsMetrics)
 const totalFailures = computed(() => Math.max(...failurePoints.value.map((item) => item.value || 0), 1))
 
@@ -284,6 +295,34 @@ const serviceReasonLabel = (item: { status?: DashboardStatus; reason?: string; s
   return '来自管理驾驶舱'
 }
 
+const vectorCollectionLabel = (value: string) => {
+  const map: Record<string, string> = {
+    question_embedding: '题目向量索引',
+    personal_knowledge_chunk: '个人知识库向量'
+  }
+  return map[value] || value
+}
+
+const vectorTone = (item: VectorCollectionInfoVO) => {
+  if (!vectorHealth.value?.enabled) return 'unknown'
+  if (item.exists && String(item.status || '').toUpperCase() !== 'ERROR') return 'healthy'
+  if (String(item.status || '').toUpperCase() === 'ERROR') return 'down'
+  return 'degraded'
+}
+
+const vectorCollectionStatus = (item: VectorCollectionInfoVO) => {
+  if (!vectorHealth.value?.enabled) return '未启用'
+  if (String(item.status || '').toUpperCase() === 'ERROR') return '异常'
+  return item.exists ? '可用' : '未创建'
+}
+
+const vectorCollectionHint = (item: VectorCollectionInfoVO) => {
+  if (item.errorMessage) return item.errorMessage
+  if (!vectorHealth.value?.enabled) return '向量库配置未启用'
+  if (!item.exists) return '等待首次索引创建 collection'
+  return `${item.pointCount || 0} points / ${item.vectorSize || '--'} dims / ${item.distance || '--'}`
+}
+
 const jobStatusLabel = (status?: string) => {
   const map: Record<string, string> = {
     PENDING: '待执行',
@@ -340,13 +379,14 @@ const loadPage = async () => {
   errorMessage.value = ''
   try {
     const params = { days: rangeDays.value }
-    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage] = await Promise.all([
+    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData] = await Promise.all([
       getAdminAiOverviewApi(params),
       getAdminAgentOverviewApi(params),
       getAdminAgentTrendApi(params),
       getAdminAiFailuresApi(params),
       getAdminDashboardOverviewApi(),
-      getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 })
+      getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 }),
+      getAdminVectorStoreHealthApi()
     ])
     aiOverview.value = aiData
     agentOverview.value = agentData
@@ -354,6 +394,7 @@ const loadPage = async () => {
     failurePoints.value = failureData
     dashboard.value = dashboardData
     jobs.value = jobsPage.records || []
+    vectorHealth.value = vectorData
     await renderChart()
   } catch (error) {
     errorMessage.value = error && typeof error === 'object' && 'message' in error

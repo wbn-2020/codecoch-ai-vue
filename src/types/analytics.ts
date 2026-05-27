@@ -139,6 +139,21 @@ export interface AdminAnalyticsTrainingVO {
   agentTrend?: TrendPointVO[]
 }
 
+export interface VectorCollectionInfoVO {
+  collectionName: string
+  exists?: boolean
+  status?: string
+  pointCount?: number
+  vectorSize?: number
+  distance?: string
+  errorMessage?: string
+}
+
+export interface VectorStoreHealthVO {
+  enabled: boolean
+  collections: VectorCollectionInfoVO[]
+}
+
 export interface AdminAnalyticsDictionaryQuery {
   pageNo?: number
   pageNum?: number
