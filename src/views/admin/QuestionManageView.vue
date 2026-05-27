@@ -419,6 +419,9 @@
               </el-table-column>
               <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
+                  <el-button link type="info" @click="openDuplicateDrawer(row.id)">
+                    详情
+                  </el-button>
                   <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleMergeDuplicate(row.id)">
                     合并
                   </el-button>
@@ -444,6 +447,93 @@
       </el-tabs>
     </section>
 
+    <el-drawer v-model="duplicateDrawerVisible" title="重复候选详情" size="860px" class="duplicate-detail-drawer">
+      <div v-loading="duplicateDetailLoading" class="duplicate-detail-content">
+        <template v-if="duplicateDetail">
+          <section class="duplicate-detail-section duplicate-detail-summary">
+            <div>
+              <div class="duplicate-detail-section__title">判重结论</div>
+              <div class="duplicate-detail-tags">
+                <el-tag :type="getDuplicateStatusType(duplicateDetail.reviewStatus)" effect="plain">
+                  {{ getDuplicateStatusLabel(duplicateDetail.reviewStatus) }}
+                </el-tag>
+                <el-tag type="info" effect="plain">{{ getDuplicateMatchTypeLabel(duplicateDetail.matchType) }}</el-tag>
+                <el-tag type="warning" effect="plain">{{ formatSimilarity(duplicateDetail.similarityScore) }}</el-tag>
+              </div>
+            </div>
+            <div class="duplicate-detail-meta">
+              <span>Review #{{ duplicateDetail.id }}</span>
+              <span>{{ duplicateDetail.createdAt || '-' }}</span>
+            </div>
+          </section>
+
+          <section class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">评分构成</div>
+            <div class="duplicate-score-parts duplicate-score-parts--large">
+              <el-tag
+                v-for="item in duplicateScoreParts(duplicateDetail)"
+                :key="`detail-${duplicateDetail.id}-${item.label}`"
+                effect="plain"
+              >
+                {{ item.label }} {{ item.value }}
+              </el-tag>
+              <span v-if="!duplicateScoreParts(duplicateDetail).length" class="muted-text">暂无拆分评分</span>
+            </div>
+            <p class="duplicate-detail-reason">{{ formatDuplicateReason(duplicateDetail.matchReason) }}</p>
+          </section>
+
+          <section class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">题目对比</div>
+            <div class="duplicate-compare-grid">
+              <article class="duplicate-question-panel">
+                <header>
+                  <span>源题</span>
+                  <el-tag size="small" effect="plain">#{{ duplicateDetail.sourceQuestionId || '-' }}</el-tag>
+                </header>
+                <h4>{{ duplicateDetail.sourceQuestion?.title || duplicateDetail.sourceTitleSnapshot || '-' }}</h4>
+                <pre>{{ duplicateDetail.sourceQuestion?.content || duplicateDetail.sourceContentSnapshot || '-' }}</pre>
+              </article>
+              <article class="duplicate-question-panel">
+                <header>
+                  <span>候选题</span>
+                  <el-tag size="small" effect="plain">#{{ duplicateDetail.targetQuestionId || '-' }}</el-tag>
+                </header>
+                <h4>{{ duplicateDetail.targetQuestion?.title || duplicateDetail.targetTitleSnapshot || '-' }}</h4>
+                <pre>{{ duplicateDetail.targetQuestion?.content || duplicateDetail.targetContentSnapshot || '-' }}</pre>
+              </article>
+            </div>
+          </section>
+
+          <section v-if="duplicateDetail.ignoredReason || duplicateDetail.relationId" class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">处理记录</div>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="关系ID">{{ duplicateDetail.relationId || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="处理人">{{ duplicateDetail.reviewedBy || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="处理时间">{{ duplicateDetail.reviewedAt || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="忽略原因">{{ duplicateDetail.ignoredReason || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </section>
+        </template>
+        <el-empty v-else-if="!duplicateDetailLoading" description="暂无重复候选详情" />
+      </div>
+      <template #footer>
+        <el-button @click="duplicateDrawerVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          @click="duplicateDetail && handleMergeDuplicate(duplicateDetail.id)"
+        >
+          合并
+        </el-button>
+        <el-button
+          type="warning"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          @click="duplicateDetail && handleIgnoreDuplicate(duplicateDetail.id)"
+        >
+          忽略
+        </el-button>
+      </template>
+    </el-drawer>
     <el-drawer v-model="reviewDrawerVisible" title="AI 题目审核详情" size="760px" class="review-detail-drawer">
       <div v-loading="reviewDetailLoading" class="review-detail-content">
         <template v-if="reviewDetail">
@@ -683,6 +773,7 @@ import {
   getAdminQuestionDetailApi,
   getAdminQuestionsApi,
   getQuestionDuplicateReviewsApi,
+  getQuestionDuplicateReviewDetailApi,
   getQuestionReviewDetailApi,
   getQuestionReviewsApi,
   ignoreQuestionDuplicateReviewApi,
@@ -712,6 +803,7 @@ import type {
   AiQuestionGenerateResultVO,
   AiQuestionGenerateSseEvent,
   QuestionDuplicateReviewListVO,
+  QuestionDuplicateReviewDetailVO,
   QuestionDuplicateReviewQueryDTO,
   QuestionCategoryVO,
   QuestionCreateDTO,
@@ -751,17 +843,20 @@ const total = ref(0)
 const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
+const duplicateDetailLoading = ref(false)
 const generating = ref(false)
 const batchReviewProcessing = ref(false)
 const reviewDetailLoading = ref(false)
 const reviewApproveSaving = ref(false)
 const reviewDrawerVisible = ref(false)
+const duplicateDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
 const embeddingRebuilding = ref(false)
 const reviews = ref<QuestionReviewListVO[]>([])
 const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
+const duplicateDetail = ref<QuestionDuplicateReviewDetailVO | null>(null)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
@@ -1118,6 +1213,18 @@ const openReviewDrawer = async (id: number) => {
   }
 }
 
+const openDuplicateDrawer = async (id: number) => {
+  duplicateDrawerVisible.value = true
+  duplicateDetailLoading.value = true
+  duplicateDetail.value = null
+  try {
+    duplicateDetail.value = await getQuestionDuplicateReviewDetailApi(id)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '重复候选详情加载失败')
+  } finally {
+    duplicateDetailLoading.value = false
+  }
+}
 const fetchDuplicates = async () => {
   duplicateLoading.value = true
   try {
