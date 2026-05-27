@@ -41,6 +41,29 @@
       </article>
     </section>
 
+    <section class="config-strip">
+      <article>
+        <span>Vector DB</span>
+        <strong>{{ knowledgeConfig?.vectorEnabled ? 'Qdrant' : 'Keyword' }}</strong>
+        <small>{{ knowledgeConfig?.vectorCollection || '--' }}</small>
+      </article>
+      <article>
+        <span>Chunk</span>
+        <strong>{{ chunkConfigLabel }}</strong>
+        <small>{{ knowledgeConfig?.chunkStrategy || '--' }}</small>
+      </article>
+      <article>
+        <span>Near Duplicate</span>
+        <strong>{{ nearDuplicateThresholdLabel }}</strong>
+        <small>{{ nearDuplicateActionLabel }}</small>
+      </article>
+      <article>
+        <span>Upload</span>
+        <strong>{{ uploadLimitLabel }}</strong>
+        <small>{{ uploadExtensionsLabel }}</small>
+      </article>
+    </section>
+
     <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadDocuments">重试</el-button>
     </AppState>
@@ -353,6 +376,7 @@ import {
   createKnowledgeDocumentApi,
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
+  getKnowledgeConfigApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
   getKnowledgeDocumentsApi,
@@ -363,6 +387,7 @@ import {
   updateKnowledgeDocumentApi,
   uploadKnowledgeDocumentApi,
   type KnowledgeChunkVO,
+  type KnowledgeConfigVO,
   type KnowledgeDocumentVO,
   type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
@@ -390,6 +415,7 @@ const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
 const documentChunks = ref<KnowledgeChunkVO[]>([])
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
+const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
 const answer = ref('')
 const total = ref(0)
 const keyword = ref('')
@@ -434,6 +460,31 @@ const chunkStrategyLabel = computed(() => {
   return strategy || '语义分块'
 })
 
+const chunkConfigLabel = computed(() => {
+  const size = knowledgeConfig.value?.chunkSize
+  const overlap = knowledgeConfig.value?.chunkOverlap
+  const min = knowledgeConfig.value?.minChunkSize
+  return size ? `${size}/${overlap || 0}/${min || 0}` : '--'
+})
+
+const nearDuplicateThresholdLabel = computed(() => {
+  const threshold = knowledgeConfig.value?.nearDuplicateThreshold
+  return typeof threshold === 'number' ? `${Math.round(threshold * 100)}%` : '--'
+})
+
+const nearDuplicateActionLabel = computed(() => {
+  const action = knowledgeConfig.value?.nearDuplicateAction
+  if (action === 'WARN_ONLY') return 'warn only'
+  return action || '--'
+})
+
+const uploadLimitLabel = computed(() => {
+  const bytes = knowledgeConfig.value?.uploadMaxBytes
+  return bytes ? `${Math.round(bytes / 1024 / 1024)} MB` : '--'
+})
+
+const uploadExtensionsLabel = computed(() => knowledgeConfig.value?.uploadExtensions?.join(', ') || '--')
+
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
 )
@@ -457,14 +508,20 @@ const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [page, stats] = await Promise.all([getKnowledgeDocumentsApi(query), getKnowledgeStatsApi()])
+    const [page, stats, config] = await Promise.all([
+      getKnowledgeDocumentsApi(query),
+      getKnowledgeStatsApi(),
+      getKnowledgeConfigApi()
+    ])
     allDocuments.value = page.records || []
     knowledgeStats.value = stats || null
+    knowledgeConfig.value = config || null
     applyDocumentPage()
   } catch (error) {
     allDocuments.value = []
     documents.value = []
     knowledgeStats.value = null
+    knowledgeConfig.value = null
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
@@ -944,6 +1001,40 @@ onMounted(loadDocuments)
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.config-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.config-strip article {
+  min-width: 0;
+}
+
+.config-strip span,
+.config-strip small {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.config-strip strong {
+  display: block;
+  margin: 5px 0;
+  color: var(--app-text);
+  font-size: 15px;
+}
+
+.config-strip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .summary-item {
   padding: 16px;
   border: 1px solid var(--app-border);
@@ -1111,7 +1202,8 @@ onMounted(loadDocuments)
     grid-template-columns: 1fr;
   }
 
-  .summary-grid {
+  .summary-grid,
+  .config-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1128,7 +1220,8 @@ onMounted(loadDocuments)
     flex-direction: column;
   }
 
-  .summary-grid {
+  .summary-grid,
+  .config-strip {
     grid-template-columns: 1fr;
   }
 

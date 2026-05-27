@@ -175,6 +175,22 @@ export interface KnowledgeStatsVO {
   chunkStrategy?: string
 }
 
+export interface KnowledgeConfigVO {
+  vectorEnabled?: boolean
+  vectorCollection?: string
+  retrievalMode?: string
+  chunkStrategy?: string
+  chunkSize?: number
+  chunkOverlap?: number
+  minChunkSize?: number
+  nearDuplicateThreshold?: number
+  uploadMaxBytes?: number
+  uploadMaxTextChars?: number
+  uploadExtensions?: string[]
+  exactDedupScope?: string
+  nearDuplicateAction?: string
+}
+
 export interface KnowledgeSearchResultVO {
   documentId?: number
   chunkId?: number
@@ -298,6 +314,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
 
 export const getKnowledgeStatsApi = () =>
   request.get<KnowledgeStatsVO, KnowledgeStatsVO>('/agent/knowledge/stats')
+
+export const getKnowledgeConfigApi = () =>
+  request.get<KnowledgeConfigVO, KnowledgeConfigVO>('/agent/knowledge/config')
 
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
