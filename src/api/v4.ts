@@ -360,7 +360,7 @@ export const uploadKnowledgeDocumentApi = (file: File, documentType?: string) =>
   return request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents/upload', formData)
 }
 
-export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number }) =>
+export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number; title?: string; documentType?: string; status?: string }) =>
   request
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
     .then((result) => normalizePageResult(result, params))

@@ -91,6 +91,25 @@
                 <h2>已索引资料</h2>
               </div>
             </div>
+            <el-form class="document-filter" inline @submit.prevent>
+              <el-form-item label="标题">
+                <el-input v-model.trim="query.title" clearable placeholder="搜索资料标题" @keyup.enter="handleDocumentFilter" />
+              </el-form-item>
+              <el-form-item label="类型">
+                <el-input v-model.trim="query.documentType" clearable placeholder="NOTE / PDF / DOC" @keyup.enter="handleDocumentFilter" />
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
+                  <el-option label="已索引" value="INDEXED" />
+                  <el-option label="空内容" value="EMPTY" />
+                  <el-option label="失败" value="FAILED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :icon="Search" :loading="loading" @click="handleDocumentFilter">查询</el-button>
+                <el-button :icon="Refresh" @click="resetDocumentFilter">重置</el-button>
+              </el-form-item>
+            </el-form>
             <el-table v-loading="loading" :data="documents" row-key="id">
               <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
               <el-table-column label="类型" width="130">
@@ -631,7 +650,10 @@ const rebuildTargetLabel = ref('全部资料')
 
 const query = reactive({
   pageNo: 1,
-  pageSize: 10
+  pageSize: 10,
+  title: '',
+  documentType: '',
+  status: ''
 })
 
 const form = reactive({
@@ -743,12 +765,20 @@ const applyDocumentPage = () => {
   total.value = allDocuments.value.length
 }
 
+const documentQueryParams = () => ({
+  pageNo: query.pageNo,
+  pageSize: query.pageSize,
+  title: query.title || undefined,
+  documentType: query.documentType || undefined,
+  status: query.status || undefined
+})
+
 const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     const [page, stats, config] = await Promise.all([
-      getKnowledgeDocumentsApi(query),
+      getKnowledgeDocumentsApi(documentQueryParams()),
       getKnowledgeStatsApi(),
       getKnowledgeConfigApi()
     ])
@@ -766,6 +796,19 @@ const loadDocuments = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleDocumentFilter = async () => {
+  query.pageNo = 1
+  await loadDocuments()
+}
+
+const resetDocumentFilter = async () => {
+  query.pageNo = 1
+  query.title = ''
+  query.documentType = ''
+  query.status = ''
+  await loadDocuments()
 }
 
 const handleSearch = async () => {
@@ -1527,13 +1570,19 @@ onMounted(loadDocuments)
   margin-bottom: 6px;
 }
 
-.search-toolbar {
+.search-toolbar,
+.document-filter {
   row-gap: 8px;
 }
 
-.search-toolbar :deep(.el-input) {
+.search-toolbar :deep(.el-input),
+.document-filter :deep(.el-input) {
   width: 320px;
   max-width: 100%;
+}
+
+.document-filter {
+  margin-bottom: 12px;
 }
 
 .result-list,
