@@ -194,6 +194,17 @@ export interface KnowledgeStatsVO {
   retrievalMode?: string
   chunkStrategy?: string
   documentTypeCounts?: Record<string, number>
+  duplicateTypeCounts?: Record<string, number>
+  duplicateDocumentHotspots?: KnowledgeDuplicateDocumentHotspotVO[]
+}
+
+export interface KnowledgeDuplicateDocumentHotspotVO {
+  documentId?: number
+  title?: string
+  documentType?: string
+  duplicateChunkCount?: number
+  chunkCount?: number
+  duplicateRatio?: number
 }
 
 export interface KnowledgeConfigVO {

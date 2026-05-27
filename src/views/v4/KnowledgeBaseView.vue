@@ -85,7 +85,22 @@
       <el-button type="primary" @click="loadDocuments">重试</el-button>
     </AppState>
 
-    <section v-else class="workspace-grid">
+    <section v-if="hasDuplicateHotspots && !errorMessage" class="duplicate-hotspot-strip">
+      <article>
+        <span>Duplicate Types</span>
+        <strong>{{ duplicateTypeSummary }}</strong>
+      </article>
+      <article>
+        <span>Top Hotspot</span>
+        <strong>{{ topDuplicateHotspotLabel }}</strong>
+      </article>
+      <article>
+        <span>Cleanup Candidates</span>
+        <strong>{{ duplicateChunkTotal }}</strong>
+      </article>
+    </section>
+
+    <section v-if="!errorMessage" class="workspace-grid">
       <main class="main-stack">
         <section class="content-card">
           <div class="content-card__body">
@@ -759,6 +774,29 @@ const documentTypeSummary = computed(() => {
     .slice(0, 3)
   if (!items.length) return '--'
   return items.map(([type, count]) => `${type}:${count}`).join(' / ')
+})
+
+const duplicateTypeSummary = computed(() => {
+  const counts = knowledgeStats.value?.duplicateTypeCounts || {}
+  const items = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+  if (!items.length) return '--'
+  return items.map(([type, count]) => `${type}:${count}`).join(' / ')
+})
+
+const duplicateDocumentHotspots = computed(() => knowledgeStats.value?.duplicateDocumentHotspots || [])
+
+const hasDuplicateHotspots = computed(() => duplicateChunkTotal.value > 0 || duplicateDocumentHotspots.value.length > 0)
+
+const topDuplicateHotspotLabel = computed(() => {
+  const hotspot = duplicateDocumentHotspots.value[0]
+  if (!hotspot) return '--'
+  const title = hotspot.title || `#${hotspot.documentId || '--'}`
+  const duplicateCount = hotspot.duplicateChunkCount || 0
+  const ratio = typeof hotspot.duplicateRatio === 'number' ? `, ${hotspot.duplicateRatio}%` : ''
+  return `${title} (${duplicateCount}${ratio})`
 })
 
 const retrievalModeLabel = computed(() => {
@@ -1668,6 +1706,39 @@ onMounted(loadDocuments)
   font-size: 12px;
 }
 
+.duplicate-hotspot-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.duplicate-hotspot-strip article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.1);
+}
+
+.duplicate-hotspot-strip span,
+.duplicate-hotspot-strip strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duplicate-hotspot-strip span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.duplicate-hotspot-strip strong {
+  margin-top: 6px;
+  color: var(--app-text);
+  font-size: 15px;
+}
+
 .dedup-actions {
   display: flex;
   align-items: center;
@@ -1905,7 +1976,8 @@ onMounted(loadDocuments)
   }
 
   .summary-grid,
-  .config-strip {
+  .config-strip,
+  .duplicate-hotspot-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1924,7 +1996,8 @@ onMounted(loadDocuments)
   }
 
   .summary-grid,
-  .config-strip {
+  .config-strip,
+  .duplicate-hotspot-strip {
     grid-template-columns: 1fr;
   }
 
