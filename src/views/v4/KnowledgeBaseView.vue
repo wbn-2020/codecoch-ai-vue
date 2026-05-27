@@ -9,6 +9,7 @@
       <div class="hero-actions">
         <el-button :icon="Refresh" :loading="loading" @click="loadDocuments">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
+        <el-button :icon="Refresh" :loading="rebuilding" @click="handleRebuildVectors">重建向量</el-button>
       </div>
     </section>
 
@@ -63,6 +64,15 @@
               </el-table-column>
               <el-table-column label="操作" width="100" fixed="right">
                 <template #default="{ row }">
+                  <el-button
+                    link
+                    type="primary"
+                    :icon="Refresh"
+                    :loading="rebuilding"
+                    @click="handleRebuildVectors(row.id, row.title)"
+                  >
+                    重建
+                  </el-button>
                   <el-button
                     link
                     type="danger"
@@ -203,6 +213,43 @@
         <el-button type="primary" :loading="saving" @click="createDocument">保存并索引</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="rebuildDialogVisible" title="知识库向量重建结果" width="640px">
+      <div v-if="rebuildResult" class="rebuild-result">
+        <p class="rebuild-tip">重建范围：{{ rebuildTargetLabel }}</p>
+        <div class="rebuild-grid">
+          <article class="rebuild-stat">
+            <span>向量库</span>
+            <strong>{{ rebuildResult.vectorEnabled ? '已启用' : '未启用' }}</strong>
+          </article>
+          <article class="rebuild-stat">
+            <span>文档</span>
+            <strong>{{ rebuildResult.documentCount || 0 }}</strong>
+          </article>
+          <article class="rebuild-stat">
+            <span>片段</span>
+            <strong>{{ rebuildResult.chunkCount || 0 }}</strong>
+          </article>
+          <article class="rebuild-stat">
+            <span>向量</span>
+            <strong>{{ rebuildResult.vectorUpdated || 0 }}</strong>
+          </article>
+        </div>
+        <p class="rebuild-tip">失败文档：{{ rebuildResult.failedDocuments?.length || 0 }}</p>
+        <p class="rebuild-tip" v-if="rebuildResult.failedDocuments?.length">
+          文档 ID：{{ rebuildResult.failedDocuments.join(', ') }}
+        </p>
+        <div v-if="rebuildResult.errors?.length" class="rebuild-errors">
+          <strong>错误详情</strong>
+          <ul>
+            <li v-for="(item, index) in rebuildResult.errors.slice(0, 8)" :key="index">{{ item }}</li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="rebuildDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -216,8 +263,10 @@ import {
   createKnowledgeDocumentApi,
   deleteKnowledgeDocumentApi,
   getKnowledgeDocumentsApi,
+  rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
   type KnowledgeDocumentVO,
+  type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
@@ -226,6 +275,7 @@ const loading = ref(false)
 const searching = ref(false)
 const asking = ref(false)
 const saving = ref(false)
+const rebuilding = ref(false)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
@@ -238,6 +288,9 @@ const keyword = ref('')
 const question = ref('')
 const limit = ref(10)
 const dialogVisible = ref(false)
+const rebuildDialogVisible = ref(false)
+const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
+const rebuildTargetLabel = ref('全部资料')
 
 const query = reactive({
   pageNo: 1,
@@ -345,6 +398,24 @@ const createDocument = async () => {
   }
 }
 
+const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
+  rebuilding.value = true
+  rebuildTargetLabel.value = documentTitle ? `资料「${documentTitle}」` : '全部资料'
+  try {
+    const result = await rebuildKnowledgeVectorsApi(documentId)
+    rebuildResult.value = result
+    const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条`
+    rebuildDialogVisible.value = true
+    if ((result.errors || []).length || (result.failedDocuments || []).length) {
+      ElMessage.warning(summary)
+      return
+    }
+    ElMessage.success(summary)
+  } finally {
+    rebuilding.value = false
+  }
+}
+
 const handleDelete = async (row: KnowledgeDocumentVO) => {
   await ElMessageBox.confirm(
     `确认删除资料「${row.title || `#${row.id}`}」？删除后会同步清理对应向量索引。`,
@@ -448,6 +519,53 @@ onMounted(loadDocuments)
 .hero-actions {
   flex-wrap: wrap;
   align-items: center;
+}
+
+.rebuild-result {
+  display: grid;
+  gap: 14px;
+}
+
+.rebuild-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rebuild-stat {
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.rebuild-stat span,
+.rebuild-tip,
+.rebuild-errors li {
+  color: var(--app-text-muted);
+}
+
+.rebuild-stat strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text);
+  font-size: 20px;
+}
+
+.rebuild-errors {
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.rebuild-errors strong {
+  color: var(--app-text);
+}
+
+.rebuild-errors ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
 }
 
 .summary-grid {
@@ -610,6 +728,10 @@ onMounted(loadDocuments)
 
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rebuild-grid {
+    grid-template-columns: 1fr;
   }
 }
 

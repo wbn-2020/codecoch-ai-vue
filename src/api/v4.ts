@@ -168,6 +168,15 @@ export interface KnowledgeAskVO {
   generatedAt?: string
 }
 
+export interface KnowledgeVectorRebuildVO {
+  vectorEnabled?: boolean
+  documentCount?: number
+  chunkCount?: number
+  vectorUpdated?: number
+  failedDocuments?: number[]
+  errors?: string[]
+}
+
 export const generateAgentReviewApi = (data?: { targetJobId?: number; date?: string }) =>
   request.post<AgentReviewVO, AgentReviewVO>('/agent/job-coach/review', data || {})
 
@@ -253,6 +262,11 @@ export const getKnowledgeDocumentDetailApi = (id: number) =>
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
+
+export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
+    params: documentId ? { documentId } : undefined
+  })
 
 export const searchKnowledgeApi = (params: { keyword: string; limit?: number }) =>
   request
