@@ -382,7 +382,9 @@
             <el-table v-loading="duplicateLoading" :data="duplicates" row-key="id">
               <el-table-column prop="sourceTitle" label="源题" min-width="220" show-overflow-tooltip />
               <el-table-column prop="targetTitle" label="疑似重复题" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="matchType" label="匹配类型" min-width="150" />
+              <el-table-column label="匹配类型" min-width="150">
+                <template #default="{ row }">{{ getDuplicateMatchTypeLabel(row.matchType) }}</template>
+              </el-table-column>
               <el-table-column label="相似度" width="100">
                 <template #default="{ row }">{{ formatSimilarity(row.similarityScore) }}</template>
               </el-table-column>
@@ -961,9 +963,22 @@ const getDuplicateStatusType = (status?: string) => {
   return 'warning'
 }
 
+const getDuplicateMatchTypeLabel = (matchType?: string) => {
+  const labels: Record<string, string> = {
+    TITLE_EXACT: '标题完全一致',
+    TITLE_NORMALIZED_EQUAL: '标题归一后一致',
+    TITLE_SIMILAR: '标题高度相似',
+    CONTENT_SIMILAR: '内容高度相似'
+  }
+  return matchType ? labels[matchType] || matchType : '-'
+}
+
 const formatSimilarity = (value?: number) => {
   if (value === undefined || value === null) return '-'
-  return `${Math.round(Number(value) * 100)}%`
+  const score = Number(value)
+  if (!Number.isFinite(score)) return '-'
+  const percent = score > 1 ? score : score * 100
+  return `${percent.toFixed(percent >= 99 ? 0 : 2).replace(/\.00$/, '')}%`
 }
 
 const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {

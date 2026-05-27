@@ -17,12 +17,29 @@
       <div class="admin-panel__header">
         <div>
           <h2>关系查询</h2>
-          <p>输入源题目 ID 后读取 GET /admin/questions/{id}/relations 的真实结果。</p>
+          <p>题目关系来自重复题审核合并或手动新增；先选择题目或输入题目 ID，再查看它关联到哪些题。</p>
         </div>
       </div>
 
       <div class="admin-filter-bar">
         <el-form class="relation-query-form" :model="queryForm" inline @submit.prevent>
+          <el-form-item label="快速选择">
+            <el-select
+              v-model="queryForm.questionId"
+              clearable
+              filterable
+              placeholder="选择最近题目"
+              style="width: min(360px, 100%)"
+              @change="handleQuestionSelect"
+            >
+              <el-option
+                v-for="item in latestQuestions"
+                :key="item.id"
+                :label="formatQuestion(item.id, item.title)"
+                :value="item.id"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="源题目 ID">
             <el-input-number
               v-model="queryForm.questionId"
@@ -87,7 +104,7 @@
             </template>
           </el-table-column>
           <template #empty>
-            <el-empty description="暂无题目关系" />
+            <el-empty description="暂无题目关系，关系通常在重复题审核点击“合并”后产生，也可以在下方手动新增。" />
           </template>
         </el-table>
       </div>
@@ -171,14 +188,16 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link2 } from 'lucide-vue-next'
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 
 import {
   createQuestionRelationApi,
   deleteQuestionRelationApi,
+  getAdminQuestionsApi,
   getQuestionRelationsApi
 } from '@/api/question'
 import type {
+  AdminQuestionVO,
   QuestionRelationCreateDTO,
   QuestionRelationType,
   QuestionRelationVO
@@ -203,6 +222,7 @@ const saving = ref(false)
 const formRef = ref<FormInstance>()
 const relations = ref<QuestionRelationVO[]>([])
 const currentQuestionId = ref<number>()
+const latestQuestions = ref<AdminQuestionVO[]>([])
 
 const queryForm = reactive({
   questionId: undefined as number | undefined
@@ -223,6 +243,21 @@ const rules: FormRules = {
 const normalizeId = (value?: number) => {
   const id = Number(value)
   return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
+const fetchQuestionOptions = async () => {
+  try {
+    const result = await getAdminQuestionsApi({ pageNo: 1, pageSize: 30, status: 1 })
+    latestQuestions.value = result.records || []
+  } catch {
+    latestQuestions.value = []
+  }
+}
+
+const handleQuestionSelect = async () => {
+  if (normalizeId(queryForm.questionId)) {
+    await fetchRelations()
+  }
 }
 
 const fetchRelations = async () => {
@@ -317,8 +352,13 @@ const formatQuestion = (id?: number, title?: string) => {
 
 const formatSimilarity = (value?: number) => {
   if (value === undefined || value === null) return '-'
-  return `${Math.round(Number(value) * 100)}%`
+  const score = Number(value)
+  if (!Number.isFinite(score)) return '-'
+  const percent = score > 1 ? score : score * 100
+  return `${percent.toFixed(percent >= 99 ? 0 : 2).replace(/\.00$/, '')}%`
 }
+
+onMounted(fetchQuestionOptions)
 </script>
 
 <style scoped lang="scss">
