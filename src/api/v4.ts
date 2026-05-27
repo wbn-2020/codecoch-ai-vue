@@ -239,6 +239,12 @@ export interface KnowledgeDuplicateReviewVO {
   generatedAt?: string
 }
 
+export interface KnowledgeExactDuplicateGroupVO {
+  chunkHash?: string
+  duplicateCount?: number
+  chunks?: KnowledgeChunkVO[]
+}
+
 export interface KnowledgeAskVO {
   question?: string
   answer?: string
@@ -377,6 +383,11 @@ export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
 
 export const getKnowledgeDuplicateReviewApi = (limit?: number) =>
   request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params: { limit } })
+
+export const getKnowledgeExactDuplicatesApi = (limit?: number) =>
+  request
+    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: { limit } })
+    .then((data) => data || [])
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)

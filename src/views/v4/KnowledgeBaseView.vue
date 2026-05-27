@@ -70,7 +70,10 @@
         <strong>{{ duplicateReviewSummary }}</strong>
         <small>threshold {{ nearDuplicateThresholdLabel }} · scanned {{ duplicateReview?.scannedChunkCount || 0 }}</small>
       </div>
-      <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
+      <div class="dedup-actions">
+        <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
+        <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates">完全重复</el-button>
+      </div>
     </section>
 
     <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
@@ -383,6 +386,30 @@
       </div>
     </el-drawer>
 
+    <el-drawer v-model="exactDuplicateVisible" size="760px" title="完全重复片段">
+      <div class="duplicate-review-drawer" v-loading="exactDuplicateLoading">
+        <div class="duplicate-review-list">
+          <article v-for="group in exactDuplicateGroups" :key="group.chunkHash" class="duplicate-review-row">
+            <div class="duplicate-review-row__head">
+              <strong>{{ shortHash(group.chunkHash) }}</strong>
+              <el-tag size="small" type="warning" effect="light">{{ group.duplicateCount || 0 }} duplicates</el-tag>
+              <small>{{ group.chunks?.length || 0 }} chunks</small>
+            </div>
+            <div class="chunk-list exact-duplicate-chunks">
+              <article v-for="chunk in group.chunks || []" :key="`exact-${group.chunkHash}-${chunk.id}`" class="chunk-row">
+                <div class="chunk-row__head">
+                  <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
+                  <span>{{ chunk.sourceRef || `Document #${chunk.documentId || '--'}` }}</span>
+                </div>
+                <p>{{ chunk.content || '--' }}</p>
+              </article>
+            </div>
+          </article>
+          <el-empty v-if="!exactDuplicateGroups.length && !exactDuplicateLoading" description="暂无完全重复片段" />
+        </div>
+      </div>
+    </el-drawer>
+
     <el-drawer v-model="chunksDrawerVisible" size="720px" :title="selectedDocument?.title || '资料片段'">
       <div class="chunk-drawer" v-loading="chunksLoading">
         <div class="chunk-summary">
@@ -500,6 +527,7 @@ import {
   getKnowledgeDocumentDetailApi,
   getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
+  getKnowledgeExactDuplicatesApi,
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
@@ -513,6 +541,7 @@ import {
   type KnowledgeDocumentVersionVO,
   type KnowledgeDuplicateReviewItemVO,
   type KnowledgeDuplicateReviewVO,
+  type KnowledgeExactDuplicateGroupVO,
   type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
@@ -527,6 +556,7 @@ const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
 const duplicateReviewLoading = ref(false)
+const exactDuplicateLoading = ref(false)
 const editingLoadingId = ref<number | null>(null)
 const versionsLoadingId = ref<number | null>(null)
 const restoringVersionId = ref<number | null>(null)
@@ -545,6 +575,7 @@ const documentChunks = ref<KnowledgeChunkVO[]>([])
 const documentVersions = ref<KnowledgeDocumentVersionVO[]>([])
 const selectedChunkDetail = ref<KnowledgeChunkVO | null>(null)
 const selectedChunkSource = ref<KnowledgeSearchResultVO | null>(null)
+const exactDuplicateGroups = ref<KnowledgeExactDuplicateGroupVO[]>([])
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
@@ -560,6 +591,7 @@ const chunksDrawerVisible = ref(false)
 const duplicateReviewVisible = ref(false)
 const versionsDrawerVisible = ref(false)
 const chunkDetailVisible = ref(false)
+const exactDuplicateVisible = ref(false)
 const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
@@ -766,6 +798,19 @@ const loadDuplicateReview = async () => {
     }
   } finally {
     duplicateReviewLoading.value = false
+  }
+}
+
+const loadExactDuplicates = async () => {
+  exactDuplicateVisible.value = true
+  exactDuplicateLoading.value = true
+  try {
+    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(20)
+    if (!exactDuplicateGroups.value.length) {
+      ElMessage.success('暂未发现完全重复片段')
+    }
+  } finally {
+    exactDuplicateLoading.value = false
   }
 }
 
@@ -1296,6 +1341,17 @@ onMounted(loadDocuments)
   margin-top: 5px;
   color: var(--app-text-muted);
   font-size: 12px;
+}
+
+.dedup-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exact-duplicate-chunks {
+  margin-top: 12px;
 }
 
 .summary-item {
