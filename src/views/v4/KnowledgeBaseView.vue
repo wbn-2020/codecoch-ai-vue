@@ -85,6 +85,15 @@
                   <el-button
                     link
                     type="primary"
+                    :icon="Plus"
+                    :loading="editingLoadingId === row.id"
+                    @click="openEdit(row)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
                     :icon="Refresh"
                     :loading="rebuilding"
                     @click="handleRebuildVectors(row.id, row.title)"
@@ -216,7 +225,7 @@
       </aside>
     </section>
 
-    <el-dialog v-model="dialogVisible" title="新增知识资料" width="640px">
+    <el-dialog v-model="dialogVisible" :title="editingDocumentId ? '编辑知识资料' : '新增知识资料'" width="640px">
       <el-form label-position="top">
         <el-form-item label="标题" required>
           <el-input v-model.trim="form.title" maxlength="120" show-word-limit />
@@ -231,7 +240,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="createDocument">保存并索引</el-button>
+        <el-button type="primary" :loading="saving" @click="saveDocument">保存并索引</el-button>
       </template>
     </el-dialog>
 
@@ -345,11 +354,13 @@ import {
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
   getKnowledgeDocumentChunksApi,
+  getKnowledgeDocumentDetailApi,
   getKnowledgeDocumentsApi,
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
+  updateKnowledgeDocumentApi,
   uploadKnowledgeDocumentApi,
   type KnowledgeChunkVO,
   type KnowledgeDocumentVO,
@@ -366,6 +377,7 @@ const saving = ref(false)
 const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
+const editingLoadingId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
@@ -386,6 +398,7 @@ const limit = ref(10)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
+const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
 
@@ -541,6 +554,7 @@ const handleDeleteChunk = async (chunk: KnowledgeChunkVO) => {
 }
 
 const openCreate = () => {
+  editingDocumentId.value = null
   Object.assign(form, {
     title: '',
     documentType: 'NOTE',
@@ -549,20 +563,40 @@ const openCreate = () => {
   dialogVisible.value = true
 }
 
-const createDocument = async () => {
+const openEdit = async (row: KnowledgeDocumentVO) => {
+  editingLoadingId.value = row.id
+  try {
+    const detail = await getKnowledgeDocumentDetailApi(row.id)
+    editingDocumentId.value = row.id
+    Object.assign(form, {
+      title: detail.title || '',
+      documentType: detail.documentType || 'NOTE',
+      content: detail.content || ''
+    })
+    dialogVisible.value = true
+  } finally {
+    editingLoadingId.value = null
+  }
+}
+
+const saveDocument = async () => {
   if (!form.title || !form.content) {
     ElMessage.warning('请填写标题和内容')
     return
   }
   saving.value = true
   try {
-    const result = await createKnowledgeDocumentApi({
+    const payload = {
       title: form.title,
       documentType: form.documentType || 'NOTE',
       content: form.content
-    })
+    }
+    const result = editingDocumentId.value
+      ? await updateKnowledgeDocumentApi(editingDocumentId.value, payload)
+      : await createKnowledgeDocumentApi(payload)
     dialogVisible.value = false
-    showKnowledgeIndexResult(result, '资料已索引')
+    showKnowledgeIndexResult(result, editingDocumentId.value ? '资料已更新' : '资料已索引')
+    editingDocumentId.value = null
     await loadDocuments()
   } finally {
     saving.value = false
