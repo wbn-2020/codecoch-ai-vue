@@ -1591,8 +1591,10 @@ const handleImportFileChange = (file: { raw: File }) => {
 
 const importDuplicateReasonLabel = (code?: string) => {
   const labels: Record<string, string> = {
-    FILE_TITLE_DUPLICATE: '文件内重复',
-    BANK_TITLE_DUPLICATE: '题库已有'
+    FILE_TITLE_DUPLICATE: '文件内标题重复',
+    FILE_CONTENT_DUPLICATE: '文件内内容重复',
+    BANK_TITLE_DUPLICATE: '题库标题已存在',
+    BANK_CONTENT_DUPLICATE: '题库内容已存在'
   }
   return code ? labels[code] || code : '重复'
 }
