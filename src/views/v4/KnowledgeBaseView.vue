@@ -216,6 +216,9 @@
               <el-form-item label="最低分">
                 <el-input-number v-model="searchMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
               </el-form-item>
+              <el-form-item label="类型">
+                <el-input v-model.trim="knowledgeScopeType" clearable placeholder="全部类型" @keyup.enter="handleSearch" />
+              </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
               </el-form-item>
@@ -273,6 +276,9 @@
             <el-form label-position="top" class="ask-options">
               <el-form-item :label="`引用最低分（默认 ${askMinScoreLabel}）`">
                 <el-input-number v-model="askMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
+              </el-form-item>
+              <el-form-item label="资料类型范围">
+                <el-input v-model.trim="knowledgeScopeType" clearable placeholder="全部类型" />
               </el-form-item>
             </el-form>
             <el-button class="ask-button" type="primary" :icon="ChatDotRound" :loading="asking" @click="handleAsk">
@@ -642,6 +648,7 @@ const total = ref(0)
 const keyword = ref('')
 const question = ref('')
 const limit = ref(10)
+const knowledgeScopeType = ref('')
 const searchMinScorePercent = ref<number | null>(null)
 const askMinScorePercent = ref<number | null>(null)
 const duplicateThresholdPercent = ref<number | null>(null)
@@ -829,7 +836,8 @@ const handleSearch = async () => {
     searchResults.value = await searchKnowledgeApi({
       keyword: keyword.value,
       limit: limit.value,
-      minScore: normalizedSearchMinScore.value
+      minScore: normalizedSearchMinScore.value,
+      documentType: knowledgeScopeType.value || undefined
     })
   } finally {
     searching.value = false
@@ -852,7 +860,8 @@ const handleAsk = async () => {
     const result = await askKnowledgeApi({
       question: question.value.trim(),
       limit: Math.min(limit.value || 5, 10),
-      minScore: normalizedAskMinScore.value
+      minScore: normalizedAskMinScore.value,
+      documentType: knowledgeScopeType.value || undefined
     })
     answer.value = result.answer || ''
     askInsufficientReferences.value = !!result.insufficientReferences
