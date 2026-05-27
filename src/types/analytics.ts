@@ -154,6 +154,20 @@ export interface VectorStoreHealthVO {
   collections: VectorCollectionInfoVO[]
 }
 
+export interface QuestionDuplicateConfigVO {
+  maxBatchCheckCount: number
+  maxRuleCandidateCount: number
+  maxVectorSeedCount: number
+  vectorSearchLimit: number
+  embeddingBatchSize: number
+  titleJaccardThreshold: number
+  titleLevenshteinThreshold: number
+  contentSimilarityThreshold: number
+  semanticSimilarityThreshold: number
+  semanticVectorWeight: number
+  semanticTextWeight: number
+}
+
 export interface AdminAnalyticsDictionaryQuery {
   pageNo?: number
   pageNum?: number

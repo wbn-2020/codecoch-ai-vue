@@ -126,6 +126,24 @@
           </div>
         </article>
       </section>
+
+      <section class="ops-main-grid">
+        <article class="ops-panel ops-panel--wide">
+          <div class="ops-panel__head">
+            <div>
+              <h2>题目去重参数</h2>
+              <p>当前生效的规则阈值、语义检索和候选池规模</p>
+            </div>
+          </div>
+          <div class="ops-config-grid">
+            <div v-for="item in duplicateConfigItems" :key="item.label" class="ops-config-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.hint }}</small>
+            </div>
+          </div>
+        </article>
+      </section>
     </template>
   </div>
 </template>
@@ -140,11 +158,12 @@ import {
   getAdminAiFailuresApi,
   getAdminAiOverviewApi,
   getAdminAnalyticsJobsApi,
-  getAdminVectorStoreHealthApi
+  getAdminVectorStoreHealthApi,
+  getQuestionDuplicateConfigApi
 } from '@/api/analytics'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
-import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, TrendPointVO, VectorCollectionInfoVO, VectorStoreHealthVO } from '@/types/analytics'
+import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorStoreHealthVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import echarts, { type ECharts } from '@/utils/echarts'
@@ -156,6 +175,7 @@ const aiOverview = ref<AdminAiOverviewVO>()
 const agentOverview = ref<AdminAgentOverviewVO>()
 const dashboard = ref<AdminDashboardOverviewVO>()
 const vectorHealth = ref<VectorStoreHealthVO>()
+const duplicateConfig = ref<QuestionDuplicateConfigVO>()
 const trendPoints = ref<TrendPointVO[]>([])
 const failurePoints = ref<MetricPointVO[]>([])
 const jobs = ref<AdminAnalyticsJobLogVO[]>([])
@@ -247,6 +267,25 @@ const metricGroups = computed(() => [
 ])
 
 const failurePercent = (value?: number) => Math.min(100, Math.max(4, ((value || 0) / totalFailures.value) * 100))
+
+const formatThreshold = (value?: number) => Number(value ?? 0).toFixed(2)
+
+const duplicateConfigItems = computed(() => {
+  const config = duplicateConfig.value
+  if (!config) return []
+  return [
+    { label: '语义命中阈值', value: formatThreshold(config.semanticSimilarityThreshold), hint: '向量召回后的综合分门槛' },
+    { label: '标题 Jaccard', value: formatThreshold(config.titleJaccardThreshold), hint: '标题词集合相似度门槛' },
+    { label: '标题编辑距离', value: formatThreshold(config.titleLevenshteinThreshold), hint: '标题 Levenshtein 相似度门槛' },
+    { label: '正文相似度', value: formatThreshold(config.contentSimilarityThreshold), hint: '正文文本规则命中门槛' },
+    { label: '向量 / 文本权重', value: `${formatThreshold(config.semanticVectorWeight)} / ${formatThreshold(config.semanticTextWeight)}`, hint: '语义综合分权重' },
+    { label: '向量召回数', value: config.vectorSearchLimit, hint: '每题从向量库召回的候选数' },
+    { label: '候选池规模', value: config.maxRuleCandidateCount, hint: '规则侧最多比较候选数' },
+    { label: '批量检测上限', value: config.maxBatchCheckCount, hint: '单次管理端检测题目数' },
+    { label: '向量种子数', value: config.maxVectorSeedCount, hint: '语义去重补充种子范围' },
+    { label: 'Embedding 批量', value: config.embeddingBatchSize, hint: '批量生成向量的请求大小' }
+  ]
+})
 
 const statusText = (status?: DashboardStatus) => {
   const value = String(status || 'UNKNOWN').toUpperCase()
@@ -379,14 +418,15 @@ const loadPage = async () => {
   errorMessage.value = ''
   try {
     const params = { days: rangeDays.value }
-    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData] = await Promise.all([
+    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData, duplicateConfigData] = await Promise.all([
       getAdminAiOverviewApi(params),
       getAdminAgentOverviewApi(params),
       getAdminAgentTrendApi(params),
       getAdminAiFailuresApi(params),
       getAdminDashboardOverviewApi(),
       getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 }),
-      getAdminVectorStoreHealthApi()
+      getAdminVectorStoreHealthApi(),
+      getQuestionDuplicateConfigApi()
     ])
     aiOverview.value = aiData
     agentOverview.value = agentData
@@ -395,6 +435,7 @@ const loadPage = async () => {
     dashboard.value = dashboardData
     jobs.value = jobsPage.records || []
     vectorHealth.value = vectorData
+    duplicateConfig.value = duplicateConfigData
     await renderChart()
   } catch (error) {
     errorMessage.value = error && typeof error === 'object' && 'message' in error
@@ -576,6 +617,35 @@ onBeforeUnmount(() => {
   scrollbar-width: thin;
 }
 
+.ops-config-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.ops-config-item {
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.ops-config-item span,
+.ops-config-item small {
+  display: block;
+  color: var(--app-text-muted);
+}
+
+.ops-config-item strong {
+  display: block;
+  margin: 8px 0 6px;
+  color: var(--app-text);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
 .ops-model-row,
 .ops-service-row,
 .ops-job-row {
@@ -660,11 +730,19 @@ onBeforeUnmount(() => {
   .ops-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .ops-config-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
   .ops-card-grid,
   .ops-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-config-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -22,6 +22,7 @@ import type {
   PromptRegressionQuery,
   PromptRegressionResultVO,
   PromptRegressionRunDTO,
+  QuestionDuplicateConfigVO,
   TrendPointVO,
   VectorStoreHealthVO
 } from '@/types/analytics'
@@ -143,6 +144,9 @@ export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
 
 export const getAdminVectorStoreHealthApi = () =>
   request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/vector-store/health')
+
+export const getQuestionDuplicateConfigApi = () =>
+  request.get<QuestionDuplicateConfigVO, QuestionDuplicateConfigVO>('/admin/questions/duplicate/config')
 
 export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQuery) => {
   const requestParams = {
