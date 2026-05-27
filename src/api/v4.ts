@@ -182,6 +182,7 @@ export interface KnowledgeChunkVO {
   chunkHash?: string
   sourceRef?: string
   duplicateInDocument?: boolean
+  cleanupCandidate?: boolean
   createdAt?: string
   updatedAt?: string
 }

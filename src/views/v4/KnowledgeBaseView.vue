@@ -525,6 +525,9 @@
               <article v-for="chunk in group.chunks || []" :key="`exact-${group.chunkHash}-${chunk.id}`" class="chunk-row">
                 <div class="chunk-row__head">
                   <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
+                  <el-tag size="small" :type="chunk.cleanupCandidate ? 'danger' : 'success'" effect="light">
+                    {{ chunk.cleanupCandidate ? 'delete candidate' : 'keep' }}
+                  </el-tag>
                   <span>{{ chunk.sourceRef || `Document #${chunk.documentId || '--'}` }}</span>
                   <el-button
                     v-if="chunk.id"
