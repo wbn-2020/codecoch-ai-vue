@@ -132,6 +132,12 @@ export const getAdminQuestionsApi = (params: AdminQuestionQueryDTO) => {
     .then(normalizeAdminQuestionPage)
 }
 
+export const getAdminQuestionDetailApi = (id: number) => {
+  return request
+    .get<BackendAdminQuestionVO, BackendAdminQuestionVO>(`/admin/questions/${id}`)
+    .then(normalizeAdminQuestion)
+}
+
 export const createAdminQuestionApi = (data: QuestionCreateDTO) => {
   const payload = {
     title: data.title,

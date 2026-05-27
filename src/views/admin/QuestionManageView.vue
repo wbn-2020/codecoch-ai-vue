@@ -132,7 +132,7 @@
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
               <el-button link type="warning" @click="handleStatus(row)">
                 {{ row.status === 1 ? '禁用' : '启用' }}
               </el-button>
@@ -559,7 +559,7 @@
         show-icon
         title="若后端列表未返回题干、参考答案或解析，请在编辑保存前补全这些字段。"
       />
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
+      <el-form ref="formRef" v-loading="dialogLoading" :model="form" :rules="rules" label-width="104px">
         <el-form-item label="题目标题" prop="title">
           <el-input v-model.trim="form.title" />
         </el-form-item>
@@ -658,6 +658,7 @@ import {
   downloadQuestionImportTemplate,
   exportAdminQuestionsApi,
   generateAiQuestionsApi,
+  getAdminQuestionDetailApi,
   getAdminQuestionsApi,
   getQuestionDuplicateReviewsApi,
   getQuestionReviewDetailApi,
@@ -715,6 +716,7 @@ const props = withDefaults(
 
 const loading = ref(false)
 const saving = ref(false)
+const dialogLoading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
@@ -1071,8 +1073,7 @@ const fetchDuplicates = async () => {
   }
 }
 
-const openDialog = (row?: AdminQuestionVO) => {
-  editingId.value = row?.id || null
+const fillQuestionForm = (row?: AdminQuestionVO) => {
   Object.assign(form, {
     title: row?.title || '',
     content: row?.content || '',
@@ -1087,10 +1088,29 @@ const openDialog = (row?: AdminQuestionVO) => {
     tagIds: resolveTagIdsFromRow(row),
     status: row?.status ?? 1
   })
+}
+
+const openDialog = async (row?: AdminQuestionVO) => {
+  editingId.value = row?.id || null
+  fillQuestionForm(row)
   dialogVisible.value = true
+  if (!row?.id) return
+
+  dialogLoading.value = true
+  try {
+    const detail = await getAdminQuestionDetailApi(row.id)
+    if (editingId.value === row.id) {
+      fillQuestionForm(detail)
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '题目详情加载失败，请稍后重试')
+  } finally {
+    dialogLoading.value = false
+  }
 }
 
 const handleSave = async () => {
+  if (dialogLoading.value) return
   if (!formRef.value) return
   try {
     await formRef.value.validate()
