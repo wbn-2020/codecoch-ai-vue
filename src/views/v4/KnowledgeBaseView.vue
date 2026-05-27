@@ -388,6 +388,15 @@
 
     <el-drawer v-model="exactDuplicateVisible" size="760px" title="完全重复片段">
       <div class="duplicate-review-drawer" v-loading="exactDuplicateLoading">
+        <div class="duplicate-cleanup-bar">
+          <div>
+            <strong>{{ exactDuplicateGroups.length }}</strong>
+            <small>duplicate groups</small>
+          </div>
+          <el-button type="danger" :loading="exactDuplicateCleanupLoading" @click="handleCleanupExactDuplicates">
+            清理完全重复
+          </el-button>
+        </div>
         <div class="duplicate-review-list">
           <article v-for="group in exactDuplicateGroups" :key="group.chunkHash" class="duplicate-review-row">
             <div class="duplicate-review-row__head">
@@ -517,6 +526,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   askKnowledgeApi,
+  cleanupKnowledgeExactDuplicatesApi,
   createKnowledgeDocumentApi,
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
@@ -539,6 +549,7 @@ import {
   type KnowledgeConfigVO,
   type KnowledgeDocumentVO,
   type KnowledgeDocumentVersionVO,
+  type KnowledgeDuplicateCleanupVO,
   type KnowledgeDuplicateReviewItemVO,
   type KnowledgeDuplicateReviewVO,
   type KnowledgeExactDuplicateGroupVO,
@@ -557,6 +568,7 @@ const rebuilding = ref(false)
 const chunksLoading = ref(false)
 const duplicateReviewLoading = ref(false)
 const exactDuplicateLoading = ref(false)
+const exactDuplicateCleanupLoading = ref(false)
 const editingLoadingId = ref<number | null>(null)
 const versionsLoadingId = ref<number | null>(null)
 const restoringVersionId = ref<number | null>(null)
@@ -576,6 +588,7 @@ const documentVersions = ref<KnowledgeDocumentVersionVO[]>([])
 const selectedChunkDetail = ref<KnowledgeChunkVO | null>(null)
 const selectedChunkSource = ref<KnowledgeSearchResultVO | null>(null)
 const exactDuplicateGroups = ref<KnowledgeExactDuplicateGroupVO[]>([])
+const exactDuplicateCleanup = ref<KnowledgeDuplicateCleanupVO | null>(null)
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
@@ -811,6 +824,30 @@ const loadExactDuplicates = async () => {
     }
   } finally {
     exactDuplicateLoading.value = false
+  }
+}
+
+const handleCleanupExactDuplicates = async () => {
+  exactDuplicateCleanupLoading.value = true
+  try {
+    const preview = await cleanupKnowledgeExactDuplicatesApi({ dryRun: true, limit: 20 })
+    exactDuplicateCleanup.value = preview
+    if (!preview.deleteCandidateCount) {
+      ElMessage.success('暂无需要清理的完全重复片段')
+      return
+    }
+    await ElMessageBox.confirm(
+      `将清理 ${preview.duplicateGroupCount || 0} 组完全重复片段，删除 ${preview.deleteCandidateCount || 0} 个重复片段，并同步清理向量索引。确认继续？`,
+      '清理完全重复片段',
+      { type: 'warning' }
+    )
+    const result = await cleanupKnowledgeExactDuplicatesApi({ dryRun: false, limit: 20 })
+    exactDuplicateCleanup.value = result
+    ElMessage.success(`已清理 ${result.deletedCount || 0} 个重复片段`)
+    exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(20)
+    await loadDocuments()
+  } finally {
+    exactDuplicateCleanupLoading.value = false
   }
 }
 
@@ -1352,6 +1389,27 @@ onMounted(loadDocuments)
 
 .exact-duplicate-chunks {
   margin-top: 12px;
+}
+
+.duplicate-cleanup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.duplicate-cleanup-bar strong,
+.duplicate-cleanup-bar small {
+  display: block;
+}
+
+.duplicate-cleanup-bar small {
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .summary-item {

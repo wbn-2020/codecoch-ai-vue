@@ -245,6 +245,15 @@ export interface KnowledgeExactDuplicateGroupVO {
   chunks?: KnowledgeChunkVO[]
 }
 
+export interface KnowledgeDuplicateCleanupVO {
+  dryRun?: boolean
+  duplicateGroupCount?: number
+  deleteCandidateCount?: number
+  deletedCount?: number
+  deletedChunkIds?: number[]
+  generatedAt?: string
+}
+
 export interface KnowledgeAskVO {
   question?: string
   answer?: string
@@ -388,6 +397,11 @@ export const getKnowledgeExactDuplicatesApi = (limit?: number) =>
   request
     .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: { limit } })
     .then((data) => data || [])
+
+export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number }) =>
+  request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
+    params
+  })
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
