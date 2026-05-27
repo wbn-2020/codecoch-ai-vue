@@ -251,6 +251,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
 
+export const deleteKnowledgeDocumentApi = (id: number) =>
+  request.delete<null, null>(`/agent/knowledge/documents/${id}`)
+
 export const searchKnowledgeApi = (params: { keyword: string; limit?: number }) =>
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })

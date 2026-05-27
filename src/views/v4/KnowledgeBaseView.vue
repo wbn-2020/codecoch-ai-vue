@@ -57,6 +57,19 @@
               <el-table-column label="更新时间" width="180">
                 <template #default="{ row }">{{ row.updatedAt || '--' }}</template>
               </el-table-column>
+              <el-table-column label="操作" width="100" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    link
+                    type="danger"
+                    :icon="Delete"
+                    :loading="deletingId === row.id"
+                    @click="handleDelete(row)"
+                  >
+                    删除
+                  </el-button>
+                </template>
+              </el-table-column>
               <template #empty>
                 <el-empty description="暂无知识库资料" />
               </template>
@@ -189,13 +202,14 @@
 </template>
 
 <script setup lang="ts">
-import { ChatDotRound, Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ChatDotRound, Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   askKnowledgeApi,
   createKnowledgeDocumentApi,
+  deleteKnowledgeDocumentApi,
   getKnowledgeDocumentsApi,
   searchKnowledgeApi,
   type KnowledgeDocumentVO,
@@ -207,6 +221,7 @@ const loading = ref(false)
 const searching = ref(false)
 const asking = ref(false)
 const saving = ref(false)
+const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
@@ -322,6 +337,25 @@ const createDocument = async () => {
     await loadDocuments()
   } finally {
     saving.value = false
+  }
+}
+
+const handleDelete = async (row: KnowledgeDocumentVO) => {
+  await ElMessageBox.confirm(
+    `确认删除资料「${row.title || `#${row.id}`}」？删除后会同步清理对应向量索引。`,
+    '删除知识资料',
+    { type: 'warning' }
+  )
+  deletingId.value = row.id
+  try {
+    await deleteKnowledgeDocumentApi(row.id)
+    ElMessage.success('资料已删除')
+    searchResults.value = []
+    askReferences.value = []
+    answer.value = ''
+    await loadDocuments()
+  } finally {
+    deletingId.value = null
   }
 }
 
