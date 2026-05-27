@@ -460,6 +460,12 @@ export interface QuestionDuplicateCheckResultVO {
   reviewIds?: number[]
 }
 
+export interface QuestionDuplicateScorePartVO {
+  code?: string
+  label?: string
+  score?: number
+}
+
 export interface QuestionDuplicateReviewListVO {
   id: number
   sourceQuestionId?: number
@@ -470,6 +476,7 @@ export interface QuestionDuplicateReviewListVO {
   matchType?: QuestionDuplicateMatchType
   similarityScore?: number
   matchReason?: string
+  scoreParts?: QuestionDuplicateScorePartVO[]
   sourceGroupId?: number
   targetGroupId?: number
   relationId?: number

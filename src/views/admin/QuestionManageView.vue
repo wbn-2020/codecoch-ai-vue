@@ -396,14 +396,14 @@
                 <template #default="{ row }">
                   <div class="duplicate-score-parts">
                     <el-tag
-                      v-for="item in parseDuplicateScoreParts(row.matchReason)"
+                      v-for="item in duplicateScoreParts(row)"
                       :key="`${row.id}-${item.label}`"
                       size="small"
                       effect="plain"
                     >
                       {{ item.label }} {{ item.value }}
                     </el-tag>
-                    <span v-if="!parseDuplicateScoreParts(row.matchReason).length" class="muted-text">-</span>
+                    <span v-if="!duplicateScoreParts(row).length" class="muted-text">-</span>
                   </div>
                 </template>
               </el-table-column>
@@ -1008,6 +1008,17 @@ const formatSimilarity = (value?: number) => {
   return `${percent.toFixed(percent >= 99 ? 0 : 2).replace(/\.00$/, '')}%`
 }
 
+const duplicateScoreParts = (row: QuestionDuplicateReviewListVO) => {
+  if (row.scoreParts?.length) {
+    return row.scoreParts
+      .filter((item) => Number.isFinite(Number(item.score)))
+      .map((item) => ({
+        label: item.label || item.code || '评分',
+        value: formatSimilarity(Number(item.score))
+      }))
+  }
+  return parseDuplicateScoreParts(row.matchReason)
+}
 const parseDuplicateScoreParts = (reason?: string) => {
   if (!reason?.includes('semantic vector match')) {
     return []
