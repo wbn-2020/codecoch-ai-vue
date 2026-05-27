@@ -310,6 +310,9 @@ export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
 
+export const deleteKnowledgeChunkApi = (chunkId: number) =>
+  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`)
+
 export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
     params: documentId ? { documentId } : undefined

@@ -307,6 +307,15 @@
               >
                 相似
               </el-button>
+              <el-button
+                link
+                size="small"
+                type="danger"
+                :loading="deletingChunkId === chunk.id"
+                @click="handleDeleteChunk(chunk)"
+              >
+                删除
+              </el-button>
             </div>
             <p>{{ chunk.content || '--' }}</p>
             <small>{{ shortHash(chunk.chunkHash) }}</small>
@@ -333,6 +342,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import {
   askKnowledgeApi,
   createKnowledgeDocumentApi,
+  deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentsApi,
@@ -357,6 +367,7 @@ const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
 const similarLoadingId = ref<number | null>(null)
+const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
@@ -505,6 +516,27 @@ const loadSimilarChunks = async (chunk: KnowledgeChunkVO) => {
     }
   } finally {
     similarLoadingId.value = null
+  }
+}
+
+const handleDeleteChunk = async (chunk: KnowledgeChunkVO) => {
+  if (!chunk.id) return
+  await ElMessageBox.confirm(
+    `确认删除片段 #${(chunk.chunkIndex ?? 0) + 1}？删除后会同步清理对应向量索引。`,
+    '删除知识片段',
+    { type: 'warning' }
+  )
+  deletingChunkId.value = chunk.id
+  try {
+    await deleteKnowledgeChunkApi(chunk.id)
+    ElMessage.success('片段已删除')
+    similarChunkMap.value = {}
+    if (selectedDocument.value?.id) {
+      documentChunks.value = await getKnowledgeDocumentChunksApi(selectedDocument.value.id)
+    }
+    await loadDocuments()
+  } finally {
+    deletingChunkId.value = null
   }
 }
 
