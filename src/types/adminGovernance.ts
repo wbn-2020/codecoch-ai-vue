@@ -75,6 +75,7 @@ export interface OperationLogVO {
   userId?: number
   username?: string
   module?: string
+  menuName?: string
   operation?: string
   action?: string
   traceId?: string

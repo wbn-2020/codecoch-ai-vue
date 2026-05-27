@@ -78,6 +78,7 @@ const normalizeOperationLog = (item: any): OperationLogVO => ({
   id: normalizeId(item),
   username: pick(item, 'username', 'operatorName', 'operator_name', 'nickName', 'nick_name'),
   module: pick(item, 'module', 'businessModule', 'business_module'),
+  menuName: pick(item, 'menuName', 'menu_name', 'menu', 'menuTitle', 'menu_title'),
   operation: pick(item, 'operation', 'operationType', 'operation_type', 'action'),
   action: pick(item, 'action', 'operation', 'operationType', 'operation_type'),
   traceId: pick(item, 'traceId', 'trace_id'),
