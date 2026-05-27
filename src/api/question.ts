@@ -314,6 +314,8 @@ export interface QuestionEmbeddingRebuildResult {
   updated: number
   vectorEnabled: boolean
   vectorUpdated: number
+  failedBatches?: number
+  errors?: string[]
 }
 
 export const rebuildQuestionEmbeddingApi = (limit?: number) => {

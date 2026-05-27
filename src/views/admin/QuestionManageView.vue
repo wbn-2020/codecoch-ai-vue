@@ -1522,9 +1522,22 @@ const handleRebuildEmbedding = async () => {
   embeddingRebuilding.value = true
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
-    ElMessage.success(
-      `索引重建完成：元数据 ${result.updated || 0} 条，向量 ${result.vectorUpdated || 0} 条`
-    )
+    const errors = result.errors || []
+    const summary = `索引重建完成：元数据 ${result.updated || 0} 条，向量 ${result.vectorUpdated || 0} 条`
+    if (errors.length || result.failedBatches) {
+      await ElMessageBox.alert(
+        [
+          summary,
+          `失败批次：${result.failedBatches || errors.length}`,
+          ...errors.slice(0, 8).map((item, index) => `${index + 1}. ${item}`),
+          errors.length > 8 ? `还有 ${errors.length - 8} 条错误未展示，请查看后端日志。` : ''
+        ].filter(Boolean).join('\n'),
+        '题目向量索引重建结果',
+        { type: 'warning' }
+      )
+      return
+    }
+    ElMessage.success(summary)
   } finally {
     embeddingRebuilding.value = false
   }
