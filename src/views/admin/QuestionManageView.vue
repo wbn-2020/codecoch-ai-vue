@@ -24,6 +24,10 @@
         <Upload :size="16" />
         批量导入
       </el-button>
+      <el-button :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
+        <RefreshCw :size="16" />
+        重建向量索引
+      </el-button>
     </section>
 
     <div v-if="showQuestionManagement" class="admin-insight-grid">
@@ -663,7 +667,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BookOpenCheck, Download, Plus, Upload } from 'lucide-vue-next'
+import { BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import {
@@ -684,6 +688,7 @@ import {
   ignoreQuestionDuplicateReviewApi,
   importAdminQuestionsApi,
   mergeQuestionDuplicateReviewApi,
+  rebuildQuestionEmbeddingApi,
   rejectQuestionReviewApi,
   streamAiQuestionGenerateApi,
   updateAdminQuestionApi,
@@ -752,6 +757,7 @@ const reviewDetailLoading = ref(false)
 const reviewApproveSaving = ref(false)
 const reviewDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
+const embeddingRebuilding = ref(false)
 const reviews = ref<QuestionReviewListVO[]>([])
 const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
@@ -1504,6 +1510,23 @@ const handleCheckDuplicates = async () => {
     await fetchDuplicates()
   } finally {
     duplicateChecking.value = false
+  }
+}
+
+const handleRebuildEmbedding = async () => {
+  await ElMessageBox.confirm(
+    '将按更新时间重建最多 5000 道启用题目的文本指纹和向量索引，期间可能产生 embedding 调用成本。确认继续？',
+    '重建题目向量索引',
+    { type: 'warning' }
+  )
+  embeddingRebuilding.value = true
+  try {
+    const result = await rebuildQuestionEmbeddingApi(5000)
+    ElMessage.success(
+      `索引重建完成：元数据 ${result.updated || 0} 条，向量 ${result.vectorUpdated || 0} 条`
+    )
+  } finally {
+    embeddingRebuilding.value = false
   }
 }
 

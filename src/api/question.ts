@@ -310,6 +310,19 @@ export const checkQuestionDuplicateApi = (data: QuestionDuplicateCheckDTO) => {
   )
 }
 
+export interface QuestionEmbeddingRebuildResult {
+  updated: number
+  vectorEnabled: boolean
+  vectorUpdated: number
+}
+
+export const rebuildQuestionEmbeddingApi = (limit?: number) => {
+  return request.post<QuestionEmbeddingRebuildResult, QuestionEmbeddingRebuildResult>(
+    '/admin/questions/embedding/rebuild',
+    limit ? { limit } : {}
+  )
+}
+
 export const getQuestionDuplicateReviewsApi = (params: QuestionDuplicateReviewQueryDTO) => {
   return request.get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
     '/admin/question-duplicate-reviews',
