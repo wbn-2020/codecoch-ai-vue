@@ -209,6 +209,16 @@
                 <div class="result-meta">
                   <span>{{ scoreLabel(item.score) }}</span>
                   <small>{{ item.sourceRef || item.documentType || '--' }}</small>
+                  <el-button
+                    v-if="item.chunkId"
+                    link
+                    size="small"
+                    type="primary"
+                    :loading="chunkDetailLoadingId === item.chunkId"
+                    @click="openChunkDetail(item)"
+                  >
+                    查看片段
+                  </el-button>
                 </div>
               </article>
               <el-empty v-if="!searchResults.length && !searching" description="输入关键词后检索知识片段" />
@@ -258,6 +268,16 @@
                 <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
                 <p>{{ item.snippet || '--' }}</p>
                 <small>{{ matchLabel(item.matchType) }} · {{ scoreLabel(item.score) }}</small>
+                <el-button
+                  v-if="item.chunkId"
+                  link
+                  size="small"
+                  type="primary"
+                  :loading="chunkDetailLoadingId === item.chunkId"
+                  @click="openChunkDetail(item)"
+                >
+                  查看片段
+                </el-button>
               </article>
               <el-empty v-if="!askReferences.length" description="生成回答后显示引用片段" />
             </div>
@@ -445,6 +465,21 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="chunkDetailVisible" size="640px" :title="chunkDetailTitle">
+      <div class="chunk-detail" v-loading="!!chunkDetailLoadingId">
+        <div v-if="selectedChunkDetail" class="chunk-row">
+          <div class="chunk-row__head">
+            <strong>#{{ (selectedChunkDetail.chunkIndex ?? 0) + 1 }}</strong>
+            <el-tag size="small" effect="plain">{{ selectedChunkSource?.documentType || 'NOTE' }}</el-tag>
+            <span>{{ selectedChunkDetail.sourceRef || '--' }}</span>
+          </div>
+          <p>{{ selectedChunkDetail.content || '--' }}</p>
+          <small>{{ shortHash(selectedChunkDetail.chunkHash) }}</small>
+        </div>
+        <el-empty v-else-if="!chunkDetailLoadingId" description="暂无片段详情" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -459,6 +494,7 @@ import {
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
   getKnowledgeConfigApi,
+  getKnowledgeChunkApi,
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
@@ -495,6 +531,7 @@ const editingLoadingId = ref<number | null>(null)
 const versionsLoadingId = ref<number | null>(null)
 const restoringVersionId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
+const chunkDetailLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
@@ -506,6 +543,8 @@ const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
 const versionDocument = ref<KnowledgeDocumentVO | null>(null)
 const documentChunks = ref<KnowledgeChunkVO[]>([])
 const documentVersions = ref<KnowledgeDocumentVersionVO[]>([])
+const selectedChunkDetail = ref<KnowledgeChunkVO | null>(null)
+const selectedChunkSource = ref<KnowledgeSearchResultVO | null>(null)
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
@@ -520,6 +559,7 @@ const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
 const duplicateReviewVisible = ref(false)
 const versionsDrawerVisible = ref(false)
+const chunkDetailVisible = ref(false)
 const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
@@ -593,6 +633,10 @@ const duplicateReviewThresholdLabel = computed(() => {
   const threshold = duplicateReview.value?.threshold ?? knowledgeConfig.value?.nearDuplicateThreshold
   return typeof threshold === 'number' ? `${Math.round(threshold * 100)}%` : '--'
 })
+
+const chunkDetailTitle = computed(() =>
+  selectedChunkSource.value?.title || `片段 #${selectedChunkDetail.value?.id || '--'}`
+)
 
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
@@ -695,6 +739,18 @@ const loadSimilarChunks = async (chunk: KnowledgeChunkVO) => {
     }
   } finally {
     similarLoadingId.value = null
+  }
+}
+
+const openChunkDetail = async (item: KnowledgeSearchResultVO) => {
+  if (!item.chunkId) return
+  chunkDetailVisible.value = true
+  selectedChunkSource.value = item
+  chunkDetailLoadingId.value = item.chunkId
+  try {
+    selectedChunkDetail.value = await getKnowledgeChunkApi(item.chunkId)
+  } finally {
+    chunkDetailLoadingId.value = null
   }
 }
 
