@@ -13,17 +13,32 @@
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
           <el-form-item label="关键词"><el-input v-model.trim="query.keyword" clearable placeholder="标题 / 内容" /></el-form-item>
-          <el-form-item label="类型"><el-input v-model.trim="query.type" clearable placeholder="SYSTEM" /></el-form-item>
+          <el-form-item label="类型">
+            <el-select v-model="query.type" clearable filterable placeholder="全部类型" style="width: 180px">
+              <el-option
+                v-for="option in notificationTypeOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item><el-button type="primary" @click="handleSearch">查询</el-button><el-button @click="handleReset">重置</el-button></el-form-item>
         </el-form>
       </div>
       <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="notices" row-key="id">
           <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="type" label="类型" width="120" />
+          <el-table-column label="类型" width="130">
+            <template #default="{ row }">
+              <el-tag effect="plain">{{ formatNotificationType(row.type) }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="目标" width="140"><template #default="{ row }">{{ row.targetType || 'ALL' }}{{ row.targetUserId ? ` #${row.targetUserId}` : '' }}</template></el-table-column>
           <el-table-column prop="content" label="内容" min-width="280" show-overflow-tooltip />
-          <el-table-column prop="createdAt" label="创建时间" min-width="170" />
+          <el-table-column label="创建时间" min-width="170">
+            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button link type="danger" @click="handleDelete(row)">删除</el-button></template></el-table-column>
         </el-table>
       </div>
@@ -35,7 +50,16 @@
     <el-dialog v-model="dialogVisible" title="发送通知" width="620px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="标题" prop="title"><el-input v-model.trim="form.title" /></el-form-item>
-        <el-form-item label="类型" prop="type"><el-input v-model.trim="form.type" placeholder="SYSTEM / INTERVIEW / TASK" /></el-form-item>
+        <el-form-item label="类型" prop="type">
+          <el-select v-model="form.type" filterable placeholder="请选择通知类型" style="width: 100%">
+            <el-option
+              v-for="option in notificationTypeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="目标" prop="targetType">
           <el-radio-group v-model="form.targetType"><el-radio-button label="ALL">全员广播</el-radio-button><el-radio-button label="USER">指定用户</el-radio-button></el-radio-group>
         </el-form-item>
@@ -55,6 +79,7 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { broadcastAdminNotificationApi, deleteAdminNotificationApi, getAdminNotificationsApi, sendAdminNotificationApi } from '@/api/adminGovernance'
 import type { AdminListQuery, AdminNotificationVO, NotificationSendDTO } from '@/types/adminGovernance'
+import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -62,6 +87,7 @@ const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const notices = ref<AdminNotificationVO[]>([])
 const total = ref(0)
+const notificationTypeOptions = Object.entries(notificationTypeLabels).map(([value, label]) => ({ value, label }))
 const query = reactive<AdminListQuery>({ keyword: '', type: '', pageNo: 1, pageSize: 10 })
 const form = reactive<NotificationSendDTO>({ title: '', content: '', type: 'SYSTEM', targetType: 'ALL', targetUserId: undefined })
 const rules: FormRules<NotificationSendDTO> = {

@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { AxiosError } from 'axios'
+import { formatDateTime } from '@/utils/format'
 
 export interface NotificationVO {
   id: number
@@ -52,6 +53,7 @@ const normalizeNotification = (item: BackendNotificationVO): NotificationVO => (
   ...item,
   type: item.type || item.bizType || 'SYSTEM',
   isRead: item.isRead ?? normalizeReadFlag(item.readStatus),
+  createdAt: formatDateTime(item.createdAt),
   relatedId: item.relatedId ?? item.bizId,
   relatedType: normalizeRelatedType(item.relatedType ?? item.bizType)
 })

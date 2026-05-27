@@ -29,10 +29,12 @@
           <el-radio-button :value="1">已读</el-radio-button>
         </el-radio-group>
         <el-select v-model="query.type" clearable placeholder="通知类型" style="width: 160px" @change="handleFilter">
-          <el-option label="报告完成" value="REPORT_DONE" />
-          <el-option label="解析完成" value="PARSE_DONE" />
-          <el-option label="任务提醒" value="TASK_REMIND" />
-          <el-option label="系统公告" value="ANNOUNCEMENT" />
+          <el-option
+            v-for="option in notificationTypeOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
         </el-select>
       </div>
 
@@ -64,7 +66,7 @@
               <el-tag size="small" effect="plain">{{ typeLabel(item.type) }}</el-tag>
             </div>
             <p v-if="item.content">{{ item.content }}</p>
-            <span class="notification-time">{{ item.createdAt }}</span>
+            <span class="notification-time">{{ formatDateTime(item.createdAt) }}</span>
           </div>
         </article>
       </div>
@@ -90,7 +92,7 @@
       <div v-if="selectedNotification" class="notification-detail">
         <div class="detail-meta">
           <el-tag effect="plain">{{ typeLabel(selectedNotification.type) }}</el-tag>
-          <span>{{ selectedNotification.createdAt || '--' }}</span>
+          <span>{{ formatDateTime(selectedNotification.createdAt) }}</span>
         </div>
         <p class="detail-content">{{ selectedNotification.content || '这条通知暂无正文内容。' }}</p>
         <el-alert
@@ -138,6 +140,7 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
+import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 
 const router = useRouter()
 const loading = ref(false)
@@ -156,16 +159,9 @@ const query = reactive<NotificationQueryDTO>({
   type: ''
 })
 
-const typeLabels: Record<string, string> = {
-  REPORT_DONE: '报告完成',
-  PARSE_DONE: '解析完成',
-  TASK_REMIND: '任务提醒',
-  ANNOUNCEMENT: '系统公告',
-  STUDY_PLAN: '学习计划',
-  AI_REVIEW: 'AI 审核'
-}
+const notificationTypeOptions = Object.entries(notificationTypeLabels).map(([value, label]) => ({ value, label }))
 
-const typeLabel = (type: string) => typeLabels[type] || type || '通知'
+const typeLabel = formatNotificationType
 
 const pickRelatedId = (item?: NotificationVO) => {
   const value = item?.relatedId ?? item?.bizId

@@ -16,6 +16,7 @@ import type {
   RoleMenuGrantDTO,
   SlowSqlLogVO
 } from '@/types/adminGovernance'
+import { formatDateTime } from '@/utils/format'
 import { normalizePageResult } from '@/utils/page'
 
 const normalizeId = (item: any) => Number(item.id || item.menuId || item.roleId || item.reportId || item.interviewId || 0)
@@ -69,8 +70,8 @@ const normalizeNotice = (item: any): AdminNotificationVO => ({
   type: pick(item, 'type', 'bizType', 'biz_type') || 'SYSTEM',
   targetType: pick(item, 'targetType', 'target_type') || (pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id') ? 'USER' : 'ALL'),
   targetUserId: pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id'),
-  createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
-  publishedAt: pick(item, 'publishedAt', 'publishTime', 'published_at')
+  createdAt: formatDateTime(pick(item, 'createdAt', 'createTime', 'created_at')),
+  publishedAt: formatDateTime(pick(item, 'publishedAt', 'publishTime', 'published_at'))
 })
 
 const normalizeOperationLog = (item: any): OperationLogVO => ({

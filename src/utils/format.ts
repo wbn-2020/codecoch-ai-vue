@@ -1,8 +1,46 @@
 import type { SelectOption } from '@/types/common'
 
-export const formatDateTime = (value?: string | null): string => value || '-'
-
 const padDatePart = (value: number): string => String(value).padStart(2, '0')
+
+export const formatDateTime = (value?: string | number | null): string => {
+  if (!value) return '-'
+
+  const normalized = String(value).trim()
+  const localDateTime = normalized.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/)
+  if (localDateTime) {
+    return `${localDateTime[1]} ${localDateTime[2]}`
+  }
+
+  const date = new Date(normalized)
+  if (!Number.isNaN(date.getTime())) {
+    return formatLocalDateTime(date)
+  }
+
+  return normalized
+    .replace('T', ' ')
+    .replace(/\.\d+(?=Z|[+-]\d{2}:?\d{2}$|$)/, '')
+    .replace(/([+-]\d{2}:?\d{2}|Z)$/, '')
+}
+
+export const notificationTypeLabels: Record<string, string> = {
+  SYSTEM: '系统通知',
+  ANNOUNCEMENT: '系统公告',
+  REPORT_DONE: '报告完成',
+  TASK_DONE: '任务完成',
+  TASK_FAILED: '任务失败',
+  TASK_REMIND: '任务提醒',
+  PLAN_READY: '计划已生成',
+  PARSE_DONE: '解析完成',
+  REVIEW_RESULT: '审核结果',
+  SECURITY: '安全提醒',
+  AI_REVIEW: 'AI 审核',
+  STUDY_PLAN: '学习计划'
+}
+
+export const formatNotificationType = (type?: string | null): string => {
+  if (!type) return '通知'
+  return notificationTypeLabels[type] || type
+}
 
 export const formatLocalDate = (value: Date = new Date()): string => {
   const year = value.getFullYear()
