@@ -443,6 +443,16 @@
               >
                 查看片段
               </el-button>
+              <el-button
+                v-if="item.chunkId"
+                link
+                size="small"
+                type="danger"
+                :loading="deletingChunkId === item.chunkId"
+                @click="handleDeleteDuplicateReviewChunk(item)"
+              >
+                删除候选
+              </el-button>
             </div>
             <p>{{ item.snippet || '--' }}</p>
             <div class="similar-list">
@@ -1023,14 +1033,18 @@ const openExactDuplicateChunk = async (chunk: KnowledgeChunkVO) => {
   })
 }
 
+const refreshDuplicateReview = async () => {
+  duplicateReview.value = await getKnowledgeDuplicateReviewApi({
+    limit: 20,
+    threshold: normalizedDuplicateThreshold.value
+  })
+}
+
 const loadDuplicateReview = async () => {
   duplicateReviewVisible.value = true
   duplicateReviewLoading.value = true
   try {
-    duplicateReview.value = await getKnowledgeDuplicateReviewApi({
-      limit: 20,
-      threshold: normalizedDuplicateThreshold.value
-    })
+    await refreshDuplicateReview()
     if (!duplicateReview.value?.vectorEnabled) {
       ElMessage.warning('向量库未启用，无法扫描近重复片段')
     } else if (!duplicateReview.value?.candidateCount) {
@@ -1038,6 +1052,30 @@ const loadDuplicateReview = async () => {
     }
   } finally {
     duplicateReviewLoading.value = false
+  }
+}
+
+const handleDeleteDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewItemVO) => {
+  if (!item.chunkId) return
+  await ElMessageBox.confirm(
+    `确认删除近重复候选片段 #${(item.chunkIndex ?? 0) + 1}？删除后会同步清理对应向量索引。`,
+    '删除近重复候选',
+    { type: 'warning' }
+  )
+  deletingChunkId.value = item.chunkId
+  try {
+    await deleteKnowledgeChunkApi(item.chunkId)
+    ElMessage.success('近重复候选已删除')
+    similarChunkMap.value = {}
+    if (selectedChunkDetail.value?.id === item.chunkId) {
+      selectedChunkDetail.value = null
+      selectedChunkSource.value = null
+      chunkDetailVisible.value = false
+    }
+    await refreshDuplicateReview()
+    await loadDocuments()
+  } finally {
+    deletingChunkId.value = null
   }
 }
 
