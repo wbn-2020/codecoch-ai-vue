@@ -302,6 +302,11 @@ export const getKnowledgeDocumentDetailApi = (id: number) =>
 export const getKnowledgeDocumentChunksApi = (id: number) =>
   request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
 
+export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
+  request
+    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: { limit } })
+    .then((data) => data || [])
+
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
 

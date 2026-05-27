@@ -298,9 +298,25 @@
               <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
               <el-tag v-if="chunk.duplicateInDocument" size="small" type="warning" effect="light">重复</el-tag>
               <span>{{ chunk.sourceRef || '--' }}</span>
+              <el-button
+                link
+                size="small"
+                type="primary"
+                :loading="similarLoadingId === chunk.id"
+                @click="loadSimilarChunks(chunk)"
+              >
+                相似
+              </el-button>
             </div>
             <p>{{ chunk.content || '--' }}</p>
             <small>{{ shortHash(chunk.chunkHash) }}</small>
+            <div v-if="similarChunkMap[chunk.id]?.length" class="similar-list">
+              <article v-for="item in similarChunkMap[chunk.id]" :key="`${chunk.id}-${resultKey(item)}`">
+                <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+                <span>{{ scoreLabel(item.score) }} · {{ item.sourceRef || item.documentType || '--' }}</span>
+                <p>{{ item.snippet || '--' }}</p>
+              </article>
+            </div>
           </article>
           <el-empty v-if="!documentChunks.length && !chunksLoading" description="暂无片段" />
         </div>
@@ -320,6 +336,7 @@ import {
   deleteKnowledgeDocumentApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentsApi,
+  getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
@@ -339,6 +356,7 @@ const saving = ref(false)
 const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
+const similarLoadingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
@@ -347,6 +365,7 @@ const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
 const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
 const documentChunks = ref<KnowledgeChunkVO[]>([])
+const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const answer = ref('')
 const total = ref(0)
@@ -463,10 +482,29 @@ const openChunksDrawer = async (row: KnowledgeDocumentVO) => {
   selectedDocument.value = row
   chunksDrawerVisible.value = true
   chunksLoading.value = true
+  similarChunkMap.value = {}
   try {
     documentChunks.value = await getKnowledgeDocumentChunksApi(row.id)
   } finally {
     chunksLoading.value = false
+  }
+}
+
+const loadSimilarChunks = async (chunk: KnowledgeChunkVO) => {
+  if (!chunk.id) return
+  if (similarChunkMap.value[chunk.id]?.length) {
+    similarChunkMap.value = { ...similarChunkMap.value, [chunk.id]: [] }
+    return
+  }
+  similarLoadingId.value = chunk.id
+  try {
+    const result = await getKnowledgeSimilarChunksApi(chunk.id, 5)
+    similarChunkMap.value = { ...similarChunkMap.value, [chunk.id]: result }
+    if (!result.length) {
+      ElMessage.info('暂未找到相似片段')
+    }
+  } finally {
+    similarLoadingId.value = null
   }
 }
 
@@ -801,6 +839,38 @@ onMounted(loadDocuments)
   color: var(--app-text-muted);
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.similar-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.similar-list article {
+  padding: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.similar-list strong,
+.similar-list span {
+  display: block;
+}
+
+.similar-list strong {
+  color: var(--app-text);
+}
+
+.similar-list span {
+  margin-top: 4px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.similar-list p {
+  margin-bottom: 0;
 }
 
 .summary-grid {
