@@ -25,6 +25,10 @@
         <span>检索模式</span>
         <strong>向量优先</strong>
       </article>
+      <article class="summary-item">
+        <span>切分策略</span>
+        <strong>语义切分</strong>
+      </article>
     </section>
 
     <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
@@ -51,7 +55,7 @@
               <el-table-column prop="chunkCount" label="片段" width="100" />
               <el-table-column label="状态" width="120">
                 <template #default="{ row }">
-                  <el-tag :type="statusType(row.status)" effect="light">{{ row.status || 'INDEXED' }}</el-tag>
+                  <el-tag :type="statusType(row.status)" effect="light">{{ statusLabel(row.status) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="更新时间" width="180">
@@ -191,6 +195,7 @@
         </el-form-item>
         <el-form-item label="内容" required>
           <el-input v-model="form.content" type="textarea" :rows="10" maxlength="10000" show-word-limit />
+          <small class="form-help">保存后会优先按标题、段落和代码块切成语义片段，再写入个人向量索引。</small>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -327,13 +332,13 @@ const createDocument = async () => {
   }
   saving.value = true
   try {
-    await createKnowledgeDocumentApi({
+    const result = await createKnowledgeDocumentApi({
       title: form.title,
       documentType: form.documentType || 'NOTE',
       content: form.content
     })
     dialogVisible.value = false
-    ElMessage.success('资料已索引')
+    ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个语义片段`)
     await loadDocuments()
   } finally {
     saving.value = false
@@ -378,6 +383,14 @@ const statusType = (status?: string) => {
   if (status === 'INDEXED') return 'success'
   if (status?.includes('FAIL')) return 'danger'
   return 'info'
+}
+
+const statusLabel = (status?: string) => {
+  const value = status || 'INDEXED'
+  const map: Record<string, string> = {
+    INDEXED: '已索引'
+  }
+  return map[value] || value
 }
 
 onMounted(loadDocuments)
@@ -439,7 +452,7 @@ onMounted(loadDocuments)
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .summary-item {
@@ -452,9 +465,16 @@ onMounted(loadDocuments)
 .summary-item span,
 .reference-row small,
 .result-meta small,
-.answer-box span {
+.answer-box span,
+.form-help {
   color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.form-help {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.6;
 }
 
 .summary-item strong {
@@ -586,6 +606,10 @@ onMounted(loadDocuments)
 @media (max-width: 1120px) {
   .workspace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
