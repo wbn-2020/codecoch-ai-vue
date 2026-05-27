@@ -433,6 +433,16 @@
               <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
               <el-tag size="small" type="warning" effect="light">{{ scoreLabel(item.topScore) }}</el-tag>
               <small>#{{ (item.chunkIndex ?? 0) + 1 }} · {{ item.sourceRef || item.documentType || '--' }}</small>
+              <el-button
+                v-if="item.chunkId"
+                link
+                size="small"
+                type="primary"
+                :loading="chunkDetailLoadingId === item.chunkId"
+                @click="openDuplicateReviewChunk(item)"
+              >
+                查看片段
+              </el-button>
             </div>
             <p>{{ item.snippet || '--' }}</p>
             <div class="similar-list">
@@ -440,6 +450,16 @@
                 <strong>{{ match.title || `资料 #${match.documentId || '--'}` }}</strong>
                 <span>{{ scoreLabel(match.score) }} · {{ match.sourceRef || match.documentType || '--' }}</span>
                 <p>{{ match.snippet || '--' }}</p>
+                <el-button
+                  v-if="match.chunkId"
+                  link
+                  size="small"
+                  type="primary"
+                  :loading="chunkDetailLoadingId === match.chunkId"
+                  @click="openChunkDetail(match)"
+                >
+                  查看片段
+                </el-button>
               </article>
             </div>
           </article>
@@ -964,6 +984,20 @@ const openChunkDetail = async (item: KnowledgeSearchResultVO) => {
   }
 }
 
+const openDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewItemVO) => {
+  if (!item.chunkId) return
+  await openChunkDetail({
+    documentId: item.documentId,
+    chunkId: item.chunkId,
+    title: item.title,
+    documentType: item.documentType,
+    snippet: item.snippet,
+    sourceRef: item.sourceRef,
+    score: item.topScore,
+    matchType: 'DUPLICATE_REVIEW'
+  })
+}
+
 const loadDuplicateReview = async () => {
   duplicateReviewVisible.value = true
   duplicateReviewLoading.value = true
@@ -1486,6 +1520,10 @@ onMounted(loadDocuments)
 
 .similar-list p {
   margin-bottom: 0;
+}
+
+.similar-list .el-button {
+  margin-top: 6px;
 }
 
 .summary-grid {
