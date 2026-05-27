@@ -151,7 +151,10 @@
                     <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
                     <el-tag size="small" effect="plain">{{ matchLabel(item.matchType) }}</el-tag>
                   </div>
-                  <p>{{ item.snippet || '--' }}</p>
+                  <p v-html="highlightSnippet(item)"></p>
+                  <div v-if="item.matchedTerms?.length" class="matched-terms">
+                    <el-tag v-for="term in item.matchedTerms" :key="term" size="small" effect="plain">{{ term }}</el-tag>
+                  </div>
                 </div>
                 <div class="result-meta">
                   <span>{{ scoreLabel(item.score) }}</span>
@@ -584,6 +587,21 @@ const scoreLabel = (score?: number) => {
   return `${Math.round(score * 100)}%`
 }
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const highlightSnippet = (item: KnowledgeSearchResultVO) => {
+  const value = item.highlightedSnippet || item.snippet || '--'
+  return escapeHtml(value)
+    .replace(/\[\[H\]\]/g, '<mark>')
+    .replace(/\[\[\/H\]\]/g, '</mark>')
+}
+
 const shortHash = (hash?: string) => {
   if (!hash) return '--'
   return hash.length > 16 ? `${hash.slice(0, 8)}...${hash.slice(-6)}` : hash
@@ -879,6 +897,20 @@ onMounted(loadDocuments)
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.result-row p :deep(mark) {
+  padding: 0 3px;
+  border-radius: 4px;
+  color: #fef3c7;
+  background: rgba(245, 158, 11, 0.28);
+}
+
+.matched-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .result-meta {

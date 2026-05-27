@@ -179,6 +179,8 @@ export interface KnowledgeSearchResultVO {
   title?: string
   documentType?: string
   snippet?: string
+  highlightedSnippet?: string
+  matchedTerms?: string[]
   sourceRef?: string
   score?: number
   matchType?: string
