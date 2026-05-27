@@ -422,10 +422,10 @@ export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
     params: documentId ? { documentId } : undefined
   })
 
-export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentType?: string }) =>
+export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
 
-export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number; documentType?: string }) =>
+export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)

@@ -223,6 +223,11 @@
                   <el-option v-for="type in documentTypeOptions" :key="`search-${type}`" :label="type" :value="type" />
                 </el-select>
               </el-form-item>
+              <el-form-item label="资料">
+                <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料" style="width: 220px">
+                  <el-option v-for="item in allDocuments" :key="`search-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
+                </el-select>
+              </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
               </el-form-item>
@@ -284,6 +289,11 @@
               <el-form-item label="资料类型范围">
                 <el-select v-model="knowledgeScopeType" clearable filterable placeholder="全部类型">
                   <el-option v-for="type in documentTypeOptions" :key="`ask-${type}`" :label="type" :value="type" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="资料范围">
+                <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料">
+                  <el-option v-for="item in allDocuments" :key="`ask-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
                 </el-select>
               </el-form-item>
             </el-form>
@@ -657,6 +667,7 @@ const keyword = ref('')
 const question = ref('')
 const limit = ref(10)
 const knowledgeScopeType = ref('')
+const knowledgeScopeDocumentId = ref<number | undefined>()
 const searchMinScorePercent = ref<number | null>(null)
 const askMinScorePercent = ref<number | null>(null)
 const duplicateThresholdPercent = ref<number | null>(null)
@@ -848,6 +859,7 @@ const handleSearch = async () => {
       keyword: keyword.value,
       limit: limit.value,
       minScore: normalizedSearchMinScore.value,
+      documentId: knowledgeScopeDocumentId.value,
       documentType: knowledgeScopeType.value || undefined
     })
   } finally {
@@ -872,6 +884,7 @@ const handleAsk = async () => {
       question: question.value.trim(),
       limit: Math.min(limit.value || 5, 10),
       minScore: normalizedAskMinScore.value,
+      documentId: knowledgeScopeDocumentId.value,
       documentType: knowledgeScopeType.value || undefined
     })
     answer.value = result.answer || ''
