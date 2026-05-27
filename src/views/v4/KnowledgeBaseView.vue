@@ -126,6 +126,15 @@
                   <el-button
                     link
                     type="primary"
+                    :icon="Files"
+                    :loading="versionsLoadingId === row.id"
+                    @click="openVersionsDrawer(row)"
+                  >
+                    历史
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
                     :icon="Refresh"
                     :loading="rebuilding"
                     @click="handleRebuildVectors(row.id, row.title)"
@@ -409,6 +418,24 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="versionsDrawerVisible" size="760px" :title="versionDocument?.title || '版本历史'">
+      <div class="version-drawer" v-loading="versionsLoadingId === versionDocument?.id">
+        <div class="version-list">
+          <article v-for="item in documentVersions" :key="item.id" class="version-row">
+            <div class="version-row__head">
+              <strong>v{{ item.versionNo || 0 }}</strong>
+              <el-tag size="small" effect="plain">{{ item.documentType || 'NOTE' }}</el-tag>
+              <small>{{ item.createdAt || '--' }} · {{ item.chunkCount || 0 }} chunks</small>
+            </div>
+            <div class="version-row__title">{{ item.title || '--' }}</div>
+            <p>{{ item.content || '--' }}</p>
+            <small>{{ shortHash(item.contentHash) }}</small>
+          </article>
+          <el-empty v-if="!documentVersions.length && versionsLoadingId !== versionDocument?.id" description="暂无历史版本" />
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -426,6 +453,7 @@ import {
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
+  getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
@@ -436,6 +464,7 @@ import {
   type KnowledgeChunkVO,
   type KnowledgeConfigVO,
   type KnowledgeDocumentVO,
+  type KnowledgeDocumentVersionVO,
   type KnowledgeDuplicateReviewItemVO,
   type KnowledgeDuplicateReviewVO,
   type KnowledgeStatsVO,
@@ -453,6 +482,7 @@ const rebuilding = ref(false)
 const chunksLoading = ref(false)
 const duplicateReviewLoading = ref(false)
 const editingLoadingId = ref<number | null>(null)
+const versionsLoadingId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
@@ -462,7 +492,9 @@ const documents = ref<KnowledgeDocumentVO[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
 const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
+const versionDocument = ref<KnowledgeDocumentVO | null>(null)
 const documentChunks = ref<KnowledgeChunkVO[]>([])
+const documentVersions = ref<KnowledgeDocumentVersionVO[]>([])
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
@@ -476,6 +508,7 @@ const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
 const duplicateReviewVisible = ref(false)
+const versionsDrawerVisible = ref(false)
 const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
@@ -713,6 +746,17 @@ const openEdit = async (row: KnowledgeDocumentVO) => {
     dialogVisible.value = true
   } finally {
     editingLoadingId.value = null
+  }
+}
+
+const openVersionsDrawer = async (row: KnowledgeDocumentVO) => {
+  versionDocument.value = row
+  versionsDrawerVisible.value = true
+  versionsLoadingId.value = row.id
+  try {
+    documentVersions.value = await getKnowledgeDocumentVersionsApi(row.id)
+  } finally {
+    versionsLoadingId.value = null
   }
 }
 
@@ -988,7 +1032,9 @@ onMounted(loadDocuments)
 .chunk-drawer,
 .chunk-list,
 .duplicate-review-drawer,
-.duplicate-review-list {
+.duplicate-review-list,
+.version-drawer,
+.version-list {
   display: grid;
   gap: 14px;
 }
@@ -1001,7 +1047,8 @@ onMounted(loadDocuments)
 
 .chunk-summary article,
 .chunk-row,
-.duplicate-review-row {
+.duplicate-review-row,
+.version-row {
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.42);
@@ -1014,6 +1061,7 @@ onMounted(loadDocuments)
 .chunk-summary span,
 .chunk-row small,
 .duplicate-review-row small,
+.version-row small,
 .chunk-row__head span {
   color: var(--app-text-muted);
   font-size: 13px;
@@ -1027,12 +1075,14 @@ onMounted(loadDocuments)
 }
 
 .chunk-row,
-.duplicate-review-row {
+.duplicate-review-row,
+.version-row {
   padding: 14px;
 }
 
 .chunk-row__head,
-.duplicate-review-row__head {
+.duplicate-review-row__head,
+.version-row__head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1040,16 +1090,29 @@ onMounted(loadDocuments)
 }
 
 .chunk-row__head strong,
-.duplicate-review-row__head strong {
+.duplicate-review-row__head strong,
+.version-row__head strong,
+.version-row__title {
   color: var(--app-text);
 }
 
 .chunk-row p,
-.duplicate-review-row p {
+.duplicate-review-row p,
+.version-row p {
   margin: 10px 0 8px;
   color: var(--app-text-muted);
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.version-row__title {
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+.version-row p {
+  max-height: 180px;
+  overflow: auto;
 }
 
 .similar-list {

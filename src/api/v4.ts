@@ -148,6 +148,19 @@ export interface KnowledgeDocumentVO {
   updatedAt?: string
 }
 
+export interface KnowledgeDocumentVersionVO {
+  id: number
+  documentId?: number
+  versionNo?: number
+  title?: string
+  documentType?: string
+  content?: string
+  contentHash?: string
+  chunkCount?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface KnowledgeDocumentCreateDTO {
   title: string
   documentType?: string
@@ -342,6 +355,11 @@ export const getKnowledgeConfigApi = () =>
 
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
+
+export const getKnowledgeDocumentVersionsApi = (id: number) =>
+  request
+    .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
+    .then((data) => data || [])
 
 export const getKnowledgeDocumentChunksApi = (id: number) =>
   request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
