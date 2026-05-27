@@ -363,6 +363,29 @@
         </el-tab-pane>
 
         <el-tab-pane v-if="showDuplicatesPane" label="重复题审核" name="duplicates">
+          <div class="duplicate-config-panel" v-loading="duplicateConfigLoading">
+            <div class="duplicate-config-panel__head">
+              <div>
+                <strong>当前去重参数</strong>
+                <span>规则判重、语义召回和候选池配置</span>
+              </div>
+              <el-button link type="primary" @click="fetchDuplicateConfig">刷新</el-button>
+            </div>
+            <div v-if="duplicateConfigItems.length" class="duplicate-config-grid">
+              <div v-for="item in duplicateConfigItems" :key="item.label" class="duplicate-config-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.hint }}</small>
+              </div>
+            </div>
+            <el-alert
+              v-else
+              type="info"
+              :closable="false"
+              show-icon
+              title="暂未加载到去重参数，审核和处理功能仍可继续使用。"
+            />
+          </div>
           <div class="admin-filter-bar governance-filter">
             <el-form :model="duplicateQuery" inline>
               <el-form-item label="关键词">
@@ -785,6 +808,7 @@ import {
   updateAdminQuestionApi,
   updateAdminQuestionStatusApi
 } from '@/api/question'
+import { getQuestionDuplicateConfigApi } from '@/api/analytics'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
@@ -815,6 +839,7 @@ import type {
   QuestionReviewQueryDTO,
   QuestionTagVO
 } from '@/types/question'
+import type { QuestionDuplicateConfigVO } from '@/types/analytics'
 
 type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
 
@@ -844,6 +869,7 @@ const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
 const duplicateDetailLoading = ref(false)
+const duplicateConfigLoading = ref(false)
 const generating = ref(false)
 const batchReviewProcessing = ref(false)
 const reviewDetailLoading = ref(false)
@@ -857,6 +883,7 @@ const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
 const duplicateDetail = ref<QuestionDuplicateReviewDetailVO | null>(null)
+const duplicateConfig = ref<QuestionDuplicateConfigVO | null>(null)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
@@ -970,6 +997,27 @@ const governancePageDesc = computed(() => {
   return '处理疑似重复题的合并和忽略，保持题库质量。'
 })
 
+const formatDuplicateConfigValue = (value?: number) => {
+  if (value === undefined || value === null) return '-'
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '-'
+  return numeric % 1 === 0 ? String(numeric) : numeric.toFixed(2)
+}
+
+const duplicateConfigItems = computed(() => {
+  const config = duplicateConfig.value
+  if (!config) return []
+  return [
+    { label: '语义命中阈值', value: formatDuplicateConfigValue(config.semanticSimilarityThreshold), hint: '向量召回进入语义判重的最低分' },
+    { label: '标题 Jaccard', value: formatDuplicateConfigValue(config.titleJaccardThreshold), hint: '标题词集合相似度规则阈值' },
+    { label: '标题编辑距离', value: formatDuplicateConfigValue(config.titleLevenshteinThreshold), hint: '标题 Levenshtein 相似度阈值' },
+    { label: '内容相似度', value: formatDuplicateConfigValue(config.contentSimilarityThreshold), hint: '题干内容规则命中阈值' },
+    { label: '向量/文本权重', value: `${formatDuplicateConfigValue(config.semanticVectorWeight)} / ${formatDuplicateConfigValue(config.semanticTextWeight)}`, hint: '语义最终分的加权比例' },
+    { label: '向量召回数', value: formatDuplicateConfigValue(config.vectorSearchLimit), hint: '每题向量库候选召回规模' },
+    { label: '规则候选池', value: formatDuplicateConfigValue(config.maxRuleCandidateCount), hint: '规则侧最多比较的候选数' },
+    { label: '批量检测上限', value: formatDuplicateConfigValue(config.maxBatchCheckCount), hint: '单次管理端检测题目数' }
+  ]
+})
 const getDifficultyLabel = (value?: QuestionDifficulty) => {
   if (value === QUESTION_DIFFICULTY.EASY) return '简单'
   if (value === QUESTION_DIFFICULTY.MEDIUM) return '中等'
@@ -1213,6 +1261,16 @@ const openReviewDrawer = async (id: number) => {
   }
 }
 
+const fetchDuplicateConfig = async () => {
+  duplicateConfigLoading.value = true
+  try {
+    duplicateConfig.value = await getQuestionDuplicateConfigApi()
+  } catch {
+    duplicateConfig.value = null
+  } finally {
+    duplicateConfigLoading.value = false
+  }
+}
 const openDuplicateDrawer = async (id: number) => {
   duplicateDrawerVisible.value = true
   duplicateDetailLoading.value = true
@@ -1773,7 +1831,7 @@ const handleDownloadTemplate = async () => {
 
 onMounted(async () => {
   await fetchOptions()
-  await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates()])
+  await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates(), fetchDuplicateConfig()])
 })
 
 watch(
