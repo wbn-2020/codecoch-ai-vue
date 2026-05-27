@@ -193,6 +193,9 @@
               <el-form-item label="数量">
                 <el-input-number v-model="limit" :min="1" :max="50" controls-position="right" />
               </el-form-item>
+              <el-form-item label="最低分">
+                <el-input-number v-model="searchMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
+              </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
               </el-form-item>
@@ -606,6 +609,7 @@ const total = ref(0)
 const keyword = ref('')
 const question = ref('')
 const limit = ref(10)
+const searchMinScorePercent = ref<number | null>(null)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
@@ -696,6 +700,11 @@ const chunkDetailTitle = computed(() =>
   selectedChunkSource.value?.title || `片段 #${selectedChunkDetail.value?.id || '--'}`
 )
 
+const normalizedSearchMinScore = computed(() => {
+  if (searchMinScorePercent.value === null || searchMinScorePercent.value === undefined) return undefined
+  return Math.min(Math.max(searchMinScorePercent.value, 0), 100) / 100
+})
+
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
 )
@@ -747,7 +756,11 @@ const handleSearch = async () => {
   }
   searching.value = true
   try {
-    searchResults.value = await searchKnowledgeApi({ keyword: keyword.value, limit: limit.value })
+    searchResults.value = await searchKnowledgeApi({
+      keyword: keyword.value,
+      limit: limit.value,
+      minScore: normalizedSearchMinScore.value
+    })
   } finally {
     searching.value = false
   }

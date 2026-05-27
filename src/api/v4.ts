@@ -417,7 +417,7 @@ export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
     params: documentId ? { documentId } : undefined
   })
 
-export const searchKnowledgeApi = (params: { keyword: string; limit?: number }) =>
+export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number }) =>
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
