@@ -156,6 +156,16 @@ export interface KnowledgeSearchResultVO {
   documentType?: string
   snippet?: string
   sourceRef?: string
+  score?: number
+  matchType?: string
+}
+
+export interface KnowledgeAskVO {
+  question?: string
+  answer?: string
+  references?: KnowledgeSearchResultVO[]
+  aiCallLogId?: number
+  generatedAt?: string
 }
 
 export const generateAgentReviewApi = (data?: { targetJobId?: number; date?: string }) =>
@@ -245,3 +255,6 @@ export const searchKnowledgeApi = (params: { keyword: string; limit?: number }) 
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
+
+export const askKnowledgeApi = (data: { question: string; limit?: number }) =>
+  request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)
