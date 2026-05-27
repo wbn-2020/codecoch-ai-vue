@@ -388,6 +388,24 @@
               <el-table-column label="相似度" width="100">
                 <template #default="{ row }">{{ formatSimilarity(row.similarityScore) }}</template>
               </el-table-column>
+              <el-table-column label="语义评分" min-width="210">
+                <template #default="{ row }">
+                  <div class="duplicate-score-parts">
+                    <el-tag
+                      v-for="item in parseDuplicateScoreParts(row.matchReason)"
+                      :key="`${row.id}-${item.label}`"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ item.label }} {{ item.value }}
+                    </el-tag>
+                    <span v-if="!parseDuplicateScoreParts(row.matchReason).length" class="muted-text">-</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="匹配原因" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">{{ formatDuplicateReason(row.matchReason) }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
                   <el-tag :type="getDuplicateStatusType(row.reviewStatus)" effect="plain">
@@ -966,6 +984,7 @@ const getDuplicateStatusType = (status?: string) => {
 }
 
 const getDuplicateMatchTypeLabel = (matchType?: string) => {
+  if (matchType === 'SEMANTIC_SIMILAR') return '语义相似'
   const labels: Record<string, string> = {
     TITLE_EXACT: '标题完全一致',
     TITLE_NORMALIZED_EQUAL: '标题归一后一致',
@@ -981,6 +1000,29 @@ const formatSimilarity = (value?: number) => {
   if (!Number.isFinite(score)) return '-'
   const percent = score > 1 ? score : score * 100
   return `${percent.toFixed(percent >= 99 ? 0 : 2).replace(/\.00$/, '')}%`
+}
+
+const parseDuplicateScoreParts = (reason?: string) => {
+  if (!reason?.includes('semantic vector match')) {
+    return []
+  }
+  const labels: Record<string, string> = {
+    vectorScore: '向量',
+    textScore: '文本',
+    finalScore: '综合'
+  }
+  return ['vectorScore', 'textScore', 'finalScore']
+    .map((key) => {
+      const match = reason.match(new RegExp(`${key}=([0-9.]+)`))
+      return match ? { label: labels[key], value: `${Number(match[1]).toFixed(1).replace(/\.0$/, '')}%` } : null
+    })
+    .filter((item): item is { label: string; value: string } => Boolean(item))
+}
+
+const formatDuplicateReason = (reason?: string) => {
+  if (!reason) return '-'
+  if (reason.includes('semantic vector match')) return '向量召回后综合文本相似度命中'
+  return reason
 }
 
 const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {
@@ -1627,6 +1669,16 @@ onUnmounted(() => {
   padding: 0 0 14px;
   color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.duplicate-score-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.muted-text {
+  color: var(--app-text-muted);
 }
 
 .review-detail-content {
