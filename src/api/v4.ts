@@ -164,6 +164,15 @@ export interface KnowledgeChunkVO {
   updatedAt?: string
 }
 
+export interface KnowledgeStatsVO {
+  documentCount?: number
+  chunkCount?: number
+  duplicateChunkCount?: number
+  vectorEnabled?: boolean
+  retrievalMode?: string
+  chunkStrategy?: string
+}
+
 export interface KnowledgeSearchResultVO {
   documentId?: number
   chunkId?: number
@@ -272,6 +281,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
   request
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
     .then((result) => normalizePageResult(result, params))
+
+export const getKnowledgeStatsApi = () =>
+  request.get<KnowledgeStatsVO, KnowledgeStatsVO>('/agent/knowledge/stats')
 
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)

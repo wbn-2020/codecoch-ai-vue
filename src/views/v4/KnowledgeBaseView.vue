@@ -16,19 +16,19 @@
     <section class="summary-grid">
       <article class="summary-item">
         <span>文档</span>
-        <strong>{{ total }}</strong>
+        <strong>{{ documentTotal }}</strong>
       </article>
       <article class="summary-item">
         <span>片段</span>
         <strong>{{ chunkTotal }}</strong>
       </article>
       <article class="summary-item">
-        <span>检索模式</span>
-        <strong>向量优先</strong>
+        <span>重复片段</span>
+        <strong>{{ duplicateChunkTotal }}</strong>
       </article>
       <article class="summary-item">
-        <span>切分策略</span>
-        <strong>语义切分</strong>
+        <span>{{ retrievalModeLabel }}</span>
+        <strong>{{ chunkStrategyLabel }}</strong>
       </article>
     </section>
 
@@ -308,10 +308,12 @@ import {
   deleteKnowledgeDocumentApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentsApi,
+  getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
   type KnowledgeChunkVO,
   type KnowledgeDocumentVO,
+  type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
 } from '@/api/v4'
@@ -331,6 +333,7 @@ const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
 const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
 const documentChunks = ref<KnowledgeChunkVO[]>([])
+const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const answer = ref('')
 const total = ref(0)
 const keyword = ref('')
@@ -354,8 +357,25 @@ const form = reactive({
 })
 
 const chunkTotal = computed(() =>
-  allDocuments.value.reduce((sum, item) => sum + (Number(item.chunkCount) || 0), 0)
+  knowledgeStats.value?.chunkCount ?? allDocuments.value.reduce((sum, item) => sum + (Number(item.chunkCount) || 0), 0)
 )
+
+const documentTotal = computed(() => knowledgeStats.value?.documentCount ?? total.value)
+
+const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkCount ?? 0)
+
+const retrievalModeLabel = computed(() => {
+  const mode = knowledgeStats.value?.retrievalMode
+  if (mode === 'VECTOR_FIRST') return '向量优先'
+  if (mode === 'KEYWORD_FALLBACK') return '关键词兜底'
+  return knowledgeStats.value?.vectorEnabled ? '向量优先' : '关键词兜底'
+})
+
+const chunkStrategyLabel = computed(() => {
+  const strategy = knowledgeStats.value?.chunkStrategy
+  if (strategy === 'SEMANTIC_BLOCK_800_OVERLAP_80') return '语义分块 800/80'
+  return strategy || '语义分块'
+})
 
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
@@ -380,12 +400,14 @@ const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const page = await getKnowledgeDocumentsApi(query)
+    const [page, stats] = await Promise.all([getKnowledgeDocumentsApi(query), getKnowledgeStatsApi()])
     allDocuments.value = page.records || []
+    knowledgeStats.value = stats || null
     applyDocumentPage()
   } catch (error) {
     allDocuments.value = []
     documents.value = []
+    knowledgeStats.value = null
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
