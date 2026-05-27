@@ -207,6 +207,8 @@ const menuRules = [
   { pattern: /^\/admin\/users\b/, label: '用户管理' },
   { pattern: /^\/admin\/roles\b/, label: '角色管理' },
   { pattern: /^\/admin\/menus\b/, label: '菜单权限' },
+  { pattern: /^\/admin\/question-reviews\b/, label: '题目审核' },
+  { pattern: /^\/admin\/question-duplicate-reviews\b|^\/admin\/questions\/check-duplicate\b/, label: '重复题审核' },
   { pattern: /^\/admin\/question-relations\b/, label: '题目关系' },
   { pattern: /^\/admin\/question-categories\b/, label: '分类管理' },
   { pattern: /^\/admin\/question-tags\b/, label: '标签管理' },
