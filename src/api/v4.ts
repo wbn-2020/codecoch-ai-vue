@@ -277,6 +277,13 @@ export const createApplicationEventApi = (id: number, data: Partial<JobApplicati
 export const createKnowledgeDocumentApi = (data: KnowledgeDocumentCreateDTO) =>
   request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents', data)
 
+export const uploadKnowledgeDocumentApi = (file: File, documentType?: string) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (documentType) formData.append('documentType', documentType)
+  return request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents/upload', formData)
+}
+
 export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number }) =>
   request
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })

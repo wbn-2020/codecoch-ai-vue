@@ -9,6 +9,15 @@
       <div class="hero-actions">
         <el-button :icon="Refresh" :loading="loading" @click="loadDocuments">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
+        <el-upload
+          class="knowledge-upload"
+          accept=".txt,.md,.markdown"
+          :show-file-list="false"
+          :auto-upload="false"
+          :on-change="handleKnowledgeFileChange"
+        >
+          <el-button :icon="Files" :loading="uploading">上传资料</el-button>
+        </el-upload>
         <el-button :icon="Refresh" :loading="rebuilding" @click="handleRebuildVectors">重建向量</el-button>
       </div>
     </section>
@@ -299,7 +308,7 @@
 
 <script setup lang="ts">
 import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -311,6 +320,7 @@ import {
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
   searchKnowledgeApi,
+  uploadKnowledgeDocumentApi,
   type KnowledgeChunkVO,
   type KnowledgeDocumentVO,
   type KnowledgeStatsVO,
@@ -323,6 +333,7 @@ const loading = ref(false)
 const searching = ref(false)
 const asking = ref(false)
 const saving = ref(false)
+const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
 const deletingId = ref<number | null>(null)
@@ -491,6 +502,35 @@ const createDocument = async () => {
   }
 }
 
+const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
+  const file = uploadFile.raw
+  if (!file) return
+  const lowerName = file.name.toLowerCase()
+  const supported = lowerName.endsWith('.txt') || lowerName.endsWith('.md') || lowerName.endsWith('.markdown')
+  if (!supported) {
+    ElMessage.warning('仅支持 .txt / .md / .markdown 文件')
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.warning('文件大小不能超过 2MB')
+    return
+  }
+  uploading.value = true
+  try {
+    const result = await uploadKnowledgeDocumentApi(file, lowerName.endsWith('.txt') ? 'TEXT' : 'MARKDOWN')
+    if (result.duplicateDocument) {
+      ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
+    } else if (result.duplicateChunkCount) {
+      ElMessage.success(`上传完成：生成 ${result.chunkCount || 0} 个片段，跳过 ${result.duplicateChunkCount} 个重复片段`)
+    } else {
+      ElMessage.success(`上传完成：生成 ${result.chunkCount || 0} 个语义片段`)
+    }
+    await loadDocuments()
+  } finally {
+    uploading.value = false
+  }
+}
+
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
   rebuilding.value = true
   rebuildTargetLabel.value = documentTitle ? `资料「${documentTitle}」` : '全部资料'
@@ -618,6 +658,10 @@ onMounted(loadDocuments)
 .hero-actions {
   flex-wrap: wrap;
   align-items: center;
+}
+
+.knowledge-upload {
+  display: inline-flex;
 }
 
 .rebuild-result {
