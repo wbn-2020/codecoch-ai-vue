@@ -225,7 +225,7 @@
               </el-form-item>
               <el-form-item label="资料">
                 <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料" style="width: 220px">
-                  <el-option v-for="item in documentOptions" :key="`search-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
+                  <el-option v-for="item in scopedDocumentOptions" :key="`search-doc-${item.id}`" :label="documentOptionLabel(item)" :value="item.id" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -293,7 +293,7 @@
               </el-form-item>
               <el-form-item label="资料范围">
                 <el-select v-model="knowledgeScopeDocumentId" clearable filterable placeholder="全部资料">
-                  <el-option v-for="item in documentOptions" :key="`ask-doc-${item.id}`" :label="item.title || `#${item.id}`" :value="item.id" />
+                  <el-option v-for="item in scopedDocumentOptions" :key="`ask-doc-${item.id}`" :label="documentOptionLabel(item)" :value="item.id" />
                 </el-select>
               </el-form-item>
             </el-form>
@@ -584,7 +584,7 @@
 <script setup lang="ts">
 import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import {
   askKnowledgeApi,
@@ -751,6 +751,11 @@ const uploadLimitLabel = computed(() => {
 
 const uploadExtensionsLabel = computed(() => knowledgeConfig.value?.uploadExtensions?.join(', ') || '--')
 
+const scopedDocumentOptions = computed(() => {
+  if (!knowledgeScopeType.value) return documentOptions.value
+  return documentOptions.value.filter((item) => item.documentType === knowledgeScopeType.value)
+})
+
 const duplicateReviewItems = computed<KnowledgeDuplicateReviewItemVO[]>(() => duplicateReview.value?.items || [])
 
 const duplicateReviewSummary = computed(() => {
@@ -793,6 +798,19 @@ const getErrorMessage = (error: unknown) => {
   }
   return '接口请求失败'
 }
+
+const documentOptionLabel = (item: KnowledgeDocumentOptionVO) => {
+  const type = item.documentType ? ` · ${item.documentType}` : ''
+  return `${item.title || `#${item.id}`}${type}`
+}
+
+watch([knowledgeScopeType, scopedDocumentOptions], () => {
+  if (!knowledgeScopeDocumentId.value) return
+  const matched = scopedDocumentOptions.value.some((item) => item.id === knowledgeScopeDocumentId.value)
+  if (!matched) {
+    knowledgeScopeDocumentId.value = undefined
+  }
+})
 
 const applyDocumentPage = () => {
   const pageNo = query.pageNo || 1
