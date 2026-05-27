@@ -197,6 +197,7 @@ export interface KnowledgeConfigVO {
   chunkOverlap?: number
   minChunkSize?: number
   nearDuplicateThreshold?: number
+  askMinScore?: number
   uploadMaxBytes?: number
   uploadMaxTextChars?: number
   uploadExtensions?: string[]
@@ -258,6 +259,8 @@ export interface KnowledgeAskVO {
   question?: string
   answer?: string
   references?: KnowledgeSearchResultVO[]
+  insufficientReferences?: boolean
+  minReferenceScore?: number
   aiCallLogId?: number
   generatedAt?: string
 }

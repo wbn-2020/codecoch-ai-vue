@@ -55,7 +55,7 @@
       <article>
         <span>Near Duplicate</span>
         <strong>{{ nearDuplicateThresholdLabel }}</strong>
-        <small>{{ nearDuplicateActionLabel }}</small>
+        <small>ask >= {{ askMinScoreLabel }}</small>
       </article>
       <article>
         <span>Upload</span>
@@ -253,6 +253,13 @@
 
             <div v-if="answer" class="answer-box">
               <span>回答</span>
+              <el-alert
+                v-if="askInsufficientReferences"
+                class="answer-alert"
+                type="warning"
+                :closable="false"
+                title="引用不足，回答仅供参考"
+              />
               <p>{{ answer }}</p>
             </div>
           </div>
@@ -594,6 +601,7 @@ const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
 const duplicateReview = ref<KnowledgeDuplicateReviewVO | null>(null)
 const answer = ref('')
+const askInsufficientReferences = ref(false)
 const total = ref(0)
 const keyword = ref('')
 const question = ref('')
@@ -651,6 +659,11 @@ const chunkConfigLabel = computed(() => {
 const nearDuplicateThresholdLabel = computed(() => {
   const threshold = knowledgeConfig.value?.nearDuplicateThreshold
   return typeof threshold === 'number' ? `${Math.round(threshold * 100)}%` : '--'
+})
+
+const askMinScoreLabel = computed(() => {
+  const score = knowledgeConfig.value?.askMinScore
+  return typeof score === 'number' ? `${Math.round(score * 100)}%` : '--'
 })
 
 const nearDuplicateActionLabel = computed(() => {
@@ -747,10 +760,12 @@ const handleAsk = async () => {
   }
   asking.value = true
   answer.value = ''
+  askInsufficientReferences.value = false
   askReferences.value = []
   try {
     const result = await askKnowledgeApi({ question: question.value.trim(), limit: Math.min(limit.value || 5, 10) })
     answer.value = result.answer || ''
+    askInsufficientReferences.value = !!result.insufficientReferences
     askReferences.value = result.references || []
   } finally {
     asking.value = false
@@ -1033,6 +1048,7 @@ const handleDelete = async (row: KnowledgeDocumentVO) => {
     ElMessage.success('资料已删除')
     searchResults.value = []
     askReferences.value = []
+    askInsufficientReferences.value = false
     answer.value = ''
     await loadDocuments()
   } finally {
@@ -1567,6 +1583,10 @@ onMounted(loadDocuments)
 .answer-box p {
   margin: 8px 0 0;
   white-space: pre-wrap;
+}
+
+.answer-alert {
+  margin-top: 10px;
 }
 
 .reference-row small {
