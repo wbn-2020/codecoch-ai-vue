@@ -209,6 +209,21 @@ export interface UpdateMasteryVO {
   updatedAt: string
 }
 
+export interface QuestionImportErrorVO {
+  rowIndex?: number
+  title?: string
+  reason?: string
+}
+
+export interface QuestionImportResultVO {
+  batchId?: number
+  totalCount?: number
+  successCount?: number
+  failCount?: number
+  duplicateCount?: number
+  duplicateReasonCounts?: Record<string, number>
+  errors?: QuestionImportErrorVO[]
+}
 export interface AdminQuestionQueryDTO extends PageQuery {
   keyword?: string
   categoryId?: number

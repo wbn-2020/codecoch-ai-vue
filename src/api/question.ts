@@ -28,6 +28,7 @@ import type {
   QuestionDuplicateReviewDetailVO,
   QuestionDuplicateReviewListVO,
   QuestionDuplicateReviewQueryDTO,
+  QuestionImportResultVO,
   QuestionQueryDTO,
   QuestionRelationCreateDTO,
   QuestionRelationVO,
@@ -191,7 +192,7 @@ export const deleteAdminQuestionApi = (id: number) => {
 export const importAdminQuestionsApi = (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
-  return request.post<unknown, unknown>('/admin/questions/import', formData, {
+  return request.post<QuestionImportResultVO, QuestionImportResultVO>('/admin/questions/import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }

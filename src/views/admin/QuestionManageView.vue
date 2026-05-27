@@ -1589,12 +1589,33 @@ const handleImportFileChange = (file: { raw: File }) => {
   importFile.value = file.raw
 }
 
+const importDuplicateReasonLabel = (code?: string) => {
+  const labels: Record<string, string> = {
+    FILE_TITLE_DUPLICATE: '文件内重复',
+    BANK_TITLE_DUPLICATE: '题库已有'
+  }
+  return code ? labels[code] || code : '重复'
+}
+
 const handleImport = async () => {
   if (!importFile.value) return
   importing.value = true
   try {
-    await importAdminQuestionsApi(importFile.value)
-    ElMessage.success('导入成功')
+    const result = await importAdminQuestionsApi(importFile.value)
+    const duplicateParts = Object.entries(result.duplicateReasonCounts || {})
+      .filter(([, count]) => Number(count) > 0)
+      .map(([code, count]) => `${importDuplicateReasonLabel(code)} ${count}`)
+    const summary = `导入完成：总数 ${result.totalCount || 0}，成功 ${result.successCount || 0}，失败 ${result.failCount || 0}，重复 ${result.duplicateCount || 0}${duplicateParts.length ? `（${duplicateParts.join('，')}）` : ''}`
+    if (result.errors?.length) {
+      await ElMessageBox.alert(
+        [summary, ...result.errors.slice(0, 8).map((item) => `第 ${item.rowIndex || '-'} 行：${item.title || '-'} - ${importDuplicateReasonLabel(item.reason)}`)]
+          .join('\n'),
+        '导入结果',
+        { type: result.successCount ? 'warning' : 'error' }
+      )
+    } else {
+      ElMessage.success(summary)
+    }
     importDialogVisible.value = false
     importFile.value = null
     fetchQuestions()
