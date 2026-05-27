@@ -492,13 +492,7 @@ const createDocument = async () => {
       content: form.content
     })
     dialogVisible.value = false
-    if (result.duplicateDocument) {
-      ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
-    } else if (result.duplicateChunkCount) {
-      ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个片段，跳过 ${result.duplicateChunkCount} 个重复片段`)
-    } else {
-      ElMessage.success(`资料已索引：生成 ${result.chunkCount || 0} 个语义片段`)
-    }
+    showKnowledgeIndexResult(result, '资料已索引')
     await loadDocuments()
   } finally {
     saving.value = false
@@ -521,13 +515,7 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
   uploading.value = true
   try {
     const result = await uploadKnowledgeDocumentApi(file, documentTypeFromFileName(lowerName))
-    if (result.duplicateDocument) {
-      ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
-    } else if (result.duplicateChunkCount) {
-      ElMessage.success(`上传完成：生成 ${result.chunkCount || 0} 个片段，跳过 ${result.duplicateChunkCount} 个重复片段`)
-    } else {
-      ElMessage.success(`上传完成：生成 ${result.chunkCount || 0} 个语义片段`)
-    }
+    showKnowledgeIndexResult(result, '上传完成')
     await loadDocuments()
   } finally {
     uploading.value = false
@@ -539,6 +527,26 @@ const documentTypeFromFileName = (lowerName: string) => {
   if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) return 'WORD'
   if (lowerName.endsWith('.txt')) return 'TEXT'
   return 'MARKDOWN'
+}
+
+const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: string) => {
+  if (result.duplicateDocument) {
+    ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
+    return
+  }
+  const parts = [`${actionLabel}：生成 ${result.chunkCount || 0} 个片段`]
+  if (result.duplicateChunkCount) {
+    parts.push(`跳过 ${result.duplicateChunkCount} 个完全重复片段`)
+  }
+  if (result.nearDuplicateChunkCount) {
+    parts.push(`${result.nearDuplicateChunkCount} 个片段疑似语义重复`)
+  }
+  const message = parts.join('，')
+  if (result.nearDuplicateChunkCount) {
+    ElMessage.warning(message)
+    return
+  }
+  ElMessage.success(message)
 }
 
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {

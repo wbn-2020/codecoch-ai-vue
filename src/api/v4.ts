@@ -139,6 +139,8 @@ export interface KnowledgeDocumentVO {
   status?: string
   chunkCount?: number
   duplicateChunkCount?: number
+  nearDuplicateChunkCount?: number
+  nearDuplicateThreshold?: number
   duplicateDocumentId?: number
   duplicateDocument?: boolean
   content?: string
