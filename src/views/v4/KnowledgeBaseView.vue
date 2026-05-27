@@ -250,6 +250,11 @@
               show-word-limit
               placeholder="问一个只依赖个人资料回答的问题"
             />
+            <el-form label-position="top" class="ask-options">
+              <el-form-item :label="`引用最低分（默认 ${askMinScoreLabel}）`">
+                <el-input-number v-model="askMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
+              </el-form-item>
+            </el-form>
             <el-button class="ask-button" type="primary" :icon="ChatDotRound" :loading="asking" @click="handleAsk">
               生成回答
             </el-button>
@@ -610,6 +615,7 @@ const keyword = ref('')
 const question = ref('')
 const limit = ref(10)
 const searchMinScorePercent = ref<number | null>(null)
+const askMinScorePercent = ref<number | null>(null)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
@@ -705,6 +711,11 @@ const normalizedSearchMinScore = computed(() => {
   return Math.min(Math.max(searchMinScorePercent.value, 0), 100) / 100
 })
 
+const normalizedAskMinScore = computed(() => {
+  if (askMinScorePercent.value === null || askMinScorePercent.value === undefined) return undefined
+  return Math.min(Math.max(askMinScorePercent.value, 0), 100) / 100
+})
+
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
 )
@@ -776,7 +787,11 @@ const handleAsk = async () => {
   askInsufficientReferences.value = false
   askReferences.value = []
   try {
-    const result = await askKnowledgeApi({ question: question.value.trim(), limit: Math.min(limit.value || 5, 10) })
+    const result = await askKnowledgeApi({
+      question: question.value.trim(),
+      limit: Math.min(limit.value || 5, 10),
+      minScore: normalizedAskMinScore.value
+    })
     answer.value = result.answer || ''
     askInsufficientReferences.value = !!result.insufficientReferences
     askReferences.value = result.references || []
@@ -1582,6 +1597,14 @@ onMounted(loadDocuments)
 .ask-panel {
   display: grid;
   gap: 12px;
+}
+
+.ask-options {
+  margin-bottom: -8px;
+}
+
+.ask-options :deep(.el-form-item) {
+  margin-bottom: 8px;
 }
 
 .ask-button {

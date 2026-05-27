@@ -422,5 +422,5 @@ export const searchKnowledgeApi = (params: { keyword: string; limit?: number; mi
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
 
-export const askKnowledgeApi = (data: { question: string; limit?: number }) =>
+export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number }) =>
   request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)
