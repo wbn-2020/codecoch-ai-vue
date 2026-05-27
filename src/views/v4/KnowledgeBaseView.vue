@@ -64,6 +64,15 @@
       </article>
     </section>
 
+    <section class="duplicate-review-strip">
+      <div>
+        <p class="section-kicker">Dedup Review</p>
+        <strong>{{ duplicateReviewSummary }}</strong>
+        <small>threshold {{ nearDuplicateThresholdLabel }} · scanned {{ duplicateReview?.scannedChunkCount || 0 }}</small>
+      </div>
+      <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
+    </section>
+
     <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadDocuments">重试</el-button>
     </AppState>
@@ -308,6 +317,43 @@
       </template>
     </el-dialog>
 
+    <el-drawer v-model="duplicateReviewVisible" size="760px" title="近重复片段审查">
+      <div class="duplicate-review-drawer" v-loading="duplicateReviewLoading">
+        <div class="chunk-summary">
+          <article>
+            <span>候选</span>
+            <strong>{{ duplicateReview?.candidateCount || 0 }}</strong>
+          </article>
+          <article>
+            <span>扫描</span>
+            <strong>{{ duplicateReview?.scannedChunkCount || 0 }}</strong>
+          </article>
+          <article>
+            <span>阈值</span>
+            <strong>{{ duplicateReviewThresholdLabel }}</strong>
+          </article>
+        </div>
+        <div class="duplicate-review-list">
+          <article v-for="item in duplicateReviewItems" :key="`dup-${item.chunkId}`" class="duplicate-review-row">
+            <div class="duplicate-review-row__head">
+              <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+              <el-tag size="small" type="warning" effect="light">{{ scoreLabel(item.topScore) }}</el-tag>
+              <small>#{{ (item.chunkIndex ?? 0) + 1 }} · {{ item.sourceRef || item.documentType || '--' }}</small>
+            </div>
+            <p>{{ item.snippet || '--' }}</p>
+            <div class="similar-list">
+              <article v-for="match in item.matches || []" :key="`dup-${item.chunkId}-${resultKey(match)}`">
+                <strong>{{ match.title || `资料 #${match.documentId || '--'}` }}</strong>
+                <span>{{ scoreLabel(match.score) }} · {{ match.sourceRef || match.documentType || '--' }}</span>
+                <p>{{ match.snippet || '--' }}</p>
+              </article>
+            </div>
+          </article>
+          <el-empty v-if="!duplicateReviewItems.length && !duplicateReviewLoading" description="暂无近重复候选" />
+        </div>
+      </div>
+    </el-drawer>
+
     <el-drawer v-model="chunksDrawerVisible" size="720px" :title="selectedDocument?.title || '资料片段'">
       <div class="chunk-drawer" v-loading="chunksLoading">
         <div class="chunk-summary">
@@ -377,6 +423,7 @@ import {
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
   getKnowledgeConfigApi,
+  getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
   getKnowledgeDocumentsApi,
@@ -389,6 +436,8 @@ import {
   type KnowledgeChunkVO,
   type KnowledgeConfigVO,
   type KnowledgeDocumentVO,
+  type KnowledgeDuplicateReviewItemVO,
+  type KnowledgeDuplicateReviewVO,
   type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
@@ -402,6 +451,7 @@ const saving = ref(false)
 const uploading = ref(false)
 const rebuilding = ref(false)
 const chunksLoading = ref(false)
+const duplicateReviewLoading = ref(false)
 const editingLoadingId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
@@ -416,6 +466,7 @@ const documentChunks = ref<KnowledgeChunkVO[]>([])
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
+const duplicateReview = ref<KnowledgeDuplicateReviewVO | null>(null)
 const answer = ref('')
 const total = ref(0)
 const keyword = ref('')
@@ -424,6 +475,7 @@ const limit = ref(10)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
+const duplicateReviewVisible = ref(false)
 const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
@@ -484,6 +536,19 @@ const uploadLimitLabel = computed(() => {
 })
 
 const uploadExtensionsLabel = computed(() => knowledgeConfig.value?.uploadExtensions?.join(', ') || '--')
+
+const duplicateReviewItems = computed<KnowledgeDuplicateReviewItemVO[]>(() => duplicateReview.value?.items || [])
+
+const duplicateReviewSummary = computed(() => {
+  if (!duplicateReview.value) return 'not scanned'
+  if (!duplicateReview.value.vectorEnabled) return 'vector disabled'
+  return `${duplicateReview.value.candidateCount || 0} candidates`
+})
+
+const duplicateReviewThresholdLabel = computed(() => {
+  const threshold = duplicateReview.value?.threshold ?? knowledgeConfig.value?.nearDuplicateThreshold
+  return typeof threshold === 'number' ? `${Math.round(threshold * 100)}%` : '--'
+})
 
 const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
@@ -586,6 +651,21 @@ const loadSimilarChunks = async (chunk: KnowledgeChunkVO) => {
     }
   } finally {
     similarLoadingId.value = null
+  }
+}
+
+const loadDuplicateReview = async () => {
+  duplicateReviewVisible.value = true
+  duplicateReviewLoading.value = true
+  try {
+    duplicateReview.value = await getKnowledgeDuplicateReviewApi(20)
+    if (!duplicateReview.value?.vectorEnabled) {
+      ElMessage.warning('向量库未启用，无法扫描近重复片段')
+    } else if (!duplicateReview.value?.candidateCount) {
+      ElMessage.success('暂未发现近重复候选')
+    }
+  } finally {
+    duplicateReviewLoading.value = false
   }
 }
 
@@ -906,7 +986,9 @@ onMounted(loadDocuments)
 }
 
 .chunk-drawer,
-.chunk-list {
+.chunk-list,
+.duplicate-review-drawer,
+.duplicate-review-list {
   display: grid;
   gap: 14px;
 }
@@ -918,7 +1000,8 @@ onMounted(loadDocuments)
 }
 
 .chunk-summary article,
-.chunk-row {
+.chunk-row,
+.duplicate-review-row {
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.42);
@@ -930,6 +1013,7 @@ onMounted(loadDocuments)
 
 .chunk-summary span,
 .chunk-row small,
+.duplicate-review-row small,
 .chunk-row__head span {
   color: var(--app-text-muted);
   font-size: 13px;
@@ -942,22 +1026,26 @@ onMounted(loadDocuments)
   font-size: 18px;
 }
 
-.chunk-row {
+.chunk-row,
+.duplicate-review-row {
   padding: 14px;
 }
 
-.chunk-row__head {
+.chunk-row__head,
+.duplicate-review-row__head {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.chunk-row__head strong {
+.chunk-row__head strong,
+.duplicate-review-row__head strong {
   color: var(--app-text);
 }
 
-.chunk-row p {
+.chunk-row p,
+.duplicate-review-row p {
   margin: 10px 0 8px;
   color: var(--app-text-muted);
   line-height: 1.7;
@@ -1033,6 +1121,32 @@ onMounted(loadDocuments)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.duplicate-review-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.duplicate-review-strip strong,
+.duplicate-review-strip small {
+  display: block;
+}
+
+.duplicate-review-strip strong {
+  color: var(--app-text);
+}
+
+.duplicate-review-strip small {
+  margin-top: 5px;
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .summary-item {
@@ -1214,6 +1328,7 @@ onMounted(loadDocuments)
 
 @media (max-width: 760px) {
   .knowledge-hero,
+  .duplicate-review-strip,
   .result-row {
     align-items: flex-start;
     grid-template-columns: 1fr;

@@ -204,6 +204,28 @@ export interface KnowledgeSearchResultVO {
   matchType?: string
 }
 
+export interface KnowledgeDuplicateReviewItemVO {
+  documentId?: number
+  chunkId?: number
+  title?: string
+  documentType?: string
+  chunkIndex?: number
+  sourceRef?: string
+  snippet?: string
+  topScore?: number
+  matches?: KnowledgeSearchResultVO[]
+}
+
+export interface KnowledgeDuplicateReviewVO {
+  vectorEnabled?: boolean
+  threshold?: number
+  scannedChunkCount?: number
+  candidateCount?: number
+  limit?: number
+  items?: KnowledgeDuplicateReviewItemVO[]
+  generatedAt?: string
+}
+
 export interface KnowledgeAskVO {
   question?: string
   answer?: string
@@ -328,6 +350,9 @@ export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: { limit } })
     .then((data) => data || [])
+
+export const getKnowledgeDuplicateReviewApi = (limit?: number) =>
+  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params: { limit } })
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
   request.delete<null, null>(`/agent/knowledge/documents/${id}`)
