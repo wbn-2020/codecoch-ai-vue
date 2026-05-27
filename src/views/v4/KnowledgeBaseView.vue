@@ -491,6 +491,16 @@
                 <div class="chunk-row__head">
                   <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
                   <span>{{ chunk.sourceRef || `Document #${chunk.documentId || '--'}` }}</span>
+                  <el-button
+                    v-if="chunk.id"
+                    link
+                    size="small"
+                    type="primary"
+                    :loading="chunkDetailLoadingId === chunk.id"
+                    @click="openExactDuplicateChunk(chunk)"
+                  >
+                    查看片段
+                  </el-button>
                 </div>
                 <p>{{ chunk.content || '--' }}</p>
               </article>
@@ -995,6 +1005,21 @@ const openDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewItemVO) =>
     sourceRef: item.sourceRef,
     score: item.topScore,
     matchType: 'DUPLICATE_REVIEW'
+  })
+}
+
+const openExactDuplicateChunk = async (chunk: KnowledgeChunkVO) => {
+  if (!chunk.id) return
+  const document = documentOptions.value.find((item) => item.id === chunk.documentId)
+  await openChunkDetail({
+    documentId: chunk.documentId,
+    chunkId: chunk.id,
+    title: document?.title,
+    documentType: document?.documentType,
+    snippet: chunk.content,
+    sourceRef: chunk.sourceRef,
+    score: 1,
+    matchType: 'EXACT_DUPLICATE'
   })
 }
 
