@@ -11,7 +11,7 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
         <el-upload
           class="knowledge-upload"
-          accept=".txt,.md,.markdown"
+          accept=".txt,.md,.markdown,.pdf,.doc,.docx"
           :show-file-list="false"
           :auto-upload="false"
           :on-change="handleKnowledgeFileChange"
@@ -509,18 +509,18 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
   const file = uploadFile.raw
   if (!file) return
   const lowerName = file.name.toLowerCase()
-  const supported = lowerName.endsWith('.txt') || lowerName.endsWith('.md') || lowerName.endsWith('.markdown')
+  const supported = ['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx'].some((suffix) => lowerName.endsWith(suffix))
   if (!supported) {
-    ElMessage.warning('仅支持 .txt / .md / .markdown 文件')
+    ElMessage.warning('仅支持 .txt / .md / .markdown / .pdf / .doc / .docx 文件')
     return
   }
-  if (file.size > 2 * 1024 * 1024) {
-    ElMessage.warning('文件大小不能超过 2MB')
+  if (file.size > 8 * 1024 * 1024) {
+    ElMessage.warning('文件大小不能超过 8MB')
     return
   }
   uploading.value = true
   try {
-    const result = await uploadKnowledgeDocumentApi(file, lowerName.endsWith('.txt') ? 'TEXT' : 'MARKDOWN')
+    const result = await uploadKnowledgeDocumentApi(file, documentTypeFromFileName(lowerName))
     if (result.duplicateDocument) {
       ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
     } else if (result.duplicateChunkCount) {
@@ -532,6 +532,13 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
   } finally {
     uploading.value = false
   }
+}
+
+const documentTypeFromFileName = (lowerName: string) => {
+  if (lowerName.endsWith('.pdf')) return 'PDF'
+  if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) return 'WORD'
+  if (lowerName.endsWith('.txt')) return 'TEXT'
+  return 'MARKDOWN'
 }
 
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
