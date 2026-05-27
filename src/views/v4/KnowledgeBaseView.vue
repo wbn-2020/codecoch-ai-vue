@@ -96,7 +96,9 @@
                 <el-input v-model.trim="query.title" clearable placeholder="搜索资料标题" @keyup.enter="handleDocumentFilter" />
               </el-form-item>
               <el-form-item label="类型">
-                <el-input v-model.trim="query.documentType" clearable placeholder="NOTE / PDF / DOC" @keyup.enter="handleDocumentFilter" />
+                <el-select v-model="query.documentType" clearable filterable placeholder="全部类型" style="width: 160px">
+                  <el-option v-for="type in documentTypeOptions" :key="type" :label="type" :value="type" />
+                </el-select>
               </el-form-item>
               <el-form-item label="状态">
                 <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
@@ -217,7 +219,9 @@
                 <el-input-number v-model="searchMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
               </el-form-item>
               <el-form-item label="类型">
-                <el-input v-model.trim="knowledgeScopeType" clearable placeholder="全部类型" @keyup.enter="handleSearch" />
+                <el-select v-model="knowledgeScopeType" clearable filterable placeholder="全部类型" style="width: 160px">
+                  <el-option v-for="type in documentTypeOptions" :key="`search-${type}`" :label="type" :value="type" />
+                </el-select>
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
@@ -278,7 +282,9 @@
                 <el-input-number v-model="askMinScorePercent" :min="0" :max="100" :step="5" controls-position="right" />
               </el-form-item>
               <el-form-item label="资料类型范围">
-                <el-input v-model.trim="knowledgeScopeType" clearable placeholder="全部类型" />
+                <el-select v-model="knowledgeScopeType" clearable filterable placeholder="全部类型">
+                  <el-option v-for="type in documentTypeOptions" :key="`ask-${type}`" :label="type" :value="type" />
+                </el-select>
               </el-form-item>
             </el-form>
             <el-button class="ask-button" type="primary" :icon="ChatDotRound" :loading="asking" @click="handleAsk">
@@ -581,6 +587,7 @@ import {
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
+  getKnowledgeDocumentTypesApi,
   getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
   getKnowledgeExactDuplicatesApi,
@@ -625,6 +632,7 @@ const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
+const documentTypeOptions = ref<string[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
 const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
@@ -792,18 +800,21 @@ const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [page, stats, config] = await Promise.all([
+    const [page, stats, config, types] = await Promise.all([
       getKnowledgeDocumentsApi(documentQueryParams()),
       getKnowledgeStatsApi(),
-      getKnowledgeConfigApi()
+      getKnowledgeConfigApi(),
+      getKnowledgeDocumentTypesApi()
     ])
     allDocuments.value = page.records || []
     knowledgeStats.value = stats || null
     knowledgeConfig.value = config || null
+    documentTypeOptions.value = types || []
     applyDocumentPage()
   } catch (error) {
     allDocuments.value = []
     documents.value = []
+    documentTypeOptions.value = []
     knowledgeStats.value = null
     knowledgeConfig.value = null
     total.value = 0

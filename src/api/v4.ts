@@ -367,6 +367,9 @@ export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: 
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
     .then((result) => normalizePageResult(result, params))
 
+export const getKnowledgeDocumentTypesApi = () =>
+  request.get<string[], string[]>('/agent/knowledge/documents/types').then((data) => data || [])
+
 export const getKnowledgeStatsApi = () =>
   request.get<KnowledgeStatsVO, KnowledgeStatsVO>('/agent/knowledge/stats')
 
