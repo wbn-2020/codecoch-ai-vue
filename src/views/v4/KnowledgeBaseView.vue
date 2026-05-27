@@ -650,9 +650,10 @@ const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkC
 
 const retrievalModeLabel = computed(() => {
   const mode = knowledgeStats.value?.retrievalMode
+  if (mode === 'HYBRID') return '混合检索'
   if (mode === 'VECTOR_FIRST') return '向量优先'
   if (mode === 'KEYWORD_FALLBACK') return '关键词兜底'
-  return knowledgeStats.value?.vectorEnabled ? '向量优先' : '关键词兜底'
+  return knowledgeStats.value?.vectorEnabled ? '混合检索' : '关键词兜底'
 })
 
 const chunkStrategyLabel = computed(() => {
@@ -1098,6 +1099,7 @@ const resultKey = (item: KnowledgeSearchResultVO) =>
   `${item.documentId || 'doc'}-${item.chunkId || 'whole'}-${item.matchType || 'match'}`
 
 const matchLabel = (value?: string) => {
+  if (value === 'HYBRID') return '混合匹配'
   if (value === 'VECTOR') return '语义匹配'
   if (value === 'KEYWORD_CHUNK') return '片段命中'
   if (value === 'KEYWORD_DOCUMENT') return '文档命中'
