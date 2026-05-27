@@ -393,8 +393,8 @@ export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: { limit } })
     .then((data) => data || [])
 
-export const getKnowledgeDuplicateReviewApi = (limit?: number) =>
-  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params: { limit } })
+export const getKnowledgeDuplicateReviewApi = (params?: { limit?: number; threshold?: number }) =>
+  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params })
 
 export const getKnowledgeExactDuplicatesApi = (limit?: number) =>
   request

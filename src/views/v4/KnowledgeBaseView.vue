@@ -68,9 +68,10 @@
       <div>
         <p class="section-kicker">Dedup Review</p>
         <strong>{{ duplicateReviewSummary }}</strong>
-        <small>threshold {{ nearDuplicateThresholdLabel }} · scanned {{ duplicateReview?.scannedChunkCount || 0 }}</small>
+        <small>threshold {{ duplicateReviewThresholdLabel }} · scanned {{ duplicateReview?.scannedChunkCount || 0 }}</small>
       </div>
       <div class="dedup-actions">
+        <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" />
         <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
         <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates">完全重复</el-button>
       </div>
@@ -616,6 +617,7 @@ const question = ref('')
 const limit = ref(10)
 const searchMinScorePercent = ref<number | null>(null)
 const askMinScorePercent = ref<number | null>(null)
+const duplicateThresholdPercent = ref<number | null>(null)
 const dialogVisible = ref(false)
 const rebuildDialogVisible = ref(false)
 const chunksDrawerVisible = ref(false)
@@ -714,6 +716,11 @@ const normalizedSearchMinScore = computed(() => {
 const normalizedAskMinScore = computed(() => {
   if (askMinScorePercent.value === null || askMinScorePercent.value === undefined) return undefined
   return Math.min(Math.max(askMinScorePercent.value, 0), 100) / 100
+})
+
+const normalizedDuplicateThreshold = computed(() => {
+  if (duplicateThresholdPercent.value === null || duplicateThresholdPercent.value === undefined) return undefined
+  return Math.min(Math.max(duplicateThresholdPercent.value, 0), 100) / 100
 })
 
 const selectedDuplicateChunkCount = computed(() =>
@@ -846,7 +853,10 @@ const loadDuplicateReview = async () => {
   duplicateReviewVisible.value = true
   duplicateReviewLoading.value = true
   try {
-    duplicateReview.value = await getKnowledgeDuplicateReviewApi(20)
+    duplicateReview.value = await getKnowledgeDuplicateReviewApi({
+      limit: 20,
+      threshold: normalizedDuplicateThreshold.value
+    })
     if (!duplicateReview.value?.vectorEnabled) {
       ElMessage.warning('向量库未启用，无法扫描近重复片段')
     } else if (!duplicateReview.value?.candidateCount) {
@@ -1429,6 +1439,10 @@ onMounted(loadDocuments)
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.dedup-actions :deep(.el-input-number) {
+  width: 118px;
 }
 
 .exact-duplicate-chunks {
