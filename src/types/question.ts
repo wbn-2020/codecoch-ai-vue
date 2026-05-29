@@ -226,6 +226,7 @@ export interface QuestionImportResultVO {
 }
 export interface AdminQuestionQueryDTO extends PageQuery {
   keyword?: string
+  questionId?: number
   categoryId?: number
   tagId?: number
   difficulty?: QuestionDifficulty | ''
@@ -275,6 +276,8 @@ export type QuestionUpdateDTO = QuestionCreateDTO
 export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | string
 export type QuestionDuplicateReviewStatus = 'PENDING' | 'CONFIRMED' | 'IGNORED' | string
 export type QuestionDuplicateMatchType =
+  | 'HARD_TITLE_HASH'
+  | 'HARD_CONTENT_HASH'
   | 'TITLE_EXACT'
   | 'TITLE_NORMALIZED_EQUAL'
   | 'TITLE_SIMILAR'
@@ -461,6 +464,7 @@ export interface QuestionDuplicateReviewQueryDTO extends PageQuery {
   questionId?: number
   reviewStatus?: QuestionDuplicateReviewStatus | ''
   matchType?: QuestionDuplicateMatchType | ''
+  scoreBand?: '' | 'STRONG' | 'REVIEW'
   keyword?: string
 }
 
@@ -481,7 +485,77 @@ export interface QuestionDuplicateScorePartVO {
   score?: number
 }
 
+export interface QuestionDuplicateFeedbackBucketVO {
+  label?: string
+  minScore?: number
+  maxScore?: number
+  totalCount?: number
+  pendingCount?: number
+  confirmedCount?: number
+  ignoredCount?: number
+  confirmationRate?: number
+  ignoreRate?: number
+}
+
+export interface QuestionDuplicateFeedbackStatsVO {
+  totalCount?: number
+  pendingCount?: number
+  confirmedCount?: number
+  ignoredCount?: number
+  resolvedCount?: number
+  confirmationRate?: number
+  ignoreRate?: number
+  sampleCoverageRate?: number
+  averageSimilarityScore?: number
+  statusCounts?: Record<string, number>
+  matchTypeCounts?: Record<string, number>
+  scoreBandCounts?: Record<string, number>
+  scoreBuckets?: QuestionDuplicateFeedbackBucketVO[]
+  thresholdRecommendation?: string
+  warningItems?: string[]
+  generatedAt?: string
+}
+
+export interface QuestionDuplicateEvaluationSampleDTO {
+  caseId?: string
+  sourceQuestionId?: number
+  targetQuestionId?: number
+  expected?: 'DUPLICATE' | 'REVIEW' | 'NOT_DUPLICATE' | string
+  note?: string
+}
+
+export interface QuestionDuplicateEvaluationDTO {
+  samples?: QuestionDuplicateEvaluationSampleDTO[]
+}
+
+export interface QuestionDuplicateEvaluationItemVO {
+  caseId?: string
+  sourceQuestionId?: number
+  targetQuestionId?: number
+  expected?: string
+  predicted?: string
+  passed?: boolean
+  matchType?: string
+  score?: number
+  scoreBand?: string
+  scoreParts?: QuestionDuplicateScorePartVO[]
+  reason?: string
+  note?: string
+}
+
+export interface QuestionDuplicateEvaluationVO {
+  sampleCount?: number
+  evaluatedCount?: number
+  passedCount?: number
+  failedCount?: number
+  missingQuestionCount?: number
+  accuracyRate?: number
+  items?: QuestionDuplicateEvaluationItemVO[]
+  generatedAt?: string
+}
+
 export interface QuestionDuplicateReviewListVO {
+
   id: number
   sourceQuestionId?: number
   sourceTitle?: string
@@ -491,12 +565,85 @@ export interface QuestionDuplicateReviewListVO {
   matchType?: QuestionDuplicateMatchType
   similarityScore?: number
   matchReason?: string
+  scoreBand?: string
   scoreParts?: QuestionDuplicateScorePartVO[]
+  vectorScore?: number
+  textScore?: number
+  finalScore?: number
   sourceGroupId?: number
   targetGroupId?: number
+  sourceCategoryId?: number
+  targetCategoryId?: number
+  sourceQuestionType?: QuestionType | string
+  targetQuestionType?: QuestionType | string
+  sourceDifficulty?: QuestionDifficulty | string
+  targetDifficulty?: QuestionDifficulty | string
+  sameCategory?: boolean | null
+  sameQuestionType?: boolean | null
+  sameDifficulty?: boolean | null
   relationId?: number
   reviewedBy?: number
   reviewedAt?: string
+  createdAt?: string
+}
+export interface QuestionDuplicateEvalCaseQueryDTO extends PageQuery {
+  keyword?: string
+  expected?: 'DUPLICATE' | 'REVIEW' | 'NOT_DUPLICATE' | string
+  enabled?: number
+}
+
+export interface QuestionDuplicateEvalCaseSaveDTO {
+  id?: number
+  caseId?: string
+  sourceQuestionId?: number
+  targetQuestionId?: number
+  expected?: 'DUPLICATE' | 'REVIEW' | 'NOT_DUPLICATE' | string
+  note?: string
+  enabled?: number
+}
+
+export interface QuestionDuplicateEvalRunRequestDTO {
+  caseIds?: number[]
+  onlyEnabled?: boolean
+  limit?: number
+}
+
+export interface QuestionDuplicateEvalCaseVO {
+  id: number
+  caseId?: string
+  sourceQuestionId?: number
+  targetQuestionId?: number
+  sourceTitle?: string
+  targetTitle?: string
+  expected?: string
+  note?: string
+  enabled?: number
+  createdBy?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface QuestionDuplicateEvalRunResultVO extends QuestionDuplicateEvaluationItemVO {
+  id?: number
+  evalCaseId?: number
+  createdAt?: string
+}
+
+export interface QuestionDuplicateEvalRunVO {
+  id: number
+  runNo?: string
+  status?: string
+  sampleCount?: number
+  evaluatedCount?: number
+  passedCount?: number
+  failedCount?: number
+  missingQuestionCount?: number
+  accuracyRate?: number
+  startedAt?: string
+  finishedAt?: string
+  createdBy?: number
+  errorMessage?: string
+  results?: QuestionDuplicateEvalRunResultVO[]
   createdAt?: string
 }
 
@@ -513,6 +660,7 @@ export interface QuestionSummaryVO {
 }
 
 export interface QuestionDuplicateReviewDetailVO extends QuestionDuplicateReviewListVO {
+  scoreDetailJson?: string
   sourceTitleSnapshot?: string
   targetTitleSnapshot?: string
   sourceContentSnapshot?: string

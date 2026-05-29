@@ -13,6 +13,7 @@
       </div>
       <div class="admin-hero__actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
+        <el-button :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">重试向量删除</el-button>
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
@@ -101,6 +102,14 @@
               </div>
               <em :class="`status-${vectorTone(item)}`">{{ vectorCollectionStatus(item) }}</em>
             </div>
+            <div class="ops-service-row">
+              <span :class="`ops-dot ops-dot--${vectorDeleteOutboxTone}`"></span>
+              <div>
+                <strong>向量删除补偿</strong>
+                <small>{{ vectorDeleteOutboxHint }}</small>
+              </div>
+              <em :class="`status-${vectorDeleteOutboxTone}`">{{ vectorDeleteOutboxStatus }}</em>
+            </div>
             <el-empty v-if="!services.length && !loading" description="暂无服务状态" />
           </div>
         </article>
@@ -127,6 +136,316 @@
         </article>
       </section>
 
+
+      <section class="ops-main-grid vector-admin-grid">
+        <article class="ops-panel ops-panel--wide vector-admin-panel">
+          <div class="ops-panel__head">
+            <div>
+              <h2>Vector Index Console</h2>
+              <p>Qdrant collections and MySQL index-state counters for question dedupe and personal RAG.</p>
+            </div>
+            <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">Refresh</el-button>
+          </div>
+          <div class="vector-index-grid">
+            <div v-for="item in mysqlIndexCards" :key="item.key" class="vector-index-card">
+              <div class="vector-index-card__head">
+                <span>{{ item.title }}</span>
+                <strong>{{ item.total }}</strong>
+              </div>
+              <small>{{ item.subtitle }}</small>
+              <div class="vector-status-list">
+                <span v-for="status in item.statusCounts" :key="`${item.key}-${status.status}`">
+                  {{ status.status || 'UNKNOWN' }} {{ status.count || 0 }}
+                </span>
+              </div>
+              <em v-if="item.errorMessage">{{ item.errorMessage }}</em>
+            </div>
+          </div>
+          <div class="vector-runtime-grid">
+            <div class="vector-index-card">
+              <div class="vector-index-card__head">
+                <span>Runtime Config</span>
+                <strong>{{ vectorRuntimeLabel }}</strong>
+              </div>
+              <small>{{ vectorRuntimeHint }}</small>
+              <div class="vector-status-list">
+                <span>limit {{ vectorHealth?.config?.defaultLimit || '--' }}</span>
+                <span>ask {{ formatThreshold(vectorHealth?.config?.knowledgeAskMinScore) }}</span>
+                <span>near {{ formatThreshold(vectorHealth?.config?.knowledgeNearDuplicateThreshold) }}</span>
+              </div>
+            </div>
+            <div class="vector-index-card">
+              <div class="vector-index-card__head">
+                <span>Embedding Metrics</span>
+                <strong>{{ compact(vectorHealth?.embeddingMetrics?.callCount) }}</strong>
+              </div>
+              <small>{{ embeddingMetricHint }}</small>
+              <div class="vector-status-list">
+                <span>fail {{ vectorHealth?.embeddingMetrics?.failedCount || 0 }}</span>
+                <span>avg {{ formatMs(vectorHealth?.embeddingMetrics?.averageElapsedMs) }}</span>
+                <span>tokens {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
+              </div>
+              <em v-if="vectorHealth?.embeddingMetrics?.errorMessage">{{ vectorHealth.embeddingMetrics.errorMessage }}</em>
+            </div>
+          </div>
+        </article>
+
+        <article class="ops-panel vector-admin-panel">
+          <div class="ops-panel__head">
+            <div>
+              <h2>Index Actions</h2>
+              <p>Run rebuild and retry jobs before server-side validation.</p>
+            </div>
+          </div>
+          <div class="vector-action-list">
+            <el-button :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
+              Rebuild Questions
+            </el-button>
+            <el-button :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
+              Retry Question Failures
+            </el-button>
+            <el-button :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
+              Rebuild Knowledge
+            </el-button>
+            <el-button :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
+              Retry Knowledge Failures
+            </el-button>
+          </div>
+          <div v-if="lastVectorAction" class="vector-action-result">
+            <strong>{{ lastVectorAction.title }}</strong>
+            <span>{{ lastVectorAction.summary }}</span>
+            <small v-if="lastVectorAction.detail">{{ lastVectorAction.detail }}</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="ops-main-grid vector-failure-grid">
+        <article class="ops-panel ops-panel--wide vector-failure-panel">
+          <div class="ops-panel__head vector-failure-head">
+            <div>
+              <h2>Vector Failure Details</h2>
+              <p>Recent Qdrant index and delete-outbox failures for question dedupe and personal RAG.</p>
+            </div>
+            <div class="vector-failure-tools">
+              <el-segmented v-model="vectorFailureStatus" :options="vectorFailureStatusOptions" @change="loadVectorFailures" />
+              <el-select v-model="vectorFailureLimit" style="width: 108px" @change="loadVectorFailures">
+                <el-option :value="25" label="25 条" />
+                <el-option :value="50" label="50 条" />
+                <el-option :value="100" label="100 条" />
+              </el-select>
+              <el-button :icon="RefreshCw" :loading="vectorFailureLoading" @click="loadVectorFailures">刷新明细</el-button>
+            </div>
+          </div>
+
+          <div class="vector-failure-summary">
+            <div class="vector-failure-summary__item">
+              <span>题目失败</span>
+              <strong>{{ vectorFailureCounts.question }}</strong>
+            </div>
+            <div class="vector-failure-summary__item">
+              <span>知识库失败</span>
+              <strong>{{ vectorFailureCounts.knowledge }}</strong>
+            </div>
+            <div class="vector-failure-summary__item">
+              <span>删除补偿</span>
+              <strong>{{ vectorFailureCounts.deleteOutbox }}</strong>
+            </div>
+            <div class="vector-failure-summary__item">
+              <span>生成时间</span>
+              <strong>{{ vectorFailures?.generatedAt || '--' }}</strong>
+            </div>
+          </div>
+
+          <el-alert
+            v-if="vectorFailures?.errors?.length"
+            class="vector-failure-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              {{ vectorFailures.errors.slice(0, 3).join('；') }}
+            </template>
+          </el-alert>
+
+          <el-tabs v-model="vectorFailureTab" class="vector-failure-tabs" v-loading="vectorFailureLoading">
+            <el-tab-pane :label="`题目向量 ${vectorFailureCounts.question}`" name="question">
+              <el-table :data="vectorFailures?.questionFailures || []" class="ops-table" size="small" empty-text="暂无题目向量失败记录">
+                <el-table-column label="Question ID" prop="questionId" min-width="110" />
+                <el-table-column label="状态" min-width="96">
+                  <template #default="{ row }">
+                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ row.indexStatus || 'PENDING' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="模型 / 维度" min-width="160">
+                  <template #default="{ row }">
+                    <span>{{ vectorModelHint(row.embeddingModel, row.embeddingDimension) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column label="错误" min-width="260">
+                  <template #default="{ row }">
+                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    </el-tooltip>
+                    <span v-else class="vector-empty-text">--</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="132" fixed="right">
+                  <template #default="{ row }">
+                    <div class="vector-row-actions">
+                      <el-tooltip content="查看题目" placement="top">
+                        <el-button link type="primary" :icon="ExternalLink" @click="openQuestionFailure(row.questionId)" />
+                      </el-tooltip>
+                      <el-tooltip content="复制错误" placement="top">
+                        <el-button link type="info" :icon="Copy" :disabled="!row.lastError" @click="copyVectorText(row.lastError, '错误已复制')" />
+                      </el-tooltip>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <el-tab-pane :label="`知识库 Chunk ${vectorFailureCounts.knowledge}`" name="knowledge">
+              <el-table :data="vectorFailures?.knowledgeFailures || []" class="ops-table" size="small" empty-text="暂无知识库向量失败记录">
+                <el-table-column label="Chunk ID" prop="chunkId" min-width="100" />
+                <el-table-column label="User / Doc" min-width="150">
+                  <template #default="{ row }">
+                    <span>{{ row.userId || '--' }} / {{ row.documentId || '--' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="Index" prop="chunkIndex" min-width="80" />
+                <el-table-column label="状态" min-width="96">
+                  <template #default="{ row }">
+                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ row.indexStatus || 'PENDING' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="模型 / 维度" min-width="160">
+                  <template #default="{ row }">
+                    <span>{{ vectorModelHint(row.embeddingModel, row.embeddingDimension) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column label="错误" min-width="260">
+                  <template #default="{ row }">
+                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    </el-tooltip>
+                    <span v-else class="vector-empty-text">--</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="132" fixed="right">
+                  <template #default="{ row }">
+                    <div class="vector-row-actions">
+                      <el-tooltip content="查看片段" placement="top">
+                        <el-button link type="primary" :icon="ExternalLink" @click="openKnowledgeFailure(row.documentId, row.chunkId)" />
+                      </el-tooltip>
+                      <el-tooltip content="复制错误" placement="top">
+                        <el-button link type="info" :icon="Copy" :disabled="!row.lastError" @click="copyVectorText(row.lastError, '错误已复制')" />
+                      </el-tooltip>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <el-tab-pane :label="`删除补偿 ${vectorFailureCounts.deleteOutbox}`" name="deleteOutbox">
+              <el-table :data="vectorFailures?.deleteOutboxFailures || []" class="ops-table" size="small" empty-text="暂无向量删除补偿失败记录">
+                <el-table-column label="Collection" prop="collectionName" min-width="180" />
+                <el-table-column label="Point ID" min-width="220">
+                  <template #default="{ row }">
+                    <span class="vector-point-text">{{ row.pointId || '--' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="业务" prop="bizType" min-width="120" />
+                <el-table-column label="状态" min-width="96">
+                  <template #default="{ row }">
+                    <el-tag :type="vectorFailureStatusType(row.status)" effect="plain">{{ row.status || 'PENDING' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="重试" prop="retryCount" min-width="80" />
+                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column label="错误" min-width="260">
+                  <template #default="{ row }">
+                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    </el-tooltip>
+                    <span v-else class="vector-empty-text">--</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="96" fixed="right">
+                  <template #default="{ row }">
+                    <div class="vector-row-actions">
+                      <el-tooltip content="复制 Point ID" placement="top">
+                        <el-button link type="info" :icon="Copy" :disabled="!row.pointId" @click="copyVectorText(row.pointId, 'Point ID 已复制')" />
+                      </el-tooltip>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+        </article>
+      </section>
+
+      <section class="ops-main-grid vector-job-grid">
+        <article class="ops-panel ops-panel--wide vector-job-panel">
+          <div class="ops-panel__head vector-failure-head">
+            <div>
+              <h2>Vector Job History</h2>
+              <p>Recent rebuild, retry, and delete-outbox compensation runs.</p>
+            </div>
+            <div class="vector-failure-tools">
+              <el-select v-model="vectorJobStatus" style="width: 128px" @change="loadVectorJobs">
+                <el-option label="全部" value="ALL" />
+                <el-option label="运行中" value="RUNNING" />
+                <el-option label="成功" value="SUCCESS" />
+                <el-option label="失败" value="FAILED" />
+              </el-select>
+              <el-button :icon="RefreshCw" :loading="vectorJobLoading" @click="loadVectorJobs">刷新任务</el-button>
+            </div>
+          </div>
+          <el-table :data="vectorJobs" class="ops-table vector-job-table" size="small" empty-text="暂无向量索引任务">
+            <el-table-column label="任务" min-width="220">
+              <template #default="{ row }">
+                <div class="vector-job-main">
+                  <strong>{{ vectorJobTypeLabel(row.jobType) }}</strong>
+                  <small>{{ row.jobNo || `#${row.id || '-'}` }}</small>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="范围" min-width="140">
+              <template #default="{ row }">{{ row.scopeType || '-' }}{{ row.scopeId ? ` / ${row.scopeId}` : '' }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="vectorJobStatusType(row.status)" effect="plain">{{ vectorJobStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="数量" min-width="170">
+              <template #default="{ row }">
+                {{ row.successCount || 0 }}/{{ row.totalCount || 0 }} ok · fail {{ row.failedCount || 0 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="向量" min-width="150">
+              <template #default="{ row }">up {{ row.vectorUpdated || 0 }} / del {{ row.vectorDeleted || 0 }}</template>
+            </el-table-column>
+            <el-table-column label="耗时" width="110">
+              <template #default="{ row }">{{ formatDuration(row.durationMs) }}</template>
+            </el-table-column>
+            <el-table-column label="完成时间" prop="finishedAt" min-width="170" />
+            <el-table-column label="错误" min-width="240">
+              <template #default="{ row }">
+                <el-tooltip v-if="row.lastError || row.errorMessage" :content="row.lastError || row.errorMessage" placement="top" :show-after="300">
+                  <span class="vector-error-text">{{ row.lastError || row.errorMessage }}</span>
+                </el-tooltip>
+                <span v-else class="vector-empty-text">--</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </article>
+      </section>
+
       <section class="ops-main-grid">
         <article class="ops-panel ops-panel--wide">
           <div class="ops-panel__head">
@@ -149,8 +468,9 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, Gauge, Monitor, RefreshCw, Server, ShieldCheck } from 'lucide-vue-next'
+import { Activity, Copy, ExternalLink, Gauge, Monitor, RefreshCw, Server, ShieldCheck } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   getAdminAgentOverviewApi,
@@ -158,23 +478,46 @@ import {
   getAdminAiFailuresApi,
   getAdminAiOverviewApi,
   getAdminAnalyticsJobsApi,
+  getAdminVectorIndexJobsApi,
+  getAdminVectorStoreFailuresApi,
   getAdminVectorStoreHealthApi,
-  getQuestionDuplicateConfigApi
+  rebuildAdminKnowledgeVectorsApi,
+  retryAdminKnowledgeVectorsApi,
+  getQuestionDuplicateConfigApi,
+  retryAdminVectorDeletesApi
 } from '@/api/analytics'
+import { rebuildQuestionEmbeddingApi, retryFailedQuestionEmbeddingApi, type QuestionEmbeddingRebuildResult } from '@/api/question'
+import type { KnowledgeVectorRebuildVO } from '@/api/v4'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
-import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorStoreHealthVO } from '@/types/analytics'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorFailureDetailsVO, VectorIndexJobVO, VectorStoreHealthVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import echarts, { type ECharts } from '@/utils/echarts'
 
 const loading = ref(false)
+const router = useRouter()
+const retryingVectorDeletes = ref(false)
+const rebuildingQuestionVectors = ref(false)
+const retryingQuestionVectors = ref(false)
+const rebuildingKnowledgeVectors = ref(false)
+const retryingKnowledgeVectors = ref(false)
+const vectorFailureLoading = ref(false)
+const vectorJobLoading = ref(false)
+const vectorFailureStatus = ref<'ALL' | 'FAILED' | 'PENDING'>('ALL')
+const vectorJobStatus = ref<'ALL' | 'RUNNING' | 'SUCCESS' | 'FAILED'>('ALL')
+const vectorFailureLimit = ref(50)
+const vectorFailureTab = ref<'question' | 'knowledge' | 'deleteOutbox'>('question')
+const lastVectorAction = ref<{ title: string; summary: string; detail?: string } | null>(null)
 const errorMessage = ref('')
 const rangeDays = ref(7)
 const aiOverview = ref<AdminAiOverviewVO>()
 const agentOverview = ref<AdminAgentOverviewVO>()
 const dashboard = ref<AdminDashboardOverviewVO>()
 const vectorHealth = ref<VectorStoreHealthVO>()
+const vectorFailures = ref<VectorFailureDetailsVO>()
+const vectorJobs = ref<VectorIndexJobVO[]>([])
 const duplicateConfig = ref<QuestionDuplicateConfigVO>()
 const trendPoints = ref<TrendPointVO[]>([])
 const failurePoints = ref<MetricPointVO[]>([])
@@ -188,10 +531,22 @@ const rangeOptions = [
   { label: '90 天', value: 90 }
 ]
 
+const vectorFailureStatusOptions = [
+  { label: '全部', value: 'ALL' },
+  { label: '失败', value: 'FAILED' },
+  { label: '待处理', value: 'PENDING' }
+]
+
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
 const vectorCollections = computed(() => vectorHealth.value?.collections || [])
+const vectorDeleteOutbox = computed(() => vectorHealth.value?.deleteOutbox)
 const opsMetrics = computed(() => dashboard.value?.systemStatus?.opsMetrics)
 const totalFailures = computed(() => Math.max(...failurePoints.value.map((item) => item.value || 0), 1))
+const vectorFailureCounts = computed(() => ({
+  question: vectorFailures.value?.questionFailures?.length || 0,
+  knowledge: vectorFailures.value?.knowledgeFailures?.length || 0,
+  deleteOutbox: vectorFailures.value?.deleteOutboxFailures?.length || 0
+}))
 
 const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
 const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
@@ -270,21 +625,74 @@ const failurePercent = (value?: number) => Math.min(100, Math.max(4, ((value || 
 
 const formatThreshold = (value?: number) => Number(value ?? 0).toFixed(2)
 
+const formatDuration = (value?: number) => {
+  const ms = Number(value || 0)
+  if (!ms) return '--'
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(ms >= 10000 ? 0 : 1)}s`
+}
+
+const mysqlIndexCards = computed(() => {
+  const indexes = vectorHealth.value?.mysqlIndexes || {}
+  const cards = [
+    {
+      key: 'questionEmbedding',
+      title: 'Question Embeddings',
+      subtitle: 'question_embedding source-state table',
+      data: indexes.questionEmbedding
+    },
+    {
+      key: 'personalKnowledgeChunk',
+      title: 'Knowledge Chunks',
+      subtitle: 'personal_knowledge_chunk source-state table',
+      data: indexes.personalKnowledgeChunk
+    }
+  ]
+  return cards.map((item) => ({
+    key: item.key,
+    title: item.title,
+    subtitle: item.data?.lastIndexedAt ? `${item.subtitle} · last ${item.data.lastIndexedAt}` : item.subtitle,
+    total: compact(item.data?.total),
+    statusCounts: item.data?.statusCounts || [],
+    errorMessage: item.data?.errorMessage
+  }))
+})
 const duplicateConfigItems = computed(() => {
   const config = duplicateConfig.value
   if (!config) return []
   return [
-    { label: '语义命中阈值', value: formatThreshold(config.semanticSimilarityThreshold), hint: '向量召回后的综合分门槛' },
+    { label: '语义兼容阈值', value: formatThreshold(config.semanticSimilarityThreshold), hint: '旧版语义阈值配置，未配置分层阈值时作为回退' },
+    { label: '语义审核阈值', value: formatThreshold(config.semanticReviewThreshold), hint: '向量召回和最终分进入人工审核的最低分' },
+    { label: '强命中阈值', value: formatThreshold(config.semanticStrongThreshold), hint: '最终分达到后标记为高置信语义重复' },
     { label: '标题 Jaccard', value: formatThreshold(config.titleJaccardThreshold), hint: '标题词集合相似度门槛' },
     { label: '标题编辑距离', value: formatThreshold(config.titleLevenshteinThreshold), hint: '标题 Levenshtein 相似度门槛' },
     { label: '正文相似度', value: formatThreshold(config.contentSimilarityThreshold), hint: '正文文本规则命中门槛' },
     { label: '向量 / 文本权重', value: `${formatThreshold(config.semanticVectorWeight)} / ${formatThreshold(config.semanticTextWeight)}`, hint: '语义综合分权重' },
+    { label: '元数据 / 标签权重', value: `${formatThreshold(config.semanticMetadataWeight)} / ${formatThreshold(config.semanticTagWeight)}`, hint: '分类、题型、难度和标签修正权重' },
     { label: '向量召回数', value: config.vectorSearchLimit, hint: '每题从向量库召回的候选数' },
     { label: '候选池规模', value: config.maxRuleCandidateCount, hint: '规则侧最多比较候选数' },
     { label: '批量检测上限', value: config.maxBatchCheckCount, hint: '单次管理端检测题目数' },
-    { label: '向量种子数', value: config.maxVectorSeedCount, hint: '语义去重补充种子范围' },
     { label: 'Embedding 批量', value: config.embeddingBatchSize, hint: '批量生成向量的请求大小' }
   ]
+})
+
+const vectorRuntimeLabel = computed(() => {
+  const config = vectorHealth.value?.config
+  if (!config) return '--'
+  return `${config.provider || 'qdrant'} ${config.enabled ? 'enabled' : 'disabled'}`
+})
+
+const vectorRuntimeHint = computed(() => {
+  const config = vectorHealth.value?.config
+  if (!config) return 'runtime vector configuration not loaded'
+  return `${config.baseUrl || '--'} / ${config.knowledgeCollection || '--'} / chunk ${config.knowledgeChunkSize || '--'}/${config.knowledgeChunkOverlap || 0}`
+})
+
+const embeddingMetricHint = computed(() => {
+  const metrics = vectorHealth.value?.embeddingMetrics
+  if (!metrics) return 'recent embedding calls are not loaded'
+  const model = metrics.modelCounts?.[0]?.model || 'UNKNOWN'
+  return `last ${metrics.windowDays || 7} days / ${model} / fail ${formatPercent(metrics.failureRate)}`
 })
 
 const statusText = (status?: DashboardStatus) => {
@@ -362,6 +770,93 @@ const vectorCollectionHint = (item: VectorCollectionInfoVO) => {
   return `${item.pointCount || 0} points / ${item.vectorSize || '--'} dims / ${item.distance || '--'}`
 }
 
+const vectorDeleteOutboxTone = computed(() => {
+  if (vectorDeleteOutbox.value?.errorMessage) return 'down'
+  if ((vectorDeleteOutbox.value?.failed || 0) > 0) return 'down'
+  if ((vectorDeleteOutbox.value?.pending || 0) > 0) return 'degraded'
+  return 'healthy'
+})
+
+const vectorDeleteOutboxStatus = computed(() => {
+  if (vectorDeleteOutbox.value?.errorMessage) return '异常'
+  if ((vectorDeleteOutbox.value?.failed || 0) > 0) return '失败'
+  if ((vectorDeleteOutbox.value?.pending || 0) > 0) return '待重试'
+  return '清爽'
+})
+
+const vectorDeleteOutboxHint = computed(() => {
+  const outbox = vectorDeleteOutbox.value
+  if (!outbox) return '等待向量健康接口返回补偿队列状态'
+  if (outbox.errorMessage) return outbox.errorMessage
+  return `待处理 ${outbox.pending || 0} / 失败 ${outbox.failed || 0} / 已完成 ${outbox.done || 0}`
+})
+
+const vectorFailureStatusType = (status?: string) => {
+  const value = String(status || 'PENDING').toUpperCase()
+  if (value === 'FAILED') return 'danger'
+  if (value === 'PENDING') return 'warning'
+  if (value === 'SUCCESS' || value === 'DONE' || value === 'INDEXED') return 'success'
+  return 'info'
+}
+
+const vectorJobStatusType = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  if (value === 'FAILED') return 'danger'
+  if (value === 'SUCCESS') return 'success'
+  if (value === 'RUNNING') return 'warning'
+  return 'info'
+}
+
+const vectorJobStatusLabel = (status?: string) => {
+  const value = String(status || 'UNKNOWN').toUpperCase()
+  const map: Record<string, string> = {
+    RUNNING: '运行中',
+    SUCCESS: '成功',
+    FAILED: '失败',
+    UNKNOWN: '未知'
+  }
+  return map[value] || value
+}
+
+const vectorJobTypeLabel = (type?: string) => {
+  const value = String(type || 'UNKNOWN').toUpperCase()
+  const map: Record<string, string> = {
+    QUESTION_REBUILD: '题目向量重建',
+    QUESTION_RETRY: '题目失败重试',
+    KNOWLEDGE_REBUILD: '知识库向量重建',
+    KNOWLEDGE_RETRY: '知识库失败重试',
+    DELETE_OUTBOX_RETRY: '向量删除补偿'
+  }
+  return map[value] || value
+}
+
+const vectorModelHint = (model?: string, dimension?: number) => {
+  const modelText = model || 'UNKNOWN'
+  return `${modelText} / ${dimension || '--'} dims`
+}
+
+const copyVectorText = async (value?: string, message = '已复制') => {
+  if (!value) return
+  await navigator.clipboard.writeText(value)
+  ElMessage.success(message)
+}
+
+const openQuestionFailure = (questionId?: number) => {
+  if (!questionId) return
+  router.push({ path: '/admin/questions', query: { questionId: String(questionId) } })
+}
+
+const openKnowledgeFailure = (documentId?: number, chunkId?: number) => {
+  if (!documentId && !chunkId) return
+  router.push({
+    path: '/knowledge',
+    query: {
+      ...(documentId ? { documentId: String(documentId) } : {}),
+      ...(chunkId ? { chunkId: String(chunkId) } : {})
+    }
+  })
+}
+
 const jobStatusLabel = (status?: string) => {
   const map: Record<string, string> = {
     PENDING: '待执行',
@@ -418,7 +913,7 @@ const loadPage = async () => {
   errorMessage.value = ''
   try {
     const params = { days: rangeDays.value }
-    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData, duplicateConfigData] = await Promise.all([
+    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData, vectorFailureData, vectorJobsPage, duplicateConfigData] = await Promise.all([
       getAdminAiOverviewApi(params),
       getAdminAgentOverviewApi(params),
       getAdminAgentTrendApi(params),
@@ -426,6 +921,16 @@ const loadPage = async () => {
       getAdminDashboardOverviewApi(),
       getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 }),
       getAdminVectorStoreHealthApi(),
+      getAdminVectorStoreFailuresApi({
+        type: 'all',
+        status: vectorFailureStatus.value,
+        limit: vectorFailureLimit.value
+      }),
+      getAdminVectorIndexJobsApi({
+        status: vectorJobStatus.value,
+        pageNo: 1,
+        pageSize: 8
+      }),
       getQuestionDuplicateConfigApi()
     ])
     aiOverview.value = aiData
@@ -435,6 +940,8 @@ const loadPage = async () => {
     dashboard.value = dashboardData
     jobs.value = jobsPage.records || []
     vectorHealth.value = vectorData
+    vectorFailures.value = vectorFailureData
+    vectorJobs.value = vectorJobsPage.records || []
     duplicateConfig.value = duplicateConfigData
     await renderChart()
   } catch (error) {
@@ -443,6 +950,145 @@ const loadPage = async () => {
       : '接口请求失败'
   } finally {
     loading.value = false
+  }
+}
+
+const loadVectorFailures = async () => {
+  vectorFailureLoading.value = true
+  try {
+    vectorFailures.value = await getAdminVectorStoreFailuresApi({
+      type: 'all',
+      status: vectorFailureStatus.value,
+      limit: vectorFailureLimit.value
+    })
+  } finally {
+    vectorFailureLoading.value = false
+  }
+}
+
+const loadVectorJobs = async () => {
+  vectorJobLoading.value = true
+  try {
+    const result = await getAdminVectorIndexJobsApi({
+      status: vectorJobStatus.value,
+      pageNo: 1,
+      pageSize: 8
+    })
+    vectorJobs.value = result.records || []
+  } finally {
+    vectorJobLoading.value = false
+  }
+}
+
+const questionVectorSummary = (result: QuestionEmbeddingRebuildResult) => {
+  const errors = result.errors?.length ? `, errors ${result.errors.length}` : ''
+  return `updated ${result.updated || 0}, vectors ${result.vectorUpdated || 0}, deleted ${result.vectorDeleted || 0}${errors}`
+}
+
+const knowledgeVectorSummary = (result: KnowledgeVectorRebuildVO) => {
+  const errors = result.errors?.length ? `, errors ${result.errors.length}` : ''
+  return `docs ${result.documentCount || 0}, chunks ${result.chunkCount || 0}, vectors ${result.vectorUpdated || 0}, deleted ${result.vectorDeleted || 0}${errors}`
+}
+
+const recordQuestionVectorAction = (title: string, result: QuestionEmbeddingRebuildResult) => {
+  lastVectorAction.value = {
+    title,
+    summary: questionVectorSummary(result),
+    detail: result.vectorEnabled === false ? 'Vector store is disabled; only metadata was updated.' : undefined
+  }
+}
+
+const recordKnowledgeVectorAction = (title: string, result: KnowledgeVectorRebuildVO) => {
+  lastVectorAction.value = {
+    title,
+    summary: knowledgeVectorSummary(result),
+    detail: result.vectorEnabled === false ? 'Vector store is disabled; only chunk states were inspected.' : undefined
+  }
+}
+
+const handleRebuildQuestionVectors = async () => {
+  await ElMessageBox.confirm('Rebuild up to 5000 question embeddings and Qdrant points?', 'Rebuild question vectors', { type: 'warning' })
+  rebuildingQuestionVectors.value = true
+  try {
+    const result = await rebuildQuestionEmbeddingApi(5000)
+    const summary = questionVectorSummary(result)
+    recordQuestionVectorAction('Question vector rebuild', result)
+    ElMessage.success(summary)
+    await loadVectorJobs()
+    await loadPage()
+  } finally {
+    rebuildingQuestionVectors.value = false
+  }
+}
+
+const handleRetryQuestionVectors = async () => {
+  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending question embeddings?', 'Retry question vectors', { type: 'warning' })
+  retryingQuestionVectors.value = true
+  try {
+    const result = await retryFailedQuestionEmbeddingApi(1000)
+    const summary = questionVectorSummary(result)
+    recordQuestionVectorAction('Question vector retry', result)
+    ElMessage.success(summary)
+    await loadVectorJobs()
+    await loadPage()
+  } finally {
+    retryingQuestionVectors.value = false
+  }
+}
+
+const handleRebuildKnowledgeVectors = async () => {
+  await ElMessageBox.confirm('Rebuild up to 5000 personal knowledge documents across users?', 'Rebuild knowledge vectors', { type: 'warning' })
+  rebuildingKnowledgeVectors.value = true
+  try {
+    const result = await rebuildAdminKnowledgeVectorsApi(5000)
+    const summary = knowledgeVectorSummary(result)
+    recordKnowledgeVectorAction('Knowledge vector rebuild', result)
+    ElMessage.success(summary)
+    await loadVectorJobs()
+    await loadPage()
+  } finally {
+    rebuildingKnowledgeVectors.value = false
+  }
+}
+
+const handleRetryKnowledgeVectors = async () => {
+  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending knowledge chunks?', 'Retry knowledge vectors', { type: 'warning' })
+  retryingKnowledgeVectors.value = true
+  try {
+    const result = await retryAdminKnowledgeVectorsApi(1000)
+    const summary = knowledgeVectorSummary(result)
+    recordKnowledgeVectorAction('Knowledge vector retry', result)
+    ElMessage.success(summary)
+    await loadVectorJobs()
+    await loadPage()
+  } finally {
+    retryingKnowledgeVectors.value = false
+  }
+}
+const handleRetryVectorDeletes = async () => {
+  const retryable = vectorDeleteOutbox.value?.retryable || 0
+  await ElMessageBox.confirm(
+    `将重试最多 500 条 Qdrant 向量删除补偿记录，当前待处理/失败共 ${retryable} 条。确认继续？`,
+    '重试向量删除补偿',
+    { type: 'warning' }
+  )
+  retryingVectorDeletes.value = true
+  try {
+    const result = await retryAdminVectorDeletesApi(500)
+    const summary = `补偿完成：匹配 ${result.matched || 0} 条，删除 ${result.deleted || 0} 条，失败 ${result.failed || 0} 条`
+    if ((result.errors || []).length || result.failed) {
+      await ElMessageBox.alert(
+        [summary, ...(result.errors || []).slice(0, 8).map((item, index) => `${index + 1}. ${item}`)].join('\n'),
+        '向量删除补偿结果',
+        { type: 'warning' }
+      )
+    } else {
+      ElMessage.success(summary)
+    }
+    await loadVectorJobs()
+    await loadPage()
+  } finally {
+    retryingVectorDeletes.value = false
   }
 }
 
@@ -726,12 +1372,217 @@ onBeforeUnmount(() => {
   color: #f87171;
 }
 
+.vector-index-grid,
+.vector-runtime-grid,
+.vector-action-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.vector-index-grid,
+.vector-runtime-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vector-index-card,
+.vector-action-result {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.vector-index-card {
+  min-height: 132px;
+  padding: 14px;
+}
+
+.vector-index-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vector-index-card__head span,
+.vector-index-card small,
+.vector-index-card em,
+.vector-action-result small {
+  color: var(--app-text-muted);
+}
+
+.vector-index-card__head strong {
+  color: var(--app-text);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.vector-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.vector-status-list span {
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 12px;
+}
+
+.vector-action-list :deep(.el-button) {
+  justify-content: flex-start;
+  width: 100%;
+  margin-left: 0;
+}
+
+.vector-action-result {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.vector-action-result strong,
+.vector-action-result span {
+  color: var(--app-text);
+}
+
+.vector-failure-grid {
+  grid-template-columns: 1fr;
+}
+
+.vector-job-grid {
+  grid-template-columns: 1fr;
+}
+
+.vector-failure-head {
+  align-items: center;
+}
+
+.vector-failure-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.vector-failure-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.vector-failure-summary__item {
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.vector-failure-summary__item span {
+  display: block;
+  color: var(--app-text-muted);
+}
+
+.vector-failure-summary__item strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text);
+  font-size: 20px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.vector-failure-alert,
+.vector-failure-tabs {
+  margin-top: 16px;
+}
+
+.ops-table {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ops-table :deep(.el-table__inner-wrapper),
+.ops-table :deep(.el-table__body-wrapper),
+.ops-table :deep(.el-table__header-wrapper) {
+  background: rgba(2, 6, 23, 0.3);
+}
+
+.ops-table :deep(.el-table__cell) {
+  background: rgba(2, 6, 23, 0.22);
+  color: var(--app-text);
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+}
+
+.ops-table :deep(th.el-table__cell) {
+  background: rgba(15, 23, 42, 0.82);
+  color: var(--app-text-muted);
+}
+
+.ops-table :deep(.el-table__empty-text) {
+  color: var(--app-text-muted);
+}
+
+.vector-error-text,
+.vector-point-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--app-text);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.vector-error-text {
+  color: #fca5a5;
+}
+
+.vector-empty-text {
+  color: var(--app-text-muted);
+}
+
+.vector-job-table {
+  margin-top: 16px;
+}
+
+.vector-job-main strong,
+.vector-job-main small {
+  display: block;
+}
+
+.vector-job-main strong {
+  color: var(--app-text);
+}
+
+.vector-job-main small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vector-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 @media (max-width: 1280px) {
   .ops-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ops-config-grid {
+  .ops-config-grid,
+  .vector-failure-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -742,8 +1593,22 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .ops-config-grid {
+  .ops-config-grid,
+  .vector-index-grid,
+  .vector-runtime-grid,
+  .vector-failure-summary {
     grid-template-columns: 1fr;
+  }
+
+  .vector-failure-head,
+  .vector-failure-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vector-failure-tools :deep(.el-button),
+  .vector-failure-tools :deep(.el-select) {
+    width: 100% !important;
   }
 }
 </style>

@@ -7,7 +7,7 @@
         <p>维护你的学习资料、项目笔记和面试复盘，并用语义检索快速找到真正相关的片段。</p>
       </div>
       <div class="hero-actions">
-        <el-button :icon="Refresh" :loading="loading" @click="loadDocuments">刷新</el-button>
+        <el-button :icon="Refresh" :loading="loading" @click="refreshKnowledgePage">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
         <el-upload
           class="knowledge-upload"
@@ -19,6 +19,7 @@
           <el-button :icon="Files" :loading="uploading">上传资料</el-button>
         </el-upload>
         <el-button :icon="Refresh" :loading="rebuilding" @click="handleRebuildVectors">重建向量</el-button>
+        <el-button :icon="Refresh" :loading="retryingFailedVectors" @click="handleRetryFailedVectors">重试失败向量</el-button>
       </div>
     </section>
 
@@ -68,6 +69,27 @@
       </article>
     </section>
 
+    <section class="index-observability-strip">
+      <article>
+        <span>Index Status</span>
+        <div class="index-pill-row">
+          <el-tag v-for="item in indexStatusItems" :key="item.status" size="small" :type="statusType(item.status)" effect="light">
+            {{ statusLabel(item.status) }} {{ item.count }}
+          </el-tag>
+        </div>
+      </article>
+      <article>
+        <span>Embedding Models</span>
+        <strong>{{ embeddingModelSummary }}</strong>
+        <small>{{ vectorIndexHealthLabel }}</small>
+      </article>
+      <article>
+        <span>Failed Chunks</span>
+        <strong>{{ failedChunkCount }}</strong>
+        <small>{{ pendingChunkCount }} pending / {{ disabledChunkCount }} disabled</small>
+      </article>
+    </section>
+
     <section class="duplicate-review-strip">
       <div>
         <p class="section-kicker">Dedup Review</p>
@@ -82,7 +104,7 @@
     </section>
 
     <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
-      <el-button type="primary" @click="loadDocuments">重试</el-button>
+      <el-button type="primary" @click="refreshKnowledgePage">重试</el-button>
     </AppState>
 
     <section v-if="hasDuplicateHotspots && !errorMessage" class="duplicate-hotspot-strip">
@@ -124,6 +146,7 @@
               <el-form-item label="状态">
                 <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
                   <el-option label="已索引" value="INDEXED" />
+                  <el-option label="待索引" value="PENDING" />
                   <el-option label="空内容" value="EMPTY" />
                   <el-option label="失败" value="FAILED" />
                 </el-select>
@@ -251,8 +274,190 @@
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
+                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">Evaluate</el-button>
               </el-form-item>
             </el-form>
+            <div v-if="knowledgeEvaluation" class="knowledge-evaluation-panel">
+              <div class="knowledge-evaluation-panel__head">
+                <div>
+                  <span>Retrieval Evaluation</span>
+                  <strong>{{ formatRate(knowledgeEvaluation.passRate) }}</strong>
+                </div>
+                <el-tag :type="knowledgeEvaluation.failedCount ? 'warning' : 'success'" effect="light">
+                  {{ knowledgeEvaluation.passedCount || 0 }} / {{ knowledgeEvaluation.evaluatedCount || 0 }} passed
+                </el-tag>
+              </div>
+              <div class="knowledge-evaluation-grid">
+                <article>
+                  <span>Top score</span>
+                  <strong>{{ scoreLabel(knowledgeEvaluationTop?.topScore) }}</strong>
+                </article>
+                <article>
+                  <span>References</span>
+                  <strong>{{ knowledgeEvaluationTop?.referenceCount || 0 }}</strong>
+                </article>
+                <article>
+                  <span>Citation</span>
+                  <strong>{{ knowledgeTrustLabel(knowledgeEvaluationTop) }}</strong>
+                </article>
+                <article>
+                  <span>Expected</span>
+                  <strong>{{ knowledgeEvaluationExpectedLabel }}</strong>
+                </article>
+              </div>
+              <div v-if="knowledgeEvaluationTop" class="knowledge-trust-strip">
+                <el-tag :type="trustTagType(knowledgeEvaluationTop.citationValid)" effect="plain">
+                  Citation {{ trustText(knowledgeEvaluationTop.citationValid) }}
+                </el-tag>
+                <el-tag :type="trustTagType(knowledgeEvaluationTop.answerGrounded)" effect="plain">
+                  Grounded {{ trustText(knowledgeEvaluationTop.answerGrounded) }}
+                </el-tag>
+                <span v-if="knowledgeEvaluationTop.answerExcerpt">{{ knowledgeEvaluationTop.answerExcerpt }}</span>
+              </div>
+              <el-alert
+                v-if="knowledgeEvaluationTop?.failureReason || knowledgeEvaluationTop?.citationWarning"
+                class="knowledge-evaluation-alert"
+                type="warning"
+                :closable="false"
+                :title="knowledgeEvaluationTop.failureReason || knowledgeEvaluationTop.citationWarning"
+              />
+            </div>
+            <div class="knowledge-eval-dataset" v-loading="knowledgeEvalCaseLoading || knowledgeEvalRunLoading">
+              <div class="knowledge-eval-dataset__head">
+                <div>
+                  <span>Persistent Evaluation</span>
+                  <strong>{{ knowledgeEvalCaseTotal || 0 }} cases · {{ knowledgeEvalLatestRunSummary }}</strong>
+                </div>
+                <div class="knowledge-eval-dataset__actions">
+                  <el-button
+                    :loading="knowledgeEvalSaving"
+                    :disabled="!knowledgeEvalHasCurrentQuery"
+                    @click="saveCurrentKnowledgeEvalCase"
+                  >
+                    保存当前样本
+                  </el-button>
+                  <el-button type="primary" :loading="knowledgeEvalRunning" @click="runKnowledgeEvalCases">
+                    运行启用样本
+                  </el-button>
+                  <el-button @click="refreshKnowledgeEvalWorkspace">刷新</el-button>
+                </div>
+              </div>
+
+              <div class="knowledge-eval-dataset__filters">
+                <el-input
+                  v-model.trim="knowledgeEvalCaseQuery.keyword"
+                  clearable
+                  placeholder="case / query / note"
+                  @keyup.enter="fetchKnowledgeEvalCases"
+                />
+                <el-select v-model="knowledgeEvalCaseQuery.expectedDocumentType" clearable filterable placeholder="资料类型">
+                  <el-option v-for="type in documentTypeOptions" :key="`eval-type-${type}`" :label="type" :value="type" />
+                </el-select>
+                <el-select v-model="knowledgeEvalCaseQuery.expectNoAnswer" clearable placeholder="期望结果">
+                  <el-option label="命中文档" :value="false" />
+                  <el-option label="无答案" :value="true" />
+                </el-select>
+                <el-select v-model="knowledgeEvalCaseQuery.enabled" clearable placeholder="状态">
+                  <el-option label="Enabled" :value="1" />
+                  <el-option label="Disabled" :value="0" />
+                </el-select>
+                <el-button type="primary" @click="fetchKnowledgeEvalCases">查询</el-button>
+              </div>
+
+              <div class="knowledge-eval-dataset__body">
+                <div class="knowledge-eval-cases">
+                  <el-table :data="knowledgeEvalCases" row-key="id" size="small" max-height="260">
+                    <el-table-column prop="caseId" label="Case" min-width="150" show-overflow-tooltip />
+                    <el-table-column prop="query" label="Query" min-width="220" show-overflow-tooltip />
+                    <el-table-column label="Expected" min-width="180" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        <span>{{ knowledgeEvalExpectedLabel(row) }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="Status" width="105">
+                      <template #default="{ row }">
+                        <el-tag :type="row.enabled === 1 ? 'success' : 'info'" effect="plain">
+                          {{ row.enabled === 1 ? 'Enabled' : 'Disabled' }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="Action" width="96" fixed="right">
+                      <template #default="{ row }">
+                        <el-button link type="danger" @click="deleteKnowledgeEvalCase(row.id)">Delete</el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <el-pagination
+                    v-model:current-page="knowledgeEvalCaseQuery.pageNo"
+                    v-model:page-size="knowledgeEvalCaseQuery.pageSize"
+                    small
+                    background
+                    layout="total, prev, pager, next"
+                    :total="knowledgeEvalCaseTotal"
+                    @change="fetchKnowledgeEvalCases"
+                  />
+                </div>
+
+                <div class="knowledge-eval-runs" v-loading="knowledgeEvalRunDetailLoading">
+                  <div class="knowledge-eval-runs__head">
+                    <strong>Recent Runs</strong>
+                    <el-button link type="primary" @click="fetchKnowledgeEvalRuns">Reload</el-button>
+                  </div>
+                  <button
+                    v-for="run in knowledgeEvalRuns"
+                    :key="run.id"
+                    class="knowledge-eval-run-item"
+                    type="button"
+                    @click="openKnowledgeEvalRun(run.id)"
+                  >
+                    <span>{{ run.runNo || `#${run.id}` }}</span>
+                    <strong>{{ formatRate(run.passRate) }}</strong>
+                    <small>{{ run.status || '-' }} · {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
+                  </button>
+                  <el-empty v-if="!knowledgeEvalRuns.length" description="No runs" />
+                </div>
+              </div>
+
+              <div v-if="knowledgeEvalLatestRun" class="knowledge-eval-latest">
+                <div class="knowledge-eval-latest__head">
+                  <div>
+                    <strong>{{ knowledgeEvalLatestRun.runNo || `#${knowledgeEvalLatestRun.id}` }}</strong>
+                    <span>{{ knowledgeEvalLatestTrustSummary }}</span>
+                  </div>
+                  <div class="knowledge-eval-latest__tags">
+                    <el-tag :type="knowledgeEvalLatestRun.failedCount ? 'warning' : 'success'" effect="light">
+                      {{ formatRate(knowledgeEvalLatestRun.passRate) }}
+                    </el-tag>
+                    <el-tag :type="knowledgeEvalLatestTrustRiskCount ? 'warning' : 'success'" effect="plain">
+                      Trust {{ knowledgeEvalLatestTrustedCount }}/{{ knowledgeEvalLatestRun.results?.length || 0 }}
+                    </el-tag>
+                  </div>
+                </div>
+                <el-alert
+                  v-if="knowledgeEvalLatestRun.errorMessage"
+                  class="knowledge-evaluation-alert"
+                  type="error"
+                  :closable="false"
+                  :title="knowledgeEvalLatestRun.errorMessage"
+                />
+                <div v-if="knowledgeEvalLatestFailures.length" class="knowledge-eval-failures">
+                  <article v-for="item in knowledgeEvalLatestFailures" :key="item.id || item.caseId">
+                    <strong>{{ item.caseId || `case-${item.evalCaseId || '-'}` }}</strong>
+                    <span>{{ knowledgeEvalExpectedLabel(item) }} / top {{ item.topTitle || `#${item.topDocumentId || '-'}` }} / {{ scoreLabel(item.topScore) }}</span>
+                    <div class="knowledge-trust-strip knowledge-trust-strip--compact">
+                      <el-tag :type="trustTagType(item.citationValid)" effect="plain">
+                        Citation {{ trustText(item.citationValid) }}
+                      </el-tag>
+                      <el-tag :type="trustTagType(item.answerGrounded)" effect="plain">
+                        Grounded {{ trustText(item.answerGrounded) }}
+                      </el-tag>
+                    </div>
+                    <small>{{ item.failureReason || item.citationWarning || item.note || '-' }}</small>
+                  </article>
+                </div>
+                <el-empty v-else-if="knowledgeEvalLatestRun.results?.length" description="最近一次运行全部通过" />
+              </div>
+            </div>
             <div class="result-list" v-loading="searching">
               <article v-for="item in searchResults" :key="resultKey(item)" class="result-row">
                 <div>
@@ -321,6 +526,9 @@
             <el-button class="ask-button" type="primary" :icon="ChatDotRound" :loading="asking" @click="handleAsk">
               生成回答
             </el-button>
+            <el-button class="ask-button ask-button--secondary" :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">
+              Evaluate Retrieval
+            </el-button>
 
             <div v-if="answer" class="answer-box">
               <span>回答</span>
@@ -329,12 +537,30 @@
                 class="answer-alert"
                 type="warning"
                 :closable="false"
-                title="引用不足，回答仅供参考"
+                title="未找到足够相关的引用来源"
+              />
+              <el-alert
+                v-else-if="askAnswerGrounded === true"
+                class="answer-alert"
+                type="success"
+                :closable="false"
+                title="可信回答：引用编号已通过校验"
+              />
+              <el-alert
+                v-else-if="askAnswerGrounded === false || askCitationWarning"
+                class="answer-alert"
+                type="warning"
+                :closable="false"
+                :title="askCitationWarning || '生成结果未通过引用校验，未作为可信回答展示'"
               />
               <div class="answer-quality">
                 <span>引用 {{ askReferenceCount }} 条</span>
                 <span>最高分 {{ scoreLabel(askTopReferenceScore) }}</span>
                 <span>最低分 {{ scoreLabel(askMinReferenceScore) }}</span>
+                <span v-if="askCitationValid !== undefined">Citation {{ askCitationValid ? 'OK' : 'Check' }}</span>
+                <span v-if="askAnswerGrounded !== undefined">Grounded {{ askAnswerGrounded ? 'Yes' : 'No' }}</span>
+                <span v-if="askCitedReferenceNumbers.length">Cited {{ askCitedReferenceNumbers.join(', ') }}</span>
+                <span v-if="askInvalidReferenceNumbers.length">Invalid refs {{ askInvalidReferenceNumbers.join(', ') }}</span>
               </div>
               <p>{{ answer }}</p>
             </div>
@@ -410,6 +636,10 @@
           <article class="rebuild-stat">
             <span>向量</span>
             <strong>{{ rebuildResult.vectorUpdated || 0 }}</strong>
+          </article>
+          <article class="rebuild-stat">
+            <span>清理向量</span>
+            <strong>{{ rebuildResult.vectorDeleted || 0 }}</strong>
           </article>
           <article class="rebuild-stat">
             <span>重复片段</span>
@@ -570,6 +800,7 @@
             <div class="chunk-row__head">
               <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
               <el-tag v-if="chunk.duplicateInDocument" size="small" type="warning" effect="light">重复</el-tag>
+              <el-tag size="small" :type="statusType(chunk.indexStatus)" effect="light">{{ statusLabel(chunk.indexStatus) }}</el-tag>
               <span>{{ chunk.sourceRef || '--' }}</span>
               <el-button
                 link
@@ -591,11 +822,27 @@
               </el-button>
             </div>
             <p>{{ chunk.content || '--' }}</p>
-            <small>{{ shortHash(chunk.chunkHash) }}</small>
+            <small>
+              {{ shortHash(chunk.chunkHash) }}
+              <template v-if="chunk.embeddingModel"> · {{ chunk.embeddingModel }}</template>
+              <template v-if="chunk.embeddingDimension"> · {{ chunk.embeddingDimension }}d</template>
+              <template v-if="chunk.indexedAt"> · {{ formatDateTime(chunk.indexedAt) }}</template>
+            </small>
+            <el-alert
+              v-if="chunk.lastError"
+              class="chunk-error"
+              type="error"
+              :closable="false"
+              :title="chunk.lastError"
+            />
             <div v-if="similarChunkMap[chunk.id]?.length" class="similar-list">
               <article v-for="item in similarChunkMap[chunk.id]" :key="`${chunk.id}-${resultKey(item)}`">
                 <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
-                <span>{{ scoreLabel(item.score) }} · {{ item.sourceRef || item.documentType || '--' }}</span>
+                <span>
+                  {{ scoreLabel(item.score) }} · {{ item.sourceRef || item.documentType || '--' }}
+                  <template v-if="item.chunkHash"> · {{ shortHash(item.chunkHash) }}</template>
+                  <template v-if="item.embeddingModel"> · {{ item.embeddingModel }}</template>
+                </span>
                 <p>{{ item.snippet || '--' }}</p>
               </article>
             </div>
@@ -638,10 +885,23 @@
           <div class="chunk-row__head">
             <strong>#{{ (selectedChunkDetail.chunkIndex ?? 0) + 1 }}</strong>
             <el-tag size="small" effect="plain">{{ selectedChunkSource?.documentType || 'NOTE' }}</el-tag>
+            <el-tag size="small" :type="statusType(selectedChunkDetail.indexStatus)" effect="light">{{ statusLabel(selectedChunkDetail.indexStatus) }}</el-tag>
             <span>{{ selectedChunkDetail.sourceRef || '--' }}</span>
           </div>
           <p>{{ selectedChunkDetail.content || '--' }}</p>
-          <small>{{ shortHash(selectedChunkDetail.chunkHash) }}</small>
+          <small>
+            {{ shortHash(selectedChunkDetail.chunkHash) }}
+            <template v-if="selectedChunkDetail.embeddingModel"> · {{ selectedChunkDetail.embeddingModel }}</template>
+            <template v-if="selectedChunkDetail.embeddingDimension"> · {{ selectedChunkDetail.embeddingDimension }}d</template>
+            <template v-if="selectedChunkDetail.indexedAt"> · {{ formatDateTime(selectedChunkDetail.indexedAt) }}</template>
+          </small>
+          <el-alert
+            v-if="selectedChunkDetail.lastError"
+            class="chunk-error"
+            type="error"
+            :closable="false"
+            :title="selectedChunkDetail.lastError"
+          />
         </div>
         <el-empty v-else-if="!chunkDetailLoadingId" description="暂无片段详情" />
       </div>
@@ -653,15 +913,23 @@
 import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { formatDateTime } from '@/utils/format'
 
 import {
   askKnowledgeApi,
+  askKnowledgeStreamApi,
   cleanupKnowledgeExactDuplicatesApi,
   createKnowledgeDocumentApi,
   deleteKnowledgeChunkApi,
   deleteKnowledgeDocumentApi,
+  evaluateKnowledgeApi,
+  deleteKnowledgeEvalCaseApi,
   getKnowledgeConfigApi,
   getKnowledgeChunkApi,
+  getKnowledgeEvalCasesApi,
+  getKnowledgeEvalRunApi,
+  getKnowledgeEvalRunsApi,
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
@@ -673,6 +941,9 @@ import {
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
+  retryFailedKnowledgeVectorsApi,
+  runKnowledgeEvalApi,
+  saveKnowledgeEvalCaseApi,
   restoreKnowledgeDocumentVersionApi,
   searchKnowledgeApi,
   updateKnowledgeDocumentApi,
@@ -686,6 +957,12 @@ import {
   type KnowledgeDuplicateReviewItemVO,
   type KnowledgeDuplicateReviewVO,
   type KnowledgeExactDuplicateGroupVO,
+  type KnowledgeEvaluationItemVO,
+  type KnowledgeEvaluationVO,
+  type KnowledgeEvalCaseQueryDTO,
+  type KnowledgeEvalCaseVO,
+  type KnowledgeEvalRunResultVO,
+  type KnowledgeEvalRunVO,
   type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
   type KnowledgeSearchResultVO
@@ -693,11 +970,19 @@ import {
 import AppState from '@/components/common/AppState.vue'
 
 const loading = ref(false)
+const route = useRoute()
 const searching = ref(false)
 const asking = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
 const rebuilding = ref(false)
+const knowledgeEvaluating = ref(false)
+const knowledgeEvalCaseLoading = ref(false)
+const knowledgeEvalRunLoading = ref(false)
+const knowledgeEvalSaving = ref(false)
+const knowledgeEvalRunning = ref(false)
+const knowledgeEvalRunDetailLoading = ref(false)
+const retryingFailedVectors = ref(false)
 const chunksLoading = ref(false)
 const duplicateReviewLoading = ref(false)
 const exactDuplicateLoading = ref(false)
@@ -729,12 +1014,23 @@ const exactDuplicateScopeType = ref('')
 const similarChunkMap = ref<Record<number, KnowledgeSearchResultVO[]>>({})
 const knowledgeStats = ref<KnowledgeStatsVO | null>(null)
 const knowledgeConfig = ref<KnowledgeConfigVO | null>(null)
+const knowledgeEvaluation = ref<KnowledgeEvaluationVO | null>(null)
+const knowledgeEvalCases = ref<KnowledgeEvalCaseVO[]>([])
+const knowledgeEvalRuns = ref<KnowledgeEvalRunVO[]>([])
+const knowledgeEvalLatestRun = ref<KnowledgeEvalRunVO | null>(null)
+const knowledgeEvalCaseTotal = ref(0)
+const knowledgeEvalRunTotal = ref(0)
 const duplicateReview = ref<KnowledgeDuplicateReviewVO | null>(null)
 const answer = ref('')
 const askInsufficientReferences = ref(false)
 const askReferenceCount = ref(0)
 const askTopReferenceScore = ref<number | undefined>()
 const askMinReferenceScore = ref<number | undefined>()
+const askCitationValid = ref<boolean | undefined>()
+const askAnswerGrounded = ref<boolean | undefined>()
+const askCitationWarning = ref('')
+const askCitedReferenceNumbers = ref<number[]>([])
+const askInvalidReferenceNumbers = ref<number[]>([])
 const total = ref(0)
 const keyword = ref('')
 const question = ref('')
@@ -742,6 +1038,20 @@ const limit = ref(10)
 const knowledgeScopeType = ref('')
 const knowledgeScopeDocumentId = ref<number | undefined>()
 const searchMinScorePercent = ref<number | null>(null)
+
+const knowledgeEvalCaseQuery = reactive<KnowledgeEvalCaseQueryDTO>({
+  keyword: '',
+  expectedDocumentType: '',
+  expectNoAnswer: undefined,
+  enabled: 1,
+  pageNo: 1,
+  pageSize: 5
+})
+
+const knowledgeEvalRunQuery = reactive({
+  pageNo: 1,
+  pageSize: 5
+})
 const askMinScorePercent = ref<number | null>(null)
 const duplicateThresholdPercent = ref<number | null>(null)
 const dialogVisible = ref(false)
@@ -787,6 +1097,43 @@ const documentTypeSummary = computed(() => {
   return items.map(([type, count]) => `${type}:${count}`).join(' / ')
 })
 
+
+const indexStatusItems = computed(() => {
+  const counts = knowledgeStats.value?.indexStatusCounts || {}
+  const ordered = ['INDEXED', 'PENDING', 'FAILED', 'DISABLED', 'DELETED']
+  const items = ordered
+    .map((status) => ({ status, count: Number(counts[status] || 0) }))
+    .filter((item) => item.count > 0)
+  for (const [status, count] of Object.entries(counts)) {
+    if (!ordered.includes(status) && Number(count) > 0) {
+      items.push({ status, count: Number(count) })
+    }
+  }
+  return items.length ? items : [{ status: knowledgeStats.value?.vectorEnabled ? 'PENDING' : 'DISABLED', count: 0 }]
+})
+
+const failedChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.FAILED || 0))
+
+const pendingChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.PENDING || 0))
+
+const disabledChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.DISABLED || 0))
+
+const embeddingModelSummary = computed(() => {
+  const counts = knowledgeStats.value?.embeddingModelCounts || {}
+  const items = Object.entries(counts)
+    .filter(([, count]) => Number(count) > 0)
+    .sort((left, right) => Number(right[1]) - Number(left[1]))
+    .slice(0, 3)
+  if (!items.length) return '--'
+  return items.map(([model, count]) => `${model}:${count}`).join(' / ')
+})
+
+const vectorIndexHealthLabel = computed(() => {
+  if (!knowledgeStats.value?.vectorEnabled) return 'vector disabled, keyword fallback active'
+  if (failedChunkCount.value > 0) return 'failed chunks need retry'
+  if (pendingChunkCount.value > 0) return 'pending chunks are waiting for indexing'
+  return 'vector index looks healthy'
+})
 const duplicateTypeSummary = computed(() => {
   const counts = knowledgeStats.value?.duplicateTypeCounts || {}
   const items = Object.entries(counts)
@@ -844,8 +1191,10 @@ const retrievalModeLabel = computed(() => {
 
 const chunkStrategyLabel = computed(() => {
   const strategy = knowledgeStats.value?.chunkStrategy
-  if (strategy === 'SEMANTIC_BLOCK_800_OVERLAP_80') return '语义分块 800/80'
-  return strategy || '语义分块'
+  if (strategy === 'SEMANTIC_BLOCK_800_OVERLAP_80') return '语义块 800/80'
+  if (strategy === 'STRUCTURED_MARKDOWN_800_OVERLAP_80') return '结构化 Markdown 800/80'
+  if (strategy === 'STRUCTURED_MARKDOWN_BLOCK_800_OVERLAP_80') return '结构化块 800/80'
+  return strategy || '语义块'
 })
 
 const chunkConfigLabel = computed(() => {
@@ -899,6 +1248,55 @@ const duplicateReviewThresholdLabel = computed(() => {
 const chunkDetailTitle = computed(() =>
   selectedChunkSource.value?.title || `片段 #${selectedChunkDetail.value?.id || '--'}`
 )
+
+const knowledgeEvaluationTop = computed<KnowledgeEvaluationItemVO | undefined>(() => knowledgeEvaluation.value?.items?.[0])
+
+const knowledgeEvaluationExpectedLabel = computed(() => {
+  const item = knowledgeEvaluationTop.value
+  if (!item) return '--'
+  if (item.expectNoAnswer) return 'No answer'
+  if (item.expectedDocumentTitle) return item.expectedDocumentTitle
+  if (item.expectedDocumentId) return `#${item.expectedDocumentId}`
+  if (item.expectedDocumentType) return item.expectedDocumentType
+  return 'Any source'
+})
+
+const knowledgeEvalLatestFailures = computed<KnowledgeEvalRunResultVO[]>(() =>
+  (knowledgeEvalLatestRun.value?.results || [])
+    .filter((item) => item.passed === false)
+    .slice(0, 5)
+)
+
+const knowledgeEvalLatestTrustedCount = computed(() =>
+  (knowledgeEvalLatestRun.value?.results || [])
+    .filter((item) => item.expectNoAnswer || (item.citationValid === true && item.answerGrounded === true))
+    .length
+)
+
+const knowledgeEvalLatestTrustRiskCount = computed(() => {
+  const results = knowledgeEvalLatestRun.value?.results || []
+  if (!results.length) return 0
+  return results.length - knowledgeEvalLatestTrustedCount.value
+})
+
+const knowledgeEvalLatestTrustSummary = computed(() => {
+  const results = knowledgeEvalLatestRun.value?.results || []
+  if (!results.length) return 'No trust samples yet'
+  return `${knowledgeEvalLatestTrustRiskCount.value} citation / grounding risks`
+})
+
+const knowledgeEvalLatestRunSummary = computed(() => {
+  const run = knowledgeEvalLatestRun.value
+  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.passRate)}` : 'No run yet'
+})
+
+const knowledgeEvalHasCurrentQuery = computed(() => Boolean((question.value || keyword.value).trim()))
+
+const selectedKnowledgeDocumentOption = computed(() => {
+  const id = knowledgeScopeDocumentId.value
+  if (!id) return undefined
+  return documentOptions.value.find((item) => item.id === id)
+})
 
 const normalizedSearchMinScore = computed(() => {
   if (searchMinScorePercent.value === null || searchMinScorePercent.value === undefined) return undefined
@@ -955,6 +1353,15 @@ const documentQueryParams = () => ({
   status: query.status || undefined
 })
 
+const firstQueryValue = (value: unknown) => Array.isArray(value) ? value[0] : value
+
+const parsePositiveQueryNumber = (value: unknown) => {
+  const raw = firstQueryValue(value)
+  if (!raw) return undefined
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -999,6 +1406,41 @@ const resetDocumentFilter = async () => {
   await loadDocuments()
 }
 
+const openKnowledgeFailureFromQuery = async () => {
+  const documentId = parsePositiveQueryNumber(route.query.documentId)
+  const chunkId = parsePositiveQueryNumber(route.query.chunkId)
+  if (!documentId && !chunkId) return
+  if (documentId) {
+    query.pageNo = 1
+    knowledgeScopeDocumentId.value = documentId
+  }
+  if (!allDocuments.value.length) {
+    await loadDocuments()
+  }
+  let document = documentId ? allDocuments.value.find((item) => item.id === documentId) : undefined
+  if (!document && documentId) {
+    try {
+      document = await getKnowledgeDocumentDetailApi(documentId)
+    } catch {
+      document = undefined
+    }
+  }
+  if (document) {
+    await openChunksDrawer(document)
+  }
+  if (chunkId) {
+    await openChunkDetail({
+      documentId,
+      chunkId,
+      title: document?.title,
+      documentType: document?.documentType,
+      snippet: '',
+      score: undefined,
+      matchType: 'VECTOR_FAILURE'
+    })
+  }
+}
+
 const handleSearch = async () => {
   if (!keyword.value) {
     searchResults.value = []
@@ -1018,6 +1460,195 @@ const handleSearch = async () => {
   }
 }
 
+const handleEvaluateKnowledge = async () => {
+  const queryText = question.value.trim() || keyword.value.trim()
+  if (!queryText) {
+    ElMessage.warning('Enter a search keyword or question first')
+    return
+  }
+  const expectedDocument = selectedKnowledgeDocumentOption.value
+  const expectedReference = expectedDocument
+    ? undefined
+    : (searchResults.value[0] || askReferences.value[0])
+  const hasExpectedSource = Boolean(expectedDocument || expectedReference || knowledgeScopeType.value)
+  knowledgeEvaluating.value = true
+  try {
+    knowledgeEvaluation.value = await evaluateKnowledgeApi({
+      limit: limit.value,
+      minScore: normalizedAskMinScore.value ?? normalizedSearchMinScore.value,
+      samples: [
+        {
+          caseId: 'current-query',
+          query: queryText,
+          expectedDocumentId: expectedDocument?.id ?? expectedReference?.documentId,
+          expectedDocumentTitle: expectedDocument?.title ?? expectedReference?.title,
+          expectedDocumentType: knowledgeScopeType.value || expectedDocument?.documentType || expectedReference?.documentType,
+          expectNoAnswer: !hasExpectedSource,
+          note: expectedDocument ? 'Current selected document scope' : expectedReference ? 'Top current retrieval result' : 'No expected source selected'
+        }
+      ]
+    })
+    const item = knowledgeEvaluation.value.items?.[0]
+    const score = item?.topScore != null ? `, top ${scoreLabel(item.topScore)}` : ''
+    ElMessage.success(
+      `Evaluation ${item?.passed ? 'passed' : 'finished'}: ${knowledgeEvaluation.value.passedCount || 0}/${knowledgeEvaluation.value.evaluatedCount || 0}${score}`
+    )
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    knowledgeEvaluating.value = false
+  }
+}
+
+const knowledgeEvalExpectedLabel = (item: {
+  expectNoAnswer?: boolean
+  expectedDocumentTitle?: string
+  expectedDocumentId?: number
+  expectedDocumentType?: string
+}) => {
+  if (item.expectNoAnswer) return 'No answer expected'
+  if (item.expectedDocumentTitle) return item.expectedDocumentTitle
+  if (item.expectedDocumentId) return `Document #${item.expectedDocumentId}`
+  if (item.expectedDocumentType) return item.expectedDocumentType
+  return 'Any source'
+}
+
+const currentKnowledgeEvalCasePayload = () => {
+  const queryText = question.value.trim() || keyword.value.trim()
+  if (!queryText) return undefined
+  const expectedDocument = selectedKnowledgeDocumentOption.value
+  const expectedReference = expectedDocument ? undefined : (searchResults.value[0] || askReferences.value[0])
+  const expectedDocumentId = expectedDocument?.id ?? expectedReference?.documentId
+  const expectedDocumentTitle = expectedDocument?.title ?? expectedReference?.title
+  const expectedDocumentType = knowledgeScopeType.value || expectedDocument?.documentType || expectedReference?.documentType
+  const hasExpectedSource = Boolean(expectedDocumentId || expectedDocumentTitle || expectedDocumentType)
+  const caseSeed = [queryText, expectedDocumentId || expectedDocumentTitle || expectedDocumentType || 'NO_SOURCE']
+    .join('|')
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]/g, '')
+    .slice(0, 72)
+    .toUpperCase()
+  return {
+    caseId: `RAG-${caseSeed || 'CURRENT'}`,
+    query: queryText,
+    expectedDocumentId,
+    expectedDocumentTitle,
+    expectedDocumentType,
+    expectNoAnswer: !hasExpectedSource,
+    note: expectedDocument
+      ? 'Current selected document scope'
+      : expectedReference
+        ? 'Top current retrieval result'
+        : 'No expected source selected',
+    enabled: 1
+  }
+}
+
+const fetchKnowledgeEvalCases = async () => {
+  knowledgeEvalCaseLoading.value = true
+  try {
+    const result = await getKnowledgeEvalCasesApi(knowledgeEvalCaseQuery)
+    knowledgeEvalCases.value = result.records || []
+    knowledgeEvalCaseTotal.value = result.total || 0
+  } catch {
+    knowledgeEvalCases.value = []
+    knowledgeEvalCaseTotal.value = 0
+  } finally {
+    knowledgeEvalCaseLoading.value = false
+  }
+}
+
+const fetchKnowledgeEvalRuns = async () => {
+  knowledgeEvalRunLoading.value = true
+  try {
+    const result = await getKnowledgeEvalRunsApi(knowledgeEvalRunQuery)
+    knowledgeEvalRuns.value = result.records || []
+    knowledgeEvalRunTotal.value = result.total || 0
+  } catch {
+    knowledgeEvalRuns.value = []
+    knowledgeEvalRunTotal.value = 0
+  } finally {
+    knowledgeEvalRunLoading.value = false
+  }
+}
+
+const openKnowledgeEvalRun = async (id?: number) => {
+  if (!id) return
+  knowledgeEvalRunDetailLoading.value = true
+  try {
+    knowledgeEvalLatestRun.value = await getKnowledgeEvalRunApi(id)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    knowledgeEvalRunDetailLoading.value = false
+  }
+}
+
+const refreshKnowledgeEvalWorkspace = async () => {
+  await Promise.all([fetchKnowledgeEvalCases(), fetchKnowledgeEvalRuns()])
+  if (knowledgeEvalRuns.value[0]?.id) {
+    await openKnowledgeEvalRun(knowledgeEvalRuns.value[0].id)
+  } else {
+    knowledgeEvalLatestRun.value = null
+  }
+}
+
+const refreshKnowledgePage = async () => {
+  await Promise.all([loadDocuments(), refreshKnowledgeEvalWorkspace()])
+}
+
+const saveCurrentKnowledgeEvalCase = async () => {
+  const payload = currentKnowledgeEvalCasePayload()
+  if (!payload) {
+    ElMessage.warning('Enter a search keyword or question first')
+    return
+  }
+  knowledgeEvalSaving.value = true
+  try {
+    await saveKnowledgeEvalCaseApi(payload)
+    ElMessage.success('Evaluation case saved')
+    await refreshKnowledgeEvalWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    knowledgeEvalSaving.value = false
+  }
+}
+
+const runKnowledgeEvalCases = async () => {
+  knowledgeEvalRunning.value = true
+  try {
+    const result = await runKnowledgeEvalApi({
+      onlyEnabled: true,
+      minScore: normalizedAskMinScore.value ?? normalizedSearchMinScore.value
+    })
+    knowledgeEvalLatestRun.value = result
+    ElMessage.success(
+      `Evaluation run done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, pass ${formatRate(result.passRate)}`
+    )
+    await fetchKnowledgeEvalRuns()
+    if (result.id) {
+      await openKnowledgeEvalRun(result.id)
+    }
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    knowledgeEvalRunning.value = false
+  }
+}
+
+const deleteKnowledgeEvalCase = async (id?: number) => {
+  if (!id) return
+  await ElMessageBox.confirm('Delete this RAG evaluation case?', 'Delete evaluation case', { type: 'warning' })
+  try {
+    await deleteKnowledgeEvalCaseApi(id)
+    ElMessage.success('Evaluation case deleted')
+    await fetchKnowledgeEvalCases()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  }
+}
+
 const handleAsk = async () => {
   if (!question.value.trim()) {
     ElMessage.warning('请先输入问题')
@@ -1030,20 +1661,73 @@ const handleAsk = async () => {
   askReferenceCount.value = 0
   askTopReferenceScore.value = undefined
   askMinReferenceScore.value = undefined
+  askCitationValid.value = undefined
+  askAnswerGrounded.value = undefined
+  askCitationWarning.value = ''
+  askCitedReferenceNumbers.value = []
+  askInvalidReferenceNumbers.value = []
+
+  const payload = {
+    question: question.value.trim(),
+    limit: Math.min(limit.value || 5, 10),
+    minScore: normalizedAskMinScore.value,
+    documentId: knowledgeScopeDocumentId.value,
+    documentType: knowledgeScopeType.value || undefined
+  }
+
   try {
-    const result = await askKnowledgeApi({
-      question: question.value.trim(),
-      limit: Math.min(limit.value || 5, 10),
-      minScore: normalizedAskMinScore.value,
-      documentId: knowledgeScopeDocumentId.value,
-      documentType: knowledgeScopeType.value || undefined
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (!settled) {
+          settled = true
+          resolve()
+        }
+      }
+      askKnowledgeStreamApi(payload, {
+        onReferences: (references) => {
+          askReferences.value = references
+          askReferenceCount.value = references.length
+          askInsufficientReferences.value = references.length === 0
+        },
+        onToken: (delta) => {
+          answer.value += delta
+        },
+        onCitation: (result) => {
+          if (result.answer) answer.value = result.answer
+          askCitationValid.value = result.citationValid
+          askAnswerGrounded.value = result.answerGrounded
+          askCitationWarning.value = result.citationWarning || ''
+          askCitedReferenceNumbers.value = result.citedReferenceNumbers || []
+          askInvalidReferenceNumbers.value = result.invalidReferenceNumbers || []
+          if (result.insufficientReferences !== undefined) {
+            askInsufficientReferences.value = !!result.insufficientReferences
+          }
+        },
+        onDone: () => finish(),
+        onError: async (message) => {
+          // 流式失败时降级到同步接口，保证可用性
+          try {
+            const result = await askKnowledgeApi(payload)
+            answer.value = result.answer || ''
+            askInsufficientReferences.value = !!result.insufficientReferences
+            askReferences.value = result.references || []
+            askReferenceCount.value = result.referenceCount ?? askReferences.value.length
+            askTopReferenceScore.value = result.topReferenceScore
+            askMinReferenceScore.value = result.minReferenceScore
+            askCitationValid.value = result.citationValid
+            askAnswerGrounded.value = result.answerGrounded
+            askCitationWarning.value = result.citationWarning || ''
+            askCitedReferenceNumbers.value = result.citedReferenceNumbers || []
+            askInvalidReferenceNumbers.value = result.invalidReferenceNumbers || []
+          } catch {
+            ElMessage.error(message || '问答失败，请稍后重试')
+          } finally {
+            finish()
+          }
+        }
+      })
     })
-    answer.value = result.answer || ''
-    askInsufficientReferences.value = !!result.insufficientReferences
-    askReferences.value = result.references || []
-    askReferenceCount.value = result.referenceCount ?? askReferences.value.length
-    askTopReferenceScore.value = result.topReferenceScore
-    askMinReferenceScore.value = result.minReferenceScore
   } finally {
     asking.value = false
   }
@@ -1375,6 +2059,30 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
   }
 }
 
+const handleRetryFailedVectors = async () => {
+  await ElMessageBox.confirm(
+    '将重试当前用户最多 500 个失败或超时待索引片段所属文档的向量索引，期间可能产生 embedding 调用成本。确认继续？',
+    '重试知识库向量索引',
+    { type: 'warning' }
+  )
+  retryingFailedVectors.value = true
+  rebuildTargetLabel.value = '失败或超时待索引记录'
+  try {
+    const result = await retryFailedKnowledgeVectorsApi(500)
+    rebuildResult.value = result
+    rebuildDialogVisible.value = true
+    const deleteSummary = result.vectorDeleted ? `，清理向量 ${result.vectorDeleted || 0} 条` : ''
+    const summary = `重试完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条${deleteSummary}`
+    if ((result.errors || []).length || (result.failedDocuments || []).length) {
+      ElMessage.warning(summary)
+      return
+    }
+    ElMessage.success(summary)
+  } finally {
+    retryingFailedVectors.value = false
+  }
+}
+
 const handleDelete = async (row: KnowledgeDocumentVO) => {
   await ElMessageBox.confirm(
     `确认删除资料「${row.title || `#${row.id}`}」？删除后会同步清理对应向量索引。`,
@@ -1392,6 +2100,11 @@ const handleDelete = async (row: KnowledgeDocumentVO) => {
     askReferenceCount.value = 0
     askTopReferenceScore.value = undefined
     askMinReferenceScore.value = undefined
+    askCitationValid.value = undefined
+    askAnswerGrounded.value = undefined
+    askCitationWarning.value = ''
+    askCitedReferenceNumbers.value = []
+    askInvalidReferenceNumbers.value = []
     await loadDocuments()
   } finally {
     deletingId.value = null
@@ -1412,6 +2125,32 @@ const matchLabel = (value?: string) => {
 const scoreLabel = (score?: number) => {
   if (score === undefined || score === null) return '--'
   return `${Math.round(score * 100)}%`
+}
+
+const formatRate = (value?: number) => {
+  if (value === undefined || value === null) return '--'
+  const rate = Number(value)
+  if (!Number.isFinite(rate)) return '--'
+  return `${rate.toFixed(rate >= 99 ? 0 : 1).replace(/\.0$/, '')}%`
+}
+
+const trustText = (value?: boolean) => {
+  if (value === true) return 'valid'
+  if (value === false) return 'risk'
+  return 'unknown'
+}
+
+const trustTagType = (value?: boolean) => {
+  if (value === true) return 'success'
+  if (value === false) return 'warning'
+  return 'info'
+}
+
+const knowledgeTrustLabel = (item?: Pick<KnowledgeEvaluationItemVO, 'citationValid' | 'answerGrounded'>) => {
+  if (!item) return '--'
+  if (item.citationValid === true && item.answerGrounded === true) return 'Trusted'
+  if (item.citationValid === false || item.answerGrounded === false) return 'Needs review'
+  return 'Unknown'
 }
 
 const escapeHtml = (value: string) =>
@@ -1441,14 +2180,28 @@ const statusType = (status?: string) => {
 }
 
 const statusLabel = (status?: string) => {
-  const value = status || 'INDEXED'
+  const value = status || 'PENDING'
   const map: Record<string, string> = {
-    INDEXED: '已索引'
+    INDEXED: '已索引',
+    PENDING: '待索引',
+    FAILED: '索引失败',
+    DISABLED: '未启用',
+    DELETED: '已删除'
   }
   return map[value] || value
 }
 
-onMounted(loadDocuments)
+onMounted(async () => {
+  await refreshKnowledgePage()
+  await openKnowledgeFailureFromQuery()
+})
+
+watch(
+  () => [route.query.documentId, route.query.chunkId],
+  async () => {
+    await openKnowledgeFailureFromQuery()
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -1683,9 +2436,9 @@ onMounted(loadDocuments)
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
-.config-strip {
+.config-strip,
+.index-observability-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--app-border);
@@ -1693,28 +2446,50 @@ onMounted(loadDocuments)
   background: rgba(15, 23, 42, 0.32);
 }
 
-.config-strip article {
+.config-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.index-observability-strip {
+  grid-template-columns: 1.4fr 1fr 1fr;
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(20, 83, 45, 0.1);
+}
+
+.config-strip article,
+.index-observability-strip article {
   min-width: 0;
 }
 
 .config-strip span,
-.config-strip small {
+.config-strip small,
+.index-observability-strip span,
+.index-observability-strip small {
   display: block;
   color: var(--app-text-muted);
   font-size: 12px;
 }
 
-.config-strip strong {
+.config-strip strong,
+.index-observability-strip strong {
   display: block;
   margin: 5px 0;
   color: var(--app-text);
   font-size: 15px;
 }
 
-.config-strip small {
+.config-strip small,
+.index-observability-strip small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.index-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .duplicate-review-strip {
@@ -1938,6 +2713,225 @@ onMounted(loadDocuments)
   margin-top: 10px;
 }
 
+.knowledge-evaluation-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  border-radius: 8px;
+  background: rgba(30, 64, 175, 0.14);
+}
+
+.knowledge-evaluation-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledge-evaluation-panel__head span,
+.knowledge-evaluation-grid span {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.knowledge-evaluation-panel__head strong,
+.knowledge-evaluation-grid strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.knowledge-evaluation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.knowledge-evaluation-grid article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.knowledge-evaluation-grid strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-evaluation-alert {
+  margin-top: 2px;
+}
+
+.knowledge-trust-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  min-width: 0;
+
+  span:not(.el-tag__content) {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.knowledge-trust-strip--compact {
+  margin-top: 8px;
+}
+
+.knowledge-eval-dataset {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 8px;
+  background: rgba(20, 83, 45, 0.1);
+}
+
+.knowledge-eval-dataset__head,
+.knowledge-eval-dataset__actions,
+.knowledge-eval-dataset__filters,
+.knowledge-eval-runs__head,
+.knowledge-eval-latest__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.knowledge-eval-dataset__head,
+.knowledge-eval-runs__head,
+.knowledge-eval-latest__head {
+  justify-content: space-between;
+}
+
+.knowledge-eval-dataset__head span,
+.knowledge-eval-dataset__head strong,
+.knowledge-eval-runs__head strong,
+.knowledge-eval-latest__head strong,
+.knowledge-eval-run-item span,
+.knowledge-eval-run-item strong,
+.knowledge-eval-run-item small,
+.knowledge-eval-failures strong,
+.knowledge-eval-failures span,
+.knowledge-eval-failures small {
+  display: block;
+}
+
+.knowledge-eval-dataset__head span,
+.knowledge-eval-run-item small,
+.knowledge-eval-failures span,
+.knowledge-eval-failures small {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.knowledge-eval-dataset__head strong,
+.knowledge-eval-runs__head strong,
+.knowledge-eval-latest__head strong,
+.knowledge-eval-run-item span,
+.knowledge-eval-run-item strong,
+.knowledge-eval-failures strong {
+  color: var(--app-text);
+}
+
+.knowledge-eval-dataset__actions,
+.knowledge-eval-dataset__filters {
+  flex-wrap: wrap;
+}
+
+.knowledge-eval-latest__head > div,
+.knowledge-eval-latest__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.knowledge-eval-latest__head > div:first-child {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.knowledge-eval-latest__head span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.knowledge-eval-dataset__filters :deep(.el-input),
+.knowledge-eval-dataset__filters :deep(.el-select) {
+  width: 180px;
+}
+
+.knowledge-eval-dataset__filters :deep(.el-input) {
+  width: 240px;
+}
+
+.knowledge-eval-dataset__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.knowledge-eval-cases {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.knowledge-eval-runs,
+.knowledge-eval-latest,
+.knowledge-eval-failures {
+  display: grid;
+  gap: 8px;
+}
+
+.knowledge-eval-run-item,
+.knowledge-eval-failures article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.knowledge-eval-run-item {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.knowledge-eval-run-item:hover {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.knowledge-eval-run-item strong {
+  margin: 4px 0;
+  font-size: 18px;
+}
+
+.knowledge-eval-failures span,
+.knowledge-eval-failures small {
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .result-meta {
   flex-direction: column;
   align-items: flex-end;
@@ -2002,6 +2996,10 @@ onMounted(loadDocuments)
   margin-top: 10px;
 }
 
+.chunk-error {
+  margin-top: 10px;
+}
+
 .reference-row small {
   display: block;
   margin-top: 8px;
@@ -2014,7 +3012,9 @@ onMounted(loadDocuments)
 
   .summary-grid,
   .config-strip,
-  .duplicate-hotspot-strip {
+  .index-observability-strip,
+  .duplicate-hotspot-strip,
+  .knowledge-eval-dataset__body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2034,8 +3034,20 @@ onMounted(loadDocuments)
 
   .summary-grid,
   .config-strip,
-  .duplicate-hotspot-strip {
+  .index-observability-strip,
+  .duplicate-hotspot-strip,
+  .knowledge-eval-dataset__body {
     grid-template-columns: 1fr;
+  }
+
+  .knowledge-eval-dataset__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .knowledge-eval-dataset__filters :deep(.el-input),
+  .knowledge-eval-dataset__filters :deep(.el-select) {
+    width: 100%;
   }
 
   .result-meta {

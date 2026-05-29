@@ -141,6 +141,7 @@ import {
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
+import { notifyUnreadChanged } from '@/utils/notificationEvents'
 
 const router = useRouter()
 const loading = ref(false)
@@ -241,6 +242,7 @@ const handleClickNotification = async (item: NotificationVO) => {
       await markNotificationReadApi(item.id)
       item.isRead = 1
       unreadCount.value = Math.max(0, unreadCount.value - 1)
+      notifyUnreadChanged()
     } catch {
       // silent
     }
@@ -259,8 +261,13 @@ const handleMarkAllRead = async () => {
   markingAll.value = true
   try {
     await markAllNotificationsReadApi()
-    notifications.value.forEach((item) => { item.isRead = 1 })
     unreadCount.value = 0
+    notifyUnreadChanged()
+    if (query.isRead === 0) {
+      await fetchNotifications()
+    } else {
+      notifications.value.forEach((item) => { item.isRead = 1 })
+    }
     ElMessage.success('已全部标记为已读')
   } catch {
     ElMessage.error('操作失败')

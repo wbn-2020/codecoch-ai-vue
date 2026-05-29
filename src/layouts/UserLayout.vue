@@ -28,17 +28,18 @@
         </div>
 
         <div class="app-layout__header-actions">
-          <div class="command-search" aria-hidden="true">
+          <button class="command-search" type="button" aria-label="打开命令面板" @click="commandPaletteOpen = true">
             <Search :size="15" />
             <span>Search workspace</span>
-          </div>
+            <kbd>Ctrl K</kbd>
+          </button>
           <el-tooltip :content="notificationTooltip" placement="bottom">
             <button class="icon-button icon-button--ghost notification-bell" type="button" aria-label="通知中心" @click="router.push('/notifications')">
               <Bell :size="16" />
               <span v-if="unreadAvailable && unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
             </button>
           </el-tooltip>
-          <el-button v-if="authStore.isAdmin" class="admin-entry" text @click="router.push('/admin')">
+          <el-button v-if="authStore.canAccessAdmin" class="admin-entry" text @click="router.push('/admin')">
             <Shield :size="15" />
             管理端
           </el-button>
@@ -60,6 +61,8 @@
         </div>
       </el-header>
 
+      <CommandPalette v-model="commandPaletteOpen" scope="user" />
+
       <TagsView scope="user" />
 
       <el-main class="app-layout__main">
@@ -73,14 +76,16 @@
 
 <script setup lang="ts">
 import { Bell, PanelLeftClose, PanelLeftOpen, Search, Shield } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
+import CommandPalette from '@/components/layout/CommandPalette.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import UserSidebar from '@/components/layout/UserSidebar.vue'
+import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -98,6 +103,7 @@ const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
+const commandPaletteOpen = ref(false)
 const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（未读数暂不可用）')
 const fetchUnreadCount = async () => {
   try {
@@ -109,7 +115,14 @@ const fetchUnreadCount = async () => {
   }
 }
 
-onMounted(fetchUnreadCount)
+onMounted(() => {
+  fetchUnreadCount()
+  window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
+})
 
 watch(
   () => route.fullPath,
@@ -310,7 +323,25 @@ const handleCommand = async (command: string) => {
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.62);
   color: var(--app-text-muted);
+  cursor: pointer;
   font-size: 12px;
+
+  kbd {
+    margin-left: auto;
+    padding: 2px 6px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: rgba(2, 6, 23, 0.48);
+    color: var(--app-text-muted);
+    font-family: inherit;
+    font-size: 11px;
+  }
+
+  &:hover {
+    border-color: rgba(129, 140, 248, 0.5);
+    background: rgba(99, 102, 241, 0.14);
+    color: var(--app-text);
+  }
 }
 
 .admin-entry {

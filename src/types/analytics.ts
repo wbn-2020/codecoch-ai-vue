@@ -1,4 +1,4 @@
-﻿export interface MetricPointVO {
+export interface MetricPointVO {
   name: string
   value: number
 }
@@ -149,23 +149,171 @@ export interface VectorCollectionInfoVO {
   errorMessage?: string
 }
 
+export interface VectorMysqlIndexStatsVO {
+  tableName?: string
+  idColumn?: string
+  total?: number
+  statusCounts?: Array<{ status?: string; count?: number }>
+  modelCounts?: Array<{ model?: string; count?: number }>
+  lastIndexedAt?: string
+  errorMessage?: string
+}
+
 export interface VectorStoreHealthVO {
   enabled: boolean
+  checks?: {
+    enabled?: boolean
+    collectionsPresent?: boolean
+    dimensionMatched?: boolean
+    deleteOutboxClear?: boolean
+  }
+  deleteOutbox?: {
+    pending?: number
+    failed?: number
+    done?: number
+    retryable?: number
+    clear?: boolean
+    errorMessage?: string
+    statusCounts?: Array<{ status?: string; count?: number }>
+    collectionCounts?: Array<{ collectionName?: string; status?: string; count?: number }>
+  }
+  mysqlIndexes?: {
+    questionEmbedding?: VectorMysqlIndexStatsVO
+    personalKnowledgeChunk?: VectorMysqlIndexStatsVO
+  }
+  config?: {
+    enabled?: boolean
+    provider?: string
+    baseUrl?: string
+    defaultLimit?: number
+    requestTimeout?: string
+    knowledgeCollection?: string
+    knowledgeAskMinScore?: number
+    knowledgeNearDuplicateThreshold?: number
+    knowledgeChunkSize?: number
+    knowledgeChunkOverlap?: number
+  }
+  embeddingMetrics?: {
+    windowDays?: number
+    callCount?: number
+    successCount?: number
+    failedCount?: number
+    failureRate?: number
+    averageElapsedMs?: number
+    maxElapsedMs?: number
+    totalTokens?: number
+    lastCalledAt?: string
+    modelCounts?: Array<{ model?: string; count?: number }>
+    errorMessage?: string
+  }
   collections: VectorCollectionInfoVO[]
+}
+
+export interface VectorDeleteRetryResultVO {
+  vectorEnabled?: boolean
+  requested?: number
+  matched?: number
+  deleted?: number
+  failed?: number
+  errors?: string[]
+  deleteOutbox?: VectorStoreHealthVO['deleteOutbox']
+}
+
+export interface VectorFailureQuery {
+  type?: 'all' | 'question' | 'knowledge' | 'deleteOutbox'
+  status?: 'ALL' | 'FAILED' | 'PENDING'
+  limit?: number
+}
+
+export interface VectorQuestionFailureVO {
+  questionId?: number
+  indexStatus?: string
+  embeddingModel?: string
+  embeddingDimension?: number
+  indexedAt?: string
+  lastError?: string
+  updatedAt?: string
+}
+
+export interface VectorKnowledgeFailureVO {
+  chunkId?: number
+  userId?: number
+  documentId?: number
+  chunkIndex?: number
+  indexStatus?: string
+  embeddingModel?: string
+  embeddingDimension?: number
+  indexedAt?: string
+  lastError?: string
+  updatedAt?: string
+}
+
+export interface VectorDeleteOutboxFailureVO {
+  collectionName?: string
+  pointId?: string
+  bizType?: string
+  status?: string
+  retryCount?: number
+  lastError?: string
+  updatedAt?: string
+}
+
+export interface VectorFailureDetailsVO {
+  type?: string
+  status?: string
+  statuses?: string[]
+  limit?: number
+  questionFailures?: VectorQuestionFailureVO[]
+  knowledgeFailures?: VectorKnowledgeFailureVO[]
+  deleteOutboxFailures?: VectorDeleteOutboxFailureVO[]
+  errors?: string[]
+  generatedAt?: string
+}
+
+export interface VectorIndexJobVO {
+  id?: number
+  jobNo?: string
+  jobType?: string
+  scopeType?: string
+  scopeId?: string
+  status?: string
+  requestedCount?: number
+  totalCount?: number
+  successCount?: number
+  failedCount?: number
+  vectorUpdated?: number
+  vectorDeleted?: number
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
+  lastError?: string
+  errorMessage?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface VectorIndexJobQuery {
+  jobType?: string
+  status?: 'ALL' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+  pageNo?: number
+  pageSize?: number
 }
 
 export interface QuestionDuplicateConfigVO {
   maxBatchCheckCount: number
   maxRuleCandidateCount: number
-  maxVectorSeedCount: number
   vectorSearchLimit: number
   embeddingBatchSize: number
   titleJaccardThreshold: number
   titleLevenshteinThreshold: number
   contentSimilarityThreshold: number
   semanticSimilarityThreshold: number
+  semanticReviewThreshold: number
+  semanticStrongThreshold: number
   semanticVectorWeight: number
   semanticTextWeight: number
+  semanticMetadataWeight?: number
+  semanticTagWeight?: number
 }
 
 export interface AdminAnalyticsDictionaryQuery {
