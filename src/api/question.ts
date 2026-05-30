@@ -298,6 +298,13 @@ export const rejectQuestionReviewApi = (id: number, data: QuestionReviewRejectDT
   )
 }
 
+export const cancelQuestionReviewApi = (id: number, data?: Partial<QuestionReviewRejectDTO>) => {
+  return request.post<QuestionReviewDetailVO, QuestionReviewDetailVO>(
+    `/admin/question-reviews/${id}/cancel`,
+    data
+  )
+}
+
 export const batchApproveQuestionReviewsApi = (data: BatchQuestionReviewApproveDTO) => {
   return request.post<BatchQuestionReviewResultVO, BatchQuestionReviewResultVO>(
     '/admin/question-reviews/batch-approve',

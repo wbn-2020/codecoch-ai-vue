@@ -273,7 +273,7 @@ export interface QuestionCreateDTO {
 
 export type QuestionUpdateDTO = QuestionCreateDTO
 
-export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | string
+export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | string
 export type QuestionDuplicateReviewStatus = 'PENDING' | 'CONFIRMED' | 'IGNORED' | string
 export type QuestionDuplicateMatchType =
   | 'HARD_TITLE_HASH'

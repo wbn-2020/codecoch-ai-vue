@@ -294,6 +294,7 @@
                   <el-option label="待审核" value="PENDING" />
                   <el-option label="已通过" value="APPROVED" />
                   <el-option label="已驳回" value="REJECTED" />
+                  <el-option label="已作废" value="CANCELLED" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -344,7 +345,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="createdAt" label="生成时间" min-width="170" />
-              <el-table-column label="操作" width="250" fixed="right">
+              <el-table-column label="操作" width="300" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
                   <el-button link type="success" :disabled="row.reviewStatus !== 'PENDING'" @click="openReviewDrawer(row.id)">
@@ -355,6 +356,9 @@
                   </el-button>
                   <el-button link type="danger" :disabled="row.reviewStatus !== 'PENDING'" @click="handleRejectReview(row.id)">
                     驳回
+                  </el-button>
+                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleCancelReview(row.id)">
+                    作废
                   </el-button>
                 </template>
               </el-table-column>
@@ -922,6 +926,13 @@
       <template #footer>
         <el-button @click="reviewDrawerVisible = false">关闭</el-button>
         <el-button
+          type="warning"
+          :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
+          @click="reviewDetail && handleCancelReview(reviewDetail.id)"
+        >
+          作废
+        </el-button>
+        <el-button
           type="primary"
           :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
           :loading="reviewApproveSaving"
@@ -999,19 +1010,19 @@
 
     <el-dialog v-model="importDialogVisible" title="批量导入题目" width="500px">
       <div class="import-dialog-body">
-        <p>支持 Excel (.xlsx) 格式，请按模板格式填写题目数据。</p>
+        <p>支持 Excel (.xlsx/.xls)、Markdown (.md)、Word (.docx)、PDF (.pdf) 格式，请按模板格式填写题目数据。</p>
         <el-upload
           ref="importUploadRef"
           :auto-upload="false"
           :limit="1"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.md,.docx,.pdf"
           :on-change="handleImportFileChange"
         >
           <template #trigger>
             <el-button type="primary">选择文件</el-button>
           </template>
           <template #tip>
-            <div class="el-upload__tip">仅支持 .xlsx / .xls 文件，单次最多 500 条</div>
+            <div class="el-upload__tip">支持 .xlsx / .xls / .md / .docx / .pdf 文件，单次最多 500 条</div>
           </template>
         </el-upload>
         <el-button class="import-template-btn" link type="primary" @click="handleDownloadTemplate">下载导入模板</el-button>
@@ -1035,6 +1046,7 @@ import {
   approveQuestionReviewApi,
   batchApproveQuestionReviewsApi,
   batchRejectQuestionReviewsApi,
+  cancelQuestionReviewApi,
   checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
@@ -1389,12 +1401,14 @@ const getReviewStatusLabel = (status?: string) => {
   if (status === 'PENDING') return '待审核'
   if (status === 'APPROVED') return '已通过'
   if (status === 'REJECTED') return '已驳回'
+  if (status === 'CANCELLED') return '已作废'
   return status || '-'
 }
 
 const getReviewStatusType = (status?: string) => {
   if (status === 'APPROVED') return 'success'
   if (status === 'REJECTED') return 'danger'
+  if (status === 'CANCELLED') return 'info'
   return 'warning'
 }
 
@@ -2115,6 +2129,26 @@ const handleRejectReview = async (id: number) => {
   })
   await rejectQuestionReviewApi(id, { rejectReason: value.trim() })
   ElMessage.success('题目已驳回')
+  await fetchReviews()
+}
+
+const handleCancelReview = async (id: number) => {
+  const { value } = await ElMessageBox.prompt('请输入作废原因', '作废 AI 草稿', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：E2E 测试数据清理或生成内容不再需要',
+    inputValue: '管理员作废草稿',
+    inputValidator: (value) => {
+      const reason = value?.trim() || ''
+      if (!reason) return '请输入作废原因'
+      if (reason.length > 500) return '作废原因不能超过 500 字'
+      return true
+    }
+  })
+  await cancelQuestionReviewApi(id, { rejectReason: value.trim() })
+  ElMessage.success('题目草稿已作废')
+  if (reviewDetail.value?.id === id) {
+    reviewDrawerVisible.value = false
+  }
   await fetchReviews()
 }
 
