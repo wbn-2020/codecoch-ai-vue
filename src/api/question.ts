@@ -408,39 +408,39 @@ export const evaluateQuestionDuplicateApi = (data: QuestionDuplicateEvaluationDT
 
 export const getQuestionDuplicateEvalCasesApi = (params: QuestionDuplicateEvalCaseQueryDTO) => {
   return request.get<PageResult<QuestionDuplicateEvalCaseVO>, PageResult<QuestionDuplicateEvalCaseVO>>(
-    '/admin/question-duplicate-eval/cases',
+    '/admin/question-duplicate-reviews/eval/cases',
     { params }
   )
 }
 
 export const saveQuestionDuplicateEvalCaseApi = (data: QuestionDuplicateEvalCaseSaveDTO) => {
   return request.post<QuestionDuplicateEvalCaseVO, QuestionDuplicateEvalCaseVO>(
-    '/admin/question-duplicate-eval/cases',
+    '/admin/question-duplicate-reviews/eval/cases',
     data
   )
 }
 
 export const deleteQuestionDuplicateEvalCaseApi = (id: number) => {
-  return request.delete<null, null>(`/admin/question-duplicate-eval/cases/${id}`)
+  return request.delete<null, null>(`/admin/question-duplicate-reviews/eval/cases/${id}`)
 }
 
 export const runQuestionDuplicateEvalApi = (data?: QuestionDuplicateEvalRunRequestDTO) => {
   return request.post<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(
-    '/admin/question-duplicate-eval/runs',
+    '/admin/question-duplicate-reviews/eval/runs',
     data || {}
   )
 }
 
 export const getQuestionDuplicateEvalRunsApi = (params?: { pageNo?: number; pageSize?: number }) => {
   return request.get<PageResult<QuestionDuplicateEvalRunVO>, PageResult<QuestionDuplicateEvalRunVO>>(
-    '/admin/question-duplicate-eval/runs',
+    '/admin/question-duplicate-reviews/eval/runs',
     { params }
   )
 }
 
 
 export const getQuestionDuplicateEvalRunApi = (id: number) => {
-  return request.get<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(`/admin/question-duplicate-eval/runs/${id}`)
+  return request.get<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(`/admin/question-duplicate-reviews/eval/runs/${id}`)
 }
 export const mergeQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateMergeDTO) => {
   return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
