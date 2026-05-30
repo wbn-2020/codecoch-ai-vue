@@ -1,5 +1,6 @@
-﻿import request from '@/utils/request'
+import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import type { KnowledgeVectorRebuildVO } from '@/api/v4'
 import { normalizePageResult } from '@/utils/page'
 import type {
   AdminAnalyticsDictionaryQuery,
@@ -22,7 +23,14 @@ import type {
   PromptRegressionQuery,
   PromptRegressionResultVO,
   PromptRegressionRunDTO,
-  TrendPointVO
+  QuestionDuplicateConfigVO,
+  TrendPointVO,
+  VectorFailureDetailsVO,
+  VectorFailureQuery,
+  VectorDeleteRetryResultVO,
+  VectorIndexJobQuery,
+  VectorIndexJobVO,
+  VectorStoreHealthVO
 } from '@/types/analytics'
 
 const normalizeMetricList = (items?: MetricPointVO[]): MetricPointVO[] =>
@@ -139,6 +147,40 @@ export const getAdminAnalyticsTrainingApi = (params?: AnalyticsRangeQuery) =>
 
 export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
   request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
+
+export const getAdminVectorStoreHealthApi = () =>
+  request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/vector-store/health')
+
+export const getAdminVectorStoreFailuresApi = (params?: VectorFailureQuery) =>
+  request.get<VectorFailureDetailsVO, VectorFailureDetailsVO>('/admin/vector-store/failures', { params })
+
+export const getAdminVectorIndexJobsApi = (params?: VectorIndexJobQuery) =>
+  request
+    .get<PageResult<VectorIndexJobVO>, PageResult<VectorIndexJobVO>>('/admin/vector-store/jobs', { params })
+    .then((result) => normalizePageResult(result, params))
+
+export const retryAdminVectorDeletesApi = (limit?: number) =>
+  request.post<VectorDeleteRetryResultVO, VectorDeleteRetryResultVO>(
+    '/admin/vector-store/delete-outbox/retry',
+    undefined,
+    { params: { limit } }
+  )
+export const rebuildAdminKnowledgeVectorsApi = (limit?: number) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
+    '/admin/vector-store/knowledge/rebuild',
+    undefined,
+    { params: limit ? { limit } : undefined }
+  )
+
+export const retryAdminKnowledgeVectorsApi = (limit?: number) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
+    '/admin/vector-store/knowledge/retry-failed',
+    undefined,
+    { params: limit ? { limit } : undefined }
+  )
+
+export const getQuestionDuplicateConfigApi = () =>
+  request.get<QuestionDuplicateConfigVO, QuestionDuplicateConfigVO>('/admin/questions/duplicate/config')
 
 export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQuery) => {
   const requestParams = {

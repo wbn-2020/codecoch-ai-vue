@@ -24,6 +24,18 @@
         <Upload :size="16" />
         批量导入
       </el-button>
+      <el-button :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
+        <RefreshCw :size="16" />
+        重建向量索引
+      </el-button>
+      <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
+        <RefreshCw :size="16" />
+        向量状态
+      </el-button>
+      <el-button :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
+        <RefreshCw :size="16" />
+        重试失败向量
+      </el-button>
     </section>
 
     <div v-if="showQuestionManagement" class="admin-insight-grid">
@@ -61,6 +73,9 @@
         <el-form class="filter-form" :model="query" inline>
           <el-form-item label="关键词">
             <el-input v-model.trim="query.keyword" clearable placeholder="题目标题" />
+          </el-form-item>
+          <el-form-item label="题目ID">
+            <el-input-number v-model="query.questionId" :min="1" :precision="0" controls-position="right" placeholder="全部" style="width: 140px" />
           </el-form-item>
           <el-form-item label="分类">
             <el-select v-model="query.categoryId" clearable placeholder="全部分类" style="width: 150px">
@@ -359,6 +374,78 @@
         </el-tab-pane>
 
         <el-tab-pane v-if="showDuplicatesPane" label="重复题审核" name="duplicates">
+          <div class="duplicate-config-panel" v-loading="duplicateConfigLoading">
+            <div class="duplicate-config-panel__head">
+              <div>
+                <strong>当前去重参数</strong>
+                <span>规则判重、语义召回和候选池配置</span>
+              </div>
+              <el-button link type="primary" @click="fetchDuplicateConfig">刷新</el-button>
+            </div>
+            <div v-if="duplicateConfigItems.length" class="duplicate-config-grid">
+              <div v-for="item in duplicateConfigItems" :key="item.label" class="duplicate-config-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.hint }}</small>
+              </div>
+            </div>
+            <el-alert
+              v-else
+              type="info"
+              :closable="false"
+              show-icon
+              title="暂未加载到去重参数，审核和处理功能仍可继续使用。"
+            />
+          </div>
+          <div class="duplicate-feedback-panel" v-loading="duplicateFeedbackLoading">
+            <div class="duplicate-feedback-panel__head">
+              <div>
+                <strong>人工反馈统计</strong>
+                <span>用确认/忽略结果观察阈值是否偏松或偏紧</span>
+              </div>
+              <el-button link type="primary" @click="fetchDuplicateFeedbackStats">刷新</el-button>
+            </div>
+            <div v-if="duplicateFeedbackCards.length" class="duplicate-feedback-grid">
+              <div v-for="item in duplicateFeedbackCards" :key="item.label" class="duplicate-feedback-card">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.hint }}</small>
+              </div>
+            </div>
+            <div v-if="duplicateFeedbackRecommendation" class="duplicate-feedback-recommendation">
+              <div>
+                <span>阈值建议</span>
+                <strong>{{ duplicateFeedbackRecommendation }}</strong>
+              </div>
+              <small>样本覆盖率 {{ formatRate(duplicateFeedbackStats?.sampleCoverageRate) }} · 已处理 {{ duplicateFeedbackStats?.resolvedCount || 0 }} 条</small>
+            </div>
+            <div v-if="duplicateFeedbackBuckets.length" class="duplicate-feedback-buckets">
+              <article v-for="bucket in duplicateFeedbackBuckets" :key="bucket.label">
+                <div>
+                  <strong>{{ bucket.label }}</strong>
+                  <span>{{ bucket.totalCount || 0 }} 条</span>
+                </div>
+                <small>确认 {{ bucket.confirmedCount || 0 }} / 忽略 {{ bucket.ignoredCount || 0 }} / 确认率 {{ formatRate(bucket.confirmationRate) }}</small>
+              </article>
+            </div>
+            <el-alert
+              v-if="duplicateFeedbackMatchSummary"
+              class="duplicate-feedback-alert"
+              type="info"
+              :closable="false"
+              show-icon
+              :title="`主要命中类型：${duplicateFeedbackMatchSummary}`"
+            />
+            <el-alert
+              v-for="item in duplicateFeedbackWarnings"
+              :key="item"
+              class="duplicate-feedback-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="item"
+            />
+          </div>
           <div class="admin-filter-bar governance-filter">
             <el-form :model="duplicateQuery" inline>
               <el-form-item label="关键词">
@@ -371,12 +458,167 @@
                   <el-option label="已忽略" value="IGNORED" />
                 </el-select>
               </el-form-item>
+              <el-form-item label="置信度">
+                <el-select v-model="duplicateQuery.scoreBand" clearable placeholder="全部" style="width: 130px">
+                  <el-option label="高置信" value="STRONG" />
+                  <el-option label="待审核" value="REVIEW" />
+                </el-select>
+              </el-form-item>
               <el-form-item>
                 <el-button type="primary" @click="fetchDuplicates">查询</el-button>
                 <el-button @click="resetDuplicateQuery">重置</el-button>
                 <el-button :loading="duplicateChecking" @click="handleCheckDuplicates">检测当前页</el-button>
+                <el-button :loading="duplicateEvaluating" :disabled="duplicates.length === 0" @click="handleEvaluateDuplicates">Evaluate Candidates</el-button>
               </el-form-item>
             </el-form>
+          </div>
+          <div v-if="duplicateEvaluation" class="duplicate-evaluation-panel">
+            <div class="duplicate-evaluation-panel__head">
+              <div>
+                <strong>Evaluation Snapshot</strong>
+                <span>{{ duplicateEvaluation.evaluatedCount || 0 }} evaluated / {{ duplicateEvaluation.sampleCount || 0 }} samples</span>
+              </div>
+              <el-tag :type="duplicateEvaluation.failedCount ? 'warning' : 'success'" effect="light">
+                Accuracy {{ formatRate(duplicateEvaluation.accuracyRate) }}
+              </el-tag>
+            </div>
+            <div class="duplicate-evaluation-grid">
+              <article>
+                <span>Passed</span>
+                <strong>{{ duplicateEvaluation.passedCount || 0 }}</strong>
+              </article>
+              <article>
+                <span>Failed</span>
+                <strong>{{ duplicateEvaluation.failedCount || 0 }}</strong>
+              </article>
+              <article>
+                <span>Missing</span>
+                <strong>{{ duplicateEvaluation.missingQuestionCount || 0 }}</strong>
+              </article>
+            </div>
+            <div v-if="duplicateEvaluationFailures.length" class="duplicate-evaluation-failures">
+              <article v-for="item in duplicateEvaluationFailures" :key="item.caseId || `${item.sourceQuestionId}-${item.targetQuestionId}`">
+                <strong>{{ item.caseId || `#${item.sourceQuestionId} / #${item.targetQuestionId}` }}</strong>
+                <span>expected {{ item.expected || '-' }} / predicted {{ item.predicted || '-' }} / {{ formatSimilarity(item.score) }}</span>
+                <small>{{ item.reason || item.note || '-' }}</small>
+              </article>
+            </div>
+          </div>
+          <div class="duplicate-eval-dataset" v-loading="duplicateEvalCaseLoading || duplicateEvalRunLoading">
+            <div class="duplicate-eval-dataset__head">
+              <div>
+                <strong>Persistent Evaluation</strong>
+                <span>{{ duplicateEvalCaseTotal || 0 }} cases ? {{ duplicateEvalLatestRunSummary }}</span>
+              </div>
+              <div class="duplicate-eval-dataset__actions">
+                <el-button
+                  :loading="duplicateEvalSaving"
+                  :disabled="!duplicateEvalHasCurrentCandidates"
+                  @click="saveCurrentDuplicateEvalCases"
+                >
+                  Save Page Cases
+                </el-button>
+                <el-button type="primary" :loading="duplicateEvalRunning" @click="runDuplicateEvalCases">
+                  Run Enabled
+                </el-button>
+                <el-button @click="refreshDuplicateEvalWorkspace">Refresh</el-button>
+              </div>
+            </div>
+
+            <div class="duplicate-eval-dataset__filters">
+              <el-input
+                v-model.trim="duplicateEvalCaseQuery.keyword"
+                clearable
+                placeholder="case / question"
+                @keyup.enter="fetchDuplicateEvalCases"
+              />
+              <el-select v-model="duplicateEvalCaseQuery.expected" clearable placeholder="expected">
+                <el-option label="Duplicate" value="DUPLICATE" />
+                <el-option label="Review" value="REVIEW" />
+                <el-option label="Not duplicate" value="NOT_DUPLICATE" />
+              </el-select>
+              <el-select v-model="duplicateEvalCaseQuery.enabled" clearable placeholder="enabled">
+                <el-option label="Enabled" :value="1" />
+                <el-option label="Disabled" :value="0" />
+              </el-select>
+              <el-button type="primary" @click="fetchDuplicateEvalCases">Query</el-button>
+            </div>
+
+            <div class="duplicate-eval-dataset__body">
+              <div class="duplicate-eval-cases">
+                <el-table :data="duplicateEvalCases" row-key="id" size="small" max-height="260">
+                  <el-table-column prop="caseId" label="Case" min-width="150" show-overflow-tooltip />
+                  <el-table-column label="Pair" min-width="240" show-overflow-tooltip>
+                    <template #default="{ row }">
+                      <span>#{{ row.sourceQuestionId }} / #{{ row.targetQuestionId }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Expected" width="130">
+                    <template #default="{ row }">
+                      <el-tag :type="duplicateEvalExpectedType(row.expected)" effect="plain">
+                        {{ row.expected || '-' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Status" width="105">
+                    <template #default="{ row }">
+                      <el-tag :type="row.enabled === 1 ? 'success' : 'info'" effect="plain">
+                        {{ row.enabled === 1 ? 'Enabled' : 'Disabled' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Action" width="96" fixed="right">
+                    <template #default="{ row }">
+                      <el-button link type="danger" @click="deleteDuplicateEvalCase(row.id)">Delete</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-pagination
+                  v-model:current-page="duplicateEvalCaseQuery.pageNo"
+                  v-model:page-size="duplicateEvalCaseQuery.pageSize"
+                  small
+                  background
+                  layout="total, prev, pager, next"
+                  :total="duplicateEvalCaseTotal"
+                  @change="fetchDuplicateEvalCases"
+                />
+              </div>
+
+              <div class="duplicate-eval-runs" v-loading="duplicateEvalRunDetailLoading">
+                <div class="duplicate-eval-runs__head">
+                  <strong>Recent Runs</strong>
+                  <el-button link type="primary" @click="fetchDuplicateEvalRuns">Reload</el-button>
+                </div>
+                <button
+                  v-for="run in duplicateEvalRuns"
+                  :key="run.id"
+                  class="duplicate-eval-run-item"
+                  type="button"
+                  @click="openDuplicateEvalRun(run.id)"
+                >
+                  <span>{{ run.runNo || `#${run.id}` }}</span>
+                  <strong>{{ formatRate(run.accuracyRate) }}</strong>
+                  <small>{{ run.status || '-' }} ? {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
+                </button>
+                <el-empty v-if="!duplicateEvalRuns.length" description="No runs" />
+              </div>
+            </div>
+
+            <div v-if="duplicateEvalLatestRun" class="duplicate-eval-latest">
+              <div class="duplicate-eval-latest__head">
+                <strong>{{ duplicateEvalLatestRun.runNo || `#${duplicateEvalLatestRun.id}` }}</strong>
+                <el-tag :type="duplicateEvalLatestRun.failedCount ? 'warning' : 'success'" effect="light">
+                  {{ formatRate(duplicateEvalLatestRun.accuracyRate) }}
+                </el-tag>
+              </div>
+              <div v-if="duplicateEvalLatestFailures.length" class="duplicate-eval-failures">
+                <article v-for="item in duplicateEvalLatestFailures" :key="item.id || item.caseId">
+                  <strong>{{ item.caseId || `case-${item.evalCaseId || '-'}` }}</strong>
+                  <span>{{ item.expected || '-' }} / {{ item.predicted || '-' }} / {{ formatSimilarity(item.score) }}</span>
+                  <small>{{ item.reason || item.note || '-' }}</small>
+                </article>
+              </div>
+            </div>
           </div>
           <div class="table-card admin-table-card">
             <el-table v-loading="duplicateLoading" :data="duplicates" row-key="id">
@@ -388,6 +630,48 @@
               <el-table-column label="相似度" width="100">
                 <template #default="{ row }">{{ formatSimilarity(row.similarityScore) }}</template>
               </el-table-column>
+              <el-table-column label="语义评分" min-width="210">
+                <template #default="{ row }">
+                  <div class="duplicate-score-parts">
+                    <el-tag
+                      v-if="duplicateScoreBandLabel(row)"
+                      :type="duplicateScoreBandType(row)"
+                      size="small"
+                      effect="dark"
+                    >
+                      {{ duplicateScoreBandLabel(row) }}
+                    </el-tag>
+                    <el-tag
+                      v-for="item in duplicateScoreParts(row)"
+                      :key="`${row.id}-${item.label}`"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ item.label }} {{ item.value }}
+                    </el-tag>
+                    <span v-if="!duplicateScoreParts(row).length" class="muted-text">-</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="上下文一致性" min-width="220">
+                <template #default="{ row }">
+                  <div class="duplicate-context-tags">
+                    <el-tag
+                      v-for="item in duplicateContextTags(row)"
+                      :key="`${row.id}-${item.label}`"
+                      :type="item.type"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ item.label }} {{ item.text }}
+                    </el-tag>
+                    <small>{{ duplicateContextHint(row) }}</small>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="匹配原因" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">{{ formatDuplicateReason(row.matchReason) }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
                   <el-tag :type="getDuplicateStatusType(row.reviewStatus)" effect="plain">
@@ -397,6 +681,9 @@
               </el-table-column>
               <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
+                  <el-button link type="info" @click="openDuplicateDrawer(row.id)">
+                    详情
+                  </el-button>
                   <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleMergeDuplicate(row.id)">
                     合并
                   </el-button>
@@ -422,6 +709,101 @@
       </el-tabs>
     </section>
 
+    <el-drawer v-model="duplicateDrawerVisible" title="重复候选详情" size="860px" class="duplicate-detail-drawer">
+      <div v-loading="duplicateDetailLoading" class="duplicate-detail-content">
+        <template v-if="duplicateDetail">
+          <section class="duplicate-detail-section duplicate-detail-summary">
+            <div>
+              <div class="duplicate-detail-section__title">判重结论</div>
+              <div class="duplicate-detail-tags">
+                <el-tag :type="getDuplicateStatusType(duplicateDetail.reviewStatus)" effect="plain">
+                  {{ getDuplicateStatusLabel(duplicateDetail.reviewStatus) }}
+                </el-tag>
+                <el-tag type="info" effect="plain">{{ getDuplicateMatchTypeLabel(duplicateDetail.matchType) }}</el-tag>
+                <el-tag v-if="duplicateScoreBandLabel(duplicateDetail)" :type="duplicateScoreBandType(duplicateDetail)" effect="dark">
+                  {{ duplicateScoreBandLabel(duplicateDetail) }}
+                </el-tag>
+                <el-tag type="warning" effect="plain">{{ formatSimilarity(duplicateDetail.similarityScore) }}</el-tag>
+              </div>
+            </div>
+            <div class="duplicate-detail-meta">
+              <span>Review #{{ duplicateDetail.id }}</span>
+              <span>{{ duplicateDetail.createdAt || '-' }}</span>
+            </div>
+          </section>
+
+          <section class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">评分构成</div>
+            <div class="duplicate-score-parts duplicate-score-parts--large">
+              <el-tag
+                v-for="item in duplicateScoreParts(duplicateDetail)"
+                :key="`detail-${duplicateDetail.id}-${item.code || item.label}`"
+                effect="plain"
+              >
+                {{ item.label }} {{ item.value }}
+              </el-tag>
+              <span v-if="!duplicateScoreParts(duplicateDetail).length" class="muted-text">暂无拆分评分</span>
+            </div>
+            <p class="duplicate-detail-reason">{{ formatDuplicateReason(duplicateDetail.matchReason) }}</p>
+            <el-collapse v-if="duplicateDetail.scoreDetailJson" class="duplicate-score-debug">
+              <el-collapse-item title="原始评分 JSON" name="score-json">
+                <pre>{{ formatScoreDetailJson(duplicateDetail.scoreDetailJson) }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+          </section>
+
+          <section class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">题目对比</div>
+            <div class="duplicate-compare-grid">
+              <article class="duplicate-question-panel">
+                <header>
+                  <span>源题</span>
+                  <el-tag size="small" effect="plain">#{{ duplicateDetail.sourceQuestionId || '-' }}</el-tag>
+                </header>
+                <h4>{{ duplicateDetail.sourceQuestion?.title || duplicateDetail.sourceTitleSnapshot || '-' }}</h4>
+                <pre>{{ duplicateDetail.sourceQuestion?.content || duplicateDetail.sourceContentSnapshot || '-' }}</pre>
+              </article>
+              <article class="duplicate-question-panel">
+                <header>
+                  <span>候选题</span>
+                  <el-tag size="small" effect="plain">#{{ duplicateDetail.targetQuestionId || '-' }}</el-tag>
+                </header>
+                <h4>{{ duplicateDetail.targetQuestion?.title || duplicateDetail.targetTitleSnapshot || '-' }}</h4>
+                <pre>{{ duplicateDetail.targetQuestion?.content || duplicateDetail.targetContentSnapshot || '-' }}</pre>
+              </article>
+            </div>
+          </section>
+
+          <section v-if="duplicateDetail.ignoredReason || duplicateDetail.relationId" class="duplicate-detail-section">
+            <div class="duplicate-detail-section__title">处理记录</div>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="关系ID">{{ duplicateDetail.relationId || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="处理人">{{ duplicateDetail.reviewedBy || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="处理时间">{{ duplicateDetail.reviewedAt || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="忽略原因">{{ duplicateDetail.ignoredReason || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </section>
+        </template>
+        <el-empty v-else-if="!duplicateDetailLoading" description="暂无重复候选详情" />
+      </div>
+      <template #footer>
+        <el-button @click="duplicateDrawerVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          @click="duplicateDetail && handleMergeDuplicate(duplicateDetail.id)"
+        >
+          合并
+        </el-button>
+        <el-button
+          type="warning"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          @click="duplicateDetail && handleIgnoreDuplicate(duplicateDetail.id)"
+        >
+          忽略
+        </el-button>
+      </template>
+    </el-drawer>
     <el-drawer v-model="reviewDrawerVisible" title="AI 题目审核详情" size="760px" class="review-detail-drawer">
       <div v-loading="reviewDetailLoading" class="review-detail-content">
         <template v-if="reviewDetail">
@@ -645,8 +1027,9 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BookOpenCheck, Download, Plus, Upload } from 'lucide-vue-next'
+import { BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   approveQuestionReviewApi,
@@ -655,22 +1038,35 @@ import {
   checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
+  deleteQuestionDuplicateEvalCaseApi,
   downloadQuestionImportTemplate,
+  evaluateQuestionDuplicateApi,
   exportAdminQuestionsApi,
   generateAiQuestionsApi,
   getAdminQuestionDetailApi,
   getAdminQuestionsApi,
+  getQuestionEmbeddingStatsApi,
+  getQuestionDuplicateEvalCasesApi,
+  getQuestionDuplicateEvalRunApi,
+  getQuestionDuplicateEvalRunsApi,
   getQuestionDuplicateReviewsApi,
+  getQuestionDuplicateReviewDetailApi,
+  getQuestionDuplicateFeedbackStatsApi,
   getQuestionReviewDetailApi,
   getQuestionReviewsApi,
   ignoreQuestionDuplicateReviewApi,
   importAdminQuestionsApi,
   mergeQuestionDuplicateReviewApi,
+  rebuildQuestionEmbeddingApi,
   rejectQuestionReviewApi,
+  retryFailedQuestionEmbeddingApi,
+  runQuestionDuplicateEvalApi,
+  saveQuestionDuplicateEvalCaseApi,
   streamAiQuestionGenerateApi,
   updateAdminQuestionApi,
   updateAdminQuestionStatusApi
 } from '@/api/question'
+import { getQuestionDuplicateConfigApi } from '@/api/analytics'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
@@ -688,7 +1084,15 @@ import type {
   AiQuestionGenerateRequestDTO,
   AiQuestionGenerateResultVO,
   AiQuestionGenerateSseEvent,
+  QuestionDuplicateEvaluationItemVO,
+  QuestionDuplicateEvalCaseQueryDTO,
+  QuestionDuplicateEvalCaseVO,
+  QuestionDuplicateEvalRunVO,
+  QuestionDuplicateEvalRunResultVO,
+  QuestionDuplicateEvaluationVO,
   QuestionDuplicateReviewListVO,
+  QuestionDuplicateReviewDetailVO,
+  QuestionDuplicateFeedbackStatsVO,
   QuestionDuplicateReviewQueryDTO,
   QuestionCategoryVO,
   QuestionCreateDTO,
@@ -700,6 +1104,7 @@ import type {
   QuestionReviewQueryDTO,
   QuestionTagVO
 } from '@/types/question'
+import type { QuestionDuplicateConfigVO } from '@/types/analytics'
 
 type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
 
@@ -715,6 +1120,7 @@ const props = withDefaults(
 )
 
 const loading = ref(false)
+const route = useRoute()
 const saving = ref(false)
 const dialogLoading = ref(false)
 const dialogVisible = ref(false)
@@ -722,22 +1128,44 @@ const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const questions = ref<AdminQuestionVO[]>([])
 const categories = ref<QuestionCategoryVO[]>([])
+const duplicateEvalCaseLoading = ref(false)
+const duplicateEvalRunLoading = ref(false)
+const duplicateEvalSaving = ref(false)
+const duplicateEvalRunning = ref(false)
+const duplicateEvalRunDetailLoading = ref(false)
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
 const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
+const duplicateDetailLoading = ref(false)
+const duplicateConfigLoading = ref(false)
+const duplicateFeedbackLoading = ref(false)
+const duplicateEvaluating = ref(false)
 const generating = ref(false)
 const batchReviewProcessing = ref(false)
 const reviewDetailLoading = ref(false)
 const reviewApproveSaving = ref(false)
 const reviewDrawerVisible = ref(false)
+const duplicateDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
+const embeddingRebuilding = ref(false)
+const duplicateEvalCases = ref<QuestionDuplicateEvalCaseVO[]>([])
+const duplicateEvalRuns = ref<QuestionDuplicateEvalRunVO[]>([])
+const duplicateEvalLatestRun = ref<QuestionDuplicateEvalRunVO | null>(null)
+const duplicateEvalCaseTotal = ref(0)
+const duplicateEvalRunTotal = ref(0)
+const embeddingStatsLoading = ref(false)
+const embeddingRetrying = ref(false)
 const reviews = ref<QuestionReviewListVO[]>([])
 const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
+const duplicateDetail = ref<QuestionDuplicateReviewDetailVO | null>(null)
+const duplicateConfig = ref<QuestionDuplicateConfigVO | null>(null)
+const duplicateFeedbackStats = ref<QuestionDuplicateFeedbackStatsVO | null>(null)
+const duplicateEvaluation = ref<QuestionDuplicateEvaluationVO | null>(null)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
@@ -748,6 +1176,7 @@ const generateSseHandle = ref<ReturnType<typeof streamAiQuestionGenerateApi> | n
 
 const query = reactive<AdminQuestionQueryDTO>({
   keyword: '',
+  questionId: undefined,
   categoryId: undefined,
   tagId: undefined,
   difficulty: '',
@@ -806,11 +1235,37 @@ const generateForm = reactive<AiQuestionGenerateRequestDTO>({
   extraRequirements: ''
 })
 
+const duplicateEvalCaseQuery = reactive<QuestionDuplicateEvalCaseQueryDTO>({
+  keyword: '',
+  expected: '',
+  enabled: 1,
+  pageNo: 1,
+  pageSize: 5
+})
+
+const duplicateEvalRunQuery = reactive({
+  pageNo: 1,
+  pageSize: 5
+})
+
 const duplicateQuery = reactive<QuestionDuplicateReviewQueryDTO>({
   keyword: '',
   reviewStatus: 'PENDING',
+  scoreBand: '',
   pageNo: 1,
   pageSize: 10
+})
+
+const duplicateEvalLatestFailures = computed<QuestionDuplicateEvalRunResultVO[]>(() =>
+  (duplicateEvalLatestRun.value?.results || [])
+    .filter((item) => item.passed === false || !item.predicted)
+    .slice(0, 5)
+)
+const duplicateEvalCaseIds = computed(() => new Set(duplicateEvalCases.value.map((item) => item.id).filter(Boolean)))
+const duplicateEvalHasCurrentCandidates = computed(() => duplicates.value.some((item) => item.sourceQuestionId && item.targetQuestionId))
+const duplicateEvalLatestRunSummary = computed(() => {
+  const run = duplicateEvalLatestRun.value
+  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.accuracyRate)}` : 'No run yet'
 })
 
 const rules: FormRules<QuestionCreateDTO> = {
@@ -835,6 +1290,11 @@ const selectedPendingReviewIds = computed(() =>
     .filter((item) => item.reviewStatus === 'PENDING')
     .map((item) => item.id)
 )
+const duplicateEvaluationFailures = computed<QuestionDuplicateEvaluationItemVO[]>(() =>
+  (duplicateEvaluation.value?.items || [])
+    .filter((item) => item.passed === false || !item.predicted)
+    .slice(0, 6)
+)
 const showQuestionManagement = computed(() => !props.governanceOnly)
 const showGovernancePanel = computed(() => props.governanceOnly || !showQuestionManagement.value)
 const showGeneratePane = computed(() => !props.governanceOnly || governanceTab.value === 'generate')
@@ -851,6 +1311,56 @@ const governancePageDesc = computed(() => {
   return '处理疑似重复题的合并和忽略，保持题库质量。'
 })
 
+const formatDuplicateConfigValue = (value?: number) => {
+  if (value === undefined || value === null) return '-'
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '-'
+  return numeric % 1 === 0 ? String(numeric) : numeric.toFixed(2)
+}
+
+const duplicateFeedbackCards = computed(() => {
+  const stats = duplicateFeedbackStats.value
+  if (!stats) return []
+  return [
+    { label: '累计候选', value: stats.totalCount || 0, hint: `待处理 ${stats.pendingCount || 0}` },
+    { label: '已处理样本', value: stats.resolvedCount || 0, hint: `覆盖率 ${formatRate(stats.sampleCoverageRate)}` },
+    { label: '确认重复', value: stats.confirmedCount || 0, hint: `确认率 ${formatRate(stats.confirmationRate)}` },
+    { label: '忽略候选', value: stats.ignoredCount || 0, hint: `忽略率 ${formatRate(stats.ignoreRate)}` },
+    { label: '平均分', value: formatSimilarity(stats.averageSimilarityScore), hint: `STRONG ${stats.scoreBandCounts?.STRONG || 0} / REVIEW ${stats.scoreBandCounts?.REVIEW || 0}` }
+  ]
+})
+
+const duplicateFeedbackBuckets = computed(() => duplicateFeedbackStats.value?.scoreBuckets || [])
+
+const duplicateFeedbackRecommendation = computed(() => duplicateFeedbackStats.value?.thresholdRecommendation || '')
+
+const duplicateFeedbackWarnings = computed(() => duplicateFeedbackStats.value?.warningItems || [])
+
+const duplicateFeedbackMatchSummary = computed(() => {
+  const counts = duplicateFeedbackStats.value?.matchTypeCounts || {}
+  return Object.entries(counts)
+    .sort((left, right) => Number(right[1]) - Number(left[1]))
+    .slice(0, 4)
+    .map(([type, count]) => `${getDuplicateMatchTypeLabel(type)} ${count}`)
+    .join(' / ')
+})
+const duplicateConfigItems = computed(() => {
+  const config = duplicateConfig.value
+  if (!config) return []
+  return [
+    { label: '语义命中阈值', value: formatDuplicateConfigValue(config.semanticSimilarityThreshold), hint: '向量召回进入语义判重的最低分' },
+    { label: '语义审核阈值', value: formatDuplicateConfigValue(config.semanticReviewThreshold), hint: '向量召回和最终分进入人工审核的最低分' },
+    { label: '高置信阈值', value: formatDuplicateConfigValue(config.semanticStrongThreshold), hint: '最终分达到后标记为高置信语义重复' },
+    { label: '标题 Jaccard', value: formatDuplicateConfigValue(config.titleJaccardThreshold), hint: '标题词集合相似度规则阈值' },
+    { label: '标题编辑距离', value: formatDuplicateConfigValue(config.titleLevenshteinThreshold), hint: '标题 Levenshtein 相似度阈值' },
+    { label: '内容相似度', value: formatDuplicateConfigValue(config.contentSimilarityThreshold), hint: '题干内容规则命中阈值' },
+    { label: 'Metadata / Tag Weight', value: `${formatDuplicateConfigValue(config.semanticMetadataWeight)} / ${formatDuplicateConfigValue(config.semanticTagWeight)}`, hint: 'Category, type, difficulty and tag scoring weight' },
+    { label: '向量/文本权重', value: `${formatDuplicateConfigValue(config.semanticVectorWeight)} / ${formatDuplicateConfigValue(config.semanticTextWeight)}`, hint: '语义最终分的加权比例' },
+    { label: '向量召回数', value: formatDuplicateConfigValue(config.vectorSearchLimit), hint: '每题向量库候选召回规模' },
+    { label: '规则候选池', value: formatDuplicateConfigValue(config.maxRuleCandidateCount), hint: '规则侧最多比较的候选数' },
+    { label: '批量检测上限', value: formatDuplicateConfigValue(config.maxBatchCheckCount), hint: '单次管理端检测题目数' }
+  ]
+})
 const getDifficultyLabel = (value?: QuestionDifficulty) => {
   if (value === QUESTION_DIFFICULTY.EASY) return '简单'
   if (value === QUESTION_DIFFICULTY.MEDIUM) return '中等'
@@ -912,6 +1422,13 @@ const showBatchReviewResult = (result: { successCount?: number; failureCount?: n
   )
 }
 
+const duplicateEvalExpectedType = (expected?: string) => {
+  if (expected === 'DUPLICATE') return 'danger'
+  if (expected === 'REVIEW') return 'warning'
+  if (expected === 'NOT_DUPLICATE') return 'info'
+  return 'info'
+}
+
 const formatJsonText = (value?: string) => {
   if (!value) return '-'
   try {
@@ -966,7 +1483,10 @@ const getDuplicateStatusType = (status?: string) => {
 }
 
 const getDuplicateMatchTypeLabel = (matchType?: string) => {
+  if (matchType === 'SEMANTIC_SIMILAR') return '语义相似'
   const labels: Record<string, string> = {
+    HARD_TITLE_HASH: '标题指纹一致',
+    HARD_CONTENT_HASH: '内容指纹一致',
     TITLE_EXACT: '标题完全一致',
     TITLE_NORMALIZED_EQUAL: '标题归一后一致',
     TITLE_SIMILAR: '标题高度相似',
@@ -975,12 +1495,144 @@ const getDuplicateMatchTypeLabel = (matchType?: string) => {
   return matchType ? labels[matchType] || matchType : '-'
 }
 
+const getQuestionTypeLabel = (value?: string) => {
+  if (!value) return '-'
+  return questionTypeOptions.find((item) => item.value === value)?.label || value
+}
+
+const duplicateContextTagType = (same?: boolean | null) => {
+  if (same === true) return 'success'
+  if (same === false) return 'warning'
+  return 'info'
+}
+
+const duplicateContextTagText = (same?: boolean | null) => {
+  if (same === true) return '一致'
+  if (same === false) return '不同'
+  return '未知'
+}
+
+const duplicateContextTags = (row: QuestionDuplicateReviewListVO) => [
+  { label: '分类', text: duplicateContextTagText(row.sameCategory), type: duplicateContextTagType(row.sameCategory) },
+  { label: '题型', text: duplicateContextTagText(row.sameQuestionType), type: duplicateContextTagType(row.sameQuestionType) },
+  { label: '难度', text: duplicateContextTagText(row.sameDifficulty), type: duplicateContextTagType(row.sameDifficulty) }
+]
+
+const duplicateContextHint = (row: QuestionDuplicateReviewListVO) => {
+  const categoryText = `${row.sourceCategoryId || '-'} / ${row.targetCategoryId || '-'}`
+  const typeText = `${getQuestionTypeLabel(row.sourceQuestionType)} / ${getQuestionTypeLabel(row.targetQuestionType)}`
+  const difficultyText = `${getDifficultyLabel(row.sourceDifficulty)} / ${getDifficultyLabel(row.targetDifficulty)}`
+  return `分类 ${categoryText} · 题型 ${typeText} · 难度 ${difficultyText}`
+}
+
 const formatSimilarity = (value?: number) => {
   if (value === undefined || value === null) return '-'
   const score = Number(value)
   if (!Number.isFinite(score)) return '-'
   const percent = score > 1 ? score : score * 100
   return `${percent.toFixed(percent >= 99 ? 0 : 2).replace(/\.00$/, '')}%`
+}
+
+const formatRate = (value?: number) => {
+  if (value === undefined || value === null) return '-'
+  const rate = Number(value)
+  if (!Number.isFinite(rate)) return '-'
+  return `${rate.toFixed(rate >= 99 ? 0 : 1).replace(/\.0$/, '')}%`
+}
+
+const duplicateScoreParts = (row: QuestionDuplicateReviewListVO) => {
+  if (row.scoreParts?.length) {
+    return row.scoreParts
+      .filter((item) => Number.isFinite(Number(item.score)))
+      .sort((left, right) => duplicateScorePartOrder(left.code) - duplicateScorePartOrder(right.code))
+      .map((item) => ({
+        code: item.code,
+        label: item.label || item.code || '评分',
+        value: formatSimilarity(Number(item.score))
+      }))
+  }
+  const topLevelParts = [
+    { code: 'vectorScore', label: '向量', score: row.vectorScore },
+    { code: 'textScore', label: '文本', score: row.textScore },
+    { code: 'finalScore', label: '综合', score: row.finalScore }
+  ]
+    .filter((item) => Number.isFinite(Number(item.score)))
+    .map((item) => ({
+      code: item.code,
+      label: item.label,
+      value: formatSimilarity(Number(item.score))
+    }))
+  if (topLevelParts.length) {
+    return topLevelParts
+  }
+  return parseDuplicateScoreParts(row.matchReason)
+}
+
+const duplicateScorePartOrder = (code?: string) => {
+  const order: Record<string, number> = {
+    vectorScore: 10,
+    textScore: 20,
+    metadataScore: 30,
+    tagScore: 40,
+    finalScore: 50
+  }
+  return code ? order[code] ?? 100 : 100
+}
+
+const duplicateScoreBandLabel = (row: QuestionDuplicateReviewListVO) => {
+  const scoreBand = row.scoreBand || parseDuplicateReasonToken(row.matchReason, 'scoreBand')
+  if (scoreBand === 'STRONG') return '高置信'
+  if (scoreBand === 'REVIEW') return '待审核'
+  return ''
+}
+
+const duplicateScoreBandType = (row: QuestionDuplicateReviewListVO) => {
+  const scoreBand = row.scoreBand || parseDuplicateReasonToken(row.matchReason, 'scoreBand')
+  if (scoreBand === 'STRONG') return 'danger'
+  if (scoreBand === 'REVIEW') return 'warning'
+  return 'info'
+}
+
+const parseDuplicateReasonToken = (reason?: string, key?: string) => {
+  if (!reason || !key) return ''
+  const match = reason.match(new RegExp(`${key}=([^;\\s]+)`))
+  return match?.[1] || ''
+}
+
+const parseDuplicateScoreParts = (reason?: string) => {
+  if (!reason?.includes('semantic vector match')) {
+    return []
+  }
+  const labels: Record<string, string> = {
+    vectorScore: '向量',
+    textScore: '文本',
+    metadataScore: '元数据',
+    tagScore: '标签',
+    finalScore: '综合'
+  }
+  return ['vectorScore', 'textScore', 'metadataScore', 'tagScore', 'finalScore']
+    .map((key) => {
+      const match = reason.match(new RegExp(`${key}=([0-9.]+)`))
+      return match ? { code: key, label: labels[key], value: `${Number(match[1]).toFixed(1).replace(/\.0$/, '')}%` } : null
+    })
+    .filter((item): item is { code: string; label: string; value: string } => Boolean(item))
+}
+
+const formatScoreDetailJson = (value?: string) => {
+  if (!value) return '-'
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+const formatDuplicateReason = (reason?: string) => {
+  if (!reason) return '-'
+  if (reason.includes('content fingerprint exact match')) return '内容指纹完全一致'
+  if (reason.includes('normalized title fingerprint exact match')) return '标题指纹完全一致'
+  if (reason.includes('semantic vector match')) return '向量召回后综合文本相似度命中'
+  return reason
 }
 
 const resolveTagIdsFromRow = (row?: AdminQuestionVO): number[] => {
@@ -1027,6 +1679,20 @@ const fetchQuestions = async () => {
   }
 }
 
+const applyFailureQuery = () => {
+  const rawQuestionId = route.query.questionId
+  const questionId = Array.isArray(rawQuestionId) ? rawQuestionId[0] : rawQuestionId
+  if (!questionId) return
+  const parsed = Number(questionId)
+  if (!Number.isFinite(parsed) || parsed <= 0) return
+  query.questionId = parsed
+  query.pageNo = 1
+  if (showDuplicatesPane.value) {
+    duplicateQuery.keyword = String(parsed)
+    duplicateQuery.pageNo = 1
+  }
+}
+
 const fetchReviews = async () => {
   reviewLoading.value = true
   try {
@@ -1059,6 +1725,91 @@ const openReviewDrawer = async (id: number) => {
   }
 }
 
+const fetchDuplicateConfig = async () => {
+  duplicateConfigLoading.value = true
+  try {
+    duplicateConfig.value = await getQuestionDuplicateConfigApi()
+  } catch {
+    duplicateConfig.value = null
+  } finally {
+    duplicateConfigLoading.value = false
+  }
+}
+
+const fetchDuplicateFeedbackStats = async () => {
+  duplicateFeedbackLoading.value = true
+  try {
+    duplicateFeedbackStats.value = await getQuestionDuplicateFeedbackStatsApi()
+  } catch {
+    duplicateFeedbackStats.value = null
+  } finally {
+    duplicateFeedbackLoading.value = false
+  }
+}
+
+const refreshDuplicateWorkspace = async () => {
+  await Promise.all([fetchDuplicates(), fetchDuplicateFeedbackStats(), refreshDuplicateEvalWorkspace()])
+}
+
+const fetchDuplicateEvalCases = async () => {
+  duplicateEvalCaseLoading.value = true
+  try {
+    const result = await getQuestionDuplicateEvalCasesApi(duplicateEvalCaseQuery)
+    duplicateEvalCases.value = result.records || []
+    duplicateEvalCaseTotal.value = result.total || 0
+  } catch {
+    duplicateEvalCases.value = []
+    duplicateEvalCaseTotal.value = 0
+  } finally {
+    duplicateEvalCaseLoading.value = false
+  }
+}
+
+const fetchDuplicateEvalRuns = async () => {
+  duplicateEvalRunLoading.value = true
+  try {
+    const result = await getQuestionDuplicateEvalRunsApi(duplicateEvalRunQuery)
+    duplicateEvalRuns.value = result.records || []
+    duplicateEvalRunTotal.value = result.total || 0
+  } catch {
+    duplicateEvalRuns.value = []
+    duplicateEvalRunTotal.value = 0
+  } finally {
+    duplicateEvalRunLoading.value = false
+  }
+}
+
+const openDuplicateEvalRun = async (id?: number) => {
+  if (!id) return
+  duplicateEvalRunDetailLoading.value = true
+  try {
+    duplicateEvalLatestRun.value = await getQuestionDuplicateEvalRunApi(id)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Evaluation run load failed')
+  } finally {
+    duplicateEvalRunDetailLoading.value = false
+  }
+}
+
+const refreshDuplicateEvalWorkspace = async () => {
+  await Promise.all([fetchDuplicateEvalCases(), fetchDuplicateEvalRuns()])
+  if (duplicateEvalRuns.value[0]?.id) {
+    await openDuplicateEvalRun(duplicateEvalRuns.value[0].id)
+  }
+}
+
+const openDuplicateDrawer = async (id: number) => {
+  duplicateDrawerVisible.value = true
+  duplicateDetailLoading.value = true
+  duplicateDetail.value = null
+  try {
+    duplicateDetail.value = await getQuestionDuplicateReviewDetailApi(id)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '重复候选详情加载失败')
+  } finally {
+    duplicateDetailLoading.value = false
+  }
+}
 const fetchDuplicates = async () => {
   duplicateLoading.value = true
   try {
@@ -1154,6 +1905,7 @@ const handleSearch = () => {
 const handleReset = () => {
   Object.assign(query, {
     keyword: '',
+    questionId: undefined,
     categoryId: undefined,
     tagId: undefined,
     difficulty: '',
@@ -1179,6 +1931,7 @@ const resetDuplicateQuery = () => {
   Object.assign(duplicateQuery, {
     keyword: '',
     reviewStatus: 'PENDING',
+    scoreBand: '',
     pageNo: 1,
     pageSize: 10
   })
@@ -1352,7 +2105,7 @@ const handleApproveReview = async (id: number) => {
   await ElMessageBox.confirm('确认通过该 AI 题目并写入正式题库？', '审核通过', { type: 'warning' })
   await approveQuestionReviewApi(id)
   ElMessage.success('题目已通过审核')
-  await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+  await Promise.all([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
 }
 
 const handleRejectReview = async (id: number) => {
@@ -1385,7 +2138,7 @@ const handleApproveReviewWithEdit = async () => {
     })
     ElMessage.success('题目已编辑并通过审核')
     reviewDrawerVisible.value = false
-    await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+    await Promise.all([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '编辑后通过失败')
   } finally {
@@ -1414,7 +2167,7 @@ const handleBatchApproveReviews = async () => {
       }
     })
     showBatchReviewResult(result)
-    await Promise.all([fetchReviews(), fetchQuestions(), fetchDuplicates()])
+    await Promise.all([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
   } finally {
     batchReviewProcessing.value = false
   }
@@ -1459,13 +2212,208 @@ const handleCheckDuplicates = async () => {
   try {
     const result = await checkQuestionDuplicateApi({ questionIds })
     ElMessage.success(`已检测 ${result.checkedCount || questionIds.length} 道题，新增 ${result.createdCount || 0} 条候选`)
-    await fetchDuplicates()
+    await refreshDuplicateWorkspace()
   } finally {
     duplicateChecking.value = false
   }
 }
 
+const duplicateExpectedLabel = (row: QuestionDuplicateReviewListVO) => {
+  if (row.reviewStatus === 'CONFIRMED') return 'DUPLICATE'
+  if (row.reviewStatus === 'IGNORED') return 'NOT_DUPLICATE'
+  return 'REVIEW'
+}
+
+const duplicateEvaluationSamples = () =>
+  duplicates.value
+    .filter((item) => item.sourceQuestionId && item.targetQuestionId)
+    .map((item) => ({
+      caseId: `review-${item.id}`,
+      sourceQuestionId: item.sourceQuestionId,
+      targetQuestionId: item.targetQuestionId,
+      expected: duplicateExpectedLabel(item),
+      note: [item.matchType, item.scoreBand, formatSimilarity(item.similarityScore)].filter(Boolean).join(' / ')
+    }))
+
+const handleEvaluateDuplicates = async () => {
+  const samples = duplicateEvaluationSamples()
+  if (!samples.length) {
+    ElMessage.warning('No evaluable duplicate candidates on this page')
+    return
+  }
+  duplicateEvaluating.value = true
+  try {
+    duplicateEvaluation.value = await evaluateQuestionDuplicateApi({ samples })
+    const result = duplicateEvaluation.value
+    ElMessage.success(
+      `Evaluation done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, accuracy ${formatRate(result.accuracyRate)}`
+    )
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Duplicate evaluation failed')
+  } finally {
+    duplicateEvaluating.value = false
+  }
+}
+
+const saveCurrentDuplicateEvalCases = async () => {
+  const samples = duplicateEvaluationSamples()
+  if (!samples.length) {
+    ElMessage.warning('No duplicate candidates can be saved on this page')
+    return
+  }
+  duplicateEvalSaving.value = true
+  try {
+    let saved = 0
+    for (const sample of samples) {
+      await saveQuestionDuplicateEvalCaseApi({
+        caseId: sample.caseId,
+        sourceQuestionId: sample.sourceQuestionId,
+        targetQuestionId: sample.targetQuestionId,
+        expected: sample.expected,
+        note: sample.note,
+        enabled: 1
+      })
+      saved++
+    }
+    ElMessage.success(`Saved ${saved} evaluation cases`)
+    await refreshDuplicateEvalWorkspace()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Evaluation cases save failed')
+  } finally {
+    duplicateEvalSaving.value = false
+  }
+}
+
+const runDuplicateEvalCases = async () => {
+  duplicateEvalRunning.value = true
+  try {
+    const result = await runQuestionDuplicateEvalApi({
+      onlyEnabled: true,
+      limit: 100
+    })
+    duplicateEvalLatestRun.value = result
+    ElMessage.success(
+      `Evaluation run done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, accuracy ${formatRate(result.accuracyRate)}`
+    )
+    await fetchDuplicateEvalRuns()
+    if (result.id) {
+      await openDuplicateEvalRun(result.id)
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Evaluation run failed')
+  } finally {
+    duplicateEvalRunning.value = false
+  }
+}
+
+const deleteDuplicateEvalCase = async (id?: number) => {
+  if (!id) return
+  await ElMessageBox.confirm('Delete this evaluation case?', 'Delete Evaluation Case', { type: 'warning' })
+  try {
+    await deleteQuestionDuplicateEvalCaseApi(id)
+    ElMessage.success('Evaluation case deleted')
+    await fetchDuplicateEvalCases()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Evaluation case delete failed')
+  }
+}
+
+const handleRebuildEmbedding = async () => {
+  await ElMessageBox.confirm(
+    '将按更新时间重建最多 5000 道启用题目的文本指纹和向量索引，期间可能产生 embedding 调用成本。确认继续？',
+    '重建题目向量索引',
+    { type: 'warning' }
+  )
+  embeddingRebuilding.value = true
+  try {
+    const result = await rebuildQuestionEmbeddingApi(5000)
+    const errors = result.errors || []
+    const summary = `索引重建完成：元数据 ${result.updated || 0} 条，向量 ${result.vectorUpdated || 0} 条`
+    if (errors.length || result.failedBatches) {
+      await ElMessageBox.alert(
+        [
+          summary,
+          `失败批次：${result.failedBatches || errors.length}`,
+          ...errors.slice(0, 8).map((item, index) => `${index + 1}. ${item}`),
+          errors.length > 8 ? `还有 ${errors.length - 8} 条错误未展示，请查看后端日志。` : ''
+        ].filter(Boolean).join('\n'),
+        '题目向量索引重建结果',
+        { type: 'warning' }
+      )
+      return
+    }
+    ElMessage.success(summary)
+  } finally {
+    embeddingRebuilding.value = false
+  }
+}
+
+const handleEmbeddingStats = async () => {
+  embeddingStatsLoading.value = true
+  try {
+    const stats = await getQuestionEmbeddingStatsApi()
+    const statusLines = (stats.statusCounts || [])
+      .map((item) => `${item.status || 'UNKNOWN'}: ${item.count || 0}`)
+      .join('\n')
+    const dimensionLines = (stats.dimensionCounts || [])
+      .map((item) => `${item.dimension || '--'} dims: ${item.count || 0}`)
+      .join('\n')
+    const modelLines = (stats.modelCounts || [])
+      .map((item) => `${item.model || 'UNKNOWN'}: ${item.count || 0}`)
+      .join('\n')
+    await ElMessageBox.alert(
+      [
+        `Vector store: ${stats.vectorEnabled ? 'enabled' : 'disabled'}`,
+        `Index records: ${stats.total || 0}, failed: ${stats.failed || 0}`,
+        `Collection: ${stats.collection?.collectionName || 'question_embedding'} / ${stats.collection?.status || '--'}`,
+        `Dimension: ${stats.collection?.vectorSize || '--'}, points: ${stats.collection?.pointCount ?? '--'}`,
+        `Last indexed: ${stats.lastIndexedAt || '--'}, last failed: ${stats.lastFailedAt || '--'}`,
+        `Average text chars: ${stats.averageTextChars ?? '--'}`,
+        statusLines ? `\nStatus distribution:\n${statusLines}` : '',
+        dimensionLines ? `\nDimension distribution:\n${dimensionLines}` : '',
+        modelLines ? `\nEmbedding model distribution:\n${modelLines}` : '',
+        stats.collection?.errorMessage ? `\nError: ${stats.collection.errorMessage}` : ''
+      ].filter(Boolean).join('\n'),
+      '题目向量索引状态',
+      { type: stats.failed ? 'warning' : 'info' }
+    )
+  } finally {
+    embeddingStatsLoading.value = false
+  }
+}
+
+const handleRetryFailedEmbedding = async () => {
+  await ElMessageBox.confirm(
+    '将重试最多 1000 条失败的题目向量索引记录，期间可能产生 embedding 调用成本。确认继续？',
+    '重试失败题目向量',
+    { type: 'warning' }
+  )
+  embeddingRetrying.value = true
+  try {
+    const result = await retryFailedQuestionEmbeddingApi(1000)
+    const errors = result.errors || []
+    const deleteSummary = result.vectorDeleted ? `，清理向量 ${result.vectorDeleted || 0} 条` : ''
+    const summary = `重试完成：匹配 ${result.matched || 0} 条，已重试 ${result.retried || 0} 条${deleteSummary}`
+    if (errors.length) {
+      await ElMessageBox.alert(
+        [summary, ...errors.slice(0, 8).map((item, index) => `${index + 1}. ${item}`)].join('\n'),
+        '失败题目向量重试结果',
+        { type: 'warning' }
+      )
+      return
+    }
+    ElMessage.success(summary)
+  } finally {
+    embeddingRetrying.value = false
+  }
+}
+
 const handleMergeDuplicate = async (id: number) => {
+  await ElMessageBox.confirm(
+    '确认后会建立 SAME_INTENT 关系，并自动归入同一 canonical 题组；后续每日推荐、内部推荐会按题组/同意图排重。',
+    '确认同意图重复题',
+    { type: 'warning' }
+  )
   const { value } = await ElMessageBox.prompt('请输入合并原因', '合并重复题', {
     inputType: 'textarea',
     inputPlaceholder: '例如：语义重复，保留主问题并建立重复关系'
@@ -1475,7 +2423,7 @@ const handleMergeDuplicate = async (id: number) => {
     reason: value?.trim() || '确认重复'
   })
   ElMessage.success('重复题已合并')
-  await fetchDuplicates()
+  await refreshDuplicateWorkspace()
 }
 
 const handleIgnoreDuplicate = async (id: number) => {
@@ -1487,7 +2435,7 @@ const handleIgnoreDuplicate = async (id: number) => {
     ignoredReason: value?.trim() || '确认不是重复题'
   })
   ElMessage.success('重复候选已忽略')
-  await fetchDuplicates()
+  await refreshDuplicateWorkspace()
 }
 
 // ============ 批量导入/导出 ============
@@ -1500,15 +2448,38 @@ const handleImportFileChange = (file: { raw: File }) => {
   importFile.value = file.raw
 }
 
+const importDuplicateReasonLabel = (code?: string) => {
+  const labels: Record<string, string> = {
+    FILE_TITLE_DUPLICATE: '文件内标题重复',
+    FILE_CONTENT_DUPLICATE: '文件内内容重复',
+    BANK_TITLE_DUPLICATE: '题库标题已存在',
+    BANK_CONTENT_DUPLICATE: '题库内容已存在'
+  }
+  return code ? labels[code] || code : '重复'
+}
+
 const handleImport = async () => {
   if (!importFile.value) return
   importing.value = true
   try {
-    await importAdminQuestionsApi(importFile.value)
-    ElMessage.success('导入成功')
+    const result = await importAdminQuestionsApi(importFile.value)
+    const duplicateParts = Object.entries(result.duplicateReasonCounts || {})
+      .filter(([, count]) => Number(count) > 0)
+      .map(([code, count]) => `${importDuplicateReasonLabel(code)} ${count}`)
+    const summary = `导入完成：总数 ${result.totalCount || 0}，成功 ${result.successCount || 0}，失败 ${result.failCount || 0}，重复 ${result.duplicateCount || 0}${duplicateParts.length ? `（${duplicateParts.join('，')}）` : ''}`
+    if (result.errors?.length) {
+      await ElMessageBox.alert(
+        [summary, ...result.errors.slice(0, 8).map((item) => `第 ${item.rowIndex || '-'} 行：${item.title || '-'} - ${importDuplicateReasonLabel(item.reason)}`)]
+          .join('\n'),
+        '导入结果',
+        { type: result.successCount ? 'warning' : 'error' }
+      )
+    } else {
+      ElMessage.success(summary)
+    }
     importDialogVisible.value = false
     importFile.value = null
-    fetchQuestions()
+    await Promise.all([fetchQuestions(), refreshDuplicateWorkspace()])
   } catch {
     ElMessage.error('导入失败')
   } finally {
@@ -1553,9 +2524,18 @@ const handleDownloadTemplate = async () => {
 }
 
 onMounted(async () => {
+  applyFailureQuery()
   await fetchOptions()
-  await Promise.all([fetchQuestions(), fetchReviews(), fetchDuplicates()])
+  await Promise.all([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace(), fetchDuplicateConfig()])
 })
+
+watch(
+  () => route.query.questionId,
+  async () => {
+    applyFailureQuery()
+    await fetchQuestions()
+  }
+)
 
 watch(
   () => props.initialGovernanceTab,
@@ -1618,6 +2598,104 @@ onUnmounted(() => {
   padding: 0 0 16px;
 }
 
+.duplicate-feedback-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.duplicate-feedback-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.duplicate-feedback-panel__head > div,
+.duplicate-feedback-card,
+.duplicate-feedback-recommendation,
+.duplicate-feedback-buckets article {
+  min-width: 0;
+}
+
+.duplicate-feedback-panel__head strong,
+.duplicate-feedback-card strong,
+.duplicate-feedback-recommendation strong,
+.duplicate-feedback-buckets strong {
+  color: var(--app-text);
+}
+
+.duplicate-feedback-panel__head span,
+.duplicate-feedback-card span,
+.duplicate-feedback-card small,
+.duplicate-feedback-recommendation span,
+.duplicate-feedback-recommendation small,
+.duplicate-feedback-buckets span,
+.duplicate-feedback-buckets small {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.duplicate-feedback-panel__head span,
+.duplicate-feedback-card span,
+.duplicate-feedback-card small,
+.duplicate-feedback-recommendation span,
+.duplicate-feedback-recommendation small,
+.duplicate-feedback-buckets small {
+  display: block;
+}
+
+.duplicate-feedback-grid,
+.duplicate-feedback-buckets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.duplicate-feedback-card,
+.duplicate-feedback-recommendation,
+.duplicate-feedback-buckets article {
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.duplicate-feedback-card strong {
+  display: block;
+  margin: 6px 0 3px;
+  font-size: 20px;
+}
+
+.duplicate-feedback-recommendation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.duplicate-feedback-recommendation strong {
+  display: block;
+  margin-top: 5px;
+  line-height: 1.45;
+}
+
+.duplicate-feedback-buckets article div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.duplicate-feedback-alert {
+  margin-top: 2px;
+}
+
 .review-batch-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1627,6 +2705,106 @@ onUnmounted(() => {
   padding: 0 0 14px;
   color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.duplicate-evaluation-panel {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 10px;
+  background: rgba(30, 64, 175, 0.12);
+}
+
+.duplicate-evaluation-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.duplicate-evaluation-panel__head strong,
+.duplicate-evaluation-grid strong,
+.duplicate-evaluation-failures strong {
+  color: var(--app-text);
+}
+
+.duplicate-evaluation-panel__head span,
+.duplicate-evaluation-grid span,
+.duplicate-evaluation-failures span,
+.duplicate-evaluation-failures small {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.duplicate-evaluation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.duplicate-evaluation-grid article,
+.duplicate-evaluation-failures article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.duplicate-evaluation-grid span,
+.duplicate-evaluation-grid strong,
+.duplicate-evaluation-failures strong,
+.duplicate-evaluation-failures span,
+.duplicate-evaluation-failures small {
+  display: block;
+}
+
+.duplicate-evaluation-failures {
+  display: grid;
+  gap: 8px;
+}
+
+.duplicate-score-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.duplicate-context-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.duplicate-context-tags small {
+  flex: 0 0 100%;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duplicate-score-debug {
+  margin-top: 12px;
+}
+
+.duplicate-score-debug pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  color: var(--app-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.muted-text {
+  color: var(--app-text-muted);
 }
 
 .review-detail-content {

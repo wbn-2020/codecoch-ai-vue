@@ -23,11 +23,20 @@ import type {
   QuestionDetailVO,
   QuestionDuplicateCheckDTO,
   QuestionDuplicateCheckResultVO,
+  QuestionDuplicateEvalCaseQueryDTO,
+  QuestionDuplicateEvalCaseSaveDTO,
+  QuestionDuplicateEvalCaseVO,
+  QuestionDuplicateEvalRunRequestDTO,
+  QuestionDuplicateEvalRunVO,
+  QuestionDuplicateEvaluationDTO,
+  QuestionDuplicateEvaluationVO,
+  QuestionDuplicateFeedbackStatsVO,
   QuestionDuplicateIgnoreDTO,
   QuestionDuplicateMergeDTO,
   QuestionDuplicateReviewDetailVO,
   QuestionDuplicateReviewListVO,
   QuestionDuplicateReviewQueryDTO,
+  QuestionImportResultVO,
   QuestionQueryDTO,
   QuestionRelationCreateDTO,
   QuestionRelationVO,
@@ -191,7 +200,7 @@ export const deleteAdminQuestionApi = (id: number) => {
 export const importAdminQuestionsApi = (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
-  return request.post<unknown, unknown>('/admin/questions/import', formData, {
+  return request.post<QuestionImportResultVO, QuestionImportResultVO>('/admin/questions/import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
@@ -310,6 +319,67 @@ export const checkQuestionDuplicateApi = (data: QuestionDuplicateCheckDTO) => {
   )
 }
 
+export interface QuestionEmbeddingRebuildResult {
+  updated: number
+  vectorEnabled: boolean
+  vectorUpdated: number
+  requested?: number
+  matched?: number
+  retried?: number
+  vectorDeleted?: number
+  failedBatches?: number
+  errors?: string[]
+}
+
+export interface QuestionDuplicateEvaluationSummary {
+  sampleCount?: number
+  evaluatedCount?: number
+  passedCount?: number
+  failedCount?: number
+  missingQuestionCount?: number
+  accuracyRate?: number
+  generatedAt?: string
+}
+
+export interface QuestionEmbeddingStatsResult {
+  vectorEnabled?: boolean
+  total?: number
+  failed?: number
+  statusCounts?: Array<{ status?: string; count?: number }>
+  dimensionCounts?: Array<{ dimension?: number; count?: number }>
+  modelCounts?: Array<{ model?: string; count?: number }>
+  lastIndexedAt?: string
+  lastFailedAt?: string
+  averageTextChars?: number
+  collection?: {
+    collectionName?: string
+    exists?: boolean
+    status?: string
+    pointCount?: number
+    vectorSize?: number
+    distance?: string
+    errorMessage?: string
+  }
+}
+
+export const rebuildQuestionEmbeddingApi = (limit?: number) => {
+  return request.post<QuestionEmbeddingRebuildResult, QuestionEmbeddingRebuildResult>(
+    '/admin/questions/embedding/rebuild',
+    limit ? { limit } : {}
+  )
+}
+
+export const getQuestionEmbeddingStatsApi = () => {
+  return request.get<QuestionEmbeddingStatsResult, QuestionEmbeddingStatsResult>('/admin/questions/embedding/stats')
+}
+
+export const retryFailedQuestionEmbeddingApi = (limit?: number) => {
+  return request.post<QuestionEmbeddingRebuildResult, QuestionEmbeddingRebuildResult>(
+    '/admin/questions/embedding/retry-failed',
+    limit ? { limit } : {}
+  )
+}
+
 export const getQuestionDuplicateReviewsApi = (params: QuestionDuplicateReviewQueryDTO) => {
   return request.get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
     '/admin/question-duplicate-reviews',
@@ -323,6 +393,55 @@ export const getQuestionDuplicateReviewDetailApi = (id: number) => {
   )
 }
 
+export const getQuestionDuplicateFeedbackStatsApi = () => {
+  return request.get<QuestionDuplicateFeedbackStatsVO, QuestionDuplicateFeedbackStatsVO>(
+    '/admin/question-duplicate-reviews/feedback-stats'
+  )
+}
+
+export const evaluateQuestionDuplicateApi = (data: QuestionDuplicateEvaluationDTO) => {
+  return request.post<QuestionDuplicateEvaluationVO, QuestionDuplicateEvaluationVO>(
+    '/admin/question-duplicate-reviews/evaluate',
+    data
+  )
+}
+
+export const getQuestionDuplicateEvalCasesApi = (params: QuestionDuplicateEvalCaseQueryDTO) => {
+  return request.get<PageResult<QuestionDuplicateEvalCaseVO>, PageResult<QuestionDuplicateEvalCaseVO>>(
+    '/admin/question-duplicate-eval/cases',
+    { params }
+  )
+}
+
+export const saveQuestionDuplicateEvalCaseApi = (data: QuestionDuplicateEvalCaseSaveDTO) => {
+  return request.post<QuestionDuplicateEvalCaseVO, QuestionDuplicateEvalCaseVO>(
+    '/admin/question-duplicate-eval/cases',
+    data
+  )
+}
+
+export const deleteQuestionDuplicateEvalCaseApi = (id: number) => {
+  return request.delete<null, null>(`/admin/question-duplicate-eval/cases/${id}`)
+}
+
+export const runQuestionDuplicateEvalApi = (data?: QuestionDuplicateEvalRunRequestDTO) => {
+  return request.post<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(
+    '/admin/question-duplicate-eval/runs',
+    data || {}
+  )
+}
+
+export const getQuestionDuplicateEvalRunsApi = (params?: { pageNo?: number; pageSize?: number }) => {
+  return request.get<PageResult<QuestionDuplicateEvalRunVO>, PageResult<QuestionDuplicateEvalRunVO>>(
+    '/admin/question-duplicate-eval/runs',
+    { params }
+  )
+}
+
+
+export const getQuestionDuplicateEvalRunApi = (id: number) => {
+  return request.get<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(`/admin/question-duplicate-eval/runs/${id}`)
+}
 export const mergeQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateMergeDTO) => {
   return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
     `/admin/question-duplicate-reviews/${id}/merge`,
@@ -333,6 +452,31 @@ export const mergeQuestionDuplicateReviewApi = (id: number, data?: QuestionDupli
 export const ignoreQuestionDuplicateReviewApi = (id: number, data?: QuestionDuplicateIgnoreDTO) => {
   return request.post<QuestionDuplicateReviewDetailVO, QuestionDuplicateReviewDetailVO>(
     `/admin/question-duplicate-reviews/${id}/ignore`,
+    data
+  )
+}
+
+export interface BatchQuestionDuplicateResultVO {
+  requestedCount: number
+  successCount: number
+  failureCount: number
+  failures: Array<{ id: number; reason: string }>
+}
+
+export const batchMergeQuestionDuplicateReviewApi = (data: {
+  ids: number[]
+  relationType?: string
+  reason?: string
+}) => {
+  return request.post<BatchQuestionDuplicateResultVO, BatchQuestionDuplicateResultVO>(
+    '/admin/question-duplicate-reviews/batch-merge',
+    data
+  )
+}
+
+export const batchIgnoreQuestionDuplicateReviewApi = (data: { ids: number[]; ignoredReason?: string }) => {
+  return request.post<BatchQuestionDuplicateResultVO, BatchQuestionDuplicateResultVO>(
+    '/admin/question-duplicate-reviews/batch-ignore',
     data
   )
 }

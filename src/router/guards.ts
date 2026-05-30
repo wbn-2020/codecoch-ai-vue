@@ -1,6 +1,7 @@
 import type { Router } from 'vue-router'
 
 import { appConfig } from '@/config'
+import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { getToken } from '@/utils/token'
 
@@ -53,6 +54,16 @@ export const setupRouterGuards = (router: Router) => {
 
     if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.canAccessAdmin) {
       return '/403'
+    }
+
+    if (to.path === '/admin') {
+      const firstAdminPath = firstAccessibleAdminPath(authStore)
+      if (!firstAdminPath) {
+        return '/403'
+      }
+      if (firstAdminPath !== '/admin') {
+        return firstAdminPath
+      }
     }
 
     const requiredRoles = to.matched.flatMap((record) => {

@@ -22,10 +22,11 @@
         </div>
 
         <div class="app-layout__header-actions">
-          <div class="command-search" aria-hidden="true">
+          <button class="command-search" type="button" aria-label="打开命令面板" @click="commandPaletteOpen = true">
             <Search :size="15" />
             <span>搜索管理后台</span>
-          </div>
+            <kbd>Ctrl K</kbd>
+          </button>
           <el-tooltip content="通知管理" placement="bottom">
             <button class="icon-button icon-button--ghost" type="button" aria-label="通知管理" @click="router.push('/admin/notices')">
               <Bell :size="16" />
@@ -52,6 +53,8 @@
         </div>
       </el-header>
 
+      <CommandPalette v-model="commandPaletteOpen" scope="admin" />
+
       <TagsView scope="admin" />
 
       <el-main class="app-layout__main">
@@ -65,11 +68,12 @@
 
 <script setup lang="ts">
 import { Bell, MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
+import CommandPalette from '@/components/layout/CommandPalette.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import { useAppStore } from '@/stores/app'
@@ -81,6 +85,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const tagsStore = useTagsViewStore()
+const commandPaletteOpen = ref(false)
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || '管理员'
@@ -246,7 +251,25 @@ const handleCommand = async (command: string) => {
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.62);
   color: var(--app-text-muted);
+  cursor: pointer;
   font-size: 12px;
+
+  kbd {
+    margin-left: auto;
+    padding: 2px 6px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: rgba(2, 6, 23, 0.48);
+    color: var(--app-text-muted);
+    font-family: inherit;
+    font-size: 11px;
+  }
+
+  &:hover {
+    border-color: rgba(6, 182, 212, 0.5);
+    background: rgba(6, 182, 212, 0.12);
+    color: var(--app-text);
+  }
 }
 
 .user-entry {

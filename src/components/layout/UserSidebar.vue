@@ -112,6 +112,7 @@ const menuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '推荐题目', path: '/questions/recommendations', icon: Collection },
+      { label: '刷题练习', path: '/questions/practice', icon: Reading },
       { label: '题库', path: '/questions', icon: Collection },
       { label: '错题本', path: '/questions/wrong-records', icon: DocumentChecked },
       { label: '收藏题目', path: '/questions/favorites', icon: Star }
@@ -169,6 +170,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/skill-profile')) return '/skill-profile'
   if (route.path.startsWith('/study-plans/from-gap')) return '/study-plans/from-gap'
   if (route.path.startsWith('/questions/recommendations')) return '/questions/recommendations'
+  if (route.path.startsWith('/questions/practice')) return '/questions/practice'
   if (route.path.startsWith('/questions/wrong-records')) return '/questions/wrong-records'
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'

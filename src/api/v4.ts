@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import { normalizePageResult } from '@/utils/page'
+import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
 
 export interface AgentReviewVO {
   id: number
@@ -138,7 +139,32 @@ export interface KnowledgeDocumentVO {
   documentType?: string
   status?: string
   chunkCount?: number
+  duplicateChunkCount?: number
+  nearDuplicateChunkCount?: number
+  nearDuplicateThreshold?: number
+  duplicateDocumentId?: number
+  duplicateDocument?: boolean
   content?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeDocumentOptionVO {
+  id: number
+  title?: string
+  documentType?: string
+  status?: string
+}
+
+export interface KnowledgeDocumentVersionVO {
+  id: number
+  documentId?: number
+  versionNo?: number
+  title?: string
+  documentType?: string
+  content?: string
+  contentHash?: string
+  chunkCount?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -149,13 +175,282 @@ export interface KnowledgeDocumentCreateDTO {
   content: string
 }
 
+export interface KnowledgeChunkVO {
+  id: number
+  documentId?: number
+  chunkIndex?: number
+  content?: string
+  chunkHash?: string
+  sourceRef?: string
+  embeddingModel?: string
+  embeddingDimension?: number
+  indexedAt?: string
+  indexStatus?: string
+  lastError?: string
+  duplicateInDocument?: boolean
+  cleanupCandidate?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeStatsVO {
+  documentCount?: number
+  chunkCount?: number
+  duplicateChunkCount?: number
+  vectorEnabled?: boolean
+  retrievalMode?: string
+  chunkStrategy?: string
+  documentTypeCounts?: Record<string, number>
+  indexStatusCounts?: Record<string, number>
+  embeddingModelCounts?: Record<string, number>
+  duplicateTypeCounts?: Record<string, number>
+  duplicateDocumentHotspots?: KnowledgeDuplicateDocumentHotspotVO[]
+}
+
+export interface KnowledgeDuplicateDocumentHotspotVO {
+  documentId?: number
+  title?: string
+  documentType?: string
+  duplicateChunkCount?: number
+  chunkCount?: number
+  duplicateRatio?: number
+}
+
+export interface KnowledgeConfigVO {
+  vectorEnabled?: boolean
+  vectorCollection?: string
+  retrievalMode?: string
+  chunkStrategy?: string
+  chunkSize?: number
+  chunkOverlap?: number
+  minChunkSize?: number
+  nearDuplicateThreshold?: number
+  askMinScore?: number
+  uploadMaxBytes?: number
+  uploadMaxTextChars?: number
+  uploadExtensions?: string[]
+  exactDedupScope?: string
+  nearDuplicateAction?: string
+}
+
 export interface KnowledgeSearchResultVO {
+  documentId?: number
+  chunkId?: number
+  chunkIndex?: number
+  title?: string
+  documentType?: string
+  snippet?: string
+  highlightedSnippet?: string
+  matchedTerms?: string[]
+  sourceRef?: string
+  chunkHash?: string
+  embeddingModel?: string
+  embeddingDimension?: number
+  indexedAt?: string
+  indexStatus?: string
+  score?: number
+  matchType?: string
+}
+
+export interface KnowledgeDuplicateReviewItemVO {
   documentId?: number
   chunkId?: number
   title?: string
   documentType?: string
-  snippet?: string
+  chunkIndex?: number
   sourceRef?: string
+  snippet?: string
+  topScore?: number
+  matches?: KnowledgeSearchResultVO[]
+}
+
+export interface KnowledgeDuplicateReviewVO {
+  vectorEnabled?: boolean
+  threshold?: number
+  scannedChunkCount?: number
+  candidateCount?: number
+  limit?: number
+  items?: KnowledgeDuplicateReviewItemVO[]
+  generatedAt?: string
+}
+
+export interface KnowledgeExactDuplicateGroupVO {
+  chunkHash?: string
+  duplicateCount?: number
+  chunks?: KnowledgeChunkVO[]
+}
+
+export interface KnowledgeDuplicateCleanupVO {
+  dryRun?: boolean
+  duplicateGroupCount?: number
+  deleteCandidateCount?: number
+  deletedCount?: number
+  deletedChunkIds?: number[]
+  generatedAt?: string
+}
+
+export interface KnowledgeAskVO {
+  question?: string
+  answer?: string
+  references?: KnowledgeSearchResultVO[]
+  referenceCount?: number
+  topReferenceScore?: number
+  insufficientReferences?: boolean
+  answerGrounded?: boolean
+  citationValid?: boolean
+  citationWarning?: string
+  citedReferenceNumbers?: number[]
+  invalidReferenceNumbers?: number[]
+  minReferenceScore?: number
+  aiCallLogId?: number
+  generatedAt?: string
+}
+
+export interface KnowledgeVectorRebuildVO {
+  vectorEnabled?: boolean
+  documentCount?: number
+  chunkCount?: number
+  vectorUpdated?: number
+  vectorDeleted?: number
+  duplicateChunkCount?: number
+  failedDocuments?: number[]
+  errors?: string[]
+}
+
+export interface KnowledgeEvaluationSampleDTO {
+  caseId?: string
+  query?: string
+  expectedDocumentId?: number
+  expectedDocumentTitle?: string
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  note?: string
+}
+
+export interface KnowledgeEvaluationDTO {
+  samples?: KnowledgeEvaluationSampleDTO[]
+  limit?: number
+  minScore?: number
+}
+
+export interface KnowledgeEvaluationItemVO {
+  caseId?: string
+  query?: string
+  expectedDocumentId?: number
+  expectedDocumentTitle?: string
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  passed?: boolean
+  topDocumentId?: number
+  topTitle?: string
+  topDocumentType?: string
+  topScore?: number
+  referenceCount?: number
+  citationValid?: boolean
+  answerGrounded?: boolean
+  answerExcerpt?: string
+  citationWarning?: string
+  failureReason?: string
+  note?: string
+  references?: KnowledgeSearchResultVO[]
+}
+
+export interface KnowledgeEvaluationVO {
+  sampleCount?: number
+  evaluatedCount?: number
+  passedCount?: number
+  failedCount?: number
+  passRate?: number
+  limit?: number
+  minScore?: number
+  items?: KnowledgeEvaluationItemVO[]
+
+}
+export interface KnowledgeEvalCaseQueryDTO {
+  keyword?: string
+  expectedDocumentId?: number
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  enabled?: number
+  pageNo?: number
+  pageSize?: number
+}
+
+export interface KnowledgeEvalCaseSaveDTO {
+  id?: number
+  caseId?: string
+  query?: string
+  expectedDocumentId?: number
+  expectedDocumentTitle?: string
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  note?: string
+  enabled?: number
+}
+
+export interface KnowledgeEvalRunRequestDTO {
+  caseIds?: number[]
+  onlyEnabled?: boolean
+  limit?: number
+  minScore?: number
+}
+
+export interface KnowledgeEvalCaseVO {
+  id: number
+  caseId?: string
+  query?: string
+  expectedDocumentId?: number
+  expectedDocumentTitle?: string
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  note?: string
+  enabled?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface KnowledgeEvalRunResultVO {
+  id?: number
+  evalCaseId?: number
+  caseId?: string
+  query?: string
+  expectedDocumentId?: number
+  expectedDocumentTitle?: string
+  expectedDocumentType?: string
+  expectNoAnswer?: boolean
+  passed?: boolean
+  topDocumentId?: number
+  topTitle?: string
+  topDocumentType?: string
+  topScore?: number
+  referenceCount?: number
+  citationValid?: boolean
+  answerGrounded?: boolean
+  answerExcerpt?: string
+  citationWarning?: string
+  failureReason?: string
+  note?: string
+  references?: KnowledgeSearchResultVO[]
+  createdAt?: string
+}
+
+export interface KnowledgeEvalRunVO {
+  id: number
+  runNo?: string
+  status?: string
+  sampleCount?: number
+  evaluatedCount?: number
+  passedCount?: number
+  failedCount?: number
+  passRate?: number
+  limit?: number
+  minScore?: number
+  startedAt?: string
+  finishedAt?: string
+  errorMessage?: string
+  results?: KnowledgeEvalRunResultVO[]
+  createdAt?: string
+  updatedAt?: string
 }
 
 export const generateAgentReviewApi = (data?: { targetJobId?: number; date?: string }) =>
@@ -233,15 +528,157 @@ export const createApplicationEventApi = (id: number, data: Partial<JobApplicati
 export const createKnowledgeDocumentApi = (data: KnowledgeDocumentCreateDTO) =>
   request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents', data)
 
-export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number }) =>
+export const updateKnowledgeDocumentApi = (id: number, data: KnowledgeDocumentCreateDTO) =>
+  request.put<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`, data)
+
+export const uploadKnowledgeDocumentApi = (file: File, documentType?: string) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (documentType) formData.append('documentType', documentType)
+  return request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents/upload', formData)
+}
+
+export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number; title?: string; documentType?: string; status?: string }) =>
   request
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
     .then((result) => normalizePageResult(result, params))
 
+export const getKnowledgeDocumentTypesApi = () =>
+  request.get<string[], string[]>('/agent/knowledge/documents/types').then((data) => data || [])
+
+export const getKnowledgeDocumentOptionsApi = () =>
+  request.get<KnowledgeDocumentOptionVO[], KnowledgeDocumentOptionVO[]>('/agent/knowledge/documents/options').then((data) => data || [])
+
+export const getKnowledgeStatsApi = () =>
+  request.get<KnowledgeStatsVO, KnowledgeStatsVO>('/agent/knowledge/stats')
+
+export const getKnowledgeConfigApi = () =>
+  request.get<KnowledgeConfigVO, KnowledgeConfigVO>('/agent/knowledge/config')
+
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
 
-export const searchKnowledgeApi = (params: { keyword: string; limit?: number }) =>
+export const getKnowledgeDocumentVersionsApi = (id: number) =>
+  request
+    .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
+    .then((data) => data || [])
+
+export const restoreKnowledgeDocumentVersionApi = (id: number, versionId: number) =>
+  request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}/versions/${versionId}/restore`)
+
+export const getKnowledgeDocumentChunksApi = (id: number) =>
+  request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
+
+export const getKnowledgeChunkApi = (chunkId: number) =>
+  request.get<KnowledgeChunkVO, KnowledgeChunkVO>(`/agent/knowledge/chunks/${chunkId}`)
+
+export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
+  request
+    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: { limit } })
+    .then((data) => data || [])
+
+export const getKnowledgeDuplicateReviewApi = (params?: { limit?: number; threshold?: number }) =>
+  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params })
+
+export const getKnowledgeExactDuplicatesApi = (params?: { limit?: number; documentId?: number; documentType?: string }) =>
+  request
+    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params })
+    .then((data) => data || [])
+
+export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number; documentId?: number; documentType?: string }) =>
+  request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
+    params
+  })
+
+export const deleteKnowledgeDocumentApi = (id: number) =>
+  request.delete<null, null>(`/agent/knowledge/documents/${id}`)
+
+export const deleteKnowledgeChunkApi = (chunkId: number) =>
+  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`)
+
+export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
+    params: documentId ? { documentId } : undefined
+  })
+
+export const retryFailedKnowledgeVectorsApi = (limit?: number) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/retry-failed', undefined, {
+    params: limit ? { limit } : undefined
+  })
+
+export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
+
+export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
+  request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)
+
+export interface KnowledgeAskStreamHandlers {
+  onReferences?: (references: KnowledgeSearchResultVO[]) => void
+  onToken?: (delta: string) => void
+  onCitation?: (result: Partial<KnowledgeAskVO>) => void
+  onDone?: (aiCallLogId?: number) => void
+  onError?: (message: string) => void
+}
+
+/**
+ * 流式问答。事件序列：references → token（多帧）→ citation → done；失败走 error。
+ * 同步接口 askKnowledgeApi 作为降级。
+ */
+export const askKnowledgeStreamApi = (
+  data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string },
+  handlers: KnowledgeAskStreamHandlers
+): StreamSseHandle => {
+  return streamSse({
+    url: buildSseUrl('/agent/knowledge/ask/stream', {}),
+    method: 'POST',
+    body: data,
+    handlers: {
+      onEvent: (event, payload) => {
+        if (!payload) return
+        switch (event) {
+          case 'references':
+            handlers.onReferences?.((payload.references as KnowledgeSearchResultVO[]) || [])
+            break
+          case 'token':
+            if (typeof payload.delta === 'string') handlers.onToken?.(payload.delta)
+            break
+          case 'citation':
+            handlers.onCitation?.(payload as Partial<KnowledgeAskVO>)
+            break
+          case 'done':
+            handlers.onDone?.(payload.aiCallLogId as number | undefined)
+            break
+          case 'error':
+            handlers.onError?.(String(payload.message || 'Knowledge ask failed'))
+            break
+          default:
+            break
+        }
+      },
+      onError: (error) => handlers.onError?.(error.message)
+    }
+  })
+}
+
+export const evaluateKnowledgeApi = (data: KnowledgeEvaluationDTO) =>
+  request.post<KnowledgeEvaluationVO, KnowledgeEvaluationVO>('/agent/knowledge/evaluate', data)
+
+export const getKnowledgeEvalCasesApi = (params?: KnowledgeEvalCaseQueryDTO) =>
+  request.get<PageResult<KnowledgeEvalCaseVO>, PageResult<KnowledgeEvalCaseVO>>('/agent/knowledge/eval/cases', { params })
+
+export const saveKnowledgeEvalCaseApi = (data: KnowledgeEvalCaseSaveDTO) =>
+  request.post<KnowledgeEvalCaseVO, KnowledgeEvalCaseVO>('/agent/knowledge/eval/cases', data)
+
+export const deleteKnowledgeEvalCaseApi = (id: number) =>
+  request.delete<null, null>(`/agent/knowledge/eval/cases/${id}`)
+
+export const runKnowledgeEvalApi = (data?: KnowledgeEvalRunRequestDTO) =>
+  request.post<KnowledgeEvalRunVO, KnowledgeEvalRunVO>('/agent/knowledge/eval/runs', data || {})
+
+export const getKnowledgeEvalRunsApi = (params?: { pageNo?: number; pageSize?: number }) =>
+  request.get<PageResult<KnowledgeEvalRunVO>, PageResult<KnowledgeEvalRunVO>>('/agent/knowledge/eval/runs', { params })
+
+export const getKnowledgeEvalRunApi = (id: number) =>
+  request.get<KnowledgeEvalRunVO, KnowledgeEvalRunVO>(`/agent/knowledge/eval/runs/${id}`)
