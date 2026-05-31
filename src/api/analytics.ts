@@ -149,32 +149,32 @@ export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
   request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
 
 export const getAdminVectorStoreHealthApi = () =>
-  request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/vector-store/health')
+  request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/analytics/vector-store/health')
 
 export const getAdminVectorStoreFailuresApi = (params?: VectorFailureQuery) =>
-  request.get<VectorFailureDetailsVO, VectorFailureDetailsVO>('/admin/vector-store/failures', { params })
+  request.get<VectorFailureDetailsVO, VectorFailureDetailsVO>('/admin/analytics/vector-store/failures', { params })
 
 export const getAdminVectorIndexJobsApi = (params?: VectorIndexJobQuery) =>
   request
-    .get<PageResult<VectorIndexJobVO>, PageResult<VectorIndexJobVO>>('/admin/vector-store/jobs', { params })
+    .get<PageResult<VectorIndexJobVO>, PageResult<VectorIndexJobVO>>('/admin/analytics/vector-store/jobs', { params })
     .then((result) => normalizePageResult(result, params))
 
 export const retryAdminVectorDeletesApi = (limit?: number) =>
   request.post<VectorDeleteRetryResultVO, VectorDeleteRetryResultVO>(
-    '/admin/vector-store/delete-outbox/retry',
+    '/admin/analytics/vector-store/delete-outbox/retry',
     undefined,
     { params: { limit } }
   )
 export const rebuildAdminKnowledgeVectorsApi = (limit?: number) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
-    '/admin/vector-store/knowledge/rebuild',
+    '/admin/analytics/vector-store/knowledge/rebuild',
     undefined,
     { params: limit ? { limit } : undefined }
   )
 
 export const retryAdminKnowledgeVectorsApi = (limit?: number) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
-    '/admin/vector-store/knowledge/retry-failed',
+    '/admin/analytics/vector-store/knowledge/retry-failed',
     undefined,
     { params: limit ? { limit } : undefined }
   )

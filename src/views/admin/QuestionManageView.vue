@@ -294,6 +294,7 @@
                   <el-option label="待审核" value="PENDING" />
                   <el-option label="已通过" value="APPROVED" />
                   <el-option label="已驳回" value="REJECTED" />
+                  <el-option label="已作废" value="CANCELLED" />
                 </el-select>
               </el-form-item>
               <el-form-item>
@@ -344,7 +345,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="createdAt" label="生成时间" min-width="170" />
-              <el-table-column label="操作" width="250" fixed="right">
+              <el-table-column label="操作" width="300" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
                   <el-button link type="success" :disabled="row.reviewStatus !== 'PENDING'" @click="openReviewDrawer(row.id)">
@@ -355,6 +356,9 @@
                   </el-button>
                   <el-button link type="danger" :disabled="row.reviewStatus !== 'PENDING'" @click="handleRejectReview(row.id)">
                     驳回
+                  </el-button>
+                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleCancelReview(row.id)">
+                    作废
                   </el-button>
                 </template>
               </el-table-column>
@@ -453,8 +457,9 @@
               </el-form-item>
               <el-form-item label="状态">
                 <el-select v-model="duplicateQuery.reviewStatus" clearable placeholder="全部" style="width: 130px">
+                  <el-option label="全部" value="ALL" />
                   <el-option label="待处理" value="PENDING" />
-                  <el-option label="已合并" value="CONFIRMED" />
+                  <el-option label="已合并" value="MERGED" />
                   <el-option label="已忽略" value="IGNORED" />
                 </el-select>
               </el-form-item>
@@ -521,7 +526,31 @@
                 <el-button type="primary" :loading="duplicateEvalRunning" @click="runDuplicateEvalCases">
                   Run Enabled
                 </el-button>
+                <el-button :loading="duplicateThresholdSweeping" @click="sweepDuplicateThresholds">
+                  Threshold Sweep
+                </el-button>
                 <el-button @click="refreshDuplicateEvalWorkspace">Refresh</el-button>
+              </div>
+            </div>
+
+            <div v-if="duplicateThresholdSweep" class="duplicate-threshold-panel">
+              <div class="duplicate-threshold-panel__head">
+                <div>
+                  <strong>Recommended threshold {{ duplicateThresholdSweep.bestThreshold ?? '--' }}</strong>
+                  <span>
+                    F1 {{ formatRate(duplicateThresholdSweep.bestF1) }} / Precision {{ formatRate(duplicateThresholdSweep.bestPrecision) }} / Recall {{ formatRate(duplicateThresholdSweep.bestRecall) }}
+                  </span>
+                </div>
+                <el-tag type="info" effect="plain">
+                  {{ duplicateThresholdSweep.evaluatedCount || 0 }} evaluated
+                </el-tag>
+              </div>
+              <div class="duplicate-threshold-grid">
+                <article v-for="bucket in duplicateThresholdSweep.buckets || []" :key="bucket.threshold">
+                  <span>{{ bucket.threshold }}</span>
+                  <strong>{{ formatRate(bucket.f1) }}</strong>
+                  <small>P {{ formatRate(bucket.precision) }} / R {{ formatRate(bucket.recall) }} / workload {{ formatRate(bucket.reviewWorkloadRate) }}</small>
+                </article>
               </div>
             </div>
 
@@ -620,8 +649,36 @@
               </div>
             </div>
           </div>
+          <div class="review-batch-toolbar duplicate-batch-toolbar">
+            <span>已选择 {{ selectedPendingDuplicateIds.length }} 条待处理候选</span>
+            <el-space>
+              <el-button
+                type="primary"
+                :disabled="selectedPendingDuplicateIds.length === 0"
+                :loading="duplicateBatchProcessing"
+                @click="handleBatchMergeDuplicates"
+              >
+                批量合并
+              </el-button>
+              <el-button
+                type="warning"
+                plain
+                :disabled="selectedPendingDuplicateIds.length === 0"
+                :loading="duplicateBatchProcessing"
+                @click="handleBatchIgnoreDuplicates"
+              >
+                批量忽略
+              </el-button>
+            </el-space>
+          </div>
           <div class="table-card admin-table-card">
-            <el-table v-loading="duplicateLoading" :data="duplicates" row-key="id">
+            <el-table
+              v-loading="duplicateLoading"
+              :data="duplicates"
+              row-key="id"
+              @selection-change="handleDuplicateSelectionChange"
+            >
+              <el-table-column type="selection" width="48" :selectable="isPendingDuplicate" />
               <el-table-column prop="sourceTitle" label="源题" min-width="220" show-overflow-tooltip />
               <el-table-column prop="targetTitle" label="疑似重复题" min-width="220" show-overflow-tooltip />
               <el-table-column label="匹配类型" min-width="150">
@@ -922,6 +979,13 @@
       <template #footer>
         <el-button @click="reviewDrawerVisible = false">关闭</el-button>
         <el-button
+          type="warning"
+          :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
+          @click="reviewDetail && handleCancelReview(reviewDetail.id)"
+        >
+          作废
+        </el-button>
+        <el-button
           type="primary"
           :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
           :loading="reviewApproveSaving"
@@ -999,19 +1063,19 @@
 
     <el-dialog v-model="importDialogVisible" title="批量导入题目" width="500px">
       <div class="import-dialog-body">
-        <p>支持 Excel (.xlsx) 格式，请按模板格式填写题目数据。</p>
+        <p>支持 Excel (.xlsx/.xls)、Markdown (.md)、Word (.docx)、PDF (.pdf) 格式，请按模板格式填写题目数据。</p>
         <el-upload
           ref="importUploadRef"
           :auto-upload="false"
           :limit="1"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.md,.docx,.pdf"
           :on-change="handleImportFileChange"
         >
           <template #trigger>
             <el-button type="primary">选择文件</el-button>
           </template>
           <template #tip>
-            <div class="el-upload__tip">仅支持 .xlsx / .xls 文件，单次最多 500 条</div>
+            <div class="el-upload__tip">支持 .xlsx / .xls / .md / .docx / .pdf 文件，单次最多 500 条</div>
           </template>
         </el-upload>
         <el-button class="import-template-btn" link type="primary" @click="handleDownloadTemplate">下载导入模板</el-button>
@@ -1034,7 +1098,10 @@ import { useRoute } from 'vue-router'
 import {
   approveQuestionReviewApi,
   batchApproveQuestionReviewsApi,
+  batchIgnoreQuestionDuplicateReviewApi,
+  batchMergeQuestionDuplicateReviewApi,
   batchRejectQuestionReviewsApi,
+  cancelQuestionReviewApi,
   checkQuestionDuplicateApi,
   createAdminQuestionApi,
   deleteAdminQuestionApi,
@@ -1063,6 +1130,7 @@ import {
   runQuestionDuplicateEvalApi,
   saveQuestionDuplicateEvalCaseApi,
   streamAiQuestionGenerateApi,
+  sweepQuestionDuplicateThresholdApi,
   updateAdminQuestionApi,
   updateAdminQuestionStatusApi
 } from '@/api/question'
@@ -1094,6 +1162,7 @@ import type {
   QuestionDuplicateReviewDetailVO,
   QuestionDuplicateFeedbackStatsVO,
   QuestionDuplicateReviewQueryDTO,
+  QuestionDuplicateThresholdSweepVO,
   QuestionCategoryVO,
   QuestionCreateDTO,
   QuestionDifficulty,
@@ -1150,10 +1219,12 @@ const reviewApproveSaving = ref(false)
 const reviewDrawerVisible = ref(false)
 const duplicateDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
+const duplicateBatchProcessing = ref(false)
 const embeddingRebuilding = ref(false)
 const duplicateEvalCases = ref<QuestionDuplicateEvalCaseVO[]>([])
 const duplicateEvalRuns = ref<QuestionDuplicateEvalRunVO[]>([])
 const duplicateEvalLatestRun = ref<QuestionDuplicateEvalRunVO | null>(null)
+const duplicateThresholdSweep = ref<QuestionDuplicateThresholdSweepVO | null>(null)
 const duplicateEvalCaseTotal = ref(0)
 const duplicateEvalRunTotal = ref(0)
 const embeddingStatsLoading = ref(false)
@@ -1162,10 +1233,12 @@ const reviews = ref<QuestionReviewListVO[]>([])
 const reviewDetail = ref<QuestionReviewDetailVO | null>(null)
 const selectedReviewRows = ref<QuestionReviewListVO[]>([])
 const duplicates = ref<QuestionDuplicateReviewListVO[]>([])
+const selectedDuplicateRows = ref<QuestionDuplicateReviewListVO[]>([])
 const duplicateDetail = ref<QuestionDuplicateReviewDetailVO | null>(null)
 const duplicateConfig = ref<QuestionDuplicateConfigVO | null>(null)
 const duplicateFeedbackStats = ref<QuestionDuplicateFeedbackStatsVO | null>(null)
 const duplicateEvaluation = ref<QuestionDuplicateEvaluationVO | null>(null)
+const duplicateThresholdSweeping = ref(false)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
@@ -1250,7 +1323,7 @@ const duplicateEvalRunQuery = reactive({
 
 const duplicateQuery = reactive<QuestionDuplicateReviewQueryDTO>({
   keyword: '',
-  reviewStatus: 'PENDING',
+  reviewStatus: 'ALL',
   scoreBand: '',
   pageNo: 1,
   pageSize: 10
@@ -1287,6 +1360,11 @@ const difficultyStats = computed(() => ({
 }))
 const selectedPendingReviewIds = computed(() =>
   selectedReviewRows.value
+    .filter((item) => item.reviewStatus === 'PENDING')
+    .map((item) => item.id)
+)
+const selectedPendingDuplicateIds = computed(() =>
+  selectedDuplicateRows.value
     .filter((item) => item.reviewStatus === 'PENDING')
     .map((item) => item.id)
 )
@@ -1389,19 +1467,27 @@ const getReviewStatusLabel = (status?: string) => {
   if (status === 'PENDING') return '待审核'
   if (status === 'APPROVED') return '已通过'
   if (status === 'REJECTED') return '已驳回'
+  if (status === 'CANCELLED') return '已作废'
   return status || '-'
 }
 
 const getReviewStatusType = (status?: string) => {
   if (status === 'APPROVED') return 'success'
   if (status === 'REJECTED') return 'danger'
+  if (status === 'CANCELLED') return 'info'
   return 'warning'
 }
 
 const isPendingReview = (row: QuestionReviewListVO) => row.reviewStatus === 'PENDING'
 
+const isPendingDuplicate = (row: QuestionDuplicateReviewListVO) => row.reviewStatus === 'PENDING'
+
 const handleReviewSelectionChange = (rows: QuestionReviewListVO[]) => {
   selectedReviewRows.value = rows
+}
+
+const handleDuplicateSelectionChange = (rows: QuestionDuplicateReviewListVO[]) => {
+  selectedDuplicateRows.value = rows
 }
 
 const showBatchReviewResult = (result: { successCount?: number; failureCount?: number; failures?: Array<{ reviewId: number; reason?: string }> }) => {
@@ -1418,6 +1504,23 @@ const showBatchReviewResult = (result: { successCount?: number; failureCount?: n
   ElMessageBox.alert(
     `成功 ${result.successCount || 0} 条，失败 ${result.failureCount || 0} 条。\n${failureText}`,
     '批量操作结果',
+    { type: 'warning' }
+  )
+}
+
+const showBatchDuplicateResult = (result: { successCount?: number; failureCount?: number; failures?: Array<{ id: number; reason?: string }> }) => {
+  const failures = result.failures || []
+  if (!failures.length) {
+    ElMessage.success(`批量处理完成：成功 ${result.successCount || 0} 条，失败 ${result.failureCount || 0} 条`)
+    return
+  }
+  const failureText = failures
+    .slice(0, 6)
+    .map((item) => `#${item.id}: ${item.reason || '未知原因'}`)
+    .join('\n')
+  ElMessageBox.alert(
+    `批量处理完成：成功 ${result.successCount || 0} 条，失败 ${result.failureCount || 0} 条\n${failureText}`,
+    '批量重复题处理结果',
     { type: 'warning' }
   )
 }
@@ -1470,14 +1573,15 @@ const resetReviewApproveForm = (detail?: QuestionReviewDetailVO | null) => {
 }
 
 const getDuplicateStatusLabel = (status?: string) => {
+  if (status === 'ALL') return '全部'
   if (status === 'PENDING') return '待处理'
-  if (status === 'CONFIRMED') return '已合并'
+  if (status === 'CONFIRMED' || status === 'MERGED') return '已合并'
   if (status === 'IGNORED') return '已忽略'
   return status || '-'
 }
 
 const getDuplicateStatusType = (status?: string) => {
-  if (status === 'CONFIRMED') return 'success'
+  if (status === 'CONFIRMED' || status === 'MERGED') return 'success'
   if (status === 'IGNORED') return 'info'
   return 'warning'
 }
@@ -1813,12 +1917,17 @@ const openDuplicateDrawer = async (id: number) => {
 const fetchDuplicates = async () => {
   duplicateLoading.value = true
   try {
-    const result = await getQuestionDuplicateReviewsApi(duplicateQuery)
+    const result = await getQuestionDuplicateReviewsApi({
+      ...duplicateQuery,
+      reviewStatus: duplicateQuery.reviewStatus || 'ALL'
+    })
     duplicates.value = result.records || []
     duplicateTotal.value = result.total || 0
+    selectedDuplicateRows.value = []
   } catch {
     duplicates.value = []
     duplicateTotal.value = 0
+    selectedDuplicateRows.value = []
   } finally {
     duplicateLoading.value = false
   }
@@ -1930,7 +2039,7 @@ const resetReviewQuery = () => {
 const resetDuplicateQuery = () => {
   Object.assign(duplicateQuery, {
     keyword: '',
-    reviewStatus: 'PENDING',
+    reviewStatus: 'ALL',
     scoreBand: '',
     pageNo: 1,
     pageSize: 10
@@ -2115,6 +2224,26 @@ const handleRejectReview = async (id: number) => {
   })
   await rejectQuestionReviewApi(id, { rejectReason: value.trim() })
   ElMessage.success('题目已驳回')
+  await fetchReviews()
+}
+
+const handleCancelReview = async (id: number) => {
+  const { value } = await ElMessageBox.prompt('请输入作废原因', '作废 AI 草稿', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：E2E 测试数据清理或生成内容不再需要',
+    inputValue: '管理员作废草稿',
+    inputValidator: (value) => {
+      const reason = value?.trim() || ''
+      if (!reason) return '请输入作废原因'
+      if (reason.length > 500) return '作废原因不能超过 500 字'
+      return true
+    }
+  })
+  await cancelQuestionReviewApi(id, { rejectReason: value.trim() })
+  ElMessage.success('题目草稿已作废')
+  if (reviewDetail.value?.id === id) {
+    reviewDrawerVisible.value = false
+  }
   await fetchReviews()
 }
 
@@ -2306,6 +2435,27 @@ const runDuplicateEvalCases = async () => {
   }
 }
 
+const sweepDuplicateThresholds = async () => {
+  duplicateThresholdSweeping.value = true
+  try {
+    const result = await sweepQuestionDuplicateThresholdApi({
+      onlyEnabled: true,
+      limit: 100,
+      minThreshold: 70,
+      maxThreshold: 95,
+      step: 5
+    })
+    duplicateThresholdSweep.value = result
+    ElMessage.success(
+      `Threshold sweep done: best ${result.bestThreshold ?? '--'}, F1 ${formatRate(result.bestF1)}`
+    )
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'Threshold sweep failed')
+  } finally {
+    duplicateThresholdSweeping.value = false
+  }
+}
+
 const deleteDuplicateEvalCase = async (id?: number) => {
   if (!id) return
   await ElMessageBox.confirm('Delete this evaluation case?', 'Delete Evaluation Case', { type: 'warning' })
@@ -2436,6 +2586,59 @@ const handleIgnoreDuplicate = async (id: number) => {
   })
   ElMessage.success('重复候选已忽略')
   await refreshDuplicateWorkspace()
+}
+
+const handleBatchMergeDuplicates = async () => {
+  const ids = selectedPendingDuplicateIds.value
+  if (!ids.length) return
+  await ElMessageBox.confirm(
+    `将批量合并 ${ids.length} 条待处理重复候选，后端会逐条建立 SAME_INTENT 关系；冲突项会返回失败明细。确认继续？`,
+    '批量合并重复题',
+    { type: 'warning' }
+  )
+  const { value } = await ElMessageBox.prompt('请输入批量合并原因', '批量合并重复题', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：批量确认同意图重复'
+  })
+  duplicateBatchProcessing.value = true
+  try {
+    const result = await batchMergeQuestionDuplicateReviewApi({
+      ids,
+      relationType: 'SAME_INTENT',
+      reason: value?.trim() || '批量确认重复'
+    })
+    showBatchDuplicateResult(result)
+    selectedDuplicateRows.value = []
+    await refreshDuplicateWorkspace()
+  } finally {
+    duplicateBatchProcessing.value = false
+  }
+}
+
+const handleBatchIgnoreDuplicates = async () => {
+  const ids = selectedPendingDuplicateIds.value
+  if (!ids.length) return
+  await ElMessageBox.confirm(
+    `将批量忽略 ${ids.length} 条待处理重复候选；后端会逐条处理，冲突项会返回失败明细。确认继续？`,
+    '批量忽略重复候选',
+    { type: 'warning' }
+  )
+  const { value } = await ElMessageBox.prompt('请输入批量忽略原因', '批量忽略重复候选', {
+    inputType: 'textarea',
+    inputPlaceholder: '例如：考察角度不同'
+  })
+  duplicateBatchProcessing.value = true
+  try {
+    const result = await batchIgnoreQuestionDuplicateReviewApi({
+      ids,
+      ignoredReason: value?.trim() || '批量确认不是重复题'
+    })
+    showBatchDuplicateResult(result)
+    selectedDuplicateRows.value = []
+    await refreshDuplicateWorkspace()
+  } finally {
+    duplicateBatchProcessing.value = false
+  }
 }
 
 // ============ 批量导入/导出 ============
@@ -2715,6 +2918,56 @@ onUnmounted(() => {
   border: 1px solid rgba(59, 130, 246, 0.28);
   border-radius: 10px;
   background: rgba(30, 64, 175, 0.12);
+}
+
+.duplicate-threshold-panel {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 10px;
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.duplicate-threshold-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.duplicate-threshold-panel__head strong,
+.duplicate-threshold-grid strong {
+  display: block;
+  color: var(--app-text);
+}
+
+.duplicate-threshold-panel__head span,
+.duplicate-threshold-grid span,
+.duplicate-threshold-grid small {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.duplicate-threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.duplicate-threshold-grid article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.duplicate-threshold-grid strong {
+  margin: 5px 0;
+  font-size: 18px;
 }
 
 .duplicate-evaluation-panel__head {

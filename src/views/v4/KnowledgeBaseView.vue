@@ -11,7 +11,7 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
         <el-upload
           class="knowledge-upload"
-          accept=".txt,.md,.markdown,.pdf,.doc,.docx"
+          :accept="uploadAccept"
           :show-file-list="false"
           :auto-upload="false"
           :on-change="handleKnowledgeFileChange"
@@ -274,9 +274,51 @@
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
+                <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">Trace</el-button>
                 <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">Evaluate</el-button>
               </el-form-item>
             </el-form>
+            <div v-if="searchTrace" class="search-trace-panel">
+              <div class="search-trace-panel__head">
+                <div>
+                  <span>Retrieval Trace</span>
+                  <strong>{{ searchTrace.retrievalMode || '--' }}</strong>
+                </div>
+                <el-tag :type="searchTrace.vectorEnabled ? 'success' : 'warning'" effect="light">
+                  {{ searchTrace.vectorEnabled ? 'Vector enabled' : 'Keyword fallback' }}
+                </el-tag>
+              </div>
+              <div class="search-trace-metrics">
+                <article>
+                  <span>Terms</span>
+                  <strong>{{ searchTrace.expandedTerms?.length || 0 }}</strong>
+                  <small>{{ searchTrace.expandedTerms?.slice(0, 8).join(' / ') || '-' }}</small>
+                </article>
+                <article>
+                  <span>Vector</span>
+                  <strong>{{ searchTrace.vectorCandidateCount || 0 }}</strong>
+                  <small>recall {{ searchTrace.recallLimit || 0 }}</small>
+                </article>
+                <article>
+                  <span>Keyword</span>
+                  <strong>{{ searchTrace.keywordCandidateCount || 0 }}</strong>
+                  <small>multi-term fallback</small>
+                </article>
+                <article>
+                  <span>Final</span>
+                  <strong>{{ searchTrace.finalCandidateCount || 0 }}</strong>
+                  <small>min {{ scoreLabel(searchTrace.minScore) }}</small>
+                </article>
+              </div>
+              <el-alert
+                v-for="warning in searchTrace.warnings || []"
+                :key="warning"
+                class="search-trace-warning"
+                type="warning"
+                :closable="false"
+                :title="warning"
+              />
+            </div>
             <div v-if="knowledgeEvaluation" class="knowledge-evaluation-panel">
               <div class="knowledge-evaluation-panel__head">
                 <div>
@@ -946,6 +988,7 @@ import {
   saveKnowledgeEvalCaseApi,
   restoreKnowledgeDocumentVersionApi,
   searchKnowledgeApi,
+  traceKnowledgeSearchApi,
   updateKnowledgeDocumentApi,
   uploadKnowledgeDocumentApi,
   type KnowledgeChunkVO,
@@ -965,13 +1008,15 @@ import {
   type KnowledgeEvalRunVO,
   type KnowledgeStatsVO,
   type KnowledgeVectorRebuildVO,
-  type KnowledgeSearchResultVO
+  type KnowledgeSearchResultVO,
+  type KnowledgeSearchTraceVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 
 const loading = ref(false)
 const route = useRoute()
 const searching = ref(false)
+const tracingSearch = ref(false)
 const asking = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
@@ -1000,6 +1045,7 @@ const documents = ref<KnowledgeDocumentVO[]>([])
 const documentOptions = ref<KnowledgeDocumentOptionVO[]>([])
 const documentTypeOptions = ref<string[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
+const searchTrace = ref<KnowledgeSearchTraceVO | null>(null)
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
 const selectedDocument = ref<KnowledgeDocumentVO | null>(null)
 const versionDocument = ref<KnowledgeDocumentVO | null>(null)
@@ -1226,6 +1272,12 @@ const uploadLimitLabel = computed(() => {
 })
 
 const uploadExtensionsLabel = computed(() => knowledgeConfig.value?.uploadExtensions?.join(', ') || '--')
+const uploadExtensions = computed(() => knowledgeConfig.value?.uploadExtensions?.length
+  ? knowledgeConfig.value.uploadExtensions.map((item) => item.toLowerCase().replace(/^\./, ''))
+  : ['txt', 'md', 'markdown', 'pdf', 'doc', 'docx']
+)
+const uploadAccept = computed(() => uploadExtensions.value.map((item) => `.${item}`).join(','))
+const uploadMaxBytes = computed(() => knowledgeConfig.value?.uploadMaxBytes || 8 * 1024 * 1024)
 
 const scopedDocumentOptions = computed(() => {
   if (!knowledgeScopeType.value) return documentOptions.value
@@ -1444,6 +1496,7 @@ const openKnowledgeFailureFromQuery = async () => {
 const handleSearch = async () => {
   if (!keyword.value) {
     searchResults.value = []
+    searchTrace.value = null
     return
   }
   searching.value = true
@@ -1457,6 +1510,30 @@ const handleSearch = async () => {
     })
   } finally {
     searching.value = false
+  }
+}
+
+const handleSearchTrace = async () => {
+  if (!keyword.value) {
+    searchTrace.value = null
+    ElMessage.warning('Enter a search keyword or question first')
+    return
+  }
+  tracingSearch.value = true
+  try {
+    const trace = await traceKnowledgeSearchApi({
+      keyword: keyword.value,
+      limit: limit.value,
+      minScore: normalizedSearchMinScore.value,
+      documentId: knowledgeScopeDocumentId.value,
+      documentType: knowledgeScopeType.value || undefined
+    })
+    searchTrace.value = trace || null
+    searchResults.value = trace?.finalResults || []
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    tracingSearch.value = false
   }
 }
 
@@ -1483,6 +1560,8 @@ const handleEvaluateKnowledge = async () => {
           expectedDocumentId: expectedDocument?.id ?? expectedReference?.documentId,
           expectedDocumentTitle: expectedDocument?.title ?? expectedReference?.title,
           expectedDocumentType: knowledgeScopeType.value || expectedDocument?.documentType || expectedReference?.documentType,
+          retrievalDocumentId: knowledgeScopeDocumentId.value,
+          retrievalDocumentType: knowledgeScopeType.value || undefined,
           expectNoAnswer: !hasExpectedSource,
           note: expectedDocument ? 'Current selected document scope' : expectedReference ? 'Top current retrieval result' : 'No expected source selected'
         }
@@ -1521,6 +1600,8 @@ const currentKnowledgeEvalCasePayload = () => {
   const expectedDocumentId = expectedDocument?.id ?? expectedReference?.documentId
   const expectedDocumentTitle = expectedDocument?.title ?? expectedReference?.title
   const expectedDocumentType = knowledgeScopeType.value || expectedDocument?.documentType || expectedReference?.documentType
+  const retrievalDocumentId = knowledgeScopeDocumentId.value
+  const retrievalDocumentType = knowledgeScopeType.value || undefined
   const hasExpectedSource = Boolean(expectedDocumentId || expectedDocumentTitle || expectedDocumentType)
   const caseSeed = [queryText, expectedDocumentId || expectedDocumentTitle || expectedDocumentType || 'NO_SOURCE']
     .join('|')
@@ -1534,6 +1615,8 @@ const currentKnowledgeEvalCasePayload = () => {
     expectedDocumentId,
     expectedDocumentTitle,
     expectedDocumentType,
+    retrievalDocumentId,
+    retrievalDocumentType,
     expectNoAnswer: !hasExpectedSource,
     note: expectedDocument
       ? 'Current selected document scope'
@@ -1994,13 +2077,14 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
   const file = uploadFile.raw
   if (!file) return
   const lowerName = file.name.toLowerCase()
-  const supported = ['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx'].some((suffix) => lowerName.endsWith(suffix))
+  const extension = lowerName.includes('.') ? lowerName.split('.').pop() || '' : ''
+  const supported = uploadExtensions.value.includes(extension)
   if (!supported) {
-    ElMessage.warning('仅支持 .txt / .md / .markdown / .pdf / .doc / .docx 文件')
+    ElMessage.warning(`仅支持 ${uploadAccept.value || uploadExtensionsLabel.value} 文件`)
     return
   }
-  if (file.size > 8 * 1024 * 1024) {
-    ElMessage.warning('文件大小不能超过 8MB')
+  if (file.size > uploadMaxBytes.value) {
+    ElMessage.warning(`文件大小不能超过 ${uploadLimitLabel.value}`)
     return
   }
   uploading.value = true
@@ -2022,7 +2106,8 @@ const documentTypeFromFileName = (lowerName: string) => {
 
 const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: string) => {
   if (result.duplicateDocument) {
-    ElMessage.warning(`资料已存在：复用资料 #${result.duplicateDocumentId || result.id}`)
+    const title = result.title ? `「${result.title}」` : `#${result.duplicateDocumentId || result.id}`
+    ElMessage.warning(`资料已存在：${title}`)
     return
   }
   const parts = [`${actionLabel}：生成 ${result.chunkCount || 0} 个片段`]
@@ -2041,8 +2126,14 @@ const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: stri
 }
 
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
+  const scopeLabel = documentTitle ? `资料「${documentTitle}」` : '全部资料'
+  await ElMessageBox.confirm(
+    `将重建${scopeLabel}的知识库向量索引，可能产生 embedding 调用成本；请求完成前请不要重复点击。确认继续？`,
+    '重建知识库向量索引',
+    { type: 'warning' }
+  )
   rebuilding.value = true
-  rebuildTargetLabel.value = documentTitle ? `资料「${documentTitle}」` : '全部资料'
+  rebuildTargetLabel.value = scopeLabel
   try {
     const result = await rebuildKnowledgeVectorsApi(documentId)
     rebuildResult.value = result
@@ -2711,6 +2802,64 @@ watch(
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.search-trace-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.search-trace-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-trace-panel__head span,
+.search-trace-metrics span,
+.search-trace-metrics small {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.search-trace-panel__head strong,
+.search-trace-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.search-trace-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.search-trace-metrics article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.search-trace-metrics small {
+  overflow: hidden;
+  margin-top: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-trace-warning {
+  margin-top: 0;
 }
 
 .knowledge-evaluation-panel {

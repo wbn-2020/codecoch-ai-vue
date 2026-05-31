@@ -273,8 +273,8 @@ export interface QuestionCreateDTO {
 
 export type QuestionUpdateDTO = QuestionCreateDTO
 
-export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | string
-export type QuestionDuplicateReviewStatus = 'PENDING' | 'CONFIRMED' | 'IGNORED' | string
+export type QuestionReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | string
+export type QuestionDuplicateReviewStatus = 'ALL' | 'PENDING' | 'MERGED' | 'CONFIRMED' | 'IGNORED' | string
 export type QuestionDuplicateMatchType =
   | 'HARD_TITLE_HASH'
   | 'HARD_CONTENT_HASH'
@@ -462,6 +462,7 @@ export interface BatchQuestionReviewResultVO {
 
 export interface QuestionDuplicateReviewQueryDTO extends PageQuery {
   questionId?: number
+  status?: QuestionDuplicateReviewStatus | ''
   reviewStatus?: QuestionDuplicateReviewStatus | ''
   matchType?: QuestionDuplicateMatchType | ''
   scoreBand?: '' | 'STRONG' | 'REVIEW'
@@ -606,6 +607,40 @@ export interface QuestionDuplicateEvalRunRequestDTO {
   caseIds?: number[]
   onlyEnabled?: boolean
   limit?: number
+}
+
+export interface QuestionDuplicateThresholdSweepDTO extends QuestionDuplicateEvalRunRequestDTO {
+  minThreshold?: number
+  maxThreshold?: number
+  step?: number
+}
+
+export interface QuestionDuplicateThresholdSweepBucketVO {
+  threshold?: number
+  truePositive?: number
+  falsePositive?: number
+  trueNegative?: number
+  falseNegative?: number
+  predictedPositiveCount?: number
+  precision?: number
+  recall?: number
+  f1?: number
+  accuracy?: number
+  reviewWorkloadRate?: number
+}
+
+export interface QuestionDuplicateThresholdSweepVO {
+  sampleCount?: number
+  evaluatedCount?: number
+  positiveExpectedCount?: number
+  negativeExpectedCount?: number
+  bestThreshold?: number
+  bestPrecision?: number
+  bestRecall?: number
+  bestF1?: number
+  bestAccuracy?: number
+  buckets?: QuestionDuplicateThresholdSweepBucketVO[]
+  generatedAt?: string
 }
 
 export interface QuestionDuplicateEvalCaseVO {
