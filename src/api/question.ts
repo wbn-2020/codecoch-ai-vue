@@ -36,6 +36,8 @@ import type {
   QuestionDuplicateReviewDetailVO,
   QuestionDuplicateReviewListVO,
   QuestionDuplicateReviewQueryDTO,
+  QuestionDuplicateThresholdSweepDTO,
+  QuestionDuplicateThresholdSweepVO,
   QuestionImportResultVO,
   QuestionQueryDTO,
   QuestionRelationCreateDTO,
@@ -434,6 +436,13 @@ export const deleteQuestionDuplicateEvalCaseApi = (id: number) => {
 export const runQuestionDuplicateEvalApi = (data?: QuestionDuplicateEvalRunRequestDTO) => {
   return request.post<QuestionDuplicateEvalRunVO, QuestionDuplicateEvalRunVO>(
     '/admin/question-duplicate-reviews/eval/runs',
+    data || {}
+  )
+}
+
+export const sweepQuestionDuplicateThresholdApi = (data?: QuestionDuplicateThresholdSweepDTO) => {
+  return request.post<QuestionDuplicateThresholdSweepVO, QuestionDuplicateThresholdSweepVO>(
+    '/admin/question-duplicate-reviews/eval/runs/threshold-sweep',
     data || {}
   )
 }

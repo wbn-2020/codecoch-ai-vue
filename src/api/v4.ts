@@ -138,6 +138,7 @@ export interface KnowledgeDocumentVO {
   title?: string
   documentType?: string
   status?: string
+  normalizationVersion?: string
   chunkCount?: number
   duplicateChunkCount?: number
   nearDuplicateChunkCount?: number
@@ -164,6 +165,7 @@ export interface KnowledgeDocumentVersionVO {
   documentType?: string
   content?: string
   contentHash?: string
+  normalizationVersion?: string
   chunkCount?: number
   createdAt?: string
   updatedAt?: string
@@ -181,6 +183,7 @@ export interface KnowledgeChunkVO {
   chunkIndex?: number
   content?: string
   chunkHash?: string
+  normalizationVersion?: string
   sourceRef?: string
   embeddingModel?: string
   embeddingDimension?: number
@@ -220,6 +223,7 @@ export interface KnowledgeConfigVO {
   vectorEnabled?: boolean
   vectorCollection?: string
   retrievalMode?: string
+  normalizationVersion?: string
   chunkStrategy?: string
   chunkSize?: number
   chunkOverlap?: number
@@ -250,6 +254,29 @@ export interface KnowledgeSearchResultVO {
   indexStatus?: string
   score?: number
   matchType?: string
+}
+
+export interface KnowledgeSearchTraceVO {
+  query?: string
+  expandedTerms?: string[]
+  limit?: number
+  recallLimit?: number
+  minScore?: number
+  documentId?: number
+  documentType?: string
+  vectorEnabled?: boolean
+  retrievalMode?: string
+  vectorCandidateCount?: number
+  keywordCandidateCount?: number
+  mergedCandidateCount?: number
+  filteredCandidateCount?: number
+  finalCandidateCount?: number
+  vectorCandidates?: KnowledgeSearchResultVO[]
+  keywordCandidates?: KnowledgeSearchResultVO[]
+  mergedCandidates?: KnowledgeSearchResultVO[]
+  finalResults?: KnowledgeSearchResultVO[]
+  warnings?: string[]
+  generatedAt?: string
 }
 
 export interface KnowledgeDuplicateReviewItemVO {
@@ -301,6 +328,7 @@ export interface KnowledgeAskVO {
   citationWarning?: string
   citedReferenceNumbers?: number[]
   invalidReferenceNumbers?: number[]
+  unsupportedSentences?: string[]
   minReferenceScore?: number
   aiCallLogId?: number
   generatedAt?: string
@@ -323,6 +351,8 @@ export interface KnowledgeEvaluationSampleDTO {
   expectedDocumentId?: number
   expectedDocumentTitle?: string
   expectedDocumentType?: string
+  retrievalDocumentId?: number
+  retrievalDocumentType?: string
   expectNoAnswer?: boolean
   note?: string
 }
@@ -339,6 +369,8 @@ export interface KnowledgeEvaluationItemVO {
   expectedDocumentId?: number
   expectedDocumentTitle?: string
   expectedDocumentType?: string
+  retrievalDocumentId?: number
+  retrievalDocumentType?: string
   expectNoAnswer?: boolean
   passed?: boolean
   topDocumentId?: number
@@ -383,6 +415,8 @@ export interface KnowledgeEvalCaseSaveDTO {
   expectedDocumentId?: number
   expectedDocumentTitle?: string
   expectedDocumentType?: string
+  retrievalDocumentId?: number
+  retrievalDocumentType?: string
   expectNoAnswer?: boolean
   note?: string
   enabled?: number
@@ -391,6 +425,7 @@ export interface KnowledgeEvalCaseSaveDTO {
 export interface KnowledgeEvalRunRequestDTO {
   caseIds?: number[]
   onlyEnabled?: boolean
+  caseLimit?: number
   limit?: number
   minScore?: number
 }
@@ -402,6 +437,8 @@ export interface KnowledgeEvalCaseVO {
   expectedDocumentId?: number
   expectedDocumentTitle?: string
   expectedDocumentType?: string
+  retrievalDocumentId?: number
+  retrievalDocumentType?: string
   expectNoAnswer?: boolean
   note?: string
   enabled?: number
@@ -417,6 +454,8 @@ export interface KnowledgeEvalRunResultVO {
   expectedDocumentId?: number
   expectedDocumentTitle?: string
   expectedDocumentType?: string
+  retrievalDocumentId?: number
+  retrievalDocumentType?: string
   expectNoAnswer?: boolean
   passed?: boolean
   topDocumentId?: number
@@ -610,6 +649,9 @@ export const searchKnowledgeApi = (params: { keyword: string; limit?: number; mi
   request
     .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
     .then((data) => data || [])
+
+export const traceKnowledgeSearchApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
+  request.get<KnowledgeSearchTraceVO, KnowledgeSearchTraceVO>('/agent/knowledge/search/trace', { params })
 
 export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)
