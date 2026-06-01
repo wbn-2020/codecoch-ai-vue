@@ -1,10 +1,15 @@
 ﻿import type { RouteRecordRaw } from 'vue-router'
 
+import ForgotPasswordView from '@/views/auth/ForgotPasswordView.vue'
+import LoginView from '@/views/auth/LoginView.vue'
+import RegisterView from '@/views/auth/RegisterView.vue'
+import ResetPasswordView from '@/views/auth/ResetPasswordView.vue'
+
 export const routes: RouteRecordRaw[] = [
-  { path: '/login', name: 'Login', component: () => import('@/views/auth/LoginView.vue'), meta: { public: true, title: '登录' } },
-  { path: '/register', name: 'Register', component: () => import('@/views/auth/RegisterView.vue'), meta: { public: true, title: '注册' } },
-  { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/auth/ForgotPasswordView.vue'), meta: { public: true, title: '找回密码' } },
-  { path: '/reset-password', name: 'ResetPassword', component: () => import('@/views/auth/ResetPasswordView.vue'), meta: { public: true, title: '重置密码' } },
+  { path: '/login', name: 'Login', component: LoginView, meta: { public: true, title: '登录' } },
+  { path: '/register', name: 'Register', component: RegisterView, meta: { public: true, title: '注册' } },
+  { path: '/forgot-password', name: 'ForgotPassword', component: ForgotPasswordView, meta: { public: true, title: '找回密码' } },
+  { path: '/reset-password', name: 'ResetPassword', component: ResetPasswordView, meta: { public: true, title: '重置密码' } },
   { path: '/403', name: 'Forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { public: true, title: '无权限' } },
   { path: '/404', name: 'NotFound', component: () => import('@/views/error/NotFoundView.vue'), meta: { public: true, title: '页面不存在' } },
   {

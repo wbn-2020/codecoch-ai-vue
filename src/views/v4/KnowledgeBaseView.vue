@@ -18,8 +18,24 @@
         >
           <el-button :icon="Files" :loading="uploading">上传资料</el-button>
         </el-upload>
-        <el-button :icon="Refresh" :loading="rebuilding" @click="handleRebuildVectors">重建向量</el-button>
-        <el-button :icon="Refresh" :loading="retryingFailedVectors" @click="handleRetryFailedVectors">重试失败向量</el-button>
+        <el-button
+          :icon="Refresh"
+          :loading="rebuilding"
+          :disabled="!semanticEnabled"
+          :title="!semanticEnabled ? semanticDisabledReason : undefined"
+          @click="handleRebuildVectors"
+        >
+          重建向量
+        </el-button>
+        <el-button
+          :icon="Refresh"
+          :loading="retryingFailedVectors"
+          :disabled="!semanticEnabled"
+          :title="!semanticEnabled ? semanticDisabledReason : undefined"
+          @click="handleRetryFailedVectors"
+        >
+          重试失败向量
+        </el-button>
       </div>
     </section>
 
@@ -49,8 +65,8 @@
     <section class="config-strip">
       <article>
         <span>Vector DB</span>
-        <strong>{{ knowledgeConfig?.vectorEnabled ? 'Qdrant' : 'Keyword' }}</strong>
-        <small>{{ knowledgeConfig?.vectorCollection || '--' }}</small>
+        <strong>{{ vectorCapabilityLabel }}</strong>
+        <small>{{ vectorCapabilityDetail }}</small>
       </article>
       <article>
         <span>Chunk</span>
@@ -206,6 +222,8 @@
                     type="primary"
                     :icon="Refresh"
                     :loading="rebuilding"
+                    :disabled="!semanticEnabled"
+                    :title="!semanticEnabled ? semanticDisabledReason : undefined"
                     @click="handleRebuildVectors(row.id, row.title)"
                   >
                     重建
@@ -665,7 +683,7 @@
         <div class="rebuild-grid">
           <article class="rebuild-stat">
             <span>向量库</span>
-            <strong>{{ rebuildResult.vectorEnabled ? '已启用' : '未启用' }}</strong>
+            <strong>{{ (rebuildResult.semanticEnabled ?? rebuildResult.vectorEnabled) ? '已启用' : '未配置' }}</strong>
           </article>
           <article class="rebuild-stat">
             <span>文档</span>
@@ -688,6 +706,7 @@
             <strong>{{ rebuildResult.duplicateChunkCount || 0 }}</strong>
           </article>
         </div>
+        <p v-if="rebuildResult.embeddingDisabledReason" class="rebuild-tip">{{ rebuildResult.embeddingDisabledReason }}</p>
         <p class="rebuild-tip">失败文档：{{ rebuildResult.failedDocuments?.length || 0 }}</p>
         <p class="rebuild-tip" v-if="rebuildResult.failedDocuments?.length">
           文档 ID：{{ rebuildResult.failedDocuments.join(', ') }}
@@ -1133,6 +1152,34 @@ const documentTotal = computed(() => knowledgeStats.value?.documentCount ?? tota
 
 const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkCount ?? 0)
 
+const semanticEnabled = computed(() => {
+  if (typeof knowledgeConfig.value?.semanticEnabled === 'boolean') {
+    return knowledgeConfig.value.semanticEnabled
+  }
+  if (typeof knowledgeStats.value?.semanticEnabled === 'boolean') {
+    return knowledgeStats.value.semanticEnabled
+  }
+  return Boolean(knowledgeConfig.value?.vectorEnabled ?? knowledgeStats.value?.vectorEnabled)
+})
+
+const semanticDisabledReason = computed(() =>
+  knowledgeConfig.value?.embeddingDisabledReason ||
+  knowledgeStats.value?.embeddingDisabledReason ||
+  '语义检索未配置，当前使用关键词兜底'
+)
+
+const vectorCapabilityLabel = computed(() => {
+  if (semanticEnabled.value) {
+    return knowledgeConfig.value?.vectorEnabled ? 'Qdrant' : 'Semantic'
+  }
+  return '未配置'
+})
+
+const vectorCapabilityDetail = computed(() => {
+  if (!semanticEnabled.value) return semanticDisabledReason.value
+  return knowledgeConfig.value?.vectorCollection || 'semantic ready'
+})
+
 const documentTypeSummary = computed(() => {
   const counts = knowledgeStats.value?.documentTypeCounts || {}
   const items = Object.entries(counts)
@@ -1155,7 +1202,7 @@ const indexStatusItems = computed(() => {
       items.push({ status, count: Number(count) })
     }
   }
-  return items.length ? items : [{ status: knowledgeStats.value?.vectorEnabled ? 'PENDING' : 'DISABLED', count: 0 }]
+  return items.length ? items : [{ status: semanticEnabled.value ? 'PENDING' : 'DISABLED', count: 0 }]
 })
 
 const failedChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.FAILED || 0))
@@ -1175,7 +1222,7 @@ const embeddingModelSummary = computed(() => {
 })
 
 const vectorIndexHealthLabel = computed(() => {
-  if (!knowledgeStats.value?.vectorEnabled) return 'vector disabled, keyword fallback active'
+  if (!semanticEnabled.value) return semanticDisabledReason.value
   if (failedChunkCount.value > 0) return 'failed chunks need retry'
   if (pendingChunkCount.value > 0) return 'pending chunks are waiting for indexing'
   return 'vector index looks healthy'
@@ -1232,7 +1279,7 @@ const retrievalModeLabel = computed(() => {
   if (mode === 'HYBRID') return '混合检索'
   if (mode === 'VECTOR_FIRST') return '向量优先'
   if (mode === 'KEYWORD_FALLBACK') return '关键词兜底'
-  return knowledgeStats.value?.vectorEnabled ? '混合检索' : '关键词兜底'
+  return semanticEnabled.value ? '混合检索' : '关键词兜底'
 })
 
 const chunkStrategyLabel = computed(() => {
@@ -1288,7 +1335,7 @@ const duplicateReviewItems = computed<KnowledgeDuplicateReviewItemVO[]>(() => du
 
 const duplicateReviewSummary = computed(() => {
   if (!duplicateReview.value) return 'not scanned'
-  if (!duplicateReview.value.vectorEnabled) return 'vector disabled'
+  if (!semanticEnabled.value || !duplicateReview.value.vectorEnabled) return 'vector disabled'
   return `${duplicateReview.value.candidateCount || 0} candidates`
 })
 
@@ -2126,6 +2173,10 @@ const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: stri
 }
 
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
+  if (!semanticEnabled.value) {
+    ElMessage.warning(semanticDisabledReason.value)
+    return
+  }
   const scopeLabel = documentTitle ? `资料「${documentTitle}」` : '全部资料'
   await ElMessageBox.confirm(
     `将重建${scopeLabel}的知识库向量索引，可能产生 embedding 调用成本；请求完成前请不要重复点击。确认继续？`,
@@ -2151,6 +2202,10 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
 }
 
 const handleRetryFailedVectors = async () => {
+  if (!semanticEnabled.value) {
+    ElMessage.warning(semanticDisabledReason.value)
+    return
+  }
   await ElMessageBox.confirm(
     '将重试当前用户最多 500 个失败或超时待索引片段所属文档的向量索引，期间可能产生 embedding 调用成本。确认继续？',
     '重试知识库向量索引',

@@ -209,10 +209,13 @@ import {
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import type { PageResult } from '@/types/api'
 import type {
   AdminAiOverviewVO,
+  AdminAnalyticsOverviewVO,
   AdminAnalyticsJobLogVO,
   AdminAnalyticsMetricDefinitionVO,
+  AdminAnalyticsTrainingVO,
   AgentFeedbackStatsVO,
   MetricPointVO,
   TrendPointVO
@@ -291,6 +294,17 @@ const getErrorMessage = (error: unknown) => {
   return '接口请求失败'
 }
 
+const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
+  result.status === 'fulfilled' ? result.value : fallback
+
+const emptyPage = <T,>(pageNo = 1, pageSize = 6): PageResult<T> => ({
+  records: [],
+  total: 0,
+  pageNo,
+  pageSize,
+  pages: 0
+})
+
 const disposeChart = () => {
   successChart?.dispose()
   successChart = null
@@ -323,9 +337,19 @@ const renderChart = async () => {
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
+  const params = { days: rangeDays.value }
+  const emptyOverview: AdminAiOverviewVO = {
+    totalAiCalls: 0,
+    successAiCalls: 0,
+    failedAiCalls: 0,
+    aiSuccessRate: 0,
+    avgElapsedMs: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0
+  }
   try {
-    const params = { days: rangeDays.value }
-    const [overviewData, failureData, opsOverview, trainingData, feedbackData, metricsPage, jobsPage] = await Promise.all([
+    const [overviewResult, failureResult, opsResult, trainingResult, feedbackResult, metricsResult, jobsResult] = await Promise.allSettled([
       getAdminAiOverviewApi(params),
       getAdminAiFailuresApi(params),
       getAdminAnalyticsOverviewApi(params),
@@ -334,6 +358,13 @@ const loadPage = async () => {
       getAdminAnalyticsMetricsApi({ pageNo: 1, pageSize: 6 }),
       getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 })
     ])
+    const overviewData = getSettledValue(overviewResult, emptyOverview)
+    const failureData = getSettledValue(failureResult, [])
+    const opsOverview = getSettledValue(opsResult, {} as AdminAnalyticsOverviewVO)
+    const trainingData = getSettledValue(trainingResult, {} as AdminAnalyticsTrainingVO)
+    const feedbackData = getSettledValue(feedbackResult, undefined)
+    const metricsPage = getSettledValue(metricsResult, emptyPage<AdminAnalyticsMetricDefinitionVO>())
+    const jobsPage = getSettledValue(jobsResult, emptyPage<AdminAnalyticsJobLogVO>())
     overview.value = opsOverview.ai || overviewData
     feedback.value = opsOverview.feedback || feedbackData
     trainingTaskStats.value = {
@@ -346,15 +377,12 @@ const loadPage = async () => {
     failures.value = failureData
     metricDefs.value = metricsPage.records || []
     jobs.value = jobsPage.records || []
+    const failed = [overviewResult, failureResult, opsResult, trainingResult, feedbackResult, metricsResult, jobsResult]
+      .filter((result) => result.status === 'rejected')
+    if (failed.length === 7) {
+      errorMessage.value = getErrorMessage(failed[0].reason)
+    }
     await renderChart()
-  } catch (error) {
-    overview.value = undefined
-    feedback.value = undefined
-    trainingTrend.value = []
-    metricDefs.value = []
-    jobs.value = []
-    failures.value = []
-    errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
   }

@@ -201,6 +201,9 @@ export interface KnowledgeStatsVO {
   chunkCount?: number
   duplicateChunkCount?: number
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   retrievalMode?: string
   chunkStrategy?: string
   documentTypeCounts?: Record<string, number>
@@ -221,6 +224,9 @@ export interface KnowledgeDuplicateDocumentHotspotVO {
 
 export interface KnowledgeConfigVO {
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   vectorCollection?: string
   retrievalMode?: string
   normalizationVersion?: string
@@ -336,6 +342,9 @@ export interface KnowledgeAskVO {
 
 export interface KnowledgeVectorRebuildVO {
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   documentCount?: number
   chunkCount?: number
   vectorUpdated?: number
