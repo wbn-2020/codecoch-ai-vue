@@ -9,6 +9,27 @@ export const getErrorMessage = (error: unknown, fallback = '请求失败，请�
     return error
   }
 
+  if (error && typeof error === 'object') {
+    const payload = error as {
+      message?: unknown
+      response?: {
+        data?: {
+          message?: unknown
+          msg?: unknown
+        }
+      }
+    }
+
+    const responseMessage = payload.response?.data?.message || payload.response?.data?.msg
+    if (typeof responseMessage === 'string' && responseMessage.trim()) {
+      return responseMessage
+    }
+
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message
+    }
+  }
+
   return fallback
 }
 

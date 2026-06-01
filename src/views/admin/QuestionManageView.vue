@@ -8,8 +8,7 @@
         </div>
         <h1 class="admin-hero__title">题库治理</h1>
         <p class="admin-hero__desc">
-          维护 Java 面试题库的分类、标签、题组、难度和上下架状态。AI 生成题目审核属于后续能力，
-          当前不伪造审核结果或生成数据。
+          维护 Java 面试题库的分类、标签、题组、难度和上下架状态，并跟进 AI 生成题目的审核进度。
         </p>
       </div>
       <div class="question-hero-actions">
@@ -65,7 +64,7 @@
       <article class="admin-insight-card">
         <span>AI 生成审核</span>
         <strong>{{ reviewTotal }}</strong>
-        <small>来自审核池真实接口</small>
+        <small>待审核题目数量</small>
       </article>
     </div>
 
@@ -204,7 +203,7 @@
               type="info"
               :closable="false"
               show-icon
-              title="生成结果只进入后端审核池，不在前端伪造题目内容；审核池数据来自 GET /admin/question-reviews。"
+              title="生成结果会进入审核池，请在审核通过后再发布到正式题库。"
             />
             <el-form class="ai-generate-form" :model="generateForm" label-width="110px">
               <el-row :gutter="16">
@@ -1408,7 +1407,7 @@ const governancePageTitle = computed(() => {
   return '重复题审核'
 })
 const governancePageDesc = computed(() => {
-  if (governanceTab.value === 'generate') return '生成结果进入后端审核池，不在前端伪造题目内容。'
+  if (governanceTab.value === 'generate') return '生成结果进入审核池，审核通过后再发布到正式题库。'
   if (governanceTab.value === 'reviews') return '处理 AI 生成题目的审核、编辑通过和批量驳回。'
   return '处理疑似重复题的合并和忽略，保持题库质量。'
 })
@@ -2780,14 +2779,27 @@ const handleDownloadTemplate = async () => {
 onMounted(async () => {
   applyFailureQuery()
   await fetchOptions()
-  await Promise.all([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+  if (!props.governanceOnly) {
+    await Promise.all([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+    return
+  }
+
+  if (governanceTab.value === 'reviews') {
+    await fetchReviews()
+  } else if (governanceTab.value === 'duplicates') {
+    await Promise.all([refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+  }
 })
 
 watch(
   () => route.query.questionId,
   async () => {
     applyFailureQuery()
-    await fetchQuestions()
+    if (showQuestionManagement.value) {
+      await fetchQuestions()
+    } else if (showDuplicatesPane.value) {
+      await fetchDuplicates()
+    }
   }
 )
 

@@ -9,7 +9,7 @@
         </div>
         <h1>欢迎回来，{{ displayName }}</h1>
         <p>
-          这里展示当前账号的真实简历、面试、学习计划与今日任务数据；接口异常时保留入口和空状态，不使用伪造数据。
+          这里汇总你的简历、面试、学习计划和今日任务，帮助你快速回到下一步训练。
         </p>
         <div class="hero-actions">
           <el-button type="primary" size="large" @click="go('/interviews/create')">
@@ -28,7 +28,7 @@
           <span>Dashboard Overview</span>
           <span class="cc-badge cc-badge--streaming">
             <span class="cc-badge__dot"></span>
-            真实用户数据
+            账号概览
           </span>
         </div>
         <div class="cc-terminal">
@@ -49,7 +49,7 @@
     <!-- Error alert -->
     <section v-if="overviewError" class="cc-glass dashboard-alert">
       <AlertTriangle :size="18" />
-      <span>工作台概览接口异常，当前页面不会回退到假数据。</span>
+      <span>工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。</span>
       <el-button text @click="fetchOverview">重试</el-button>
     </section>
 
@@ -79,7 +79,7 @@
           <p class="section-kicker">Quick Actions</p>
           <h2>核心训练入口</h2>
         </div>
-        <span class="section-note">入口状态来自 dashboard entryStatuses</span>
+        <span class="section-note">根据你的当前进度推荐</span>
       </div>
 
       <div class="action-grid">
@@ -245,7 +245,7 @@
             <small>{{ item.reason || '-' }}</small>
           </div>
         </article>
-        <el-empty v-if="!entryStatuses.length" description="概览接口未返回推荐入口状态" />
+        <el-empty v-if="!entryStatuses.length" description="暂无推荐入口，完成简历或面试后会出现更多建议。" />
       </div>
     </section>
   </div>
@@ -302,7 +302,7 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: '简历数量',
     value: overview.value?.resumeCount ?? 0,
-    hint: '来自用户 dashboard 概览',
+    hint: '当前账号已有简历',
     icon: FileText,
     tone: 'tone-cyan',
     path: '/resumes'
@@ -310,7 +310,7 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: '面试总数',
     value: overview.value?.interviewCount ?? 0,
-    hint: '仅统计当前用户',
+    hint: '你的历史面试记录',
     icon: Target,
     tone: 'tone-blue',
     path: '/interviews/history'
@@ -318,7 +318,7 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: '学习计划',
     value: overview.value?.studyPlanCount ?? 0,
-    hint: '来自 study_plan',
+    hint: '正在推进的计划',
     icon: Route,
     tone: 'tone-purple',
     path: '/study-plans'
@@ -326,7 +326,7 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: '今日任务',
     value: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0}`,
-    hint: '按 plannedDate=今日统计',
+    hint: '今天需要完成的任务',
     icon: BookOpenCheck,
     tone: 'tone-green',
     path: '/study-plans'
@@ -352,7 +352,7 @@ const metrics = computed<MetricItem[]>(() => [
 const actionCards = computed(() => [
   {
     title: '开始 AI 模拟面试',
-    desc: '进入真实创建面试流程',
+    desc: '选择岗位、难度和简历后开始训练',
     icon: PlayCircle,
     tone: 'tone-blue',
     path: '/interviews/create',
@@ -368,7 +368,7 @@ const actionCards = computed(() => [
   },
   {
     title: '题库练习',
-    desc: '按真实题库接口进行刷题训练',
+    desc: '按分类和难度进行刷题训练',
     icon: BookOpenCheck,
     tone: 'tone-purple',
     path: '/questions',

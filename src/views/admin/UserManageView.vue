@@ -36,6 +36,19 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="users" row-key="id">
+          <template #empty>
+            <AppState
+              v-if="errorMessage"
+              type="error"
+              title="用户列表加载失败"
+              :description="errorMessage"
+            >
+              <el-button type="primary" :loading="loading" @click="fetchUsers">重新加载</el-button>
+            </AppState>
+            <el-empty v-else :description="userEmptyDescription">
+              <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="username" label="用户名" min-width="140" />
           <el-table-column prop="nickname" label="昵称" min-width="140" />
           <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
@@ -102,13 +115,16 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getAdminUsersApi, updateAdminUserStatusApi } from '@/api/user'
+import AppState from '@/components/common/AppState.vue'
 import type { AdminUserQuery, AdminUserVO } from '@/types/user'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const statusChangingId = ref<number | null>(null)
+const errorMessage = ref('')
 const users = ref<AdminUserVO[]>([])
 const total = ref(0)
 
@@ -120,12 +136,22 @@ const query = reactive<AdminUserQuery>({
   pageSize: 10
 })
 
+const hasFilters = computed(() => Boolean(query.keyword || query.status !== '' || query.roleCode))
+const userEmptyDescription = computed(() =>
+  hasFilters.value ? '没有匹配当前筛选条件的用户' : '暂无用户数据'
+)
+
 const fetchUsers = async () => {
   loading.value = true
+  errorMessage.value = ''
   try {
     const result = await getAdminUsersApi(query)
     users.value = result.records || []
     total.value = result.total || 0
+  } catch (error) {
+    users.value = []
+    total.value = 0
+    errorMessage.value = getErrorMessage(error, '用户列表暂时加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }

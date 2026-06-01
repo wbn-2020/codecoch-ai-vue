@@ -8,11 +8,11 @@
         </div>
         <h1 class="admin-hero__title">AI 内容治理中心</h1>
         <p class="admin-hero__desc">
-          统计数据来自管理概览接口，按当前数据库实时聚合；接口异常时仅展示异常与空状态，不回退到假数据。
+          汇总题库、简历、面试、AI 调用和系统运行状态，帮助运营人员快速定位待处理事项。
         </p>
         <div class="dashboard-hero__notice">
           <Database :size="16" />
-          <span>{{ dashboard?.dataSourceDesc || '管理概览接口实时聚合' }}</span>
+          <span>{{ dashboard?.dataSourceDesc || '管理概览已更新' }}</span>
           <span class="notice-divider"></span>
           <Clock3 :size="16" />
           <span>生成时间：{{ formatDateTime(dashboard?.generatedAt) }}</span>
@@ -29,12 +29,16 @@
     <el-alert
       v-if="overviewError"
       class="dashboard-alert"
-      title="统计接口异常"
-      description="GET /admin/dashboard/overview 请求失败，当前页面不会回退到伪造数据。"
+      title="管理首页数据加载失败"
+      description="暂时无法获取统计概览，请稍后重试或检查服务状态。"
       type="error"
       show-icon
       :closable="false"
-    />
+    >
+      <template #default>
+        <el-button text type="primary" :loading="loading" @click="fetchOverview">重试</el-button>
+      </template>
+    </el-alert>
 
     <div class="admin-metric-grid" v-loading="loading">
       <article v-for="item in metrics" :key="item.key" class="admin-metric-card dashboard-metric-card">
@@ -52,15 +56,15 @@
     <section class="admin-panel dashboard-screen-panel">
       <div class="admin-panel__header dashboard-panel-header">
         <div>
-          <h2>近 7 日真实趋势</h2>
-          <p>趋势来自后端 trendStats，空数据按 0 展示。</p>
+          <h2>近 7 日趋势</h2>
+          <p>观察面试、简历、学习计划和 AI 调用的近期变化。</p>
         </div>
-        <el-tag type="success" effect="plain">真实接口</el-tag>
+        <el-tag type="success" effect="plain">已更新</el-tag>
       </div>
 
       <div v-if="!trendStats.length && !loading" class="dashboard-empty">
         <LineChart :size="18" />
-        <span>统计接口未返回趋势数据</span>
+        <span>暂无趋势数据</span>
       </div>
       <div v-else class="dashboard-chart-grid">
         <article class="dashboard-chart-card dashboard-chart-card--wide">
@@ -92,7 +96,7 @@
               <h2>待处理事项</h2>
               <p>来自当前数据库的待审核、失败和待发布事项。</p>
             </div>
-            <el-tag type="success" effect="plain">真实待办</el-tag>
+            <el-tag type="success" effect="plain">待处理</el-tag>
           </div>
           <div class="admin-work-list dashboard-work-list">
             <button
@@ -108,7 +112,7 @@
               </div>
               <strong>{{ item.count ?? 0 }}</strong>
             </button>
-            <el-empty v-if="!pendingItems.length && !loading" description="统计接口未返回待处理事项" />
+            <el-empty v-if="!pendingItems.length && !loading" description="当前没有待处理事项" />
           </div>
         </section>
 
@@ -140,7 +144,7 @@
         <div class="admin-panel__header">
           <div>
             <h2>系统状态</h2>
-            <p>展示概览接口、数据库和已纳入探测范围的服务状态。</p>
+            <p>展示数据库和关键服务的最近探测结果。</p>
           </div>
           <el-tag :type="statusTagType(systemStatus?.status)" effect="plain">
             {{ statusText(systemStatus?.status) }}
@@ -155,7 +159,7 @@
               <small>{{ serviceReasonLabel(item) }}</small>
             </div>
           </div>
-          <el-empty v-if="!services.length && !loading" description="统计接口未返回系统状态" />
+          <el-empty v-if="!services.length && !loading" description="暂无系统状态数据" />
         </div>
       </section>
     </div>
@@ -260,7 +264,7 @@ const metrics = computed(() =>
       key: item.key,
       label: meta.label,
       value: item.value ?? 0,
-      hint: item.sourceTable ? `来源：${item.sourceTable}` : '来源：管理概览接口',
+      hint: item.sourceTable ? `关联：${item.sourceTable}` : '管理首页统计',
       icon: meta.icon,
       tone: meta.tone
     }
@@ -384,7 +388,7 @@ const statusTagType = (status?: string) => {
 
 const serviceLabel = (value: string) => {
   const map: Record<string, string> = {
-    overview: '概览接口',
+    overview: '管理概览',
     database: '数据库',
     'codecoachai-gateway': 'Gateway 服务',
     'codecoachai-auth': 'Auth 服务',
@@ -413,7 +417,7 @@ const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
   const value = String(item.status || '').toUpperCase()
   if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
   if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
-  return '来自管理概览接口'
+  return '最近一次状态检查'
 }
 
 const goPending = (item: AdminDashboardPendingItemVO) => {

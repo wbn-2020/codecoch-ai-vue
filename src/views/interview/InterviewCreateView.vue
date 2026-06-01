@@ -7,9 +7,9 @@
           AI Interview Configurator
         </div>
         <h1>创建 AI 模拟面试</h1>
-        <p>基于简历、岗位方向、技术栈生成 Java 面试训练。当前仅提交后端已支持的面试配置字段。</p>
+        <p>基于简历、岗位方向和技术栈生成 Java 面试训练，创建后可直接进入面试房间。</p>
         <div class="hero-tags">
-          <el-tag effect="plain">真实接口创建</el-tag>
+          <el-tag effect="plain">创建后进入面试</el-tag>
           <el-tag effect="plain" type="success">支持简历上下文</el-tag>
           <el-tag effect="plain" type="warning">行业场景按现有字段提交</el-tag>
         </div>
@@ -35,7 +35,7 @@
         <div class="panel-head">
           <div>
             <h2>面试类型</h2>
-            <p>选择后端已支持的训练模式；行业场景会以综合模拟模式携带真实行业模板提交。</p>
+            <p>选择本次训练的重点，系统会按配置生成更贴近目标岗位的追问。</p>
           </div>
         </div>
 
@@ -120,7 +120,7 @@
               <el-select
                 v-model="form.industryTemplateId"
                 v-loading="industryTemplateLoading"
-                placeholder="请选择真实行业模板"
+                placeholder="请选择行业场景模板"
                 style="width: 100%"
               >
                 <el-option
@@ -134,7 +134,7 @@
                 {{ industryTemplateError }}
               </div>
               <div v-else-if="!industryTemplateLoading && !industryTemplates.length" class="field-empty">
-                暂无可用行业模板，请确认后端行业模板已初始化并启用。
+                暂无可用行业模板，可以先选择技术八股、项目深挖或综合模拟。
               </div>
             </el-form-item>
 
@@ -160,7 +160,7 @@
             <div class="resume-switch">
               <div>
                 <strong>基于简历生成追问</strong>
-                <p>项目深挖和综合模拟建议选择简历；不会使用假简历或本地 Mock 数据。</p>
+                <p>项目深挖和综合模拟建议选择简历，方便围绕你的真实经历追问。</p>
               </div>
               <el-switch v-model="useResume" />
             </div>
@@ -168,7 +168,7 @@
               <el-select
                 v-model="form.resumeId"
                 filterable
-                placeholder="请选择真实简历"
+                placeholder="请选择简历"
                 style="width: 100%"
                 v-loading="resumeLoading"
               >
@@ -200,7 +200,7 @@
         <div class="panel-head">
           <div>
             <h2>配置预览</h2>
-            <p>仅展示当前真实选择，不展示任何假 AI 结果。</p>
+            <p>提交前核对训练范围，确保面试问题围绕当前目标展开。</p>
           </div>
         </div>
 
@@ -236,8 +236,8 @@
         <div class="pending-box">
           <Zap :size="17" />
           <div>
-            <strong>真实行业模板</strong>
-            <p>行业场景会读取后端模板，并以综合模拟模式提交行业模板 ID，不发送后端未支持的模式。</p>
+            <strong>行业场景</strong>
+            <p>选择行业模板后，面试会更关注该场景下的业务理解、技术取舍和项目表达。</p>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ const modeCards = [
   {
     key: 'comprehensive',
     title: '综合模拟',
-    desc: '按真实面试节奏综合考察技术、项目与表达。',
+    desc: '按面试节奏综合考察技术、项目与表达。',
     badge: '已接入',
     value: INTERVIEW_MODE.COMPREHENSIVE,
     icon: Target
@@ -332,8 +332,8 @@ const modeCards = [
   {
     key: 'industry',
     title: '行业场景',
-    desc: '读取真实行业模板，以综合模拟模式生成场景化追问。',
-    badge: '真实模板',
+    desc: '选择行业模板，生成更贴近业务场景的追问。',
+    badge: '场景模板',
     value: INTERVIEW_MODE.COMPREHENSIVE,
     industry: true,
     icon: Sparkles
@@ -494,7 +494,7 @@ const fetchIndustryTemplates = async () => {
     }
   } catch {
     industryTemplates.value = []
-    industryTemplateError.value = '行业模板加载失败，请确认后端服务或权限状态。'
+    industryTemplateError.value = '行业模板暂时加载失败，可以先使用其他面试模式。'
   } finally {
     industryTemplateLoading.value = false
   }
@@ -586,7 +586,7 @@ const handleCreate = async () => {
     return
   }
   if (isIndustryMode.value && !form.industryTemplateId) {
-    ElMessage.warning('请选择真实行业模板后再开始面试')
+    ElMessage.warning('请选择行业模板后再开始面试')
     return
   }
   if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {

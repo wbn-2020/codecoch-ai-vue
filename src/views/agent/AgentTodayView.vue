@@ -7,7 +7,7 @@
           <span>JobCoachAgent</span>
         </div>
         <h1>今日求职准备计划</h1>
-        <p>基于当前目标岗位生成当天任务，任务完成与跳过都会回写真实 Agent 任务接口。</p>
+        <p>基于当前目标岗位生成当天任务，你可以按优先级开始、完成或跳过。</p>
       </div>
       <div class="agent-hero__actions">
         <el-date-picker v-model="queryDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadPage" />
@@ -53,10 +53,10 @@
 
           <div v-loading="loading" class="plan-panel">
             <AppState
-              v-if="plan?.empty && !taskList.length"
+              v-if="isPlanEmpty"
               type="empty"
               title="今天还没有计划"
-              :description="plan.emptyMessage || '可以手动生成一份今日求职准备计划。'"
+              :description="plan?.emptyMessage || '可以手动生成一份今日求职准备计划。'"
             >
               <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
             </AppState>
@@ -236,6 +236,7 @@ const feedbackTypeOptions = [
 
 const focusSkills = computed(() => plan.value?.focusSkills || [])
 const taskList = computed(() => todayTasks.value?.tasks?.length ? todayTasks.value.tasks : plan.value?.tasks || [])
+const isPlanEmpty = computed(() => !loading.value && !taskList.value.length && (plan.value?.empty || !plan.value?.runId))
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))

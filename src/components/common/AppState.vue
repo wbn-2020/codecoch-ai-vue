@@ -50,18 +50,18 @@ const defaultTitle = computed(() => {
     empty: '暂无数据',
     error: '加载失败',
     disabled: '暂不可用',
-    'api-pending': 'API 待接入'
+    'api-pending': '功能准备中'
   }
   return titleMap[props.type]
 })
 
 const defaultDescription = computed(() => {
   const descMap: Record<AppStateType, string> = {
-    loading: '正在读取真实接口数据。',
+    loading: '正在加载，请稍候。',
     empty: '当前没有可展示的数据。',
-    error: '接口请求异常，请稍后重试。',
-    disabled: '该能力将在后续阶段开放。',
-    'api-pending': '后端聚合接口尚未接入，本区域不使用 mock 数据。'
+    error: '数据加载遇到问题，请稍后重试。',
+    disabled: '当前状态下暂时无法操作。',
+    'api-pending': '该功能正在准备中，请稍后再试。'
   }
   return descMap[props.type]
 })

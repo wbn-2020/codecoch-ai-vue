@@ -7,7 +7,24 @@
       </div>
     </div>
 
-    <section class="content-card">
+    <AppState v-if="loadError && !hasProfileData" type="error" title="个人资料加载失败" :description="loadError">
+      <el-button type="primary" :loading="loading" @click="fetchProfile">重新加载</el-button>
+    </AppState>
+
+    <section v-else class="content-card">
+      <el-alert
+        v-if="loadError"
+        class="profile-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="当前展示的是本地账号信息，完整资料暂时加载失败。"
+        :description="loadError"
+      >
+        <template #default>
+          <el-button text type="primary" :loading="loading" @click="fetchProfile">重试</el-button>
+        </template>
+      </el-alert>
       <div class="content-card__body profile-layout" v-loading="loading">
         <div class="profile-summary">
           <div class="avatar-wrapper">
@@ -45,13 +62,16 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getUserProfileApi, updateAvatarApi, updateUserProfileApi } from '@/api/user'
+import AppState from '@/components/common/AppState.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserProfileUpdateDTO, UserProfileVO } from '@/types/user'
+import { getErrorMessage } from '@/utils/error'
 
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const saving = ref(false)
+const loadError = ref('')
 const originalAvatarUrl = ref('')
 
 const form = reactive<UserProfileVO>({
@@ -75,6 +95,7 @@ const rules: FormRules<UserProfileUpdateDTO> = {
 
 const avatarText = computed(() => (form.nickname || form.username || 'U').slice(0, 1).toUpperCase())
 const rolesText = computed(() => form.roles?.join(' / ') || 'USER')
+const hasProfileData = computed(() => Boolean(form.username || form.nickname || authStore.userInfo?.username))
 
 const assignForm = (data: UserProfileVO) => {
   Object.assign(form, {
@@ -89,9 +110,21 @@ const assignForm = (data: UserProfileVO) => {
 
 const fetchProfile = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const data = await getUserProfileApi()
     assignForm(data)
+  } catch (error) {
+    if (authStore.userInfo) {
+      assignForm({
+        username: authStore.userInfo.username || '',
+        nickname: authStore.userInfo.nickname,
+        avatarUrl: authStore.userInfo.avatarUrl,
+        email: authStore.userInfo.email,
+        roles: authStore.roles
+      })
+    }
+    loadError.value = getErrorMessage(error, '暂时无法读取完整个人资料，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -138,6 +171,11 @@ onMounted(fetchProfile)
   grid-template-columns: 220px minmax(0, 520px);
   gap: 28px;
   align-items: start;
+}
+
+.profile-alert {
+  margin: 0 20px;
+  transform: translateY(16px);
 }
 
 .profile-summary {
