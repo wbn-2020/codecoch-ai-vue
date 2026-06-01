@@ -1,6 +1,6 @@
 <template>
-  <div class="page-shell admin-console-page">
-    <section v-if="showQuestionManagement" class="admin-hero">
+  <div class="page-shell admin-console-page question-governance-page">
+    <section v-if="showQuestionManagement" class="admin-hero question-hero">
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <BookOpenCheck :size="16" />
@@ -12,30 +12,38 @@
           当前不伪造审核结果或生成数据。
         </p>
       </div>
-      <el-button type="primary" @click="openDialog()">
-        <Plus :size="16" />
-        新增题目
-      </el-button>
-      <el-button @click="handleExport">
-        <Download :size="16" />
-        导出题目
-      </el-button>
-      <el-button @click="importDialogVisible = true">
-        <Upload :size="16" />
-        批量导入
-      </el-button>
-      <el-button :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
-        <RefreshCw :size="16" />
-        重建向量索引
-      </el-button>
-      <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
-        <RefreshCw :size="16" />
-        向量状态
-      </el-button>
-      <el-button :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
-        <RefreshCw :size="16" />
-        重试失败向量
-      </el-button>
+      <div class="question-hero-actions">
+        <div class="question-hero-actions__group">
+          <span>内容操作</span>
+          <el-button type="primary" @click="openDialog()">
+            <Plus :size="16" />
+            新增题目
+          </el-button>
+          <el-button @click="importDialogVisible = true">
+            <Upload :size="16" />
+            批量导入
+          </el-button>
+          <el-button @click="handleExport">
+            <Download :size="16" />
+            导出题目
+          </el-button>
+        </div>
+        <div class="question-hero-actions__group question-hero-actions__group--risk">
+          <span><AlertTriangle :size="14" />索引维护</span>
+          <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
+            <RefreshCw :size="16" />
+            向量状态
+          </el-button>
+          <el-button type="warning" plain :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
+            <RefreshCw :size="16" />
+            重试失败向量
+          </el-button>
+          <el-button type="warning" plain :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
+            <RefreshCw :size="16" />
+            重建向量索引
+          </el-button>
+        </div>
+      </div>
     </section>
 
     <div v-if="showQuestionManagement" class="admin-insight-grid">
@@ -114,6 +122,12 @@
 
       <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="questions" row-key="id">
+          <template #empty>
+            <el-empty :description="questionEmptyDescription">
+              <el-button v-if="hasQuestionFilters" @click="handleReset">清空筛选</el-button>
+              <el-button v-else type="primary" @click="openDialog()">新增题目</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="title" label="题目标题" min-width="220" show-overflow-tooltip />
           <el-table-column label="分类" min-width="130">
             <template #default="{ row }">
@@ -147,11 +161,15 @@
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="warning" @click="handleStatus(row)">
-                {{ row.status === 1 ? '禁用' : '启用' }}
-              </el-button>
-              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+              <div class="question-row-actions">
+                <el-button link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
+                <span class="question-row-actions__risk">
+                  <el-button link type="warning" @click="handleStatus(row)">
+                    {{ row.status === 1 ? '禁用' : '启用' }}
+                  </el-button>
+                  <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+                </span>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -1091,7 +1109,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
+import { AlertTriangle, BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -1358,6 +1376,12 @@ const difficultyStats = computed(() => ({
   MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
   HARD: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.HARD).length
 }))
+const hasQuestionFilters = computed(() =>
+  Boolean(query.keyword || query.questionId || query.categoryId || query.tagId || query.difficulty || query.status !== '')
+)
+const questionEmptyDescription = computed(() =>
+  hasQuestionFilters.value ? '没有匹配当前筛选条件的题目' : '题库暂无题目，先新增或批量导入'
+)
 const selectedPendingReviewIds = computed(() =>
   selectedReviewRows.value
     .filter((item) => item.reviewStatus === 'PENDING')
@@ -1994,6 +2018,20 @@ const handleSave = async () => {
 
 const handleStatus = async (row: AdminQuestionVO) => {
   const nextStatus = row.status === 1 ? 0 : 1
+  const actionLabel = nextStatus === 1 ? '启用' : '禁用'
+  try {
+    await ElMessageBox.confirm(
+      `确认${actionLabel}题目「${row.title}」？${nextStatus === 0 ? '禁用后用户侧将不再展示该题目。' : '启用后该题目会重新进入可用题库。'}`,
+      `${actionLabel}题目`,
+      {
+        type: nextStatus === 1 ? 'info' : 'warning',
+        confirmButtonText: `确认${actionLabel}`,
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   await updateAdminQuestionStatusApi(row.id, nextStatus)
   ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
   await fetchQuestions()
@@ -2663,6 +2701,19 @@ const importDuplicateReasonLabel = (code?: string) => {
 
 const handleImport = async () => {
   if (!importFile.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认导入文件「${importFile.value.name}」？后端会校验并写入题库记录，单次最多 500 条。`,
+      '确认批量导入题目',
+      {
+        type: 'warning',
+        confirmButtonText: '确认导入',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   importing.value = true
   try {
     const result = await importAdminQuestionsApi(importFile.value)
@@ -2753,6 +2804,65 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.question-governance-page {
+  .admin-hero {
+    padding-top: 6px;
+    padding-bottom: 18px;
+  }
+}
+
+.question-hero {
+  gap: 16px;
+}
+
+.question-hero-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.question-hero-actions__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.question-hero-actions__group > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.question-hero-actions__group--risk {
+  border-color: rgba(245, 158, 11, 0.18);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.question-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.question-row-actions__risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.question-empty-state {
+  padding: 18px 0 10px;
+}
+
 .filter-form {
   width: 100%;
 }
@@ -2779,6 +2889,10 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.table-card :deep(.el-table__empty-block) {
+  min-height: 200px;
 }
 
 .governance-panel {

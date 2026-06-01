@@ -95,12 +95,23 @@ export interface LoginLogVO {
   userId?: number
   username?: string
   ip?: string
+  ipMasked?: string
+  maskedIp?: string
   location?: string
   userAgent?: string
+  userAgentMasked?: string
+  maskedUserAgent?: string
+  userAgentSummary?: string
   traceId?: string
+  traceIdShort?: string
+  shortTraceId?: string
   loginType?: string
   status?: string | number
   message?: string
+  summary?: string
+  loginSummary?: string
+  preview?: string
+  maskedPreview?: string
   loginTime?: string
   createdAt?: string
 }

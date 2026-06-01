@@ -80,7 +80,9 @@
         <el-table v-loading="loading" :data="logs" row-key="id">
           <el-table-column prop="createdAt" label="调用时间" min-width="170" />
           <el-table-column prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="traceId" label="traceId" min-width="150" show-overflow-tooltip />
+          <el-table-column label="traceId" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ displayAiTraceId(row) }}</template>
+          </el-table-column>
           <el-table-column label="场景 / 类型" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">{{ getSceneLabel(row.scene || row.callType) }}</template>
           </el-table-column>
@@ -95,6 +97,14 @@
           </el-table-column>
           <el-table-column label="失败原因" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ translateFailureReason(row.failReason || row.errorMessage) }}</template>
+          </el-table-column>
+          <el-table-column label="摘要 / 脱敏预览" min-width="320" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="log-preview">
+                <strong>{{ displayAiSummary(row) }}</strong>
+                <small>{{ displayAiMaskedPreview(row) }}</small>
+              </div>
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
@@ -117,11 +127,11 @@
       </div>
     </section>
 
-    <el-drawer v-model="drawerVisible" title="AI 调用日志详情" size="720px">
-      <div v-if="detail" class="log-detail">
+    <el-dialog v-model="drawerVisible" title="AI 调用日志详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div v-if="detail" class="admin-detail-dialog__body log-detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="日志 ID">{{ detail.id }}</el-descriptions-item>
-          <el-descriptions-item label="traceId">{{ detail.traceId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="traceId">{{ detail.traceId || displayAiTraceId(detail) }}</el-descriptions-item>
           <el-descriptions-item label="调用场景">{{ getSceneLabel(detail.scene || detail.callType) }}</el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
@@ -129,6 +139,8 @@
           <el-descriptions-item label="Token">{{ detail.totalTokens ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ detail.elapsedMs ?? detail.latencyMs ?? '-' }} ms</el-descriptions-item>
           <el-descriptions-item label="失败原因">{{ translateFailureReason(detail.failReason || detail.errorMessage) }}</el-descriptions-item>
+          <el-descriptions-item label="摘要">{{ displayAiSummary(detail) }}</el-descriptions-item>
+          <el-descriptions-item label="脱敏预览">{{ displayAiMaskedPreview(detail) }}</el-descriptions-item>
         </el-descriptions>
 
         <h3>请求 Prompt</h3>
@@ -138,7 +150,12 @@
         <h3>响应内容</h3>
         <pre>{{ detail.responseContent || '-' }}</pre>
       </div>
-    </el-drawer>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="drawerVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -186,6 +203,43 @@ const tokenTotal = computed(() => logs.value.reduce((sum, item) => sum + (item.t
 const modelCount = computed(() => new Set(logs.value.map((item) => item.modelName).filter(Boolean)).size)
 
 const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || value || '-'
+
+const compactText = (value?: string, maxLength = 120) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+}
+
+const maskSensitiveText = (value?: string) =>
+  compactText(value)
+    .replace(/([\w.+-]{2})[\w.+-]*@([\w-]+\.[\w.-]+)/g, '$1***@$2')
+    .replace(/(1[3-9]\d)\d{4}(\d{4})/g, '$1****$2')
+    .replace(/(api[_-]?key|token|password|secret)["'=:\s]+([^,\s}"']+)/gi, '$1=***')
+
+const displayAiSummary = (row: AiCallLogVO) =>
+  row.summary ||
+  row.callSummary ||
+  compactText(row.requestPromptPreview || row.promptPreview || row.requestPreview || row.requestPrompt || row.promptContent, 72) ||
+  getSceneLabel(row.scene || row.callType)
+
+const displayAiTraceId = (row: AiCallLogVO) =>
+  row.traceIdShort || row.shortTraceId || compactText(row.traceId, 12) || '-'
+
+const displayAiMaskedPreview = (row: AiCallLogVO) => {
+  const preview =
+  row.maskedPreview ||
+  row.requestPromptPreview ||
+  row.requestBodyPreview ||
+  row.requestPreview ||
+  row.promptPreview ||
+  row.responseContentPreview ||
+  row.responseBodyPreview ||
+  row.responsePreview ||
+  row.requestParams ||
+  row.requestPrompt ||
+  row.promptContent ||
+  row.responseContent
+  return preview ? maskSensitiveText(preview) : '-'
+}
 
 const fetchLogs = async () => {
   loading.value = true
@@ -237,6 +291,39 @@ onMounted(fetchLogs)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.log-preview {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--app-text-muted);
+  }
+}
+
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .log-detail {

@@ -54,16 +54,32 @@
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="风险操作" width="130" fixed="right">
             <template #default="{ row }">
-              <el-button
-                link
-                :type="row.status === 1 ? 'danger' : 'primary'"
-                :loading="statusChangingId === row.id"
-                @click="handleToggleStatus(row)"
-              >
-                {{ row.status === 1 ? '禁用' : '启用' }}
-              </el-button>
+              <div class="risk-action-cell">
+                <el-dropdown
+                  v-permission="'ADMIN'"
+                  trigger="click"
+                  :disabled="statusChangingId === row.id"
+                  @command="() => handleToggleStatus(row)"
+                >
+                  <el-button
+                    link
+                    :type="row.status === 1 ? 'danger' : 'warning'"
+                    :loading="statusChangingId === row.id"
+                    class="risk-operation-trigger"
+                  >
+                    风险操作
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="toggle-status">
+                        {{ row.status === 1 ? '禁用账号' : '启用账号' }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -133,9 +149,22 @@ const handleReset = () => {
 
 const handleToggleStatus = async (row: AdminUserVO) => {
   const nextStatus = row.status === 1 ? 0 : 1
-  await ElMessageBox.confirm(`确认${nextStatus === 1 ? '启用' : '禁用'}用户 ${row.username}？`, '操作确认', {
-    type: 'warning'
-  })
+  const actionLabel = nextStatus === 1 ? '启用' : '禁用'
+  const targetName = row.nickname ? `${row.username}（${row.nickname}）` : row.username
+  const impactText =
+    nextStatus === 1
+      ? '影响范围：该用户将恢复登录和使用已授权业务功能的能力。'
+      : '影响范围：该用户将无法登录或继续使用需要账号正常状态的业务功能。'
+
+  try {
+    await ElMessageBox.confirm(`确认${actionLabel}用户「${targetName}」？${impactText}`, `${actionLabel}用户高风险确认`, {
+      type: 'warning',
+      confirmButtonText: `确认${actionLabel}`,
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
 
   statusChangingId.value = row.id
   try {
@@ -163,5 +192,16 @@ onMounted(fetchUsers)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.risk-action-cell {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 10px;
+  border-left: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.risk-operation-trigger {
+  font-weight: 600;
 }
 </style>

@@ -67,8 +67,12 @@
           <el-table-column prop="loginTime" label="登录时间" min-width="170" />
           <el-table-column prop="username" label="用户" min-width="140" show-overflow-tooltip />
           <el-table-column prop="loginType" label="登录类型" min-width="120" />
-          <el-table-column prop="traceId" label="traceId" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="ip" label="IP" min-width="130" />
+          <el-table-column label="traceId" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ displayLoginTraceId(row) }}</template>
+          </el-table-column>
+          <el-table-column label="IP" min-width="130">
+            <template #default="{ row }">{{ row.ipMasked || row.maskedIp || maskIp(row.ip) }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="isSuccess(row.status) ? 'success' : 'danger'">
@@ -79,7 +83,17 @@
           <el-table-column label="消息" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.message || (isSuccess(row.status) ? '登录成功' : '-') }}</template>
           </el-table-column>
-          <el-table-column prop="userAgent" label="客户端" min-width="260" show-overflow-tooltip />
+          <el-table-column label="摘要 / 脱敏预览" min-width="280" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="log-preview">
+                <strong>{{ displayLoginSummary(row) }}</strong>
+                <small>{{ displayMaskedLoginPreview(row) }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="客户端" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.userAgentMasked || row.maskedUserAgent || row.userAgentSummary || row.userAgent || '-' }}</template>
+          </el-table-column>
         </el-table>
       </div>
 
@@ -121,6 +135,31 @@ const query = reactive<AdminListQuery>({
 })
 
 const isSuccess = (status?: string | number) => status === 1 || status === '1' || String(status).toUpperCase() === 'SUCCESS'
+
+const maskIp = (ip?: string) => {
+  if (!ip) return '-'
+  if (ip.includes(':')) return ip.replace(/:[\da-f]{1,4}$/i, ':****')
+  return ip.replace(/(\d+\.\d+\.)\d+\.(\d+)/, '$1***.$2')
+}
+
+const compactText = (value?: string, maxLength = 96) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+}
+
+const displayLoginSummary = (row: LoginLogVO) =>
+  row.summary || row.loginSummary || row.message || (isSuccess(row.status) ? '登录成功' : '登录失败')
+
+const displayLoginTraceId = (row: LoginLogVO) =>
+  row.traceIdShort || row.shortTraceId || row.traceId || '-'
+
+const displayMaskedLoginPreview = (row: LoginLogVO) => {
+  const preview = row.maskedPreview || row.preview
+  if (preview) return compactText(preview)
+  const ip = row.ipMasked || row.maskedIp || maskIp(row.ip)
+  const client = row.userAgentMasked || row.maskedUserAgent || row.userAgentSummary || compactText(row.userAgent, 56)
+  return compactText([ip, row.location, client].filter(Boolean).join(' · '))
+}
 
 const fetchSummary = async () => {
   summaryLoading.value = true
@@ -200,6 +239,28 @@ onMounted(loadPage)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.log-preview {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--app-text-muted);
+  }
 }
 
 @media (max-width: 1080px) {

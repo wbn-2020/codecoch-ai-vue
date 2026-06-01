@@ -31,17 +31,24 @@
       </div>
       <div class="pagination-wrap"><el-pagination v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" background layout="total, sizes, prev, pager, next" :total="total" :page-sizes="[10, 20, 50]" @change="fetchReports" /></div>
     </section>
-    <el-drawer v-model="drawerVisible" title="报告详情" size="660px">
-      <el-descriptions v-if="detail" :column="1" border>
-        <el-descriptions-item label="报告 ID">{{ detail.reportId || detail.id }}</el-descriptions-item>
-        <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
-        <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="总分">{{ detail.totalScore ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="摘要"><pre>{{ detail.summary || '-' }}</pre></el-descriptions-item>
-        <el-descriptions-item label="失败原因">{{ detail.failedReason || '-' }}</el-descriptions-item>
-      </el-descriptions>
-    </el-drawer>
+    <el-dialog v-model="drawerVisible" title="报告详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div class="admin-detail-dialog__body">
+        <el-descriptions v-if="detail" :column="1" border>
+          <el-descriptions-item label="报告 ID">{{ detail.reportId || detail.id }}</el-descriptions-item>
+          <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
+          <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="总分">{{ detail.totalScore ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="摘要"><pre>{{ detail.summary || '-' }}</pre></el-descriptions-item>
+          <el-descriptions-item label="失败原因">{{ detail.failedReason || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="drawerVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -77,5 +84,17 @@ onMounted(fetchReports)
 
 <style scoped lang="scss">
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
+
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 </style>

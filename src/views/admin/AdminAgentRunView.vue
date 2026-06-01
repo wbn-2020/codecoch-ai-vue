@@ -116,8 +116,8 @@
       </template>
     </section>
 
-    <el-drawer v-model="detailVisible" title="Agent 运行详情" size="720px">
-      <div v-loading="detailLoading" class="run-detail-drawer">
+    <el-dialog v-model="detailVisible" title="Agent 运行详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div v-loading="detailLoading" class="admin-detail-dialog__body run-detail-dialog">
         <AppState v-if="detailError" type="error" title="运行详情加载失败" :description="detailError">
           <el-button type="primary" @click="detailId && openRunDetail(detailId)">重试</el-button>
         </AppState>
@@ -172,7 +172,12 @@
           </el-collapse>
         </template>
       </div>
-    </el-drawer>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="detailVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -325,7 +330,18 @@ onMounted(fetchRuns)
   padding: 16px 20px 20px;
 }
 
-.run-detail-drawer {
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.run-detail-dialog {
   min-height: 360px;
 }
 

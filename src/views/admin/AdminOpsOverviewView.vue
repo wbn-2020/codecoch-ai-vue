@@ -13,7 +13,6 @@
       </div>
       <div class="admin-hero__actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
-        <el-button :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">重试向量删除</el-button>
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
@@ -188,28 +187,48 @@
               <em v-if="vectorHealth?.embeddingMetrics?.errorMessage">{{ vectorHealth.embeddingMetrics.errorMessage }}</em>
             </div>
           </div>
+          <el-alert
+            class="vector-state-alert"
+            :type="vectorStateBanner.type"
+            :closable="false"
+            show-icon
+          >
+            <template #title>{{ vectorStateBanner.title }}</template>
+            <template #default>
+              <div>{{ vectorStateBanner.description }}</div>
+            </template>
+          </el-alert>
         </article>
 
         <article class="ops-panel vector-admin-panel">
           <div class="ops-panel__head">
             <div>
               <h2>Index Actions</h2>
-              <p>Run rebuild and retry jobs before server-side validation.</p>
+              <p>High-cost rebuild and retry jobs stay separate from ordinary refresh.</p>
             </div>
           </div>
           <div class="vector-action-list">
-            <el-button :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
-              Rebuild Questions
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
-              Retry Question Failures
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
-              Rebuild Knowledge
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
-              Retry Knowledge Failures
-            </el-button>
+            <div class="vector-action-group">
+              <span class="vector-action-group__label">Question vectors</span>
+              <el-button type="warning" plain :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
+                Rebuild Questions
+              </el-button>
+              <el-button type="warning" plain :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
+                Retry Question Failures
+              </el-button>
+            </div>
+            <div class="vector-action-group vector-action-group--risk">
+              <span class="vector-action-group__label">Knowledge + compensation</span>
+              <el-button type="warning" plain :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
+                Rebuild Knowledge
+              </el-button>
+              <el-button type="warning" plain :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
+                Retry Knowledge Failures
+              </el-button>
+              <el-button type="danger" plain :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">
+                Retry Vector Deletes
+              </el-button>
+            </div>
           </div>
           <div v-if="lastVectorAction" class="vector-action-result">
             <strong>{{ lastVectorAction.title }}</strong>
@@ -547,6 +566,52 @@ const vectorFailureCounts = computed(() => ({
   knowledge: vectorFailures.value?.knowledgeFailures?.length || 0,
   deleteOutbox: vectorFailures.value?.deleteOutboxFailures?.length || 0
 }))
+const vectorStateBanner = computed(() => {
+  const health = vectorHealth.value
+  if (!health) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant state uncertain',
+      description: 'Vector health has not returned yet; no collection rebuild or delete compensation is run automatically.'
+    }
+  }
+  if (!health.enabled) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant disabled',
+      description: 'Vector features are disabled in runtime config. Collection rows are informational only and no repair is attempted.'
+    }
+  }
+  const collections = health.collections || []
+  if (!collections.length) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant collections unknown',
+      description: 'The health API did not return collection records. Treat the state as uncertain until a manual refresh succeeds.'
+    }
+  }
+  const errored = collections.filter((item) => item.errorMessage || String(item.status || '').toUpperCase() === 'ERROR')
+  if (errored.length) {
+    return {
+      type: 'error' as const,
+      title: 'Qdrant collection error',
+      description: `${errored.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} returned an error. Use the details below before running any retry job.`
+    }
+  }
+  const missing = collections.filter((item) => !item.exists)
+  if (missing.length) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant collection missing',
+      description: `${missing.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} is missing. The page does not silently repair it; rebuild actions require confirmation.`
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: 'Qdrant collections available',
+    description: 'Configured collections are present. Rebuild and retry actions still require explicit confirmation.'
+  }
+})
 
 const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
 const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
@@ -751,26 +816,32 @@ const vectorCollectionLabel = (value: string) => {
 }
 
 const vectorTone = (item: VectorCollectionInfoVO) => {
-  if (!vectorHealth.value?.enabled) return 'unknown'
+  if (!vectorHealth.value) return 'unknown'
+  if (!vectorHealth.value.enabled) return 'unknown'
   if (item.exists && String(item.status || '').toUpperCase() !== 'ERROR') return 'healthy'
   if (String(item.status || '').toUpperCase() === 'ERROR') return 'down'
-  return 'degraded'
+  if (!item.exists) return 'down'
+  return 'unknown'
 }
 
 const vectorCollectionStatus = (item: VectorCollectionInfoVO) => {
-  if (!vectorHealth.value?.enabled) return '未启用'
+  if (!vectorHealth.value) return '未确认'
+  if (!vectorHealth.value.enabled) return '未启用'
   if (String(item.status || '').toUpperCase() === 'ERROR') return '异常'
-  return item.exists ? '可用' : '未创建'
+  if (!item.exists) return '缺失'
+  return '可用'
 }
 
 const vectorCollectionHint = (item: VectorCollectionInfoVO) => {
   if (item.errorMessage) return item.errorMessage
+  if (!vectorHealth.value) return 'Qdrant 状态未返回，本页不会自动修复'
   if (!vectorHealth.value?.enabled) return '向量库配置未启用'
-  if (!item.exists) return '等待首次索引创建 collection'
+  if (!item.exists) return 'Collection 缺失；需人工确认后执行重建，本页不会静默修复'
   return `${item.pointCount || 0} points / ${item.vectorSize || '--'} dims / ${item.distance || '--'}`
 }
 
 const vectorDeleteOutboxTone = computed(() => {
+  if (!vectorDeleteOutbox.value) return 'unknown'
   if (vectorDeleteOutbox.value?.errorMessage) return 'down'
   if ((vectorDeleteOutbox.value?.failed || 0) > 0) return 'down'
   if ((vectorDeleteOutbox.value?.pending || 0) > 0) return 'degraded'
@@ -778,6 +849,7 @@ const vectorDeleteOutboxTone = computed(() => {
 })
 
 const vectorDeleteOutboxStatus = computed(() => {
+  if (!vectorDeleteOutbox.value) return '未确认'
   if (vectorDeleteOutbox.value?.errorMessage) return '异常'
   if ((vectorDeleteOutbox.value?.failed || 0) > 0) return '失败'
   if ((vectorDeleteOutbox.value?.pending || 0) > 0) return '待重试'
@@ -786,7 +858,7 @@ const vectorDeleteOutboxStatus = computed(() => {
 
 const vectorDeleteOutboxHint = computed(() => {
   const outbox = vectorDeleteOutbox.value
-  if (!outbox) return '等待向量健康接口返回补偿队列状态'
+  if (!outbox) return '等待向量健康接口返回补偿队列状态，未自动执行补偿'
   if (outbox.errorMessage) return outbox.errorMessage
   return `待处理 ${outbox.pending || 0} / 失败 ${outbox.failed || 0} / 已完成 ${outbox.done || 0}`
 })
@@ -1006,8 +1078,25 @@ const recordKnowledgeVectorAction = (title: string, result: KnowledgeVectorRebui
   }
 }
 
+const confirmVectorAction = async (message: string, title: string) => {
+  try {
+    await ElMessageBox.confirm(message, title, {
+      type: 'warning',
+      confirmButtonText: 'Confirm run',
+      cancelButtonText: 'Cancel'
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const handleRebuildQuestionVectors = async () => {
-  await ElMessageBox.confirm('Rebuild up to 5000 question embeddings and Qdrant points?', 'Rebuild question vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction(
+    'Rebuild up to 5000 question embeddings and Qdrant points. This may call the embedding provider and will not run as an automatic repair.',
+    'Rebuild question vectors'
+  )
+  if (!confirmed) return
   rebuildingQuestionVectors.value = true
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
@@ -1022,7 +1111,11 @@ const handleRebuildQuestionVectors = async () => {
 }
 
 const handleRetryQuestionVectors = async () => {
-  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending question embeddings?', 'Retry question vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction(
+    'Retry up to 1000 failed or stale pending question embeddings. This may create or replace Qdrant points.',
+    'Retry question vectors'
+  )
+  if (!confirmed) return
   retryingQuestionVectors.value = true
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
@@ -1037,7 +1130,11 @@ const handleRetryQuestionVectors = async () => {
 }
 
 const handleRebuildKnowledgeVectors = async () => {
-  await ElMessageBox.confirm('Rebuild up to 5000 personal knowledge documents across users?', 'Rebuild knowledge vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction(
+    'Rebuild up to 5000 personal knowledge documents across users. This is a high-cost maintenance action and requires manual confirmation.',
+    'Rebuild knowledge vectors'
+  )
+  if (!confirmed) return
   rebuildingKnowledgeVectors.value = true
   try {
     const result = await rebuildAdminKnowledgeVectorsApi(5000)
@@ -1052,7 +1149,11 @@ const handleRebuildKnowledgeVectors = async () => {
 }
 
 const handleRetryKnowledgeVectors = async () => {
-  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending knowledge chunks?', 'Retry knowledge vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction(
+    'Retry up to 1000 failed or stale pending knowledge chunks. Review the failure details first if Qdrant state is missing or uncertain.',
+    'Retry knowledge vectors'
+  )
+  if (!confirmed) return
   retryingKnowledgeVectors.value = true
   try {
     const result = await retryAdminKnowledgeVectorsApi(1000)
@@ -1067,11 +1168,11 @@ const handleRetryKnowledgeVectors = async () => {
 }
 const handleRetryVectorDeletes = async () => {
   const retryable = vectorDeleteOutbox.value?.retryable || 0
-  await ElMessageBox.confirm(
-    `将重试最多 500 条 Qdrant 向量删除补偿记录，当前待处理/失败共 ${retryable} 条。确认继续？`,
-    '重试向量删除补偿',
-    { type: 'warning' }
+  const confirmed = await confirmVectorAction(
+    `Retry up to 500 Qdrant delete-outbox records. Current retryable pending/failed records: ${retryable}. This page will not silently repair missing collections.`,
+    'Retry vector delete compensation'
   )
+  if (!confirmed) return
   retryingVectorDeletes.value = true
   try {
     const result = await retryAdminVectorDeletesApi(500)
@@ -1431,6 +1532,30 @@ onBeforeUnmount(() => {
   color: var(--app-text);
   background: rgba(15, 23, 42, 0.42);
   font-size: 12px;
+}
+
+.vector-state-alert {
+  margin-top: 14px;
+}
+
+.vector-action-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.vector-action-group--risk {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(120, 53, 15, 0.14);
+}
+
+.vector-action-group__label {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .vector-action-list :deep(.el-button) {
