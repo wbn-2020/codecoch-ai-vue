@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">指标字典</div>
         <h1 class="admin-hero__title">指标字典</h1>
-        <p class="admin-hero__desc">从 V4 分析指标字典接口读取指标编码、定义、数据来源和刷新频率。</p>
+        <p class="admin-hero__desc">维护分析指标编码、定义、数据来源和刷新频率。</p>
       </div>
       <div class="admin-hero__actions">
         <el-button v-permission="'admin:analytics:metric:write'" type="primary" @click="openMetricDialog()">新增指标</el-button>

@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">聚合任务</div>
         <h1 class="admin-hero__title">聚合任务日志</h1>
-        <p class="admin-hero__desc">查看 V4 聚合任务日志，并在后端开放重跑接口后重跑失败或过期任务。</p>
+        <p class="admin-hero__desc">查看聚合任务日志，并按需重跑失败或过期任务。</p>
       </div>
       <div class="admin-hero__actions">
         <el-button v-permission="'admin:analytics:job:run'" type="primary" @click="openManualRun">运行每日计划</el-button>

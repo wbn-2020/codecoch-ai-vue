@@ -31,7 +31,7 @@
             <template #default="{ data }">
               <div class="menu-node">
                 <span>{{ displayMenuName(data) }}</span>
-                <small>{{ data.path || data.permission || data.type }}</small>
+                <small>{{ menuMetaText(data) }}</small>
               </div>
             </template>
           </el-tree>
@@ -192,9 +192,21 @@ const displayRoleName = (role: RoleVO) => {
 }
 
 const displayMenuName = (menu: MenuVO) => {
-  const pathLabel = menu.path ? menuPathMap[menu.path] : ''
   const rawName = menu.menuName || menu.name || ''
-  return pathLabel || menuNameMap[rawName] || rawName || menu.permission || `菜单 #${menu.id}`
+  const rawLabel = menuNameMap[rawName] || rawName
+  if (String(menu.type || '').toUpperCase() === 'BUTTON') {
+    return rawLabel || menu.permission || menu.permissionCode || `操作权限 #${menu.id}`
+  }
+  const pathLabel = menu.path ? menuPathMap[menu.path] : ''
+  return pathLabel || rawLabel || menu.permission || menu.permissionCode || `菜单 #${menu.id}`
+}
+
+const menuMetaText = (menu: MenuVO) => {
+  const permission = menu.permission || menu.permissionCode
+  if (String(menu.type || '').toUpperCase() === 'BUTTON') {
+    return permission || menu.path || '操作权限'
+  }
+  return menu.path || permission || menu.type || '菜单'
 }
 
 const fetchRoles = async () => {

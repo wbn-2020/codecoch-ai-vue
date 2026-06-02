@@ -19,7 +19,7 @@
         </div>
       </div>
       <div class="admin-hero__actions">
-        <el-button v-for="item in primaryLinks" :key="item.path" type="primary" plain @click="router.push(item.path)">
+        <el-button v-for="item in primaryLinkItems" :key="item.path" type="primary" plain @click="router.push(item.path)">
           <component :is="item.icon" :size="15" />
           {{ item.label }}
         </el-button>
@@ -41,7 +41,13 @@
     </el-alert>
 
     <div class="admin-metric-grid" v-loading="loading">
-      <article v-for="item in metrics" :key="item.key" class="admin-metric-card dashboard-metric-card">
+      <article
+        v-for="item in metrics"
+        :key="item.key"
+        class="admin-metric-card dashboard-metric-card"
+        :class="{ 'is-clickable': Boolean(item.path) }"
+        @click="goMetric(item)"
+      >
         <div class="admin-metric-card__icon" :class="item.tone">
           <component :is="item.icon" :size="18" />
         </div>
@@ -125,7 +131,7 @@
           </div>
           <div class="admin-link-grid dashboard-link-grid">
             <button
-              v-for="item in quickLinks"
+              v-for="item in quickLinkItems"
               :key="item.path"
               class="admin-link-card"
               type="button"
@@ -136,6 +142,7 @@
               <small>{{ item.desc }}</small>
               <ArrowRight :size="14" class="dashboard-link-arrow" />
             </button>
+            <el-empty v-if="!quickLinkItems.length && !loading" description="暂无可访问的快捷入口，请联系管理员分配权限" />
           </div>
         </section>
       </div>
@@ -188,6 +195,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
+import { useAuthStore } from '@/stores/auth'
 import type {
   AdminDashboardOverviewVO,
   AdminDashboardPendingItemVO,
@@ -197,6 +205,7 @@ import type {
 import echarts, { type ECharts, type EChartsOption, type SeriesOption } from '@/utils/echarts'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const overviewError = ref(false)
 const dashboard = ref<AdminDashboardOverviewVO | null>(null)
@@ -208,19 +217,19 @@ const charts: ECharts[] = []
 let dashboardLayoutObserver: ResizeObserver | null = null
 
 const primaryLinks = [
-  { label: '题目管理', path: '/admin/questions', icon: ListTree },
-  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode },
-  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: ScrollText },
-  { label: '文件治理', path: '/admin/files', icon: FileText }
+  { label: '题目管理', path: '/admin/questions', icon: ListTree, permissions: ['admin:question:list'] },
+  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, permissions: ['admin:ai:prompt:list'] },
+  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: ScrollText, permissions: ['admin:ai:log:list'] },
+  { label: '文件治理', path: '/admin/files', icon: FileText, permissions: ['admin:file:list'] }
 ]
 
 const quickLinks = [
-  { label: '题目管理', path: '/admin/questions', icon: ListTree, desc: '维护 Java 面试题库' },
-  { label: '题目审核', path: '/admin/question-reviews', icon: ClipboardList, desc: '处理 AI 生成题审核池' },
-  { label: '去重审核', path: '/admin/question-duplicate-reviews', icon: Tags, desc: '处理疑似重复题' },
-  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本' },
-  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查失败调用' },
-  { label: '系统配置', path: '/admin/system/configs', icon: Settings, desc: '维护运行参数' }
+  { label: '题目管理', path: '/admin/questions', icon: ListTree, desc: '维护 Java 面试题库', permissions: ['admin:question:list'] },
+  { label: '题目审核', path: '/admin/question-reviews', icon: ClipboardList, desc: '处理 AI 生成题审核池', permissions: ['admin:question:review'] },
+  { label: '去重审核', path: '/admin/question-duplicate-reviews', icon: Tags, desc: '处理疑似重复题', permissions: ['admin:question:dedupe'] },
+  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本', permissions: ['admin:ai:prompt:list'] },
+  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查失败调用', permissions: ['admin:ai:log:list'] },
+  { label: '系统配置', path: '/admin/system/configs', icon: Settings, desc: '维护运行参数', permissions: ['admin:system:config:list'] }
 ]
 
 const summaryCards = computed(() => dashboard.value?.summaryCards || [])
@@ -229,6 +238,8 @@ const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
 const services = computed(() => systemStatus.value?.services || [])
 const statusPanelStyle = computed(() => statusPanelHeight.value ? { height: statusPanelHeight.value + 'px' } : undefined)
+const primaryLinkItems = computed(() => primaryLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
+const quickLinkItems = computed(() => quickLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
 
 const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
   users: { label: '用户数', icon: Users, tone: 'tone-blue' },
@@ -242,11 +253,18 @@ const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
 }
 
 const pendingRoutes: Record<string, string> = {
-  pendingQuestionReviews: '/admin/question-reviews',
-  duplicateQuestionReviews: '/admin/question-duplicate-reviews',
+  pendingQuestionReviews: '/admin/question-reviews?reviewStatus=PENDING',
+  duplicateQuestionReviews: '/admin/question-duplicate-reviews?reviewStatus=PENDING',
   promptVersions: '/admin/ai/prompts',
   failedAiCalls: '/admin/ai/logs',
   failedResumeParses: '/admin/files'
+}
+
+const cardHintMap: Record<string, string> = {
+  pendingQuestionReviews: '题目审核池待处理数量',
+  aiCalls: '累计 AI 调用记录',
+  todayAiCalls: '今日 AI 调用记录',
+  failedResumeParses: '待处理的简历解析失败记录'
 }
 
 const pendingLabels: Record<string, string> = {
@@ -264,9 +282,10 @@ const metrics = computed(() =>
       key: item.key,
       label: meta.label,
       value: item.value ?? 0,
-      hint: item.sourceTable ? `关联：${item.sourceTable}` : '管理首页统计',
+      hint: cardHintMap[item.key] || item.label || '管理首页统计',
       icon: meta.icon,
-      tone: meta.tone
+      tone: meta.tone,
+      path: pendingRoutes[item.key]
     }
   })
 )
@@ -425,6 +444,10 @@ const goPending = (item: AdminDashboardPendingItemVO) => {
   if (path) router.push(path)
 }
 
+const goMetric = (item: { path?: string }) => {
+  if (item.path) router.push(item.path)
+}
+
 const syncDashboardPanelHeight = () => {
   const leftStack = dashboardLeftStackRef.value
   if (!leftStack || window.innerWidth <= 760) {
@@ -496,6 +519,15 @@ onBeforeUnmount(() => {
 
   .dashboard-metric-card {
     min-height: 132px;
+
+    &.is-clickable {
+      cursor: pointer;
+    }
+
+    &.is-clickable:hover {
+      border-color: rgba(96, 165, 250, 0.45);
+      transform: translateY(-1px);
+    }
   }
 
   .admin-metric-card__icon.tone-blue {

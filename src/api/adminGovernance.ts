@@ -138,6 +138,7 @@ const normalizeMenu = (item: any): MenuVO => ({
   parentId: pick(item, 'parentId', 'parent_id', 'pid') || 0,
   menuName: pick(item, 'menuName', 'menu_name', 'name', 'title') || '',
   name: pick(item, 'name', 'menuName', 'menu_name', 'title'),
+  permission: pick(item, 'permission', 'permissionCode', 'permission_code'),
   sortOrder: pick(item, 'sortOrder', 'sort_order', 'sort', 'orderNum', 'order_num'),
   type: pick(item, 'type', 'menuType', 'menu_type') || 'MENU',
   children: (item.children || []).map(normalizeMenu)

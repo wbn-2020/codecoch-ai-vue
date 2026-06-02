@@ -23,6 +23,10 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
+interface ApiCodeError extends Error {
+  code?: number
+}
+
 const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
   timeout: appConfig.requestTimeout
@@ -34,6 +38,22 @@ const handleTokenExpired = () => {
     const redirect = encodeURIComponent(window.location.pathname + window.location.search)
     window.location.href = `/login?redirect=${redirect}`
   }
+}
+
+const getErrorCode = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  if (typeof code === 'number') return code
+  const responseCode = (error as AxiosError<RequestErrorPayload>)?.response?.data?.code
+  return typeof responseCode === 'number' ? responseCode : undefined
+}
+
+const isAuthFailureCode = (code?: number) =>
+  code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+
+const createApiCodeError = (message: string, code?: number) => {
+  const error = new Error(message) as ApiCodeError
+  error.code = code
+  return error
 }
 
 const normalizeAuthArray = <T>(items?: T[]): T[] => Array.from(new Set(items || []))
@@ -79,7 +99,7 @@ const refreshToken = async () => {
       .then((response) => {
         const result = response.data
         if (result.code !== HTTP_STATUS_CODE.SUCCESS || !result.data?.token) {
-          throw new Error(result.message || 'refresh token failed')
+          throw createApiCodeError(result.message || 'refresh token failed', result.code)
         }
         persistRefreshResult(result.data)
         return result.data.token
@@ -95,7 +115,7 @@ const refreshToken = async () => {
 const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
   if (!config || config._retry) {
     handleTokenExpired()
-    return Promise.reject(new Error('Token expired'))
+    return Promise.reject(createApiCodeError('Token expired', HTTP_STATUS_CODE.TOKEN_INVALID))
   }
 
   config._retry = true
@@ -105,7 +125,9 @@ const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`
     return request(config)
   } catch (error) {
-    handleTokenExpired()
+    if (isAuthFailureCode(getErrorCode(error))) {
+      handleTokenExpired()
+    }
     return Promise.reject(error)
   }
 }

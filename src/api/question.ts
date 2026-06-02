@@ -135,10 +135,15 @@ export const updateQuestionMasteryApi = (id: number, data: UpdateMasteryDTO) => 
   return request.put<UpdateMasteryVO, UpdateMasteryVO>(`/questions/${id}/mastery`, data)
 }
 
+const compactQuery = <T extends object>(params: T) =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ) as Partial<T>
+
 export const getAdminQuestionsApi = (params: AdminQuestionQueryDTO) => {
   return request
     .get<PageResult<BackendAdminQuestionVO>, PageResult<BackendAdminQuestionVO>>('/admin/questions', {
-      params
+      params: compactQuery(params)
     })
     .then(normalizeAdminQuestionPage)
 }
@@ -278,7 +283,7 @@ export const streamAiQuestionGenerateApi = (
 export const getQuestionReviewsApi = (params: QuestionReviewQueryDTO) => {
   return request.get<PageResult<QuestionReviewListVO>, PageResult<QuestionReviewListVO>>(
     '/admin/question-reviews',
-    { params }
+    { params: compactQuery(params) }
   )
 }
 

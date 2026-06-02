@@ -38,17 +38,10 @@
               <div class="admin-row-actions">
                 <el-button v-permission="'ADMIN'" link type="primary" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
-                  <el-dropdown v-permission="'ADMIN'" trigger="click" @command="(command: string) => handleRiskCommand(command, row)">
-                    <el-button link type="warning" class="risk-operation-trigger">风险操作</el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="status">
-                          {{ row.status === 1 ? '禁用角色' : '启用角色' }}
-                        </el-dropdown-item>
-                        <el-dropdown-item command="delete" divided>删除角色</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button v-permission="'ADMIN'" link type="warning" @click="handleToggleStatus(row)">
+                    {{ row.status === 1 ? '禁用角色' : '启用角色' }}
+                  </el-button>
+                  <el-button v-permission="'ADMIN'" link type="danger" @click="handleDelete(row)">删除角色</el-button>
                 </span>
               </div>
             </template>
@@ -163,45 +156,37 @@ const handleToggleStatus = async (row: RoleVO) => {
       ? '启用后，拥有该角色的用户可重新获得对应授权。'
       : '禁用后，拥有该角色的用户可能无法继续访问对应后台功能。'
 
-  await ElMessageBox.confirm(`确认${actionLabel}角色「${row.roleName || row.roleCode}」？${impactText}`, `${actionLabel}角色高风险确认`, {
-    type: 'warning',
-    confirmButtonText: `确认${actionLabel}`,
-    cancelButtonText: '取消'
-  })
+  try {
+    await ElMessageBox.confirm(`确认${actionLabel}角色「${row.roleName || row.roleCode}」？${impactText}`, `${actionLabel}角色高风险确认`, {
+      type: 'warning',
+      confirmButtonText: `确认${actionLabel}`,
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
   await updateAdminRoleStatusApi(row.roleId, { status: nextStatus })
   ElMessage.success(`角色已${actionLabel}`)
   await fetchRoles()
 }
 
 const handleDelete = async (row: RoleVO) => {
-  await ElMessageBox.confirm(
-    `确认删除角色「${row.roleName || row.roleCode}」？删除后，该角色与用户的关联会被移除，相关人员可能失去对应后台入口。`,
-    '删除角色高风险确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消'
-    }
-  )
+  try {
+    await ElMessageBox.confirm(
+      `确认删除角色「${row.roleName || row.roleCode}」？删除后，该角色与用户的关联会被移除，相关人员可能失去对应后台入口。`,
+      '删除角色高风险确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   await deleteAdminRoleApi(row.roleId)
   ElMessage.success('角色已删除')
   await fetchRoles()
-}
-
-const isConfirmCancel = (error: unknown) => error === 'cancel' || error === 'close'
-
-const handleRiskCommand = async (command: string, row: RoleVO) => {
-  try {
-    if (command === 'status') {
-      await handleToggleStatus(row)
-    } else if (command === 'delete') {
-      await handleDelete(row)
-    }
-  } catch (error) {
-    if (!isConfirmCancel(error)) {
-      throw error
-    }
-  }
 }
 
 onMounted(fetchRoles)

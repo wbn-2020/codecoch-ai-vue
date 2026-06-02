@@ -9,9 +9,9 @@
         <h1>创建 AI 模拟面试</h1>
         <p>基于简历、岗位方向和技术栈生成 Java 面试训练，创建后可直接进入面试房间。</p>
         <div class="hero-tags">
-          <el-tag effect="plain">创建后进入面试</el-tag>
+          <el-tag effect="plain">创建后直接开始</el-tag>
           <el-tag effect="plain" type="success">支持简历上下文</el-tag>
-          <el-tag effect="plain" type="warning">行业场景按现有字段提交</el-tag>
+          <el-tag effect="plain" type="warning">行业场景可用</el-tag>
         </div>
       </div>
       <div class="hero-actions">
@@ -179,7 +179,11 @@
                   :value="resume.id"
                 />
               </el-select>
-              <div v-if="!resumeLoading && !resumes.length" class="field-empty">
+              <div v-if="resumeLoadError" class="field-error">
+                <span>{{ resumeLoadError }}</span>
+                <el-button link type="primary" :loading="resumeLoading" @click="fetchResumes">重试</el-button>
+              </div>
+              <div v-else-if="!resumeLoading && !resumes.length" class="field-empty">
                 暂无可选简历，请先进入简历中心创建后再开启简历上下文。
               </div>
             </el-form-item>
@@ -276,12 +280,14 @@ import {
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const creating = ref(false)
 const resumeLoading = ref(false)
+const resumeLoadError = ref('')
 const industryTemplateLoading = ref(false)
 const industryTemplateError = ref('')
 const useResume = ref(true)
@@ -470,6 +476,7 @@ watch(
 
 const fetchResumes = async () => {
   resumeLoading.value = true
+  resumeLoadError.value = ''
   try {
     const result = await getResumesApi({ pageNo: 1, pageSize: 50 })
     resumes.value = result.records || []
@@ -478,6 +485,10 @@ const fetchResumes = async () => {
       (queryResumeId && resumes.value.some((item) => item.id === queryResumeId) ? queryResumeId : undefined) ||
       resumes.value.find((item) => item.isDefault === 1)?.id ||
       resumes.value[0]?.id
+  } catch (error) {
+    resumes.value = []
+    form.resumeId = undefined
+    resumeLoadError.value = getErrorMessage(error, '简历列表暂时加载失败，请重试后再选择简历上下文。')
   } finally {
     resumeLoading.value = false
   }
@@ -616,7 +627,7 @@ const handleCreate = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchResumes(), fetchIndustryTemplates()])
+  await Promise.allSettled([fetchResumes(), fetchIndustryTemplates()])
   await applyRouteContext()
 })
 </script>
@@ -827,6 +838,15 @@ onMounted(async () => {
 .field-empty {
   margin-top: 8px;
   color: var(--cc-warning);
+  font-size: 12px;
+}
+
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #fca5a5;
   font-size: 12px;
 }
 

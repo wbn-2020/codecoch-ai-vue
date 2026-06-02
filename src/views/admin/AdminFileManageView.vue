@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">文件治理</h1>
         <p class="admin-hero__desc">
-          基于真实 /admin/files 接口查看上传文件元数据、下载鉴权和简历解析联动状态。
+          查看上传文件元数据、下载鉴权和简历解析联动状态。
         </p>
       </div>
     </section>
@@ -17,7 +17,7 @@
       <article class="admin-insight-card">
         <span>文件总数</span>
         <strong>{{ total }}</strong>
-        <small>来自文件分页接口 total</small>
+        <small>当前文件总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页容量</span>

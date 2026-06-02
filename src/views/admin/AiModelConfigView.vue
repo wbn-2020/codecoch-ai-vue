@@ -40,7 +40,7 @@
                     trigger="click"
                     @command="(command: string | number | object) => handleRiskCommand(command, row)"
                   >
-                    <el-button link type="warning" class="risk-operation-trigger">风险操作</el-button>
+                    <el-button link type="warning" class="risk-operation-trigger">更多操作</el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item command="toggle-status">

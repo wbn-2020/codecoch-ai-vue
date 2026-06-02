@@ -1,9 +1,15 @@
 import type { Router } from 'vue-router'
 
 import { appConfig } from '@/config'
+import { HTTP_STATUS_CODE } from '@/constants/http'
 import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { getToken } from '@/utils/token'
+
+const isAuthFailure = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+}
 
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
@@ -14,7 +20,13 @@ export const setupRouterGuards = (router: Router) => {
     const isPublic = Boolean(to.meta.public)
     const isAuthPage = to.path === '/login' || to.path === '/register'
 
-    if (authStore.isLoggedIn && !getToken()) {
+    const localToken = getToken()
+
+    if (!authStore.isLoggedIn && localToken) {
+      authStore.setToken(localToken)
+    }
+
+    if (authStore.isLoggedIn && !localToken) {
       authStore.clearAuth()
     }
 
@@ -42,9 +54,10 @@ export const setupRouterGuards = (router: Router) => {
     if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
       try {
         await authStore.verifyToken()
-      } catch {
-        return {
-          path: '/login',
+        } catch (error) {
+          if (!isAuthFailure(error)) return true
+          return {
+            path: '/login',
           query: {
             redirect: to.fullPath
           }

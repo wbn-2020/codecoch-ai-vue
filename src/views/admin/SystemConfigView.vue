@@ -50,19 +50,15 @@
               <div class="admin-row-actions">
                 <el-button v-permission="'ADMIN'" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
-                  <el-dropdown
+                  <el-button
                     v-permission="'ADMIN'"
-                    trigger="click"
+                    link
+                    type="danger"
                     :disabled="row.editable !== 1"
-                    @command="() => handleDelete(row)"
+                    @click="handleDelete(row)"
                   >
-                    <el-button link type="warning" :disabled="row.editable !== 1" class="risk-operation-trigger">风险操作</el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="delete">删除配置</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                    删除配置
+                  </el-button>
                 </span>
               </div>
             </template>

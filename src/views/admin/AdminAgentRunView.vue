@@ -7,7 +7,7 @@
           <span>Agent 可观测</span>
         </div>
         <h1 class="admin-hero__title">Agent 运行记录</h1>
-        <p class="admin-hero__desc">查询 JobCoachAgent 运行状态、触发方式、模型、耗时和错误信息，数据来自管理端真实列表接口。</p>
+        <p class="admin-hero__desc">查询 JobCoachAgent 运行状态、触发方式、模型、耗时和错误信息。</p>
       </div>
     </section>
 
@@ -15,7 +15,7 @@
       <article class="admin-insight-card">
         <span>运行总数</span>
         <strong>{{ total }}</strong>
-        <small>来自分页 total</small>
+          <small>当前运行记录总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页成功</span>
@@ -98,7 +98,7 @@
               </template>
             </el-table-column>
             <template #empty>
-              <AppState type="empty" title="暂无 Agent 运行记录" description="当前筛选条件下没有真实运行数据。" />
+              <AppState type="empty" title="暂无 Agent 运行记录" description="当前筛选条件下没有运行数据。" />
             </template>
           </el-table>
         </div>

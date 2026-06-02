@@ -137,9 +137,11 @@ export interface MenuVO {
   path?: string
   component?: string
   permission?: string
+  permissionCode?: string
   icon?: string
   type?: string
   sortOrder?: number
+  visible?: number
   status?: number
   children?: MenuVO[]
 }

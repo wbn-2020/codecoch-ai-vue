@@ -49,7 +49,7 @@
     <!-- Error alert -->
     <section v-if="overviewError" class="cc-glass dashboard-alert">
       <AlertTriangle :size="18" />
-      <span>工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。</span>
+      <span>{{ overviewErrorMessage || '工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。' }}</span>
       <el-button text @click="fetchOverview">重试</el-button>
     </section>
 
@@ -76,7 +76,7 @@
     <section class="cc-glass dashboard-section">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">Quick Actions</p>
+          <p class="section-kicker">快捷入口</p>
           <h2>核心训练入口</h2>
         </div>
         <span class="section-note">根据你的当前进度推荐</span>
@@ -207,6 +207,11 @@
         </div>
 
         <div v-if="wrongQuestionsLoading" v-loading="true" class="loading-placeholder"></div>
+        <div v-else-if="wrongQuestionsError" class="dashboard-inline-error">
+          <AlertTriangle :size="16" />
+          <span>{{ wrongQuestionsError }}</span>
+          <el-button text @click="fetchWrongQuestions">重试</el-button>
+        </div>
         <div v-else-if="wrongQuestions.length" class="info-list">
           <button
             v-for="item in wrongQuestions"
@@ -275,6 +280,7 @@ import { getWrongQuestionsApi } from '@/api/question'
 import { useAuthStore } from '@/stores/auth'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
+import { getErrorMessage } from '@/utils/error'
 
 interface MetricItem {
   label: string
@@ -290,9 +296,11 @@ const router = useRouter()
 const authStore = useAuthStore()
 const overviewLoading = ref(false)
 const overviewError = ref(false)
+const overviewErrorMessage = ref('')
 const overview = ref<UserDashboardOverviewVO | null>(null)
 
 const wrongQuestionsLoading = ref(false)
+const wrongQuestionsError = ref('')
 const wrongQuestions = ref<WrongQuestionVO[]>([])
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
@@ -471,11 +479,13 @@ const formatDateTime = (value?: string) => {
 const fetchOverview = async () => {
   overviewLoading.value = true
   overviewError.value = false
+  overviewErrorMessage.value = ''
   try {
     overview.value = await getUserDashboardOverviewApi()
-  } catch {
+  } catch (error) {
     overview.value = null
     overviewError.value = true
+    overviewErrorMessage.value = getErrorMessage(error, '工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。')
   } finally {
     overviewLoading.value = false
   }
@@ -483,11 +493,13 @@ const fetchOverview = async () => {
 
 const fetchWrongQuestions = async () => {
   wrongQuestionsLoading.value = true
+  wrongQuestionsError.value = ''
   try {
     const result = await getWrongQuestionsApi({ pageNum: 1, pageSize: 5 }, { silentError: true })
     wrongQuestions.value = result.records || []
-  } catch {
+  } catch (error) {
     wrongQuestions.value = []
+    wrongQuestionsError.value = getErrorMessage(error, '错题复盘数据暂时加载失败。')
   } finally {
     wrongQuestionsLoading.value = false
   }
@@ -525,6 +537,18 @@ onMounted(() => {
   gap: 10px;
   padding: 12px 14px;
   color: #fed7aa;
+}
+
+.dashboard-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.16);
+  color: #fecaca;
 }
 
 .hero-copy h1 {

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">用户管理</h1>
-        <p class="page-subtitle">对接 `/admin/users` 和 `/admin/users/{id}/status`，保留分页与基础筛选结构。</p>
+        <p class="page-subtitle">查看后台账号、角色和启用状态，必要时停用异常账号。</p>
       </div>
     </div>
 
@@ -67,31 +67,19 @@
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="风险操作" width="130" fixed="right">
+          <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
               <div class="risk-action-cell">
-                <el-dropdown
+                <el-button
                   v-permission="'ADMIN'"
-                  trigger="click"
+                  link
+                  :type="row.status === 1 ? 'danger' : 'warning'"
                   :disabled="statusChangingId === row.id"
-                  @command="() => handleToggleStatus(row)"
+                  :loading="statusChangingId === row.id"
+                  @click="handleToggleStatus(row)"
                 >
-                  <el-button
-                    link
-                    :type="row.status === 1 ? 'danger' : 'warning'"
-                    :loading="statusChangingId === row.id"
-                    class="risk-operation-trigger"
-                  >
-                    风险操作
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="toggle-status">
-                        {{ row.status === 1 ? '禁用账号' : '启用账号' }}
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                  {{ row.status === 1 ? '禁用账号' : '启用账号' }}
+                </el-button>
               </div>
             </template>
           </el-table-column>

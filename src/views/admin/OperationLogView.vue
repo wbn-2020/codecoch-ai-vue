@@ -33,7 +33,7 @@
       <article class="audit-metric">
         <span>当前筛选结果</span>
         <strong>{{ total }}</strong>
-        <small>来自分页接口 total</small>
+        <small>当前筛选记录数</small>
       </article>
     </section>
 

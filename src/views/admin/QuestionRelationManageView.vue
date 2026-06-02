@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">题目关系管理</h1>
         <p class="admin-hero__desc">
-          基于后端真实关系接口维护题目之间的相似、关联、追问、进阶和前置关系，不扩展后端契约。
+          维护题目之间的相似、关联、追问、进阶和前置关系。
         </p>
       </div>
     </section>

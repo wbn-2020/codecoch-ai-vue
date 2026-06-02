@@ -3,11 +3,12 @@
     <el-scrollbar>
       <div class="tags-view__inner">
         <button
-          v-for="tag in displayedTags"
+          v-for="tag in visibleTags"
           :key="tag.path"
           class="tag-item"
           :class="{ 'is-active': tag.path === route.path }"
           type="button"
+          :title="tag.title"
           @click="goTag(tag)"
           @contextmenu.prevent="openMenu(tag, $event)"
         >
@@ -18,6 +19,31 @@
         </button>
       </div>
     </el-scrollbar>
+    <div class="tags-view__actions">
+      <el-dropdown v-if="overflowTags.length" trigger="click" @command="goOverflowTag">
+        <button type="button" class="tags-view__more">
+          <el-icon><MoreFilled /></el-icon>
+          <span>{{ overflowTags.length }}</span>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="tag in overflowTags" :key="tag.path" :command="tag.path">
+              {{ tag.title }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-tooltip content="关闭其他页签" placement="bottom">
+        <button type="button" :disabled="displayedTags.length <= 1" @click="closeOthers">
+          <el-icon><CircleClose /></el-icon>
+        </button>
+      </el-tooltip>
+      <el-tooltip content="关闭全部页签" placement="bottom">
+        <button type="button" :disabled="!displayedTags.some((item) => !item.affix)" @click="closeAll">
+          <el-icon><DArrowRight /></el-icon>
+        </button>
+      </el-tooltip>
+    </div>
 
     <Teleport to="body">
       <div
@@ -56,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { Back, CircleClose, Close, DArrowRight, Refresh, Right } from '@element-plus/icons-vue'
+import { Back, CircleClose, Close, DArrowRight, MoreFilled, Refresh, Right } from '@element-plus/icons-vue'
 import { computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -79,6 +105,7 @@ const props = withDefaults(
 const route = useRoute()
 const router = useRouter()
 const tagsStore = useTagsViewStore()
+const MAX_VISIBLE_TAGS = 8
 
 const displayedTags = computed(() => tagsStore.tagsByScope(props.scope))
 const homeTag = computed(() => getHomeTag(props.scope))
@@ -96,6 +123,24 @@ const hasLeftClosable = computed(() =>
 const hasRightClosable = computed(() =>
   displayedTags.value.slice(selectedTagIndex.value + 1).some((item) => !item.affix)
 )
+const visibleTags = computed(() => {
+  const tags = displayedTags.value
+  if (tags.length <= MAX_VISIBLE_TAGS) return tags
+  const visible = new Map<string, VisitedTag>()
+  tags.filter((tag) => tag.affix).forEach((tag) => visible.set(tag.path, tag))
+  const current = currentTag.value
+  const remainingSlots = Math.max(1, MAX_VISIBLE_TAGS - visible.size - 1)
+  tags
+    .filter((tag) => !tag.affix && tag.path !== current.path)
+    .slice(-remainingSlots)
+    .forEach((tag) => visible.set(tag.path, tag))
+  visible.set(current.path, current)
+  return tags.filter((tag) => visible.has(tag.path))
+})
+const overflowTags = computed(() => {
+  const visiblePaths = new Set(visibleTags.value.map((tag) => tag.path))
+  return displayedTags.value.filter((tag) => !visiblePaths.has(tag.path))
+})
 
 const menu = reactive({
   visible: false,
@@ -106,6 +151,11 @@ const menu = reactive({
 
 const goTag = async (tag: VisitedTag) => {
   await router.push(tag.fullPath || tag.path)
+}
+
+const goOverflowTag = async (path: string | number | object) => {
+  const tag = overflowTags.value.find((item) => item.path === String(path))
+  if (tag) await goTag(tag)
 }
 
 const getFallbackTag = (closedPath: string): VisitedTag | undefined => {
@@ -191,6 +241,39 @@ const closeAll = async () => {
   min-width: 0;
 }
 
+.tags-view__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-left: 1px solid var(--app-border);
+
+  button,
+  :deep(.tags-view__more) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: var(--app-surface-soft);
+    color: var(--app-text-muted);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--app-text);
+      border-color: rgba(129, 140, 248, 0.45);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+  }
+}
+
 .tags-view__inner {
   display: flex;
   align-items: center;
@@ -204,7 +287,7 @@ const closeAll = async () => {
   align-items: center;
   gap: 6px;
   height: 26px;
-  max-width: 180px;
+  max-width: clamp(96px, 12vw, 150px);
   padding: 0 10px;
   border: 1px solid var(--app-border);
   border-radius: 6px;

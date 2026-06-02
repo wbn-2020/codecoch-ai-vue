@@ -8,8 +8,8 @@
         </div>
         <h1 class="admin-hero__title">Prompt 模板治理</h1>
         <p class="admin-hero__desc">
-          维护面试提问、答案评分、动态追问和报告生成模板。当前保留模板真实 CRUD，
-          Prompt 内容变更已收敛到版本 API，版本管理与测试面板已接入。
+          维护面试提问、答案评分、动态追问和报告生成模板，
+          Prompt 内容支持版本化管理，可在测试面板验证效果后再发布。
         </p>
       </div>
       <el-button type="primary" @click="openDialog()">
@@ -22,7 +22,7 @@
       <article class="admin-insight-card">
         <span>模板总数</span>
         <strong>{{ total }}</strong>
-        <small>来自 Prompt 列表接口 total</small>
+        <small>当前模板总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页启用</span>
@@ -37,7 +37,7 @@
       <article class="admin-insight-card">
         <span>版本治理</span>
         <strong>闭环已接入</strong>
-        <small>版本列表、切换与测试均走真实接口</small>
+        <small>版本切换、测试和发布状态</small>
       </article>
     </div>
 
@@ -45,7 +45,7 @@
       <div class="admin-panel__header admin-panel__header--toolbar">
         <div>
           <h2>模板列表</h2>
-          <p>搜索、启停、新增、编辑、删除均复用现有 Prompt 管理接口。</p>
+          <p>搜索、启停、新增、编辑和删除 Prompt 模板。</p>
         </div>
       </div>
 
@@ -286,7 +286,7 @@
         type="warning"
         show-icon
         :closable="false"
-        title="callAi=false 只渲染 Prompt；callAi=true 可能真实调用 AI 并写入 AI 调用日志。"
+        title="可选择仅预览渲染结果，或发起一次 AI 测试并记录调用日志。"
       />
 
       <el-form label-position="top">
@@ -294,7 +294,7 @@
           <el-input v-model="testInputJson" type="textarea" :rows="8" placeholder='例如：{"position":"Java 后端工程师"}' />
         </el-form-item>
         <el-form-item label="是否调用 AI">
-          <el-switch v-model="testCallAi" active-text="callAi=true" inactive-text="callAi=false" />
+          <el-switch v-model="testCallAi" active-text="调用 AI" inactive-text="仅预览" />
         </el-form-item>
       </el-form>
 
@@ -302,7 +302,7 @@
         <div class="version-section-head">
           <div>
             <h3>测试结果</h3>
-            <p>展示接口真实返回的渲染内容、AI 响应和调用日志信息。</p>
+            <p>展示渲染内容、AI 响应和调用日志信息。</p>
           </div>
         </div>
         <div class="test-result-grid">
@@ -350,7 +350,7 @@
         <div class="version-section-head">
           <div>
             <h3>调用记录</h3>
-            <p>仅展示后端真实日志；历史日志可能未写入 Prompt 模板或版本字段。</p>
+            <p>历史日志可能未写入 Prompt 模板或版本字段。</p>
           </div>
         </div>
         <el-form :model="callLogQuery" inline class="call-log-filter">
