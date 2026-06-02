@@ -1,5 +1,13 @@
 <template>
-  <el-menu class="layout-menu user-sidebar-menu" :default-active="activePath" :collapse="collapsed" router>
+  <el-menu
+    ref="menuRef"
+    class="layout-menu user-sidebar-menu"
+    :default-active="activePath"
+    :collapse="collapsed"
+    :unique-opened="true"
+    router
+    @select="handleSelect"
+  >
     <template v-for="section in menuSections" :key="section.key">
       <el-menu-item v-if="section.children.length === 1 && !section.forceGroup" :index="section.children[0].path">
         <el-icon>
@@ -42,14 +50,15 @@ import {
   TrendCharts,
   User
 } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-defineProps<{
+const props = defineProps<{
   collapsed?: boolean
 }>()
 
 const route = useRoute()
+const menuRef = ref<{ close: (index: string) => void }>()
 
 interface UserMenuItem {
   label: string
@@ -130,12 +139,12 @@ const menuSections: UserMenuSection[] = [
   },
   {
     key: 'study-plan',
-    label: '学习计划',
+    label: '学习成长',
     icon: Reading,
     forceGroup: true,
     children: [
       { label: '差距学习计划', path: '/study-plans/from-gap', icon: Reading },
-      { label: '学习计划', path: '/study-plans', icon: Reading },
+      { label: '计划总览', path: '/study-plans', icon: Reading },
       { label: '每日任务', path: '/daily-tasks', icon: Calendar },
       { label: '薄弱点分析', path: '/weakness-analysis', icon: TrendCharts }
     ]
@@ -153,6 +162,17 @@ const menuSections: UserMenuSection[] = [
     ]
   }
 ]
+
+const closeAllMenus = () => {
+  if (!props.collapsed) return
+  nextTick(() => {
+    menuSections.forEach((section) => menuRef.value?.close(section.key))
+  })
+}
+
+const handleSelect = () => {
+  closeAllMenus()
+}
 
 const activePath = computed(() => {
   if (route.path.startsWith('/dashboard/v3')) return '/dashboard/v3'
@@ -185,6 +205,8 @@ const activePath = computed(() => {
   if (route.path.startsWith('/interviews')) return '/interviews/create'
   return route.path
 })
+
+watch(() => route.fullPath, closeAllMenus)
 </script>
 
 <style scoped lang="scss">

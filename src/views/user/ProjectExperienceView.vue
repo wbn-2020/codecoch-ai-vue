@@ -226,9 +226,15 @@ const openDialog = (project?: ResumeProjectVO) => {
   dialogVisible.value = true
 }
 
+const validateProjectForm = async () => {
+  if (!formRef.value) return false
+  return formRef.value.validate().catch(() => false)
+}
+
 const saveProject = async () => {
   if (!selectedResumeId.value) return
-  await formRef.value?.validate()
+  const valid = await validateProjectForm()
+  if (!valid) return
   saving.value = true
   try {
     if (editingProject.value?.projectId) {

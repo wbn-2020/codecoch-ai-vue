@@ -63,8 +63,8 @@
 
       <div class="content-panel">
         <div class="section-head"><div><h2>学习计划</h2><p>来自 studyProgress/activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
-        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(`/study-plans?planId=${activeStudyProgress.planId}`)">
-          <strong>{{ activeStudyProgress.planTitle || `学习计划 #${activeStudyProgress.planId}` }}</strong>
+        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(activeStudyPlanRoute)">
+          <strong>{{ activeStudyPlanTitle }}</strong>
           <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
           <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
         </div>
@@ -166,6 +166,15 @@ const errors = computed(() => [overviewError.value, skillError.value, notificati
 const currentTargetJobId = computed(() => overview.value?.currentTargetJob?.targetJobId || overview.value?.currentTargetJob?.id)
 const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchReportId || overview.value?.latestMatch?.reportId)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
+const activeStudyPlanTitle = computed(() => {
+  const plan = activeStudyProgress.value
+  if (!plan) return ''
+  return plan.planTitle || `学习计划 #${plan.planId}`
+})
+const activeStudyPlanRoute = computed(() => ({
+  path: '/study-plans',
+  query: { planId: String(activeStudyProgress.value?.planId) }
+}))
 const compactQuery = (query: Record<string, unknown>): LocationQueryRaw => Object.fromEntries(
   Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
 ) as LocationQueryRaw

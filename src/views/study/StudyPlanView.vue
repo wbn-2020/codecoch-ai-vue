@@ -257,6 +257,12 @@
               </div>
             </section>
 
+            <div class="all-task-head">
+              <p class="section-kicker">All Tasks</p>
+              <h3>全部任务明细</h3>
+              <span>下方列表展示当前计划的全部任务，不按上方所选日期过滤。</span>
+            </div>
+
             <div class="task-list" v-loading="detailLoading">
               <template v-if="tasks.length">
                 <article v-for="task in tasks" :key="task.id" class="task-item">
@@ -988,6 +994,23 @@ onBeforeUnmount(() => {
 .task-list {
   display: grid;
   gap: 12px;
+}
+
+.all-task-head {
+  margin: 8px 0 12px;
+
+  h3 {
+    margin: 4px 0 0;
+    color: #f8fafc;
+    font-size: 17px;
+  }
+
+  span {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
 }
 
 .task-item {

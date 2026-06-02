@@ -1,0 +1,209 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/@fs/C:\\my-claude\\CodeCoachAI-vue\\src\\views\\auth\\ForgotPasswordView.vue");import { defineComponent as _defineComponent } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+import { ElMessage } from "/node_modules/.vite/deps/element-plus.js?v=9b9c413f";
+import { reactive, ref } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+import { useRouter } from "/node_modules/.vite/deps/vue-router.js?v=9b9c413f";
+import { forgotPasswordApi } from "/src/api/auth.ts";
+const _sfc_main = /* @__PURE__ */ _defineComponent({
+  __name: "ForgotPasswordView",
+  setup(__props, { expose: __expose }) {
+    __expose();
+    const router = useRouter();
+    const formRef = ref();
+    const loading = ref(false);
+    const sent = ref(false);
+    const successMessage = ref("");
+    const errorMessage = ref("");
+    const form = reactive({
+      email: ""
+    });
+    const rules = {
+      email: [
+        { required: true, message: "请输入邮箱地址", trigger: "blur" },
+        { type: "email", message: "请输入有效的邮箱地址", trigger: "blur" }
+      ]
+    };
+    const getErrorMessage = (error, fallback) => {
+      if (error && typeof error === "object") {
+        const payload = error;
+        return payload.response?.data?.message || payload.message || fallback;
+      }
+      return fallback;
+    };
+    const handleSubmit = async () => {
+      if (!formRef.value) return;
+      await formRef.value.validate(async (valid) => {
+        if (!valid) return;
+        loading.value = true;
+        errorMessage.value = "";
+        successMessage.value = "";
+        try {
+          const result = await forgotPasswordApi(form);
+          sent.value = true;
+          successMessage.value = result.message || `请检查 ${form.email} 的收件箱（含垃圾邮件），点击链接完成密码重置。`;
+          if (result.resetToken) {
+            successMessage.value = `${successMessage.value} 测试环境 resetToken：${result.resetToken}`;
+          }
+          ElMessage.success("重置链接已发送，请查收邮箱");
+        } catch (error) {
+          errorMessage.value = getErrorMessage(error, "重置链接发送失败，请稍后重试");
+        } finally {
+          loading.value = false;
+        }
+      });
+    };
+    const __returned__ = { router, formRef, loading, sent, successMessage, errorMessage, form, rules, getErrorMessage, handleSubmit };
+    Object.defineProperty(__returned__, "__isScriptSetup", { enumerable: false, value: true });
+    return __returned__;
+  }
+});
+import { createElementVNode as _createElementVNode, resolveComponent as _resolveComponent, openBlock as _openBlock, createBlock as _createBlock, createCommentVNode as _createCommentVNode, createVNode as _createVNode, withCtx as _withCtx, createTextVNode as _createTextVNode, withKeys as _withKeys, createElementBlock as _createElementBlock } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+const _hoisted_1 = { class: "auth-page" };
+const _hoisted_2 = { class: "auth-card" };
+const _hoisted_3 = { class: "auth-card__footer" };
+function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
+  const _component_el_alert = _resolveComponent("el-alert");
+  const _component_el_input = _resolveComponent("el-input");
+  const _component_el_form_item = _resolveComponent("el-form-item");
+  const _component_el_button = _resolveComponent("el-button");
+  const _component_el_form = _resolveComponent("el-form");
+  return _openBlock(), _createElementBlock("main", _hoisted_1, [
+    _createElementVNode("section", _hoisted_2, [
+      _cache[7] || (_cache[7] = _createElementVNode(
+        "div",
+        { class: "auth-card__intro" },
+        [
+          _createElementVNode("div", { class: "auth-card__brand" }, "CodeCoachAI"),
+          _createElementVNode("h1", null, "找回密码"),
+          _createElementVNode("p", null, "输入注册时使用的邮箱地址，我们将发送密码重置链接到你的邮箱。")
+        ],
+        -1
+        /* CACHED */
+      )),
+      $setup.sent ? (_openBlock(), _createBlock(_component_el_alert, {
+        key: 0,
+        type: "success",
+        "show-icon": "",
+        closable: false,
+        title: "重置链接已发送",
+        description: $setup.successMessage,
+        class: "sent-alert"
+      }, null, 8, ["description"])) : _createCommentVNode("v-if", true),
+      $setup.errorMessage ? (_openBlock(), _createBlock(_component_el_alert, {
+        key: 1,
+        type: "error",
+        "show-icon": "",
+        closable: false,
+        title: $setup.errorMessage,
+        class: "sent-alert"
+      }, null, 8, ["title"])) : _createCommentVNode("v-if", true),
+      !$setup.sent ? (_openBlock(), _createBlock(_component_el_form, {
+        key: 2,
+        ref: "formRef",
+        class: "auth-form",
+        model: $setup.form,
+        rules: $setup.rules,
+        "label-position": "top",
+        onKeyup: _withKeys($setup.handleSubmit, ["enter"])
+      }, {
+        default: _withCtx(() => [
+          _createVNode(_component_el_form_item, {
+            label: "邮箱地址",
+            prop: "email"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.email,
+                "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $setup.form.email = $event),
+                modelModifiers: { trim: true },
+                size: "large",
+                placeholder: "请输入注册邮箱",
+                type: "email"
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_button, {
+            class: "auth-form__submit",
+            type: "primary",
+            size: "large",
+            loading: $setup.loading,
+            onClick: $setup.handleSubmit
+          }, {
+            default: _withCtx(() => [..._cache[3] || (_cache[3] = [
+              _createTextVNode(
+                " 发送重置链接 ",
+                -1
+                /* CACHED */
+              )
+            ])]),
+            _: 1
+            /* STABLE */
+          }, 8, ["loading"])
+        ]),
+        _: 1
+        /* STABLE */
+      }, 8, ["model"])) : _createCommentVNode("v-if", true),
+      $setup.sent ? (_openBlock(), _createBlock(_component_el_button, {
+        key: 3,
+        class: "auth-form__submit",
+        type: "primary",
+        size: "large",
+        onClick: _cache[1] || (_cache[1] = ($event) => $setup.sent = false)
+      }, {
+        default: _withCtx(() => [..._cache[4] || (_cache[4] = [
+          _createTextVNode(
+            " 重新发送 ",
+            -1
+            /* CACHED */
+          )
+        ])]),
+        _: 1
+        /* STABLE */
+      })) : _createCommentVNode("v-if", true),
+      _createElementVNode("div", _hoisted_3, [
+        _cache[6] || (_cache[6] = _createElementVNode(
+          "span",
+          null,
+          "想起密码了？",
+          -1
+          /* CACHED */
+        )),
+        _createVNode(_component_el_button, {
+          link: "",
+          type: "primary",
+          onClick: _cache[2] || (_cache[2] = ($event) => $setup.router.push("/login"))
+        }, {
+          default: _withCtx(() => [..._cache[5] || (_cache[5] = [
+            _createTextVNode(
+              "返回登录",
+              -1
+              /* CACHED */
+            )
+          ])]),
+          _: 1
+          /* STABLE */
+        })
+      ])
+    ])
+  ]);
+}
+import "/src/views/auth/ForgotPasswordView.vue?vue&type=style&index=0&scoped=df6974df&lang.scss";
+_sfc_main.__hmrId = "df6974df";
+typeof __VUE_HMR_RUNTIME__ !== "undefined" && __VUE_HMR_RUNTIME__.createRecord(_sfc_main.__hmrId, _sfc_main);
+import.meta.hot.on("file-changed", ({ file }) => {
+  __VUE_HMR_RUNTIME__.CHANGED_FILE = file;
+});
+import.meta.hot.accept((mod) => {
+  if (!mod) return;
+  const { default: updated, _rerender_only } = mod;
+  if (_rerender_only) {
+    __VUE_HMR_RUNTIME__.rerender(updated.__hmrId, updated.render);
+  } else {
+    __VUE_HMR_RUNTIME__.reload(updated.__hmrId, updated);
+  }
+});
+import _export_sfc from "/@id/__x00__plugin-vue:export-helper";
+export default /* @__PURE__ */ _export_sfc(_sfc_main, [["render", _sfc_render], ["__scopeId", "data-v-df6974df"], ["__file", "C:/my-claude/CodeCoachAI-vue/src/views/auth/ForgotPasswordView.vue"]]);
+
+//# sourceMappingURL=data:application/json;base64,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LDZFQUFMLFlBQUssUUFBSztBQUFBLGdDQUF4QjtBQUFBLGdCQUNBLE1BQUs7QUFBQSxnQkFDTCxhQUFZO0FBQUEsZ0JBQ1osTUFBSztBQUFBOzs7OztVQUdULGFBUVk7QUFBQSxZQVBWLE9BQU07QUFBQSxZQUNOLE1BQUs7QUFBQSxZQUNMLE1BQUs7QUFBQSxZQUNKLFNBQVM7QUFBQSxZQUNULFNBQU87QUFBQTs4QkFDVCxNQUVEO0FBQUE7Z0JBRkM7QUFBQSxnQkFFRDtBQUFBO0FBQUE7QUFBQTs7Ozs7Ozs7TUFJTSw2QkFEUixhQVFZO0FBQUE7UUFOVixPQUFNO0FBQUEsUUFDTixNQUFLO0FBQUEsUUFDTCxNQUFLO0FBQUEsUUFDSixTQUFLLHNDQUFFLGNBQUk7QUFBQTswQkFDYixNQUVEO0FBQUE7WUFGQztBQUFBLFlBRUQ7QUFBQTtBQUFBO0FBQUE7Ozs7TUFFQSxvQkFHTSxPQUhOLFlBR007QUFBQSxrQ0FGSjtBQUFBLFVBQW1CO0FBQUE7QUFBQSxVQUFiO0FBQUEsVUFBTTtBQUFBO0FBQUE7QUFBQSxRQUNaLGFBQThFO0FBQUEsVUFBbkU7QUFBQSxVQUFLLE1BQUs7QUFBQSxVQUFXLFNBQUssc0NBQUUsY0FBTyxLQUFJO0FBQUE7NEJBQVksTUFBSTtBQUFBO2NBQUo7QUFBQSxjQUFJO0FBQUE7QUFBQTtBQUFBIiwibmFtZXMiOltdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJGb3Jnb3RQYXNzd29yZFZpZXcudnVlIl0sInNvdXJjZXNDb250ZW50IjpbIjx0ZW1wbGF0ZT5cbiAgPG1haW4gY2xhc3M9XCJhdXRoLXBhZ2VcIj5cbiAgICA8c2VjdGlvbiBjbGFzcz1cImF1dGgtY2FyZFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImF1dGgtY2FyZF9faW50cm9cIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImF1dGgtY2FyZF9fYnJhbmRcIj5Db2RlQ29hY2hBSTwvZGl2PlxuICAgICAgICA8aDE+5om+5Zue5a+G56CBPC9oMT5cbiAgICAgICAgPHA+6L6T5YWl5rOo5YaM5pe25L2/55So55qE6YKu566x5Zyw5Z2A77yM5oiR5Lus5bCG5Y+R6YCB5a+G56CB6YeN572u6ZO+5o6l5Yiw5L2g55qE6YKu566x44CCPC9wPlxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxlbC1hbGVydFxuICAgICAgICB2LWlmPVwic2VudFwiXG4gICAgICAgIHR5cGU9XCJzdWNjZXNzXCJcbiAgICAgICAgc2hvdy1pY29uXG4gICAgICAgIDpjbG9zYWJsZT1cImZhbHNlXCJcbiAgICAgICAgdGl0bGU9XCLph43nva7pk77mjqXlt7Llj5HpgIFcIlxuICAgICAgICA6ZGVzY3JpcHRpb249XCJzdWNjZXNzTWVzc2FnZVwiXG4gICAgICAgIGNsYXNzPVwic2VudC1hbGVydFwiXG4gICAgICAvPlxuXG4gICAgICA8ZWwtYWxlcnRcbiAgICAgICAgdi1pZj1cImVycm9yTWVzc2FnZVwiXG4gICAgICAgIHR5cGU9XCJlcnJvclwiXG4gICAgICAgIHNob3ctaWNvblxuICAgICAgICA6Y2xvc2FibGU9XCJmYWxzZVwiXG4gICAgICAgIDp0aXRsZT1cImVycm9yTWVzc2FnZVwiXG4gICAgICAgIGNsYXNzPVwic2VudC1hbGVydFwiXG4gICAgICAvPlxuXG4gICAgICA8ZWwtZm9ybVxuICAgICAgICB2LWlmPVwiIXNlbnRcIlxuICAgICAgICByZWY9XCJmb3JtUmVmXCJcbiAgICAgICAgY2xhc3M9XCJhdXRoLWZvcm1cIlxuICAgICAgICA6bW9kZWw9XCJmb3JtXCJcbiAgICAgICAgOnJ1bGVzPVwicnVsZXNcIlxuICAgICAgICBsYWJlbC1wb3NpdGlvbj1cInRvcFwiXG4gICAgICAgIEBrZXl1cC5lbnRlcj1cImhhbmRsZVN1Ym1pdFwiXG4gICAgICA+XG4gICAgICAgIDxlbC1mb3JtLWl0ZW0gbGFiZWw9XCLpgq7nrrHlnLDlnYBcIiBwcm9wPVwiZW1haWxcIj5cbiAgICAgICAgICA8ZWwtaW5wdXRcbiAgICAgICAgICAgIHYtbW9kZWwudHJpbT1cImZvcm0uZW1haWxcIlxuICAgICAgICAgICAgc2l6ZT1cImxhcmdlXCJcbiAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi6K+36L6T5YWl5rOo5YaM6YKu566xXCJcbiAgICAgICAgICAgIHR5cGU9XCJlbWFpbFwiXG4gICAgICAgICAgLz5cbiAgICAgICAgPC9lbC1mb3JtLWl0ZW0+XG4gICAgICAgIDxlbC1idXR0b25cbiAgICAgICAgICBjbGFzcz1cImF1dGgtZm9ybV9fc3VibWl0XCJcbiAgICAgICAgICB0eXBlPVwicHJpbWFyeVwiXG4gICAgICAgICAgc2l6ZT1cImxhcmdlXCJcbiAgICAgICAgICA6bG9hZGluZz1cImxvYWRpbmdcIlxuICAgICAgICAgIEBjbGljaz1cImhhbmRsZVN1Ym1pdFwiXG4gICAgICAgID5cbiAgICAgICAgICDlj5HpgIHph43nva7pk77mjqVcbiAgICAgICAgPC9lbC1idXR0b24+XG4gICAgICA8L2VsLWZvcm0+XG5cbiAgICAgIDxlbC1idXR0b25cbiAgICAgICAgdi1pZj1cInNlbnRcIlxuICAgICAgICBjbGFzcz1cImF1dGgtZm9ybV9fc3VibWl0XCJcbiAgICAgICAgdHlwZT1cInByaW1hcnlcIlxuICAgICAgICBzaXplPVwibGFyZ2VcIlxuICAgICAgICBAY2xpY2s9XCJzZW50ID0gZmFsc2VcIlxuICAgICAgPlxuICAgICAgICDph43mlrDlj5HpgIFcbiAgICAgIDwvZWwtYnV0dG9uPlxuXG4gICAgICA8ZGl2IGNsYXNzPVwiYXV0aC1jYXJkX19mb290ZXJcIj5cbiAgICAgICAgPHNwYW4+5oOz6LW35a+G56CB5LqG77yfPC9zcGFuPlxuICAgICAgICA8ZWwtYnV0dG9uIGxpbmsgdHlwZT1cInByaW1hcnlcIiBAY2xpY2s9XCJyb3V0ZXIucHVzaCgnL2xvZ2luJylcIj7ov5Tlm57nmbvlvZU8L2VsLWJ1dHRvbj5cbiAgICAgIDwvZGl2PlxuICAgIDwvc2VjdGlvbj5cbiAgPC9tYWluPlxuPC90ZW1wbGF0ZT5cblxuPHNjcmlwdCBzZXR1cCBsYW5nPVwidHNcIj5cbmltcG9ydCB0eXBlIHsgRm9ybUluc3RhbmNlLCBGb3JtUnVsZXMgfSBmcm9tICdlbGVtZW50LXBsdXMnXG5pbXBvcnQgeyBFbE1lc3NhZ2UgfSBmcm9tICdlbGVtZW50LXBsdXMnXG5pbXBvcnQgeyByZWFjdGl2ZSwgcmVmIH0gZnJvbSAndnVlJ1xuaW1wb3J0IHsgdXNlUm91dGVyIH0gZnJvbSAndnVlLXJvdXRlcidcblxuaW1wb3J0IHsgZm9yZ290UGFzc3dvcmRBcGksIHR5cGUgRm9yZ290UGFzc3dvcmREVE8gfSBmcm9tICdAL2FwaS9hdXRoJ1xuXG5jb25zdCByb3V0ZXIgPSB1c2VSb3V0ZXIoKVxuY29uc3QgZm9ybVJlZiA9IHJlZjxGb3JtSW5zdGFuY2U+KClcbmNvbnN0IGxvYWRpbmcgPSByZWYoZmFsc2UpXG5jb25zdCBzZW50ID0gcmVmKGZhbHNlKVxuY29uc3Qgc3VjY2Vzc01lc3NhZ2UgPSByZWYoJycpXG5jb25zdCBlcnJvck1lc3NhZ2UgPSByZWYoJycpXG5cbmNvbnN0IGZvcm0gPSByZWFjdGl2ZTxGb3Jnb3RQYXNzd29yZERUTz4oe1xuICBlbWFpbDogJydcbn0pXG5cbmNvbnN0IHJ1bGVzOiBGb3JtUnVsZXM8Rm9yZ290UGFzc3dvcmREVE8+ID0ge1xuICBlbWFpbDogW1xuICAgIHsgcmVxdWlyZWQ6IHRydWUsIG1lc3NhZ2U6ICfor7fovpPlhaXpgq7nrrHlnLDlnYAnLCB0cmlnZ2VyOiAnYmx1cicgfSxcbiAgICB7IHR5cGU6ICdlbWFpbCcsIG1lc3NhZ2U6ICfor7fovpPlhaXmnInmlYjnmoTpgq7nrrHlnLDlnYAnLCB0cmlnZ2VyOiAnYmx1cicgfVxuICBdXG59XG5cbmNvbnN0IGdldEVycm9yTWVzc2FnZSA9IChlcnJvcjogdW5rbm93biwgZmFsbGJhY2s6IHN0cmluZykgPT4ge1xuICBpZiAoZXJyb3IgJiYgdHlwZW9mIGVycm9yID09PSAnb2JqZWN0Jykge1xuICAgIGNvbnN0IHBheWxvYWQgPSBlcnJvciBhcyB7IG1lc3NhZ2U/OiBzdHJpbmc7IHJlc3BvbnNlPzogeyBkYXRhPzogeyBtZXNzYWdlPzogc3RyaW5nIH0gfSB9XG4gICAgcmV0dXJuIHBheWxvYWQucmVzcG9uc2U/LmRhdGE/Lm1lc3NhZ2UgfHwgcGF5bG9hZC5tZXNzYWdlIHx8IGZhbGxiYWNrXG4gIH1cbiAgcmV0dXJuIGZhbGxiYWNrXG59XG5cbmNvbnN0IGhhbmRsZVN1Ym1pdCA9IGFzeW5jICgpID0+IHtcbiAgaWYgKCFmb3JtUmVmLnZhbHVlKSByZXR1cm5cblxuICBhd2FpdCBmb3JtUmVmLnZhbHVlLnZhbGlkYXRlKGFzeW5jICh2YWxpZCkgPT4ge1xuICAgIGlmICghdmFsaWQpIHJldHVyblxuXG4gICAgbG9hZGluZy52YWx1ZSA9IHRydWVcbiAgICBlcnJvck1lc3NhZ2UudmFsdWUgPSAnJ1xuICAgIHN1Y2Nlc3NNZXNzYWdlLnZhbHVlID0gJydcbiAgICB0cnkge1xuICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgZm9yZ290UGFzc3dvcmRBcGkoZm9ybSlcbiAgICAgIHNlbnQudmFsdWUgPSB0cnVlXG4gICAgICBzdWNjZXNzTWVzc2FnZS52YWx1ZSA9XG4gICAgICAgIHJlc3VsdC5tZXNzYWdlIHx8XG4gICAgICAgIGDor7fmo4Dmn6UgJHtmb3JtLmVtYWlsfSDnmoTmlLbku7bnrrHvvIjlkKvlnoPlnL7pgq7ku7bvvInvvIzngrnlh7vpk77mjqXlrozmiJDlr4bnoIHph43nva7jgIJgXG4gICAgICBpZiAocmVzdWx0LnJlc2V0VG9rZW4pIHtcbiAgICAgICAgc3VjY2Vzc01lc3NhZ2UudmFsdWUgPSBgJHtzdWNjZXNzTWVzc2FnZS52YWx1ZX0g5rWL6K+V546v5aKDIHJlc2V0VG9rZW7vvJoke3Jlc3VsdC5yZXNldFRva2VufWBcbiAgICAgIH1cbiAgICAgIEVsTWVzc2FnZS5zdWNjZXNzKCfph43nva7pk77mjqXlt7Llj5HpgIHvvIzor7fmn6XmlLbpgq7nrrEnKVxuICAgIH0gY2F0Y2ggKGVycm9yOiB1bmtub3duKSB7XG4gICAgICBlcnJvck1lc3NhZ2UudmFsdWUgPSBnZXRFcnJvck1lc3NhZ2UoZXJyb3IsICfph43nva7pk77mjqXlj5HpgIHlpLHotKXvvIzor7fnqI3lkI7ph43or5UnKVxuICAgIH0gZmluYWxseSB7XG4gICAgICBsb2FkaW5nLnZhbHVlID0gZmFsc2VcbiAgICB9XG4gIH0pXG59XG48L3NjcmlwdD5cblxuPHN0eWxlIHNjb3BlZCBsYW5nPVwic2Nzc1wiPlxuLmF1dGgtcGFnZSB7XG4gIGRpc3BsYXk6IGZsZXg7XG4gIGFsaWduLWl0ZW1zOiBjZW50ZXI7XG4gIGp1c3RpZnktY29udGVudDogY2VudGVyO1xuICBtaW4taGVpZ2h0OiAxMDB2aDtcbiAgcGFkZGluZzogMjRweDtcbiAgYmFja2dyb3VuZDpcbiAgICBsaW5lYXItZ3JhZGllbnQoMTM1ZGVnLCByZ2IoMzcgOTkgMjM1IC8gMTAlKSwgdHJhbnNwYXJlbnQgNDIlKSxcbiAgICBsaW5lYXItZ3JhZGllbnQoMzE1ZGVnLCByZ2IoMTUgMTE4IDExMCAvIDEwJSksIHRyYW5zcGFyZW50IDM4JSksXG4gICAgdmFyKC0tYXBwLWJnKTtcbn1cblxuLmF1dGgtY2FyZCB7XG4gIHdpZHRoOiBtaW4oMTAwJSwgNDIwcHgpO1xuICBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1hcHAtYm9yZGVyKTtcbiAgYm9yZGVyLXJhZGl1czogOHB4O1xuICBiYWNrZ3JvdW5kOiB2YXIoLS1hcHAtc3VyZmFjZSk7XG4gIGJveC1zaGFkb3c6IHZhcigtLWFwcC1zaGFkb3cpO1xuICBwYWRkaW5nOiAzMnB4O1xufVxuXG4uYXV0aC1jYXJkX19icmFuZCB7XG4gIGNvbG9yOiB2YXIoLS1hcHAtcHJpbWFyeSk7XG4gIGZvbnQtc2l6ZTogMTRweDtcbiAgZm9udC13ZWlnaHQ6IDcwMDtcbn1cblxuLmF1dGgtY2FyZF9faW50cm8ge1xuICBoMSB7XG4gICAgbWFyZ2luOiAxMnB4IDAgOHB4O1xuICAgIGZvbnQtc2l6ZTogMjhweDtcbiAgfVxuXG4gIHAge1xuICAgIG1hcmdpbjogMDtcbiAgICBjb2xvcjogdmFyKC0tYXBwLXRleHQtbXV0ZWQpO1xuICAgIGxpbmUtaGVpZ2h0OiAxLjY7XG4gIH1cbn1cblxuLmF1dGgtZm9ybSB7XG4gIG1hcmdpbi10b3A6IDI4cHg7XG59XG5cbi5hdXRoLWZvcm1fX3N1Ym1pdCB7XG4gIHdpZHRoOiAxMDAlO1xuICBtYXJnaW4tdG9wOiA2cHg7XG59XG5cbi5zZW50LWFsZXJ0IHtcbiAgbWFyZ2luLXRvcDogMjRweDtcbn1cblxuLmF1dGgtY2FyZF9fZm9vdGVyIHtcbiAgZGlzcGxheTogZmxleDtcbiAgYWxpZ24taXRlbXM6IGNlbnRlcjtcbiAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7XG4gIGdhcDogNHB4O1xuICBtYXJnaW4tdG9wOiAyMnB4O1xuICBjb2xvcjogdmFyKC0tYXBwLXRleHQtbXV0ZWQpO1xuICBmb250LXNpemU6IDE0cHg7XG59XG48L3N0eWxlPlxuIl0sImZpbGUiOiJDOi9teS1jbGF1ZGUvQ29kZUNvYWNoQUktdnVlL3NyYy92aWV3cy9hdXRoL0ZvcmdvdFBhc3N3b3JkVmlldy52dWUifQ==

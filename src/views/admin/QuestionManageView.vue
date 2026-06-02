@@ -364,9 +364,15 @@
                 </el-empty>
               </template>
               <el-table-column type="selection" width="48" :selectable="isPendingReview" />
-              <el-table-column prop="questionTitle" label="题目" min-width="240" show-overflow-tooltip />
-              <el-table-column prop="targetPosition" label="目标岗位" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="knowledgePoint" label="知识点" min-width="140" show-overflow-tooltip />
+              <el-table-column label="题目" min-width="240" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.questionTitle) }}</template>
+              </el-table-column>
+              <el-table-column label="目标岗位" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.targetPosition) }}</template>
+              </el-table-column>
+              <el-table-column label="知识点" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.knowledgePoint) }}</template>
+              </el-table-column>
               <el-table-column prop="difficulty" label="难度" width="110" />
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
@@ -906,25 +912,25 @@
           <section class="review-detail-section">
             <div class="review-detail-section__title">AI 原始建议</div>
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="题目标题">{{ reviewDetail.questionTitle || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="目标岗位">{{ reviewDetail.targetPosition || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="分类建议">{{ reviewDetail.categorySuggestion || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="题组建议">{{ reviewDetail.groupSuggestion || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="题目标题">{{ displayReviewText(reviewDetail.questionTitle) }}</el-descriptions-item>
+              <el-descriptions-item label="目标岗位">{{ displayReviewText(reviewDetail.targetPosition) }}</el-descriptions-item>
+              <el-descriptions-item label="分类建议">{{ displayReviewText(reviewDetail.categorySuggestion) }}</el-descriptions-item>
+              <el-descriptions-item label="题组建议">{{ displayReviewText(reviewDetail.groupSuggestion) }}</el-descriptions-item>
               <el-descriptions-item label="状态">{{ getReviewStatusLabel(reviewDetail.reviewStatus) }}</el-descriptions-item>
               <el-descriptions-item label="更新时间">{{ reviewDetail.updatedAt || '-' }}</el-descriptions-item>
             </el-descriptions>
             <div class="review-json-grid">
               <div class="review-json-card">
                 <span>题干</span>
-                <pre>{{ reviewDetail.questionContent || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.questionContent) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>参考答案</span>
-                <pre>{{ reviewDetail.referenceAnswer || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.referenceAnswer) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>解析</span>
-                <pre>{{ reviewDetail.analysis || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.analysis) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>追问建议</span>
@@ -1597,6 +1603,19 @@ const formatJsonText = (value?: string) => {
   } catch {
     return value
   }
+}
+
+const hasGarbledText = (value?: string) => {
+  if (!value) return false
+  const compact = value.replace(/\s/g, '')
+  if (/[�]/.test(compact)) return true
+  const questionMarks = compact.match(/\?/g)?.length || 0
+  return questionMarks >= 3 && questionMarks / Math.max(compact.length, 1) >= 0.25
+}
+
+const displayReviewText = (value?: string, fallback = '-') => {
+  if (!value) return fallback
+  return hasGarbledText(value) ? '疑似编码异常，待人工修复' : value
 }
 
 const parseNumberArray = (value?: string): number[] => {
