@@ -27,20 +27,32 @@
             导出题目
           </el-button>
         </div>
-        <div class="question-hero-actions__group question-hero-actions__group--risk">
+        <div v-if="showEmbeddingActions" class="question-hero-actions__group question-hero-actions__group--risk">
           <span><AlertTriangle :size="14" />索引维护</span>
           <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
             <RefreshCw :size="16" />
             向量状态
           </el-button>
-          <el-button type="warning" plain :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
+          <el-button v-if="canRetryEmbedding" type="warning" plain :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
             <RefreshCw :size="16" />
-            重试失败向量
+            {{ embeddingRetryLabel }}
           </el-button>
-          <el-button type="warning" plain :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
-            <RefreshCw :size="16" />
-            重建向量索引
-          </el-button>
+          <el-dropdown trigger="click">
+            <el-button type="warning" plain :disabled="embeddingRebuilding">
+              <MoreHorizontal :size="16" />
+              更多索引操作
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item :disabled="embeddingRebuilding" @click="handleRebuildEmbedding">重建向量索引</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <small>{{ embeddingActionHint }}</small>
+        </div>
+        <div v-else class="question-hero-actions__group question-hero-actions__group--muted">
+          <span>索引维护</span>
+          <small>题库有数据后再进行向量状态检查和索引维护。</small>
         </div>
       </div>
     </section>
@@ -161,16 +173,19 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="操作" width="230" fixed="right">
+          <el-table-column label="操作" width="150">
             <template #default="{ row }">
               <div class="question-row-actions">
                 <el-button link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
-                <span class="question-row-actions__risk">
-                  <el-button link type="warning" @click="handleStatus(row)">
-                    {{ row.status === 1 ? '禁用' : '启用' }}
-                  </el-button>
-                  <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
-                </span>
+                <el-dropdown trigger="click" @command="(command: string) => handleQuestionCommand(row, command)">
+                  <el-button text :icon="MoreHorizontal" aria-label="更多操作" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="status">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -382,21 +397,20 @@
                 </template>
               </el-table-column>
               <el-table-column prop="createdAt" label="生成时间" min-width="170" />
-              <el-table-column label="操作" width="300" fixed="right">
+              <el-table-column label="操作" width="170">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
-                  <el-button link type="success" :disabled="row.reviewStatus !== 'PENDING'" @click="openReviewDrawer(row.id)">
-                    编辑通过
-                  </el-button>
-                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleApproveReview(row.id)">
-                    通过
-                  </el-button>
-                  <el-button link type="danger" :disabled="row.reviewStatus !== 'PENDING'" @click="handleRejectReview(row.id)">
-                    驳回
-                  </el-button>
-                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleCancelReview(row.id)">
-                    作废
-                  </el-button>
+                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleReviewCommand(row.id, command)">
+                    <el-button text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多审核操作" />
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="editApprove">编辑通过</el-dropdown-item>
+                        <el-dropdown-item command="approve">通过</el-dropdown-item>
+                        <el-dropdown-item command="reject" divided>驳回</el-dropdown-item>
+                        <el-dropdown-item command="cancel">作废</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -781,17 +795,20 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="150">
                 <template #default="{ row }">
                   <el-button link type="info" @click="openDuplicateDrawer(row.id)">
                     详情
                   </el-button>
-                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleMergeDuplicate(row.id)">
-                    合并
-                  </el-button>
-                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleIgnoreDuplicate(row.id)">
-                    忽略
-                  </el-button>
+                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleDuplicateCommand(row.id, command)">
+                    <el-button text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多重复题操作" />
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="merge">合并</el-dropdown-item>
+                        <el-dropdown-item command="ignore">忽略</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -1136,7 +1153,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { AlertTriangle, BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
+import { AlertTriangle, BookOpenCheck, Download, MoreHorizontal, Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -1286,6 +1303,7 @@ const duplicateConfig = ref<QuestionDuplicateConfigVO | null>(null)
 const duplicateFeedbackStats = ref<QuestionDuplicateFeedbackStatsVO | null>(null)
 const duplicateEvaluation = ref<QuestionDuplicateEvaluationVO | null>(null)
 const duplicateThresholdSweeping = ref(false)
+const embeddingFailedCount = ref<number | null>(null)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
 const questionError = ref('')
@@ -1415,6 +1433,17 @@ const hasQuestionFilters = computed(() =>
 const questionEmptyDescription = computed(() =>
   hasQuestionFilters.value ? '没有匹配当前筛选条件的题目' : '题库暂无题目，先新增或批量导入'
 )
+const isQuestionBankEmpty = computed(() => !loading.value && !hasQuestionFilters.value && total.value === 0)
+const showEmbeddingActions = computed(() => !isQuestionBankEmpty.value)
+const canRetryEmbedding = computed(() => (embeddingFailedCount.value || 0) > 0)
+const embeddingRetryLabel = computed(() =>
+  embeddingFailedCount.value ? `重试失败向量 ${embeddingFailedCount.value}` : '重试失败向量'
+)
+const embeddingActionHint = computed(() => {
+  if (embeddingFailedCount.value === null) return '先查看向量状态，再处理失败索引。'
+  if (embeddingFailedCount.value > 0) return '检测到失败索引，可按需重试。'
+  return '当前未检测到失败索引。'
+})
 const selectedPendingReviewIds = computed(() =>
   selectedReviewRows.value
     .filter((item) => item.reviewStatus === 'PENDING')
@@ -2116,6 +2145,16 @@ const handleDelete = async (row: AdminQuestionVO) => {
   await fetchQuestions()
 }
 
+const handleQuestionCommand = (row: AdminQuestionVO, command: string) => {
+  if (command === 'status') {
+    void handleStatus(row)
+    return
+  }
+  if (command === 'delete') {
+    void handleDelete(row)
+  }
+}
+
 const handleSearch = () => {
   query.pageNo = 1
   fetchQuestions()
@@ -2363,6 +2402,24 @@ const handleCancelReview = async (id: number) => {
     reviewDrawerVisible.value = false
   }
   await fetchReviews()
+}
+
+const handleReviewCommand = (id: number, command: string) => {
+  if (command === 'editApprove') {
+    void openReviewDrawer(id)
+    return
+  }
+  if (command === 'approve') {
+    void handleApproveReview(id)
+    return
+  }
+  if (command === 'reject') {
+    void handleRejectReview(id)
+    return
+  }
+  if (command === 'cancel') {
+    void handleCancelReview(id)
+  }
 }
 
 const handleApproveReviewWithEdit = async () => {
@@ -2632,6 +2689,7 @@ const handleEmbeddingStats = async () => {
   embeddingStatsLoading.value = true
   try {
     const stats = await getQuestionEmbeddingStatsApi()
+    embeddingFailedCount.value = stats.failed || 0
     const statusLines = (stats.statusCounts || [])
       .map((item) => `${item.status || 'UNKNOWN'}: ${item.count || 0}`)
       .join('\n')
@@ -2671,6 +2729,7 @@ const handleRetryFailedEmbedding = async () => {
   embeddingRetrying.value = true
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
+    embeddingFailedCount.value = Math.max(0, (embeddingFailedCount.value || 0) - (result.retried || 0))
     const errors = result.errors || []
     const deleteSummary = result.vectorDeleted ? `，清理向量 ${result.vectorDeleted || 0} 条` : ''
     const summary = `重试完成：匹配 ${result.matched || 0} 条，已重试 ${result.retried || 0} 条${deleteSummary}`
@@ -2707,15 +2766,31 @@ const handleMergeDuplicate = async (id: number) => {
 }
 
 const handleIgnoreDuplicate = async (id: number) => {
+  await ElMessageBox.confirm(
+    '确认忽略该重复候选？忽略后它会从待处理队列移出，不会建立重复关系。',
+    '忽略重复候选',
+    { type: 'warning', confirmButtonText: '继续填写原因', cancelButtonText: '取消' }
+  )
   const { value } = await ElMessageBox.prompt('请输入忽略原因', '忽略重复候选', {
     inputType: 'textarea',
-    inputPlaceholder: '例如：考察角度不同'
+    inputPlaceholder: '例如：考察角度不同',
+    inputValidator: (value) => Boolean(value?.trim()) || '请输入忽略原因'
   })
   await ignoreQuestionDuplicateReviewApi(id, {
-    ignoredReason: value?.trim() || '确认不是重复题'
+    ignoredReason: value.trim()
   })
   ElMessage.success('重复候选已忽略')
   await refreshDuplicateWorkspace()
+}
+
+const handleDuplicateCommand = (id: number, command: string) => {
+  if (command === 'merge') {
+    void handleMergeDuplicate(id)
+    return
+  }
+  if (command === 'ignore') {
+    void handleIgnoreDuplicate(id)
+  }
 }
 
 const handleBatchMergeDuplicates = async () => {
@@ -2961,6 +3036,17 @@ onUnmounted(() => {
 .question-hero-actions__group--risk {
   border-color: rgba(245, 158, 11, 0.18);
   background: rgba(120, 53, 15, 0.16);
+}
+
+.question-hero-actions__group--muted {
+  border-style: dashed;
+}
+
+.question-hero-actions__group > small {
+  flex-basis: 100%;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .question-row-actions {

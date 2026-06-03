@@ -106,11 +106,20 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="100" fixed="right">
+          <el-table-column label="操作" width="100">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <AppState
+              :type="logError ? 'error' : 'empty'"
+              :title="logError ? 'AI 日志加载失败' : '暂无 AI 调用日志'"
+              :description="logError || '当前筛选条件下没有日志记录。'"
+            >
+              <el-button type="primary" @click="logError ? fetchLogs() : handleReset()">{{ logError ? '重新加载' : '清空筛选' }}</el-button>
+            </AppState>
+          </template>
         </el-table>
       </div>
 
@@ -141,14 +150,46 @@
           <el-descriptions-item label="失败原因">{{ translateFailureReason(detail.failReason || detail.errorMessage) }}</el-descriptions-item>
           <el-descriptions-item label="摘要">{{ displayAiSummary(detail) }}</el-descriptions-item>
           <el-descriptions-item label="脱敏预览">{{ displayAiMaskedPreview(detail) }}</el-descriptions-item>
+          <el-descriptions-item label="原文字段">
+            <span>{{ detail.rawFieldsAvailable ? '已记录，可按权限申请查看' : '未记录原文字段' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.requestPromptHash || detail.responseContentHash" label="内容指纹">
+            请求 {{ detail.requestPromptHash || detail.requestBodyHash || '-' }} / 响应 {{ detail.responseContentHash || detail.responseBodyHash || '-' }}
+          </el-descriptions-item>
         </el-descriptions>
 
-        <h3>请求 Prompt</h3>
-        <pre>{{ detail.requestPrompt || detail.promptContent || detail.requestParams || '-' }}</pre>
-        <h3>Prompt 内容</h3>
-        <pre>{{ detail.promptContent || '-' }}</pre>
-        <h3>响应内容</h3>
-        <pre>{{ detail.responseContent || '-' }}</pre>
+        <el-alert
+          class="sensitive-detail-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="原始 Prompt 和响应可能包含简历、面试回答或调试变量，默认隐藏。"
+        />
+        <div class="raw-detail-toggle">
+          <span>原始内容</span>
+          <div class="raw-detail-actions">
+            <el-button
+              v-if="!rawDetailVisible"
+              type="warning"
+              plain
+              :loading="rawDetailLoading"
+              :disabled="!canViewRawLog || !detail.rawFieldsAvailable"
+              @click="loadRawDetail"
+            >
+              查看原文
+            </el-button>
+            <el-button v-else @click="rawDetailVisible = false">隐藏原文</el-button>
+          </div>
+        </div>
+        <p v-if="!canViewRawLog && detail.rawFieldsAvailable" class="raw-detail-hint">当前账号没有 AI 日志原文查看权限。</p>
+        <template v-if="rawDetailVisible">
+          <h3>原始请求 Prompt</h3>
+          <pre>{{ detail.requestPrompt || detail.promptContent || detail.requestParams || '-' }}</pre>
+          <h3>原始变量 / 请求体</h3>
+          <pre>{{ detail.inputVariablesJson || detail.requestBody || '-' }}</pre>
+          <h3>原始响应内容</h3>
+          <pre>{{ detail.responseContent || detail.responseBody || '-' }}</pre>
+        </template>
       </div>
       <template #footer>
         <div class="admin-detail-dialog__footer">
@@ -164,9 +205,11 @@ import { ElMessage } from 'element-plus'
 import { Activity } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { getAdminAiLogDetailApi, getAdminAiLogsApi } from '@/api/aiAdmin'
+import { getAdminAiLogDetailApi, getAdminAiLogRawApi, getAdminAiLogsApi } from '@/api/aiAdmin'
+import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { AI_SCENE } from '@/constants/enums'
+import { useAuthStore } from '@/stores/auth'
 import type { AiCallLogQueryDTO, AiCallLogVO, AiScene } from '@/types/ai'
 import { translateFailureReason } from '@/utils/adminDisplay'
 
@@ -184,6 +227,10 @@ const drawerVisible = ref(false)
 const logs = ref<AiCallLogVO[]>([])
 const detail = ref<AiCallLogVO | null>(null)
 const total = ref(0)
+const rawDetailVisible = ref(false)
+const rawDetailLoading = ref(false)
+const logError = ref('')
+const authStore = useAuthStore()
 
 const query = reactive<AiCallLogQueryDTO>({
   userId: undefined,
@@ -201,6 +248,7 @@ const failedCount = computed(() =>
 )
 const tokenTotal = computed(() => logs.value.reduce((sum, item) => sum + (item.totalTokens || 0), 0))
 const modelCount = computed(() => new Set(logs.value.map((item) => item.modelName).filter(Boolean)).size)
+const canViewRawLog = computed(() => authStore.hasPermission('admin:ai:log:raw:view'))
 
 const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || value || '-'
 
@@ -243,6 +291,7 @@ const displayAiMaskedPreview = (row: AiCallLogVO) => {
 
 const fetchLogs = async () => {
   loading.value = true
+  logError.value = ''
   try {
     const result = await getAdminAiLogsApi(query)
     logs.value = result.records || []
@@ -250,6 +299,7 @@ const fetchLogs = async () => {
   } catch {
     logs.value = []
     total.value = 0
+    logError.value = '暂时无法获取 AI 调用日志，请稍后重试或检查服务状态。'
   } finally {
     loading.value = false
   }
@@ -257,6 +307,7 @@ const fetchLogs = async () => {
 
 const openDetail = async (row: AiCallLogVO) => {
   try {
+    rawDetailVisible.value = false
     detail.value = await getAdminAiLogDetailApi(row.id)
     drawerVisible.value = true
   } catch {
@@ -281,6 +332,20 @@ const handleReset = () => {
     pageSize: 10
   })
   fetchLogs()
+}
+
+const loadRawDetail = async () => {
+  if (!detail.value?.id || !canViewRawLog.value) return
+  rawDetailLoading.value = true
+  try {
+    detail.value = await getAdminAiLogRawApi(detail.value.id)
+    rawDetailVisible.value = true
+  } catch {
+    rawDetailVisible.value = false
+    ElMessage.error('没有权限或原文加载失败')
+  } finally {
+    rawDetailLoading.value = false
+  }
 }
 
 onMounted(fetchLogs)
@@ -324,6 +389,39 @@ onMounted(fetchLogs)
 .admin-detail-dialog__footer {
   display: flex;
   justify-content: flex-end;
+}
+
+.sensitive-detail-alert {
+  margin-top: 18px;
+}
+
+.raw-detail-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.raw-detail-toggle span {
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.raw-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.raw-detail-hint {
+  margin: 8px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .log-detail {

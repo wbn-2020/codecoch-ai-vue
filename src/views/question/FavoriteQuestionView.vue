@@ -27,13 +27,19 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="favorites" :row-key="getQuestionId">
+          <template #empty>
+            <AppState type="empty" title="还没有收藏题目" :description="favoriteEmptyDescription">
+              <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
+              <el-button v-else type="primary" @click="router.push('/questions')">去题库收藏题目</el-button>
+            </AppState>
+          </template>
           <el-table-column prop="title" label="题目" min-width="240" show-overflow-tooltip />
           <el-table-column prop="categoryName" label="分类" width="140" />
           <el-table-column label="难度" width="100">
             <template #default="{ row }">{{ getOptionLabel(difficultyOptions, row.difficulty) }}</template>
           </el-table-column>
           <el-table-column prop="createdAt" label="收藏时间" min-width="170" />
-          <el-table-column label="操作" width="170" fixed="right">
+          <el-table-column label="操作" width="170">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/questions/${getQuestionId(row)}`)">详情</el-button>
               <el-button link type="danger" :loading="removingId === getQuestionId(row)" @click="removeFavorite(row)">
@@ -61,10 +67,11 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getFavoriteQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
+import AppState from '@/components/common/AppState.vue'
 import { difficultyOptions } from '@/constants/enums'
 import type { FavoriteQuestionVO, QuestionQueryDTO } from '@/types/question'
 import { getOptionLabel } from '@/utils/format'
@@ -81,6 +88,11 @@ const query = reactive<QuestionQueryDTO>({
   pageNo: 1,
   pageSize: 10
 })
+
+const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
+const favoriteEmptyDescription = computed(() =>
+  hasFilters.value ? '没有匹配当前筛选条件的收藏题。' : '收藏高价值题目后，这里会形成你的面试复习清单。'
+)
 
 const fetchFavorites = async () => {
   loading.value = true

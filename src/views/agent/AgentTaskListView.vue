@@ -72,29 +72,44 @@
             <span v-else>--</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="310" fixed="right">
+        <el-table-column label="操作" width="150">
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :loading="isTaskActionPending(row, 'start')"
-              :disabled="isTaskPending(row) || row.status !== 'TODO'"
-              @click="handleStartTask(row)"
-            >
-              开始
-            </el-button>
-            <el-button link type="primary" :disabled="isTaskPending(row) || row.status === 'DONE'" @click="openCompleteDialog(row)">完成</el-button>
-            <el-button link type="info" :disabled="isTaskPending(row) || row.status === 'DONE' || row.status === 'SKIPPED'" @click="openSkipDialog(row)">跳过</el-button>
-            <el-button
-              link
-              type="warning"
-              :loading="isTaskActionPending(row, 'restore')"
-              :disabled="isTaskPending(row) || row.status !== 'SKIPPED'"
-              @click="handleRestoreTask(row)"
-            >
-              恢复
-            </el-button>
-            <el-button link type="info" :disabled="isTaskPending(row)" @click="openFeedbackDialog(row)">反馈</el-button>
+            <div class="task-table-actions">
+              <el-button
+                v-if="row.status === 'TODO'"
+                link
+                type="primary"
+                :loading="isTaskActionPending(row, 'start')"
+                :disabled="isTaskPending(row)"
+                @click="handleStartTask(row)"
+              >
+                开始
+              </el-button>
+              <el-button v-else-if="row.status === 'DOING'" link type="success" :disabled="isTaskPending(row)" @click="openCompleteDialog(row)">完成</el-button>
+              <el-button
+                v-else-if="row.status === 'SKIPPED'"
+                link
+                type="warning"
+                :loading="isTaskActionPending(row, 'restore')"
+                :disabled="isTaskPending(row)"
+                @click="handleRestoreTask(row)"
+              >
+                恢复
+              </el-button>
+              <el-button v-else-if="row.status === 'DONE'" link disabled>已完成</el-button>
+              <el-button v-else link type="primary" :disabled="isTaskPending(row)" @click="openCompleteDialog(row)">完成</el-button>
+              <el-dropdown trigger="click">
+                <el-button link type="info" :icon="MoreHorizontal">更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="row.status !== 'DONE'" :disabled="isTaskPending(row)" @click="openCompleteDialog(row)">标记完成</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status !== 'DONE' && row.status !== 'SKIPPED'" :disabled="isTaskPending(row)" @click="openSkipDialog(row)">跳过任务</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status === 'SKIPPED'" :disabled="isTaskPending(row)" @click="handleRestoreTask(row)">恢复待办</el-dropdown-item>
+                    <el-dropdown-item divided :disabled="isTaskPending(row)" @click="openFeedbackDialog(row)">提交反馈</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -143,7 +158,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { CalendarDays } from 'lucide-vue-next'
+import { CalendarDays, MoreHorizontal } from 'lucide-vue-next'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -343,6 +358,10 @@ const openSkipDialog = (task: AgentTaskVO) => {
 const submitAction = async () => {
   const task = selectedTask.value
   if (!task) return
+  if (dialogMode.value === 'skip' && !note.value.trim()) {
+    ElMessage.warning('请填写跳过原因')
+    return
+  }
   await withTaskPending(task, dialogMode.value, async () => {
     if (dialogMode.value === 'complete') {
       await completeAgentTaskApi(task.id, { note: note.value || undefined })
@@ -420,6 +439,16 @@ onMounted(fetchTasks)
 .task-cell span {
   color: var(--app-text-muted);
   font-size: 12px;
+}
+
+.task-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-table-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .pagination-wrap {

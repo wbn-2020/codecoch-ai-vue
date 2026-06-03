@@ -52,7 +52,13 @@ export const setupRouterGuards = (router: Router) => {
       return typeof featureFlag === 'string' ? [featureFlag] : []
     })
     if (requiredFeatureFlags.some((featureFlag) => !isFeatureEnabled(featureFlag))) {
-      return '/404'
+      return {
+        path: '/feature-unavailable',
+        query: {
+          title: String(to.meta.title || ''),
+          redirect: to.fullPath
+        }
+      }
     }
 
     if (!authStore.isLoggedIn) {

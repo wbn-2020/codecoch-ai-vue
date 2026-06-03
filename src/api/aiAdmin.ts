@@ -250,3 +250,8 @@ export const getAdminAiLogDetailApi = async (id: number) => {
   const result = await request.get<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}`)
   return normalizeAiCallLog(result)
 }
+
+export const getAdminAiLogRawApi = async (id: number) => {
+  const result = await request.get<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}/raw`)
+  return normalizeAiCallLog(result)
+}

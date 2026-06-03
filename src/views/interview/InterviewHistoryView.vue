@@ -19,6 +19,11 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="interviews" row-key="interviewId">
+          <template #empty>
+            <AppState type="empty" title="还没有模拟面试记录" description="创建一次面试后，可以在这里继续进入房间、查看报告和复盘得分。">
+              <el-button type="primary" @click="router.push('/interviews/create')">创建面试</el-button>
+            </AppState>
+          </template>
           <el-table-column prop="interviewName" label="面试名称" min-width="180" show-overflow-tooltip />
           <el-table-column prop="interviewMode" label="模式" min-width="150" />
           <el-table-column prop="targetPosition" label="目标岗位" min-width="150" />
@@ -32,7 +37,7 @@
           <el-table-column prop="totalScore" label="总分" width="90" />
           <el-table-column prop="startedAt" label="开始时间" min-width="170" />
           <el-table-column prop="finishedAt" label="结束时间" min-width="170" />
-          <el-table-column label="操作" width="220" fixed="right">
+          <el-table-column label="操作" width="220">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/interviews/${row.interviewId}`)">详情</el-button>
               <el-button link @click="router.push(`/interviews/room/${row.interviewId}`)">房间</el-button>
@@ -62,6 +67,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getInterviewsApi } from '@/api/interview'
+import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { InterviewListVO, InterviewQueryDTO } from '@/types/interview'
 

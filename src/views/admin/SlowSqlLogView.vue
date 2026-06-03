@@ -51,7 +51,7 @@
           <el-table-column prop="thresholdMs" label="阈值" width="110" />
           <el-table-column prop="resultSize" label="结果/行数" width="110" />
           <el-table-column prop="sqlText" label="SQL" min-width="320" show-overflow-tooltip />
-          <el-table-column label="操作" width="100" fixed="right">
+          <el-table-column label="操作" width="100">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             </template>
@@ -82,6 +82,8 @@
         <el-descriptions-item label="阈值">{{ currentLog.thresholdMs ?? '-' }} ms</el-descriptions-item>
         <el-descriptions-item label="数据源">{{ currentLog.databaseName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="参数摘要">{{ currentLog.parameterSummary || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="SQL 指纹">{{ currentLog.sqlTextHash || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="参数指纹">{{ currentLog.parameterSummaryHash || '-' }}</el-descriptions-item>
       </el-descriptions>
       <pre v-if="currentLog?.sqlText" class="sql-block">{{ currentLog.sqlText }}</pre>
     </el-drawer>

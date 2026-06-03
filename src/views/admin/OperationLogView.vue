@@ -130,6 +130,11 @@
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="错误">{{ currentLog.errorMessage || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="请求参数预览">{{ currentLog.requestArgsPreview || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="响应预览">{{ currentLog.responsePreview || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="内容指纹">
+          请求 {{ currentLog.requestArgsHash || '-' }} / 响应 {{ currentLog.responseHash || '-' }}
+        </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
   </div>

@@ -6,6 +6,7 @@ import type {
   AdminLogSummaryVO,
   AdminListQuery,
   AdminNotificationVO,
+  AdminTaskImpactPreviewVO,
   AiModelConfigDTO,
   AiModelConfigVO,
   AsyncTaskVO,
@@ -57,6 +58,11 @@ const normalizeTask = (item: any): AsyncTaskVO => ({
   status: pick(item, 'status', 'taskStatus', 'task_status') || 'UNKNOWN',
   deadLetter: item.deadLetter ?? item.isDeadLetter ?? item.deadLetterFlag ?? item.dead_letter,
   errorMessage: pick(item, 'errorMessage', 'failReason', 'failureReason', 'failure_reason'),
+  payloadPreview: pick(item, 'payloadPreview', 'payload_preview'),
+  payloadHash: pick(item, 'payloadHash', 'payload_hash'),
+  resultPreview: pick(item, 'resultPreview', 'result_preview'),
+  resultHash: pick(item, 'resultHash', 'result_hash'),
+  rawFieldsAvailable: pick(item, 'rawFieldsAvailable', 'raw_fields_available'),
   createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
   updatedAt: pick(item, 'updatedAt', 'updateTime', 'updated_at'),
   finishedAt: pick(item, 'finishedAt', 'finishTime', 'completedAt', 'completed_at')
@@ -85,8 +91,14 @@ const normalizeOperationLog = (item: any): OperationLogVO => ({
   traceId: pick(item, 'traceId', 'trace_id'),
   requestUri: pick(item, 'requestUri', 'request_uri', 'uri', 'path'),
   requestArgs: pick(item, 'requestArgs', 'request_args'),
+  requestArgsPreview: pick(item, 'requestArgsPreview', 'request_args_preview', 'requestArgs', 'request_args'),
+  requestArgsHash: pick(item, 'requestArgsHash', 'request_args_hash'),
   response: pick(item, 'response'),
+  responsePreview: pick(item, 'responsePreview', 'response_preview', 'response'),
+  responseHash: pick(item, 'responseHash', 'response_hash'),
+  rawAvailable: Boolean(pick(item, 'rawAvailable', 'raw_available')),
   ip: pick(item, 'ip', 'ipAddress', 'ip_address'),
+  userAgentSummary: pick(item, 'userAgentSummary', 'user_agent_summary'),
   costTime: pick(item, 'costTime', 'costMillis', 'costMs', 'cost_ms', 'duration'),
   errorMessage: pick(item, 'errorMessage', 'errorMsg', 'error_msg'),
   createdAt: pick(item, 'createdAt', 'operationTime', 'createTime', 'created_at')
@@ -123,8 +135,12 @@ const normalizeSlowSqlLog = (item: any): SlowSqlLogVO => ({
   id: normalizeId(item),
   mapperId: pick(item, 'mapperId', 'mapper_id'),
   sqlCommandType: pick(item, 'sqlCommandType', 'sql_command_type'),
-  sqlText: pick(item, 'sqlText', 'sql_text'),
+  sqlText: pick(item, 'sqlTextPreview', 'sql_text_preview', 'sqlText', 'sql_text'),
+  sqlTextPreview: pick(item, 'sqlTextPreview', 'sql_text_preview', 'sqlText', 'sql_text'),
+  sqlTextHash: pick(item, 'sqlTextHash', 'sql_text_hash'),
   parameterSummary: pick(item, 'parameterSummary', 'parameter_summary'),
+  parameterSummaryHash: pick(item, 'parameterSummaryHash', 'parameter_summary_hash'),
+  rawAvailable: Boolean(pick(item, 'rawAvailable', 'raw_available')),
   databaseName: pick(item, 'databaseName', 'database_name'),
   costMs: pick(item, 'costMs', 'cost_ms', 'costTime', 'duration'),
   thresholdMs: pick(item, 'thresholdMs', 'threshold_ms'),
@@ -204,10 +220,17 @@ export const getAdminTasksApi = (params: AdminListQuery) =>
 export const getAdminTaskDetailApi = (id: number) =>
   request.get<any, any>(`/admin/tasks/${id}`).then(normalizeTask)
 
-export const retryAdminTaskApi = (id: number) => request.post<null, null>(`/admin/tasks/${id}/retry`)
+export const getAdminTaskRetryPreviewApi = (id: number) =>
+  request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/retry-preview`)
 
-export const retryAdminDeadLetterTaskApi = (id: number) =>
-  request.post<null, null>(`/admin/tasks/${id}/dead-letter/retry`)
+export const retryAdminTaskApi = (id: number, note: string) =>
+  request.post<null, null>(`/admin/tasks/${id}/retry`, { note })
+
+export const getAdminDeadLetterRetryPreviewApi = (id: number) =>
+  request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/dead-letter/retry-preview`)
+
+export const retryAdminDeadLetterTaskApi = (id: number, note: string) =>
+  request.post<null, null>(`/admin/tasks/${id}/dead-letter/retry`, { note })
 
 export const getAdminNotificationsApi = (params: AdminListQuery) =>
   request

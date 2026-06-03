@@ -18,6 +18,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/forgot-password', name: 'ForgotPassword', component: ForgotPasswordView, meta: { public: true, title: '找回密码' } },
   { path: '/reset-password', name: 'ResetPassword', component: ResetPasswordView, meta: { public: true, title: '重置密码' } },
   { path: '/auth-unavailable', name: 'AuthUnavailable', component: () => import('@/views/error/AuthUnavailableView.vue'), meta: { public: true, title: '认证服务暂不可用' } },
+  { path: '/feature-unavailable', name: 'FeatureUnavailable', component: () => import('@/views/error/FeatureUnavailableView.vue'), meta: { public: true, title: '能力暂未开放' } },
   { path: '/403', name: 'Forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { public: true, title: '无权限' } },
   { path: '/404', name: 'NotFound', component: () => import('@/views/error/NotFoundView.vue'), meta: { public: true, title: '页面不存在' } },
   {

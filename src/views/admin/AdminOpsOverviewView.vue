@@ -509,6 +509,7 @@ import { rebuildQuestionEmbeddingApi, retryFailedQuestionEmbeddingApi, type Ques
 import type { KnowledgeVectorRebuildVO } from '@/api/v4'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
+import { appConfig } from '@/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorFailureDetailsVO, VectorIndexJobVO, VectorStoreHealthVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
@@ -920,6 +921,10 @@ const openQuestionFailure = (questionId?: number) => {
 
 const openKnowledgeFailure = (documentId?: number, chunkId?: number) => {
   if (!documentId && !chunkId) return
+  if (!appConfig.enableV4Preview) {
+    ElMessage.info('个人知识库能力暂未开放，已保留失败线索供后续处理。')
+    return
+  }
   router.push({
     path: '/knowledge',
     query: {

@@ -93,30 +93,41 @@
                     <p v-if="task.reason" class="task-reason">{{ task.reason }}</p>
                   </div>
                   <div class="task-actions">
-                    <el-button v-if="task.actionUrl" size="small" :icon="ExternalLink" @click="goAction(task.actionUrl)">去处理</el-button>
                     <el-button
+                      v-if="task.status === 'TODO'"
                       size="small"
                       type="primary"
-                      plain
                       :loading="isTaskActionPending(task, 'start')"
-                      :disabled="isTaskPending(task) || task.status !== 'TODO'"
+                      :disabled="isTaskPending(task)"
                       @click="handleStartTask(task)"
                     >
                       开始
                     </el-button>
-                    <el-button size="small" type="success" plain :disabled="isTaskPending(task) || task.status === 'DONE'" @click="openCompleteDialog(task)">完成</el-button>
-                    <el-button size="small" plain :disabled="isTaskPending(task) || task.status === 'DONE' || task.status === 'SKIPPED'" @click="openSkipDialog(task)">跳过</el-button>
+                    <el-button v-else-if="task.status === 'DOING'" size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
                     <el-button
+                      v-else-if="task.status === 'SKIPPED'"
                       size="small"
                       type="warning"
-                      plain
                       :loading="isTaskActionPending(task, 'restore')"
-                      :disabled="isTaskPending(task) || task.status !== 'SKIPPED'"
+                      :disabled="isTaskPending(task)"
                       @click="handleRestoreTask(task)"
                     >
                       恢复
                     </el-button>
-                    <el-button size="small" :icon="MessageSquare" :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">反馈</el-button>
+                    <el-button v-else-if="task.status === 'DONE'" size="small" disabled>已完成</el-button>
+                    <el-button v-else size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
+                    <el-dropdown trigger="click">
+                      <el-button size="small" text class="task-more-button" :icon="MoreHorizontal">更多</el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item v-if="task.actionUrl" @click="goAction(task.actionUrl)">打开任务入口</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE'" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE' && task.status !== 'SKIPPED'" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
+                          <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
                   </div>
                 </article>
                 <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="没有从今日任务接口读取到任务。" />
@@ -132,8 +143,23 @@
         <el-form-item label="日期">
           <el-date-picker v-model="generateForm.date" type="date" value-format="YYYY-MM-DD" :clearable="false" />
         </el-form-item>
-        <el-form-item label="目标岗位 ID">
-          <el-input-number v-model="generateForm.targetJobId" :min="1" controls-position="right" placeholder="不填则使用主目标岗位" />
+        <el-form-item label="目标岗位">
+          <el-select
+            v-model="generateForm.targetJobId"
+            :loading="targetLoading"
+            clearable
+            filterable
+            placeholder="默认使用当前主目标"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="target in targets"
+              :key="target.id"
+              :label="formatTargetOption(target)"
+              :value="target.id"
+            />
+          </el-select>
+          <p class="form-hint">{{ currentTargetHint }}</p>
         </el-form-item>
         <el-form-item label="期望任务数">
           <el-input-number v-model="generateForm.taskCount" :min="1" :max="5" controls-position="right" />
@@ -179,8 +205,8 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-import { ExternalLink, MessageSquare, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { MoreHorizontal, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -194,9 +220,11 @@ import {
   startAgentTaskApi,
   submitAgentFeedbackApi
 } from '@/api/agent'
+import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
+import type { TargetJobVO } from '@/types/jobTarget'
 import { formatLocalDate } from '@/utils/format'
 
 const router = useRouter()
@@ -209,6 +237,10 @@ const queryDate = ref(today)
 const plan = ref<DailyPlanVO>()
 const todayTasks = ref<AgentTodayTaskVO>()
 const currentTargetJobId = ref<number | undefined>()
+const targets = ref<TargetJobVO[]>([])
+const currentTarget = ref<TargetJobVO | null>(null)
+const targetLoading = ref(false)
+const targetLoadError = ref('')
 const generateDialogVisible = ref(false)
 const taskDialogVisible = ref(false)
 const taskDialogMode = ref<'complete' | 'skip'>('complete')
@@ -315,6 +347,13 @@ const planStatusMessage = computed(() => {
   }
   return ''
 })
+const currentTargetHint = computed(() => {
+  if (targetLoading.value) return '正在读取岗位目标列表...'
+  if (targetLoadError.value) return targetLoadError.value
+  if (currentTarget.value) return `不选择时使用当前主目标：${formatTargetOption(currentTarget.value)}`
+  if (!targets.value.length) return '还没有岗位目标，系统会尝试使用默认主目标；也可以先去岗位目标页创建。'
+  return '不选择时使用当前主目标。'
+})
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -355,6 +394,33 @@ const displayTaskDescription = (task: AgentTaskVO) => {
   return map[task.taskType || ''] || task.description || '暂无任务描述'
 }
 
+const formatTargetOption = (target: TargetJobVO) => {
+  const title = target.jobTitle || `岗位 #${target.id}`
+  const company = target.companyName || '未填写公司'
+  const current = target.currentFlag === 1 ? ' · 当前' : ''
+  return `${title} · ${company}${current}`
+}
+
+const loadJobTargets = async () => {
+  if (targetLoading.value) return
+  targetLoading.value = true
+  targetLoadError.value = ''
+  try {
+    const [list, current] = await Promise.all([
+      getJobTargetsApi({ pageNo: 1, pageSize: 50 }),
+      getCurrentJobTargetApi().catch(() => null)
+    ])
+    targets.value = list || []
+    currentTarget.value = current || null
+  } catch (error) {
+    targets.value = []
+    currentTarget.value = null
+    targetLoadError.value = getErrorMessage(error) || '岗位目标列表暂时加载失败，不选择时仍会按当前主目标生成。'
+  } finally {
+    targetLoading.value = false
+  }
+}
+
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -382,9 +448,23 @@ const openGenerateDialog = () => {
   generateForm.date = queryDate.value
   generateForm.targetJobId = currentTargetJobId.value
   generateDialogVisible.value = true
+  if (!targets.value.length) {
+    void loadJobTargets()
+  }
 }
 
 const handleGenerate = async () => {
+  if (generateForm.forceRegenerate && plan.value?.runId) {
+    try {
+      await ElMessageBox.confirm(
+        '强制重新生成会重新创建当天计划，并刷新当前任务视图。请确认已有任务状态和反馈已经记录。',
+        '重新生成今日计划',
+        { type: 'warning', confirmButtonText: '确认重新生成', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+  }
   generating.value = true
   errorMessage.value = ''
   try {
@@ -421,6 +501,10 @@ const openSkipDialog = (task: AgentTaskVO) => {
 const submitTaskAction = async () => {
   const task = selectedTask.value
   if (!task) return
+  if (taskDialogMode.value === 'skip' && !taskNote.value.trim()) {
+    ElMessage.warning('请填写跳过原因')
+    return
+  }
   await withTaskPending(task, taskDialogMode.value, async () => {
     if (taskDialogMode.value === 'complete') {
       await completeAgentTaskApi(task.id, { note: taskNote.value || undefined })
@@ -482,7 +566,10 @@ const goAction = (actionUrl: string) => {
   ElMessage.warning('任务链接暂不支持跳转到站外地址')
 }
 
-onMounted(loadPage)
+onMounted(() => {
+  void loadJobTargets()
+  void loadPage()
+})
 </script>
 
 <style scoped lang="scss">
@@ -634,6 +721,17 @@ onMounted(loadPage)
 .task-actions {
   align-content: flex-start;
   justify-content: flex-end;
+}
+
+.task-more-button {
+  padding-inline: 6px;
+}
+
+.form-hint {
+  margin: 6px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media (max-width: 900px) {
