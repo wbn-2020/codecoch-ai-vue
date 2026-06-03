@@ -62,6 +62,11 @@ export const getAdminDashboardOverviewApi = () => {
     .then(normalizeAdminDashboardOverview)
 }
 
+const isCompatibilityNotFound = (error: unknown) => {
+  const payload = error as { code?: number; response?: { status?: number; data?: { code?: number } } }
+  return payload.response?.status === 404 || payload.code === 404 || payload.response?.data?.code === 404
+}
+
 const normalizeV3DashboardOverview = (data: Partial<V3DashboardOverviewVO> = {}): V3DashboardOverviewVO => {
   const userOverview = normalizeUserDashboardOverview(data)
   const recommendedQuestions = Array.isArray(data.recommendedQuestions)
@@ -91,6 +96,9 @@ export const getUserDashboardOverviewApi = async () => {
     })
     return normalizeUserDashboardOverview(data)
   } catch (error) {
+    if (!isCompatibilityNotFound(error)) {
+      throw error
+    }
     const data = await request.get<UserDashboardOverviewVO, UserDashboardOverviewVO>('/dashboard/overview', {
       silentError: true
     })

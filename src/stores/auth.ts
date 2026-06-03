@@ -153,8 +153,8 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async login(data: LoginDTO) {
-      const result = await loginApi(data)
+    async login(data: LoginDTO, options?: { silentError?: boolean }) {
+      const result = await loginApi(data, options)
       this.setToken(result.token)
       const userInfo = normalizeUser(result)
       this.setUserInfo(userInfo)
@@ -162,8 +162,8 @@ export const useAuthStore = defineStore('auth', {
       return result
     },
 
-    async register(data: RegisterDTO) {
-      return registerApi(data)
+    async register(data: RegisterDTO, options?: { silentError?: boolean }) {
+      return registerApi(data, options)
     },
 
     async logout() {
@@ -201,6 +201,17 @@ export const useAuthStore = defineStore('auth', {
       }
 
       return this.fetchCurrentUser()
+    },
+
+    markAuthStale() {
+      this.userInfo = null
+      this.roles = []
+      this.permissions = []
+      this.tokenVerified = false
+      storage.remove(STORAGE_KEYS.userInfo)
+      storage.remove(STORAGE_KEYS.roles)
+      storage.remove(STORAGE_KEYS.permissions)
+      clearAllRequestCache()
     },
 
     clearAuth() {

@@ -5,27 +5,27 @@
       <div class="hero-copy">
         <div class="hero-eyebrow">
           <Sparkles :size="16" />
-          <span>AI Java Interview Workspace</span>
+          <span>Today Focus</span>
         </div>
         <h1>欢迎回来，{{ displayName }}</h1>
         <p>
-          这里汇总你的简历、面试、学习计划和今日任务，帮助你快速回到下一步训练。
+          先看今天最值得推进的准备动作，再进入简历、题库或模拟面试，不用在多个模块里自己找路。
         </p>
         <div class="hero-actions">
-          <el-button type="primary" size="large" @click="go('/interviews/create')">
-            <PlayCircle :size="18" />
-            开始 AI 模拟面试
+          <el-button type="primary" size="large" @click="go('/agent/today')">
+            <BookOpenCheck :size="18" />
+            查看今日任务
           </el-button>
-          <el-button size="large" @click="go('/resumes')">
-            <FileText :size="18" />
-            进入简历中心
+          <el-button size="large" @click="go(primaryNextAction.path)">
+            <component :is="primaryNextAction.icon" :size="18" />
+            {{ primaryNextAction.cta }}
           </el-button>
         </div>
       </div>
 
       <div class="hero-panel">
         <div class="panel-header">
-          <span>Dashboard Overview</span>
+          <span>今日准备概览</span>
           <span class="cc-badge cc-badge--streaming">
             <span class="cc-badge__dot"></span>
             账号概览
@@ -36,11 +36,10 @@
             <span></span><span></span><span></span>
           </div>
           <code>
-            <span>$ codecoach dashboard --user=current</span>
-            <span>generatedAt: {{ formatDateTime(overview?.generatedAt) }}</span>
-            <span>resumeCount: {{ overview?.resumeCount ?? 0 }}</span>
-            <span>interviewCount: {{ overview?.interviewCount ?? 0 }}</span>
-            <span>todayTasks: {{ overview?.todayCompletedTaskCount ?? 0 }}/{{ overview?.todayTaskCount ?? 0 }}</span>
+            <span>生成时间：{{ formatDateTime(overview?.generatedAt) }}</span>
+            <span>今日任务：{{ todayDoneCount }}/{{ todayTotalCount }}</span>
+            <span>默认下一步：{{ primaryNextAction.title }}</span>
+            <span>错题复盘：{{ wrongQuestions.length }} 道待关注</span>
           </code>
         </div>
       </div>
@@ -70,6 +69,41 @@
         <strong class="metric-card__value">{{ item.value }}</strong>
         <span class="metric-card__hint">{{ item.hint }}</span>
       </button>
+    </section>
+
+    <!-- Today's Focus -->
+    <section class="cc-glass dashboard-section today-focus-section" v-loading="agentTasksLoading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">今日闭环</p>
+          <h2>今天先做这几件事</h2>
+        </div>
+        <el-button text @click="go('/agent/today')">进入今日任务</el-button>
+      </div>
+
+      <div v-if="agentTasksError" class="dashboard-inline-error">
+        <AlertTriangle :size="16" />
+        <span>{{ agentTasksError }}</span>
+        <el-button text @click="fetchAgentTasks">重试</el-button>
+      </div>
+
+      <div v-else class="today-focus-grid">
+        <button
+          v-for="item in todayFocusCards"
+          :key="item.key"
+          class="today-focus-card"
+          type="button"
+          @click="go(item.path)"
+        >
+          <span class="today-focus-card__index">{{ item.index }}</span>
+          <span class="today-focus-card__content">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.desc }}</span>
+            <small>{{ item.reason }}</small>
+          </span>
+          <span class="cc-badge" :class="badgeClass(item.badge)">{{ item.badge }}</span>
+        </button>
+      </div>
     </section>
 
     <!-- Quick Actions -->
@@ -275,12 +309,15 @@ import type { Component } from 'vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getTodayAgentTasksApi } from '@/api/agent'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getWrongQuestionsApi } from '@/api/question'
 import { useAuthStore } from '@/stores/auth'
+import type { AgentTaskVO } from '@/types/agent'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
+import { formatLocalDate } from '@/utils/format'
 
 interface MetricItem {
   label: string
@@ -302,9 +339,100 @@ const overview = ref<UserDashboardOverviewVO | null>(null)
 const wrongQuestionsLoading = ref(false)
 const wrongQuestionsError = ref('')
 const wrongQuestions = ref<WrongQuestionVO[]>([])
+const agentTasksLoading = ref(false)
+const agentTasksError = ref('')
+const agentTasks = ref<AgentTaskVO[]>([])
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
+const todayTotalCount = computed(() => agentTasks.value.length || overview.value?.todayTaskCount || 0)
+const todayDoneCount = computed(() =>
+  agentTasks.value.length
+    ? agentTasks.value.filter((task) => task.status === 'DONE').length
+    : overview.value?.todayCompletedTaskCount || 0
+)
+
+const primaryNextAction = computed(() => {
+  const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
+  if (firstTodo) {
+    return {
+      title: displayAgentTaskTitle(firstTodo),
+      cta: '继续今日任务',
+      path: firstTodo.actionUrl && firstTodo.actionUrl.startsWith('/') ? firstTodo.actionUrl : '/agent/today',
+      icon: BookOpenCheck
+    }
+  }
+
+  if (!overview.value?.resumeCount) {
+    return {
+      title: '完善第一份简历',
+      cta: '完善简历',
+      path: '/resumes',
+      icon: FileText
+    }
+  }
+
+  if (!overview.value?.recentInterview) {
+    return {
+      title: '完成一次模拟面试',
+      cta: '开始面试',
+      path: '/interviews/create',
+      icon: PlayCircle
+    }
+  }
+
+  return {
+    title: wrongQuestions.value.length ? '复盘最近错题' : '生成今日训练计划',
+    cta: wrongQuestions.value.length ? '复盘错题' : '生成计划',
+    path: wrongQuestions.value.length ? '/questions/wrong-records' : '/agent/today',
+    icon: wrongQuestions.value.length ? RefreshCcw : BookOpenCheck
+  }
+})
+
+const todayFocusCards = computed(() => {
+  const openTasks = agentTasks.value.filter((task) => task.status !== 'DONE' && task.status !== 'SKIPPED').slice(0, 3)
+  if (openTasks.length) {
+    return openTasks.map((task, index) => ({
+      key: `agent-${task.id}`,
+      index: index + 1,
+      title: displayAgentTaskTitle(task),
+      desc: displayAgentTaskDescription(task),
+      reason: task.reason || task.relatedSkillName || '来自今日训练任务',
+      path: task.actionUrl && task.actionUrl.startsWith('/') ? task.actionUrl : '/agent/today',
+      badge: formatStatus(task.status)
+    }))
+  }
+
+  return [
+    {
+      key: 'generate-plan',
+      index: 1,
+      title: '生成今日训练计划',
+      desc: '根据目标岗位和最近训练记录生成 3-5 个任务。',
+      reason: '适合每天开始训练前先执行',
+      path: '/agent/today',
+      badge: '待处理'
+    },
+    {
+      key: 'resume',
+      index: 2,
+      title: overview.value?.resumeCount ? '检查简历匹配状态' : '补充第一份简历',
+      desc: overview.value?.resumeCount ? resumeOptimizeText.value : '上传或创建简历后，系统才能给出岗位匹配建议。',
+      reason: '简历证据会影响任务推荐质量',
+      path: '/resumes',
+      badge: entryStatusText(findEntryStatus('resume')?.status)
+    },
+    {
+      key: 'interview-or-wrong',
+      index: 3,
+      title: wrongQuestions.value.length ? '复盘最近错题' : '完成一次模拟面试',
+      desc: wrongQuestions.value.length ? `${wrongQuestions.value.length} 道错题可用于校准薄弱点。` : '用一次模拟面试补充系统对表达和项目深度的判断。',
+      reason: '练习证据越多，明天的计划越准',
+      path: wrongQuestions.value.length ? '/questions/wrong-records' : '/interviews/create',
+      badge: wrongQuestions.value.length ? '待复习' : '待处理'
+    }
+  ]
+})
 
 const metrics = computed<MetricItem[]>(() => [
   {
@@ -333,11 +461,11 @@ const metrics = computed<MetricItem[]>(() => [
   },
   {
     label: '今日任务',
-    value: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0}`,
+    value: `${todayDoneCount.value}/${todayTotalCount.value}`,
     hint: '今天需要完成的任务',
     icon: BookOpenCheck,
     tone: 'tone-green',
-    path: '/study-plans'
+    path: '/agent/today'
   },
   {
     label: '最近报告分',
@@ -422,7 +550,7 @@ const resumeOptimizeText = computed(() => {
 
 const activePlanText = computed(() => {
   const plan = overview.value?.activeStudyPlan
-  if (!plan) return '暂无 active 计划，可从报告生成'
+  if (!plan) return '暂无进行中的计划，可从面试报告或差距分析生成'
   return `${plan.planTitle || `学习计划 #${plan.planId}`} · ${plan.progressPercent || 0}%`
 })
 
@@ -430,6 +558,35 @@ const findEntryStatus = (key: string) => entryStatuses.value.find((item) => item
 
 const go = (path: string) => {
   router.push(path)
+}
+
+const displayAgentTaskTitle = (task: AgentTaskVO) => {
+  const skill = task.relatedSkillName || task.targetJobTitle || '目标能力'
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: `${skill} 面试题练习`,
+    WRONG_QUESTION_REVIEW: `${skill} 错题复盘`,
+    INTERVIEW: '目标岗位模拟面试',
+    RESUME_OPTIMIZE: `${skill} 简历证据优化`,
+    STUDY_TASK: `${skill} 学习任务`,
+    REPORT_REVIEW: '面试报告复盘',
+    SKILL_REVIEW: `${skill} 核心概念复习`,
+    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+  }
+  return map[task.taskType || ''] || task.title || `训练任务 #${task.id}`
+}
+
+const displayAgentTaskDescription = (task: AgentTaskVO) => {
+  const map: Record<string, string> = {
+    QUESTION_PRACTICE: '完成一组聚焦题目练习，并记录薄弱点。',
+    WRONG_QUESTION_REVIEW: '复盘历史错题，确认相关知识点是否已经掌握。',
+    INTERVIEW: '围绕目标岗位进行项目深挖和技术追问练习。',
+    RESUME_OPTIMIZE: '检查项目经历是否清楚证明目标技能和业务影响。',
+    STUDY_TASK: '推进学习计划中的阶段任务。',
+    REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
+    SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
+    KNOWLEDGE_REVIEW: '提取可复用的项目例子和面试表达。'
+  }
+  return map[task.taskType || ''] || task.description || '根据你的当前准备状态生成的训练任务。'
 }
 
 const formatStatus = (status?: string) => {
@@ -505,9 +662,24 @@ const fetchWrongQuestions = async () => {
   }
 }
 
+const fetchAgentTasks = async () => {
+  agentTasksLoading.value = true
+  agentTasksError.value = ''
+  try {
+    const result = await getTodayAgentTasksApi({ date: formatLocalDate() })
+    agentTasks.value = result.tasks || []
+  } catch (error) {
+    agentTasks.value = []
+    agentTasksError.value = getErrorMessage(error, '今日任务暂时加载失败，可以先进入今日任务页重试。')
+  } finally {
+    agentTasksLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchOverview()
   fetchWrongQuestions()
+  fetchAgentTasks()
 })
 </script>
 
@@ -529,6 +701,10 @@ onMounted(() => {
 
 .dashboard-section {
   padding: 20px;
+}
+
+.today-focus-section {
+  border-color: rgba(34, 211, 238, 0.24);
 }
 
 .dashboard-alert {
@@ -731,6 +907,67 @@ onMounted(() => {
   gap: 14px;
 }
 
+.today-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.today-focus-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.1), transparent 55%),
+    rgba(15, 23, 42, 0.64);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.today-focus-card:hover {
+  border-color: rgba(34, 211, 238, 0.42);
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.14), transparent 55%),
+    rgba(15, 23, 42, 0.78);
+  transform: translateY(-2px);
+}
+
+.today-focus-card__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: rgba(6, 182, 212, 0.18);
+  color: #67e8f9;
+  font-weight: 800;
+}
+
+.today-focus-card__content {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+
+  strong {
+    color: #f8fafc;
+    line-height: 1.35;
+  }
+
+  span,
+  small {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
 .action-card,
 .info-item,
 .entry-item,
@@ -882,7 +1119,8 @@ onMounted(() => {
 
 @media (max-width: 1280px) {
   .dashboard-metrics,
-  .action-grid {
+  .action-grid,
+  .today-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -902,8 +1140,18 @@ onMounted(() => {
 
   .dashboard-metrics,
   .action-grid,
+  .today-focus-grid,
   .study-summary {
     grid-template-columns: 1fr;
+  }
+
+  .today-focus-card {
+    grid-template-columns: auto minmax(0, 1fr);
+
+    .cc-badge {
+      grid-column: 2;
+      justify-self: flex-start;
+    }
   }
 
   .panel-header,

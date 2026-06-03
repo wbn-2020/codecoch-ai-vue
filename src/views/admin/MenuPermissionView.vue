@@ -104,7 +104,7 @@ const menuNameMap: Record<string, string> = {
 }
 
 const menuPathMap: Record<string, string> = {
-  '/admin': '管理首页',
+  '/admin/dashboard': '管理首页',
   '/admin/v3': 'V3 管理后台',
   '/admin/users': '用户管理',
   '/admin/roles': '角色管理',

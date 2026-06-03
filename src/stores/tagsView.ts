@@ -24,7 +24,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/knowledge': '知识库',
   '/agent/today': '今日 Agent',
   '/agent/tasks': 'Agent 任务',
-  '/admin': '管理首页',
+  '/admin/dashboard': '管理首页',
   '/admin/files': '文件治理',
   '/admin/users': '用户管理',
   '/admin/roles': '角色管理',
@@ -81,8 +81,8 @@ const userHomeTag: VisitedTag = {
 
 const adminHomeTag: VisitedTag = {
   title: '管理首页',
-  path: '/admin',
-  fullPath: '/admin',
+  path: '/admin/dashboard',
+  fullPath: '/admin/dashboard',
   name: 'AdminDashboard',
   affix: true,
   scope: 'admin'

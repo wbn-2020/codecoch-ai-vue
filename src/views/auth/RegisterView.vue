@@ -4,8 +4,18 @@
       <div class="auth-card__intro">
         <div class="auth-card__brand">CodeCoachAI</div>
         <h1>创建账号</h1>
-        <p>注册普通用户账号，先打通 V1 登录注册和个人信息链路。</p>
+        <p>创建你的求职训练账号，用来保存简历、面试记录、练习进度和每日任务。</p>
       </div>
+
+      <el-alert
+        v-if="errorMessage"
+        class="auth-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="注册失败"
+        :description="errorMessage"
+      />
 
       <el-form ref="formRef" class="auth-form" :model="form" :rules="rules" label-position="top">
         <el-form-item label="用户名" prop="username">
@@ -39,7 +49,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
@@ -49,6 +59,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const errorMessage = ref('')
 
 const form = reactive<RegisterDTO>({
   username: '',
@@ -85,6 +96,21 @@ const rules: FormRules<RegisterDTO> = {
   confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
 }
 
+const getRegisterErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const payload = error as { message?: string; response?: { data?: { message?: string } } }
+    const message = payload.response?.data?.message || payload.message || ''
+    if (message.includes('用户名') || message.toLowerCase().includes('username')) {
+      return '该用户名暂时不可用，请换一个用户名后重试。'
+    }
+    if (message.includes('邮箱') || message.toLowerCase().includes('email')) {
+      return '该邮箱格式或状态不符合要求，请检查后重试。'
+    }
+    return message || '注册失败，请稍后重试。'
+  }
+  return '注册失败，请稍后重试。'
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -92,15 +118,25 @@ const handleSubmit = async () => {
     if (!valid) return
 
     loading.value = true
+    errorMessage.value = ''
     try {
-      await authStore.register(form)
+      await authStore.register(form, { silentError: true })
       ElMessage.success('注册成功，请登录')
       await router.replace('/login')
+    } catch (error) {
+      errorMessage.value = getRegisterErrorMessage(error)
     } finally {
       loading.value = false
     }
   })
 }
+
+watch(
+  () => ({ ...form }),
+  () => {
+    if (errorMessage.value) errorMessage.value = ''
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -145,7 +181,11 @@ const handleSubmit = async () => {
 }
 
 .auth-form {
-  margin-top: 26px;
+  margin-top: 22px;
+}
+
+.auth-alert {
+  margin-top: 22px;
 }
 
 .auth-form__submit {

@@ -117,6 +117,21 @@ const handleSend = async () => {
     ElMessage.warning('Please select a target user before sending.')
     return
   }
+  if (form.targetType === 'ALL') {
+    try {
+      await ElMessageBox.confirm(
+        `即将向所有用户广播通知「${form.title}」（${formatNotificationType(form.type)}）。已送达或已读的客户端无法静默撤回，请确认内容、类型和审计记录无误。`,
+        '确认全员广播',
+        {
+          type: 'warning',
+          confirmButtonText: '确认全员广播',
+          cancelButtonText: '取消发送'
+        }
+      )
+    } catch {
+      return
+    }
+  }
   saving.value = true
   try {
     if (form.targetType === 'ALL') await broadcastAdminNotificationApi(form)

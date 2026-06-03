@@ -4,12 +4,20 @@ import ForgotPasswordView from '@/views/auth/ForgotPasswordView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import ResetPasswordView from '@/views/auth/ResetPasswordView.vue'
+import { appConfig } from '@/config'
+
+const v4PreviewMeta = (title: string) => ({
+  title,
+  featureFlag: 'v4Preview',
+  hidden: !appConfig.enableV4Preview
+})
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'Login', component: LoginView, meta: { public: true, title: '登录' } },
   { path: '/register', name: 'Register', component: RegisterView, meta: { public: true, title: '注册' } },
   { path: '/forgot-password', name: 'ForgotPassword', component: ForgotPasswordView, meta: { public: true, title: '找回密码' } },
   { path: '/reset-password', name: 'ResetPassword', component: ResetPasswordView, meta: { public: true, title: '重置密码' } },
+  { path: '/auth-unavailable', name: 'AuthUnavailable', component: () => import('@/views/error/AuthUnavailableView.vue'), meta: { public: true, title: '认证服务暂不可用' } },
   { path: '/403', name: 'Forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { public: true, title: '无权限' } },
   { path: '/404', name: 'NotFound', component: () => import('@/views/error/NotFoundView.vue'), meta: { public: true, title: '页面不存在' } },
   {
@@ -19,7 +27,7 @@ export const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: '/dashboard' },
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/user/DashboardView.vue'), meta: { title: '工作台' } },
-      { path: 'dashboard/v3', name: 'V3Dashboard', component: () => import('@/views/v3/V3DashboardView.vue'), meta: { title: 'V3 驾驶舱' } },
+      { path: 'dashboard/v3', name: 'V3Dashboard', component: () => import('@/views/v3/V3DashboardView.vue'), meta: { title: '求职驾驶舱' } },
       { path: 'profile', name: 'Profile', component: () => import('@/views/user/ProfileView.vue'), meta: { title: '个人资料' } },
       { path: 'password', name: 'Password', component: () => import('@/views/user/PasswordView.vue'), meta: { title: '修改密码' } },
       { path: 'notifications', name: 'Notifications', component: () => import('@/views/user/NotificationCenterView.vue'), meta: { title: '通知中心' } },
@@ -38,7 +46,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'resumes', name: 'ResumeList', component: () => import('@/views/resume/ResumeListView.vue'), meta: { title: '简历中心' } },
       { path: 'resumes/create', name: 'ResumeCreate', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '新建简历' } },
       { path: 'resumes/:id/edit', name: 'ResumeEdit', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '编辑简历' } },
-      { path: 'resumes/:id/versions', name: 'ResumeVersionsByResume', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本' } },
+      { path: 'resumes/:id/versions', name: 'ResumeVersionsByResume', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: v4PreviewMeta('简历版本') },
       { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: '简历匹配' } },
       { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: '简历匹配详情' } },
       { path: 'skill-profile', name: 'SkillProfile', component: () => import('@/views/v3/SkillProfileView.vue'), meta: { title: '能力画像' } },
@@ -50,18 +58,18 @@ export const routes: RouteRecordRaw[] = [
       { path: 'study-plans/from-gap', name: 'StudyPlansFromGap', component: () => import('@/views/v3/StudyPlanFromGapView.vue'), meta: { title: '短板学习计划' } },
       { path: 'study-plans', name: 'StudyPlans', component: () => import('@/views/study/StudyPlanView.vue'), meta: { title: '学习计划' } },
       { path: 'daily-tasks', name: 'DailyTasks', component: () => import('@/views/study/DailyTaskView.vue'), meta: { title: '每日任务' } },
-      { path: 'analytics/personal', name: 'PersonalAnalytics', component: () => import('@/views/analytics/PersonalAnalyticsView.vue'), meta: { title: '个人分析' } },
-      { path: 'agent/reviews', name: 'AgentReviews', component: () => import('@/views/v4/AgentReviewView.vue'), meta: { title: 'Agent 复盘' } },
-      { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '成长画像' } },
-      { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '技能趋势' } },
-      { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '就绪度趋势' } },
-      { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: { title: 'Agent 记忆' } },
-      { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: '个人知识库' } },
-      { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本' } },
-      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理' } },
-      { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日 Agent' } },
-      { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: 'Agent 任务' } },
-      { path: 'agent/runs/:id', name: 'AgentRunDetail', component: () => import('@/views/agent/AgentRunDetailView.vue'), meta: { title: 'Agent 运行详情' } }
+      { path: 'analytics/personal', name: 'PersonalAnalytics', component: () => import('@/views/analytics/PersonalAnalyticsView.vue'), meta: { title: '训练分析' } },
+      { path: 'agent/reviews', name: 'AgentReviews', component: () => import('@/views/v4/AgentReviewView.vue'), meta: v4PreviewMeta('Agent 复盘') },
+      { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: v4PreviewMeta('成长画像') },
+      { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: v4PreviewMeta('技能趋势') },
+      { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: v4PreviewMeta('就绪度趋势') },
+      { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: v4PreviewMeta('Agent 记忆') },
+      { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: v4PreviewMeta('个人知识库') },
+      { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: v4PreviewMeta('简历版本') },
+      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: v4PreviewMeta('投递管理') },
+      { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
+      { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务列表' } },
+      { path: 'agent/runs/:id', name: 'AgentRunDetail', component: () => import('@/views/agent/AgentRunDetailView.vue'), meta: { title: '生成详情' } }
     ]
   },
   {
@@ -69,7 +77,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, title: '管理后台' },
     children: [
-      { path: '', name: 'AdminDashboard', component: () => import('@/views/admin/AdminDashboardView.vue'), meta: { title: '管理首页', icon: 'DataBoard', affix: true, requiredPermissions: ['admin:v3'] } },
+      { path: 'dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/AdminDashboardView.vue'), meta: { title: '管理首页', icon: 'DataBoard', affix: true, requiredPermissions: ['admin:v3'] } },
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManageView.vue'), meta: { title: '用户管理', icon: 'UserFilled', requiredPermissions: ['admin:user:list'] } },
       { path: 'roles', name: 'AdminRoles', component: () => import('@/views/admin/RoleManageView.vue'), meta: { title: '角色管理', icon: 'Connection', requiredPermissions: ['admin:role:list'] } },
       { path: 'questions', name: 'AdminQuestions', component: () => import('@/views/admin/QuestionManageView.vue'), meta: { title: '题目管理', icon: 'Collection', requiredPermissions: ['admin:question:list'] } },

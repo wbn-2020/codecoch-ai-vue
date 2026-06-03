@@ -11,6 +11,11 @@ const isAuthFailure = (error: unknown) => {
   return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
 }
 
+const isFeatureEnabled = (featureFlag: string) => {
+  if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
+  return true
+}
+
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
     const authStore = useAuthStore()
@@ -42,6 +47,14 @@ export const setupRouterGuards = (router: Router) => {
       return true
     }
 
+    const requiredFeatureFlags = to.matched.flatMap((record) => {
+      const featureFlag = record.meta.featureFlag
+      return typeof featureFlag === 'string' ? [featureFlag] : []
+    })
+    if (requiredFeatureFlags.some((featureFlag) => !isFeatureEnabled(featureFlag))) {
+      return '/404'
+    }
+
     if (!authStore.isLoggedIn) {
       return {
         path: '/login',
@@ -54,10 +67,19 @@ export const setupRouterGuards = (router: Router) => {
     if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
       try {
         await authStore.verifyToken()
-        } catch (error) {
-          if (!isAuthFailure(error)) return true
+      } catch (error) {
+        if (isAuthFailure(error)) {
+          authStore.clearAuth()
           return {
             path: '/login',
+            query: {
+              redirect: to.fullPath
+            }
+          }
+        }
+        authStore.markAuthStale()
+        return {
+          path: '/auth-unavailable',
           query: {
             redirect: to.fullPath
           }

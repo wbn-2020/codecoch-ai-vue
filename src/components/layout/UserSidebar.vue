@@ -52,6 +52,7 @@ import {
 } from '@element-plus/icons-vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { appConfig } from '@/config'
 
 const props = defineProps<{
   collapsed?: boolean
@@ -64,6 +65,7 @@ interface UserMenuItem {
   label: string
   path: string
   icon: unknown
+  featureFlag?: 'v4Preview'
 }
 
 interface UserMenuSection {
@@ -74,7 +76,13 @@ interface UserMenuSection {
   children: UserMenuItem[]
 }
 
-const menuSections: UserMenuSection[] = [
+const isFeatureEnabled = (featureFlag?: UserMenuItem['featureFlag']) => {
+  if (!featureFlag) return true
+  if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
+  return true
+}
+
+const baseMenuSections: UserMenuSection[] = [
   {
     key: 'workspace',
     label: '工作台',
@@ -82,21 +90,21 @@ const menuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '工作台', path: '/dashboard', icon: DataBoard },
-      { label: 'V3 驾驶舱', path: '/dashboard/v3', icon: DataBoard }
+      { label: '求职驾驶舱', path: '/dashboard/v3', icon: DataBoard }
     ]
   },
   {
     key: 'agent-growth',
-    label: 'Agent 成长',
+    label: '今日训练',
     icon: MagicStick,
     forceGroup: true,
     children: [
-      { label: 'JobCoachAgent', path: '/agent/today', icon: MagicStick },
-      { label: 'Agent 任务', path: '/agent/tasks', icon: Calendar },
-      { label: '个人分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked },
-      { label: '成长档案', path: '/growth/profile', icon: Medal },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick }
+      { label: '今日任务', path: '/agent/today', icon: MagicStick },
+      { label: '任务列表', path: '/agent/tasks', icon: Calendar },
+      { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
+      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Preview' },
+      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Preview' },
+      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Preview' }
     ]
   },
   {
@@ -105,10 +113,10 @@ const menuSections: UserMenuSection[] = [
     icon: Files,
     forceGroup: true,
     children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files },
+      { label: '简历版本', path: '/resume-versions', icon: Files, featureFlag: 'v4Preview' },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass },
+      { label: '求职进度', path: '/applications', icon: Compass, featureFlag: 'v4Preview' },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal }
@@ -156,17 +164,26 @@ const menuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading },
+      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Preview' },
       { label: '修改密码', path: '/password', icon: Key },
       { label: '个人资料', path: '/profile', icon: User }
     ]
   }
 ]
 
+const menuSections = computed(() =>
+  baseMenuSections
+    .map((section) => ({
+      ...section,
+      children: section.children.filter((item) => isFeatureEnabled(item.featureFlag))
+    }))
+    .filter((section) => section.children.length > 0)
+)
+
 const closeAllMenus = () => {
   if (!props.collapsed) return
   nextTick(() => {
-    menuSections.forEach((section) => menuRef.value?.close(section.key))
+    menuSections.value.forEach((section) => menuRef.value?.close(section.key))
   })
 }
 

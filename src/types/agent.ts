@@ -53,10 +53,16 @@ export interface DailyPlanVO {
   targetJobTitle?: string
   date?: string
   summary?: string | null
+  status?: AgentRunStatus
+  errorCode?: string | null
+  errorMessage?: string | null
+  durationMs?: number
   focusSkills?: AgentSkillRefVO[]
   tasks?: AgentTaskVO[]
   empty?: boolean
   emptyMessage?: string
+  startedAt?: string
+  finishedAt?: string
   createdAt?: string
 }
 
@@ -123,8 +129,11 @@ export interface AgentRunDetailVO {
   agentType?: string
   targetJobId?: number
   targetJobTitle?: string
+  planDate?: string
   triggerType?: AgentTriggerType
   status?: AgentRunStatus
+  summary?: string | null
+  focusSkills?: Array<{ code?: string; name?: string }>
   promptType?: string
   promptVersionId?: number
   modelName?: string

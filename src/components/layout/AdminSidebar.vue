@@ -93,7 +93,7 @@ const sections: AdminMenuSection[] = [
     label: '概览',
     icon: DataBoard,
     children: [
-      { label: '管理首页', path: '/admin', icon: DataBoard, permissions: ['admin:v3'] }
+      { label: '管理首页', path: '/admin/dashboard', icon: DataBoard, permissions: ['admin:v3'] }
     ]
   },
   {

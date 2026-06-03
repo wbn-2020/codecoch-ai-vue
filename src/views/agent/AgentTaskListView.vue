@@ -2,8 +2,8 @@
   <div class="page-shell agent-page">
     <section class="page-header">
       <div>
-        <h1 class="page-title">Agent 任务列表</h1>
-        <p class="page-subtitle">按日期、类型、优先级和状态查询历史任务，操作会直接调用 V4-A 任务接口。</p>
+        <h1 class="page-title">任务列表</h1>
+        <p class="page-subtitle">按日期、类型、优先级和状态查看历史训练任务，继续推进未完成事项。</p>
       </div>
       <el-button type="primary" :icon="CalendarDays" @click="router.push('/agent/today')">今日计划</el-button>
     </section>
@@ -74,15 +74,31 @@
         </el-table-column>
         <el-table-column label="操作" width="310" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :disabled="row.status !== 'TODO'" @click="handleStartTask(row)">开始</el-button>
-            <el-button link type="primary" :disabled="row.status === 'DONE'" @click="openCompleteDialog(row)">完成</el-button>
-            <el-button link type="info" :disabled="row.status === 'DONE' || row.status === 'SKIPPED'" @click="openSkipDialog(row)">跳过</el-button>
-            <el-button link type="warning" :disabled="row.status !== 'SKIPPED'" @click="handleRestoreTask(row)">恢复</el-button>
-            <el-button link type="info" @click="openFeedbackDialog(row)">反馈</el-button>
+            <el-button
+              link
+              type="primary"
+              :loading="isTaskActionPending(row, 'start')"
+              :disabled="isTaskPending(row) || row.status !== 'TODO'"
+              @click="handleStartTask(row)"
+            >
+              开始
+            </el-button>
+            <el-button link type="primary" :disabled="isTaskPending(row) || row.status === 'DONE'" @click="openCompleteDialog(row)">完成</el-button>
+            <el-button link type="info" :disabled="isTaskPending(row) || row.status === 'DONE' || row.status === 'SKIPPED'" @click="openSkipDialog(row)">跳过</el-button>
+            <el-button
+              link
+              type="warning"
+              :loading="isTaskActionPending(row, 'restore')"
+              :disabled="isTaskPending(row) || row.status !== 'SKIPPED'"
+              @click="handleRestoreTask(row)"
+            >
+              恢复
+            </el-button>
+            <el-button link type="info" :disabled="isTaskPending(row)" @click="openFeedbackDialog(row)">反馈</el-button>
           </template>
         </el-table-column>
         <template #empty>
-          <AppState type="empty" title="暂无 Agent 任务" description="当前筛选条件下没有真实任务记录。" />
+          <AppState type="empty" title="暂无训练任务" description="当前筛选条件下没有任务记录，可以回到今日任务生成新的准备计划。" />
         </template>
       </el-table>
       <div class="pagination-wrap">
@@ -102,7 +118,7 @@
       <el-input v-model="note" type="textarea" :rows="4" :placeholder="dialogMode === 'complete' ? '可填写完成备注' : '请填写跳过原因'" maxlength="200" show-word-limit />
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitAction">确认</el-button>
+        <el-button type="primary" :loading="selectedTask ? isTaskActionPending(selectedTask, dialogMode) : false" @click="submitAction">确认</el-button>
       </template>
     </el-dialog>
 
@@ -119,7 +135,7 @@
       </el-form>
       <template #footer>
         <el-button @click="feedbackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitFeedback">提交</el-button>
+        <el-button type="primary" :loading="feedbackTask ? isTaskActionPending(feedbackTask, 'feedback') : false" @click="submitFeedback">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -145,7 +161,6 @@ import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 
 const router = useRouter()
 const loading = ref(false)
-const mutating = ref(false)
 const errorMessage = ref('')
 const tasks = ref<AgentTaskVO[]>([])
 const total = ref(0)
@@ -199,6 +214,35 @@ const feedbackTypeOptions = [
   { label: '太简单', value: 'TOO_EASY' },
   { label: '不相关', value: 'IRRELEVANT' }
 ]
+
+type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+
+const pendingTaskActions = ref<Set<string>>(new Set())
+
+const taskActionKey = (task: AgentTaskVO, action: TaskAction) => `${task.id}:${action}`
+const isTaskActionPending = (task: AgentTaskVO, action: TaskAction) => pendingTaskActions.value.has(taskActionKey(task, action))
+const isTaskPending = (task: AgentTaskVO) => Array.from(pendingTaskActions.value).some((key) => key.startsWith(`${task.id}:`))
+
+const setTaskActionPending = (task: AgentTaskVO, action: TaskAction, pending: boolean) => {
+  const next = new Set(pendingTaskActions.value)
+  const key = taskActionKey(task, action)
+  if (pending) {
+    next.add(key)
+  } else {
+    next.delete(key)
+  }
+  pendingTaskActions.value = next
+}
+
+const withTaskPending = async (task: AgentTaskVO, action: TaskAction, handler: () => Promise<void>) => {
+  if (isTaskActionPending(task, action)) return
+  setTaskActionPending(task, action, true)
+  try {
+    await handler()
+  } finally {
+    setTaskActionPending(task, action, false)
+  }
+}
 
 watch(dateRange, (value) => {
   query.startDate = Array.isArray(value) ? value[0] : ''
@@ -297,43 +341,35 @@ const openSkipDialog = (task: AgentTaskVO) => {
 }
 
 const submitAction = async () => {
-  if (!selectedTask.value) return
-  mutating.value = true
-  try {
+  const task = selectedTask.value
+  if (!task) return
+  await withTaskPending(task, dialogMode.value, async () => {
     if (dialogMode.value === 'complete') {
-      await completeAgentTaskApi(selectedTask.value.id, { note: note.value || undefined })
+      await completeAgentTaskApi(task.id, { note: note.value || undefined })
       ElMessage.success('任务已完成')
     } else {
-      await skipAgentTaskApi(selectedTask.value.id, { skipReason: note.value || undefined })
+      await skipAgentTaskApi(task.id, { skipReason: note.value || undefined })
       ElMessage.success('任务已跳过')
     }
     dialogVisible.value = false
     await fetchTasks()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const handleStartTask = async (task: AgentTaskVO) => {
-  mutating.value = true
-  try {
+  await withTaskPending(task, 'start', async () => {
     await startAgentTaskApi(task.id)
     ElMessage.success('任务已开始')
     await fetchTasks()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const handleRestoreTask = async (task: AgentTaskVO) => {
-  mutating.value = true
-  try {
+  await withTaskPending(task, 'restore', async () => {
     await restoreAgentTaskApi(task.id)
     ElMessage.success('任务已恢复')
     await fetchTasks()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const openFeedbackDialog = (task: AgentTaskVO) => {
@@ -346,20 +382,18 @@ const openFeedbackDialog = (task: AgentTaskVO) => {
 }
 
 const submitFeedback = async () => {
-  if (!feedbackTask.value) return
-  mutating.value = true
-  try {
+  const task = feedbackTask.value
+  if (!task) return
+  await withTaskPending(task, 'feedback', async () => {
     await submitAgentFeedbackApi({
-      agentTaskId: feedbackTask.value.id,
-      agentRunId: feedbackTask.value.agentRunId,
+      agentTaskId: task.id,
+      agentRunId: task.agentRunId,
       feedbackType: feedbackForm.feedbackType,
       comment: feedbackForm.comment || undefined
     })
     feedbackDialogVisible.value = false
     ElMessage.success('反馈已提交')
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 onMounted(fetchTasks)
