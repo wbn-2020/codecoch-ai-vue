@@ -236,7 +236,9 @@ const summaryCards = computed(() => dashboard.value?.summaryCards || [])
 const trendStats = computed(() => dashboard.value?.trendStats || [])
 const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
-const services = computed(() => systemStatus.value?.services || [])
+const services = computed(() =>
+  (systemStatus.value?.services || []).filter((item) => String(item.status || '').toUpperCase() !== 'UNSUPPORTED')
+)
 const statusPanelStyle = computed(() => statusPanelHeight.value ? { height: statusPanelHeight.value + 'px' } : undefined)
 const primaryLinkItems = computed(() => primaryLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
 const quickLinkItems = computed(() => quickLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
@@ -371,7 +373,7 @@ const fetchOverview = async () => {
 }
 
 const formatDateTime = (value?: string) => {
-  if (!value) return '--'
+  if (!value) return '暂无生成时间'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
@@ -383,11 +385,11 @@ const statusText = (status?: string) => {
     HEALTHY: '正常',
     DEGRADED: '降级',
     DOWN: '不可用',
-    UNKNOWN: '未接入探测',
-    UNSUPPORTED: '未接入探测',
+    UNKNOWN: '未配置监控源',
+    UNSUPPORTED: '待接入，不计入健康状态',
     SUPPORTED: '已支持'
   }
-  return map[value] || status || '未接入探测'
+  return map[value] || status || '未配置监控源'
 }
 
 const statusTone = (status?: string) => {
@@ -434,8 +436,8 @@ const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
   if (item.reason) return item.reason
   if (item.source) return item.source
   const value = String(item.status || '').toUpperCase()
-  if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
-  if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
+  if (value === 'UNKNOWN') return '后端未返回该服务的监控源或最近探测结果'
+  if (value === 'UNSUPPORTED') return '该服务暂未配置运行态探测源，不计入核心健康状态'
   return '最近一次状态检查'
 }
 

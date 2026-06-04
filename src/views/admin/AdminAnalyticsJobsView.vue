@@ -62,7 +62,7 @@
             <el-table-column prop="finishedAt" label="结束时间" width="180" />
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerun(row.id)">重跑</el-button>
+                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerun(row)">重跑</el-button>
               </template>
             </el-table-column>
             <template #empty>
@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 
 import { getAdminAnalyticsJobsApi, rerunAdminAnalyticsJobApi, runAdminAnalyticsDailyPlanApi } from '@/api/analytics'
@@ -125,6 +125,7 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsJobLogVO, AdminAnalyticsJobQuery } from '@/types/analytics'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 
 const statusOptions = [
   { label: '待执行', value: 'PENDING' },
@@ -214,13 +215,25 @@ const parseUserIds = () =>
     .filter((item) => Number.isFinite(item) && item > 0)
 
 const runDailyPlan = async () => {
+  const userIds = parseUserIds()
+  const confirmed = await confirmDangerActionPreview({
+    title: '运行每日计划高风险确认',
+    action: '手动运行 Agent 每日计划聚合',
+    target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按后端任务规则筛选可生成计划的用户',
+    impact: '可能为多个用户生成或刷新今日训练计划，并产生 AI 调用、任务日志和统计记录。',
+    rollback: '前端无法自动撤销已生成计划；如误执行，需要通过任务日志和业务记录人工排查。',
+    audit: '后端会记录聚合任务日志，执行人、时间、任务参数可用于追踪。',
+    tips: ['确认统计日期、目标岗位和任务数量参数正确。', '确认当前不是演示只读模式或共享演示环境。'],
+    confirmButtonText: '确认运行'
+  })
+  if (!confirmed) return
   manualRunning.value = true
   try {
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
       jobName: 'Agent 每日计划聚合',
       statDate: manualForm.statDate || undefined,
-      userIds: parseUserIds(),
+      userIds,
       targetJobId: manualForm.targetJobId,
       taskCount: manualForm.taskCount,
       maxTotalMinutes: manualForm.maxTotalMinutes
@@ -238,12 +251,19 @@ const openOutput = (content?: string) => {
   outputDialogVisible.value = true
 }
 
-const rerun = async (id: number) => {
-  try {
-    await ElMessageBox.confirm('确认重跑该聚合任务？', '重跑确认', { type: 'warning' })
-  } catch {
-    return
-  }
+const rerun = async (row: AdminAnalyticsJobLogVO) => {
+  const id = row.id
+  const confirmed = await confirmDangerActionPreview({
+    title: '重跑聚合任务高风险确认',
+    action: `重跑聚合任务 ${translateJobName(row.jobName || row.jobCode)}`,
+    target: `任务 ID：${id}；统计日期：${row.statDate || '未提供'}`,
+    impact: '会重新提交该任务，可能覆盖或追加统计结果，并产生新的任务执行记录。',
+    rollback: '无法由前端撤销已提交的任务；如结果异常，需要依据任务输出和操作日志人工修正。',
+    audit: '重跑请求会进入聚合任务日志，可通过任务 ID 和操作时间追踪。',
+    tips: ['优先确认原任务失败原因已处理。', '避免对运行中任务重复提交。'],
+    confirmButtonText: '确认重跑'
+  })
+  if (!confirmed) return
   rerunningId.value = id
   try {
     await rerunAdminAnalyticsJobApi(id)

@@ -1,4 +1,4 @@
-import type { Router } from 'vue-router'
+import type { RouteLocationNormalized, Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
@@ -15,6 +15,20 @@ const isFeatureEnabled = (featureFlag: string) => {
   if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
   return true
 }
+
+const forbiddenRoute = (to: RouteLocationNormalized, reason: string, detail: Record<string, string | string[] | undefined> = {}) => ({
+  path: '/403',
+  query: {
+    reason,
+    target: to.fullPath,
+    title: String(to.meta.title || ''),
+    ...Object.fromEntries(
+      Object.entries(detail)
+        .filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value))
+        .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)])
+    )
+  }
+})
 
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
@@ -94,13 +108,19 @@ export const setupRouterGuards = (router: Router) => {
     }
 
     if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.canAccessAdmin) {
-      return '/403'
+      return forbiddenRoute(to, 'requiresAdmin', {
+        userRoles: authStore.roles,
+        userPermissions: authStore.permissions.slice(0, 20)
+      })
     }
 
     if (to.path === '/admin') {
       const firstAdminPath = firstAccessibleAdminPath(authStore)
       if (!firstAdminPath) {
-        return '/403'
+        return forbiddenRoute(to, 'noAdminMenu', {
+          userRoles: authStore.roles,
+          userPermissions: authStore.permissions.slice(0, 20)
+        })
       }
       if (firstAdminPath !== '/admin') {
         return firstAdminPath
@@ -112,7 +132,10 @@ export const setupRouterGuards = (router: Router) => {
       return Array.isArray(roles) ? roles.map(String) : []
     })
     if (requiredRoles.length > 0 && !authStore.hasAnyRole(requiredRoles)) {
-      return '/403'
+      return forbiddenRoute(to, 'missingRole', {
+        requiredRoles,
+        userRoles: authStore.roles
+      })
     }
 
     const requiredPermissions = to.matched.flatMap((record) => {
@@ -120,7 +143,10 @@ export const setupRouterGuards = (router: Router) => {
       return Array.isArray(permissions) ? permissions.map(String) : []
     })
     if (requiredPermissions.length > 0 && !authStore.hasAnyPermission(requiredPermissions)) {
-      return '/403'
+      return forbiddenRoute(to, 'missingPermission', {
+        requiredPermissions,
+        userPermissions: authStore.permissions.slice(0, 20)
+      })
     }
 
     return true

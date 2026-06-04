@@ -4,10 +4,10 @@
       <div>
         <div class="hero-kicker">
           <FilePenLine :size="16" />
-          Job Target Form
+          岗位目标
         </div>
         <h1>{{ pageTitle }}</h1>
-        <p>表单字段严格按后端 `TargetJobSaveDTO` 提交，保存真实岗位目标与 JD 原文。</p>
+        <p>填写岗位名称、公司、经验要求和 JD 原文，保存后进入 JD 分析页。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/job-targets')">
@@ -23,7 +23,7 @@
 
     <section class="content-card">
       <div v-if="loading" class="state-wrap">
-        <AppState type="loading" title="正在加载岗位详情" description="通过 GET /job-targets/{id} 读取真实数据。" />
+        <AppState type="loading" title="正在加载岗位详情" description="正在读取岗位目标信息。" />
       </div>
 
       <div v-else-if="loadError" class="state-wrap">
@@ -35,15 +35,15 @@
       <div v-else class="content-card__body edit-workspace">
         <div class="form-side">
           <h2>岗位信息</h2>
-          <p>后端当前不支持城市、薪资、技能关键词独立字段，这些内容可保留在 JD 原文中。</p>
+          <p>城市、薪资、技能关键词可先写在 JD 原文里，后续分析会一并参考。</p>
           <div class="contract-list">
             <div>
-              <span>创建接口</span>
-              <strong>POST /job-targets</strong>
+              <span>基础信息</span>
+              <strong>岗位、公司、级别</strong>
             </div>
             <div>
-              <span>编辑接口</span>
-              <strong>PUT /job-targets/{id}</strong>
+              <span>关键输入</span>
+              <strong>完整 JD 原文</strong>
             </div>
             <div>
               <span>保存后</span>
@@ -72,6 +72,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { createJobTargetApi, getJobTargetDetailApi, updateJobTargetApi } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import type { TargetJobSaveDTO } from '@/types/jobTarget'
+import { getErrorMessage } from '@/utils/error'
 
 import JobTargetForm from './components/JobTargetForm.vue'
 
@@ -97,14 +98,6 @@ const form = reactive<TargetJobSaveDTO>({
   jdSource: ''
 })
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string') return message
-  }
-  return fallback
-}
-
 const loadDetail = async () => {
   if (!targetId.value) return
   loading.value = true
@@ -119,7 +112,7 @@ const loadDetail = async () => {
       jdSource: detail.jdSource || ''
     })
   } catch (error) {
-    loadError.value = getErrorMessage(error, '目标岗位不存在或接口请求失败。')
+    loadError.value = getErrorMessage(error, '目标岗位不存在或暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
   }

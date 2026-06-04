@@ -3,7 +3,7 @@
     <div class="analysis-summary">
       <div>
         <span>AI 解析摘要</span>
-        <p>{{ analysis.summary || '后端暂未返回摘要。' }}</p>
+        <p>{{ analysis.summary || '暂无解析摘要。' }}</p>
       </div>
       <JobTargetStatusTag :status="analysis.parseStatus" />
     </div>

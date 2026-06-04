@@ -539,13 +539,13 @@ const actionCards = computed(() => [
 const resumeParseText = computed(() => {
   const item = overview.value?.recentResumeParse
   if (!item) return '暂无简历解析记录'
-  return `${item.fileName || '未命名文件'} · ${item.parseStatus || 'UNKNOWN'}`
+  return `${item.fileName || '未命名文件'} · ${formatStatus(item.parseStatus)}`
 })
 
 const resumeOptimizeText = computed(() => {
   const item = overview.value?.recentResumeOptimize
   if (!item) return '暂无最近优化记录'
-  return `最近优化状态：${item.optimizeStatus || 'UNKNOWN'}`
+  return `最近优化状态：${formatStatus(item.optimizeStatus)}`
 })
 
 const activePlanText = computed(() => {

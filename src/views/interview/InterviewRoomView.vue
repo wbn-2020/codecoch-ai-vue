@@ -38,7 +38,7 @@
 
         <div class="session-card">
           <strong>{{ current?.currentStage?.stageName || '当前阶段' }}</strong>
-          <p>{{ current?.currentQuestion?.stageProgress || '等待后端返回当前面试进度' }}</p>
+          <p>{{ current?.currentQuestion?.stageProgress || '等待当前面试进度' }}</p>
           <div class="mini-meta">
             <span>会话 #{{ interviewId || '-' }}</span>
             <span>{{ current?.currentQuestion?.isFollowUp ? '追问题' : '主问题' }}</span>
@@ -201,7 +201,7 @@
             />
             <div v-if="submitting && answerReviewEvents.length" class="review-stage-list">
               <article v-for="item in answerReviewEvents" :key="item.key" class="review-stage-item">
-                <span>{{ item.event }}</span>
+                <span>{{ item.eventLabel || item.event }}</span>
                 <strong>{{ item.stageLabel || item.message || '-' }}</strong>
                 <p>{{ item.message || item.stageLabel || '-' }}</p>
               </article>
@@ -307,6 +307,7 @@ import type {
   InterviewAnswerReviewSseEvent,
   InterviewCurrentVO
 } from '@/types/interview'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -326,7 +327,7 @@ const answerReviewMessage = ref('')
 const answerReviewAnswerId = ref<number | undefined>()
 const answerReviewAiCallLogId = ref<number | undefined>()
 const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
-const answerReviewEvents = ref<Array<{ key: string; event: string; stage?: string; stageLabel?: string; message?: string }>>([])
+const answerReviewEvents = ref<Array<{ key: string; event: string; eventLabel?: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
 let elapsedTimer: number | undefined
@@ -341,6 +342,15 @@ const answerReviewStageLabels: Record<string, string> = {
   SAVE_REVIEW: '保存点评结果',
   GENERATE_FOLLOW_UP: '生成追问',
   SAVE_FOLLOW_UP: '保存追问'
+}
+
+const answerReviewEventLabels: Record<string, string> = {
+  start: '开始点评',
+  progress: '点评进度',
+  delta: '生成点评',
+  result: '点评完成',
+  done: '点评完成',
+  error: '点评失败'
 }
 
 // SSE 四态徽章
@@ -474,9 +484,8 @@ const answerDurationText = computed(() => {
 
 const answerReviewMetaText = computed(() => {
   const items = []
-  if (answerReviewAnswerId.value) items.push(`answerId: ${answerReviewAnswerId.value}`)
-  if (answerReviewAiCallLogId.value) items.push(`aiCallLogId: ${answerReviewAiCallLogId.value}`)
-  if (answerReviewFollowUpAiCallLogId.value) items.push(`followUpAiCallLogId: ${answerReviewFollowUpAiCallLogId.value}`)
+  if (answerReviewAnswerId.value) items.push(`回答 #${answerReviewAnswerId.value}`)
+  if (answerReviewAiCallLogId.value || answerReviewFollowUpAiCallLogId.value) items.push('AI 点评已记录')
   return items.join(' / ')
 })
 
@@ -565,7 +574,11 @@ const normalizeAnswerReviewResult = (
     ? (data.result as Partial<InterviewAnswerResultVO>)
     : {}
   if (!data && !Object.keys(raw).length) return null
-  const score = data?.score ?? raw.score ?? raw.evaluation?.score ?? 0
+  const rawScore: unknown = data?.score ?? raw.score ?? raw.evaluation?.score
+  const parsedScore = rawScore === undefined || rawScore === null || rawScore === ''
+    ? undefined
+    : Number(rawScore)
+  const score = Number.isFinite(parsedScore) ? parsedScore : undefined
   const feedback = data?.feedback || raw.comment || raw.evaluation?.comment || ''
 
   return {
@@ -597,7 +610,7 @@ const normalizeAnswerReviewResult = (
 const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEvent) => {
   const stage = data?.stage ? String(data.stage) : ''
   const stageLabel = stage ? answerReviewStageLabels[stage] || stage : ''
-  const message = data?.message || ''
+  const message = toFriendlyMessage(data?.message, stageLabel || 'AI 正在点评')
   const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
   const answerId = data?.answerId || Number(metadata.answerId || 0)
   const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
@@ -609,6 +622,7 @@ const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEv
   answerReviewEvents.value.push({
     key: `${Date.now()}-${answerReviewEvents.value.length}`,
     event,
+    eventLabel: answerReviewEventLabels[event] || '点评进度',
     stage,
     stageLabel,
     message
@@ -671,11 +685,11 @@ const handleSubmit = async () => {
       },
       onError: async (error, hasStarted) => {
         if (!hasStarted) {
-          ElMessage.warning('SSE 启动失败，已回退到同步答题接口')
+          ElMessage.warning('点评流未启动，已切换为同步点评')
           await submitAnswerFallback(id, payload)
           return
         }
-        ElMessage.error(error.message || 'AI 点评 SSE 失败，请刷新当前题状态')
+        ElMessage.error(getErrorMessage(error, 'AI 点评失败，请刷新当前题状态。'))
       },
       onDone: async () => {
         if (!completedByDone && latestResult) {

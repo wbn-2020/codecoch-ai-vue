@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker">
           <ScanSearch :size="16" />
-          JD Analysis
+          JD 分析
         </div>
         <h1>{{ target?.jobTitle || 'JD 解析 / 分析结果' }}</h1>
         <p>{{ targetSubtitle }}</p>
@@ -94,15 +94,15 @@
             type="error"
             :closable="false"
             show-icon
-            title="后端解析失败"
-            :description="target?.parseErrorMessage || analysis?.parseErrorMessage"
+            title="JD 解析失败"
+            :description="toFriendlyMessage(target?.parseErrorMessage || analysis?.parseErrorMessage, 'JD 解析失败，请稍后重试。')"
           />
         </div>
       </aside>
 
       <main class="content-card main-panel">
         <div v-if="loading" class="state-wrap">
-          <AppState type="loading" title="正在读取 JD 分析结果" description="通过 GET /job-targets/{id} 与 GET /job-targets/{id}/analysis 查询真实数据。" />
+          <AppState type="loading" title="正在读取 JD 分析结果" description="正在同步岗位信息和解析结果。" />
         </div>
 
         <div v-else-if="loadError" class="state-wrap">
@@ -120,7 +120,7 @@
             <div class="section-head">
               <div>
                 <h2>JD 原文</h2>
-                <p>展示保存到后端的真实 JD 原文，解析请求会基于这段内容发起。</p>
+                <p>这里展示你保存的 JD 原文，重新解析会基于这段内容生成结构化信息。</p>
               </div>
               <JobTargetStatusTag :status="target.parseStatus" />
             </div>
@@ -129,7 +129,7 @@
               v-else
               type="empty"
               title="JD 原文为空"
-              description="请先编辑岗位目标补充 JD 原文，再触发后端解析。"
+              description="请先编辑岗位目标补充 JD 原文，再触发解析。"
             >
               <el-button type="primary" @click="router.push(`/job-targets/${target.id}/edit`)">编辑岗位目标</el-button>
             </AppState>
@@ -139,7 +139,7 @@
             <div class="section-head">
               <div>
                 <h2>结构化解析结果</h2>
-                <p>职责、技能、关键词、经验要求均来自 `GET /job-targets/{id}/analysis`。</p>
+                <p>职责、技能、关键词和经验要求会在解析完成后展示。</p>
               </div>
               <el-button
                 :loading="parsing"
@@ -155,7 +155,7 @@
               v-if="!analysis"
               type="empty"
               title="暂无 JD 解析结果"
-              description="后端还没有返回解析结果，可以在当前页面触发真实 REST 解析接口。"
+              description="当前还没有解析结果，可以先触发解析。"
             >
               <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发解析</el-button>
             </AppState>
@@ -189,6 +189,7 @@ import type {
   JobTargetParseSseEventType,
   TargetJobVO
 } from '@/types/jobTarget'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import type { StreamSseHandle } from '@/utils/sse'
 
@@ -228,16 +229,8 @@ const recentParseSseEvents = computed(() => parseSseEvents.value.slice(-3))
 const latestParseSseMessage = computed(() => {
   const recent = recentParseSseEvents.value
   const latest = recent[recent.length - 1]
-  return latest?.message || '等待 DeepSeek 返回 JD 解析进度'
+  return latest?.message || '正在获取 JD 解析进度'
 })
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string') return message
-  }
-  return fallback
-}
 
 const loadAll = async () => {
   if (!targetId.value) {
@@ -256,7 +249,7 @@ const loadAll = async () => {
   } catch (error) {
     target.value = null
     analysis.value = null
-    loadError.value = getErrorMessage(error, 'JD 分析接口请求失败，请确认后端服务和登录态。')
+    loadError.value = getErrorMessage(error, 'JD 分析暂时无法加载，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
@@ -299,7 +292,7 @@ const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => 
 }
 
 const applyParseSseEvent = (event: JobTargetParseSseEventType, data?: JobTargetParseSseEvent) => {
-  const message = data?.message || data?.content || data?.stage || event
+  const message = toFriendlyMessage(data?.message || data?.content || data?.stage, sseStatusLabel(event))
   addParseSseEvent(event, message)
   if (data?.result) {
     analysis.value = data.result
@@ -322,14 +315,15 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
       onError: (error, hasStarted) => {
         parseSseHandle = null
         if (!hasStarted) {
-          addParseSseEvent('fallback', 'SSE 未启动，切换同步解析')
-          ElMessage.warning('JD 解析流未启动，已回退到同步接口')
+          addParseSseEvent('fallback', '已切换为同步解析')
+          ElMessage.warning('JD 解析流未启动，已切换为同步解析')
           void runParseFallback(id, payload)
           return
         }
         parsing.value = false
-        setParseSseError(error, true)
-        ElMessage.error(error.message || 'JD 解析流中断')
+        const message = getErrorMessage(error, 'JD 解析流中断，请稍后重试。')
+        setParseSseError(message, true)
+        ElMessage.error(message)
       },
       onDone: () => {
         parseSseHandle = null
@@ -352,7 +346,7 @@ const handleParse = async () => {
   const forceRefresh = Boolean(analysis.value || target.value.parseStatus === 'PARSED')
   if (forceRefresh) {
     try {
-      await ElMessageBox.confirm('确认重新解析当前 JD？后端会请求 AI 解析并刷新最新结果。', '重新解析 JD', {
+      await ElMessageBox.confirm('确认重新解析当前 JD？系统会重新分析并刷新最新结果。', '重新解析 JD', {
         type: 'warning',
         confirmButtonText: '重新解析',
         cancelButtonText: '取消'

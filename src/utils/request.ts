@@ -27,6 +27,12 @@ interface ApiCodeError extends Error {
   code?: number
 }
 
+const DEMO_READ_ONLY_ALLOW_METHODS = new Set(['get', 'head', 'options'])
+const DEMO_READ_ONLY_WRITE_WHITELIST = [
+  '/auth/login',
+  '/auth/refresh-token'
+]
+
 const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
   timeout: appConfig.requestTimeout
@@ -54,6 +60,14 @@ const createApiCodeError = (message: string, code?: number) => {
   const error = new Error(message) as ApiCodeError
   error.code = code
   return error
+}
+
+const isDemoReadOnlyWrite = (config: InternalAxiosRequestConfig) => {
+  if (!appConfig.demoReadOnly) return false
+  const method = String(config.method || 'get').toLowerCase()
+  if (DEMO_READ_ONLY_ALLOW_METHODS.has(method)) return false
+  const url = String(config.url || '')
+  return !DEMO_READ_ONLY_WRITE_WHITELIST.some((path) => url.includes(path))
 }
 
 const normalizeAuthArray = <T>(items?: T[]): T[] => Array.from(new Set(items || []))
@@ -133,6 +147,12 @@ const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
 }
 
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (isDemoReadOnlyWrite(config)) {
+    const message = '演示只读模式已开启，写入操作不会提交。'
+    ElMessage.warning(message)
+    return Promise.reject(createApiCodeError(message, HTTP_STATUS_CODE.FORBIDDEN))
+  }
+
   const token = getToken()
 
   if (token) {
@@ -166,7 +186,12 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
         ElMessage.error(result.message || '无访问权限')
       }
       if (window.location.pathname !== '/403') {
-        window.location.href = '/403'
+        const query = new URLSearchParams({
+          reason: 'apiForbidden',
+          target: window.location.pathname + window.location.search,
+          message: result.message || '无访问权限'
+        })
+        window.location.href = `/403?${query.toString()}`
       }
       return Promise.reject(result)
     }

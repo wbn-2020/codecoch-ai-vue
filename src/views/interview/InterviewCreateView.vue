@@ -295,6 +295,7 @@ const resumes = ref<ResumeVO[]>([])
 const industryTemplates = ref<IndustryTemplateVO[]>([])
 const selectedModeKey = ref('technical')
 const sourceTargetJobId = ref<number>()
+const fallbackTargetJobId = ref<number>()
 
 const form = reactive<InterviewCreateDTO>({
   interviewName: '',
@@ -372,6 +373,7 @@ const isJobTargetFlow = computed(() => {
   const source = getQueryString('source')?.toLowerCase()
   return Boolean(
     sourceTargetJobId.value ||
+    fallbackTargetJobId.value ||
     getQueryNumber('targetJobId') ||
     source === 'job-target' ||
     source === 'v3'
@@ -524,15 +526,20 @@ const applyRouteContext = async () => {
     form.resumeId = resumeId
   }
 
-  if (isV3Source && !targetJobId) {
+  if (!targetJobId) {
     const currentTarget = await getCurrentJobTargetApi().catch(() => null)
     targetJobId = currentTarget?.id
+    if (targetJobId) fallbackTargetJobId.value = targetJobId
   }
-  if (!isV3Source && !targetJobId) return
+  if (!targetJobId) return
 
-  selectedModeKey.value = 'comprehensive'
-  form.interviewMode = INTERVIEW_MODE.COMPREHENSIVE
-  sourceTargetJobId.value = targetJobId
+  if (isV3Source || source === 'job-target') {
+    selectedModeKey.value = 'comprehensive'
+    form.interviewMode = INTERVIEW_MODE.COMPREHENSIVE
+  }
+  if (isV3Source || getQueryNumber('targetJobId')) {
+    sourceTargetJobId.value = targetJobId
+  }
 
   if (targetJobId) {
     try {
@@ -551,9 +558,9 @@ const applyRouteContext = async () => {
 }
 
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
-  let targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId')
+  let targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
   const source = getQueryString('source')?.toLowerCase()
-  const shouldUseJobTargetApi = Boolean(targetJobId || source === 'job-target' || source === 'v3')
+  const shouldUseJobTargetApi = Boolean((targetJobId && payload.resumeId) || source === 'job-target' || source === 'v3')
 
   if (!shouldUseJobTargetApi) {
     return createInterviewApi(payload)

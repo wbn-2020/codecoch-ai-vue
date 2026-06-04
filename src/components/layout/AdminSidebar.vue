@@ -139,7 +139,6 @@ const sections: AdminMenuSection[] = [
     icon: Monitor,
     forceGroup: true,
     children: [
-      { label: '运维监控', path: '/admin/ops/overview', icon: Monitor, permissions: ['admin:analytics:ai'] },
       { label: 'AI Ops 看板', path: '/admin/analytics/ai', icon: DataAnalysis, permissions: ['admin:analytics:ai'] },
       { label: 'Agent 效果分析', path: '/admin/analytics/agent', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
       { label: '指标字典', path: '/admin/analytics/metrics', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },

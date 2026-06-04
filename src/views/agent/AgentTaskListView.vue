@@ -173,6 +173,7 @@ import {
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
@@ -225,6 +226,9 @@ const priorityMap: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '
 const feedbackTypeOptions = [
   { label: '有帮助', value: 'HELPFUL' },
   { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '内容不准确', value: 'INACCURATE' },
+  { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
+  { label: '疑似幻觉', value: 'HALLUCINATION' },
   { label: '太难', value: 'TOO_HARD' },
   { label: '太简单', value: 'TOO_EASY' },
   { label: '不相关', value: 'IRRELEVANT' }
@@ -265,10 +269,7 @@ watch(dateRange, (value) => {
 })
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
-  }
-  return '接口请求失败'
+  return normalizeErrorMessage(error, '请求失败，请稍后重试。')
 }
 
 const skillFromText = (value?: string) =>

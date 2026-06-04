@@ -90,7 +90,9 @@
             <el-table-column label="耗时" width="110">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
-            <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip />
+            <el-table-column label="错误信息" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ displayAgentError(row) }}</template>
+            </el-table-column>
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
@@ -141,8 +143,18 @@
             <el-descriptions-item label="耗时">{{ detail.durationMs ?? '--' }} ms</el-descriptions-item>
             <el-descriptions-item label="Trace ID">{{ detail.traceId || '--' }}</el-descriptions-item>
             <el-descriptions-item label="错误码">{{ detail.errorCode || '--' }}</el-descriptions-item>
-            <el-descriptions-item label="错误信息">{{ detail.errorMessage || '--' }}</el-descriptions-item>
+            <el-descriptions-item label="错误信息">{{ displayAgentError(detail) }}</el-descriptions-item>
           </el-descriptions>
+
+          <el-alert
+            v-if="detail.errorCode || detail.errorMessage"
+            class="detail-section"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="agentErrorInfo(detail).title"
+            :description="agentErrorInfo(detail).action"
+          />
 
           <div class="detail-section">
             <h4>生成任务</h4>
@@ -190,6 +202,7 @@ import { getAdminAgentRunDetailApi, getAdminAgentRunsApi } from '@/api/adminAgen
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAgentRunQueryDTO, AgentRunDetailVO } from '@/types/agent'
+import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const loading = ref(false)
@@ -238,10 +251,38 @@ const avgDuration = computed(() => {
 })
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+  return normalizeErrorMessage(error, '接口请求失败，请稍后重试。')
+}
+
+const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+  const value = `${run.errorCode || ''} ${run.errorMessage || ''}`.toUpperCase()
+  if (value.includes('TARGET_JOB')) {
+    return {
+      title: '缺少目标岗位',
+      action: '用户需要先创建或设置当前目标岗位，然后重新生成今日计划。'
+    }
   }
-  return '接口请求失败'
+  if (value.includes('RESUME')) {
+    return {
+      title: '缺少可用简历',
+      action: '用户需要先创建、上传或解析简历，然后重新生成今日计划。'
+    }
+  }
+  if (value.includes('SKILL_PROFILE')) {
+    return {
+      title: '缺少能力画像',
+      action: '用户需要先完成简历匹配并生成能力画像，然后重新生成今日计划。'
+    }
+  }
+  return {
+    title: toFriendlyMessage(run.errorMessage || run.errorCode, 'Agent 运行失败'),
+    action: '请结合 Trace ID、AI 调用日志和用户上下文排查，必要时让用户稍后重试。'
+  }
+}
+
+const displayAgentError = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+  if (!run.errorCode && !run.errorMessage) return '--'
+  return agentErrorInfo(run).title
 }
 
 const taskStatusMap = {

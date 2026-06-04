@@ -37,8 +37,8 @@
               <el-descriptions-item label="运行日期">{{ detail.planDate || '--' }}</el-descriptions-item>
               <el-descriptions-item label="开始时间">{{ detail.startedAt || '--' }}</el-descriptions-item>
               <el-descriptions-item label="结束时间">{{ detail.finishedAt || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="错误码">{{ detail.errorCode || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="错误信息">{{ detail.errorMessage || '--' }}</el-descriptions-item>
+              <el-descriptions-item label="失败类型">{{ displayAgentError(detail.errorCode) }}</el-descriptions-item>
+              <el-descriptions-item label="失败原因">{{ displayAgentError(detail.errorMessage || detail.errorCode) }}</el-descriptions-item>
             </el-descriptions>
           </template>
         </div>
@@ -82,7 +82,7 @@
               </el-table-column>
               <el-table-column prop="dueDate" label="日期" width="120" />
               <template #empty>
-                <AppState type="empty" title="本次运行没有任务产物" description="后端未返回 tasks，或本次运行未生成任务。" />
+                <AppState type="empty" title="本次运行没有任务产物" description="本次运行未生成可执行任务。" />
               </template>
             </el-table>
           </div>
@@ -100,6 +100,7 @@ import { getAgentRunDetailApi } from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentRunDetailVO } from '@/types/agent'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -130,12 +131,7 @@ const triggerMap: Record<string, string> = {
 
 const summaryFallback = '本次运行暂未返回摘要。你仍可以查看下方生成任务，按优先级完成后系统会更新后续计划。'
 
-const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
-  }
-  return '接口请求失败'
-}
+const displayAgentError = (value?: string | null) => toFriendlyMessage(value, '--')
 
 const fetchDetail = async () => {
   const id = Number(route.params.id)
@@ -150,7 +146,7 @@ const fetchDetail = async () => {
     detail.value = await getAgentRunDetailApi(id)
   } catch (error) {
     detail.value = undefined
-    errorMessage.value = getErrorMessage(error)
+    errorMessage.value = getErrorMessage(error, '运行详情加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }

@@ -7,7 +7,7 @@
           AI Interview Report
         </div>
         <h1>结构化 AI 面试报告</h1>
-        <p>报告内容来自后端 report 接口，缺失维度展示为空状态。</p>
+        <p>汇总面试表现、阶段评分、题目点评和后续练习建议。</p>
       </div>
       <div class="report-actions">
         <el-button @click="router.push('/dashboard')">
@@ -47,7 +47,7 @@
         <div class="overview-grid">
           <div class="score-hero">
             <span>综合得分</span>
-            <strong>{{ report.totalScore ?? 0 }}</strong>
+            <strong>{{ displayTotalScore }}</strong>
             <StatusTag :status="report.reportStatus" />
           </div>
           <div class="overview-card">
@@ -65,17 +65,39 @@
         </div>
 
         <el-alert
+          v-if="isScoreUnavailable"
+          class="score-source"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="评分暂未生成"
+          description="本次报告没有拿到可信评分，已保留面试问答。你可以重新生成报告。"
+        />
+
+        <el-alert
+          v-else
           class="score-source"
           type="info"
           show-icon
           :closable="false"
-          title="总分来源于后端面试报告 totalScore 字段。"
+          title="综合得分已生成。"
         />
+
+        <div class="report-feedback-row">
+          <AiResultFeedback
+            scene="INTERVIEW_REPORT"
+            biz-type="INTERVIEW_REPORT"
+            :biz-id="report.reportId || report.id"
+            :ai-call-log-id="sseAiCallLogId"
+            label="反馈报告问题"
+            compact
+          />
+        </div>
 
         <div class="dimension-section">
           <div class="section-head">
             <h2>评分维度</h2>
-            <p>优先展示后端 stageReports/stageScores，无拆分维度时展示空状态。</p>
+            <p>按面试阶段展示能力表现，暂无拆分时保持空状态。</p>
           </div>
           <ReportChart v-if="stageReports.length" :stages="stageReports" />
           <el-empty v-else description="暂无维度评分数据" />
@@ -190,7 +212,7 @@
       <div class="content-card__body">
         <div class="section-head">
           <h2>阶段得分</h2>
-          <p>阶段名称、类型、得分、总结、短板与建议均来自后端报告。</p>
+          <p>阶段名称、类型、得分、总结、短板与建议会在报告生成后展示。</p>
         </div>
         <el-table :data="stageReports" row-key="stageId">
           <el-table-column prop="stageName" label="阶段" min-width="160" />
@@ -207,7 +229,7 @@
       <div class="content-card__body">
         <div class="section-head">
           <h2>题目明细</h2>
-          <p>展示后端返回的问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
+          <p>展示问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
         </div>
         <div class="qa-list">
           <article v-for="message in qaMessages" :key="message.messageId" class="qa-item">
@@ -216,7 +238,7 @@
                 <strong>{{ message.questionContent ? '面试题' : message.role }}</strong>
                 <el-tag v-if="message.isFollowUp" size="small" type="warning" effect="plain">追问</el-tag>
               </div>
-              <span>{{ message.score ?? '-' }} 分</span>
+              <span>{{ displayQuestionScore(message) }}</span>
             </div>
             <div class="qa-block">
               <label>问题</label>
@@ -281,6 +303,7 @@ import {
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
 import type {
   InterviewMessageVO,
@@ -290,6 +313,7 @@ import type {
   RecommendedQuestionVO,
   StageReportVO
 } from '@/types/interview'
+import { toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -349,14 +373,34 @@ const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normal
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
+const hasReportText = computed(() => Boolean(
+  report.value?.summary ||
+  report.value?.reportContent ||
+  report.value?.strengths ||
+  report.value?.weaknesses ||
+  report.value?.mainProblems ||
+  report.value?.reviewSuggestions ||
+  report.value?.suggestions
+))
+const isScoreUnavailable = computed(() => isGenerated.value && !Number(report.value?.totalScore) && !stageReports.value.length && !hasReportText.value)
+const displayTotalScore = computed(() => isScoreUnavailable.value ? '--' : report.value?.totalScore ?? '--')
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
-const failureReason = computed(() => report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage || '请稍后重试')
+const failureReason = computed(() => toFriendlyMessage(
+  report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
+  '报告生成失败，请稍后重试。'
+))
 const sseMetaText = computed(() => {
   const items = []
-  if (sseReportId.value) items.push(`reportId: ${sseReportId.value}`)
-  if (sseAiCallLogId.value) items.push(`aiCallLogId: ${sseAiCallLogId.value}`)
+  if (sseReportId.value) items.push(`报告 #${sseReportId.value}`)
   return items.join(' / ')
 })
+
+const cleanDisplayText = (value?: string | null) => toFriendlyMessage(value || '', '')
+
+const displayQuestionScore = (message: InterviewMessageVO) => {
+  const score = Number(message.score)
+  return Number.isFinite(score) && score > 0 ? `${score} 分` : '未评分'
+}
 
 const weakPointText = computed(() => {
   const value = report.value?.weakPoints || report.value?.weakKnowledgePoints
@@ -480,8 +524,8 @@ const runSyncFallback = async (forceRegenerate: boolean) => {
 }
 
 const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
-  const message = data?.message || ''
-  const stage = data?.stage ? String(data.stage) : ''
+  const message = cleanDisplayText(data?.message)
+  const stage = cleanDisplayText(data?.stage ? String(data.stage) : '')
   const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
   const reportId = data?.reportId || Number(metadata.reportId || 0)
   const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
@@ -543,7 +587,7 @@ const startReportSse = (forceRegenerate = false) => {
         sseGenerating.value = false
         reportSseHandle = null
         if (!hasStarted) {
-          ElMessage.warning('SSE 启动失败，已回退到同步报告接口')
+          ElMessage.warning('报告生成流未启动，已切换为同步生成')
           await runSyncFallback(forceRegenerate)
           return
         }
@@ -821,6 +865,12 @@ onBeforeUnmount(() => {
 .score-source,
 .retry-row {
   margin: 16px 0;
+}
+
+.report-feedback-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .dimension-section {

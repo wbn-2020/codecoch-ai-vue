@@ -97,8 +97,16 @@ const normalizeSession = (session: any): InterviewSessionVO => ({
 const normalizeAnswerResult = (result: any, interviewId: number): InterviewAnswerResultVO => {
   const knowledgePoints = normalizeKnowledgePoints(result.knowledgePoints || result.evaluation?.knowledgePoints)
   const followUpQuestion = result.followUpQuestion || result.nextQuestion?.questionContent || ''
+  const toOptionalScore = (value: unknown) => {
+    if (value === undefined || value === null || value === '') return undefined
+    const scoreValue = Number(value)
+    return Number.isFinite(scoreValue) ? scoreValue : undefined
+  }
+  const resultScore = toOptionalScore(result.score)
+  const evaluationScore = toOptionalScore(result.evaluation?.score)
+  const score = resultScore ?? evaluationScore
   const evaluation = result.evaluation || {
-    score: result.score || 0,
+    score,
     comment: result.comment || ''
   }
   const nextQuestion =
@@ -121,11 +129,11 @@ const normalizeAnswerResult = (result: any, interviewId: number): InterviewAnswe
     ...result,
     interviewId: result.interviewId || result.id || interviewId,
     answerMessageId: result.answerMessageId || 0,
-    score: result.score ?? evaluation.score,
+    score,
     comment: result.comment || evaluation.comment || '',
     evaluation: {
       ...evaluation,
-      score: evaluation.score ?? result.score ?? 0,
+      score,
       comment: evaluation.comment || result.comment || '',
       knowledgePoints,
       followUpReason: result.followUpReason || evaluation.followUpReason

@@ -60,6 +60,10 @@
             :title="planStatusTitle"
             :description="planStatusMessage"
           />
+          <div v-if="planFixAction" class="plan-fix-row">
+            <el-button type="primary" plain @click="router.push(planFixAction.path)">{{ planFixAction.label }}</el-button>
+            <el-button :loading="generating" @click="openGenerateDialog">重新生成</el-button>
+          </div>
 
           <div v-loading="loading" class="plan-panel">
             <AppState
@@ -71,7 +75,7 @@
               <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
             </AppState>
             <template v-else>
-              <p class="plan-summary">{{ plan?.summary || '暂无计划摘要' }}</p>
+              <p class="plan-summary">{{ cleanUserText(plan?.summary, '暂无计划摘要') }}</p>
               <div v-if="focusSkills.length" class="skill-strip">
                 <el-tag v-for="skill in focusSkills" :key="skill.code || skill.name" effect="plain">{{ skill.name || skill.code }}</el-tag>
               </div>
@@ -90,7 +94,7 @@
                       <span>{{ task.estimatedMinutes ?? 0 }} 分钟</span>
                       <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
                     </div>
-                    <p v-if="task.reason" class="task-reason">{{ task.reason }}</p>
+                    <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
                   </div>
                   <div class="task-actions">
                     <el-button
@@ -130,7 +134,7 @@
                     </el-dropdown>
                   </div>
                 </article>
-                <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="没有从今日任务接口读取到任务。" />
+                <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="当前日期还没有生成训练任务。" />
               </div>
             </template>
           </div>
@@ -225,6 +229,7 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
 import type { TargetJobVO } from '@/types/jobTarget'
+import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
 
 const router = useRouter()
@@ -289,6 +294,9 @@ const priorityMap: Record<string, string> = {
 const feedbackTypeOptions = [
   { label: '有帮助', value: 'HELPFUL' },
   { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '内容不准确', value: 'INACCURATE' },
+  { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
+  { label: '疑似幻觉', value: 'HALLUCINATION' },
   { label: '太难', value: 'TOO_HARD' },
   { label: '太简单', value: 'TOO_EASY' },
   { label: '不相关', value: 'IRRELEVANT' }
@@ -343,9 +351,22 @@ const planStatusMessage = computed(() => {
     return '计划正在生成，请稍后刷新；系统会避免重复提交同一天同岗位的生成请求。'
   }
   if (planStatus.value === 'FAILED') {
-    return plan.value?.errorMessage || '计划生成失败，请检查目标岗位、简历和后端 AI 服务状态后重试。'
+    return toFriendlyMessage(plan.value?.errorMessage || plan.value?.errorCode, '计划生成失败，请检查目标岗位、简历和能力画像后重试。')
   }
   return ''
+})
+const planFixAction = computed(() => {
+  const value = `${plan.value?.errorCode || ''} ${plan.value?.errorMessage || ''}`.toUpperCase()
+  if (value.includes('TARGET_JOB')) {
+    return { label: '去创建目标岗位', path: '/job-targets' }
+  }
+  if (value.includes('RESUME')) {
+    return { label: '去完善简历', path: '/resumes' }
+  }
+  if (value.includes('SKILL_PROFILE')) {
+    return { label: '去生成能力画像', path: '/skill-profile' }
+  }
+  return null
 })
 const currentTargetHint = computed(() => {
   if (targetLoading.value) return '正在读取岗位目标列表...'
@@ -356,14 +377,18 @@ const currentTargetHint = computed(() => {
 })
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
-  }
-  return '接口请求失败'
+  return normalizeErrorMessage(error, '请求失败，请稍后重试。')
 }
 
 const skillFromText = (value?: string) =>
   value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const cleanUserText = (value?: string | null, fallback = '') => {
+  const text = toFriendlyMessage(value || '', '').trim()
+  if (!text) return fallback
+  if (/^(Calling DeepSeek|Task completed)$/i.test(text)) return fallback
+  return text
+}
 
 const displayTaskTitle = (task: AgentTaskVO) => {
   const skill = task.relatedSkillName || skillFromText(task.title) || task.targetJobTitle || '目标技能'
@@ -377,7 +402,7 @@ const displayTaskTitle = (task: AgentTaskVO) => {
     SKILL_REVIEW: `${skill} 核心概念复习`,
     KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
   }
-  return map[task.taskType || ''] || task.title || `Agent 任务 #${task.id}`
+  return map[task.taskType || ''] || cleanUserText(task.title, `Agent 任务 #${task.id}`)
 }
 
 const displayTaskDescription = (task: AgentTaskVO) => {
@@ -391,8 +416,10 @@ const displayTaskDescription = (task: AgentTaskVO) => {
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
     KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
   }
-  return map[task.taskType || ''] || task.description || '暂无任务描述'
+  return map[task.taskType || ''] || cleanUserText(task.description, '暂无任务描述')
 }
+
+const displayTaskReason = (task: AgentTaskVO) => cleanUserText(task.reason, '')
 
 const formatTargetOption = (target: TargetJobVO) => {
   const title = target.jobTitle || `岗位 #${target.id}`

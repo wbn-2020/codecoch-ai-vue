@@ -200,6 +200,7 @@ import {
 } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import type { TargetJobQueryDTO, TargetJobVO } from '@/types/jobTarget'
+import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 import JobTargetStatusTag from './components/JobTargetStatusTag.vue'
@@ -231,14 +232,6 @@ const latestUpdatedAt = computed(() => {
   return latest ? formatDateTime(latest) : '--'
 })
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string') return message
-  }
-  return fallback
-}
-
 const buildQuery = (): TargetJobQueryDTO => ({
   keyword: query.keyword || undefined,
   status: query.status,
@@ -253,7 +246,7 @@ const fetchAll = async () => {
     targets.value = list || []
     currentTarget.value = current || null
   } catch (error) {
-    loadError.value = getErrorMessage(error, '岗位目标接口请求失败，请确认后端 dev-v3 服务和登录态。')
+    loadError.value = getErrorMessage(error, '岗位目标加载失败，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
@@ -317,7 +310,7 @@ const handleParse = async (row: TargetJobVO) => {
   }
   if (row.parseStatus === 'PARSED') {
     try {
-      await ElMessageBox.confirm('重新解析会请求后端 AI 解析接口并覆盖最新分析结果，确认继续？', '重新解析 JD', {
+      await ElMessageBox.confirm('重新解析会覆盖当前分析结果，确认继续？', '重新解析 JD', {
         type: 'warning',
         confirmButtonText: '重新解析',
         cancelButtonText: '取消'
@@ -339,7 +332,7 @@ const handleParse = async (row: TargetJobVO) => {
 
 const handleDelete = async (row: TargetJobVO) => {
   try {
-    await ElMessageBox.confirm(`确认删除岗位目标「${row.jobTitle}」？对应 JD 解析结果也会被后端删除。`, '删除确认', {
+    await ElMessageBox.confirm(`确认删除岗位目标「${row.jobTitle}」？对应 JD 解析结果也会一并删除。`, '删除确认', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消'

@@ -58,6 +58,9 @@
       <TagsView scope="admin" />
 
       <el-main class="app-layout__main">
+        <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
+          演示只读模式已开启，后台写入类操作会被拦截，仅保留查询和浏览。
+        </div>
         <RouteErrorBoundary fallback-path="/admin">
           <RouterView />
         </RouteErrorBoundary>
@@ -71,6 +74,7 @@ import { Bell, MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-v
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { appConfig } from '@/config'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import CommandPalette from '@/components/layout/CommandPalette.vue'
@@ -293,6 +297,17 @@ const handleCommand = async (command: string) => {
   min-height: calc(100vh - var(--app-header-height) - 38px);
   padding: 24px;
   overflow: auto;
+}
+
+.demo-readonly-banner {
+  margin-bottom: 16px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 :deep(.layout-menu) {

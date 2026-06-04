@@ -71,6 +71,7 @@
             <template #default="{ row }">
               <div class="risk-action-cell">
                 <el-button
+                  v-if="canToggleStatus(row)"
                   v-permission="'ADMIN'"
                   link
                   :type="row.status === 1 ? 'danger' : 'warning'"
@@ -80,6 +81,7 @@
                 >
                   {{ row.status === 1 ? '禁用账号' : '启用账号' }}
                 </el-button>
+                <el-tag v-else type="info" effect="plain">当前账号</el-tag>
               </div>
             </template>
           </el-table-column>
@@ -107,6 +109,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getAdminUsersApi, updateAdminUserStatusApi } from '@/api/user'
 import AppState from '@/components/common/AppState.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { AdminUserQuery, AdminUserVO } from '@/types/user'
 import { getErrorMessage } from '@/utils/error'
 
@@ -115,6 +118,7 @@ const statusChangingId = ref<number | null>(null)
 const errorMessage = ref('')
 const users = ref<AdminUserVO[]>([])
 const total = ref(0)
+const authStore = useAuthStore()
 
 const query = reactive<AdminUserQuery>({
   keyword: '',
@@ -128,6 +132,13 @@ const hasFilters = computed(() => Boolean(query.keyword || query.status !== '' |
 const userEmptyDescription = computed(() =>
   hasFilters.value ? '没有匹配当前筛选条件的用户' : '暂无用户数据'
 )
+const currentUserId = computed(() => authStore.userInfo?.userId || authStore.userInfo?.id)
+const currentUsername = computed(() => authStore.userInfo?.username)
+const canToggleStatus = (row: AdminUserVO) => {
+  if (currentUserId.value && row.id === currentUserId.value) return false
+  if (currentUsername.value && row.username === currentUsername.value) return false
+  return true
+}
 
 const fetchUsers = async () => {
   loading.value = true

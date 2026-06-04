@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <BookOpenCheck :size="16" />
-          <span>Java Question Governance</span>
+          <span>Java 题库治理</span>
         </div>
         <h1 class="admin-hero__title">题库治理</h1>
         <p class="admin-hero__desc">
@@ -1237,6 +1237,7 @@ import type {
   QuestionTagVO
 } from '@/types/question'
 import type { QuestionDuplicateConfigVO } from '@/types/analytics'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 
 type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
@@ -2656,11 +2657,17 @@ const deleteDuplicateEvalCase = async (id?: number) => {
 }
 
 const handleRebuildEmbedding = async () => {
-  await ElMessageBox.confirm(
-    '将按更新时间重建最多 5000 道启用题目的文本指纹和向量索引，期间可能产生 embedding 调用成本。确认继续？',
-    '重建题目向量索引',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '重建题目向量索引高风险确认',
+    action: '重建启用题目的文本指纹和向量索引',
+    target: '最多处理 5000 道启用题目，按后端更新时间和索引状态执行。',
+    impact: '可能产生 Embedding 调用成本，并创建、覆盖或删除题目向量索引。',
+    rollback: '无法由前端一键恢复旧向量；如结果异常，需要重新执行修复或结合后端日志人工处理。',
+    audit: '后端会记录索引维护结果，页面会展示本次处理数量和失败明细。',
+    tips: ['建议先点击“向量状态”确认集合、维度和失败数量。', '避免在题库批量导入过程中同时重建索引。'],
+    confirmButtonText: '确认重建'
+  })
+  if (!confirmed) return
   embeddingRebuilding.value = true
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
@@ -2721,11 +2728,17 @@ const handleEmbeddingStats = async () => {
 }
 
 const handleRetryFailedEmbedding = async () => {
-  await ElMessageBox.confirm(
-    '将重试最多 1000 条失败的题目向量索引记录，期间可能产生 embedding 调用成本。确认继续？',
-    '重试失败题目向量',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '重试失败题目向量确认',
+    action: '重试失败的题目向量索引记录',
+    target: '最多处理 1000 条失败题目向量索引记录。',
+    impact: '可能重新调用 Embedding 供应商，并创建或替换 Qdrant 向量点。',
+    rollback: '无法由前端撤销已写入的向量点；如仍失败，请结合失败明细和后端日志继续排查。',
+    audit: '后端会记录索引维护结果，页面会展示本次匹配、重试和失败明细。',
+    tips: ['确认失败原因不是模型维度变化或集合缺失。'],
+    confirmButtonText: '确认重试'
+  })
+  if (!confirmed) return
   embeddingRetrying.value = true
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
@@ -3103,6 +3116,15 @@ onUnmounted(() => {
 
 .governance-tabs {
   padding: 0 20px 20px;
+
+  :deep(.el-tabs__header) {
+    position: sticky;
+    top: 72px;
+    z-index: 5;
+    margin-bottom: 18px;
+    padding-top: 10px;
+    background: var(--app-surface);
+  }
 }
 
 .governance-tabs--single {

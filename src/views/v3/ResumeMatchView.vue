@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><GitCompareArrows :size="16" /> Resume Match</div>
         <h1>简历岗位匹配</h1>
-        <p>选择真实简历和目标岗位，提交后端匹配报告生成任务。页面只展示接口返回的数据，不填充演示分数。</p>
+        <p>选择简历和目标岗位，生成真实匹配报告；报告完成前不会显示虚假分数。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/resumes')"><FileText :size="16" /> 简历中心</el-button>
@@ -86,7 +86,7 @@
         <div class="section-head">
           <div>
             <h2>最近报告</h2>
-            <p>来自 GET /resume-job-match/reports。</p>
+            <p>展示最近生成的匹配报告。</p>
           </div>
           <el-button text :loading="reportsLoading" @click="loadReports">刷新</el-button>
         </div>
@@ -212,7 +212,7 @@ const loadInitial = async () => {
     form.resumeId = Number(route.query.resumeId) || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
     form.targetJobId = Number(route.query.targetJobId) || current?.id || targets.value[0]?.id
   } catch (error) {
-    loadError.value = getErrorMessage(error, '读取简历或岗位目标失败，请确认后端服务和登录态。')
+    loadError.value = getErrorMessage(error, '读取简历或岗位目标失败，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
@@ -299,14 +299,15 @@ const startMatchSse = (payload: ResumeJobMatchCreateDTO) => {
       onError: (error, hasStarted) => {
         matchSseHandle = null
         if (!hasStarted) {
-          addMatchSseEvent('fallback', 'SSE 未启动，切换同步提交')
-          ElMessage.warning('匹配生成流未启动，已回退到同步提交')
+          addMatchSseEvent('fallback', '已切换为同步提交')
+          ElMessage.warning('匹配生成流未启动，已切换为同步提交')
           void runMatchFallback(payload)
           return
         }
         submitting.value = false
-        setMatchSseError(error, true)
-        ElMessage.error(error.message || '匹配生成流中断')
+        const message = getErrorMessage(error, '匹配生成流中断，请稍后重试。')
+        setMatchSseError(message, true)
+        ElMessage.error(message)
       },
       onDone: () => {
         matchSseHandle = null

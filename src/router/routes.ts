@@ -109,7 +109,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'analytics/overview', redirect: '/admin/analytics/agent', meta: { hidden: true } },
       { path: 'analytics/training', redirect: '/admin/analytics/agent', meta: { hidden: true } },
       { path: 'analytics/ai', name: 'AdminAiOpsAnalytics', component: () => import('@/views/admin/AdminAiOpsAnalyticsView.vue'), meta: { title: 'AI Ops 看板', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:ai'] } },
-      { path: 'ops/overview', name: 'AdminOpsOverview', component: () => import('@/views/admin/AdminOpsOverviewView.vue'), meta: { title: '运维监控', icon: 'Monitor', requiredPermissions: ['admin:analytics:ai'] } },
+      { path: 'ops/overview', redirect: '/admin/analytics/ai', meta: { hidden: true } },
       { path: 'ai/ops', redirect: '/admin/analytics/ai', meta: { hidden: true } },
       { path: 'analytics/metrics', name: 'AdminAnalyticsMetrics', component: () => import('@/views/admin/AdminAnalyticsMetricsView.vue'), meta: { title: '指标字典', icon: 'DataAnalysis', requiredPermissions: ['admin:analytics:agent'] } },
       { path: 'analytics/jobs', name: 'AdminAnalyticsJobs', component: () => import('@/views/admin/AdminAnalyticsJobsView.vue'), meta: { title: '聚合任务', icon: 'Timer', requiredPermissions: ['admin:analytics:agent'] } },

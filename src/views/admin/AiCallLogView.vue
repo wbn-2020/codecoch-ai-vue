@@ -266,8 +266,7 @@ const maskSensitiveText = (value?: string) =>
 const displayAiSummary = (row: AiCallLogVO) =>
   row.summary ||
   row.callSummary ||
-  compactText(row.requestPromptPreview || row.promptPreview || row.requestPreview || row.requestPrompt || row.promptContent, 72) ||
-  getSceneLabel(row.scene || row.callType)
+  `${getSceneLabel(row.scene || row.callType)} · ${row.businessId ? `业务 ${row.businessId}` : displayAiTraceId(row)}`
 
 const displayAiTraceId = (row: AiCallLogVO) =>
   row.traceIdShort || row.shortTraceId || compactText(row.traceId, 12) || '-'
@@ -275,18 +274,12 @@ const displayAiTraceId = (row: AiCallLogVO) =>
 const displayAiMaskedPreview = (row: AiCallLogVO) => {
   const preview =
   row.maskedPreview ||
-  row.requestPromptPreview ||
-  row.requestBodyPreview ||
-  row.requestPreview ||
-  row.promptPreview ||
-  row.responseContentPreview ||
-  row.responseBodyPreview ||
-  row.responsePreview ||
-  row.requestParams ||
-  row.requestPrompt ||
-  row.promptContent ||
-  row.responseContent
-  return preview ? maskSensitiveText(preview) : '-'
+  row.inputVariablesPreview ||
+  row.requestBodyHash ||
+  row.requestPromptHash ||
+  row.responseContentHash ||
+  row.responseBodyHash
+  return preview ? maskSensitiveText(preview) : '原始 Prompt 和响应默认隐藏'
 }
 
 const fetchLogs = async () => {
