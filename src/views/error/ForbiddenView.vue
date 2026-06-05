@@ -9,25 +9,9 @@
           <span>目标页面</span>
           <strong>{{ targetPath }}</strong>
         </div>
-        <div v-if="requiredPermissions.length">
-          <span>需要权限</span>
-          <el-tag v-for="item in requiredPermissions" :key="item" type="warning" effect="plain">{{ item }}</el-tag>
-        </div>
-        <div v-if="requiredRoles.length">
-          <span>需要角色</span>
-          <el-tag v-for="item in requiredRoles" :key="item" type="warning" effect="plain">{{ item }}</el-tag>
-        </div>
-        <div v-if="userRoles.length">
-          <span>当前角色</span>
-          <el-tag v-for="item in userRoles" :key="item" effect="plain">{{ item }}</el-tag>
-        </div>
-        <div v-if="userPermissions.length">
-          <span>当前权限</span>
-          <small>{{ userPermissions.join('、') }}</small>
-        </div>
-        <div v-if="apiMessage">
-          <span>接口提示</span>
-          <small>{{ apiMessage }}</small>
+        <div>
+          <span>处理结果</span>
+          <small>当前操作未执行。如需开通访问范围，请联系管理员处理。</small>
         </div>
       </div>
 
@@ -49,17 +33,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const splitQuery = (value: unknown) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
-
 const targetPath = computed(() => String(route.query.target || ''))
-const apiMessage = computed(() => String(route.query.message || ''))
-const requiredPermissions = computed(() => splitQuery(route.query.requiredPermissions))
-const requiredRoles = computed(() => splitQuery(route.query.requiredRoles))
-const userRoles = computed(() => splitQuery(route.query.userRoles).length ? splitQuery(route.query.userRoles) : authStore.roles)
-const userPermissions = computed(() => {
-  const permissions = splitQuery(route.query.userPermissions)
-  return permissions.length ? permissions : authStore.permissions.slice(0, 20)
-})
 const reasonText = computed(() => {
   const reason = String(route.query.reason || '')
   if (reason === 'requiresAdmin') return '当前账号没有管理端访问角色。'

@@ -163,7 +163,9 @@
               <el-table-column prop="status" label="状态" width="110">
                 <template #default="{ row }"><StatusTag :status="row.status" :map="taskStatusMap" /></template>
               </el-table-column>
-              <el-table-column prop="priority" label="优先级" width="100" />
+              <el-table-column label="优先级" width="100">
+                <template #default="{ row }">{{ priorityLabel(row.priority) }}</template>
+              </el-table-column>
               <el-table-column prop="dueDate" label="日期" width="120" />
               <template #empty>
                 <el-empty description="本次运行没有任务产物" />
@@ -171,7 +173,7 @@
             </el-table>
           </div>
 
-          <el-collapse class="detail-section">
+          <el-collapse v-if="canViewAgentDiagnostics" class="detail-section">
             <el-collapse-item title="输入快照">
               <pre class="json-box">{{ formatJson(detail.inputSnapshot) }}</pre>
             </el-collapse-item>
@@ -182,6 +184,15 @@
               <pre class="json-box">{{ detail.rawOutputText }}</pre>
             </el-collapse-item>
           </el-collapse>
+          <el-alert
+            v-else
+            class="detail-section"
+            type="info"
+            show-icon
+            :closable="false"
+            title="诊断原文已隐藏"
+            description="当前账号没有查看 Agent 输入快照、结构化输出和 AI 原始输出的权限。"
+          />
         </template>
       </div>
       <template #footer>
@@ -201,10 +212,12 @@ import { useRoute } from 'vue-router'
 import { getAdminAgentRunDetailApi, getAdminAgentRunsApi } from '@/api/adminAgent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { AdminAgentRunQueryDTO, AgentRunDetailVO } from '@/types/agent'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const loading = ref(false)
 const detailLoading = ref(false)
 const errorMessage = ref('')
@@ -249,6 +262,16 @@ const avgDuration = computed(() => {
   if (!durations.length) return '--'
   return Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
 })
+const canViewAgentDiagnostics = computed(() => {
+  const permission = detail.value?.rawAccessPermission || 'admin:ai:log:raw:view'
+  return Boolean(detail.value?.rawAvailable) && authStore.hasPermission(permission)
+})
+
+const priorityMap: Record<string, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低'
+}
 
 const getErrorMessage = (error: unknown) => {
   return normalizeErrorMessage(error, '接口请求失败，请稍后重试。')
@@ -292,6 +315,8 @@ const taskStatusMap = {
   SKIPPED: '已跳过',
   EXPIRED: '已过期'
 }
+
+const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || value : '--')
 
 const formatJson = (value: unknown) => {
   if (!value) return '--'

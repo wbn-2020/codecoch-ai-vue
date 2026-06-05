@@ -4,7 +4,7 @@
       <div>
         <div class="eyebrow">
           <Bot :size="16" />
-          AI Interview War Room
+          AI 面试训练室
         </div>
         <h1>AI 面试房间</h1>
         <p>围绕当前题目、作答区和实时反馈组织面试流程，帮助你稳定完成一次模拟训练。</p>

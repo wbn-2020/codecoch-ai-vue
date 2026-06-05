@@ -254,6 +254,7 @@ import {
 } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import echarts, { type ECharts } from '@/utils/echarts'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -282,7 +283,7 @@ const rangeOptions = [
 const metrics = computed(() => [
   { key: 'calls', label: 'AI 调用总数', value: overview.value?.totalAiCalls || 0, hint: `成功 ${overview.value?.successAiCalls || 0} / 失败 ${overview.value?.failedAiCalls || 0}` },
   { key: 'rate', label: '调用成功率', value: `${overview.value?.aiSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgElapsedMs || 0}ms` },
-  { key: 'input', label: '输入 Token', value: overview.value?.totalInputTokens || 0, hint: 'prompt tokens' },
+  { key: 'input', label: '输入 Token', value: overview.value?.totalInputTokens || 0, hint: '提示词消耗' },
   { key: 'output', label: '输出 Token', value: overview.value?.totalOutputTokens || 0, hint: `总计 ${overview.value?.totalTokens || 0}` }
 ])
 
@@ -332,9 +333,9 @@ const manualForm = ref({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
 const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>

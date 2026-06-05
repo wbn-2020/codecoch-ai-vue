@@ -72,7 +72,7 @@
               <div class="risk-action-cell">
                 <el-button
                   v-if="canToggleStatus(row)"
-                  v-permission="'ADMIN'"
+                  v-permission="'admin:user:write'"
                   link
                   :type="row.status === 1 ? 'danger' : 'warning'"
                   :disabled="statusChangingId === row.id"

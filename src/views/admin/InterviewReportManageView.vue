@@ -22,7 +22,7 @@
           <el-table-column prop="interviewName" label="面试" min-width="190" show-overflow-tooltip />
           <el-table-column prop="username" label="用户" min-width="120" show-overflow-tooltip />
           <el-table-column label="状态" width="120"><template #default="{ row }"><el-tag :type="statusType(row.reportStatus)">{{ row.reportStatus || '-' }}</el-tag></template></el-table-column>
-          <el-table-column label="分数" width="100"><template #default="{ row }">{{ row.totalScore ?? '-' }}</template></el-table-column>
+          <el-table-column label="分数" width="100"><template #default="{ row }">{{ displayReportScore(row) }}</template></el-table-column>
           <el-table-column prop="summary" label="摘要" min-width="280" show-overflow-tooltip />
           <el-table-column prop="failedReason" label="失败原因" min-width="200" show-overflow-tooltip />
           <el-table-column prop="generatedAt" label="生成时间" min-width="170" />
@@ -38,7 +38,7 @@
           <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
           <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="总分">{{ detail.totalScore ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="总分">{{ displayReportScore(detail) }}</el-descriptions-item>
           <el-descriptions-item label="摘要"><pre>{{ detail.summary || '-' }}</pre></el-descriptions-item>
           <el-descriptions-item label="失败原因">{{ detail.failedReason || '-' }}</el-descriptions-item>
         </el-descriptions>
@@ -71,6 +71,12 @@ const statusType = (status?: string) => {
   if (['FAILED', 'ERROR'].includes(value)) return 'danger'
   if (['GENERATING', 'PENDING'].includes(value)) return 'warning'
   return 'info'
+}
+const isReportSuccess = (status?: string) => ['GENERATED', 'COMPLETED', 'SUCCESS'].includes(String(status || '').toUpperCase())
+const displayReportScore = (row?: AdminInterviewReportVO | null) => {
+  if (!row || !isReportSuccess(row.reportStatus)) return '-'
+  const score = Number(row.totalScore)
+  return Number.isFinite(score) && score > 0 ? score : '-'
 }
 const fetchReports = async () => {
   loading.value = true

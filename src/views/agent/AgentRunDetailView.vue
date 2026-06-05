@@ -37,8 +37,10 @@
               <el-descriptions-item label="运行日期">{{ detail.planDate || '--' }}</el-descriptions-item>
               <el-descriptions-item label="开始时间">{{ detail.startedAt || '--' }}</el-descriptions-item>
               <el-descriptions-item label="结束时间">{{ detail.finishedAt || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="失败类型">{{ displayAgentError(detail.errorCode) }}</el-descriptions-item>
-              <el-descriptions-item label="失败原因">{{ displayAgentError(detail.errorMessage || detail.errorCode) }}</el-descriptions-item>
+              <template v-if="isFailedRun">
+                <el-descriptions-item label="失败类型">{{ displayAgentError(detail.errorCode) }}</el-descriptions-item>
+                <el-descriptions-item label="失败原因">{{ displayAgentError(detail.errorMessage || detail.errorCode) }}</el-descriptions-item>
+              </template>
             </el-descriptions>
           </template>
         </div>
@@ -72,8 +74,12 @@
           <div class="table-card embedded-table">
             <el-table :data="detail.tasks || []" row-key="id">
               <el-table-column prop="title" label="任务" min-width="240" show-overflow-tooltip />
-              <el-table-column prop="taskType" label="类型" width="150" />
-              <el-table-column prop="priority" label="优先级" width="100" />
+              <el-table-column label="类型" width="150">
+                <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
+              </el-table-column>
+              <el-table-column label="优先级" width="100">
+                <template #default="{ row }">{{ priorityLabel(row.priority) }}</template>
+              </el-table-column>
               <el-table-column label="耗时" width="90">
                 <template #default="{ row }">{{ row.estimatedMinutes ?? '--' }}m</template>
               </el-table-column>
@@ -93,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getAgentRunDetailApi } from '@/api/agent'
@@ -129,9 +135,26 @@ const triggerMap: Record<string, string> = {
   AUTO: '自动触发'
 }
 
+const taskTypeMap: Record<string, string> = {
+  QUESTION_PRACTICE: '刷题练习',
+  RESUME_OPTIMIZE: '简历优化',
+  INTERVIEW: '模拟面试',
+  SKILL_REVIEW: '技能复盘',
+  KNOWLEDGE_REVIEW: '知识复习'
+}
+
+const priorityMap: Record<string, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低'
+}
+
 const summaryFallback = '本次运行暂未返回摘要。你仍可以查看下方生成任务，按优先级完成后系统会更新后续计划。'
 
+const isFailedRun = computed(() => detail.value?.status === 'FAILED')
 const displayAgentError = (value?: string | null) => toFriendlyMessage(value, '--')
+const taskTypeLabel = (value?: string | null) => (value ? taskTypeMap[value] || value : '--')
+const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || value : '--')
 
 const fetchDetail = async () => {
   const id = Number(route.params.id)

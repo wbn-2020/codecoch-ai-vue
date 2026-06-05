@@ -5,7 +5,7 @@
         <h1 class="page-title">分类管理</h1>
         <p class="page-subtitle">维护题目分类，V1 支持基础层级与状态管理。</p>
       </div>
-      <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增分类</el-button>
+      <el-button v-permission="'admin:question:category'" type="primary" @click="openDialog()">新增分类</el-button>
     </div>
 
     <section class="content-card">
@@ -40,7 +40,7 @@
             </AppState>
             <el-empty v-else :description="categoryEmptyDescription">
               <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
-              <el-button v-permission="'ADMIN'" v-else type="primary" @click="openDialog()">新增分类</el-button>
+              <el-button v-permission="'admin:question:category'" v-else type="primary" @click="openDialog()">新增分类</el-button>
             </el-empty>
           </template>
           <el-table-column prop="name" label="分类名称" min-width="180" />
@@ -50,8 +50,8 @@
           </el-table-column>
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
-              <el-button v-permission="'ADMIN'" link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button v-permission="'ADMIN'" link type="danger" @click="handleDelete(row)">删除</el-button>
+              <el-button v-permission="'admin:question:category'" link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button v-permission="'admin:question:category'" link type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -79,7 +79,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button v-permission="'admin:question:category'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,5 +1,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 
+import { toFriendlyMessage } from '@/utils/error'
+
 export type SseStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error'
 
 export interface UseSseStateOptions {
@@ -68,7 +70,7 @@ export const useSseState = (options: UseSseStateOptions = {}) => {
   }
 
   const setError = (err: Error | string, started = false) => {
-    const message = typeof err === 'string' ? err : err.message || 'SSE 连接异常'
+    const message = toFriendlyMessage(typeof err === 'string' ? err : err.message, '流式连接异常，请稍后重试。')
     status.value = 'error'
     error.value = message
     errorDetail.value = typeof err === 'string' ? new Error(err) : err

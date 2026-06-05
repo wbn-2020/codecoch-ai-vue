@@ -67,6 +67,7 @@ import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
 import { appConfig } from '@/config'
@@ -128,8 +129,9 @@ const handleSubmit = async () => {
     try {
       await authStore.login(form, { silentError: true })
       ElMessage.success('登录成功')
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-      await router.replace(redirect || '/dashboard')
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+      const defaultPath = authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
+      await router.replace(redirect || defaultPath)
     } catch (error) {
       errorMessage.value = getLoginErrorMessage(error)
     } finally {

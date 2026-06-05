@@ -1,4 +1,5 @@
 import { appConfig } from '@/config'
+import { toFriendlyMessage } from '@/utils/error'
 import { getToken } from '@/utils/token'
 
 export type SseStandardEventName = 'start' | 'delta' | 'metadata' | 'done' | 'error'
@@ -93,7 +94,7 @@ const isStartLikeEvent = (event: SseEventName) => {
 }
 
 const createSseError = (data?: SseEventData) => {
-  return new Error(data?.message || data?.code || 'SSE stream error')
+  return new Error(toFriendlyMessage(data?.message || data?.code, '流式生成异常，请稍后重试。'))
 }
 
 export const streamSse = <T extends SseEventData = SseEventData>({
@@ -120,7 +121,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       if (controller.signal.aborted) return
 
       if (!window.fetch || !window.ReadableStream) {
-        throw new Error('Current browser does not support fetch SSE streaming')
+        throw new Error('当前浏览器暂不支持流式进度，已尝试切换为普通生成。')
       }
 
       const token = getToken()
@@ -138,7 +139,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       })
 
       if (!response.ok || !response.body) {
-        throw new Error(`SSE request failed: ${response.status}`)
+        throw new Error(`流式请求失败（${response.status}），请稍后重试。`)
       }
 
       const reader = response.body.getReader()

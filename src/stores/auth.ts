@@ -99,14 +99,12 @@ export const useAuthStore = defineStore('auth', {
     },
     hasPermission: (state) => {
       return (permissionCode: string) => {
-        if (state.roles.includes('ADMIN')) return true
         const normalized = normalizePermissionCode(permissionCode)
         return normalized ? state.permissions.includes(normalized) : false
       }
     },
     hasAnyPermission: (state) => {
       return (permissionCodes: string[]) => {
-        if (state.roles.includes('ADMIN')) return true
         return permissionCodes.some((permissionCode) => {
           const normalized = normalizePermissionCode(permissionCode)
           return normalized ? state.permissions.includes(normalized) : false
@@ -115,7 +113,6 @@ export const useAuthStore = defineStore('auth', {
     },
     hasAnyAuthority: (state) => {
       return (codes: string[]) => {
-        if (state.roles.includes('ADMIN')) return true
         return codes.some((code) => {
           const role = normalizeRoleCode(code)
           const permission = normalizePermissionCode(code)

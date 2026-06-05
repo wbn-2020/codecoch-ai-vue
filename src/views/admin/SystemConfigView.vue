@@ -5,7 +5,7 @@
         <h1 class="page-title">系统配置</h1>
         <p class="page-subtitle">维护 V1 基础配置项，例如追问次数、每场题数和 AI 超时时间。</p>
       </div>
-      <el-button v-permission="['ADMIN', 'admin:system:config:write']" type="primary" @click="openDialog()">新增配置</el-button>
+      <el-button v-permission="'admin:system:config:write'" type="primary" @click="openDialog()">新增配置</el-button>
     </div>
 
     <section class="content-card">
@@ -31,7 +31,7 @@
         <el-table v-loading="loading" :data="configs" row-key="configKey">
           <template #empty>
             <el-empty description="暂无系统配置">
-              <el-button v-permission="['ADMIN', 'admin:system:config:write']" type="primary" @click="openDialog()">新增配置</el-button>
+              <el-button v-permission="'admin:system:config:write'" type="primary" @click="openDialog()">新增配置</el-button>
             </el-empty>
           </template>
           <el-table-column prop="configKey" label="配置 Key" min-width="200" show-overflow-tooltip />
@@ -48,10 +48,10 @@
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <div class="admin-row-actions">
-                <el-button v-permission="['ADMIN', 'admin:system:config:write']" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
+                <el-button v-permission="'admin:system:config:write'" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
                   <el-button
-                    v-permission="['ADMIN', 'admin:system:config:write']"
+                    v-permission="'admin:system:config:write'"
                     link
                     type="danger"
                     :disabled="row.editable !== 1"
@@ -110,7 +110,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="['ADMIN', 'admin:system:config:write']" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button v-permission="'admin:system:config:write'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -224,7 +224,7 @@ const handleSave = async () => {
     dialogVisible.value = false
     await fetchConfigs()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, 'System config save failed. Please try again.'))
+    ElMessage.error(getErrorMessage(error, '系统配置保存失败，请稍后重试。'))
   } finally {
     saving.value = false
   }

@@ -101,6 +101,7 @@ import {
   type SkillGrowthSnapshotVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -119,9 +120,9 @@ const boundedPercent = (value?: number) => Math.max(0, Math.min(100, Number(valu
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
 const load = async () => {

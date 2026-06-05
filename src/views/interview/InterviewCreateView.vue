@@ -4,7 +4,7 @@
       <div>
         <div class="eyebrow">
           <Sparkles :size="16" />
-          AI Interview Configurator
+          AI 面试配置
         </div>
         <h1>创建 AI 模拟面试</h1>
         <p>基于简历、岗位方向和技术栈生成 Java 面试训练，创建后可直接进入面试房间。</p>

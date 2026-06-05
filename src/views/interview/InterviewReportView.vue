@@ -33,7 +33,7 @@
         <el-progress :percentage="pollProgress" :show-text="false" />
         <div class="sse-stage-list">
           <article v-for="item in sseEvents" :key="item.key" class="sse-stage-item">
-            <span>{{ item.event }}</span>
+            <span>{{ sseEventLabel(item.event) }}</span>
             <strong>{{ item.stage || item.message || '-' }}</strong>
             <p>{{ item.message || item.stage || '-' }}</p>
           </article>
@@ -104,12 +104,12 @@
         </div>
       </div>
 
-      <div v-else-if="isFailed" class="content-card__body failed-panel">
+      <div v-else-if="isFailed || isUnscorable" class="content-card__body failed-panel">
         <el-alert
-          type="error"
+          :type="isUnscorable ? 'warning' : 'error'"
           show-icon
           :closable="false"
-          title="报告生成失败"
+          :title="isUnscorable ? '报告暂不可评分' : '报告生成失败'"
           :description="failureReason"
         />
         <div class="retry-row">
@@ -338,12 +338,12 @@ const normalizedStatus = computed(() => {
   return String(status).toUpperCase()
 })
 
+const successReportStatuses = ['GENERATED', 'COMPLETED', 'SUCCESS']
+const unscorableReportStatuses = ['UNSCORABLE', 'NOT_SCORABLE', 'INSUFFICIENT_SAMPLE', 'SAMPLE_INSUFFICIENT']
 const isGenerating = computed(() => sseGenerating.value || ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
-const isGenerated = computed(() => {
-  if (['GENERATED', 'COMPLETED'].includes(normalizedStatus.value)) return true
-  return Boolean(report.value?.totalScore || report.value?.summary || report.value?.reportContent)
-})
+const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
+const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
 
 type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
 
@@ -373,21 +373,16 @@ const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normal
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
-const hasReportText = computed(() => Boolean(
-  report.value?.summary ||
-  report.value?.reportContent ||
-  report.value?.strengths ||
-  report.value?.weaknesses ||
-  report.value?.mainProblems ||
-  report.value?.reviewSuggestions ||
-  report.value?.suggestions
-))
-const isScoreUnavailable = computed(() => isGenerated.value && !Number(report.value?.totalScore) && !stageReports.value.length && !hasReportText.value)
-const displayTotalScore = computed(() => isScoreUnavailable.value ? '--' : report.value?.totalScore ?? '--')
+const hasValidTotalScore = computed(() => {
+  const score = Number(report.value?.totalScore)
+  return isGenerated.value && Number.isFinite(score) && score > 0
+})
+const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
+const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
 const failureReason = computed(() => toFriendlyMessage(
   report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
-  '报告生成失败，请稍后重试。'
+  isUnscorable.value ? '本次面试答题样本不足或题目明细不完整，暂时无法生成可信评分。请继续答题或重新生成报告。' : '报告生成失败，请稍后重试。'
 ))
 const sseMetaText = computed(() => {
   const items = []
@@ -395,7 +390,33 @@ const sseMetaText = computed(() => {
   return items.join(' / ')
 })
 
-const cleanDisplayText = (value?: string | null) => toFriendlyMessage(value || '', '')
+const cleanDisplayText = (value?: string | null, fallback = '') => toFriendlyMessage(value || '', fallback)
+
+const sseEventLabel = (event?: string) => {
+  const map: Record<string, string> = {
+    start: '开始',
+    progress: '生成中',
+    delta: '生成中',
+    metadata: '状态更新',
+    result: '结果返回',
+    done: '完成',
+    error: '失败'
+  }
+  return map[String(event || '').toLowerCase()] || '状态更新'
+}
+
+const sseStageLabel = (stage?: string) => {
+  const map: Record<string, string> = {
+    VALIDATE_REQUEST: '校验请求',
+    LOAD_INTERVIEW: '读取面试记录',
+    BUILD_PROMPT: '生成提示词',
+    CALL_AI_REPORT: '调用 AI 生成报告',
+    PARSE_AI_REPORT: '解析报告内容',
+    SAVE_REPORT: '保存报告',
+    COMPLETE: '生成完成'
+  }
+  return map[String(stage || '').toUpperCase()] || cleanDisplayText(stage, '')
+}
 
 const displayQuestionScore = (message: InterviewMessageVO) => {
   const score = Number(message.score)
@@ -524,8 +545,9 @@ const runSyncFallback = async (forceRegenerate: boolean) => {
 }
 
 const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
-  const message = cleanDisplayText(data?.message)
-  const stage = cleanDisplayText(data?.stage ? String(data.stage) : '')
+  const eventLabel = sseEventLabel(event)
+  const message = cleanDisplayText(data?.message, eventLabel)
+  const stage = sseStageLabel(data?.stage ? String(data.stage) : '')
   const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
   const reportId = data?.reportId || Number(metadata.reportId || 0)
   const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
@@ -596,9 +618,9 @@ const startReportSse = (forceRegenerate = false) => {
           interviewId: id,
           reportStatus: 'FAILED',
           status: 'FAILED',
-          failedReason: error.message
+          failedReason: toFriendlyMessage(error.message, '报告生成失败，请稍后重试。')
         }
-        ElMessage.error(error.message || '报告 SSE 生成失败')
+        ElMessage.error(toFriendlyMessage(error.message, '报告生成失败，请稍后重试。'))
       },
       onDone: () => {
         sseGenerating.value = false
@@ -615,7 +637,7 @@ const loadReportOrStartSse = async () => {
   try {
     report.value = await getInterviewReportApi(interviewId)
     pollFailures.value = 0
-    if (isGenerated.value || isFailed.value) {
+    if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
       return
     }
@@ -641,8 +663,8 @@ const handleGenerateStudyPlan = async () => {
   studyPlanGenerating.value = true
   try {
     const result = await generateStudyPlanApi({ reportId })
-    if (result.planStatus === 'FAILED') {
-      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+    if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
+      ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
     } else {
       ElMessage.success('学习计划已生成')
     }

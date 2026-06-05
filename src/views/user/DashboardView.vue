@@ -5,7 +5,7 @@
       <div class="hero-copy">
         <div class="hero-eyebrow">
           <Sparkles :size="16" />
-          <span>Today Focus</span>
+          <span>今日重点</span>
         </div>
         <h1>欢迎回来，{{ displayName }}</h1>
         <p>
@@ -270,7 +270,7 @@
     <section class="cc-glass dashboard-section">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">Entry Status</p>
+          <p class="section-kicker">入口状态</p>
           <h2>推荐入口状态</h2>
         </div>
       </div>

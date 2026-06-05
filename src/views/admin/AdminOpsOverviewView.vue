@@ -210,22 +210,22 @@
           <div class="vector-action-list">
             <div class="vector-action-group">
               <span class="vector-action-group__label">题目向量</span>
-              <el-button type="warning" plain :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
+              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
                 重建题目向量
               </el-button>
-              <el-button type="warning" plain :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
+              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
                 重试题目失败
               </el-button>
             </div>
             <div class="vector-action-group vector-action-group--risk">
               <span class="vector-action-group__label">知识库与删除补偿</span>
-              <el-button type="warning" plain :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
+              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
                 重建知识库向量
               </el-button>
-              <el-button type="warning" plain :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
+              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
                 重试知识库失败
               </el-button>
-              <el-button type="danger" plain :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">
+              <el-button v-permission="'admin:analytics:ai'" type="danger" plain :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">
                 重试向量删除补偿
               </el-button>
             </div>
@@ -516,6 +516,7 @@ import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboar
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview, type DangerActionPreviewOptions } from '@/utils/dangerAction'
 import echarts, { type ECharts } from '@/utils/echarts'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const router = useRouter()
@@ -1023,9 +1024,10 @@ const loadPage = async () => {
     duplicateConfig.value = duplicateConfigData
     await renderChart()
   } catch (error) {
-    errorMessage.value = error && typeof error === 'object' && 'message' in error
-      ? String((error as { message?: unknown }).message || '接口请求失败')
-      : '接口请求失败'
+    errorMessage.value = toFriendlyMessage(
+      error && typeof error === 'object' && 'message' in error ? (error as { message?: unknown }).message : error,
+      '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+    )
   } finally {
     loading.value = false
   }

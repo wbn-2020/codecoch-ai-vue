@@ -153,7 +153,7 @@
               show-icon
               :closable="false"
               title="学习计划生成失败"
-              :description="selectedPlan.failureReason || '请稍后重试或返回报告重新生成'"
+              :description="toFriendlyMessage(selectedPlan.failureReason, '请稍后重试或返回报告重新生成')"
             />
 
             <div class="progress-row">
@@ -328,6 +328,7 @@ import type {
   StudyTaskStatus,
   StudyTaskVO
 } from '@/types/studyPlan'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -452,7 +453,7 @@ const fetchDailyView = async () => {
     dailyView.value = await getStudyPlanDailyViewApi(planId, dailyDate.value)
   } catch (error) {
     dailyView.value = null
-    dailyError.value = error instanceof Error ? error.message : '请稍后重试'
+    dailyError.value = getErrorMessage(error, '请稍后重试')
   } finally {
     dailyLoading.value = false
   }
@@ -470,7 +471,7 @@ const handleGenerate = async () => {
   }
   generating.value = true
   streamContent.value = ''
-  streamStatus.value = '正在建立学习计划 SSE 连接'
+  streamStatus.value = '正在建立学习计划流式生成连接'
   let streamStarted = false
   let streamPlanId = 0
   try {
@@ -487,7 +488,7 @@ const handleGenerate = async () => {
         onEvent: (event, data) => {
           if (event === 'start') {
             streamStarted = true
-            streamStatus.value = data?.message || '学习计划流式生成中'
+            streamStatus.value = toFriendlyMessage(data?.message, '学习计划流式生成中')
           }
           if (event === 'metadata') {
             streamPlanId = resolveStreamPlanId(data) || streamPlanId
@@ -506,7 +507,7 @@ const handleGenerate = async () => {
       planId: streamPlanId,
       planStatus: 'ACTIVE'
     }
-    ElMessage.success('学习计划已通过 SSE 生成')
+    ElMessage.success('学习计划已通过流式生成完成')
     if (result.planId) {
       pollCount.value = 0
       await router.replace({ path: '/study-plans', query: { planId: String(result.planId) } })
@@ -521,12 +522,12 @@ const handleGenerate = async () => {
       return
     }
     if (streamStarted) {
-      streamStatus.value = 'SSE 生成失败，请刷新后查看是否已有生成结果'
-      ElMessage.error(error instanceof Error ? error.message : 'SSE 生成失败')
+      streamStatus.value = '流式生成失败，请刷新后查看是否已有生成结果'
+      ElMessage.error(getErrorMessage(error, '流式生成失败，请刷新后查看是否已有生成结果'))
       await fetchPlans()
       return
     }
-    streamStatus.value = 'SSE 连接失败，已回退到同步生成接口'
+    streamStatus.value = '流式连接失败，已回退到同步生成接口'
     const result = await generateStudyPlanApi({
       ...generateForm,
       targetPosition: generateForm.targetPosition || undefined,

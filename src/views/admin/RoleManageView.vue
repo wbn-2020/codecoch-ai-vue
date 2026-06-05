@@ -5,7 +5,7 @@
         <h1 class="page-title">角色管理</h1>
         <p class="page-subtitle">维护后台角色的基础信息和启用状态，角色权限菜单可在“菜单权限”中配置。</p>
       </div>
-      <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增角色</el-button>
+      <el-button v-permission="'admin:role:write'" type="primary" @click="openDialog()">新增角色</el-button>
     </div>
 
     <section class="content-card">
@@ -21,7 +21,7 @@
               <el-button type="primary" :loading="loading" @click="fetchRoles">重新加载</el-button>
             </AppState>
             <el-empty v-else description="暂无角色数据">
-              <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增角色</el-button>
+              <el-button v-permission="'admin:role:write'" type="primary" @click="openDialog()">新增角色</el-button>
             </el-empty>
           </template>
           <el-table-column prop="roleCode" label="角色编码" min-width="160" />
@@ -36,12 +36,12 @@
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <div class="admin-row-actions">
-                <el-button v-permission="'ADMIN'" link type="primary" @click="openDialog(row)">编辑</el-button>
+                <el-button v-permission="'admin:role:write'" link type="primary" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
-                  <el-button v-permission="'ADMIN'" link type="warning" @click="handleToggleStatus(row)">
+                  <el-button v-permission="'admin:role:write'" link type="warning" @click="handleToggleStatus(row)">
                     {{ row.status === 1 ? '禁用角色' : '启用角色' }}
                   </el-button>
-                  <el-button v-permission="'ADMIN'" link type="danger" @click="handleDelete(row)">删除角色</el-button>
+                  <el-button v-permission="'admin:role:write'" link type="danger" @click="handleDelete(row)">删除角色</el-button>
                 </span>
               </div>
             </template>
@@ -64,7 +64,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button v-permission="'admin:role:write'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>

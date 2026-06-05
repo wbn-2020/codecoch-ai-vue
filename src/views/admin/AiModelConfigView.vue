@@ -6,7 +6,7 @@
         <h1 class="admin-hero__title">AI 模型配置</h1>
         <p class="admin-hero__desc">维护模型供应商、调用地址、默认模型和启停状态。</p>
       </div>
-      <div class="admin-hero__actions"><el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增模型</el-button></div>
+      <div class="admin-hero__actions"><el-button v-permission="'admin:ai:model:write'" type="primary" @click="openDialog()">新增模型</el-button></div>
     </section>
     <section class="admin-panel">
       <div class="admin-filter-bar">
@@ -20,7 +20,7 @@
         <el-table v-loading="loading" :data="models" row-key="id">
           <template #empty>
             <el-empty description="暂无模型配置">
-              <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增模型</el-button>
+              <el-button v-permission="'admin:ai:model:write'" type="primary" @click="openDialog()">新增模型</el-button>
             </el-empty>
           </template>
           <el-table-column prop="provider" label="供应商" min-width="120" />
@@ -33,10 +33,10 @@
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <div class="admin-row-actions">
-                <el-button v-permission="'ADMIN'" link type="primary" @click="openDialog(row)">编辑</el-button>
+                <el-button v-permission="'admin:ai:model:write'" link type="primary" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
                   <el-dropdown
-                    v-permission="'ADMIN'"
+                    v-permission="'admin:ai:model:write'"
                     trigger="click"
                     @command="(command: string | number | object) => handleRiskCommand(command, row)"
                   >
@@ -71,7 +71,7 @@
         <el-form-item label="Max Tokens"><el-input-number v-model="form.maxTokens" :min="1" :step="512" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-permission="'admin:ai:model:write'" type="primary" :loading="saving" @click="handleSave">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

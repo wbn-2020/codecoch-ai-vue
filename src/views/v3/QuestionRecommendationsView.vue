@@ -2,7 +2,7 @@
   <div class="v3-page">
     <section class="page-hero">
       <div>
-        <div class="hero-kicker"><ListChecks :size="16" /> Question Recommendations</div>
+        <div class="hero-kicker"><ListChecks :size="16" /> 推荐题目</div>
         <h1>推荐题目</h1>
         <p>按能力画像、匹配报告或学习计划读取推荐批次；缺少 URL 参数时自动使用最近上下文。</p>
       </div>
@@ -46,7 +46,7 @@
         >
           <span class="question-main">
             <strong>{{ item.questionTitle || `推荐项 #${item.id}` }}</strong>
-            <small>{{ item.skillName || item.skillCode || '--' }} · {{ item.difficulty || '--' }} · {{ item.questionType || '--' }}</small>
+            <small>{{ item.skillName || item.skillCode || '--' }} · {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
             <em>{{ item.recommendReason || item.questionContent || '暂无推荐理由' }}</em>
           </span>
           <span class="question-tags">
@@ -71,6 +71,7 @@ import {
   generateQuestionRecommendationsFromGapApi,
   generateQuestionRecommendationsFromMatchReportApi,
   generateQuestionRecommendationsFromStudyPlanApi,
+  getQuestionRecommendationBatchItemsApi,
   getQuestionRecommendationItemsFromGapBatchApi,
   getQuestionRecommendationItemsFromMatchReportBatchApi,
   getQuestionRecommendationItemsFromStudyPlanBatchApi
@@ -90,13 +91,27 @@ const generating = ref(false)
 const loadError = ref('')
 const items = ref<QuestionRecommendationItemVO[]>([])
 
-const initialSource = (route.query.studyPlanId ? 'studyPlan' : route.query.matchReportId ? 'matchReport' : 'gap') as Source
+const sourceByRouteValue: Record<string, Source> = {
+  gap: 'gap',
+  JD_GAP: 'gap',
+  matchReport: 'matchReport',
+  RESUME_JOB_MATCH: 'matchReport',
+  studyPlan: 'studyPlan',
+  STUDY_PLAN: 'studyPlan'
+}
+
+const routeSource = String(route.query.source || route.query.sourceType || '')
+const initialSource = (
+  sourceByRouteValue[routeSource] || (route.query.studyPlanId ? 'studyPlan' : route.query.matchReportId ? 'matchReport' : 'gap')
+) as Source
+
 const initialSourceId = Number(
-  initialSource === 'studyPlan'
+  route.query.sourceId ||
+  (initialSource === 'studyPlan'
     ? route.query.studyPlanId
     : initialSource === 'matchReport'
       ? route.query.matchReportId
-      : route.query.skillProfileId || route.query.profileId
+      : route.query.skillProfileId || route.query.profileId)
 )
 
 const query = reactive({
@@ -111,6 +126,18 @@ const sourceOptions = [
   { label: '学习计划', value: 'studyPlan' }
 ]
 const canGenerate = computed(() => !generating.value)
+const difficultyMap: Record<string, string> = {
+  EASY: '简单',
+  MEDIUM: '中等',
+  HARD: '困难'
+}
+const questionTypeMap: Record<string, string> = {
+  SINGLE_CHOICE: '单选题',
+  MULTIPLE_CHOICE: '多选题',
+  SHORT_ANSWER: '简答题',
+  CODING: '编程题',
+  CASE_ANALYSIS: '案例分析'
+}
 
 const getQueryNumber = (name: string) => {
   const value = route.query[name]
@@ -120,6 +147,8 @@ const getQueryNumber = (name: string) => {
 }
 
 const severityTag = (severity?: string) => severity === 'HIGH' || severity === 'CRITICAL' ? 'danger' : severity === 'MEDIUM' ? 'warning' : 'info'
+const difficultyLabel = (value?: string | null) => value ? difficultyMap[value] || value : '--'
+const questionTypeLabel = (value?: string | null) => value ? questionTypeMap[value] || value : '--'
 const sourceTypeBySource: Record<Source, string> = {
   gap: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP,
   matchReport: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH,
@@ -132,16 +161,19 @@ const buildPracticeQuery = (item: QuestionRecommendationItemVO) => {
     : getQueryNumber('skillProfileId') || getQueryNumber('profileId')
   const matchReportId = query.source === 'matchReport' ? query.sourceId : getQueryNumber('matchReportId')
   const studyPlanId = query.source === 'studyPlan' ? query.sourceId : getQueryNumber('studyPlanId')
+  const recommendationSourceId = item.sourceId || query.sourceId
+  const targetJobId = getQueryNumber('targetJobId')
+  const resumeId = getQueryNumber('resumeId')
   return {
     recommendationItemId: String(item.id),
     batchId: String(item.batchId),
     sourceType: item.sourceType || sourceTypeBySource[query.source],
-    sourceId: item.sourceId || query.sourceId ? String(item.sourceId || query.sourceId) : undefined,
+    sourceId: recommendationSourceId ? String(recommendationSourceId) : undefined,
     skillProfileId: skillProfileId ? String(skillProfileId) : undefined,
     matchReportId: matchReportId ? String(matchReportId) : undefined,
     studyPlanId: studyPlanId ? String(studyPlanId) : undefined,
-    targetJobId: getQueryNumber('targetJobId') ? String(getQueryNumber('targetJobId')) : undefined,
-    resumeId: getQueryNumber('resumeId') ? String(getQueryNumber('resumeId')) : undefined
+    targetJobId: targetJobId ? String(targetJobId) : undefined,
+    resumeId: resumeId ? String(resumeId) : undefined
   }
 }
 
@@ -190,6 +222,11 @@ const loadRecommendations = async () => {
   loading.value = true
   loadError.value = ''
   try {
+    const batchId = getQueryNumber('batchId')
+    if (batchId) {
+      items.value = await getQuestionRecommendationBatchItemsApi(batchId)
+      return
+    }
     if (!query.sourceId) {
       await hydrateContext()
     }
@@ -214,6 +251,7 @@ const loadRecommendations = async () => {
 
 const generateRecommendations = async () => {
   generating.value = true
+  loadError.value = ''
   try {
     if (!query.sourceId) {
       await hydrateContext()
@@ -231,6 +269,9 @@ const generateRecommendations = async () => {
     }
     ElMessage.success('推荐题生成任务已提交')
     await loadRecommendations()
+  } catch (error) {
+    loadError.value = getErrorMessage(error, '生成推荐题失败，请稍后重试。')
+    ElMessage.error(loadError.value)
   } finally {
     generating.value = false
   }

@@ -202,6 +202,7 @@ import type {
   QuestionRelationType,
   QuestionRelationVO
 } from '@/types/question'
+import { getErrorMessage } from '@/utils/error'
 
 const relationTypeOptions: Array<{ label: string; value: QuestionRelationType }> = [
   { label: '同一意图', value: 'SAME_INTENT' },
@@ -273,7 +274,7 @@ const fetchRelations = async () => {
     currentQuestionId.value = questionId
     form.questionId = questionId
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '题目关系列表加载失败')
+    ElMessage.error(getErrorMessage(error, '题目关系列表加载失败'))
   } finally {
     loading.value = false
   }
@@ -322,7 +323,7 @@ const handleCreate = async () => {
     await fetchRelations()
     resetCreateForm()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '题目关系新增失败')
+    ElMessage.error(getErrorMessage(error, '题目关系新增失败'))
   } finally {
     saving.value = false
   }
@@ -336,7 +337,7 @@ const handleDelete = async (row: QuestionRelationVO) => {
     ElMessage.success('题目关系已删除')
     await fetchRelations()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '题目关系删除失败')
+    ElMessage.error(getErrorMessage(error, '题目关系删除失败'))
   }
 }
 

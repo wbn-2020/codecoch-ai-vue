@@ -78,7 +78,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, title: '管理后台' },
     children: [
-      { path: 'dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/AdminDashboardView.vue'), meta: { title: '管理首页', icon: 'DataBoard', affix: true, requiredPermissions: ['admin:v3'] } },
+      { path: 'dashboard', redirect: '/admin', meta: { hidden: true } },
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManageView.vue'), meta: { title: '用户管理', icon: 'UserFilled', requiredPermissions: ['admin:user:list'] } },
       { path: 'roles', name: 'AdminRoles', component: () => import('@/views/admin/RoleManageView.vue'), meta: { title: '角色管理', icon: 'Connection', requiredPermissions: ['admin:role:list'] } },
       { path: 'questions', name: 'AdminQuestions', component: () => import('@/views/admin/QuestionManageView.vue'), meta: { title: '题目管理', icon: 'Collection', requiredPermissions: ['admin:question:list'] } },

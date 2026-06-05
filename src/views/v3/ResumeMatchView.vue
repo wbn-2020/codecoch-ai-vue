@@ -101,7 +101,7 @@
               <small>{{ report.resumeTitle || `简历 #${report.resumeId}` }} · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
             </span>
             <el-tag :type="statusTag(report.status)">{{ report.status || '--' }}</el-tag>
-            <b>{{ report.overallScore ?? '--' }}</b>
+            <b>{{ isReportSuccess(report.status) ? (report.overallScore ?? '--') : '--' }}</b>
           </button>
         </div>
       </div>
@@ -132,7 +132,7 @@ import type {
   ResumeJobMatchSseEvent,
   ResumeJobMatchSseEventType
 } from '@/types/resumeJobMatch'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import type { StreamSseHandle } from '@/utils/sse'
 
@@ -179,6 +179,27 @@ const statusTag = (status?: string) => {
   if (status === 'FAILED') return 'danger'
   if (status === 'PROCESSING' || status === 'PENDING') return 'warning'
   return 'info'
+}
+
+const isReportSuccess = (status?: string) => status === 'SUCCESS'
+
+const matchSseStageLabel = (stage?: string) => {
+  const normalized = (stage || '').trim().toUpperCase()
+  const labels: Record<string, string> = {
+    START: '开始生成',
+    VALIDATE_REQUEST: '校验请求',
+    REQUEST_VALIDATED: '请求已校验',
+    LOAD_RESUME: '读取简历',
+    LOAD_TARGET_JOB: '读取岗位',
+    CALL_AI: '调用 AI',
+    AI_STREAMING: 'AI 生成中',
+    PARSE_RESULT: '解析结果',
+    SAVE_REPORT: '保存报告',
+    DONE: '生成完成',
+    ERROR: '生成失败',
+    FALLBACK: '同步提交'
+  }
+  return labels[normalized] || ''
 }
 
 const sseStatusLabel = (status: string) => {
@@ -271,7 +292,9 @@ const applyMatchSseEvent = (
   data: ResumeJobMatchSseEvent | undefined,
   payload: ResumeJobMatchCreateDTO
 ) => {
-  const message = data?.message || data?.content || data?.stage || event
+  const stageLabel = matchSseStageLabel(data?.stage) || matchSseStageLabel(event)
+  const rawMessage = data?.message || data?.content || event
+  const message = [stageLabel, toFriendlyMessage(rawMessage, '简历岗位匹配生成中')].filter(Boolean).join('：')
   addMatchSseEvent(event, message)
   const reportId = data?.result?.reportId || data?.bizId
   if ((event === 'result' || event === 'done') && reportId) {

@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker">
           <FilePenLine :size="16" />
-          Structured Resume Editor
+          结构化简历编辑器
         </div>
         <h1>{{ isEdit ? '编辑简历' : '新增简历' }}</h1>
         <p>以结构化方式维护基本信息、求职目标、技术栈和项目经历，供后续真实面试流程读取。</p>
@@ -260,7 +260,7 @@
               <span>综合评分</span>
               <strong>{{ optimizeDetail.resultJson?.overallScore ?? '--' }}</strong>
             </div>
-            <p>{{ optimizeDetail.resultJson?.overallComment || optimizeDetail.errorMessage || '后端未返回整体评价。' }}</p>
+            <p>{{ optimizeDetailSummary }}</p>
             <div v-if="optimizeSuggestions.length" class="rewrite-toolbar">
               <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
               <el-button text size="small" @click="selectAllOptimizeSuggestions">全选</el-button>
@@ -377,6 +377,7 @@ import type {
   ResumeProjectDTO,
   ResumeProjectVO
 } from '@/types/resume'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 import { formatDateTime } from '@/utils/format'
 
@@ -446,6 +447,11 @@ const completion = computed(() => {
 const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
 
 const optimizeSuggestions = computed(() => optimizeDetail.value?.resultJson?.rewriteSuggestions || [])
+
+const optimizeDetailSummary = computed(() => {
+  const raw = optimizeDetail.value?.resultJson?.overallComment || optimizeDetail.value?.errorMessage
+  return raw ? toFriendlyMessage(raw, 'AI 优化结果暂不可用，请稍后重试。') : '后端未返回整体评价。'
+})
 
 const canApplyOptimizeResult = computed(() =>
   optimizeDetail.value?.optimizeStatus === 'SUCCESS' && selectedOptimizeSuggestionIndexes.value.length > 0
@@ -544,11 +550,11 @@ const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
 
 const runSyncOptimizeFallback = async () => {
   if (!resumeId.value) return
-  optimizeSseStatus.value = '同步 fallback'
-  optimizeSseMessage.value = 'SSE 未启动成功，已回退到原同步优化接口。'
+  optimizeSseStatus.value = '同步回退'
+  optimizeSseMessage.value = '流式连接未启动成功，已回退到原同步优化接口。'
   const result = await optimizeResumeApi(resumeId.value, buildOptimizePayload())
   if (result.optimizeStatus === 'FAILED') {
-    ElMessage.error(result.errorMessage || 'AI 优化失败')
+    ElMessage.error(toFriendlyMessage(result.errorMessage, 'AI 优化失败，请稍后重试'))
   } else {
     ElMessage.success('AI 优化已完成')
   }
@@ -568,12 +574,22 @@ const pushOptimizeSseEvent = (type: string, data?: ResumeOptimizeSseEvent) => {
     done: '简历优化完成',
     error: '简历优化失败'
   }
-  const message = data?.message || messageMap[type] || type
-  optimizeSseStatus.value = type
-  optimizeSseMessage.value = data?.stage ? `${data.stage}：${message}` : message
+  const stageMap: Record<string, string> = {
+    VALIDATE_REQUEST: '校验请求',
+    LOAD_RESUME: '读取简历',
+    BUILD_PROMPT: '生成提示词',
+    CALL_AI_OPTIMIZE: '调用 AI 优化',
+    PARSE_AI_RESULT: '解析优化建议',
+    SAVE_RECORD: '保存优化记录',
+    COMPLETE: '优化完成'
+  }
+  const stage = data?.stage ? stageMap[String(data.stage).toUpperCase()] || toFriendlyMessage(data.stage, '') : ''
+  const message = toFriendlyMessage(data?.message, messageMap[type] || '简历优化状态更新')
+  optimizeSseStatus.value = messageMap[type] || '状态更新'
+  optimizeSseMessage.value = stage ? `${stage}：${message}` : message
   optimizeSseEvents.value.push({
     type,
-    stage: data?.stage,
+    stage,
     message
   })
 }
@@ -632,7 +648,7 @@ const handleOptimizeResume = async () => {
     if (!streamStarted) {
       await runSyncOptimizeFallback()
     } else {
-      ElMessage.error(error instanceof Error ? error.message : 'AI 优化流中断，请稍后手动重试。')
+      ElMessage.error(getErrorMessage(error, 'AI 优化流中断，请稍后手动重试。'))
     }
   } finally {
     optimizing.value = false
@@ -726,14 +742,19 @@ const handleSaveProject = async () => {
   if (!payload) return
   projectSaving.value = true
   try {
+    const projectPayload = { ...payload }
     if (editingProjectId.value) {
-      await updateResumeProjectApi(resumeId.value, editingProjectId.value, payload)
+      await updateResumeProjectApi(resumeId.value, editingProjectId.value, projectPayload)
     } else {
-      await createResumeProjectApi(resumeId.value, payload)
+      await createResumeProjectApi(resumeId.value, projectPayload)
     }
     ElMessage.success('项目经历已保存')
     projectDialogVisible.value = false
+    editingProjectId.value = null
+    editingProject.value = null
     await fetchDetail()
+  } catch (err) {
+    ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
   } finally {
     projectSaving.value = false
   }

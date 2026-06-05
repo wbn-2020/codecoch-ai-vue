@@ -6,6 +6,7 @@ import { HTTP_STATUS_CODE } from '@/constants/http'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { ApiResult, RequestErrorPayload } from '@/types/api'
 import type { LoginVO } from '@/types/auth'
+import { toFriendlyMessage } from '@/utils/error'
 import { clearLocalAuth, getToken, setToken } from '@/utils/token'
 import { storage } from '@/utils/storage'
 
@@ -183,21 +184,13 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
 
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
       if (!silentError) {
-        ElMessage.error(result.message || '无访问权限')
-      }
-      if (window.location.pathname !== '/403') {
-        const query = new URLSearchParams({
-          reason: 'apiForbidden',
-          target: window.location.pathname + window.location.search,
-          message: result.message || '无访问权限'
-        })
-        window.location.href = `/403?${query.toString()}`
+        ElMessage.error(toFriendlyMessage(result.message, '当前账号无权执行该操作，操作未提交。'))
       }
       return Promise.reject(result)
     }
 
     if (!silentError) {
-      ElMessage.error(result.message || '请求失败，请稍后重试')
+      ElMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
     }
     return Promise.reject(result)
 }
@@ -211,7 +204,10 @@ request.interceptors.response.use(
     }
 
     const silentError = (error.config as RetryableRequestConfig | undefined)?.silentError
-    const message = error.response?.data?.message || error.message || '网络异常，请稍后重试'
+    const message = toFriendlyMessage(
+      error.response?.data?.message || error.message,
+      '\u7f51\u7edc\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+    )
     if (!silentError) {
       ElMessage.error(message)
     }

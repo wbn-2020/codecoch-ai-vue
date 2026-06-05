@@ -34,7 +34,7 @@
         <el-button :loading="loading" @click="loadReport">立即刷新</el-button>
       </section>
 
-      <section class="score-grid">
+      <section v-if="isSuccessReport" class="score-grid">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
@@ -85,7 +85,7 @@
         </aside>
       </section>
 
-      <section class="content-panel">
+      <section v-if="isSuccessReport" class="content-panel">
         <div class="section-head"><div><h2>维度明细</h2><p>按技能维度展示分数、差距和建议。</p></div></div>
         <el-table v-if="report.details?.length" :data="report.details">
           <el-table-column prop="dimension" label="维度" min-width="120" />
@@ -126,6 +126,7 @@ const isTrackingReport = computed(() => {
   const status = report.value?.status
   return status === 'PENDING' || status === 'PROCESSING'
 })
+const isSuccessReport = computed(() => report.value?.status === 'SUCCESS')
 const scoreCards = computed(() => [
   { label: '综合匹配', value: report.value?.overallScore },
   { label: '技术栈', value: report.value?.techStackScore },

@@ -19,6 +19,7 @@ import { onErrorCaptured, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppState from '@/components/common/AppState.vue'
+import { toFriendlyMessage } from '@/utils/error'
 
 withDefaults(
   defineProps<{
@@ -43,9 +44,10 @@ watch(
 )
 
 onErrorCaptured((error) => {
-  errorMessage.value = error instanceof Error
-    ? error.message
-    : '页面组件运行异常，请重试或返回安全入口。'
+  errorMessage.value = toFriendlyMessage(
+    error instanceof Error ? error.message : error,
+    '\u9875\u9762\u7ec4\u4ef6\u8fd0\u884c\u5f02\u5e38\uff0c\u8bf7\u91cd\u8bd5\u6216\u8fd4\u56de\u5b89\u5168\u5165\u53e3\u3002'
+  )
   return false
 })
 </script>

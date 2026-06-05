@@ -43,7 +43,7 @@
             </button>
 
             <div v-if="!filteredCommands.length" class="command-palette__empty">
-              No matching commands
+              没有匹配的命令
             </div>
           </div>
 

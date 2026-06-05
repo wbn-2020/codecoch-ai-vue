@@ -44,6 +44,7 @@
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
               <el-button
                 v-if="isDead(row)"
+                v-permission="'admin:task:retry'"
                 link
                 type="danger"
                 :loading="retryingId === row.id"
@@ -53,6 +54,7 @@
               </el-button>
               <el-button
                 v-else-if="canRetry(row)"
+                v-permission="'admin:task:retry'"
                 link
                 type="warning"
                 :loading="retryingId === row.id"

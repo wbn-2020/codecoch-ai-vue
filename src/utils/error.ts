@@ -16,6 +16,10 @@ const FRIENDLY_MESSAGE_MAP: Record<string, string> = {
 const RAW_MESSAGE_MAP: Record<string, string> = {
   'No resume parse record found': FRIENDLY_MESSAGE_MAP.NO_RESUME_PARSE_RECORD_FOUND,
   'No interview found': FRIENDLY_MESSAGE_MAP.NO_INTERVIEW_FOUND,
+  'Learning plan response missing stages': '学习计划生成结果缺少阶段任务，请稍后重试或返回报告页重新生成。',
+  'Learning plan response missing tasks': '学习计划生成结果缺少可执行任务，请稍后重试或返回报告页重新生成。',
+  'Current browser does not support fetch SSE streaming': '当前浏览器暂不支持流式进度，已尝试切换为普通生成。',
+  'SSE stream error': '流式生成异常，请稍后重试。',
   '[fallback]': 'AI 结果暂未生成，请稍后重试。',
   fallback: 'AI 结果暂未生成，请稍后重试。'
 }
@@ -45,6 +49,14 @@ export const toFriendlyMessage = (message?: unknown, fallback = '请求失败，
   }
 
   if (/\b(DTO|GET\s+\/|POST\s+\/|PUT\s+\/|DELETE\s+\/|DeepSeek|Task completed|Calling)\b/i.test(withoutInternalIds)) {
+    return fallback
+  }
+
+  if (/\b(SSE request failed|Feign|Exception|stack|response missing|parse failed|schema|unsupported fact)\b/i.test(withoutInternalIds)) {
+    return fallback
+  }
+
+  if (!/[\u4e00-\u9fff]/.test(withoutInternalIds) && /[a-z]/i.test(withoutInternalIds)) {
     return fallback
   }
 

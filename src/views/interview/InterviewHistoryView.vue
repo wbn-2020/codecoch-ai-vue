@@ -34,7 +34,9 @@
           <el-table-column label="报告" width="120">
             <template #default="{ row }"><StatusTag :status="row.reportStatus" /></template>
           </el-table-column>
-          <el-table-column prop="totalScore" label="总分" width="90" />
+          <el-table-column label="总分" width="90">
+            <template #default="{ row }">{{ displayInterviewScore(row) }}</template>
+          </el-table-column>
           <el-table-column prop="startedAt" label="开始时间" min-width="170" />
           <el-table-column prop="finishedAt" label="结束时间" min-width="170" />
           <el-table-column label="操作" width="220">
@@ -80,6 +82,14 @@ const query = reactive<InterviewQueryDTO>({
   pageNo: 1,
   pageSize: 10
 })
+
+const isReportSuccess = (status?: string) => ['GENERATED', 'COMPLETED', 'SUCCESS'].includes(String(status || '').toUpperCase())
+
+const displayInterviewScore = (row: InterviewListVO) => {
+  if (!isReportSuccess(row.reportStatus)) return '-'
+  const score = Number(row.totalScore)
+  return Number.isFinite(score) && score > 0 ? score : '-'
+}
 
 const fetchInterviews = async () => {
   loading.value = true

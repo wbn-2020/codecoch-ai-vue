@@ -51,37 +51,41 @@ type BackendPromptTemplateDetailVO = BackendPromptTemplateVO & {
   activeVersion?: PromptTemplateVersionVO
 }
 
-const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => ({
-  ...log,
-  scene: log.scene || log.callType || '',
-  callType: log.callType || log.scene || '',
-  status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
-  traceId: log.traceId,
-  traceIdShort: log.traceIdShort ?? log.shortTraceId ?? log.traceId,
-  shortTraceId: log.shortTraceId ?? log.traceIdShort ?? log.traceId,
-  latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
-  elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
-  costTimeMs: log.costTimeMs ?? log.duration ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
-  duration: log.duration ?? log.costTimeMs ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
-  requestPrompt: log.requestPrompt ?? log.promptContent ?? log.requestBody,
-  requestParams: log.requestParams ?? log.requestBody ?? log.requestPrompt,
-  requestPromptPreview: log.requestPromptPreview ?? log.requestPreview ?? log.promptPreview ?? log.requestSummary,
-  requestBody: log.requestBody ?? log.requestParams,
-  requestBodyPreview: log.requestBodyPreview ?? log.requestPreview ?? log.requestSummary,
-  promptContent: log.promptContent ?? log.requestPrompt,
-  responseContent: log.responseContent ?? log.responseBody,
-  responseContentPreview: log.responseContentPreview ?? log.responsePreview ?? log.responseSummary,
-  responseBody: log.responseBody ?? log.responseContent,
-  responseBodyPreview: log.responseBodyPreview ?? log.responsePreview ?? log.responseSummary,
-  requestPreview: log.requestPreview ?? log.requestPromptPreview ?? log.requestBodyPreview ?? log.requestPreviewMasked ?? log.requestSummary,
-  promptPreview: log.promptPreview ?? log.requestPromptPreview ?? log.promptPreviewMasked ?? log.promptSummary ?? log.requestPreview,
-  responsePreview: log.responsePreview ?? log.responseContentPreview ?? log.responseBodyPreview ?? log.responsePreviewMasked ?? log.responseSummary,
-  maskedPreview: log.maskedPreview ?? log.requestPreviewMasked ?? log.promptPreviewMasked ?? log.responsePreviewMasked,
-  summary: log.summary ?? log.callSummary ?? log.requestSummary ?? log.promptSummary ?? log.responseSummary,
-  callSummary: log.callSummary ?? log.summary ?? log.requestSummary ?? log.promptSummary ?? log.responseSummary,
-  failReason: log.failReason ?? log.errorMessage,
-  errorMessage: log.errorMessage ?? log.failReason
-})
+const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => {
+  const rawFieldsIncluded = log.rawFieldsIncluded === true
+  return {
+    ...log,
+    scene: log.scene || log.callType || '',
+    callType: log.callType || log.scene || '',
+    status: log.status === 1 ? 'SUCCESS' : log.status === 0 ? 'FAILED' : String(log.status),
+    traceId: log.traceId,
+    traceIdShort: log.traceIdShort ?? log.shortTraceId ?? log.traceId,
+    shortTraceId: log.shortTraceId ?? log.traceIdShort ?? log.traceId,
+    latencyMs: log.latencyMs ?? log.elapsedMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+    elapsedMs: log.elapsedMs ?? log.latencyMs ?? log.costTimeMs ?? log.duration ?? log.costMillis,
+    costTimeMs: log.costTimeMs ?? log.duration ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+    duration: log.duration ?? log.costTimeMs ?? log.elapsedMs ?? log.latencyMs ?? log.costMillis,
+    requestPrompt: rawFieldsIncluded ? log.requestPrompt ?? log.promptContent ?? log.requestBody : undefined,
+    requestParams: rawFieldsIncluded ? log.requestParams ?? log.requestBody ?? log.requestPrompt : undefined,
+    requestPromptPreview: log.requestPromptPreview ?? log.requestPreview ?? log.promptPreview ?? log.requestSummary,
+    requestBody: rawFieldsIncluded ? log.requestBody ?? log.requestParams : undefined,
+    requestBodyPreview: log.requestBodyPreview ?? log.requestPreview ?? log.requestSummary,
+    promptContent: rawFieldsIncluded ? log.promptContent ?? log.requestPrompt : undefined,
+    responseContent: rawFieldsIncluded ? log.responseContent ?? log.responseBody : undefined,
+    responseContentPreview: log.responseContentPreview ?? log.responsePreview ?? log.responseSummary,
+    responseBody: rawFieldsIncluded ? log.responseBody ?? log.responseContent : undefined,
+    responseBodyPreview: log.responseBodyPreview ?? log.responsePreview ?? log.responseSummary,
+    requestPreview: log.requestPreview ?? log.requestPromptPreview ?? log.requestBodyPreview ?? log.requestPreviewMasked ?? log.requestSummary,
+    promptPreview: log.promptPreview ?? log.requestPromptPreview ?? log.promptPreviewMasked ?? log.promptSummary ?? log.requestPreview,
+    responsePreview: log.responsePreview ?? log.responseContentPreview ?? log.responseBodyPreview ?? log.responsePreviewMasked ?? log.responseSummary,
+    maskedPreview: log.maskedPreview ?? log.requestPreviewMasked ?? log.promptPreviewMasked ?? log.responsePreviewMasked,
+    summary: log.summary ?? log.callSummary ?? log.requestSummary ?? log.promptSummary ?? log.responseSummary,
+    callSummary: log.callSummary ?? log.summary ?? log.requestSummary ?? log.promptSummary ?? log.responseSummary,
+    failReason: log.failReason ?? log.errorMessage,
+    errorMessage: log.errorMessage ?? log.failReason,
+    rawFieldsIncluded
+  }
+}
 
 const normalizeAiLogPage = (result: PageResult<BackendAiCallLogVO>): PageResult<AiCallLogVO> => ({
   ...normalizePageResult(result, undefined, normalizeAiCallLog)

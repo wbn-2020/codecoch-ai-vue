@@ -145,6 +145,8 @@ export interface AgentRunDetailVO {
   inputSnapshot?: Record<string, unknown> | unknown[] | string | null
   output?: Record<string, unknown> | unknown[] | string | null
   rawOutputText?: string | null
+  rawAvailable?: boolean
+  rawAccessPermission?: string
   errorCode?: string | null
   errorMessage?: string | null
   tasks?: AgentTaskVO[]
