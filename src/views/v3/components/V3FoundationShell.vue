@@ -23,15 +23,15 @@
       <div class="v3-hero__panel">
         <span class="v3-status-pill">{{ statusLabel }}</span>
         <strong>V3 前端基础骨架</strong>
-        <p>本页只提供真实路由入口与接口对齐说明，不展示 mock 业务结果。</p>
+        <p>本页提供真实路由入口和联调状态说明，不展示演示业务结果。</p>
       </div>
     </section>
 
     <div class="v3-grid">
       <section class="v3-section">
         <div class="v3-section__head">
-          <span>后端契约</span>
-          <el-tag effect="plain" type="success">真实接口</el-tag>
+          <span>数据契约</span>
+          <el-tag effect="plain" type="success">真实数据</el-tag>
         </div>
         <ul class="v3-api-list">
           <li v-for="item in apiItems" :key="item">

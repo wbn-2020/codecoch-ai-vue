@@ -22,7 +22,7 @@
           <el-table-column prop="interviewName" label="面试" min-width="190" show-overflow-tooltip />
           <el-table-column prop="username" label="用户" min-width="120" show-overflow-tooltip />
           <el-table-column label="状态" width="120"><template #default="{ row }"><el-tag :type="statusType(row.reportStatus)">{{ row.reportStatus || '-' }}</el-tag></template></el-table-column>
-          <el-table-column label="分数" width="100"><template #default="{ row }">{{ row.totalScore ?? '-' }}</template></el-table-column>
+          <el-table-column label="分数" width="100"><template #default="{ row }">{{ displayReportScore(row) }}</template></el-table-column>
           <el-table-column prop="summary" label="摘要" min-width="280" show-overflow-tooltip />
           <el-table-column prop="failedReason" label="失败原因" min-width="200" show-overflow-tooltip />
           <el-table-column prop="generatedAt" label="生成时间" min-width="170" />
@@ -31,17 +31,24 @@
       </div>
       <div class="pagination-wrap"><el-pagination v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" background layout="total, sizes, prev, pager, next" :total="total" :page-sizes="[10, 20, 50]" @change="fetchReports" /></div>
     </section>
-    <el-drawer v-model="drawerVisible" title="报告详情" size="660px">
-      <el-descriptions v-if="detail" :column="1" border>
-        <el-descriptions-item label="报告 ID">{{ detail.reportId || detail.id }}</el-descriptions-item>
-        <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
-        <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="总分">{{ detail.totalScore ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="摘要"><pre>{{ detail.summary || '-' }}</pre></el-descriptions-item>
-        <el-descriptions-item label="失败原因">{{ detail.failedReason || '-' }}</el-descriptions-item>
-      </el-descriptions>
-    </el-drawer>
+    <el-dialog v-model="drawerVisible" title="报告详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div class="admin-detail-dialog__body">
+        <el-descriptions v-if="detail" :column="1" border>
+          <el-descriptions-item label="报告 ID">{{ detail.reportId || detail.id }}</el-descriptions-item>
+          <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
+          <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="总分">{{ displayReportScore(detail) }}</el-descriptions-item>
+          <el-descriptions-item label="摘要"><pre>{{ detail.summary || '-' }}</pre></el-descriptions-item>
+          <el-descriptions-item label="失败原因">{{ detail.failedReason || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="drawerVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -65,6 +72,12 @@ const statusType = (status?: string) => {
   if (['GENERATING', 'PENDING'].includes(value)) return 'warning'
   return 'info'
 }
+const isReportSuccess = (status?: string) => ['GENERATED', 'COMPLETED', 'SUCCESS'].includes(String(status || '').toUpperCase())
+const displayReportScore = (row?: AdminInterviewReportVO | null) => {
+  if (!row || !isReportSuccess(row.reportStatus)) return '-'
+  const score = Number(row.totalScore)
+  return Number.isFinite(score) && score > 0 ? score : '-'
+}
 const fetchReports = async () => {
   loading.value = true
   try { const result = await getAdminInterviewReportsApi(query); reports.value = result.records || []; total.value = result.total || 0 } catch { reports.value = []; total.value = 0 } finally { loading.value = false }
@@ -77,5 +90,17 @@ onMounted(fetchReports)
 
 <style scoped lang="scss">
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
+
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
 </style>

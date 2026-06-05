@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 import { getCurrentUserApi, loginApi, logoutApi, registerApi } from '@/api/auth'
 import { clearAllRequestCache } from '@/composables/useRequestCache'
+import { HTTP_STATUS_CODE } from '@/constants/http'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { CurrentUserVO, LoginDTO, LoginVO, RegisterDTO } from '@/types/auth'
 import type { RoleCode } from '@/types/common'
@@ -34,6 +35,11 @@ const normalizePermissionCode = (permission: unknown): string | null => {
 
 const normalizePermissions = (permissions?: unknown[]): string[] => {
   return Array.from(new Set((permissions || []).map(normalizePermissionCode).filter(Boolean))) as string[]
+}
+
+const isAuthFailure = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
 }
 
 const normalizeUser = (loginResult: LoginVO): CurrentUserVO | null => {
@@ -93,14 +99,12 @@ export const useAuthStore = defineStore('auth', {
     },
     hasPermission: (state) => {
       return (permissionCode: string) => {
-        if (state.roles.includes('ADMIN')) return true
         const normalized = normalizePermissionCode(permissionCode)
         return normalized ? state.permissions.includes(normalized) : false
       }
     },
     hasAnyPermission: (state) => {
       return (permissionCodes: string[]) => {
-        if (state.roles.includes('ADMIN')) return true
         return permissionCodes.some((permissionCode) => {
           const normalized = normalizePermissionCode(permissionCode)
           return normalized ? state.permissions.includes(normalized) : false
@@ -109,7 +113,6 @@ export const useAuthStore = defineStore('auth', {
     },
     hasAnyAuthority: (state) => {
       return (codes: string[]) => {
-        if (state.roles.includes('ADMIN')) return true
         return codes.some((code) => {
           const role = normalizeRoleCode(code)
           const permission = normalizePermissionCode(code)
@@ -147,8 +150,8 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async login(data: LoginDTO) {
-      const result = await loginApi(data)
+    async login(data: LoginDTO, options?: { silentError?: boolean }) {
+      const result = await loginApi(data, options)
       this.setToken(result.token)
       const userInfo = normalizeUser(result)
       this.setUserInfo(userInfo)
@@ -156,8 +159,8 @@ export const useAuthStore = defineStore('auth', {
       return result
     },
 
-    async register(data: RegisterDTO) {
-      return registerApi(data)
+    async register(data: RegisterDTO, options?: { silentError?: boolean }) {
+      return registerApi(data, options)
     },
 
     async logout() {
@@ -177,7 +180,9 @@ export const useAuthStore = defineStore('auth', {
         this.tokenVerified = true
         return userInfo
       } catch (error) {
-        this.clearAuth()
+        if (isAuthFailure(error)) {
+          this.clearAuth()
+        }
         throw error
       }
     },
@@ -193,6 +198,17 @@ export const useAuthStore = defineStore('auth', {
       }
 
       return this.fetchCurrentUser()
+    },
+
+    markAuthStale() {
+      this.userInfo = null
+      this.roles = []
+      this.permissions = []
+      this.tokenVerified = false
+      storage.remove(STORAGE_KEYS.userInfo)
+      storage.remove(STORAGE_KEYS.roles)
+      storage.remove(STORAGE_KEYS.permissions)
+      clearAllRequestCache()
     },
 
     clearAuth() {

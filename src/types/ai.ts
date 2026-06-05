@@ -144,13 +144,39 @@ export interface AiCallLogVO {
   provider?: string
   modelName?: string
   traceId?: string
+  traceIdShort?: string
+  shortTraceId?: string
+  requestId?: string
+  shortRequestId?: string
   promptTemplateId?: number
   promptTemplateVersionId?: number
   promptVersion?: string
   requestPrompt?: string
+  requestPromptPreview?: string
+  requestPromptHash?: string
   requestParams?: string
+  requestBody?: string
+  requestBodyPreview?: string
+  requestBodyHash?: string
   promptContent?: string
+  requestPreview?: string
+  promptPreview?: string
   responseContent?: string
+  responseContentPreview?: string
+  responseContentHash?: string
+  responseBody?: string
+  responseBodyPreview?: string
+  responseBodyHash?: string
+  inputVariablesJson?: string
+  inputVariablesPreview?: string
+  inputVariablesHash?: string
+  rawFieldsAvailable?: boolean
+  rawFieldsIncluded?: boolean
+  rawAccessPermission?: string
+  responsePreview?: string
+  maskedPreview?: string
+  summary?: string
+  callSummary?: string
   businessId?: string
   elapsedMs?: number
   errorMessage?: string

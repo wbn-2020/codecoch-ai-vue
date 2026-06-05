@@ -8,18 +8,18 @@
         </div>
         <h1 class="admin-hero__title">AI 内容治理中心</h1>
         <p class="admin-hero__desc">
-          统计数据来自管理概览接口，按当前数据库实时聚合；接口异常时仅展示异常与空状态，不回退到假数据。
+          汇总题库、简历、面试、AI 调用和系统运行状态，帮助运营人员快速定位待处理事项。
         </p>
         <div class="dashboard-hero__notice">
           <Database :size="16" />
-          <span>{{ dashboard?.dataSourceDesc || '管理概览接口实时聚合' }}</span>
+          <span>{{ dashboard?.dataSourceDesc || '管理概览已更新' }}</span>
           <span class="notice-divider"></span>
           <Clock3 :size="16" />
           <span>生成时间：{{ formatDateTime(dashboard?.generatedAt) }}</span>
         </div>
       </div>
       <div class="admin-hero__actions">
-        <el-button v-for="item in primaryLinks" :key="item.path" type="primary" plain @click="router.push(item.path)">
+        <el-button v-for="item in primaryLinkItems" :key="item.path" type="primary" plain @click="router.push(item.path)">
           <component :is="item.icon" :size="15" />
           {{ item.label }}
         </el-button>
@@ -29,15 +29,25 @@
     <el-alert
       v-if="overviewError"
       class="dashboard-alert"
-      title="统计接口异常"
-      description="GET /admin/dashboard/overview 请求失败，当前页面不会回退到伪造数据。"
+      title="管理首页数据加载失败"
+      description="暂时无法获取统计概览，请稍后重试或检查服务状态。"
       type="error"
       show-icon
       :closable="false"
-    />
+    >
+      <template #default>
+        <el-button text type="primary" :loading="loading" @click="fetchOverview">重试</el-button>
+      </template>
+    </el-alert>
 
     <div class="admin-metric-grid" v-loading="loading">
-      <article v-for="item in metrics" :key="item.key" class="admin-metric-card dashboard-metric-card">
+      <article
+        v-for="item in metrics"
+        :key="item.key"
+        class="admin-metric-card dashboard-metric-card"
+        :class="{ 'is-clickable': Boolean(item.path) }"
+        @click="goMetric(item)"
+      >
         <div class="admin-metric-card__icon" :class="item.tone">
           <component :is="item.icon" :size="18" />
         </div>
@@ -52,15 +62,15 @@
     <section class="admin-panel dashboard-screen-panel">
       <div class="admin-panel__header dashboard-panel-header">
         <div>
-          <h2>近 7 日真实趋势</h2>
-          <p>趋势来自后端 trendStats，空数据按 0 展示。</p>
+          <h2>近 7 日趋势</h2>
+          <p>观察面试、简历、学习计划和 AI 调用的近期变化。</p>
         </div>
-        <el-tag type="success" effect="plain">真实接口</el-tag>
+        <el-tag type="success" effect="plain">已更新</el-tag>
       </div>
 
       <div v-if="!trendStats.length && !loading" class="dashboard-empty">
         <LineChart :size="18" />
-        <span>统计接口未返回趋势数据</span>
+        <span>暂无趋势数据</span>
       </div>
       <div v-else class="dashboard-chart-grid">
         <article class="dashboard-chart-card dashboard-chart-card--wide">
@@ -92,7 +102,7 @@
               <h2>待处理事项</h2>
               <p>来自当前数据库的待审核、失败和待发布事项。</p>
             </div>
-            <el-tag type="success" effect="plain">真实待办</el-tag>
+            <el-tag type="success" effect="plain">待处理</el-tag>
           </div>
           <div class="admin-work-list dashboard-work-list">
             <button
@@ -108,7 +118,7 @@
               </div>
               <strong>{{ item.count ?? 0 }}</strong>
             </button>
-            <el-empty v-if="!pendingItems.length && !loading" description="统计接口未返回待处理事项" />
+            <el-empty v-if="!pendingItems.length && !loading" description="当前没有待处理事项" />
           </div>
         </section>
 
@@ -121,7 +131,7 @@
           </div>
           <div class="admin-link-grid dashboard-link-grid">
             <button
-              v-for="item in quickLinks"
+              v-for="item in quickLinkItems"
               :key="item.path"
               class="admin-link-card"
               type="button"
@@ -132,6 +142,7 @@
               <small>{{ item.desc }}</small>
               <ArrowRight :size="14" class="dashboard-link-arrow" />
             </button>
+            <el-empty v-if="!quickLinkItems.length && !loading" description="暂无可访问的快捷入口，请联系管理员分配权限" />
           </div>
         </section>
       </div>
@@ -140,7 +151,7 @@
         <div class="admin-panel__header">
           <div>
             <h2>系统状态</h2>
-            <p>展示概览接口、数据库和已纳入探测范围的服务状态。</p>
+            <p>展示数据库和关键服务的最近探测结果。</p>
           </div>
           <el-tag :type="statusTagType(systemStatus?.status)" effect="plain">
             {{ statusText(systemStatus?.status) }}
@@ -155,7 +166,7 @@
               <small>{{ serviceReasonLabel(item) }}</small>
             </div>
           </div>
-          <el-empty v-if="!services.length && !loading" description="统计接口未返回系统状态" />
+          <el-empty v-if="!services.length && !loading" description="暂无系统状态数据" />
         </div>
       </section>
     </div>
@@ -184,6 +195,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
+import { useAuthStore } from '@/stores/auth'
 import type {
   AdminDashboardOverviewVO,
   AdminDashboardPendingItemVO,
@@ -193,6 +205,7 @@ import type {
 import echarts, { type ECharts, type EChartsOption, type SeriesOption } from '@/utils/echarts'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const overviewError = ref(false)
 const dashboard = ref<AdminDashboardOverviewVO | null>(null)
@@ -204,27 +217,31 @@ const charts: ECharts[] = []
 let dashboardLayoutObserver: ResizeObserver | null = null
 
 const primaryLinks = [
-  { label: '题目管理', path: '/admin/questions', icon: ListTree },
-  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode },
-  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: ScrollText },
-  { label: '文件治理', path: '/admin/files', icon: FileText }
+  { label: '题目管理', path: '/admin/questions', icon: ListTree, permissions: ['admin:question:list'] },
+  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, permissions: ['admin:ai:prompt:list'] },
+  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: ScrollText, permissions: ['admin:ai:log:list'] },
+  { label: '文件治理', path: '/admin/files', icon: FileText, permissions: ['admin:file:list'] }
 ]
 
 const quickLinks = [
-  { label: '题目管理', path: '/admin/questions', icon: ListTree, desc: '维护 Java 面试题库' },
-  { label: '题目审核', path: '/admin/question-reviews', icon: ClipboardList, desc: '处理 AI 生成题审核池' },
-  { label: '去重审核', path: '/admin/question-duplicate-reviews', icon: Tags, desc: '处理疑似重复题' },
-  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本' },
-  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查失败调用' },
-  { label: '系统配置', path: '/admin/system/configs', icon: Settings, desc: '维护运行参数' }
+  { label: '题目管理', path: '/admin/questions', icon: ListTree, desc: '维护 Java 面试题库', permissions: ['admin:question:list'] },
+  { label: '题目审核', path: '/admin/question-reviews', icon: ClipboardList, desc: '处理 AI 生成题审核池', permissions: ['admin:question:review'] },
+  { label: '去重审核', path: '/admin/question-duplicate-reviews', icon: Tags, desc: '处理疑似重复题', permissions: ['admin:question:dedupe'] },
+  { label: 'Prompt 管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本', permissions: ['admin:ai:prompt:list'] },
+  { label: 'AI 调用日志', path: '/admin/ai/logs', icon: Bot, desc: '排查失败调用', permissions: ['admin:ai:log:list'] },
+  { label: '系统配置', path: '/admin/system/configs', icon: Settings, desc: '维护运行参数', permissions: ['admin:system:config:list'] }
 ]
 
 const summaryCards = computed(() => dashboard.value?.summaryCards || [])
 const trendStats = computed(() => dashboard.value?.trendStats || [])
 const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
-const services = computed(() => systemStatus.value?.services || [])
+const services = computed(() =>
+  (systemStatus.value?.services || []).filter((item) => String(item.status || '').toUpperCase() !== 'UNSUPPORTED')
+)
 const statusPanelStyle = computed(() => statusPanelHeight.value ? { height: statusPanelHeight.value + 'px' } : undefined)
+const primaryLinkItems = computed(() => primaryLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
+const quickLinkItems = computed(() => quickLinks.filter((item) => authStore.hasAnyPermission(item.permissions)))
 
 const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
   users: { label: '用户数', icon: Users, tone: 'tone-blue' },
@@ -238,11 +255,18 @@ const cardMeta: Record<string, { label: string; icon: any; tone: string }> = {
 }
 
 const pendingRoutes: Record<string, string> = {
-  pendingQuestionReviews: '/admin/question-reviews',
-  duplicateQuestionReviews: '/admin/question-duplicate-reviews',
+  pendingQuestionReviews: '/admin/question-reviews?reviewStatus=PENDING',
+  duplicateQuestionReviews: '/admin/question-duplicate-reviews?reviewStatus=PENDING',
   promptVersions: '/admin/ai/prompts',
   failedAiCalls: '/admin/ai/logs',
   failedResumeParses: '/admin/files'
+}
+
+const cardHintMap: Record<string, string> = {
+  pendingQuestionReviews: '题目审核池待处理数量',
+  aiCalls: '累计 AI 调用记录',
+  todayAiCalls: '今日 AI 调用记录',
+  failedResumeParses: '待处理的简历解析失败记录'
 }
 
 const pendingLabels: Record<string, string> = {
@@ -260,9 +284,10 @@ const metrics = computed(() =>
       key: item.key,
       label: meta.label,
       value: item.value ?? 0,
-      hint: item.sourceTable ? `来源：${item.sourceTable}` : '来源：管理概览接口',
+      hint: cardHintMap[item.key] || item.label || '管理首页统计',
       icon: meta.icon,
-      tone: meta.tone
+      tone: meta.tone,
+      path: pendingRoutes[item.key]
     }
   })
 )
@@ -348,7 +373,7 @@ const fetchOverview = async () => {
 }
 
 const formatDateTime = (value?: string) => {
-  if (!value) return '--'
+  if (!value) return '暂无生成时间'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
@@ -360,11 +385,11 @@ const statusText = (status?: string) => {
     HEALTHY: '正常',
     DEGRADED: '降级',
     DOWN: '不可用',
-    UNKNOWN: '未接入探测',
-    UNSUPPORTED: '未接入探测',
+    UNKNOWN: '未配置监控源',
+    UNSUPPORTED: '待接入，不计入健康状态',
     SUPPORTED: '已支持'
   }
-  return map[value] || status || '未接入探测'
+  return map[value] || status || '未配置监控源'
 }
 
 const statusTone = (status?: string) => {
@@ -384,7 +409,7 @@ const statusTagType = (status?: string) => {
 
 const serviceLabel = (value: string) => {
   const map: Record<string, string> = {
-    overview: '概览接口',
+    overview: '管理概览',
     database: '数据库',
     'codecoachai-gateway': 'Gateway 服务',
     'codecoachai-auth': 'Auth 服务',
@@ -411,14 +436,18 @@ const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
   if (item.reason) return item.reason
   if (item.source) return item.source
   const value = String(item.status || '').toUpperCase()
-  if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
-  if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
-  return '来自管理概览接口'
+  if (value === 'UNKNOWN') return '后端未返回该服务的监控源或最近探测结果'
+  if (value === 'UNSUPPORTED') return '该服务暂未配置运行态探测源，不计入核心健康状态'
+  return '最近一次状态检查'
 }
 
 const goPending = (item: AdminDashboardPendingItemVO) => {
   const path = pendingRoutes[item.key]
   if (path) router.push(path)
+}
+
+const goMetric = (item: { path?: string }) => {
+  if (item.path) router.push(item.path)
 }
 
 const syncDashboardPanelHeight = () => {
@@ -492,6 +521,15 @@ onBeforeUnmount(() => {
 
   .dashboard-metric-card {
     min-height: 132px;
+
+    &.is-clickable {
+      cursor: pointer;
+    }
+
+    &.is-clickable:hover {
+      border-color: rgba(96, 165, 250, 0.45);
+      transform: translateY(-1px);
+    }
   }
 
   .admin-metric-card__icon.tone-blue {

@@ -7,7 +7,7 @@
           Resume Intelligence Hub
         </div>
         <h1>简历中心</h1>
-        <p>管理求职简历、上传文件解析结构化简历，并基于真实 V2 接口获取 AI 优化建议。</p>
+        <p>管理求职简历，上传文件解析内容，并获取可落地的 AI 优化建议。</p>
         <div class="hero-actions">
           <el-button type="primary" size="large" @click="router.push('/resumes/create')">
             <Plus :size="17" />
@@ -26,8 +26,8 @@
 
       <div class="hero-panel">
         <div class="panel-line">
-          <span>V1 数据源</span>
-          <strong>真实简历 CRUD</strong>
+          <span>简历管理</span>
+          <strong>可创建和编辑</strong>
         </div>
         <div class="panel-line">
           <span>V2 上传解析</span>
@@ -44,12 +44,12 @@
       <article class="metric-card">
         <div class="metric-card__label">简历总数</div>
         <div class="metric-card__value">{{ total }}</div>
-        <p>来自 `/resumes` 真实列表接口</p>
+        <p>当前账号已创建的简历数量</p>
       </article>
       <article class="metric-card">
         <div class="metric-card__label">最近更新时间</div>
         <div class="metric-card__value is-date">{{ latestUpdatedAt }}</div>
-        <p>基于当前页真实记录计算</p>
+        <p>最近一次编辑或上传时间</p>
       </article>
       <article class="metric-card">
         <div class="metric-card__label">上传解析状态</div>
@@ -87,7 +87,7 @@
           <div class="upload-drop">
             <UploadCloud :size="28" />
             <strong>{{ uploading ? '上传中...' : '选择简历文件' }}</strong>
-            <span>不会写入 Mock 数据，解析结果来自真实后端任务</span>
+            <span>上传后会生成解析任务，完成后可确认生成简历</span>
           </div>
         </el-upload>
       </div>
@@ -116,7 +116,7 @@
         <div>
           <span>解析任务 #{{ parseTask.analysisRecordId }}</span>
           <strong>{{ parseStatusText(parseTask.parseStatus) }}</strong>
-          <p>{{ parseTask.message || parseTask.errorMessage || '等待后端解析任务更新状态' }}</p>
+          <p>{{ parseStatusMessage || '等待后端解析任务更新状态' }}</p>
         </div>
         <div class="task-actions">
           <el-button :loading="parsePolling" @click="refreshParseStatus(parseTask.analysisRecordId)">刷新状态</el-button>
@@ -142,7 +142,7 @@
       <div class="content-card__body workspace-toolbar">
         <div>
           <h2>求职资料库</h2>
-          <p>以卡片方式维护简历、项目经历和面试上下文，保留现有真实接口。</p>
+          <p>维护简历、项目经历和面试上下文，优先补齐能支撑面试表达的内容。</p>
         </div>
         <el-form class="search-form" :model="query" inline>
           <el-form-item label="关键词">
@@ -243,7 +243,7 @@
             <div class="resume-card__status">
               <div>
                 <span>解析来源</span>
-                <strong>列表接口无解析字段</strong>
+                <strong>已入库</strong>
               </div>
               <div>
                 <span>AI 优化</span>
@@ -253,8 +253,8 @@
               </div>
             </div>
 
-            <div v-if="latestRecord(item.id)?.overallComment || latestRecord(item.id)?.errorMessage" class="optimize-summary">
-              {{ latestRecord(item.id)?.overallComment || latestRecord(item.id)?.errorMessage }}
+            <div v-if="latestOptimizeSummary(item.id)" class="optimize-summary">
+              {{ latestOptimizeSummary(item.id) }}
             </div>
 
             <div class="resume-card__actions">
@@ -319,7 +319,7 @@
           :closable="false"
           show-icon
           title="解析失败"
-          :description="parseResult.errorMessage"
+          :description="toFriendlyMessage(parseResult.errorMessage, '简历解析失败，请稍后重试。')"
         />
         <div class="json-preview">
           <h3>结构化结果</h3>
@@ -355,7 +355,7 @@
           :closable="false"
           show-icon
           title="AI 优化失败"
-          :description="optimizeDetail.errorMessage"
+          :description="toFriendlyMessage(optimizeDetail.errorMessage, 'AI 优化失败，请稍后重试。')"
         />
         <div class="score-strip">
           <div>
@@ -462,6 +462,7 @@ import type {
   ResumeQueryDTO,
   ResumeVO
 } from '@/types/resume'
+import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
@@ -545,7 +546,7 @@ const uploadStatusClass = computed(() => ({
   'is-danger': parseTask.value?.parseStatus === 'FAILED'
 }))
 
-const parseStatusMessage = computed(() => parseTask.value?.message || parseTask.value?.errorMessage || '')
+const parseStatusMessage = computed(() => toFriendlyMessage(parseTask.value?.message || parseTask.value?.errorMessage, ''))
 
 const allOptimizeRecords = computed(() => Object.values(optimizeRecords.value).flat())
 
@@ -628,10 +629,10 @@ const splitSkills = (value?: string) => {
 }
 
 const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return toFriendlyMessage(error.message, fallback)
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = (error as { message?: string }).message
-    if (message) return message
+    if (message) return toFriendlyMessage(message, fallback)
   }
   return fallback
 }
@@ -651,6 +652,12 @@ const optimizeStatusText = (status?: string) => {
 }
 
 const latestRecord = (resumeId: number) => optimizeRecords.value[resumeId]?.[0]
+
+const latestOptimizeSummary = (resumeId: number) => {
+  const record = latestRecord(resumeId)
+  const raw = record?.overallComment || record?.errorMessage
+  return raw ? toFriendlyMessage(raw, 'AI 优化结果暂不可用，请稍后重试。') : ''
+}
 
 const formatJson = (value: unknown) => {
   if (!value) return '后端未返回结构化 JSON'
@@ -824,7 +831,7 @@ const runSyncOptimizeFallback = async (row: ResumeVO) => {
     targetPosition: row.targetPosition
   })
   if (result.optimizeStatus === 'FAILED') {
-    ElMessage.error(result.errorMessage || 'AI 优化失败')
+    ElMessage.error(toFriendlyMessage(result.errorMessage, 'AI 优化失败，请稍后重试。'))
   } else {
     ElMessage.success('AI 优化已完成')
   }
@@ -866,7 +873,8 @@ const handleOptimize = async (row: ResumeVO) => {
           }
           resultRecordId = resolveOptimizeRecordId(data) || resultRecordId
           if ((event === 'progress' || event === 'delta') && data?.message) {
-            ElMessage.info(data.stage ? `${data.stage}：${data.message}` : data.message)
+            const message = toFriendlyMessage(data.message, 'AI 优化进行中')
+            ElMessage.info(data.stage ? `${toFriendlyMessage(data.stage, '优化阶段')}：${message}` : message)
           }
         }
       }
@@ -878,7 +886,7 @@ const handleOptimize = async (row: ResumeVO) => {
     if (!streamStarted) {
       await runSyncOptimizeFallback(row)
     } else {
-      ElMessage.error(error instanceof Error ? error.message : 'AI 优化流中断，请稍后手动重试。')
+      ElMessage.error(getErrorMessage(error, 'AI 优化流中断，请稍后手动重试。'))
     }
   } finally {
     optimizingId.value = null

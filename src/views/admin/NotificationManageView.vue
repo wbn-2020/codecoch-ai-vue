@@ -79,6 +79,7 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { broadcastAdminNotificationApi, deleteAdminNotificationApi, getAdminNotificationsApi, sendAdminNotificationApi } from '@/api/adminGovernance'
 import type { AdminListQuery, AdminNotificationVO, NotificationSendDTO } from '@/types/adminGovernance'
+import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 
 const loading = ref(false)
@@ -105,8 +106,32 @@ const fetchNotices = async () => {
   } catch { notices.value = []; total.value = 0 } finally { loading.value = false }
 }
 const openDialog = () => { Object.assign(form, { title: '', content: '', type: 'SYSTEM', targetType: 'ALL', targetUserId: undefined }); dialogVisible.value = true }
+const validateNoticeForm = async () => {
+  if (!formRef.value) return false
+  return formRef.value.validate().catch(() => false)
+}
 const handleSend = async () => {
-  await formRef.value?.validate()
+  const valid = await validateNoticeForm()
+  if (!valid) return
+  if (form.targetType === 'USER' && !form.targetUserId) {
+    ElMessage.warning('Please select a target user before sending.')
+    return
+  }
+  if (form.targetType === 'ALL') {
+    try {
+      await ElMessageBox.confirm(
+        `即将向所有用户广播通知「${form.title}」（${formatNotificationType(form.type)}）。已送达或已读的客户端无法静默撤回，请确认内容、类型和审计记录无误。`,
+        '确认全员广播',
+        {
+          type: 'warning',
+          confirmButtonText: '确认全员广播',
+          cancelButtonText: '取消发送'
+        }
+      )
+    } catch {
+      return
+    }
+  }
   saving.value = true
   try {
     if (form.targetType === 'ALL') await broadcastAdminNotificationApi(form)
@@ -114,6 +139,8 @@ const handleSend = async () => {
     ElMessage.success('通知已发送')
     dialogVisible.value = false
     await fetchNotices()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, 'Notification send failed. Please try again.'))
   } finally { saving.value = false }
 }
 const handleDelete = async (row: AdminNotificationVO) => {

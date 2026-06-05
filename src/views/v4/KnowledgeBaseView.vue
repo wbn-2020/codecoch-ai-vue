@@ -2,7 +2,7 @@
   <div class="page-shell knowledge-page">
     <section class="knowledge-hero">
       <div>
-        <p class="eyebrow">Personal RAG</p>
+        <p class="eyebrow">个人知识检索</p>
         <h1>个人知识库</h1>
         <p>维护你的学习资料、项目笔记和面试复盘，并用语义检索快速找到真正相关的片段。</p>
       </div>
@@ -18,8 +18,24 @@
         >
           <el-button :icon="Files" :loading="uploading">上传资料</el-button>
         </el-upload>
-        <el-button :icon="Refresh" :loading="rebuilding" @click="handleRebuildVectors">重建向量</el-button>
-        <el-button :icon="Refresh" :loading="retryingFailedVectors" @click="handleRetryFailedVectors">重试失败向量</el-button>
+        <el-button
+          :icon="Refresh"
+          :loading="rebuilding"
+          :disabled="!semanticEnabled"
+          :title="!semanticEnabled ? semanticDisabledReason : undefined"
+          @click="handleRebuildVectors"
+        >
+          重建向量
+        </el-button>
+        <el-button
+          :icon="Refresh"
+          :loading="retryingFailedVectors"
+          :disabled="!semanticEnabled"
+          :title="!semanticEnabled ? semanticDisabledReason : undefined"
+          @click="handleRetryFailedVectors"
+        >
+          重试失败向量
+        </el-button>
       </div>
     </section>
 
@@ -48,22 +64,22 @@
 
     <section class="config-strip">
       <article>
-        <span>Vector DB</span>
-        <strong>{{ knowledgeConfig?.vectorEnabled ? 'Qdrant' : 'Keyword' }}</strong>
-        <small>{{ knowledgeConfig?.vectorCollection || '--' }}</small>
+        <span>语义检索</span>
+        <strong>{{ vectorCapabilityLabel }}</strong>
+        <small>{{ vectorCapabilityDetail }}</small>
       </article>
       <article>
-        <span>Chunk</span>
+        <span>切片策略</span>
         <strong>{{ chunkConfigLabel }}</strong>
         <small>{{ knowledgeConfig?.chunkStrategy || '--' }}</small>
       </article>
       <article>
-        <span>Near Duplicate</span>
+        <span>近重复阈值</span>
         <strong>{{ nearDuplicateThresholdLabel }}</strong>
         <small>ask >= {{ askMinScoreLabel }}</small>
       </article>
       <article>
-        <span>Upload</span>
+        <span>上传限制</span>
         <strong>{{ uploadLimitLabel }}</strong>
         <small>{{ uploadExtensionsLabel }}</small>
       </article>
@@ -71,7 +87,7 @@
 
     <section class="index-observability-strip">
       <article>
-        <span>Index Status</span>
+        <span>索引状态</span>
         <div class="index-pill-row">
           <el-tag v-for="item in indexStatusItems" :key="item.status" size="small" :type="statusType(item.status)" effect="light">
             {{ statusLabel(item.status) }} {{ item.count }}
@@ -79,22 +95,22 @@
         </div>
       </article>
       <article>
-        <span>Embedding Models</span>
+        <span>向量模型</span>
         <strong>{{ embeddingModelSummary }}</strong>
         <small>{{ vectorIndexHealthLabel }}</small>
       </article>
       <article>
-        <span>Failed Chunks</span>
+        <span>失败片段</span>
         <strong>{{ failedChunkCount }}</strong>
-        <small>{{ pendingChunkCount }} pending / {{ disabledChunkCount }} disabled</small>
+        <small>{{ pendingChunkCount }} 待索引 / {{ disabledChunkCount }} 未启用</small>
       </article>
     </section>
 
     <section class="duplicate-review-strip">
       <div>
-        <p class="section-kicker">Dedup Review</p>
+        <p class="section-kicker">去重审核</p>
         <strong>{{ duplicateReviewSummary }}</strong>
-        <small>threshold {{ duplicateReviewThresholdLabel }} · scanned {{ duplicateReview?.scannedChunkCount || 0 }}</small>
+        <small>阈值 {{ duplicateReviewThresholdLabel }} · 已扫描 {{ duplicateReview?.scannedChunkCount || 0 }}</small>
       </div>
       <div class="dedup-actions">
         <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" />
@@ -109,17 +125,17 @@
 
     <section v-if="hasDuplicateHotspots && !errorMessage" class="duplicate-hotspot-strip">
       <article>
-        <span>Duplicate Types</span>
+        <span>重复类型</span>
         <strong>{{ duplicateTypeSummary }}</strong>
-        <el-button v-if="topDuplicateType" link type="primary" @click="loadExactDuplicates(undefined, topDuplicateType)">Review</el-button>
+        <el-button v-if="topDuplicateType" link type="primary" @click="loadExactDuplicates(undefined, topDuplicateType)">查看</el-button>
       </article>
       <article>
-        <span>Top Hotspot</span>
+        <span>主要重复资料</span>
         <strong>{{ topDuplicateHotspotLabel }}</strong>
-        <el-button v-if="topDuplicateHotspotId" link type="primary" @click="loadExactDuplicates(topDuplicateHotspotId)">Review</el-button>
+        <el-button v-if="topDuplicateHotspotId" link type="primary" @click="loadExactDuplicates(topDuplicateHotspotId)">查看</el-button>
       </article>
       <article>
-        <span>Cleanup Candidates</span>
+        <span>清理候选</span>
         <strong>{{ duplicateChunkTotal }}</strong>
       </article>
     </section>
@@ -130,7 +146,7 @@
           <div class="content-card__body">
             <div class="section-head">
               <div>
-                <p class="section-kicker">Documents</p>
+                <p class="section-kicker">知识资料</p>
                 <h2>已索引资料</h2>
               </div>
             </div>
@@ -206,6 +222,8 @@
                     type="primary"
                     :icon="Refresh"
                     :loading="rebuilding"
+                    :disabled="!semanticEnabled"
+                    :title="!semanticEnabled ? semanticDisabledReason : undefined"
                     @click="handleRebuildVectors(row.id, row.title)"
                   >
                     重建
@@ -274,40 +292,40 @@
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
-                <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">Trace</el-button>
-                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">Evaluate</el-button>
+                <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">检索诊断</el-button>
+                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">评估检索</el-button>
               </el-form-item>
             </el-form>
             <div v-if="searchTrace" class="search-trace-panel">
               <div class="search-trace-panel__head">
                 <div>
-                  <span>Retrieval Trace</span>
+                  <span>检索诊断</span>
                   <strong>{{ searchTrace.retrievalMode || '--' }}</strong>
                 </div>
                 <el-tag :type="searchTrace.vectorEnabled ? 'success' : 'warning'" effect="light">
-                  {{ searchTrace.vectorEnabled ? 'Vector enabled' : 'Keyword fallback' }}
+                  {{ searchTrace.vectorEnabled ? '语义检索可用' : '关键词兜底' }}
                 </el-tag>
               </div>
               <div class="search-trace-metrics">
                 <article>
-                  <span>Terms</span>
+                  <span>扩展词</span>
                   <strong>{{ searchTrace.expandedTerms?.length || 0 }}</strong>
                   <small>{{ searchTrace.expandedTerms?.slice(0, 8).join(' / ') || '-' }}</small>
                 </article>
                 <article>
-                  <span>Vector</span>
+                  <span>向量候选</span>
                   <strong>{{ searchTrace.vectorCandidateCount || 0 }}</strong>
-                  <small>recall {{ searchTrace.recallLimit || 0 }}</small>
+                  <small>召回 {{ searchTrace.recallLimit || 0 }}</small>
                 </article>
                 <article>
-                  <span>Keyword</span>
+                  <span>关键词候选</span>
                   <strong>{{ searchTrace.keywordCandidateCount || 0 }}</strong>
-                  <small>multi-term fallback</small>
+                  <small>多关键词兜底</small>
                 </article>
                 <article>
-                  <span>Final</span>
+                  <span>最终候选</span>
                   <strong>{{ searchTrace.finalCandidateCount || 0 }}</strong>
-                  <small>min {{ scoreLabel(searchTrace.minScore) }}</small>
+                  <small>最低分 {{ scoreLabel(searchTrace.minScore) }}</small>
                 </article>
               </div>
               <el-alert
@@ -322,37 +340,37 @@
             <div v-if="knowledgeEvaluation" class="knowledge-evaluation-panel">
               <div class="knowledge-evaluation-panel__head">
                 <div>
-                  <span>Retrieval Evaluation</span>
+                  <span>检索评估</span>
                   <strong>{{ formatRate(knowledgeEvaluation.passRate) }}</strong>
                 </div>
                 <el-tag :type="knowledgeEvaluation.failedCount ? 'warning' : 'success'" effect="light">
-                  {{ knowledgeEvaluation.passedCount || 0 }} / {{ knowledgeEvaluation.evaluatedCount || 0 }} passed
+                  通过 {{ knowledgeEvaluation.passedCount || 0 }} / {{ knowledgeEvaluation.evaluatedCount || 0 }}
                 </el-tag>
               </div>
               <div class="knowledge-evaluation-grid">
                 <article>
-                  <span>Top score</span>
+                  <span>最高分</span>
                   <strong>{{ scoreLabel(knowledgeEvaluationTop?.topScore) }}</strong>
                 </article>
                 <article>
-                  <span>References</span>
+                  <span>引用数</span>
                   <strong>{{ knowledgeEvaluationTop?.referenceCount || 0 }}</strong>
                 </article>
                 <article>
-                  <span>Citation</span>
+                  <span>引用校验</span>
                   <strong>{{ knowledgeTrustLabel(knowledgeEvaluationTop) }}</strong>
                 </article>
                 <article>
-                  <span>Expected</span>
+                  <span>期望结果</span>
                   <strong>{{ knowledgeEvaluationExpectedLabel }}</strong>
                 </article>
               </div>
               <div v-if="knowledgeEvaluationTop" class="knowledge-trust-strip">
                 <el-tag :type="trustTagType(knowledgeEvaluationTop.citationValid)" effect="plain">
-                  Citation {{ trustText(knowledgeEvaluationTop.citationValid) }}
+                  引用 {{ trustText(knowledgeEvaluationTop.citationValid) }}
                 </el-tag>
                 <el-tag :type="trustTagType(knowledgeEvaluationTop.answerGrounded)" effect="plain">
-                  Grounded {{ trustText(knowledgeEvaluationTop.answerGrounded) }}
+                  有依据 {{ trustText(knowledgeEvaluationTop.answerGrounded) }}
                 </el-tag>
                 <span v-if="knowledgeEvaluationTop.answerExcerpt">{{ knowledgeEvaluationTop.answerExcerpt }}</span>
               </div>
@@ -367,8 +385,8 @@
             <div class="knowledge-eval-dataset" v-loading="knowledgeEvalCaseLoading || knowledgeEvalRunLoading">
               <div class="knowledge-eval-dataset__head">
                 <div>
-                  <span>Persistent Evaluation</span>
-                  <strong>{{ knowledgeEvalCaseTotal || 0 }} cases · {{ knowledgeEvalLatestRunSummary }}</strong>
+                  <span>持续评估</span>
+                  <strong>{{ knowledgeEvalCaseTotal || 0 }} 个样本 · {{ knowledgeEvalLatestRunSummary }}</strong>
                 </div>
                 <div class="knowledge-eval-dataset__actions">
                   <el-button
@@ -389,7 +407,7 @@
                 <el-input
                   v-model.trim="knowledgeEvalCaseQuery.keyword"
                   clearable
-                  placeholder="case / query / note"
+                  placeholder="样本 / 查询 / 备注"
                   @keyup.enter="fetchKnowledgeEvalCases"
                 />
                 <el-select v-model="knowledgeEvalCaseQuery.expectedDocumentType" clearable filterable placeholder="资料类型">
@@ -400,8 +418,8 @@
                   <el-option label="无答案" :value="true" />
                 </el-select>
                 <el-select v-model="knowledgeEvalCaseQuery.enabled" clearable placeholder="状态">
-                  <el-option label="Enabled" :value="1" />
-                  <el-option label="Disabled" :value="0" />
+                  <el-option label="启用" :value="1" />
+                  <el-option label="停用" :value="0" />
                 </el-select>
                 <el-button type="primary" @click="fetchKnowledgeEvalCases">查询</el-button>
               </div>
@@ -409,23 +427,23 @@
               <div class="knowledge-eval-dataset__body">
                 <div class="knowledge-eval-cases">
                   <el-table :data="knowledgeEvalCases" row-key="id" size="small" max-height="260">
-                    <el-table-column prop="caseId" label="Case" min-width="150" show-overflow-tooltip />
-                    <el-table-column prop="query" label="Query" min-width="220" show-overflow-tooltip />
-                    <el-table-column label="Expected" min-width="180" show-overflow-tooltip>
+                    <el-table-column prop="caseId" label="样本编号" min-width="150" show-overflow-tooltip />
+                    <el-table-column prop="query" label="查询内容" min-width="220" show-overflow-tooltip />
+                    <el-table-column label="期望结果" min-width="180" show-overflow-tooltip>
                       <template #default="{ row }">
                         <span>{{ knowledgeEvalExpectedLabel(row) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column label="Status" width="105">
+                    <el-table-column label="状态" width="105">
                       <template #default="{ row }">
                         <el-tag :type="row.enabled === 1 ? 'success' : 'info'" effect="plain">
-                          {{ row.enabled === 1 ? 'Enabled' : 'Disabled' }}
+                          {{ row.enabled === 1 ? '启用' : '停用' }}
                         </el-tag>
                       </template>
                     </el-table-column>
-                    <el-table-column label="Action" width="96" fixed="right">
+                    <el-table-column label="操作" width="96" fixed="right">
                       <template #default="{ row }">
-                        <el-button link type="danger" @click="deleteKnowledgeEvalCase(row.id)">Delete</el-button>
+                        <el-button link type="danger" @click="deleteKnowledgeEvalCase(row.id)">删除</el-button>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -442,8 +460,8 @@
 
                 <div class="knowledge-eval-runs" v-loading="knowledgeEvalRunDetailLoading">
                   <div class="knowledge-eval-runs__head">
-                    <strong>Recent Runs</strong>
-                    <el-button link type="primary" @click="fetchKnowledgeEvalRuns">Reload</el-button>
+                    <strong>最近运行</strong>
+                    <el-button link type="primary" @click="fetchKnowledgeEvalRuns">刷新</el-button>
                   </div>
                   <button
                     v-for="run in knowledgeEvalRuns"
@@ -456,7 +474,7 @@
                     <strong>{{ formatRate(run.passRate) }}</strong>
                     <small>{{ run.status || '-' }} · {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
                   </button>
-                  <el-empty v-if="!knowledgeEvalRuns.length" description="No runs" />
+                  <el-empty v-if="!knowledgeEvalRuns.length" description="暂无运行记录" />
                 </div>
               </div>
 
@@ -471,7 +489,7 @@
                       {{ formatRate(knowledgeEvalLatestRun.passRate) }}
                     </el-tag>
                     <el-tag :type="knowledgeEvalLatestTrustRiskCount ? 'warning' : 'success'" effect="plain">
-                      Trust {{ knowledgeEvalLatestTrustedCount }}/{{ knowledgeEvalLatestRun.results?.length || 0 }}
+                      可信 {{ knowledgeEvalLatestTrustedCount }}/{{ knowledgeEvalLatestRun.results?.length || 0 }}
                     </el-tag>
                   </div>
                 </div>
@@ -484,14 +502,14 @@
                 />
                 <div v-if="knowledgeEvalLatestFailures.length" class="knowledge-eval-failures">
                   <article v-for="item in knowledgeEvalLatestFailures" :key="item.id || item.caseId">
-                    <strong>{{ item.caseId || `case-${item.evalCaseId || '-'}` }}</strong>
-                    <span>{{ knowledgeEvalExpectedLabel(item) }} / top {{ item.topTitle || `#${item.topDocumentId || '-'}` }} / {{ scoreLabel(item.topScore) }}</span>
+                    <strong>{{ item.caseId || `样本-${item.evalCaseId || '-'}` }}</strong>
+                    <span>{{ knowledgeEvalExpectedLabel(item) }} / 最佳匹配 {{ item.topTitle || `#${item.topDocumentId || '-'}` }} / {{ scoreLabel(item.topScore) }}</span>
                     <div class="knowledge-trust-strip knowledge-trust-strip--compact">
                       <el-tag :type="trustTagType(item.citationValid)" effect="plain">
-                        Citation {{ trustText(item.citationValid) }}
+                        引用 {{ trustText(item.citationValid) }}
                       </el-tag>
                       <el-tag :type="trustTagType(item.answerGrounded)" effect="plain">
-                        Grounded {{ trustText(item.answerGrounded) }}
+                        有依据 {{ trustText(item.answerGrounded) }}
                       </el-tag>
                     </div>
                     <small>{{ item.failureReason || item.citationWarning || item.note || '-' }}</small>
@@ -569,7 +587,7 @@
               生成回答
             </el-button>
             <el-button class="ask-button ask-button--secondary" :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">
-              Evaluate Retrieval
+              评估检索质量
             </el-button>
 
             <div v-if="answer" class="answer-box">
@@ -599,10 +617,10 @@
                 <span>引用 {{ askReferenceCount }} 条</span>
                 <span>最高分 {{ scoreLabel(askTopReferenceScore) }}</span>
                 <span>最低分 {{ scoreLabel(askMinReferenceScore) }}</span>
-                <span v-if="askCitationValid !== undefined">Citation {{ askCitationValid ? 'OK' : 'Check' }}</span>
-                <span v-if="askAnswerGrounded !== undefined">Grounded {{ askAnswerGrounded ? 'Yes' : 'No' }}</span>
-                <span v-if="askCitedReferenceNumbers.length">Cited {{ askCitedReferenceNumbers.join(', ') }}</span>
-                <span v-if="askInvalidReferenceNumbers.length">Invalid refs {{ askInvalidReferenceNumbers.join(', ') }}</span>
+                <span v-if="askCitationValid !== undefined">引用校验 {{ askCitationValid ? '通过' : '需复核' }}</span>
+                <span v-if="askAnswerGrounded !== undefined">回答依据 {{ askAnswerGrounded ? '充分' : '需复核' }}</span>
+                <span v-if="askCitedReferenceNumbers.length">已引用 {{ askCitedReferenceNumbers.join(', ') }}</span>
+                <span v-if="askInvalidReferenceNumbers.length">异常引用 {{ askInvalidReferenceNumbers.join(', ') }}</span>
               </div>
               <p>{{ answer }}</p>
             </div>
@@ -613,7 +631,7 @@
           <div class="content-card__body">
             <div class="section-head compact">
               <div>
-                <p class="section-kicker">References</p>
+                <p class="section-kicker">引用来源</p>
                 <h2>回答引用</h2>
               </div>
             </div>
@@ -646,7 +664,21 @@
           <el-input v-model.trim="form.title" maxlength="120" show-word-limit />
         </el-form-item>
         <el-form-item label="资料类型">
-          <el-input v-model.trim="form.documentType" placeholder="NOTE" />
+          <el-select
+            v-model="form.documentType"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="选择或输入资料类型"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="type in formDocumentTypeOptions"
+              :key="type"
+              :label="documentTypeLabel(type)"
+              :value="type"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="内容" required>
           <el-input v-model="form.content" type="textarea" :rows="10" maxlength="10000" show-word-limit />
@@ -665,7 +697,7 @@
         <div class="rebuild-grid">
           <article class="rebuild-stat">
             <span>向量库</span>
-            <strong>{{ rebuildResult.vectorEnabled ? '已启用' : '未启用' }}</strong>
+            <strong>{{ (rebuildResult.semanticEnabled ?? rebuildResult.vectorEnabled) ? '已启用' : '未配置' }}</strong>
           </article>
           <article class="rebuild-stat">
             <span>文档</span>
@@ -688,6 +720,7 @@
             <strong>{{ rebuildResult.duplicateChunkCount || 0 }}</strong>
           </article>
         </div>
+        <p v-if="rebuildResult.embeddingDisabledReason" class="rebuild-tip">{{ knowledgeDisabledReason(rebuildResult.embeddingDisabledReason) }}</p>
         <p class="rebuild-tip">失败文档：{{ rebuildResult.failedDocuments?.length || 0 }}</p>
         <p class="rebuild-tip" v-if="rebuildResult.failedDocuments?.length">
           文档 ID：{{ rebuildResult.failedDocuments.join(', ') }}
@@ -798,9 +831,9 @@
                 <div class="chunk-row__head">
                   <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
                   <el-tag size="small" :type="chunk.cleanupCandidate ? 'danger' : 'success'" effect="light">
-                    {{ chunk.cleanupCandidate ? 'delete candidate' : 'keep' }}
+                    {{ chunk.cleanupCandidate ? '清理候选' : '保留' }}
                   </el-tag>
-                  <span>{{ chunk.sourceRef || `Document #${chunk.documentId || '--'}` }}</span>
+                  <span>{{ chunk.sourceRef || `资料 #${chunk.documentId || '--'}` }}</span>
                   <el-button
                     v-if="chunk.id"
                     link
@@ -956,6 +989,7 @@ import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plu
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 import {
@@ -1125,6 +1159,32 @@ const form = reactive({
   content: ''
 })
 
+const documentTypeLabelMap: Record<string, string> = {
+  NOTE: '学习笔记',
+  PROJECT: '项目资料',
+  INTERVIEW_REVIEW: '面试复盘',
+  RESUME: '简历资料',
+  MARKDOWN: 'Markdown 文档',
+  PDF: 'PDF 文档',
+  WORD: 'Word 文档',
+  TEXT: '文本资料'
+}
+
+const documentTypeLabel = (type?: string) => documentTypeLabelMap[String(type || '').toUpperCase()] || type || '未分类'
+
+const formDocumentTypeOptions = computed(() =>
+  Array.from(new Set(['NOTE', 'PROJECT', 'INTERVIEW_REVIEW', 'RESUME', ...documentTypeOptions.value]))
+)
+
+const knowledgeDisabledReason = (reason?: string) => {
+  if (!reason) return '语义检索未配置，当前使用关键词兜底。'
+  if (reason.includes('Vector store is disabled')) return '向量库未启用，当前使用关键词兜底。'
+  if (reason.includes('Embedding provider is not configured')) return '向量模型服务未配置，当前使用关键词兜底。'
+  if (reason.includes('Embedding base URL')) return '向量模型服务地址、密钥或模型未配置，当前使用关键词兜底。'
+  if (reason.includes('keyword fallback')) return reason.replace('keyword fallback is active.', '当前使用关键词兜底。')
+  return reason
+}
+
 const chunkTotal = computed(() =>
   knowledgeStats.value?.chunkCount ?? allDocuments.value.reduce((sum, item) => sum + (Number(item.chunkCount) || 0), 0)
 )
@@ -1132,6 +1192,36 @@ const chunkTotal = computed(() =>
 const documentTotal = computed(() => knowledgeStats.value?.documentCount ?? total.value)
 
 const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkCount ?? 0)
+
+const semanticEnabled = computed(() => {
+  if (typeof knowledgeConfig.value?.semanticEnabled === 'boolean') {
+    return knowledgeConfig.value.semanticEnabled
+  }
+  if (typeof knowledgeStats.value?.semanticEnabled === 'boolean') {
+    return knowledgeStats.value.semanticEnabled
+  }
+  return Boolean(knowledgeConfig.value?.vectorEnabled ?? knowledgeStats.value?.vectorEnabled)
+})
+
+const semanticDisabledReason = computed(() =>
+  knowledgeDisabledReason(
+    knowledgeConfig.value?.embeddingDisabledReason ||
+    knowledgeStats.value?.embeddingDisabledReason ||
+    '语义检索未配置，当前使用关键词兜底。'
+  )
+)
+
+const vectorCapabilityLabel = computed(() => {
+  if (semanticEnabled.value) {
+    return knowledgeConfig.value?.vectorEnabled ? '向量库已启用' : '语义检索已启用'
+  }
+  return '未配置'
+})
+
+const vectorCapabilityDetail = computed(() => {
+  if (!semanticEnabled.value) return semanticDisabledReason.value
+  return knowledgeConfig.value?.vectorCollection || '语义检索可用'
+})
 
 const documentTypeSummary = computed(() => {
   const counts = knowledgeStats.value?.documentTypeCounts || {}
@@ -1155,7 +1245,7 @@ const indexStatusItems = computed(() => {
       items.push({ status, count: Number(count) })
     }
   }
-  return items.length ? items : [{ status: knowledgeStats.value?.vectorEnabled ? 'PENDING' : 'DISABLED', count: 0 }]
+  return items.length ? items : [{ status: semanticEnabled.value ? 'PENDING' : 'DISABLED', count: 0 }]
 })
 
 const failedChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.FAILED || 0))
@@ -1175,10 +1265,10 @@ const embeddingModelSummary = computed(() => {
 })
 
 const vectorIndexHealthLabel = computed(() => {
-  if (!knowledgeStats.value?.vectorEnabled) return 'vector disabled, keyword fallback active'
-  if (failedChunkCount.value > 0) return 'failed chunks need retry'
-  if (pendingChunkCount.value > 0) return 'pending chunks are waiting for indexing'
-  return 'vector index looks healthy'
+  if (!semanticEnabled.value) return semanticDisabledReason.value
+  if (failedChunkCount.value > 0) return '存在失败片段，建议重试索引'
+  if (pendingChunkCount.value > 0) return '存在等待索引的片段'
+  return '向量索引状态正常'
 })
 const duplicateTypeSummary = computed(() => {
   const counts = knowledgeStats.value?.duplicateTypeCounts || {}
@@ -1232,7 +1322,7 @@ const retrievalModeLabel = computed(() => {
   if (mode === 'HYBRID') return '混合检索'
   if (mode === 'VECTOR_FIRST') return '向量优先'
   if (mode === 'KEYWORD_FALLBACK') return '关键词兜底'
-  return knowledgeStats.value?.vectorEnabled ? '混合检索' : '关键词兜底'
+  return semanticEnabled.value ? '混合检索' : '关键词兜底'
 })
 
 const chunkStrategyLabel = computed(() => {
@@ -1287,9 +1377,9 @@ const scopedDocumentOptions = computed(() => {
 const duplicateReviewItems = computed<KnowledgeDuplicateReviewItemVO[]>(() => duplicateReview.value?.items || [])
 
 const duplicateReviewSummary = computed(() => {
-  if (!duplicateReview.value) return 'not scanned'
-  if (!duplicateReview.value.vectorEnabled) return 'vector disabled'
-  return `${duplicateReview.value.candidateCount || 0} candidates`
+  if (!duplicateReview.value) return '尚未扫描'
+  if (!semanticEnabled.value || !duplicateReview.value.vectorEnabled) return '语义检索未启用'
+  return `${duplicateReview.value.candidateCount || 0} 个候选`
 })
 
 const duplicateReviewThresholdLabel = computed(() => {
@@ -1306,11 +1396,11 @@ const knowledgeEvaluationTop = computed<KnowledgeEvaluationItemVO | undefined>((
 const knowledgeEvaluationExpectedLabel = computed(() => {
   const item = knowledgeEvaluationTop.value
   if (!item) return '--'
-  if (item.expectNoAnswer) return 'No answer'
+  if (item.expectNoAnswer) return '期望无答案'
   if (item.expectedDocumentTitle) return item.expectedDocumentTitle
   if (item.expectedDocumentId) return `#${item.expectedDocumentId}`
   if (item.expectedDocumentType) return item.expectedDocumentType
-  return 'Any source'
+  return '任意来源'
 })
 
 const knowledgeEvalLatestFailures = computed<KnowledgeEvalRunResultVO[]>(() =>
@@ -1333,13 +1423,13 @@ const knowledgeEvalLatestTrustRiskCount = computed(() => {
 
 const knowledgeEvalLatestTrustSummary = computed(() => {
   const results = knowledgeEvalLatestRun.value?.results || []
-  if (!results.length) return 'No trust samples yet'
-  return `${knowledgeEvalLatestTrustRiskCount.value} citation / grounding risks`
+  if (!results.length) return '暂无可信度样本'
+  return `${knowledgeEvalLatestTrustRiskCount.value} 条引用或依据风险`
 })
 
 const knowledgeEvalLatestRunSummary = computed(() => {
   const run = knowledgeEvalLatestRun.value
-  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.passRate)}` : 'No run yet'
+  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.passRate)}` : '暂无运行'
 })
 
 const knowledgeEvalHasCurrentQuery = computed(() => Boolean((question.value || keyword.value).trim()))
@@ -1371,9 +1461,9 @@ const selectedDuplicateChunkCount = computed(() =>
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
 const documentOptionLabel = (item: KnowledgeDocumentOptionVO) => {
@@ -1516,7 +1606,7 @@ const handleSearch = async () => {
 const handleSearchTrace = async () => {
   if (!keyword.value) {
     searchTrace.value = null
-    ElMessage.warning('Enter a search keyword or question first')
+    ElMessage.warning('请先输入搜索关键词或问题')
     return
   }
   tracingSearch.value = true
@@ -1540,7 +1630,7 @@ const handleSearchTrace = async () => {
 const handleEvaluateKnowledge = async () => {
   const queryText = question.value.trim() || keyword.value.trim()
   if (!queryText) {
-    ElMessage.warning('Enter a search keyword or question first')
+    ElMessage.warning('请先输入搜索关键词或问题')
     return
   }
   const expectedDocument = selectedKnowledgeDocumentOption.value
@@ -1568,9 +1658,9 @@ const handleEvaluateKnowledge = async () => {
       ]
     })
     const item = knowledgeEvaluation.value.items?.[0]
-    const score = item?.topScore != null ? `, top ${scoreLabel(item.topScore)}` : ''
+    const score = item?.topScore != null ? `，最高分 ${scoreLabel(item.topScore)}` : ''
     ElMessage.success(
-      `Evaluation ${item?.passed ? 'passed' : 'finished'}: ${knowledgeEvaluation.value.passedCount || 0}/${knowledgeEvaluation.value.evaluatedCount || 0}${score}`
+      `评估${item?.passed ? '通过' : '完成'}：${knowledgeEvaluation.value.passedCount || 0}/${knowledgeEvaluation.value.evaluatedCount || 0}${score}`
     )
   } catch (error) {
     ElMessage.error(getErrorMessage(error))
@@ -1585,11 +1675,11 @@ const knowledgeEvalExpectedLabel = (item: {
   expectedDocumentId?: number
   expectedDocumentType?: string
 }) => {
-  if (item.expectNoAnswer) return 'No answer expected'
+  if (item.expectNoAnswer) return '期望无答案'
   if (item.expectedDocumentTitle) return item.expectedDocumentTitle
-  if (item.expectedDocumentId) return `Document #${item.expectedDocumentId}`
+  if (item.expectedDocumentId) return `资料 #${item.expectedDocumentId}`
   if (item.expectedDocumentType) return item.expectedDocumentType
-  return 'Any source'
+  return '任意来源'
 }
 
 const currentKnowledgeEvalCasePayload = () => {
@@ -1683,13 +1773,13 @@ const refreshKnowledgePage = async () => {
 const saveCurrentKnowledgeEvalCase = async () => {
   const payload = currentKnowledgeEvalCasePayload()
   if (!payload) {
-    ElMessage.warning('Enter a search keyword or question first')
+    ElMessage.warning('请先输入搜索关键词或问题')
     return
   }
   knowledgeEvalSaving.value = true
   try {
     await saveKnowledgeEvalCaseApi(payload)
-    ElMessage.success('Evaluation case saved')
+    ElMessage.success('评估样本已保存')
     await refreshKnowledgeEvalWorkspace()
   } catch (error) {
     ElMessage.error(getErrorMessage(error))
@@ -1707,7 +1797,7 @@ const runKnowledgeEvalCases = async () => {
     })
     knowledgeEvalLatestRun.value = result
     ElMessage.success(
-      `Evaluation run done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, pass ${formatRate(result.passRate)}`
+      `评估运行完成：${result.passedCount || 0}/${result.evaluatedCount || 0}，通过率 ${formatRate(result.passRate)}`
     )
     await fetchKnowledgeEvalRuns()
     if (result.id) {
@@ -1722,10 +1812,22 @@ const runKnowledgeEvalCases = async () => {
 
 const deleteKnowledgeEvalCase = async (id?: number) => {
   if (!id) return
-  await ElMessageBox.confirm('Delete this RAG evaluation case?', 'Delete evaluation case', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(
+      '确认删除该知识库评估样本？删除后不会影响资料内容，但后续检索评估将不再使用该样本。',
+      '删除评估样本高风险确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   try {
     await deleteKnowledgeEvalCaseApi(id)
-    ElMessage.success('Evaluation case deleted')
+    ElMessage.success('评估样本已删除')
     await fetchKnowledgeEvalCases()
   } catch (error) {
     ElMessage.error(getErrorMessage(error))
@@ -2126,6 +2228,10 @@ const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: stri
 }
 
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
+  if (!semanticEnabled.value) {
+    ElMessage.warning(semanticDisabledReason.value)
+    return
+  }
   const scopeLabel = documentTitle ? `资料「${documentTitle}」` : '全部资料'
   await ElMessageBox.confirm(
     `将重建${scopeLabel}的知识库向量索引，可能产生 embedding 调用成本；请求完成前请不要重复点击。确认继续？`,
@@ -2151,6 +2257,10 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
 }
 
 const handleRetryFailedVectors = async () => {
+  if (!semanticEnabled.value) {
+    ElMessage.warning(semanticDisabledReason.value)
+    return
+  }
   await ElMessageBox.confirm(
     '将重试当前用户最多 500 个失败或超时待索引片段所属文档的向量索引，期间可能产生 embedding 调用成本。确认继续？',
     '重试知识库向量索引',
@@ -2239,9 +2349,9 @@ const trustTagType = (value?: boolean) => {
 
 const knowledgeTrustLabel = (item?: Pick<KnowledgeEvaluationItemVO, 'citationValid' | 'answerGrounded'>) => {
   if (!item) return '--'
-  if (item.citationValid === true && item.answerGrounded === true) return 'Trusted'
-  if (item.citationValid === false || item.answerGrounded === false) return 'Needs review'
-  return 'Unknown'
+  if (item.citationValid === true && item.answerGrounded === true) return '可信'
+  if (item.citationValid === false || item.answerGrounded === false) return '需复核'
+  return '未知'
 }
 
 const escapeHtml = (value: string) =>

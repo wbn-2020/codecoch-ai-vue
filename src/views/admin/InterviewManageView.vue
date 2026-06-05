@@ -31,18 +31,25 @@
       </div>
       <div class="pagination-wrap"><el-pagination v-model:current-page="query.pageNo" v-model:page-size="query.pageSize" background layout="total, sizes, prev, pager, next" :total="total" :page-sizes="[10, 20, 50]" @change="fetchInterviews" /></div>
     </section>
-    <el-drawer v-model="drawerVisible" title="面试详情" size="620px">
-      <el-descriptions v-if="detail" :column="1" border>
-        <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
-        <el-descriptions-item label="标题">{{ detail.interviewName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="目标岗位">{{ detail.targetPosition || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ detail.status || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="报告状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="题目数">{{ detail.questionCount ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="时间">{{ detail.startedAt || '-' }} - {{ detail.finishedAt || '-' }}</el-descriptions-item>
-      </el-descriptions>
-    </el-drawer>
+    <el-dialog v-model="drawerVisible" title="面试详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div class="admin-detail-dialog__body">
+        <el-descriptions v-if="detail" :column="1" border>
+          <el-descriptions-item label="面试 ID">{{ detail.interviewId }}</el-descriptions-item>
+          <el-descriptions-item label="标题">{{ detail.interviewName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="用户">{{ detail.username || detail.userId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="目标岗位">{{ detail.targetPosition || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ detail.status || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="报告状态">{{ detail.reportStatus || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="题目数">{{ detail.questionCount ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="时间">{{ detail.startedAt || '-' }} - {{ detail.finishedAt || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="drawerVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -78,4 +85,15 @@ onMounted(fetchInterviews)
 
 <style scoped lang="scss">
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
+
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
 </style>

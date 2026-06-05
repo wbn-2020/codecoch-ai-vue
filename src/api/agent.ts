@@ -20,12 +20,16 @@ const normalizeTask = (task: AgentTaskVO): AgentTaskVO => ({
   status: task.status || 'TODO'
 })
 
-const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => ({
-  ...plan,
-  focusSkills: plan.focusSkills || [],
-  tasks: (plan.tasks || []).map(normalizeTask),
-  empty: Boolean(plan.empty || !plan.runId)
-})
+const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
+  const status = String(plan.status || '').toUpperCase()
+  const hasVisibleRun = Boolean(plan.runId && ['RUNNING', 'SUCCESS', 'FAILED'].includes(status))
+  return {
+    ...plan,
+    focusSkills: plan.focusSkills || [],
+    tasks: (plan.tasks || []).map(normalizeTask),
+    empty: Boolean(plan.empty || (!plan.runId && !hasVisibleRun))
+  }
+}
 
 const normalizeTodayTasks = (view: AgentTodayTaskVO | AgentTaskVO[]): AgentTodayTaskVO => {
   if (Array.isArray(view)) {

@@ -145,7 +145,7 @@ export interface InterviewAnswerDTO {
 }
 
 export interface InterviewEvaluationVO {
-  score: number
+  score?: number
   level?: string
   comment: string
   advantage?: string

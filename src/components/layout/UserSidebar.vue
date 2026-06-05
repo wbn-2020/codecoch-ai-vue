@@ -1,5 +1,13 @@
 <template>
-  <el-menu class="layout-menu user-sidebar-menu" :default-active="activePath" :collapse="collapsed" router>
+  <el-menu
+    ref="menuRef"
+    class="layout-menu user-sidebar-menu"
+    :default-active="activePath"
+    :collapse="collapsed"
+    :unique-opened="true"
+    router
+    @select="handleSelect"
+  >
     <template v-for="section in menuSections" :key="section.key">
       <el-menu-item v-if="section.children.length === 1 && !section.forceGroup" :index="section.children[0].path">
         <el-icon>
@@ -42,19 +50,22 @@ import {
   TrendCharts,
   User
 } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { appConfig } from '@/config'
 
-defineProps<{
+const props = defineProps<{
   collapsed?: boolean
 }>()
 
 const route = useRoute()
+const menuRef = ref<{ close: (index: string) => void }>()
 
 interface UserMenuItem {
   label: string
   path: string
   icon: unknown
+  featureFlag?: 'v4Preview'
 }
 
 interface UserMenuSection {
@@ -65,7 +76,13 @@ interface UserMenuSection {
   children: UserMenuItem[]
 }
 
-const menuSections: UserMenuSection[] = [
+const isFeatureEnabled = (featureFlag?: UserMenuItem['featureFlag']) => {
+  if (!featureFlag) return true
+  if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
+  return true
+}
+
+const baseMenuSections: UserMenuSection[] = [
   {
     key: 'workspace',
     label: '工作台',
@@ -73,21 +90,21 @@ const menuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '工作台', path: '/dashboard', icon: DataBoard },
-      { label: 'V3 驾驶舱', path: '/dashboard/v3', icon: DataBoard }
+      { label: '求职驾驶舱', path: '/dashboard/v3', icon: DataBoard }
     ]
   },
   {
     key: 'agent-growth',
-    label: 'Agent 成长',
+    label: '今日训练',
     icon: MagicStick,
     forceGroup: true,
     children: [
-      { label: 'JobCoachAgent', path: '/agent/today', icon: MagicStick },
-      { label: 'Agent 任务', path: '/agent/tasks', icon: Calendar },
-      { label: '个人分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked },
-      { label: '成长档案', path: '/growth/profile', icon: Medal },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick }
+      { label: '今日任务', path: '/agent/today', icon: MagicStick },
+      { label: '任务列表', path: '/agent/tasks', icon: Calendar },
+      { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
+      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Preview' },
+      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Preview' },
+      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Preview' }
     ]
   },
   {
@@ -96,10 +113,10 @@ const menuSections: UserMenuSection[] = [
     icon: Files,
     forceGroup: true,
     children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files },
+      { label: '简历版本', path: '/resume-versions', icon: Files, featureFlag: 'v4Preview' },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass },
+      { label: '求职进度', path: '/applications', icon: Compass, featureFlag: 'v4Preview' },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal }
@@ -130,12 +147,12 @@ const menuSections: UserMenuSection[] = [
   },
   {
     key: 'study-plan',
-    label: '学习计划',
+    label: '学习成长',
     icon: Reading,
     forceGroup: true,
     children: [
       { label: '差距学习计划', path: '/study-plans/from-gap', icon: Reading },
-      { label: '学习计划', path: '/study-plans', icon: Reading },
+      { label: '计划总览', path: '/study-plans', icon: Reading },
       { label: '每日任务', path: '/daily-tasks', icon: Calendar },
       { label: '薄弱点分析', path: '/weakness-analysis', icon: TrendCharts }
     ]
@@ -147,12 +164,32 @@ const menuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading },
+      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Preview' },
       { label: '修改密码', path: '/password', icon: Key },
       { label: '个人资料', path: '/profile', icon: User }
     ]
   }
 ]
+
+const menuSections = computed(() =>
+  baseMenuSections
+    .map((section) => ({
+      ...section,
+      children: section.children.filter((item) => isFeatureEnabled(item.featureFlag))
+    }))
+    .filter((section) => section.children.length > 0)
+)
+
+const closeAllMenus = () => {
+  if (!props.collapsed) return
+  nextTick(() => {
+    menuSections.value.forEach((section) => menuRef.value?.close(section.key))
+  })
+}
+
+const handleSelect = () => {
+  closeAllMenus()
+}
 
 const activePath = computed(() => {
   if (route.path.startsWith('/dashboard/v3')) return '/dashboard/v3'
@@ -185,6 +222,8 @@ const activePath = computed(() => {
   if (route.path.startsWith('/interviews')) return '/interviews/create'
   return route.path
 })
+
+watch(() => route.fullPath, closeAllMenus)
 </script>
 
 <style scoped lang="scss">

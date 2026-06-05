@@ -29,6 +29,18 @@
       <el-empty v-else-if="!loading" description="未找到面试详情" />
     </section>
 
+    <section v-if="detail && hasPerQuestionEvaluation && !finalReportGenerated" class="content-card">
+      <div class="content-card__body">
+        <el-alert
+          type="warning"
+          show-icon
+          :closable="false"
+          title="当前展示的是单题点评，最终面试报告尚未生成"
+          description="问答区的分数和点评来自答题后的即时评估，不代表最终报告已生成。"
+        />
+      </div>
+    </section>
+
     <section v-if="detail?.resumeSnapshot" class="content-card">
       <div class="content-card__body">
         <h2 class="section-title">简历快照</h2>
@@ -94,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getInterviewDetailApi } from '@/api/interview'
@@ -108,6 +120,11 @@ const router = useRouter()
 const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const detail = ref<InterviewDetailVO | null>(null)
+
+const finalReportGenerated = computed(() => String(detail.value?.reportStatus || '').toUpperCase() === 'GENERATED')
+const hasPerQuestionEvaluation = computed(() =>
+  (detail.value?.messages || []).some((message) => message.score !== undefined || Boolean(message.aiComment))
+)
 
 const normalizeKnowledgePoints = (value: string | string[] | undefined) => {
   if (Array.isArray(value)) return value.filter(Boolean)

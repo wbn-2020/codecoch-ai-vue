@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><RouteIcon :size="16" /> Gap Driven Plan</div>
         <h1>差距学习计划</h1>
-        <p>读取能力画像短板项，选择 gap、周期和每日时长后调用 generate-from-gap 生成真实学习计划。</p>
+        <p>从能力画像中选择短板项，配置周期和每日时长后生成学习计划。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/skill-profile')"><Radar :size="16" /> 能力画像</el-button>
@@ -15,11 +15,11 @@
     <section class="plan-grid">
       <div class="content-panel" v-loading="loading">
         <div class="section-head">
-          <div><h2>选择短板</h2><p>优先使用 URL 中的 profileId，否则按 targetJobId/overview 查找。</p></div>
+          <div><h2>选择短板</h2><p>优先使用当前能力画像，也可以从岗位目标自动匹配。</p></div>
           <el-button text :loading="loading" @click="loadProfile">刷新</el-button>
         </div>
         <AppState v-if="loadError" type="error" title="短板加载失败" :description="loadError"><el-button type="primary" @click="loadProfile">重试</el-button></AppState>
-        <AppState v-else-if="!gapItems.length" type="empty" title="暂无可选短板" description="请先生成能力画像，或确认后端返回 gapItems/topGaps。" />
+        <AppState v-else-if="!gapItems.length" type="empty" title="暂无可选短板" description="请先生成能力画像，或刷新后再试。" />
         <el-checkbox-group v-else v-model="form.gapItemIds" class="gap-list">
           <label v-for="gap in gapItems" :key="gap.id" class="gap-card">
             <el-checkbox :value="gap.id" />
@@ -36,7 +36,7 @@
         <h2>生成参数</h2>
         <el-form label-position="top">
           <el-form-item label="计划标题">
-            <el-input v-model.trim="form.planTitle" placeholder="例如：Java 后端短板冲刺计划" />
+            <el-input v-model.trim="form.planTitle" placeholder="例如：Java 面试短板冲刺计划" />
           </el-form-item>
           <el-form-item label="学习天数">
             <el-input-number v-model="form.days" :min="3" :max="120" class="full" />
@@ -177,7 +177,7 @@ const generatePlan = async () => {
       return
     }
     if (!result.planId) {
-      ElMessage.error('学习计划生成失败：后端未返回 planId')
+      ElMessage.error('学习计划生成失败，请稍后重试。')
       return
     }
     ElMessage.success('学习计划已生成')

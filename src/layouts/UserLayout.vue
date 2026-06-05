@@ -39,7 +39,7 @@
               <span v-if="unreadAvailable && unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
             </button>
           </el-tooltip>
-          <el-button v-if="authStore.canAccessAdmin" class="admin-entry" text @click="router.push('/admin')">
+          <el-button v-if="authStore.canAccessAdmin" class="admin-entry" text @click="goAdmin">
             <Shield :size="15" />
             管理端
           </el-button>
@@ -66,6 +66,9 @@
       <TagsView scope="user" />
 
       <el-main class="app-layout__main">
+        <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
+          演示只读模式已开启，页面可浏览，新增、修改、删除等写入操作会被拦截。
+        </div>
         <RouteErrorBoundary fallback-path="/dashboard">
           <RouterView />
         </RouteErrorBoundary>
@@ -80,11 +83,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
+import { appConfig } from '@/config'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import CommandPalette from '@/components/layout/CommandPalette.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
 import UserSidebar from '@/components/layout/UserSidebar.vue'
+import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -105,6 +110,9 @@ const unreadCount = ref(0)
 const unreadAvailable = ref(true)
 const commandPaletteOpen = ref(false)
 const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（未读数暂不可用）')
+const goAdmin = async () => {
+  await router.push(firstAccessibleAdminPath(authStore) || '/403')
+}
 const fetchUnreadCount = async () => {
   try {
     const result = await getUnreadCountApi()
@@ -376,6 +384,17 @@ const handleCommand = async (command: string) => {
   min-height: calc(100vh - var(--app-header-height) - 38px);
   padding: 24px;
   overflow: auto;
+}
+
+.demo-readonly-banner {
+  margin-bottom: 16px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 :deep(.layout-menu) {

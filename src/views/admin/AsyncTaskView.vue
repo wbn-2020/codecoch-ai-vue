@@ -39,13 +39,41 @@
           <el-table-column label="死信" width="90"><template #default="{ row }"><el-tag v-if="isDead(row)" type="danger">是</el-tag><span v-else>否</span></template></el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
           <el-table-column label="失败原因" min-width="220" show-overflow-tooltip><template #default="{ row }">{{ row.errorMessage || '-' }}</template></el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
+          <el-table-column label="操作" width="170">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-              <el-button link type="warning" :disabled="!canRetry(row)" @click="handleRetry(row)">重试</el-button>
-              <el-button link type="danger" :disabled="!isDead(row)" @click="handleDeadRetry(row)">死信重试</el-button>
+              <el-button
+                v-if="isDead(row)"
+                v-permission="'admin:task:retry'"
+                link
+                type="danger"
+                :loading="retryingId === row.id"
+                @click="handleDeadRetry(row)"
+              >
+                死信重试
+              </el-button>
+              <el-button
+                v-else-if="canRetry(row)"
+                v-permission="'admin:task:retry'"
+                link
+                type="warning"
+                :loading="retryingId === row.id"
+                @click="handleRetry(row)"
+              >
+                重试
+              </el-button>
+              <span v-else class="muted-action">无需处理</span>
             </template>
           </el-table-column>
+          <template #empty>
+            <AppState
+              :type="taskError ? 'error' : 'empty'"
+              :title="taskError ? '任务列表加载失败' : '暂无异步任务'"
+              :description="taskError || '当前筛选条件下没有后台任务记录。'"
+            >
+              <el-button type="primary" @click="taskError ? fetchTasks() : handleReset()">{{ taskError ? '重新加载' : '清空筛选' }}</el-button>
+            </AppState>
+          </template>
         </el-table>
       </div>
 
@@ -61,8 +89,14 @@
         <el-descriptions-item label="状态"><el-tag :type="statusType(detail.status)">{{ detail.status }}</el-tag></el-descriptions-item>
         <el-descriptions-item label="业务">{{ detail.bizType || '-' }} / {{ detail.bizId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="错误">{{ detail.errorMessage || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Payload"><pre>{{ detail.payload || '-' }}</pre></el-descriptions-item>
-        <el-descriptions-item label="Result"><pre>{{ detail.result || '-' }}</pre></el-descriptions-item>
+        <el-descriptions-item label="Payload 预览">
+          <pre>{{ detail.payloadPreview || '-' }}</pre>
+          <small v-if="detail.payloadHash">SHA-256: {{ detail.payloadHash }}</small>
+        </el-descriptions-item>
+        <el-descriptions-item label="Result 预览">
+          <pre>{{ detail.resultPreview || '-' }}</pre>
+          <small v-if="detail.resultHash">SHA-256: {{ detail.resultHash }}</small>
+        </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
   </div>
@@ -73,14 +107,24 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Timer } from 'lucide-vue-next'
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAdminTaskDetailApi, getAdminTasksApi, retryAdminDeadLetterTaskApi, retryAdminTaskApi } from '@/api/adminGovernance'
-import type { AdminListQuery, AsyncTaskVO } from '@/types/adminGovernance'
+import {
+  getAdminDeadLetterRetryPreviewApi,
+  getAdminTaskDetailApi,
+  getAdminTaskRetryPreviewApi,
+  getAdminTasksApi,
+  retryAdminDeadLetterTaskApi,
+  retryAdminTaskApi
+} from '@/api/adminGovernance'
+import AppState from '@/components/common/AppState.vue'
+import type { AdminListQuery, AdminTaskImpactPreviewVO, AsyncTaskVO } from '@/types/adminGovernance'
 
 const loading = ref(false)
 const drawerVisible = ref(false)
 const tasks = ref<AsyncTaskVO[]>([])
 const detail = ref<AsyncTaskVO | null>(null)
 const total = ref(0)
+const taskError = ref('')
+const retryingId = ref<number | null>(null)
 const query = reactive<AdminListQuery>({ keyword: '', status: '', type: '', pageNo: 1, pageSize: 10 })
 
 const statusType = (status?: string) => {
@@ -90,11 +134,12 @@ const statusType = (status?: string) => {
   if (['RUNNING', 'PROCESSING'].includes(value)) return 'warning'
   return 'info'
 }
-const isDead = (row: AsyncTaskVO) => row.deadLetter === true || row.deadLetter === 1 || String(row.status).toUpperCase() === 'DEAD_LETTER'
-const canRetry = (row: AsyncTaskVO) => ['FAILED', 'ERROR', 'DEAD_LETTER'].includes(String(row.status).toUpperCase())
+const isDead = (row: AsyncTaskVO) => row.deadLetter === true || row.deadLetter === 1 || ['DEAD', 'DEAD_LETTER'].includes(String(row.status).toUpperCase())
+const canRetry = (row: AsyncTaskVO) => ['FAILED', 'ERROR', 'DEAD', 'DEAD_LETTER'].includes(String(row.status).toUpperCase())
 
 const fetchTasks = async () => {
   loading.value = true
+  taskError.value = ''
   try {
     const result = await getAdminTasksApi(query)
     tasks.value = result.records || []
@@ -102,6 +147,7 @@ const fetchTasks = async () => {
   } catch {
     tasks.value = []
     total.value = 0
+    taskError.value = '暂时无法获取任务列表，请稍后重试或检查任务服务状态。'
   } finally {
     loading.value = false
   }
@@ -113,17 +159,53 @@ const openDetail = async (row: AsyncTaskVO) => {
 }
 
 const handleRetry = async (row: AsyncTaskVO) => {
-  await ElMessageBox.confirm(`确认重试任务 ${row.taskName || row.id}？`, '重试确认', { type: 'warning' })
-  await retryAdminTaskApi(row.id)
-  ElMessage.success('已提交重试')
-  await fetchTasks()
+  retryingId.value = row.id
+  try {
+    const preview = await getAdminTaskRetryPreviewApi(row.id)
+    const note = await promptActionNote('重试失败任务', row, preview)
+    await retryAdminTaskApi(row.id, note)
+    ElMessage.success('已提交重试')
+    await fetchTasks()
+  } catch (error) {
+    if ((error as Error)?.message === '当前状态不可执行') ElMessage.warning('当前状态不可执行')
+  } finally {
+    retryingId.value = null
+  }
 }
 
 const handleDeadRetry = async (row: AsyncTaskVO) => {
-  await ElMessageBox.confirm(`确认从死信队列重试任务 ${row.taskName || row.id}？`, '死信重试确认', { type: 'warning' })
-  await retryAdminDeadLetterTaskApi(row.id)
-  ElMessage.success('已提交死信重试')
-  await fetchTasks()
+  retryingId.value = row.id
+  try {
+    const preview = await getAdminDeadLetterRetryPreviewApi(row.id)
+    const note = await promptActionNote('死信任务重试', row, preview)
+    await retryAdminDeadLetterTaskApi(row.id, note)
+    ElMessage.success('已提交死信重试')
+    await fetchTasks()
+  } catch (error) {
+    if ((error as Error)?.message === '当前状态不可执行') ElMessage.warning('当前状态不可执行')
+  } finally {
+    retryingId.value = null
+  }
+}
+
+const promptActionNote = async (title: string, row: AsyncTaskVO, preview?: AdminTaskImpactPreviewVO) => {
+  if (preview && preview.executable === false) {
+    throw new Error('当前状态不可执行')
+  }
+  const message = [
+    `对象：${row.taskName || row.taskId || row.id}`,
+    preview?.impact || '该操作会重新执行后台任务，请确认依赖已经恢复。',
+    preview?.requiredNote || '请填写本次人工处理说明。'
+  ].join('\n')
+  const result = await ElMessageBox.prompt(message, title, {
+    type: preview?.riskLevel === 'HIGH' ? 'error' : 'warning',
+    inputType: 'textarea',
+    inputPlaceholder: '例如：已确认依赖恢复，允许人工补偿重试',
+    inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写处理说明',
+    confirmButtonText: '确认执行',
+    cancelButtonText: '取消'
+  })
+  return String(result.value || '').trim()
 }
 
 const handleSearch = () => { query.pageNo = 1; fetchTasks() }
@@ -134,5 +216,6 @@ onMounted(fetchTasks)
 
 <style scoped lang="scss">
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
+.muted-action { color: var(--app-text-muted); font-size: 12px; }
 pre { overflow: auto; max-height: 220px; margin: 0; white-space: pre-wrap; word-break: break-word; }
 </style>

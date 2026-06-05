@@ -4,11 +4,11 @@
       <div>
         <div class="eyebrow">Daily Tasks</div>
         <h1>每日任务</h1>
-        <p>按学习计划读取真实 daily-view，支持完成、跳过和学习记录提交。</p>
+        <p>根据学习计划展示当天任务，支持完成、跳过和学习记录提交。</p>
       </div>
       <div class="hero-actions">
         <el-date-picker v-model="selectedDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadDailyView" />
-        <el-button :loading="loading" @click="loadDailyView">刷新</el-button>
+        <el-button :loading="loading || retryingDailyView" @click="loadDailyView">刷新</el-button>
       </div>
     </section>
 
@@ -35,7 +35,10 @@
               <strong>{{ plan.planTitle || `学习计划 #${plan.id}` }}</strong>
               <span>{{ plan.doneTaskCount || 0 }}/{{ plan.totalTaskCount || 0 }} 已完成</span>
             </button>
-            <AppState v-if="!plansLoading && !plans.length" type="empty" title="暂无学习计划" description="可以先从面试报告或能力短板生成学习计划。">
+            <AppState v-if="plansError" type="error" title="学习计划加载失败" :description="plansError">
+              <el-button type="primary" :loading="plansLoading" @click="loadPlans">重试</el-button>
+            </AppState>
+            <AppState v-else-if="!plansLoading && !plans.length" type="empty" title="暂无学习计划" description="可以先从面试报告或能力短板生成学习计划。">
               <el-button type="primary" @click="router.push('/study-plans')">创建学习计划</el-button>
               <el-button @click="router.push('/skill-profile')">查看能力画像</el-button>
             </AppState>
@@ -54,7 +57,7 @@
           </div>
 
           <AppState v-if="loadError" type="error" title="任务加载失败" :description="loadError">
-            <el-button type="primary" @click="loadDailyView">重试</el-button>
+            <el-button type="primary" :loading="loading || retryingDailyView" @click="loadDailyView">重试</el-button>
           </AppState>
           <AppState v-else-if="!selectedPlanId" type="empty" title="请选择学习计划" description="选择左侧计划后查看对应日期的任务。">
             <el-button type="primary" @click="router.push('/study-plans')">学习计划</el-button>
@@ -107,6 +110,7 @@ import { checkinApi, completeTaskApi, skipTaskApi } from '@/api/dailyTask'
 import { getStudyPlanDailyViewApi, getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import type { StudyPlanDailyViewVO, StudyPlanListVO, StudyTaskStatus } from '@/types/studyPlan'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const today = new Date().toISOString().slice(0, 10)
@@ -119,16 +123,22 @@ const plansLoading = ref(false)
 const loading = ref(false)
 const checkingIn = ref(false)
 const loadError = ref('')
+const plansError = ref('')
+const retryingDailyView = ref(false)
 
 const tasks = computed(() => dailyView.value?.tasks || [])
 
 const loadPlans = async () => {
   plansLoading.value = true
+  plansError.value = ''
   try {
     const page = await getStudyPlansApi({ pageNo: 1, pageSize: 50, planStatus: 'ACTIVE' })
     plans.value = page.records || []
     selectedPlanId.value ||= plans.value[0]?.id
     if (selectedPlanId.value) await loadDailyView()
+  } catch (error) {
+    plans.value = []
+    plansError.value = getErrorMessage(error, '学习计划暂时加载失败，请稍后重试。')
   } finally {
     plansLoading.value = false
   }
@@ -144,11 +154,41 @@ const loadDailyView = async () => {
   loading.value = true
   loadError.value = ''
   try {
-    dailyView.value = await getStudyPlanDailyViewApi(selectedPlanId.value, selectedDate.value)
+    dailyView.value = await loadDailyViewWithRetry(selectedPlanId.value, selectedDate.value)
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : '接口请求失败'
+    const status = getHttpStatus(error)
+    if (status === 503) {
+      loadError.value = '每日任务服务繁忙或任务正在生成，已自动重试一次；请稍后再试。'
+    } else if (status === 500) {
+      loadError.value = '每日任务暂时不可用，已自动重试一次；请稍后再试。'
+    } else {
+      loadError.value = getErrorMessage(error, '每日任务暂时加载失败，请稍后重试。')
+    }
   } finally {
+    retryingDailyView.value = false
     loading.value = false
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+const getHttpStatus = (error: unknown) => {
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return typeof status === 'number' ? status : 0
+}
+
+const loadDailyViewWithRetry = async (planId: number, date: string) => {
+  try {
+    return await getStudyPlanDailyViewApi(planId, date)
+  } catch (error) {
+    if (![500, 503].includes(getHttpStatus(error))) throw error
+    retryingDailyView.value = true
+    try {
+      await sleep(600)
+      return await getStudyPlanDailyViewApi(planId, date)
+    } finally {
+      retryingDailyView.value = false
+    }
   }
 }
 

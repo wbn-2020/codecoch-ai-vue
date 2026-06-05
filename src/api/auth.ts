@@ -1,12 +1,16 @@
 import request from '@/utils/request'
 import type { CurrentUserVO, LoginDTO, LoginVO, RegisterDTO, RegisterVO } from '@/types/auth'
 
-export const loginApi = (data: LoginDTO) => {
-  return request.post<LoginVO, LoginVO>('/auth/login', data)
+export const loginApi = (data: LoginDTO, options?: { silentError?: boolean }) => {
+  return request.post<LoginVO, LoginVO>('/auth/login', data, {
+    silentError: options?.silentError
+  })
 }
 
-export const registerApi = (data: RegisterDTO) => {
-  return request.post<RegisterVO, RegisterVO>('/auth/register', data)
+export const registerApi = (data: RegisterDTO, options?: { silentError?: boolean }) => {
+  return request.post<RegisterVO, RegisterVO>('/auth/register', data, {
+    silentError: options?.silentError
+  })
 }
 
 export const logoutApi = () => {

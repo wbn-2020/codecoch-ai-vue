@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">文件治理</h1>
         <p class="admin-hero__desc">
-          基于真实 /admin/files 接口查看上传文件元数据、下载鉴权和简历解析联动状态。
+          查看上传文件元数据、下载鉴权和简历解析联动状态。
         </p>
       </div>
     </section>
@@ -17,7 +17,7 @@
       <article class="admin-insight-card">
         <span>文件总数</span>
         <strong>{{ total }}</strong>
-        <small>来自文件分页接口 total</small>
+        <small>当前文件总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页容量</span>
@@ -93,8 +93,8 @@
           </el-table-column>
           <el-table-column label="失败原因" min-width="180">
             <template #default="{ row }">
-              <el-tooltip v-if="row.parseErrorMessage" :content="row.parseErrorMessage" placement="top">
-                <span class="parse-error-text">{{ row.parseErrorMessage }}</span>
+              <el-tooltip v-if="row.parseErrorMessage" :content="friendlyParseError(row.parseErrorMessage)" placement="top">
+                <span class="parse-error-text">{{ friendlyParseError(row.parseErrorMessage) }}</span>
               </el-tooltip>
               <span v-else class="muted-value">-</span>
             </template>
@@ -202,7 +202,7 @@
               </el-descriptions-item>
               <el-descriptions-item label="是否已确认">{{ formatConfirmed(detail.analysisConfirmed) }}</el-descriptions-item>
               <el-descriptions-item label="解析失败原因">
-                <span class="parse-error-block">{{ detail.parseErrorMessage || '-' }}</span>
+                <span class="parse-error-block">{{ friendlyParseError(detail.parseErrorMessage) || '-' }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="解析完成时间">{{ detail.parsedAt || '-' }}</el-descriptions-item>
               <el-descriptions-item label="确认时间">{{ detail.confirmedAt || '-' }}</el-descriptions-item>
@@ -221,6 +221,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { downloadAdminFileApi, getAdminFileDetailApi, getAdminFilesApi } from '@/api/file'
 import type { AdminFileQueryDTO, FileInfoVO } from '@/types/file'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -261,6 +262,7 @@ const hasDisplayValue = (value?: number | string | boolean | null) =>
   value !== undefined && value !== null && String(value).trim() !== ''
 
 const formatNullable = (value?: number | string | boolean | null) => (hasDisplayValue(value) ? String(value) : '-')
+const friendlyParseError = (value?: string) => toFriendlyMessage(value, '解析失败，请稍后重试。')
 
 const formatIdLabel = (label: string, value?: number | string | null) =>
   hasDisplayValue(value) ? `${label} #${value}` : '-'
@@ -322,7 +324,7 @@ const fetchFiles = async () => {
   } catch (error) {
     files.value = []
     total.value = 0
-    loadError.value = error instanceof Error ? error.message : '文件列表加载失败'
+    loadError.value = getErrorMessage(error, '文件列表加载失败')
   } finally {
     loading.value = false
   }

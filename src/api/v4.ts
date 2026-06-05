@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import { normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
+import { toFriendlyMessage } from '@/utils/error'
 
 export interface AgentReviewVO {
   id: number
@@ -201,6 +202,9 @@ export interface KnowledgeStatsVO {
   chunkCount?: number
   duplicateChunkCount?: number
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   retrievalMode?: string
   chunkStrategy?: string
   documentTypeCounts?: Record<string, number>
@@ -221,6 +225,9 @@ export interface KnowledgeDuplicateDocumentHotspotVO {
 
 export interface KnowledgeConfigVO {
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   vectorCollection?: string
   retrievalMode?: string
   normalizationVersion?: string
@@ -336,6 +343,9 @@ export interface KnowledgeAskVO {
 
 export interface KnowledgeVectorRebuildVO {
   vectorEnabled?: boolean
+  embeddingEnabled?: boolean
+  semanticEnabled?: boolean
+  embeddingDisabledReason?: string
   documentCount?: number
   chunkCount?: number
   vectorUpdated?: number
@@ -693,13 +703,13 @@ export const askKnowledgeStreamApi = (
             handlers.onDone?.(payload.aiCallLogId as number | undefined)
             break
           case 'error':
-            handlers.onError?.(String(payload.message || 'Knowledge ask failed'))
+            handlers.onError?.(toFriendlyMessage(payload.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
             break
           default:
             break
         }
       },
-      onError: (error) => handlers.onError?.(error.message)
+      onError: (error) => handlers.onError?.(toFriendlyMessage(error.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
     }
   })
 }

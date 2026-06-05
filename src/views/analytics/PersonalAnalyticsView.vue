@@ -4,10 +4,10 @@
       <div>
         <div class="analytics-eyebrow">
           <LineChart :size="16" />
-          <span>V4 分析</span>
+          <span>训练分析</span>
         </div>
         <h1>个人训练分析</h1>
-        <p>汇总 JobCoachAgent 任务、完成率、训练耗时和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
+        <p>汇总每日任务、完成率、训练耗时和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
       </div>
       <div class="analytics-actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
@@ -53,7 +53,7 @@
             <div>
               <p class="section-kicker">技能</p>
               <h2>重点训练技能</h2>
-              <span>来自 Agent 任务关联技能 Top 分布</span>
+              <span>来自训练任务关联技能 Top 分布</span>
             </div>
           </div>
           <div class="skill-bars">
@@ -82,6 +82,7 @@ import {
 import AppState from '@/components/common/AppState.vue'
 import type { MetricPointVO, PersonalAgentOverviewVO, TrendPointVO } from '@/types/analytics'
 import echarts, { type ECharts } from '@/utils/echarts'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -99,9 +100,9 @@ const rangeOptions = [
 
 const metrics = computed(() => [
   { key: 'today', label: '今日任务', value: overview.value?.todayTaskCount || 0, hint: `完成 ${overview.value?.todayDoneCount || 0} / 跳过 ${overview.value?.todaySkippedCount || 0}`, icon: Target, tone: 'tone-blue' },
-  { key: 'minutes', label: '今日预计耗时', value: `${overview.value?.todayEstimatedMinutes || 0}m`, hint: '来自今日 Agent 任务', icon: Timer, tone: 'tone-cyan' },
+  { key: 'minutes', label: '今日预计耗时', value: `${overview.value?.todayEstimatedMinutes || 0}m`, hint: '来自今日训练任务', icon: Timer, tone: 'tone-cyan' },
   { key: 'week', label: '近 7 天完成率', value: `${overview.value?.last7DaysCompletionRate || 0}%`, hint: `${overview.value?.last7DaysDoneCount || 0}/${overview.value?.last7DaysTaskCount || 0} 个任务`, icon: CheckCircle2, tone: 'tone-green' },
-  { key: 'agent', label: 'Agent 成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgAgentDurationMs || 0}ms`, icon: Sparkles, tone: 'tone-violet' }
+  { key: 'agent', label: '计划生成成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgAgentDurationMs || 0}ms`, icon: Sparkles, tone: 'tone-violet' }
 ])
 
 const maxSkillValue = computed(() => Math.max(...skillDistribution.value.map((item) => item.value || 0), 1))
@@ -110,9 +111,9 @@ const barWidth = (value?: number) => `${Math.max(6, ((value || 0) / maxSkillValu
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
 const disposeChart = () => {

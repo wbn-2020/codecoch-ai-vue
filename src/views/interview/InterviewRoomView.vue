@@ -4,10 +4,10 @@
       <div>
         <div class="eyebrow">
           <Bot :size="16" />
-          AI Interview War Room
+          AI 面试训练室
         </div>
         <h1>AI 面试房间</h1>
-        <p>保留真实面试 current、answer、finish 接口，以三栏作战台组织进度、作答和实时评估。</p>
+        <p>围绕当前题目、作答区和实时反馈组织面试流程，帮助你稳定完成一次模拟训练。</p>
       </div>
       <div class="topbar-actions">
         <span class="cc-badge" :class="sseStatusBadgeClass">
@@ -38,7 +38,7 @@
 
         <div class="session-card">
           <strong>{{ current?.currentStage?.stageName || '当前阶段' }}</strong>
-          <p>{{ current?.currentQuestion?.stageProgress || '等待后端返回当前面试进度' }}</p>
+          <p>{{ current?.currentQuestion?.stageProgress || '等待当前面试进度' }}</p>
           <div class="mini-meta">
             <span>会话 #{{ interviewId || '-' }}</span>
             <span>{{ current?.currentQuestion?.isFollowUp ? '追问题' : '主问题' }}</span>
@@ -83,8 +83,15 @@
 
         <div class="side-actions">
           <el-button plain @click="fetchCurrent">刷新当前题</el-button>
-          <el-button v-if="interviewId" type="primary" plain @click="router.push(`/interviews/${interviewId}/report`)">
-            查看报告
+          <el-button
+            v-if="interviewId"
+            type="primary"
+            plain
+            :disabled="!canViewReport"
+            :title="reportButtonTip"
+            @click="handleViewReport"
+          >
+            {{ reportButtonText }}
           </el-button>
         </div>
       </aside>
@@ -104,7 +111,7 @@
             <Rocket :size="26" />
             <div>
               <h2>准备进入 AI 面试</h2>
-              <p>开始后将调用后端 start/current 流程获取第一道题。</p>
+              <p>开始后将获取第一道题，并根据你的回答继续推进面试。</p>
             </div>
             <el-button type="primary" size="large" :loading="starting" @click="handleStart">开始面试</el-button>
           </div>
@@ -151,7 +158,7 @@
             <div class="console-head">
               <div>
                 <h2>作答区</h2>
-                <p>{{ answerDisabled ? '当前状态不可提交回答' : '提交后由真实 AI 评分接口返回评分、追问和下一步动作' }}</p>
+                <p>{{ answerDisabled ? '当前状态不可提交回答' : '提交后会获得 AI 评分、追问和下一步动作' }}</p>
               </div>
               <StatusTag :status="submitting ? 'AI_EVALUATING' : current.status" />
             </div>
@@ -173,7 +180,15 @@
                 {{ submitting ? 'AI 正在评分并生成下一步问题' : '提交回答' }}
               </el-button>
               <el-button @click="fetchCurrent">刷新当前题</el-button>
-              <el-button v-if="interviewId" plain @click="router.push(`/interviews/${interviewId}/report`)">查看报告</el-button>
+              <el-button
+                v-if="interviewId"
+                plain
+                :disabled="!canViewReport"
+                :title="reportButtonTip"
+                @click="handleViewReport"
+              >
+                {{ reportButtonText }}
+              </el-button>
             </div>
             <el-alert
               v-if="submitting"
@@ -186,7 +201,7 @@
             />
             <div v-if="submitting && answerReviewEvents.length" class="review-stage-list">
               <article v-for="item in answerReviewEvents" :key="item.key" class="review-stage-item">
-                <span>{{ item.event }}</span>
+                <span>{{ item.eventLabel || item.event }}</span>
                 <strong>{{ item.stageLabel || item.message || '-' }}</strong>
                 <p>{{ item.message || item.stageLabel || '-' }}</p>
               </article>
@@ -245,7 +260,7 @@
           </el-tab-pane>
 
           <el-tab-pane label="简历" name="resume">
-            <el-empty description="当前房间接口未返回简历快照，请在面试详情页查看已持久化的简历信息" />
+            <el-empty description="当前房间暂无简历快照，请在面试详情页查看简历信息" />
           </el-tab-pane>
 
           <el-tab-pane label="笔记" name="notes">
@@ -263,9 +278,9 @@
       <span>会话：{{ interviewId || '-' }}</span>
       <span>状态：{{ current?.status || '-' }}</span>
       <span>计时：{{ elapsedText }}</span>
-      <span>接口：{{ submitting ? 'answer SSE 处理中' : loading ? 'current 加载中' : '等待操作' }}</span>
+      <span>处理状态：{{ submitting ? 'AI 正在点评' : loading ? '题目加载中' : '等待操作' }}</span>
       <span v-if="answerReviewMetaText">点评：{{ answerReviewMetaText }}</span>
-      <span>报告：真实 finish 后跳转报告页轮询</span>
+      <span>报告：{{ reportStatusText }}</span>
     </footer>
   </div>
 </template>
@@ -292,6 +307,7 @@ import type {
   InterviewAnswerReviewSseEvent,
   InterviewCurrentVO
 } from '@/types/interview'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -311,7 +327,7 @@ const answerReviewMessage = ref('')
 const answerReviewAnswerId = ref<number | undefined>()
 const answerReviewAiCallLogId = ref<number | undefined>()
 const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
-const answerReviewEvents = ref<Array<{ key: string; event: string; stage?: string; stageLabel?: string; message?: string }>>([])
+const answerReviewEvents = ref<Array<{ key: string; event: string; eventLabel?: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
 let elapsedTimer: number | undefined
@@ -326,6 +342,15 @@ const answerReviewStageLabels: Record<string, string> = {
   SAVE_REVIEW: '保存点评结果',
   GENERATE_FOLLOW_UP: '生成追问',
   SAVE_FOLLOW_UP: '保存追问'
+}
+
+const answerReviewEventLabels: Record<string, string> = {
+  start: '开始点评',
+  progress: '点评进度',
+  delta: '生成点评',
+  result: '点评完成',
+  done: '点评完成',
+  error: '点评失败'
 }
 
 // SSE 四态徽章
@@ -393,6 +418,27 @@ const answerDisabled = computed(() => {
   return !current.value?.currentQuestion || ['COMPLETED', 'REPORT_GENERATING', 'FAILED'].includes(current.value.status)
 })
 
+const canViewReport = computed(() =>
+  ['COMPLETED', 'REPORT_GENERATING', 'REPORT_DONE', 'GENERATED', 'FINISHED'].includes(String(current.value?.status || '').toUpperCase())
+)
+
+const reportButtonText = computed(() => {
+  const status = String(current.value?.status || '').toUpperCase()
+  if (status === 'REPORT_GENERATING') return '报告生成中'
+  return canViewReport.value ? '查看报告' : '完成后查看'
+})
+
+const reportButtonTip = computed(() =>
+  canViewReport.value ? '进入面试报告页' : '完成面试后系统会生成报告'
+)
+
+const reportStatusText = computed(() => {
+  const status = String(current.value?.status || '').toUpperCase()
+  if (status === 'REPORT_GENERATING') return '正在生成'
+  if (canViewReport.value) return '可查看'
+  return '完成面试后生成'
+})
+
 const outlineStages = computed(() => current.value?.outline || [])
 
 const outlineStageState = (stage: { stageOrder: number; status?: string }) => {
@@ -410,7 +456,7 @@ const progressItems = computed(() => [
     title: current.value?.currentStage?.stageName || '等待阶段',
     desc: current.value?.currentStage
       ? `阶段序号 ${current.value.currentStage.stageOrder || '-'}，预期 ${current.value.currentStage.expectedQuestionCount || '-'} 题`
-      : '后端 current 接口尚未返回阶段',
+      : '当前阶段信息暂未返回',
     state: current.value?.currentStage ? 'done' : 'pending'
   },
   {
@@ -438,9 +484,8 @@ const answerDurationText = computed(() => {
 
 const answerReviewMetaText = computed(() => {
   const items = []
-  if (answerReviewAnswerId.value) items.push(`answerId: ${answerReviewAnswerId.value}`)
-  if (answerReviewAiCallLogId.value) items.push(`aiCallLogId: ${answerReviewAiCallLogId.value}`)
-  if (answerReviewFollowUpAiCallLogId.value) items.push(`followUpAiCallLogId: ${answerReviewFollowUpAiCallLogId.value}`)
+  if (answerReviewAnswerId.value) items.push(`回答 #${answerReviewAnswerId.value}`)
+  if (answerReviewAiCallLogId.value || answerReviewFollowUpAiCallLogId.value) items.push('AI 点评已记录')
   return items.join(' / ')
 })
 
@@ -529,7 +574,11 @@ const normalizeAnswerReviewResult = (
     ? (data.result as Partial<InterviewAnswerResultVO>)
     : {}
   if (!data && !Object.keys(raw).length) return null
-  const score = data?.score ?? raw.score ?? raw.evaluation?.score ?? 0
+  const rawScore: unknown = data?.score ?? raw.score ?? raw.evaluation?.score
+  const parsedScore = rawScore === undefined || rawScore === null || rawScore === ''
+    ? undefined
+    : Number(rawScore)
+  const score = Number.isFinite(parsedScore) ? parsedScore : undefined
   const feedback = data?.feedback || raw.comment || raw.evaluation?.comment || ''
 
   return {
@@ -561,7 +610,7 @@ const normalizeAnswerReviewResult = (
 const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEvent) => {
   const stage = data?.stage ? String(data.stage) : ''
   const stageLabel = stage ? answerReviewStageLabels[stage] || stage : ''
-  const message = data?.message || ''
+  const message = toFriendlyMessage(data?.message, stageLabel || 'AI 正在点评')
   const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
   const answerId = data?.answerId || Number(metadata.answerId || 0)
   const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
@@ -573,6 +622,7 @@ const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEv
   answerReviewEvents.value.push({
     key: `${Date.now()}-${answerReviewEvents.value.length}`,
     event,
+    eventLabel: answerReviewEventLabels[event] || '点评进度',
     stage,
     stageLabel,
     message
@@ -635,11 +685,11 @@ const handleSubmit = async () => {
       },
       onError: async (error, hasStarted) => {
         if (!hasStarted) {
-          ElMessage.warning('SSE 启动失败，已回退到同步答题接口')
+          ElMessage.warning('点评流未启动，已切换为同步点评')
           await submitAnswerFallback(id, payload)
           return
         }
-        ElMessage.error(error.message || 'AI 点评 SSE 失败，请刷新当前题状态')
+        ElMessage.error(getErrorMessage(error, 'AI 点评失败，请刷新当前题状态。'))
       },
       onDone: async () => {
         if (!completedByDone && latestResult) {
@@ -668,6 +718,15 @@ const handleFinish = async (_manual: boolean) => {
   } finally {
     finishing.value = false
   }
+}
+
+const handleViewReport = async () => {
+  if (!interviewId) return
+  if (!canViewReport.value) {
+    ElMessage.info('完成面试后系统会生成报告，当前还不能查看。')
+    return
+  }
+  await router.push(`/interviews/${interviewId}/report`)
 }
 
 const handleManualFinish = async () => {

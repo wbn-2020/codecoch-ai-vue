@@ -4,8 +4,18 @@
       <div class="auth-card__intro">
         <div class="auth-card__brand">CodeCoachAI</div>
         <h1>登录账号</h1>
-        <p>进入 Java 面试训练工作台，继续管理你的题库、简历和模拟面试准备。</p>
+        <p>登录后查看今日求职任务、简历匹配建议和薄弱点练习，继续推进你的面试准备。</p>
       </div>
+
+      <el-alert
+        v-if="errorMessage"
+        class="auth-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="登录失败"
+        :description="errorMessage"
+      />
 
       <el-form
         ref="formRef"
@@ -30,6 +40,15 @@
         <el-button class="auth-form__submit" type="primary" size="large" :loading="loading" @click="handleSubmit">
           登录
         </el-button>
+        <el-button
+          v-if="hasDemoAccount"
+          class="auth-form__demo"
+          size="large"
+          :disabled="loading"
+          @click="fillDemoAccount"
+        >
+          使用演示账号
+        </el-button>
       </el-form>
 
       <div class="auth-card__footer">
@@ -45,17 +64,21 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
+import { appConfig } from '@/config'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const errorMessage = ref('')
+const hasDemoAccount = Boolean(appConfig.demoUsername && appConfig.demoPassword)
 
 const form = reactive<LoginDTO>({
   username: '',
@@ -70,6 +93,31 @@ const rules: FormRules<LoginDTO> = {
   ]
 }
 
+const getLoginErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const payload = error as {
+      code?: number
+      message?: string
+      response?: { status?: number; data?: { message?: string } }
+    }
+    const message = payload.response?.data?.message || payload.message || ''
+    if (payload.response?.status === 0 || message.includes('Network')) {
+      return '网络连接异常，请确认后端服务是否可用后重试。'
+    }
+    if (payload.response?.status && payload.response.status >= 500) {
+      return '认证服务暂时不可用，请稍后重试。'
+    }
+    if (message.includes('密码') || message.toLowerCase().includes('password')) {
+      return '用户名或密码不正确，请检查后重新输入。'
+    }
+    if (message.includes('用户') || message.toLowerCase().includes('user')) {
+      return '账号不存在或不可用，请确认用户名是否正确。'
+    }
+    return message || '登录失败，请检查账号状态后重试。'
+  }
+  return '登录失败，请检查账号状态后重试。'
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -77,16 +125,33 @@ const handleSubmit = async () => {
     if (!valid) return
 
     loading.value = true
+    errorMessage.value = ''
     try {
-      await authStore.login(form)
+      await authStore.login(form, { silentError: true })
       ElMessage.success('登录成功')
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-      await router.replace(redirect || '/dashboard')
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+      const defaultPath = authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
+      await router.replace(redirect || defaultPath)
+    } catch (error) {
+      errorMessage.value = getLoginErrorMessage(error)
     } finally {
       loading.value = false
     }
   })
 }
+
+const fillDemoAccount = () => {
+  form.username = appConfig.demoUsername
+  form.password = appConfig.demoPassword
+  errorMessage.value = ''
+}
+
+watch(
+  () => [form.username, form.password],
+  () => {
+    if (errorMessage.value) errorMessage.value = ''
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -131,12 +196,21 @@ const handleSubmit = async () => {
 }
 
 .auth-form {
-  margin-top: 28px;
+  margin-top: 24px;
+}
+
+.auth-alert {
+  margin-top: 22px;
 }
 
 .auth-form__submit {
   width: 100%;
   margin-top: 6px;
+}
+
+.auth-form__demo {
+  width: 100%;
+  margin-top: 10px;
 }
 
 .auth-card__footer {

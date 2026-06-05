@@ -61,6 +61,12 @@ export interface RoleVO {
   status: UserStatus
 }
 
+export interface RoleSaveDTO {
+  roleCode: RoleCode
+  roleName: string
+  description?: string
+}
+
 export interface UserStatusUpdateDTO {
   status: UserStatus
 }

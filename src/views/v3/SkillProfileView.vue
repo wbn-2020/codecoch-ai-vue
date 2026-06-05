@@ -2,7 +2,7 @@
   <div class="v3-page">
     <section class="page-hero">
       <div>
-        <div class="hero-kicker"><Radar :size="16" /> Skill Profile</div>
+        <div class="hero-kicker"><Radar :size="16" /> 能力画像</div>
         <h1>{{ overview?.profileName || detail?.profileName || '能力画像' }}</h1>
         <p>{{ overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能雷达、短板与下一步动作。' }}</p>
       </div>
@@ -35,7 +35,7 @@
 
       <section class="profile-grid">
         <div class="content-panel">
-          <div class="section-head"><div><h2>技能雷达</h2><p>来自 overview.radarData，按当前水平和目标水平对比。</p></div></div>
+          <div class="section-head"><div><h2>技能雷达</h2><p>按当前水平和目标水平对比，帮助你快速定位优先补强项。</p></div></div>
           <div v-if="radarItems.length" class="radar-visual-grid">
             <div ref="radarChartRef" class="radar-chart" />
             <div class="radar-list">
@@ -71,7 +71,7 @@
       </section>
 
       <section class="content-panel">
-        <div class="section-head"><div><h2>能力短板</h2><p>优先展示 overview.topGaps，其次展示 by-job-target 的 gapItems。</p></div></div>
+        <div class="section-head"><div><h2>能力短板</h2><p>优先展示最影响目标岗位匹配度的技能差距。</p></div></div>
         <el-table v-if="gapItems.length" :data="gapItems">
           <el-table-column prop="skillName" label="技能" min-width="150" />
           <el-table-column prop="category" label="分类" min-width="120" />
@@ -94,7 +94,7 @@ import { ListChecks, Radar, RefreshCw, Route as RouteIcon, Sparkles } from 'luci
 import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { generateSkillProfileApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
+import { generateSkillProfileApi, getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
 import type { SkillGapItemVO, SkillProfileDetailVO, SkillProfileOverviewVO } from '@/types/skillProfile'
 import echarts, { type ECharts } from '@/utils/echarts'
@@ -124,8 +124,12 @@ const buildContextQuery = (extra: Record<string, unknown>) => Object.fromEntries
     ])
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
 )
-const radarItems = computed(() => overview.value?.radarData || [])
-const gapItems = computed<SkillGapItemVO[]>(() => overview.value?.topGaps?.length ? overview.value.topGaps : detail.value?.gapItems || [])
+const radarItems = computed(() => Array.isArray(overview.value?.radarData) ? overview.value.radarData : [])
+const gapItems = computed<SkillGapItemVO[]>(() => {
+  const topGaps = Array.isArray(overview.value?.topGaps) ? overview.value.topGaps : []
+  const detailGaps = Array.isArray(detail.value?.gapItems) ? detail.value.gapItems : []
+  return topGaps.length ? topGaps : detailGaps
+})
 const isEmpty = computed(() => overview.value?.empty || (!overview.value && !detail.value))
 const radarMaxLevel = computed(() => {
   const values = radarItems.value.flatMap((item) => [Number(item.currentLevel || 0), Number(item.targetLevel || 0)])
@@ -140,12 +144,15 @@ const ActionList = defineComponent({
       const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split('\n').filter(Boolean) : []
       return items.length
         ? h('ul', { class: 'action-list' }, items.map((item) => h('li', String(item))))
-        : h(AppState, { type: 'empty', title: '暂无下一步动作', description: 'overview.nextActions 为空。' })
+        : h(AppState, { type: 'empty', title: '暂无下一步动作', description: '生成或刷新能力画像后，这里会展示下一步训练建议。' })
     }
   }
 })
 
-const toPercent = (level?: number) => Math.min(100, Math.max(0, Number(level || 0) * 20))
+const toPercent = (level?: number) => {
+  const value = Math.max(0, Number(level || 0))
+  return Math.min(100, radarMaxLevel.value === 100 ? value : value * 20)
+}
 
 const renderRadarChart = async () => {
   await nextTick()
@@ -230,10 +237,21 @@ const loadAll = async () => {
   loading.value = true
   loadError.value = ''
   try {
+    const routeProfileId = Number(route.query.profileId) || undefined
+    if (routeProfileId) {
+      detail.value = await getSkillProfileByIdApi(routeProfileId)
+      const overviewTargetJobId = targetJobId.value || detail.value?.targetJobId
+      overview.value = overviewTargetJobId
+        ? await getSkillProfileOverviewApi(overviewTargetJobId).catch(() => null)
+        : null
+      return
+    }
+
     overview.value = await getSkillProfileOverviewApi(targetJobId.value)
-    if (targetJobId.value) {
+    const overviewTargetJobId = targetJobId.value || overview.value?.targetJobId
+    if (overviewTargetJobId) {
       try {
-        detail.value = await getSkillProfileByJobTargetApi(targetJobId.value)
+        detail.value = await getSkillProfileByJobTargetApi(overviewTargetJobId)
       } catch {
         detail.value = null
       }
@@ -254,9 +272,24 @@ const generateFromReport = async () => {
     const result = profileId.value
       ? await refreshSkillProfileApi({ profileId: profileId.value, matchReportId: matchReportId.value })
       : await generateSkillProfileApi({ matchReportId: matchReportId.value })
-    ElMessage.success(result.status === 'FAILED' ? '能力画像生成返回失败状态' : '能力画像已提交生成')
-    await router.replace({ path: '/skill-profile', query: { ...route.query, profileId: result.profileId, targetJobId: result.targetJobId || targetJobId.value } })
+    if (String(result.status || '').toUpperCase() === 'FAILED') {
+      ElMessage.error(result.errorMessage || '能力画像生成失败，请稍后重试。')
+      return
+    }
+    ElMessage.success('能力画像已提交生成')
+    await router.replace({
+      path: '/skill-profile',
+      query: buildContextQuery({
+        ...route.query,
+        profileId: result.profileId || profileId.value,
+        targetJobId: result.targetJobId || targetJobId.value,
+        resumeId: resumeId.value,
+        matchReportId: matchReportId.value
+      })
+    })
     await loadAll()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '能力画像生成失败，请稍后重试。'))
   } finally {
     generating.value = false
   }

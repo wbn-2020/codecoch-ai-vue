@@ -12,7 +12,7 @@
         <el-input v-model.trim="form.jobTitle" maxlength="128" show-word-limit placeholder="例如：Java 后端开发工程师" />
       </el-form-item>
       <el-form-item label="公司名称" prop="companyName">
-        <el-input v-model.trim="form.companyName" maxlength="128" show-word-limit placeholder="后端支持，可选" />
+        <el-input v-model.trim="form.companyName" maxlength="128" show-word-limit placeholder="选填，例如：字节跳动" />
       </el-form-item>
       <el-form-item label="岗位级别 / 经验要求" prop="jobLevel">
         <el-input v-model.trim="form.jobLevel" maxlength="64" show-word-limit placeholder="例如：3-5 年 / 中级 / 高级" />
@@ -29,7 +29,7 @@
         :rows="14"
         maxlength="20000"
         show-word-limit
-        placeholder="粘贴真实 JD 原文。前端会原样提交给后端，不生成示例 JD。"
+        placeholder="粘贴真实 JD 原文，用于后续解析、匹配和能力画像。"
       />
     </el-form-item>
 
@@ -38,7 +38,7 @@
       type="info"
       :closable="false"
       show-icon
-      title="字段已按后端 TargetJobSaveDTO 对齐：本轮不提交城市、薪资范围、技能关键词等后端尚未支持字段。"
+      title="当前表单聚焦岗位核心信息；城市、薪资、技能关键词可写入 JD 原文。"
     />
 
     <div class="form-actions">

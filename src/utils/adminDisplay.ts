@@ -42,6 +42,16 @@ const feedbackTypeMap: Record<string, string> = {
   LIKED: '点赞',
   DISLIKE: '点踩',
   DISLIKED: '点踩',
+  HELPFUL: '有帮助',
+  NOT_HELPFUL: '没有帮助',
+  INACCURATE: '内容不准确',
+  NOT_MY_EXPERIENCE: '不是我的经历',
+  HALLUCINATION: '疑似幻觉',
+  IRRELEVANT: '不相关',
+  OUTDATED: '已过时',
+  OTHER: '其他',
+  TOO_HARD: '太难',
+  TOO_EASY: '太简单',
   UNKNOWN: '未知'
 }
 

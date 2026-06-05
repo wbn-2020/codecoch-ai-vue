@@ -1,5 +1,13 @@
 <template>
-  <el-menu class="layout-menu admin-sidebar-menu" :default-active="activePath" :collapse="collapsed" router>
+  <el-menu
+    ref="menuRef"
+    class="layout-menu admin-sidebar-menu"
+    :default-active="activePath"
+    :collapse="collapsed"
+    :unique-opened="true"
+    router
+    @select="handleSelect"
+  >
     <template v-for="section in visibleSections" :key="section.key">
       <el-menu-item
         v-if="section.children.length === 1 && !section.forceGroup"
@@ -51,17 +59,18 @@ import {
   Timer,
   UserFilled
 } from '@element-plus/icons-vue'
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 
-defineProps<{
+const props = defineProps<{
   collapsed?: boolean
 }>()
 
 const route = useRoute()
 const authStore = useAuthStore()
+const menuRef = ref<{ close: (index: string) => void }>()
 
 interface AdminMenuItem {
   label: string
@@ -84,7 +93,12 @@ const sections: AdminMenuSection[] = [
     label: '概览',
     icon: DataBoard,
     children: [
-      { label: '管理首页', path: '/admin', icon: DataBoard, permissions: ['admin:v3'] }
+      {
+        label: '后台入口',
+        path: '/admin',
+        icon: DataBoard,
+        permissions: ['admin:analytics:ai', 'admin:user:list', 'admin:question:list', 'admin:ai:log:list']
+      }
     ]
   },
   {
@@ -130,7 +144,6 @@ const sections: AdminMenuSection[] = [
     icon: Monitor,
     forceGroup: true,
     children: [
-      { label: '运维监控', path: '/admin/ops/overview', icon: Monitor, permissions: ['admin:analytics:ai'] },
       { label: 'AI Ops 看板', path: '/admin/analytics/ai', icon: DataAnalysis, permissions: ['admin:analytics:ai'] },
       { label: 'Agent 效果分析', path: '/admin/analytics/agent', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
       { label: '指标字典', path: '/admin/analytics/metrics', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
@@ -177,6 +190,17 @@ const sections: AdminMenuSection[] = [
   }
 ]
 
+const closeAllMenus = () => {
+  if (!props.collapsed) return
+  nextTick(() => {
+    sections.forEach((section) => menuRef.value?.close(section.key))
+  })
+}
+
+const handleSelect = () => {
+  closeAllMenus()
+}
+
 const canSee = (item: AdminMenuItem) => authStore.hasAnyPermission(item.permissions)
 
 const visibleSections = computed(() =>
@@ -196,6 +220,8 @@ const activePath = computed(() => {
     .find((item) => route.path === item.path || route.path.startsWith(`${item.path}/`))
   return matched?.path || route.path
 })
+
+watch(() => route.fullPath, closeAllMenus)
 </script>
 
 <style scoped lang="scss">

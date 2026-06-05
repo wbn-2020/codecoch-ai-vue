@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><LayoutDashboard :size="16" /> V3 Dashboard</div>
         <h1>V3 求职闭环驾驶舱</h1>
-        <p>聚合当前岗位目标、最近匹配、学习进度、推荐题和下一步动作；任一接口缺数据时降级展示。</p>
+        <p>聚合当前岗位目标、最近匹配、学习进度、推荐题和下一步动作。</p>
       </div>
       <div class="hero-actions">
         <el-button :loading="loading" @click="loadDashboard"><RefreshCw :size="16" /> 刷新</el-button>
@@ -25,14 +25,45 @@
       </button>
     </section>
 
+    <section class="content-panel onboarding-panel" v-loading="loading">
+      <div class="section-head">
+        <div>
+          <h2>求职闭环清单</h2>
+          <p>按“岗位 -> 简历 -> 匹配 -> 能力 -> 今日任务”的顺序完成首轮准备。</p>
+        </div>
+        <el-tag effect="plain">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} 已完成</el-tag>
+      </div>
+      <div class="onboarding-track">
+        <button
+          v-for="step in onboardingSteps"
+          :key="step.key"
+          class="onboarding-step"
+          :class="{ 'is-done': step.done, 'is-current': step.key === nextOnboardingStep?.key }"
+          type="button"
+          @click="router.push(step.path)"
+        >
+          <span class="onboarding-step__marker">
+            <CheckCircle2 v-if="step.done" :size="16" />
+            <span v-else>{{ step.order }}</span>
+          </span>
+          <strong>{{ step.title }}</strong>
+          <span>{{ step.desc }}</span>
+        </button>
+      </div>
+      <div v-if="nextOnboardingStep" class="onboarding-next">
+        <span>下一步：{{ nextOnboardingStep.title }}，{{ nextOnboardingStep.desc }}</span>
+        <el-button type="primary" @click="router.push(nextOnboardingStep.path)">{{ nextOnboardingStep.cta }}</el-button>
+      </div>
+    </section>
+
     <section class="dashboard-grid">
       <div class="content-panel loop-card">
-        <div class="section-head"><div><h2>当前岗位目标</h2><p>来自 GET /dashboard/v3/overview.currentTargetJob。</p></div><el-button text @click="router.push('/job-targets')">管理</el-button></div>
+        <div class="section-head"><div><h2>当前岗位目标</h2><p>优先展示你正在推进的岗位方向。</p></div><el-button text @click="router.push('/job-targets')">管理</el-button></div>
         <AppState v-if="!overview?.currentTargetJob" type="empty" title="暂无当前岗位目标" description="请先创建或设置当前目标岗位。" />
         <div v-else class="loop-summary">
           <strong>{{ overview.currentTargetJob.jobTitle || `岗位 #${overview.currentTargetJob.targetJobId || overview.currentTargetJob.id}` }}</strong>
           <span>{{ overview.currentTargetJob.companyName || '未填写公司' }} · {{ overview.currentTargetJob.jobLevel || '未填写级别' }}</span>
-          <el-tag effect="plain">{{ overview.currentTargetJob.parseStatus || 'UNKNOWN' }}</el-tag>
+          <el-tag effect="plain">{{ formatStatus(overview.currentTargetJob.parseStatus) }}</el-tag>
           <el-button type="primary" @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">继续简历匹配</el-button>
         </div>
       </div>
@@ -50,7 +81,7 @@
 
     <section class="dashboard-grid">
       <div class="content-panel">
-        <div class="section-head"><div><h2>能力画像</h2><p>来自 GET /skill-profiles/overview。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
+        <div class="section-head"><div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
         <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
         <AppState v-else-if="!skillOverview || skillOverview.empty" type="empty" title="暂无能力画像" description="完成匹配报告后可生成能力画像。" />
         <div v-else class="skill-summary">
@@ -63,8 +94,8 @@
 
       <div class="content-panel">
         <div class="section-head"><div><h2>学习计划</h2><p>来自 studyProgress/activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
-        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(`/study-plans?planId=${activeStudyProgress.planId}`)">
-          <strong>{{ activeStudyProgress.planTitle || `学习计划 #${activeStudyProgress.planId}` }}</strong>
+        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(activeStudyPlanRoute)">
+          <strong>{{ activeStudyPlanTitle }}</strong>
           <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
           <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
         </div>
@@ -78,7 +109,7 @@
         <AppState v-if="!overview?.recommendedQuestions" type="empty" title="暂无推荐题批次" description="可从能力短板或学习计划生成推荐题。" />
         <div v-else class="loop-summary">
           <strong>{{ overview.recommendedQuestions.questionCount ?? '--' }} 题</strong>
-          <span>{{ overview.recommendedQuestions.sourceType || 'UNKNOWN' }} · {{ overview.recommendedQuestions.status || 'UNKNOWN' }}</span>
+          <span>{{ formatSourceType(overview.recommendedQuestions.sourceType) }} · {{ formatStatus(overview.recommendedQuestions.status) }}</span>
           <el-button type="primary" @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">继续刷题</el-button>
         </div>
       </div>
@@ -101,7 +132,7 @@
         <AppState v-if="!overview?.recentReport && !overview?.recentInterview" type="empty" title="暂无面试报告" description="完成目标岗位面试并生成报告后会展示回流建议。" />
         <div v-else class="loop-summary">
           <strong>{{ overview?.recentReport?.totalScore ?? '--' }} 分</strong>
-          <span>{{ overview?.recentInterview?.title || `面试 #${overview?.recentReport?.interviewId || overview?.recentInterview?.interviewId}` }} · {{ overview?.recentReport?.status || overview?.recentInterview?.reportStatus || 'UNKNOWN' }}</span>
+          <span>{{ overview?.recentInterview?.title || `面试 #${overview?.recentReport?.interviewId || overview?.recentInterview?.interviewId}` }} · {{ formatStatus(overview?.recentReport?.status || overview?.recentInterview?.reportStatus) }}</span>
           <small v-if="reportInsightText">{{ reportInsightText }}</small>
           <div class="inline-actions">
             <el-button type="primary" @click="router.push(`/interviews/${overview?.recentReport?.interviewId}/report`)" :disabled="!overview?.recentReport?.interviewId">查看报告</el-button>
@@ -112,7 +143,7 @@
       </div>
 
       <div class="content-panel">
-        <div class="section-head"><div><h2>最近通知</h2><p>来自 GET /notifications。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
+        <div class="section-head"><div><h2>最近通知</h2><p>同步与你的训练和求职进度相关的提醒。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
         <AppState v-if="notificationLoading" type="loading" title="正在读取通知" />
         <div v-else-if="notifications.length" class="notification-list">
           <article v-for="item in notifications" :key="item.id">
@@ -120,7 +151,7 @@
             <span>{{ item.content || item.type }} · {{ item.createdAt }}</span>
           </article>
         </div>
-        <AppState v-else type="empty" title="暂无通知" description="通知接口未返回记录。" />
+        <AppState v-else type="empty" title="暂无通知" description="当前没有新的通知。" />
       </div>
 
       <div class="content-panel">
@@ -138,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { Bell, BookOpenCheck, Crosshair, FileText, GitCompareArrows, LayoutDashboard, ListChecks, Radar, RefreshCw } from 'lucide-vue-next'
+import { Bell, BookOpenCheck, CheckCircle2, Crosshair, FileText, GitCompareArrows, LayoutDashboard, ListChecks, Radar, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter, type LocationQueryRaw } from 'vue-router'
 
@@ -166,9 +197,51 @@ const errors = computed(() => [overviewError.value, skillError.value, notificati
 const currentTargetJobId = computed(() => overview.value?.currentTargetJob?.targetJobId || overview.value?.currentTargetJob?.id)
 const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchReportId || overview.value?.latestMatch?.reportId)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
+const activeStudyPlanTitle = computed(() => {
+  const plan = activeStudyProgress.value
+  if (!plan) return ''
+  return plan.planTitle || `学习计划 #${plan.planId}`
+})
+const activeStudyPlanRoute = computed(() => ({
+  path: '/study-plans',
+  query: { planId: String(activeStudyProgress.value?.planId) }
+}))
 const compactQuery = (query: Record<string, unknown>): LocationQueryRaw => Object.fromEntries(
   Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '')
 ) as LocationQueryRaw
+const isCompletedStatus = (value?: string) =>
+  ['SUCCESS', 'DONE', 'COMPLETED', 'PARSED', 'ANALYZED'].includes(String(value || '').toUpperCase())
+const formatStatus = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  const map: Record<string, string> = {
+    SUCCESS: '已完成',
+    DONE: '已完成',
+    COMPLETED: '已完成',
+    FINISHED: '已完成',
+    GENERATED: '已生成',
+    PARSED: '已解析',
+    ANALYZED: '已分析',
+    PROCESSING: '处理中',
+    RUNNING: '进行中',
+    IN_PROGRESS: '进行中',
+    PENDING: '待处理',
+    NOT_STARTED: '未开始',
+    FAILED: '失败',
+    ERROR: '失败'
+  }
+  return map[value] || status || '暂未返回状态'
+}
+const formatSourceType = (sourceType?: string) => {
+  const value = String(sourceType || '').toUpperCase()
+  const map: Record<string, string> = {
+    MATCH_REPORT: '匹配报告',
+    SKILL_PROFILE: '能力画像',
+    STUDY_PLAN: '学习计划',
+    INTERVIEW_REPORT: '面试报告',
+    MANUAL: '手动生成'
+  }
+  return map[value] || sourceType || '来源待确认'
+}
 const recommendationQuery = computed(() => compactQuery({
   batchId: overview.value?.recommendedQuestions?.batchId,
   studyPlanId: activeStudyProgress.value?.planId,
@@ -220,6 +293,67 @@ const metrics = computed(() => [
   { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
   { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
 ])
+const onboardingSteps = computed(() => [
+  {
+    key: 'target',
+    order: 1,
+    title: '创建目标岗位',
+    desc: overview.value?.currentTargetJob?.jobTitle || '先确定本轮投递方向',
+    cta: '去维护岗位',
+    done: Boolean(currentTargetJobId.value),
+    path: '/job-targets'
+  },
+  {
+    key: 'jd',
+    order: 2,
+    title: '完成 JD 解析',
+    desc: '让系统识别岗位职责和能力要求',
+    cta: '去解析 JD',
+    done: Boolean(currentTargetJobId.value && isCompletedStatus(overview.value?.currentTargetJob?.parseStatus)),
+    path: currentTargetJobId.value ? `/job-targets/${currentTargetJobId.value}/analysis` : '/job-targets'
+  },
+  {
+    key: 'resume',
+    order: 3,
+    title: '准备默认简历',
+    desc: overview.value?.resumeCount ? `已有 ${overview.value.resumeCount} 份简历` : '上传或创建一份可用于匹配的简历',
+    cta: '去简历中心',
+    done: Boolean(overview.value?.resumeCount),
+    path: '/resumes'
+  },
+  {
+    key: 'match',
+    order: 4,
+    title: '生成简历匹配',
+    desc: overview.value?.latestMatch?.summary || '把简历和当前岗位做一次可信匹配',
+    cta: '去匹配',
+    done: Boolean(latestMatchReportId.value),
+    path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }
+  },
+  {
+    key: 'skill',
+    order: 5,
+    title: '查看能力画像',
+    desc: skillOverview.value?.summary || '把差距转成技能短板和训练动作',
+    cta: '去能力画像',
+    done: Boolean(skillOverview.value && !skillOverview.value.empty),
+    path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }
+  },
+  {
+    key: 'today',
+    order: 6,
+    title: '开始今日任务',
+    desc: (overview.value?.todayTaskCount || 0) > 0 ? `今日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成` : '让 Agent 给出今天最该推进的动作',
+    cta: '去今日任务',
+    done: Boolean((overview.value?.todayTaskCount || 0) > 0 || activeStudyProgress.value),
+    path: '/agent/today'
+  }
+])
+const onboardingProgress = computed(() => ({
+  done: onboardingSteps.value.filter((item) => item.done).length,
+  total: onboardingSteps.value.length
+}))
+const nextOnboardingStep = computed(() => onboardingSteps.value.find((item) => !item.done))
 const nextActionItems = computed(() => normalizeNextActions(overview.value?.nextActions))
 const reportInsightText = computed(() => {
   const weakPoints = overview.value?.recentReport?.weakPoints || []
@@ -241,7 +375,7 @@ const loadOverview = async () => {
     overview.value = await getV3DashboardOverviewApi()
   } catch (error) {
     overview.value = null
-    overviewError.value = getErrorMessage(error, '工作台概览接口不可用，已降级展示入口。')
+    overviewError.value = getErrorMessage(error, '工作台概览暂时不可用，已保留常用入口。')
   } finally {
     overviewLoading.value = false
   }
@@ -254,7 +388,7 @@ const loadSkill = async () => {
     skillOverview.value = await getSkillProfileOverviewApi()
   } catch (error) {
     skillOverview.value = null
-    skillError.value = getErrorMessage(error, '能力画像概览接口不可用。')
+    skillError.value = getErrorMessage(error, '能力画像概览暂时不可用。')
   } finally {
     skillLoading.value = false
   }
@@ -268,7 +402,7 @@ const loadNotifications = async () => {
     notifications.value = page.records || []
   } catch (error) {
     notifications.value = []
-    notificationError.value = getErrorMessage(error, '通知接口不可用。')
+    notificationError.value = getErrorMessage(error, '通知暂时不可用。')
   } finally {
     notificationLoading.value = false
   }
@@ -294,6 +428,16 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .metric-card { padding: 16px; color: var(--app-text); text-align: left; cursor: pointer; }
 .metric-card span, .metric-card small { display: block; margin-top: 8px; color: var(--app-text-muted); }
 .metric-card strong { display: block; margin-top: 8px; font-size: 28px; }
+.onboarding-panel { display: grid; gap: 16px; }
+.onboarding-track { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.onboarding-step { display: grid; gap: 8px; align-content: start; min-height: 132px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); color: var(--app-text); text-align: left; cursor: pointer; }
+.onboarding-step:hover, .onboarding-step.is-current { border-color: rgba(59, 130, 246, 0.42); background: rgba(59, 130, 246, 0.1); }
+.onboarding-step.is-done { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
+.onboarding-step__marker { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(148, 163, 184, 0.16); color: var(--app-text); font-size: 12px; font-weight: 800; }
+.onboarding-step.is-done .onboarding-step__marker { background: rgba(34, 197, 94, 0.18); color: #22c55e; }
+.onboarding-step strong { font-size: 14px; }
+.onboarding-step > span:last-child { color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
+.onboarding-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 8px; background: rgba(59, 130, 246, 0.1); color: var(--app-text); }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
 .skill-summary strong { font-size: 42px; }
@@ -313,5 +457,6 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .entry-grid button { color: var(--app-text); text-align: left; cursor: pointer; }
 .entry-grid strong, .entry-grid span { display: block; margin-top: 8px; }
 .entry-grid span { color: var(--app-text-muted); line-height: 1.5; }
-@media (max-width: 900px) { .page-hero, .dashboard-grid, .metric-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions, .section-head { flex-wrap: wrap; } }
+@media (max-width: 1200px) { .onboarding-track { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .page-hero { flex-direction: column; } .dashboard-grid, .metric-grid, .onboarding-track { grid-template-columns: 1fr; } .hero-actions, .section-head { flex-wrap: wrap; } }
 </style>

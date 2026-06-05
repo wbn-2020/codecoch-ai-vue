@@ -4,10 +4,10 @@
       <div>
         <div class="agent-eyebrow">
           <Sparkles :size="16" />
-          <span>JobCoachAgent</span>
+          <span>今日训练</span>
         </div>
         <h1>今日求职准备计划</h1>
-        <p>基于当前目标岗位生成当天任务，任务完成与跳过都会回写真实 Agent 任务接口。</p>
+        <p>根据目标岗位、简历证据和薄弱点生成当天任务，你可以按优先级开始、完成或跳过。</p>
       </div>
       <div class="agent-hero__actions">
         <el-date-picker v-model="queryDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadPage" />
@@ -51,17 +51,31 @@
             <el-button v-if="plan?.runId" text type="primary" @click="router.push(`/agent/runs/${plan.runId}`)">查看运行详情</el-button>
           </div>
 
+          <el-alert
+            v-if="planStatusMessage"
+            class="plan-status-alert"
+            :type="planStatusType"
+            show-icon
+            :closable="false"
+            :title="planStatusTitle"
+            :description="planStatusMessage"
+          />
+          <div v-if="planFixAction" class="plan-fix-row">
+            <el-button type="primary" plain @click="router.push(planFixAction.path)">{{ planFixAction.label }}</el-button>
+            <el-button :loading="generating" @click="openGenerateDialog">重新生成</el-button>
+          </div>
+
           <div v-loading="loading" class="plan-panel">
             <AppState
-              v-if="plan?.empty && !taskList.length"
+              v-if="isPlanEmpty"
               type="empty"
               title="今天还没有计划"
-              :description="plan.emptyMessage || '可以手动生成一份今日求职准备计划。'"
+              :description="plan?.emptyMessage || emptyPlanDescription"
             >
               <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
             </AppState>
             <template v-else>
-              <p class="plan-summary">{{ plan?.summary || '暂无计划摘要' }}</p>
+              <p class="plan-summary">{{ cleanUserText(plan?.summary, '暂无计划摘要') }}</p>
               <div v-if="focusSkills.length" class="skill-strip">
                 <el-tag v-for="skill in focusSkills" :key="skill.code || skill.name" effect="plain">{{ skill.name || skill.code }}</el-tag>
               </div>
@@ -80,18 +94,47 @@
                       <span>{{ task.estimatedMinutes ?? 0 }} 分钟</span>
                       <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
                     </div>
-                    <p v-if="task.reason" class="task-reason">{{ task.reason }}</p>
+                    <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
                   </div>
                   <div class="task-actions">
-                    <el-button v-if="task.actionUrl" size="small" :icon="ExternalLink" @click="goAction(task.actionUrl)">去处理</el-button>
-                    <el-button size="small" type="primary" plain :disabled="task.status !== 'TODO'" @click="handleStartTask(task)">开始</el-button>
-                    <el-button size="small" type="success" plain :disabled="task.status === 'DONE'" @click="openCompleteDialog(task)">完成</el-button>
-                    <el-button size="small" plain :disabled="task.status === 'DONE' || task.status === 'SKIPPED'" @click="openSkipDialog(task)">跳过</el-button>
-                    <el-button size="small" type="warning" plain :disabled="task.status !== 'SKIPPED'" @click="handleRestoreTask(task)">恢复</el-button>
-                    <el-button size="small" :icon="MessageSquare" @click="openFeedbackDialog(task)">反馈</el-button>
+                    <el-button
+                      v-if="task.status === 'TODO'"
+                      size="small"
+                      type="primary"
+                      :loading="isTaskActionPending(task, 'start')"
+                      :disabled="isTaskPending(task)"
+                      @click="handleStartTask(task)"
+                    >
+                      开始
+                    </el-button>
+                    <el-button v-else-if="task.status === 'DOING'" size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
+                    <el-button
+                      v-else-if="task.status === 'SKIPPED'"
+                      size="small"
+                      type="warning"
+                      :loading="isTaskActionPending(task, 'restore')"
+                      :disabled="isTaskPending(task)"
+                      @click="handleRestoreTask(task)"
+                    >
+                      恢复
+                    </el-button>
+                    <el-button v-else-if="task.status === 'DONE'" size="small" disabled>已完成</el-button>
+                    <el-button v-else size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
+                    <el-dropdown trigger="click">
+                      <el-button size="small" text class="task-more-button" :icon="MoreHorizontal">更多</el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item v-if="task.actionUrl" @click="goAction(task.actionUrl)">打开任务入口</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE'" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE' && task.status !== 'SKIPPED'" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
+                          <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
                   </div>
                 </article>
-                <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="没有从今日任务接口读取到任务。" />
+                <AppState v-if="!taskList.length" type="empty" title="当前日期暂无任务" description="当前日期还没有生成训练任务。" />
               </div>
             </template>
           </div>
@@ -104,8 +147,23 @@
         <el-form-item label="日期">
           <el-date-picker v-model="generateForm.date" type="date" value-format="YYYY-MM-DD" :clearable="false" />
         </el-form-item>
-        <el-form-item label="目标岗位 ID">
-          <el-input-number v-model="generateForm.targetJobId" :min="1" controls-position="right" placeholder="不填则使用主目标岗位" />
+        <el-form-item label="目标岗位">
+          <el-select
+            v-model="generateForm.targetJobId"
+            :loading="targetLoading"
+            clearable
+            filterable
+            placeholder="默认使用当前主目标"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="target in targets"
+              :key="target.id"
+              :label="formatTargetOption(target)"
+              :value="target.id"
+            />
+          </el-select>
+          <p class="form-hint">{{ currentTargetHint }}</p>
         </el-form-item>
         <el-form-item label="期望任务数">
           <el-input-number v-model="generateForm.taskCount" :min="1" :max="5" controls-position="right" />
@@ -127,7 +185,7 @@
       <el-input v-model="taskNote" type="textarea" :rows="4" :placeholder="taskDialogMode === 'complete' ? '可填写完成备注' : '请填写跳过原因'" maxlength="200" show-word-limit />
       <template #footer>
         <el-button @click="taskDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitTaskAction">确认</el-button>
+        <el-button type="primary" :loading="selectedTask ? isTaskActionPending(selectedTask, taskDialogMode) : false" @click="submitTaskAction">确认</el-button>
       </template>
     </el-dialog>
 
@@ -144,15 +202,15 @@
       </el-form>
       <template #footer>
         <el-button @click="feedbackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="mutating" @click="submitFeedback">提交</el-button>
+        <el-button type="primary" :loading="feedbackTask ? isTaskActionPending(feedbackTask, 'feedback') : false" @click="submitFeedback">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-import { ExternalLink, MessageSquare, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { MoreHorizontal, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -166,9 +224,12 @@ import {
   startAgentTaskApi,
   submitAgentFeedbackApi
 } from '@/api/agent'
+import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
+import type { TargetJobVO } from '@/types/jobTarget'
+import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
 
 const router = useRouter()
@@ -176,11 +237,15 @@ const today = formatLocalDate()
 
 const loading = ref(false)
 const generating = ref(false)
-const mutating = ref(false)
 const errorMessage = ref('')
 const queryDate = ref(today)
 const plan = ref<DailyPlanVO>()
 const todayTasks = ref<AgentTodayTaskVO>()
+const currentTargetJobId = ref<number | undefined>()
+const targets = ref<TargetJobVO[]>([])
+const currentTarget = ref<TargetJobVO | null>(null)
+const targetLoading = ref(false)
+const targetLoadError = ref('')
 const generateDialogVisible = ref(false)
 const taskDialogVisible = ref(false)
 const taskDialogMode = ref<'complete' | 'skip'>('complete')
@@ -229,26 +294,101 @@ const priorityMap: Record<string, string> = {
 const feedbackTypeOptions = [
   { label: '有帮助', value: 'HELPFUL' },
   { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '内容不准确', value: 'INACCURATE' },
+  { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
+  { label: '疑似幻觉', value: 'HALLUCINATION' },
   { label: '太难', value: 'TOO_HARD' },
   { label: '太简单', value: 'TOO_EASY' },
   { label: '不相关', value: 'IRRELEVANT' }
 ]
 
+const emptyPlanDescription = '先确认目标岗位和默认简历；如果缺少弱点证据，可以先完成一次题目练习或模拟面试，再生成今日计划。'
+
+type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+
+const pendingTaskActions = ref<Set<string>>(new Set())
+
+const taskActionKey = (task: AgentTaskVO, action: TaskAction) => `${task.id}:${action}`
+const isTaskActionPending = (task: AgentTaskVO, action: TaskAction) => pendingTaskActions.value.has(taskActionKey(task, action))
+const isTaskPending = (task: AgentTaskVO) => Array.from(pendingTaskActions.value).some((key) => key.startsWith(`${task.id}:`))
+
+const setTaskActionPending = (task: AgentTaskVO, action: TaskAction, pending: boolean) => {
+  const next = new Set(pendingTaskActions.value)
+  const key = taskActionKey(task, action)
+  if (pending) {
+    next.add(key)
+  } else {
+    next.delete(key)
+  }
+  pendingTaskActions.value = next
+}
+
+const withTaskPending = async (task: AgentTaskVO, action: TaskAction, handler: () => Promise<void>) => {
+  if (isTaskActionPending(task, action)) return
+  setTaskActionPending(task, action, true)
+  try {
+    await handler()
+  } finally {
+    setTaskActionPending(task, action, false)
+  }
+}
+
 const focusSkills = computed(() => plan.value?.focusSkills || [])
 const taskList = computed(() => todayTasks.value?.tasks?.length ? todayTasks.value.tasks : plan.value?.tasks || [])
+const isPlanEmpty = computed(() => !loading.value && !taskList.value.length && (plan.value?.empty || !plan.value?.runId))
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
+const planStatus = computed(() => String(plan.value?.status || '').toUpperCase())
+const planStatusType = computed(() => (planStatus.value === 'FAILED' ? 'error' : planStatus.value === 'RUNNING' ? 'warning' : 'info'))
+const planStatusTitle = computed(() => {
+  if (planStatus.value === 'RUNNING') return '计划生成中'
+  if (planStatus.value === 'FAILED') return '计划生成失败'
+  return '计划状态'
+})
+const planStatusMessage = computed(() => {
+  if (planStatus.value === 'RUNNING') {
+    return '计划正在生成，请稍后刷新；系统会避免重复提交同一天同岗位的生成请求。'
+  }
+  if (planStatus.value === 'FAILED') {
+    return toFriendlyMessage(plan.value?.errorMessage || plan.value?.errorCode, '计划生成失败，请检查目标岗位、简历和能力画像后重试。')
+  }
+  return ''
+})
+const planFixAction = computed(() => {
+  const value = `${plan.value?.errorCode || ''} ${plan.value?.errorMessage || ''}`.toUpperCase()
+  if (value.includes('TARGET_JOB')) {
+    return { label: '去创建目标岗位', path: '/job-targets' }
+  }
+  if (value.includes('RESUME')) {
+    return { label: '去完善简历', path: '/resumes' }
+  }
+  if (value.includes('SKILL_PROFILE')) {
+    return { label: '去生成能力画像', path: '/skill-profile' }
+  }
+  return null
+})
+const currentTargetHint = computed(() => {
+  if (targetLoading.value) return '正在读取岗位目标列表...'
+  if (targetLoadError.value) return targetLoadError.value
+  if (currentTarget.value) return `不选择时使用当前主目标：${formatTargetOption(currentTarget.value)}`
+  if (!targets.value.length) return '还没有岗位目标，系统会尝试使用默认主目标；也可以先去岗位目标页创建。'
+  return '不选择时使用当前主目标。'
+})
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
-  }
-  return '接口请求失败'
+  return normalizeErrorMessage(error, '请求失败，请稍后重试。')
 }
 
 const skillFromText = (value?: string) =>
   value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const cleanUserText = (value?: string | null, fallback = '') => {
+  const text = toFriendlyMessage(value || '', '').trim()
+  if (!text) return fallback
+  if (/^(Calling DeepSeek|Task completed)$/i.test(text)) return fallback
+  return text
+}
 
 const displayTaskTitle = (task: AgentTaskVO) => {
   const skill = task.relatedSkillName || skillFromText(task.title) || task.targetJobTitle || '目标技能'
@@ -262,7 +402,7 @@ const displayTaskTitle = (task: AgentTaskVO) => {
     SKILL_REVIEW: `${skill} 核心概念复习`,
     KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
   }
-  return map[task.taskType || ''] || task.title || `Agent 任务 #${task.id}`
+  return map[task.taskType || ''] || cleanUserText(task.title, `Agent 任务 #${task.id}`)
 }
 
 const displayTaskDescription = (task: AgentTaskVO) => {
@@ -276,14 +416,46 @@ const displayTaskDescription = (task: AgentTaskVO) => {
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
     KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
   }
-  return map[task.taskType || ''] || task.description || '暂无任务描述'
+  return map[task.taskType || ''] || cleanUserText(task.description, '暂无任务描述')
+}
+
+const displayTaskReason = (task: AgentTaskVO) => cleanUserText(task.reason, '')
+
+const formatTargetOption = (target: TargetJobVO) => {
+  const title = target.jobTitle || `岗位 #${target.id}`
+  const company = target.companyName || '未填写公司'
+  const current = target.currentFlag === 1 ? ' · 当前' : ''
+  return `${title} · ${company}${current}`
+}
+
+const loadJobTargets = async () => {
+  if (targetLoading.value) return
+  targetLoading.value = true
+  targetLoadError.value = ''
+  try {
+    const [list, current] = await Promise.all([
+      getJobTargetsApi({ pageNo: 1, pageSize: 50 }),
+      getCurrentJobTargetApi().catch(() => null)
+    ])
+    targets.value = list || []
+    currentTarget.value = current || null
+  } catch (error) {
+    targets.value = []
+    currentTarget.value = null
+    targetLoadError.value = getErrorMessage(error) || '岗位目标列表暂时加载失败，不选择时仍会按当前主目标生成。'
+  } finally {
+    targetLoading.value = false
+  }
 }
 
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const params = { date: queryDate.value }
+    const params = {
+      date: queryDate.value,
+      targetJobId: currentTargetJobId.value
+    }
     const [latestPlan, tasks] = await Promise.all([
       getLatestDailyPlanApi(params),
       getTodayAgentTasksApi(params)
@@ -301,20 +473,39 @@ const loadPage = async () => {
 
 const openGenerateDialog = () => {
   generateForm.date = queryDate.value
+  generateForm.targetJobId = currentTargetJobId.value
   generateDialogVisible.value = true
+  if (!targets.value.length) {
+    void loadJobTargets()
+  }
 }
 
 const handleGenerate = async () => {
+  if (generateForm.forceRegenerate && plan.value?.runId) {
+    try {
+      await ElMessageBox.confirm(
+        '强制重新生成会重新创建当天计划，并刷新当前任务视图。请确认已有任务状态和反馈已经记录。',
+        '重新生成今日计划',
+        { type: 'warning', confirmButtonText: '确认重新生成', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+  }
   generating.value = true
+  errorMessage.value = ''
   try {
     plan.value = await generateDailyPlanApi({
       ...generateForm,
       targetJobId: generateForm.targetJobId || undefined
     })
+    currentTargetJobId.value = generateForm.targetJobId || undefined
     queryDate.value = generateForm.date
     generateDialogVisible.value = false
     ElMessage.success('今日计划已生成')
     await loadPage()
+  } catch (error) {
+    errorMessage.value = getErrorMessage(error)
   } finally {
     generating.value = false
   }
@@ -335,43 +526,39 @@ const openSkipDialog = (task: AgentTaskVO) => {
 }
 
 const submitTaskAction = async () => {
-  if (!selectedTask.value) return
-  mutating.value = true
-  try {
+  const task = selectedTask.value
+  if (!task) return
+  if (taskDialogMode.value === 'skip' && !taskNote.value.trim()) {
+    ElMessage.warning('请填写跳过原因')
+    return
+  }
+  await withTaskPending(task, taskDialogMode.value, async () => {
     if (taskDialogMode.value === 'complete') {
-      await completeAgentTaskApi(selectedTask.value.id, { note: taskNote.value || undefined })
+      await completeAgentTaskApi(task.id, { note: taskNote.value || undefined })
       ElMessage.success('任务已完成')
     } else {
-      await skipAgentTaskApi(selectedTask.value.id, { skipReason: taskNote.value || undefined })
+      await skipAgentTaskApi(task.id, { skipReason: taskNote.value || undefined })
       ElMessage.success('任务已跳过')
     }
     taskDialogVisible.value = false
     await loadPage()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const handleStartTask = async (task: AgentTaskVO) => {
-  mutating.value = true
-  try {
+  await withTaskPending(task, 'start', async () => {
     await startAgentTaskApi(task.id)
     ElMessage.success('任务已开始')
     await loadPage()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const handleRestoreTask = async (task: AgentTaskVO) => {
-  mutating.value = true
-  try {
+  await withTaskPending(task, 'restore', async () => {
     await restoreAgentTaskApi(task.id)
     ElMessage.success('任务已恢复')
     await loadPage()
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const openFeedbackDialog = (task: AgentTaskVO) => {
@@ -384,20 +571,18 @@ const openFeedbackDialog = (task: AgentTaskVO) => {
 }
 
 const submitFeedback = async () => {
-  if (!feedbackTask.value) return
-  mutating.value = true
-  try {
+  const task = feedbackTask.value
+  if (!task) return
+  await withTaskPending(task, 'feedback', async () => {
     await submitAgentFeedbackApi({
-      agentTaskId: feedbackTask.value.id,
-      agentRunId: feedbackTask.value.agentRunId,
+      agentTaskId: task.id,
+      agentRunId: task.agentRunId,
       feedbackType: feedbackForm.feedbackType,
       comment: feedbackForm.comment || undefined
     })
     feedbackDialogVisible.value = false
     ElMessage.success('反馈已提交')
-  } finally {
-    mutating.value = false
-  }
+  })
 }
 
 const goAction = (actionUrl: string) => {
@@ -405,10 +590,13 @@ const goAction = (actionUrl: string) => {
     router.push(actionUrl)
     return
   }
-  window.open(actionUrl, '_blank', 'noopener,noreferrer')
+  ElMessage.warning('任务链接暂不支持跳转到站外地址')
 }
 
-onMounted(loadPage)
+onMounted(() => {
+  void loadJobTargets()
+  void loadPage()
+})
 </script>
 
 <style scoped lang="scss">
@@ -509,6 +697,10 @@ onMounted(loadPage)
   min-height: 220px;
 }
 
+.plan-status-alert {
+  margin-bottom: 16px;
+}
+
 .plan-summary {
   margin: 18px 0 0;
 }
@@ -556,6 +748,17 @@ onMounted(loadPage)
 .task-actions {
   align-content: flex-start;
   justify-content: flex-end;
+}
+
+.task-more-button {
+  padding-inline: 6px;
+}
+
+.form-hint {
+  margin: 6px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media (max-width: 900px) {

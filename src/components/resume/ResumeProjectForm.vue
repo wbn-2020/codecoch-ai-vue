@@ -89,7 +89,19 @@ defineExpose({
   validate: async () => {
     if (!formRef.value) return false
     await formRef.value.validate()
-    return { ...form }
+    return {
+      ...form,
+      projectPeriod: form.projectPeriod || form.projectTime,
+      projectTime: form.projectTime || form.projectPeriod,
+      role: form.role || form.responsibility,
+      responsibility: form.responsibility || form.role,
+      technicalDifficulties: form.technicalDifficulties || form.technicalChallenges,
+      technicalChallenges: form.technicalChallenges || form.technicalDifficulties,
+      optimizationResults: form.optimizationResults || form.optimizationResult,
+      optimizationResult: form.optimizationResult || form.optimizationResults,
+      sortOrder: form.sortOrder ?? form.sort,
+      sort: form.sort ?? form.sortOrder
+    }
   }
 })
 </script>

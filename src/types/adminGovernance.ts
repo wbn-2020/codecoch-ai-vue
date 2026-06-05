@@ -44,10 +44,29 @@ export interface AsyncTaskVO {
   bizType?: string
   errorMessage?: string
   payload?: string
+  payloadPreview?: string
+  payloadHash?: string
   result?: string
+  resultPreview?: string
+  resultHash?: string
+  rawFieldsAvailable?: boolean
   createdAt?: string
   updatedAt?: string
   finishedAt?: string
+}
+
+export interface AdminTaskImpactPreviewVO {
+  id: number
+  targetType?: string
+  bizType?: string
+  bizId?: string
+  userId?: number
+  currentStatus?: string
+  executable?: boolean
+  impact?: string
+  riskLevel?: string
+  requiredPermission?: string
+  requiredNote?: string
 }
 
 export interface AdminNotificationVO {
@@ -82,8 +101,14 @@ export interface OperationLogVO {
   method?: string
   requestUri?: string
   requestArgs?: string
+  requestArgsPreview?: string
+  requestArgsHash?: string
   response?: string
+  responsePreview?: string
+  responseHash?: string
+  rawAvailable?: boolean
   ip?: string
+  userAgentSummary?: string
   status?: string | number
   costTime?: number
   errorMessage?: string
@@ -95,12 +120,23 @@ export interface LoginLogVO {
   userId?: number
   username?: string
   ip?: string
+  ipMasked?: string
+  maskedIp?: string
   location?: string
   userAgent?: string
+  userAgentMasked?: string
+  maskedUserAgent?: string
+  userAgentSummary?: string
   traceId?: string
+  traceIdShort?: string
+  shortTraceId?: string
   loginType?: string
   status?: string | number
   message?: string
+  summary?: string
+  loginSummary?: string
+  preview?: string
+  maskedPreview?: string
   loginTime?: string
   createdAt?: string
 }
@@ -110,7 +146,11 @@ export interface SlowSqlLogVO {
   mapperId?: string
   sqlCommandType?: string
   sqlText?: string
+  sqlTextPreview?: string
+  sqlTextHash?: string
   parameterSummary?: string
+  parameterSummaryHash?: string
+  rawAvailable?: boolean
   databaseName?: string
   costMs?: number
   thresholdMs?: number
@@ -126,9 +166,11 @@ export interface MenuVO {
   path?: string
   component?: string
   permission?: string
+  permissionCode?: string
   icon?: string
   type?: string
   sortOrder?: number
+  visible?: number
   status?: number
   children?: MenuVO[]
 }

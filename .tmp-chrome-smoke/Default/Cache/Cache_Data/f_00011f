@@ -1,0 +1,239 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/@fs/C:\\my-claude\\CodeCoachAI-vue\\src\\views\\auth\\RegisterView.vue");import { defineComponent as _defineComponent } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+import { ElMessage } from "/node_modules/.vite/deps/element-plus.js?v=9b9c413f";
+import { reactive, ref } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+import { useRouter } from "/node_modules/.vite/deps/vue-router.js?v=9b9c413f";
+import { useAuthStore } from "/src/stores/auth.ts";
+const _sfc_main = /* @__PURE__ */ _defineComponent({
+  __name: "RegisterView",
+  setup(__props, { expose: __expose }) {
+    __expose();
+    const router = useRouter();
+    const authStore = useAuthStore();
+    const formRef = ref();
+    const loading = ref(false);
+    const form = reactive({
+      username: "",
+      nickname: "",
+      email: "",
+      password: "",
+      confirmPassword: ""
+    });
+    const validateConfirmPassword = (_rule, value, callback) => {
+      if (!value) {
+        callback(new Error("请再次输入密码"));
+        return;
+      }
+      if (value !== form.password) {
+        callback(new Error("两次输入的密码不一致"));
+        return;
+      }
+      callback();
+    };
+    const rules = {
+      username: [
+        { required: true, message: "请输入用户名", trigger: "blur" },
+        { min: 4, max: 32, message: "用户名长度为 4-32 位", trigger: "blur" }
+      ],
+      email: [{ type: "email", message: "请输入正确的邮箱格式", trigger: "blur" }],
+      password: [
+        { required: true, message: "请输入密码", trigger: "blur" },
+        { min: 6, max: 32, message: "密码长度为 6-32 位", trigger: "blur" }
+      ],
+      confirmPassword: [{ validator: validateConfirmPassword, trigger: "blur" }]
+    };
+    const handleSubmit = async () => {
+      if (!formRef.value) return;
+      await formRef.value.validate(async (valid) => {
+        if (!valid) return;
+        loading.value = true;
+        try {
+          await authStore.register(form);
+          ElMessage.success("注册成功，请登录");
+          await router.replace("/login");
+        } finally {
+          loading.value = false;
+        }
+      });
+    };
+    const __returned__ = { router, authStore, formRef, loading, form, validateConfirmPassword, rules, handleSubmit };
+    Object.defineProperty(__returned__, "__isScriptSetup", { enumerable: false, value: true });
+    return __returned__;
+  }
+});
+import { createElementVNode as _createElementVNode, resolveComponent as _resolveComponent, createVNode as _createVNode, withCtx as _withCtx, createTextVNode as _createTextVNode, openBlock as _openBlock, createElementBlock as _createElementBlock } from "/node_modules/.vite/deps/vue.js?v=9b9c413f";
+const _hoisted_1 = { class: "auth-page" };
+const _hoisted_2 = { class: "auth-card" };
+const _hoisted_3 = { class: "auth-card__footer" };
+function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
+  const _component_el_input = _resolveComponent("el-input");
+  const _component_el_form_item = _resolveComponent("el-form-item");
+  const _component_el_button = _resolveComponent("el-button");
+  const _component_el_form = _resolveComponent("el-form");
+  return _openBlock(), _createElementBlock("main", _hoisted_1, [
+    _createElementVNode("section", _hoisted_2, [
+      _cache[9] || (_cache[9] = _createElementVNode(
+        "div",
+        { class: "auth-card__intro" },
+        [
+          _createElementVNode("div", { class: "auth-card__brand" }, "CodeCoachAI"),
+          _createElementVNode("h1", null, "创建账号"),
+          _createElementVNode("p", null, "注册普通用户账号，先打通 V1 登录注册和个人信息链路。")
+        ],
+        -1
+        /* CACHED */
+      )),
+      _createVNode(_component_el_form, {
+        ref: "formRef",
+        class: "auth-form",
+        model: $setup.form,
+        rules: $setup.rules,
+        "label-position": "top"
+      }, {
+        default: _withCtx(() => [
+          _createVNode(_component_el_form_item, {
+            label: "用户名",
+            prop: "username"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.username,
+                "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $setup.form.username = $event),
+                modelModifiers: { trim: true },
+                size: "large",
+                placeholder: "4-32 位用户名"
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_form_item, {
+            label: "昵称",
+            prop: "nickname"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.nickname,
+                "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $setup.form.nickname = $event),
+                modelModifiers: { trim: true },
+                size: "large",
+                placeholder: "可选"
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_form_item, {
+            label: "邮箱",
+            prop: "email"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.email,
+                "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => $setup.form.email = $event),
+                modelModifiers: { trim: true },
+                size: "large",
+                placeholder: "可选"
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_form_item, {
+            label: "密码",
+            prop: "password"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.password,
+                "onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => $setup.form.password = $event),
+                size: "large",
+                type: "password",
+                "show-password": ""
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_form_item, {
+            label: "确认密码",
+            prop: "confirmPassword"
+          }, {
+            default: _withCtx(() => [
+              _createVNode(_component_el_input, {
+                modelValue: $setup.form.confirmPassword,
+                "onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => $setup.form.confirmPassword = $event),
+                size: "large",
+                type: "password",
+                "show-password": ""
+              }, null, 8, ["modelValue"])
+            ]),
+            _: 1
+            /* STABLE */
+          }),
+          _createVNode(_component_el_button, {
+            class: "auth-form__submit",
+            type: "primary",
+            size: "large",
+            loading: $setup.loading,
+            onClick: $setup.handleSubmit
+          }, {
+            default: _withCtx(() => [..._cache[6] || (_cache[6] = [
+              _createTextVNode(
+                " 注册 ",
+                -1
+                /* CACHED */
+              )
+            ])]),
+            _: 1
+            /* STABLE */
+          }, 8, ["loading"])
+        ]),
+        _: 1
+        /* STABLE */
+      }, 8, ["model"]),
+      _createElementVNode("div", _hoisted_3, [
+        _cache[8] || (_cache[8] = _createElementVNode(
+          "span",
+          null,
+          "已有账号？",
+          -1
+          /* CACHED */
+        )),
+        _createVNode(_component_el_button, {
+          link: "",
+          type: "primary",
+          onClick: _cache[5] || (_cache[5] = ($event) => $setup.router.push("/login"))
+        }, {
+          default: _withCtx(() => [..._cache[7] || (_cache[7] = [
+            _createTextVNode(
+              "去登录",
+              -1
+              /* CACHED */
+            )
+          ])]),
+          _: 1
+          /* STABLE */
+        })
+      ])
+    ])
+  ]);
+}
+import "/src/views/auth/RegisterView.vue?vue&type=style&index=0&scoped=1ca25142&lang.scss";
+_sfc_main.__hmrId = "1ca25142";
+typeof __VUE_HMR_RUNTIME__ !== "undefined" && __VUE_HMR_RUNTIME__.createRecord(_sfc_main.__hmrId, _sfc_main);
+import.meta.hot.on("file-changed", ({ file }) => {
+  __VUE_HMR_RUNTIME__.CHANGED_FILE = file;
+});
+import.meta.hot.accept((mod) => {
+  if (!mod) return;
+  const { default: updated, _rerender_only } = mod;
+  if (_rerender_only) {
+    __VUE_HMR_RUNTIME__.rerender(updated.__hmrId, updated.render);
+  } else {
+    __VUE_HMR_RUNTIME__.reload(updated.__hmrId, updated);
+  }
+});
+import _export_sfc from "/@id/__x00__plugin-vue:export-helper";
+export default /* @__PURE__ */ _export_sfc(_sfc_main, [["render", _sfc_render], ["__scopeId", "data-v-1ca25142"], ["__file", "C:/my-claude/CodeCoachAI-vue/src/views/auth/RegisterView.vue"]]);
+
+//# sourceMappingURL=data:application/json;base64,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QUFFLGNBQU8sS0FBSTtBQUFBOzRCQUFZLE1BQUc7QUFBQTtjQUFIO0FBQUEsY0FBRztBQUFBO0FBQUE7QUFBQSIsIm5hbWVzIjpbXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiUmVnaXN0ZXJWaWV3LnZ1ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8dGVtcGxhdGU+XG4gIDxtYWluIGNsYXNzPVwiYXV0aC1wYWdlXCI+XG4gICAgPHNlY3Rpb24gY2xhc3M9XCJhdXRoLWNhcmRcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJhdXRoLWNhcmRfX2ludHJvXCI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJhdXRoLWNhcmRfX2JyYW5kXCI+Q29kZUNvYWNoQUk8L2Rpdj5cbiAgICAgICAgPGgxPuWIm+W7uui0puWPtzwvaDE+XG4gICAgICAgIDxwPuazqOWGjOaZrumAmueUqOaIt+i0puWPt++8jOWFiOaJk+mAmiBWMSDnmbvlvZXms6jlhozlkozkuKrkurrkv6Hmga/pk77ot6/jgII8L3A+XG4gICAgICA8L2Rpdj5cblxuICAgICAgPGVsLWZvcm0gcmVmPVwiZm9ybVJlZlwiIGNsYXNzPVwiYXV0aC1mb3JtXCIgOm1vZGVsPVwiZm9ybVwiIDpydWxlcz1cInJ1bGVzXCIgbGFiZWwtcG9zaXRpb249XCJ0b3BcIj5cbiAgICAgICAgPGVsLWZvcm0taXRlbSBsYWJlbD1cIueUqOaIt+WQjVwiIHByb3A9XCJ1c2VybmFtZVwiPlxuICAgICAgICAgIDxlbC1pbnB1dCB2LW1vZGVsLnRyaW09XCJmb3JtLnVzZXJuYW1lXCIgc2l6ZT1cImxhcmdlXCIgcGxhY2Vob2xkZXI9XCI0LTMyIOS9jeeUqOaIt+WQjVwiIC8+XG4gICAgICAgIDwvZWwtZm9ybS1pdGVtPlxuICAgICAgICA8ZWwtZm9ybS1pdGVtIGxhYmVsPVwi5pi156ewXCIgcHJvcD1cIm5pY2tuYW1lXCI+XG4gICAgICAgICAgPGVsLWlucHV0IHYtbW9kZWwudHJpbT1cImZvcm0ubmlja25hbWVcIiBzaXplPVwibGFyZ2VcIiBwbGFjZWhvbGRlcj1cIuWPr+mAiVwiIC8+XG4gICAgICAgIDwvZWwtZm9ybS1pdGVtPlxuICAgICAgICA8ZWwtZm9ybS1pdGVtIGxhYmVsPVwi6YKu566xXCIgcHJvcD1cImVtYWlsXCI+XG4gICAgICAgICAgPGVsLWlucHV0IHYtbW9kZWwudHJpbT1cImZvcm0uZW1haWxcIiBzaXplPVwibGFyZ2VcIiBwbGFjZWhvbGRlcj1cIuWPr+mAiVwiIC8+XG4gICAgICAgIDwvZWwtZm9ybS1pdGVtPlxuICAgICAgICA8ZWwtZm9ybS1pdGVtIGxhYmVsPVwi5a+G56CBXCIgcHJvcD1cInBhc3N3b3JkXCI+XG4gICAgICAgICAgPGVsLWlucHV0IHYtbW9kZWw9XCJmb3JtLnBhc3N3b3JkXCIgc2l6ZT1cImxhcmdlXCIgdHlwZT1cInBhc3N3b3JkXCIgc2hvdy1wYXNzd29yZCAvPlxuICAgICAgICA8L2VsLWZvcm0taXRlbT5cbiAgICAgICAgPGVsLWZvcm0taXRlbSBsYWJlbD1cIuehruiupOWvhueggVwiIHByb3A9XCJjb25maXJtUGFzc3dvcmRcIj5cbiAgICAgICAgICA8ZWwtaW5wdXQgdi1tb2RlbD1cImZvcm0uY29uZmlybVBhc3N3b3JkXCIgc2l6ZT1cImxhcmdlXCIgdHlwZT1cInBhc3N3b3JkXCIgc2hvdy1wYXNzd29yZCAvPlxuICAgICAgICA8L2VsLWZvcm0taXRlbT5cbiAgICAgICAgPGVsLWJ1dHRvbiBjbGFzcz1cImF1dGgtZm9ybV9fc3VibWl0XCIgdHlwZT1cInByaW1hcnlcIiBzaXplPVwibGFyZ2VcIiA6bG9hZGluZz1cImxvYWRpbmdcIiBAY2xpY2s9XCJoYW5kbGVTdWJtaXRcIj5cbiAgICAgICAgICDms6jlhoxcbiAgICAgICAgPC9lbC1idXR0b24+XG4gICAgICA8L2VsLWZvcm0+XG5cbiAgICAgIDxkaXYgY2xhc3M9XCJhdXRoLWNhcmRfX2Zvb3RlclwiPlxuICAgICAgICA8c3Bhbj7lt7LmnInotKblj7fvvJ88L3NwYW4+XG4gICAgICAgIDxlbC1idXR0b24gbGluayB0eXBlPVwicHJpbWFyeVwiIEBjbGljaz1cInJvdXRlci5wdXNoKCcvbG9naW4nKVwiPuWOu+eZu+W9lTwvZWwtYnV0dG9uPlxuICAgICAgPC9kaXY+XG4gICAgPC9zZWN0aW9uPlxuICA8L21haW4+XG48L3RlbXBsYXRlPlxuXG48c2NyaXB0IHNldHVwIGxhbmc9XCJ0c1wiPlxuaW1wb3J0IHR5cGUgeyBGb3JtSW5zdGFuY2UsIEZvcm1SdWxlcyB9IGZyb20gJ2VsZW1lbnQtcGx1cydcbmltcG9ydCB7IEVsTWVzc2FnZSB9IGZyb20gJ2VsZW1lbnQtcGx1cydcbmltcG9ydCB7IHJlYWN0aXZlLCByZWYgfSBmcm9tICd2dWUnXG5pbXBvcnQgeyB1c2VSb3V0ZXIgfSBmcm9tICd2dWUtcm91dGVyJ1xuXG5pbXBvcnQgeyB1c2VBdXRoU3RvcmUgfSBmcm9tICdAL3N0b3Jlcy9hdXRoJ1xuaW1wb3J0IHR5cGUgeyBSZWdpc3RlckRUTyB9IGZyb20gJ0AvdHlwZXMvYXV0aCdcblxuY29uc3Qgcm91dGVyID0gdXNlUm91dGVyKClcbmNvbnN0IGF1dGhTdG9yZSA9IHVzZUF1dGhTdG9yZSgpXG5jb25zdCBmb3JtUmVmID0gcmVmPEZvcm1JbnN0YW5jZT4oKVxuY29uc3QgbG9hZGluZyA9IHJlZihmYWxzZSlcblxuY29uc3QgZm9ybSA9IHJlYWN0aXZlPFJlZ2lzdGVyRFRPPih7XG4gIHVzZXJuYW1lOiAnJyxcbiAgbmlja25hbWU6ICcnLFxuICBlbWFpbDogJycsXG4gIHBhc3N3b3JkOiAnJyxcbiAgY29uZmlybVBhc3N3b3JkOiAnJ1xufSlcblxuY29uc3QgdmFsaWRhdGVDb25maXJtUGFzc3dvcmQgPSAoX3J1bGU6IHVua25vd24sIHZhbHVlOiBzdHJpbmcsIGNhbGxiYWNrOiAoZXJyb3I/OiBFcnJvcikgPT4gdm9pZCkgPT4ge1xuICBpZiAoIXZhbHVlKSB7XG4gICAgY2FsbGJhY2sobmV3IEVycm9yKCfor7flho3mrKHovpPlhaXlr4bnoIEnKSlcbiAgICByZXR1cm5cbiAgfVxuXG4gIGlmICh2YWx1ZSAhPT0gZm9ybS5wYXNzd29yZCkge1xuICAgIGNhbGxiYWNrKG5ldyBFcnJvcign5Lik5qyh6L6T5YWl55qE5a+G56CB5LiN5LiA6Ie0JykpXG4gICAgcmV0dXJuXG4gIH1cblxuICBjYWxsYmFjaygpXG59XG5cbmNvbnN0IHJ1bGVzOiBGb3JtUnVsZXM8UmVnaXN0ZXJEVE8+ID0ge1xuICB1c2VybmFtZTogW1xuICAgIHsgcmVxdWlyZWQ6IHRydWUsIG1lc3NhZ2U6ICfor7fovpPlhaXnlKjmiLflkI0nLCB0cmlnZ2VyOiAnYmx1cicgfSxcbiAgICB7IG1pbjogNCwgbWF4OiAzMiwgbWVzc2FnZTogJ+eUqOaIt+WQjemVv+W6puS4uiA0LTMyIOS9jScsIHRyaWdnZXI6ICdibHVyJyB9XG4gIF0sXG4gIGVtYWlsOiBbeyB0eXBlOiAnZW1haWwnLCBtZXNzYWdlOiAn6K+36L6T5YWl5q2j56Gu55qE6YKu566x5qC85byPJywgdHJpZ2dlcjogJ2JsdXInIH1dLFxuICBwYXNzd29yZDogW1xuICAgIHsgcmVxdWlyZWQ6IHRydWUsIG1lc3NhZ2U6ICfor7fovpPlhaXlr4bnoIEnLCB0cmlnZ2VyOiAnYmx1cicgfSxcbiAgICB7IG1pbjogNiwgbWF4OiAzMiwgbWVzc2FnZTogJ+WvhueggemVv+W6puS4uiA2LTMyIOS9jScsIHRyaWdnZXI6ICdibHVyJyB9XG4gIF0sXG4gIGNvbmZpcm1QYXNzd29yZDogW3sgdmFsaWRhdG9yOiB2YWxpZGF0ZUNvbmZpcm1QYXNzd29yZCwgdHJpZ2dlcjogJ2JsdXInIH1dXG59XG5cbmNvbnN0IGhhbmRsZVN1Ym1pdCA9IGFzeW5jICgpID0+IHtcbiAgaWYgKCFmb3JtUmVmLnZhbHVlKSByZXR1cm5cblxuICBhd2FpdCBmb3JtUmVmLnZhbHVlLnZhbGlkYXRlKGFzeW5jICh2YWxpZCkgPT4ge1xuICAgIGlmICghdmFsaWQpIHJldHVyblxuXG4gICAgbG9hZGluZy52YWx1ZSA9IHRydWVcbiAgICB0cnkge1xuICAgICAgYXdhaXQgYXV0aFN0b3JlLnJlZ2lzdGVyKGZvcm0pXG4gICAgICBFbE1lc3NhZ2Uuc3VjY2Vzcygn5rOo5YaM5oiQ5Yqf77yM6K+355m75b2VJylcbiAgICAgIGF3YWl0IHJvdXRlci5yZXBsYWNlKCcvbG9naW4nKVxuICAgIH0gZmluYWxseSB7XG4gICAgICBsb2FkaW5nLnZhbHVlID0gZmFsc2VcbiAgICB9XG4gIH0pXG59XG48L3NjcmlwdD5cblxuPHN0eWxlIHNjb3BlZCBsYW5nPVwic2Nzc1wiPlxuLmF1dGgtcGFnZSB7XG4gIGRpc3BsYXk6IGZsZXg7XG4gIGFsaWduLWl0ZW1zOiBjZW50ZXI7XG4gIGp1c3RpZnktY29udGVudDogY2VudGVyO1xuICBtaW4taGVpZ2h0OiAxMDB2aDtcbiAgcGFkZGluZzogMjRweDtcbiAgYmFja2dyb3VuZDpcbiAgICBsaW5lYXItZ3JhZGllbnQoMTM1ZGVnLCByZ2IoMzcgOTkgMjM1IC8gMTAlKSwgdHJhbnNwYXJlbnQgNDIlKSxcbiAgICBsaW5lYXItZ3JhZGllbnQoMzE1ZGVnLCByZ2IoMTUgMTE4IDExMCAvIDEwJSksIHRyYW5zcGFyZW50IDM4JSksXG4gICAgdmFyKC0tYXBwLWJnKTtcbn1cblxuLmF1dGgtY2FyZCB7XG4gIHdpZHRoOiBtaW4oMTAwJSwgNDYwcHgpO1xuICBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1hcHAtYm9yZGVyKTtcbiAgYm9yZGVyLXJhZGl1czogOHB4O1xuICBiYWNrZ3JvdW5kOiB2YXIoLS1hcHAtc3VyZmFjZSk7XG4gIGJveC1zaGFkb3c6IHZhcigtLWFwcC1zaGFkb3cpO1xuICBwYWRkaW5nOiAzMnB4O1xufVxuXG4uYXV0aC1jYXJkX19icmFuZCB7XG4gIGNvbG9yOiB2YXIoLS1hcHAtcHJpbWFyeSk7XG4gIGZvbnQtc2l6ZTogMTRweDtcbiAgZm9udC13ZWlnaHQ6IDcwMDtcbn1cblxuLmF1dGgtY2FyZF9faW50cm8ge1xuICBoMSB7XG4gICAgbWFyZ2luOiAxMnB4IDAgOHB4O1xuICAgIGZvbnQtc2l6ZTogMjhweDtcbiAgfVxuXG4gIHAge1xuICAgIG1hcmdpbjogMDtcbiAgICBjb2xvcjogdmFyKC0tYXBwLXRleHQtbXV0ZWQpO1xuICAgIGxpbmUtaGVpZ2h0OiAxLjY7XG4gIH1cbn1cblxuLmF1dGgtZm9ybSB7XG4gIG1hcmdpbi10b3A6IDI2cHg7XG59XG5cbi5hdXRoLWZvcm1fX3N1Ym1pdCB7XG4gIHdpZHRoOiAxMDAlO1xuICBtYXJnaW4tdG9wOiA2cHg7XG59XG5cbi5hdXRoLWNhcmRfX2Zvb3RlciB7XG4gIGRpc3BsYXk6IGZsZXg7XG4gIGFsaWduLWl0ZW1zOiBjZW50ZXI7XG4gIGp1c3RpZnktY29udGVudDogY2VudGVyO1xuICBnYXA6IDRweDtcbiAgbWFyZ2luLXRvcDogMjJweDtcbiAgY29sb3I6IHZhcigtLWFwcC10ZXh0LW11dGVkKTtcbiAgZm9udC1zaXplOiAxNHB4O1xufVxuPC9zdHlsZT5cbiJdLCJmaWxlIjoiQzovbXktY2xhdWRlL0NvZGVDb2FjaEFJLXZ1ZS9zcmMvdmlld3MvYXV0aC9SZWdpc3RlclZpZXcudnVlIn0=

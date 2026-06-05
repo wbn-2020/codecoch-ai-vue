@@ -6,7 +6,11 @@
         <h1 class="admin-hero__title">菜单权限</h1>
         <p class="admin-hero__desc">查看后台菜单树，并为角色分配可访问菜单。</p>
       </div>
-      <div class="admin-hero__actions"><el-button type="primary" :loading="saving" :disabled="!selectedRoleId" @click="handleSave">保存授权</el-button></div>
+      <div class="admin-hero__actions">
+        <el-button :disabled="!hasUnsavedChanges" @click="cancelUnsavedChanges">取消更改</el-button>
+        <el-button :disabled="!selectedRoleId || !currentGrantMenuIds.length" @click="resetDraftGrant">清空草稿</el-button>
+        <el-button type="primary" :loading="saving" :disabled="!selectedRoleId || !hasUnsavedChanges" @click="handleSave">保存授权</el-button>
+      </div>
     </section>
 
     <div class="permission-grid">
@@ -21,16 +25,34 @@
       </section>
 
       <section class="admin-panel">
-        <div class="admin-panel__header"><div><h2>菜单树</h2><p>勾选后提交到角色菜单授权接口</p></div><el-tag v-if="selectedRoleId" type="success" effect="plain">{{ selectedRoleLabel }}</el-tag></div>
+        <div class="admin-panel__header"><div><h2>菜单树</h2><p>勾选后提交到角色菜单授权接口</p></div><el-tag v-if="selectedRoleId" :type="hasUnsavedChanges ? 'warning' : 'success'" effect="plain">{{ selectedRoleLabel }}{{ hasUnsavedChanges ? ' · 未保存' : '' }}</el-tag></div>
         <div class="tree-wrap" v-loading="menuLoading">
-          <el-tree ref="treeRef" :data="menus" node-key="id" show-checkbox default-expand-all :props="{ label: 'menuName', children: 'children' }">
+          <el-tree ref="treeRef" :data="menus" node-key="id" show-checkbox default-expand-all :props="{ label: 'menuName', children: 'children' }" @check="syncCheckedState">
             <template #default="{ data }">
               <div class="menu-node">
                 <span>{{ displayMenuName(data) }}</span>
-                <small>{{ data.path || data.permission || data.type }}</small>
+                <small>{{ menuMetaText(data) }}</small>
               </div>
             </template>
           </el-tree>
+        </div>
+        <div class="change-preview">
+          <div class="change-preview__head">
+            <strong>变更预览</strong>
+            <span>{{ changeSummary }}</span>
+          </div>
+          <div class="change-preview__grid">
+            <section>
+              <h3>新增授权</h3>
+              <el-tag v-for="item in addedMenus" :key="`add-${item.id}`" type="success" effect="plain">{{ displayMenuName(item) }}</el-tag>
+              <el-empty v-if="!addedMenus.length" description="暂无新增" :image-size="48" />
+            </section>
+            <section>
+              <h3>移除授权</h3>
+              <el-tag v-for="item in removedMenus" :key="`remove-${item.id}`" type="danger" effect="plain">{{ displayMenuName(item) }}</el-tag>
+              <el-empty v-if="!removedMenus.length" description="暂无移除" :image-size="48" />
+            </section>
+          </div>
         </div>
       </section>
     </div>
@@ -39,7 +61,7 @@
 
 <script setup lang="ts">
 import type { ElTree } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ShieldCheck } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, ref } from 'vue'
 
@@ -55,6 +77,8 @@ const roles = ref<RoleVO[]>([])
 const menus = ref<MenuVO[]>([])
 const selectedRoleId = ref<number>()
 const treeRef = ref<InstanceType<typeof ElTree>>()
+const originalGrantMenuIds = ref<number[]>([])
+const currentGrantMenuIds = ref<number[]>([])
 
 const roleNameMap: Record<string, string> = {
   USER: '普通用户',
@@ -80,7 +104,7 @@ const menuNameMap: Record<string, string> = {
 }
 
 const menuPathMap: Record<string, string> = {
-  '/admin': '管理首页',
+  '/admin/dashboard': '管理首页',
   '/admin/v3': 'V3 管理后台',
   '/admin/users': '用户管理',
   '/admin/roles': '角色管理',
@@ -121,15 +145,68 @@ const selectedRoleLabel = computed(() => {
   return role ? displayRoleName(role) : `角色 #${selectedRoleId.value}`
 })
 
+const flatMenus = computed(() => flattenMenus(menus.value))
+const menuById = computed(() => new Map(flatMenus.value.map((item) => [item.id, item])))
+const addedMenuIds = computed(() => diffIds(currentGrantMenuIds.value, originalGrantMenuIds.value))
+const removedMenuIds = computed(() => diffIds(originalGrantMenuIds.value, currentGrantMenuIds.value))
+const addedMenus = computed(() => addedMenuIds.value.map((id) => menuById.value.get(id)).filter(Boolean) as MenuVO[])
+const removedMenus = computed(() => removedMenuIds.value.map((id) => menuById.value.get(id)).filter(Boolean) as MenuVO[])
+const hasUnsavedChanges = computed(() => addedMenuIds.value.length > 0 || removedMenuIds.value.length > 0)
+const changeSummary = computed(() =>
+  hasUnsavedChanges.value
+    ? `新增 ${addedMenuIds.value.length} 项，移除 ${removedMenuIds.value.length} 项`
+    : '当前授权与已保存状态一致'
+)
+
+const normalizeIds = (ids: Array<string | number>) =>
+  Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0))).sort((a, b) => a - b)
+
+const diffIds = (source: number[], target: number[]) => {
+  const targetSet = new Set(target)
+  return source.filter((id) => !targetSet.has(id))
+}
+
+const flattenMenus = (items: MenuVO[]): MenuVO[] =>
+  items.flatMap((item) => [item, ...flattenMenus(item.children || [])])
+
+const getGrantMenuIdsFromTree = () => {
+  const checked = treeRef.value?.getCheckedKeys(false) || []
+  const halfChecked = treeRef.value?.getHalfCheckedKeys() || []
+  return normalizeIds([...checked, ...halfChecked])
+}
+
+const syncCheckedState = () => {
+  currentGrantMenuIds.value = getGrantMenuIdsFromTree()
+}
+
+const applyCheckedKeys = async (menuIds: number[]) => {
+  await nextTick()
+  treeRef.value?.setCheckedKeys(menuIds, false)
+  await nextTick()
+  syncCheckedState()
+}
+
 const displayRoleName = (role: RoleVO) => {
   const roleCode = String(role.roleCode || '').toUpperCase()
   return roleNameMap[roleCode] || role.roleName || role.roleCode
 }
 
 const displayMenuName = (menu: MenuVO) => {
-  const pathLabel = menu.path ? menuPathMap[menu.path] : ''
   const rawName = menu.menuName || menu.name || ''
-  return pathLabel || menuNameMap[rawName] || rawName || menu.permission || `菜单 #${menu.id}`
+  const rawLabel = menuNameMap[rawName] || rawName
+  if (String(menu.type || '').toUpperCase() === 'BUTTON') {
+    return rawLabel || menu.permission || menu.permissionCode || `操作权限 #${menu.id}`
+  }
+  const pathLabel = menu.path ? menuPathMap[menu.path] : ''
+  return pathLabel || rawLabel || menu.permission || menu.permissionCode || `菜单 #${menu.id}`
+}
+
+const menuMetaText = (menu: MenuVO) => {
+  const permission = menu.permission || menu.permissionCode
+  if (String(menu.type || '').toUpperCase() === 'BUTTON') {
+    return permission || menu.path || '操作权限'
+  }
+  return menu.path || permission || menu.type || '菜单'
 }
 
 const fetchRoles = async () => {
@@ -148,18 +225,42 @@ const selectRole = async (roleId: number) => {
   await nextTick()
   try {
     const menuIds = await getAdminRoleMenusApi(roleId)
-    treeRef.value?.setCheckedKeys(menuIds, false)
+    await applyCheckedKeys(menuIds)
+    originalGrantMenuIds.value = [...currentGrantMenuIds.value]
   } catch {
-    treeRef.value?.setCheckedKeys([], false)
+    await applyCheckedKeys([])
+    originalGrantMenuIds.value = []
   }
 }
+
+const cancelUnsavedChanges = async () => {
+  await applyCheckedKeys(originalGrantMenuIds.value)
+}
+
+const resetDraftGrant = async () => {
+  await applyCheckedKeys([])
+}
+
 const handleSave = async () => {
   if (!selectedRoleId.value) return
+  syncCheckedState()
+  try {
+    await ElMessageBox.confirm(
+      `确认保存「${selectedRoleLabel.value}」的菜单授权变更？${changeSummary.value}，保存后会立即影响该角色的后台可访问范围。`,
+      '保存菜单授权',
+      {
+        type: 'warning',
+        confirmButtonText: '确认保存',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   saving.value = true
   try {
-    const checked = treeRef.value?.getCheckedKeys(false) || []
-    const halfChecked = treeRef.value?.getHalfCheckedKeys() || []
-    await grantAdminRoleMenusApi(selectedRoleId.value, { menuIds: [...checked, ...halfChecked].map(Number) })
+    await grantAdminRoleMenusApi(selectedRoleId.value, { menuIds: currentGrantMenuIds.value })
+    originalGrantMenuIds.value = [...currentGrantMenuIds.value]
     ElMessage.success('角色菜单授权已保存')
   } finally { saving.value = false }
 }
@@ -174,5 +275,13 @@ onMounted(async () => { await fetchMenus(); await fetchRoles() })
 .role-item small, .menu-node small { color: var(--app-text-muted); }
 .tree-wrap { padding: 16px 20px 20px; }
 .menu-node { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.change-preview { padding: 0 20px 20px; }
+.change-preview__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid rgba(148, 163, 184, .14); }
+.change-preview__head strong { color: var(--app-text); }
+.change-preview__head span { color: var(--app-text-muted); font-size: 13px; }
+.change-preview__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.change-preview__grid section { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; min-height: 92px; padding: 12px; border: 1px solid rgba(148, 163, 184, .14); border-radius: 8px; background: rgba(15, 23, 42, .38); }
+.change-preview__grid h3 { flex-basis: 100%; margin: 0 0 4px; color: var(--app-text); font-size: 14px; font-weight: 600; }
 @media (max-width: 860px) { .permission-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .change-preview__grid { grid-template-columns: 1fr; } }
 </style>

@@ -1,5 +1,7 @@
 import { ref, shallowRef, type Ref, type ShallowRef } from 'vue'
 
+import { toFriendlyMessage } from '@/utils/error'
+
 export interface UseRequestCacheOptions<T> {
   /** 缓存有效期（ms），默认 60000（1 分钟） */
   ttl?: number
@@ -94,7 +96,7 @@ export const useRequestCache = <T>(
       setCache(result)
       return result
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '请求失败'
+      error.value = toFriendlyMessage(err instanceof Error ? err.message : err, '\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
       return undefined
     } finally {
       loading.value = false

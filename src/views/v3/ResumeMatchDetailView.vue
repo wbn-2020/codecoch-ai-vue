@@ -12,7 +12,7 @@
       </div>
     </section>
 
-    <section v-if="loading" class="content-panel"><AppState type="loading" title="正在读取报告" description="通过 GET /resume-job-match/reports/{id} 获取真实详情。" /></section>
+    <section v-if="loading" class="content-panel"><AppState type="loading" title="正在读取报告" description="正在同步匹配报告详情。" /></section>
     <section v-else-if="loadError" class="content-panel">
       <AppState type="error" title="报告加载失败" :description="loadError"><el-button type="primary" @click="loadReport">重新加载</el-button></AppState>
     </section>
@@ -20,7 +20,7 @@
 
     <template v-else>
       <section v-if="report.status === 'FAILED'" class="content-panel">
-        <el-alert type="error" show-icon :closable="false" title="后端生成失败" :description="report.errorMessage || '接口返回 FAILED，但未给出失败原因。'" />
+        <el-alert type="error" show-icon :closable="false" title="报告生成失败" :description="toFriendlyMessage(report.errorMessage, '报告生成失败，请稍后重试。')" />
       </section>
       <section v-else-if="isTrackingReport" class="content-panel report-tracker">
         <div>
@@ -29,12 +29,12 @@
             {{ report.status }}
           </span>
           <h2>匹配报告生成中</h2>
-          <p>报告任务已进入后端异步链路，页面会自动追踪终态并刷新报告详情。</p>
+          <p>报告正在生成，页面会自动追踪状态并刷新详情。</p>
         </div>
         <el-button :loading="loading" @click="loadReport">立即刷新</el-button>
       </section>
 
-      <section class="score-grid">
+      <section v-if="isSuccessReport" class="score-grid">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
@@ -45,8 +45,19 @@
       <section class="detail-grid">
         <div class="content-panel">
           <div class="section-head">
-            <div><h2>报告摘要</h2><p>{{ report.summary || '后端暂未返回摘要。' }}</p></div>
-            <el-tag :type="statusTag(report.status)">{{ report.status }}</el-tag>
+            <div><h2>报告摘要</h2><p>{{ report.summary || '暂无摘要。' }}</p></div>
+            <div class="section-actions">
+              <el-tag :type="statusTag(report.status)">{{ report.status }}</el-tag>
+              <AiResultFeedback
+                v-if="report.status === 'SUCCESS'"
+                scene="RESUME_MATCH"
+                biz-type="RESUME_MATCH_REPORT"
+                :biz-id="report.reportId"
+                :ai-call-log-id="report.aiCallLogId"
+                label="反馈报告"
+                compact
+              />
+            </div>
           </div>
           <div class="json-sections">
             <DataBlock title="优势" :value="report.strengths" />
@@ -74,8 +85,8 @@
         </aside>
       </section>
 
-      <section class="content-panel">
-        <div class="section-head"><div><h2>维度明细</h2><p>来自报告 details 字段。</p></div></div>
+      <section v-if="isSuccessReport" class="content-panel">
+        <div class="section-head"><div><h2>维度明细</h2><p>按技能维度展示分数、差距和建议。</p></div></div>
         <el-table v-if="report.details?.length" :data="report.details">
           <el-table-column prop="dimension" label="维度" min-width="120" />
           <el-table-column prop="skillName" label="技能" min-width="140" />
@@ -83,7 +94,7 @@
           <el-table-column prop="gapDescription" label="差距" min-width="220" show-overflow-tooltip />
           <el-table-column prop="suggestion" label="建议" min-width="220" show-overflow-tooltip />
         </el-table>
-        <AppState v-else type="empty" title="暂无维度明细" description="后端没有返回 details 明细。" />
+        <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
       </section>
     </template>
   </div>
@@ -98,8 +109,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
+import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,6 +126,7 @@ const isTrackingReport = computed(() => {
   const status = report.value?.status
   return status === 'PENDING' || status === 'PROCESSING'
 })
+const isSuccessReport = computed(() => report.value?.status === 'SUCCESS')
 const scoreCards = computed(() => [
   { label: '综合匹配', value: report.value?.overallScore },
   { label: '技术栈', value: report.value?.techStackScore },
@@ -135,7 +148,7 @@ const DataBlock = defineComponent({
   setup(props) {
     return () => h('article', { class: 'data-block' }, [
       h('h3', props.title),
-      props.value ? h('pre', stringify(props.value)) : h(AppState, { type: 'empty', title: '暂无数据', description: '接口未返回该字段。' })
+      props.value ? h('pre', stringify(props.value)) : h(AppState, { type: 'empty', title: '暂无数据', description: '当前报告暂无该项内容。' })
     ])
   }
 })
@@ -203,7 +216,7 @@ onBeforeUnmount(stopReportPoll)
 .v3-page { display: flex; flex-direction: column; gap: 18px; }
 .page-hero, .content-panel, .score-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
 .page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
-.hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
+.hero-kicker, .hero-actions, .section-head, .section-actions { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1, h2, h3, p { margin: 0; }
 h1 { margin-top: 10px; font-size: 30px; }
@@ -218,11 +231,12 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .score-card strong { display: block; margin: 8px 0 12px; font-size: 28px; }
 .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
+.section-actions { flex-wrap: wrap; justify-content: flex-end; }
 .json-sections { display: grid; gap: 14px; }
 .data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .data-block h3 { font-size: 15px; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
 @media (max-width: 1080px) { .score-grid, .detail-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 760px) { .page-hero, .detail-grid, .score-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } .report-tracker { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 760px) { .page-hero, .detail-grid, .score-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions, .section-head { flex-wrap: wrap; } .section-actions { justify-content: flex-start; } .report-tracker { align-items: flex-start; flex-direction: column; } }
 </style>

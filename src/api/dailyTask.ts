@@ -1,25 +1,8 @@
 import request from '@/utils/request'
+import type { StudyPlanDailyViewVO, StudyTaskVO } from '@/types/studyPlan'
 
-export interface DailyTaskVO {
-  id: number
-  title: string
-  description?: string
-  type: string
-  status: 'PENDING' | 'COMPLETED' | 'SKIPPED'
-  relatedId?: number
-  relatedType?: string
-  planDate: string
-  completedAt?: string
-}
-
-export interface DailyTaskListVO {
-  date: string
-  tasks: DailyTaskVO[]
-  completedCount: number
-  totalCount: number
-  streak: number
-  isCheckedIn: boolean
-}
+export type DailyTaskVO = StudyTaskVO
+export type DailyTaskListVO = StudyPlanDailyViewVO
 
 export interface CheckinVO {
   streak: number
@@ -36,11 +19,11 @@ export const getDailyTasksApi = (planId: number, date?: string) => {
 }
 
 export const completeTaskApi = (taskId: number) => {
-  return request.post<DailyTaskVO, DailyTaskVO>(`/study-tasks/${taskId}/complete`)
+  return request.post<StudyTaskVO, StudyTaskVO>(`/study-tasks/${taskId}/complete`)
 }
 
 export const skipTaskApi = (taskId: number) => {
-  return request.post<DailyTaskVO, DailyTaskVO>(`/study-tasks/${taskId}/skip`)
+  return request.post<StudyTaskVO, StudyTaskVO>(`/study-tasks/${taskId}/skip`)
 }
 
 export const checkinApi = (data?: { planId?: number; studyMinutes?: number; note?: string }) => {

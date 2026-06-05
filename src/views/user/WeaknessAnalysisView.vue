@@ -60,6 +60,7 @@ import { useRouter } from 'vue-router'
 
 import { getWeaknessAnalysisApi, type WeaknessAnalysisVO } from '@/api/questionStudy'
 import AppState from '@/components/common/AppState.vue'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
@@ -68,13 +69,24 @@ const analysis = ref<WeaknessAnalysisVO>()
 
 const weakCategories = computed(() => analysis.value?.weakCategories || [])
 
+const normalizeWeaknessError = (err: unknown) => {
+  const message = getErrorMessage(err, '薄弱点暂时加载失败，请稍后重试。')
+  if (/未登录|unauthorized|401/i.test(message)) {
+    return '登录状态已失效，请重新登录后再试。'
+  }
+  if (/接口请求失败|network/i.test(message)) {
+    return '薄弱点暂时加载失败，请稍后重试。'
+  }
+  return message
+}
+
 const loadData = async () => {
   loading.value = true
   error.value = ''
   try {
     analysis.value = await getWeaknessAnalysisApi()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '接口请求失败'
+    error.value = normalizeWeaknessError(err)
   } finally {
     loading.value = false
   }

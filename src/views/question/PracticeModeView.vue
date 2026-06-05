@@ -4,7 +4,7 @@
       <div class="hero-copy">
         <div class="eyebrow">
           <Dumbbell :size="16" />
-          Practice Mode
+          练习模式
         </div>
         <h1>刷题练习</h1>
         <p>连续答题模式，支持随机抽题、按分类专项、错题重刷。答题后可查看参考答案和 AI 点评。</p>

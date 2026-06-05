@@ -29,7 +29,7 @@
       :rows="8"
       maxlength="5000"
       show-word-limit
-      placeholder="请输入你的简答题答案，提交后将调用真实 AI 点评接口。"
+      placeholder="请输入你的简答题答案，提交后会生成针对性点评。"
     />
 
     <div class="answer-review-panel__actions">
@@ -92,16 +92,12 @@
           <dd>{{ displayValue(currentReview.referenceAnswerSnapshot || currentReview.referenceAnswer) }}</dd>
         </div>
         <div>
-          <dt>AI 调用日志</dt>
-          <dd>{{ displayValue(currentReview.aiCallLogId) }}</dd>
-        </div>
-        <div>
           <dt>创建时间</dt>
           <dd>{{ displayValue(currentReview.createdAt) }}</dd>
         </div>
         <div v-if="currentReview.errorMessage">
           <dt>错误信息</dt>
-          <dd>{{ currentReview.errorMessage }}</dd>
+          <dd>{{ toFriendlyMessage(currentReview.errorMessage, 'AI 点评暂时不可用，请稍后重试') }}</dd>
         </div>
       </dl>
     </div>
@@ -139,6 +135,7 @@ import {
 } from '@/api/question'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import type { PracticeRecordVO, QuestionDetailVO } from '@/types/question'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const props = defineProps<{
   question: QuestionDetailVO
@@ -177,12 +174,6 @@ const normalizeList = (value?: string[] | string) => {
   return ['--']
 }
 
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  return 'AI 点评请求失败'
-}
-
 const fetchHistory = async () => {
   historyLoading.value = true
   historyError.value = ''
@@ -193,7 +184,7 @@ const fetchHistory = async () => {
     })
     history.value = result.records || []
   } catch (error) {
-    historyError.value = getErrorMessage(error)
+    historyError.value = getErrorMessage(error, '点评历史加载失败')
   } finally {
     historyLoading.value = false
   }
@@ -223,7 +214,7 @@ const handleSubmit = async () => {
     await fetchHistory()
     ElMessage.success('AI 点评已生成')
   } catch (error) {
-    submitError.value = getErrorMessage(error)
+    submitError.value = getErrorMessage(error, 'AI 点评请求失败')
   } finally {
     submitting.value = false
   }

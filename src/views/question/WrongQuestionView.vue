@@ -27,6 +27,12 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="records" row-key="wrongRecordId">
+          <template #empty>
+            <AppState type="empty" title="暂无错题记录" :description="wrongEmptyDescription">
+              <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
+              <el-button v-else type="primary" @click="router.push('/questions/practice')">开始一次刷题</el-button>
+            </AppState>
+          </template>
           <el-table-column prop="title" label="题目" min-width="220" show-overflow-tooltip />
           <el-table-column prop="categoryName" label="分类" width="130" />
           <el-table-column label="难度" width="100">
@@ -39,7 +45,7 @@
               <StatusTag :status="row.masteryStatus" :map="masteryMap" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
+          <el-table-column label="操作" width="190">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/questions/${row.questionId}`)">详情</el-button>
               <el-button link :loading="masteryChangingId === row.questionId" @click="markMastered(row)">
@@ -67,10 +73,11 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getWrongQuestionsApi, updateQuestionMasteryApi } from '@/api/question'
+import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { difficultyOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { WrongQuestionQueryDTO, WrongQuestionVO } from '@/types/question'
@@ -88,6 +95,11 @@ const query = reactive<WrongQuestionQueryDTO>({
   pageNo: 1,
   pageSize: 10
 })
+
+const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
+const wrongEmptyDescription = computed(() =>
+  hasFilters.value ? '没有匹配当前筛选条件的错题。' : '完成刷题练习后，答错的题会自动沉淀到这里。'
+)
 
 const masteryMap = {
   MASTERED: '已掌握',

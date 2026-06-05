@@ -4,6 +4,7 @@ import type {
   AdminUserQuery,
   AdminUserVO,
   PasswordUpdateDTO,
+  RoleSaveDTO,
   RoleVO,
   UserOverviewVO,
   UserProfileUpdateDTO,
@@ -44,4 +45,20 @@ export const updateAdminUserStatusApi = (id: number, data: UserStatusUpdateDTO) 
 
 export const getAdminRolesApi = () => {
   return request.get<RoleVO[], RoleVO[]>('/admin/roles')
+}
+
+export const createAdminRoleApi = (data: RoleSaveDTO) => {
+  return request.post<number, number>('/admin/roles', data)
+}
+
+export const updateAdminRoleApi = (id: number, data: RoleSaveDTO) => {
+  return request.put<null, null>(`/admin/roles/${id}`, data)
+}
+
+export const deleteAdminRoleApi = (id: number) => {
+  return request.delete<null, null>(`/admin/roles/${id}`)
+}
+
+export const updateAdminRoleStatusApi = (id: number, data: UserStatusUpdateDTO) => {
+  return request.put<null, null>(`/admin/roles/${id}/status`, data)
 }

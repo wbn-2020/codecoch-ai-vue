@@ -1,48 +1,67 @@
 <template>
-  <div class="page-shell admin-console-page">
-    <section v-if="showQuestionManagement" class="admin-hero">
+  <div class="page-shell admin-console-page question-governance-page">
+    <section v-if="showQuestionManagement" class="admin-hero question-hero">
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <BookOpenCheck :size="16" />
-          <span>Java Question Governance</span>
+          <span>Java 题库治理</span>
         </div>
         <h1 class="admin-hero__title">题库治理</h1>
         <p class="admin-hero__desc">
-          维护 Java 面试题库的分类、标签、题组、难度和上下架状态。AI 生成题目审核属于后续能力，
-          当前不伪造审核结果或生成数据。
+          维护 Java 面试题库的分类、标签、题组、难度和上下架状态，并跟进 AI 生成题目的审核进度。
         </p>
       </div>
-      <el-button type="primary" @click="openDialog()">
-        <Plus :size="16" />
-        新增题目
-      </el-button>
-      <el-button @click="handleExport">
-        <Download :size="16" />
-        导出题目
-      </el-button>
-      <el-button @click="importDialogVisible = true">
-        <Upload :size="16" />
-        批量导入
-      </el-button>
-      <el-button :loading="embeddingRebuilding" @click="handleRebuildEmbedding">
-        <RefreshCw :size="16" />
-        重建向量索引
-      </el-button>
-      <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
-        <RefreshCw :size="16" />
-        向量状态
-      </el-button>
-      <el-button :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
-        <RefreshCw :size="16" />
-        重试失败向量
-      </el-button>
+      <div class="question-hero-actions">
+        <div class="question-hero-actions__group">
+          <span>内容操作</span>
+          <el-button v-if="canWriteQuestion" type="primary" @click="openDialog()">
+            <Plus :size="16" />
+            新增题目
+          </el-button>
+          <el-button v-if="canImportQuestion" @click="importDialogVisible = true">
+            <Upload :size="16" />
+            批量导入
+          </el-button>
+          <el-button v-if="canExportQuestion" @click="handleExport">
+            <Download :size="16" />
+            导出题目
+          </el-button>
+        </div>
+        <div v-if="showEmbeddingActions" class="question-hero-actions__group question-hero-actions__group--risk">
+          <span><AlertTriangle :size="14" />索引维护</span>
+          <el-button :loading="embeddingStatsLoading" @click="handleEmbeddingStats">
+            <RefreshCw :size="16" />
+            向量状态
+          </el-button>
+          <el-button v-if="canRetryEmbedding" type="warning" plain :loading="embeddingRetrying" @click="handleRetryFailedEmbedding">
+            <RefreshCw :size="16" />
+            {{ embeddingRetryLabel }}
+          </el-button>
+          <el-dropdown v-if="canRebuildEmbedding" trigger="click">
+            <el-button type="warning" plain :disabled="embeddingRebuilding">
+              <MoreHorizontal :size="16" />
+              更多索引操作
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item :disabled="embeddingRebuilding" @click="handleRebuildEmbedding">重建向量索引</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <small>{{ embeddingActionHint }}</small>
+        </div>
+        <div v-else class="question-hero-actions__group question-hero-actions__group--muted">
+          <span>索引维护</span>
+          <small>题库有数据后再进行向量状态检查和索引维护。</small>
+        </div>
+      </div>
     </section>
 
     <div v-if="showQuestionManagement" class="admin-insight-grid">
       <article class="admin-insight-card">
         <span>题目总数</span>
         <strong>{{ total }}</strong>
-        <small>来自题目列表接口 total</small>
+        <small>当前题库列表总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页分类</span>
@@ -57,7 +76,7 @@
       <article class="admin-insight-card">
         <span>AI 生成审核</span>
         <strong>{{ reviewTotal }}</strong>
-        <small>来自审核池真实接口</small>
+        <small>待审核题目数量</small>
       </article>
     </div>
 
@@ -65,7 +84,7 @@
       <div class="admin-panel__header">
         <div>
           <h2>题目列表</h2>
-          <p>搜索、分页、新增、编辑、删除、启禁用保留现有后台 CRUD 链路。</p>
+          <p>维护题目内容、分类标签和上下架状态，保持题库质量稳定。</p>
         </div>
       </div>
 
@@ -114,6 +133,15 @@
 
       <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="questions" row-key="id">
+          <template #empty>
+            <AppState v-if="questionError" type="error" title="题目列表加载失败" :description="questionError">
+              <el-button type="primary" :loading="loading" @click="fetchQuestions">重新加载</el-button>
+            </AppState>
+            <el-empty v-else :description="questionEmptyDescription">
+              <el-button v-if="hasQuestionFilters" @click="handleReset">清空筛选</el-button>
+              <el-button v-else-if="canWriteQuestion" type="primary" @click="openDialog()">新增题目</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="title" label="题目标题" min-width="220" show-overflow-tooltip />
           <el-table-column label="分类" min-width="130">
             <template #default="{ row }">
@@ -145,13 +173,20 @@
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-          <el-table-column label="操作" width="230" fixed="right">
+          <el-table-column label="操作" width="150">
             <template #default="{ row }">
-              <el-button link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="warning" @click="handleStatus(row)">
-                {{ row.status === 1 ? '禁用' : '启用' }}
-              </el-button>
-              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+              <div class="question-row-actions">
+                <el-button v-if="canWriteQuestion" link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
+                <el-dropdown v-if="canWriteQuestion" trigger="click" @command="(command: string) => handleQuestionCommand(row, command)">
+                  <el-button text :icon="MoreHorizontal" aria-label="更多操作" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="status">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -176,7 +211,7 @@
           <h2>{{ governancePageTitle }}</h2>
           <p>{{ governancePageDesc }}</p>
         </div>
-        <el-button v-if="!props.governanceOnly" :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
+        <el-button v-if="!props.governanceOnly && canGenerateQuestion" :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
       </div>
 
       <el-tabs v-model="governanceTab" :class="['governance-tabs', { 'governance-tabs--single': props.governanceOnly }]">
@@ -186,8 +221,11 @@
               type="info"
               :closable="false"
               show-icon
-              title="生成结果只进入后端审核池，不在前端伪造题目内容；审核池数据来自 GET /admin/question-reviews。"
+              title="生成结果会进入审核池，请在审核通过后再发布到正式题库。"
             />
+            <AppState v-if="generateError" type="error" title="AI 题目生成失败" :description="generateError">
+              <el-button v-if="canGenerateQuestion" type="primary" :loading="generating" @click="handleGenerateReviews">重新生成</el-button>
+            </AppState>
             <el-form class="ai-generate-form" :model="generateForm" label-width="110px">
               <el-row :gutter="16">
                 <el-col :xs="24" :md="12">
@@ -237,13 +275,13 @@
                       :rows="3"
                       maxlength="500"
                       show-word-limit
-                      placeholder="可补充场景、侧重点或排除项；不要填写不存在的接口字段。"
+                      placeholder="可补充场景、侧重点或排除项；不要填写后台无法识别的字段。"
                     />
                   </el-form-item>
                 </el-col>
               </el-row>
               <div class="ai-generate-actions">
-                <el-button :loading="generating" type="primary" @click="handleGenerateReviews">生成到审核池</el-button>
+                <el-button v-if="canGenerateQuestion" :loading="generating" type="primary" @click="handleGenerateReviews">生成到审核池</el-button>
                 <el-button @click="resetGenerateForm">重置</el-button>
                 <el-button v-if="generateResult?.batchId" type="success" plain @click="viewGeneratedBatch">
                   查看本批次审核题
@@ -267,14 +305,14 @@
             <div v-if="generateResult" class="generate-result-card">
               <div class="generate-result-card__title">生成结果</div>
               <el-descriptions :column="3" border>
-                <el-descriptions-item label="batchId">{{ generateResult.batchId || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="reviewIds">{{ generateResult.reviewIds?.join(', ') || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="aiCallLogId">{{ generateResult.aiCallLogId || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="generatedCount">
+                <el-descriptions-item label="批次编号">{{ generateResult.batchId || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="审核题编号">{{ generateResult.reviewIds?.join(', ') || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="AI 调用日志">{{ generateResult.aiCallLogId || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="生成数量">
                   {{ generateResult.generatedCount ?? generateResult.successCount ?? generateResult.count ?? '-' }}
                 </el-descriptions-item>
-                <el-descriptions-item label="message">{{ generateResult.message || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="failedReason">{{ generateResult.failedReason || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="结果说明">{{ generateResult.message || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="失败原因">{{ generateResult.failedReason || '-' }}</el-descriptions-item>
               </el-descriptions>
             </div>
           </div>
@@ -287,7 +325,7 @@
                 <el-input v-model.trim="reviewQuery.keyword" clearable placeholder="标题 / 题干 / 知识点" />
               </el-form-item>
               <el-form-item label="批次">
-                <el-input v-model.trim="reviewQuery.batchId" clearable placeholder="batchId" style="width: 220px" />
+                <el-input v-model.trim="reviewQuery.batchId" clearable placeholder="批次编号" style="width: 220px" />
               </el-form-item>
               <el-form-item label="状态">
                 <el-select v-model="reviewQuery.reviewStatus" clearable placeholder="全部" style="width: 130px">
@@ -303,7 +341,7 @@
               </el-form-item>
             </el-form>
           </div>
-          <div class="review-batch-toolbar">
+          <div v-if="canReviewQuestion" class="review-batch-toolbar">
             <span>已选择 {{ selectedPendingReviewIds.length }} 条待审核记录</span>
             <el-space>
               <el-button
@@ -332,10 +370,24 @@
               row-key="id"
               @selection-change="handleReviewSelectionChange"
             >
+              <template #empty>
+                <AppState v-if="reviewError" type="error" title="审核池加载失败" :description="reviewError">
+                  <el-button type="primary" :loading="reviewLoading" @click="fetchReviews">重新加载</el-button>
+                </AppState>
+                <el-empty v-else description="暂无匹配的审核题目">
+                  <el-button @click="resetReviewQuery">清空筛选</el-button>
+                </el-empty>
+              </template>
               <el-table-column type="selection" width="48" :selectable="isPendingReview" />
-              <el-table-column prop="questionTitle" label="题目" min-width="240" show-overflow-tooltip />
-              <el-table-column prop="targetPosition" label="目标岗位" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="knowledgePoint" label="知识点" min-width="140" show-overflow-tooltip />
+              <el-table-column label="题目" min-width="240" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.questionTitle) }}</template>
+              </el-table-column>
+              <el-table-column label="目标岗位" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.targetPosition) }}</template>
+              </el-table-column>
+              <el-table-column label="知识点" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ displayReviewText(row.knowledgePoint) }}</template>
+              </el-table-column>
               <el-table-column prop="difficulty" label="难度" width="110" />
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
@@ -345,21 +397,20 @@
                 </template>
               </el-table-column>
               <el-table-column prop="createdAt" label="生成时间" min-width="170" />
-              <el-table-column label="操作" width="300" fixed="right">
+              <el-table-column label="操作" width="170">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
-                  <el-button link type="success" :disabled="row.reviewStatus !== 'PENDING'" @click="openReviewDrawer(row.id)">
-                    编辑通过
-                  </el-button>
-                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleApproveReview(row.id)">
-                    通过
-                  </el-button>
-                  <el-button link type="danger" :disabled="row.reviewStatus !== 'PENDING'" @click="handleRejectReview(row.id)">
-                    驳回
-                  </el-button>
-                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleCancelReview(row.id)">
-                    作废
-                  </el-button>
+                  <el-dropdown v-if="canReviewQuestion" trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleReviewCommand(row.id, command)">
+                    <el-button text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多审核操作" />
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="editApprove">编辑通过</el-dropdown-item>
+                        <el-dropdown-item command="approve">通过</el-dropdown-item>
+                        <el-dropdown-item command="reject" divided>驳回</el-dropdown-item>
+                        <el-dropdown-item command="cancel">作废</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -472,39 +523,46 @@
               <el-form-item>
                 <el-button type="primary" @click="fetchDuplicates">查询</el-button>
                 <el-button @click="resetDuplicateQuery">重置</el-button>
-                <el-button :loading="duplicateChecking" @click="handleCheckDuplicates">检测当前页</el-button>
-                <el-button :loading="duplicateEvaluating" :disabled="duplicates.length === 0" @click="handleEvaluateDuplicates">Evaluate Candidates</el-button>
+                <el-button v-if="canDedupeQuestion" :loading="duplicateChecking" @click="handleCheckDuplicates">检测当前页</el-button>
+                <el-button
+                  v-if="canDedupeQuestion"
+                  :loading="duplicateEvaluating"
+                  :disabled="duplicates.length === 0"
+                  @click="handleEvaluateDuplicates"
+                >
+                  评估候选
+                </el-button>
               </el-form-item>
             </el-form>
           </div>
           <div v-if="duplicateEvaluation" class="duplicate-evaluation-panel">
             <div class="duplicate-evaluation-panel__head">
               <div>
-                <strong>Evaluation Snapshot</strong>
-                <span>{{ duplicateEvaluation.evaluatedCount || 0 }} evaluated / {{ duplicateEvaluation.sampleCount || 0 }} samples</span>
+                <strong>评估概览</strong>
+                <span>已评估 {{ duplicateEvaluation.evaluatedCount || 0 }} / 样本 {{ duplicateEvaluation.sampleCount || 0 }}</span>
               </div>
               <el-tag :type="duplicateEvaluation.failedCount ? 'warning' : 'success'" effect="light">
-                Accuracy {{ formatRate(duplicateEvaluation.accuracyRate) }}
+                准确率 {{ formatRate(duplicateEvaluation.accuracyRate) }}
               </el-tag>
             </div>
             <div class="duplicate-evaluation-grid">
               <article>
-                <span>Passed</span>
+                <span>通过</span>
                 <strong>{{ duplicateEvaluation.passedCount || 0 }}</strong>
               </article>
               <article>
-                <span>Failed</span>
+                <span>失败</span>
                 <strong>{{ duplicateEvaluation.failedCount || 0 }}</strong>
               </article>
               <article>
-                <span>Missing</span>
+                <span>缺失</span>
                 <strong>{{ duplicateEvaluation.missingQuestionCount || 0 }}</strong>
               </article>
             </div>
             <div v-if="duplicateEvaluationFailures.length" class="duplicate-evaluation-failures">
               <article v-for="item in duplicateEvaluationFailures" :key="item.caseId || `${item.sourceQuestionId}-${item.targetQuestionId}`">
                 <strong>{{ item.caseId || `#${item.sourceQuestionId} / #${item.targetQuestionId}` }}</strong>
-                <span>expected {{ item.expected || '-' }} / predicted {{ item.predicted || '-' }} / {{ formatSimilarity(item.score) }}</span>
+                <span>期望 {{ duplicateEvalExpectedLabel(item.expected) }} / 预测 {{ duplicateEvalExpectedLabel(item.predicted) }} / {{ formatSimilarity(item.score) }}</span>
                 <small>{{ item.reason || item.note || '-' }}</small>
               </article>
             </div>
@@ -512,44 +570,45 @@
           <div class="duplicate-eval-dataset" v-loading="duplicateEvalCaseLoading || duplicateEvalRunLoading">
             <div class="duplicate-eval-dataset__head">
               <div>
-                <strong>Persistent Evaluation</strong>
-                <span>{{ duplicateEvalCaseTotal || 0 }} cases ? {{ duplicateEvalLatestRunSummary }}</span>
+                <strong>持续评估</strong>
+                <span>{{ duplicateEvalCaseTotal || 0 }} 个样本 · {{ duplicateEvalLatestRunSummary }}</span>
               </div>
               <div class="duplicate-eval-dataset__actions">
                 <el-button
+                  v-if="canDedupeQuestion"
                   :loading="duplicateEvalSaving"
                   :disabled="!duplicateEvalHasCurrentCandidates"
                   @click="saveCurrentDuplicateEvalCases"
                 >
-                  Save Page Cases
+                  保存当前页样本
                 </el-button>
-                <el-button type="primary" :loading="duplicateEvalRunning" @click="runDuplicateEvalCases">
-                  Run Enabled
+                <el-button v-if="canDedupeQuestion" type="primary" :loading="duplicateEvalRunning" @click="runDuplicateEvalCases">
+                  运行启用样本
                 </el-button>
-                <el-button :loading="duplicateThresholdSweeping" @click="sweepDuplicateThresholds">
-                  Threshold Sweep
+                <el-button v-if="canDedupeQuestion" :loading="duplicateThresholdSweeping" @click="sweepDuplicateThresholds">
+                  阈值扫描
                 </el-button>
-                <el-button @click="refreshDuplicateEvalWorkspace">Refresh</el-button>
+                <el-button @click="refreshDuplicateEvalWorkspace">刷新</el-button>
               </div>
             </div>
 
             <div v-if="duplicateThresholdSweep" class="duplicate-threshold-panel">
               <div class="duplicate-threshold-panel__head">
                 <div>
-                  <strong>Recommended threshold {{ duplicateThresholdSweep.bestThreshold ?? '--' }}</strong>
+                  <strong>推荐阈值 {{ duplicateThresholdSweep.bestThreshold ?? '--' }}</strong>
                   <span>
-                    F1 {{ formatRate(duplicateThresholdSweep.bestF1) }} / Precision {{ formatRate(duplicateThresholdSweep.bestPrecision) }} / Recall {{ formatRate(duplicateThresholdSweep.bestRecall) }}
+                    F1 {{ formatRate(duplicateThresholdSweep.bestF1) }} / 精确率 {{ formatRate(duplicateThresholdSweep.bestPrecision) }} / 召回率 {{ formatRate(duplicateThresholdSweep.bestRecall) }}
                   </span>
                 </div>
                 <el-tag type="info" effect="plain">
-                  {{ duplicateThresholdSweep.evaluatedCount || 0 }} evaluated
+                  已评估 {{ duplicateThresholdSweep.evaluatedCount || 0 }}
                 </el-tag>
               </div>
               <div class="duplicate-threshold-grid">
                 <article v-for="bucket in duplicateThresholdSweep.buckets || []" :key="bucket.threshold">
                   <span>{{ bucket.threshold }}</span>
                   <strong>{{ formatRate(bucket.f1) }}</strong>
-                  <small>P {{ formatRate(bucket.precision) }} / R {{ formatRate(bucket.recall) }} / workload {{ formatRate(bucket.reviewWorkloadRate) }}</small>
+                  <small>精确率 {{ formatRate(bucket.precision) }} / 召回率 {{ formatRate(bucket.recall) }} / 工作量 {{ formatRate(bucket.reviewWorkloadRate) }}</small>
                 </article>
               </div>
             </div>
@@ -558,47 +617,47 @@
               <el-input
                 v-model.trim="duplicateEvalCaseQuery.keyword"
                 clearable
-                placeholder="case / question"
+                placeholder="样本 / 题目"
                 @keyup.enter="fetchDuplicateEvalCases"
               />
-              <el-select v-model="duplicateEvalCaseQuery.expected" clearable placeholder="expected">
-                <el-option label="Duplicate" value="DUPLICATE" />
-                <el-option label="Review" value="REVIEW" />
-                <el-option label="Not duplicate" value="NOT_DUPLICATE" />
+              <el-select v-model="duplicateEvalCaseQuery.expected" clearable placeholder="期望结果">
+                <el-option label="重复" value="DUPLICATE" />
+                <el-option label="待复核" value="REVIEW" />
+                <el-option label="不重复" value="NOT_DUPLICATE" />
               </el-select>
-              <el-select v-model="duplicateEvalCaseQuery.enabled" clearable placeholder="enabled">
-                <el-option label="Enabled" :value="1" />
-                <el-option label="Disabled" :value="0" />
+              <el-select v-model="duplicateEvalCaseQuery.enabled" clearable placeholder="状态">
+                <el-option label="启用" :value="1" />
+                <el-option label="停用" :value="0" />
               </el-select>
-              <el-button type="primary" @click="fetchDuplicateEvalCases">Query</el-button>
+              <el-button type="primary" @click="fetchDuplicateEvalCases">查询</el-button>
             </div>
 
             <div class="duplicate-eval-dataset__body">
               <div class="duplicate-eval-cases">
                 <el-table :data="duplicateEvalCases" row-key="id" size="small" max-height="260">
-                  <el-table-column prop="caseId" label="Case" min-width="150" show-overflow-tooltip />
-                  <el-table-column label="Pair" min-width="240" show-overflow-tooltip>
+                  <el-table-column prop="caseId" label="样本编号" min-width="150" show-overflow-tooltip />
+                  <el-table-column label="题目对" min-width="240" show-overflow-tooltip>
                     <template #default="{ row }">
                       <span>#{{ row.sourceQuestionId }} / #{{ row.targetQuestionId }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="Expected" width="130">
+                  <el-table-column label="期望结果" width="130">
                     <template #default="{ row }">
                       <el-tag :type="duplicateEvalExpectedType(row.expected)" effect="plain">
-                        {{ row.expected || '-' }}
+                        {{ duplicateEvalExpectedLabel(row.expected) }}
                       </el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="Status" width="105">
+                  <el-table-column label="状态" width="105">
                     <template #default="{ row }">
                       <el-tag :type="row.enabled === 1 ? 'success' : 'info'" effect="plain">
-                        {{ row.enabled === 1 ? 'Enabled' : 'Disabled' }}
+                        {{ row.enabled === 1 ? '启用' : '停用' }}
                       </el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="Action" width="96" fixed="right">
+                  <el-table-column v-if="canDedupeQuestion" label="操作" width="96" fixed="right">
                     <template #default="{ row }">
-                      <el-button link type="danger" @click="deleteDuplicateEvalCase(row.id)">Delete</el-button>
+                      <el-button link type="danger" @click="deleteDuplicateEvalCase(row.id)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -615,8 +674,8 @@
 
               <div class="duplicate-eval-runs" v-loading="duplicateEvalRunDetailLoading">
                 <div class="duplicate-eval-runs__head">
-                  <strong>Recent Runs</strong>
-                  <el-button link type="primary" @click="fetchDuplicateEvalRuns">Reload</el-button>
+                  <strong>最近运行</strong>
+                  <el-button link type="primary" @click="fetchDuplicateEvalRuns">刷新</el-button>
                 </div>
                 <button
                   v-for="run in duplicateEvalRuns"
@@ -627,9 +686,9 @@
                 >
                   <span>{{ run.runNo || `#${run.id}` }}</span>
                   <strong>{{ formatRate(run.accuracyRate) }}</strong>
-                  <small>{{ run.status || '-' }} ? {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
+                  <small>{{ run.status || '-' }} · {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
                 </button>
-                <el-empty v-if="!duplicateEvalRuns.length" description="No runs" />
+                <el-empty v-if="!duplicateEvalRuns.length" description="暂无运行记录" />
               </div>
             </div>
 
@@ -642,14 +701,14 @@
               </div>
               <div v-if="duplicateEvalLatestFailures.length" class="duplicate-eval-failures">
                 <article v-for="item in duplicateEvalLatestFailures" :key="item.id || item.caseId">
-                  <strong>{{ item.caseId || `case-${item.evalCaseId || '-'}` }}</strong>
-                  <span>{{ item.expected || '-' }} / {{ item.predicted || '-' }} / {{ formatSimilarity(item.score) }}</span>
+                  <strong>{{ item.caseId || `样本-${item.evalCaseId || '-'}` }}</strong>
+                  <span>期望 {{ duplicateEvalExpectedLabel(item.expected) }} / 预测 {{ duplicateEvalExpectedLabel(item.predicted) }} / {{ formatSimilarity(item.score) }}</span>
                   <small>{{ item.reason || item.note || '-' }}</small>
                 </article>
               </div>
             </div>
           </div>
-          <div class="review-batch-toolbar duplicate-batch-toolbar">
+          <div v-if="canDedupeQuestion" class="review-batch-toolbar duplicate-batch-toolbar">
             <span>已选择 {{ selectedPendingDuplicateIds.length }} 条待处理候选</span>
             <el-space>
               <el-button
@@ -678,6 +737,14 @@
               row-key="id"
               @selection-change="handleDuplicateSelectionChange"
             >
+              <template #empty>
+                <AppState v-if="duplicateError" type="error" title="重复题候选加载失败" :description="duplicateError">
+                  <el-button type="primary" :loading="duplicateLoading" @click="fetchDuplicates">重新加载</el-button>
+                </AppState>
+                <el-empty v-else description="暂无匹配的重复题候选">
+                  <el-button @click="resetDuplicateQuery">清空筛选</el-button>
+                </el-empty>
+              </template>
               <el-table-column type="selection" width="48" :selectable="isPendingDuplicate" />
               <el-table-column prop="sourceTitle" label="源题" min-width="220" show-overflow-tooltip />
               <el-table-column prop="targetTitle" label="疑似重复题" min-width="220" show-overflow-tooltip />
@@ -736,17 +803,20 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="150">
                 <template #default="{ row }">
                   <el-button link type="info" @click="openDuplicateDrawer(row.id)">
                     详情
                   </el-button>
-                  <el-button link type="primary" :disabled="row.reviewStatus !== 'PENDING'" @click="handleMergeDuplicate(row.id)">
-                    合并
-                  </el-button>
-                  <el-button link type="warning" :disabled="row.reviewStatus !== 'PENDING'" @click="handleIgnoreDuplicate(row.id)">
-                    忽略
-                  </el-button>
+                  <el-dropdown v-if="canDedupeQuestion" trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleDuplicateCommand(row.id, command)">
+                    <el-button text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多重复题操作" />
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="merge">合并</el-dropdown-item>
+                        <el-dropdown-item command="ignore">忽略</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </template>
               </el-table-column>
             </el-table>
@@ -846,6 +916,7 @@
       <template #footer>
         <el-button @click="duplicateDrawerVisible = false">关闭</el-button>
         <el-button
+          v-if="canDedupeQuestion"
           type="primary"
           :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
           @click="duplicateDetail && handleMergeDuplicate(duplicateDetail.id)"
@@ -853,6 +924,7 @@
           合并
         </el-button>
         <el-button
+          v-if="canDedupeQuestion"
           type="warning"
           :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
           @click="duplicateDetail && handleIgnoreDuplicate(duplicateDetail.id)"
@@ -867,25 +939,25 @@
           <section class="review-detail-section">
             <div class="review-detail-section__title">AI 原始建议</div>
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="题目标题">{{ reviewDetail.questionTitle || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="目标岗位">{{ reviewDetail.targetPosition || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="分类建议">{{ reviewDetail.categorySuggestion || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="题组建议">{{ reviewDetail.groupSuggestion || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="题目标题">{{ displayReviewText(reviewDetail.questionTitle) }}</el-descriptions-item>
+              <el-descriptions-item label="目标岗位">{{ displayReviewText(reviewDetail.targetPosition) }}</el-descriptions-item>
+              <el-descriptions-item label="分类建议">{{ displayReviewText(reviewDetail.categorySuggestion) }}</el-descriptions-item>
+              <el-descriptions-item label="题组建议">{{ displayReviewText(reviewDetail.groupSuggestion) }}</el-descriptions-item>
               <el-descriptions-item label="状态">{{ getReviewStatusLabel(reviewDetail.reviewStatus) }}</el-descriptions-item>
               <el-descriptions-item label="更新时间">{{ reviewDetail.updatedAt || '-' }}</el-descriptions-item>
             </el-descriptions>
             <div class="review-json-grid">
               <div class="review-json-card">
                 <span>题干</span>
-                <pre>{{ reviewDetail.questionContent || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.questionContent) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>参考答案</span>
-                <pre>{{ reviewDetail.referenceAnswer || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.referenceAnswer) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>解析</span>
-                <pre>{{ reviewDetail.analysis || '-' }}</pre>
+                <pre>{{ displayReviewText(reviewDetail.analysis) }}</pre>
               </div>
               <div class="review-json-card">
                 <span>追问建议</span>
@@ -979,6 +1051,7 @@
       <template #footer>
         <el-button @click="reviewDrawerVisible = false">关闭</el-button>
         <el-button
+          v-if="canReviewQuestion"
           type="warning"
           :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
           @click="reviewDetail && handleCancelReview(reviewDetail.id)"
@@ -986,6 +1059,7 @@
           作废
         </el-button>
         <el-button
+          v-if="canReviewQuestion"
           type="primary"
           :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
           :loading="reviewApproveSaving"
@@ -1091,7 +1165,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BookOpenCheck, Download, Plus, RefreshCw, Upload } from 'lucide-vue-next'
+import { AlertTriangle, BookOpenCheck, Download, MoreHorizontal, Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -1138,6 +1212,7 @@ import { getQuestionDuplicateConfigApi } from '@/api/analytics'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
+import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import {
   difficultyOptions,
@@ -1146,6 +1221,7 @@ import {
   QUESTION_TYPE,
   questionTypeOptions
 } from '@/constants/enums'
+import { useAuthStore } from '@/stores/auth'
 import type {
   AdminQuestionQueryDTO,
   AdminQuestionVO,
@@ -1174,6 +1250,8 @@ import type {
   QuestionTagVO
 } from '@/types/question'
 import type { QuestionDuplicateConfigVO } from '@/types/analytics'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 type GovernanceTab = 'generate' | 'reviews' | 'duplicates'
 
@@ -1190,6 +1268,7 @@ const props = withDefaults(
 
 const loading = ref(false)
 const route = useRoute()
+const authStore = useAuthStore()
 const saving = ref(false)
 const dialogLoading = ref(false)
 const dialogVisible = ref(false)
@@ -1239,8 +1318,13 @@ const duplicateConfig = ref<QuestionDuplicateConfigVO | null>(null)
 const duplicateFeedbackStats = ref<QuestionDuplicateFeedbackStatsVO | null>(null)
 const duplicateEvaluation = ref<QuestionDuplicateEvaluationVO | null>(null)
 const duplicateThresholdSweeping = ref(false)
+const embeddingFailedCount = ref<number | null>(null)
 const reviewTotal = ref(0)
 const duplicateTotal = ref(0)
+const questionError = ref('')
+const reviewError = ref('')
+const duplicateError = ref('')
+const generateError = ref('')
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
 const generateSseEvents = ref<Array<{ type: string; stage?: string; message: string; display: string }>>([])
 const generateSseMessage = ref('')
@@ -1338,7 +1422,7 @@ const duplicateEvalCaseIds = computed(() => new Set(duplicateEvalCases.value.map
 const duplicateEvalHasCurrentCandidates = computed(() => duplicates.value.some((item) => item.sourceQuestionId && item.targetQuestionId))
 const duplicateEvalLatestRunSummary = computed(() => {
   const run = duplicateEvalLatestRun.value
-  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.accuracyRate)}` : 'No run yet'
+  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.accuracyRate)}` : '暂无运行'
 })
 
 const rules: FormRules<QuestionCreateDTO> = {
@@ -1358,6 +1442,30 @@ const difficultyStats = computed(() => ({
   MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
   HARD: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.HARD).length
 }))
+const hasQuestionFilters = computed(() =>
+  Boolean(query.keyword || query.questionId || query.categoryId || query.tagId || query.difficulty || query.status !== '')
+)
+const questionEmptyDescription = computed(() =>
+  hasQuestionFilters.value ? '没有匹配当前筛选条件的题目' : '题库暂无题目，先新增或批量导入'
+)
+const isQuestionBankEmpty = computed(() => !loading.value && !hasQuestionFilters.value && total.value === 0)
+const showEmbeddingActions = computed(() => !isQuestionBankEmpty.value)
+const canWriteQuestion = computed(() => authStore.hasPermission('admin:question:write'))
+const canImportQuestion = computed(() => authStore.hasPermission('admin:question:import'))
+const canExportQuestion = computed(() => authStore.hasPermission('admin:question:export'))
+const canGenerateQuestion = computed(() => authStore.hasPermission('admin:question:generate'))
+const canReviewQuestion = computed(() => authStore.hasPermission('admin:question:review'))
+const canDedupeQuestion = computed(() => authStore.hasPermission('admin:question:dedupe'))
+const canRebuildEmbedding = computed(() => authStore.hasPermission('admin:question:embedding:rebuild'))
+const canRetryEmbedding = computed(() => canRebuildEmbedding.value && (embeddingFailedCount.value || 0) > 0)
+const embeddingRetryLabel = computed(() =>
+  embeddingFailedCount.value ? `重试失败向量 ${embeddingFailedCount.value}` : '重试失败向量'
+)
+const embeddingActionHint = computed(() => {
+  if (embeddingFailedCount.value === null) return '先查看向量状态，再处理失败索引。'
+  if (embeddingFailedCount.value > 0) return '检测到失败索引，可按需重试。'
+  return '当前未检测到失败索引。'
+})
 const selectedPendingReviewIds = computed(() =>
   selectedReviewRows.value
     .filter((item) => item.reviewStatus === 'PENDING')
@@ -1384,7 +1492,7 @@ const governancePageTitle = computed(() => {
   return '重复题审核'
 })
 const governancePageDesc = computed(() => {
-  if (governanceTab.value === 'generate') return '生成结果进入后端审核池，不在前端伪造题目内容。'
+  if (governanceTab.value === 'generate') return '生成结果进入审核池，审核通过后再发布到正式题库。'
   if (governanceTab.value === 'reviews') return '处理 AI 生成题目的审核、编辑通过和批量驳回。'
   return '处理疑似重复题的合并和忽略，保持题库质量。'
 })
@@ -1532,6 +1640,13 @@ const duplicateEvalExpectedType = (expected?: string) => {
   return 'info'
 }
 
+const duplicateEvalExpectedLabel = (expected?: string) => {
+  if (expected === 'DUPLICATE') return '重复'
+  if (expected === 'REVIEW') return '待复核'
+  if (expected === 'NOT_DUPLICATE') return '不重复'
+  return expected || '-'
+}
+
 const formatJsonText = (value?: string) => {
   if (!value) return '-'
   try {
@@ -1539,6 +1654,19 @@ const formatJsonText = (value?: string) => {
   } catch {
     return value
   }
+}
+
+const hasGarbledText = (value?: string) => {
+  if (!value) return false
+  const compact = value.replace(/\s/g, '')
+  if (/[�]/.test(compact)) return true
+  const questionMarks = compact.match(/\?/g)?.length || 0
+  return questionMarks >= 3 && questionMarks / Math.max(compact.length, 1) >= 0.25
+}
+
+const displayReviewText = (value?: string, fallback = '-') => {
+  if (!value) return fallback
+  return hasGarbledText(value) ? '疑似编码异常，待人工修复' : value
 }
 
 const parseNumberArray = (value?: string): number[] => {
@@ -1771,13 +1899,15 @@ const fetchOptions = async () => {
 
 const fetchQuestions = async () => {
   loading.value = true
+  questionError.value = ''
   try {
     const result = await getAdminQuestionsApi(query)
     questions.value = result.records || []
     total.value = result.total || 0
-  } catch {
+  } catch (error) {
     questions.value = []
     total.value = 0
+    questionError.value = getErrorMessage(error, '题目列表暂时加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -1797,17 +1927,32 @@ const applyFailureQuery = () => {
   }
 }
 
+const firstQueryText = (value: unknown) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+const applyReviewRouteQuery = () => {
+  const reviewStatus = firstQueryText(route.query.reviewStatus)
+  const batchId = firstQueryText(route.query.batchId)
+  reviewQuery.reviewStatus = reviewStatus || 'PENDING'
+  reviewQuery.batchId = batchId
+  reviewQuery.pageNo = 1
+}
+
 const fetchReviews = async () => {
   reviewLoading.value = true
+  reviewError.value = ''
   try {
     const result = await getQuestionReviewsApi(reviewQuery)
     reviews.value = result.records || []
     reviewTotal.value = result.total || 0
     selectedReviewRows.value = []
-  } catch {
+  } catch (error) {
     reviews.value = []
     reviewTotal.value = 0
     selectedReviewRows.value = []
+    reviewError.value = getErrorMessage(error, '审核池暂时加载失败，请稍后重试。')
   } finally {
     reviewLoading.value = false
   }
@@ -1823,7 +1968,7 @@ const openReviewDrawer = async (id: number) => {
     reviewDetail.value = detail
     resetReviewApproveForm(detail)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '审核详情加载失败')
+    ElMessage.error(getErrorMessage(error, '审核详情加载失败'))
   } finally {
     reviewDetailLoading.value = false
   }
@@ -1889,7 +2034,7 @@ const openDuplicateEvalRun = async (id?: number) => {
   try {
     duplicateEvalLatestRun.value = await getQuestionDuplicateEvalRunApi(id)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Evaluation run load failed')
+    ElMessage.error(getErrorMessage(error, '评估运行记录加载失败'))
   } finally {
     duplicateEvalRunDetailLoading.value = false
   }
@@ -1909,13 +2054,14 @@ const openDuplicateDrawer = async (id: number) => {
   try {
     duplicateDetail.value = await getQuestionDuplicateReviewDetailApi(id)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '重复候选详情加载失败')
+    ElMessage.error(getErrorMessage(error, '重复候选详情加载失败'))
   } finally {
     duplicateDetailLoading.value = false
   }
 }
 const fetchDuplicates = async () => {
   duplicateLoading.value = true
+  duplicateError.value = ''
   try {
     const result = await getQuestionDuplicateReviewsApi({
       ...duplicateQuery,
@@ -1924,10 +2070,11 @@ const fetchDuplicates = async () => {
     duplicates.value = result.records || []
     duplicateTotal.value = result.total || 0
     selectedDuplicateRows.value = []
-  } catch {
+  } catch (error) {
     duplicates.value = []
     duplicateTotal.value = 0
     selectedDuplicateRows.value = []
+    duplicateError.value = getErrorMessage(error, '重复题候选暂时加载失败，请稍后重试。')
   } finally {
     duplicateLoading.value = false
   }
@@ -1951,6 +2098,10 @@ const fillQuestionForm = (row?: AdminQuestionVO) => {
 }
 
 const openDialog = async (row?: AdminQuestionVO) => {
+  if (!canWriteQuestion.value) {
+    ElMessage.warning('当前账号没有题目写权限，操作未提交。')
+    return
+  }
   editingId.value = row?.id || null
   fillQuestionForm(row)
   dialogVisible.value = true
@@ -1963,13 +2114,17 @@ const openDialog = async (row?: AdminQuestionVO) => {
       fillQuestionForm(detail)
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '题目详情加载失败，请稍后重试')
+    ElMessage.error(getErrorMessage(error, '题目详情加载失败，请稍后重试'))
   } finally {
     dialogLoading.value = false
   }
 }
 
 const handleSave = async () => {
+  if (!canWriteQuestion.value) {
+    ElMessage.warning('当前账号没有题目写权限，操作未提交。')
+    return
+  }
   if (dialogLoading.value) return
   if (!formRef.value) return
   try {
@@ -1993,17 +2148,49 @@ const handleSave = async () => {
 }
 
 const handleStatus = async (row: AdminQuestionVO) => {
+  if (!canWriteQuestion.value) {
+    ElMessage.warning('当前账号没有题目写权限，操作未提交。')
+    return
+  }
   const nextStatus = row.status === 1 ? 0 : 1
+  const actionLabel = nextStatus === 1 ? '启用' : '禁用'
+  try {
+    await ElMessageBox.confirm(
+      `确认${actionLabel}题目「${row.title}」？${nextStatus === 0 ? '禁用后用户侧将不再展示该题目。' : '启用后该题目会重新进入可用题库。'}`,
+      `${actionLabel}题目`,
+      {
+        type: nextStatus === 1 ? 'info' : 'warning',
+        confirmButtonText: `确认${actionLabel}`,
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   await updateAdminQuestionStatusApi(row.id, nextStatus)
   ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
   await fetchQuestions()
 }
 
 const handleDelete = async (row: AdminQuestionVO) => {
+  if (!canWriteQuestion.value) {
+    ElMessage.warning('当前账号没有题目写权限，操作未提交。')
+    return
+  }
   await ElMessageBox.confirm(`确认删除题目 ${row.title}？`, '删除确认', { type: 'warning' })
   await deleteAdminQuestionApi(row.id)
   ElMessage.success('题目已删除')
   await fetchQuestions()
+}
+
+const handleQuestionCommand = (row: AdminQuestionVO, command: string) => {
+  if (command === 'status') {
+    void handleStatus(row)
+    return
+  }
+  if (command === 'delete') {
+    void handleDelete(row)
+  }
 }
 
 const handleSearch = () => {
@@ -2059,6 +2246,7 @@ const resetGenerateForm = () => {
     extraRequirements: ''
   })
   generateResult.value = null
+  generateError.value = ''
   generateSseEvents.value = []
   generateSseMessage.value = ''
   generateSseStatus.value = '未开始'
@@ -2101,9 +2289,30 @@ const completeGenerateFlow = async (result: AiQuestionGenerateResultVO) => {
 }
 
 const runSyncGenerateFallback = async () => {
-  generateSseStatus.value = '同步 fallback'
-  generateSseMessage.value = 'SSE 未启动成功，已回退到原同步生成接口。'
+  generateSseStatus.value = '同步生成'
+  generateSseMessage.value = '阶段式进度未启动，已改用同步生成。'
   await completeGenerateFlow(await generateAiQuestionsApi(normalizeGeneratePayload()))
+}
+
+const generateSseStageLabel = (stage?: string) => {
+  const normalized = (stage || '').trim().toUpperCase()
+  const labels: Record<string, string> = {
+    START: '开始生成',
+    INIT: '准备生成',
+    VALIDATE_REQUEST: '校验请求',
+    REQUEST_VALIDATED: '请求已校验',
+    CALL_AI: '调用 AI',
+    AI_CALLING: '调用 AI',
+    AI_STREAMING: 'AI 生成中',
+    PARSE_RESULT: '解析结果',
+    RESULT: '生成结果',
+    SAVE_REVIEW: '写入审核池',
+    SAVE_REVIEWS: '写入审核池',
+    DONE: '生成完成',
+    ERROR: '生成失败',
+    FALLBACK: '基础生成'
+  }
+  return labels[normalized] || ''
 }
 
 const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) => {
@@ -2116,23 +2325,25 @@ const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) =
     done: 'AI 题目生成完成',
     error: 'AI 题目生成失败'
   }
-  const message = type === 'delta' ? data?.content || data?.message || messageMap[type] : data?.message || messageMap[type] || type
+  const rawMessage = type === 'delta' ? data?.message || messageMap[type] : data?.message || messageMap[type] || type
+  const message = toFriendlyMessage(rawMessage, messageMap[type] || 'AI 题目生成进行中')
+  const stageLabel = generateSseStageLabel(data?.stage) || generateSseStageLabel(type)
   const result = resolveGenerateResult(data, generateResult.value)
   const metadataParts =
     type === 'result' || type === 'done'
       ? [
-          result.batchId ? `batchId=${result.batchId}` : '',
-          result.generatedCount != null ? `count=${result.generatedCount}` : '',
-          result.reviewIds?.length ? `reviewIds=${result.reviewIds.length}` : '',
-          result.aiCallLogId ? `aiCallLogId=${result.aiCallLogId}` : ''
+          result.batchId ? `批次编号=${result.batchId}` : '',
+          result.generatedCount != null ? `生成数量=${result.generatedCount}` : '',
+          result.reviewIds?.length ? `审核题=${result.reviewIds.length}` : '',
+          result.aiCallLogId ? `AI 调用日志=${result.aiCallLogId}` : ''
         ].filter(Boolean)
       : []
-  const display = [data?.stage, message, ...metadataParts].filter(Boolean).join(' · ')
+  const display = [stageLabel, message, ...metadataParts].filter(Boolean).join(' · ')
   generateSseStatus.value = type
   generateSseMessage.value = display || message
   generateSseEvents.value.push({
     type,
-    stage: data?.stage,
+    stage: stageLabel,
     message,
     display: display || message
   })
@@ -2169,9 +2380,14 @@ const resolveGenerateResult = (
 }
 
 const handleGenerateReviews = async () => {
+  if (!canGenerateQuestion.value) {
+    ElMessage.warning('当前账号没有 AI 题目生成权限，操作未提交。')
+    return
+  }
   if (generating.value) return
   generateSseHandle.value?.abort()
   generating.value = true
+  generateError.value = ''
   generateResult.value = null
   generateSseEvents.value = []
   generateSseMessage.value = '正在启动阶段式生成进度。'
@@ -2200,9 +2416,15 @@ const handleGenerateReviews = async () => {
     }
   } catch (error) {
     if (!streamStarted) {
-      await runSyncGenerateFallback()
+      try {
+        await runSyncGenerateFallback()
+      } catch (fallbackError) {
+        generateError.value = getErrorMessage(fallbackError, 'AI 题目生成失败，请稍后重试。')
+        ElMessage.error(generateError.value)
+      }
     } else {
-      ElMessage.error(error instanceof Error ? error.message : 'AI 题目生成流中断，请稍后手动重试。')
+      generateError.value = getErrorMessage(error, 'AI 题目生成流中断，请稍后手动重试。')
+      ElMessage.error(generateError.value)
     }
   } finally {
     generating.value = false
@@ -2211,6 +2433,10 @@ const handleGenerateReviews = async () => {
 }
 
 const handleApproveReview = async (id: number) => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   await ElMessageBox.confirm('确认通过该 AI 题目并写入正式题库？', '审核通过', { type: 'warning' })
   await approveQuestionReviewApi(id)
   ElMessage.success('题目已通过审核')
@@ -2218,6 +2444,10 @@ const handleApproveReview = async (id: number) => {
 }
 
 const handleRejectReview = async (id: number) => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回题目', {
     inputType: 'textarea',
     inputValidator: (value) => Boolean(value?.trim()) || '请输入驳回原因'
@@ -2228,6 +2458,10 @@ const handleRejectReview = async (id: number) => {
 }
 
 const handleCancelReview = async (id: number) => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   const { value } = await ElMessageBox.prompt('请输入作废原因', '作废 AI 草稿', {
     inputType: 'textarea',
     inputPlaceholder: '例如：E2E 测试数据清理或生成内容不再需要',
@@ -2247,7 +2481,29 @@ const handleCancelReview = async (id: number) => {
   await fetchReviews()
 }
 
+const handleReviewCommand = (id: number, command: string) => {
+  if (command === 'editApprove') {
+    void openReviewDrawer(id)
+    return
+  }
+  if (command === 'approve') {
+    void handleApproveReview(id)
+    return
+  }
+  if (command === 'reject') {
+    void handleRejectReview(id)
+    return
+  }
+  if (command === 'cancel') {
+    void handleCancelReview(id)
+  }
+}
+
 const handleApproveReviewWithEdit = async () => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   if (!reviewDetail.value) return
   if (reviewDetail.value.reviewStatus !== 'PENDING') {
     ElMessage.warning('只有待审核题目可以编辑后通过')
@@ -2269,13 +2525,17 @@ const handleApproveReviewWithEdit = async () => {
     reviewDrawerVisible.value = false
     await Promise.all([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '编辑后通过失败')
+    ElMessage.error(getErrorMessage(error, '编辑后通过失败'))
   } finally {
     reviewApproveSaving.value = false
   }
 }
 
 const handleBatchApproveReviews = async () => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   const reviewIds = selectedPendingReviewIds.value
   if (!reviewIds.length) {
     ElMessage.warning('请先选择待审核记录')
@@ -2303,6 +2563,10 @@ const handleBatchApproveReviews = async () => {
 }
 
 const handleBatchRejectReviews = async () => {
+  if (!canReviewQuestion.value) {
+    ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
+    return
+  }
   const reviewIds = selectedPendingReviewIds.value
   if (!reviewIds.length) {
     ElMessage.warning('请先选择待审核记录')
@@ -2332,6 +2596,10 @@ const handleBatchRejectReviews = async () => {
 }
 
 const handleCheckDuplicates = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   const questionIds = questions.value.map((item) => item.id).filter(Boolean)
   if (!questionIds.length) {
     ElMessage.warning('当前页没有可检测题目')
@@ -2365,9 +2633,13 @@ const duplicateEvaluationSamples = () =>
     }))
 
 const handleEvaluateDuplicates = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   const samples = duplicateEvaluationSamples()
   if (!samples.length) {
-    ElMessage.warning('No evaluable duplicate candidates on this page')
+    ElMessage.warning('当前页没有可评估的重复题候选')
     return
   }
   duplicateEvaluating.value = true
@@ -2375,19 +2647,23 @@ const handleEvaluateDuplicates = async () => {
     duplicateEvaluation.value = await evaluateQuestionDuplicateApi({ samples })
     const result = duplicateEvaluation.value
     ElMessage.success(
-      `Evaluation done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, accuracy ${formatRate(result.accuracyRate)}`
+      `评估完成：${result.passedCount || 0}/${result.evaluatedCount || 0}，准确率 ${formatRate(result.accuracyRate)}`
     )
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Duplicate evaluation failed')
+    ElMessage.error(getErrorMessage(error, '重复题评估失败'))
   } finally {
     duplicateEvaluating.value = false
   }
 }
 
 const saveCurrentDuplicateEvalCases = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   const samples = duplicateEvaluationSamples()
   if (!samples.length) {
-    ElMessage.warning('No duplicate candidates can be saved on this page')
+    ElMessage.warning('当前页没有可保存的重复题候选')
     return
   }
   duplicateEvalSaving.value = true
@@ -2404,16 +2680,20 @@ const saveCurrentDuplicateEvalCases = async () => {
       })
       saved++
     }
-    ElMessage.success(`Saved ${saved} evaluation cases`)
+    ElMessage.success(`已保存 ${saved} 个评估样本`)
     await refreshDuplicateEvalWorkspace()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Evaluation cases save failed')
+    ElMessage.error(getErrorMessage(error, '评估样本保存失败'))
   } finally {
     duplicateEvalSaving.value = false
   }
 }
 
 const runDuplicateEvalCases = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   duplicateEvalRunning.value = true
   try {
     const result = await runQuestionDuplicateEvalApi({
@@ -2422,20 +2702,24 @@ const runDuplicateEvalCases = async () => {
     })
     duplicateEvalLatestRun.value = result
     ElMessage.success(
-      `Evaluation run done: ${result.passedCount || 0}/${result.evaluatedCount || 0}, accuracy ${formatRate(result.accuracyRate)}`
+      `评估运行完成：${result.passedCount || 0}/${result.evaluatedCount || 0}，准确率 ${formatRate(result.accuracyRate)}`
     )
     await fetchDuplicateEvalRuns()
     if (result.id) {
       await openDuplicateEvalRun(result.id)
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Evaluation run failed')
+    ElMessage.error(getErrorMessage(error, '评估运行失败'))
   } finally {
     duplicateEvalRunning.value = false
   }
 }
 
 const sweepDuplicateThresholds = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   duplicateThresholdSweeping.value = true
   try {
     const result = await sweepQuestionDuplicateThresholdApi({
@@ -2447,33 +2731,59 @@ const sweepDuplicateThresholds = async () => {
     })
     duplicateThresholdSweep.value = result
     ElMessage.success(
-      `Threshold sweep done: best ${result.bestThreshold ?? '--'}, F1 ${formatRate(result.bestF1)}`
+      `阈值扫描完成：推荐 ${result.bestThreshold ?? '--'}，F1 ${formatRate(result.bestF1)}`
     )
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Threshold sweep failed')
+    ElMessage.error(getErrorMessage(error, '阈值扫描失败'))
   } finally {
     duplicateThresholdSweeping.value = false
   }
 }
 
 const deleteDuplicateEvalCase = async (id?: number) => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   if (!id) return
-  await ElMessageBox.confirm('Delete this evaluation case?', 'Delete Evaluation Case', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(
+      '确认删除该重复题评估样本？删除后不会影响正式题库，但后续阈值评估将不再使用该样本。',
+      '删除评估样本高风险确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   try {
     await deleteQuestionDuplicateEvalCaseApi(id)
-    ElMessage.success('Evaluation case deleted')
+    ElMessage.success('评估样本已删除')
     await fetchDuplicateEvalCases()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Evaluation case delete failed')
+    ElMessage.error(getErrorMessage(error, '评估样本删除失败'))
   }
 }
 
 const handleRebuildEmbedding = async () => {
-  await ElMessageBox.confirm(
-    '将按更新时间重建最多 5000 道启用题目的文本指纹和向量索引，期间可能产生 embedding 调用成本。确认继续？',
-    '重建题目向量索引',
-    { type: 'warning' }
-  )
+  if (!canRebuildEmbedding.value) {
+    ElMessage.warning('当前账号没有重建向量索引权限，操作未提交。')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '重建题目向量索引高风险确认',
+    action: '重建启用题目的文本指纹和向量索引',
+    target: '最多处理 5000 道启用题目，按后端更新时间和索引状态执行。',
+    impact: '可能产生 Embedding 调用成本，并创建、覆盖或删除题目向量索引。',
+    rollback: '无法由前端一键恢复旧向量；如结果异常，需要重新执行修复或结合后端日志人工处理。',
+    audit: '后端会记录索引维护结果，页面会展示本次处理数量和失败明细。',
+    tips: ['建议先点击“向量状态”确认集合、维度和失败数量。', '避免在题库批量导入过程中同时重建索引。'],
+    confirmButtonText: '确认重建'
+  })
+  if (!confirmed) return
   embeddingRebuilding.value = true
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
@@ -2502,6 +2812,7 @@ const handleEmbeddingStats = async () => {
   embeddingStatsLoading.value = true
   try {
     const stats = await getQuestionEmbeddingStatsApi()
+    embeddingFailedCount.value = stats.failed || 0
     const statusLines = (stats.statusCounts || [])
       .map((item) => `${item.status || 'UNKNOWN'}: ${item.count || 0}`)
       .join('\n')
@@ -2513,16 +2824,16 @@ const handleEmbeddingStats = async () => {
       .join('\n')
     await ElMessageBox.alert(
       [
-        `Vector store: ${stats.vectorEnabled ? 'enabled' : 'disabled'}`,
-        `Index records: ${stats.total || 0}, failed: ${stats.failed || 0}`,
-        `Collection: ${stats.collection?.collectionName || 'question_embedding'} / ${stats.collection?.status || '--'}`,
-        `Dimension: ${stats.collection?.vectorSize || '--'}, points: ${stats.collection?.pointCount ?? '--'}`,
-        `Last indexed: ${stats.lastIndexedAt || '--'}, last failed: ${stats.lastFailedAt || '--'}`,
-        `Average text chars: ${stats.averageTextChars ?? '--'}`,
-        statusLines ? `\nStatus distribution:\n${statusLines}` : '',
-        dimensionLines ? `\nDimension distribution:\n${dimensionLines}` : '',
-        modelLines ? `\nEmbedding model distribution:\n${modelLines}` : '',
-        stats.collection?.errorMessage ? `\nError: ${stats.collection.errorMessage}` : ''
+        `语义检索：${stats.vectorEnabled ? '已启用' : '未启用'}`,
+        `索引记录：${stats.total || 0} 条，失败 ${stats.failed || 0} 条`,
+        `集合：${stats.collection?.collectionName || 'question_embedding'} / ${stats.collection?.status || '--'}`,
+        `维度：${stats.collection?.vectorSize || '--'}，向量点数：${stats.collection?.pointCount ?? '--'}`,
+        `最近索引：${stats.lastIndexedAt || '--'}，最近失败：${stats.lastFailedAt || '--'}`,
+        `平均文本长度：${stats.averageTextChars ?? '--'}`,
+        statusLines ? `\n状态分布：\n${statusLines}` : '',
+        dimensionLines ? `\n维度分布：\n${dimensionLines}` : '',
+        modelLines ? `\n向量模型分布：\n${modelLines}` : '',
+        stats.collection?.errorMessage ? `\n错误：${stats.collection.errorMessage}` : ''
       ].filter(Boolean).join('\n'),
       '题目向量索引状态',
       { type: stats.failed ? 'warning' : 'info' }
@@ -2533,14 +2844,25 @@ const handleEmbeddingStats = async () => {
 }
 
 const handleRetryFailedEmbedding = async () => {
-  await ElMessageBox.confirm(
-    '将重试最多 1000 条失败的题目向量索引记录，期间可能产生 embedding 调用成本。确认继续？',
-    '重试失败题目向量',
-    { type: 'warning' }
-  )
+  if (!canRebuildEmbedding.value) {
+    ElMessage.warning('当前账号没有重试向量索引权限，操作未提交。')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '重试失败题目向量确认',
+    action: '重试失败的题目向量索引记录',
+    target: '最多处理 1000 条失败题目向量索引记录。',
+    impact: '可能重新调用 Embedding 供应商，并创建或替换 Qdrant 向量点。',
+    rollback: '无法由前端撤销已写入的向量点；如仍失败，请结合失败明细和后端日志继续排查。',
+    audit: '后端会记录索引维护结果，页面会展示本次匹配、重试和失败明细。',
+    tips: ['确认失败原因不是模型维度变化或集合缺失。'],
+    confirmButtonText: '确认重试'
+  })
+  if (!confirmed) return
   embeddingRetrying.value = true
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
+    embeddingFailedCount.value = Math.max(0, (embeddingFailedCount.value || 0) - (result.retried || 0))
     const errors = result.errors || []
     const deleteSummary = result.vectorDeleted ? `，清理向量 ${result.vectorDeleted || 0} 条` : ''
     const summary = `重试完成：匹配 ${result.matched || 0} 条，已重试 ${result.retried || 0} 条${deleteSummary}`
@@ -2559,6 +2881,10 @@ const handleRetryFailedEmbedding = async () => {
 }
 
 const handleMergeDuplicate = async (id: number) => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   await ElMessageBox.confirm(
     '确认后会建立 SAME_INTENT 关系，并自动归入同一 canonical 题组；后续每日推荐、内部推荐会按题组/同意图排重。',
     '确认同意图重复题',
@@ -2577,18 +2903,42 @@ const handleMergeDuplicate = async (id: number) => {
 }
 
 const handleIgnoreDuplicate = async (id: number) => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
+  await ElMessageBox.confirm(
+    '确认忽略该重复候选？忽略后它会从待处理队列移出，不会建立重复关系。',
+    '忽略重复候选',
+    { type: 'warning', confirmButtonText: '继续填写原因', cancelButtonText: '取消' }
+  )
   const { value } = await ElMessageBox.prompt('请输入忽略原因', '忽略重复候选', {
     inputType: 'textarea',
-    inputPlaceholder: '例如：考察角度不同'
+    inputPlaceholder: '例如：考察角度不同',
+    inputValidator: (value) => Boolean(value?.trim()) || '请输入忽略原因'
   })
   await ignoreQuestionDuplicateReviewApi(id, {
-    ignoredReason: value?.trim() || '确认不是重复题'
+    ignoredReason: value.trim()
   })
   ElMessage.success('重复候选已忽略')
   await refreshDuplicateWorkspace()
 }
 
+const handleDuplicateCommand = (id: number, command: string) => {
+  if (command === 'merge') {
+    void handleMergeDuplicate(id)
+    return
+  }
+  if (command === 'ignore') {
+    void handleIgnoreDuplicate(id)
+  }
+}
+
 const handleBatchMergeDuplicates = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   const ids = selectedPendingDuplicateIds.value
   if (!ids.length) return
   await ElMessageBox.confirm(
@@ -2616,6 +2966,10 @@ const handleBatchMergeDuplicates = async () => {
 }
 
 const handleBatchIgnoreDuplicates = async () => {
+  if (!canDedupeQuestion.value) {
+    ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
+    return
+  }
   const ids = selectedPendingDuplicateIds.value
   if (!ids.length) return
   await ElMessageBox.confirm(
@@ -2662,7 +3016,24 @@ const importDuplicateReasonLabel = (code?: string) => {
 }
 
 const handleImport = async () => {
+  if (!canImportQuestion.value) {
+    ElMessage.warning('当前账号没有题目导入权限，操作未提交。')
+    return
+  }
   if (!importFile.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认导入文件「${importFile.value.name}」？后端会校验并写入题库记录，单次最多 500 条。`,
+      '确认批量导入题目',
+      {
+        type: 'warning',
+        confirmButtonText: '确认导入',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   importing.value = true
   try {
     const result = await importAdminQuestionsApi(importFile.value)
@@ -2691,6 +3062,10 @@ const handleImport = async () => {
 }
 
 const handleExport = async () => {
+  if (!canExportQuestion.value) {
+    ElMessage.warning('当前账号没有题目导出权限，操作未提交。')
+    return
+  }
   try {
     const res = await exportAdminQuestionsApi({ ...query })
     const blob = new Blob([res as unknown as BlobPart], {
@@ -2728,15 +3103,39 @@ const handleDownloadTemplate = async () => {
 
 onMounted(async () => {
   applyFailureQuery()
+  applyReviewRouteQuery()
   await fetchOptions()
-  await Promise.all([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+  if (!props.governanceOnly) {
+    await Promise.all([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+    return
+  }
+
+  if (governanceTab.value === 'reviews') {
+    await fetchReviews()
+  } else if (governanceTab.value === 'duplicates') {
+    await Promise.all([refreshDuplicateWorkspace(), fetchDuplicateConfig()])
+  }
 })
 
 watch(
   () => route.query.questionId,
   async () => {
     applyFailureQuery()
-    await fetchQuestions()
+    if (showQuestionManagement.value) {
+      await fetchQuestions()
+    } else if (showDuplicatesPane.value) {
+      await fetchDuplicates()
+    }
+  }
+)
+
+watch(
+  () => [route.query.reviewStatus, route.query.batchId],
+  async () => {
+    applyReviewRouteQuery()
+    if (showReviewsPane.value) {
+      await fetchReviews()
+    }
   }
 )
 
@@ -2753,6 +3152,76 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.question-governance-page {
+  .admin-hero {
+    padding-top: 6px;
+    padding-bottom: 18px;
+  }
+}
+
+.question-hero {
+  gap: 16px;
+}
+
+.question-hero-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.question-hero-actions__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.question-hero-actions__group > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.question-hero-actions__group--risk {
+  border-color: rgba(245, 158, 11, 0.18);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.question-hero-actions__group--muted {
+  border-style: dashed;
+}
+
+.question-hero-actions__group > small {
+  flex-basis: 100%;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.question-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.question-row-actions__risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.question-empty-state {
+  padding: 18px 0 10px;
+}
+
 .filter-form {
   width: 100%;
 }
@@ -2781,12 +3250,25 @@ onUnmounted(() => {
   padding: 16px 20px 20px;
 }
 
+.table-card :deep(.el-table__empty-block) {
+  min-height: 200px;
+}
+
 .governance-panel {
   margin-top: 18px;
 }
 
 .governance-tabs {
   padding: 0 20px 20px;
+
+  :deep(.el-tabs__header) {
+    position: sticky;
+    top: 72px;
+    z-index: 5;
+    margin-bottom: 18px;
+    padding-top: 10px;
+    background: var(--app-surface);
+  }
 }
 
 .governance-tabs--single {

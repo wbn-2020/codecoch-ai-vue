@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">指标字典</div>
         <h1 class="admin-hero__title">指标字典</h1>
-        <p class="admin-hero__desc">从 V4 分析指标字典接口读取指标编码、定义、数据来源和刷新频率。</p>
+        <p class="admin-hero__desc">维护分析指标编码、定义、数据来源和刷新频率。</p>
       </div>
       <div class="admin-hero__actions">
         <el-button v-permission="'admin:analytics:metric:write'" type="primary" @click="openMetricDialog()">新增指标</el-button>
@@ -130,6 +130,7 @@ import { createAdminAnalyticsMetricApi, getAdminAnalyticsMetricsApi, updateAdmin
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AdminAnalyticsDictionaryQuery, AdminAnalyticsMetricDefinitionVO } from '@/types/analytics'
+import { toFriendlyMessage } from '@/utils/error'
 import {
   translateMetricCategory,
   translateMetricDefinition,
@@ -180,9 +181,9 @@ const metricEnabled = computed({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
 const fetchMetrics = async () => {

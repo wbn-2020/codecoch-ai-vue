@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><GitCompareArrows :size="16" /> Resume Match</div>
         <h1>简历岗位匹配</h1>
-        <p>选择真实简历和目标岗位，提交后端匹配报告生成任务。页面只展示接口返回的数据，不填充演示分数。</p>
+        <p>选择简历和目标岗位，生成真实匹配报告；报告完成前不会显示虚假分数。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/resumes')"><FileText :size="16" /> 简历中心</el-button>
@@ -86,7 +86,7 @@
         <div class="section-head">
           <div>
             <h2>最近报告</h2>
-            <p>来自 GET /resume-job-match/reports。</p>
+            <p>展示最近生成的匹配报告。</p>
           </div>
           <el-button text :loading="reportsLoading" @click="loadReports">刷新</el-button>
         </div>
@@ -101,7 +101,7 @@
               <small>{{ report.resumeTitle || `简历 #${report.resumeId}` }} · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
             </span>
             <el-tag :type="statusTag(report.status)">{{ report.status || '--' }}</el-tag>
-            <b>{{ report.overallScore ?? '--' }}</b>
+            <b>{{ isReportSuccess(report.status) ? (report.overallScore ?? '--') : '--' }}</b>
           </button>
         </div>
       </div>
@@ -132,7 +132,7 @@ import type {
   ResumeJobMatchSseEvent,
   ResumeJobMatchSseEventType
 } from '@/types/resumeJobMatch'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import type { StreamSseHandle } from '@/utils/sse'
 
@@ -181,6 +181,27 @@ const statusTag = (status?: string) => {
   return 'info'
 }
 
+const isReportSuccess = (status?: string) => status === 'SUCCESS'
+
+const matchSseStageLabel = (stage?: string) => {
+  const normalized = (stage || '').trim().toUpperCase()
+  const labels: Record<string, string> = {
+    START: '开始生成',
+    VALIDATE_REQUEST: '校验请求',
+    REQUEST_VALIDATED: '请求已校验',
+    LOAD_RESUME: '读取简历',
+    LOAD_TARGET_JOB: '读取岗位',
+    CALL_AI: '调用 AI',
+    AI_STREAMING: 'AI 生成中',
+    PARSE_RESULT: '解析结果',
+    SAVE_REPORT: '保存报告',
+    DONE: '生成完成',
+    ERROR: '生成失败',
+    FALLBACK: '同步提交'
+  }
+  return labels[normalized] || ''
+}
+
 const sseStatusLabel = (status: string) => {
   if (status === 'connecting') return '连接中'
   if (status === 'streaming') return '生成中'
@@ -212,7 +233,7 @@ const loadInitial = async () => {
     form.resumeId = Number(route.query.resumeId) || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
     form.targetJobId = Number(route.query.targetJobId) || current?.id || targets.value[0]?.id
   } catch (error) {
-    loadError.value = getErrorMessage(error, '读取简历或岗位目标失败，请确认后端服务和登录态。')
+    loadError.value = getErrorMessage(error, '读取简历或岗位目标失败，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
@@ -271,7 +292,9 @@ const applyMatchSseEvent = (
   data: ResumeJobMatchSseEvent | undefined,
   payload: ResumeJobMatchCreateDTO
 ) => {
-  const message = data?.message || data?.content || data?.stage || event
+  const stageLabel = matchSseStageLabel(data?.stage) || matchSseStageLabel(event)
+  const rawMessage = data?.message || data?.content || event
+  const message = [stageLabel, toFriendlyMessage(rawMessage, '简历岗位匹配生成中')].filter(Boolean).join('：')
   addMatchSseEvent(event, message)
   const reportId = data?.result?.reportId || data?.bizId
   if ((event === 'result' || event === 'done') && reportId) {
@@ -299,14 +322,15 @@ const startMatchSse = (payload: ResumeJobMatchCreateDTO) => {
       onError: (error, hasStarted) => {
         matchSseHandle = null
         if (!hasStarted) {
-          addMatchSseEvent('fallback', 'SSE 未启动，切换同步提交')
-          ElMessage.warning('匹配生成流未启动，已回退到同步提交')
+          addMatchSseEvent('fallback', '已切换为同步提交')
+          ElMessage.warning('匹配生成流未启动，已切换为同步提交')
           void runMatchFallback(payload)
           return
         }
         submitting.value = false
-        setMatchSseError(error, true)
-        ElMessage.error(error.message || '匹配生成流中断')
+        const message = getErrorMessage(error, '匹配生成流中断，请稍后重试。')
+        setMatchSseError(message, true)
+        ElMessage.error(message)
       },
       onDone: () => {
         matchSseHandle = null

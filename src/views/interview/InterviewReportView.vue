@@ -7,7 +7,7 @@
           AI Interview Report
         </div>
         <h1>结构化 AI 面试报告</h1>
-        <p>报告内容来自后端 report 接口，缺失维度展示为空状态。</p>
+        <p>汇总面试表现、阶段评分、题目点评和后续练习建议。</p>
       </div>
       <div class="report-actions">
         <el-button @click="router.push('/dashboard')">
@@ -33,7 +33,7 @@
         <el-progress :percentage="pollProgress" :show-text="false" />
         <div class="sse-stage-list">
           <article v-for="item in sseEvents" :key="item.key" class="sse-stage-item">
-            <span>{{ item.event }}</span>
+            <span>{{ sseEventLabel(item.event) }}</span>
             <strong>{{ item.stage || item.message || '-' }}</strong>
             <p>{{ item.message || item.stage || '-' }}</p>
           </article>
@@ -47,7 +47,7 @@
         <div class="overview-grid">
           <div class="score-hero">
             <span>综合得分</span>
-            <strong>{{ report.totalScore ?? 0 }}</strong>
+            <strong>{{ displayTotalScore }}</strong>
             <StatusTag :status="report.reportStatus" />
           </div>
           <div class="overview-card">
@@ -65,29 +65,51 @@
         </div>
 
         <el-alert
+          v-if="isScoreUnavailable"
+          class="score-source"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="评分暂未生成"
+          description="本次报告没有拿到可信评分，已保留面试问答。你可以重新生成报告。"
+        />
+
+        <el-alert
+          v-else
           class="score-source"
           type="info"
           show-icon
           :closable="false"
-          title="总分来源于后端面试报告 totalScore 字段。"
+          title="综合得分已生成。"
         />
+
+        <div class="report-feedback-row">
+          <AiResultFeedback
+            scene="INTERVIEW_REPORT"
+            biz-type="INTERVIEW_REPORT"
+            :biz-id="report.reportId || report.id"
+            :ai-call-log-id="sseAiCallLogId"
+            label="反馈报告问题"
+            compact
+          />
+        </div>
 
         <div class="dimension-section">
           <div class="section-head">
             <h2>评分维度</h2>
-            <p>优先展示后端 stageReports/stageScores，无拆分维度时展示空状态。</p>
+            <p>按面试阶段展示能力表现，暂无拆分时保持空状态。</p>
           </div>
           <ReportChart v-if="stageReports.length" :stages="stageReports" />
           <el-empty v-else description="暂无维度评分数据" />
         </div>
       </div>
 
-      <div v-else-if="isFailed" class="content-card__body failed-panel">
+      <div v-else-if="isFailed || isUnscorable" class="content-card__body failed-panel">
         <el-alert
-          type="error"
+          :type="isUnscorable ? 'warning' : 'error'"
           show-icon
           :closable="false"
-          title="报告生成失败"
+          :title="isUnscorable ? '报告暂不可评分' : '报告生成失败'"
           :description="failureReason"
         />
         <div class="retry-row">
@@ -190,7 +212,7 @@
       <div class="content-card__body">
         <div class="section-head">
           <h2>阶段得分</h2>
-          <p>阶段名称、类型、得分、总结、短板与建议均来自后端报告。</p>
+          <p>阶段名称、类型、得分、总结、短板与建议会在报告生成后展示。</p>
         </div>
         <el-table :data="stageReports" row-key="stageId">
           <el-table-column prop="stageName" label="阶段" min-width="160" />
@@ -207,7 +229,7 @@
       <div class="content-card__body">
         <div class="section-head">
           <h2>题目明细</h2>
-          <p>展示后端返回的问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
+          <p>展示问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
         </div>
         <div class="qa-list">
           <article v-for="message in qaMessages" :key="message.messageId" class="qa-item">
@@ -216,7 +238,7 @@
                 <strong>{{ message.questionContent ? '面试题' : message.role }}</strong>
                 <el-tag v-if="message.isFollowUp" size="small" type="warning" effect="plain">追问</el-tag>
               </div>
-              <span>{{ message.score ?? '-' }} 分</span>
+              <span>{{ displayQuestionScore(message) }}</span>
             </div>
             <div class="qa-block">
               <label>问题</label>
@@ -281,6 +303,7 @@ import {
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
 import type {
   InterviewMessageVO,
@@ -290,6 +313,7 @@ import type {
   RecommendedQuestionVO,
   StageReportVO
 } from '@/types/interview'
+import { toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -314,12 +338,12 @@ const normalizedStatus = computed(() => {
   return String(status).toUpperCase()
 })
 
+const successReportStatuses = ['GENERATED', 'COMPLETED', 'SUCCESS']
+const unscorableReportStatuses = ['UNSCORABLE', 'NOT_SCORABLE', 'INSUFFICIENT_SAMPLE', 'SAMPLE_INSUFFICIENT']
 const isGenerating = computed(() => sseGenerating.value || ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
-const isGenerated = computed(() => {
-  if (['GENERATED', 'COMPLETED'].includes(normalizedStatus.value)) return true
-  return Boolean(report.value?.totalScore || report.value?.summary || report.value?.reportContent)
-})
+const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
+const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
 
 type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
 
@@ -349,14 +373,55 @@ const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normal
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
+const hasValidTotalScore = computed(() => {
+  const score = Number(report.value?.totalScore)
+  return isGenerated.value && Number.isFinite(score) && score > 0
+})
+const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
+const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
-const failureReason = computed(() => report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage || '请稍后重试')
+const failureReason = computed(() => toFriendlyMessage(
+  report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
+  isUnscorable.value ? '本次面试答题样本不足或题目明细不完整，暂时无法生成可信评分。请继续答题或重新生成报告。' : '报告生成失败，请稍后重试。'
+))
 const sseMetaText = computed(() => {
   const items = []
-  if (sseReportId.value) items.push(`reportId: ${sseReportId.value}`)
-  if (sseAiCallLogId.value) items.push(`aiCallLogId: ${sseAiCallLogId.value}`)
+  if (sseReportId.value) items.push(`报告 #${sseReportId.value}`)
   return items.join(' / ')
 })
+
+const cleanDisplayText = (value?: string | null, fallback = '') => toFriendlyMessage(value || '', fallback)
+
+const sseEventLabel = (event?: string) => {
+  const map: Record<string, string> = {
+    start: '开始',
+    progress: '生成中',
+    delta: '生成中',
+    metadata: '状态更新',
+    result: '结果返回',
+    done: '完成',
+    error: '失败'
+  }
+  return map[String(event || '').toLowerCase()] || '状态更新'
+}
+
+const sseStageLabel = (stage?: string) => {
+  const map: Record<string, string> = {
+    VALIDATE_REQUEST: '校验请求',
+    LOAD_INTERVIEW: '读取面试记录',
+    BUILD_PROMPT: '生成提示词',
+    CALL_AI_REPORT: '调用 AI 生成报告',
+    PARSE_AI_REPORT: '解析报告内容',
+    SAVE_REPORT: '保存报告',
+    COMPLETE: '生成完成'
+  }
+  return map[String(stage || '').toUpperCase()] || cleanDisplayText(stage, '')
+}
+
+const displayQuestionScore = (message: InterviewMessageVO) => {
+  const score = Number(message.score)
+  return Number.isFinite(score) && score > 0 ? `${score} 分` : '未评分'
+}
 
 const weakPointText = computed(() => {
   const value = report.value?.weakPoints || report.value?.weakKnowledgePoints
@@ -480,8 +545,9 @@ const runSyncFallback = async (forceRegenerate: boolean) => {
 }
 
 const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
-  const message = data?.message || ''
-  const stage = data?.stage ? String(data.stage) : ''
+  const eventLabel = sseEventLabel(event)
+  const message = cleanDisplayText(data?.message, eventLabel)
+  const stage = sseStageLabel(data?.stage ? String(data.stage) : '')
   const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
   const reportId = data?.reportId || Number(metadata.reportId || 0)
   const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
@@ -543,7 +609,7 @@ const startReportSse = (forceRegenerate = false) => {
         sseGenerating.value = false
         reportSseHandle = null
         if (!hasStarted) {
-          ElMessage.warning('SSE 启动失败，已回退到同步报告接口')
+          ElMessage.warning('报告生成流未启动，已切换为同步生成')
           await runSyncFallback(forceRegenerate)
           return
         }
@@ -552,9 +618,9 @@ const startReportSse = (forceRegenerate = false) => {
           interviewId: id,
           reportStatus: 'FAILED',
           status: 'FAILED',
-          failedReason: error.message
+          failedReason: toFriendlyMessage(error.message, '报告生成失败，请稍后重试。')
         }
-        ElMessage.error(error.message || '报告 SSE 生成失败')
+        ElMessage.error(toFriendlyMessage(error.message, '报告生成失败，请稍后重试。'))
       },
       onDone: () => {
         sseGenerating.value = false
@@ -571,7 +637,7 @@ const loadReportOrStartSse = async () => {
   try {
     report.value = await getInterviewReportApi(interviewId)
     pollFailures.value = 0
-    if (isGenerated.value || isFailed.value) {
+    if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
       return
     }
@@ -597,8 +663,8 @@ const handleGenerateStudyPlan = async () => {
   studyPlanGenerating.value = true
   try {
     const result = await generateStudyPlanApi({ reportId })
-    if (result.planStatus === 'FAILED') {
-      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+    if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
+      ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
     } else {
       ElMessage.success('学习计划已生成')
     }
@@ -821,6 +887,12 @@ onBeforeUnmount(() => {
 .score-source,
 .retry-row {
   margin: 16px 0;
+}
+
+.report-feedback-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .dimension-section {

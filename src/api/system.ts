@@ -13,6 +13,14 @@ type BackendSystemConfigVO = SystemConfigVO & {
   valueType?: string
 }
 
+type BackendSystemConfigSaveDTO = {
+  configKey?: string
+  configValue?: string
+  valueType?: string
+  status?: number
+  description?: string
+}
+
 type BackendAdminOverviewVO = Partial<AdminOverviewVO> & {
   usersCount?: number
   questionsCount?: number
@@ -36,6 +44,19 @@ const normalizeConfigPage = (
   result: PageResult<BackendSystemConfigVO> | BackendSystemConfigVO[],
   params: SystemConfigQueryDTO
 ): PageResult<SystemConfigVO> => normalizePageResult(result, params, normalizeSystemConfig)
+
+const toBackendCreateConfigPayload = (data: SystemConfigCreateDTO): BackendSystemConfigSaveDTO => ({
+  configKey: data.configKey,
+  configValue: data.configValue,
+  valueType: data.configType,
+  status: data.status,
+  description: data.description
+})
+
+const toBackendUpdateConfigPayload = (data: SystemConfigUpdateDTO): BackendSystemConfigSaveDTO => ({
+  configValue: data.configValue,
+  description: data.description
+})
 
 const normalizeAdminOverview = (data: BackendAdminOverviewVO): AdminOverviewVO => ({
   userCount: data.userCount ?? data.usersCount ?? 0,
@@ -67,11 +88,15 @@ export const getSystemConfigsApi = async (params: SystemConfigQueryDTO) => {
 }
 
 export const createSystemConfigApi = (data: SystemConfigCreateDTO) => {
-  return request.post<SystemConfigVO, SystemConfigVO>('/admin/configs', data)
+  return request
+    .post<BackendSystemConfigVO, BackendSystemConfigVO>('/admin/configs', toBackendCreateConfigPayload(data))
+    .then(normalizeSystemConfig)
 }
 
 export const updateSystemConfigApi = (id: number, data: SystemConfigUpdateDTO) => {
-  return request.put<SystemConfigVO, SystemConfigVO>(`/admin/configs/${id}`, data)
+  return request
+    .put<BackendSystemConfigVO, BackendSystemConfigVO>(`/admin/configs/${id}`, toBackendUpdateConfigPayload(data))
+    .then(normalizeSystemConfig)
 }
 
 export const deleteSystemConfigApi = (id: number) => {

@@ -13,7 +13,6 @@
       </div>
       <div class="admin-hero__actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
-        <el-button :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">重试向量删除</el-button>
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
@@ -141,10 +140,10 @@
         <article class="ops-panel ops-panel--wide vector-admin-panel">
           <div class="ops-panel__head">
             <div>
-              <h2>Vector Index Console</h2>
-              <p>Qdrant collections and MySQL index-state counters for question dedupe and personal RAG.</p>
+              <h2>向量索引控制台</h2>
+              <p>展示 Qdrant 集合、MySQL 索引状态计数，以及题目去重和个人知识库的向量运行情况。</p>
             </div>
-            <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">Refresh</el-button>
+            <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
           </div>
           <div class="vector-index-grid">
             <div v-for="item in mysqlIndexCards" :key="item.key" class="vector-index-card">
@@ -164,52 +163,72 @@
           <div class="vector-runtime-grid">
             <div class="vector-index-card">
               <div class="vector-index-card__head">
-                <span>Runtime Config</span>
+                <span>运行配置</span>
                 <strong>{{ vectorRuntimeLabel }}</strong>
               </div>
               <small>{{ vectorRuntimeHint }}</small>
               <div class="vector-status-list">
-                <span>limit {{ vectorHealth?.config?.defaultLimit || '--' }}</span>
-                <span>ask {{ formatThreshold(vectorHealth?.config?.knowledgeAskMinScore) }}</span>
-                <span>near {{ formatThreshold(vectorHealth?.config?.knowledgeNearDuplicateThreshold) }}</span>
+                <span>默认上限 {{ vectorHealth?.config?.defaultLimit || '--' }}</span>
+                <span>问答阈值 {{ formatThreshold(vectorHealth?.config?.knowledgeAskMinScore) }}</span>
+                <span>近重阈值 {{ formatThreshold(vectorHealth?.config?.knowledgeNearDuplicateThreshold) }}</span>
               </div>
             </div>
             <div class="vector-index-card">
               <div class="vector-index-card__head">
-                <span>Embedding Metrics</span>
+                <span>Embedding 指标</span>
                 <strong>{{ compact(vectorHealth?.embeddingMetrics?.callCount) }}</strong>
               </div>
               <small>{{ embeddingMetricHint }}</small>
               <div class="vector-status-list">
-                <span>fail {{ vectorHealth?.embeddingMetrics?.failedCount || 0 }}</span>
-                <span>avg {{ formatMs(vectorHealth?.embeddingMetrics?.averageElapsedMs) }}</span>
-                <span>tokens {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
+                <span>失败 {{ vectorHealth?.embeddingMetrics?.failedCount || 0 }}</span>
+                <span>平均 {{ formatMs(vectorHealth?.embeddingMetrics?.averageElapsedMs) }}</span>
+                <span>Token {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
               </div>
               <em v-if="vectorHealth?.embeddingMetrics?.errorMessage">{{ vectorHealth.embeddingMetrics.errorMessage }}</em>
             </div>
           </div>
+          <el-alert
+            class="vector-state-alert"
+            :type="vectorStateBanner.type"
+            :closable="false"
+            show-icon
+          >
+            <template #title>{{ vectorStateBanner.title }}</template>
+            <template #default>
+              <div>{{ vectorStateBanner.description }}</div>
+            </template>
+          </el-alert>
         </article>
 
         <article class="ops-panel vector-admin-panel">
           <div class="ops-panel__head">
             <div>
-              <h2>Index Actions</h2>
-              <p>Run rebuild and retry jobs before server-side validation.</p>
+              <h2>索引高风险操作</h2>
+              <p>重建、重试和删除补偿不会随普通刷新自动执行，提交前必须确认影响范围。</p>
             </div>
           </div>
           <div class="vector-action-list">
-            <el-button :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
-              Rebuild Questions
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
-              Retry Question Failures
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
-              Rebuild Knowledge
-            </el-button>
-            <el-button :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
-              Retry Knowledge Failures
-            </el-button>
+            <div class="vector-action-group">
+              <span class="vector-action-group__label">题目向量</span>
+              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
+                重建题目向量
+              </el-button>
+              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
+                重试题目失败
+              </el-button>
+            </div>
+            <div class="vector-action-group vector-action-group--risk">
+              <span class="vector-action-group__label">知识库与删除补偿</span>
+              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
+                重建知识库向量
+              </el-button>
+              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
+                重试知识库失败
+              </el-button>
+              <el-button v-permission="'admin:analytics:ai'" type="danger" plain :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">
+                重试向量删除补偿
+              </el-button>
+            </div>
           </div>
           <div v-if="lastVectorAction" class="vector-action-result">
             <strong>{{ lastVectorAction.title }}</strong>
@@ -223,8 +242,8 @@
         <article class="ops-panel ops-panel--wide vector-failure-panel">
           <div class="ops-panel__head vector-failure-head">
             <div>
-              <h2>Vector Failure Details</h2>
-              <p>Recent Qdrant index and delete-outbox failures for question dedupe and personal RAG.</p>
+              <h2>向量失败明细</h2>
+              <p>展示题目去重、个人知识库索引和删除补偿最近的失败记录。</p>
             </div>
             <div class="vector-failure-tools">
               <el-segmented v-model="vectorFailureStatus" :options="vectorFailureStatusOptions" @change="loadVectorFailures" />
@@ -490,11 +509,14 @@ import { rebuildQuestionEmbeddingApi, retryFailedQuestionEmbeddingApi, type Ques
 import type { KnowledgeVectorRebuildVO } from '@/api/v4'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
+import { appConfig } from '@/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorFailureDetailsVO, VectorIndexJobVO, VectorStoreHealthVO } from '@/types/analytics'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
+import { confirmDangerActionPreview, type DangerActionPreviewOptions } from '@/utils/dangerAction'
 import echarts, { type ECharts } from '@/utils/echarts'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const router = useRouter()
@@ -547,6 +569,52 @@ const vectorFailureCounts = computed(() => ({
   knowledge: vectorFailures.value?.knowledgeFailures?.length || 0,
   deleteOutbox: vectorFailures.value?.deleteOutboxFailures?.length || 0
 }))
+const vectorStateBanner = computed(() => {
+  const health = vectorHealth.value
+  if (!health) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant state uncertain',
+      description: 'Vector health has not returned yet; no collection rebuild or delete compensation is run automatically.'
+    }
+  }
+  if (!health.enabled) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant disabled',
+      description: 'Vector features are disabled in runtime config. Collection rows are informational only and no repair is attempted.'
+    }
+  }
+  const collections = health.collections || []
+  if (!collections.length) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant collections unknown',
+      description: 'The health API did not return collection records. Treat the state as uncertain until a manual refresh succeeds.'
+    }
+  }
+  const errored = collections.filter((item) => item.errorMessage || String(item.status || '').toUpperCase() === 'ERROR')
+  if (errored.length) {
+    return {
+      type: 'error' as const,
+      title: 'Qdrant collection error',
+      description: `${errored.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} returned an error. Use the details below before running any retry job.`
+    }
+  }
+  const missing = collections.filter((item) => !item.exists)
+  if (missing.length) {
+    return {
+      type: 'warning' as const,
+      title: 'Qdrant collection missing',
+      description: `${missing.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} is missing. The page does not silently repair it; rebuild actions require confirmation.`
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: 'Qdrant collections available',
+    description: 'Configured collections are present. Rebuild and retry actions still require explicit confirmation.'
+  }
+})
 
 const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
 const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
@@ -751,26 +819,32 @@ const vectorCollectionLabel = (value: string) => {
 }
 
 const vectorTone = (item: VectorCollectionInfoVO) => {
-  if (!vectorHealth.value?.enabled) return 'unknown'
+  if (!vectorHealth.value) return 'unknown'
+  if (!vectorHealth.value.enabled) return 'unknown'
   if (item.exists && String(item.status || '').toUpperCase() !== 'ERROR') return 'healthy'
   if (String(item.status || '').toUpperCase() === 'ERROR') return 'down'
-  return 'degraded'
+  if (!item.exists) return 'down'
+  return 'unknown'
 }
 
 const vectorCollectionStatus = (item: VectorCollectionInfoVO) => {
-  if (!vectorHealth.value?.enabled) return '未启用'
+  if (!vectorHealth.value) return '未确认'
+  if (!vectorHealth.value.enabled) return '未启用'
   if (String(item.status || '').toUpperCase() === 'ERROR') return '异常'
-  return item.exists ? '可用' : '未创建'
+  if (!item.exists) return '缺失'
+  return '可用'
 }
 
 const vectorCollectionHint = (item: VectorCollectionInfoVO) => {
   if (item.errorMessage) return item.errorMessage
+  if (!vectorHealth.value) return 'Qdrant 状态未返回，本页不会自动修复'
   if (!vectorHealth.value?.enabled) return '向量库配置未启用'
-  if (!item.exists) return '等待首次索引创建 collection'
+  if (!item.exists) return 'Collection 缺失；需人工确认后执行重建，本页不会静默修复'
   return `${item.pointCount || 0} points / ${item.vectorSize || '--'} dims / ${item.distance || '--'}`
 }
 
 const vectorDeleteOutboxTone = computed(() => {
+  if (!vectorDeleteOutbox.value) return 'unknown'
   if (vectorDeleteOutbox.value?.errorMessage) return 'down'
   if ((vectorDeleteOutbox.value?.failed || 0) > 0) return 'down'
   if ((vectorDeleteOutbox.value?.pending || 0) > 0) return 'degraded'
@@ -778,6 +852,7 @@ const vectorDeleteOutboxTone = computed(() => {
 })
 
 const vectorDeleteOutboxStatus = computed(() => {
+  if (!vectorDeleteOutbox.value) return '未确认'
   if (vectorDeleteOutbox.value?.errorMessage) return '异常'
   if ((vectorDeleteOutbox.value?.failed || 0) > 0) return '失败'
   if ((vectorDeleteOutbox.value?.pending || 0) > 0) return '待重试'
@@ -786,7 +861,7 @@ const vectorDeleteOutboxStatus = computed(() => {
 
 const vectorDeleteOutboxHint = computed(() => {
   const outbox = vectorDeleteOutbox.value
-  if (!outbox) return '等待向量健康接口返回补偿队列状态'
+  if (!outbox) return '等待向量健康接口返回补偿队列状态，未自动执行补偿'
   if (outbox.errorMessage) return outbox.errorMessage
   return `待处理 ${outbox.pending || 0} / 失败 ${outbox.failed || 0} / 已完成 ${outbox.done || 0}`
 })
@@ -848,6 +923,10 @@ const openQuestionFailure = (questionId?: number) => {
 
 const openKnowledgeFailure = (documentId?: number, chunkId?: number) => {
   if (!documentId && !chunkId) return
+  if (!appConfig.enableV4Preview) {
+    ElMessage.info('个人知识库能力暂未开放，已保留失败线索供后续处理。')
+    return
+  }
   router.push({
     path: '/knowledge',
     query: {
@@ -945,9 +1024,10 @@ const loadPage = async () => {
     duplicateConfig.value = duplicateConfigData
     await renderChart()
   } catch (error) {
-    errorMessage.value = error && typeof error === 'object' && 'message' in error
-      ? String((error as { message?: unknown }).message || '接口请求失败')
-      : '接口请求失败'
+    errorMessage.value = toFriendlyMessage(
+      error && typeof error === 'object' && 'message' in error ? (error as { message?: unknown }).message : error,
+      '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+    )
   } finally {
     loading.value = false
   }
@@ -981,20 +1061,20 @@ const loadVectorJobs = async () => {
 }
 
 const questionVectorSummary = (result: QuestionEmbeddingRebuildResult) => {
-  const errors = result.errors?.length ? `, errors ${result.errors.length}` : ''
-  return `updated ${result.updated || 0}, vectors ${result.vectorUpdated || 0}, deleted ${result.vectorDeleted || 0}${errors}`
+  const errors = result.errors?.length ? `，错误 ${result.errors.length} 条` : ''
+  return `更新 ${result.updated || 0} 条，写入向量 ${result.vectorUpdated || 0} 条，删除向量 ${result.vectorDeleted || 0} 条${errors}`
 }
 
 const knowledgeVectorSummary = (result: KnowledgeVectorRebuildVO) => {
-  const errors = result.errors?.length ? `, errors ${result.errors.length}` : ''
-  return `docs ${result.documentCount || 0}, chunks ${result.chunkCount || 0}, vectors ${result.vectorUpdated || 0}, deleted ${result.vectorDeleted || 0}${errors}`
+  const errors = result.errors?.length ? `，错误 ${result.errors.length} 条` : ''
+  return `文档 ${result.documentCount || 0} 份，片段 ${result.chunkCount || 0} 条，写入向量 ${result.vectorUpdated || 0} 条，删除向量 ${result.vectorDeleted || 0} 条${errors}`
 }
 
 const recordQuestionVectorAction = (title: string, result: QuestionEmbeddingRebuildResult) => {
   lastVectorAction.value = {
     title,
     summary: questionVectorSummary(result),
-    detail: result.vectorEnabled === false ? 'Vector store is disabled; only metadata was updated.' : undefined
+    detail: result.vectorEnabled === false ? '向量库未启用，本次仅更新元数据状态。' : undefined
   }
 }
 
@@ -1002,17 +1082,33 @@ const recordKnowledgeVectorAction = (title: string, result: KnowledgeVectorRebui
   lastVectorAction.value = {
     title,
     summary: knowledgeVectorSummary(result),
-    detail: result.vectorEnabled === false ? 'Vector store is disabled; only chunk states were inspected.' : undefined
+    detail: result.vectorEnabled === false ? '向量库未启用，本次仅检查知识片段状态。' : undefined
   }
 }
 
+const confirmVectorAction = (options: DangerActionPreviewOptions) =>
+  confirmDangerActionPreview({
+    ...options,
+    audit: options.audit || '后端会写入向量索引任务或删除补偿任务记录，可结合操作时间追踪。',
+    confirmButtonText: options.confirmButtonText || '确认执行'
+  })
+
 const handleRebuildQuestionVectors = async () => {
-  await ElMessageBox.confirm('Rebuild up to 5000 question embeddings and Qdrant points?', 'Rebuild question vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction({
+    title: '题目向量重建高风险确认',
+    action: '重建题目 Embedding 和 Qdrant 向量点',
+    target: '最多扫描 5000 道题目，具体数量由后端接口和当前索引状态决定。',
+    impact: '可能调用 Embedding 供应商，并创建、覆盖或删除题目向量点，运行成本和耗时都高于普通刷新。',
+    rollback: '无法由前端一键回滚；如结果异常，需要依据索引任务日志重新重建或人工修复。',
+    tips: ['确认 Qdrant 集合状态正常。', '确认 Embedding 模型和维度配置未发生误配。'],
+    confirmButtonText: '确认重建'
+  })
+  if (!confirmed) return
   rebuildingQuestionVectors.value = true
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
     const summary = questionVectorSummary(result)
-    recordQuestionVectorAction('Question vector rebuild', result)
+    recordQuestionVectorAction('题目向量重建', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1022,12 +1118,21 @@ const handleRebuildQuestionVectors = async () => {
 }
 
 const handleRetryQuestionVectors = async () => {
-  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending question embeddings?', 'Retry question vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction({
+    title: '题目失败向量重试确认',
+    action: '重试失败或长时间待处理的题目向量',
+    target: '最多处理 1000 条失败或待处理题目索引记录。',
+    impact: '可能重新调用 Embedding 供应商，并创建或替换 Qdrant 向量点。',
+    rollback: '无法由前端撤销已写入的向量点；可通过失败明细和索引任务日志二次修复。',
+    tips: ['先查看失败明细，确认不是模型维度或集合缺失导致的系统性失败。'],
+    confirmButtonText: '确认重试'
+  })
+  if (!confirmed) return
   retryingQuestionVectors.value = true
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
     const summary = questionVectorSummary(result)
-    recordQuestionVectorAction('Question vector retry', result)
+    recordQuestionVectorAction('题目失败向量重试', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1037,12 +1142,21 @@ const handleRetryQuestionVectors = async () => {
 }
 
 const handleRebuildKnowledgeVectors = async () => {
-  await ElMessageBox.confirm('Rebuild up to 5000 personal knowledge documents across users?', 'Rebuild knowledge vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction({
+    title: '知识库向量重建高风险确认',
+    action: '重建个人知识库向量',
+    target: '最多扫描 5000 份个人知识库文档，可能跨用户处理知识片段。',
+    impact: '会重新计算知识片段向量，可能产生较高模型调用成本，并影响知识库检索结果。',
+    rollback: '无法由前端自动恢复旧向量；如结果异常，需要重新执行修复任务或人工处理文档状态。',
+    tips: ['确认这是维护窗口内的人工动作。', '确认个人知识库预览能力当前允许运维处理。'],
+    confirmButtonText: '确认重建'
+  })
+  if (!confirmed) return
   rebuildingKnowledgeVectors.value = true
   try {
     const result = await rebuildAdminKnowledgeVectorsApi(5000)
     const summary = knowledgeVectorSummary(result)
-    recordKnowledgeVectorAction('Knowledge vector rebuild', result)
+    recordKnowledgeVectorAction('知识库向量重建', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1052,12 +1166,21 @@ const handleRebuildKnowledgeVectors = async () => {
 }
 
 const handleRetryKnowledgeVectors = async () => {
-  await ElMessageBox.confirm('Retry up to 1000 failed or stale pending knowledge chunks?', 'Retry knowledge vectors', { type: 'warning' })
+  const confirmed = await confirmVectorAction({
+    title: '知识库失败向量重试确认',
+    action: '重试失败或长时间待处理的知识库向量',
+    target: '最多处理 1000 条失败或待处理知识片段索引记录。',
+    impact: '可能重新调用 Embedding 供应商，并创建或替换个人知识库向量点。',
+    rollback: '无法由前端撤销已写入的向量点；可通过失败明细和索引任务日志二次修复。',
+    tips: ['若 Qdrant 状态缺失或不确定，请先查看失败详情。'],
+    confirmButtonText: '确认重试'
+  })
+  if (!confirmed) return
   retryingKnowledgeVectors.value = true
   try {
     const result = await retryAdminKnowledgeVectorsApi(1000)
     const summary = knowledgeVectorSummary(result)
-    recordKnowledgeVectorAction('Knowledge vector retry', result)
+    recordKnowledgeVectorAction('知识库失败向量重试', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1067,11 +1190,16 @@ const handleRetryKnowledgeVectors = async () => {
 }
 const handleRetryVectorDeletes = async () => {
   const retryable = vectorDeleteOutbox.value?.retryable || 0
-  await ElMessageBox.confirm(
-    `将重试最多 500 条 Qdrant 向量删除补偿记录，当前待处理/失败共 ${retryable} 条。确认继续？`,
-    '重试向量删除补偿',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmVectorAction({
+    title: '向量删除补偿重试确认',
+    action: '重试 Qdrant 删除补偿记录',
+    target: `最多处理 500 条删除补偿记录；当前可重试待处理/失败记录 ${retryable} 条。`,
+    impact: '会尝试删除 Qdrant 中对应向量点，适合修复业务删除后向量侧未同步的记录。',
+    rollback: '删除补偿成功后无法由前端恢复被删除的向量；如误删，需要重新执行对应数据的向量重建。',
+    tips: ['本页面不会静默修复缺失集合。', '确认待删除对象确实已在业务侧删除或失效。'],
+    confirmButtonText: '确认补偿'
+  })
+  if (!confirmed) return
   retryingVectorDeletes.value = true
   try {
     const result = await retryAdminVectorDeletesApi(500)
@@ -1431,6 +1559,30 @@ onBeforeUnmount(() => {
   color: var(--app-text);
   background: rgba(15, 23, 42, 0.42);
   font-size: 12px;
+}
+
+.vector-state-alert {
+  margin-top: 14px;
+}
+
+.vector-action-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.vector-action-group--risk {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(120, 53, 15, 0.14);
+}
+
+.vector-action-group__label {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .vector-action-list :deep(.el-button) {

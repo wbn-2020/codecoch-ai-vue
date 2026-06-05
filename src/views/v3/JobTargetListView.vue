@@ -38,22 +38,22 @@
       <article class="metric-card">
         <div class="metric-card__label">岗位目标总数</div>
         <div class="metric-card__value">{{ targets.length }}</div>
-        <p>后端当前返回列表数组，未提供分页结构。</p>
+        <p>用于简历匹配、能力画像和训练计划的岗位目标。</p>
       </article>
       <article class="metric-card">
         <div class="metric-card__label">已解析 JD</div>
         <div class="metric-card__value">{{ parsedCount }}</div>
-        <p>状态来自 `parseStatus = PARSED`。</p>
+        <p>已完成岗位要求、技能重点和面试关注点提取。</p>
       </article>
       <article class="metric-card">
         <div class="metric-card__label">解析失败</div>
         <div class="metric-card__value">{{ failedCount }}</div>
-        <p>失败信息来自后端 `parseErrorMessage`。</p>
+        <p>可进入编辑页补充 JD 后重新解析。</p>
       </article>
       <article class="metric-card">
         <div class="metric-card__label">最近更新时间</div>
         <div class="metric-card__value is-date">{{ latestUpdatedAt }}</div>
-        <p>基于当前返回记录计算。</p>
+        <p>帮助判断当前岗位目标是否需要刷新。</p>
       </article>
     </section>
 
@@ -61,7 +61,7 @@
       <div class="content-card__body toolbar target-toolbar">
         <div>
           <h2>岗位目标列表</h2>
-          <p>列表、筛选和操作均调用 V3-B 后端真实接口，不使用前端 mock 数据。</p>
+          <p>管理你正在准备的目标岗位，优先把最重要的岗位设为当前主目标。</p>
         </div>
         <el-form class="filter-form" :model="query" inline>
           <el-form-item label="关键词">
@@ -109,7 +109,7 @@
           v-else-if="!loading && targets.length === 0"
           type="empty"
           title="暂无岗位目标"
-          description="创建第一个目标岗位后，可以粘贴 JD 并触发真实后端解析。"
+          description="创建第一个目标岗位后，可以粘贴 JD，系统会提取技能要求并串联简历匹配、刷题和今日计划。"
         >
           <el-button type="primary" @click="router.push('/job-targets/create')">新增岗位目标</el-button>
         </AppState>
@@ -146,45 +146,36 @@
               {{ formatDateTime(row.updatedAt || row.createdAt) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" fixed="right" width="360">
+          <el-table-column label="操作" width="150">
             <template #default="{ row }: { row: TargetJobVO }">
               <div class="row-actions">
                 <el-button type="primary" text @click="router.push(`/job-targets/${row.id}/analysis`)">
                   <ScanSearch :size="15" />
                   分析
                 </el-button>
-                <el-button text @click="router.push(`/job-targets/${row.id}/edit`)">
-                  <Pencil :size="15" />
-                  编辑
-                </el-button>
-                <el-button
-                  text
-                  :loading="parsingId === row.id"
-                  :disabled="parsingId !== null"
-                  @click="handleParse(row)"
-                >
-                  <Sparkles :size="15" />
-                  {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析' }}
-                </el-button>
-                <el-button
-                  text
-                  :disabled="row.currentFlag === 1 || settingCurrentId !== null"
-                  :loading="settingCurrentId === row.id"
-                  @click="handleSetCurrent(row)"
-                >
-                  <CircleDot :size="15" />
-                  设当前
-                </el-button>
-                <el-button
-                  type="danger"
-                  text
-                  :disabled="deletingId !== null"
-                  :loading="deletingId === row.id"
-                  @click="handleDelete(row)"
-                >
-                  <Trash2 :size="15" />
-                  删除
-                </el-button>
+                <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(row, command)">
+                  <el-button text :icon="MoreHorizontal" aria-label="更多操作" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="edit">
+                        <Pencil :size="14" />
+                        编辑
+                      </el-dropdown-item>
+                      <el-dropdown-item command="parse" :disabled="parsingId !== null">
+                        <Sparkles :size="14" />
+                        {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析' }}
+                      </el-dropdown-item>
+                      <el-dropdown-item command="current" :disabled="row.currentFlag === 1 || settingCurrentId !== null">
+                        <CircleDot :size="14" />
+                        设为当前
+                      </el-dropdown-item>
+                      <el-dropdown-item command="delete" divided :disabled="deletingId !== null">
+                        <Trash2 :size="14" />
+                        删除
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -196,7 +187,7 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleDot, Crosshair, Pencil, Plus, RefreshCw, ScanSearch, Search, Sparkles, Trash2 } from 'lucide-vue-next'
+import { CircleDot, Crosshair, MoreHorizontal, Pencil, Plus, RefreshCw, ScanSearch, Search, Sparkles, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -209,6 +200,7 @@ import {
 } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import type { TargetJobQueryDTO, TargetJobVO } from '@/types/jobTarget'
+import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 import JobTargetStatusTag from './components/JobTargetStatusTag.vue'
@@ -240,14 +232,6 @@ const latestUpdatedAt = computed(() => {
   return latest ? formatDateTime(latest) : '--'
 })
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string') return message
-  }
-  return fallback
-}
-
 const buildQuery = (): TargetJobQueryDTO => ({
   keyword: query.keyword || undefined,
   status: query.status,
@@ -262,7 +246,7 @@ const fetchAll = async () => {
     targets.value = list || []
     currentTarget.value = current || null
   } catch (error) {
-    loadError.value = getErrorMessage(error, '岗位目标接口请求失败，请确认后端 dev-v3 服务和登录态。')
+    loadError.value = getErrorMessage(error, '岗位目标加载失败，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
@@ -279,6 +263,24 @@ const handleReset = () => {
     current: undefined
   })
   fetchAll()
+}
+
+const handleRowCommand = (row: TargetJobVO, command: string) => {
+  if (command === 'edit') {
+    router.push(`/job-targets/${row.id}/edit`)
+    return
+  }
+  if (command === 'parse') {
+    void handleParse(row)
+    return
+  }
+  if (command === 'current') {
+    void handleSetCurrent(row)
+    return
+  }
+  if (command === 'delete') {
+    void handleDelete(row)
+  }
 }
 
 const handleSetCurrent = async (row: TargetJobVO) => {
@@ -308,7 +310,7 @@ const handleParse = async (row: TargetJobVO) => {
   }
   if (row.parseStatus === 'PARSED') {
     try {
-      await ElMessageBox.confirm('重新解析会请求后端 AI 解析接口并覆盖最新分析结果，确认继续？', '重新解析 JD', {
+      await ElMessageBox.confirm('重新解析会覆盖当前分析结果，确认继续？', '重新解析 JD', {
         type: 'warning',
         confirmButtonText: '重新解析',
         cancelButtonText: '取消'
@@ -330,7 +332,7 @@ const handleParse = async (row: TargetJobVO) => {
 
 const handleDelete = async (row: TargetJobVO) => {
   try {
-    await ElMessageBox.confirm(`确认删除岗位目标「${row.jobTitle}」？对应 JD 解析结果也会被后端删除。`, '删除确认', {
+    await ElMessageBox.confirm(`确认删除岗位目标「${row.jobTitle}」？对应 JD 解析结果也会一并删除。`, '删除确认', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消'

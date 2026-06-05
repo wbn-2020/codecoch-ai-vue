@@ -7,7 +7,7 @@
           <span>Agent 可观测</span>
         </div>
         <h1 class="admin-hero__title">Agent 运行记录</h1>
-        <p class="admin-hero__desc">查询 JobCoachAgent 运行状态、触发方式、模型、耗时和错误信息，数据来自管理端真实列表接口。</p>
+        <p class="admin-hero__desc">查询 JobCoachAgent 运行状态、触发方式、模型、耗时和错误信息。</p>
       </div>
     </section>
 
@@ -15,7 +15,7 @@
       <article class="admin-insight-card">
         <span>运行总数</span>
         <strong>{{ total }}</strong>
-        <small>来自分页 total</small>
+          <small>当前运行记录总数</small>
       </article>
       <article class="admin-insight-card">
         <span>当前页成功</span>
@@ -90,7 +90,9 @@
             <el-table-column label="耗时" width="110">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
-            <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip />
+            <el-table-column label="错误信息" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ displayAgentError(row) }}</template>
+            </el-table-column>
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
@@ -98,7 +100,7 @@
               </template>
             </el-table-column>
             <template #empty>
-              <AppState type="empty" title="暂无 Agent 运行记录" description="当前筛选条件下没有真实运行数据。" />
+              <AppState type="empty" title="暂无 Agent 运行记录" description="当前筛选条件下没有运行数据。" />
             </template>
           </el-table>
         </div>
@@ -116,8 +118,8 @@
       </template>
     </section>
 
-    <el-drawer v-model="detailVisible" title="Agent 运行详情" size="720px">
-      <div v-loading="detailLoading" class="run-detail-drawer">
+    <el-dialog v-model="detailVisible" title="Agent 运行详情" width="min(920px, calc(100vw - 32px))" class="admin-detail-dialog" align-center>
+      <div v-loading="detailLoading" class="admin-detail-dialog__body run-detail-dialog">
         <AppState v-if="detailError" type="error" title="运行详情加载失败" :description="detailError">
           <el-button type="primary" @click="detailId && openRunDetail(detailId)">重试</el-button>
         </AppState>
@@ -141,8 +143,18 @@
             <el-descriptions-item label="耗时">{{ detail.durationMs ?? '--' }} ms</el-descriptions-item>
             <el-descriptions-item label="Trace ID">{{ detail.traceId || '--' }}</el-descriptions-item>
             <el-descriptions-item label="错误码">{{ detail.errorCode || '--' }}</el-descriptions-item>
-            <el-descriptions-item label="错误信息">{{ detail.errorMessage || '--' }}</el-descriptions-item>
+            <el-descriptions-item label="错误信息">{{ displayAgentError(detail) }}</el-descriptions-item>
           </el-descriptions>
+
+          <el-alert
+            v-if="detail.errorCode || detail.errorMessage"
+            class="detail-section"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="agentErrorInfo(detail).title"
+            :description="agentErrorInfo(detail).action"
+          />
 
           <div class="detail-section">
             <h4>生成任务</h4>
@@ -151,7 +163,9 @@
               <el-table-column prop="status" label="状态" width="110">
                 <template #default="{ row }"><StatusTag :status="row.status" :map="taskStatusMap" /></template>
               </el-table-column>
-              <el-table-column prop="priority" label="优先级" width="100" />
+              <el-table-column label="优先级" width="100">
+                <template #default="{ row }">{{ priorityLabel(row.priority) }}</template>
+              </el-table-column>
               <el-table-column prop="dueDate" label="日期" width="120" />
               <template #empty>
                 <el-empty description="本次运行没有任务产物" />
@@ -159,7 +173,7 @@
             </el-table>
           </div>
 
-          <el-collapse class="detail-section">
+          <el-collapse v-if="canViewAgentDiagnostics" class="detail-section">
             <el-collapse-item title="输入快照">
               <pre class="json-box">{{ formatJson(detail.inputSnapshot) }}</pre>
             </el-collapse-item>
@@ -170,9 +184,23 @@
               <pre class="json-box">{{ detail.rawOutputText }}</pre>
             </el-collapse-item>
           </el-collapse>
+          <el-alert
+            v-else
+            class="detail-section"
+            type="info"
+            show-icon
+            :closable="false"
+            title="诊断原文已隐藏"
+            description="当前账号没有查看 Agent 输入快照、结构化输出和 AI 原始输出的权限。"
+          />
         </template>
       </div>
-    </el-drawer>
+      <template #footer>
+        <div class="admin-detail-dialog__footer">
+          <el-button @click="detailVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -184,9 +212,12 @@ import { useRoute } from 'vue-router'
 import { getAdminAgentRunDetailApi, getAdminAgentRunsApi } from '@/api/adminAgent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { AdminAgentRunQueryDTO, AgentRunDetailVO } from '@/types/agent'
+import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const loading = ref(false)
 const detailLoading = ref(false)
 const errorMessage = ref('')
@@ -231,12 +262,50 @@ const avgDuration = computed(() => {
   if (!durations.length) return '--'
   return Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
 })
+const canViewAgentDiagnostics = computed(() => {
+  const permission = detail.value?.rawAccessPermission || 'admin:ai:log:raw:view'
+  return Boolean(detail.value?.rawAvailable) && authStore.hasPermission(permission)
+})
+
+const priorityMap: Record<string, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低'
+}
 
 const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+  return normalizeErrorMessage(error, '接口请求失败，请稍后重试。')
+}
+
+const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+  const value = `${run.errorCode || ''} ${run.errorMessage || ''}`.toUpperCase()
+  if (value.includes('TARGET_JOB')) {
+    return {
+      title: '缺少目标岗位',
+      action: '用户需要先创建或设置当前目标岗位，然后重新生成今日计划。'
+    }
   }
-  return '接口请求失败'
+  if (value.includes('RESUME')) {
+    return {
+      title: '缺少可用简历',
+      action: '用户需要先创建、上传或解析简历，然后重新生成今日计划。'
+    }
+  }
+  if (value.includes('SKILL_PROFILE')) {
+    return {
+      title: '缺少能力画像',
+      action: '用户需要先完成简历匹配并生成能力画像，然后重新生成今日计划。'
+    }
+  }
+  return {
+    title: toFriendlyMessage(run.errorMessage || run.errorCode, 'Agent 运行失败'),
+    action: '请结合 Trace ID、AI 调用日志和用户上下文排查，必要时让用户稍后重试。'
+  }
+}
+
+const displayAgentError = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+  if (!run.errorCode && !run.errorMessage) return '--'
+  return agentErrorInfo(run).title
 }
 
 const taskStatusMap = {
@@ -246,6 +315,8 @@ const taskStatusMap = {
   SKIPPED: '已跳过',
   EXPIRED: '已过期'
 }
+
+const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || value : '--')
 
 const formatJson = (value: unknown) => {
   if (!value) return '--'
@@ -325,7 +396,18 @@ onMounted(fetchRuns)
   padding: 16px 20px 20px;
 }
 
-.run-detail-drawer {
+.admin-detail-dialog__body {
+  overflow: auto;
+  max-height: min(72vh, 720px);
+  padding-right: 2px;
+}
+
+.admin-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.run-detail-dialog {
   min-height: 360px;
 }
 

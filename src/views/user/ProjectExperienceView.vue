@@ -134,6 +134,7 @@ import {
 } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
 import type { ResumeDetailVO, ResumeProjectDTO, ResumeProjectVO, ResumeVO } from '@/types/resume'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const resumes = ref<ResumeVO[]>([])
@@ -202,7 +203,7 @@ const loadSelectedResume = async () => {
   try {
     selectedDetail.value = await getResumeDetailApi(selectedResumeId.value)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '接口请求失败'
+    error.value = getErrorMessage(err, '\u9879\u76ee\u7ecf\u5386\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   } finally {
     loadingDetail.value = false
   }
@@ -226,9 +227,15 @@ const openDialog = (project?: ResumeProjectVO) => {
   dialogVisible.value = true
 }
 
+const validateProjectForm = async () => {
+  if (!formRef.value) return false
+  return formRef.value.validate().catch(() => false)
+}
+
 const saveProject = async () => {
   if (!selectedResumeId.value) return
-  await formRef.value?.validate()
+  const valid = await validateProjectForm()
+  if (!valid) return
   saving.value = true
   try {
     if (editingProject.value?.projectId) {
@@ -241,7 +248,7 @@ const saveProject = async () => {
     dialogVisible.value = false
     await loadSelectedResume()
   } catch (err) {
-    const message = err instanceof Error ? err.message : '项目保存失败，请检查必填项后重试'
+    const message = getErrorMessage(err, '\u9879\u76ee\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u5fc5\u586b\u9879\u540e\u91cd\u8bd5\u3002')
     ElMessage.error(message)
   } finally {
     saving.value = false

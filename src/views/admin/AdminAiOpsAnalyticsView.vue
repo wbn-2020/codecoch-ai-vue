@@ -85,6 +85,29 @@
         <section class="admin-panel">
           <div class="admin-panel__header">
             <div>
+              <h2>AI 结果质量反馈</h2>
+              <p>用户对简历匹配、面试报告等 AI 输出的可信度反馈。</p>
+            </div>
+            <el-tag effect="plain">ai_result_feedback</el-tag>
+          </div>
+          <div class="feedback-grid">
+            <article v-for="item in qualityFeedbackMetrics" :key="item.key" class="feedback-card">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+          <div class="failure-list">
+            <div v-for="item in qualityFeedbackTypes" :key="item.name" class="failure-row">
+              <span>{{ translateFeedbackType(item.name) }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+            <el-empty v-if="!qualityFeedbackTypes.length && !loading" description="暂无 AI 结果反馈数据" />
+          </div>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel__header">
+            <div>
               <h2>训练快照</h2>
               <p>任务训练统计与 Agent 趋势摘要。</p>
             </div>
@@ -152,7 +175,7 @@
             <el-table-column prop="statDate" label="统计日期" width="120" />
             <el-table-column label="操作" width="100">
               <template #default="{ row }">
-                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerunJob(row.id)">重跑</el-button>
+                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerunJob(row)">重跑</el-button>
               </template>
             </el-table-column>
             <template #empty>
@@ -192,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Bot, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -207,12 +230,17 @@ import {
   rerunAdminAnalyticsJobApi,
   runAdminAnalyticsDailyPlanApi
 } from '@/api/analytics'
+import { getAdminAiResultFeedbackStatsApi } from '@/api/aiFeedback'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import type { PageResult } from '@/types/api'
+import type { AiResultFeedbackStatsVO } from '@/types/aiFeedback'
 import type {
   AdminAiOverviewVO,
+  AdminAnalyticsOverviewVO,
   AdminAnalyticsJobLogVO,
   AdminAnalyticsMetricDefinitionVO,
+  AdminAnalyticsTrainingVO,
   AgentFeedbackStatsVO,
   MetricPointVO,
   TrendPointVO
@@ -224,13 +252,16 @@ import {
   translateMetricCategory,
   translateMetricName
 } from '@/utils/adminDisplay'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import echarts, { type ECharts } from '@/utils/echarts'
+import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const errorMessage = ref('')
 const rangeDays = ref(7)
 const overview = ref<AdminAiOverviewVO>()
 const feedback = ref<AgentFeedbackStatsVO>()
+const aiResultFeedback = ref<AiResultFeedbackStatsVO>()
 const trainingTaskStats = ref({ totalAgentTasks: 0, doneTaskCount: 0, skippedTaskCount: 0, taskCompletionRate: 0 })
 const trainingTrend = ref<TrendPointVO[]>([])
 const failures = ref<MetricPointVO[]>([])
@@ -252,7 +283,7 @@ const rangeOptions = [
 const metrics = computed(() => [
   { key: 'calls', label: 'AI 调用总数', value: overview.value?.totalAiCalls || 0, hint: `成功 ${overview.value?.successAiCalls || 0} / 失败 ${overview.value?.failedAiCalls || 0}` },
   { key: 'rate', label: '调用成功率', value: `${overview.value?.aiSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgElapsedMs || 0}ms` },
-  { key: 'input', label: '输入 Token', value: overview.value?.totalInputTokens || 0, hint: 'prompt tokens' },
+  { key: 'input', label: '输入 Token', value: overview.value?.totalInputTokens || 0, hint: '提示词消耗' },
   { key: 'output', label: '输出 Token', value: overview.value?.totalOutputTokens || 0, hint: `总计 ${overview.value?.totalTokens || 0}` }
 ])
 
@@ -265,6 +296,22 @@ const feedbackMetrics = computed(() => [
 
 const feedbackTypes = computed(() =>
   (feedback.value?.typeDistribution || []).map((item) => ({
+    name: item.feedbackType || 'UNKNOWN',
+    value: Number(item.count || 0)
+  }))
+)
+
+const formatRatio = (value?: number) => value == null ? '--' : `${Math.round(value * 1000) / 10}%`
+
+const qualityFeedbackMetrics = computed(() => [
+  { key: 'total', label: '结果反馈数', value: aiResultFeedback.value?.totalFeedbackCount ?? '--' },
+  { key: 'negative', label: '负向反馈', value: aiResultFeedback.value?.negativeFeedbackCount ?? '--' },
+  { key: 'hallucination', label: '疑似幻觉', value: aiResultFeedback.value?.hallucinationCount ?? '--' },
+  { key: 'negativeRate', label: '负向反馈率', value: formatRatio(aiResultFeedback.value?.negativeFeedbackRate) }
+])
+
+const qualityFeedbackTypes = computed(() =>
+  (aiResultFeedback.value?.typeDistribution || []).map((item) => ({
     name: item.feedbackType || 'UNKNOWN',
     value: Number(item.count || 0)
   }))
@@ -286,10 +333,21 @@ const manualForm = ref({
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
+
+const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
+  result.status === 'fulfilled' ? result.value : fallback
+
+const emptyPage = <T,>(pageNo = 1, pageSize = 6): PageResult<T> => ({
+  records: [],
+  total: 0,
+  pageNo,
+  pageSize,
+  pages: 0
+})
 
 const disposeChart = () => {
   successChart?.dispose()
@@ -323,19 +381,39 @@ const renderChart = async () => {
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
+  const params = { days: rangeDays.value }
+  const emptyOverview: AdminAiOverviewVO = {
+    totalAiCalls: 0,
+    successAiCalls: 0,
+    failedAiCalls: 0,
+    aiSuccessRate: 0,
+    avgElapsedMs: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0
+  }
   try {
-    const params = { days: rangeDays.value }
-    const [overviewData, failureData, opsOverview, trainingData, feedbackData, metricsPage, jobsPage] = await Promise.all([
+    const [overviewResult, failureResult, opsResult, trainingResult, feedbackResult, aiResultFeedbackResult, metricsResult, jobsResult] = await Promise.allSettled([
       getAdminAiOverviewApi(params),
       getAdminAiFailuresApi(params),
       getAdminAnalyticsOverviewApi(params),
       getAdminAnalyticsTrainingApi(params),
       getAdminAgentFeedbackApi(params),
+      getAdminAiResultFeedbackStatsApi(params),
       getAdminAnalyticsMetricsApi({ pageNo: 1, pageSize: 6 }),
       getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 })
     ])
+    const overviewData = getSettledValue(overviewResult, emptyOverview)
+    const failureData = getSettledValue(failureResult, [])
+    const opsOverview = getSettledValue(opsResult, {} as AdminAnalyticsOverviewVO)
+    const trainingData = getSettledValue(trainingResult, {} as AdminAnalyticsTrainingVO)
+    const feedbackData = getSettledValue(feedbackResult, undefined)
+    const aiResultFeedbackData = getSettledValue(aiResultFeedbackResult, undefined)
+    const metricsPage = getSettledValue(metricsResult, emptyPage<AdminAnalyticsMetricDefinitionVO>())
+    const jobsPage = getSettledValue(jobsResult, emptyPage<AdminAnalyticsJobLogVO>())
     overview.value = opsOverview.ai || overviewData
     feedback.value = opsOverview.feedback || feedbackData
+    aiResultFeedback.value = aiResultFeedbackData
     trainingTaskStats.value = {
       totalAgentTasks: trainingData.taskStats?.totalAgentTasks || 0,
       doneTaskCount: trainingData.taskStats?.doneTaskCount || 0,
@@ -346,15 +424,12 @@ const loadPage = async () => {
     failures.value = failureData
     metricDefs.value = metricsPage.records || []
     jobs.value = jobsPage.records || []
+    const failed = [overviewResult, failureResult, opsResult, trainingResult, feedbackResult, aiResultFeedbackResult, metricsResult, jobsResult]
+      .filter((result) => result.status === 'rejected')
+    if (failed.length === 8) {
+      errorMessage.value = getErrorMessage(failed[0].reason)
+    }
     await renderChart()
-  } catch (error) {
-    overview.value = undefined
-    feedback.value = undefined
-    trainingTrend.value = []
-    metricDefs.value = []
-    jobs.value = []
-    failures.value = []
-    errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
   }
@@ -378,13 +453,25 @@ const parseUserIds = () =>
     .filter((item) => Number.isFinite(item) && item > 0)
 
 const runDailyPlan = async () => {
+  const userIds = parseUserIds()
+  const confirmed = await confirmDangerActionPreview({
+    title: '运行每日计划高风险确认',
+    action: '手动运行 Agent 每日计划聚合',
+    target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按后端任务规则筛选可生成计划的用户',
+    impact: '可能为多个用户生成或刷新今日训练计划，并产生 AI 调用、任务日志和统计记录。',
+    rollback: '前端无法自动撤销已生成计划；如误执行，需要通过任务日志和业务记录人工排查。',
+    audit: '后端会记录聚合任务日志，执行人、时间、任务参数可用于追踪。',
+    tips: ['确认统计日期、目标岗位和任务数量参数正确。', '确认当前不是演示只读模式或共享演示环境。'],
+    confirmButtonText: '确认运行'
+  })
+  if (!confirmed) return
   manualRunning.value = true
   try {
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
       jobName: 'Agent 每日计划聚合',
       statDate: manualForm.value.statDate || undefined,
-      userIds: parseUserIds(),
+      userIds,
       targetJobId: manualForm.value.targetJobId,
       taskCount: manualForm.value.taskCount,
       maxTotalMinutes: manualForm.value.maxTotalMinutes
@@ -397,12 +484,19 @@ const runDailyPlan = async () => {
   }
 }
 
-const rerunJob = async (id: number) => {
-  try {
-    await ElMessageBox.confirm('确认重跑该聚合任务？', '重跑确认', { type: 'warning' })
-  } catch {
-    return
-  }
+const rerunJob = async (row: AdminAnalyticsJobLogVO) => {
+  const id = row.id
+  const confirmed = await confirmDangerActionPreview({
+    title: '重跑聚合任务高风险确认',
+    action: `重跑聚合任务 ${translateJobName(row.jobName || row.jobCode)}`,
+    target: `任务 ID：${id}；统计日期：${row.statDate || '未提供'}`,
+    impact: '会重新提交该任务，可能覆盖或追加统计结果，并产生新的任务执行记录。',
+    rollback: '无法由前端撤销已提交的任务；如结果异常，需要依据任务输出和操作日志人工修正。',
+    audit: '重跑请求会进入聚合任务日志，可通过任务 ID 和操作时间追踪。',
+    tips: ['优先确认原任务失败原因已处理。', '避免对运行中任务重复提交。'],
+    confirmButtonText: '确认重跑'
+  })
+  if (!confirmed) return
   rerunningId.value = id
   try {
     await rerunAdminAnalyticsJobApi(id)

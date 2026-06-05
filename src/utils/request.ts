@@ -6,6 +6,7 @@ import { HTTP_STATUS_CODE } from '@/constants/http'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { ApiResult, RequestErrorPayload } from '@/types/api'
 import type { LoginVO } from '@/types/auth'
+import { toFriendlyMessage } from '@/utils/error'
 import { clearLocalAuth, getToken, setToken } from '@/utils/token'
 import { storage } from '@/utils/storage'
 
@@ -23,6 +24,16 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
+interface ApiCodeError extends Error {
+  code?: number
+}
+
+const DEMO_READ_ONLY_ALLOW_METHODS = new Set(['get', 'head', 'options'])
+const DEMO_READ_ONLY_WRITE_WHITELIST = [
+  '/auth/login',
+  '/auth/refresh-token'
+]
+
 const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
   timeout: appConfig.requestTimeout
@@ -34,6 +45,30 @@ const handleTokenExpired = () => {
     const redirect = encodeURIComponent(window.location.pathname + window.location.search)
     window.location.href = `/login?redirect=${redirect}`
   }
+}
+
+const getErrorCode = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  if (typeof code === 'number') return code
+  const responseCode = (error as AxiosError<RequestErrorPayload>)?.response?.data?.code
+  return typeof responseCode === 'number' ? responseCode : undefined
+}
+
+const isAuthFailureCode = (code?: number) =>
+  code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+
+const createApiCodeError = (message: string, code?: number) => {
+  const error = new Error(message) as ApiCodeError
+  error.code = code
+  return error
+}
+
+const isDemoReadOnlyWrite = (config: InternalAxiosRequestConfig) => {
+  if (!appConfig.demoReadOnly) return false
+  const method = String(config.method || 'get').toLowerCase()
+  if (DEMO_READ_ONLY_ALLOW_METHODS.has(method)) return false
+  const url = String(config.url || '')
+  return !DEMO_READ_ONLY_WRITE_WHITELIST.some((path) => url.includes(path))
 }
 
 const normalizeAuthArray = <T>(items?: T[]): T[] => Array.from(new Set(items || []))
@@ -79,7 +114,7 @@ const refreshToken = async () => {
       .then((response) => {
         const result = response.data
         if (result.code !== HTTP_STATUS_CODE.SUCCESS || !result.data?.token) {
-          throw new Error(result.message || 'refresh token failed')
+          throw createApiCodeError(result.message || 'refresh token failed', result.code)
         }
         persistRefreshResult(result.data)
         return result.data.token
@@ -95,7 +130,7 @@ const refreshToken = async () => {
 const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
   if (!config || config._retry) {
     handleTokenExpired()
-    return Promise.reject(new Error('Token expired'))
+    return Promise.reject(createApiCodeError('Token expired', HTTP_STATUS_CODE.TOKEN_INVALID))
   }
 
   config._retry = true
@@ -105,12 +140,20 @@ const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`
     return request(config)
   } catch (error) {
-    handleTokenExpired()
+    if (isAuthFailureCode(getErrorCode(error))) {
+      handleTokenExpired()
+    }
     return Promise.reject(error)
   }
 }
 
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (isDemoReadOnlyWrite(config)) {
+    const message = '演示只读模式已开启，写入操作不会提交。'
+    ElMessage.warning(message)
+    return Promise.reject(createApiCodeError(message, HTTP_STATUS_CODE.FORBIDDEN))
+  }
+
   const token = getToken()
 
   if (token) {
@@ -141,16 +184,13 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
 
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
       if (!silentError) {
-        ElMessage.error(result.message || '无访问权限')
-      }
-      if (window.location.pathname !== '/403') {
-        window.location.href = '/403'
+        ElMessage.error(toFriendlyMessage(result.message, '当前账号无权执行该操作，操作未提交。'))
       }
       return Promise.reject(result)
     }
 
     if (!silentError) {
-      ElMessage.error(result.message || '请求失败，请稍后重试')
+      ElMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
     }
     return Promise.reject(result)
 }
@@ -164,7 +204,10 @@ request.interceptors.response.use(
     }
 
     const silentError = (error.config as RetryableRequestConfig | undefined)?.silentError
-    const message = error.response?.data?.message || error.message || '网络异常，请稍后重试'
+    const message = toFriendlyMessage(
+      error.response?.data?.message || error.message,
+      '\u7f51\u7edc\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+    )
     if (!silentError) {
       ElMessage.error(message)
     }

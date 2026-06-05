@@ -3,7 +3,7 @@
     <section class="page-header">
       <div>
         <h1 class="page-title">Agent 运行详情</h1>
-        <p class="page-subtitle">查看本次 JobCoachAgent 的状态、耗时、任务产物和摘要化输入输出。</p>
+        <p class="page-subtitle">查看本次计划生成的状态、摘要、关注能力和任务产物。</p>
       </div>
       <el-button @click="router.back()">返回</el-button>
     </section>
@@ -20,47 +20,47 @@
             <div class="run-head">
               <div>
                 <div class="run-id">Run #{{ detail.id }}</div>
-                <h2>{{ detail.targetJobTitle || detail.agentType || 'JobCoachAgent' }}</h2>
+                <h2>{{ detail.targetJobTitle || '今日训练计划' }}</h2>
               </div>
               <StatusTag :status="detail.status" :map="runStatusMap" />
             </div>
 
             <div class="run-metrics">
               <article><span>触发方式</span><strong>{{ triggerMap[detail.triggerType || ''] || detail.triggerType || '--' }}</strong></article>
-              <article><span>模型</span><strong>{{ detail.modelName || '--' }}</strong></article>
               <article><span>耗时</span><strong>{{ detail.durationMs ?? '--' }} ms</strong></article>
-              <article><span>Token</span><strong>{{ (detail.tokenInput || 0) + (detail.tokenOutput || 0) || '--' }}</strong></article>
+              <article><span>计划日期</span><strong>{{ detail.planDate || '--' }}</strong></article>
+              <article><span>目标岗位 ID</span><strong>{{ detail.targetJobId ?? '--' }}</strong></article>
             </div>
 
             <el-descriptions :column="2" border class="run-desc">
               <el-descriptions-item label="Agent 类型">{{ detail.agentType || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="Prompt 类型">{{ detail.promptType || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="Prompt 版本">{{ detail.promptVersionId ?? '--' }}</el-descriptions-item>
-              <el-descriptions-item label="AI 日志 ID">{{ detail.aiCallLogId ?? '--' }}</el-descriptions-item>
-              <el-descriptions-item label="Trace ID">{{ detail.traceId || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="目标岗位 ID">{{ detail.targetJobId ?? '--' }}</el-descriptions-item>
+              <el-descriptions-item label="运行日期">{{ detail.planDate || '--' }}</el-descriptions-item>
               <el-descriptions-item label="开始时间">{{ detail.startedAt || '--' }}</el-descriptions-item>
               <el-descriptions-item label="结束时间">{{ detail.finishedAt || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="错误码">{{ detail.errorCode || '--' }}</el-descriptions-item>
-              <el-descriptions-item label="错误信息">{{ detail.errorMessage || '--' }}</el-descriptions-item>
+              <template v-if="isFailedRun">
+                <el-descriptions-item label="失败类型">{{ displayAgentError(detail.errorCode) }}</el-descriptions-item>
+                <el-descriptions-item label="失败原因">{{ displayAgentError(detail.errorMessage || detail.errorCode) }}</el-descriptions-item>
+              </template>
             </el-descriptions>
           </template>
         </div>
       </section>
 
-      <section v-if="detail" class="run-grid">
-        <article class="content-card">
-          <div class="content-card__body">
-            <h3>输入快照</h3>
-            <pre class="json-box">{{ formatJson(detail.inputSnapshot) }}</pre>
+      <section v-if="detail" class="content-card">
+        <div class="content-card__body">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Summary</p>
+              <h2>本次计划摘要</h2>
+            </div>
           </div>
-        </article>
-        <article class="content-card">
-          <div class="content-card__body">
-            <h3>结构化输出</h3>
-            <pre class="json-box">{{ formatJson(detail.output) }}</pre>
+          <p class="summary-text">{{ detail.summary || summaryFallback }}</p>
+          <div v-if="detail.focusSkills?.length" class="skill-tags">
+            <el-tag v-for="skill in detail.focusSkills" :key="skill.code || skill.name" effect="plain">
+              {{ skill.name || skill.code }}
+            </el-tag>
           </div>
-        </article>
+        </div>
       </section>
 
       <section v-if="detail" class="content-card">
@@ -74,8 +74,12 @@
           <div class="table-card embedded-table">
             <el-table :data="detail.tasks || []" row-key="id">
               <el-table-column prop="title" label="任务" min-width="240" show-overflow-tooltip />
-              <el-table-column prop="taskType" label="类型" width="150" />
-              <el-table-column prop="priority" label="优先级" width="100" />
+              <el-table-column label="类型" width="150">
+                <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
+              </el-table-column>
+              <el-table-column label="优先级" width="100">
+                <template #default="{ row }">{{ priorityLabel(row.priority) }}</template>
+              </el-table-column>
               <el-table-column label="耗时" width="90">
                 <template #default="{ row }">{{ row.estimatedMinutes ?? '--' }}m</template>
               </el-table-column>
@@ -84,20 +88,10 @@
               </el-table-column>
               <el-table-column prop="dueDate" label="日期" width="120" />
               <template #empty>
-                <AppState type="empty" title="本次运行没有任务产物" description="后端未返回 tasks，或本次运行未生成任务。" />
+                <AppState type="empty" title="本次运行没有任务产物" description="本次运行未生成可执行任务。" />
               </template>
             </el-table>
           </div>
-        </div>
-      </section>
-
-      <section v-if="detail?.rawOutputText" class="content-card">
-        <div class="content-card__body">
-          <el-collapse>
-            <el-collapse-item title="AI 原始输出">
-              <pre class="json-box">{{ detail.rawOutputText }}</pre>
-            </el-collapse-item>
-          </el-collapse>
         </div>
       </section>
     </template>
@@ -105,13 +99,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getAgentRunDetailApi } from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentRunDetailVO } from '@/types/agent'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -140,18 +135,26 @@ const triggerMap: Record<string, string> = {
   AUTO: '自动触发'
 }
 
-const getErrorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message?: unknown }).message || '接口请求失败')
-  }
-  return '接口请求失败'
+const taskTypeMap: Record<string, string> = {
+  QUESTION_PRACTICE: '刷题练习',
+  RESUME_OPTIMIZE: '简历优化',
+  INTERVIEW: '模拟面试',
+  SKILL_REVIEW: '技能复盘',
+  KNOWLEDGE_REVIEW: '知识复习'
 }
 
-const formatJson = (value: unknown) => {
-  if (!value) return '--'
-  if (typeof value === 'string') return value
-  return JSON.stringify(value, null, 2)
+const priorityMap: Record<string, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低'
 }
+
+const summaryFallback = '本次运行暂未返回摘要。你仍可以查看下方生成任务，按优先级完成后系统会更新后续计划。'
+
+const isFailedRun = computed(() => detail.value?.status === 'FAILED')
+const displayAgentError = (value?: string | null) => toFriendlyMessage(value, '--')
+const taskTypeLabel = (value?: string | null) => (value ? taskTypeMap[value] || value : '--')
+const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || value : '--')
 
 const fetchDetail = async () => {
   const id = Number(route.params.id)
@@ -166,7 +169,7 @@ const fetchDetail = async () => {
     detail.value = await getAgentRunDetailApi(id)
   } catch (error) {
     detail.value = undefined
-    errorMessage.value = getErrorMessage(error)
+    errorMessage.value = getErrorMessage(error, '运行详情加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -191,8 +194,7 @@ onMounted(fetchDetail)
 }
 
 .run-head h2,
-.section-head h2,
-.run-grid h3 {
+.section-head h2 {
   margin: 6px 0 0;
 }
 
@@ -223,23 +225,17 @@ onMounted(fetchDetail)
   white-space: nowrap;
 }
 
-.run-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+.summary-text {
+  margin: 14px 0 0;
+  color: var(--app-text);
+  line-height: 1.7;
 }
 
-.json-box {
-  overflow: auto;
-  max-height: 360px;
-  margin: 14px 0 0;
-  padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 8px;
-  background: #020617;
-  color: #dbeafe;
-  white-space: pre-wrap;
-  word-break: break-word;
+.skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .embedded-table {
@@ -251,8 +247,7 @@ onMounted(fetchDetail)
 }
 
 @media (max-width: 900px) {
-  .run-metrics,
-  .run-grid {
+  .run-metrics {
     grid-template-columns: 1fr;
   }
 }

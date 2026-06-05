@@ -3,6 +3,7 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
 const TAGS_KEY = 'codecoachai-visited-tags'
 const MAX_TAGS_PER_SCOPE = 12
+const RETIRED_TAG_PATHS = new Set(['/admin/ops/overview'])
 
 const TAG_TITLE_MAP: Record<string, string> = {
   '/dashboard': '工作台',
@@ -24,7 +25,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/knowledge': '知识库',
   '/agent/today': '今日 Agent',
   '/agent/tasks': 'Agent 任务',
-  '/admin': '管理首页',
+  '/admin/dashboard': '管理首页',
   '/admin/files': '文件治理',
   '/admin/users': '用户管理',
   '/admin/roles': '角色管理',
@@ -42,7 +43,6 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/admin/ai/models': 'AI 模型配置',
   '/admin/analytics/agent': 'Agent 效果分析',
   '/admin/analytics/ai': 'AI Ops 看板',
-  '/admin/ops/overview': '运维监控',
   '/admin/analytics/metrics': '指标字典',
   '/admin/analytics/jobs': '聚合任务',
   '/admin/ai/prompt-regression': 'Prompt 回归',
@@ -81,8 +81,8 @@ const userHomeTag: VisitedTag = {
 
 const adminHomeTag: VisitedTag = {
   title: '管理首页',
-  path: '/admin',
-  fullPath: '/admin',
+  path: '/admin/dashboard',
+  fullPath: '/admin/dashboard',
   name: 'AdminDashboard',
   affix: true,
   scope: 'admin'
@@ -125,6 +125,7 @@ const readTags = (): VisitedTag[] => {
     const tags: VisitedTag[] = Array.isArray(parsed)
       ? parsed
           .filter((item) => item && item.path)
+          .filter((item) => !RETIRED_TAG_PATHS.has(String(item.path)))
           .map((item) => ({
             title: resolveTagTitle(String(item.path), item.title),
             path: String(item.path),
@@ -168,6 +169,7 @@ export const useTagsViewStore = defineStore('tagsView', {
 
       // 公共页面（登录 / 注册 / 错误页）不进 Tab
       if (route.meta?.public) return
+      if (RETIRED_TAG_PATHS.has(route.path)) return
 
       const scope = resolveTagScope(route.path)
       const tag: VisitedTag = {

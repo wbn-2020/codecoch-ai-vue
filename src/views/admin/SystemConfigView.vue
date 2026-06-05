@@ -5,7 +5,7 @@
         <h1 class="page-title">系统配置</h1>
         <p class="page-subtitle">维护 V1 基础配置项，例如追问次数、每场题数和 AI 超时时间。</p>
       </div>
-      <el-button v-permission="'ADMIN'" type="primary" @click="openDialog()">新增配置</el-button>
+      <el-button v-permission="'admin:system:config:write'" type="primary" @click="openDialog()">新增配置</el-button>
     </div>
 
     <section class="content-card">
@@ -29,6 +29,11 @@
 
       <div class="table-card">
         <el-table v-loading="loading" :data="configs" row-key="configKey">
+          <template #empty>
+            <el-empty description="暂无系统配置">
+              <el-button v-permission="'admin:system:config:write'" type="primary" @click="openDialog()">新增配置</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="configKey" label="配置 Key" min-width="200" show-overflow-tooltip />
           <el-table-column prop="configName" label="配置名称" min-width="160" />
           <el-table-column prop="configValue" label="配置值" min-width="180" show-overflow-tooltip />
@@ -42,8 +47,20 @@
           <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
           <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
-              <el-button v-permission="'ADMIN'" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
-              <el-button v-permission="'ADMIN'" link type="danger" :disabled="row.editable !== 1" @click="handleDelete(row)">删除</el-button>
+              <div class="admin-row-actions">
+                <el-button v-permission="'admin:system:config:write'" link type="primary" :disabled="row.editable !== 1" @click="openDialog(row)">编辑</el-button>
+                <span class="admin-row-actions__risk">
+                  <el-button
+                    v-permission="'admin:system:config:write'"
+                    link
+                    type="danger"
+                    :disabled="row.editable !== 1"
+                    @click="handleDelete(row)"
+                  >
+                    删除配置
+                  </el-button>
+                </span>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -93,7 +110,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'ADMIN'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button v-permission="'admin:system:config:write'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -112,6 +129,7 @@ import {
 } from '@/api/system'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { SystemConfigCreateDTO, SystemConfigQueryDTO, SystemConfigVO } from '@/types/system'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -171,12 +189,30 @@ const openDialog = (row?: SystemConfigVO) => {
   dialogVisible.value = true
 }
 
+const validateConfigForm = async () => {
+  if (!formRef.value) return false
+  return formRef.value.validate().catch(() => false)
+}
+
 const handleSave = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await validateConfigForm()
+  if (!valid) return
   saving.value = true
   try {
     if (editingConfigId.value) {
+      try {
+        await ElMessageBox.confirm(
+          `确认保存系统配置「${form.configKey}」？影响范围：配置值变更后会影响依赖该 Key 的后台运行参数和管理端读取结果。`,
+          '确认变更系统配置',
+          {
+            type: 'warning',
+            confirmButtonText: '确认保存',
+            cancelButtonText: '取消'
+          }
+        )
+      } catch {
+        return
+      }
       await updateSystemConfigApi(editingConfigId.value, {
         configValue: form.configValue || '',
         description: form.description
@@ -187,6 +223,8 @@ const handleSave = async () => {
     ElMessage.success('系统配置已保存')
     dialogVisible.value = false
     await fetchConfigs()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '系统配置保存失败，请稍后重试。'))
   } finally {
     saving.value = false
   }
@@ -194,7 +232,15 @@ const handleSave = async () => {
 
 
 const handleDelete = async (row: SystemConfigVO) => {
-  await ElMessageBox.confirm(`确认删除配置 ${row.configKey}？`, '删除确认', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(`确认删除系统配置「${row.configKey}」？影响范围：该配置项将从系统配置列表移除，依赖该 Key 的后台参数读取和管理端展示会受到影响。`, '删除系统配置高风险确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
   await deleteSystemConfigApi(row.id)
   ElMessage.success('系统配置已删除')
   await fetchConfigs()
@@ -223,5 +269,22 @@ onMounted(fetchConfigs)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-row-actions__risk {
+  display: inline-flex;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.risk-operation-trigger {
+  font-weight: 600;
 }
 </style>
