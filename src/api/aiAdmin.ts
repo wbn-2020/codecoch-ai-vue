@@ -4,6 +4,7 @@ import type {
   ActivatePromptTemplateVersionDTO,
   AiCallLogQueryDTO,
   AiCallLogVO,
+  AiLogRawAccessDTO,
   CreatePromptTemplateVersionDTO,
   DisablePromptTemplateVersionDTO,
   PromptCallLogQueryDTO,
@@ -17,7 +18,7 @@ import type {
   TestPromptTemplateVersionVO,
   PromptTemplateVO
 } from '@/types/ai'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendAiCallLogVO = Omit<AiCallLogVO, 'status'> & {
   status: string | number
@@ -113,8 +114,9 @@ const normalizePromptTemplateDetail = (prompt: BackendPromptTemplateDetailVO): P
 })
 
 const normalizePromptPage = (
-  result: PageResult<BackendPromptTemplateVO>
-): PageResult<PromptTemplateVO> => normalizePageResult(result, undefined, normalizePromptTemplate)
+  result: PageResult<BackendPromptTemplateVO> | BackendPromptTemplateVO[],
+  params?: PromptTemplateQueryDTO
+): PageResult<PromptTemplateVO> => normalizePageResult(result, params, normalizePromptTemplate)
 
 const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => ({
   scene: data.scene,
@@ -126,11 +128,14 @@ const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => (
 
 export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
   return request
-    .get<PageResult<BackendPromptTemplateVO>, PageResult<BackendPromptTemplateVO>>(
+    .get<
+      PageResult<BackendPromptTemplateVO> | BackendPromptTemplateVO[],
+      PageResult<BackendPromptTemplateVO> | BackendPromptTemplateVO[]
+    >(
       '/admin/ai/prompts',
-      { params }
+      { params: compactQueryParams(params) }
     )
-    .then(normalizePromptPage)
+    .then((result) => normalizePromptPage(result, params))
 }
 
 export const createAdminAiPromptApi = (data: PromptTemplateDTO) => {
@@ -158,10 +163,12 @@ export const getPromptTemplateDetailApi = (id: number) => {
 }
 
 export const getPromptTemplateVersionsApi = (templateId: number, params?: PromptTemplateVersionQuery) => {
-  return request.get<PageResult<PromptTemplateVersionVO>, PageResult<PromptTemplateVersionVO>>(
-    `/admin/ai/prompt-templates/${templateId}/versions`,
-    { params }
-  )
+  return request
+    .get<PageResult<PromptTemplateVersionVO>, PageResult<PromptTemplateVersionVO>>(
+      `/admin/ai/prompt-templates/${templateId}/versions`,
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const createPromptTemplateVersionApi = (templateId: number, data: CreatePromptTemplateVersionDTO) => {
@@ -222,7 +229,7 @@ export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
   const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
     '/admin/ai/logs',
     {
-      params: requestParams
+      params: compactQueryParams(requestParams)
     }
   )
   return normalizeAiLogPage(result)
@@ -234,7 +241,7 @@ export const getPromptTemplateCallLogsApi = async (
 ) => {
   const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
     `/admin/ai/prompt-templates/${templateId}/call-logs`,
-    { params }
+    { params: compactQueryParams(params) }
   )
   return normalizeAiLogPage(result)
 }
@@ -245,7 +252,7 @@ export const getPromptTemplateVersionCallLogsApi = async (
 ) => {
   const result = await request.get<PageResult<BackendAiCallLogVO>, PageResult<BackendAiCallLogVO>>(
     `/admin/ai/prompt-template-versions/${versionId}/call-logs`,
-    { params }
+    { params: compactQueryParams(params) }
   )
   return normalizeAiLogPage(result)
 }
@@ -255,7 +262,7 @@ export const getAdminAiLogDetailApi = async (id: number) => {
   return normalizeAiCallLog(result)
 }
 
-export const getAdminAiLogRawApi = async (id: number) => {
-  const result = await request.get<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}/raw`)
+export const getAdminAiLogRawApi = async (id: number, data: AiLogRawAccessDTO) => {
+  const result = await request.post<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}/raw`, data)
   return normalizeAiCallLog(result)
 }

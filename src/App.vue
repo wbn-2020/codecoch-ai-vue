@@ -15,6 +15,46 @@
   </RouterView>
 </template>
 
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
+
+import { STORAGE_KEYS } from '@/constants/storage'
+import type { LoginVO } from '@/types/auth'
+import { AUTH_REFRESHED_EVENT } from '@/utils/authEvents'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const authStorageKeys = new Set<string>([
+  STORAGE_KEYS.token,
+  STORAGE_KEYS.userInfo,
+  STORAGE_KEYS.roles,
+  STORAGE_KEYS.permissions
+])
+
+const handleAuthRefreshed = (event: Event) => {
+  const detail = (event as CustomEvent<LoginVO>).detail
+  if (detail?.token) {
+    authStore.applyRefreshResult(detail)
+  }
+}
+
+const handleAuthStorageChange = (event: StorageEvent) => {
+  if (!event.key || authStorageKeys.has(event.key)) {
+    authStore.syncFromStorage()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
+  window.addEventListener('storage', handleAuthStorageChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
+  window.removeEventListener('storage', handleAuthStorageChange)
+})
+</script>
+
 <style scoped lang="scss">
 .app-route-loading {
   display: flex;

@@ -47,7 +47,7 @@ const stateIcon = computed(() => {
 const defaultTitle = computed(() => {
   const titleMap: Record<AppStateType, string> = {
     loading: '加载中',
-    empty: '暂无数据',
+    empty: '还没有可展示内容',
     error: '加载失败',
     disabled: '暂不可用',
     'api-pending': '功能准备中'
@@ -58,7 +58,7 @@ const defaultTitle = computed(() => {
 const defaultDescription = computed(() => {
   const descMap: Record<AppStateType, string> = {
     loading: '正在加载，请稍候。',
-    empty: '当前没有可展示的数据。',
+    empty: '当前还没有可展示的数据。',
     error: '数据加载遇到问题，请稍后重试。',
     disabled: '当前状态下暂时无法操作。',
     'api-pending': '该功能正在准备中，请稍后再试。'
@@ -75,7 +75,8 @@ const defaultDescription = computed(() => {
   padding: 18px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--app-surface, #ffffff);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
 .app-state__icon {

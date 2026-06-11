@@ -1,7 +1,7 @@
 const metricNameMap: Record<string, string> = {
-  'Agent success rate': 'Agent 成功率',
+  'Agent success rate': '计划生成成功率',
   'Task adoption rate': '任务采纳率',
-  'AI token cost': 'AI token 成本',
+  'AI token cost': 'AI 运行成本',
   'Prompt regression pass rate': 'Prompt 回归通过率'
 }
 
@@ -13,9 +13,9 @@ const metricDefinitionMap: Record<string, string> = {
 }
 
 const categoryMap: Record<string, string> = {
-  AGENT: 'Agent',
+  AGENT: '智能教练',
   AI: 'AI',
-  AI_OPS: 'AI Ops',
+  AI_OPS: 'AI 运营',
   TRAINING: '训练',
   GENERAL: '通用'
 }
@@ -28,9 +28,10 @@ const frequencyMap: Record<string, string> = {
 }
 
 const jobNameMap: Record<string, string> = {
-  'Agent daily plan batch': 'Agent 每日计划批处理',
-  'Agent daily plan aggregation': 'Agent 每日计划聚合',
-  'Agent 每日计划聚合': 'Agent 每日计划聚合'
+  'Agent daily plan batch': '智能教练每日计划批处理',
+  'Agent daily plan aggregation': '智能教练每日计划聚合',
+  'Agent 每日计划聚合': '智能教练每日计划聚合',
+  '智能教练每日计划聚合': '智能教练每日计划聚合'
 }
 
 const feedbackTypeMap: Record<string, string> = {
@@ -52,7 +53,7 @@ const feedbackTypeMap: Record<string, string> = {
   OTHER: '其他',
   TOO_HARD: '太难',
   TOO_EASY: '太简单',
-  UNKNOWN: '未知'
+  UNKNOWN: '反馈待确认'
 }
 
 export const translateMetricName = (value?: string) => (value ? metricNameMap[value] || value : '--')
@@ -67,7 +68,7 @@ export const translateJobName = (value?: string) => (value ? jobNameMap[value] |
 
 export const translateFeedbackType = (value?: string) => {
   const key = String(value || 'UNKNOWN').toUpperCase()
-  return feedbackTypeMap[key] || value || '未知'
+  return feedbackTypeMap[key] || value || '反馈待确认'
 }
 
 export const translateFailureReason = (value?: string | null) => {
@@ -76,8 +77,8 @@ export const translateFailureReason = (value?: string | null) => {
     .replace(/Provider api-key decrypt failed:\s*/gi, '供应商 api-key 解密失败：')
     .replace(/Provider not configured:\s*/gi, '供应商未配置：')
     .replace(/Provider request failed:\s*/gi, '供应商请求失败：')
-    .replace(/AI provider response is empty/gi, 'AI 供应商响应为空')
-    .replace(/AI base-url, api-key or model is not configured/gi, 'AI base-url、api-key 或模型未配置')
+    .replace(/AI provider response is empty/gi, 'AI 服务响应为空')
+    .replace(/AI base-url, api-key or model is not configured/gi, 'AI 服务地址、密钥或模型未配置')
     .replace(/not logged in/gi, '未登录')
     .replace(/manual rerun recorded/gi, '已记录手动重跑')
 }

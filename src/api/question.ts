@@ -66,6 +66,7 @@ import {
   normalizeUserQuestionPage,
   normalizeWrongPage
 } from '@/utils/normalizers/question'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse } from '@/utils/sse'
 
 export const getQuestionsApi = (params: QuestionQueryDTO) => {
@@ -135,17 +136,15 @@ export const updateQuestionMasteryApi = (id: number, data: UpdateMasteryDTO) => 
   return request.put<UpdateMasteryVO, UpdateMasteryVO>(`/questions/${id}/mastery`, data)
 }
 
-const compactQuery = <T extends object>(params: T) =>
-  Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
-  ) as Partial<T>
-
 export const getAdminQuestionsApi = (params: AdminQuestionQueryDTO) => {
   return request
-    .get<PageResult<BackendAdminQuestionVO>, PageResult<BackendAdminQuestionVO>>('/admin/questions', {
-      params: compactQuery(params)
+    .get<
+      PageResult<BackendAdminQuestionVO> | BackendAdminQuestionVO[],
+      PageResult<BackendAdminQuestionVO> | BackendAdminQuestionVO[]
+    >('/admin/questions', {
+      params: compactQueryParams(params)
     })
-    .then(normalizeAdminQuestionPage)
+    .then((result) => normalizeAdminQuestionPage(result, params))
 }
 
 export const getAdminQuestionDetailApi = (id: number) => {
@@ -240,15 +239,24 @@ export const getQuestionAnswerReviewsApi = (
   questionId: number,
   params: Omit<PracticeRecordQueryDTO, 'questionId'>
 ) => {
-  return request.get<PageResult<PracticeRecordVO>, PageResult<PracticeRecordVO>>(
-    `/questions/${questionId}/answer-reviews`,
-    { params }
-  )
+  return request
+    .get<PageResult<PracticeRecordVO>, PageResult<PracticeRecordVO>>(
+      `/questions/${questionId}/answer-reviews`,
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const generateAiQuestionsApi = (data: AiQuestionGenerateRequestDTO) => {
   return request.post<AiQuestionGenerateResultVO, AiQuestionGenerateResultVO>(
     '/admin/ai/questions/generate',
+    data
+  )
+}
+
+export const submitAiQuestionGenerateApi = (data: AiQuestionGenerateRequestDTO) => {
+  return request.post<AiQuestionGenerateResultVO, AiQuestionGenerateResultVO>(
+    '/admin/ai/questions/generate/submit',
     data
   )
 }
@@ -281,10 +289,12 @@ export const streamAiQuestionGenerateApi = (
 }
 
 export const getQuestionReviewsApi = (params: QuestionReviewQueryDTO) => {
-  return request.get<PageResult<QuestionReviewListVO>, PageResult<QuestionReviewListVO>>(
-    '/admin/question-reviews',
-    { params: compactQuery(params) }
-  )
+  return request
+    .get<PageResult<QuestionReviewListVO>, PageResult<QuestionReviewListVO>>(
+      '/admin/question-reviews',
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const getQuestionReviewDetailApi = (id: number) => {
@@ -337,6 +347,12 @@ export interface QuestionEmbeddingRebuildResult {
   updated: number
   vectorEnabled: boolean
   vectorUpdated: number
+  jobId?: number
+  vectorJobId?: number
+  vectorJobType?: string
+  vectorScopeType?: string
+  vectorScopeId?: string
+  vectorJobStatus?: string
   requested?: number
   matched?: number
   retried?: number
@@ -395,10 +411,12 @@ export const retryFailedQuestionEmbeddingApi = (limit?: number) => {
 }
 
 export const getQuestionDuplicateReviewsApi = (params: QuestionDuplicateReviewQueryDTO) => {
-  return request.get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
-    '/admin/question-duplicate-reviews',
-    { params }
-  )
+  return request
+    .get<PageResult<QuestionDuplicateReviewListVO>, PageResult<QuestionDuplicateReviewListVO>>(
+      '/admin/question-duplicate-reviews',
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const getQuestionDuplicateReviewDetailApi = (id: number) => {
@@ -421,10 +439,12 @@ export const evaluateQuestionDuplicateApi = (data: QuestionDuplicateEvaluationDT
 }
 
 export const getQuestionDuplicateEvalCasesApi = (params: QuestionDuplicateEvalCaseQueryDTO) => {
-  return request.get<PageResult<QuestionDuplicateEvalCaseVO>, PageResult<QuestionDuplicateEvalCaseVO>>(
-    '/admin/question-duplicate-reviews/eval/cases',
-    { params }
-  )
+  return request
+    .get<PageResult<QuestionDuplicateEvalCaseVO>, PageResult<QuestionDuplicateEvalCaseVO>>(
+      '/admin/question-duplicate-reviews/eval/cases',
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 export const saveQuestionDuplicateEvalCaseApi = (data: QuestionDuplicateEvalCaseSaveDTO) => {
@@ -453,10 +473,12 @@ export const sweepQuestionDuplicateThresholdApi = (data?: QuestionDuplicateThres
 }
 
 export const getQuestionDuplicateEvalRunsApi = (params?: { pageNo?: number; pageSize?: number }) => {
-  return request.get<PageResult<QuestionDuplicateEvalRunVO>, PageResult<QuestionDuplicateEvalRunVO>>(
-    '/admin/question-duplicate-reviews/eval/runs',
-    { params }
-  )
+  return request
+    .get<PageResult<QuestionDuplicateEvalRunVO>, PageResult<QuestionDuplicateEvalRunVO>>(
+      '/admin/question-duplicate-reviews/eval/runs',
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params))
 }
 
 

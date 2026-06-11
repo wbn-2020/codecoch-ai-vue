@@ -70,7 +70,6 @@ export interface SkillProfileListVO {
 }
 
 export interface SkillProfileDetailVO extends SkillProfileListVO {
-  rawResult?: unknown
   gapItems?: SkillGapItemVO[]
 }
 

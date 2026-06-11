@@ -20,6 +20,15 @@
     </AppState>
 
     <template v-else>
+      <el-alert
+        v-if="partialErrorMessage"
+        class="partial-alert"
+        type="warning"
+        :title="partialErrorMessage"
+        :closable="false"
+        show-icon
+      />
+
       <section class="analytics-metric-grid" v-loading="loading">
         <article v-for="item in metrics" :key="item.key" class="analytics-metric-card">
           <div class="metric-icon" :class="item.tone">
@@ -41,7 +50,16 @@
             </div>
           </div>
           <div v-if="!trend.length && !loading" class="empty-inline">
-            <el-empty description="暂无任务趋势数据" />
+            <AppState
+              type="empty"
+              title="还没有训练趋势"
+              description="完成今日任务或题库练习后，这里会按日期展示生成、完成和耗时。"
+            >
+              <div class="empty-actions">
+                <el-button type="primary" @click="goTodayPlan">去今日计划</el-button>
+                <el-button @click="goQuestionTraining">练一组题</el-button>
+              </div>
+            </AppState>
           </div>
           <div v-else ref="trendChartRef" class="analytics-chart"></div>
         </div>
@@ -62,7 +80,17 @@
               <div class="skill-bar-track"><i :style="{ width: barWidth(item.value) }"></i></div>
               <strong>{{ item.value }}</strong>
             </div>
-            <el-empty v-if="!skillDistribution.length && !loading" description="暂无技能分布数据" />
+            <AppState
+              v-if="!skillDistribution.length && !loading"
+              type="empty"
+              title="还没有技能分布"
+              description="完成带技能标签的练习、错题复盘或模拟面试后，这里会汇总重点技能。"
+            >
+              <div class="empty-actions">
+                <el-button type="primary" @click="goQuestionTraining">进入题库训练</el-button>
+                <el-button @click="goInterviewCreate">创建模拟面试</el-button>
+              </div>
+            </AppState>
           </div>
         </div>
       </section>
@@ -73,6 +101,7 @@
 <script setup lang="ts">
 import { CheckCircle2, Clock3, LineChart, RefreshCw, Sparkles, Target, Timer } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   getPersonalAgentOverviewApi,
@@ -81,39 +110,60 @@ import {
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import type { MetricPointVO, PersonalAgentOverviewVO, TrendPointVO } from '@/types/analytics'
-import echarts, { type ECharts } from '@/utils/echarts'
+import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
+const router = useRouter()
 const errorMessage = ref('')
+const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)
 const overview = ref<PersonalAgentOverviewVO>()
 const trend = ref<TrendPointVO[]>([])
 const skillDistribution = ref<MetricPointVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 let trendChart: ECharts | null = null
+let analyticsMounted = false
+let chartRenderSeq = 0
+let echartsModulePromise: Promise<typeof import('@/utils/echarts')> | null = null
 
 const rangeOptions = [
   { label: '近 7 天', value: 7 },
   { label: '近 30 天', value: 30 }
 ]
 
+const formatMinutes = (minutes?: number) => `${Math.max(0, minutes || 0)} 分钟`
+
+const formatWaitSeconds = (durationMs?: number) => {
+  const seconds = Math.max(1, Math.round((durationMs || 0) / 1000))
+  return `平均等待约 ${seconds} 秒`
+}
+
+const analyticsLoadErrorText = '分析数据暂时加载失败，请稍后重试。'
+
 const metrics = computed(() => [
   { key: 'today', label: '今日任务', value: overview.value?.todayTaskCount || 0, hint: `完成 ${overview.value?.todayDoneCount || 0} / 跳过 ${overview.value?.todaySkippedCount || 0}`, icon: Target, tone: 'tone-blue' },
-  { key: 'minutes', label: '今日预计耗时', value: `${overview.value?.todayEstimatedMinutes || 0}m`, hint: '来自今日训练任务', icon: Timer, tone: 'tone-cyan' },
+  { key: 'minutes', label: '今日预计耗时', value: formatMinutes(overview.value?.todayEstimatedMinutes), hint: '来自今日训练任务', icon: Timer, tone: 'tone-cyan' },
   { key: 'week', label: '近 7 天完成率', value: `${overview.value?.last7DaysCompletionRate || 0}%`, hint: `${overview.value?.last7DaysDoneCount || 0}/${overview.value?.last7DaysTaskCount || 0} 个任务`, icon: CheckCircle2, tone: 'tone-green' },
-  { key: 'agent', label: '计划生成成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgAgentDurationMs || 0}ms`, icon: Sparkles, tone: 'tone-violet' }
+  { key: 'agent', label: '今日计划成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: formatWaitSeconds(overview.value?.avgAgentDurationMs), icon: Sparkles, tone: 'tone-violet' }
 ])
 
 const maxSkillValue = computed(() => Math.max(...skillDistribution.value.map((item) => item.value || 0), 1))
+const partialErrorMessage = computed(() =>
+  partialErrors.value.length ? `部分分析数据暂时不可用：${partialErrors.value.join('；')}` : ''
+)
 
 const barWidth = (value?: number) => `${Math.max(6, ((value || 0) / maxSkillValue.value) * 100)}%`
 
+const goTodayPlan = () => router.push('/agent/today')
+const goQuestionTraining = () => router.push('/questions/recommendations')
+const goInterviewCreate = () => router.push('/interviews/create')
+
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, analyticsLoadErrorText)
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+  return analyticsLoadErrorText
 }
 
 const disposeChart = () => {
@@ -121,11 +171,24 @@ const disposeChart = () => {
   trendChart = null
 }
 
+const loadEcharts = () => {
+  if (!echartsModulePromise) {
+    echartsModulePromise = import('@/utils/echarts')
+  }
+  return echartsModulePromise
+}
+
 const renderTrendChart = async () => {
+  const renderSeq = ++chartRenderSeq
   await nextTick()
   disposeChart()
+  if (!analyticsMounted) return
   if (!trendChartRef.value || !trend.value.length) return
-  trendChart = echarts.init(trendChartRef.value)
+  const echarts = await loadEcharts()
+  if (!analyticsMounted || renderSeq !== chartRenderSeq || !trendChartRef.value || !trend.value.length) {
+    return
+  }
+  trendChart = echarts.default.init(trendChartRef.value)
   trendChart.setOption({
     color: ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa'],
     tooltip: { trigger: 'axis' },
@@ -145,21 +208,46 @@ const renderTrendChart = async () => {
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
+  partialErrors.value = []
   try {
     const params = { days: rangeDays.value }
-    const [overviewData, trendData, skillData] = await Promise.all([
+    const [overviewResult, trendResult, skillResult] = await Promise.allSettled([
       getPersonalAgentOverviewApi(),
       getPersonalTaskTrendApi(params),
       getPersonalSkillDistributionApi(params)
     ])
-    overview.value = overviewData
-    trend.value = trendData
-    skillDistribution.value = skillData
+
+    if (overviewResult.status === 'fulfilled') {
+      overview.value = overviewResult.value
+    } else {
+      overview.value = undefined
+      partialErrors.value.push(`训练总览加载失败：${getErrorMessage(overviewResult.reason)}`)
+    }
+
+    if (trendResult.status === 'fulfilled') {
+      trend.value = trendResult.value
+    } else {
+      trend.value = []
+      partialErrors.value.push(`任务趋势加载失败：${getErrorMessage(trendResult.reason)}`)
+    }
+
+    if (skillResult.status === 'fulfilled') {
+      skillDistribution.value = skillResult.value
+    } else {
+      skillDistribution.value = []
+      partialErrors.value.push(`技能分布加载失败：${getErrorMessage(skillResult.reason)}`)
+    }
+
+    if (partialErrors.value.length === 3) {
+      errorMessage.value = partialErrorMessage.value || '分析数据加载失败。'
+      partialErrors.value = []
+    }
     await renderTrendChart()
   } catch (error) {
     overview.value = undefined
     trend.value = []
     skillDistribution.value = []
+    partialErrors.value = []
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
@@ -169,11 +257,14 @@ const loadPage = async () => {
 const resizeChart = () => trendChart?.resize()
 
 onMounted(async () => {
-  await loadPage()
+  analyticsMounted = true
   window.addEventListener('resize', resizeChart)
+  await loadPage()
 })
 
 onBeforeUnmount(() => {
+  analyticsMounted = false
+  chartRenderSeq += 1
   window.removeEventListener('resize', resizeChart)
   disposeChart()
 })
@@ -234,6 +325,10 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
+.partial-alert {
+  margin: -4px 0 2px;
+}
+
 .analytics-metric-card {
   padding: 16px;
   border: 1px solid var(--app-border);
@@ -287,6 +382,13 @@ onBeforeUnmount(() => {
 
 .empty-inline {
   padding: 24px 0;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .skill-bars {

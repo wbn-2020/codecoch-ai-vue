@@ -12,6 +12,7 @@ export interface AdminListQuery extends PageQuery {
   module?: string
   action?: string
   traceId?: string
+  sendStatus?: string
   loginType?: string
   mapperId?: string
   sqlCommandType?: string
@@ -33,6 +34,7 @@ export interface AdminLogSummaryVO {
 
 export interface AsyncTaskVO {
   id: number
+  messageId?: string
   taskId?: string
   taskType?: string
   taskName?: string
@@ -42,6 +44,8 @@ export interface AsyncTaskVO {
   deadLetter?: boolean | number
   bizId?: string
   bizType?: string
+  userId?: number
+  traceId?: string
   errorMessage?: string
   payload?: string
   payloadPreview?: string
@@ -77,6 +81,9 @@ export interface AdminNotificationVO {
   targetType?: string
   targetUserId?: number
   status?: string | number
+  sendStatus?: string
+  sendError?: string
+  sentAt?: string
   createdAt?: string
   publishedAt?: string
 }

@@ -1,6 +1,7 @@
 import type { PageQuery } from './api'
 
 export type QuestionRecommendationStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | string
+export type QuestionRecommendationTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
 
 export const QUESTION_RECOMMENDATION_SOURCE_TYPE = {
   JD_GAP: 'JD_GAP',
@@ -46,10 +47,20 @@ export interface QuestionRecommendationQueryDTO extends PageQuery {
 
 export interface QuestionRecommendationGenerateVO {
   batchId: number
+  sourceType?: QuestionRecommendationSourceType
+  sourceId?: number
   status: QuestionRecommendationStatus
   questionCount?: number
   aiCallLogId?: number
   errorMessage?: string
+  trustStatus?: QuestionRecommendationTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -68,6 +79,9 @@ export interface QuestionRecommendationBatchListVO {
   status: QuestionRecommendationStatus
   aiCallLogId?: number
   errorMessage?: string
+  trustStatus?: QuestionRecommendationTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
   createdAt?: string
   updatedAt?: string
 }
@@ -87,9 +101,15 @@ export interface QuestionRecommendationItemVO {
   answerHint?: string
   evaluatePoints?: string
   sortOrder?: number
+  matchStatus?: string
   practiceStatus?: string
+  canPractice?: boolean
+  practiceQuestionId?: number
   sourceType?: QuestionRecommendationSourceType
   sourceId?: number
+  trustStatus?: QuestionRecommendationTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
   createdAt?: string
   updatedAt?: string
 }

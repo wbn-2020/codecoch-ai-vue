@@ -25,6 +25,14 @@ npm run dev
 npm run build
 ```
 
+## 目录约定
+
+- `src/`: 前端源码，页面、路由、API、类型和公共组件都从这里进入。
+- `docs/`: 项目文档、联调说明、验收报告和截图资产。
+- `docs/reports/frontend/`: 历史前端 Review、阶段报告和检查清单。
+- `docs/assets/smoke/`: 浏览器 smoke 截图等可复查图片资产。
+- `MD/`: 仅保留旧路径兼容入口，新文档请放到 `docs/`。
+
 ## 联调说明
 
 前端已按当前后端链路接入以下关键能力：

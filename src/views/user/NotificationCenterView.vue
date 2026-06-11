@@ -10,13 +10,13 @@
         <p>查看系统通知、报告完成提醒、任务提醒和公告。</p>
       </div>
       <div class="hero-actions">
-        <el-button :loading="markingAll" @click="handleMarkAllRead">
+        <el-button :loading="markingAll" :disabled="unreadCount <= 0" @click="handleMarkAllRead">
           <CheckCheck :size="16" />
           全部已读
         </el-button>
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
-          工作台
+          今日计划
         </el-button>
       </div>
     </section>
@@ -41,9 +41,14 @@
       <div v-if="errorMessage && !loading" class="notification-error">
         <AppState
           type="error"
-          title="通知接口请求失败"
+          title="通知加载失败"
           :description="errorMessage"
-        />
+        >
+          <el-button type="primary" :loading="loading" @click="loadNotificationCenter">
+            <RefreshCw :size="16" />
+            重新加载
+          </el-button>
+        </AppState>
       </div>
 
       <div class="notification-list" v-loading="loading">
@@ -100,14 +105,14 @@
           type="info"
           :closable="false"
           show-icon
-          :title="`关联业务：${notificationTarget.label}`"
+          :title="`关联页面：${notificationTarget.label}`"
         />
         <el-alert
           v-else
           type="warning"
           :closable="false"
           show-icon
-          title="这条通知没有配置可跳转的业务页面，可以仅查看并关闭。"
+          title="这条通知没有配置可跳转页面，可以仅查看并关闭。"
         />
       </div>
       <template #footer>
@@ -127,7 +132,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard } from 'lucide-vue-next'
+import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -140,6 +145,8 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
+import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 import { notifyUnreadChanged } from '@/utils/notificationEvents'
 
@@ -189,13 +196,13 @@ const notificationTarget = computed(() => {
     return { label: '简历中心', path: '/resumes' }
   }
   if (relatedType.includes('STUDY') || relatedType.includes('PLAN')) {
-    return { label: '学习计划', path: '/study-plans' }
+    return id ? { label: '学习计划', path: `/study-plans?planId=${id}` } : { label: '学习计划', path: '/study-plans' }
   }
   if (relatedType.includes('QUESTION')) {
     return id ? { label: '题目详情', path: `/questions/${id}` } : { label: '题库', path: '/questions' }
   }
   if (relatedType.includes('AGENT_RUN')) {
-    return id ? { label: 'Agent 运行详情', path: `/agent/runs/${id}` } : { label: 'Agent 任务', path: '/agent/tasks' }
+    return id ? { label: '训练计划生成详情', path: `/agent/runs/${id}` } : { label: '训练任务', path: '/agent/tasks' }
   }
   if (relatedType.includes('TASK')) {
     return { label: '每日任务', path: '/daily-tasks' }
@@ -213,10 +220,10 @@ const fetchNotifications = async () => {
     notifications.value = result.records || []
     total.value = result.total || 0
     errorMessage.value = ''
-  } catch {
+  } catch (error) {
     notifications.value = []
     total.value = 0
-    errorMessage.value = '通知中心接口未联调或暂时不可用，当前页面不会将失败请求伪装成空列表。'
+    errorMessage.value = getErrorMessage(error, '通知暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -236,6 +243,11 @@ const handleFilter = () => {
   fetchNotifications()
 }
 
+const loadNotificationCenter = () => {
+  fetchNotifications()
+  fetchUnreadCount()
+}
+
 const handleClickNotification = async (item: NotificationVO) => {
   if (item.isRead === 0) {
     try {
@@ -243,8 +255,8 @@ const handleClickNotification = async (item: NotificationVO) => {
       item.isRead = 1
       unreadCount.value = Math.max(0, unreadCount.value - 1)
       notifyUnreadChanged()
-    } catch {
-      // silent
+    } catch (error) {
+      ElMessage.warning(getErrorMessage(error, '已打开通知详情，但已读状态暂时没有保存成功，请稍后重试。'))
     }
   }
   selectedNotification.value = item
@@ -258,6 +270,21 @@ const jumpToNotificationTarget = async () => {
 }
 
 const handleMarkAllRead = async () => {
+  if (unreadCount.value <= 0) {
+    ElMessage.info('当前没有未读通知')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '全部标记为已读',
+    action: '将当前账号的未读通知全部标记为已读',
+    target: `${unreadCount.value} 条未读通知`,
+    impact: '未读数量会清零，通知列表中的未读提醒会消失；通知正文仍然保留，可以继续在通知中心查看。',
+    rollback: '已读状态不能批量恢复为未读；如需定位重要提醒，请在通知列表或关联页面继续查看。',
+    audit: '本次操作会按当前账号提交，通知中心会刷新未读数。',
+    tips: ['确认已经处理完需要立即关注的未读提醒。', '确认只改变已读状态，不会删除通知内容。'],
+    confirmButtonText: '全部标记已读'
+  })
+  if (!confirmed) return
   markingAll.value = true
   try {
     await markAllNotificationsReadApi()
@@ -269,16 +296,15 @@ const handleMarkAllRead = async () => {
       notifications.value.forEach((item) => { item.isRead = 1 })
     }
     ElMessage.success('已全部标记为已读')
-  } catch {
-    ElMessage.error('操作失败')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '全部标记为已读失败，请稍后重试。'))
   } finally {
     markingAll.value = false
   }
 }
 
 onMounted(() => {
-  fetchNotifications()
-  fetchUnreadCount()
+  loadNotificationCenter()
 })
 </script>
 
@@ -461,6 +487,29 @@ onMounted(() => {
   .notification-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+
+@media (max-width: 720px) {
+  .page-hero,
+  .history-hero,
+  .detail-hero,
+  .report-top,
+  .room-topbar,
+  .notification-hero,
+  .create-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions,
+  .report-actions,
+  .topbar-actions,
+  .card-actions,
+  .filter-bar,
+  .notification-toolbar {
+    justify-content: flex-start;
   }
 }
 </style>

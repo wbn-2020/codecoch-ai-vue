@@ -7,12 +7,45 @@
         <p class="admin-hero__desc">查看聚合任务日志，并按需重跑失败或过期任务。</p>
       </div>
       <div class="admin-hero__actions">
-        <el-button v-permission="'admin:analytics:job:run'" type="primary" @click="openManualRun">运行每日计划</el-button>
+        <el-button
+          v-permission="'admin:analytics:job:run'"
+          type="primary"
+          :disabled="pageActionDisabled"
+          :title="pageActionDisabledTitle"
+          @click="openManualRun"
+        >
+          运行每日计划
+        </el-button>
         <el-button :loading="loading" @click="fetchJobs">刷新</el-button>
       </div>
     </section>
 
     <section class="admin-panel">
+      <div class="admin-panel__header">
+        <div>
+          <h2>任务日志</h2>
+          <p>聚合任务用于支撑运营首页和 AI 运营看板；可按排障场景调整表格密度和诊断列。</p>
+        </div>
+        <div class="table-view-tools">
+          <el-segmented v-model="tableSize" :options="tableSizeOptions" />
+          <el-dropdown trigger="click" :hide-on-click="false">
+            <el-button plain>列配置</el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="column-config-menu">
+                <el-dropdown-item v-for="item in columnOptions" :key="item.key">
+                  <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
+                    {{ item.label }}
+                  </el-checkbox>
+                </el-dropdown-item>
+                <el-dropdown-item divided>
+                  <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </div>
+
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
           <el-form-item label="任务编码">
@@ -36,37 +69,62 @@
 
       <template v-else>
         <div class="table-card admin-table-card">
-          <el-table v-loading="loading" :data="jobs" row-key="id">
-            <el-table-column prop="jobCode" label="任务编码" min-width="180" show-overflow-tooltip />
-            <el-table-column label="任务名称" min-width="180" show-overflow-tooltip>
+          <el-table v-loading="loading" :data="jobs" row-key="id" :size="tableSize">
+            <el-table-column v-if="isColumnVisible('id')" prop="id" label="任务编号" width="100" />
+            <el-table-column v-if="isColumnVisible('jobCode')" prop="jobCode" label="任务编码" min-width="180" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('jobName')" label="任务名称" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ translateJobName(row.jobName || row.jobCode) }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="120">
+            <el-table-column v-if="isColumnVisible('status')" label="状态" width="120">
               <template #default="{ row }">
                 <StatusTag :status="row.status" />
               </template>
             </el-table-column>
-            <el-table-column prop="statDate" label="统计日期" width="130" />
-            <el-table-column prop="durationMs" label="耗时" width="120">
+            <el-table-column v-if="isColumnVisible('statDate')" prop="statDate" label="统计日期" width="130" />
+            <el-table-column v-if="isColumnVisible('durationMs')" prop="durationMs" label="耗时" width="120">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
-            <el-table-column label="错误信息" min-width="220" show-overflow-tooltip>
+            <el-table-column v-if="isColumnVisible('errorMessage')" label="错误信息" min-width="220" show-overflow-tooltip>
               <template #default="{ row }">{{ translateFailureReason(row.errorMessage) }}</template>
             </el-table-column>
-            <el-table-column label="输出" width="110">
+            <el-table-column v-if="isColumnVisible('outputJson')" label="输出" width="110">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openOutput(row.outputJson)">查看</el-button>
               </template>
             </el-table-column>
-            <el-table-column prop="startedAt" label="开始时间" width="180" />
-            <el-table-column prop="finishedAt" label="结束时间" width="180" />
+            <el-table-column v-if="isColumnVisible('startedAt')" prop="startedAt" label="开始时间" width="180" />
+            <el-table-column v-if="isColumnVisible('finishedAt')" prop="finishedAt" label="结束时间" width="180" />
+            <el-table-column v-if="isColumnVisible('createdAt')" prop="createdAt" label="创建时间" min-width="170" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('updatedAt')" prop="updatedAt" label="更新时间" min-width="170" show-overflow-tooltip />
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'admin:analytics:job:run'" link type="primary" :loading="rerunningId === row.id" @click="rerun(row)">重跑</el-button>
+                <el-button
+                  v-permission="'admin:analytics:job:run'"
+                  link
+                  type="primary"
+                  :loading="rerunningId === row.id"
+                  :disabled="pageActionDisabled"
+                  :title="pageActionDisabledTitle"
+                  @click="rerun(row)"
+                >
+                  重跑
+                </el-button>
               </template>
             </el-table-column>
             <template #empty>
-              <el-empty description="暂无聚合任务日志" />
+              <AppState type="empty" :title="jobEmptyTitle" :description="jobEmptyDescription">
+                <el-button v-if="hasJobFilters" type="primary" @click="handleReset">清空筛选</el-button>
+                <el-button
+                  v-else
+                  v-permission="'admin:analytics:job:run'"
+                  type="primary"
+                  :disabled="pageActionDisabled"
+                  :title="pageActionDisabledTitle"
+                  @click="openManualRun"
+                >
+                  运行每日计划
+                </el-button>
+              </AppState>
             </template>
           </el-table>
         </div>
@@ -84,13 +142,13 @@
       </template>
     </section>
 
-    <el-dialog v-model="manualDialogVisible" title="运行 Agent 每日计划聚合" width="620px">
+    <el-dialog v-model="manualDialogVisible" title="运行每日计划聚合" width="620px">
       <el-form :model="manualForm" label-position="top">
         <div class="form-grid">
           <el-form-item label="统计日期">
             <el-date-picker v-model="manualForm.statDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="目标岗位 ID">
+          <el-form-item label="目标岗位编号">
             <el-input-number v-model="manualForm.targetJobId" :min="1" controls-position="right" style="width: 100%" />
           </el-form-item>
           <el-form-item label="任务数量">
@@ -100,13 +158,22 @@
             <el-input-number v-model="manualForm.maxTotalMinutes" :min="1" controls-position="right" style="width: 100%" />
           </el-form-item>
         </div>
-        <el-form-item label="用户 ID">
-          <el-input v-model.trim="manualUserIds" placeholder="多个 ID 用英文逗号分隔，可选" />
+        <el-form-item label="用户编号">
+          <el-input v-model.trim="manualUserIds" placeholder="多个用户编号用英文逗号分隔，可选" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="manualDialogVisible = false">取消</el-button>
-        <el-button v-permission="'admin:analytics:job:run'" type="primary" :loading="manualRunning" @click="runDailyPlan">运行</el-button>
+        <el-button
+          v-permission="'admin:analytics:job:run'"
+          type="primary"
+          :loading="manualRunning"
+          :disabled="pageActionDisabled"
+          :title="pageActionDisabledTitle"
+          @click="runDailyPlan"
+        >
+          运行
+        </el-button>
       </template>
     </el-dialog>
 
@@ -118,11 +185,13 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getAdminAnalyticsJobsApi, rerunAdminAnalyticsJobApi, runAdminAnalyticsDailyPlanApi } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
+import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminAnalyticsJobLogVO, AdminAnalyticsJobQuery } from '@/types/analytics'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
@@ -135,6 +204,20 @@ const statusOptions = [
   { label: '失败', value: 'FAILED' },
   { label: '已取消', value: 'CANCELED' }
 ]
+type JobColumnKey =
+  | 'id'
+  | 'jobCode'
+  | 'jobName'
+  | 'status'
+  | 'statDate'
+  | 'durationMs'
+  | 'errorMessage'
+  | 'outputJson'
+  | 'startedAt'
+  | 'finishedAt'
+  | 'createdAt'
+  | 'updatedAt'
+
 const loading = ref(false)
 const errorMessage = ref('')
 const jobs = ref<AdminAnalyticsJobLogVO[]>([])
@@ -145,6 +228,28 @@ const manualRunning = ref(false)
 const manualUserIds = ref('')
 const outputDialogVisible = ref(false)
 const outputDialogContent = ref('')
+const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
+const {
+  tableSize,
+  tableSizeOptions,
+  columnOptions,
+  visibleColumns,
+  isColumnVisible,
+  resetTableView
+} = useAdminTableView<JobColumnKey>('admin:analytics-jobs', [
+  { key: 'id', label: '任务编号', defaultVisible: false },
+  { key: 'jobCode', label: '任务编码', required: true },
+  { key: 'jobName', label: '任务名称' },
+  { key: 'status', label: '状态', required: true },
+  { key: 'statDate', label: '统计日期' },
+  { key: 'durationMs', label: '耗时' },
+  { key: 'errorMessage', label: '错误信息' },
+  { key: 'outputJson', label: '输出', defaultVisible: false },
+  { key: 'startedAt', label: '开始时间' },
+  { key: 'finishedAt', label: '结束时间', defaultVisible: false },
+  { key: 'createdAt', label: '创建时间', defaultVisible: false },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false }
+])
 
 const query = reactive<AdminAnalyticsJobQuery>({
   pageNo: 1,
@@ -159,6 +264,20 @@ const manualForm = reactive({
   taskCount: undefined as number | undefined,
   maxTotalMinutes: undefined as number | undefined
 })
+const hasJobFilters = computed(() => Boolean(query.jobCode || query.status))
+const hasPageError = computed(() => Boolean(errorMessage.value))
+const pageActionDisabled = computed(() => hasPageError.value || isAdminMobileReadonly.value)
+const pageActionDisabledTitle = computed(() =>
+  mobileReadonlyTitle(hasPageError.value ? '当前聚合任务加载失败，请先重试加载，确认任务状态后再执行运行或重跑。' : undefined)
+)
+const jobEmptyTitle = computed(() =>
+  hasJobFilters.value ? '当前筛选没有聚合任务' : '暂无聚合任务日志'
+)
+const jobEmptyDescription = computed(() =>
+  hasJobFilters.value
+    ? '当前筛选条件下没有聚合任务。可以清空任务编码或状态筛选后重新查看，避免把筛选空误判为任务调度异常。'
+    : '暂无聚合任务日志。手动运行每日计划或等待定时聚合后，可在这里查看状态、耗时、错误信息和输出。'
+)
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -216,14 +335,15 @@ const parseUserIds = () =>
     .filter((item) => Number.isFinite(item) && item > 0)
 
 const runDailyPlan = async () => {
+  if (!guardAdminMobileWrite()) return
   const userIds = parseUserIds()
   const confirmed = await confirmDangerActionPreview({
     title: '运行每日计划高风险确认',
-    action: '手动运行 Agent 每日计划聚合',
-    target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按后端任务规则筛选可生成计划的用户',
+    action: '手动运行每日计划聚合',
+    target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按任务规则筛选可生成计划的用户',
     impact: '可能为多个用户生成或刷新今日训练计划，并产生 AI 调用、任务日志和统计记录。',
-    rollback: '前端无法自动撤销已生成计划；如误执行，需要通过任务日志和业务记录人工排查。',
-    audit: '后端会记录聚合任务日志，执行人、时间、任务参数可用于追踪。',
+    rollback: '已生成的计划无法自动撤销；如误执行，需要通过任务日志和业务记录人工排查。',
+    audit: '系统会记录聚合任务日志，执行人、时间、任务参数可用于追踪。',
     tips: ['确认统计日期、目标岗位和任务数量参数正确。', '确认当前不是演示只读模式或共享演示环境。'],
     confirmButtonText: '确认运行'
   })
@@ -232,7 +352,7 @@ const runDailyPlan = async () => {
   try {
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
-      jobName: 'Agent 每日计划聚合',
+      jobName: '智能教练每日计划聚合',
       statDate: manualForm.statDate || undefined,
       userIds,
       targetJobId: manualForm.targetJobId,
@@ -253,14 +373,15 @@ const openOutput = (content?: string) => {
 }
 
 const rerun = async (row: AdminAnalyticsJobLogVO) => {
+  if (!guardAdminMobileWrite()) return
   const id = row.id
   const confirmed = await confirmDangerActionPreview({
     title: '重跑聚合任务高风险确认',
     action: `重跑聚合任务 ${translateJobName(row.jobName || row.jobCode)}`,
-    target: `任务 ID：${id}；统计日期：${row.statDate || '未提供'}`,
+    target: `任务编号：${id}；统计日期：${row.statDate || '未提供'}`,
     impact: '会重新提交该任务，可能覆盖或追加统计结果，并产生新的任务执行记录。',
-    rollback: '无法由前端撤销已提交的任务；如结果异常，需要依据任务输出和操作日志人工修正。',
-    audit: '重跑请求会进入聚合任务日志，可通过任务 ID 和操作时间追踪。',
+    rollback: '任务提交后不能直接撤销；如结果异常，需要依据任务输出和操作日志人工修正。',
+    audit: '重跑请求会进入聚合任务日志，可通过任务编号和操作时间追踪。',
     tips: ['优先确认原任务失败原因已处理。', '避免对运行中任务重复提交。'],
     confirmButtonText: '确认重跑'
   })
@@ -304,6 +425,30 @@ onMounted(fetchJobs)
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.table-view-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+:global(.column-config-menu) {
+  min-width: 180px;
+  padding: 8px;
+}
+
+:global(.column-config-menu .el-checkbox) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .table-view-tools {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 
 @media (max-width: 720px) {

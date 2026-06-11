@@ -14,6 +14,7 @@ export type AgentTaskPriority = 'HIGH' | 'MEDIUM' | 'LOW' | string
 export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'SKIPPED' | 'EXPIRED' | string
 export type AgentRunStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELED' | string
 export type AgentTriggerType = 'MANUAL' | 'AUTO' | string
+export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
 
 export interface AgentSkillRefVO {
   code?: string
@@ -22,7 +23,11 @@ export interface AgentSkillRefVO {
 
 export interface AgentTaskVO {
   id: number
-  agentRunId?: number
+  agentRunId?: number | null
+  runId?: number | null
+  traceId?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
   targetJobId?: number
   targetJobTitle?: string
   userId?: number
@@ -38,6 +43,11 @@ export interface AgentTaskVO {
   relatedBizType?: string
   relatedBizId?: number
   actionUrl?: string
+  sourceType?: string | null
+  sourceId?: number | null
+  trustStatus?: AgentTrustStatus | null
+  evidenceSummary?: string | null
+  fallback?: boolean | null
   status?: AgentTaskStatus
   skipReason?: string
   dueDate?: string
@@ -61,6 +71,10 @@ export interface DailyPlanVO {
   tasks?: AgentTaskVO[]
   empty?: boolean
   emptyMessage?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
   startedAt?: string
   finishedAt?: string
   createdAt?: string

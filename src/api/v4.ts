@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
 import { toFriendlyMessage } from '@/utils/error'
 
@@ -353,6 +353,12 @@ export interface KnowledgeVectorRebuildVO {
   duplicateChunkCount?: number
   failedDocuments?: number[]
   errors?: string[]
+  jobId?: number
+  vectorJobId?: number
+  vectorJobType?: string
+  vectorScopeType?: string
+  vectorScopeId?: string
+  vectorJobStatus?: string
 }
 
 export interface KnowledgeEvaluationSampleDTO {
@@ -506,7 +512,7 @@ export const generateAgentReviewApi = (data?: { targetJobId?: number; date?: str
   request.post<AgentReviewVO, AgentReviewVO>('/agent/job-coach/review', data || {})
 
 export const getAgentReviewsApi = (params?: { targetJobId?: number }) =>
-  request.get<AgentReviewVO[], AgentReviewVO[]>('/agent/reviews', { params }).then((data) => data || [])
+  request.get<AgentReviewVO[], AgentReviewVO[]>('/agent/reviews', { params: compactQueryParams(params) }).then((data) => data || [])
 
 export const getGrowthOverviewApi = () =>
   request.get<GrowthOverviewVO, GrowthOverviewVO>('/agent/growth/profile/overview')
@@ -515,17 +521,17 @@ export const getGrowthProfileOverviewApi = getGrowthOverviewApi
 
 export const getGrowthSkillsTrendApi = (params?: { days?: number }) =>
   request
-    .get<SkillGrowthSnapshotVO[], SkillGrowthSnapshotVO[]>('/agent/growth/skills/trend', { params })
+    .get<SkillGrowthSnapshotVO[], SkillGrowthSnapshotVO[]>('/agent/growth/skills/trend', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
 export const getGrowthReadinessTrendApi = (params?: { days?: number }) =>
   request
-    .get<ReadinessScoreRecordVO[], ReadinessScoreRecordVO[]>('/agent/growth/readiness/trend', { params })
+    .get<ReadinessScoreRecordVO[], ReadinessScoreRecordVO[]>('/agent/growth/readiness/trend', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
 export const getAgentMemoriesApi = (params?: { pageNo?: number; pageSize?: number; memoryType?: string; enabled?: number }) =>
   request
-    .get<PageResult<AgentMemoryVO> | AgentMemoryVO[], PageResult<AgentMemoryVO> | AgentMemoryVO[]>('/agent/memories', { params })
+    .get<PageResult<AgentMemoryVO> | AgentMemoryVO[], PageResult<AgentMemoryVO> | AgentMemoryVO[]>('/agent/memories', { params: compactQueryParams(params) })
     .then((result) => normalizePageResult(result, params))
 
 export const createAgentMemoryApi = (data: Partial<AgentMemoryVO>) =>
@@ -560,7 +566,7 @@ export const applyResumeVersionSuggestionApi = (versionId: number, data?: Resume
   request.post<ResumeSuggestionAdoptionVO, ResumeSuggestionAdoptionVO>(`/resume-versions/${versionId}/apply-ai-suggestion`, data || {})
 
 export const getApplicationsApi = (params?: { status?: string }) =>
-  request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params }).then((data) => data || [])
+  request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params: compactQueryParams(params) }).then((data) => data || [])
 
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
@@ -589,7 +595,7 @@ export const uploadKnowledgeDocumentApi = (file: File, documentType?: string) =>
 
 export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number; title?: string; documentType?: string; status?: string }) =>
   request
-    .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params })
+    .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params: compactQueryParams(params) })
     .then((result) => normalizePageResult(result, params))
 
 export const getKnowledgeDocumentTypesApi = () =>
@@ -623,20 +629,20 @@ export const getKnowledgeChunkApi = (chunkId: number) =>
 
 export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
   request
-    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: { limit } })
+    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>(`/agent/knowledge/chunks/${chunkId}/similar`, { params: compactQueryParams({ limit }) })
     .then((data) => data || [])
 
 export const getKnowledgeDuplicateReviewApi = (params?: { limit?: number; threshold?: number }) =>
-  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params })
+  request.get<KnowledgeDuplicateReviewVO, KnowledgeDuplicateReviewVO>('/agent/knowledge/duplicates/review', { params: compactQueryParams(params) })
 
 export const getKnowledgeExactDuplicatesApi = (params?: { limit?: number; documentId?: number; documentType?: string }) =>
   request
-    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params })
+    .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
 export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number; documentId?: number; documentType?: string }) =>
   request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
-    params
+    params: compactQueryParams(params)
   })
 
 export const deleteKnowledgeDocumentApi = (id: number) =>
@@ -657,11 +663,11 @@ export const retryFailedKnowledgeVectorsApi = (limit?: number) =>
 
 export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request
-    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params })
+    .get<KnowledgeSearchResultVO[], KnowledgeSearchResultVO[]>('/agent/knowledge/search', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
 export const traceKnowledgeSearchApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
-  request.get<KnowledgeSearchTraceVO, KnowledgeSearchTraceVO>('/agent/knowledge/search/trace', { params })
+  request.get<KnowledgeSearchTraceVO, KnowledgeSearchTraceVO>('/agent/knowledge/search/trace', { params: compactQueryParams(params) })
 
 export const askKnowledgeApi = (data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
   request.post<KnowledgeAskVO, KnowledgeAskVO>('/agent/knowledge/ask', data)
@@ -718,7 +724,9 @@ export const evaluateKnowledgeApi = (data: KnowledgeEvaluationDTO) =>
   request.post<KnowledgeEvaluationVO, KnowledgeEvaluationVO>('/agent/knowledge/evaluate', data)
 
 export const getKnowledgeEvalCasesApi = (params?: KnowledgeEvalCaseQueryDTO) =>
-  request.get<PageResult<KnowledgeEvalCaseVO>, PageResult<KnowledgeEvalCaseVO>>('/agent/knowledge/eval/cases', { params })
+  request
+    .get<PageResult<KnowledgeEvalCaseVO>, PageResult<KnowledgeEvalCaseVO>>('/agent/knowledge/eval/cases', { params: compactQueryParams(params) })
+    .then((result) => normalizePageResult(result, params))
 
 export const saveKnowledgeEvalCaseApi = (data: KnowledgeEvalCaseSaveDTO) =>
   request.post<KnowledgeEvalCaseVO, KnowledgeEvalCaseVO>('/agent/knowledge/eval/cases', data)
@@ -730,7 +738,9 @@ export const runKnowledgeEvalApi = (data?: KnowledgeEvalRunRequestDTO) =>
   request.post<KnowledgeEvalRunVO, KnowledgeEvalRunVO>('/agent/knowledge/eval/runs', data || {})
 
 export const getKnowledgeEvalRunsApi = (params?: { pageNo?: number; pageSize?: number }) =>
-  request.get<PageResult<KnowledgeEvalRunVO>, PageResult<KnowledgeEvalRunVO>>('/agent/knowledge/eval/runs', { params })
+  request
+    .get<PageResult<KnowledgeEvalRunVO>, PageResult<KnowledgeEvalRunVO>>('/agent/knowledge/eval/runs', { params: compactQueryParams(params) })
+    .then((result) => normalizePageResult(result, params))
 
 export const getKnowledgeEvalRunApi = (id: number) =>
   request.get<KnowledgeEvalRunVO, KnowledgeEvalRunVO>(`/agent/knowledge/eval/runs/${id}`)

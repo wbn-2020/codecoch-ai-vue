@@ -5,11 +5,16 @@ import type {
   IndustryTemplateVO,
   UpdateIndustryTemplateDTO
 } from '@/types/industryTemplate'
+import type { PageResult } from '@/types/api'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 export const getAdminIndustryTemplatesApi = (params?: AdminIndustryTemplateQuery) => {
-  return request.get<IndustryTemplateVO[], IndustryTemplateVO[]>('/admin/industry-templates', {
-    params
-  })
+  return request
+    .get<IndustryTemplateVO[] | PageResult<IndustryTemplateVO>, IndustryTemplateVO[] | PageResult<IndustryTemplateVO>>(
+      '/admin/industry-templates',
+      { params: compactQueryParams(params) }
+    )
+    .then((result) => normalizePageResult(result, params).records)
 }
 
 export const getAdminIndustryTemplateDetailApi = (id: number) => {

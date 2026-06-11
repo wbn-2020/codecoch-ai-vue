@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionCategoryVO = Partial<QuestionCategoryVO> & {
   categoryName?: string
@@ -37,7 +37,7 @@ const toBackendCategoryDTO = (data: QuestionCategoryDTO) => ({
 export const getQuestionCategoriesApi = (params?: { status?: number | ''; keyword?: string }) => {
   return request
     .get<BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>, BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>>('/admin/question-categories', {
-      params
+      params: compactQueryParams(params)
     })
     .then((result) => normalizeCategoryList(normalizePageResult(result).records))
 }

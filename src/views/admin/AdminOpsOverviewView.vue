@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">运维监控</h1>
         <p class="admin-hero__desc">
-          聚合 AI 调用、Agent 运行、系统状态和失败分布。已接入服务健康探测；QPS、TPS、CPU、内存和缓存命中率等待后端指标采集后自动替换。
+          聚合 AI 运行、智能教练生成运行、系统状态和失败分布。已接入服务健康探测；QPS、TPS、CPU、内存和缓存命中率会在监控指标可用后自动替换。
         </p>
       </div>
       <div class="admin-hero__actions">
@@ -22,6 +22,20 @@
     </AppState>
 
     <template v-else>
+      <AppState
+        v-if="partialErrors.length"
+        class="admin-diagnostic-state"
+        type="disabled"
+        title="部分运维数据未返回"
+        :description="partialErrorDescription"
+      >
+        <div class="diagnostic-actions">
+          <el-button type="primary" @click="loadPage">重新加载</el-button>
+          <el-button @click="goAdminPath('/admin/ai/logs')">查看 AI 运行记录</el-button>
+          <el-button @click="goAdminPath('/admin/analytics/jobs')">查看聚合任务</el-button>
+        </div>
+      </AppState>
+
       <section class="ops-card-grid" v-loading="loading">
         <article v-for="group in metricGroups" :key="group.key" class="ops-card">
           <div class="ops-card__head">
@@ -48,19 +62,29 @@
           <div class="ops-panel__head">
             <div>
               <h2>QPS / RPM / TPM 趋势</h2>
-              <p>按天聚合 AI 调用、失败和 Agent 运行数据</p>
+              <p>按天聚合 AI 运行、失败和智能教练生成运行数据</p>
             </div>
             <el-tag effect="plain">近 {{ rangeDays }} 天</el-tag>
           </div>
-          <div ref="trendChartRef" class="ops-chart" />
-          <el-empty v-if="!trendPoints.length && !loading" description="暂无趋势数据" />
+          <div v-if="trendPoints.length" ref="trendChartRef" class="ops-chart" />
+          <AppState
+            v-else-if="!loading"
+            class="ops-empty-state"
+            :type="trendEmptyType"
+            :title="trendEmptyTitle"
+            :description="trendEmptyDescription"
+          >
+            <el-button type="primary" @click="loadPage">重新加载</el-button>
+            <el-button @click="goAdminPath('/admin/ai/logs')">查看 AI 运行记录</el-button>
+            <el-button @click="goAdminPath('/admin/agent/runs')">查看生成运行</el-button>
+          </AppState>
         </article>
 
         <article class="ops-panel">
           <div class="ops-panel__head">
             <div>
               <h2>模型 / 失败统计</h2>
-              <p>当前后端返回失败原因聚合</p>
+              <p>当前失败原因聚合</p>
             </div>
           </div>
           <div class="ops-model-list">
@@ -71,7 +95,16 @@
               </div>
               <el-progress :percentage="failurePercent(item.value)" :stroke-width="8" :show-text="false" />
             </div>
-            <el-empty v-if="!failurePoints.length && !loading" description="暂无失败原因聚合" />
+            <AppState
+              v-if="!failurePoints.length && !loading"
+              class="ops-empty-state"
+              :type="failureEmptyType"
+              :title="failureEmptyTitle"
+              :description="failureEmptyDescription"
+            >
+              <el-button type="primary" @click="goAdminPath('/admin/ai/logs?status=FAILED')">查看失败记录</el-button>
+              <el-button @click="loadPage">刷新聚合</el-button>
+            </AppState>
           </div>
         </article>
       </section>
@@ -104,12 +137,21 @@
             <div class="ops-service-row">
               <span :class="`ops-dot ops-dot--${vectorDeleteOutboxTone}`"></span>
               <div>
-                <strong>向量删除补偿</strong>
+                <strong>索引删除补偿</strong>
                 <small>{{ vectorDeleteOutboxHint }}</small>
               </div>
               <em :class="`status-${vectorDeleteOutboxTone}`">{{ vectorDeleteOutboxStatus }}</em>
             </div>
-            <el-empty v-if="!services.length && !loading" description="暂无服务状态" />
+            <AppState
+              v-if="!hasServiceHealthRows && !loading"
+              class="ops-empty-state"
+              :type="serviceHealthEmptyType"
+              :title="serviceHealthEmptyTitle"
+              :description="serviceHealthEmptyDescription"
+            >
+              <el-button type="primary" @click="loadPage">重新加载</el-button>
+              <el-button @click="goAdminPath('/admin/dashboard')">运营首页</el-button>
+            </AppState>
           </div>
         </article>
 
@@ -123,14 +165,23 @@
           <div class="ops-job-list">
             <div v-for="job in jobs" :key="job.id" class="ops-job-row">
               <div>
-                <strong>{{ translateJobName(job.jobName || job.jobCode || `Job #${job.id}`) }}</strong>
+                <strong>{{ translateJobName(job.jobName || job.jobCode || `任务编号 ${job.id}`) }}</strong>
                 <small>{{ job.statDate || job.createdAt || '--' }}</small>
               </div>
               <el-tag :type="job.status === 'SUCCESS' ? 'success' : job.status === 'FAILED' ? 'danger' : 'warning'" effect="plain">
                 {{ jobStatusLabel(job.status) }}
               </el-tag>
             </div>
-            <el-empty v-if="!jobs.length && !loading" description="暂无聚合任务" />
+            <AppState
+              v-if="!jobs.length && !loading"
+              class="ops-empty-state"
+              :type="jobEmptyType"
+              :title="jobEmptyTitle"
+              :description="jobEmptyDescription"
+            >
+              <el-button type="primary" @click="goAdminPath('/admin/analytics/jobs')">查看聚合任务</el-button>
+              <el-button @click="loadPage">刷新</el-button>
+            </AppState>
           </div>
         </article>
       </section>
@@ -140,8 +191,8 @@
         <article class="ops-panel ops-panel--wide vector-admin-panel">
           <div class="ops-panel__head">
             <div>
-              <h2>向量索引控制台</h2>
-              <p>展示 Qdrant 集合、MySQL 索引状态计数，以及题目去重和个人知识库的向量运行情况。</p>
+              <h2>语义索引控制台</h2>
+              <p>展示语义检索集合、业务索引状态计数，以及题目去重和个人知识库的索引运行情况。</p>
             </div>
             <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
           </div>
@@ -154,7 +205,7 @@
               <small>{{ item.subtitle }}</small>
               <div class="vector-status-list">
                 <span v-for="status in item.statusCounts" :key="`${item.key}-${status.status}`">
-                  {{ status.status || 'UNKNOWN' }} {{ status.count || 0 }}
+                  {{ vectorStatusLabel(status.status) }} {{ status.count || 0 }}
                 </span>
               </div>
               <em v-if="item.errorMessage">{{ item.errorMessage }}</em>
@@ -175,14 +226,14 @@
             </div>
             <div class="vector-index-card">
               <div class="vector-index-card__head">
-                <span>Embedding 指标</span>
+                <span>索引生成指标</span>
                 <strong>{{ compact(vectorHealth?.embeddingMetrics?.callCount) }}</strong>
               </div>
               <small>{{ embeddingMetricHint }}</small>
               <div class="vector-status-list">
                 <span>失败 {{ vectorHealth?.embeddingMetrics?.failedCount || 0 }}</span>
                 <span>平均 {{ formatMs(vectorHealth?.embeddingMetrics?.averageElapsedMs) }}</span>
-                <span>Token {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
+                <span>消耗 {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
               </div>
               <em v-if="vectorHealth?.embeddingMetrics?.errorMessage">{{ vectorHealth.embeddingMetrics.errorMessage }}</em>
             </div>
@@ -209,24 +260,69 @@
           </div>
           <div class="vector-action-list">
             <div class="vector-action-group">
-              <span class="vector-action-group__label">题目向量</span>
-              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="rebuildingQuestionVectors" @click="handleRebuildQuestionVectors">
-                重建题目向量
+              <span class="vector-action-group__label">题目语义索引</span>
+              <el-button
+                v-permission="'admin:question:embedding:rebuild'"
+                type="warning"
+                plain
+                :icon="RefreshCw"
+                :loading="rebuildingQuestionVectors"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleRebuildQuestionVectors"
+              >
+                重建题目索引
               </el-button>
-              <el-button v-permission="'admin:question:embedding:rebuild'" type="warning" plain :icon="RefreshCw" :loading="retryingQuestionVectors" @click="handleRetryQuestionVectors">
+              <el-button
+                v-permission="'admin:question:embedding:rebuild'"
+                type="warning"
+                plain
+                :icon="RefreshCw"
+                :loading="retryingQuestionVectors"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleRetryQuestionVectors"
+              >
                 重试题目失败
               </el-button>
             </div>
             <div class="vector-action-group vector-action-group--risk">
               <span class="vector-action-group__label">知识库与删除补偿</span>
-              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="rebuildingKnowledgeVectors" @click="handleRebuildKnowledgeVectors">
-                重建知识库向量
+              <el-button
+                v-permission="'admin:analytics:ai'"
+                type="warning"
+                plain
+                :icon="RefreshCw"
+                :loading="rebuildingKnowledgeVectors"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleRebuildKnowledgeVectors"
+              >
+                重建知识库索引
               </el-button>
-              <el-button v-permission="'admin:analytics:ai'" type="warning" plain :icon="RefreshCw" :loading="retryingKnowledgeVectors" @click="handleRetryKnowledgeVectors">
+              <el-button
+                v-permission="'admin:analytics:ai'"
+                type="warning"
+                plain
+                :icon="RefreshCw"
+                :loading="retryingKnowledgeVectors"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleRetryKnowledgeVectors"
+              >
                 重试知识库失败
               </el-button>
-              <el-button v-permission="'admin:analytics:ai'" type="danger" plain :icon="RefreshCw" :loading="retryingVectorDeletes" @click="handleRetryVectorDeletes">
-                重试向量删除补偿
+              <el-button
+                v-permission="'admin:analytics:ai'"
+                type="danger"
+                plain
+                :icon="RefreshCw"
+                :loading="retryingVectorDeletes"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleRetryVectorDeletes"
+              >
+                重试索引删除补偿
               </el-button>
             </div>
           </div>
@@ -234,6 +330,15 @@
             <strong>{{ lastVectorAction.title }}</strong>
             <span>{{ lastVectorAction.summary }}</span>
             <small v-if="lastVectorAction.detail">{{ lastVectorAction.detail }}</small>
+            <el-button
+              v-if="lastVectorAction.vectorJobId"
+              link
+              type="primary"
+              :icon="ExternalLink"
+              @click="openLastVectorJob"
+            >
+              查看索引任务编号 {{ lastVectorAction.vectorJobId }}
+            </el-button>
           </div>
         </article>
       </section>
@@ -242,7 +347,7 @@
         <article class="ops-panel ops-panel--wide vector-failure-panel">
           <div class="ops-panel__head vector-failure-head">
             <div>
-              <h2>向量失败明细</h2>
+              <h2>索引失败明细</h2>
               <p>展示题目去重、个人知识库索引和删除补偿最近的失败记录。</p>
             </div>
             <div class="vector-failure-tools">
@@ -252,6 +357,52 @@
                 <el-option :value="50" label="50 条" />
                 <el-option :value="100" label="100 条" />
               </el-select>
+              <el-segmented v-model="vectorFailureTableSize" :options="vectorFailureTableSizeOptions" />
+              <el-dropdown trigger="click" :hide-on-click="false">
+                <el-button plain>题目列配置</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu class="column-config-menu">
+                    <el-dropdown-item v-for="item in questionFailureColumnOptions" :key="item.key">
+                      <el-checkbox v-model="questionFailureVisibleColumns[item.key]" :disabled="item.required">
+                        {{ item.label }}
+                      </el-checkbox>
+                    </el-dropdown-item>
+                    <el-dropdown-item divided>
+                      <el-button link type="primary" @click.stop="resetQuestionFailureTableView">恢复默认视图</el-button>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" :hide-on-click="false">
+                <el-button plain>知识列配置</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu class="column-config-menu">
+                    <el-dropdown-item v-for="item in knowledgeFailureColumnOptions" :key="item.key">
+                      <el-checkbox v-model="knowledgeFailureVisibleColumns[item.key]" :disabled="item.required">
+                        {{ item.label }}
+                      </el-checkbox>
+                    </el-dropdown-item>
+                    <el-dropdown-item divided>
+                      <el-button link type="primary" @click.stop="resetKnowledgeFailureTableView">恢复默认视图</el-button>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" :hide-on-click="false">
+                <el-button plain>补偿列配置</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu class="column-config-menu">
+                    <el-dropdown-item v-for="item in deleteOutboxFailureColumnOptions" :key="item.key">
+                      <el-checkbox v-model="deleteOutboxFailureVisibleColumns[item.key]" :disabled="item.required">
+                        {{ item.label }}
+                      </el-checkbox>
+                    </el-dropdown-item>
+                    <el-dropdown-item divided>
+                      <el-button link type="primary" @click.stop="resetDeleteOutboxFailureTableView">恢复默认视图</el-button>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button :icon="RefreshCw" :loading="vectorFailureLoading" @click="loadVectorFailures">刷新明细</el-button>
             </div>
           </div>
@@ -288,21 +439,21 @@
           </el-alert>
 
           <el-tabs v-model="vectorFailureTab" class="vector-failure-tabs" v-loading="vectorFailureLoading">
-            <el-tab-pane :label="`题目向量 ${vectorFailureCounts.question}`" name="question">
-              <el-table :data="vectorFailures?.questionFailures || []" class="ops-table" size="small" empty-text="暂无题目向量失败记录">
-                <el-table-column label="Question ID" prop="questionId" min-width="110" />
-                <el-table-column label="状态" min-width="96">
+            <el-tab-pane :label="`题目语义索引 ${vectorFailureCounts.question}`" name="question">
+              <el-table :data="vectorFailures?.questionFailures || []" class="ops-table" :size="vectorFailureTableSize">
+                <el-table-column v-if="isQuestionFailureColumnVisible('questionId')" label="题目编号" prop="questionId" min-width="110" />
+                <el-table-column v-if="isQuestionFailureColumnVisible('status')" label="状态" min-width="96">
                   <template #default="{ row }">
-                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ row.indexStatus || 'PENDING' }}</el-tag>
+                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ vectorStatusLabel(row.indexStatus) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="模型 / 维度" min-width="160">
+                <el-table-column v-if="isQuestionFailureColumnVisible('model')" label="模型 / 维度" min-width="160">
                   <template #default="{ row }">
                     <span>{{ vectorModelHint(row.embeddingModel, row.embeddingDimension) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
-                <el-table-column label="错误" min-width="260">
+                <el-table-column v-if="isQuestionFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column v-if="isQuestionFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
                     <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
                       <span class="vector-error-text">{{ row.lastError }}</span>
@@ -322,30 +473,41 @@
                     </div>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <AppState
+                    class="ops-empty-state ops-table-empty"
+                    :type="vectorFailureEmptyType"
+                    :title="vectorFailureEmptyTitle('question')"
+                    :description="vectorFailureEmptyDescription('question')"
+                  >
+                    <el-button type="primary" @click="loadVectorFailures">重新加载明细</el-button>
+                    <el-button @click="goAdminPath('/admin/questions')">查看题库治理</el-button>
+                  </AppState>
+                </template>
               </el-table>
             </el-tab-pane>
 
-            <el-tab-pane :label="`知识库 Chunk ${vectorFailureCounts.knowledge}`" name="knowledge">
-              <el-table :data="vectorFailures?.knowledgeFailures || []" class="ops-table" size="small" empty-text="暂无知识库向量失败记录">
-                <el-table-column label="Chunk ID" prop="chunkId" min-width="100" />
-                <el-table-column label="User / Doc" min-width="150">
+            <el-tab-pane :label="`知识库片段 ${vectorFailureCounts.knowledge}`" name="knowledge">
+              <el-table :data="vectorFailures?.knowledgeFailures || []" class="ops-table" :size="vectorFailureTableSize">
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('chunkId')" label="片段编号" prop="chunkId" min-width="100" />
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('owner')" label="用户 / 资料" min-width="150">
                   <template #default="{ row }">
-                    <span>{{ row.userId || '--' }} / {{ row.documentId || '--' }}</span>
+                    <span>用户 {{ row.userId || '--' }} / 资料 {{ row.documentId || '--' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="Index" prop="chunkIndex" min-width="80" />
-                <el-table-column label="状态" min-width="96">
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('chunkIndex')" label="片段序号" prop="chunkIndex" min-width="90" />
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('status')" label="状态" min-width="96">
                   <template #default="{ row }">
-                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ row.indexStatus || 'PENDING' }}</el-tag>
+                    <el-tag :type="vectorFailureStatusType(row.indexStatus)" effect="plain">{{ vectorStatusLabel(row.indexStatus) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="模型 / 维度" min-width="160">
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('model')" label="模型 / 维度" min-width="160">
                   <template #default="{ row }">
                     <span>{{ vectorModelHint(row.embeddingModel, row.embeddingDimension) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
-                <el-table-column label="错误" min-width="260">
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
                     <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
                       <span class="vector-error-text">{{ row.lastError }}</span>
@@ -365,26 +527,41 @@
                     </div>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <AppState
+                    class="ops-empty-state ops-table-empty"
+                    :type="vectorFailureEmptyType"
+                    :title="vectorFailureEmptyTitle('knowledge')"
+                    :description="vectorFailureEmptyDescription('knowledge')"
+                  >
+                    <el-button type="primary" @click="loadVectorFailures">重新加载明细</el-button>
+                    <el-button @click="goAdminPath('/admin/analytics/ai')">查看 AI 运营看板</el-button>
+                  </AppState>
+                </template>
               </el-table>
             </el-tab-pane>
 
             <el-tab-pane :label="`删除补偿 ${vectorFailureCounts.deleteOutbox}`" name="deleteOutbox">
-              <el-table :data="vectorFailures?.deleteOutboxFailures || []" class="ops-table" size="small" empty-text="暂无向量删除补偿失败记录">
-                <el-table-column label="Collection" prop="collectionName" min-width="180" />
-                <el-table-column label="Point ID" min-width="220">
+              <el-table :data="vectorFailures?.deleteOutboxFailures || []" class="ops-table" :size="vectorFailureTableSize">
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('collection')" label="索引集合" min-width="180">
+                  <template #default="{ row }">
+                    {{ vectorCollectionLabel(row.collectionName) }}
+                  </template>
+                </el-table-column>
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('pointId')" label="索引点编号" min-width="220">
                   <template #default="{ row }">
                     <span class="vector-point-text">{{ row.pointId || '--' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="业务" prop="bizType" min-width="120" />
-                <el-table-column label="状态" min-width="96">
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('bizType')" label="业务" prop="bizType" min-width="120" />
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('status')" label="状态" min-width="96">
                   <template #default="{ row }">
-                    <el-tag :type="vectorFailureStatusType(row.status)" effect="plain">{{ row.status || 'PENDING' }}</el-tag>
+                    <el-tag :type="vectorFailureStatusType(row.status)" effect="plain">{{ vectorStatusLabel(row.status) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="重试" prop="retryCount" min-width="80" />
-                <el-table-column label="更新时间" prop="updatedAt" min-width="170" />
-                <el-table-column label="错误" min-width="260">
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('retryCount')" label="重试" prop="retryCount" min-width="80" />
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
+                <el-table-column v-if="isDeleteOutboxFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
                     <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
                       <span class="vector-error-text">{{ row.lastError }}</span>
@@ -395,12 +572,23 @@
                 <el-table-column label="操作" width="96" fixed="right">
                   <template #default="{ row }">
                     <div class="vector-row-actions">
-                      <el-tooltip content="复制 Point ID" placement="top">
-                        <el-button link type="info" :icon="Copy" :disabled="!row.pointId" @click="copyVectorText(row.pointId, 'Point ID 已复制')" />
+                      <el-tooltip content="复制索引点编号" placement="top">
+                        <el-button link type="info" :icon="Copy" :disabled="!row.pointId" @click="copyVectorText(row.pointId, '索引点编号已复制')" />
                       </el-tooltip>
                     </div>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <AppState
+                    class="ops-empty-state ops-table-empty"
+                    :type="vectorFailureEmptyType"
+                    :title="vectorFailureEmptyTitle('deleteOutbox')"
+                    :description="vectorFailureEmptyDescription('deleteOutbox')"
+                  >
+                    <el-button type="primary" @click="loadVectorFailures">重新加载明细</el-button>
+                    <el-button @click="goAdminPath('/admin/analytics/ai')">查看索引任务</el-button>
+                  </AppState>
+                </template>
               </el-table>
             </el-tab-pane>
           </el-tabs>
@@ -411,8 +599,8 @@
         <article class="ops-panel ops-panel--wide vector-job-panel">
           <div class="ops-panel__head vector-failure-head">
             <div>
-              <h2>Vector Job History</h2>
-              <p>Recent rebuild, retry, and delete-outbox compensation runs.</p>
+              <h2>语义索引任务记录</h2>
+              <p>展示最近的重建、失败重试和删除补偿任务，便于确认是否仍有积压。</p>
             </div>
             <div class="vector-failure-tools">
               <el-select v-model="vectorJobStatus" style="width: 128px" @change="loadVectorJobs">
@@ -421,39 +609,55 @@
                 <el-option label="成功" value="SUCCESS" />
                 <el-option label="失败" value="FAILED" />
               </el-select>
+              <el-segmented v-model="vectorJobTableSize" :options="vectorJobTableSizeOptions" />
+              <el-dropdown trigger="click" :hide-on-click="false">
+                <el-button plain>列配置</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu class="column-config-menu">
+                    <el-dropdown-item v-for="item in vectorJobColumnOptions" :key="item.key">
+                      <el-checkbox v-model="vectorJobVisibleColumns[item.key]" :disabled="item.required">
+                        {{ item.label }}
+                      </el-checkbox>
+                    </el-dropdown-item>
+                    <el-dropdown-item divided>
+                      <el-button link type="primary" @click.stop="resetVectorJobTableView">恢复默认视图</el-button>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button :icon="RefreshCw" :loading="vectorJobLoading" @click="loadVectorJobs">刷新任务</el-button>
             </div>
           </div>
-          <el-table :data="vectorJobs" class="ops-table vector-job-table" size="small" empty-text="暂无向量索引任务">
-            <el-table-column label="任务" min-width="220">
+          <el-table :data="vectorJobs" class="ops-table vector-job-table" :size="vectorJobTableSize">
+            <el-table-column v-if="isVectorJobColumnVisible('job')" label="任务" min-width="220">
               <template #default="{ row }">
                 <div class="vector-job-main">
                   <strong>{{ vectorJobTypeLabel(row.jobType) }}</strong>
-                  <small>{{ row.jobNo || `#${row.id || '-'}` }}</small>
+                  <small>{{ row.jobNo || `任务编号 ${row.id || '-'}` }}</small>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="范围" min-width="140">
+            <el-table-column v-if="isVectorJobColumnVisible('scope')" label="范围" min-width="140">
               <template #default="{ row }">{{ row.scopeType || '-' }}{{ row.scopeId ? ` / ${row.scopeId}` : '' }}</template>
             </el-table-column>
-            <el-table-column label="状态" width="100">
+            <el-table-column v-if="isVectorJobColumnVisible('status')" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="vectorJobStatusType(row.status)" effect="plain">{{ vectorJobStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="数量" min-width="170">
+            <el-table-column v-if="isVectorJobColumnVisible('counts')" label="数量" min-width="170">
               <template #default="{ row }">
-                {{ row.successCount || 0 }}/{{ row.totalCount || 0 }} ok · fail {{ row.failedCount || 0 }}
+                成功 {{ row.successCount || 0 }}/{{ row.totalCount || 0 }} · 失败 {{ row.failedCount || 0 }}
               </template>
             </el-table-column>
-            <el-table-column label="向量" min-width="150">
-              <template #default="{ row }">up {{ row.vectorUpdated || 0 }} / del {{ row.vectorDeleted || 0 }}</template>
+            <el-table-column v-if="isVectorJobColumnVisible('vectors')" label="索引变更" min-width="150">
+              <template #default="{ row }">写入 {{ row.vectorUpdated || 0 }} / 删除 {{ row.vectorDeleted || 0 }}</template>
             </el-table-column>
-            <el-table-column label="耗时" width="110">
+            <el-table-column v-if="isVectorJobColumnVisible('duration')" label="耗时" width="110">
               <template #default="{ row }">{{ formatDuration(row.durationMs) }}</template>
             </el-table-column>
-            <el-table-column label="完成时间" prop="finishedAt" min-width="170" />
-            <el-table-column label="错误" min-width="240">
+            <el-table-column v-if="isVectorJobColumnVisible('finishedAt')" label="完成时间" prop="finishedAt" min-width="170" />
+            <el-table-column v-if="isVectorJobColumnVisible('error')" label="错误" min-width="240">
               <template #default="{ row }">
                 <el-tooltip v-if="row.lastError || row.errorMessage" :content="row.lastError || row.errorMessage" placement="top" :show-after="300">
                   <span class="vector-error-text">{{ row.lastError || row.errorMessage }}</span>
@@ -461,6 +665,17 @@
                 <span v-else class="vector-empty-text">--</span>
               </template>
             </el-table-column>
+            <template #empty>
+              <AppState
+                class="ops-empty-state ops-table-empty"
+                :type="vectorJobEmptyType"
+                :title="vectorJobEmptyTitle"
+                :description="vectorJobEmptyDescription"
+              >
+                <el-button type="primary" @click="loadVectorJobs">刷新任务</el-button>
+                <el-button @click="goAdminPath('/admin/analytics/ai')">AI 运营看板</el-button>
+              </AppState>
+            </template>
           </el-table>
         </article>
       </section>
@@ -480,6 +695,16 @@
               <small>{{ item.hint }}</small>
             </div>
           </div>
+          <AppState
+            v-if="!duplicateConfigItems.length && !loading"
+            class="ops-empty-state"
+            :type="duplicateConfigEmptyType"
+            :title="duplicateConfigEmptyTitle"
+            :description="duplicateConfigEmptyDescription"
+          >
+            <el-button type="primary" @click="loadPage">重新加载</el-button>
+            <el-button @click="goAdminPath('/admin/questions')">查看题库治理</el-button>
+          </AppState>
         </article>
       </section>
     </template>
@@ -509,17 +734,21 @@ import { rebuildQuestionEmbeddingApi, retryFailedQuestionEmbeddingApi, type Ques
 import type { KnowledgeVectorRebuildVO } from '@/api/v4'
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
+import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
+import { useAdminTableView } from '@/composables/useAdminTableView'
 import { appConfig } from '@/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AdminAgentOverviewVO, AdminAiOverviewVO, AdminAnalyticsJobLogVO, MetricPointVO, QuestionDuplicateConfigVO, TrendPointVO, VectorCollectionInfoVO, VectorFailureDetailsVO, VectorIndexJobVO, VectorStoreHealthVO } from '@/types/analytics'
+import type { PageResult } from '@/types/api'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview, type DangerActionPreviewOptions } from '@/utils/dangerAction'
-import echarts, { type ECharts } from '@/utils/echarts'
+import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const router = useRouter()
+const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const retryingVectorDeletes = ref(false)
 const rebuildingQuestionVectors = ref(false)
 const retryingQuestionVectors = ref(false)
@@ -531,8 +760,17 @@ const vectorFailureStatus = ref<'ALL' | 'FAILED' | 'PENDING'>('ALL')
 const vectorJobStatus = ref<'ALL' | 'RUNNING' | 'SUCCESS' | 'FAILED'>('ALL')
 const vectorFailureLimit = ref(50)
 const vectorFailureTab = ref<'question' | 'knowledge' | 'deleteOutbox'>('question')
-const lastVectorAction = ref<{ title: string; summary: string; detail?: string } | null>(null)
+const lastVectorAction = ref<{
+  title: string
+  summary: string
+  detail?: string
+  vectorJobId?: number
+  vectorJobType?: string
+  vectorScopeType?: string
+  vectorJobStatus?: string
+} | null>(null)
 const errorMessage = ref('')
+const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)
 const aiOverview = ref<AdminAiOverviewVO>()
 const agentOverview = ref<AdminAgentOverviewVO>()
@@ -546,6 +784,9 @@ const failurePoints = ref<MetricPointVO[]>([])
 const jobs = ref<AdminAnalyticsJobLogVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 let trendChart: ECharts | null = null
+let opsMounted = false
+let chartRenderSeq = 0
+let echartsModulePromise: Promise<typeof import('@/utils/echarts')> | null = null
 
 const rangeOptions = [
   { label: '7 天', value: 7 },
@@ -559,9 +800,104 @@ const vectorFailureStatusOptions = [
   { label: '待处理', value: 'PENDING' }
 ]
 
+const dataSourceLabels = {
+  aiOverview: 'AI 运行概览',
+  agentOverview: '智能教练概览',
+  trend: '趋势数据',
+  failures: '失败原因聚合',
+  dashboard: '服务健康',
+  jobs: '聚合任务',
+  vectorHealth: '语义索引健康',
+  vectorFailures: '索引失败明细',
+  vectorJobs: '语义索引任务',
+  duplicateConfig: '题目去重参数'
+} as const
+
+const sourceFailed = (label: string) => partialErrors.value.includes(label)
+const markSourceFailed = (label: string) => {
+  if (!partialErrors.value.includes(label)) {
+    partialErrors.value = [...partialErrors.value, label]
+  }
+}
+
+const clearSourceFailed = (label: string) => {
+  partialErrors.value = partialErrors.value.filter((item) => item !== label)
+}
+
+type QuestionFailureColumnKey = 'questionId' | 'status' | 'model' | 'updatedAt' | 'error'
+type KnowledgeFailureColumnKey = 'chunkId' | 'owner' | 'chunkIndex' | 'status' | 'model' | 'updatedAt' | 'error'
+type DeleteOutboxFailureColumnKey = 'collection' | 'pointId' | 'bizType' | 'status' | 'retryCount' | 'updatedAt' | 'error'
+type VectorJobColumnKey = 'job' | 'scope' | 'status' | 'counts' | 'vectors' | 'duration' | 'finishedAt' | 'error'
+
+const {
+  tableSize: vectorFailureTableSize,
+  tableSizeOptions: vectorFailureTableSizeOptions,
+  columnOptions: questionFailureColumnOptions,
+  visibleColumns: questionFailureVisibleColumns,
+  isColumnVisible: isQuestionFailureColumnVisible,
+  resetTableView: resetQuestionFailureTableView
+} = useAdminTableView<QuestionFailureColumnKey>('admin:ops-vector-question-failures', [
+  { key: 'questionId', label: '题目编号', required: true },
+  { key: 'status', label: '状态', required: true },
+  { key: 'model', label: '模型 / 维度', defaultVisible: false },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false },
+  { key: 'error', label: '错误', defaultVisible: true }
+])
+
+const {
+  columnOptions: knowledgeFailureColumnOptions,
+  visibleColumns: knowledgeFailureVisibleColumns,
+  isColumnVisible: isKnowledgeFailureColumnVisible,
+  resetTableView: resetKnowledgeFailureTableView
+} = useAdminTableView<KnowledgeFailureColumnKey>('admin:ops-vector-knowledge-failures', [
+  { key: 'chunkId', label: '片段编号', required: true },
+  { key: 'owner', label: '用户 / 资料', required: true },
+  { key: 'chunkIndex', label: '片段序号', defaultVisible: false },
+  { key: 'status', label: '状态', required: true },
+  { key: 'model', label: '模型 / 维度', defaultVisible: false },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false },
+  { key: 'error', label: '错误', defaultVisible: true }
+])
+
+const {
+  columnOptions: deleteOutboxFailureColumnOptions,
+  visibleColumns: deleteOutboxFailureVisibleColumns,
+  isColumnVisible: isDeleteOutboxFailureColumnVisible,
+  resetTableView: resetDeleteOutboxFailureTableView
+} = useAdminTableView<DeleteOutboxFailureColumnKey>('admin:ops-vector-delete-outbox-failures', [
+  { key: 'collection', label: '索引集合', required: true },
+  { key: 'pointId', label: '索引点编号', required: true },
+  { key: 'bizType', label: '业务', defaultVisible: false },
+  { key: 'status', label: '状态', required: true },
+  { key: 'retryCount', label: '重试', defaultVisible: true },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false },
+  { key: 'error', label: '错误', defaultVisible: true }
+])
+
+const {
+  tableSize: vectorJobTableSize,
+  tableSizeOptions: vectorJobTableSizeOptions,
+  columnOptions: vectorJobColumnOptions,
+  visibleColumns: vectorJobVisibleColumns,
+  isColumnVisible: isVectorJobColumnVisible,
+  resetTableView: resetVectorJobTableView
+} = useAdminTableView<VectorJobColumnKey>('admin:ops-vector-jobs', [
+  { key: 'job', label: '任务', required: true },
+  { key: 'scope', label: '范围', defaultVisible: false },
+  { key: 'status', label: '状态', required: true },
+  { key: 'counts', label: '数量', required: true },
+  { key: 'vectors', label: '索引变更', defaultVisible: true },
+  { key: 'duration', label: '耗时' },
+  { key: 'finishedAt', label: '完成时间', defaultVisible: false },
+  { key: 'error', label: '错误', defaultVisible: true }
+])
+
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
 const vectorCollections = computed(() => vectorHealth.value?.collections || [])
 const vectorDeleteOutbox = computed(() => vectorHealth.value?.deleteOutbox)
+const hasServiceHealthRows = computed(
+  () => Boolean(services.value.length || vectorCollections.value.length || vectorDeleteOutbox.value)
+)
 const opsMetrics = computed(() => dashboard.value?.systemStatus?.opsMetrics)
 const totalFailures = computed(() => Math.max(...failurePoints.value.map((item) => item.value || 0), 1))
 const vectorFailureCounts = computed(() => ({
@@ -569,52 +905,152 @@ const vectorFailureCounts = computed(() => ({
   knowledge: vectorFailures.value?.knowledgeFailures?.length || 0,
   deleteOutbox: vectorFailures.value?.deleteOutboxFailures?.length || 0
 }))
+type VectorFailureScope = 'question' | 'knowledge' | 'deleteOutbox'
+const vectorFailureEmptyType = computed(() =>
+  sourceFailed(dataSourceLabels.vectorFailures) || vectorFailures.value?.errors?.length ? 'error' : 'empty'
+)
+const vectorFailureScopeLabels: Record<VectorFailureScope, string> = {
+  question: '题目语义索引',
+  knowledge: '知识库索引',
+  deleteOutbox: '索引删除补偿'
+}
+const vectorFailureEmptyTitle = (scope: VectorFailureScope) => {
+  if (sourceFailed(dataSourceLabels.vectorFailures)) return `${vectorFailureScopeLabels[scope]}明细加载失败`
+  if (vectorFailures.value?.errors?.length) return `${vectorFailureScopeLabels[scope]}明细加载不完整`
+  if (vectorFailureStatus.value !== 'ALL') return `当前筛选下没有${vectorFailureScopeLabels[scope]}失败记录`
+  return `暂无${vectorFailureScopeLabels[scope]}失败记录`
+}
+const vectorFailureEmptyDescription = (scope: VectorFailureScope) => {
+  const label = vectorFailureScopeLabels[scope]
+  if (sourceFailed(dataSourceLabels.vectorFailures)) {
+    return `${label}失败明细数据暂未返回，本次不能判断是否真的没有失败记录。请重新加载，或进入 AI 运营看板核对索引任务。`
+  }
+  if (vectorFailures.value?.errors?.length) {
+    return `本次明细数据返回了异常提示：${vectorFailures.value.errors.slice(0, 2).join('；')}。请先重新加载，确认不是数据加载失败或权限状态变化后再判断是否真的没有${label}记录。`
+  }
+  if (!vectorFailures.value) {
+    return `尚未拿到${label}失败明细，请重新加载后再判断索引链路是否正常。`
+  }
+  if (vectorFailureStatus.value !== 'ALL') {
+    return `当前只查看“${vectorFailureStatus.value === 'FAILED' ? '失败' : '待处理'}”状态，未命中记录不代表索引链路没有数据。可切换到“全部”或提高条数上限继续核对。`
+  }
+  return `最近 ${vectorFailureLimit.value} 条范围内没有${label}失败或待处理记录。若仍怀疑索引异常，请结合上方健康检查、语义索引任务和 AI 运营看板一起排查。`
+}
 const vectorStateBanner = computed(() => {
+  if (sourceFailed(dataSourceLabels.vectorHealth)) {
+    return {
+      type: 'error' as const,
+      title: '语义索引健康检查加载失败',
+      description: '语义索引健康检查暂未返回，本页不会把当前集合、运行配置或删除补偿状态判断为正常。请重新加载后再执行重建或重试。'
+    }
+  }
   const health = vectorHealth.value
   if (!health) {
     return {
       type: 'warning' as const,
-      title: 'Qdrant state uncertain',
-      description: 'Vector health has not returned yet; no collection rebuild or delete compensation is run automatically.'
+      title: '语义索引健康状态待确认',
+      description: '语义索引健康检查尚未返回，本页不会自动执行集合重建或删除补偿。请先刷新确认状态。'
     }
   }
   if (!health.enabled) {
     return {
       type: 'warning' as const,
-      title: 'Qdrant disabled',
-      description: 'Vector features are disabled in runtime config. Collection rows are informational only and no repair is attempted.'
+      title: '语义索引未启用',
+      description: '当前运行配置未启用语义索引能力，本页只展示配置状态，不会自动执行修复。'
     }
   }
   const collections = health.collections || []
   if (!collections.length) {
     return {
       type: 'warning' as const,
-      title: 'Qdrant collections unknown',
-      description: 'The health API did not return collection records. Treat the state as uncertain until a manual refresh succeeds.'
+      title: '索引集合状态待确认',
+      description: '健康检查暂未返回集合记录。请在手动刷新成功前把当前状态视为不确定，不要直接执行重建或重试。'
     }
   }
   const errored = collections.filter((item) => item.errorMessage || String(item.status || '').toUpperCase() === 'ERROR')
   if (errored.length) {
     return {
       type: 'error' as const,
-      title: 'Qdrant collection error',
-      description: `${errored.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} returned an error. Use the details below before running any retry job.`
+      title: '语义索引异常',
+      description: `${errored.map((item) => vectorCollectionLabel(item.collectionName)).join('、')} 返回异常。请先查看下方明细，再决定是否执行重试。`
     }
   }
   const missing = collections.filter((item) => !item.exists)
   if (missing.length) {
     return {
       type: 'warning' as const,
-      title: 'Qdrant collection missing',
-      description: `${missing.map((item) => vectorCollectionLabel(item.collectionName)).join(', ')} is missing. The page does not silently repair it; rebuild actions require confirmation.`
+      title: '语义索引缺失',
+      description: `${missing.map((item) => vectorCollectionLabel(item.collectionName)).join('、')} 暂未找到。本页不会静默修复，重建操作需要人工确认。`
     }
   }
   return {
     type: 'success' as const,
-    title: 'Qdrant collections available',
-    description: 'Configured collections are present. Rebuild and retry actions still require explicit confirmation.'
+    title: '索引集合可用',
+    description: '已配置的索引集合存在。重建和重试仍需要人工确认影响范围后再执行。'
   }
 })
+
+const partialErrorDescription = computed(() =>
+  `以下数据源暂未返回：${partialErrors.value.join('、')}。页面会继续展示已成功返回的数据，失败模块会以错误空态标记，请重新加载或进入对应明细页排查。`
+)
+
+const trendEmptyType = computed(() => sourceFailed(dataSourceLabels.trend) ? 'error' : 'empty')
+const trendEmptyTitle = computed(() => sourceFailed(dataSourceLabels.trend) ? '趋势数据加载失败' : '暂无趋势数据')
+const trendEmptyDescription = computed(() =>
+  sourceFailed(dataSourceLabels.trend)
+    ? '趋势数据暂未返回，当前无法判断是近段时间没有运行记录，还是聚合数据加载失败。请重新加载，或分别查看 AI 运行记录和生成运行。'
+    : `近 ${rangeDays.value} 天没有可聚合的 AI 运行或智能教练生成趋势。先确认 AI 运行记录、生成运行记录和聚合任务是否正常写入。`
+)
+
+const failureEmptyType = computed(() => sourceFailed(dataSourceLabels.failures) ? 'error' : 'empty')
+const failureEmptyTitle = computed(() =>
+  sourceFailed(dataSourceLabels.failures) ? '失败原因聚合加载失败' : '暂无失败原因聚合'
+)
+const failureEmptyDescription = computed(() =>
+  sourceFailed(dataSourceLabels.failures)
+    ? '失败原因聚合暂未返回，本次不能判断是没有失败运行还是数据加载失败。可到 AI 运行记录按失败状态进一步核对。'
+    : '当前失败原因聚合为空，可能是近段时间没有失败运行，也可能是 AI 运行记录尚未写入失败原因字段。可到记录页按失败状态进一步核对。'
+)
+
+const serviceHealthEmptyType = computed(() =>
+  sourceFailed(dataSourceLabels.dashboard) || sourceFailed(dataSourceLabels.vectorHealth) ? 'error' : 'empty'
+)
+const serviceHealthEmptyTitle = computed(() =>
+  serviceHealthEmptyType.value === 'error' ? '服务健康数据加载失败' : '暂无服务健康数据'
+)
+const serviceHealthEmptyDescription = computed(() =>
+  serviceHealthEmptyType.value === 'error'
+    ? '管理驾驶舱或语义索引健康检查暂未返回，当前不能把服务状态判断为正常。请重新加载，或回到运营首页确认基础健康检查。'
+    : '管理驾驶舱和语义索引健康检查暂未返回可展示的服务状态。请先刷新本页，或回到运营首页确认基础健康检查是否可用。'
+)
+
+const jobEmptyType = computed(() => sourceFailed(dataSourceLabels.jobs) ? 'error' : 'empty')
+const jobEmptyTitle = computed(() => sourceFailed(dataSourceLabels.jobs) ? '聚合任务加载失败' : '暂无聚合任务')
+const jobEmptyDescription = computed(() =>
+  sourceFailed(dataSourceLabels.jobs)
+    ? '最近聚合任务数据暂未返回，本次不能判断定时任务是否真的没有执行记录。请打开聚合任务页或重新加载。'
+    : '最近没有聚合任务日志。可以先查看聚合任务页确认定时任务是否启用，或手动运行一次每日计划后再回到这里观察。'
+)
+
+const vectorJobEmptyType = computed(() => sourceFailed(dataSourceLabels.vectorJobs) ? 'error' : 'empty')
+const vectorJobEmptyTitle = computed(() =>
+  sourceFailed(dataSourceLabels.vectorJobs) ? '语义索引任务加载失败' : '暂无语义索引任务'
+)
+const vectorJobEmptyDescription = computed(() =>
+  sourceFailed(dataSourceLabels.vectorJobs)
+    ? '语义索引任务数据暂未返回，本次不能判断是否仍有重建、失败重试或删除补偿任务。请重新加载，或进入 AI 运营看板排查。'
+    : '当前筛选条件下没有题目、知识库或删除补偿索引任务。触发重建、失败重试或切换任务状态后，可在这里查看执行记录。'
+)
+
+const duplicateConfigEmptyType = computed(() => sourceFailed(dataSourceLabels.duplicateConfig) ? 'error' : 'empty')
+const duplicateConfigEmptyTitle = computed(() =>
+  sourceFailed(dataSourceLabels.duplicateConfig) ? '题目去重参数加载失败' : '暂无题目去重参数'
+)
+const duplicateConfigEmptyDescription = computed(() =>
+  sourceFailed(dataSourceLabels.duplicateConfig)
+    ? '题目去重参数暂未返回，当前不要把阈值视为未配置。请重新加载，或进入题库治理页核对配置。'
+    : '当前没有可展示的题目去重阈值和候选池配置。请先进入题库治理页确认配置是否已保存。'
+)
 
 const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
 const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
@@ -638,14 +1074,14 @@ const metricGroups = computed(() => [
   {
     key: 'usage',
     title: '使用统计',
-    subtitle: '请求、Token 与调用',
+    subtitle: '请求、消耗与调用',
     icon: Activity,
     tone: 'tone-blue',
     metrics: [
-      { label: 'AI 调用', value: compact(aiOverview.value?.totalAiCalls), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` },
-      { label: '总 Token', value: compact(aiOverview.value?.totalTokens), hint: `输入 ${compact(aiOverview.value?.totalInputTokens)}` },
-      { label: 'Agent 运行', value: compact(agentOverview.value?.totalAgentRuns), hint: `成功 ${agentOverview.value?.successAgentRuns || 0}` },
-      { label: 'Agent 任务', value: compact(agentOverview.value?.totalAgentTasks), hint: `完成 ${agentOverview.value?.doneTaskCount || 0}` }
+      { label: 'AI 运行', value: compact(aiOverview.value?.totalAiCalls), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` },
+      { label: '总消耗', value: compact(aiOverview.value?.totalTokens), hint: `输入 ${compact(aiOverview.value?.totalInputTokens)}` },
+      { label: '生成运行', value: compact(agentOverview.value?.totalAgentRuns), hint: `成功 ${agentOverview.value?.successAgentRuns || 0}` },
+      { label: '生成任务', value: compact(agentOverview.value?.totalAgentTasks), hint: `完成 ${agentOverview.value?.doneTaskCount || 0}` }
     ]
   },
   {
@@ -658,7 +1094,7 @@ const metricGroups = computed(() => [
       { label: 'QPS', value: formatMetric(opsMetrics.value?.qps), hint: '最近 1 分钟请求均值' },
       { label: 'TPS', value: formatMetric(opsMetrics.value?.tps), hint: '最近 1 分钟业务写入均值' },
       { label: 'RPM', value: compact(opsMetrics.value?.rpm || aiOverview.value?.totalAiCalls), hint: '最近 1 分钟请求数' },
-      { label: 'TPM', value: compact(opsMetrics.value?.tpm || aiOverview.value?.totalTokens), hint: '最近 1 分钟 Token' }
+      { label: '每分钟消耗', value: compact(opsMetrics.value?.tpm || aiOverview.value?.totalTokens), hint: '最近 1 分钟调用消耗' }
     ]
   },
   {
@@ -682,7 +1118,7 @@ const metricGroups = computed(() => [
     tone: 'tone-green',
     metrics: [
       { label: 'AI 成功率', value: formatPercent(aiOverview.value?.aiSuccessRate), hint: `平均 ${formatMs(aiOverview.value?.avgElapsedMs)}` },
-      { label: 'Agent 成功率', value: formatPercent(agentOverview.value?.agentSuccessRate), hint: `平均 ${formatMs(agentOverview.value?.avgDurationMs)}` },
+      { label: '生成成功率', value: formatPercent(agentOverview.value?.agentSuccessRate), hint: `平均 ${formatMs(agentOverview.value?.avgDurationMs)}` },
       { label: '缓存命中', value: formatPercent(opsMetrics.value?.redisHitRate), hint: `hits ${compact(opsMetrics.value?.redisKeyspaceHits)} / misses ${compact(opsMetrics.value?.redisKeyspaceMisses)}` },
       { label: '错误率', value: formatPercent(errorRate.value), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` }
     ]
@@ -705,21 +1141,21 @@ const mysqlIndexCards = computed(() => {
   const cards = [
     {
       key: 'questionEmbedding',
-      title: 'Question Embeddings',
-      subtitle: 'question_embedding source-state table',
+      title: '题目语义索引',
+      subtitle: '题目索引状态表',
       data: indexes.questionEmbedding
     },
     {
       key: 'personalKnowledgeChunk',
-      title: 'Knowledge Chunks',
-      subtitle: 'personal_knowledge_chunk source-state table',
+      title: '个人知识库片段',
+      subtitle: '知识库片段索引状态表',
       data: indexes.personalKnowledgeChunk
     }
   ]
   return cards.map((item) => ({
     key: item.key,
     title: item.title,
-    subtitle: item.data?.lastIndexedAt ? `${item.subtitle} · last ${item.data.lastIndexedAt}` : item.subtitle,
+    subtitle: item.data?.lastIndexedAt ? `${item.subtitle} · 最近 ${item.data.lastIndexedAt}` : item.subtitle,
     total: compact(item.data?.total),
     statusCounts: item.data?.statusCounts || [],
     errorMessage: item.data?.errorMessage
@@ -730,37 +1166,38 @@ const duplicateConfigItems = computed(() => {
   if (!config) return []
   return [
     { label: '语义兼容阈值', value: formatThreshold(config.semanticSimilarityThreshold), hint: '旧版语义阈值配置，未配置分层阈值时作为回退' },
-    { label: '语义审核阈值', value: formatThreshold(config.semanticReviewThreshold), hint: '向量召回和最终分进入人工审核的最低分' },
+    { label: '语义审核阈值', value: formatThreshold(config.semanticReviewThreshold), hint: '语义召回和最终分进入人工审核的最低分' },
     { label: '强命中阈值', value: formatThreshold(config.semanticStrongThreshold), hint: '最终分达到后标记为高置信语义重复' },
     { label: '标题 Jaccard', value: formatThreshold(config.titleJaccardThreshold), hint: '标题词集合相似度门槛' },
     { label: '标题编辑距离', value: formatThreshold(config.titleLevenshteinThreshold), hint: '标题 Levenshtein 相似度门槛' },
     { label: '正文相似度', value: formatThreshold(config.contentSimilarityThreshold), hint: '正文文本规则命中门槛' },
-    { label: '向量 / 文本权重', value: `${formatThreshold(config.semanticVectorWeight)} / ${formatThreshold(config.semanticTextWeight)}`, hint: '语义综合分权重' },
+    { label: '语义 / 文本权重', value: `${formatThreshold(config.semanticVectorWeight)} / ${formatThreshold(config.semanticTextWeight)}`, hint: '语义综合分权重' },
     { label: '元数据 / 标签权重', value: `${formatThreshold(config.semanticMetadataWeight)} / ${formatThreshold(config.semanticTagWeight)}`, hint: '分类、题型、难度和标签修正权重' },
-    { label: '向量召回数', value: config.vectorSearchLimit, hint: '每题从向量库召回的候选数' },
+    { label: '语义召回数', value: config.vectorSearchLimit, hint: '每题从语义索引库召回的候选数' },
     { label: '候选池规模', value: config.maxRuleCandidateCount, hint: '规则侧最多比较候选数' },
     { label: '批量检测上限', value: config.maxBatchCheckCount, hint: '单次管理端检测题目数' },
-    { label: 'Embedding 批量', value: config.embeddingBatchSize, hint: '批量生成向量的请求大小' }
+    { label: '索引生成批量', value: config.embeddingBatchSize, hint: '批量生成语义索引的请求大小' }
   ]
 })
 
 const vectorRuntimeLabel = computed(() => {
   const config = vectorHealth.value?.config
   if (!config) return '--'
-  return `${config.provider || 'qdrant'} ${config.enabled ? 'enabled' : 'disabled'}`
+  return `${config.provider || 'qdrant'} ${config.enabled ? '已启用' : '未启用'}`
 })
 
 const vectorRuntimeHint = computed(() => {
   const config = vectorHealth.value?.config
-  if (!config) return 'runtime vector configuration not loaded'
-  return `${config.baseUrl || '--'} / ${config.knowledgeCollection || '--'} / chunk ${config.knowledgeChunkSize || '--'}/${config.knowledgeChunkOverlap || 0}`
+  if (!config) return '运行中的语义索引配置未返回'
+  const collectionState = config.knowledgeCollection ? '个人知识库索引已配置' : '个人知识库索引待配置'
+  return `${collectionState} / 片段 ${config.knowledgeChunkSize || '--'}/${config.knowledgeChunkOverlap || 0}`
 })
 
 const embeddingMetricHint = computed(() => {
   const metrics = vectorHealth.value?.embeddingMetrics
-  if (!metrics) return 'recent embedding calls are not loaded'
-  const model = metrics.modelCounts?.[0]?.model || 'UNKNOWN'
-  return `last ${metrics.windowDays || 7} days / ${model} / fail ${formatPercent(metrics.failureRate)}`
+  if (!metrics) return '最近的索引生成调用尚未返回'
+  const model = metrics.modelCounts?.[0]?.model || '模型待确认'
+  return `最近 ${metrics.windowDays || 7} 天 / ${model} / 失败率 ${formatPercent(metrics.failureRate)}`
 })
 
 const statusText = (status?: DashboardStatus) => {
@@ -768,12 +1205,12 @@ const statusText = (status?: DashboardStatus) => {
   const map: Record<string, string> = {
     HEALTHY: '正常',
     SUPPORTED: '正常',
-    DEGRADED: '降级',
+    DEGRADED: '能力受限',
     DOWN: '不可用',
     UNKNOWN: '未探测到',
-    UNSUPPORTED: '未接入探测'
+    UNSUPPORTED: '未纳入探测'
   }
-  return map[value] || String(status || '未探测到')
+  return map[value] || '状态待确认'
 }
 
 const statusTone = (status?: DashboardStatus) => {
@@ -786,19 +1223,19 @@ const statusTone = (status?: DashboardStatus) => {
 
 const serviceLabel = (value: string) => {
   const map: Record<string, string> = {
-    overview: '概览接口',
+    overview: '概览服务',
     database: '数据库',
-    'codecoachai-gateway': 'Gateway',
-    'codecoachai-auth': 'Auth 服务',
-    'codecoachai-user': 'User 服务',
-    'codecoachai-resume': 'Resume 服务',
-    'codecoachai-interview': 'Interview 服务',
-    'codecoachai-question': 'Question 服务',
+    'codecoachai-gateway': '网关服务',
+    'codecoachai-auth': '认证服务',
+    'codecoachai-user': '用户服务',
+    'codecoachai-resume': '简历服务',
+    'codecoachai-interview': '面试服务',
+    'codecoachai-question': '题库服务',
     'codecoachai-ai': 'AI 服务',
-    'codecoachai-task': 'Task 服务',
-    'codecoachai-file': 'File 服务'
+    'codecoachai-task': '任务服务',
+    'codecoachai-file': '文件服务'
   }
-  return map[value] || value
+  return map[value] || '服务待确认'
 }
 
 const serviceReasonLabel = (item: { status?: DashboardStatus; reason?: string; source?: string }) => {
@@ -806,16 +1243,16 @@ const serviceReasonLabel = (item: { status?: DashboardStatus; reason?: string; s
   if (item.source) return item.source
   const value = String(item.status || '').toUpperCase()
   if (value === 'UNKNOWN') return '本次健康探测未返回可用状态'
-  if (value === 'UNSUPPORTED') return '该服务暂未接入运行态探测'
+  if (value === 'UNSUPPORTED') return '该服务当前未纳入运行态探测'
   return '来自管理驾驶舱'
 }
 
 const vectorCollectionLabel = (value: string) => {
   const map: Record<string, string> = {
-    question_embedding: '题目向量索引',
-    personal_knowledge_chunk: '个人知识库向量'
+    question_embedding: '题目语义索引',
+    personal_knowledge_chunk: '个人知识库索引'
   }
-  return map[value] || value
+  return map[value] || '语义索引'
 }
 
 const vectorTone = (item: VectorCollectionInfoVO) => {
@@ -837,10 +1274,10 @@ const vectorCollectionStatus = (item: VectorCollectionInfoVO) => {
 
 const vectorCollectionHint = (item: VectorCollectionInfoVO) => {
   if (item.errorMessage) return item.errorMessage
-  if (!vectorHealth.value) return 'Qdrant 状态未返回，本页不会自动修复'
-  if (!vectorHealth.value?.enabled) return '向量库配置未启用'
-  if (!item.exists) return 'Collection 缺失；需人工确认后执行重建，本页不会静默修复'
-  return `${item.pointCount || 0} points / ${item.vectorSize || '--'} dims / ${item.distance || '--'}`
+  if (!vectorHealth.value) return '语义索引状态待确认，本页不会自动修复'
+  if (!vectorHealth.value?.enabled) return '语义索引库配置未启用'
+  if (!item.exists) return '索引集合缺失；需人工确认后执行重建，本页不会静默修复'
+  return `${item.pointCount || 0} 个索引点 / ${item.vectorSize || '--'} 维 / ${item.distance || '--'}`
 }
 
 const vectorDeleteOutboxTone = computed(() => {
@@ -861,7 +1298,7 @@ const vectorDeleteOutboxStatus = computed(() => {
 
 const vectorDeleteOutboxHint = computed(() => {
   const outbox = vectorDeleteOutbox.value
-  if (!outbox) return '等待向量健康接口返回补偿队列状态，未自动执行补偿'
+  if (!outbox) return '等待语义索引健康检查返回补偿队列状态，未自动执行补偿'
   if (outbox.errorMessage) return outbox.errorMessage
   return `待处理 ${outbox.pending || 0} / 失败 ${outbox.failed || 0} / 已完成 ${outbox.done || 0}`
 })
@@ -872,6 +1309,18 @@ const vectorFailureStatusType = (status?: string) => {
   if (value === 'PENDING') return 'warning'
   if (value === 'SUCCESS' || value === 'DONE' || value === 'INDEXED') return 'success'
   return 'info'
+}
+
+const vectorStatusLabel = (status?: string) => {
+  const map: Record<string, string> = {
+    PENDING: '待处理',
+    FAILED: '失败',
+    SUCCESS: '成功',
+    DONE: '已完成',
+    INDEXED: '已入库',
+    RUNNING: '执行中'
+  }
+  return map[String(status || 'PENDING').toUpperCase()] || '状态待确认'
 }
 
 const vectorJobStatusType = (status?: string) => {
@@ -888,26 +1337,26 @@ const vectorJobStatusLabel = (status?: string) => {
     RUNNING: '运行中',
     SUCCESS: '成功',
     FAILED: '失败',
-    UNKNOWN: '未知'
+    UNKNOWN: '状态待确认'
   }
-  return map[value] || value
+  return map[value] || '状态待确认'
 }
 
 const vectorJobTypeLabel = (type?: string) => {
   const value = String(type || 'UNKNOWN').toUpperCase()
   const map: Record<string, string> = {
-    QUESTION_REBUILD: '题目向量重建',
+    QUESTION_REBUILD: '题目语义索引重建',
     QUESTION_RETRY: '题目失败重试',
-    KNOWLEDGE_REBUILD: '知识库向量重建',
+    KNOWLEDGE_REBUILD: '知识库语义索引重建',
     KNOWLEDGE_RETRY: '知识库失败重试',
-    DELETE_OUTBOX_RETRY: '向量删除补偿'
+    DELETE_OUTBOX_RETRY: '索引删除补偿'
   }
-  return map[value] || value
+  return map[value] || '索引任务'
 }
 
 const vectorModelHint = (model?: string, dimension?: number) => {
-  const modelText = model || 'UNKNOWN'
-  return `${modelText} / ${dimension || '--'} dims`
+  const modelText = model || '模型待确认'
+  return `${modelText} / ${dimension || '--'} 维`
 }
 
 const copyVectorText = async (value?: string, message = '已复制') => {
@@ -924,7 +1373,7 @@ const openQuestionFailure = (questionId?: number) => {
 const openKnowledgeFailure = (documentId?: number, chunkId?: number) => {
   if (!documentId && !chunkId) return
   if (!appConfig.enableV4Preview) {
-    ElMessage.info('个人知识库能力暂未开放，已保留失败线索供后续处理。')
+    ElMessage.info('个人知识库入口当前未开放，已保留失败线索供后续处理。')
     return
   }
   router.push({
@@ -936,6 +1385,10 @@ const openKnowledgeFailure = (documentId?: number, chunkId?: number) => {
   })
 }
 
+const goAdminPath = (path: string) => {
+  router.push(path)
+}
+
 const jobStatusLabel = (status?: string) => {
   const map: Record<string, string> = {
     PENDING: '待执行',
@@ -944,7 +1397,7 @@ const jobStatusLabel = (status?: string) => {
     FAILED: '失败',
     CANCELED: '已取消'
   }
-  return map[String(status || 'UNKNOWN').toUpperCase()] || '未知'
+  return map[String(status || 'UNKNOWN').toUpperCase()] || '状态待确认'
 }
 
 const disposeChart = () => {
@@ -952,11 +1405,24 @@ const disposeChart = () => {
   trendChart = null
 }
 
+const loadEcharts = () => {
+  if (!echartsModulePromise) {
+    echartsModulePromise = import('@/utils/echarts')
+  }
+  return echartsModulePromise
+}
+
 const renderChart = async () => {
+  const renderSeq = ++chartRenderSeq
   await nextTick()
   disposeChart()
+  if (!opsMounted) return
   if (!trendChartRef.value || !trendPoints.value.length) return
-  trendChart = echarts.init(trendChartRef.value)
+  const echarts = await loadEcharts()
+  if (!opsMounted || renderSeq !== chartRenderSeq || !trendChartRef.value || !trendPoints.value.length) {
+    return
+  }
+  trendChart = echarts.default.init(trendChartRef.value)
   trendChart.setOption({
     backgroundColor: 'transparent',
     color: ['#60a5fa', '#22d3ee', '#a78bfa'],
@@ -987,12 +1453,31 @@ const renderChart = async () => {
   })
 }
 
+const getErrorMessage = (error: unknown) => {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+  }
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+}
+
+const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
+  result.status === 'fulfilled' ? result.value : fallback
+
+const emptyPage = <T,>(pageNo = 1, pageSize = 6): PageResult<T> => ({
+  records: [],
+  total: 0,
+  pageNo,
+  pageSize,
+  pages: 0
+})
+
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
+  partialErrors.value = []
   try {
     const params = { days: rangeDays.value }
-    const [aiData, agentData, trendData, failureData, dashboardData, jobsPage, vectorData, vectorFailureData, vectorJobsPage, duplicateConfigData] = await Promise.all([
+    const [aiResult, agentResult, trendResult, failureResult, dashboardResult, jobsResult, vectorHealthResult, vectorFailureResult, vectorJobsResult, duplicateConfigResult] = await Promise.allSettled([
       getAdminAiOverviewApi(params),
       getAdminAgentOverviewApi(params),
       getAdminAgentTrendApi(params),
@@ -1012,22 +1497,40 @@ const loadPage = async () => {
       }),
       getQuestionDuplicateConfigApi()
     ])
-    aiOverview.value = aiData
-    agentOverview.value = agentData
-    trendPoints.value = trendData
-    failurePoints.value = failureData
-    dashboard.value = dashboardData
-    jobs.value = jobsPage.records || []
-    vectorHealth.value = vectorData
-    vectorFailures.value = vectorFailureData
-    vectorJobs.value = vectorJobsPage.records || []
-    duplicateConfig.value = duplicateConfigData
+    const sourceResults = [
+      { label: dataSourceLabels.aiOverview, result: aiResult },
+      { label: dataSourceLabels.agentOverview, result: agentResult },
+      { label: dataSourceLabels.trend, result: trendResult },
+      { label: dataSourceLabels.failures, result: failureResult },
+      { label: dataSourceLabels.dashboard, result: dashboardResult },
+      { label: dataSourceLabels.jobs, result: jobsResult },
+      { label: dataSourceLabels.vectorHealth, result: vectorHealthResult },
+      { label: dataSourceLabels.vectorFailures, result: vectorFailureResult },
+      { label: dataSourceLabels.vectorJobs, result: vectorJobsResult },
+      { label: dataSourceLabels.duplicateConfig, result: duplicateConfigResult }
+    ]
+    const failed = sourceResults.filter((item) => item.result.status === 'rejected')
+    if (failed.length === sourceResults.length) {
+      errorMessage.value = getErrorMessage((failed[0].result as PromiseRejectedResult).reason)
+      disposeChart()
+      return
+    }
+    partialErrors.value = failed.map((item) => item.label)
+    if (aiResult.status === 'fulfilled') aiOverview.value = aiResult.value
+    if (agentResult.status === 'fulfilled') agentOverview.value = agentResult.value
+    if (trendResult.status === 'fulfilled') trendPoints.value = trendResult.value
+    if (failureResult.status === 'fulfilled') failurePoints.value = failureResult.value
+    if (dashboardResult.status === 'fulfilled') dashboard.value = dashboardResult.value
+    const jobsPage = getSettledValue(jobsResult, emptyPage<AdminAnalyticsJobLogVO>())
+    jobs.value = jobsResult.status === 'fulfilled' ? jobsPage.records || [] : jobs.value
+    if (vectorHealthResult.status === 'fulfilled') vectorHealth.value = vectorHealthResult.value
+    if (vectorFailureResult.status === 'fulfilled') vectorFailures.value = vectorFailureResult.value
+    const vectorJobsPage = getSettledValue(vectorJobsResult, emptyPage<VectorIndexJobVO>(1, 8))
+    vectorJobs.value = vectorJobsResult.status === 'fulfilled' ? vectorJobsPage.records || [] : vectorJobs.value
+    if (duplicateConfigResult.status === 'fulfilled') duplicateConfig.value = duplicateConfigResult.value
     await renderChart()
   } catch (error) {
-    errorMessage.value = toFriendlyMessage(
-      error && typeof error === 'object' && 'message' in error ? (error as { message?: unknown }).message : error,
-      '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
-    )
+    errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
   }
@@ -1041,6 +1544,10 @@ const loadVectorFailures = async () => {
       status: vectorFailureStatus.value,
       limit: vectorFailureLimit.value
     })
+    clearSourceFailed(dataSourceLabels.vectorFailures)
+  } catch (error) {
+    markSourceFailed(dataSourceLabels.vectorFailures)
+    ElMessage.error(getErrorMessage(error))
   } finally {
     vectorFailureLoading.value = false
   }
@@ -1055,6 +1562,10 @@ const loadVectorJobs = async () => {
       pageSize: 8
     })
     vectorJobs.value = result.records || []
+    clearSourceFailed(dataSourceLabels.vectorJobs)
+  } catch (error) {
+    markSourceFailed(dataSourceLabels.vectorJobs)
+    ElMessage.error(getErrorMessage(error))
   } finally {
     vectorJobLoading.value = false
   }
@@ -1062,19 +1573,23 @@ const loadVectorJobs = async () => {
 
 const questionVectorSummary = (result: QuestionEmbeddingRebuildResult) => {
   const errors = result.errors?.length ? `，错误 ${result.errors.length} 条` : ''
-  return `更新 ${result.updated || 0} 条，写入向量 ${result.vectorUpdated || 0} 条，删除向量 ${result.vectorDeleted || 0} 条${errors}`
+  return `更新 ${result.updated || 0} 条，写入索引 ${result.vectorUpdated || 0} 条，删除索引 ${result.vectorDeleted || 0} 条${errors}`
 }
 
 const knowledgeVectorSummary = (result: KnowledgeVectorRebuildVO) => {
   const errors = result.errors?.length ? `，错误 ${result.errors.length} 条` : ''
-  return `文档 ${result.documentCount || 0} 份，片段 ${result.chunkCount || 0} 条，写入向量 ${result.vectorUpdated || 0} 条，删除向量 ${result.vectorDeleted || 0} 条${errors}`
+  return `文档 ${result.documentCount || 0} 份，片段 ${result.chunkCount || 0} 条，写入索引 ${result.vectorUpdated || 0} 条，删除索引 ${result.vectorDeleted || 0} 条${errors}`
 }
 
 const recordQuestionVectorAction = (title: string, result: QuestionEmbeddingRebuildResult) => {
   lastVectorAction.value = {
     title,
     summary: questionVectorSummary(result),
-    detail: result.vectorEnabled === false ? '向量库未启用，本次仅更新元数据状态。' : undefined
+    detail: result.vectorEnabled === false ? '语义索引库未启用，本次仅更新元数据状态。' : undefined,
+    vectorJobId: result.vectorJobId,
+    vectorJobType: result.vectorJobType,
+    vectorScopeType: result.vectorScopeType,
+    vectorJobStatus: result.vectorJobStatus
   }
 }
 
@@ -1082,25 +1597,55 @@ const recordKnowledgeVectorAction = (title: string, result: KnowledgeVectorRebui
   lastVectorAction.value = {
     title,
     summary: knowledgeVectorSummary(result),
-    detail: result.vectorEnabled === false ? '向量库未启用，本次仅检查知识片段状态。' : undefined
+    detail: result.vectorEnabled === false ? '语义索引库未启用，本次仅检查知识片段状态。' : undefined,
+    vectorJobId: result.vectorJobId,
+    vectorJobType: result.vectorJobType,
+    vectorScopeType: result.vectorScopeType,
+    vectorJobStatus: result.vectorJobStatus
   }
+}
+
+const recordVectorDeleteAction = (title: string, summary: string, result: { jobId?: number }) => {
+  lastVectorAction.value = {
+    title,
+    summary,
+    vectorJobId: result.jobId,
+    vectorJobType: 'DELETE_OUTBOX_RETRY',
+    vectorScopeType: 'DELETE_OUTBOX',
+    vectorJobStatus: undefined
+  }
+}
+
+const openLastVectorJob = () => {
+  const action = lastVectorAction.value
+  if (!action?.vectorJobId) return
+  router.push({
+    path: '/admin/analytics/ai',
+    query: {
+      vectorJobId: String(action.vectorJobId),
+      vectorJobType: action.vectorJobType || undefined,
+      vectorScopeType: action.vectorScopeType || undefined,
+      vectorJobStatus: action.vectorJobStatus || undefined
+    }
+  })
 }
 
 const confirmVectorAction = (options: DangerActionPreviewOptions) =>
   confirmDangerActionPreview({
     ...options,
-    audit: options.audit || '后端会写入向量索引任务或删除补偿任务记录，可结合操作时间追踪。',
+    audit: options.audit || '系统会写入语义索引任务或删除补偿任务记录，可结合操作时间追踪。',
     confirmButtonText: options.confirmButtonText || '确认执行'
   })
 
 const handleRebuildQuestionVectors = async () => {
+  if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
-    title: '题目向量重建高风险确认',
-    action: '重建题目 Embedding 和 Qdrant 向量点',
-    target: '最多扫描 5000 道题目，具体数量由后端接口和当前索引状态决定。',
-    impact: '可能调用 Embedding 供应商，并创建、覆盖或删除题目向量点，运行成本和耗时都高于普通刷新。',
-    rollback: '无法由前端一键回滚；如结果异常，需要依据索引任务日志重新重建或人工修复。',
-    tips: ['确认 Qdrant 集合状态正常。', '确认 Embedding 模型和维度配置未发生误配。'],
+    title: '题目语义索引重建高风险确认',
+    action: '重建题目语义索引',
+    target: '最多扫描 5000 道题目，具体数量由当前索引状态和任务规则决定。',
+    impact: '可能调用语义检索模型服务，并创建、覆盖或删除题目索引点，运行成本和耗时都高于普通刷新。',
+    rollback: '索引重建不能一键回到执行前；如结果异常，需要依据索引任务日志重新重建或人工修复。',
+    tips: ['确认语义索引库集合状态正常。', '确认检索模型和维度配置未发生误配。'],
     confirmButtonText: '确认重建'
   })
   if (!confirmed) return
@@ -1108,7 +1653,7 @@ const handleRebuildQuestionVectors = async () => {
   try {
     const result = await rebuildQuestionEmbeddingApi(5000)
     const summary = questionVectorSummary(result)
-    recordQuestionVectorAction('题目向量重建', result)
+    recordQuestionVectorAction('题目语义索引重建', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1118,12 +1663,13 @@ const handleRebuildQuestionVectors = async () => {
 }
 
 const handleRetryQuestionVectors = async () => {
+  if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
-    title: '题目失败向量重试确认',
-    action: '重试失败或长时间待处理的题目向量',
+    title: '题目失败索引重试确认',
+    action: '重试失败或长时间待处理的题目索引',
     target: '最多处理 1000 条失败或待处理题目索引记录。',
-    impact: '可能重新调用 Embedding 供应商，并创建或替换 Qdrant 向量点。',
-    rollback: '无法由前端撤销已写入的向量点；可通过失败明细和索引任务日志二次修复。',
+    impact: '可能重新调用语义检索模型服务，并创建或替换题目索引点。',
+    rollback: '已写入的索引点不能直接撤销；可通过失败明细和索引任务日志二次修复。',
     tips: ['先查看失败明细，确认不是模型维度或集合缺失导致的系统性失败。'],
     confirmButtonText: '确认重试'
   })
@@ -1132,7 +1678,7 @@ const handleRetryQuestionVectors = async () => {
   try {
     const result = await retryFailedQuestionEmbeddingApi(1000)
     const summary = questionVectorSummary(result)
-    recordQuestionVectorAction('题目失败向量重试', result)
+    recordQuestionVectorAction('题目失败索引重试', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1142,13 +1688,14 @@ const handleRetryQuestionVectors = async () => {
 }
 
 const handleRebuildKnowledgeVectors = async () => {
+  if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
-    title: '知识库向量重建高风险确认',
-    action: '重建个人知识库向量',
+    title: '知识库语义索引重建高风险确认',
+    action: '重建个人知识库语义索引',
     target: '最多扫描 5000 份个人知识库文档，可能跨用户处理知识片段。',
-    impact: '会重新计算知识片段向量，可能产生较高模型调用成本，并影响知识库检索结果。',
-    rollback: '无法由前端自动恢复旧向量；如结果异常，需要重新执行修复任务或人工处理文档状态。',
-    tips: ['确认这是维护窗口内的人工动作。', '确认个人知识库预览能力当前允许运维处理。'],
+    impact: '会重新计算知识片段语义索引，可能产生较高模型调用成本，并影响知识库检索结果。',
+    rollback: '旧索引不会自动恢复；如结果异常，需要重新执行修复任务或人工处理文档状态。',
+    tips: ['确认这是维护窗口内的人工动作。', '确认个人知识库能力当前允许运维处理。'],
     confirmButtonText: '确认重建'
   })
   if (!confirmed) return
@@ -1156,7 +1703,7 @@ const handleRebuildKnowledgeVectors = async () => {
   try {
     const result = await rebuildAdminKnowledgeVectorsApi(5000)
     const summary = knowledgeVectorSummary(result)
-    recordKnowledgeVectorAction('知识库向量重建', result)
+    recordKnowledgeVectorAction('知识库语义索引重建', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1166,13 +1713,14 @@ const handleRebuildKnowledgeVectors = async () => {
 }
 
 const handleRetryKnowledgeVectors = async () => {
+  if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
-    title: '知识库失败向量重试确认',
-    action: '重试失败或长时间待处理的知识库向量',
+    title: '知识库失败索引重试确认',
+    action: '重试失败或长时间待处理的知识库索引',
     target: '最多处理 1000 条失败或待处理知识片段索引记录。',
-    impact: '可能重新调用 Embedding 供应商，并创建或替换个人知识库向量点。',
-    rollback: '无法由前端撤销已写入的向量点；可通过失败明细和索引任务日志二次修复。',
-    tips: ['若 Qdrant 状态缺失或不确定，请先查看失败详情。'],
+    impact: '可能重新调用语义检索模型服务，并创建或替换个人知识库索引点。',
+    rollback: '已写入的索引点不能直接撤销；可通过失败明细和索引任务日志二次修复。',
+    tips: ['若语义索引库状态缺失或不确定，请先查看失败详情。'],
     confirmButtonText: '确认重试'
   })
   if (!confirmed) return
@@ -1180,7 +1728,7 @@ const handleRetryKnowledgeVectors = async () => {
   try {
     const result = await retryAdminKnowledgeVectorsApi(1000)
     const summary = knowledgeVectorSummary(result)
-    recordKnowledgeVectorAction('知识库失败向量重试', result)
+    recordKnowledgeVectorAction('知识库失败索引重试', result)
     ElMessage.success(summary)
     await loadVectorJobs()
     await loadPage()
@@ -1189,13 +1737,14 @@ const handleRetryKnowledgeVectors = async () => {
   }
 }
 const handleRetryVectorDeletes = async () => {
+  if (!guardAdminMobileWrite()) return
   const retryable = vectorDeleteOutbox.value?.retryable || 0
   const confirmed = await confirmVectorAction({
-    title: '向量删除补偿重试确认',
-    action: '重试 Qdrant 删除补偿记录',
+    title: '索引删除补偿重试确认',
+    action: '重试索引删除补偿记录',
     target: `最多处理 500 条删除补偿记录；当前可重试待处理/失败记录 ${retryable} 条。`,
-    impact: '会尝试删除 Qdrant 中对应向量点，适合修复业务删除后向量侧未同步的记录。',
-    rollback: '删除补偿成功后无法由前端恢复被删除的向量；如误删，需要重新执行对应数据的向量重建。',
+    impact: '会尝试删除语义索引库中对应索引点，适合修复业务删除后索引侧未同步的记录。',
+    rollback: '删除补偿成功后不能直接恢复被删除的索引；如误删，需要重新执行对应数据的语义索引重建。',
     tips: ['本页面不会静默修复缺失集合。', '确认待删除对象确实已在业务侧删除或失效。'],
     confirmButtonText: '确认补偿'
   })
@@ -1204,10 +1753,11 @@ const handleRetryVectorDeletes = async () => {
   try {
     const result = await retryAdminVectorDeletesApi(500)
     const summary = `补偿完成：匹配 ${result.matched || 0} 条，删除 ${result.deleted || 0} 条，失败 ${result.failed || 0} 条`
+    recordVectorDeleteAction('索引删除补偿重试', summary, result)
     if ((result.errors || []).length || result.failed) {
       await ElMessageBox.alert(
         [summary, ...(result.errors || []).slice(0, 8).map((item, index) => `${index + 1}. ${item}`)].join('\n'),
-        '向量删除补偿结果',
+        '索引删除补偿结果',
         { type: 'warning' }
       )
     } else {
@@ -1223,11 +1773,14 @@ const handleRetryVectorDeletes = async () => {
 const resizeChart = () => trendChart?.resize()
 
 onMounted(async () => {
-  await loadPage()
+  opsMounted = true
   window.addEventListener('resize', resizeChart)
+  await loadPage()
 })
 
 onBeforeUnmount(() => {
+  opsMounted = false
+  chartRenderSeq += 1
   window.removeEventListener('resize', resizeChart)
   disposeChart()
 })
@@ -1360,6 +1913,17 @@ onBeforeUnmount(() => {
   color: var(--app-text);
   font-size: 24px;
   line-height: 1.1;
+}
+
+.admin-diagnostic-state {
+  margin-bottom: 18px;
+}
+
+.diagnostic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .ops-main-grid {
@@ -1622,6 +2186,18 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.vector-failure-tools :deep(.el-segmented) {
+  max-width: 100%;
+}
+
+:global(.column-config-menu) {
+  min-width: 168px;
+}
+
+:global(.column-config-menu .el-dropdown-menu__item) {
+  min-width: 148px;
+}
+
 .vector-failure-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1681,6 +2257,32 @@ onBeforeUnmount(() => {
 
 .ops-table :deep(.el-table__empty-text) {
   color: var(--app-text-muted);
+}
+
+.ops-empty-state {
+  margin-top: 18px;
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.42);
+  box-shadow: none;
+}
+
+.ops-empty-state :deep(.app-state__content) {
+  display: grid;
+  gap: 10px;
+}
+
+.ops-empty-state :deep(.app-state__content p) {
+  max-width: 680px;
+}
+
+.ops-empty-state :deep(.el-button + .el-button) {
+  margin-left: 8px;
+}
+
+.ops-table-empty {
+  margin: 18px auto;
+  max-width: 760px;
+  text-align: left;
 }
 
 .vector-error-text,

@@ -88,6 +88,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { resetPasswordApi, type ResetPasswordDTO } from '@/api/auth'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
@@ -126,14 +127,6 @@ const rules: FormRules = {
   ]
 }
 
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error && typeof error === 'object') {
-    const payload = error as { message?: string; response?: { data?: { message?: string } } }
-    return payload.response?.data?.message || payload.message || fallback
-  }
-  return fallback
-}
-
 const handleSubmit = async () => {
   if (!formRef.value || !token.value) return
 
@@ -156,7 +149,7 @@ const handleSubmit = async () => {
         router.push('/login')
       }, 2000)
     } catch (error: unknown) {
-      errorMessage.value = getErrorMessage(error, '密码重置失败，请确认链接是否有效')
+      errorMessage.value = normalizeErrorMessage(error, '密码重置失败，请确认链接是否有效')
     } finally {
       loading.value = false
     }

@@ -12,13 +12,13 @@
           先看今天最值得推进的准备动作，再进入简历、题库或模拟面试，不用在多个模块里自己找路。
         </p>
         <div class="hero-actions">
-          <el-button type="primary" size="large" @click="go('/agent/today')">
-            <BookOpenCheck :size="18" />
-            查看今日任务
-          </el-button>
-          <el-button size="large" @click="go(primaryNextAction.path)">
+          <el-button type="primary" size="large" @click="go(primaryNextAction.path)">
             <component :is="primaryNextAction.icon" :size="18" />
             {{ primaryNextAction.cta }}
+          </el-button>
+          <el-button size="large" text @click="go('/agent/tasks')">
+            <Route :size="18" />
+            任务中心
           </el-button>
         </div>
       </div>
@@ -48,7 +48,7 @@
     <!-- Error alert -->
     <section v-if="overviewError" class="cc-glass dashboard-alert">
       <AlertTriangle :size="18" />
-      <span>{{ overviewErrorMessage || '工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。' }}</span>
+      <span>{{ overviewErrorMessage || '今日计划数据暂时加载失败，可以先使用快捷入口，或稍后重试。' }}</span>
       <el-button text @click="fetchOverview">重试</el-button>
     </section>
 
@@ -130,12 +130,12 @@
       </div>
     </section>
 
-    <!-- Main grid: Resume + Study Plan -->
+    <!-- Main grid: 简历与学习计划 -->
     <div class="dashboard-main-grid">
       <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Resume</p>
+            <p class="section-kicker">简历</p>
             <h2>最近简历状态</h2>
           </div>
           <el-button text @click="go('/resumes')">查看简历</el-button>
@@ -164,7 +164,7 @@
       <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Study Plan</p>
+            <p class="section-kicker">学习计划</p>
             <h2>学习计划与今日任务</h2>
           </div>
           <el-button text @click="go('/study-plans')">查看计划</el-button>
@@ -181,19 +181,27 @@
           </div>
         </div>
         <div v-if="overview?.activeStudyPlan" class="active-plan" @click="go(`/study-plans?planId=${overview.activeStudyPlan.planId}`)">
-          <strong>{{ overview.activeStudyPlan.planTitle || `学习计划 #${overview.activeStudyPlan.planId}` }}</strong>
+          <strong>{{ overview.activeStudyPlan.planTitle || '学习计划' }}</strong>
           <span>{{ overview.activeStudyPlan.doneTaskCount || 0 }}/{{ overview.activeStudyPlan.totalTaskCount || 0 }} · {{ overview.activeStudyPlan.progressPercent || 0 }}%</span>
         </div>
-        <el-empty v-else description="暂无进行中的学习计划" />
+        <AppState
+          v-else
+          type="empty"
+          title="还没有进行中的学习计划"
+          description="学习计划通常由面试报告或能力短板生成。先做一次模拟面试，或从历史报告生成训练路线。"
+        >
+          <el-button type="primary" @click="go('/interviews/history')">从报告生成</el-button>
+          <el-button @click="go('/interviews/create')">先做面试</el-button>
+        </AppState>
       </section>
     </div>
 
-    <!-- Main grid: Recent Interview + Wrong Questions -->
+    <!-- Main grid: 最近面试与错题复盘 -->
     <div class="dashboard-main-grid">
       <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Recent Interview</p>
+            <p class="section-kicker">最近面试</p>
             <h2>最近面试 / 报告</h2>
           </div>
           <el-button text @click="go('/interviews/history')">查看历史</el-button>
@@ -213,7 +221,14 @@
               <small>{{ formatDateTime(overview.recentInterview.updatedAt) }}</small>
             </div>
           </button>
-          <el-empty v-else description="暂无最近面试记录" />
+          <AppState
+            v-else
+            type="empty"
+            title="还没有面试记录"
+            description="完成一次模拟面试后，这里会展示最近面试和报告入口，方便继续复盘。"
+          >
+            <el-button type="primary" @click="go('/interviews/create')">开始模拟面试</el-button>
+          </AppState>
 
           <button
             v-if="overview?.recentReport"
@@ -234,7 +249,7 @@
       <section class="cc-glass dashboard-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Wrong Questions</p>
+            <p class="section-kicker">错题复盘</p>
             <h2>待复习错题</h2>
           </div>
           <el-button text @click="go('/questions/wrong-records')">查看全部</el-button>
@@ -256,13 +271,20 @@
           >
             <AlertTriangle :size="16" />
             <div>
-              <strong>{{ item.title || `题目 #${item.questionId}` }}</strong>
+              <strong>{{ item.title || '待复习题目' }}</strong>
               <span>错误次数 {{ item.wrongCount ?? 1 }} · {{ formatDateTime(item.lastWrongAt) }}</span>
             </div>
             <span class="cc-badge cc-badge--warning">待复习</span>
           </button>
         </div>
-        <el-empty v-else description="暂无待复习错题" />
+        <AppState
+          v-else
+          type="empty"
+          title="暂时没有待复习错题"
+          description="提交练习或面试回答后，答错和低分题会回流到这里。可以先做一组专项练习。"
+        >
+          <el-button type="primary" @click="go('/questions/practice')">开始练习</el-button>
+        </AppState>
       </section>
     </div>
 
@@ -284,7 +306,14 @@
             <small>{{ item.reason || '-' }}</small>
           </div>
         </article>
-        <el-empty v-if="!entryStatuses.length" description="暂无推荐入口，完成简历或面试后会出现更多建议。" />
+        <AppState
+          v-if="!entryStatuses.length"
+          type="empty"
+          title="入口状态还在等待数据"
+          description="完成简历、岗位或面试后，系统会判断哪些入口可继续推进；也可以先从简历与岗位页补齐证据。"
+        >
+          <el-button type="primary" @click="go('/resumes')">补齐简历与岗位</el-button>
+        </AppState>
       </div>
     </section>
   </div>
@@ -301,17 +330,18 @@ import {
   PlayCircle,
   RefreshCcw,
   Route,
-  Sparkles,
-  Star,
-  Target
+  Sparkles
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getTodayAgentTasksApi } from '@/api/agent'
-import { getUserDashboardOverviewApi } from '@/api/dashboard'
-import { getWrongQuestionsApi } from '@/api/question'
+import {
+  fetchCachedDashboardOverview,
+  fetchCachedTodayAgentTasks,
+  fetchCachedWrongQuestions
+} from '@/composables/useUserHomeDataCache'
+import AppState from '@/components/common/AppState.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO } from '@/types/agent'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
@@ -342,6 +372,7 @@ const wrongQuestions = ref<WrongQuestionVO[]>([])
 const agentTasksLoading = ref(false)
 const agentTasksError = ref('')
 const agentTasks = ref<AgentTaskVO[]>([])
+let secondaryDataCancelled = false
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
@@ -436,44 +467,28 @@ const todayFocusCards = computed(() => {
 
 const metrics = computed<MetricItem[]>(() => [
   {
-    label: '简历数量',
-    value: overview.value?.resumeCount ?? 0,
-    hint: '当前账号已有简历',
-    icon: FileText,
-    tone: 'tone-cyan',
-    path: '/resumes'
-  },
-  {
-    label: '面试总数',
-    value: overview.value?.interviewCount ?? 0,
-    hint: '你的历史面试记录',
-    icon: Target,
-    tone: 'tone-blue',
-    path: '/interviews/history'
-  },
-  {
-    label: '学习计划',
-    value: overview.value?.studyPlanCount ?? 0,
-    hint: '正在推进的计划',
-    icon: Route,
-    tone: 'tone-purple',
-    path: '/study-plans'
-  },
-  {
     label: '今日任务',
     value: `${todayDoneCount.value}/${todayTotalCount.value}`,
-    hint: '今天需要完成的任务',
+    hint: primaryNextAction.value.title,
     icon: BookOpenCheck,
     tone: 'tone-green',
     path: '/agent/today'
   },
   {
+    label: '简历证据',
+    value: overview.value?.resumeCount ?? 0,
+    hint: resumeParseText.value,
+    icon: FileText,
+    tone: 'tone-cyan',
+    path: '/resumes'
+  },
+  {
     label: '最近报告分',
     value: overview.value?.recentReport?.totalScore ?? '--',
-    hint: overview.value?.recentReport ? '来自最近报告' : '暂无报告',
+    hint: overview.value?.recentReport ? '来自最近面试报告' : `${overview.value?.interviewCount ?? 0} 次面试记录`,
     icon: BrainCircuit,
     tone: 'tone-purple',
-    disabled: !overview.value?.recentReport
+    path: overview.value?.recentReport ? `/interviews/${overview.value.recentReport.interviewId}/report` : '/interviews/create'
   },
   {
     label: '待复习错题',
@@ -487,15 +502,23 @@ const metrics = computed<MetricItem[]>(() => [
 
 const actionCards = computed(() => [
   {
-    title: '开始 AI 模拟面试',
-    desc: '选择岗位、难度和简历后开始训练',
+    title: primaryNextAction.value.title,
+    desc: '优先完成这一项，系统会据此更新后续推荐。',
+    icon: primaryNextAction.value.icon,
+    tone: 'tone-green',
+    path: primaryNextAction.value.path,
+    badge: '下一步'
+  },
+  {
+    title: '模拟面试',
+    desc: '用一次面试补充表达、项目深度和岗位匹配证据。',
     icon: PlayCircle,
     tone: 'tone-blue',
     path: '/interviews/create',
     badge: entryStatusText(findEntryStatus('interview')?.status)
   },
   {
-    title: '简历中心 / 优化入口',
+    title: '简历中心',
     desc: resumeOptimizeText.value,
     icon: FileText,
     tone: 'tone-cyan',
@@ -504,35 +527,11 @@ const actionCards = computed(() => [
   },
   {
     title: '题库练习',
-    desc: '按分类和难度进行刷题训练',
+    desc: wrongQuestions.value.length ? '先复盘错题，再补一组专项练习。' : '按分类和难度做一组专项训练。',
     icon: BookOpenCheck,
     tone: 'tone-purple',
-    path: '/questions',
-    badge: '可用'
-  },
-  {
-    title: '错题复盘',
-    desc: `${wrongQuestions.value.length} 道待复习`,
-    icon: RefreshCcw,
-    tone: 'tone-amber',
-    path: '/questions/wrong-records',
+    path: wrongQuestions.value.length ? '/questions/wrong-records' : '/questions',
     badge: wrongQuestions.value.length > 0 ? '待复习' : '可用'
-  },
-  {
-    title: '收藏题目',
-    desc: '沉淀高频重点题',
-    icon: Star,
-    tone: 'tone-green',
-    path: '/questions/favorites',
-    badge: '可用'
-  },
-  {
-    title: '学习计划',
-    desc: activePlanText.value,
-    icon: Route,
-    tone: 'tone-purple',
-    path: '/study-plans',
-    badge: entryStatusText(findEntryStatus('studyPlan')?.status)
   }
 ])
 
@@ -551,7 +550,7 @@ const resumeOptimizeText = computed(() => {
 const activePlanText = computed(() => {
   const plan = overview.value?.activeStudyPlan
   if (!plan) return '暂无进行中的计划，可从面试报告或差距分析生成'
-  return `${plan.planTitle || `学习计划 #${plan.planId}`} · ${plan.progressPercent || 0}%`
+  return `${plan.planTitle || '学习计划'} · ${plan.progressPercent || 0}%`
 })
 
 const findEntryStatus = (key: string) => entryStatuses.value.find((item) => item.key === key)
@@ -559,6 +558,8 @@ const findEntryStatus = (key: string) => entryStatuses.value.find((item) => item
 const go = (path: string) => {
   router.push(path)
 }
+
+const shouldForceRefresh = (force: unknown = true) => force !== false
 
 const displayAgentTaskTitle = (task: AgentTaskVO) => {
   const skill = task.relatedSkillName || task.targetJobTitle || '目标能力'
@@ -570,9 +571,9 @@ const displayAgentTaskTitle = (task: AgentTaskVO) => {
     STUDY_TASK: `${skill} 学习任务`,
     REPORT_REVIEW: '面试报告复盘',
     SKILL_REVIEW: `${skill} 核心概念复习`,
-    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+    KNOWLEDGE_REVIEW: `${skill} 表达素材复盘`
   }
-  return map[task.taskType || ''] || task.title || `训练任务 #${task.id}`
+  return map[String(task.taskType || '').toUpperCase()] || cleanUserTaskText(task.title, '新的训练任务')
 }
 
 const displayAgentTaskDescription = (task: AgentTaskVO) => {
@@ -586,7 +587,14 @@ const displayAgentTaskDescription = (task: AgentTaskVO) => {
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
     KNOWLEDGE_REVIEW: '提取可复用的项目例子和面试表达。'
   }
-  return map[task.taskType || ''] || task.description || '根据你的当前准备状态生成的训练任务。'
+  return map[String(task.taskType || '').toUpperCase()] || cleanUserTaskText(task.description, '根据你的当前准备状态生成的训练任务。')
+}
+
+const cleanUserTaskText = (value?: string | null, fallback = '') => {
+  const text = String(value || '').trim()
+  if (!text) return fallback
+  if (/^[A-Z0-9_./-]+$/.test(text)) return fallback
+  return text
 }
 
 const formatStatus = (status?: string) => {
@@ -605,7 +613,7 @@ const formatStatus = (status?: string) => {
     FINISHED: '已完成',
     FAILED: '失败'
   }
-  return map[value] || status || '未知'
+  return map[value] || (value ? '状态待确认' : '未知')
 }
 
 const entryStatusText = (status?: string) => formatStatus(status || 'TODO')
@@ -623,7 +631,7 @@ const entryLabel = (key: string) => {
     interview: '面试入口',
     studyPlan: '学习计划入口'
   }
-  return map[key] || key
+  return map[key] || '入口状态'
 }
 
 const formatDateTime = (value?: string) => {
@@ -633,26 +641,26 @@ const formatDateTime = (value?: string) => {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
-const fetchOverview = async () => {
+const fetchOverview = async (force: unknown = true) => {
   overviewLoading.value = true
   overviewError.value = false
   overviewErrorMessage.value = ''
   try {
-    overview.value = await getUserDashboardOverviewApi()
+    overview.value = await fetchCachedDashboardOverview(shouldForceRefresh(force))
   } catch (error) {
     overview.value = null
     overviewError.value = true
-    overviewErrorMessage.value = getErrorMessage(error, '工作台数据暂时加载失败，可以先使用快捷入口，或稍后重试。')
+    overviewErrorMessage.value = getErrorMessage(error, '今日计划数据暂时加载失败，可以先使用快捷入口，或稍后重试。')
   } finally {
     overviewLoading.value = false
   }
 }
 
-const fetchWrongQuestions = async () => {
+const fetchWrongQuestions = async (force: unknown = true) => {
   wrongQuestionsLoading.value = true
   wrongQuestionsError.value = ''
   try {
-    const result = await getWrongQuestionsApi({ pageNum: 1, pageSize: 5 }, { silentError: true })
+    const result = await fetchCachedWrongQuestions(shouldForceRefresh(force))
     wrongQuestions.value = result.records || []
   } catch (error) {
     wrongQuestions.value = []
@@ -662,11 +670,11 @@ const fetchWrongQuestions = async () => {
   }
 }
 
-const fetchAgentTasks = async () => {
+const fetchAgentTasks = async (force: unknown = true) => {
   agentTasksLoading.value = true
   agentTasksError.value = ''
   try {
-    const result = await getTodayAgentTasksApi({ date: formatLocalDate() })
+    const result = await fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force))
     agentTasks.value = result.tasks || []
   } catch (error) {
     agentTasks.value = []
@@ -676,10 +684,33 @@ const fetchAgentTasks = async () => {
   }
 }
 
+const deferSecondaryDashboardData = (callback: () => void, timeout = 1200, fallbackDelay = 240) => {
+  const run = () => {
+    if (!secondaryDataCancelled) {
+      void callback()
+    }
+  }
+  const requestIdleCallback = (window as Window & {
+    requestIdleCallback?: (handler: () => void, options?: { timeout?: number }) => number
+  }).requestIdleCallback
+
+  if (requestIdleCallback) {
+    requestIdleCallback(run, { timeout })
+    return
+  }
+
+  window.setTimeout(run, fallbackDelay)
+}
+
 onMounted(() => {
-  fetchOverview()
-  fetchWrongQuestions()
-  fetchAgentTasks()
+  secondaryDataCancelled = false
+  fetchOverview(false)
+  deferSecondaryDashboardData(() => fetchAgentTasks(false), 900, 180)
+  deferSecondaryDashboardData(() => fetchWrongQuestions(false), 1600, 420)
+})
+
+onBeforeUnmount(() => {
+  secondaryDataCancelled = true
 })
 </script>
 
@@ -827,7 +858,7 @@ onMounted(() => {
 }
 
 .dashboard-metrics {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .metric-card--interactive {

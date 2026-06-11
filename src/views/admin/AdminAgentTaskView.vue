@@ -4,10 +4,10 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow">
           <ListChecks :size="16" />
-          <span>Agent Tasks</span>
+          <span>生成任务处理</span>
         </div>
-        <h1 class="admin-hero__title">Agent 任务诊断</h1>
-        <p class="admin-hero__desc">查看所有用户的 Agent 任务分布、状态和关联运行记录，用于 V4-A 基础诊断。</p>
+        <h1 class="admin-hero__title">生成任务处理</h1>
+        <p class="admin-hero__desc">查看所有用户的智能任务分布、状态和关联计划记录，用于核对生成进度与失败原因。</p>
       </div>
     </section>
 
@@ -15,13 +15,31 @@
       <div class="admin-panel__header">
         <div>
           <h2>任务明细</h2>
-          <p>按用户、日期、类型、优先级和状态筛选 Agent 任务。</p>
+          <p>按用户、日期、类型、优先级和状态筛选智能任务。</p>
+        </div>
+        <div class="table-view-tools">
+          <el-segmented v-model="tableSize" :options="tableSizeOptions" />
+          <el-dropdown trigger="click" :hide-on-click="false">
+            <el-button plain>列配置</el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="column-config-menu">
+                <el-dropdown-item v-for="item in columnOptions" :key="item.key">
+                  <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
+                    {{ item.label }}
+                  </el-checkbox>
+                </el-dropdown-item>
+                <el-dropdown-item divided>
+                  <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
 
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
-          <el-form-item label="用户 ID">
+          <el-form-item label="用户编号">
             <el-input-number v-model="query.userId" :min="1" controls-position="right" />
           </el-form-item>
           <el-form-item label="日期">
@@ -51,16 +69,11 @@
         </el-form>
       </div>
 
-      <AppState v-if="errorMessage" type="error" title="Agent 任务加载失败" :description="errorMessage">
-        <el-button type="primary" @click="fetchTasks">重试</el-button>
-      </AppState>
-
-      <template v-else>
-        <div class="table-card admin-table-card">
-          <el-table v-loading="loading" :data="tasks" row-key="id">
-            <el-table-column prop="id" label="任务 ID" width="100" />
-            <el-table-column prop="userId" label="用户 ID" width="100" />
-            <el-table-column label="任务" min-width="260" show-overflow-tooltip>
+      <div class="table-card admin-table-card">
+        <el-table v-loading="loading" :data="errorMessage ? [] : tasks" row-key="id" :size="tableSize">
+            <el-table-column v-if="isColumnVisible('id')" prop="id" label="任务编号" width="100" />
+            <el-table-column v-if="isColumnVisible('userId')" prop="userId" label="用户编号" width="100" />
+            <el-table-column v-if="isColumnVisible('task')" label="任务" min-width="260" show-overflow-tooltip>
               <template #default="{ row }">
                 <div class="task-cell">
                   <strong>{{ displayTaskTitle(row) }}</strong>
@@ -68,53 +81,79 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="targetJobTitle" label="目标岗位" min-width="160" show-overflow-tooltip />
-            <el-table-column label="状态" width="110">
+            <el-table-column v-if="isColumnVisible('targetJobTitle')" prop="targetJobTitle" label="目标岗位" min-width="160" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('status')" label="状态" width="110">
               <template #default="{ row }"><StatusTag :status="row.status" :map="statusMap" /></template>
             </el-table-column>
-            <el-table-column label="优先级" width="100"><template #default="{ row }">{{ priorityLabel(row.priority) }}</template></el-table-column>
-            <el-table-column label="类型" width="150" show-overflow-tooltip><template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template></el-table-column>
-            <el-table-column label="耗时" width="90">
+            <el-table-column v-if="isColumnVisible('priority')" label="优先级" width="100"><template #default="{ row }">{{ priorityLabel(row.priority) }}</template></el-table-column>
+            <el-table-column v-if="isColumnVisible('taskType')" label="类型" width="150" show-overflow-tooltip><template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template></el-table-column>
+            <el-table-column v-if="isColumnVisible('estimatedMinutes')" label="耗时" width="90">
               <template #default="{ row }">{{ row.estimatedMinutes ?? '--' }}m</template>
             </el-table-column>
-            <el-table-column prop="dueDate" label="日期" width="120" />
-            <el-table-column label="运行" width="100">
+            <el-table-column v-if="isColumnVisible('dueDate')" prop="dueDate" label="日期" width="120" />
+            <el-table-column v-if="isColumnVisible('source')" label="来源" min-width="170" show-overflow-tooltip>
+              <template #default="{ row }">{{ formatTaskSource(row) }}</template>
+            </el-table-column>
+            <el-table-column v-if="isColumnVisible('traceId')" prop="traceId" label="追踪号" min-width="180" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('run')" label="运行" width="100">
               <template #default="{ row }">
                 <el-button v-if="row.agentRunId" link type="primary" @click="openRun(row.agentRunId)">详情</el-button>
                 <span v-else>--</span>
               </template>
             </el-table-column>
-            <template #empty>
-              <AppState type="empty" title="暂无 Agent 任务" description="当前筛选条件下没有真实任务数据。" />
-            </template>
-          </el-table>
-        </div>
-        <div class="pagination-wrap">
-          <el-pagination
-            v-model:current-page="query.pageNum"
-            v-model:page-size="query.pageSize"
-            background
-            layout="total, sizes, prev, pager, next"
-            :total="total"
-            :page-sizes="[10, 20, 50]"
-            @change="fetchTasks"
-          />
-        </div>
-      </template>
+          <template #empty>
+            <AppState
+              :type="errorMessage ? 'error' : 'empty'"
+              :title="errorMessage ? '生成任务加载失败' : taskEmptyTitle"
+              :description="errorMessage || taskEmptyDescription"
+            >
+              <el-button v-if="errorMessage" type="primary" @click="fetchTasks">重试</el-button>
+              <el-button v-else-if="hasTaskFilters" type="primary" @click="handleReset">清空筛选</el-button>
+              <el-button v-else @click="fetchTasks">刷新任务</el-button>
+            </AppState>
+          </template>
+        </el-table>
+      </div>
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="query.pageNum"
+          v-model:page-size="query.pageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          @change="fetchTasks"
+        />
+      </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ListChecks } from 'lucide-vue-next'
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAdminAgentTasksApi } from '@/api/adminAgent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminAgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import { toFriendlyMessage } from '@/utils/error'
+
+type AgentTaskColumnKey =
+  | 'id'
+  | 'userId'
+  | 'task'
+  | 'targetJobTitle'
+  | 'status'
+  | 'priority'
+  | 'taskType'
+  | 'estimatedMinutes'
+  | 'dueDate'
+  | 'source'
+  | 'traceId'
+  | 'run'
 
 const router = useRouter()
 const loading = ref(false)
@@ -122,6 +161,27 @@ const errorMessage = ref('')
 const tasks = ref<AgentTaskVO[]>([])
 const total = ref(0)
 const dateRange = ref<[string, string] | ''>('')
+const {
+  tableSize,
+  tableSizeOptions,
+  columnOptions,
+  visibleColumns,
+  isColumnVisible,
+  resetTableView
+} = useAdminTableView<AgentTaskColumnKey>('admin:agent-task', [
+  { key: 'id', label: '任务编号', required: true },
+  { key: 'userId', label: '用户编号' },
+  { key: 'task', label: '任务', required: true },
+  { key: 'targetJobTitle', label: '目标岗位' },
+  { key: 'status', label: '状态', required: true },
+  { key: 'priority', label: '优先级' },
+  { key: 'taskType', label: '类型' },
+  { key: 'estimatedMinutes', label: '耗时' },
+  { key: 'dueDate', label: '日期' },
+  { key: 'source', label: '来源', defaultVisible: false },
+  { key: 'traceId', label: '追踪号', defaultVisible: false },
+  { key: 'run', label: '运行' }
+])
 
 const query = reactive<AdminAgentTaskQueryDTO>({
   pageNum: 1,
@@ -155,9 +215,25 @@ const statusOptions = [
 ]
 
 const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
+const hasTaskFilters = computed(() =>
+  Boolean(query.userId || query.startDate || query.endDate || query.taskType || query.status || query.priority)
+)
+const taskEmptyTitle = computed(() => hasTaskFilters.value ? '没有匹配当前筛选的智能任务' : '暂无智能任务')
+const taskEmptyDescription = computed(() => {
+  if (hasTaskFilters.value) {
+    return '当前筛选条件下没有智能任务。清空用户、日期、类型、状态或优先级筛选后，可确认是否真的没有任务数据。'
+  }
+  return '当前还没有智能任务。用户生成今日计划并保存任务后，这里会展示任务类型、优先级、状态和关联运行记录。'
+})
 
 const skillFromText = (value?: string) =>
   value?.match(/(?:for|with)\s+(.+?)(?:\s+interview|\s+concepts|$)/i)?.[1]?.trim()
+
+const readableTaskText = (value?: string) => {
+  const text = value?.trim()
+  if (!text) return ''
+  return /^[A-Z0-9_:.#-]+$/.test(text) ? '' : text
+}
 
 const displayTaskTitle = (row: AgentTaskVO) => {
   const skill = row.relatedSkillName || skillFromText(row.title) || row.targetJobTitle || '目标技能'
@@ -169,9 +245,9 @@ const displayTaskTitle = (row: AgentTaskVO) => {
     STUDY_TASK: `${skill} 学习任务`,
     REPORT_REVIEW: '面试报告复盘',
     SKILL_REVIEW: `${skill} 核心概念复习`,
-    KNOWLEDGE_REVIEW: `${skill} 个人知识复盘`
+    KNOWLEDGE_REVIEW: `${skill} 表达素材复盘`
   }
-  return map[row.taskType || ''] || row.title || `Agent 任务 #${row.id}`
+  return map[row.taskType || ''] || readableTaskText(row.title) || `任务编号 ${row.id}`
 }
 
 const displayTaskDescription = (row: AgentTaskVO) => {
@@ -183,13 +259,30 @@ const displayTaskDescription = (row: AgentTaskVO) => {
     STUDY_TASK: '完成学习计划中的阶段任务。',
     REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
-    KNOWLEDGE_REVIEW: '从个人知识库中提取可复用的项目例子和面试表达。'
+    KNOWLEDGE_REVIEW: '从项目经历、训练记录或面试工具中提取可复用表达。'
   }
-  return map[row.taskType || ''] || row.description || '暂无描述'
+  return map[row.taskType || ''] || readableTaskText(row.description) || '暂无描述'
 }
 
-const taskTypeLabel = (value?: string) => taskTypeMap[value || ''] || value || '--'
-const priorityLabel = (value?: string) => priorityMap[value || ''] || value || '--'
+const taskTypeLabel = (value?: string) => taskTypeMap[value || ''] || (value ? '任务类型待确认' : '--')
+const priorityLabel = (value?: string) => priorityMap[value || ''] || (value ? '优先级待确认' : '--')
+const taskSourceTypeMap: Record<string, string> = {
+  TARGET_JOB: '目标岗位',
+  RESUME_MATCH: '简历匹配',
+  TRAINING_MATERIAL: '训练素材',
+  QUESTION: '题目',
+  INTERVIEW: '面试',
+  RESUME: '简历',
+  AGENT_RUN: '计划生成记录'
+}
+
+const formatTaskSource = (row: AgentTaskVO) => {
+  const type = row.sourceType || row.relatedBizType || ''
+  const id = row.sourceId ?? row.relatedBizId
+  if (!type && !id) return '--'
+  const typeLabel = taskSourceTypeMap[String(type).toUpperCase()] || (type ? '关联来源' : '来源')
+  return [typeLabel, id ? `来源编号 ${id}` : ''].filter(Boolean).join(' ')
+}
 
 watch(dateRange, (value) => {
   query.startDate = Array.isArray(value) ? value[0] : ''
@@ -198,9 +291,9 @@ watch(dateRange, (value) => {
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, '生成任务列表加载失败，请稍后重试。')
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+  return '生成任务列表加载失败，请稍后重试。'
 }
 
 const fetchTasks = async () => {
@@ -269,5 +362,29 @@ onMounted(fetchTasks)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.table-view-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+:global(.column-config-menu) {
+  min-width: 180px;
+  padding: 8px;
+}
+
+:global(.column-config-menu .el-checkbox) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .table-view-tools {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 </style>

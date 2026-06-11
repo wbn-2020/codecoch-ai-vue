@@ -9,7 +9,7 @@
     </div>
 
     <div v-if="analysis.parseErrorMessage" class="analysis-error">
-      {{ analysis.parseErrorMessage }}
+      {{ friendlyJobParseError(analysis.parseErrorMessage) }}
     </div>
 
     <div class="analysis-grid">
@@ -88,6 +88,7 @@
 import { computed } from 'vue'
 
 import type { JobDescriptionAnalysisVO } from '@/types/jobTarget'
+import { toFriendlyMessage } from '@/utils/error'
 
 import JobTargetStatusTag from './JobTargetStatusTag.vue'
 
@@ -97,6 +98,9 @@ const props = defineProps<{
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const friendlyJobParseError = (message?: string) =>
+  toFriendlyMessage(message, '岗位描述解析没有成功，请补充岗位描述内容或稍后重试。')
 
 const stringifyItem = (value: unknown): string => {
   if (typeof value === 'string') return value

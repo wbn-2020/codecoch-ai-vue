@@ -164,7 +164,12 @@ const normalizeFinish = (result: any, interviewId: number): FinishInterviewVO =>
   ...result,
   interviewId: result.interviewId || result.id || interviewId,
   reportId: result.reportId || result.report?.id,
-  message: result.message || '面试已结束'
+  message: result.message || '面试已结束',
+  asyncMessageId: result.asyncMessageId || result.messageId || result.report?.asyncMessageId,
+  asyncTraceId: result.asyncTraceId || result.traceId || result.report?.asyncTraceId,
+  asyncBizType: result.asyncBizType || result.bizType || result.report?.asyncBizType,
+  asyncBizId: result.asyncBizId || result.bizId || result.report?.asyncBizId,
+  asyncSendStatus: result.asyncSendStatus || result.sendStatus || result.report?.asyncSendStatus
 })
 
 const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterviewVO => ({
@@ -173,7 +178,12 @@ const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterview
   status: result.status || result.interviewStatus || 'REPORT_GENERATING',
   reportStatus: result.reportStatus || result.report?.status || result.report?.reportStatus || 'GENERATING',
   reportId: result.reportId || result.report?.id,
-  message: result.message || '面试已结束，报告正在生成'
+  message: result.message || '面试已结束，报告正在生成',
+  asyncMessageId: result.asyncMessageId || result.messageId || result.report?.asyncMessageId,
+  asyncTraceId: result.asyncTraceId || result.traceId || result.report?.asyncTraceId,
+  asyncBizType: result.asyncBizType || result.bizType || result.report?.asyncBizType,
+  asyncBizId: result.asyncBizId || result.bizId || result.report?.asyncBizId,
+  asyncSendStatus: result.asyncSendStatus || result.sendStatus || result.report?.asyncSendStatus
 })
 
 const normalizeListItem = (item: any): InterviewListVO => ({
@@ -232,7 +242,17 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
     summary: source.summary || source.reportContent || '',
     reportContent: source.reportContent || source.summary || '',
     generatedAt: source.generatedAt || source.createdAt,
-    failedReason: source.failedReason || source.failureReason || source.errorMessage || ''
+    failedReason: source.failedReason || source.failureReason || source.errorMessage || '',
+    asyncMessageId: source.asyncMessageId || source.messageId,
+    asyncTraceId: source.asyncTraceId || source.traceId,
+    asyncBizType: source.asyncBizType || source.bizType,
+    asyncBizId: source.asyncBizId || source.bizId,
+    asyncSendStatus: source.asyncSendStatus || source.sendStatus,
+    sourceType: source.sourceType,
+    sourceId: source.sourceId,
+    trustStatus: source.trustStatus,
+    evidenceSummary: source.evidenceSummary,
+    fallback: source.fallback
   }
 }
 
@@ -247,6 +267,9 @@ const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDT
   industryDirection: data.industryDirection,
   difficulty: data.difficulty,
   interviewerStyle: data.interviewerStyle,
+  practiceMode: data.practiceMode,
+  recommendationSource: data.recommendationSource,
+  recommendationReason: data.recommendationReason,
   basedOnResume: data.basedOnResume ?? Boolean(data.resumeId),
   ...('targetJobId' in data ? {
     targetJobId: data.targetJobId,

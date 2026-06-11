@@ -336,6 +336,11 @@ export interface AiQuestionGenerateResultVO {
   generatedCount?: number
   reviewIds?: number[]
   aiCallLogId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   message?: string
   failedReason?: string
 }

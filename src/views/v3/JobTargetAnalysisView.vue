@@ -4,9 +4,9 @@
       <div>
         <div class="hero-kicker">
           <ScanSearch :size="16" />
-          JD 分析
+          岗位分析
         </div>
-        <h1>{{ target?.jobTitle || 'JD 解析 / 分析结果' }}</h1>
+        <h1>{{ target?.jobTitle || '岗位分析结果' }}</h1>
         <p>{{ targetSubtitle }}</p>
       </div>
       <div class="hero-actions">
@@ -39,7 +39,7 @@
               <strong>{{ target?.jobLevel || '--' }}</strong>
             </div>
             <div>
-              <span>JD 来源</span>
+              <span>岗位描述来源</span>
               <strong>{{ target?.jdSource || '--' }}</strong>
             </div>
             <div>
@@ -47,7 +47,7 @@
               <strong>{{ target?.currentFlag === 1 ? '是' : '否' }}</strong>
             </div>
             <div>
-              <span>解析状态</span>
+              <span>分析状态</span>
               <JobTargetStatusTag :status="target?.parseStatus || analysis?.parseStatus" />
             </div>
             <div>
@@ -64,7 +64,7 @@
               @click="handleParse"
             >
               <Sparkles :size="16" />
-              {{ analysis ? '重新解析 JD' : '触发 JD 解析' }}
+              {{ analysis ? '重新分析岗位描述' : '分析岗位描述' }}
             </el-button>
             <el-button :loading="loading" @click="loadAll">
               <RefreshCw :size="16" />
@@ -72,19 +72,32 @@
             </el-button>
           </div>
 
-          <div v-if="parseSseStatus !== 'idle' || parseSseEvents.length" class="sse-progress">
-            <div class="sse-progress__head">
-              <span class="cc-badge" :class="sseBadgeClass(parseSseStatus)">
+          <div v-if="parseTaskVisible" class="parse-task-progress">
+            <div class="parse-task-progress__head">
+              <span class="cc-badge" :class="parseTaskBadgeClass(parseSseStatus)">
                 <i class="cc-badge__dot" />
-                {{ sseStatusLabel(parseSseStatus) }}
+                {{ parseTaskStatusLabel(parseSseStatus) }}
               </span>
               <strong>{{ latestParseSseMessage }}</strong>
             </div>
             <p v-if="parseSseError">{{ parseSseError }}</p>
+            <div v-if="parseRecoveryVisible" class="parse-task-progress__recovery">
+              <span>{{ parseRecoveryHint }}</span>
+              <el-button text type="primary" :loading="loading" @click="refreshAnalysisAfterInterrupt">
+                刷新分析结果
+              </el-button>
+            </div>
+            <div v-if="parseTaskDiagnostics.length" class="parse-task-progress__diagnostics">
+              <span v-for="item in parseTaskDiagnostics" :key="item">{{ item }}</span>
+            </div>
             <div v-if="recentParseSseEvents.length" class="sse-progress__events">
               <span v-for="item in recentParseSseEvents" :key="item.key">
-                {{ item.message || item.event }}
+                {{ parseSseEventText(item) }}
               </span>
+            </div>
+            <div class="parse-task-progress__actions">
+              <el-button text type="primary" @click="goTaskCenter">去任务中心查看</el-button>
+              <el-button text :loading="loading" @click="loadAll">刷新结果</el-button>
             </div>
           </div>
 
@@ -94,19 +107,19 @@
             type="error"
             :closable="false"
             show-icon
-            title="JD 解析失败"
-            :description="toFriendlyMessage(target?.parseErrorMessage || analysis?.parseErrorMessage, 'JD 解析失败，请稍后重试。')"
+            title="岗位分析失败"
+            :description="toFriendlyMessage(target?.parseErrorMessage || analysis?.parseErrorMessage, '岗位描述解析没有成功，请补充岗位描述内容或稍后重试。')"
           />
         </div>
       </aside>
 
       <main class="content-card main-panel">
         <div v-if="loading" class="state-wrap">
-          <AppState type="loading" title="正在读取 JD 分析结果" description="正在同步岗位信息和解析结果。" />
+          <AppState type="loading" title="正在读取岗位分析结果" description="正在同步岗位信息和分析结果。" />
         </div>
 
         <div v-else-if="loadError" class="state-wrap">
-          <AppState type="error" title="JD 分析加载失败" :description="loadError">
+          <AppState type="error" title="岗位分析加载失败" :description="loadError">
             <el-button type="primary" @click="loadAll">重新加载</el-button>
           </AppState>
         </div>
@@ -116,11 +129,20 @@
         </div>
 
         <div v-else class="content-card__body analysis-workspace">
+          <el-alert
+            v-if="partialLoadWarning"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="岗位分析结果暂时不可用"
+            :description="partialLoadWarning"
+          />
+
           <section class="jd-preview">
             <div class="section-head">
               <div>
-                <h2>JD 原文</h2>
-                <p>这里展示你保存的 JD 原文，重新解析会基于这段内容生成结构化信息。</p>
+                <h2>完整岗位描述</h2>
+                <p>这里展示你保存的岗位描述，重新分析会基于这段内容生成结构化信息。</p>
               </div>
               <JobTargetStatusTag :status="target.parseStatus" />
             </div>
@@ -128,8 +150,8 @@
             <AppState
               v-else
               type="empty"
-              title="JD 原文为空"
-              description="请先编辑岗位目标补充 JD 原文，再触发解析。"
+              title="岗位描述为空"
+              description="请先编辑岗位目标补充岗位描述，再触发分析。"
             >
               <el-button type="primary" @click="router.push(`/job-targets/${target.id}/edit`)">编辑岗位目标</el-button>
             </AppState>
@@ -138,8 +160,8 @@
           <section>
             <div class="section-head">
               <div>
-                <h2>结构化解析结果</h2>
-                <p>职责、技能、关键词和经验要求会在解析完成后展示。</p>
+                <h2>结构化分析结果</h2>
+                <p>职责、技能、关键词和经验要求会在分析完成后展示。</p>
               </div>
               <el-button
                 :loading="parsing"
@@ -147,17 +169,17 @@
                 @click="handleParse"
               >
                 <Sparkles :size="16" />
-                {{ analysis ? '重新解析' : '解析 JD' }}
+                {{ analysis ? '重新分析' : '分析岗位描述' }}
               </el-button>
             </div>
 
             <AppState
               v-if="!analysis"
               type="empty"
-              title="暂无 JD 解析结果"
-              description="当前还没有解析结果，可以先触发解析。"
+              title="暂无岗位分析结果"
+              description="当前还没有分析结果，可以先触发分析。"
             >
-              <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发解析</el-button>
+              <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发分析</el-button>
             </AppState>
 
             <JobTargetAnalysisPanel v-else :analysis="analysis" />
@@ -169,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowLeft, Files, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -178,6 +200,7 @@ import {
   getJobDescriptionAnalysisApi,
   getJobTargetDetailApi,
   parseJobDescriptionApi,
+  submitJobDescriptionParseTaskApi,
   streamJobDescriptionParseApi
 } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
@@ -189,6 +212,7 @@ import type {
   JobTargetParseSseEventType,
   TargetJobVO
 } from '@/types/jobTarget'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import type { StreamSseHandle } from '@/utils/sse'
@@ -201,8 +225,10 @@ const router = useRouter()
 const loading = ref(false)
 const parsing = ref(false)
 const loadError = ref('')
+const partialLoadWarning = ref('')
 const target = ref<TargetJobVO | null>(null)
 const analysis = ref<JobDescriptionAnalysisVO | null>(null)
+const JOB_TARGET_PARSE_TASK_BIZ_TYPE = 'job-target.parse'
 const {
   status: parseSseStatus,
   error: parseSseError,
@@ -222,52 +248,225 @@ const targetId = computed(() => {
 })
 
 const targetSubtitle = computed(() => {
-  if (!target.value) return '读取岗位详情后展示 JD 原文、解析状态和结构化分析结果。'
+  if (!target.value) return '读取岗位详情后展示岗位描述、分析状态和结构化分析结果。'
   return `${target.value.companyName || '--'} · ${target.value.jobLevel || '--'}`
 })
 const recentParseSseEvents = computed(() => parseSseEvents.value.slice(-3))
+const currentParseStatus = computed(() => String(analysis.value?.parseStatus || target.value?.parseStatus || '').toUpperCase())
+const targetHasRecoverableParseStatus = computed(() => ['PARSING', 'FAILED'].includes(currentParseStatus.value))
+const parseTaskDiagnostics = computed(() => {
+  const result = analysis.value
+  const items: string[] = []
+  if (result?.asyncMessageId) items.push('处理进度已提交')
+  if (result?.asyncTraceId) items.push('处理线索已记录')
+  if (result?.asyncBizType || result?.asyncBizId) {
+    items.push('岗位分析记录已保存')
+  } else if (targetHasRecoverableParseStatus.value && target.value?.id) {
+    items.push('岗位分析记录已保存')
+  }
+  if (result?.asyncSendStatus) items.push(parseSubmitStatusText(result.asyncSendStatus))
+  return items
+})
+
+const parseSubmitStatusText = (status?: string | null) => {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (!normalized) return '提交进度待更新'
+  const map: Record<string, string> = {
+    SENT: '处理请求已提交',
+    SUCCESS: '处理请求已提交',
+    SUBMITTED: '处理请求已提交',
+    PENDING: '等待提交处理',
+    WAITING: '等待提交处理',
+    PROCESSING: '正在提交处理',
+    SENDING: '正在提交处理',
+    FAILED: '提交处理失败',
+    ERROR: '提交处理失败'
+  }
+  return map[normalized] || '提交进度已更新'
+}
+const parseTaskVisible = computed(() => (
+  parseSseStatus.value !== 'idle'
+  || parseSseEvents.value.length > 0
+  || parseTaskDiagnostics.value.length > 0
+  || targetHasRecoverableParseStatus.value
+))
+const parseRecoveryVisible = computed(() => parseSseStatus.value === 'error' && !parsing.value)
+const parseRecoveryHint = computed(() => (
+  hasParseTaskReceipt(analysis.value)
+    ? '处理记录已保留，也可以刷新分析结果确认结构化分析是否已经落库。'
+    : '如果分析结果已经落库，刷新后可继续查看；没有新结果时再重新提交分析。'
+))
 const latestParseSseMessage = computed(() => {
   const recent = recentParseSseEvents.value
   const latest = recent[recent.length - 1]
-  return latest?.message || '正在获取 JD 解析进度'
+  if (latest?.message) return latest.message
+  if (analysis.value?.asyncMessageId) return '岗位分析已提交，可以离开页面，稍后回到任务中心查看。'
+  if (currentParseStatus.value === 'PARSING') return '岗位分析正在生成中，可以离开页面，稍后在任务中心查看。'
+  if (currentParseStatus.value === 'FAILED') return '岗位分析失败，失败原因已保留，可以重新分析或到任务中心按分析记录查看。'
+  return '正在获取岗位分析进度'
 })
+
+const compactRouteQuery = (query: Record<string, string | undefined>) =>
+  Object.fromEntries(Object.entries(query).filter(([, value]) => Boolean(value))) as Record<string, string>
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+
+const firstText = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  }
+  return ''
+}
+
+const firstParseStatus = (...values: unknown[]) => {
+  const status = firstText(...values)
+  return status || undefined
+}
+
+const hasParseTaskReceipt = (result?: JobDescriptionAnalysisVO | null) => Boolean(
+  result?.asyncMessageId
+  || result?.asyncTraceId
+  || result?.asyncBizType
+  || result?.asyncBizId
+  || result?.parseStatus === 'PARSING'
+)
+
+const hasStructuredAnalysis = (result?: JobDescriptionAnalysisVO | null) => Boolean(
+  result?.parseStatus === 'PARSED'
+  || result?.summary
+  || result?.responsibilities
+  || result?.requiredSkills
+  || result?.interviewFocusPoints
+  || result?.techStackKeywords
+  || result?.businessKeywords
+)
+
+const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
+  result.status === 'fulfilled'
 
 const loadAll = async () => {
   if (!targetId.value) {
-    loadError.value = '路由参数 id 无效。'
+    loadError.value = '岗位目标链接不完整，请从岗位目标列表重新进入。'
     return
   }
   loading.value = true
   loadError.value = ''
+  partialLoadWarning.value = ''
   try {
-    const [detail, result] = await Promise.all([
+    const [detailResult, analysisResult] = await Promise.allSettled([
       getJobTargetDetailApi(targetId.value),
       getJobDescriptionAnalysisApi(targetId.value)
     ])
-    target.value = detail
-    analysis.value = result || null
+
+    if (!isFulfilled(detailResult)) {
+      target.value = null
+      analysis.value = null
+      loadError.value = getErrorMessage(detailResult.reason, '岗位目标暂时无法加载，请确认登录状态后重试。')
+      return
+    }
+
+    target.value = detailResult.value
+    if (isFulfilled(analysisResult)) {
+      if (analysisResult.value) {
+        captureParseTaskReceipt(analysisResult.value)
+      } else if (!hasParseTaskReceipt(analysis.value)) {
+        analysis.value = null
+      }
+    } else {
+      partialLoadWarning.value = getErrorMessage(analysisResult.reason, '岗位分析结果暂时无法加载；岗位描述仍可查看，也可以重新分析。')
+      if (!hasParseTaskReceipt(analysis.value)) {
+        analysis.value = null
+      }
+    }
   } catch (error) {
     target.value = null
     analysis.value = null
-    loadError.value = getErrorMessage(error, 'JD 分析暂时无法加载，请确认登录状态后重试。')
+    loadError.value = getErrorMessage(error, '岗位分析暂时无法加载，请确认登录状态后重试。')
   } finally {
     loading.value = false
   }
 }
 
-const sseStatusLabel = (status: string) => {
-  if (status === 'connecting') return '连接中'
-  if (status === 'streaming') return '解析中'
+const refreshAnalysisAfterInterrupt = async () => {
+  const hadStructuredAnalysis = hasStructuredAnalysis(analysis.value)
+  await loadAll()
+  if (loadError.value) {
+    ElMessage.error(loadError.value)
+    return
+  }
+  if (hasStructuredAnalysis(analysis.value) && !hadStructuredAnalysis) {
+    ElMessage.success('岗位分析结果已刷新，可以继续查看。')
+    return
+  }
+  if (hasStructuredAnalysis(analysis.value)) {
+    ElMessage.success('岗位分析结果已刷新。')
+    return
+  }
+  ElMessage.info('暂未发现新的分析结果，可以稍后刷新或重新提交分析。')
+}
+
+const mergeAnalysisReceipt = (next: JobDescriptionAnalysisVO): JobDescriptionAnalysisVO => {
+  const current = analysis.value
+  if (!current || current.targetJobId !== next.targetJobId) return next
+  return {
+    ...next,
+    asyncMessageId: next.asyncMessageId || current.asyncMessageId,
+    asyncTraceId: next.asyncTraceId || current.asyncTraceId,
+    asyncBizType: next.asyncBizType || current.asyncBizType,
+    asyncBizId: next.asyncBizId || current.asyncBizId,
+    asyncSendStatus: next.asyncSendStatus || current.asyncSendStatus
+  }
+}
+
+const captureParseTaskReceipt = (...sources: unknown[]) => {
+  const id = targetId.value
+  if (!id) return
+  const records = sources.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
+  if (!records.length) return
+
+  const resultRecord = asRecord(records.find((item) => asRecord(item.result))?.result)
+  const metadataRecord = asRecord(records.find((item) => asRecord(item.metadata))?.metadata)
+  const flatRecords = [...records, resultRecord, metadataRecord].filter((item): item is Record<string, unknown> => Boolean(item))
+  const directAnalysisRecord = records.find((item) => 'targetJobId' in item) as Partial<JobDescriptionAnalysisVO> | undefined
+  const currentAnalysis = analysis.value?.targetJobId === id ? analysis.value : null
+  const next: JobDescriptionAnalysisVO = {
+    ...(currentAnalysis || {}),
+    ...(resultRecord || {}),
+    ...(directAnalysisRecord || {}),
+    targetJobId: id,
+    asyncMessageId: firstText(...flatRecords.flatMap((item) => [item.asyncMessageId, item.messageId])),
+    asyncTraceId: firstText(...flatRecords.flatMap((item) => [item.asyncTraceId, item.traceId, item.requestId])),
+    asyncBizType: firstText(...flatRecords.flatMap((item) => [item.asyncBizType, item.bizType])) || JOB_TARGET_PARSE_TASK_BIZ_TYPE,
+    asyncBizId: firstText(...flatRecords.flatMap((item) => [item.asyncBizId, item.bizId])) || String(id),
+    asyncSendStatus: firstText(...flatRecords.flatMap((item) => [item.asyncSendStatus, item.sendStatus])),
+    parseStatus: firstParseStatus(...flatRecords.flatMap((item) => [item.parseStatus, item.status]))
+  }
+  analysis.value = mergeAnalysisReceipt(next)
+}
+
+const parseTaskStatusLabel = (status: string) => {
+  if (status === 'connecting') return '提交中'
+  if (status === 'streaming') return '分析中'
   if (status === 'done') return '已完成'
   if (status === 'error') return '失败'
+  if (currentParseStatus.value === 'FAILED') return '失败'
+  if (analysis.value?.asyncMessageId || currentParseStatus.value === 'PARSING') return '已入队'
   return '待开始'
 }
 
-const sseBadgeClass = (status: string) => {
+const parseSseEventText = (item: { message?: string; event?: string }) => (
+  item.message || parseTaskStatusLabel(item.event || '') || '处理进度已更新'
+)
+
+const parseTaskBadgeClass = (status: string) => {
   if (status === 'connecting') return 'cc-badge--thinking'
   if (status === 'streaming') return 'cc-badge--streaming'
   if (status === 'done') return 'cc-badge--success'
   if (status === 'error') return 'cc-badge--danger'
+  if (currentParseStatus.value === 'FAILED') return 'cc-badge--danger'
+  if (currentParseStatus.value === 'PARSING') return 'cc-badge--warning'
   return 'cc-badge--idle'
 }
 
@@ -278,12 +477,12 @@ const stopParseSse = () => {
 
 const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => {
   try {
-    analysis.value = await parseJobDescriptionApi(id, payload)
+    captureParseTaskReceipt(await parseJobDescriptionApi(id, payload))
     setParseSseDone()
-    ElMessage.success(analysis.value.parseStatus === 'FAILED' ? 'JD 解析已返回失败状态' : 'JD 解析已完成')
+    ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     await loadAll()
   } catch (error) {
-    const message = getErrorMessage(error, 'JD 解析失败，请稍后重试。')
+    const message = getErrorMessage(error, '岗位分析失败，请稍后重试。')
     setParseSseError(message)
     ElMessage.error(message)
   } finally {
@@ -292,11 +491,9 @@ const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => 
 }
 
 const applyParseSseEvent = (event: JobTargetParseSseEventType, data?: JobTargetParseSseEvent) => {
-  const message = toFriendlyMessage(data?.message || data?.content || data?.stage, sseStatusLabel(event))
+  const message = toFriendlyMessage(data?.message || data?.content || data?.stage, parseTaskStatusLabel(event))
   addParseSseEvent(event, message)
-  if (data?.result) {
-    analysis.value = data.result
-  }
+  captureParseTaskReceipt(data, data?.result, data?.metadata)
   if (event === 'done') {
     setParseSseDone()
   }
@@ -315,47 +512,85 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
       onError: (error, hasStarted) => {
         parseSseHandle = null
         if (!hasStarted) {
-          addParseSseEvent('fallback', '已切换为同步解析')
-          ElMessage.warning('JD 解析流未启动，已切换为同步解析')
+          addParseSseEvent('fallback', '进度连接暂时不稳定，系统会继续完成分析')
+          ElMessage.warning('岗位分析进度暂时无法实时显示，系统会继续完成分析')
           void runParseFallback(id, payload)
           return
         }
         parsing.value = false
-        const message = getErrorMessage(error, 'JD 解析流中断，请稍后重试。')
+        const message = getErrorMessage(error, '岗位分析生成进度中断，可以刷新分析结果；如果处理记录已出现，也可以到任务中心查看。')
         setParseSseError(message, true)
         ElMessage.error(message)
+        void loadAll()
       },
       onDone: () => {
         parseSseHandle = null
         parsing.value = false
         if (parseSseStatus.value === 'error') return
         setParseSseDone()
-        void loadAll().then(() => ElMessage.success('JD 解析已完成'))
+        void loadAll().then(() => ElMessage.success('岗位分析已完成'))
       }
     }
   )
   void parseSseHandle.finished.catch(() => undefined)
 }
 
+const submitParseTask = async (id: number, payload: JobDescriptionParseDTO) => {
+  stopParseSse()
+  resetParseSse()
+  setParseSseConnecting()
+  parsing.value = true
+  try {
+    captureParseTaskReceipt(await submitJobDescriptionParseTaskApi(id, payload))
+    setParseSseDone()
+    if (analysis.value?.asyncMessageId || analysis.value?.parseStatus === 'PARSING') {
+      ElMessage.success('岗位分析已提交，可以稍后在任务中心查看')
+    } else {
+      ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
+    }
+    await loadAll()
+  } catch (error) {
+    addParseSseEvent('fallback', '任务提交暂时失败，已尝试继续分析')
+    ElMessage.warning(getErrorMessage(error, '岗位分析提交暂时失败，已尝试继续处理。'))
+    startParseSse(id, payload)
+  } finally {
+    if (!parseSseHandle) {
+      parsing.value = false
+    }
+  }
+}
+
 const handleParse = async () => {
   if (!target.value) return
   if (!target.value.jdText) {
-    ElMessage.warning('请先编辑岗位目标补充 JD 原文。')
+    ElMessage.warning('请先编辑岗位目标补充岗位描述。')
     return
   }
   const forceRefresh = Boolean(analysis.value || target.value.parseStatus === 'PARSED')
   if (forceRefresh) {
-    try {
-      await ElMessageBox.confirm('确认重新解析当前 JD？系统会重新分析并刷新最新结果。', '重新解析 JD', {
-        type: 'warning',
-        confirmButtonText: '重新解析',
-        cancelButtonText: '取消'
-      })
-    } catch {
-      return
-    }
+    const confirmed = await confirmDangerActionPreview({
+      title: '重新分析岗位描述',
+      action: '重新分析当前岗位描述并刷新分析结果',
+      target: target.value.jobTitle || target.value.companyName || '当前岗位目标',
+      impact: '会刷新当前岗位分析结果，后续能力画像、推荐题、简历匹配和今日计划可能跟随新的分析结果变化。',
+      rollback: '旧分析结果不会自动恢复；如新结果不合适，可以再次编辑岗位描述后重新分析。',
+      audit: '系统会保存处理记录，便于在任务中心查看进度。',
+      tips: ['确认岗位描述已经更新到最新版本。', '确认可以接受基于新分析结果刷新后续推荐。'],
+      confirmButtonText: '重新分析'
+    })
+    if (!confirmed) return
   }
-  startParseSse(target.value.id, { forceRefresh })
+  void submitParseTask(target.value.id, { forceRefresh })
+}
+
+const goTaskCenter = () => {
+  const query = compactRouteQuery({
+    messageId: analysis.value?.asyncMessageId || undefined,
+    traceId: analysis.value?.asyncTraceId || undefined,
+    bizType: analysis.value?.asyncBizType || JOB_TARGET_PARSE_TASK_BIZ_TYPE,
+    bizId: analysis.value?.asyncBizId || (targetId.value ? String(targetId.value) : undefined)
+  })
+  router.push({ path: '/agent/tasks', query })
 }
 
 const goResumeMatch = () => {
@@ -490,7 +725,7 @@ onBeforeUnmount(stopParseSse)
   margin-top: 16px;
 }
 
-.sse-progress {
+.parse-task-progress {
   display: grid;
   gap: 10px;
   margin-top: 16px;
@@ -507,14 +742,14 @@ onBeforeUnmount(stopParseSse)
   }
 }
 
-.sse-progress__head,
+.parse-task-progress__head,
 .sse-progress__events {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.sse-progress__head {
+.parse-task-progress__head {
   align-items: flex-start;
   flex-direction: column;
 
@@ -523,6 +758,45 @@ onBeforeUnmount(stopParseSse)
     font-size: 13px;
     line-height: 1.5;
   }
+}
+
+.parse-task-progress__diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px dashed rgba(148, 163, 184, 0.34);
+    border-radius: 6px;
+    color: #cbd5e1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+}
+
+.parse-task-progress__recovery {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 47, 73, 0.24);
+  color: #bfdbfe;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.parse-task-progress__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .sse-progress__events {

@@ -54,6 +54,7 @@ import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import type { RegisterDTO } from '@/types/auth'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -106,7 +107,7 @@ const getRegisterErrorMessage = (error: unknown) => {
     if (message.includes('邮箱') || message.toLowerCase().includes('email')) {
       return '该邮箱格式或状态不符合要求，请检查后重试。'
     }
-    return message || '注册失败，请稍后重试。'
+    return normalizeErrorMessage(error, '注册失败，请稍后重试。')
   }
   return '注册失败，请稍后重试。'
 }

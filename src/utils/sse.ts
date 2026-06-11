@@ -94,7 +94,7 @@ const isStartLikeEvent = (event: SseEventName) => {
 }
 
 const createSseError = (data?: SseEventData) => {
-  return new Error(toFriendlyMessage(data?.message || data?.code, '流式生成异常，请稍后重试。'))
+  return new Error(toFriendlyMessage(data?.message || data?.code, '生成进度暂时不可用，请稍后刷新查看结果。'))
 }
 
 export const streamSse = <T extends SseEventData = SseEventData>({
@@ -121,7 +121,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       if (controller.signal.aborted) return
 
       if (!window.fetch || !window.ReadableStream) {
-        throw new Error('当前浏览器暂不支持流式进度，已尝试切换为普通生成。')
+        throw new Error('当前浏览器暂不支持实时进度，已尝试切换为普通生成方式。')
       }
 
       const token = getToken()
@@ -139,7 +139,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       })
 
       if (!response.ok || !response.body) {
-        throw new Error(`流式请求失败（${response.status}），请稍后重试。`)
+        throw new Error('生成进度暂时不可用，系统会继续处理，请稍后刷新查看结果。')
       }
 
       const reader = response.body.getReader()

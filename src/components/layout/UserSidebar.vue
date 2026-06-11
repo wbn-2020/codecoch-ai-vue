@@ -66,6 +66,7 @@ interface UserMenuItem {
   path: string
   icon: unknown
   featureFlag?: 'v4Preview'
+  previewOnly?: boolean
 }
 
 interface UserMenuSection {
@@ -76,7 +77,9 @@ interface UserMenuSection {
   children: UserMenuItem[]
 }
 
-const isFeatureEnabled = (featureFlag?: UserMenuItem['featureFlag']) => {
+const isMenuItemVisible = (item: UserMenuItem) => {
+  if (item.previewOnly) return false
+  const featureFlag = item.featureFlag
   if (!featureFlag) return true
   if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
   return true
@@ -89,8 +92,8 @@ const baseMenuSections: UserMenuSection[] = [
     icon: DataBoard,
     forceGroup: true,
     children: [
-      { label: '工作台', path: '/dashboard', icon: DataBoard },
-      { label: '求职驾驶舱', path: '/dashboard/v3', icon: DataBoard }
+      { label: '今日计划', path: '/dashboard', icon: DataBoard },
+      { label: '新手引导', path: '/onboarding', icon: Compass }
     ]
   },
   {
@@ -100,11 +103,11 @@ const baseMenuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '今日任务', path: '/agent/today', icon: MagicStick },
-      { label: '任务列表', path: '/agent/tasks', icon: Calendar },
+      { label: '任务中心', path: '/agent/tasks', icon: Calendar },
       { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Preview' },
-      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Preview' },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Preview' }
+      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Preview', previewOnly: true },
+      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Preview', previewOnly: true },
+      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Preview', previewOnly: true }
     ]
   },
   {
@@ -113,10 +116,10 @@ const baseMenuSections: UserMenuSection[] = [
     icon: Files,
     forceGroup: true,
     children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files, featureFlag: 'v4Preview' },
+      { label: '简历版本', path: '/resume-versions', icon: Files, featureFlag: 'v4Preview', previewOnly: true },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass, featureFlag: 'v4Preview' },
+      { label: '求职进度', path: '/applications', icon: Compass, featureFlag: 'v4Preview', previewOnly: true },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal }
@@ -164,7 +167,7 @@ const baseMenuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Preview' },
+      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Preview', previewOnly: true },
       { label: '修改密码', path: '/password', icon: Key },
       { label: '个人资料', path: '/profile', icon: User }
     ]
@@ -175,7 +178,7 @@ const menuSections = computed(() =>
   baseMenuSections
     .map((section) => ({
       ...section,
-      children: section.children.filter((item) => isFeatureEnabled(item.featureFlag))
+      children: section.children.filter(isMenuItemVisible)
     }))
     .filter((section) => section.children.length > 0)
 )
@@ -192,7 +195,7 @@ const handleSelect = () => {
 }
 
 const activePath = computed(() => {
-  if (route.path.startsWith('/dashboard/v3')) return '/dashboard/v3'
+  if (route.path.startsWith('/onboarding')) return '/onboarding'
   if (route.path.startsWith('/agent/today') || route.path.startsWith('/agent/runs')) return '/agent/today'
   if (route.path.startsWith('/agent/tasks')) return '/agent/tasks'
   if (route.path.startsWith('/analytics/personal')) return '/analytics/personal'

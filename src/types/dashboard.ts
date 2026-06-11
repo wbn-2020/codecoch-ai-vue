@@ -134,7 +134,11 @@ export interface V3DashboardLatestMatchVO {
   targetJobId?: number
   overallScore?: number
   status?: string
+  trustStatus?: string
+  fallback?: boolean
+  schemaWarningCount?: number
   summary?: string
+  evidenceSummary?: string
   updatedAt?: string
 }
 

@@ -16,7 +16,7 @@ import type {
   StudyTaskStatus,
   StudyTaskVO
 } from '@/types/studyPlan'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse } from '@/utils/sse'
 
 const normalizePlanListItem = (item: StudyPlanListVO): StudyPlanListVO => ({
@@ -91,7 +91,9 @@ export const regenerateStudyPlanApi = (id: number) => {
 
 export const getStudyPlansApi = (params?: StudyPlanQueryDTO) => {
   return request
-    .get<PageResult<StudyPlanListVO>, PageResult<StudyPlanListVO>>('/study-plans', { params })
+    .get<PageResult<StudyPlanListVO>, PageResult<StudyPlanListVO>>('/study-plans', {
+      params: compactQueryParams(params)
+    })
     .then((result) => normalizePageResult(result, params, normalizePlanListItem))
 }
 

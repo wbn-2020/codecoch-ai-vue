@@ -1,105 +1,49 @@
 <template>
-  <el-container class="app-layout user-layout" :class="{ 'is-collapsed': appStore.sidebarCollapsed }">
-    <el-aside class="app-layout__aside">
-      <div class="app-layout__brand">
-        <div class="brand-mark">C</div>
-        <div v-show="!appStore.sidebarCollapsed" class="brand-text">
-          <strong>CodeCoachAI</strong>
-          <span>AI Java 面试训练台</span>
-        </div>
+  <div class="jobcoach-layout">
+    <UserTopNav
+      :display-name="displayName"
+      :avatar-text="avatarText"
+      :avatar-url="authStore.userInfo?.avatarUrl || ''"
+      :unread-count="unreadCount"
+      :unread-available="unreadAvailable"
+      :notification-tooltip="notificationTooltip"
+      :can-access-admin="authStore.canAccessAdmin"
+      @open-command="commandPaletteOpen = true"
+      @go-admin="goAdmin"
+      @user-command="handleCommand"
+    />
+
+    <CommandPalette v-if="commandPaletteOpen" v-model="commandPaletteOpen" scope="user" />
+
+    <main class="jobcoach-main">
+      <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
+        当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
       </div>
-
-      <UserSidebar :collapsed="appStore.sidebarCollapsed" />
-
-      <div v-show="!appStore.sidebarCollapsed" class="sidebar-status">
-        <span class="status-dot"></span>
-        <span>AI Workspace</span>
-      </div>
-    </el-aside>
-
-    <el-container class="app-layout__content">
-      <el-header class="app-layout__header">
-        <div class="header-left">
-          <button class="icon-button" type="button" aria-label="Toggle sidebar" @click="appStore.toggleSidebar()">
-            <PanelLeftClose v-if="!appStore.sidebarCollapsed" :size="18" />
-            <PanelLeftOpen v-else :size="18" />
-          </button>
-          <AppBreadcrumb root-path="/dashboard" root-title="工作台" />
-        </div>
-
-        <div class="app-layout__header-actions">
-          <button class="command-search" type="button" aria-label="打开命令面板" @click="commandPaletteOpen = true">
-            <Search :size="15" />
-            <span>Search workspace</span>
-            <kbd>Ctrl K</kbd>
-          </button>
-          <el-tooltip :content="notificationTooltip" placement="bottom">
-            <button class="icon-button icon-button--ghost notification-bell" type="button" aria-label="通知中心" @click="router.push('/notifications')">
-              <Bell :size="16" />
-              <span v-if="unreadAvailable && unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
-            </button>
-          </el-tooltip>
-          <el-button v-if="authStore.canAccessAdmin" class="admin-entry" text @click="goAdmin">
-            <Shield :size="15" />
-            管理端
-          </el-button>
-          <el-dropdown trigger="click" @command="handleCommand">
-            <button class="user-trigger" type="button">
-              <el-avatar :size="30" :src="authStore.userInfo?.avatarUrl || ''">
-                {{ avatarText }}
-              </el-avatar>
-              <span>{{ displayName }}</span>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="profile">个人资料</el-dropdown-item>
-                <el-dropdown-item command="password">修改密码</el-dropdown-item>
-                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </el-header>
-
-      <CommandPalette v-model="commandPaletteOpen" scope="user" />
-
-      <TagsView scope="user" />
-
-      <el-main class="app-layout__main">
-        <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
-          演示只读模式已开启，页面可浏览，新增、修改、删除等写入操作会被拦截。
-        </div>
-        <RouteErrorBoundary fallback-path="/dashboard">
-          <RouterView />
-        </RouteErrorBoundary>
-      </el-main>
-    </el-container>
-  </el-container>
+      <RouteErrorBoundary fallback-path="/dashboard">
+        <RouterView />
+      </RouteErrorBoundary>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { Bell, PanelLeftClose, PanelLeftOpen, Search, Shield } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
 import { appConfig } from '@/config'
-import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
-import CommandPalette from '@/components/layout/CommandPalette.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
-import TagsView from '@/components/layout/TagsView.vue'
-import UserSidebar from '@/components/layout/UserSidebar.vue'
+import UserTopNav from '@/components/layout/UserTopNav.vue'
 import { firstAccessibleAdminPath } from '@/router/adminAccess'
-import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
-import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
+import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const appStore = useAppStore()
 const tagsStore = useTagsViewStore()
+const CommandPalette = defineAsyncComponent(() => import('@/components/layout/CommandPalette.vue'))
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
@@ -109,10 +53,12 @@ const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
 const commandPaletteOpen = ref(false)
-const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（未读数暂不可用）')
+const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（稍后刷新未读数）')
+
 const goAdmin = async () => {
   await router.push(firstAccessibleAdminPath(authStore) || '/403')
 }
+
 const fetchUnreadCount = async () => {
   try {
     const result = await getUnreadCountApi()
@@ -123,20 +69,25 @@ const fetchUnreadCount = async () => {
   }
 }
 
-onMounted(() => {
-  fetchUnreadCount()
-  window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
-})
+let unreadRefreshCancelled = false
 
-onBeforeUnmount(() => {
-  window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
-})
+const deferNonCriticalWork = (callback: () => void | Promise<void>) => {
+  const run = () => {
+    if (!unreadRefreshCancelled) {
+      void callback()
+    }
+  }
+  const requestIdleCallback = (window as Window & {
+    requestIdleCallback?: (handler: () => void, options?: { timeout?: number }) => number
+  }).requestIdleCallback
 
-watch(
-  () => route.fullPath,
-  () => tagsStore.addVisitedView(route),
-  { immediate: true }
-)
+  if (requestIdleCallback) {
+    requestIdleCallback(run, { timeout: 1200 })
+    return
+  }
+
+  window.setTimeout(run, 250)
+}
 
 const handleCommand = async (command: string) => {
   if (command === 'profile') {
@@ -155,278 +106,93 @@ const handleCommand = async (command: string) => {
     await router.push('/login')
   }
 }
+
+onMounted(() => {
+  unreadRefreshCancelled = false
+  deferNonCriticalWork(fetchUnreadCount)
+  window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
+})
+
+onBeforeUnmount(() => {
+  unreadRefreshCancelled = true
+  window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
+})
+
+watch(
+  () => route.fullPath,
+  () => tagsStore.addVisitedView(route),
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
-.app-layout {
+.jobcoach-layout {
   min-height: 100vh;
   background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.1), transparent 28rem),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(2, 6, 23, 0.96));
+    linear-gradient(180deg, rgba(232, 241, 255, 0.95), rgba(248, 250, 252, 0.98) 360px),
+    #f8fafc;
+  color: #172033;
+  color-scheme: light;
+
+  --app-bg: #f8fafc;
+  --app-surface: #ffffff;
+  --app-surface-soft: #f8fafc;
+  --app-border: #e2e8f0;
+  --app-text: #172033;
+  --app-text-muted: #64748b;
+  --app-primary: #2563eb;
+  --app-primary-soft: #dbeafe;
+  --app-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
+  --user-mobile-top-height: 68px;
+  --user-mobile-nav-height: 0px;
+  --user-mobile-nav-gap: 0px;
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f8fafc;
+  --el-border-color: #dbe3ef;
+  --el-border-color-light: #e5eaf2;
+  --el-text-color-primary: #172033;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #64748b;
+  --el-color-primary: #2563eb;
+  --el-color-primary-light-3: #60a5fa;
+  --el-color-primary-light-5: #93c5fd;
+  --el-color-primary-light-7: #bfdbfe;
+  --el-color-primary-light-8: #dbeafe;
+  --el-color-primary-light-9: #eff6ff;
+  --el-color-primary-dark-2: #1d4ed8;
+  --el-mask-color: rgba(255, 255, 255, 0.72);
 }
 
-.app-layout__aside {
-  width: var(--app-sidebar-width);
-  overflow-x: hidden;
-  border-right: 1px solid var(--app-border);
-  background: rgba(2, 6, 23, 0.88);
-  transition: width 0.2s ease;
-}
-
-.user-layout.is-collapsed {
-  .app-layout__aside {
-    width: 72px;
-  }
-
-  .app-layout__brand {
-    justify-content: center;
-    padding-inline: 0;
-  }
-}
-
-.app-layout__content {
-  min-width: 0;
-}
-
-.app-layout__brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: var(--app-header-height);
-  padding: 0 18px;
-  border-bottom: 1px solid var(--app-border);
-  white-space: nowrap;
-
-  span {
-    display: block;
-    margin-top: 2px;
-    color: var(--app-text-muted);
-    font-size: 12px;
-  }
-}
-
-.brand-text {
-  min-width: 0;
-}
-
-.brand-mark {
-  display: inline-flex;
-  flex: 0 0 32px;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--app-primary);
-  color: #fff;
-  font-weight: 700;
-}
-
-.app-layout__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--app-header-height);
-  border-bottom: 1px solid var(--app-border);
-  background: rgba(2, 6, 23, 0.78);
-  backdrop-filter: blur(18px);
-}
-
-.header-left {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.app-layout__header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.icon-button,
-.user-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--app-text);
-  cursor: pointer;
-}
-
-.notification-bell {
-  position: relative;
-}
-
-.notification-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--el-color-danger);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.icon-button {
-  width: 36px;
-  height: 36px;
-  border-color: var(--app-border);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.72);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease;
-
-  &:hover {
-    border-color: rgba(129, 140, 248, 0.5);
-    background: rgba(99, 102, 241, 0.14);
-  }
-
-  &--ghost {
-    background: transparent;
-    color: var(--app-text-muted);
-  }
-
-  &--ghost:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-  }
-
-  &--ghost:disabled:hover {
-    border-color: var(--app-border);
-    background: transparent;
-  }
-}
-
-.user-trigger {
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 999px;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.12);
-  }
-}
-
-.command-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 190px;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.62);
-  color: var(--app-text-muted);
-  cursor: pointer;
-  font-size: 12px;
-
-  kbd {
-    margin-left: auto;
-    padding: 2px 6px;
-    border: 1px solid var(--app-border);
-    border-radius: 6px;
-    background: rgba(2, 6, 23, 0.48);
-    color: var(--app-text-muted);
-    font-family: inherit;
-    font-size: 11px;
-  }
-
-  &:hover {
-    border-color: rgba(129, 140, 248, 0.5);
-    background: rgba(99, 102, 241, 0.14);
-    color: var(--app-text);
-  }
-}
-
-.admin-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sidebar-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 14px 16px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.64);
-  color: var(--app-text-muted);
-  font-size: 12px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--cc-success);
-  box-shadow: 0 0 14px rgba(34, 197, 94, 0.72);
-}
-
-.app-layout__main {
-  min-width: 0;
-  min-height: calc(100vh - var(--app-header-height) - 38px);
-  padding: 24px;
-  overflow: auto;
+.jobcoach-main {
+  width: min(100%, 1240px);
+  min-height: calc(100vh - 68px);
+  margin: 0 auto;
+  padding: 22px 24px 42px;
 }
 
 .demo-readonly-banner {
   margin-bottom: 16px;
-  border: 1px solid rgba(245, 158, 11, 0.34);
-  border-radius: 10px;
-  background: rgba(245, 158, 11, 0.12);
-  color: #fde68a;
   padding: 10px 14px;
+  border: 1px solid rgba(244, 122, 31, 0.28);
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
   font-size: 13px;
   line-height: 1.6;
 }
 
-:deep(.layout-menu) {
-  border-right: 0;
-}
-
-@media (max-width: 760px) {
-  .app-layout {
-    display: block;
+@media (max-width: 720px) {
+  .jobcoach-layout {
+    --user-mobile-top-height: 62px;
+    --user-mobile-nav-height: 72px;
+    --user-mobile-nav-gap: 12px;
   }
 
-  .app-layout__aside,
-  .user-layout.is-collapsed .app-layout__aside {
-    width: 100%;
-    border-right: 0;
-  }
-
-  :deep(.layout-menu) {
-    display: flex;
-    overflow-x: auto;
-  }
-
-  :deep(.el-menu-item) {
-    flex: 0 0 auto;
-  }
-
-  .app-layout__main {
-    padding: 16px;
-  }
-
-  .command-search {
-    display: none;
+  .jobcoach-main {
+    min-height: calc(100vh - 62px);
+    padding: 16px 14px calc(var(--user-mobile-nav-height) + 32px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

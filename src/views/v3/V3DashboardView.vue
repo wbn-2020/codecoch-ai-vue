@@ -2,8 +2,8 @@
   <div class="v3-page">
     <section class="page-hero">
       <div>
-        <div class="hero-kicker"><LayoutDashboard :size="16" /> V3 Dashboard</div>
-        <h1>V3 求职闭环驾驶舱</h1>
+        <div class="hero-kicker"><LayoutDashboard :size="16" /> 求职闭环</div>
+        <h1>求职闭环驾驶舱</h1>
         <p>聚合当前岗位目标、最近匹配、学习进度、推荐题和下一步动作。</p>
       </div>
       <div class="hero-actions">
@@ -29,7 +29,7 @@
       <div class="section-head">
         <div>
           <h2>求职闭环清单</h2>
-          <p>按“岗位 -> 简历 -> 匹配 -> 能力 -> 今日任务”的顺序完成首轮准备。</p>
+          <p>按“岗位描述 -> 简历 -> 匹配画像 -> 今日任务”的 4 步完成首轮准备。</p>
         </div>
         <el-tag effect="plain">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} 已完成</el-tag>
       </div>
@@ -61,7 +61,7 @@
         <div class="section-head"><div><h2>当前岗位目标</h2><p>优先展示你正在推进的岗位方向。</p></div><el-button text @click="router.push('/job-targets')">管理</el-button></div>
         <AppState v-if="!overview?.currentTargetJob" type="empty" title="暂无当前岗位目标" description="请先创建或设置当前目标岗位。" />
         <div v-else class="loop-summary">
-          <strong>{{ overview.currentTargetJob.jobTitle || `岗位 #${overview.currentTargetJob.targetJobId || overview.currentTargetJob.id}` }}</strong>
+          <strong>{{ overview.currentTargetJob.jobTitle || '岗位目标' }}</strong>
           <span>{{ overview.currentTargetJob.companyName || '未填写公司' }} · {{ overview.currentTargetJob.jobLevel || '未填写级别' }}</span>
           <el-tag effect="plain">{{ formatStatus(overview.currentTargetJob.parseStatus) }}</el-tag>
           <el-button type="primary" @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">继续简历匹配</el-button>
@@ -69,12 +69,17 @@
       </div>
 
       <div class="content-panel loop-card">
-        <div class="section-head"><div><h2>最近匹配报告</h2><p>来自 latestMatch。</p></div><el-button text @click="router.push('/resume-match')">查看</el-button></div>
+        <div class="section-head"><div><h2>最近匹配报告</h2><p>只展示已保存的最近一次简历与岗位匹配结果。</p></div><el-button text @click="router.push('/resume-match')">查看</el-button></div>
         <AppState v-if="!overview?.latestMatch" type="empty" title="暂无匹配报告" description="完成简历与岗位匹配后会展示最近结果。" />
         <div v-else class="loop-summary">
           <strong>{{ overview.latestMatch.overallScore ?? '--' }} 分</strong>
-          <span>{{ overview.latestMatch.summary || overview.latestMatch.status || '暂无摘要' }}</span>
-          <el-button type="primary" @click="router.push({ path: '/skill-profile', query: compactQuery({ matchReportId: latestMatchReportId, targetJobId: overview?.latestMatch?.targetJobId || currentTargetJobId }) })">生成/查看能力画像</el-button>
+          <span>{{ latestMatchSummary }}</span>
+          <el-button
+            type="primary"
+            @click="router.push(latestMatchPrimaryAction.path)"
+          >
+            {{ latestMatchPrimaryAction.label }}
+          </el-button>
         </div>
       </div>
     </section>
@@ -93,7 +98,7 @@
       </div>
 
       <div class="content-panel">
-        <div class="section-head"><div><h2>学习计划</h2><p>来自 studyProgress/activeStudyPlan。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
+        <div class="section-head"><div><h2>学习计划</h2><p>展示正在推进的训练路线和完成进度。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
         <div v-if="activeStudyProgress" class="active-plan" @click="router.push(activeStudyPlanRoute)">
           <strong>{{ activeStudyPlanTitle }}</strong>
           <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
@@ -105,7 +110,7 @@
 
     <section class="dashboard-grid">
       <div class="content-panel loop-card">
-        <div class="section-head"><div><h2>推荐题批次</h2><p>来自 recommendedQuestions。</p></div><el-button text @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">查看</el-button></div>
+        <div class="section-head"><div><h2>推荐题批次</h2><p>根据岗位目标、能力短板和最近练习结果生成。</p></div><el-button text @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">查看</el-button></div>
         <AppState v-if="!overview?.recommendedQuestions" type="empty" title="暂无推荐题批次" description="可从能力短板或学习计划生成推荐题。" />
         <div v-else class="loop-summary">
           <strong>{{ overview.recommendedQuestions.questionCount ?? '--' }} 题</strong>
@@ -115,14 +120,14 @@
       </div>
 
       <div class="content-panel loop-card">
-        <div class="section-head"><div><h2>下一步动作</h2><p>来自 nextActions。</p></div></div>
+        <div class="section-head"><div><h2>下一步动作</h2><p>优先给出今天最值得推进的一件事。</p></div></div>
         <div v-if="nextActionItems.length" class="next-action-list">
           <button v-for="action in nextActionItems" :key="action.title" type="button" @click="router.push(action.path)">
             <strong>{{ action.title }}</strong>
             <span>{{ action.desc }}</span>
           </button>
         </div>
-        <AppState v-else type="empty" title="暂无下一步动作" description="完成更多 V3 环节后会展示建议动作。" />
+        <AppState v-else type="empty" title="暂无下一步动作" description="完成更多求职准备后会展示建议动作。" />
       </div>
     </section>
 
@@ -132,7 +137,7 @@
         <AppState v-if="!overview?.recentReport && !overview?.recentInterview" type="empty" title="暂无面试报告" description="完成目标岗位面试并生成报告后会展示回流建议。" />
         <div v-else class="loop-summary">
           <strong>{{ overview?.recentReport?.totalScore ?? '--' }} 分</strong>
-          <span>{{ overview?.recentInterview?.title || `面试 #${overview?.recentReport?.interviewId || overview?.recentInterview?.interviewId}` }} · {{ formatStatus(overview?.recentReport?.status || overview?.recentInterview?.reportStatus) }}</span>
+          <span>{{ overview?.recentInterview?.title || '最近一次面试' }} · {{ formatStatus(overview?.recentReport?.status || overview?.recentInterview?.reportStatus) }}</span>
           <small v-if="reportInsightText">{{ reportInsightText }}</small>
           <div class="inline-actions">
             <el-button type="primary" @click="router.push(`/interviews/${overview?.recentReport?.interviewId}/report`)" :disabled="!overview?.recentReport?.interviewId">查看报告</el-button>
@@ -148,14 +153,14 @@
         <div v-else-if="notifications.length" class="notification-list">
           <article v-for="item in notifications" :key="item.id">
             <strong>{{ item.title }}</strong>
-            <span>{{ item.content || item.type }} · {{ item.createdAt }}</span>
+            <span>{{ notificationText(item) }} · {{ item.createdAt }}</span>
           </article>
         </div>
         <AppState v-else type="empty" title="暂无通知" description="当前没有新的通知。" />
       </div>
 
       <div class="content-panel">
-        <div class="section-head"><div><h2>闭环入口</h2><p>按真实数据状态引导下一步。</p></div></div>
+        <div class="section-head"><div><h2>闭环入口</h2><p>根据当前准备进度推荐下一步。</p></div></div>
         <div class="entry-grid">
           <button v-for="entry in entries" :key="entry.title" type="button" @click="router.push(entry.path)">
             <component :is="entry.icon" :size="18" />
@@ -195,12 +200,23 @@ const notifications = ref<NotificationVO[]>([])
 const loading = computed(() => overviewLoading.value || skillLoading.value || notificationLoading.value)
 const errors = computed(() => [overviewError.value, skillError.value, notificationError.value].filter(Boolean))
 const currentTargetJobId = computed(() => overview.value?.currentTargetJob?.targetJobId || overview.value?.currentTargetJob?.id)
+const latestMatchStatus = computed(() => String(overview.value?.latestMatch?.status || '').toUpperCase())
 const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchReportId || overview.value?.latestMatch?.reportId)
+const latestMatchTrusted = computed(() => {
+  const match = overview.value?.latestMatch
+  return latestMatchStatus.value === 'SUCCESS' &&
+    !match?.fallback &&
+    String(match?.trustStatus || '').toUpperCase() === 'VERIFIED' &&
+    match?.schemaWarningCount != null &&
+    Number(match.schemaWarningCount) === 0
+})
+const latestSuccessfulMatchReportId = computed(() => latestMatchTrusted.value ? latestMatchReportId.value : undefined)
+const latestSuccessfulMatch = computed(() => latestMatchTrusted.value ? overview.value?.latestMatch : null)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
 const activeStudyPlanTitle = computed(() => {
   const plan = activeStudyProgress.value
   if (!plan) return ''
-  return plan.planTitle || `学习计划 #${plan.planId}`
+  return plan.planTitle || '学习计划'
 })
 const activeStudyPlanRoute = computed(() => ({
   path: '/study-plans',
@@ -229,7 +245,7 @@ const formatStatus = (status?: string) => {
     FAILED: '失败',
     ERROR: '失败'
   }
-  return map[value] || status || '暂未返回状态'
+  return map[value] || (value ? '状态待确认' : '暂未返回状态')
 }
 const formatSourceType = (sourceType?: string) => {
   const value = String(sourceType || '').toUpperCase()
@@ -240,12 +256,47 @@ const formatSourceType = (sourceType?: string) => {
     INTERVIEW_REPORT: '面试报告',
     MANUAL: '手动生成'
   }
-  return map[value] || sourceType || '来源待确认'
+  return map[value] || '来源待确认'
 }
+const latestMatchSummary = computed(() => {
+  const match = overview.value?.latestMatch
+  if (!match) return '暂无摘要'
+  if (latestMatchStatus.value === 'SUCCESS') {
+    if (latestMatchTrusted.value) return match.summary || '匹配报告已生成，可用于后续训练。'
+    return match.evidenceSummary || match.summary || '匹配报告已生成，建议先进入详情确认重点后再继续训练。'
+  }
+  if (latestMatchStatus.value === 'FAILED') return match.summary || '上次匹配失败，请先进入详情重新生成后再继续训练。'
+  return match.summary || `${formatStatus(match.status)}，完成后会补充到训练建议里。`
+})
+const latestMatchPrimaryAction = computed(() => {
+  const match = overview.value?.latestMatch
+  if (latestMatchTrusted.value) {
+    return {
+      label: '生成/查看能力画像',
+      path: {
+        path: '/skill-profile',
+        query: compactQuery({
+          matchReportId: latestSuccessfulMatchReportId.value,
+          targetJobId: latestSuccessfulMatch.value?.targetJobId || currentTargetJobId.value
+        })
+      }
+    }
+  }
+  if (match?.reportId || match?.matchReportId) {
+    return {
+      label: latestMatchStatus.value === 'FAILED' ? '查看失败并重新生成' : '查看生成进度',
+      path: `/resume-match/${match.reportId || match.matchReportId}`
+    }
+  }
+  return {
+    label: '生成匹配报告',
+    path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }
+  }
+})
 const recommendationQuery = computed(() => compactQuery({
   batchId: overview.value?.recommendedQuestions?.batchId,
   studyPlanId: activeStudyProgress.value?.planId,
-  matchReportId: overview.value?.recommendedQuestions?.matchReportId || (activeStudyProgress.value?.planId ? undefined : latestMatchReportId.value),
+  matchReportId: overview.value?.recommendedQuestions?.matchReportId || (activeStudyProgress.value?.planId ? undefined : latestSuccessfulMatchReportId.value),
   skillProfileId: overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId,
   sourceType: overview.value?.recommendedQuestions?.sourceType,
   sourceId: overview.value?.recommendedQuestions?.sourceId,
@@ -254,8 +305,8 @@ const recommendationQuery = computed(() => compactQuery({
 const interviewRetryQuery = computed(() => compactQuery({
   source: 'v3',
   targetJobId: currentTargetJobId.value,
-  matchReportId: latestMatchReportId.value,
-  resumeId: overview.value?.latestMatch?.resumeId,
+  matchReportId: latestSuccessfulMatchReportId.value,
+  resumeId: latestSuccessfulMatch.value?.resumeId,
   fromInterviewId: overview.value?.recentReport?.interviewId || overview.value?.recentInterview?.interviewId,
   fromReportId: overview.value?.recentReport?.reportId
 }))
@@ -265,8 +316,8 @@ const normalizeActionPath = (path: string) => {
   const params = new URLSearchParams(hasQuery ? path.slice(path.indexOf('?') + 1) : '')
   if (!params.get('source')) params.set('source', 'v3')
   if (currentTargetJobId.value && !params.get('targetJobId')) params.set('targetJobId', String(currentTargetJobId.value))
-  if (latestMatchReportId.value && !params.get('matchReportId')) params.set('matchReportId', String(latestMatchReportId.value))
-  if (overview.value?.latestMatch?.resumeId && !params.get('resumeId')) params.set('resumeId', String(overview.value.latestMatch.resumeId))
+  if (latestSuccessfulMatchReportId.value && !params.get('matchReportId')) params.set('matchReportId', String(latestSuccessfulMatchReportId.value))
+  if (latestSuccessfulMatch.value?.resumeId && !params.get('resumeId')) params.set('resumeId', String(latestSuccessfulMatch.value.resumeId))
   return `/interviews/create?${params.toString()}`
 }
 const normalizeNextActions = (value: V3DashboardOverviewVO['nextActions']) => {
@@ -277,15 +328,43 @@ const normalizeNextActions = (value: V3DashboardOverviewVO['nextActions']) => {
       : []
   return rawItems.map((item, index) => {
     if (typeof item === 'string') {
-      return { title: item, desc: '继续完成 V3 求职闭环', path: '/dashboard/v3' }
+      return { title: item, desc: '继续完成求职闭环', path: '/dashboard/v3' }
     }
     const action = item as V3DashboardNextActionVO
     return {
-      title: action.title || action.actionType || action.type || `下一步 ${index + 1}`,
-      desc: action.desc || action.description || '继续完成 V3 求职闭环',
+      title: action.title || actionTypeLabel(action.actionType || action.type, index),
+      desc: action.desc || action.description || '继续完成求职闭环',
       path: normalizeActionPath(action.path || action.actionUrl || action.targetPath || '/dashboard/v3')
     }
   })
+}
+const actionTypeLabel = (type: string | undefined, index: number) => {
+  const value = String(type || '').toUpperCase()
+  const map: Record<string, string> = {
+    RESUME: '完善简历',
+    JOB_TARGET: '补充目标岗位',
+    MATCH_REPORT: '生成匹配报告',
+    SKILL_PROFILE: '生成能力画像',
+    STUDY_PLAN: '生成学习计划',
+    QUESTION_PRACTICE: '开始刷题训练',
+    INTERVIEW: '安排模拟面试',
+    AGENT_PLAN: '生成今日计划'
+  }
+  return map[value] || `下一步 ${index + 1}`
+}
+const notificationText = (item: NotificationVO) => {
+  if (item.content) return item.content
+  const value = String(item.type || '').toUpperCase()
+  const map: Record<string, string> = {
+    SYSTEM: '系统提醒',
+    INTERVIEW: '面试提醒',
+    QUESTION: '题库提醒',
+    RESUME: '简历提醒',
+    AGENT: 'AI 教练提醒',
+    TASK: '任务提醒',
+    AI: 'AI 任务提醒'
+  }
+  return map[value] || '训练进度提醒'
 }
 const metrics = computed(() => [
   { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
@@ -297,53 +376,44 @@ const onboardingSteps = computed(() => [
   {
     key: 'target',
     order: 1,
-    title: '创建目标岗位',
-    desc: overview.value?.currentTargetJob?.jobTitle || '先确定本轮投递方向',
-    cta: '去维护岗位',
-    done: Boolean(currentTargetJobId.value),
-    path: '/job-targets'
-  },
-  {
-    key: 'jd',
-    order: 2,
-    title: '完成 JD 解析',
-    desc: '让系统识别岗位职责和能力要求',
-    cta: '去解析 JD',
-    done: Boolean(currentTargetJobId.value && isCompletedStatus(overview.value?.currentTargetJob?.parseStatus)),
+    title: '确定岗位描述',
+    desc: overview.value?.currentTargetJob?.jobTitle
+      ? `当前目标：${overview.value.currentTargetJob.jobTitle}，岗位描述${formatStatus(overview.value.currentTargetJob.parseStatus)}`
+      : '先确定本轮投递方向，并补充岗位要求',
+    cta: currentTargetJobId.value ? '查看岗位分析' : '去维护岗位',
+    done: Boolean(
+      currentTargetJobId.value
+        && (!overview.value?.currentTargetJob?.parseStatus || isCompletedStatus(overview.value.currentTargetJob.parseStatus))
+    ),
     path: currentTargetJobId.value ? `/job-targets/${currentTargetJobId.value}/analysis` : '/job-targets'
   },
   {
     key: 'resume',
-    order: 3,
-    title: '准备默认简历',
-    desc: overview.value?.resumeCount ? `已有 ${overview.value.resumeCount} 份简历` : '上传或创建一份可用于匹配的简历',
+    order: 2,
+    title: '补充简历证据',
+    desc: overview.value?.resumeCount ? `已有 ${overview.value.resumeCount} 份简历可用于匹配` : '上传或创建一份可用于匹配的简历',
     cta: '去简历中心',
     done: Boolean(overview.value?.resumeCount),
     path: '/resumes'
   },
   {
-    key: 'match',
-    order: 4,
-    title: '生成简历匹配',
-    desc: overview.value?.latestMatch?.summary || '把简历和当前岗位做一次可信匹配',
-    cta: '去匹配',
-    done: Boolean(latestMatchReportId.value),
-    path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }
-  },
-  {
-    key: 'skill',
-    order: 5,
-    title: '查看能力画像',
-    desc: skillOverview.value?.summary || '把差距转成技能短板和训练动作',
-    cta: '去能力画像',
-    done: Boolean(skillOverview.value && !skillOverview.value.empty),
-    path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }
+    key: 'profile',
+    order: 3,
+    title: '生成匹配画像',
+    desc: latestSuccessfulMatchReportId.value
+      ? (skillOverview.value?.summary || '可信匹配已就绪，可继续生成能力画像')
+      : (latestMatchSummary.value || '把简历和当前岗位做一次可信匹配'),
+    cta: latestSuccessfulMatchReportId.value ? '去能力画像' : '去匹配',
+    done: Boolean(latestSuccessfulMatchReportId.value && skillOverview.value && !skillOverview.value.empty),
+    path: latestSuccessfulMatchReportId.value
+      ? { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestSuccessfulMatchReportId.value }) }
+      : { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }
   },
   {
     key: 'today',
-    order: 6,
-    title: '开始今日任务',
-    desc: (overview.value?.todayTaskCount || 0) > 0 ? `今日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成` : '让 Agent 给出今天最该推进的动作',
+    order: 4,
+    title: '生成今日计划',
+    desc: (overview.value?.todayTaskCount || 0) > 0 ? `今日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成` : '让智能教练给出今天最该推进的动作',
     cta: '去今日任务',
     done: Boolean((overview.value?.todayTaskCount || 0) > 0 || activeStudyProgress.value),
     path: '/agent/today'
@@ -361,9 +431,9 @@ const reportInsightText = computed(() => {
   return [...weakPoints.slice(0, 2), ...suggestions.slice(0, 1)].filter(Boolean).join(' · ')
 })
 const entries = computed(() => [
-  { title: '岗位目标', desc: '维护当前主目标和 JD', path: '/job-targets', icon: Crosshair },
+  { title: '岗位目标', desc: '维护当前主目标和岗位描述', path: '/job-targets', icon: Crosshair },
   { title: '简历匹配', desc: '生成匹配报告', path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }, icon: GitCompareArrows },
-  { title: '能力画像', desc: '查看短板和动作', path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }, icon: Radar },
+  { title: '能力画像', desc: latestSuccessfulMatchReportId.value ? '查看短板和动作' : '需先完成可信匹配', path: { path: latestSuccessfulMatchReportId.value ? '/skill-profile' : '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestSuccessfulMatchReportId.value }) }, icon: Radar },
   { title: '推荐题目', desc: '按短板练习', path: { path: '/questions/recommendations', query: recommendationQuery.value }, icon: ListChecks },
   { title: '模拟面试', desc: '按岗位目标创建面试', path: { path: '/interviews/create', query: interviewRetryQuery.value }, icon: Bell }
 ])
@@ -408,7 +478,7 @@ const loadNotifications = async () => {
   }
 }
 
-const loadDashboard = () => Promise.all([loadOverview(), loadSkill(), loadNotifications()])
+const loadDashboard = () => Promise.allSettled([loadOverview(), loadSkill(), loadNotifications()])
 
 onMounted(loadDashboard)
 </script>
@@ -459,4 +529,27 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .entry-grid span { color: var(--app-text-muted); line-height: 1.5; }
 @media (max-width: 1200px) { .onboarding-track { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .page-hero { flex-direction: column; } .dashboard-grid, .metric-grid, .onboarding-track { grid-template-columns: 1fr; } .hero-actions, .section-head { flex-wrap: wrap; } }
+
+
+@media (max-width: 720px) {
+  .page-hero,
+  .history-hero,
+  .detail-hero,
+  .report-top,
+  .room-topbar,
+  .notification-hero,
+  .create-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions,
+  .report-actions,
+  .topbar-actions,
+  .card-actions,
+  .filter-bar,
+  .notification-toolbar {
+    justify-content: flex-start;
+  }
+}
 </style>
