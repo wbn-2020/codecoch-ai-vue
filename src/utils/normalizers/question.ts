@@ -110,9 +110,10 @@ export const normalizeUserQuestion = (item: BackendQuestionVO): QuestionVO => ({
 })
 
 export const normalizeUserQuestionPage = (
-  result: PageResult<BackendQuestionVO>
+  result: PageResult<BackendQuestionVO> | BackendQuestionVO[],
+  params?: { pageNo?: number; pageNum?: number; pageSize?: number }
 ): PageResult<QuestionVO> =>
-  normalizePageResult(result, undefined, normalizeUserQuestion)
+  normalizePageResult(result, params, normalizeUserQuestion)
 
 export const normalizeFavoritePage = (
   result: PageResult<Omit<FavoriteQuestionVO, 'tags'> & { tags?: BackendQuestionTag[]; tagIds?: number[]; tagNames?: string[] }>
@@ -144,5 +145,6 @@ export const normalizeAdminQuestion = (item: BackendAdminQuestionVO): AdminQuest
 })
 
 export const normalizeAdminQuestionPage = (
-  result: PageResult<BackendAdminQuestionVO>
-): PageResult<AdminQuestionVO> => normalizePageResult(result, undefined, normalizeAdminQuestion)
+  result: PageResult<BackendAdminQuestionVO> | BackendAdminQuestionVO[],
+  params?: { pageNo?: number; pageNum?: number; pageSize?: number }
+): PageResult<AdminQuestionVO> => normalizePageResult(result, params, normalizeAdminQuestion)

@@ -56,9 +56,11 @@ const normalizeUserDashboardOverview = (data: Partial<UserDashboardOverviewVO> =
   generatedAt: data.generatedAt
 })
 
-export const getAdminDashboardOverviewApi = () => {
+export const getAdminDashboardOverviewApi = (options?: { silentError?: boolean }) => {
   return request
-    .get<AdminDashboardOverviewVO, AdminDashboardOverviewVO>('/admin/dashboard/overview')
+    .get<AdminDashboardOverviewVO, AdminDashboardOverviewVO>('/admin/dashboard/overview', {
+      silentError: options?.silentError
+    })
     .then(normalizeAdminDashboardOverview)
 }
 
@@ -106,8 +108,10 @@ export const getUserDashboardOverviewApi = async () => {
   }
 }
 
-export const getV3DashboardOverviewApi = () => {
+export const getV3DashboardOverviewApi = (options?: { silentError?: boolean }) => {
   return request
-    .get<V3DashboardOverviewVO, V3DashboardOverviewVO>('/dashboard/v3/overview')
+    .get<V3DashboardOverviewVO, V3DashboardOverviewVO>('/dashboard/v3/overview', {
+      silentError: options?.silentError
+    })
     .then(normalizeV3DashboardOverview)
 }

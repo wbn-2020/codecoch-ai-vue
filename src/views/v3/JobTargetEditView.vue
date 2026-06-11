@@ -7,7 +7,7 @@
           岗位目标
         </div>
         <h1>{{ pageTitle }}</h1>
-        <p>填写岗位名称、公司、经验要求和 JD 原文，保存后进入 JD 分析页。</p>
+        <p>填写岗位名称、公司、经验要求和岗位描述，保存后进入岗位分析页。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/job-targets')">
@@ -35,7 +35,7 @@
       <div v-else class="content-card__body edit-workspace">
         <div class="form-side">
           <h2>岗位信息</h2>
-          <p>城市、薪资、技能关键词可先写在 JD 原文里，后续分析会一并参考。</p>
+          <p>城市、薪资、技能关键词可先写在岗位描述里，后续分析会一并参考。</p>
           <div class="contract-list">
             <div>
               <span>基础信息</span>
@@ -43,11 +43,11 @@
             </div>
             <div>
               <span>关键输入</span>
-              <strong>完整 JD 原文</strong>
+              <strong>完整岗位描述</strong>
             </div>
             <div>
               <span>保存后</span>
-              <strong>进入 JD 分析页</strong>
+              <strong>进入岗位分析页</strong>
             </div>
           </div>
         </div>

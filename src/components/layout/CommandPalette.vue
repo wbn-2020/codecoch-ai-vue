@@ -2,12 +2,12 @@
   <Teleport to="body">
     <Transition name="command-palette">
       <div v-if="modelValue" class="command-palette" @keydown="handleKeydown">
-        <button class="command-palette__overlay" type="button" aria-label="Close command palette" @click="close" />
+        <button class="command-palette__overlay" type="button" aria-label="关闭命令面板" @click="close" />
         <section
           class="command-palette__panel"
           role="dialog"
           aria-modal="true"
-          aria-label="Command palette"
+          aria-label="命令面板"
         >
           <div class="command-palette__search">
             <Search :size="18" />
@@ -15,11 +15,13 @@
               ref="inputRef"
               v-model="keyword"
               type="text"
-              placeholder="Search pages or commands"
-              aria-label="Search commands"
+              placeholder="搜索页面或命令"
+              aria-label="搜索命令"
               autocomplete="off"
             >
-            <kbd>Esc</kbd>
+            <button class="command-palette__close" type="button" aria-label="关闭命令面板" @click="close">
+              <X :size="16" />
+            </button>
           </div>
 
           <div class="command-palette__body">
@@ -39,7 +41,7 @@
                 <strong>{{ command.title }}</strong>
                 <small>{{ command.group }}</small>
               </span>
-              <span class="command-palette__item-path">{{ command.path }}</span>
+              <span class="command-palette__item-path">打开</span>
             </button>
 
             <div v-if="!filteredCommands.length" class="command-palette__empty">
@@ -47,10 +49,6 @@
             </div>
           </div>
 
-          <div class="command-palette__footer">
-            <span><kbd>Up</kbd><kbd>Down</kbd> Select</span>
-            <span><kbd>Enter</kbd> Open</span>
-          </div>
         </section>
       </div>
     </Transition>
@@ -58,10 +56,11 @@
 </template>
 
 <script setup lang="ts">
-import { Command, Search } from 'lucide-vue-next'
+import { Command, Search, X } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter, type RouteRecordRaw } from 'vue-router'
 
+import { canAccessAdminPermissions } from '@/router/adminAccess'
 import { routes } from '@/router/routes'
 import { useAuthStore } from '@/stores/auth'
 
@@ -104,15 +103,14 @@ const hasDynamicSegment = (path: string) => path.split('/').some((segment) => se
 
 const hasAdminPermission = (route: RouteRecordRaw) => {
   const permissions = route.meta?.requiredPermissions as string[] | string | undefined
-  if (!permissions) return true
   if (Array.isArray(permissions)) {
-    return authStore.hasAnyPermission(permissions.map(String))
+    return canAccessAdminPermissions(permissions.map(String), authStore)
   }
-  return authStore.hasPermission(String(permissions))
+  return canAccessAdminPermissions(permissions ? [String(permissions)] : undefined, authStore)
 }
 
 const makeCommand = (route: RouteRecordRaw, parentPath: string, group: string): CommandItem | null => {
-  if (route.redirect || route.meta?.hidden || !route.meta?.title) return null
+  if (route.redirect || route.meta?.hidden || route.meta?.commandHidden || route.meta?.previewOnly || !route.meta?.title) return null
 
   const path = normalizePath(parentPath, route.path)
   if (hasDynamicSegment(path)) return null
@@ -129,7 +127,7 @@ const makeCommand = (route: RouteRecordRaw, parentPath: string, group: string): 
 const userCommands = computed(() => {
   const userRoot = routes.find((route) => route.path === '/')
   return (userRoot?.children || [])
-    .map((route) => makeCommand(route, '/', 'User'))
+    .map((route) => makeCommand(route, '/', '用户端'))
     .filter((command): command is CommandItem => Boolean(command))
 })
 
@@ -139,7 +137,7 @@ const adminCommands = computed(() => {
 
   return (adminRoot?.children || [])
     .filter(hasAdminPermission)
-    .map((route) => makeCommand(route, '/admin', 'Admin'))
+    .map((route) => makeCommand(route, '/admin', '管理端'))
     .filter((command): command is CommandItem => Boolean(command))
 })
 
@@ -351,31 +349,23 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.command-palette__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  padding: 10px 14px;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-kbd {
+.command-palette__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  margin: 0 2px;
-  padding: 0 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.9);
   color: #cbd5e1;
-  font-family: inherit;
-  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.46);
+    color: #f8fafc;
+  }
 }
 
 .command-palette-enter-active,

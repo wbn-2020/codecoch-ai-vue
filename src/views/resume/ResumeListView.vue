@@ -1,41 +1,41 @@
-<template>
+﻿<template>
   <div class="resume-center page-shell">
-    <section class="resume-hero cc-glass--ai">
+    <section class="hero-band">
       <div class="hero-copy">
-        <div class="hero-kicker">
+        <p class="hero-kicker">
           <FileText :size="16" />
-          Resume Intelligence Hub
-        </div>
-        <h1>简历中心</h1>
-        <p>管理求职简历，上传文件解析内容，并获取可落地的 AI 优化建议。</p>
+          我的简历
+        </p>
+        <h1>我的简历</h1>
+        <p>集中管理简历、导入文件和查看 AI 建议，把简历准备串成一条更清晰的求职路径。</p>
         <div class="hero-actions">
           <el-button type="primary" size="large" @click="router.push('/resumes/create')">
             <Plus :size="17" />
-            新增简历
+            新建简历
           </el-button>
           <el-button size="large" :loading="uploading" @click="triggerUpload">
             <UploadCloud :size="17" />
-            上传简历解析
+            上传简历
           </el-button>
           <el-button size="large" text @click="router.push('/dashboard')">
             <ArrowLeft :size="17" />
-            返回工作台
+            回到今日计划
           </el-button>
         </div>
       </div>
 
       <div class="hero-panel">
-        <div class="panel-line">
+        <div class="hero-panel__stat">
           <span>简历管理</span>
           <strong>可创建和编辑</strong>
         </div>
-        <div class="panel-line">
-          <span>V2 上传解析</span>
+        <div class="hero-panel__stat">
+          <span>文件导入</span>
           <strong :class="uploadStatusClass">{{ uploadStatusText }}</strong>
         </div>
-        <div class="panel-line">
-          <span>AI 优化</span>
-          <strong>同步优化接口</strong>
+        <div class="hero-panel__stat">
+          <span>AI 建议</span>
+          <strong>最近建议可查看</strong>
         </div>
       </div>
     </section>
@@ -54,12 +54,12 @@
       <article class="metric-card">
         <div class="metric-card__label">上传解析状态</div>
         <div class="metric-card__value is-date">{{ uploadStatusText }}</div>
-        <p>{{ parseStatusMessage || '等待上传文件后由后端任务更新' }}</p>
+          <p>{{ parseStatusMessage || '等待上传文件后更新解析状态' }}</p>
       </article>
       <article class="metric-card">
-        <div class="metric-card__label">最近优化记录</div>
+        <div class="metric-card__label">最近建议记录</div>
         <div class="metric-card__value is-date">{{ latestOptimizeStatus }}</div>
-        <p>来自 `/resumes/{id}/optimize-records`</p>
+        <p>展示最近一次建议状态，失败时可打开记录查看原因</p>
       </article>
     </section>
 
@@ -68,9 +68,9 @@
         <div>
           <div class="section-title">
             <UploadCloud :size="18" />
-            <h2>上传解析工作流</h2>
+            <h2>导入与解析</h2>
           </div>
-          <p>支持 PDF、DOC、DOCX、MD、TXT 等后端允许格式。上传后由后端异步解析，前端轮询到成功、失败或超时后停止。</p>
+          <p>支持 PDF、DOC、DOCX、MD、TXT 等格式。上传后系统会异步解析，状态会在这里更新。</p>
         </div>
         <el-upload
           ref="uploadRef"
@@ -114,12 +114,24 @@
 
       <div v-if="parseTask" class="task-card">
         <div>
-          <span>解析任务 #{{ parseTask.analysisRecordId }}</span>
+          <span>本次解析进度</span>
           <strong>{{ parseStatusText(parseTask.parseStatus) }}</strong>
-          <p>{{ parseStatusMessage || '等待后端解析任务更新状态' }}</p>
+          <p>{{ parseStatusMessage || '等待解析状态更新' }}</p>
+          <div v-if="parseTask.asyncMessageId || parseTask.asyncTraceId || parseTask.asyncSendStatus" class="task-diagnostics">
+            <span v-if="parseTask.asyncMessageId">处理进度已提交</span>
+            <span v-if="parseTask.asyncTraceId">处理线索已记录</span>
+            <span v-if="parseTask.asyncSendStatus">{{ asyncSendStatusText(parseTask.asyncSendStatus) }}</span>
+            <span v-if="parseTask.asyncBizType && parseTask.asyncBizId">
+              可在任务中心继续查看
+            </span>
+          </div>
         </div>
         <div class="task-actions">
-          <el-button :loading="parsePolling" @click="refreshParseStatus(parseTask.analysisRecordId)">刷新状态</el-button>
+          <el-button :loading="parsePolling" @click="refreshParseStatus(parseTask.analysisRecordId)">刷新进度</el-button>
+          <el-button plain @click="goParseTaskCenter(parseTask)">
+            <ListChecks :size="15" />
+            任务中心
+          </el-button>
           <el-button
             v-if="parseTask.parseStatus === 'WAIT_CONFIRM' || parseTask.parseStatus === 'SUCCESS'"
             type="primary"
@@ -132,7 +144,7 @@
             :loading="parsePolling"
             @click="handleReparse(parseTask.analysisRecordId)"
           >
-            重新解析
+            再次解析
           </el-button>
         </div>
       </div>
@@ -141,7 +153,8 @@
     <section class="content-card cc-glass resume-workspace">
       <div class="content-card__body workspace-toolbar">
         <div>
-          <h2>求职资料库</h2>
+          <p class="section-kicker">我的简历</p>
+          <h2>简历资料</h2>
           <p>维护简历、项目经历和面试上下文，优先补齐能支撑面试表达的内容。</p>
         </div>
         <el-form class="search-form" :model="query" inline>
@@ -158,7 +171,7 @@
             </el-input>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" @click="handleSearch">筛选</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
@@ -170,7 +183,7 @@
         type="error"
         :closable="false"
         show-icon
-        title="简历列表加载失败"
+        title="简历加载失败"
         :description="loadError"
       />
 
@@ -180,8 +193,27 @@
         type="warning"
         :closable="false"
         show-icon
-        title="优化记录加载失败，请稍后重试"
+        title="建议记录加载失败，请稍后重试"
       />
+
+      <div v-if="optimizeRecoveryMessage" class="resume-alert optimize-recovery-card">
+        <div>
+          <strong>{{ optimizeTask ? '建议任务已提交' : '建议生成进度中断' }}</strong>
+          <p>{{ optimizeRecoveryMessage }}</p>
+        </div>
+        <el-button
+          v-if="optimizeTask"
+          size="small"
+          type="primary"
+          plain
+          @click="goOptimizeTaskCenter(optimizeTask)"
+        >
+          查看任务中心
+        </el-button>
+        <el-button size="small" :loading="optimizeRecordsRefreshing" @click="refreshOptimizeRecords">
+          刷新最近记录
+        </el-button>
+      </div>
 
       <div class="resume-list" v-loading="loading">
         <div v-if="!loading && !loadError && resumes.length === 0" class="empty-state">
@@ -189,10 +221,10 @@
             <FilePlus2 :size="32" />
           </div>
           <h3>还没有可用于面试训练的简历</h3>
-          <p>可以手动创建，也可以上传简历文件并在解析完成后确认生成结构化简历。</p>
+          <p>可以手动创建，也可以导入简历文件，等解析完成后再确认生成结构化简历。</p>
           <div class="empty-actions">
-            <el-button type="primary" @click="router.push('/resumes/create')">新增简历</el-button>
-            <el-button :loading="uploading" @click="triggerUpload">上传简历解析</el-button>
+            <el-button type="primary" @click="router.push('/resumes/create')">新建简历</el-button>
+            <el-button :loading="uploading" @click="triggerUpload">上传简历</el-button>
           </div>
         </div>
 
@@ -246,7 +278,7 @@
                 <strong>已入库</strong>
               </div>
               <div>
-                <span>AI 优化</span>
+                <span>AI 建议</span>
                 <strong :class="{ success: latestRecord(item.id)?.optimizeStatus === 'SUCCESS', danger: latestRecord(item.id)?.optimizeStatus === 'FAILED' }">
                   {{ optimizeStatusText(latestRecord(item.id)?.optimizeStatus) }}
                 </strong>
@@ -256,23 +288,26 @@
             <div v-if="latestOptimizeSummary(item.id)" class="optimize-summary">
               {{ latestOptimizeSummary(item.id) }}
             </div>
+            <div v-else-if="optimizingId === item.id" class="optimize-summary">
+              正在生成建议，可以停留等待；离开后也能回到本页刷新最近记录。
+            </div>
 
             <div class="resume-card__actions">
               <el-button type="primary" plain @click="router.push(`/resumes/${item.id}/edit`)">
                 <Eye :size="15" />
-                查看 / 编辑
+                编辑
               </el-button>
               <el-button @click="router.push('/interviews/create')">
                 <MessagesSquare :size="15" />
-                创建面试
+                去面试
               </el-button>
               <el-button :loading="optimizingId === item.id" @click="handleOptimize(item)">
                 <Sparkles :size="15" />
-                AI 优化
+                AI 建议
               </el-button>
               <el-button :disabled="!latestRecord(item.id)" @click="openOptimizeDetail(latestRecord(item.id)?.optimizeRecordId)">
                 <GitCompareArrows :size="15" />
-                优化对比
+                查看对比
               </el-button>
               <el-dropdown trigger="click">
                 <el-button text>
@@ -284,7 +319,7 @@
                       设为默认
                     </el-dropdown-item>
                     <el-dropdown-item divided @click="handleDelete(item)">
-                      删除简历
+                      删除
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -311,8 +346,15 @@
       <div v-if="parseResult" class="drawer-panel">
         <div class="drawer-status">
           <StatusTag :status="parseResult.parseStatus" :map="parseStatusMap" />
-          <span>任务 #{{ parseResult.analysisRecordId }}</span>
+          <span>本次解析结果</span>
         </div>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="已做脱敏展示"
+          description="这里只展示解析要点，不展开完整简历内容。"
+        />
         <el-alert
           v-if="parseResult.errorMessage"
           type="error"
@@ -321,13 +363,19 @@
           title="解析失败"
           :description="toFriendlyMessage(parseResult.errorMessage, '简历解析失败，请稍后重试。')"
         />
-        <div class="json-preview">
-          <h3>结构化结果</h3>
-          <pre>{{ formatJson(parseResult.structuredJson) }}</pre>
-        </div>
-        <div v-if="parseResult.rawTextSummary" class="raw-summary">
-          <h3>原文摘要</h3>
-          <p>{{ parseResult.rawTextSummary }}</p>
+        <div class="resume-parse-preview">
+          <h3>解析要点</h3>
+          <div v-if="structuredParseSections.length" class="resume-parse-sections">
+            <article v-for="section in structuredParseSections" :key="section.title">
+              <strong>{{ section.title }}</strong>
+              <ul>
+                <li v-for="item in section.items" :key="item">{{ item }}</li>
+              </ul>
+            </article>
+          </div>
+          <p v-else class="resume-parse-empty">
+            暂未识别到可展示要点，可以先确认原简历，或重新上传更清晰的文件后再解析。
+          </p>
         </div>
         <div class="drawer-actions">
           <el-button @click="parseDrawerVisible = false">关闭</el-button>
@@ -343,26 +391,26 @@
       </div>
     </el-drawer>
 
-    <el-drawer v-model="optimizeDrawerVisible" title="AI 优化对比" size="620px" class="resume-v2-drawer">
+    <el-drawer v-model="optimizeDrawerVisible" title="AI 建议对比" size="620px" class="resume-v2-drawer">
       <div v-if="optimizeDetail" class="drawer-panel">
         <div class="drawer-status">
           <StatusTag :status="optimizeDetail.optimizeStatus" />
-          <span>记录 #{{ optimizeDetail.optimizeRecordId }}</span>
+          <span>处理线索已记录</span>
         </div>
         <el-alert
           v-if="optimizeDetail.errorMessage"
           type="error"
           :closable="false"
           show-icon
-          title="AI 优化失败"
-          :description="toFriendlyMessage(optimizeDetail.errorMessage, 'AI 优化失败，请稍后重试。')"
+          title="AI 建议失败"
+          :description="toFriendlyMessage(optimizeDetail.errorMessage, 'AI 建议失败，请稍后重试。')"
         />
         <div class="score-strip">
           <div>
             <span>综合评分</span>
-            <strong>{{ optimizeDetail.resultJson?.overallScore ?? '--' }}</strong>
+            <strong>{{ optimizeDetail.overallScore ?? '--' }}</strong>
           </div>
-          <p>{{ optimizeDetail.resultJson?.overallComment || '后端未返回整体评价。' }}</p>
+          <p>{{ optimizeDetail.overallComment || '暂未返回整体评价。' }}</p>
         </div>
         <div class="diff-toolbar">
           <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
@@ -380,19 +428,19 @@
             <div class="diff-grid">
               <div class="diff-before">
                 <span>优化前</span>
-                <p>{{ item.before || '后端未返回原文片段' }}</p>
+                <p>{{ item.before || '暂未返回优化前内容' }}</p>
               </div>
               <div class="diff-after">
                 <span>优化后</span>
-                <p>{{ item.after || '后端未返回改写建议' }}</p>
+                <p>{{ item.after || '暂未返回改写建议' }}</p>
               </div>
             </div>
             <p class="diff-reason">{{ item.reason }}</p>
           </article>
         </div>
-        <div v-if="optimizeDetail.resultJson?.nextActions?.length" class="next-actions">
+        <div v-if="optimizeDetail.nextActions?.length" class="next-actions">
           <h3>下一步动作</h3>
-          <span v-for="action in optimizeDetail.resultJson.nextActions" :key="action">{{ action }}</span>
+          <span v-for="action in optimizeDetail.nextActions" :key="action">{{ action }}</span>
         </div>
         <div class="drawer-actions">
           <el-button @click="optimizeDrawerVisible = false">关闭</el-button>
@@ -403,7 +451,7 @@
               :loading="applyingOptimize"
               @click="handleApplyOptimizeResult"
             >
-              应用优化结果 · 创建 AI 草稿
+              应用建议 · 新建草稿
             </el-button>
           </el-tooltip>
         </div>
@@ -424,6 +472,7 @@ import {
   FileText,
   GitCompareArrows,
   Layers3,
+  ListChecks,
   MessagesSquare,
   MoreHorizontal,
   Plus,
@@ -447,21 +496,22 @@ import {
   optimizeResumeApi,
   reparseResumeApi,
   setDefaultResumeApi,
-  streamResumeOptimizeApi,
   uploadResumeFileApi
 } from '@/api/resume'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type {
   ResumeAnalysisResultVO,
+  ResumeJsonValue,
   ResumeOptimizeDetailVO,
   ResumeOptimizeRecordVO,
+  ResumeOptimizeSubmitVO,
   ResumeRewriteSuggestion,
-  ResumeOptimizeSseEvent,
   ResumeParseStatus,
   ResumeParseStatusVO,
   ResumeQueryDTO,
   ResumeVO
 } from '@/types/resume'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
@@ -480,13 +530,16 @@ const parseResult = ref<ResumeAnalysisResultVO | null>(null)
 const parseDrawerVisible = ref(false)
 const confirmingParse = ref(false)
 const optimizingId = ref<number | null>(null)
-const optimizeSseHandle = ref<ReturnType<typeof streamResumeOptimizeApi> | null>(null)
 const applyingOptimize = ref(false)
 const optimizeRecords = ref<Record<number, ResumeOptimizeRecordVO[]>>({})
 const optimizeRecordsLoadError = ref(false)
+const optimizeRecordsRefreshing = ref(false)
+const optimizeRecoveryMessage = ref('')
+const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 const optimizeDrawerVisible = ref(false)
 const selectedOptimizeSuggestionIndexes = ref<number[]>([])
+let optimizeRecordsRequestSeq = 0
 
 const MAX_RESUME_UPLOAD_SIZE = 50 * 1024 * 1024
 const RESUME_UPLOAD_ACCEPT = [
@@ -556,7 +609,7 @@ const latestOptimizeStatus = computed(() => {
   return latest ? optimizeStatusText(latest.optimizeStatus) : '暂无记录'
 })
 
-const optimizeSuggestions = computed(() => optimizeDetail.value?.resultJson?.rewriteSuggestions || [])
+const optimizeSuggestions = computed(() => optimizeDetail.value?.rewriteSuggestions || [])
 
 const canApplyOptimizeResult = computed(() =>
   optimizeDetail.value?.optimizeStatus === 'SUCCESS' && selectedOptimizeSuggestionIndexes.value.length > 0
@@ -594,7 +647,7 @@ const uploadSteps = computed(() => {
       key: 'upload',
       index: '01',
       label: '文件上传',
-      description: uploading.value ? '文件正在发送到后端' : parseTask.value ? '文件已上传并生成解析任务' : '等待选择本地简历文件',
+      description: uploading.value ? '文件正在上传' : parseTask.value ? '文件已上传，等待解析' : '等待选择本地简历文件',
       active: uploading.value,
       done: Boolean(parseTask.value),
       error: false
@@ -603,7 +656,7 @@ const uploadSteps = computed(() => {
       key: 'parse',
       index: '02',
       label: '异步解析',
-      description: status ? parseStatusText(status) : '后端任务会提取文本并调用 AI 结构化解析',
+      description: status ? parseStatusText(status) : '系统会提取文本并生成解析要点',
       active: status === 'PENDING' || status === 'PARSING',
       done: status === 'WAIT_CONFIRM' || status === 'SUCCESS',
       error: status === 'FAILED'
@@ -612,7 +665,7 @@ const uploadSteps = computed(() => {
       key: 'confirm',
       index: '03',
       label: '确认生成',
-      description: status === 'SUCCESS' ? '已确认生成结构化简历' : '需要用户确认后才生成简历，不自动覆盖',
+      description: status === 'SUCCESS' ? '已确认生成结构化简历' : '需要你确认后才会生成简历，不会自动覆盖当前内容',
       active: status === 'WAIT_CONFIRM',
       done: status === 'SUCCESS',
       error: false
@@ -639,16 +692,73 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const parseStatusText = (status?: ResumeParseStatus) => {
   if (!status) return '未解析'
-  return parseStatusMap[status] || status
+  return parseStatusMap[status] || '状态待确认'
+}
+
+const asyncSendStatusText = (status?: string | null) => {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (!normalized) return '提交进度待更新'
+  const statusMap: Record<string, string> = {
+    SENT: '处理请求已提交',
+    SUCCESS: '处理请求已提交',
+    SUBMITTED: '处理请求已提交',
+    PENDING: '等待提交处理',
+    WAITING: '等待提交处理',
+    PROCESSING: '正在提交处理',
+    SENDING: '正在提交处理',
+    FAILED: '提交处理失败',
+    ERROR: '提交处理失败'
+  }
+  return statusMap[normalized] || '提交进度已更新'
+}
+
+const mergeParseTask = (next: ResumeParseStatusVO): ResumeParseStatusVO => {
+  const current = parseTask.value
+  return {
+    ...next,
+    asyncMessageId: next.asyncMessageId || current?.asyncMessageId,
+    asyncTraceId: next.asyncTraceId || current?.asyncTraceId,
+    asyncBizType: next.asyncBizType || current?.asyncBizType,
+    asyncBizId: next.asyncBizId || current?.asyncBizId,
+    asyncSendStatus: next.asyncSendStatus || current?.asyncSendStatus
+  }
+}
+
+const buildParseTaskCenterQuery = (task: ResumeParseStatusVO) => {
+  const query: Record<string, string> = {
+    bizType: task.asyncBizType || 'resume.parse',
+    bizId: task.asyncBizId || String(task.analysisRecordId)
+  }
+  if (task.asyncMessageId) query.messageId = task.asyncMessageId
+  if (task.asyncTraceId) query.traceId = task.asyncTraceId
+  return query
+}
+
+const goParseTaskCenter = (task: ResumeParseStatusVO) => {
+  router.push({ path: '/agent/tasks', query: buildParseTaskCenterQuery(task) })
+}
+
+const buildOptimizeTaskCenterQuery = (task: ResumeOptimizeSubmitVO) => {
+  const query: Record<string, string> = {
+    bizType: task.asyncBizType || 'resume.optimize',
+    bizId: task.asyncBizId || String(task.optimizeRecordId)
+  }
+  if (task.asyncMessageId) query.messageId = task.asyncMessageId
+  if (task.asyncTraceId) query.traceId = task.asyncTraceId
+  return query
+}
+
+const goOptimizeTaskCenter = (task: ResumeOptimizeSubmitVO) => {
+  router.push({ path: '/agent/tasks', query: buildOptimizeTaskCenterQuery(task) })
 }
 
 const optimizeStatusText = (status?: string) => {
   const map: Record<string, string> = {
-    PROCESSING: '优化中',
-    SUCCESS: '优化成功',
-    FAILED: '优化失败'
+    PROCESSING: '建议生成中',
+    SUCCESS: '建议已生成',
+    FAILED: '建议生成失败'
   }
-  return status ? map[status] || status : '暂无记录'
+  return status ? map[status] || '状态待确认' : '暂无记录'
 }
 
 const latestRecord = (resumeId: number) => optimizeRecords.value[resumeId]?.[0]
@@ -656,29 +766,183 @@ const latestRecord = (resumeId: number) => optimizeRecords.value[resumeId]?.[0]
 const latestOptimizeSummary = (resumeId: number) => {
   const record = latestRecord(resumeId)
   const raw = record?.overallComment || record?.errorMessage
-  return raw ? toFriendlyMessage(raw, 'AI 优化结果暂不可用，请稍后重试。') : ''
+  return raw ? toFriendlyMessage(raw, '建议结果暂不可用，请稍后重试。') : ''
 }
 
-const formatJson = (value: unknown) => {
-  if (!value) return '后端未返回结构化 JSON'
-  return JSON.stringify(value, null, 2)
+const resumeParseKeyLabels: Record<string, string> = {
+  name: '姓名',
+  realName: '姓名',
+  gender: '性别',
+  age: '年龄',
+  phone: '电话',
+  mobile: '电话',
+  email: '邮箱',
+  city: '城市',
+  targetPosition: '目标岗位',
+  expectedSalary: '期望薪资',
+  education: '教育经历',
+  school: '学校',
+  degree: '学历',
+  major: '专业',
+  graduationYear: '毕业年份',
+  skills: '技能',
+  skillTags: '技能标签',
+  workExperience: '工作经历',
+  company: '公司',
+  position: '职位',
+  projectExperience: '项目经历',
+  projectName: '项目名称',
+  responsibilities: '职责',
+  achievements: '成果',
+  description: '说明',
+  startDate: '开始时间',
+  endDate: '结束时间',
+  summary: '摘要',
+  advantages: '优势',
+  certificates: '证书',
+  languages: '语言能力'
 }
+
+const isResumeParseRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const resumeParseKeyLabel = (key: string) =>
+  resumeParseKeyLabels[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
+
+const formatStructuredResumeParseValue = (value: unknown, depth = 0): string => {
+  if (value === null || value === undefined || value === '') return ''
+  if (typeof value === 'string') return toFriendlyMessage(value, value)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  const indent = '  '.repeat(depth)
+  if (Array.isArray(value)) {
+    if (!value.length) return ''
+    return value
+      .map((item, index) => {
+        const formatted = formatStructuredResumeParseValue(item, depth + 1)
+        if (!formatted) return ''
+        return `${indent}${index + 1}. ${isResumeParseRecord(item) || Array.isArray(item) ? '\n' : ''}${formatted}`
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  if (isResumeParseRecord(value)) {
+    return Object.entries(value)
+      .map(([key, item]) => {
+        const formatted = formatStructuredResumeParseValue(item, depth + 1)
+        if (!formatted) return ''
+        return `${indent}- ${resumeParseKeyLabel(key)}：${isResumeParseRecord(item) || Array.isArray(item) ? '\n' : ''}${formatted}`
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return String(value)
+}
+
+interface ResumeParseSection {
+  title: string
+  items: string[]
+}
+
+const compactResumeParseItem = (value: unknown) =>
+  formatStructuredResumeParseValue(value)
+    .replace(/\n+/g, '；')
+    .replace(/\s+/g, ' ')
+    .replace(/；\s*；/g, '；')
+    .trim()
+
+const normalizeStructuredResumeValue = (value?: ResumeJsonValue | Record<string, ResumeJsonValue> | null): unknown => {
+  if (!value) return undefined
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    try {
+      return JSON.parse(trimmed)
+    } catch {
+      return trimmed
+    }
+  }
+  return value
+}
+
+const buildResumeParseSections = (value?: ResumeJsonValue | Record<string, ResumeJsonValue> | null): ResumeParseSection[] => {
+  const normalized = normalizeStructuredResumeValue(value)
+  if (!normalized) return []
+
+  if (Array.isArray(normalized)) {
+    const items = normalized.map((item) => compactResumeParseItem(item)).filter(Boolean).slice(0, 12)
+    return items.length ? [{ title: '解析摘要', items }] : []
+  }
+
+  if (!isResumeParseRecord(normalized)) {
+    const item = compactResumeParseItem(normalized)
+    return item ? [{ title: '解析摘要', items: [item] }] : []
+  }
+
+  return Object.entries(normalized)
+    .map(([key, item]) => {
+      const title = resumeParseKeyLabel(key)
+      const items = Array.isArray(item)
+        ? item.map((entry) => compactResumeParseItem(entry)).filter(Boolean).slice(0, 8)
+        : isResumeParseRecord(item)
+          ? Object.entries(item)
+            .map(([childKey, childValue]) => {
+              const formatted = compactResumeParseItem(childValue)
+              return formatted ? `${resumeParseKeyLabel(childKey)}：${formatted}` : ''
+            })
+            .filter(Boolean)
+            .slice(0, 8)
+          : [compactResumeParseItem(item)].filter(Boolean)
+      return { title, items }
+    })
+    .filter((section) => section.items.length)
+    .slice(0, 10)
+}
+
+const structuredParseSections = computed(() => buildResumeParseSections(parseResult.value?.structuredJson))
 
 const fetchOptimizeRecords = async () => {
-  let hasLoadError = false
-  const entries = await Promise.all(
-    resumes.value.map(async (resume) => {
-      try {
-        const records = await getResumeOptimizeRecordsApi(resume.id)
-        return [resume.id, records] as const
-      } catch {
-        hasLoadError = true
-        return [resume.id, []] as const
-      }
+  const requestSeq = ++optimizeRecordsRequestSeq
+  const resumeIds = resumes.value.map((resume) => resume.id)
+  if (!resumeIds.length) {
+    optimizeRecords.value = {}
+    optimizeRecordsLoadError.value = false
+    return
+  }
+  const results = await Promise.allSettled(
+    resumeIds.map(async (resumeId) => {
+      const records = await getResumeOptimizeRecordsApi(resumeId)
+      return [resumeId, records] as const
     })
   )
+  if (requestSeq !== optimizeRecordsRequestSeq) return
+  let hasLoadError = false
+  const entries = results.map((result, index) => {
+    const resumeId = resumeIds[index]
+    if (result.status === 'fulfilled') {
+      return result.value
+    }
+    hasLoadError = true
+    return [resumeId, []] as const
+  })
   optimizeRecords.value = Object.fromEntries(entries)
   optimizeRecordsLoadError.value = hasLoadError
+}
+
+const refreshOptimizeRecords = async () => {
+  optimizeRecordsRefreshing.value = true
+  try {
+    await fetchOptimizeRecords()
+    if (allOptimizeRecords.value.length) {
+      ElMessage.success('最近建议记录已刷新')
+    } else {
+      ElMessage.info('暂未发现新的建议记录')
+    }
+  } finally {
+    optimizeRecordsRefreshing.value = false
+  }
 }
 
 const fetchResumes = async () => {
@@ -688,14 +952,16 @@ const fetchResumes = async () => {
     const result = await getResumesApi(query)
     resumes.value = result.records || []
     total.value = result.total || 0
+    optimizeRecords.value = {}
     optimizeRecordsLoadError.value = false
-    await fetchOptimizeRecords()
+    void fetchOptimizeRecords()
   } catch (error) {
+    optimizeRecordsRequestSeq += 1
     resumes.value = []
     total.value = 0
     optimizeRecords.value = {}
     optimizeRecordsLoadError.value = false
-    loadError.value = getErrorMessage(error, '请稍后重试，或确认后端简历服务是否可用。')
+    loadError.value = getErrorMessage(error, '请稍后重试，或确认简历服务是否可用。')
   } finally {
     loading.value = false
   }
@@ -736,9 +1002,14 @@ const handleFileChange = async (uploadFile: UploadFile) => {
       resumeId: result.resumeId,
       fileId: result.fileId,
       parseStatus: result.parseStatus,
-      message: result.message
+      message: result.message,
+      asyncMessageId: result.asyncMessageId,
+      asyncTraceId: result.asyncTraceId,
+      asyncBizType: result.asyncBizType,
+      asyncBizId: result.asyncBizId,
+      asyncSendStatus: result.asyncSendStatus
     }
-    ElMessage.success(result.message || '上传成功，等待后端解析')
+    ElMessage.success(result.message || '上传成功，等待解析')
     startParsePolling(result.analysisRecordId)
   } catch (error) {
     uploadError.value = getErrorMessage(error, '上传失败，请检查文件格式或稍后重试。')
@@ -761,11 +1032,11 @@ const startParsePolling = (analysisRecordId: number, attempt = 0) => {
   parsePollTimer.value = window.setTimeout(async () => {
     try {
       const status = await getResumeParseTaskApi(analysisRecordId)
-      parseTask.value = status
+      parseTask.value = mergeParseTask(status)
       if (['WAIT_CONFIRM', 'SUCCESS', 'FAILED'].includes(status.parseStatus) || attempt >= 30) {
         parsePolling.value = false
         if (attempt >= 30 && !['WAIT_CONFIRM', 'SUCCESS', 'FAILED'].includes(status.parseStatus)) {
-          uploadError.value = '解析状态查询已超时，请稍后手动刷新任务状态。'
+          uploadError.value = '解析状态查询已超时，可以手动刷新进度，或到任务中心继续查看。'
         }
         return
       }
@@ -779,15 +1050,16 @@ const startParsePolling = (analysisRecordId: number, attempt = 0) => {
 
 const refreshParseStatus = async (analysisRecordId: number) => {
   const status = await getResumeParseTaskApi(analysisRecordId)
-  parseTask.value = status
+  parseTask.value = mergeParseTask(status)
   if (status.parseStatus === 'WAIT_CONFIRM' || status.parseStatus === 'SUCCESS') {
     await openParseResult(analysisRecordId)
   }
 }
 
 const handleReparse = async (analysisRecordId: number) => {
-  parseTask.value = await reparseResumeApi(analysisRecordId)
-  ElMessage.success('已重新提交解析任务')
+  const result = await reparseResumeApi(analysisRecordId)
+  parseTask.value = mergeParseTask(result)
+  ElMessage.success(result.asyncMessageId ? '已重新开始解析，可在任务中心查看进度。' : '已重新开始解析')
   startParsePolling(analysisRecordId)
 }
 
@@ -798,9 +1070,17 @@ const openParseResult = async (analysisRecordId: number) => {
 
 const handleConfirmParse = async () => {
   if (!parseResult.value) return
-  await ElMessageBox.confirm('确认后将根据后端解析结果生成一份结构化简历，不会覆盖正在编辑的已有简历。', '确认生成简历', {
-    type: 'warning'
+  const confirmed = await confirmDangerActionPreview({
+    title: '确认生成简历',
+    action: '根据解析结果创建一份结构化简历',
+    target: '本次简历解析结果',
+    impact: '会把本次解析结果保存为新的结构化简历；不会覆盖正在编辑的简历内容，但后续可能被你设为默认简历或用于岗位匹配。',
+    rollback: '生成后可以进入简历编辑页继续修改；如不需要，可在简历清单中删除这份新简历。',
+    audit: '解析记录和新简历记录会保留，方便回看来源。',
+    tips: ['确认解析出的姓名、项目、技能和经历基本可信。', '确认要用这份解析结果继续生成简历。'],
+    confirmButtonText: '生成简历'
   })
+  if (!confirmed) return
   confirmingParse.value = true
   try {
     const result = await confirmResumeParseResultApi(parseResult.value.analysisRecordId)
@@ -826,71 +1106,44 @@ const openLatestOptimizeRecord = async (recordId?: number) => {
   }
 }
 
-const runSyncOptimizeFallback = async (row: ResumeVO) => {
+const hasOptimizeAsyncReceipt = (result: ResumeOptimizeSubmitVO) =>
+  Boolean(result.asyncMessageId || result.asyncTraceId || result.asyncBizId || result.asyncSendStatus)
+
+const submitOptimizeTask = async (row: ResumeVO) => {
   const result = await optimizeResumeApi(row.id, {
     targetPosition: row.targetPosition
   })
-  if (result.optimizeStatus === 'FAILED') {
-    ElMessage.error(toFriendlyMessage(result.errorMessage, 'AI 优化失败，请稍后重试。'))
-  } else {
-    ElMessage.success('AI 优化已完成')
+  if (hasOptimizeAsyncReceipt(result)) {
+    optimizeTask.value = result
+    optimizeRecoveryMessage.value = '建议生成任务已提交，可在任务中心查看进度；完成后刷新最近记录查看结果。'
+    ElMessage.success('建议生成任务已提交')
+    await fetchOptimizeRecords()
+    return
   }
-  await openLatestOptimizeRecord(result.optimizeRecordId)
-}
-
-const resolveOptimizeRecordId = (data?: ResumeOptimizeSseEvent) => {
-  const result = data?.result
-  const resultRecordId =
-    typeof result === 'object' && result && 'optimizeRecordId' in result
-      ? Number(result.optimizeRecordId)
-      : undefined
-  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
-  const metadataRecordId =
-    'recordId' in metadata
-      ? Number(metadata.recordId)
-      : 'optimizeRecordId' in metadata
-        ? Number(metadata.optimizeRecordId)
-        : undefined
-  return data?.recordId || resultRecordId || metadataRecordId
+  if (result.optimizeStatus === 'FAILED') {
+    ElMessage.error(toFriendlyMessage(result.errorMessage, '建议生成失败，请稍后重试。'))
+  } else if (result.optimizeStatus === 'PROCESSING') {
+    optimizeRecoveryMessage.value = '建议生成中，可以稍后刷新最近记录查看结果。'
+    ElMessage.success('建议生成中')
+  } else {
+    ElMessage.success('建议已生成')
+    await openLatestOptimizeRecord(result.optimizeRecordId)
+  }
 }
 
 const handleOptimize = async (row: ResumeVO) => {
   if (optimizingId.value) return
-  optimizeSseHandle.value?.abort()
   optimizingId.value = row.id
-  let streamStarted = false
-  let resultRecordId: number | undefined
+  optimizeRecoveryMessage.value = ''
+  optimizeTask.value = null
   try {
-    optimizeSseHandle.value = streamResumeOptimizeApi(
-      {
-        resumeId: row.id,
-        targetPosition: row.targetPosition
-      },
-      {
-        onEvent: (event, data?: ResumeOptimizeSseEvent) => {
-          if (event === 'start' || event === 'delta' || event === 'metadata' || event === 'progress' || event === 'result' || event === 'done') {
-            streamStarted = true
-          }
-          resultRecordId = resolveOptimizeRecordId(data) || resultRecordId
-          if ((event === 'progress' || event === 'delta') && data?.message) {
-            const message = toFriendlyMessage(data.message, 'AI 优化进行中')
-            ElMessage.info(data.stage ? `${toFriendlyMessage(data.stage, '优化阶段')}：${message}` : message)
-          }
-        }
-      }
-    )
-    await optimizeSseHandle.value.finished
-    ElMessage.success('AI 优化已完成')
-    await openLatestOptimizeRecord(resultRecordId)
+    await submitOptimizeTask(row)
   } catch (error) {
-    if (!streamStarted) {
-      await runSyncOptimizeFallback(row)
-    } else {
-      ElMessage.error(getErrorMessage(error, 'AI 优化流中断，请稍后手动重试。'))
-    }
+    optimizeRecoveryMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后从本页继续查看。')
+    ElMessage.error(optimizeRecoveryMessage.value)
+    await fetchOptimizeRecords()
   } finally {
     optimizingId.value = null
-    optimizeSseHandle.value = null
   }
 }
 
@@ -903,9 +1156,10 @@ const openOptimizeDetail = async (recordId?: number) => {
 
 const showApplyResultMessage = async (message?: string, warnings?: string[], newResumeId?: number) => {
   const warningText = warnings?.length ? `\n\n注意事项：\n${warnings.map((item) => `- ${item}`).join('\n')}` : ''
+  const draftText = newResumeId ? '\n\n建议草稿已创建，稍后会自动打开编辑页。' : ''
   await ElMessageBox.alert(
-    `${message || '已创建新的 AI 优化草稿。'}${warningText}\n\n新简历 ID：${newResumeId || '--'}`,
-    '应用优化结果',
+    `${message || '已创建建议草稿，可继续编辑后再用于投递或匹配。'}${warningText}${draftText}`,
+    '应用建议',
     { type: warnings?.length ? 'warning' : 'success' }
   )
 }
@@ -919,15 +1173,17 @@ const handleApplyOptimizeResult = async () => {
   const selectedFields = selectedSuggestions
     .map(({ item }) => getOptimizeSuggestionFieldKey(item))
     .filter((field): field is string => Boolean(field))
-  try {
-    await ElMessageBox.confirm(`将应用 ${selectedSuggestions.length} 个字段建议并创建一份新的 AI 优化草稿，不会覆盖当前简历。`, '应用优化结果', {
-      type: 'warning',
-      confirmButtonText: '创建草稿',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '应用建议',
+    action: '应用选中的 AI 建议并创建建议草稿',
+    target: `${selectedSuggestions.length} 个字段建议，字段：${selectedFields.length ? selectedFields.join('、') : '按建议内容自动判断'}`,
+    impact: '会创建一份新的建议草稿，不会覆盖当前简历；草稿内容仍需要你人工检查后再用于投递或匹配。',
+    rollback: '当前简历不会被修改；如果草稿不合适，可以不使用或删除草稿。',
+    audit: '优化记录、选中字段和建议草稿记录会保留。',
+    tips: ['确认建议没有夸大经历或编造项目结果。', '确认需要先创建草稿再继续人工编辑。'],
+    confirmButtonText: '创建草稿'
+  })
+  if (!confirmed) return
   applyingOptimize.value = true
   try {
     const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
@@ -967,9 +1223,17 @@ const handleSetDefault = async (row: ResumeVO) => {
 }
 
 const handleDelete = async (row: ResumeVO) => {
-  await ElMessageBox.confirm(`确认删除简历「${row.resumeName || row.title}」？历史面试会继续使用已保存快照。`, '删除确认', {
-    type: 'warning'
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除简历',
+    action: '删除这份简历',
+    target: row.resumeName || row.title || '这份简历',
+    impact: '该简历会从简历清单移除，后续不能再用它发起新的岗位匹配或面试；历史面试仍会继续使用当时保存的快照。',
+    rollback: '系统不会自动恢复已删除简历；如误删，需要重新创建或重新上传。',
+    audit: '删除操作会按当前账号和简历记录进入操作记录。',
+    tips: ['确认这不是当前要用于投递或训练的默认简历。', '确认不再需要基于这份简历继续生成匹配报告。'],
+    confirmButtonText: '确认删除'
   })
+  if (!confirmed) return
   await deleteResumeApi(row.id)
   ElMessage.success('简历已删除')
   await fetchResumes()
@@ -978,7 +1242,6 @@ const handleDelete = async (row: ResumeVO) => {
 onMounted(fetchResumes)
 onUnmounted(() => {
   stopParsePolling()
-  optimizeSseHandle.value?.abort()
 })
 </script>
 
@@ -1232,6 +1495,25 @@ onUnmounted(() => {
   }
 }
 
+.task-diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+
+  span {
+    max-width: 220px;
+    padding: 3px 7px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.42);
+    color: rgba(226, 232, 240, 0.78);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .task-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -1280,6 +1562,30 @@ onUnmounted(() => {
   :deep(.el-alert__title),
   :deep(.el-alert__icon) {
     color: #facc15;
+  }
+}
+
+.optimize-recovery-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(129, 140, 248, 0.22);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.62);
+
+  strong {
+    display: block;
+    color: #dbeafe;
+    font-size: 13px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #a5b4fc;
+    font-size: 12px;
+    line-height: 1.6;
   }
 }
 
@@ -1510,7 +1816,7 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-.json-preview,
+.resume-parse-preview,
 .raw-summary,
 .score-strip,
 .diff-card,
@@ -1521,21 +1827,48 @@ onUnmounted(() => {
   background: rgba(2, 6, 23, 0.34);
 }
 
-.json-preview {
+.resume-parse-preview {
   h3 {
     margin: 0 0 10px;
     font-size: 15px;
   }
+}
 
-  pre {
-    max-height: 360px;
-    margin: 0;
-    overflow: auto;
-    color: #c4b5fd;
-    font-size: 12px;
-    line-height: 1.6;
-    white-space: pre-wrap;
+.resume-parse-sections {
+  display: grid;
+  gap: 10px;
+}
+
+.resume-parse-sections article {
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.26);
+
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--app-text);
+    font-size: 13px;
   }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  li + li {
+    margin-top: 4px;
+  }
+}
+
+.resume-parse-empty {
+  margin: 0;
+  color: var(--app-text-muted);
+  line-height: 1.7;
 }
 
 .raw-summary {

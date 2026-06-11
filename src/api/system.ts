@@ -7,7 +7,7 @@ import type {
   SystemConfigUpdateDTO,
   SystemConfigVO
 } from '@/types/system'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendSystemConfigVO = SystemConfigVO & {
   valueType?: string
@@ -82,7 +82,7 @@ export const getSystemConfigsApi = async (params: SystemConfigQueryDTO) => {
     PageResult<BackendSystemConfigVO> | BackendSystemConfigVO[],
     PageResult<BackendSystemConfigVO> | BackendSystemConfigVO[]
   >('/admin/configs', {
-    params
+    params: compactQueryParams(params)
   })
   return normalizeConfigPage(result, params)
 }

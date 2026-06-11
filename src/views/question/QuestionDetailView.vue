@@ -75,7 +75,15 @@
           <StatusTag :status="detail.lastAnswerResult" />
         </aside>
       </div>
-      <el-empty v-else-if="!loading" description="题目不存在或暂不可访问" />
+      <AppState
+        v-else-if="!loading"
+        type="empty"
+        title="题目不存在或暂不可访问"
+        description="题目可能已下架、被移动到审核池，或当前账号没有访问权限。可以回到题库重新选择题目。"
+      >
+        <el-button type="primary" @click="router.push('/questions')">返回题库</el-button>
+        <el-button @click="router.push('/questions/recommendations')">查看推荐题</el-button>
+      </AppState>
     </section>
   </div>
 </template>
@@ -92,6 +100,7 @@ import {
   unfavoriteQuestionApi,
   updateQuestionMasteryApi
 } from '@/api/question'
+import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import QuestionAnswerReviewPanel from '@/components/question/QuestionAnswerReviewPanel.vue'

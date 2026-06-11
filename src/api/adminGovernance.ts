@@ -18,7 +18,7 @@ import type {
   SlowSqlLogVO
 } from '@/types/adminGovernance'
 import { formatDateTime } from '@/utils/format'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 const normalizeId = (item: any) => Number(item.id || item.menuId || item.roleId || item.reportId || item.interviewId || 0)
 
@@ -30,8 +30,15 @@ const pick = <T = any>(item: any, ...keys: string[]): T | undefined => {
   return undefined
 }
 
-const cleanParams = (params: Record<string, any>) =>
-  Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+const cleanParams = (params?: Record<string, any>) => compactQueryParams(params || {})
+
+const normalizeListResult = <T, U = T>(result: PageResult<T> | T[] | unknown, mapper: (item: T) => U) =>
+  normalizePageResult(result as PageResult<T> | T[], undefined, mapper).records
+
+const normalizeIdListResult = (result: number[] | MenuVO[] | PageResult<number | MenuVO> | unknown) =>
+  normalizePageResult(result as PageResult<number | MenuVO> | Array<number | MenuVO>).records
+    .map((item: any) => (typeof item === 'number' ? item : normalizeId(item)))
+    .filter(Boolean)
 
 const withCommonParams = (params: AdminListQuery) => cleanParams({
   pageNo: params.pageNo,
@@ -53,10 +60,15 @@ const normalizeTask = (item: any): AsyncTaskVO => ({
   ...item,
   id: normalizeId(item),
   taskId: pick(item, 'taskId', 'messageId', 'message_id', 'id'),
+  messageId: pick(item, 'messageId', 'message_id'),
   taskType: pick(item, 'taskType', 'type', 'bizType', 'biz_type'),
   taskName: pick(item, 'taskName', 'name', 'taskType', 'type', 'bizType', 'biz_type'),
   status: pick(item, 'status', 'taskStatus', 'task_status') || 'UNKNOWN',
   deadLetter: item.deadLetter ?? item.isDeadLetter ?? item.deadLetterFlag ?? item.dead_letter,
+  userId: pick(item, 'userId', 'user_id'),
+  bizType: pick(item, 'bizType', 'biz_type'),
+  bizId: pick(item, 'bizId', 'biz_id'),
+  traceId: pick(item, 'traceId', 'trace_id'),
   errorMessage: pick(item, 'errorMessage', 'failReason', 'failureReason', 'failure_reason'),
   payloadPreview: pick(item, 'payloadPreview', 'payload_preview'),
   payloadHash: pick(item, 'payloadHash', 'payload_hash'),
@@ -76,6 +88,9 @@ const normalizeNotice = (item: any): AdminNotificationVO => ({
   type: pick(item, 'type', 'bizType', 'biz_type') || 'SYSTEM',
   targetType: pick(item, 'targetType', 'target_type') || (pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id') ? 'USER' : 'ALL'),
   targetUserId: pick(item, 'targetUserId', 'target_user_id', 'userId', 'user_id'),
+  sendStatus: pick(item, 'sendStatus', 'send_status') || 'SUCCESS',
+  sendError: pick(item, 'sendError', 'send_error'),
+  sentAt: formatDateTime(pick(item, 'sentAt', 'sent_at')),
   createdAt: formatDateTime(pick(item, 'createdAt', 'createTime', 'created_at')),
   publishedAt: formatDateTime(pick(item, 'publishedAt', 'publishTime', 'published_at'))
 })
@@ -220,6 +235,19 @@ export const getAdminTasksApi = (params: AdminListQuery) =>
 export const getAdminTaskDetailApi = (id: number) =>
   request.get<any, any>(`/admin/tasks/${id}`).then(normalizeTask)
 
+export const getAdminTaskByMessageIdApi = (messageId: string) =>
+  request.get<any, any>(`/admin/tasks/by-message-id/${encodeURIComponent(messageId)}`).then(normalizeTask)
+
+export const getAdminTasksByBizApi = (params: { bizType: string; bizId: string; userId?: number; limit?: number }) =>
+  request
+    .get<any[] | any, any[] | any>('/admin/tasks/by-biz', { params: cleanParams(params) })
+    .then((result) => normalizeListResult(result, normalizeTask))
+
+export const getAdminTasksByTraceApi = (params: { traceId: string; limit?: number }) =>
+  request
+    .get<any[] | any, any[] | any>('/admin/tasks/by-trace', { params: cleanParams(params) })
+    .then((result) => normalizeListResult(result, normalizeTask))
+
 export const getAdminTaskRetryPreviewApi = (id: number) =>
   request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/retry-preview`)
 
@@ -235,7 +263,7 @@ export const retryAdminDeadLetterTaskApi = (id: number, note: string) =>
 export const getAdminNotificationsApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/notifications', {
-      params: cleanParams({ ...withCommonParams(params), readStatus: params.status })
+      params: cleanParams({ ...withCommonParams(params), readStatus: params.status, sendStatus: params.sendStatus })
     })
     .then((result) => normalizePageResult(result, params, normalizeNotice))
 
@@ -275,12 +303,17 @@ export const getAdminSlowSqlLogsApi = (params: AdminListQuery) =>
     })
     .then((result) => normalizePageResult(result, params, normalizeSlowSqlLog))
 
-export const getAdminMenusApi = () => request.get<any[], any[]>('/admin/menus').then((items) => items.map(normalizeMenu))
+export const getAdminMenusApi = () =>
+  request
+    .get<any[] | PageResult<any>, any[] | PageResult<any>>('/admin/menus')
+    .then((result) => normalizeListResult(result, normalizeMenu))
 
 export const getAdminRoleMenusApi = (roleId: number) =>
-  request.get<number[] | MenuVO[], number[] | MenuVO[]>(`/admin/roles/${roleId}/menus`).then((items) =>
-    (items || []).map((item: any) => (typeof item === 'number' ? item : normalizeId(item))).filter(Boolean)
-  )
+  request
+    .get<number[] | MenuVO[] | PageResult<number | MenuVO>, number[] | MenuVO[] | PageResult<number | MenuVO>>(
+      `/admin/roles/${roleId}/menus`
+    )
+    .then(normalizeIdListResult)
 
 export const grantAdminRoleMenusApi = (roleId: number, data: RoleMenuGrantDTO) =>
   request.post<null, null>(`/admin/roles/${roleId}/menus`, data)

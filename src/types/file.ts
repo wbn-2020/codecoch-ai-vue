@@ -4,6 +4,7 @@ export interface AdminFileQueryDTO extends PageQuery {
   userId?: number
   bizType?: string
   status?: string
+  parseStatus?: string
 }
 
 export interface FileInfoVO {

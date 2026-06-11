@@ -25,7 +25,7 @@ withDefaults(
     icon?: Component
   }>(),
   {
-    tag: 'V1 后续阶段',
+    tag: '暂未开放',
     icon: Document
   }
 )

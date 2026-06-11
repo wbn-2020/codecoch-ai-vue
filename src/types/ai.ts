@@ -191,3 +191,8 @@ export interface AiCallLogVO {
   totalTokens?: number
   createdAt?: string
 }
+
+export interface AiLogRawAccessDTO {
+  accessReason: string
+  confirmSensitiveAccess: boolean
+}

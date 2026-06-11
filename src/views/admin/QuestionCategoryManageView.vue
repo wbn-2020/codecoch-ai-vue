@@ -3,9 +3,15 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">分类管理</h1>
-        <p class="page-subtitle">维护题目分类，V1 支持基础层级与状态管理。</p>
+        <p class="page-subtitle">维护题目分类，支持基础层级、状态管理和题库统计归类。</p>
       </div>
-      <el-button v-permission="'admin:question:category'" type="primary" @click="openDialog()">新增分类</el-button>
+      <el-button
+        v-permission="'admin:question:category'"
+        type="primary"
+        :disabled="isAdminMobileReadonly"
+        :title="mobileReadonlyTitle()"
+        @click="openDialog()"
+      >新增分类</el-button>
     </div>
 
     <section class="content-card">
@@ -28,7 +34,32 @@
       </div>
 
       <div class="table-card">
-        <el-table v-loading="loading" :data="pagedCategories" row-key="id">
+        <div class="table-card__header">
+          <div>
+            <h2>分类列表</h2>
+            <p>分类会影响题库筛选、推荐策略和统计口径，可按治理场景调整显示列。</p>
+          </div>
+          <div class="table-view-tools">
+            <el-segmented v-model="tableSize" :options="tableSizeOptions" />
+            <el-dropdown trigger="click" :hide-on-click="false">
+              <el-button plain>列配置</el-button>
+              <template #dropdown>
+                <el-dropdown-menu class="column-config-menu">
+                  <el-dropdown-item v-for="item in columnOptions" :key="item.key">
+                    <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
+                      {{ item.label }}
+                    </el-checkbox>
+                  </el-dropdown-item>
+                  <el-dropdown-item divided>
+                    <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </div>
+
+        <el-table v-loading="loading" :data="pagedCategories" row-key="id" :size="tableSize">
           <template #empty>
             <AppState
               v-if="errorMessage"
@@ -38,20 +69,46 @@
             >
               <el-button type="primary" :loading="loading" @click="fetchCategories">重新加载</el-button>
             </AppState>
-            <el-empty v-else :description="categoryEmptyDescription">
-              <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
-              <el-button v-permission="'admin:question:category'" v-else type="primary" @click="openDialog()">新增分类</el-button>
-            </el-empty>
+            <AppState v-else type="empty" :title="categoryEmptyTitle" :description="categoryEmptyDescription">
+              <el-button v-if="hasFilters" type="primary" @click="handleReset">清空筛选</el-button>
+              <el-button
+                v-else
+                v-permission="'admin:question:category'"
+                type="primary"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="openDialog()"
+              >新增分类</el-button>
+            </AppState>
           </template>
-          <el-table-column prop="name" label="分类名称" min-width="180" />
-          <el-table-column prop="sort" label="排序" width="90" />
-          <el-table-column label="状态" width="100">
+          <el-table-column v-if="isColumnVisible('name')" prop="name" label="分类名称" min-width="180" />
+          <el-table-column v-if="isColumnVisible('sort')" prop="sort" label="排序" width="90" />
+          <el-table-column v-if="isColumnVisible('status')" label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
+          <el-table-column v-if="isColumnVisible('description')" label="说明" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.description || row.remark || '--' }}</template>
+          </el-table-column>
+          <el-table-column v-if="isColumnVisible('createdAt')" prop="createdAt" label="创建时间" min-width="170" show-overflow-tooltip />
+          <el-table-column v-if="isColumnVisible('updatedAt')" prop="updatedAt" label="更新时间" min-width="170" show-overflow-tooltip />
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
-              <el-button v-permission="'admin:question:category'" link type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button v-permission="'admin:question:category'" link type="danger" @click="handleDelete(row)">删除</el-button>
+              <el-button
+                v-permission="'admin:question:category'"
+                link
+                type="primary"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="openDialog(row)"
+              >编辑</el-button>
+              <el-button
+                v-permission="'admin:question:category'"
+                link
+                type="danger"
+                :disabled="isAdminMobileReadonly"
+                :title="mobileReadonlyTitle()"
+                @click="handleDelete(row)"
+              >删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -79,7 +136,14 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'admin:question:category'" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button
+          v-permission="'admin:question:category'"
+          type="primary"
+          :loading="saving"
+          :disabled="isAdminMobileReadonly"
+          :title="mobileReadonlyTitle()"
+          @click="handleSave"
+        >保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -87,7 +151,7 @@
 
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -98,8 +162,30 @@ import {
 } from '@/api/questionCategory'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
+import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+
+type CategoryColumnKey = 'name' | 'sort' | 'status' | 'description' | 'createdAt' | 'updatedAt'
+
+const {
+  tableSize,
+  tableSizeOptions,
+  columnOptions,
+  visibleColumns,
+  isColumnVisible,
+  resetTableView
+} = useAdminTableView<CategoryColumnKey>('admin:question-category', [
+  { key: 'name', label: '分类名称', required: true },
+  { key: 'sort', label: '排序' },
+  { key: 'status', label: '状态', required: true },
+  { key: 'description', label: '说明', defaultVisible: false },
+  { key: 'createdAt', label: '创建时间', defaultVisible: false },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false }
+])
+const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -139,8 +225,11 @@ const filteredCategories = computed(() => {
 })
 
 const hasFilters = computed(() => Boolean(query.keyword || query.status !== ''))
+const categoryEmptyTitle = computed(() => (hasFilters.value ? '没有匹配当前筛选的分类' : '暂无题目分类'))
 const categoryEmptyDescription = computed(() =>
-  hasFilters.value ? '没有匹配当前筛选条件的分类' : '暂无分类数据'
+  hasFilters.value
+    ? '当前筛选条件下没有题目分类。清空筛选后可确认是否真的没有分类。'
+    : '题目分类为空时，题库筛选、推荐策略和后台统计都会缺少分类上下文。建议先创建基础分类。'
 )
 
 const pagedCategories = computed(() => {
@@ -162,6 +251,7 @@ const fetchCategories = async () => {
 }
 
 const openDialog = (row?: QuestionCategoryVO) => {
+  if (!guardAdminMobileWrite()) return
   editingId.value = row?.id || null
   Object.assign(form, {
     name: row?.name || '',
@@ -188,8 +278,23 @@ const handleReset = () => {
 }
 
 const handleSave = async () => {
+  if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
   await formRef.value.validate()
+  const actionLabel = editingId.value ? '更新题目分类' : '新增题目分类'
+  const confirmed = await confirmDangerActionPreview({
+    title: `${actionLabel}预览`,
+    action: `${actionLabel}「${form.name}」`,
+    target: `编码：${form.code || '-'}；排序：${form.sort ?? 0}；状态：${form.status}`,
+    impact: '分类保存后会影响题目筛选、推荐策略、运营配置和后台统计口径。',
+    rollback: editingId.value
+      ? '可再次编辑分类信息；已被题目或配置引用的历史口径不会自动回到修改前。'
+      : '如新增错误，可在确认没有题目引用后删除该分类。',
+    audit: '分类保存会记录操作人、分类名称、编码和时间，便于追踪题库治理变更。',
+    tips: ['确认分类名称和编码不会与现有分类混淆。', '确认状态设置符合当前题库运营范围。'],
+    confirmButtonText: '确认保存'
+  })
+  if (!confirmed) return
   saving.value = true
   try {
     if (editingId.value) {
@@ -206,15 +311,18 @@ const handleSave = async () => {
 }
 
 const handleDelete = async (row: QuestionCategoryVO) => {
-  await ElMessageBox.confirm(
-    `确认删除分类「${row.name}」？删除后，依赖该分类的题目筛选和运营配置可能受到影响。`,
-    '删除分类高风险确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消'
-    }
-  )
+  if (!guardAdminMobileWrite()) return
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除题目分类预览',
+    action: `删除分类「${row.name}」`,
+    target: `分类编号：${row.id}；编码：${row.code || row.categoryCode || '-'}；状态：${row.status}`,
+    impact: '依赖该分类的题目筛选、推荐策略、运营配置和后台统计可能受到影响。',
+    rollback: '删除后无法直接恢复该分类；误删后需要重新创建分类并修正相关题目或配置引用。',
+    audit: '删除分类会记录操作人、分类编号、名称和时间，便于审计。',
+    tips: ['确认没有正式题目仍依赖该分类。', '确认不是只需要禁用分类。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   await deleteQuestionCategoryApi(row.id)
   ElMessage.success('分类已删除')
   await fetchCategories()
@@ -232,5 +340,53 @@ onMounted(fetchCategories)
   display: flex;
   justify-content: flex-end;
   padding: 16px 20px 20px;
+}
+
+.table-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 12px;
+}
+
+.table-card__header h2 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.table-card__header p {
+  margin: 6px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.table-view-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+:global(.column-config-menu) {
+  min-width: 180px;
+  padding: 8px;
+}
+
+:global(.column-config-menu .el-checkbox) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .table-card__header {
+    flex-direction: column;
+  }
+
+  .table-view-tools {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 </style>

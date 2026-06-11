@@ -25,7 +25,7 @@
           :title="!semanticEnabled ? semanticDisabledReason : undefined"
           @click="handleRebuildVectors"
         >
-          重建向量
+          重建索引
         </el-button>
         <el-button
           :icon="Refresh"
@@ -34,7 +34,7 @@
           :title="!semanticEnabled ? semanticDisabledReason : undefined"
           @click="handleRetryFailedVectors"
         >
-          重试失败向量
+          重试失败索引
         </el-button>
       </div>
     </section>
@@ -71,12 +71,12 @@
       <article>
         <span>切片策略</span>
         <strong>{{ chunkConfigLabel }}</strong>
-        <small>{{ knowledgeConfig?.chunkStrategy || '--' }}</small>
+        <small>{{ chunkStrategyDetail }}</small>
       </article>
       <article>
         <span>近重复阈值</span>
         <strong>{{ nearDuplicateThresholdLabel }}</strong>
-        <small>ask >= {{ askMinScoreLabel }}</small>
+        <small>问答阈值 >= {{ askMinScoreLabel }}</small>
       </article>
       <article>
         <span>上传限制</span>
@@ -95,7 +95,7 @@
         </div>
       </article>
       <article>
-        <span>向量模型</span>
+        <span>检索索引</span>
         <strong>{{ embeddingModelSummary }}</strong>
         <small>{{ vectorIndexHealthLabel }}</small>
       </article>
@@ -119,7 +119,17 @@
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="知识库数据加载失败" :description="errorMessage">
+    <el-alert
+      v-if="partialLoadWarning && !errorMessage"
+      class="knowledge-load-warning"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="部分知识库数据暂时不可用"
+      :description="partialLoadWarning"
+    />
+
+    <AppState v-if="errorMessage" type="error" title="知识资料加载失败" :description="errorMessage">
       <el-button type="primary" @click="refreshKnowledgePage">重试</el-button>
     </AppState>
 
@@ -156,7 +166,7 @@
               </el-form-item>
               <el-form-item label="类型">
                 <el-select v-model="query.documentType" clearable filterable placeholder="全部类型" style="width: 160px">
-                  <el-option v-for="type in documentTypeOptions" :key="type" :label="type" :value="type" />
+                  <el-option v-for="type in documentTypeOptions" :key="type" :label="documentTypeLabel(type)" :value="type" />
                 </el-select>
               </el-form-item>
               <el-form-item label="状态">
@@ -176,7 +186,7 @@
               <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
               <el-table-column label="类型" width="130">
                 <template #default="{ row }">
-                  <el-tag effect="plain">{{ row.documentType || 'NOTE' }}</el-tag>
+                  <el-tag effect="plain">{{ documentTypeLabel(row.documentType) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column prop="chunkCount" label="片段" width="100" />
@@ -240,7 +250,12 @@
                 </template>
               </el-table-column>
               <template #empty>
-                <el-empty description="暂无知识库资料" />
+                <AppState type="empty" :title="documentEmptyTitle" :description="documentEmptyDescription">
+                  <div class="empty-actions">
+                    <el-button v-if="hasDocumentFilters" @click="resetDocumentFilter">清空筛选</el-button>
+                    <el-button v-else type="primary" @click="openCreate">新增资料</el-button>
+                  </div>
+                </AppState>
               </template>
             </el-table>
             <div class="pagination-wrap">
@@ -261,7 +276,7 @@
           <div class="content-card__body">
             <div class="section-head">
               <div>
-                <p class="section-kicker">Search</p>
+                <p class="section-kicker">语义搜索</p>
                 <h2>语义搜索</h2>
               </div>
             </div>
@@ -282,7 +297,7 @@
               </el-form-item>
               <el-form-item label="类型">
                 <el-select v-model="knowledgeScopeType" clearable filterable placeholder="全部类型" style="width: 160px">
-                  <el-option v-for="type in documentTypeOptions" :key="`search-${type}`" :label="type" :value="type" />
+                  <el-option v-for="type in documentTypeOptions" :key="`search-${type}`" :label="documentTypeLabel(type)" :value="type" />
                 </el-select>
               </el-form-item>
               <el-form-item label="资料">
@@ -292,44 +307,69 @@
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
-                <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">检索诊断</el-button>
-                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">评估检索</el-button>
+                <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">查看匹配说明</el-button>
+                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">评估匹配效果</el-button>
               </el-form-item>
             </el-form>
             <div v-if="searchTrace" class="search-trace-panel">
               <div class="search-trace-panel__head">
                 <div>
-                  <span>检索诊断</span>
-                  <strong>{{ searchTrace.retrievalMode || '--' }}</strong>
+                  <span>匹配说明</span>
+                  <strong>{{ searchTraceRetrievalModeLabel }}</strong>
                 </div>
                 <el-tag :type="searchTrace.vectorEnabled ? 'success' : 'warning'" effect="light">
-                  {{ searchTrace.vectorEnabled ? '语义检索可用' : '关键词兜底' }}
+                  {{ searchTrace.vectorEnabled ? '智能匹配可用' : '关键词匹配' }}
                 </el-tag>
               </div>
               <div class="search-trace-metrics">
                 <article>
-                  <span>扩展词</span>
-                  <strong>{{ searchTrace.expandedTerms?.length || 0 }}</strong>
-                  <small>{{ searchTrace.expandedTerms?.slice(0, 8).join(' / ') || '-' }}</small>
+                  <span>参考资料</span>
+                  <strong>{{ searchTrace.finalResults?.length || 0 }}</strong>
+                  <small>已按当前问题和资料范围筛选</small>
                 </article>
                 <article>
-                  <span>向量候选</span>
-                  <strong>{{ searchTrace.vectorCandidateCount || 0 }}</strong>
-                  <small>召回 {{ searchTrace.recallLimit || 0 }}</small>
+                  <span>匹配方式</span>
+                  <strong>{{ searchTrace.vectorEnabled ? '智能匹配优先' : '关键词优先' }}</strong>
+                  <small>{{ searchTraceRetrievalModeLabel }}</small>
                 </article>
                 <article>
-                  <span>关键词候选</span>
-                  <strong>{{ searchTrace.keywordCandidateCount || 0 }}</strong>
-                  <small>多关键词兜底</small>
+                  <span>关键词建议</span>
+                  <strong>{{ searchTrace.expandedTerms?.length ? '已整理' : '待补充' }}</strong>
+                  <small>{{ searchTrace.expandedTerms?.slice(0, 4).join(' / ') || '可换一个更具体的问题' }}</small>
                 </article>
                 <article>
-                  <span>最终候选</span>
-                  <strong>{{ searchTrace.finalCandidateCount || 0 }}</strong>
-                  <small>最低分 {{ scoreLabel(searchTrace.minScore) }}</small>
+                  <span>结果状态</span>
+                  <strong>{{ searchTrace.finalCandidateCount ? `命中 ${searchTrace.finalCandidateCount} 条` : '暂无命中' }}</strong>
+                  <small>可调整资料范围或问题描述</small>
                 </article>
               </div>
+              <details class="search-trace-technical">
+                <summary>匹配过程（按需展开）</summary>
+                <div class="search-trace-metrics">
+                  <article>
+                    <span>扩展词数量</span>
+                    <strong>{{ searchTrace.expandedTerms?.length || 0 }}</strong>
+                    <small>{{ searchTrace.expandedTerms?.slice(0, 8).join(' / ') || '-' }}</small>
+                  </article>
+                  <article>
+                    <span>智能候选数</span>
+                    <strong>{{ searchTrace.vectorCandidateCount || 0 }}</strong>
+                    <small>初步找到 {{ searchTrace.recallLimit || 0 }}</small>
+                  </article>
+                  <article>
+                    <span>关键词候选数</span>
+                    <strong>{{ searchTrace.keywordCandidateCount || 0 }}</strong>
+                    <small>多关键词匹配</small>
+                  </article>
+                  <article>
+                    <span>候选阈值</span>
+                    <strong>{{ scoreLabel(searchTrace.minScore) }}</strong>
+                    <small>最终保留 {{ searchTrace.finalCandidateCount || 0 }}</small>
+                  </article>
+                </div>
+              </details>
               <el-alert
-                v-for="warning in searchTrace.warnings || []"
+                v-for="warning in searchTraceWarnings"
                 :key="warning"
                 class="search-trace-warning"
                 type="warning"
@@ -396,7 +436,12 @@
                   >
                     保存当前样本
                   </el-button>
-                  <el-button type="primary" :loading="knowledgeEvalRunning" @click="runKnowledgeEvalCases">
+                  <el-button
+                    type="primary"
+                    :loading="knowledgeEvalRunning"
+                    :disabled="!knowledgeEvalCaseTotal"
+                    @click="runKnowledgeEvalCases"
+                  >
                     运行启用样本
                   </el-button>
                   <el-button @click="refreshKnowledgeEvalWorkspace">刷新</el-button>
@@ -411,7 +456,7 @@
                   @keyup.enter="fetchKnowledgeEvalCases"
                 />
                 <el-select v-model="knowledgeEvalCaseQuery.expectedDocumentType" clearable filterable placeholder="资料类型">
-                  <el-option v-for="type in documentTypeOptions" :key="`eval-type-${type}`" :label="type" :value="type" />
+                  <el-option v-for="type in documentTypeOptions" :key="`eval-type-${type}`" :label="documentTypeLabel(type)" :value="type" />
                 </el-select>
                 <el-select v-model="knowledgeEvalCaseQuery.expectNoAnswer" clearable placeholder="期望结果">
                   <el-option label="命中文档" :value="false" />
@@ -427,7 +472,7 @@
               <div class="knowledge-eval-dataset__body">
                 <div class="knowledge-eval-cases">
                   <el-table :data="knowledgeEvalCases" row-key="id" size="small" max-height="260">
-                    <el-table-column prop="caseId" label="样本编号" min-width="150" show-overflow-tooltip />
+                    <el-table-column prop="caseId" label="样本标识" min-width="150" show-overflow-tooltip />
                     <el-table-column prop="query" label="查询内容" min-width="220" show-overflow-tooltip />
                     <el-table-column label="期望结果" min-width="180" show-overflow-tooltip>
                       <template #default="{ row }">
@@ -458,7 +503,7 @@
                   />
                 </div>
 
-                <div class="knowledge-eval-runs" v-loading="knowledgeEvalRunDetailLoading">
+                <div class="knowledge-eval-runs" v-loading="knowledgeEvalRunLoading || knowledgeEvalRunDetailLoading">
                   <div class="knowledge-eval-runs__head">
                     <strong>最近运行</strong>
                     <el-button link type="primary" @click="fetchKnowledgeEvalRuns">刷新</el-button>
@@ -470,18 +515,30 @@
                     type="button"
                     @click="openKnowledgeEvalRun(run.id)"
                   >
-                    <span>{{ run.runNo || `#${run.id}` }}</span>
+                    <span>{{ run.runNo || '评估运行记录' }}</span>
                     <strong>{{ formatRate(run.passRate) }}</strong>
-                    <small>{{ run.status || '-' }} · {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
+                    <small>{{ evalRunStatusLabel(run.status) }} · {{ run.evaluatedCount || 0 }}/{{ run.sampleCount || 0 }}</small>
                   </button>
-                  <el-empty v-if="!knowledgeEvalRuns.length" description="暂无运行记录" />
+                  <AppState
+                    v-if="!knowledgeEvalRuns.length && !knowledgeEvalRunLoading"
+                    type="empty"
+                    :title="knowledgeEvalRunEmptyTitle"
+                    :description="knowledgeEvalRunEmptyDescription"
+                  >
+                    <div class="empty-actions empty-actions--compact">
+                      <el-button v-if="knowledgeEvalCaseTotal" type="primary" :loading="knowledgeEvalRunning" @click="runKnowledgeEvalCases">
+                        运行启用样本
+                      </el-button>
+                      <el-button v-else @click="seedKnowledgeEvalQuestion">填入示例问题</el-button>
+                    </div>
+                  </AppState>
                 </div>
               </div>
 
               <div v-if="knowledgeEvalLatestRun" class="knowledge-eval-latest">
                 <div class="knowledge-eval-latest__head">
                   <div>
-                    <strong>{{ knowledgeEvalLatestRun.runNo || `#${knowledgeEvalLatestRun.id}` }}</strong>
+                    <strong>{{ knowledgeEvalLatestRun.runNo || '评估运行记录' }}</strong>
                     <span>{{ knowledgeEvalLatestTrustSummary }}</span>
                   </div>
                   <div class="knowledge-eval-latest__tags">
@@ -503,7 +560,7 @@
                 <div v-if="knowledgeEvalLatestFailures.length" class="knowledge-eval-failures">
                   <article v-for="item in knowledgeEvalLatestFailures" :key="item.id || item.caseId">
                     <strong>{{ item.caseId || `样本-${item.evalCaseId || '-'}` }}</strong>
-                    <span>{{ knowledgeEvalExpectedLabel(item) }} / 最佳匹配 {{ item.topTitle || `#${item.topDocumentId || '-'}` }} / {{ scoreLabel(item.topScore) }}</span>
+                    <span>{{ knowledgeEvalExpectedLabel(item) }} / 最佳匹配 {{ item.topTitle || '知识资料' }} / {{ scoreLabel(item.topScore) }}</span>
                     <div class="knowledge-trust-strip knowledge-trust-strip--compact">
                       <el-tag :type="trustTagType(item.citationValid)" effect="plain">
                         引用 {{ trustText(item.citationValid) }}
@@ -515,14 +572,21 @@
                     <small>{{ item.failureReason || item.citationWarning || item.note || '-' }}</small>
                   </article>
                 </div>
-                <el-empty v-else-if="knowledgeEvalLatestRun.results?.length" description="最近一次运行全部通过" />
+                <AppState
+                  v-else-if="knowledgeEvalLatestRun.results?.length"
+                  type="empty"
+                  title="最近一次评估全部通过"
+                  description="当前样本没有发现引用缺失或答案脱离知识库的问题。可以继续新增评估样本，扩大可信度覆盖面。"
+                >
+                  <el-button type="primary" plain @click="startNewKnowledgeEvalCase">新增评估样本</el-button>
+                </AppState>
               </div>
             </div>
             <div class="result-list" v-loading="searching">
               <article v-for="item in searchResults" :key="resultKey(item)" class="result-row">
                 <div>
                   <div class="result-title">
-                    <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+                    <strong>{{ item.title || '知识资料' }}</strong>
                     <el-tag size="small" effect="plain">{{ matchLabel(item.matchType) }}</el-tag>
                   </div>
                   <p v-html="highlightSnippet(item)"></p>
@@ -532,7 +596,7 @@
                 </div>
                 <div class="result-meta">
                   <span>{{ scoreLabel(item.score) }}</span>
-                  <small>{{ item.sourceRef || item.documentType || '--' }}</small>
+                  <small>{{ documentTypeOrRefLabel(item.sourceRef, item.documentType) }}</small>
                   <el-button
                     v-if="item.chunkId"
                     link
@@ -545,7 +609,18 @@
                   </el-button>
                 </div>
               </article>
-              <el-empty v-if="!searchResults.length && !searching" description="输入关键词后检索知识片段" />
+              <AppState
+                v-if="!searchResults.length && !searching"
+                type="empty"
+                :title="searchEmptyTitle"
+                :description="searchEmptyDescription"
+              >
+                <div class="empty-actions">
+                  <el-button v-if="!documentTotal" type="primary" @click="openCreate">新增资料</el-button>
+                  <el-button v-else-if="!searchHasQuery" type="primary" @click="fillKnowledgeSearchExample">填入示例关键词</el-button>
+                  <el-button v-else @click="handleSearch">重新检索</el-button>
+                </div>
+              </AppState>
             </div>
           </div>
         </section>
@@ -556,7 +631,7 @@
           <div class="content-card__body ask-panel">
             <div class="section-head compact">
               <div>
-                <p class="section-kicker">Ask</p>
+                <p class="section-kicker">知识问答</p>
                 <h2>知识库问答</h2>
               </div>
             </div>
@@ -574,7 +649,7 @@
               </el-form-item>
               <el-form-item label="资料类型范围">
                 <el-select v-model="knowledgeScopeType" clearable filterable placeholder="全部类型">
-                  <el-option v-for="type in documentTypeOptions" :key="`ask-${type}`" :label="type" :value="type" />
+                  <el-option v-for="type in documentTypeOptions" :key="`ask-${type}`" :label="documentTypeLabel(type)" :value="type" />
                 </el-select>
               </el-form-item>
               <el-form-item label="资料范围">
@@ -604,7 +679,7 @@
                 class="answer-alert"
                 type="success"
                 :closable="false"
-                title="可信回答：引用编号已通过校验"
+                title="可信回答：引用来源已通过校验"
               />
               <el-alert
                 v-else-if="askAnswerGrounded === false || askCitationWarning"
@@ -637,7 +712,7 @@
             </div>
             <div class="reference-list">
               <article v-for="item in askReferences" :key="`ask-${resultKey(item)}`" class="reference-row">
-                <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+                <strong>{{ item.title || '知识资料' }}</strong>
                 <p>{{ item.snippet || '--' }}</p>
                 <small>{{ matchLabel(item.matchType) }} · {{ scoreLabel(item.score) }}</small>
                 <el-button
@@ -651,7 +726,18 @@
                   查看片段
                 </el-button>
               </article>
-              <el-empty v-if="!askReferences.length" description="生成回答后显示引用片段" />
+              <AppState
+                v-if="!askReferences.length"
+                type="empty"
+                :title="askReferenceEmptyTitle"
+                :description="askReferenceEmptyDescription"
+              >
+                <div class="empty-actions empty-actions--compact">
+                  <el-button v-if="!documentTotal" type="primary" @click="openCreate">新增资料</el-button>
+                  <el-button v-else-if="!question.trim()" @click="seedKnowledgeEvalQuestion">填入示例问题</el-button>
+                  <el-button v-else @click="handleAsk">重新生成回答</el-button>
+                </div>
+              </AppState>
             </div>
           </div>
         </section>
@@ -682,7 +768,7 @@
         </el-form-item>
         <el-form-item label="内容" required>
           <el-input v-model="form.content" type="textarea" :rows="10" maxlength="10000" show-word-limit />
-          <small class="form-help">保存后会优先按标题、段落和代码块切成语义片段，再写入个人向量索引。</small>
+          <small class="form-help">保存后会优先按标题、段落和代码块切成语义片段，再写入个人检索索引。</small>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -691,12 +777,12 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="rebuildDialogVisible" title="知识库向量重建结果" width="640px">
+    <el-dialog v-model="rebuildDialogVisible" title="知识库索引重建结果" width="640px">
       <div v-if="rebuildResult" class="rebuild-result">
         <p class="rebuild-tip">重建范围：{{ rebuildTargetLabel }}</p>
         <div class="rebuild-grid">
           <article class="rebuild-stat">
-            <span>向量库</span>
+            <span>语义检索</span>
             <strong>{{ (rebuildResult.semanticEnabled ?? rebuildResult.vectorEnabled) ? '已启用' : '未配置' }}</strong>
           </article>
           <article class="rebuild-stat">
@@ -708,11 +794,11 @@
             <strong>{{ rebuildResult.chunkCount || 0 }}</strong>
           </article>
           <article class="rebuild-stat">
-            <span>向量</span>
+            <span>已更新索引</span>
             <strong>{{ rebuildResult.vectorUpdated || 0 }}</strong>
           </article>
           <article class="rebuild-stat">
-            <span>清理向量</span>
+            <span>已清理索引</span>
             <strong>{{ rebuildResult.vectorDeleted || 0 }}</strong>
           </article>
           <article class="rebuild-stat">
@@ -721,9 +807,15 @@
           </article>
         </div>
         <p v-if="rebuildResult.embeddingDisabledReason" class="rebuild-tip">{{ knowledgeDisabledReason(rebuildResult.embeddingDisabledReason) }}</p>
+        <p v-if="rebuildResult.vectorJobId" class="rebuild-tip">
+          检索任务记录 {{ rebuildResult.vectorJobId }} · {{ vectorJobStatusLabel(rebuildResult.vectorJobStatus) }}
+        </p>
+        <p v-if="rebuildResult.vectorJobId" class="rebuild-tip">
+          可稍后按检索任务记录继续查看进度、失败原因和重试结果。
+        </p>
         <p class="rebuild-tip">失败文档：{{ rebuildResult.failedDocuments?.length || 0 }}</p>
         <p class="rebuild-tip" v-if="rebuildResult.failedDocuments?.length">
-          文档 ID：{{ rebuildResult.failedDocuments.join(', ') }}
+          未处理成功的资料记录：{{ rebuildResult.failedDocuments.join(', ') }}
         </p>
         <div v-if="rebuildResult.errors?.length" class="rebuild-errors">
           <strong>错误详情</strong>
@@ -733,6 +825,14 @@
         </div>
       </div>
       <template #footer>
+        <el-button
+          v-if="rebuildResult?.vectorJobId"
+          v-permission="'admin:analytics:ai'"
+          type="primary"
+          @click="openKnowledgeVectorJob(rebuildResult)"
+        >
+          查看检索任务明细
+        </el-button>
         <el-button @click="rebuildDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -756,9 +856,9 @@
         <div class="duplicate-review-list">
           <article v-for="item in duplicateReviewItems" :key="`dup-${item.chunkId}`" class="duplicate-review-row">
             <div class="duplicate-review-row__head">
-              <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+              <strong>{{ item.title || '知识资料' }}</strong>
               <el-tag size="small" type="warning" effect="light">{{ scoreLabel(item.topScore) }}</el-tag>
-              <small>#{{ (item.chunkIndex ?? 0) + 1 }} · {{ item.sourceRef || item.documentType || '--' }}</small>
+              <small>第 {{ (item.chunkIndex ?? 0) + 1 }} 段 · {{ documentTypeOrRefLabel(item.sourceRef, item.documentType) }}</small>
               <el-button
                 v-if="item.chunkId"
                 link
@@ -783,8 +883,8 @@
             <p>{{ item.snippet || '--' }}</p>
             <div class="similar-list">
               <article v-for="match in item.matches || []" :key="`dup-${item.chunkId}-${resultKey(match)}`">
-                <strong>{{ match.title || `资料 #${match.documentId || '--'}` }}</strong>
-                <span>{{ scoreLabel(match.score) }} · {{ match.sourceRef || match.documentType || '--' }}</span>
+                <strong>{{ match.title || '知识资料' }}</strong>
+                <span>{{ scoreLabel(match.score) }} · {{ documentTypeOrRefLabel(match.sourceRef, match.documentType) }}</span>
                 <p>{{ match.snippet || '--' }}</p>
                 <el-button
                   v-if="match.chunkId"
@@ -799,7 +899,14 @@
               </article>
             </div>
           </article>
-          <el-empty v-if="!duplicateReviewItems.length && !duplicateReviewLoading" description="暂无近重复候选" />
+          <AppState
+            v-if="!duplicateReviewItems.length && !duplicateReviewLoading"
+            type="empty"
+            title="没有发现近重复候选"
+            description="当前阈值下没有语义相近片段；如果仍怀疑重复，可以调低阈值、切换资料范围，或先重建检索索引后再扫描。"
+          >
+            <el-button type="primary" plain :loading="duplicateReviewLoading" @click="loadDuplicateReview">重新扫描</el-button>
+          </AppState>
         </div>
       </div>
     </el-drawer>
@@ -809,31 +916,31 @@
         <div class="duplicate-cleanup-bar">
           <div>
             <strong>{{ exactDuplicateGroups.length }}</strong>
-            <small>duplicate groups</small>
+            <small>组完全重复</small>
             <small>{{ exactDuplicateScopeLabel }}</small>
           </div>
           <div class="exact-scope-actions">
-            <el-button v-if="exactDuplicateScopeDocumentId || exactDuplicateScopeType" link @click="loadExactDuplicates()">View all</el-button>
+            <el-button v-if="exactDuplicateScopeDocumentId || exactDuplicateScopeType" link @click="loadExactDuplicates()">查看全部范围</el-button>
           </div>
           <el-button type="danger" :loading="exactDuplicateCleanupLoading" @click="handleCleanupExactDuplicates">
             清理完全重复
           </el-button>
         </div>
         <div class="duplicate-review-list">
-          <article v-for="group in exactDuplicateGroups" :key="group.chunkHash" class="duplicate-review-row">
+          <article v-for="(group, groupIndex) in exactDuplicateGroups" :key="group.chunkHash" class="duplicate-review-row">
             <div class="duplicate-review-row__head">
-              <strong>{{ shortHash(group.chunkHash) }}</strong>
-              <el-tag size="small" type="warning" effect="light">{{ group.duplicateCount || 0 }} duplicates</el-tag>
-              <small>{{ group.chunks?.length || 0 }} chunks</small>
+              <strong>重复组 {{ groupIndex + 1 }}</strong>
+              <el-tag size="small" type="warning" effect="light">{{ group.duplicateCount || 0 }} 个重复片段</el-tag>
+              <small>{{ group.chunks?.length || 0 }} 个片段</small>
             </div>
             <div class="chunk-list exact-duplicate-chunks">
               <article v-for="chunk in group.chunks || []" :key="`exact-${group.chunkHash}-${chunk.id}`" class="chunk-row">
                 <div class="chunk-row__head">
-                  <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
+                  <strong>第 {{ (chunk.chunkIndex ?? 0) + 1 }} 段</strong>
                   <el-tag size="small" :type="chunk.cleanupCandidate ? 'danger' : 'success'" effect="light">
                     {{ chunk.cleanupCandidate ? '清理候选' : '保留' }}
                   </el-tag>
-                  <span>{{ chunk.sourceRef || `资料 #${chunk.documentId || '--'}` }}</span>
+                  <span>{{ chunk.sourceRef || '知识资料' }}</span>
                   <el-button
                     v-if="chunk.id"
                     link
@@ -849,7 +956,14 @@
               </article>
             </div>
           </article>
-          <el-empty v-if="!exactDuplicateGroups.length && !exactDuplicateLoading" description="暂无完全重复片段" />
+          <AppState
+            v-if="!exactDuplicateGroups.length && !exactDuplicateLoading"
+            type="empty"
+            title="没有完全重复片段"
+            description="当前范围内没有内容哈希完全相同的片段；如果刚导入资料，可先重建索引后再检查。"
+          >
+            <el-button type="primary" plain :loading="exactDuplicateLoading" @click="loadExactDuplicates()">重新检查</el-button>
+          </AppState>
         </div>
       </div>
     </el-drawer>
@@ -867,13 +981,13 @@
           </article>
           <article>
             <span>类型</span>
-            <strong>{{ selectedDocument?.documentType || 'NOTE' }}</strong>
+            <strong>{{ documentTypeLabel(selectedDocument?.documentType) }}</strong>
           </article>
         </div>
         <div class="chunk-list">
           <article v-for="chunk in documentChunks" :key="chunk.id" class="chunk-row">
             <div class="chunk-row__head">
-              <strong>#{{ (chunk.chunkIndex ?? 0) + 1 }}</strong>
+              <strong>第 {{ (chunk.chunkIndex ?? 0) + 1 }} 段</strong>
               <el-tag v-if="chunk.duplicateInDocument" size="small" type="warning" effect="light">重复</el-tag>
               <el-tag size="small" :type="statusType(chunk.indexStatus)" effect="light">{{ statusLabel(chunk.indexStatus) }}</el-tag>
               <span>{{ chunk.sourceRef || '--' }}</span>
@@ -897,12 +1011,7 @@
               </el-button>
             </div>
             <p>{{ chunk.content || '--' }}</p>
-            <small>
-              {{ shortHash(chunk.chunkHash) }}
-              <template v-if="chunk.embeddingModel"> · {{ chunk.embeddingModel }}</template>
-              <template v-if="chunk.embeddingDimension"> · {{ chunk.embeddingDimension }}d</template>
-              <template v-if="chunk.indexedAt"> · {{ formatDateTime(chunk.indexedAt) }}</template>
-            </small>
+            <small>{{ indexMetaLabel(chunk) }}</small>
             <el-alert
               v-if="chunk.lastError"
               class="chunk-error"
@@ -912,17 +1021,34 @@
             />
             <div v-if="similarChunkMap[chunk.id]?.length" class="similar-list">
               <article v-for="item in similarChunkMap[chunk.id]" :key="`${chunk.id}-${resultKey(item)}`">
-                <strong>{{ item.title || `资料 #${item.documentId || '--'}` }}</strong>
+                <strong>{{ item.title || '知识资料' }}</strong>
                 <span>
-                  {{ scoreLabel(item.score) }} · {{ item.sourceRef || item.documentType || '--' }}
-                  <template v-if="item.chunkHash"> · {{ shortHash(item.chunkHash) }}</template>
-                  <template v-if="item.embeddingModel"> · {{ item.embeddingModel }}</template>
+                  {{ scoreLabel(item.score) }} · {{ documentTypeOrRefLabel(item.sourceRef, item.documentType) }}
+                  <template v-if="item.matchType"> · {{ matchLabel(item.matchType) }}</template>
                 </span>
                 <p>{{ item.snippet || '--' }}</p>
               </article>
             </div>
           </article>
-          <el-empty v-if="!documentChunks.length && !chunksLoading" description="暂无片段" />
+          <AppState
+            v-if="!documentChunks.length && !chunksLoading"
+            type="empty"
+            :title="chunkEmptyTitle"
+            :description="chunkEmptyDescription"
+          >
+            <div class="empty-actions empty-actions--compact">
+              <el-button v-if="selectedDocument" @click="openChunksDrawer(selectedDocument)">刷新片段</el-button>
+              <el-button v-if="selectedDocument" type="primary" @click="openEdit(selectedDocument)">编辑资料</el-button>
+              <el-button
+                v-if="selectedDocument && semanticEnabled"
+                :loading="rebuilding"
+                @click="handleRebuildVectors(selectedDocument.id, selectedDocument.title)"
+              >
+                重建索引
+              </el-button>
+              <el-button v-if="!selectedDocument" type="primary" @click="openCreate">新增资料</el-button>
+            </div>
+          </AppState>
         </div>
       </div>
     </el-drawer>
@@ -933,8 +1059,8 @@
           <article v-for="item in documentVersions" :key="item.id" class="version-row">
             <div class="version-row__head">
               <strong>v{{ item.versionNo || 0 }}</strong>
-              <el-tag size="small" effect="plain">{{ item.documentType || 'NOTE' }}</el-tag>
-              <small>{{ item.createdAt || '--' }} · {{ item.chunkCount || 0 }} chunks</small>
+              <el-tag size="small" effect="plain">{{ documentTypeLabel(item.documentType) }}</el-tag>
+              <small>{{ item.createdAt || '--' }} · {{ item.chunkCount || 0 }} 个片段</small>
               <el-button
                 link
                 size="small"
@@ -947,9 +1073,16 @@
             </div>
             <div class="version-row__title">{{ item.title || '--' }}</div>
             <p>{{ item.content || '--' }}</p>
-            <small>{{ shortHash(item.contentHash) }}</small>
+            <small>{{ item.contentHash ? '内容快照已保存' : '等待生成内容快照' }}</small>
           </article>
-          <el-empty v-if="!documentVersions.length && versionsLoadingId !== versionDocument?.id" description="暂无历史版本" />
+          <AppState
+            v-if="!documentVersions.length && versionsLoadingId !== versionDocument?.id"
+            type="empty"
+            title="还没有历史版本"
+            description="资料首次创建或尚未发生编辑时不会产生历史版本。后续修改资料内容后，这里会保留可恢复记录。"
+          >
+            <el-button type="primary" plain @click="versionDocument && openEdit(versionDocument)">编辑资料</el-button>
+          </AppState>
         </div>
       </div>
     </el-drawer>
@@ -958,18 +1091,13 @@
       <div class="chunk-detail" v-loading="!!chunkDetailLoadingId">
         <div v-if="selectedChunkDetail" class="chunk-row">
           <div class="chunk-row__head">
-            <strong>#{{ (selectedChunkDetail.chunkIndex ?? 0) + 1 }}</strong>
-            <el-tag size="small" effect="plain">{{ selectedChunkSource?.documentType || 'NOTE' }}</el-tag>
+            <strong>第 {{ (selectedChunkDetail.chunkIndex ?? 0) + 1 }} 段</strong>
+            <el-tag size="small" effect="plain">{{ documentTypeLabel(selectedChunkSource?.documentType) }}</el-tag>
             <el-tag size="small" :type="statusType(selectedChunkDetail.indexStatus)" effect="light">{{ statusLabel(selectedChunkDetail.indexStatus) }}</el-tag>
             <span>{{ selectedChunkDetail.sourceRef || '--' }}</span>
           </div>
           <p>{{ selectedChunkDetail.content || '--' }}</p>
-          <small>
-            {{ shortHash(selectedChunkDetail.chunkHash) }}
-            <template v-if="selectedChunkDetail.embeddingModel"> · {{ selectedChunkDetail.embeddingModel }}</template>
-            <template v-if="selectedChunkDetail.embeddingDimension"> · {{ selectedChunkDetail.embeddingDimension }}d</template>
-            <template v-if="selectedChunkDetail.indexedAt"> · {{ formatDateTime(selectedChunkDetail.indexedAt) }}</template>
-          </small>
+          <small>{{ indexMetaLabel(selectedChunkDetail) }}</small>
           <el-alert
             v-if="selectedChunkDetail.lastError"
             class="chunk-error"
@@ -978,7 +1106,14 @@
             :title="selectedChunkDetail.lastError"
           />
         </div>
-        <el-empty v-else-if="!chunkDetailLoadingId" description="暂无片段详情" />
+        <AppState
+          v-else-if="!chunkDetailLoadingId"
+          type="empty"
+          title="片段详情暂未加载"
+          description="片段可能已被重建、清理或当前索引结果没有返回完整记录。请回到资料列表刷新后再查看。"
+        >
+          <el-button type="primary" plain @click="loadDocuments">刷新资料列表</el-button>
+        </AppState>
       </div>
     </el-drawer>
   </div>
@@ -986,9 +1121,10 @@
 
 <script setup lang="ts">
 import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
+import { ElMessage, type UploadFile } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
@@ -1049,6 +1185,7 @@ import AppState from '@/components/common/AppState.vue'
 
 const loading = ref(false)
 const route = useRoute()
+const router = useRouter()
 const searching = ref(false)
 const tracingSearch = ref(false)
 const asking = ref(false)
@@ -1074,6 +1211,7 @@ const chunkDetailLoadingId = ref<number | null>(null)
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
+const partialLoadWarnings = ref<string[]>([])
 const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
 const documentOptions = ref<KnowledgeDocumentOptionVO[]>([])
@@ -1170,19 +1308,29 @@ const documentTypeLabelMap: Record<string, string> = {
   TEXT: '文本资料'
 }
 
-const documentTypeLabel = (type?: string) => documentTypeLabelMap[String(type || '').toUpperCase()] || type || '未分类'
+const documentTypeLabel = (type?: string) => documentTypeLabelMap[String(type || '').toUpperCase()] || '未分类资料'
+
+const documentTypeOrRefLabel = (sourceRef?: string | null, documentType?: string | null) =>
+  sourceRef || documentTypeLabel(documentType || undefined)
 
 const formDocumentTypeOptions = computed(() =>
   Array.from(new Set(['NOTE', 'PROJECT', 'INTERVIEW_REVIEW', 'RESUME', ...documentTypeOptions.value]))
 )
 
+const isKeywordFallbackReason = (value: string) => {
+  const normalized = value.toLowerCase()
+  return normalized.includes('keyword') && normalized.includes('fallback')
+}
+
 const knowledgeDisabledReason = (reason?: string) => {
-  if (!reason) return '语义检索未配置，当前使用关键词兜底。'
-  if (reason.includes('Vector store is disabled')) return '向量库未启用，当前使用关键词兜底。'
-  if (reason.includes('Embedding provider is not configured')) return '向量模型服务未配置，当前使用关键词兜底。'
-  if (reason.includes('Embedding base URL')) return '向量模型服务地址、密钥或模型未配置，当前使用关键词兜底。'
-  if (reason.includes('keyword fallback')) return reason.replace('keyword fallback is active.', '当前使用关键词兜底。')
-  return reason
+  if (!reason) return '更精准的资料检索暂未配置，当前先按关键词查找。'
+  if (reason.includes('Vector store is disabled')) return '更精准的资料检索暂未启用，当前先按关键词查找。'
+  if (reason.includes('Embedding provider is not configured')) return '检索增强服务暂未配置，当前先按关键词查找。'
+  if (reason.includes('Embedding base URL')) return '检索增强服务配置不完整，当前先按关键词查找。'
+  if (isKeywordFallbackReason(reason)) return '更精准的资料检索暂不可用，当前先按关键词查找。'
+  return reason.match(/[A-Za-z]{3,}/)
+    ? '更精准的资料检索暂不可用，当前先按关键词查找。'
+    : reason
 }
 
 const chunkTotal = computed(() =>
@@ -1190,6 +1338,7 @@ const chunkTotal = computed(() =>
 )
 
 const documentTotal = computed(() => knowledgeStats.value?.documentCount ?? total.value)
+const hasDocumentFilters = computed(() => Boolean(query.title || query.documentType || query.status))
 
 const duplicateChunkTotal = computed(() => knowledgeStats.value?.duplicateChunkCount ?? 0)
 
@@ -1207,20 +1356,21 @@ const semanticDisabledReason = computed(() =>
   knowledgeDisabledReason(
     knowledgeConfig.value?.embeddingDisabledReason ||
     knowledgeStats.value?.embeddingDisabledReason ||
-    '语义检索未配置，当前使用关键词兜底。'
+    '语义检索未配置，当前使用关键词检索。'
   )
 )
 
 const vectorCapabilityLabel = computed(() => {
   if (semanticEnabled.value) {
-    return knowledgeConfig.value?.vectorEnabled ? '向量库已启用' : '语义检索已启用'
+    return '语义检索已启用'
   }
   return '未配置'
 })
 
 const vectorCapabilityDetail = computed(() => {
   if (!semanticEnabled.value) return semanticDisabledReason.value
-  return knowledgeConfig.value?.vectorCollection || '语义检索可用'
+  if (knowledgeConfig.value?.vectorEnabled) return '个人知识库检索索引可用'
+  return '语义检索可用'
 })
 
 const documentTypeSummary = computed(() => {
@@ -1256,20 +1406,26 @@ const disabledChunkCount = computed(() => Number(knowledgeStats.value?.indexStat
 
 const embeddingModelSummary = computed(() => {
   const counts = knowledgeStats.value?.embeddingModelCounts || {}
-  const items = Object.entries(counts)
-    .filter(([, count]) => Number(count) > 0)
-    .sort((left, right) => Number(right[1]) - Number(left[1]))
-    .slice(0, 3)
-  if (!items.length) return '--'
-  return items.map(([model, count]) => `${model}:${count}`).join(' / ')
+  const total = Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0)
+  if (total > 0) return `已处理 ${total} 个片段`
+  return semanticEnabled.value ? '等待生成' : '未启用'
 })
 
 const vectorIndexHealthLabel = computed(() => {
   if (!semanticEnabled.value) return semanticDisabledReason.value
   if (failedChunkCount.value > 0) return '存在失败片段，建议重试索引'
   if (pendingChunkCount.value > 0) return '存在等待索引的片段'
-  return '向量索引状态正常'
+  return '检索索引状态正常'
 })
+
+const duplicateTypeLabel = (type?: string | null) => {
+  const value = String(type || '').toUpperCase()
+  if (value.includes('EXACT')) return '完全重复'
+  if (value.includes('NEAR') || value.includes('SIMILAR')) return '近重复'
+  if (value.includes('CONTENT')) return '内容重复'
+  return '重复片段'
+}
+
 const duplicateTypeSummary = computed(() => {
   const counts = knowledgeStats.value?.duplicateTypeCounts || {}
   const items = Object.entries(counts)
@@ -1277,7 +1433,7 @@ const duplicateTypeSummary = computed(() => {
     .sort((left, right) => right[1] - left[1])
     .slice(0, 3)
   if (!items.length) return '--'
-  return items.map(([type, count]) => `${type}:${count}`).join(' / ')
+  return items.map(([type, count]) => `${duplicateTypeLabel(type)} ${count}`).join(' / ')
 })
 
 const topDuplicateType = computed(() => {
@@ -1294,7 +1450,7 @@ const hasDuplicateHotspots = computed(() => duplicateChunkTotal.value > 0 || dup
 const topDuplicateHotspotLabel = computed(() => {
   const hotspot = duplicateDocumentHotspots.value[0]
   if (!hotspot) return '--'
-  const title = hotspot.title || `#${hotspot.documentId || '--'}`
+  const title = hotspot.title || '知识资料'
   const duplicateCount = hotspot.duplicateChunkCount || 0
   const ratio = typeof hotspot.duplicateRatio === 'number' ? `, ${hotspot.duplicateRatio}%` : ''
   return `${title} (${duplicateCount}${ratio})`
@@ -1305,10 +1461,10 @@ const topDuplicateHotspotId = computed(() => duplicateDocumentHotspots.value[0]?
 const exactDuplicateScopeLabel = computed(() => {
   if (exactDuplicateScopeDocumentId.value) {
     const item = documentOptions.value.find((option) => option.id === exactDuplicateScopeDocumentId.value)
-    return `scope: ${item?.title || `#${exactDuplicateScopeDocumentId.value}`}`
+    return `范围：${item?.title || '选中资料'}`
   }
-  if (exactDuplicateScopeType.value) return `scope: ${exactDuplicateScopeType.value}`
-  return 'scope: all documents'
+  if (exactDuplicateScopeType.value) return `范围：${duplicateTypeLabel(exactDuplicateScopeType.value)}`
+  return '范围：全部资料'
 })
 
 const exactDuplicateScopeParams = () => ({
@@ -1317,27 +1473,55 @@ const exactDuplicateScopeParams = () => ({
   documentType: exactDuplicateScopeType.value || undefined
 })
 
-const retrievalModeLabel = computed(() => {
-  const mode = knowledgeStats.value?.retrievalMode
-  if (mode === 'HYBRID') return '混合检索'
-  if (mode === 'VECTOR_FIRST') return '向量优先'
-  if (mode === 'KEYWORD_FALLBACK') return '关键词兜底'
-  return semanticEnabled.value ? '混合检索' : '关键词兜底'
-})
+const formatRetrievalModeLabel = (mode?: string | null, semanticAvailable = semanticEnabled.value) => {
+  const raw = String(mode || '').trim()
+  const normalized = raw.toUpperCase()
+  if (!normalized) return semanticAvailable ? '混合检索' : '关键词检索'
+  if (normalized === 'HYBRID') return '混合检索'
+  if (['VECTOR_FIRST', 'VECTOR', 'SEMANTIC_FIRST'].includes(normalized)) return '语义优先'
+  if (['KEYWORD_FALLBACK', 'KEYWORD_ONLY', 'KEYWORD'].includes(normalized)) return '关键词检索'
+  return /^[A-Z0-9_./:-]+$/.test(normalized) ? (semanticAvailable ? '混合检索' : '关键词检索') : raw
+}
+
+const knowledgeSearchWarningLabel = (warning?: string | null) => {
+  const text = String(warning || '').trim()
+  if (!text) return '本次检索有一条提示需要复核。'
+  if (text.includes('No candidate passed')) return '当前最低分或筛选条件较严格，暂未找到满足条件的资料。'
+  if (isKeywordFallbackReason(text)) return '更精准的资料检索暂不可用，本次先按关键词查找。'
+  if (text.includes('Vector store is disabled')) return '更精准的资料检索暂未启用，本次先按关键词查找。'
+  if (text.includes('Embedding provider is not configured')) return '检索增强服务暂未配置，本次先按关键词查找。'
+  if (text.includes('Embedding base URL')) return '检索增强服务配置不完整，本次先按关键词查找。'
+  if (/^[A-Za-z0-9_ ./:-]+$/.test(text)) return '本次检索返回了技术提示，请调整关键词、范围或最低分后重试。'
+  return text
+}
+
+const retrievalModeLabel = computed(() => formatRetrievalModeLabel(knowledgeStats.value?.retrievalMode))
+
+const searchTraceRetrievalModeLabel = computed(() =>
+  formatRetrievalModeLabel(searchTrace.value?.retrievalMode, Boolean(searchTrace.value?.vectorEnabled ?? semanticEnabled.value))
+)
+
+const searchTraceWarnings = computed(() =>
+  Array.from(new Set((searchTrace.value?.warnings || []).map(knowledgeSearchWarningLabel)))
+)
 
 const chunkStrategyLabel = computed(() => {
   const strategy = knowledgeStats.value?.chunkStrategy
-  if (strategy === 'SEMANTIC_BLOCK_800_OVERLAP_80') return '语义块 800/80'
-  if (strategy === 'STRUCTURED_MARKDOWN_800_OVERLAP_80') return '结构化 Markdown 800/80'
-  if (strategy === 'STRUCTURED_MARKDOWN_BLOCK_800_OVERLAP_80') return '结构化块 800/80'
-  return strategy || '语义块'
+  if (String(strategy || '').includes('STRUCTURED')) return '结构化分段'
+  return '智能分段'
 })
 
 const chunkConfigLabel = computed(() => {
   const size = knowledgeConfig.value?.chunkSize
+  return size ? `约 ${size} 字/段` : '自动分段'
+})
+
+const chunkStrategyDetail = computed(() => {
   const overlap = knowledgeConfig.value?.chunkOverlap
   const min = knowledgeConfig.value?.minChunkSize
-  return size ? `${size}/${overlap || 0}/${min || 0}` : '--'
+  if (overlap) return `保留约 ${overlap} 字上下文`
+  if (min) return `最小片段约 ${min} 字`
+  return '按资料内容自动整理'
 })
 
 const nearDuplicateThresholdLabel = computed(() => {
@@ -1360,6 +1544,11 @@ const uploadLimitLabel = computed(() => {
   const bytes = knowledgeConfig.value?.uploadMaxBytes
   return bytes ? `${Math.round(bytes / 1024 / 1024)} MB` : '--'
 })
+
+const formatFileSize = (bytes: number) => {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
 
 const uploadExtensionsLabel = computed(() => knowledgeConfig.value?.uploadExtensions?.join(', ') || '--')
 const uploadExtensions = computed(() => knowledgeConfig.value?.uploadExtensions?.length
@@ -1388,7 +1577,7 @@ const duplicateReviewThresholdLabel = computed(() => {
 })
 
 const chunkDetailTitle = computed(() =>
-  selectedChunkSource.value?.title || `片段 #${selectedChunkDetail.value?.id || '--'}`
+  selectedChunkSource.value?.title || '知识片段'
 )
 
 const knowledgeEvaluationTop = computed<KnowledgeEvaluationItemVO | undefined>(() => knowledgeEvaluation.value?.items?.[0])
@@ -1398,7 +1587,7 @@ const knowledgeEvaluationExpectedLabel = computed(() => {
   if (!item) return '--'
   if (item.expectNoAnswer) return '期望无答案'
   if (item.expectedDocumentTitle) return item.expectedDocumentTitle
-  if (item.expectedDocumentId) return `#${item.expectedDocumentId}`
+  if (item.expectedDocumentId) return '指定资料'
   if (item.expectedDocumentType) return item.expectedDocumentType
   return '任意来源'
 })
@@ -1429,10 +1618,57 @@ const knowledgeEvalLatestTrustSummary = computed(() => {
 
 const knowledgeEvalLatestRunSummary = computed(() => {
   const run = knowledgeEvalLatestRun.value
-  return run ? `${run.runNo || `#${run.id}`} · ${run.status || '--'} · ${formatRate(run.passRate)}` : '暂无运行'
+  return run ? `${run.runNo || '评估运行记录'} · ${evalRunStatusLabel(run.status)} · ${formatRate(run.passRate)}` : '暂无运行'
 })
 
 const knowledgeEvalHasCurrentQuery = computed(() => Boolean((question.value || keyword.value).trim()))
+const searchHasQuery = computed(() => Boolean(keyword.value.trim()))
+
+const documentEmptyTitle = computed(() => {
+  if (hasDocumentFilters.value) return '当前筛选没有资料'
+  return '还没有知识库资料'
+})
+
+const documentEmptyDescription = computed(() => {
+  if (hasDocumentFilters.value) return '当前筛选条件下没有资料，清空筛选后可以查看全部资料。'
+  return `可以先添加项目复盘、错题总结、岗位描述笔记或简历片段；上传支持 ${uploadExtensionsLabel.value}，单个文件不超过 ${uploadLimitLabel.value}。`
+})
+
+const searchEmptyTitle = computed(() => {
+  if (!documentTotal.value) return '先添加资料再检索'
+  if (!searchHasQuery.value) return '输入关键词开始检索'
+  return '没有命中知识片段'
+})
+
+const searchEmptyDescription = computed(() => {
+  if (!documentTotal.value) return '语义搜索依赖你添加的资料；先新增项目笔记、复盘记录或岗位摘要，再回来搜索。'
+  if (!searchHasQuery.value) return '输入 JVM 调优、项目亮点、线程池等关键词后，可以查看匹配片段和召回记录。'
+  return semanticEnabled.value
+    ? '当前资料没有匹配片段，可以换一个关键词、降低最低分，或补充更贴近问题的资料。'
+    : `${semanticDisabledReason.value} 如果关键词也没有命中，可以补充更明确的标题或正文关键词。`
+})
+
+const knowledgeEvalRunEmptyTitle = computed(() =>
+  knowledgeEvalCaseTotal.value ? '还没有运行评估' : '先准备评估样本'
+)
+
+const knowledgeEvalRunEmptyDescription = computed(() =>
+  knowledgeEvalCaseTotal.value
+    ? '已有评估样本，可以运行一次检索评估，检查答案引用和资料命中是否可靠。'
+    : '输入一个真实问题并保存为样本后，再运行评估；例如“我的项目里线程池优化怎么讲？”并指定期望资料。'
+)
+
+const askReferenceEmptyTitle = computed(() => {
+  if (!documentTotal.value) return '还没有可引用资料'
+  if (!question.value.trim()) return '生成回答后会显示引用'
+  return '本次回答没有可靠引用'
+})
+
+const askReferenceEmptyDescription = computed(() => {
+  if (!documentTotal.value) return '问答需要先有个人资料作为来源；建议先添加项目复盘、面试复盘或学习笔记。'
+  if (!question.value.trim()) return '输入一个只依赖个人资料回答的问题，系统会在回答下方列出引用片段。'
+  return '可以降低引用最低分、缩小资料范围，或补充更贴近问题的资料后重新生成。'
+})
 
 const selectedKnowledgeDocumentOption = computed(() => {
   const id = knowledgeScopeDocumentId.value
@@ -1459,16 +1695,59 @@ const selectedDuplicateChunkCount = computed(() =>
   documentChunks.value.filter((item) => item.duplicateInDocument).length
 )
 
+const chunkEmptyTitle = computed(() => {
+  if (!selectedDocument.value) return '还没有选择资料'
+  const status = String(selectedDocument.value.status || '').toUpperCase()
+  if (status.includes('FAIL')) return '片段生成失败'
+  if (['PENDING', 'PROCESSING', 'INDEXING'].includes(status)) return '片段还在生成'
+  if (Number(selectedDocument.value.chunkCount || 0) > 0) return '片段暂未加载'
+  return '这份资料还没有片段'
+})
+
+const chunkEmptyDescription = computed(() => {
+  const document = selectedDocument.value
+  if (!document) return '从资料列表打开一份资料后，可以查看切片、索引状态、重复片段和相似片段。'
+  const status = statusLabel(document.status)
+  if (String(document.status || '').toUpperCase().includes('FAIL')) {
+    return `当前资料状态为「${status}」，可能是切片或索引失败；可以编辑资料内容后重新保存，或重建检索索引。`
+  }
+  if (['PENDING', 'PROCESSING', 'INDEXING'].includes(String(document.status || '').toUpperCase())) {
+    return `当前资料状态为「${status}」，片段可能仍在生成；稍后刷新，或在确认内容无误后重建检索索引。`
+  }
+  if (!semanticEnabled.value) {
+    return `${semanticDisabledReason.value} 如果保存后仍无片段，可以先检查资料内容是否为空或过短。`
+  }
+  return '资料内容可能为空、过短或尚未完成切片；建议编辑补充正文后保存，必要时再重建检索索引。'
+})
+
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, '资料暂时加载失败，请稍后重试。')
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+  return '资料暂时加载失败，请稍后重试。'
 }
 
+const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
+  result.status === 'fulfilled'
+
+const addPartialLoadWarning = (label: string, error: unknown) => {
+  const message = `${label}：${getErrorMessage(error)}`
+  if (!partialLoadWarnings.value.includes(message)) {
+    partialLoadWarnings.value = [...partialLoadWarnings.value, message]
+  }
+}
+
+const clearPartialLoadWarnings = (...labels: string[]) => {
+  partialLoadWarnings.value = partialLoadWarnings.value.filter((item) =>
+    !labels.some((label) => item.startsWith(label))
+  )
+}
+
+const partialLoadWarning = computed(() => partialLoadWarnings.value.join('；'))
+
 const documentOptionLabel = (item: KnowledgeDocumentOptionVO) => {
-  const type = item.documentType ? ` · ${item.documentType}` : ''
-  return `${item.title || `#${item.id}`}${type}`
+  const type = item.documentType ? ` · ${documentTypeLabel(item.documentType)}` : ''
+  return `${item.title || '知识资料'}${type}`
 }
 
 watch([knowledgeScopeType, scopedDocumentOptions], () => {
@@ -1507,27 +1786,39 @@ const parsePositiveQueryNumber = (value: unknown) => {
 const loadDocuments = async () => {
   loading.value = true
   errorMessage.value = ''
+  partialLoadWarnings.value = []
   try {
-    const [page, stats, config, types, options] = await Promise.all([
+    const [page, stats, config, types, options] = await Promise.allSettled([
       getKnowledgeDocumentsApi(documentQueryParams()),
       getKnowledgeStatsApi(),
       getKnowledgeConfigApi(),
       getKnowledgeDocumentTypesApi(),
       getKnowledgeDocumentOptionsApi()
     ])
-    allDocuments.value = page.records || []
-    knowledgeStats.value = stats || null
-    knowledgeConfig.value = config || null
-    documentTypeOptions.value = types || []
-    documentOptions.value = options || []
+
+    if (!isFulfilled(page)) {
+      allDocuments.value = []
+      documents.value = []
+      total.value = 0
+      errorMessage.value = getErrorMessage(page.reason)
+      return
+    }
+
+    allDocuments.value = page.value.records || []
+    knowledgeStats.value = isFulfilled(stats) ? stats.value || null : null
+    knowledgeConfig.value = isFulfilled(config) ? config.value || null : null
+    documentTypeOptions.value = isFulfilled(types) ? types.value || [] : []
+    documentOptions.value = isFulfilled(options) ? options.value || [] : []
+
+    if (!isFulfilled(stats)) addPartialLoadWarning('统计概览加载失败，已暂用资料列表展示', stats.reason)
+    if (!isFulfilled(config)) addPartialLoadWarning('知识库配置加载失败，上传和检索阈值使用默认口径', config.reason)
+    if (!isFulfilled(types)) addPartialLoadWarning('资料类型加载失败，筛选项暂时不完整', types.reason)
+    if (!isFulfilled(options)) addPartialLoadWarning('资料范围选项加载失败，搜索和问答仍可按类型继续', options.reason)
+
     applyDocumentPage()
   } catch (error) {
     allDocuments.value = []
     documents.value = []
-    documentOptions.value = []
-    documentTypeOptions.value = []
-    knowledgeStats.value = null
-    knowledgeConfig.value = null
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
@@ -1603,6 +1894,22 @@ const handleSearch = async () => {
   }
 }
 
+const fillKnowledgeSearchExample = () => {
+  keyword.value = '项目亮点'
+}
+
+const seedKnowledgeEvalQuestion = () => {
+  const example = '我的项目里最值得讲的技术亮点是什么？'
+  question.value = question.value.trim() || example
+  keyword.value = keyword.value.trim() || '项目亮点'
+}
+
+const startNewKnowledgeEvalCase = () => {
+  seedKnowledgeEvalQuestion()
+  knowledgeEvaluation.value = null
+  ElMessage.info('已填入评估问题，可以继续选择期望资料并保存为样本')
+}
+
 const handleSearchTrace = async () => {
   if (!keyword.value) {
     searchTrace.value = null
@@ -1653,7 +1960,7 @@ const handleEvaluateKnowledge = async () => {
           retrievalDocumentId: knowledgeScopeDocumentId.value,
           retrievalDocumentType: knowledgeScopeType.value || undefined,
           expectNoAnswer: !hasExpectedSource,
-          note: expectedDocument ? 'Current selected document scope' : expectedReference ? 'Top current retrieval result' : 'No expected source selected'
+          note: expectedDocument ? '当前选中的资料范围' : expectedReference ? '当前最高相关资料' : '未指定期望来源'
         }
       ]
     })
@@ -1677,7 +1984,7 @@ const knowledgeEvalExpectedLabel = (item: {
 }) => {
   if (item.expectNoAnswer) return '期望无答案'
   if (item.expectedDocumentTitle) return item.expectedDocumentTitle
-  if (item.expectedDocumentId) return `资料 #${item.expectedDocumentId}`
+  if (item.expectedDocumentId) return '指定资料'
   if (item.expectedDocumentType) return item.expectedDocumentType
   return '任意来源'
 }
@@ -1709,23 +2016,25 @@ const currentKnowledgeEvalCasePayload = () => {
     retrievalDocumentType,
     expectNoAnswer: !hasExpectedSource,
     note: expectedDocument
-      ? 'Current selected document scope'
+      ? '当前选中的资料范围'
       : expectedReference
-        ? 'Top current retrieval result'
-        : 'No expected source selected',
+        ? '当前最高相关资料'
+        : '未指定期望来源',
     enabled: 1
   }
 }
 
 const fetchKnowledgeEvalCases = async () => {
   knowledgeEvalCaseLoading.value = true
+  clearPartialLoadWarnings('评估样本加载失败')
   try {
     const result = await getKnowledgeEvalCasesApi(knowledgeEvalCaseQuery)
     knowledgeEvalCases.value = result.records || []
     knowledgeEvalCaseTotal.value = result.total || 0
-  } catch {
+  } catch (error) {
     knowledgeEvalCases.value = []
     knowledgeEvalCaseTotal.value = 0
+    addPartialLoadWarning('评估样本加载失败', error)
   } finally {
     knowledgeEvalCaseLoading.value = false
   }
@@ -1733,13 +2042,15 @@ const fetchKnowledgeEvalCases = async () => {
 
 const fetchKnowledgeEvalRuns = async () => {
   knowledgeEvalRunLoading.value = true
+  clearPartialLoadWarnings('评估运行加载失败')
   try {
     const result = await getKnowledgeEvalRunsApi(knowledgeEvalRunQuery)
     knowledgeEvalRuns.value = result.records || []
     knowledgeEvalRunTotal.value = result.total || 0
-  } catch {
+  } catch (error) {
     knowledgeEvalRuns.value = []
     knowledgeEvalRunTotal.value = 0
+    addPartialLoadWarning('评估运行加载失败', error)
   } finally {
     knowledgeEvalRunLoading.value = false
   }
@@ -1758,7 +2069,8 @@ const openKnowledgeEvalRun = async (id?: number) => {
 }
 
 const refreshKnowledgeEvalWorkspace = async () => {
-  await Promise.all([fetchKnowledgeEvalCases(), fetchKnowledgeEvalRuns()])
+  clearPartialLoadWarnings('评估样本加载失败', '评估运行加载失败')
+  await Promise.allSettled([fetchKnowledgeEvalCases(), fetchKnowledgeEvalRuns()])
   if (knowledgeEvalRuns.value[0]?.id) {
     await openKnowledgeEvalRun(knowledgeEvalRuns.value[0].id)
   } else {
@@ -1767,15 +2079,32 @@ const refreshKnowledgeEvalWorkspace = async () => {
 }
 
 const refreshKnowledgePage = async () => {
-  await Promise.all([loadDocuments(), refreshKnowledgeEvalWorkspace()])
+  partialLoadWarnings.value = []
+  await loadDocuments()
+  await refreshKnowledgeEvalWorkspace()
 }
 
 const saveCurrentKnowledgeEvalCase = async () => {
+  if (knowledgeEvalSaving.value) return
   const payload = currentKnowledgeEvalCasePayload()
   if (!payload) {
     ElMessage.warning('请先输入搜索关键词或问题')
     return
   }
+  const confirmed = await confirmDangerActionPreview({
+    title: '保存知识库评估样本',
+    action: '把当前问题和期望来源保存为检索评估样本',
+    target: `查询内容：${payload.query}；期望来源：${knowledgeEvalExpectedLabel(payload)}`,
+    impact: '保存后，这个样本会进入知识库评估数据集；后续运行评估时会用它检查检索命中、引用可信度和回答是否有依据。',
+    rollback: '如样本设置不准确，可以在样本列表删除后重新保存；已经产生的历史评估运行不会自动改写。',
+    audit: `样本标识：${payload.caseId}；检索范围：${payload.retrievalDocumentId || payload.retrievalDocumentType || '当前范围'}`,
+    tips: [
+      payload.expectNoAnswer ? '当前未指定期望资料，系统会把它作为“期望无答案”样本。' : '确认期望来源就是这个问题应该引用的资料。',
+      '建议使用真实问题，避免把随手输入的测试词保存为长期评估样本。'
+    ],
+    confirmButtonText: '确认保存样本'
+  })
+  if (!confirmed) return
   knowledgeEvalSaving.value = true
   try {
     await saveKnowledgeEvalCaseApi(payload)
@@ -1789,11 +2118,31 @@ const saveCurrentKnowledgeEvalCase = async () => {
 }
 
 const runKnowledgeEvalCases = async () => {
+  if (!knowledgeEvalCaseTotal.value) {
+    ElMessage.warning('请先保存评估样本')
+    return
+  }
+  const minScore = normalizedAskMinScore.value ?? normalizedSearchMinScore.value
+  const confirmed = await confirmDangerActionPreview({
+    title: '运行知识库评估样本',
+    action: '运行全部启用的知识库检索评估样本',
+    target: `当前样本 ${knowledgeEvalCaseTotal.value || 0} 个；实际运行范围以启用状态为准。`,
+    impact: '会批量执行检索评估，可能调用知识库问答和模型能力，并写入一条新的评估运行记录。',
+    rollback: '评估运行产生的调用资源不能撤销；如样本设置不合适，可调整或删除样本后重新运行。',
+    audit: '系统会记录运行信息、样本数量、通过率、失败原因和时间，便于后续追踪检索质量。',
+    tips: [
+      `最低引用分：${scoreLabel(minScore)}`,
+      '确认启用样本已经代表当前要巡检的问题范围。',
+      '如只是试查单个问题，请优先使用上方“评估检索”。'
+    ],
+    confirmButtonText: '确认运行'
+  })
+  if (!confirmed) return
   knowledgeEvalRunning.value = true
   try {
     const result = await runKnowledgeEvalApi({
       onlyEnabled: true,
-      minScore: normalizedAskMinScore.value ?? normalizedSearchMinScore.value
+      minScore
     })
     knowledgeEvalLatestRun.value = result
     ElMessage.success(
@@ -1812,19 +2161,17 @@ const runKnowledgeEvalCases = async () => {
 
 const deleteKnowledgeEvalCase = async (id?: number) => {
   if (!id) return
-  try {
-    await ElMessageBox.confirm(
-      '确认删除该知识库评估样本？删除后不会影响资料内容，但后续检索评估将不再使用该样本。',
-      '删除评估样本高风险确认',
-      {
-        type: 'warning',
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消'
-      }
-    )
-  } catch {
-    return
-  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除评估样本',
+    action: '删除该知识库检索评估样本',
+    target: '选中的评估样本',
+    impact: '删除后不会影响资料内容，但后续检索评估将不再使用该样本，评估覆盖面会减少。',
+    rollback: '系统不会自动恢复已删除样本；如误删，需要重新新增评估样本。',
+    audit: '删除操作会记录对应评估样本。',
+    tips: ['确认该样本不再用于评估检索质量。', '确认删除后仍有足够样本覆盖常见问题。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   try {
     await deleteKnowledgeEvalCaseApi(id)
     ElMessage.success('评估样本已删除')
@@ -2002,7 +2349,7 @@ const loadDuplicateReview = async () => {
   try {
     await refreshDuplicateReview()
     if (!duplicateReview.value?.vectorEnabled) {
-      ElMessage.warning('向量库未启用，无法扫描近重复片段')
+      ElMessage.warning('语义检索未启用，无法扫描近重复片段')
     } else if (!duplicateReview.value?.candidateCount) {
       ElMessage.success('暂未发现近重复候选')
     }
@@ -2013,11 +2360,17 @@ const loadDuplicateReview = async () => {
 
 const handleDeleteDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewItemVO) => {
   if (!item.chunkId) return
-  await ElMessageBox.confirm(
-    `确认删除近重复候选片段 #${(item.chunkIndex ?? 0) + 1}？删除后会同步清理对应向量索引。`,
-    '删除近重复候选',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除近重复候选',
+    action: '删除近重复候选片段并同步清理索引',
+    target: `第 ${(item.chunkIndex ?? 0) + 1} 段`,
+    impact: '该片段会从资料片段中删除，并同步清理对应检索索引，后续语义检索不再返回该片段。',
+    rollback: '系统不会自动恢复已删除片段；如误删，需要重新导入或重新保存资料生成片段。',
+    audit: '删除操作会记录对应片段和当前账号。',
+    tips: ['确认它确实是重复或低价值片段。', '确认删除后不会丢失唯一有效资料。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   deletingChunkId.value = item.chunkId
   try {
     await deleteKnowledgeChunkApi(item.chunkId)
@@ -2059,11 +2412,17 @@ const handleCleanupExactDuplicates = async () => {
       ElMessage.success('暂无需要清理的完全重复片段')
       return
     }
-    await ElMessageBox.confirm(
-      `将清理 ${preview.duplicateGroupCount || 0} 组完全重复片段，删除 ${preview.deleteCandidateCount || 0} 个重复片段，并同步清理向量索引。确认继续？`,
-      '清理完全重复片段',
-      { type: 'warning' }
-    )
+    const confirmed = await confirmDangerActionPreview({
+      title: '清理完全重复片段',
+      action: '按预览结果删除完全重复片段并同步清理索引',
+      target: `${preview.duplicateGroupCount || 0} 组重复，${preview.deleteCandidateCount || 0} 个待删除片段`,
+      impact: '会删除完全重复片段并同步清理对应检索索引，后续检索会减少重复命中。',
+      rollback: '系统不会自动恢复清理结果；如误删，需要重新导入或重新保存资料生成片段。',
+      audit: '清理操作会按当前筛选范围、删除数量和当前账号记录。',
+      tips: ['已完成 dry-run 预览并确认待删除数量。', '确认当前筛选范围就是要清理的资料范围。'],
+      confirmButtonText: '确认清理'
+    })
+    if (!confirmed) return
     const result = await cleanupKnowledgeExactDuplicatesApi({ dryRun: false, ...exactDuplicateScopeParams() })
     exactDuplicateCleanup.value = result
     ElMessage.success(`已清理 ${result.deletedCount || 0} 个重复片段`)
@@ -2076,11 +2435,17 @@ const handleCleanupExactDuplicates = async () => {
 
 const handleDeleteChunk = async (chunk: KnowledgeChunkVO) => {
   if (!chunk.id) return
-  await ElMessageBox.confirm(
-    `确认删除片段 #${(chunk.chunkIndex ?? 0) + 1}？删除后会同步清理对应向量索引。`,
-    '删除知识片段',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除知识片段',
+    action: '删除该知识片段并同步清理索引',
+    target: `第 ${(chunk.chunkIndex ?? 0) + 1} 段`,
+    impact: '该片段会从资料中移除，并同步清理对应检索索引，后续检索和问答不再引用这段内容。',
+    rollback: '系统不会自动恢复已删除片段；如误删，需要重新导入或重新保存资料生成片段。',
+    audit: '删除操作会记录对应片段和当前账号。',
+    tips: ['确认这段内容不再需要被检索或引用。', '确认删除后资料仍保留完整上下文。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   deletingChunkId.value = chunk.id
   try {
     await deleteKnowledgeChunkApi(chunk.id)
@@ -2134,11 +2499,17 @@ const openVersionsDrawer = async (row: KnowledgeDocumentVO) => {
 
 const handleRestoreVersion = async (version: KnowledgeDocumentVersionVO) => {
   if (!versionDocument.value?.id || !version.id) return
-  await ElMessageBox.confirm(
-    `确认恢复到 v${version.versionNo || 0}？当前内容会先保存为新的历史版本，然后重建片段和向量索引。`,
-    '恢复历史版本',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '恢复历史版本',
+    action: '将资料恢复到选中的历史版本',
+    target: `${versionDocument.value.title || '知识资料'} · v${version.versionNo || 0}`,
+    impact: '当前内容会先保存为新的历史版本，然后恢复选中版本，并重建片段和检索索引。',
+    rollback: '可以再次从版本列表选择其他版本恢复；系统不会自动撤销本次恢复。',
+    audit: '恢复操作会记录对应资料、版本和当前账号。',
+    tips: ['确认当前内容已保存或可以被历史版本覆盖。', '确认恢复后允许重建片段和检索索引。'],
+    confirmButtonText: '确认恢复'
+  })
+  if (!confirmed) return
   restoringVersionId.value = version.id
   try {
     const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id)
@@ -2152,22 +2523,41 @@ const handleRestoreVersion = async (version: KnowledgeDocumentVersionVO) => {
 }
 
 const saveDocument = async () => {
-  if (!form.title || !form.content) {
+  const title = form.title.trim()
+  const content = form.content.trim()
+  if (!title || !content) {
     ElMessage.warning('请填写标题和内容')
     return
   }
+  const editingId = editingDocumentId.value
+  const documentType = form.documentType || 'NOTE'
+  const confirmed = await confirmDangerActionPreview({
+    title: editingId ? '更新知识资料' : '新增知识资料',
+    action: editingId ? '更新资料并重新生成知识库索引' : '新增资料并生成知识库索引',
+    target: `${title} · ${documentTypeLabel(documentType)} · 约 ${content.length} 字`,
+    impact: semanticEnabled.value
+      ? '保存后会重新切分片段并写入个人知识库索引，后续知识库问答、引用校验、评估样本和推荐解释可能引用这些片段。'
+      : '保存后会生成关键词检索片段；当前语义检索未启用，后续启用语义检索或手动重建索引时会重新处理该资料。',
+    rollback: editingId
+      ? '系统会保留资料版本记录，可从版本列表恢复历史版本；若索引结果不符合预期，也可以再次编辑后保存。'
+      : '如新增错误，可以删除资料并清理片段/索引；删除不会自动恢复，需要重新上传或创建。',
+    audit: '资料保存会记录当前资料、账号和索引结果，便于后续追踪问答引用来源。',
+    tips: ['确认资料内容可作为后续回答和训练依据。', '确认内容中没有不希望进入个人知识库检索的敏感信息。'],
+    confirmButtonText: editingId ? '确认更新并索引' : '确认新增并索引'
+  })
+  if (!confirmed) return
   saving.value = true
   try {
     const payload = {
-      title: form.title,
-      documentType: form.documentType || 'NOTE',
-      content: form.content
+      title,
+      documentType,
+      content
     }
-    const result = editingDocumentId.value
-      ? await updateKnowledgeDocumentApi(editingDocumentId.value, payload)
+    const result = editingId
+      ? await updateKnowledgeDocumentApi(editingId, payload)
       : await createKnowledgeDocumentApi(payload)
     dialogVisible.value = false
-    showKnowledgeIndexResult(result, editingDocumentId.value ? '资料已更新' : '资料已索引')
+    showKnowledgeIndexResult(result, editingId ? '资料已更新' : '资料已索引')
     editingDocumentId.value = null
     await loadDocuments()
   } finally {
@@ -2189,9 +2579,23 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
     ElMessage.warning(`文件大小不能超过 ${uploadLimitLabel.value}`)
     return
   }
+  const documentType = documentTypeFromFileName(lowerName)
+  const confirmed = await confirmDangerActionPreview({
+    title: '上传知识资料',
+    action: '上传文件并生成个人知识库索引',
+    target: `${file.name} · ${documentTypeLabel(documentType)} · ${formatFileSize(file.size)}`,
+    impact: semanticEnabled.value
+      ? '上传后会解析文件内容、切分片段并写入个人知识库索引，后续知识库问答、引用校验和评估运行可能引用这些片段。'
+      : '上传后会解析文件内容并生成关键词检索片段；当前语义检索未启用，后续启用语义检索或手动重建索引时会重新处理该资料。',
+    rollback: '如文件选错，可以删除资料并清理片段/索引；删除不会自动恢复，需要重新上传正确文件。',
+    audit: '上传资料会按文件名、资料类型、当前账号和索引结果记录，便于后续追踪来源。',
+    tips: ['确认文件内容适合作为后续回答和训练依据。', '确认文件中没有不希望进入个人知识库检索的敏感信息。'],
+    confirmButtonText: '确认上传并索引'
+  })
+  if (!confirmed) return
   uploading.value = true
   try {
-    const result = await uploadKnowledgeDocumentApi(file, documentTypeFromFileName(lowerName))
+    const result = await uploadKnowledgeDocumentApi(file, documentType)
     showKnowledgeIndexResult(result, '上传完成')
     await loadDocuments()
   } finally {
@@ -2208,7 +2612,7 @@ const documentTypeFromFileName = (lowerName: string) => {
 
 const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: string) => {
   if (result.duplicateDocument) {
-    const title = result.title ? `「${result.title}」` : `#${result.duplicateDocumentId || result.id}`
+    const title = result.title ? `「${result.title}」` : '这份资料'
     ElMessage.warning(`资料已存在：${title}`)
     return
   }
@@ -2233,18 +2637,24 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
     return
   }
   const scopeLabel = documentTitle ? `资料「${documentTitle}」` : '全部资料'
-  await ElMessageBox.confirm(
-    `将重建${scopeLabel}的知识库向量索引，可能产生 embedding 调用成本；请求完成前请不要重复点击。确认继续？`,
-    '重建知识库向量索引',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '重建知识库检索索引',
+    action: '重建知识库语义检索索引',
+    target: scopeLabel,
+    impact: '会重新切分并写入检索索引，可能消耗语义检索服务调用资源；请求完成前请不要重复点击。',
+    rollback: '重建结果不会自动回到旧索引；如结果异常，需要再次重建或检查资料内容。',
+    audit: '重建任务会生成处理记录或统计结果，便于后续追踪。',
+    tips: ['确认语义检索能力已启用。', '确认当前资料内容已经保存完成。'],
+    confirmButtonText: '确认重建'
+  })
+  if (!confirmed) return
   rebuilding.value = true
   rebuildTargetLabel.value = scopeLabel
   try {
     const result = await rebuildKnowledgeVectorsApi(documentId)
     rebuildResult.value = result
     const duplicateSummary = result.duplicateChunkCount ? `，重复片段 ${result.duplicateChunkCount || 0} 个` : ''
-    const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条${duplicateSummary}`
+    const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，索引 ${result.vectorUpdated || 0} 条${duplicateSummary}`
     rebuildDialogVisible.value = true
     if ((result.errors || []).length || (result.failedDocuments || []).length) {
       ElMessage.warning(summary)
@@ -2261,19 +2671,25 @@ const handleRetryFailedVectors = async () => {
     ElMessage.warning(semanticDisabledReason.value)
     return
   }
-  await ElMessageBox.confirm(
-    '将重试当前用户最多 500 个失败或超时待索引片段所属文档的向量索引，期间可能产生 embedding 调用成本。确认继续？',
-    '重试知识库向量索引',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '重试知识库检索索引',
+    action: '重试失败或超时的知识库检索索引任务',
+    target: '当前用户最多 500 个失败或超时待索引片段所属文档',
+    impact: '会再次提交检索索引任务，期间可能消耗语义检索服务调用资源；成功后相关资料的语义检索可用性会更新。',
+    rollback: '重试结果不会自动回到重试前状态；如仍失败，需要查看任务错误并修正资料或配置。',
+    audit: '重试任务会保留处理记录、成功数量和失败数量。',
+    tips: ['确认当前不是重复点击造成的短时间重试。', '确认语义检索服务和索引配置可用。'],
+    confirmButtonText: '确认重试'
+  })
+  if (!confirmed) return
   retryingFailedVectors.value = true
   rebuildTargetLabel.value = '失败或超时待索引记录'
   try {
     const result = await retryFailedKnowledgeVectorsApi(500)
     rebuildResult.value = result
     rebuildDialogVisible.value = true
-    const deleteSummary = result.vectorDeleted ? `，清理向量 ${result.vectorDeleted || 0} 条` : ''
-    const summary = `重试完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，向量 ${result.vectorUpdated || 0} 条${deleteSummary}`
+    const deleteSummary = result.vectorDeleted ? `，清理索引 ${result.vectorDeleted || 0} 条` : ''
+    const summary = `重试完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，索引 ${result.vectorUpdated || 0} 条${deleteSummary}`
     if ((result.errors || []).length || (result.failedDocuments || []).length) {
       ElMessage.warning(summary)
       return
@@ -2285,11 +2701,17 @@ const handleRetryFailedVectors = async () => {
 }
 
 const handleDelete = async (row: KnowledgeDocumentVO) => {
-  await ElMessageBox.confirm(
-    `确认删除资料「${row.title || `#${row.id}`}」？删除后会同步清理对应向量索引。`,
-    '删除知识资料',
-    { type: 'warning' }
-  )
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除知识资料',
+    action: '删除该知识资料并同步清理索引',
+    target: row.title || '知识资料',
+    impact: '资料、片段和对应检索索引都会被清理，后续检索、问答和评估不会再引用该资料。',
+    rollback: '系统不会自动恢复已删除资料；如误删，需要重新上传或重新创建资料。',
+    audit: '删除操作会记录对应资料和当前账号。',
+    tips: ['确认这份资料不再作为训练或问答依据。', '确认删除后不会影响仍在使用的评估样本和问答引用。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   deletingId.value = row.id
   try {
     await deleteKnowledgeDocumentApi(row.id)
@@ -2336,9 +2758,9 @@ const formatRate = (value?: number) => {
 }
 
 const trustText = (value?: boolean) => {
-  if (value === true) return 'valid'
-  if (value === false) return 'risk'
-  return 'unknown'
+  if (value === true) return '可信'
+  if (value === false) return '需复核'
+  return '待确认'
 }
 
 const trustTagType = (value?: boolean) => {
@@ -2389,7 +2811,48 @@ const statusLabel = (status?: string) => {
     DISABLED: '未启用',
     DELETED: '已删除'
   }
-  return map[value] || value
+  return map[value] || '状态待确认'
+}
+
+const indexMetaLabel = (item?: { indexStatus?: string | null; indexedAt?: string | null }) => {
+  const label = statusLabel(item?.indexStatus || undefined)
+  return item?.indexedAt ? `${label} · ${formatDateTime(item.indexedAt)}` : label
+}
+
+const vectorJobStatusLabel = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  const map: Record<string, string> = {
+    RUNNING: '运行中',
+    SUCCESS: '成功',
+    FAILED: '失败'
+  }
+  return map[value] || '待查询'
+}
+
+const evalRunStatusLabel = (status?: string) => {
+  const value = String(status || '').toUpperCase()
+  const map: Record<string, string> = {
+    PENDING: '待运行',
+    RUNNING: '运行中',
+    SUCCESS: '已完成',
+    COMPLETED: '已完成',
+    FAILED: '运行失败'
+  }
+  return map[value] || (status ? '状态待确认' : '-')
+}
+
+const openKnowledgeVectorJob = (result?: KnowledgeVectorRebuildVO | null) => {
+  if (!result?.vectorJobId) return
+  rebuildDialogVisible.value = false
+  router.push({
+    path: '/admin/analytics/ai',
+    query: {
+      vectorJobId: String(result.vectorJobId),
+      vectorJobType: result.vectorJobType || 'KNOWLEDGE_REBUILD',
+      vectorScopeType: result.vectorScopeType || 'KNOWLEDGE',
+      vectorJobStatus: result.vectorJobStatus || undefined
+    }
+  })
 }
 
 onMounted(async () => {
@@ -2970,6 +3433,18 @@ watch(
 
 .search-trace-warning {
   margin-top: 0;
+}
+
+.search-trace-technical {
+  summary {
+    cursor: pointer;
+    color: var(--app-text-muted);
+    font-size: 13px;
+  }
+
+  .search-trace-metrics {
+    margin-top: 10px;
+  }
 }
 
 .knowledge-evaluation-panel {

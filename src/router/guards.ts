@@ -2,7 +2,7 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
-import { firstAccessibleAdminPath } from '@/router/adminAccess'
+import { canAccessAdminPermissions, firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { getToken } from '@/utils/token'
 
@@ -11,10 +11,31 @@ const isAuthFailure = (error: unknown) => {
   return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
 }
 
+type AuthStore = ReturnType<typeof useAuthStore>
+
+let backgroundAuthRefresh: Promise<unknown> | null = null
+
+const refreshAuthInBackground = (authStore: AuthStore) => {
+  if (backgroundAuthRefresh) return
+
+  backgroundAuthRefresh = authStore.verifyToken()
+    .catch((error) => {
+      if (isAuthFailure(error)) {
+        authStore.clearAuth()
+      }
+    })
+    .finally(() => {
+      backgroundAuthRefresh = null
+    })
+}
+
 const isFeatureEnabled = (featureFlag: string) => {
   if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
   return true
 }
+
+const isPreviewRoute = (to: RouteLocationNormalized) =>
+  to.matched.some((record) => record.meta.previewOnly)
 
 const forbiddenRoute = (to: RouteLocationNormalized, reason: string, detail: Record<string, string | string[] | undefined> = {}) => ({
   path: '/403',
@@ -30,6 +51,16 @@ const forbiddenRoute = (to: RouteLocationNormalized, reason: string, detail: Rec
   }
 })
 
+const safeRedirectPath = (value: unknown) => {
+  if (typeof value !== 'string') return ''
+  if (!value.startsWith('/') || value.startsWith('//')) return ''
+  if (value === '/login' || value === '/register') return ''
+  return value
+}
+
+const defaultAuthenticatedPath = (authStore: AuthStore) =>
+  authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
+
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
     const authStore = useAuthStore()
@@ -41,7 +72,10 @@ export const setupRouterGuards = (router: Router) => {
 
     const localToken = getToken()
 
-    if (!authStore.isLoggedIn && localToken) {
+    if (localToken && authStore.token && authStore.token !== localToken) {
+      authStore.setToken(localToken)
+      authStore.markAuthStale()
+    } else if (!authStore.isLoggedIn && localToken) {
       authStore.setToken(localToken)
     }
 
@@ -53,7 +87,7 @@ export const setupRouterGuards = (router: Router) => {
       if (isAuthPage && authStore.isLoggedIn) {
         try {
           await authStore.verifyToken()
-          return '/dashboard'
+          return safeRedirectPath(to.query.redirect) || defaultAuthenticatedPath(authStore)
         } catch {
           return true
         }
@@ -75,6 +109,16 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
+    if (isPreviewRoute(to) && !appConfig.enableV4ExperimentalRoutes) {
+      return {
+        path: '/feature-unavailable',
+        query: {
+          title: String(to.meta.title || ''),
+          redirect: to.fullPath
+        }
+      }
+    }
+
     if (!authStore.isLoggedIn) {
       return {
         path: '/login',
@@ -84,9 +128,12 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
+    const isAdminRoute = to.matched.some((record) => record.meta.requiresAdmin)
+    const hasCachedUserSnapshot = Boolean(authStore.userInfo && authStore.roles.length > 0)
+
+    if (isAdminRoute) {
       try {
-        await authStore.verifyToken()
+        await authStore.verifyAdminSession()
       } catch (error) {
         if (isAuthFailure(error)) {
           authStore.clearAuth()
@@ -105,9 +152,34 @@ export const setupRouterGuards = (router: Router) => {
           }
         }
       }
+    } else if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
+      if (!isAdminRoute && hasCachedUserSnapshot) {
+        refreshAuthInBackground(authStore)
+      } else {
+        try {
+          await authStore.verifyToken()
+        } catch (error) {
+          if (isAuthFailure(error)) {
+            authStore.clearAuth()
+            return {
+              path: '/login',
+              query: {
+                redirect: to.fullPath
+              }
+            }
+          }
+          authStore.markAuthStale()
+          return {
+            path: '/auth-unavailable',
+            query: {
+              redirect: to.fullPath
+            }
+          }
+        }
+      }
     }
 
-    if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.canAccessAdmin) {
+    if (isAdminRoute && !authStore.canAccessAdmin) {
       return forbiddenRoute(to, 'requiresAdmin', {
         userRoles: authStore.roles,
         userPermissions: authStore.permissions.slice(0, 20)
@@ -138,11 +210,17 @@ export const setupRouterGuards = (router: Router) => {
       })
     }
 
-    const requiredPermissions = to.matched.flatMap((record) => {
+    const missingPermissionRecord = to.matched.find((record) => {
       const permissions = record.meta.requiredPermissions
-      return Array.isArray(permissions) ? permissions.map(String) : []
+      if (!permissions) return false
+      return !canAccessAdminPermissions(
+        Array.isArray(permissions) ? permissions.map(String) : [String(permissions)],
+        authStore
+      )
     })
-    if (requiredPermissions.length > 0 && !authStore.hasAnyPermission(requiredPermissions)) {
+    if (missingPermissionRecord) {
+      const permissions = missingPermissionRecord.meta.requiredPermissions
+      const requiredPermissions = Array.isArray(permissions) ? permissions.map(String) : [String(permissions)]
       return forbiddenRoute(to, 'missingPermission', {
         requiredPermissions,
         userPermissions: authStore.permissions.slice(0, 20)

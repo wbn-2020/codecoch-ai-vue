@@ -62,6 +62,7 @@ import {
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { canAccessAdminPermissions } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
@@ -94,10 +95,10 @@ const sections: AdminMenuSection[] = [
     icon: DataBoard,
     children: [
       {
-        label: '后台入口',
-        path: '/admin',
+        label: '运营首页',
+        path: '/admin/dashboard',
         icon: DataBoard,
-        permissions: ['admin:analytics:ai', 'admin:user:list', 'admin:question:list', 'admin:ai:log:list']
+        permissions: ['admin:system:overview']
       }
     ]
   },
@@ -132,10 +133,10 @@ const sections: AdminMenuSection[] = [
     icon: Operation,
     forceGroup: true,
     children: [
-      { label: 'Prompt 模板', path: '/admin/ai/prompts', icon: Operation, permissions: ['admin:ai:prompt:list'] },
-      { label: 'AI 调用日志', path: '/admin/ai/logs', icon: DataAnalysis, permissions: ['admin:ai:log:list'] },
+      { label: '提示词模板', path: '/admin/ai/prompts', icon: Operation, permissions: ['admin:ai:prompt:list'] },
+      { label: 'AI 运行记录', path: '/admin/ai/logs', icon: DataAnalysis, permissions: ['admin:ai:log:list'] },
       { label: 'AI 模型配置', path: '/admin/ai/models', icon: Cpu, permissions: ['admin:ai:model:list'] },
-      { label: 'Prompt 回归', path: '/admin/ai/prompt-regression', icon: Operation, permissions: ['admin:agent:prompt-regression:list'] }
+      { label: '提示词回归', path: '/admin/ai/prompt-regression', icon: Operation, permissions: ['admin:agent:prompt-regression:list'] }
     ]
   },
   {
@@ -144,13 +145,13 @@ const sections: AdminMenuSection[] = [
     icon: Monitor,
     forceGroup: true,
     children: [
-      { label: 'AI Ops 看板', path: '/admin/analytics/ai', icon: DataAnalysis, permissions: ['admin:analytics:ai'] },
-      { label: 'Agent 效果分析', path: '/admin/analytics/agent', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
+      { label: 'AI 运营看板', path: '/admin/analytics/ai', icon: DataAnalysis, permissions: ['admin:analytics:ai'] },
+      { label: '生成效果分析', path: '/admin/analytics/agent', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
       { label: '指标字典', path: '/admin/analytics/metrics', icon: DataAnalysis, permissions: ['admin:analytics:agent'] },
       { label: '聚合任务', path: '/admin/analytics/jobs', icon: Timer, permissions: ['admin:analytics:agent'] },
       { label: '任务中心', path: '/admin/async-tasks', icon: Timer, permissions: ['admin:task:list'] },
-      { label: 'Agent 运行', path: '/admin/agent/runs', icon: DataAnalysis, permissions: ['admin:agent:run:list'] },
-      { label: 'Agent 任务', path: '/admin/agent/tasks', icon: Timer, permissions: ['admin:agent:task:list'] }
+      { label: '生成运行记录', path: '/admin/agent/runs', icon: DataAnalysis, permissions: ['admin:agent:run:list'] },
+      { label: '生成任务处理', path: '/admin/agent/tasks', icon: Timer, permissions: ['admin:agent:task:list'] }
     ]
   },
   {
@@ -201,7 +202,7 @@ const handleSelect = () => {
   closeAllMenus()
 }
 
-const canSee = (item: AdminMenuItem) => authStore.hasAnyPermission(item.permissions)
+const canSee = (item: AdminMenuItem) => canAccessAdminPermissions(item.permissions, authStore)
 
 const visibleSections = computed(() =>
   sections

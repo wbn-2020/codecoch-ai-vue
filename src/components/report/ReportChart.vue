@@ -11,7 +11,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { StageReportVO } from '@/types/interview'
-import echarts, { type ECharts } from '@/utils/echarts'
+import type { ECharts } from '@/utils/echarts'
 
 const props = defineProps<{
   stages?: StageReportVO[]
@@ -21,16 +21,33 @@ const radarRef = ref<HTMLDivElement>()
 const barRef = ref<HTMLDivElement>()
 let radarChart: ECharts | null = null
 let barChart: ECharts | null = null
+let reportChartMounted = false
+let chartRenderSeq = 0
+let echartsModulePromise: Promise<typeof import('@/utils/echarts')> | null = null
 
 const baseTextStyle = {
   color: '#94a3b8',
   fontFamily: 'Inter, "Microsoft YaHei", sans-serif'
 }
 
-const renderRadar = () => {
+const loadEcharts = () => {
+  if (!echartsModulePromise) {
+    echartsModulePromise = import('@/utils/echarts')
+  }
+  return echartsModulePromise
+}
+
+const disposeCharts = () => {
+  radarChart?.dispose()
+  barChart?.dispose()
+  radarChart = null
+  barChart = null
+}
+
+const renderRadar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
   if (!radarRef.value) return
   if (!radarChart) {
-    radarChart = echarts.init(radarRef.value)
+    radarChart = echarts.default.init(radarRef.value)
   }
 
   const stages = props.stages || []
@@ -95,10 +112,10 @@ const renderRadar = () => {
   })
 }
 
-const renderBar = () => {
+const renderBar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
   if (!barRef.value) return
   if (!barChart) {
-    barChart = echarts.init(barRef.value)
+    barChart = echarts.default.init(barRef.value)
   }
 
   const stages = props.stages || []
@@ -146,9 +163,21 @@ const renderBar = () => {
 }
 
 const renderCharts = async () => {
+  const renderSeq = ++chartRenderSeq
   await nextTick()
-  renderRadar()
-  renderBar()
+  if (!reportChartMounted) return
+  if (!radarRef.value && !barRef.value) return
+  if (!props.stages?.length) {
+    radarChart?.clear()
+    barChart?.clear()
+    return
+  }
+  const echarts = await loadEcharts()
+  if (!reportChartMounted || renderSeq !== chartRenderSeq) {
+    return
+  }
+  renderRadar(echarts)
+  renderBar(echarts)
   resizeCharts()
 }
 
@@ -158,6 +187,7 @@ const resizeCharts = () => {
 }
 
 onMounted(() => {
+  reportChartMounted = true
   renderCharts()
   window.addEventListener('resize', resizeCharts)
 })
@@ -165,11 +195,10 @@ onMounted(() => {
 watch(() => props.stages, renderCharts, { deep: true })
 
 onBeforeUnmount(() => {
+  reportChartMounted = false
+  chartRenderSeq += 1
   window.removeEventListener('resize', resizeCharts)
-  radarChart?.dispose()
-  barChart?.dispose()
-  radarChart = null
-  barChart = null
+  disposeCharts()
 })
 </script>
 

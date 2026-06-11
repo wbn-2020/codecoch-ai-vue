@@ -18,6 +18,63 @@ interface CacheEntry<T> {
 
 // 全局缓存 Map，跨组件共享
 const globalCache = new Map<string, CacheEntry<unknown>>()
+const globalPendingRequests = new Map<string, Promise<unknown>>()
+
+export const getRequestCache = <T>(cacheKey: string, ttl: number): T | undefined => {
+  const entry = globalCache.get(cacheKey)
+  if (!entry || Date.now() - entry.timestamp >= ttl) return undefined
+  return entry.data as T
+}
+
+export const setRequestCache = <T>(cacheKey: string, value: T) => {
+  globalCache.set(cacheKey, { data: value, timestamp: Date.now() })
+}
+
+export const invalidateRequestCache = (cacheKey: string) => {
+  globalCache.delete(cacheKey)
+  globalPendingRequests.delete(cacheKey)
+}
+
+export const invalidateRequestCacheByPrefix = (prefix: string) => {
+  Array.from(globalCache.keys())
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => globalCache.delete(key))
+  Array.from(globalPendingRequests.keys())
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => globalPendingRequests.delete(key))
+}
+
+export const fetchRequestCache = async <T>(
+  cacheKey: string,
+  ttl: number,
+  fetcher: () => Promise<T>,
+  force = false
+): Promise<T> => {
+  if (!force) {
+    const cached = getRequestCache<T>(cacheKey, ttl)
+    if (cached !== undefined) return cached
+
+    const pending = globalPendingRequests.get(cacheKey)
+    if (pending) return pending as Promise<T>
+  }
+
+  const request = Promise.resolve()
+    .then(fetcher)
+    .then((result) => {
+      if (globalPendingRequests.get(cacheKey) === request) {
+        setRequestCache(cacheKey, result)
+      }
+      return result
+    })
+    .finally(() => {
+      if (globalPendingRequests.get(cacheKey) === request) {
+        globalPendingRequests.delete(cacheKey)
+      }
+    })
+
+  globalPendingRequests.set(cacheKey, request)
+  return request
+}
 
 /**
  * useRequestCache - 请求缓存 composable
@@ -58,42 +115,17 @@ export const useRequestCache = <T>(
   const loading = ref(false)
   const error = ref('')
 
-  const isCacheValid = (): boolean => {
-    const entry = globalCache.get(cacheKey)
-    if (!entry) return false
-    return Date.now() - entry.timestamp < ttl
-  }
-
-  const getCachedData = (): T | undefined => {
-    const entry = globalCache.get(cacheKey)
-    return entry ? (entry.data as T) : undefined
-  }
-
-  const setCache = (value: T) => {
-    globalCache.set(cacheKey, { data: value, timestamp: Date.now() })
-  }
-
   const invalidate = () => {
-    globalCache.delete(cacheKey)
+    invalidateRequestCache(cacheKey)
   }
 
   const execute = async (force = false): Promise<T | undefined> => {
-    // 如果缓存有效且非强制刷新，直接返回缓存
-    if (!force && isCacheValid()) {
-      const cached = getCachedData()
-      if (cached !== undefined) {
-        data.value = cached
-        return cached
-      }
-    }
-
     loading.value = true
     error.value = ''
 
     try {
-      const result = await fetcher()
+      const result = await fetchRequestCache(cacheKey, ttl, fetcher, force)
       data.value = result
-      setCache(result)
       return result
     } catch (err) {
       error.value = toFriendlyMessage(err instanceof Error ? err.message : err, '\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
@@ -117,4 +149,5 @@ export const useRequestCache = <T>(
  */
 export const clearAllRequestCache = () => {
   globalCache.clear()
+  globalPendingRequests.clear()
 }

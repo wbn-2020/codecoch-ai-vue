@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { AxiosError } from 'axios'
 import { formatDateTime } from '@/utils/format'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 export interface NotificationVO {
   id: number
@@ -77,13 +78,11 @@ export const getNotificationsApi = (params: NotificationQueryDTO) => {
     query.readStatus = params.isRead
   }
   delete query.isRead
+  const requestParams = compactQueryParams(query)
 
   return request
-    .get<PageResult<BackendNotificationVO>, PageResult<BackendNotificationVO>>('/notifications', { params: query })
-    .then((result) => ({
-      ...result,
-      records: (result.records || []).map(normalizeNotification)
-    }))
+    .get<PageResult<BackendNotificationVO>, PageResult<BackendNotificationVO>>('/notifications', { params: requestParams })
+    .then((result) => normalizePageResult(result, params, normalizeNotification))
 }
 
 export const getUnreadCountApi = () => {

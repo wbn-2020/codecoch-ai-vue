@@ -12,7 +12,7 @@ import {
   type QuestionRecommendationQueryDTO,
   type QuestionRecommendationSourceTypeVO
 } from '@/types/questionRecommendation'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 export const generateQuestionRecommendationsFromGapApi = (
   data: QuestionRecommendationGenerateFromGapDTO
@@ -41,6 +41,33 @@ export const generateQuestionRecommendationsFromStudyPlanApi = (
   )
 }
 
+export const submitQuestionRecommendationsFromGapApi = (
+  data: QuestionRecommendationGenerateFromGapDTO
+) => {
+  return request.post<QuestionRecommendationGenerateVO, QuestionRecommendationGenerateVO>(
+    '/question-recommendations/submit-from-gap',
+    data
+  )
+}
+
+export const submitQuestionRecommendationsFromMatchReportApi = (
+  data: QuestionRecommendationGenerateFromMatchReportDTO
+) => {
+  return request.post<QuestionRecommendationGenerateVO, QuestionRecommendationGenerateVO>(
+    '/question-recommendations/submit-from-match-report',
+    data
+  )
+}
+
+export const submitQuestionRecommendationsFromStudyPlanApi = (
+  data: QuestionRecommendationGenerateFromStudyPlanDTO
+) => {
+  return request.post<QuestionRecommendationGenerateVO, QuestionRecommendationGenerateVO>(
+    '/question-recommendations/submit-from-study-plan',
+    data
+  )
+}
+
 export const getQuestionRecommendationSourceTypesApi = () => {
   return request.get<QuestionRecommendationSourceTypeVO[], QuestionRecommendationSourceTypeVO[]>(
     '/question-recommendations/source-types'
@@ -52,7 +79,7 @@ export const getQuestionRecommendationBatchesApi = (params?: QuestionRecommendat
     .get<
       PageResult<QuestionRecommendationBatchListVO>,
       PageResult<QuestionRecommendationBatchListVO>
-    >('/question-recommendations/batches', { params })
+    >('/question-recommendations/batches', { params: compactQueryParams(params) })
     .then((result) => normalizePageResult(result, params))
 }
 

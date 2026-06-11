@@ -9,22 +9,22 @@
         <h1>{{ title }}</h1>
         <p>{{ description }}</p>
       </div>
-      <el-tag type="warning" effect="plain">未联调</el-tag>
+      <el-tag type="warning" effect="plain">准备中</el-tag>
     </section>
 
     <section class="content-card cc-glass">
       <div class="content-card__body pending-grid">
         <AppState
           type="api-pending"
-          title="接口待确认"
-          description="当前页面只保留入口和契约说明，不展示未联调的列表、表单或危险操作。"
+          title="能力准备中"
+          description="当前页面只保留可继续入口和能力说明，暂不开放列表、表单或高风险操作。"
         />
 
         <div class="pending-contract">
-          <h2>计划接口</h2>
+          <h2>待开放能力</h2>
           <ul>
             <li v-for="item in apiItems" :key="item">
-              <code>{{ item }}</code>
+              <span class="pending-item">{{ item }}</span>
             </li>
           </ul>
         </div>
@@ -65,7 +65,7 @@ withDefaults(
     safeLinks?: Array<{ label: string; to: RouteLocationRaw; type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' }>
   }>(),
   {
-    eyebrow: 'Pending Integration',
+    eyebrow: '能力准备中',
     apiItems: () => [],
     safeLinks: () => []
   }
@@ -137,7 +137,7 @@ const router = useRouter()
     list-style: none;
   }
 
-  code {
+  .pending-item {
     display: block;
     overflow-wrap: anywhere;
     padding: 10px 12px;

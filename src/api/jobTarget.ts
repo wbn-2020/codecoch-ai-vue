@@ -1,4 +1,6 @@
 import request from '@/utils/request'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
+import type { PageResult } from '@/types/api'
 import type {
   JobDescriptionAnalysisVO,
   JobDescriptionParseDTO,
@@ -11,7 +13,11 @@ import type {
 import { buildSseUrl, streamSse } from '@/utils/sse'
 
 export const getJobTargetsApi = (params?: TargetJobQueryDTO) => {
-  return request.get<TargetJobVO[], TargetJobVO[]>('/job-targets', { params })
+  return request
+    .get<TargetJobVO[] | PageResult<TargetJobVO>, TargetJobVO[] | PageResult<TargetJobVO>>('/job-targets', {
+      params: compactQueryParams(params)
+    })
+    .then((result) => normalizePageResult(result, params).records)
 }
 
 export const createJobTargetApi = (data: TargetJobSaveDTO) => {
@@ -41,6 +47,13 @@ export const setCurrentJobTargetApi = (id: number) => {
 export const parseJobDescriptionApi = (id: number, data?: JobDescriptionParseDTO) => {
   return request.post<JobDescriptionAnalysisVO, JobDescriptionAnalysisVO>(
     `/job-targets/${id}/parse`,
+    data || {}
+  )
+}
+
+export const submitJobDescriptionParseTaskApi = (id: number, data?: JobDescriptionParseDTO) => {
+  return request.post<JobDescriptionAnalysisVO, JobDescriptionAnalysisVO>(
+    `/job-targets/${id}/parse-task`,
     data || {}
   )
 }

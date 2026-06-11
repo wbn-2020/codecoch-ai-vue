@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "vue-tsc -b --noEmit",
+    "check:quality": "npm run type-check && npm run check:mojibake && npm run check:ui-copy",
+    "check:mojibake": "node scripts/check-mojibake.mjs",
+    "check:mojibake:frontend": "node scripts/check-mojibake.mjs --frontend",
+    "check:mojibake:backend": "node scripts/check-mojibake.mjs --backend",
+    "check:ui-copy": "node scripts/check-ui-copy.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

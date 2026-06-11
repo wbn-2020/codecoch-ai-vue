@@ -4,15 +4,15 @@
       <div>
         <div class="hero-kicker">
           <FilePenLine :size="16" />
-          结构化简历编辑器
+          简历编辑
         </div>
         <h1>{{ isEdit ? '编辑简历' : '新增简历' }}</h1>
-        <p>以结构化方式维护基本信息、求职目标、技术栈和项目经历，供后续真实面试流程读取。</p>
+        <p>维护基本信息、求职目标、技术栈和项目经历，供后续面试训练读取。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/resumes')">
           <ArrowLeft :size="16" />
-          返回简历中心
+          返回我的简历
         </el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
           <Save :size="16" />
@@ -68,7 +68,7 @@
               <el-form-item label="默认简历">
                 <div class="switch-line">
                   <el-switch v-model="form.isDefault" :active-value="1" :inactive-value="0" />
-                  <span>保存后会通过默认简历接口生效</span>
+                  <span>保存后会更新你的默认简历</span>
                 </div>
               </el-form-item>
             </div>
@@ -110,7 +110,7 @@
               </div>
               <div>
                 <h2>经历与补充</h2>
-                <p>保留现有字段结构，不向后端提交本轮新增字段。</p>
+                <p>保留现有字段结构，本页不提交新的字段。</p>
               </div>
             </div>
             <el-form-item label="工作经历 / 工作摘要">
@@ -145,7 +145,7 @@
               </div>
               <div>
                 <h2>项目经历</h2>
-                <p>手动维护项目背景、职责、难点和优化结果，不伪造 AI 解析或优化结论。</p>
+                <p>手动维护项目背景、职责、难点和优化结果，AI 建议只在生成后作为参考。</p>
               </div>
             </div>
             <el-button type="primary" @click="openProjectDialog()">
@@ -197,16 +197,16 @@
 
         <section class="content-card side-panel">
           <h3>面试联动</h3>
-          <p>创建面试页会从真实简历列表中选择简历作为上下文，不在本页改动面试接口。</p>
+          <p>面试页会从真实简历中选择上下文，不在本页改动面试入口。</p>
           <el-button class="full-button" @click="router.push('/interviews/create')">
             <MessagesSquare :size="16" />
-            去创建面试
+            去面试
           </el-button>
         </section>
 
         <section v-if="isEdit && resumeId" class="content-card side-panel ai-panel">
-          <h3>AI 简历优化</h3>
-          <p>基于当前已保存简历触发真实 V2 优化接口。结果只展示建议，不会自动覆盖当前表单。</p>
+          <h3>简历建议</h3>
+          <p>基于当前已保存简历生成建议。结果只展示改写方向，不会自动覆盖当前表单。</p>
           <el-form class="optimize-form" :model="optimizeForm" label-position="top">
             <el-form-item label="目标岗位">
               <el-input v-model.trim="optimizeForm.targetPosition" placeholder="默认使用当前求职方向" />
@@ -220,20 +220,40 @@
           </el-form>
           <el-button class="full-button" type="primary" :loading="optimizing" @click="handleOptimizeResume">
             <Sparkles :size="16" />
-            发起 AI 优化
+            生成建议
           </el-button>
 
           <div v-if="optimizeSseEvents.length || optimizeSseMessage" class="sse-progress">
             <div class="sse-progress__head">
-              <span>阶段式优化进度</span>
+              <span>建议生成进度</span>
               <el-tag size="small" effect="plain">{{ optimizeSseStatus }}</el-tag>
             </div>
-            <p>{{ optimizeSseMessage || '等待后端阶段事件返回。' }}</p>
+            <p>{{ optimizeSseMessage || '等待建议进度返回。' }}</p>
+            <p class="sse-progress__hint">{{ optimizeRecoveryHint }}</p>
             <div class="sse-progress__list">
               <span v-for="(event, index) in optimizeSseEvents" :key="`${event.type}-${index}`">
-                {{ event.stage || event.type }} · {{ event.message }}
+                {{ event.stage || optimizeSseTypeLabel(event.type) }} · {{ event.message }}
               </span>
             </div>
+            <el-button
+              v-if="optimizeTask"
+              class="sse-progress__action"
+              text
+              type="primary"
+              @click="goOptimizeTaskCenter(optimizeTask)"
+            >
+              查看任务中心
+            </el-button>
+            <el-button
+              v-if="showOptimizeRefreshAction"
+              class="sse-progress__action"
+              text
+              type="primary"
+              :loading="optimizeRecordsRefreshing"
+              @click="refreshOptimizeRecords"
+            >
+              刷新最近记录
+            </el-button>
           </div>
 
           <div class="optimize-records">
@@ -250,43 +270,50 @@
               type="button"
               @click="openOptimizeDetail(record.optimizeRecordId)"
             >
-              <span>#{{ record.optimizeRecordId }} · {{ optimizeStatusText(record.optimizeStatus) }}</span>
+              <span>建议记录 {{ record.optimizeRecordId }} · {{ optimizeStatusText(record.optimizeStatus) }}</span>
               <small>{{ formatDateTime(record.createdAt || record.updatedAt) }}</small>
             </button>
           </div>
 
-          <div v-if="optimizeDetail" class="optimize-result">
-            <div class="score-line">
-              <span>综合评分</span>
-              <strong>{{ optimizeDetail.resultJson?.overallScore ?? '--' }}</strong>
-            </div>
-            <p>{{ optimizeDetailSummary }}</p>
-            <div v-if="optimizeSuggestions.length" class="rewrite-toolbar">
-              <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
-              <el-button text size="small" @click="selectAllOptimizeSuggestions">全选</el-button>
-              <el-button text size="small" @click="selectedOptimizeSuggestionIndexes = []">清空</el-button>
-            </div>
-            <div v-if="optimizeSuggestions.length" class="rewrite-list">
-              <article v-for="(item, index) in optimizeSuggestions" :key="index">
-                <div class="rewrite-head">
-                  <el-checkbox v-model="selectedOptimizeSuggestionIndexes" :label="index">
-                    {{ getOptimizeSuggestionFieldName(item, index) }}
-                  </el-checkbox>
-                  <el-tag v-if="item.fabricationRisk" type="warning" effect="plain">需核实真实性</el-tag>
+        <div v-if="optimizeDetail" class="optimize-result">
+          <div class="score-line">
+            <span>综合评分</span>
+            <strong>{{ optimizeDetail.overallScore ?? '--' }}</strong>
+          </div>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="已做脱敏展示"
+            description="这里只展示字段建议、改写方向和风险提示，不直接展开原始片段。"
+          />
+          <p>{{ optimizeDetailSummary }}</p>
+          <div v-if="optimizeSuggestions.length" class="rewrite-toolbar">
+            <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
+            <el-button text size="small" @click="selectAllOptimizeSuggestions">全选</el-button>
+            <el-button text size="small" @click="selectedOptimizeSuggestionIndexes = []">清空</el-button>
+          </div>
+          <div v-if="optimizeSuggestions.length" class="rewrite-list">
+            <article v-for="(item, index) in optimizeSuggestions" :key="index">
+              <div class="rewrite-head">
+                <el-checkbox v-model="selectedOptimizeSuggestionIndexes" :label="index">
+                  {{ getOptimizeSuggestionFieldName(item, index) }}
+                </el-checkbox>
+                <el-tag v-if="item.fabricationRisk" type="warning" effect="plain">需核实真实性</el-tag>
+              </div>
+              <div class="rewrite-diff">
+                <div>
+                  <span>字段</span>
+                  <p>{{ getOptimizeSuggestionFieldName(item, index) }}</p>
                 </div>
-                <div class="rewrite-diff">
-                  <div>
-                    <span>优化前</span>
-                    <p>{{ item.before || '后端未返回原文片段' }}</p>
-                  </div>
-                  <div>
-                    <span>优化后</span>
-                    <p>{{ item.after || '后端未返回改写内容' }}</p>
-                  </div>
+                <div>
+                  <span>改写建议</span>
+                  <p>{{ item.after || item.reason || '暂未返回改写建议' }}</p>
                 </div>
-                <p v-if="item.reason" class="rewrite-reason">{{ item.reason }}</p>
-              </article>
-            </div>
+              </div>
+              <p v-if="item.reason" class="rewrite-reason">{{ item.reason }}</p>
+            </article>
+          </div>
             <el-tooltip :content="applyOptimizeDisabledReason" placement="top" :disabled="canApplyOptimizeResult">
               <el-button
                 class="full-button"
@@ -296,7 +323,7 @@
                 @click="handleApplyOptimizeResult"
               >
                 <GitCompareArrows :size="16" />
-                应用优化结果 · 创建 AI 草稿
+                应用建议 · 新建草稿
               </el-button>
             </el-tooltip>
           </div>
@@ -348,7 +375,7 @@ import {
   Target,
   UserRound
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -360,7 +387,6 @@ import {
   getResumeOptimizeResultApi,
   getResumeDetailApi,
   optimizeResumeApi,
-  streamResumeOptimizeApi,
   setDefaultResumeApi,
   updateResumeApi,
   updateResumeProjectApi
@@ -372,11 +398,12 @@ import type {
   ResumeOptimizeDetailVO,
   ResumeOptimizeRecordVO,
   ResumeOptimizeRequestDTO,
+  ResumeOptimizeSubmitVO,
   ResumeRewriteSuggestion,
-  ResumeOptimizeSseEvent,
   ResumeProjectDTO,
   ResumeProjectVO
 } from '@/types/resume'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 import { formatDateTime } from '@/utils/format'
@@ -403,7 +430,8 @@ const selectedOptimizeSuggestionIndexes = ref<number[]>([])
 const optimizeSseEvents = ref<Array<{ type: string; stage?: string; message: string }>>([])
 const optimizeSseMessage = ref('')
 const optimizeSseStatus = ref('未开始')
-const optimizeSseHandle = ref<ReturnType<typeof streamResumeOptimizeApi> | null>(null)
+const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
+const optimizeRecordsRefreshing = ref(false)
 
 const form = reactive<ResumeCreateDTO>({
   resumeName: '',
@@ -446,12 +474,46 @@ const completion = computed(() => {
 
 const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
 
-const optimizeSuggestions = computed(() => optimizeDetail.value?.resultJson?.rewriteSuggestions || [])
+const optimizeSuggestions = computed(() => optimizeDetail.value?.rewriteSuggestions || [])
 
 const optimizeDetailSummary = computed(() => {
-  const raw = optimizeDetail.value?.resultJson?.overallComment || optimizeDetail.value?.errorMessage
-  return raw ? toFriendlyMessage(raw, 'AI 优化结果暂不可用，请稍后重试。') : '后端未返回整体评价。'
+  const raw = optimizeDetail.value?.overallComment || optimizeDetail.value?.errorMessage
+  return raw ? toFriendlyMessage(raw, '建议结果暂不可用，请稍后重试。') : '暂未返回整体评价。'
 })
+
+const showOptimizeRefreshAction = computed(() => Boolean(optimizeSseMessage.value) && !optimizing.value)
+
+const showOptimizeTaskCenterAction = computed(() => Boolean(optimizeTask.value))
+
+const optimizeRecoveryHint = computed(() => {
+  if (showOptimizeTaskCenterAction.value) {
+    return '建议任务已进入任务中心，可以离开本页，完成后再刷新最近记录查看结果。'
+  }
+  if (optimizing.value) {
+    return '建议生成可能需要一点时间。你可以停留等待，也可以稍后回到本页，从最近记录继续查看结果。'
+  }
+  if (latestOptimizeRecord.value) {
+    return '最近建议记录已保留，可打开记录查看结果或失败原因。'
+  }
+  return '如果刚才离开或网络中断，可以刷新最近记录；仍没有结果时再重新生成建议。'
+})
+
+const hasOptimizeAsyncReceipt = (result: ResumeOptimizeSubmitVO) =>
+  Boolean(result.asyncMessageId || result.asyncTraceId || result.asyncBizId || result.asyncSendStatus)
+
+const buildOptimizeTaskCenterQuery = (task: ResumeOptimizeSubmitVO) => {
+  const query: Record<string, string> = {
+    bizType: task.asyncBizType || 'resume.optimize',
+    bizId: task.asyncBizId || String(task.optimizeRecordId)
+  }
+  if (task.asyncMessageId) query.messageId = task.asyncMessageId
+  if (task.asyncTraceId) query.traceId = task.asyncTraceId
+  return query
+}
+
+const goOptimizeTaskCenter = (task: ResumeOptimizeSubmitVO) => {
+  router.push({ path: '/agent/tasks', query: buildOptimizeTaskCenterQuery(task) })
+}
 
 const canApplyOptimizeResult = computed(() =>
   optimizeDetail.value?.optimizeStatus === 'SUCCESS' && selectedOptimizeSuggestionIndexes.value.length > 0
@@ -507,8 +569,8 @@ const fetchDetail = async () => {
   try {
     applyDetail(await getResumeDetailApi(resumeId.value))
     await fetchOptimizeRecords()
-  } catch {
-    ElMessage.error('简历详情加载失败，请返回列表重试')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '简历详情加载失败，请返回我的简历重试。'))
   } finally {
     loading.value = false
   }
@@ -516,11 +578,11 @@ const fetchDetail = async () => {
 
 const optimizeStatusText = (status?: string) => {
   const map: Record<string, string> = {
-    PROCESSING: '优化中',
-    SUCCESS: '优化成功',
-    FAILED: '优化失败'
+    PROCESSING: '建议生成中',
+    SUCCESS: '建议已生成',
+    FAILED: '建议生成失败'
   }
-  return status ? map[status] || status : '暂无记录'
+  return status ? map[status] || '状态待确认' : '暂无记录'
 }
 
 const fetchOptimizeRecords = async () => {
@@ -541,6 +603,20 @@ const openOptimizeDetail = async (recordId: number) => {
   selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
 }
 
+const refreshOptimizeRecords = async () => {
+  optimizeRecordsRefreshing.value = true
+  try {
+    await fetchOptimizeRecords()
+    if (latestOptimizeRecord.value) {
+      ElMessage.success('最近记录已刷新')
+    } else {
+      ElMessage.info('暂未发现新的建议记录')
+    }
+  } finally {
+    optimizeRecordsRefreshing.value = false
+  }
+}
+
 const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
   targetPosition: optimizeForm.targetPosition || form.targetPosition,
   experienceYears: optimizeForm.experienceYears,
@@ -550,13 +626,26 @@ const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
 
 const runSyncOptimizeFallback = async () => {
   if (!resumeId.value) return
-  optimizeSseStatus.value = '同步回退'
-  optimizeSseMessage.value = '流式连接未启动成功，已回退到原同步优化接口。'
+  optimizeSseStatus.value = '普通生成'
+  optimizeSseMessage.value = '生成进度暂时不可用，系统会继续生成建议，稍后可刷新最近记录查看。'
   const result = await optimizeResumeApi(resumeId.value, buildOptimizePayload())
+  if (hasOptimizeAsyncReceipt(result)) {
+    optimizeTask.value = result
+    optimizeSseStatus.value = '已提交'
+    optimizeSseMessage.value = '建议生成任务已提交，可在任务中心查看进度；完成后刷新最近记录查看结果。'
+    optimizeSseEvents.value = [{
+      type: 'task',
+      stage: '任务中心',
+      message: '建议生成任务已提交'
+    }]
+    ElMessage.success('建议生成任务已提交')
+    await fetchOptimizeRecords()
+    return
+  }
   if (result.optimizeStatus === 'FAILED') {
-    ElMessage.error(toFriendlyMessage(result.errorMessage, 'AI 优化失败，请稍后重试'))
+    ElMessage.error(toFriendlyMessage(result.errorMessage, '生成建议失败，请稍后重试'))
   } else {
-    ElMessage.success('AI 优化已完成')
+    ElMessage.success('建议已生成')
   }
   await fetchOptimizeRecords()
   if (result.optimizeRecordId) {
@@ -564,103 +653,44 @@ const runSyncOptimizeFallback = async () => {
   }
 }
 
-const pushOptimizeSseEvent = (type: string, data?: ResumeOptimizeSseEvent) => {
-  const messageMap: Record<string, string> = {
-    start: '简历优化开始',
-    delta: '简历优化进行中',
-    metadata: '简历优化状态更新',
-    progress: '简历优化进行中',
-    result: '已收到优化结果',
-    done: '简历优化完成',
-    error: '简历优化失败'
+const optimizeSseTypeLabel = (type?: string) => {
+  const map: Record<string, string> = {
+    start: '建议开始',
+    delta: '建议生成中',
+    metadata: '状态更新',
+    progress: '生成进度',
+    result: '建议结果',
+    done: '建议完成',
+    error: '生成失败'
   }
-  const stageMap: Record<string, string> = {
-    VALIDATE_REQUEST: '校验请求',
-    LOAD_RESUME: '读取简历',
-    BUILD_PROMPT: '生成提示词',
-    CALL_AI_OPTIMIZE: '调用 AI 优化',
-    PARSE_AI_RESULT: '解析优化建议',
-    SAVE_RECORD: '保存优化记录',
-    COMPLETE: '优化完成'
-  }
-  const stage = data?.stage ? stageMap[String(data.stage).toUpperCase()] || toFriendlyMessage(data.stage, '') : ''
-  const message = toFriendlyMessage(data?.message, messageMap[type] || '简历优化状态更新')
-  optimizeSseStatus.value = messageMap[type] || '状态更新'
-  optimizeSseMessage.value = stage ? `${stage}：${message}` : message
-  optimizeSseEvents.value.push({
-    type,
-    stage,
-    message
-  })
-}
-
-const resolveOptimizeRecordId = (data?: ResumeOptimizeSseEvent) => {
-  const result = data?.result
-  const resultRecordId =
-    typeof result === 'object' && result && 'optimizeRecordId' in result
-      ? Number(result.optimizeRecordId)
-      : undefined
-  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
-  const metadataRecordId =
-    'recordId' in metadata
-      ? Number(metadata.recordId)
-      : 'optimizeRecordId' in metadata
-        ? Number(metadata.optimizeRecordId)
-        : undefined
-  return data?.recordId || resultRecordId || metadataRecordId
+  return type ? map[type] || '状态更新' : '状态更新'
 }
 
 const handleOptimizeResume = async () => {
   if (!resumeId.value || optimizing.value) return
-  optimizeSseHandle.value?.abort()
   optimizing.value = true
   optimizeSseEvents.value = []
-  optimizeSseMessage.value = '正在启动阶段式优化进度。'
+  optimizeSseMessage.value = '正在启动建议生成进度。'
   optimizeSseStatus.value = '启动中'
-  let streamStarted = false
-  let resultRecordId: number | undefined
+  optimizeTask.value = null
 
   try {
-    optimizeSseHandle.value = streamResumeOptimizeApi(
-      {
-        resumeId: resumeId.value,
-        targetPosition: optimizeForm.targetPosition || form.targetPosition,
-        experienceYears: optimizeForm.experienceYears,
-        industryDirection: optimizeForm.industryDirection
-      },
-      {
-        onEvent: (event, data) => {
-          if (event === 'start' || event === 'delta' || event === 'metadata' || event === 'progress' || event === 'result' || event === 'done') {
-            streamStarted = true
-          }
-          pushOptimizeSseEvent(event, data)
-          resultRecordId = resolveOptimizeRecordId(data) || resultRecordId
-        }
-      }
-    )
-    await optimizeSseHandle.value.finished
-    await fetchOptimizeRecords()
-    if (resultRecordId) {
-      await openOptimizeDetail(resultRecordId)
-    }
-    ElMessage.success('AI 优化已完成')
+    await runSyncOptimizeFallback()
   } catch (error) {
-    if (!streamStarted) {
-      await runSyncOptimizeFallback()
-    } else {
-      ElMessage.error(getErrorMessage(error, 'AI 优化流中断，请稍后手动重试。'))
-    }
+    optimizeSseStatus.value = '提交失败'
+    optimizeSseMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后重新生成。')
+    ElMessage.error(optimizeSseMessage.value)
   } finally {
     optimizing.value = false
-    optimizeSseHandle.value = null
   }
 }
 
 const showApplyResultMessage = async (message?: string, warnings?: string[], newResumeId?: number) => {
   const warningText = warnings?.length ? `\n\n注意事项：\n${warnings.map((item) => `- ${item}`).join('\n')}` : ''
+  const draftText = newResumeId ? '\n\n建议草稿已创建，稍后会自动打开编辑页。' : ''
   await ElMessageBox.alert(
-    `${message || '已创建新的 AI 优化草稿。'}${warningText}\n\n新简历 ID：${newResumeId || '--'}`,
-    '应用优化结果',
+    `${message || '已创建建议草稿，可继续编辑后再用于投递或匹配。'}${warningText}${draftText}`,
+    '应用建议',
     { type: warnings?.length ? 'warning' : 'success' }
   )
 }
@@ -674,15 +704,17 @@ const handleApplyOptimizeResult = async () => {
   const selectedFields = selectedSuggestions
     .map(({ item }) => getOptimizeSuggestionFieldKey(item))
     .filter((field): field is string => Boolean(field))
-  try {
-    await ElMessageBox.confirm(`将应用 ${selectedSuggestions.length} 个字段建议并创建一份新的 AI 优化草稿，不会覆盖当前简历。`, '应用优化结果', {
-      type: 'warning',
-      confirmButtonText: '创建草稿',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '应用建议',
+    action: '应用选中的 AI 建议并创建建议草稿',
+    target: `${form.resumeName || '当前简历'}，${selectedSuggestions.length} 个字段建议`,
+    impact: '会创建一份新的建议草稿，不会覆盖当前正在编辑的简历；草稿内容仍需要你人工检查后再用于投递或匹配。',
+    rollback: '当前简历不会被修改；如果草稿不合适，可以继续编辑原简历或删除草稿。',
+    audit: '优化记录、选中字段和建议草稿记录会保留。',
+    tips: ['确认建议没有夸大经历或编造项目结果。', '确认需要先创建草稿再继续人工编辑。'],
+    confirmButtonText: '创建草稿'
+  })
+  if (!confirmed) return
   applyingOptimize.value = true
   try {
     const result = await applyResumeOptimizeResultApi(optimizeDetail.value.optimizeRecordId, {
@@ -762,16 +794,23 @@ const handleSaveProject = async () => {
 
 const handleDeleteProject = async (project: ResumeProjectVO) => {
   if (!resumeId.value) return
-  await ElMessageBox.confirm(`确认删除项目经历「${project.projectName}」？`, '删除确认', { type: 'warning' })
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除项目经历',
+    action: '删除该简历中的项目经历',
+    target: project.projectName || '项目经历',
+    impact: '该项目经历会从当前简历中移除，后续简历匹配、面试追问和推荐任务将不再把它作为证据。',
+    rollback: '系统不会自动恢复已删除项目；如误删，需要重新录入项目经历。',
+    audit: '删除操作会记录当前账号、简历和项目经历。',
+    tips: ['确认这段项目经历不再用于证明目标岗位能力。', '确认删除后仍有足够项目证据支撑简历。'],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
   await deleteResumeProjectApi(resumeId.value, project.projectId)
   ElMessage.success('项目经历已删除')
   await fetchDetail()
 }
 
 onMounted(fetchDetail)
-onUnmounted(() => {
-  optimizeSseHandle.value?.abort()
-})
 </script>
 
 <style scoped lang="scss">
@@ -1128,6 +1167,15 @@ onUnmounted(() => {
   color: #dbeafe;
   font-size: 13px;
   font-weight: 700;
+}
+
+.sse-progress__hint {
+  color: #a5b4fc;
+}
+
+.sse-progress__action {
+  margin-top: 8px;
+  padding-left: 0;
 }
 
 .sse-progress__list {

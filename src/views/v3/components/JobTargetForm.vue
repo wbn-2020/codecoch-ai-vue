@@ -17,19 +17,19 @@
       <el-form-item label="岗位级别 / 经验要求" prop="jobLevel">
         <el-input v-model.trim="form.jobLevel" maxlength="64" show-word-limit placeholder="例如：3-5 年 / 中级 / 高级" />
       </el-form-item>
-      <el-form-item label="JD 来源" prop="jdSource">
+      <el-form-item label="岗位描述来源" prop="jdSource">
         <el-input v-model.trim="form.jdSource" maxlength="64" show-word-limit placeholder="例如：BOSS 直聘 / 官网 / 猎聘" />
       </el-form-item>
     </div>
 
-    <el-form-item label="JD 原文 / 岗位描述" prop="jdText">
+    <el-form-item label="岗位描述内容" prop="jdText">
       <el-input
         v-model="form.jdText"
         type="textarea"
         :rows="14"
         maxlength="20000"
         show-word-limit
-        placeholder="粘贴真实 JD 原文，用于后续解析、匹配和能力画像。"
+        placeholder="粘贴招聘页中的岗位描述，用于后续解析、匹配和能力画像。"
       />
     </el-form-item>
 
@@ -38,7 +38,7 @@
       type="info"
       :closable="false"
       show-icon
-      title="当前表单聚焦岗位核心信息；城市、薪资、技能关键词可写入 JD 原文。"
+      title="当前表单聚焦岗位核心信息；城市、薪资、技能关键词可以写入岗位描述。"
     />
 
     <div class="form-actions">
@@ -82,8 +82,8 @@ const rules: FormRules<TargetJobSaveDTO> = {
   ],
   companyName: [{ max: 128, message: '公司名称不能超过 128 个字符', trigger: 'blur' }],
   jobLevel: [{ max: 64, message: '岗位级别不能超过 64 个字符', trigger: 'blur' }],
-  jdSource: [{ max: 64, message: 'JD 来源不能超过 64 个字符', trigger: 'blur' }],
-  jdText: [{ max: 20000, message: 'JD 原文不能超过 20000 个字符', trigger: 'blur' }]
+  jdSource: [{ max: 64, message: '来源说明不能超过 64 个字符', trigger: 'blur' }],
+  jdText: [{ max: 20000, message: '岗位描述不能超过 20000 个字符', trigger: 'blur' }]
 }
 
 watch(

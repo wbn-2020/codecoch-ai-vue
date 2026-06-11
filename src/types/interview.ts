@@ -13,6 +13,7 @@ export type InterviewStatus =
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewReportTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
 export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewQuestionSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseStage =
@@ -63,6 +64,8 @@ export interface InterviewCreateDTO {
   interviewerStyle?: string
   practiceMode?: string
   questionCount?: number
+  recommendationSource?: string
+  recommendationReason?: string
 }
 
 export interface InterviewCreateByJobTargetDTO extends InterviewCreateDTO {
@@ -192,6 +195,11 @@ export interface FinishInterviewVO {
   reportId?: number
   finishedAt?: string
   message?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
 }
 
 export interface RetryReportVO {
@@ -199,6 +207,16 @@ export interface RetryReportVO {
   reportStatus: ReportStatus
   reportId?: number
   message?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: InterviewReportTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
 }
 
 export interface InterviewAnswerReviewSseParams {
@@ -391,4 +409,14 @@ export interface InterviewReportVO {
   failedReason?: string
   failureReason?: string
   errorMessage?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: InterviewReportTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
 }

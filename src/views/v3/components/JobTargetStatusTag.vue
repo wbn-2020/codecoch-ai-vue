@@ -21,7 +21,7 @@ const label = computed(() => {
     0: '停用'
   }
   if (props.status === undefined || props.status === null || props.status === '') return '--'
-  return map[String(props.status)] || String(props.status)
+  return map[String(props.status)] || '状态待确认'
 })
 
 const tagType = computed(() => {

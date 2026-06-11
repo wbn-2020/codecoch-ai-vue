@@ -71,6 +71,7 @@ import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
 import { appConfig } from '@/config'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
@@ -102,7 +103,7 @@ const getLoginErrorMessage = (error: unknown) => {
     }
     const message = payload.response?.data?.message || payload.message || ''
     if (payload.response?.status === 0 || message.includes('Network')) {
-      return '网络连接异常，请确认后端服务是否可用后重试。'
+      return '网络连接异常，请确认服务是否可用后重试。'
     }
     if (payload.response?.status && payload.response.status >= 500) {
       return '认证服务暂时不可用，请稍后重试。'
@@ -113,9 +114,16 @@ const getLoginErrorMessage = (error: unknown) => {
     if (message.includes('用户') || message.toLowerCase().includes('user')) {
       return '账号不存在或不可用，请确认用户名是否正确。'
     }
-    return message || '登录失败，请检查账号状态后重试。'
+    return normalizeErrorMessage(error, '登录失败，请检查账号状态后重试。')
   }
   return '登录失败，请检查账号状态后重试。'
+}
+
+const safeRedirectPath = (value: unknown) => {
+  if (typeof value !== 'string') return ''
+  if (!value.startsWith('/') || value.startsWith('//')) return ''
+  if (value === '/login' || value === '/register') return ''
+  return value
 }
 
 const handleSubmit = async () => {
@@ -129,7 +137,7 @@ const handleSubmit = async () => {
     try {
       await authStore.login(form, { silentError: true })
       ElMessage.success('登录成功')
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+      const redirect = safeRedirectPath(route.query.redirect)
       const defaultPath = authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
       await router.replace(redirect || defaultPath)
     } catch (error) {

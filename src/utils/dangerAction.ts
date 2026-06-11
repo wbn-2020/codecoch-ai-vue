@@ -22,10 +22,10 @@ const previewRow = (label: string, value: string) =>
 const buildPreviewMessage = (options: DangerActionPreviewOptions) => {
   const rows: VNode[] = [
     previewRow('操作', options.action),
-    previewRow('影响范围', options.target || '按后端接口参数和当前筛选条件执行'),
+    previewRow('影响范围', options.target || '按当前提交参数和筛选条件执行'),
     previewRow('影响说明', options.impact),
-    previewRow('回滚/恢复', options.rollback || '无法由前端自动回滚，需结合操作日志和业务数据人工恢复'),
-    previewRow('审计记录', options.audit || '提交后会进入后端操作日志或任务日志，可按操作人、时间和任务编号追踪')
+    previewRow('回滚/恢复', options.rollback || '提交后不能自动回到执行前状态，需结合操作日志和业务数据人工恢复'),
+    previewRow('审计记录', options.audit || '提交后会进入操作日志或任务记录，可按操作人、时间和处理记录追踪')
   ]
 
   const children: VNode[] = [

@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionGroupVO = Partial<QuestionGroupVO> & {
   groupName?: string
@@ -45,7 +45,9 @@ export const getQuestionGroupsApi = (params?: {
   status?: number | ''
 }) => {
   return request
-    .get<BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>, BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>>('/admin/question-groups', { params })
+    .get<BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>, BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>>('/admin/question-groups', {
+      params: compactQueryParams(params)
+    })
     .then((result) => normalizeGroupList(normalizePageResult(result).records))
 }
 

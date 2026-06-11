@@ -13,12 +13,21 @@ import type {
   DailyPlanGenerateDTO,
   DailyPlanVO
 } from '@/types/agent'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
-const normalizeTask = (task: AgentTaskVO): AgentTaskVO => ({
-  ...task,
-  status: task.status || 'TODO'
-})
+const normalizeTask = (task: AgentTaskVO): AgentTaskVO => {
+  const agentRunId = task.agentRunId ?? task.runId ?? null
+  const normalizedSourceId = task.sourceId == null ? null : Number(task.sourceId)
+  return {
+    ...task,
+    agentRunId,
+    runId: task.runId ?? agentRunId,
+    sourceId: normalizedSourceId == null || Number.isFinite(normalizedSourceId) ? normalizedSourceId : task.sourceId,
+    trustStatus: task.trustStatus ? String(task.trustStatus).toUpperCase() : task.trustStatus,
+    fallback: Boolean(task.fallback),
+    status: task.status || 'TODO'
+  }
+}
 
 const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
   const status = String(plan.status || '').toUpperCase()
@@ -61,19 +70,21 @@ export const generateDailyPlanApi = (data: DailyPlanGenerateDTO) => {
 
 export const getLatestDailyPlanApi = (params?: Pick<DailyPlanGenerateDTO, 'targetJobId' | 'date'>) => {
   return request
-    .get<DailyPlanVO, DailyPlanVO>('/agent/job-coach/daily-plan/latest', { params })
+    .get<DailyPlanVO, DailyPlanVO>('/agent/job-coach/daily-plan/latest', { params: compactQueryParams(params) })
     .then(normalizeDailyPlan)
 }
 
 export const getTodayAgentTasksApi = (params?: AgentTodayTaskQuery) => {
   return request
-    .get<AgentTodayTaskVO | AgentTaskVO[], AgentTodayTaskVO | AgentTaskVO[]>('/agent/tasks/today', { params })
+    .get<AgentTodayTaskVO | AgentTaskVO[], AgentTodayTaskVO | AgentTaskVO[]>('/agent/tasks/today', {
+      params: compactQueryParams(params)
+    })
     .then(normalizeTodayTasks)
 }
 
 export const getAgentTasksApi = (params?: AgentTaskQueryDTO) => {
   return request
-    .get<PageResult<AgentTaskVO>, PageResult<AgentTaskVO>>('/agent/tasks', { params })
+    .get<PageResult<AgentTaskVO>, PageResult<AgentTaskVO>>('/agent/tasks', { params: compactQueryParams(params) })
     .then((result) => normalizePageResult(result, params, normalizeTask))
 }
 

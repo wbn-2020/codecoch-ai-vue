@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { QuestionTagDTO, QuestionTagVO } from '@/types/question'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionTagVO = Partial<QuestionTagVO> & {
   tagName?: string
@@ -33,7 +33,9 @@ const toBackendTagDTO = (data: QuestionTagDTO) => ({
 
 export const getQuestionTagsApi = (params?: { status?: number | ''; keyword?: string }) => {
   return request
-    .get<BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>, BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>>('/admin/question-tags', { params })
+    .get<BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>, BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>>('/admin/question-tags', {
+      params: compactQueryParams(params)
+    })
     .then((result) => normalizeTagList(normalizePageResult(result).records))
 }
 

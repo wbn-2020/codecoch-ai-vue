@@ -216,6 +216,7 @@ export interface VectorDeleteRetryResultVO {
   deleted?: number
   failed?: number
   errors?: string[]
+  jobId?: number
   deleteOutbox?: VectorStoreHealthVO['deleteOutbox']
 }
 
@@ -293,7 +294,9 @@ export interface VectorIndexJobVO {
 }
 
 export interface VectorIndexJobQuery {
+  jobId?: number
   jobType?: string
+  scopeType?: string
   status?: 'ALL' | 'RUNNING' | 'SUCCESS' | 'FAILED'
   pageNo?: number
   pageSize?: number
