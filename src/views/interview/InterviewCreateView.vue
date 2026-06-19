@@ -51,7 +51,13 @@
       <div class="quick-start-panel__actions">
         <el-alert v-if="quickStartNotice" :title="quickStartNotice" type="warning" :closable="false" show-icon />
         <el-alert v-if="routeContextNotice" :title="routeContextNotice" type="warning" :closable="false" show-icon />
-        <el-button type="success" size="large" :loading="creating || resumeLoading || matchReportVerifyLoading" @click="handleQuickCreate">
+        <el-button
+          v-if="!configExpanded"
+          type="success"
+          size="large"
+          :loading="creating || resumeLoading || matchReportVerifyLoading"
+          @click="handleQuickCreate"
+        >
           <Play :size="17" />
           一键开始推荐面试
         </el-button>
@@ -95,9 +101,9 @@
             </article>
           </div>
           <div class="config-collapsed__actions">
-            <el-button type="success" :loading="creating || resumeLoading || matchReportVerifyLoading" @click="handleQuickCreate">
-              <Play :size="16" />
-              一键开始推荐面试
+            <el-button :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
+              <Sparkles :size="16" />
+              套用推荐配置
             </el-button>
             <el-button type="primary" plain @click="toggleConfigExpanded">
               <Settings2 :size="16" />
@@ -273,6 +279,16 @@
               show-icon
               :title="routeContextNotice"
             />
+            <div class="config-form-actions">
+              <el-button type="primary" size="large" :loading="creating" @click="handleCreate">
+                <Play :size="16" />
+                按当前配置开始
+              </el-button>
+              <el-button size="large" :disabled="creating" @click="applyQuickRecommendation">
+                <Sparkles :size="16" />
+                套用推荐配置
+              </el-button>
+            </div>
           </el-form>
         </template>
       </section>
@@ -298,17 +314,17 @@
           <ul class="quick-create-reasons">
             <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
           </ul>
-          <el-button type="success" plain :loading="creating" @click="handleQuickCreate">
-            <Play :size="16" />
-            一键开始推荐面试
+          <el-button plain @click="scrollToConfig">
+            <Settings2 :size="16" />
+            查看并调整配置
           </el-button>
         </div>
 
-        <div class="context-trust-card">
-          <div class="context-trust-card__head">
+        <details class="context-trust-card">
+          <summary class="context-trust-card__head">
             <span>推荐依据与可信边界</span>
             <el-tag :type="quickRecommendationTrustType" effect="plain">{{ quickRecommendationTrustLabel }}</el-tag>
-          </div>
+          </summary>
           <p>{{ quickRecommendationBoundaryText }}</p>
           <div class="context-trust-list">
             <article v-for="item in quickContextTrustItems" :key="item.label" :class="{ 'is-missing': item.missing }">
@@ -316,7 +332,7 @@
               <strong>{{ item.value }}</strong>
             </article>
           </div>
-        </div>
+        </details>
 
         <div class="wizard-flow">
           <article v-for="(step, index) in wizardSteps" :key="step.title" :class="{ active: index === 0 }">
@@ -361,9 +377,13 @@
 
         <div class="preview-actions">
           <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
-          <el-button type="primary" size="large" :loading="creating" @click="configExpanded ? handleCreate() : handleQuickCreate()">
-            <Play :size="16" />
-            {{ configExpanded ? '按当前配置开始' : '一键开始推荐面试' }}
+          <el-button v-if="configExpanded" plain size="large" @click="toggleConfigExpanded">
+            <Settings2 :size="16" />
+            收起配置
+          </el-button>
+          <el-button v-else type="primary" plain size="large" @click="toggleConfigExpanded">
+            <Settings2 :size="16" />
+            展开配置
           </el-button>
         </div>
       </aside>
@@ -1392,6 +1412,10 @@ onMounted(async () => {
   border-radius: 8px;
   background: #f8fbff;
 
+  &[open] {
+    background: #ffffff;
+  }
+
   p {
     margin: 0;
     color: #475569;
@@ -1402,9 +1426,27 @@ onMounted(async () => {
 
 .context-trust-card__head {
   display: flex;
+  min-height: 28px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 12px;
+    content: '展开';
+  }
+
+  .context-trust-card[open] &::after {
+    content: '收起';
+  }
 
   > span {
     color: #1d4ed8;
@@ -1471,7 +1513,7 @@ onMounted(async () => {
 
 .create-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
   margin-top: 18px;
 }
@@ -1483,8 +1525,19 @@ onMounted(async () => {
 
 .preview-panel {
   position: sticky;
-  top: 18px;
+  top: 82px;
   align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.config-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
 }
 
 .panel-head {
@@ -1936,6 +1989,24 @@ onMounted(async () => {
 
   .preview-panel {
     position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 1181px) {
+  .create-hero,
+  .quick-start-panel {
+    padding: 18px;
+  }
+
+  .preview-panel {
+    top: 68px;
+    max-height: calc(100vh - 82px);
+  }
+
+  .wizard-flow article {
+    padding: 9px 10px;
   }
 }
 

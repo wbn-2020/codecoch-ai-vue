@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
+import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
+
 const TAGS_KEY = 'codecoachai-visited-tags'
 const MAX_TAGS_PER_SCOPE = 12
 const RETIRED_TAG_PATHS = new Set(['/admin/ops/overview'])
@@ -51,6 +53,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/admin/ai/prompt-regression': 'Prompt 回归',
   '/admin/menus': '菜单权限',
   '/admin/notices': '通知管理',
+  '/admin/announcements': '公告管理',
   '/admin/operation-logs': '操作日志',
   '/admin/login-logs': '登录日志',
   '/admin/slow-sql-logs': '慢 SQL 查询',
@@ -112,6 +115,16 @@ const resolveTagTitle = (path: string, fallback?: unknown) => {
   return TAG_TITLE_MAP[path] || String(fallback || path)
 }
 
+const sanitizeTagFullPath = (path: string, fullPath?: unknown) => {
+  const fallback = buildSafeRedirectTarget(path)
+  const sanitized = sanitizeLocalRedirectPath(
+    typeof fullPath === 'string' ? fullPath : path,
+    fallback,
+    []
+  )
+  return sanitized.split('?')[0] === path ? sanitized : fallback
+}
+
 const ensureAffix = (tags: VisitedTag[]): VisitedTag[] => {
   // 保证 user / admin 两个 affix 始终存在，且 affix 永远排在最前
   const withoutAffix = tags.filter(
@@ -132,7 +145,7 @@ const readTags = (): VisitedTag[] => {
           .map((item) => ({
             title: resolveTagTitle(String(item.path), item.title),
             path: String(item.path),
-            fullPath: String(item.fullPath || item.path),
+            fullPath: sanitizeTagFullPath(String(item.path), item.fullPath || item.path),
             name: item.name ? String(item.name) : undefined,
             affix: Boolean(item.affix),
             // 兼容旧数据（没有 scope 的认为是 admin）
@@ -178,7 +191,7 @@ export const useTagsViewStore = defineStore('tagsView', {
       const tag: VisitedTag = {
         title: resolveTagTitle(route.path, route.meta?.title || route.name || route.path),
         path: route.path,
-        fullPath: route.fullPath,
+        fullPath: buildSafeRedirectTarget(route.path, route.query),
         name: route.name ? String(route.name) : undefined,
         affix: Boolean(route.meta?.affix),
         scope

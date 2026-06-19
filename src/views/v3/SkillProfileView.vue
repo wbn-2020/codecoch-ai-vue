@@ -462,7 +462,6 @@ const generateFromReport = async () => {
     await router.replace({
       path: '/skill-profile',
       query: buildContextQuery({
-        ...route.query,
         profileId: result.profileId || profileId.value,
         targetJobId: result.targetJobId || targetJobId.value,
         resumeId: resumeId.value,

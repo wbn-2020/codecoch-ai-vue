@@ -225,6 +225,7 @@ import type {
 } from '@/types/industryTemplate'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type JsonArrayField =
   | 'coreBusinessScenarios'
@@ -420,10 +421,21 @@ const handleSave = async () => {
   if (!confirmed) return
   saving.value = true
   try {
+    const confirmedPayload = {
+      ...payload,
+      confirm: true,
+      dryRun: false,
+      reason: editingId.value
+        ? 'Admin confirmed industry template update from template management page.'
+        : 'Admin confirmed industry template create from template management page.',
+      idempotencyKey: createOperationIdempotencyKey(
+        editingId.value ? `industry-template-update-${editingId.value}` : 'industry-template-create'
+      )
+    }
     if (editingId.value) {
-      await updateAdminIndustryTemplateApi(editingId.value, payload)
+      await updateAdminIndustryTemplateApi(editingId.value, confirmedPayload)
     } else {
-      await createAdminIndustryTemplateApi(payload)
+      await createAdminIndustryTemplateApi(confirmedPayload)
     }
     ElMessage.success('行业模板已保存')
     dialogVisible.value = false
@@ -454,11 +466,17 @@ const handleToggle = async (row: IndustryTemplateVO) => {
   })
   if (!confirmed) return
   try {
+    const confirmation = {
+      confirm: true,
+      dryRun: false,
+      reason: `Admin confirmed industry template ${nextEnabled === 1 ? 'enable' : 'disable'} from template management page.`,
+      idempotencyKey: createOperationIdempotencyKey(`industry-template-toggle-${row.industryTemplateId}`)
+    }
     if (nextEnabled === 0) {
-      await disableAdminIndustryTemplateApi(row.industryTemplateId)
+      await disableAdminIndustryTemplateApi(row.industryTemplateId, confirmation)
       ElMessage.success('行业模板已禁用')
     } else {
-      await enableAdminIndustryTemplateApi(row.industryTemplateId)
+      await enableAdminIndustryTemplateApi(row.industryTemplateId, confirmation)
       ElMessage.success('行业模板已启用')
     }
     await fetchTemplates()
@@ -481,7 +499,12 @@ const handleDelete = async (row: IndustryTemplateVO) => {
   })
   if (!confirmed) return
   try {
-    await deleteAdminIndustryTemplateApi(row.industryTemplateId)
+    await deleteAdminIndustryTemplateApi(row.industryTemplateId, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed industry template delete from template management page.',
+      idempotencyKey: createOperationIdempotencyKey(`industry-template-delete-${row.industryTemplateId}`)
+    })
     ElMessage.success('行业模板已删除')
     await fetchTemplates()
   } catch (error) {

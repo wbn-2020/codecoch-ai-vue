@@ -18,25 +18,30 @@ import { compactQueryParams, normalizePageResult } from '@/utils/page'
 const normalizeTask = (task: AgentTaskVO): AgentTaskVO => {
   const agentRunId = task.agentRunId ?? task.runId ?? null
   const normalizedSourceId = task.sourceId == null ? null : Number(task.sourceId)
+  const status = String(task.status || 'TODO').toUpperCase()
   return {
     ...task,
     agentRunId,
     runId: task.runId ?? agentRunId,
     sourceId: normalizedSourceId == null || Number.isFinite(normalizedSourceId) ? normalizedSourceId : task.sourceId,
     trustStatus: task.trustStatus ? String(task.trustStatus).toUpperCase() : task.trustStatus,
+    reviewSource: task.reviewSource ? String(task.reviewSource).toUpperCase() : task.reviewSource,
+    reviewNextActions: Array.isArray(task.reviewNextActions) ? task.reviewNextActions.filter(Boolean) : [],
     fallback: Boolean(task.fallback),
-    status: task.status || 'TODO'
+    status
   }
 }
 
 const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
+  const tasks = (plan.tasks || []).map(normalizeTask)
   const status = String(plan.status || '').toUpperCase()
   const hasVisibleRun = Boolean(plan.runId && ['RUNNING', 'SUCCESS', 'FAILED'].includes(status))
   return {
     ...plan,
+    status: status || plan.status,
     focusSkills: plan.focusSkills || [],
-    tasks: (plan.tasks || []).map(normalizeTask),
-    empty: Boolean(plan.empty || (!plan.runId && !hasVisibleRun))
+    tasks,
+    empty: Boolean(plan.empty || (!plan.runId && !hasVisibleRun && !tasks.length))
   }
 }
 
@@ -62,6 +67,17 @@ const normalizeTodayTasks = (view: AgentTodayTaskVO | AgentTaskVO[]): AgentToday
   }
 }
 
+const toAgentTaskQueryParams = (params?: AgentTaskQueryDTO) => ({
+  pageNo: params?.pageNo ?? params?.pageNum,
+  pageSize: params?.pageSize,
+  startDate: params?.startDate,
+  endDate: params?.endDate,
+  targetJobId: params?.targetJobId,
+  taskType: params?.taskType,
+  status: params?.status,
+  priority: params?.priority
+})
+
 export const generateDailyPlanApi = (data: DailyPlanGenerateDTO) => {
   return request
     .post<DailyPlanVO, DailyPlanVO>('/agent/job-coach/daily-plan/generate', data)
@@ -84,7 +100,7 @@ export const getTodayAgentTasksApi = (params?: AgentTodayTaskQuery) => {
 
 export const getAgentTasksApi = (params?: AgentTaskQueryDTO) => {
   return request
-    .get<PageResult<AgentTaskVO>, PageResult<AgentTaskVO>>('/agent/tasks', { params: compactQueryParams(params) })
+    .get<PageResult<AgentTaskVO>, PageResult<AgentTaskVO>>('/agent/tasks', { params: compactQueryParams(toAgentTaskQueryParams(params)) })
     .then((result) => normalizePageResult(result, params, normalizeTask))
 }
 
@@ -113,8 +129,27 @@ export const submitAgentFeedbackApi = (data: AgentFeedbackDTO) => {
 }
 
 export const getAgentRunDetailApi = (id: number) => {
-  return request.get<AgentRunDetailVO, AgentRunDetailVO>(`/agent/runs/${id}`).then((run) => ({
-    ...run,
-    tasks: (run.tasks || []).map(normalizeTask)
-  }))
+  return request.get<AgentRunDetailVO & Record<string, unknown>, AgentRunDetailVO & Record<string, unknown>>(`/agent/runs/${id}`).then((run) => {
+    const {
+      inputSnapshot,
+      inputSnapshotJson,
+      output,
+      outputJson,
+      rawOutputText,
+      rawAvailable,
+      rawAccessPermission,
+      ...safeRun
+    } = run
+    void inputSnapshot
+    void inputSnapshotJson
+    void output
+    void outputJson
+    void rawOutputText
+    void rawAvailable
+    void rawAccessPermission
+    return {
+      ...safeRun,
+      tasks: (safeRun.tasks || []).map(normalizeTask)
+    } as AgentRunDetailVO
+  })
 }

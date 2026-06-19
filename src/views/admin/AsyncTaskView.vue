@@ -242,9 +242,10 @@ import {
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
-import type { AdminListQuery, AdminTaskImpactPreviewVO, AsyncTaskVO } from '@/types/adminGovernance'
+import type { AdminListQuery, AdminTaskActionPayload, AdminTaskImpactPreviewVO, AsyncTaskVO } from '@/types/adminGovernance'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const router = useRouter()
@@ -507,7 +508,7 @@ const handleRetry = async (row: AsyncTaskVO) => {
     const preview = await getAdminTaskRetryPreviewApi(row.id)
     const note = await promptActionNote('重试失败任务', row, preview)
     if (note === null) return
-    await retryAdminTaskApi(row.id, note)
+    await retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note))
     ElMessage.success('已提交重试')
     await fetchTasks()
   } catch (error) {
@@ -524,7 +525,7 @@ const handleDeadRetry = async (row: AsyncTaskVO) => {
     const preview = await getAdminDeadLetterRetryPreviewApi(row.id)
     const note = await promptActionNote('死信任务重试', row, preview)
     if (note === null) return
-    await retryAdminDeadLetterTaskApi(row.id, note)
+    await retryAdminDeadLetterTaskApi(row.id, buildTaskActionPayload('admin-dead-letter-retry', row, note))
     ElMessage.success('已提交死信重试')
     await fetchTasks()
   } catch (error) {
@@ -568,6 +569,14 @@ const promptActionNote = async (title: string, row: AsyncTaskVO, preview?: Admin
   })
   return String(result.value || '').trim()
 }
+
+const buildTaskActionPayload = (operation: string, row: AsyncTaskVO, note: string): AdminTaskActionPayload => ({
+  note,
+  confirm: true,
+  dryRun: false,
+  reason: `${operation} confirmed for async task ${row.id}: ${note}`.slice(0, 300),
+  idempotencyKey: createOperationIdempotencyKey(`${operation}-${row.id}`)
+})
 
 const handleSearch = () => { query.pageNo = 1; fetchTasks() }
 const handleReset = () => { Object.assign(query, { keyword: '', status: '', type: '', pageNo: 1, pageSize: 10 }); fetchTasks() }

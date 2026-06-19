@@ -6,6 +6,8 @@ import type {
   AdminLogSummaryVO,
   AdminListQuery,
   AdminNotificationVO,
+  AdminOperationConfirmPayload,
+  AdminTaskActionPayload,
   AdminTaskImpactPreviewVO,
   AiModelConfigDTO,
   AiModelConfigVO,
@@ -251,14 +253,14 @@ export const getAdminTasksByTraceApi = (params: { traceId: string; limit?: numbe
 export const getAdminTaskRetryPreviewApi = (id: number) =>
   request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/retry-preview`)
 
-export const retryAdminTaskApi = (id: number, note: string) =>
-  request.post<null, null>(`/admin/tasks/${id}/retry`, { note })
+export const retryAdminTaskApi = (id: number, data: AdminTaskActionPayload) =>
+  request.post<null, null>(`/admin/tasks/${id}/retry`, data)
 
 export const getAdminDeadLetterRetryPreviewApi = (id: number) =>
   request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/dead-letter/retry-preview`)
 
-export const retryAdminDeadLetterTaskApi = (id: number, note: string) =>
-  request.post<null, null>(`/admin/tasks/${id}/dead-letter/retry`, { note })
+export const retryAdminDeadLetterTaskApi = (id: number, data: AdminTaskActionPayload) =>
+  request.post<null, null>(`/admin/tasks/${id}/dead-letter/retry`, data)
 
 export const getAdminNotificationsApi = (params: AdminListQuery) =>
   request
@@ -271,10 +273,17 @@ export const sendAdminNotificationApi = (data: NotificationSendDTO) =>
   request.post<AdminNotificationVO, AdminNotificationVO>('/admin/notifications', data)
 
 export const broadcastAdminNotificationApi = (data: NotificationSendDTO) =>
-  request.post<null, null>('/admin/notifications/broadcast', data)
+  request.post<null, null>('/admin/notifications/broadcast', {
+    title: data.title,
+    content: data.content,
+    confirm: data.confirm,
+    dryRun: data.dryRun,
+    reason: data.reason,
+    idempotencyKey: data.idempotencyKey
+  })
 
-export const deleteAdminNotificationApi = (id: number) =>
-  request.delete<null, null>(`/admin/notifications/${id}`)
+export const deleteAdminNotificationApi = (id: number, data: AdminOperationConfirmPayload) =>
+  request.delete<null, null>(`/admin/notifications/${id}`, { data })
 
 export const getAdminOperationLogsApi = (params: AdminListQuery) =>
   request
@@ -325,19 +334,20 @@ export const getAdminAiModelsApi = (params: AdminListQuery) =>
     })
     .then((result) => normalizePageResult(result, params, normalizeAiModel))
 
-export const createAdminAiModelApi = (data: AiModelConfigDTO) =>
+export const createAdminAiModelApi = (data: AiModelConfigDTO & AdminOperationConfirmPayload) =>
   request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)
 
-export const updateAdminAiModelApi = (id: number, data: AiModelConfigDTO) =>
+export const updateAdminAiModelApi = (id: number, data: AiModelConfigDTO & AdminOperationConfirmPayload) =>
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}`, data)
 
-export const updateAdminAiModelStatusApi = (id: number, status: number) =>
-  request.put<null, null>(`/admin/ai/models/${id}/status`, { status })
+export const updateAdminAiModelStatusApi = (id: number, status: number, data: AdminOperationConfirmPayload) =>
+  request.put<null, null>(`/admin/ai/models/${id}/status`, { status, ...data })
 
-export const setDefaultAdminAiModelApi = (id: number) =>
-  request.put<null, null>(`/admin/ai/models/${id}/default`)
+export const setDefaultAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
+  request.put<null, null>(`/admin/ai/models/${id}/default`, data)
 
-export const deleteAdminAiModelApi = (id: number) => request.delete<null, null>(`/admin/ai/models/${id}`)
+export const deleteAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
+  request.delete<null, null>(`/admin/ai/models/${id}`, { data })
 
 export const getAdminInterviewsApi = (params: AdminListQuery) =>
   request

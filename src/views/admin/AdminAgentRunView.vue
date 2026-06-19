@@ -83,8 +83,8 @@
             <el-date-picker v-model="timeRange" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" start-placeholder="开始时间" end-placeholder="结束时间" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :loading="loading" :disabled="loading" @click="handleSearch">查询</el-button>
+            <el-button :disabled="loading" @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -122,9 +122,9 @@
               :title="errorMessage ? '运行记录加载失败' : runEmptyTitle"
               :description="errorMessage || runEmptyDescription"
             >
-              <el-button v-if="errorMessage" type="primary" @click="fetchRuns">重试</el-button>
-              <el-button v-else-if="hasRunFilters" type="primary" @click="handleReset">清空筛选</el-button>
-              <el-button v-else @click="fetchRuns">刷新</el-button>
+              <el-button v-if="errorMessage" type="primary" :loading="loading" @click="fetchRuns">重试</el-button>
+              <el-button v-else-if="hasRunFilters" type="primary" :disabled="loading" @click="handleReset">清空筛选</el-button>
+              <el-button v-else :loading="loading" @click="fetchRuns">刷新</el-button>
             </AppState>
           </template>
         </el-table>
@@ -288,9 +288,10 @@ import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import { useAuthStore } from '@/stores/auth'
-import type { AdminAgentRunQueryDTO, AgentRunDetailVO } from '@/types/agent'
+import type { AdminAgentRunDetailVO, AdminAgentRunQueryDTO } from '@/types/agent'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type AgentRunColumnKey =
   | 'id'
@@ -310,12 +311,13 @@ const route = useRoute()
 const authStore = useAuthStore()
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const loading = ref(false)
+const runRequestSeq = ref(0)
 const detailLoading = ref(false)
 const errorMessage = ref('')
 const detailError = ref('')
-const runs = ref<AgentRunDetailVO[]>([])
-const detail = ref<AgentRunDetailVO>()
-const rawDetail = ref<AgentRunDetailVO>()
+const runs = ref<AdminAgentRunDetailVO[]>([])
+const detail = ref<AdminAgentRunDetailVO>()
+const rawDetail = ref<AdminAgentRunDetailVO>()
 const detailId = ref<number>()
 const total = ref(0)
 const timeRange = ref<[string, string] | ''>('')
@@ -423,7 +425,7 @@ const getErrorMessage = (error: unknown, fallback = '生成运行记录加载失
   return normalizeErrorMessage(error, fallback)
 }
 
-const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+const agentErrorInfo = (run: Pick<AdminAgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
   const value = `${run.errorCode || ''} ${run.errorMessage || ''}`.toUpperCase()
   if (value.includes('TARGET_JOB')) {
     return {
@@ -449,7 +451,7 @@ const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'
   }
 }
 
-const displayAgentError = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+const displayAgentError = (run: Pick<AdminAgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
   if (!run.errorCode && !run.errorMessage) return '--'
   return agentErrorInfo(run).title
 }
@@ -507,18 +509,23 @@ const formatSensitiveSummary = (value: unknown) => {
 }
 
 const fetchRuns = async () => {
+  const requestSeq = ++runRequestSeq.value
   loading.value = true
   errorMessage.value = ''
   try {
     const result = await getAdminAgentRunsApi(query)
+    if (requestSeq !== runRequestSeq.value) return
     runs.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
+    if (requestSeq !== runRequestSeq.value) return
     runs.value = []
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
-    loading.value = false
+    if (requestSeq === runRequestSeq.value) {
+      loading.value = false
+    }
   }
 }
 
@@ -600,7 +607,9 @@ const loadRunRawDetail = async () => {
   try {
     rawDetail.value = await getAdminAgentRunRawApi(detail.value.id, {
       accessReason,
-      confirmSensitiveAccess: true
+      confirmSensitiveAccess: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`agent-run-raw-${detail.value.id}`)
     })
     rawDetailVisible.value = true
     ElMessage.success('敏感生成内容已按权限加载，访问原因已写入审计')

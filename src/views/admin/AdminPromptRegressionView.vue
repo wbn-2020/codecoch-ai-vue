@@ -304,6 +304,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { PromptRegressionCaseVO, PromptRegressionQuery, PromptRegressionResultVO } from '@/types/analytics'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type PromptCaseColumnKey = 'caseName' | 'promptType' | 'enabled' | 'inputJson' | 'expectedSchemaJson' | 'updatedAt'
 type PromptResultColumnKey = 'caseId' | 'promptVersionId' | 'status' | 'score' | 'errorMessage' | 'outputJson' | 'createdAt'
@@ -622,12 +623,17 @@ const saveCase = async () => {
   if (!confirmed) return
   savingCase.value = true
   try {
+    const operationKey = caseForm.id ? `prompt-regression-case-update-${caseForm.id}` : 'prompt-regression-case-create'
     const payload = {
       caseName: caseForm.caseName.trim(),
       promptType: caseForm.promptType.trim(),
       inputJson: caseForm.inputJson,
       expectedSchemaJson: caseForm.expectedSchemaJson,
-      enabled: caseForm.enabled
+      enabled: caseForm.enabled,
+      confirm: true,
+      dryRun: false,
+      reason: `${actionLabel}; promptType=${caseForm.promptType.trim()}; caseId=${caseForm.id || 'new'}`,
+      idempotencyKey: createOperationIdempotencyKey(operationKey)
     }
     if (caseForm.id) {
       await updatePromptRegressionCaseApi(caseForm.id, payload)
@@ -667,7 +673,11 @@ const runRegression = async () => {
   try {
     await runPromptRegressionApi({
       caseId: runForm.caseId,
-      promptVersionId: runForm.promptVersionId
+      promptVersionId: runForm.promptVersionId,
+      confirm: true,
+      dryRun: false,
+      reason: `运行提示词回归；caseId=${runForm.caseId}；promptVersionId=${runForm.promptVersionId}`,
+      idempotencyKey: createOperationIdempotencyKey(`prompt-regression-${runForm.caseId}`)
     })
     runDialogVisible.value = false
     ElMessage.success('回归运行请求已提交')

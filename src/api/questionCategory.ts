@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
-import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
+import type { AdminOperationConfirmPayload, QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionCategoryVO = Partial<QuestionCategoryVO> & {
@@ -31,7 +31,11 @@ const normalizeCategoryList = (list: BackendQuestionCategoryVO[] = []) =>
 const toBackendCategoryDTO = (data: QuestionCategoryDTO) => ({
   categoryName: data.name,
   sort: data.sort,
-  status: data.status
+  status: data.status,
+  confirm: data.confirm,
+  dryRun: data.dryRun,
+  reason: data.reason,
+  idempotencyKey: data.idempotencyKey
 })
 
 export const getQuestionCategoriesApi = (params?: { status?: number | ''; keyword?: string }) => {
@@ -60,6 +64,6 @@ export const updateQuestionCategoryApi = (id: number, data: QuestionCategoryDTO)
     .then(normalizeQuestionCategory)
 }
 
-export const deleteQuestionCategoryApi = (id: number) => {
-  return request.delete<null, null>(`/admin/question-categories/${id}`)
+export const deleteQuestionCategoryApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.delete<null, null>(`/admin/question-categories/${id}`, { data })
 }

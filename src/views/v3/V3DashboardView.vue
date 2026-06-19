@@ -185,6 +185,7 @@ import AppState from '@/components/common/AppState.vue'
 import type { V3DashboardNextActionVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 const router = useRouter()
 const overviewLoading = ref(false)
@@ -311,9 +312,10 @@ const interviewRetryQuery = computed(() => compactQuery({
   fromReportId: overview.value?.recentReport?.reportId
 }))
 const normalizeActionPath = (path: string) => {
-  if (!path.startsWith('/interviews/create')) return path
-  const hasQuery = path.includes('?')
-  const params = new URLSearchParams(hasQuery ? path.slice(path.indexOf('?') + 1) : '')
+  const safePath = sanitizeLocalActionPath(path, '/dashboard/v3')
+  if (!safePath.startsWith('/interviews/create')) return safePath
+  const hasQuery = safePath.includes('?')
+  const params = new URLSearchParams(hasQuery ? safePath.slice(safePath.indexOf('?') + 1) : '')
   if (!params.get('source')) params.set('source', 'v3')
   if (currentTargetJobId.value && !params.get('targetJobId')) params.set('targetJobId', String(currentTargetJobId.value))
   if (latestSuccessfulMatchReportId.value && !params.get('matchReportId')) params.set('matchReportId', String(latestSuccessfulMatchReportId.value))

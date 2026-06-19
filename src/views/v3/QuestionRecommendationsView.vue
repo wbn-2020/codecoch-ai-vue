@@ -449,9 +449,7 @@ const buildRecommendedPracticeQuery = (questionIds: number[]) =>
     sourceId: query.sourceId,
     batchId: generationDiagnostic.value?.batchId,
     trustStatus: generationDiagnostic.value?.trustStatus || 'PARTIAL',
-    evidenceSummary: generationDiagnostic.value?.evidenceSummary,
-    fallback: generationDiagnostic.value?.fallback,
-    recommendReason: '来自推荐批次中已匹配正式题库的题目。'
+    fallback: generationDiagnostic.value?.fallback
   })
 
 const buildFallbackPracticeQuery = () =>
@@ -462,12 +460,10 @@ const buildFallbackPracticeQuery = () =>
     trustStatus: 'FALLBACK',
     count: query.questionCount,
     keyword: fallbackKeyword.value || undefined,
-    evidenceSummary: fallbackEvidenceSummary.value,
     targetJobId: getQueryNumber('targetJobId'),
     resumeId: getQueryNumber('resumeId'),
     matchReportId: getQueryNumber('matchReportId'),
-    skillProfileId: getQueryNumber('skillProfileId') || getQueryNumber('profileId'),
-    recommendReason: fallbackEvidenceSummary.value
+    skillProfileId: getQueryNumber('skillProfileId') || getQueryNumber('profileId')
   })
 
 const setFallbackDiagnostic = (message?: string) => {

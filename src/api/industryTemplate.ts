@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { AdminOperationConfirmPayload } from '@/types/adminGovernance'
 import type {
   AdminIndustryTemplateQuery,
   CreateIndustryTemplateDTO,
@@ -21,22 +22,22 @@ export const getAdminIndustryTemplateDetailApi = (id: number) => {
   return request.get<IndustryTemplateVO, IndustryTemplateVO>(`/admin/industry-templates/${id}`)
 }
 
-export const createAdminIndustryTemplateApi = (data: CreateIndustryTemplateDTO) => {
+export const createAdminIndustryTemplateApi = (data: CreateIndustryTemplateDTO & AdminOperationConfirmPayload) => {
   return request.post<IndustryTemplateVO, IndustryTemplateVO>('/admin/industry-templates', data)
 }
 
-export const updateAdminIndustryTemplateApi = (id: number, data: UpdateIndustryTemplateDTO) => {
+export const updateAdminIndustryTemplateApi = (id: number, data: UpdateIndustryTemplateDTO & AdminOperationConfirmPayload) => {
   return request.put<IndustryTemplateVO, IndustryTemplateVO>(`/admin/industry-templates/${id}`, data)
 }
 
-export const enableAdminIndustryTemplateApi = (id: number) => {
-  return request.post<null, null>(`/admin/industry-templates/${id}/enable`)
+export const enableAdminIndustryTemplateApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.post<null, null>(`/admin/industry-templates/${id}/enable`, data)
 }
 
-export const disableAdminIndustryTemplateApi = (id: number) => {
-  return request.post<null, null>(`/admin/industry-templates/${id}/disable`)
+export const disableAdminIndustryTemplateApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.post<null, null>(`/admin/industry-templates/${id}/disable`, data)
 }
 
-export const deleteAdminIndustryTemplateApi = (id: number) => {
-  return request.delete<null, null>(`/admin/industry-templates/${id}`)
+export const deleteAdminIndustryTemplateApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.delete<null, null>(`/admin/industry-templates/${id}`, { data })
 }

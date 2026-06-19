@@ -80,13 +80,23 @@
         </div>
 
         <AppState
-          v-if="!current && !loading"
+          v-if="!current && !loading && !roomError"
           type="empty"
           title="未找到面试会话"
           description="可能是面试记录无效、会话已结束，或当前账号没有访问这场面试。请从历史记录重新进入。"
         >
           <el-button type="primary" @click="router.push('/interviews/history')">返回面试历史</el-button>
           <el-button @click="fetchCurrent">重新加载</el-button>
+        </AppState>
+
+        <AppState
+          v-if="!current && !loading && roomError"
+          type="error"
+          title="面试房间加载失败"
+          :description="roomError"
+        >
+          <el-button type="primary" @click="fetchCurrent">重新加载</el-button>
+          <el-button @click="router.push('/interviews/history')">返回面试历史</el-button>
         </AppState>
 
         <div class="side-actions">
@@ -214,6 +224,13 @@
               title="阶段式 AI 点评进度"
               :description="answerReviewMessage || 'AI 正在评分并生成下一步问题，预计需要 5-20 秒。'"
             />
+            <section
+              v-if="submitting && answerReviewStreamingFeedback"
+              class="review-stream-preview"
+            >
+              <span>AI 瀹炴椂鐐硅瘎</span>
+              <p>{{ answerReviewStreamingFeedback }}</p>
+            </section>
             <div v-if="submitting && answerReviewEvents.length" class="review-stage-list">
               <article v-for="item in answerReviewEvents" :key="item.key" class="review-stage-item">
                 <span>{{ item.eventLabel || item.event }}</span>
@@ -244,7 +261,7 @@
         <div class="score-card">
           <span>当前题评分</span>
           <strong>{{ latestScoreText }}</strong>
-          <p>{{ evaluationLevelLabel(lastResult?.evaluation.level) }}</p>
+          <p>{{ latestEvaluationLevelText }}</p>
         </div>
 
         <div class="answer-rubric">
@@ -271,21 +288,29 @@
         <el-tabs class="feedback-tabs" model-value="evaluation">
           <el-tab-pane label="评估" name="evaluation">
             <div v-if="lastResult" class="feedback-stack">
+              <el-alert
+                v-if="reviewFallbackVisible"
+                type="warning"
+                show-icon
+                :closable="false"
+                title="点评内容未完整返回"
+                description="当前题已有评分或作答记录，但结构化点评为空；请先按下方兜底建议复盘，也可以刷新当前题后继续。"
+              />
               <section>
                 <h3>AI 点评</h3>
-                <MarkdownPreview :content="lastResult.evaluation.comment || lastResult.comment || '暂无点评'" />
+                <MarkdownPreview :content="reviewCommentText" />
               </section>
               <section>
                 <h3>回答亮点</h3>
-                <p>{{ lastResult.evaluation.advantage || '暂无亮点数据' }}</p>
+                <p>{{ reviewAdvantageText }}</p>
               </section>
               <section>
                 <h3>不足之处</h3>
-                <p>{{ lastResult.evaluation.weakness || '暂无不足数据' }}</p>
+                <p>{{ reviewWeaknessText }}</p>
               </section>
               <section>
                 <h3>提升建议</h3>
-                <p>{{ lastResult.evaluation.suggestion || '暂无建议数据' }}</p>
+                <p>{{ reviewSuggestionText }}</p>
               </section>
               <section v-if="lastResult.followUpQuestion || lastResult.followUpReason">
                 <h3>AI 追问</h3>
@@ -378,6 +403,7 @@ const starting = ref(false)
 const submitting = ref(false)
 const finishing = ref(false)
 const current = ref<InterviewCurrentVO | null>(null)
+const roomError = ref('')
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerInputRef = ref<{ focus?: () => void } | null>(null)
@@ -388,6 +414,7 @@ const answerReviewMessage = ref('')
 const answerReviewAnswerId = ref<number | undefined>()
 const answerReviewAiCallLogId = ref<number | undefined>()
 const answerReviewFollowUpAiCallLogId = ref<number | undefined>()
+const answerReviewStreamingFeedback = ref('')
 const answerReviewEvents = ref<Array<{ key: string; event: string; eventLabel?: string; stage?: string; stageLabel?: string; message?: string }>>([])
 let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
@@ -566,6 +593,56 @@ const latestScoreText = computed(() => {
   return score === undefined || score === null ? '--' : `${score}`
 })
 
+const hasReviewText = (value?: string | null) => Boolean(value && value.trim())
+
+const latestEvaluationLevelText = computed(() => {
+  if (!lastResult.value) return '等待评分结果'
+  const level = lastResult.value.evaluation.level
+  if (level) return evaluationLevelLabel(level)
+  return latestScoreText.value !== '--' ? '已评分，点评待补' : '等待评分结果'
+})
+
+const reviewFallbackVisible = computed(() => {
+  const result = lastResult.value
+  if (!result) return false
+  return ![
+    result.evaluation.comment,
+    result.comment,
+    result.evaluation.advantage,
+    result.evaluation.weakness,
+    result.evaluation.suggestion
+  ].some(hasReviewText)
+})
+
+const reviewCommentText = computed(() => {
+  const result = lastResult.value
+  if (!result) return ''
+  if (hasReviewText(result.evaluation.comment)) return result.evaluation.comment
+  if (hasReviewText(result.comment)) return result.comment || ''
+  const scoreText = latestScoreText.value !== '--' ? `当前题已返回 ${latestScoreText.value} 分，` : ''
+  return `${scoreText}结构化点评暂未返回。请先按“结论是否明确、方案是否可落地、项目证据是否可信、风险取舍是否讲清”四项复盘。`
+})
+
+const reviewAdvantageText = computed(() => {
+  const value = lastResult.value?.evaluation.advantage
+  if (hasReviewText(value)) return value || ''
+  return lastSubmittedAnswer.value.length >= 80
+    ? '已完成较完整作答，可以继续保留其中清晰的结论和项目描述。'
+    : '已提交回答，但表达较短；下一轮先补一句结论和一个项目场景。'
+})
+
+const reviewWeaknessText = computed(() => {
+  const value = lastResult.value?.evaluation.weakness
+  if (hasReviewText(value)) return value || ''
+  return '结构化不足项暂未返回。请重点检查是否缺少业务背景、关键步骤、异常处理、量化指标或风险取舍。'
+})
+
+const reviewSuggestionText = computed(() => {
+  const value = lastResult.value?.evaluation.suggestion
+  if (hasReviewText(value)) return value || ''
+  return '建议下一轮按“先结论 -> 讲方案 -> 补项目证据 -> 说风险取舍”的顺序回答；如果题目涉及系统设计，再补监控、回滚和容量边界。'
+})
+
 const answerDurationText = computed(() => {
   return lastAnswerDuration.value ? `耗时 ${lastAnswerDuration.value}s` : '最近一次提交'
 })
@@ -606,12 +683,16 @@ const focusAnswerInput = () => {
 const fetchCurrent = async () => {
   if (!interviewId) return
   loading.value = true
+  roomError.value = ''
   try {
     current.value = await getCurrentInterviewQuestionApi(interviewId)
     answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
     }
+  } catch (error) {
+    current.value = null
+    roomError.value = getErrorMessage(error, '面试房间暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -677,6 +758,7 @@ const resetAnswerReviewState = () => {
   answerReviewAnswerId.value = undefined
   answerReviewAiCallLogId.value = undefined
   answerReviewFollowUpAiCallLogId.value = undefined
+  answerReviewStreamingFeedback.value = ''
   answerReviewEvents.value = []
 }
 
@@ -721,7 +803,16 @@ const normalizeAnswerReviewResult = (
   }
 }
 
+const isAnswerReviewTokenEvent = (event: string, data?: InterviewAnswerReviewSseEvent) => {
+  return (event === 'delta' || event === 'token') && Boolean(data?.content || data?.message)
+}
+
 const applyAnswerReviewEvent = (event: string, data?: InterviewAnswerReviewSseEvent) => {
+  if (isAnswerReviewTokenEvent(event, data)) {
+    answerReviewStreamingFeedback.value += String(data?.content || data?.message || '')
+    answerReviewMessage.value = 'AI 正在生成点评'
+    return
+  }
   const stage = data?.stage ? String(data.stage) : ''
   const stageLabel = stage ? answerReviewStageLabels[stage] || '点评进度更新' : ''
   const message = toFriendlyMessage(data?.message, stageLabel || 'AI 正在点评')
@@ -803,11 +894,19 @@ const handleSubmit = async () => {
           await submitAnswerFallback(id, payload)
           return
         }
-        ElMessage.error(getErrorMessage(error, 'AI 点评失败，请刷新当前题状态。'))
+        if (latestResult) {
+          await applyAnswerResult(latestResult)
+          ElMessage.warning(getErrorMessage(error, '点评连接提前中断，已保留并应用已返回的点评结果。'))
+          return
+        }
+        await fetchCurrent()
+        ElMessage.warning(getErrorMessage(error, '点评连接提前中断，已刷新当前题状态。'))
       },
       onDone: async () => {
         if (!completedByDone && latestResult) {
           await applyAnswerResult(latestResult)
+        } else if (!completedByDone) {
+          await fetchCurrent()
         }
       }
     }
@@ -1261,6 +1360,28 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+}
+
+.review-stream-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(6, 182, 212, 0.08);
+
+  span {
+    color: var(--cc-ai-cyan);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
 
 .review-stage-item {

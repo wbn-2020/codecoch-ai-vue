@@ -97,6 +97,9 @@ const rules: FormRules<RegisterDTO> = {
   confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
 }
 
+const trimAuthErrorPrefix = (message: string) =>
+  message.replace(/^(注册失败|请求失败)[，,：:\s]*/u, '').trim() || message
+
 const getRegisterErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object') {
     const payload = error as { message?: string; response?: { data?: { message?: string } } }
@@ -107,9 +110,9 @@ const getRegisterErrorMessage = (error: unknown) => {
     if (message.includes('邮箱') || message.toLowerCase().includes('email')) {
       return '该邮箱格式或状态不符合要求，请检查后重试。'
     }
-    return normalizeErrorMessage(error, '注册失败，请稍后重试。')
+    return trimAuthErrorPrefix(normalizeErrorMessage(error, '请稍后重试，或更换用户名后再试。'))
   }
-  return '注册失败，请稍后重试。'
+  return '请稍后重试，或更换用户名后再试。'
 }
 
 const handleSubmit = async () => {

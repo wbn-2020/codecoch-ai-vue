@@ -24,6 +24,10 @@
           />
         </el-select>
         <el-button :loading="loading || resumeLoading" @click="load">加载</el-button>
+        <el-button :disabled="!resumeId" @click="goResumeMatch()">
+          <GitCompareArrows :size="16" />
+          进入岗位匹配
+        </el-button>
         <el-button type="primary" :disabled="!resumeId" :loading="saving" @click="create">创建版本</el-button>
       </div>
     </section>
@@ -41,7 +45,7 @@
               <h2>版本列表</h2>
             </div>
           </div>
-          <div class="v4-list" v-loading="loading">
+            <div class="v4-list" v-loading="loading">
             <article v-for="item in versions" :key="item.id" class="v4-row">
               <div class="v4-row-head">
                 <div>
@@ -52,7 +56,8 @@
                   <el-tag v-if="item.currentFlag" type="success">当前版本</el-tag>
                   <el-button link type="primary" @click="showCurrentDiff(item.id)">对比当前</el-button>
                   <el-button link type="primary" @click="openCopy(item)">复制</el-button>
-                  <el-button link type="success" @click="openSuggestion(item)">应用建议</el-button>
+                  <el-button link type="success" @click="openSuggestion(item)">应用版本并记录采纳</el-button>
+                  <el-button link type="primary" @click="goResumeMatch(item.id)">去匹配</el-button>
                   <el-button link type="warning" @click="rollback(item.id)">回滚</el-button>
                 </div>
               </div>
@@ -80,6 +85,7 @@
             <div>
               <p class="section-kicker">双版本对比</p>
               <h2>对比两个版本</h2>
+              <p class="muted">匹配报告当前按简历正文生成；如需验证历史版本，请先复制或回滚为当前简历后再进入匹配。</p>
             </div>
           </div>
           <div class="pair-diff-bar">
@@ -130,7 +136,15 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="suggestionVisible" title="应用 AI 建议" width="520px">
+    <el-dialog v-model="suggestionVisible" title="应用版本并记录 AI 建议采纳" width="520px">
+      <el-alert
+        class="suggestion-apply-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="该操作会改写当前简历正文"
+        description="系统会先把当前简历恢复为选中的版本快照，再保存一条 AI 建议采纳记录。只想保留证据时，请先复制版本或取消操作。"
+      />
       <el-form label-position="top">
         <el-form-item label="关联优化记录">
           <el-input-number v-model="suggestionForm.optimizeRecordId" :min="1" controls-position="right" />
@@ -153,7 +167,7 @@
       </el-form>
       <template #footer>
         <el-button @click="suggestionVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="applySuggestion">应用</el-button>
+        <el-button type="primary" :loading="saving" @click="applySuggestion">应用版本并记录</el-button>
       </template>
     </el-dialog>
   </div>
@@ -161,6 +175,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
+import { GitCompareArrows } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -392,6 +407,17 @@ const selectDefaultResume = async () => {
 
 const goCreateResume = () => router.push('/resumes/create')
 const goResumeHub = () => router.push('/resumes')
+const goResumeMatch = (resumeVersionId?: number) => {
+  if (!resumeId.value) return
+  router.push({
+    path: '/resume-match',
+    query: {
+      resumeId: String(resumeId.value),
+      source: 'resume-version',
+      ...(resumeVersionId ? { resumeVersionId: String(resumeVersionId) } : {})
+    }
+  })
+}
 
 const openCopy = (item: ResumeVersionVO) => {
   copySource.value = item
@@ -473,16 +499,17 @@ const applySuggestion = async () => {
   const version = suggestionVersion.value
   const confirmed = await confirmDangerActionPreview({
     title: '记录 AI 建议采纳预览',
-    action: '保存这条简历版本的建议采纳状态',
+    action: '把当前简历恢复为该版本快照，并保存这条 AI 建议采纳状态',
     target: `${versionLabel(version)}；状态：${suggestionStatusLabel(suggestionForm.status)}`,
-    impact: '保存后会形成一条 AI 优化建议采纳记录，后续简历版本复盘、优化证据和训练建议可能引用这次判断。',
-    rollback: '该操作不会直接改写简历正文；如记录不准确，可以重新补充采纳状态或备注修正。',
+    impact: '确认后当前简历正文会被该版本快照覆盖，并形成一条 AI 优化建议采纳记录；后续简历匹配、面试追问和训练推荐可能使用覆盖后的内容作为证据。',
+    rollback: '如需恢复覆盖前内容，需要从版本列表选择其他版本回滚；采纳记录如不准确，可以再次补充采纳状态或备注修正。',
     audit: `关联优化记录：${suggestionForm.optimizeRecordId || '未关联'}；建议类型：${suggestionTypeLabel(suggestionForm.suggestionType)}`,
     tips: [
+      '确认该版本快照适合成为当前简历正文后再继续。',
       '确认采纳状态和备注能说明为什么采用或拒绝这条建议。',
       suggestionForm.note ? '备注会作为后续复盘线索，请避免填写无关隐私内容。' : '建议补充一句备注，方便之后回看。'
     ],
-    confirmButtonText: '确认保存记录'
+    confirmButtonText: '确认应用并记录'
   })
   if (!confirmed) return
   saving.value = true
@@ -581,6 +608,10 @@ onMounted(async () => {
 .pair-diff-bar {
   flex-wrap: wrap;
   align-items: center;
+}
+
+.suggestion-apply-alert {
+  margin-bottom: 14px;
 }
 
 .empty-actions {

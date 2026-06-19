@@ -199,6 +199,7 @@ export const optimizeResumeApi = (resumeId: number, data?: ResumeOptimizeRequest
 
 const toResumeOptimizeSseQuery = (params: ResumeOptimizeSseParams) => ({
   resumeId: String(params.resumeId),
+  targetJobId: params.targetJobId != null ? String(params.targetJobId) : '',
   targetPosition: params.targetPosition || '',
   targetCompany: params.targetCompany || '',
   extraRequirements: params.extraRequirements || '',

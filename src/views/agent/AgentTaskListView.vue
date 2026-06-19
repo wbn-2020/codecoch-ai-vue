@@ -213,6 +213,11 @@
             </div>
 
             <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+            <div v-if="task.reviewSummary" class="task-review-summary">
+              <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
+              <p>{{ task.reviewSummary }}</p>
+              <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
+            </div>
             <p v-if="taskFailureText(task)" class="task-failure">{{ taskFailureText(task) }}</p>
             <p v-if="task.skipReason && normalizeStatus(task.status) === 'SKIPPED'" class="task-skip-reason">跳过原因：{{ task.skipReason }}</p>
           </div>
@@ -234,12 +239,20 @@
                 开始
               </el-button>
               <el-button
-                v-else-if="normalizeStatus(task.status) === 'DOING'"
+                v-else-if="normalizeStatus(task.status) === 'DOING' && canManuallyCloseTask(task)"
                 type="success"
                 :disabled="isTaskPending(task)"
                 @click="openCompleteDialog(task)"
               >
                 完成
+              </el-button>
+              <el-button
+                v-else-if="normalizeStatus(task.status) === 'DOING' && hasAgentTaskActionEntry(task)"
+                type="primary"
+                :disabled="isTaskPending(task)"
+                @click="openTaskPrimaryEntry(task)"
+              >
+                去处理
               </el-button>
               <el-button
                 v-else-if="normalizeStatus(task.status) === 'SKIPPED'"
@@ -274,13 +287,14 @@
               >
                 查看结果
               </el-button>
-              <el-button v-else type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-button>
+              <el-button v-else-if="canManuallyCloseTask(task)" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-button>
+              <el-button v-else :disabled="!hasRecoverableEntry(task)" @click="openTaskPrimaryEntry(task)">查看任务</el-button>
 
               <el-dropdown trigger="click">
                 <el-button class="more-button" :icon="MoreHorizontal" :disabled="isTaskPending(task)">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="task.actionUrl" @click="goAction(task.actionUrl)">打开任务入口</el-dropdown-item>
+                    <el-dropdown-item v-if="hasAgentTaskActionEntry(task)" @click="goAction(buildAgentTaskActionPath(task))">打开任务入口</el-dropdown-item>
                     <el-dropdown-item v-if="getTaskRunId(task)" @click="openRunDetail(task)">查看生成详情</el-dropdown-item>
                     <el-dropdown-item v-if="canManuallyCloseTask(task)" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
                     <el-dropdown-item
@@ -462,7 +476,14 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
+import {
+  buildAgentTaskActionPath,
+  hasAgentTaskActionEntry,
+  isAgentJobApplicationTask,
+  isEvidenceBoundAgentTask
+} from '@/utils/agentTaskAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface SelectOption {
   label: string
@@ -534,6 +555,7 @@ const taskTypeOptions: SelectOption[] = [
   { label: '简历匹配', value: 'RESUME_MATCH' },
   { label: '推荐题生成', value: 'QUESTION_RECOMMENDATION' },
   { label: '面试报告', value: 'INTERVIEW_REPORT' },
+  { label: '投递跟进', value: 'APPLICATION_FOLLOW_UP' },
   { label: '刷题练习', value: 'QUESTION_PRACTICE' },
   { label: '错题复习', value: 'WRONG_QUESTION_REVIEW' },
   { label: '模拟面试', value: 'INTERVIEW' },
@@ -666,6 +688,9 @@ const metrics = computed(() => [
 
 const completionReviewItems = computed(() => {
   const task = completionReviewTask.value
+  if (task?.reviewNextActions?.length) {
+    return task.reviewNextActions
+  }
   const type = String(task?.taskType || '').toUpperCase()
   const skill = task?.relatedSkillName || task?.targetJobTitle || '当前方向'
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) {
@@ -699,7 +724,12 @@ const completionReviewItems = computed(() => {
 const completionReviewNextAction = computed(() => {
   const task = completionReviewTask.value
   const type = String(task?.taskType || '').toUpperCase()
-  if (task?.actionUrl) return { label: '打开任务入口', path: task.actionUrl }
+  if (task && hasAgentTaskActionEntry(task)) {
+    return {
+      label: isAgentJobApplicationTask(task) ? '查看投递进度' : '打开任务入口',
+      path: buildAgentTaskActionPath(task)
+    }
+  }
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) return { label: '继续专项练习', path: '/questions/practice' }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return { label: '查看面试历史', path: '/interviews/history' }
   if (type.includes('RESUME')) return { label: '查看简历匹配', path: '/resume-match' }
@@ -732,6 +762,7 @@ const displayTaskTitle = (row: AgentTaskVO) => {
     RESUME_MATCH: '简历匹配报告',
     QUESTION_RECOMMENDATION: '推荐题生成',
     INTERVIEW_REPORT: '面试报告生成',
+    APPLICATION_FOLLOW_UP: '投递跟进',
     STUDY_TASK: `${skill} 学习任务`,
     REPORT_REVIEW: '面试报告复盘',
     SKILL_REVIEW: `${skill} 核心概念复习`,
@@ -752,6 +783,7 @@ const displayTaskDescription = (row: AgentTaskVO) => {
     RESUME_MATCH: '对比简历和岗位描述的匹配度，失败后回到匹配详情查看原因并重新生成。',
     QUESTION_RECOMMENDATION: '基于画像、匹配报告或通用练习策略生成练习题。',
     INTERVIEW_REPORT: '生成面试复盘、薄弱点和后续学习建议。',
+    APPLICATION_FOLLOW_UP: '查看投递进度，补充沟通记录，并安排下一次跟进。',
     STUDY_TASK: '完成学习计划中的阶段任务。',
     REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
@@ -786,6 +818,8 @@ const sourceTypeLabel = (value?: string | null) => {
     INTERVIEW_REPORT: '面试报告',
     RESUME_OPTIMIZE: '项目经历',
     TRAINING_MATERIAL: '训练素材',
+    APPLICATION_FOLLOW_UP: '投递跟进',
+    JOB_APPLICATION: '投递进度',
     JOB_COACH_AGENT_TASK: '智能教练'
   }
   return map[type] || '智能教练'
@@ -886,13 +920,14 @@ const goRecovery = async (path: string) => {
   await router.push(path)
 }
 
-const hasRecoverableEntry = (task: AgentTaskVO) => Boolean(task.actionUrl || getTaskRunId(task))
-const canManuallyCloseTask = (task: AgentTaskVO) => ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status))
+const hasRecoverableEntry = (task: AgentTaskVO) => Boolean(hasAgentTaskActionEntry(task) || getTaskRunId(task))
+const canManuallyCloseTask = (task: AgentTaskVO) =>
+  ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status)) && !isEvidenceBoundAgentTask(task)
 const canManuallySkipTask = (task: AgentTaskVO) => ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status))
 
 const openTaskPrimaryEntry = async (task: AgentTaskVO) => {
-  if (task.actionUrl) {
-    await goAction(task.actionUrl)
+  if (hasAgentTaskActionEntry(task)) {
+    await goAction(buildAgentTaskActionPath(task))
     return
   }
   await openRunDetail(task)
@@ -907,11 +942,12 @@ const openRunDetail = async (task: AgentTaskVO) => {
 
 const goAction = async (url: string) => {
   if (!url) return
-  if (/^https?:\/\//i.test(url)) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+  const safePath = sanitizeLocalActionPath(url)
+  if (!safePath) {
+    ElMessage.warning('任务链接暂不支持跳转到站外地址')
     return
   }
-  await router.push(url.startsWith('/') ? url : `/${url}`)
+  await router.push(safePath)
 }
 
 const getAsyncTaskEntry = (task: AsyncTaskVO) => {
@@ -1322,6 +1358,15 @@ const handleAsyncDiagnosticClear = () => {
 }
 
 const openCompleteDialog = (task: AgentTaskVO) => {
+  if (!canManuallyCloseTask(task)) {
+    if (hasAgentTaskActionEntry(task)) {
+      ElMessage.info('该任务需要完成对应业务动作后自动核验')
+      void goAction(buildAgentTaskActionPath(task))
+      return
+    }
+    ElMessage.warning('该任务暂不支持手动标记完成')
+    return
+  }
   selectedTask.value = task
   dialogMode.value = 'complete'
   note.value = ''
@@ -1344,10 +1389,10 @@ const submitAction = async () => {
   }
   await withTaskPending(task, dialogMode.value, async () => {
     if (dialogMode.value === 'complete') {
-      await completeAgentTaskApi(task.id, { note: note.value || undefined })
+      const completedTask = await completeAgentTaskApi(task.id, { note: note.value || undefined })
       ElMessage.success('任务已完成')
-      completionReviewTask.value = task
-      completionReviewNote.value = note.value.trim()
+      completionReviewTask.value = completedTask || task
+      completionReviewNote.value = completedTask?.reviewNote || note.value.trim()
       completionReviewVisible.value = true
     } else {
       await skipAgentTaskApi(task.id, { skipReason: note.value || undefined })
@@ -1360,9 +1405,10 @@ const submitAction = async () => {
 
 const handleStartTask = async (task: AgentTaskVO) => {
   await withTaskPending(task, 'start', async () => {
-    await startAgentTaskApi(task.id)
+    const startedTask = await startAgentTaskApi(task.id)
     ElMessage.success('任务已开始')
     await fetchTasks()
+    await goAction(buildAgentTaskActionPath(startedTask || task))
   })
 }
 
@@ -1907,6 +1953,28 @@ onMounted(() => {
   font-size: 11px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.task-review-summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.task-review-summary span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-review-summary p,
+.task-review-summary small {
+  display: block;
+  margin: 4px 0 0;
+  line-height: 1.55;
 }
 
 .task-reason,

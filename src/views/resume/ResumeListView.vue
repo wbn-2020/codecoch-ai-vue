@@ -482,7 +482,7 @@ import {
   UploadCloud
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   applyResumeOptimizeResultApi,
@@ -516,6 +516,12 @@ import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const route = useRoute()
+const routeTargetJobId = computed(() => {
+  const rawValue = Array.isArray(route.query.targetJobId) ? route.query.targetJobId[0] : route.query.targetJobId
+  const value = Number(rawValue)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
 const loading = ref(false)
 const loadError = ref('')
 const resumes = ref<ResumeVO[]>([])
@@ -1111,6 +1117,7 @@ const hasOptimizeAsyncReceipt = (result: ResumeOptimizeSubmitVO) =>
 
 const submitOptimizeTask = async (row: ResumeVO) => {
   const result = await optimizeResumeApi(row.id, {
+    targetJobId: routeTargetJobId.value,
     targetPosition: row.targetPosition
   })
   if (hasOptimizeAsyncReceipt(result)) {

@@ -170,6 +170,7 @@ export interface ResumeConfirmAnalysisVO {
 }
 
 export interface ResumeOptimizeRequestDTO {
+  targetJobId?: number
   targetPosition?: string
   targetCompany?: string
   extraRequirements?: string
@@ -183,6 +184,7 @@ export type ResumeOptimizeSseEventType = 'start' | 'progress' | 'result' | 'done
 
 export interface ResumeOptimizeSseParams {
   resumeId: number
+  targetJobId?: number
   targetPosition?: string
   targetCompany?: string
   extraRequirements?: string
@@ -234,6 +236,7 @@ export interface ResumeOptimizeResultJson {
 export interface ResumeOptimizeSubmitVO {
   optimizeRecordId: number
   resumeId: number
+  targetJobId?: number
   aiCallLogId?: number | null
   asyncMessageId?: string | null
   asyncTraceId?: string | null
@@ -253,6 +256,7 @@ export interface ResumeOptimizeSubmitVO {
 export interface ResumeOptimizeRecordVO {
   optimizeRecordId: number
   resumeId: number
+  targetJobId?: number
   targetPosition?: string
   experienceYears?: number
   industryDirection?: string

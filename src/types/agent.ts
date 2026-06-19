@@ -8,6 +8,7 @@ export type AgentTaskType =
   | 'STUDY_TASK'
   | 'REPORT_REVIEW'
   | 'SKILL_REVIEW'
+  | 'APPLICATION_FOLLOW_UP'
   | string
 
 export type AgentTaskPriority = 'HIGH' | 'MEDIUM' | 'LOW' | string
@@ -48,6 +49,12 @@ export interface AgentTaskVO {
   trustStatus?: AgentTrustStatus | null
   evidenceSummary?: string | null
   fallback?: boolean | null
+  reviewId?: number | null
+  reviewSummary?: string | null
+  reviewNextActions?: string[]
+  reviewSource?: 'RULE' | 'LLM' | 'FALLBACK' | string | null
+  reviewSourceLabel?: string | null
+  reviewNote?: string | null
   status?: AgentTaskStatus
   skipReason?: string
   dueDate?: string
@@ -66,6 +73,9 @@ export interface DailyPlanVO {
   status?: AgentRunStatus
   errorCode?: string | null
   errorMessage?: string | null
+  failureAction?: string | null
+  failureActionLabel?: string | null
+  failureSuggestion?: string | null
   durationMs?: number
   focusSkills?: AgentSkillRefVO[]
   tasks?: AgentTaskVO[]
@@ -156,11 +166,6 @@ export interface AgentRunDetailVO {
   tokenInput?: number
   tokenOutput?: number
   durationMs?: number
-  inputSnapshot?: Record<string, unknown> | unknown[] | string | null
-  output?: Record<string, unknown> | unknown[] | string | null
-  rawOutputText?: string | null
-  rawAvailable?: boolean
-  rawAccessPermission?: string
   errorCode?: string | null
   errorMessage?: string | null
   tasks?: AgentTaskVO[]
@@ -169,11 +174,23 @@ export interface AgentRunDetailVO {
   createdAt?: string
 }
 
+export interface AdminAgentRunDetailVO extends AgentRunDetailVO {
+  inputSnapshot?: Record<string, unknown> | unknown[] | string | null
+  inputSnapshotJson?: string | null
+  output?: Record<string, unknown> | unknown[] | string | null
+  outputJson?: string | null
+  rawOutputText?: string | null
+  rawAvailable?: boolean
+  rawAccessPermission?: string
+}
+
 export interface AdminAgentRunQueryDTO extends PageQuery {
   userId?: number
   agentType?: string
   status?: AgentRunStatus | ''
   triggerType?: AgentTriggerType | ''
+  startDate?: string
+  endDate?: string
   startTime?: string
   endTime?: string
 }

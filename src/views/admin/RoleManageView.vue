@@ -139,6 +139,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { RoleSaveDTO, RoleVO } from '@/types/user'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type RoleColumnKey = 'roleCode' | 'roleName' | 'status' | 'description' | 'createdAt' | 'updatedAt'
 
@@ -227,11 +228,18 @@ const handleSave = async () => {
 
   saving.value = true
   try {
+    const payload: RoleSaveDTO = {
+      ...form,
+      confirm: true,
+      dryRun: false,
+      reason: `${actionLabel}；roleId=${editingRoleId.value || 'new'}；roleCode=${form.roleCode}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-role-save-${editingRoleId.value || form.roleCode}`)
+    }
     if (editingRoleId.value) {
-      await updateAdminRoleApi(editingRoleId.value, form)
+      await updateAdminRoleApi(editingRoleId.value, payload)
       ElMessage.success('角色信息已更新')
     } else {
-      await createAdminRoleApi(form)
+      await createAdminRoleApi(payload)
       ElMessage.success('角色已创建')
     }
     dialogVisible.value = false
@@ -260,7 +268,13 @@ const handleToggleStatus = async (row: RoleVO) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
-  await updateAdminRoleStatusApi(row.roleId, { status: nextStatus })
+  await updateAdminRoleStatusApi(row.roleId, {
+    status: nextStatus,
+    confirm: true,
+    dryRun: false,
+    reason: `${actionLabel}角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
+    idempotencyKey: createOperationIdempotencyKey(`admin-role-status-${row.roleId}`)
+  })
   ElMessage.success(`角色已${actionLabel}`)
   await fetchRoles()
 }
@@ -291,7 +305,12 @@ const handleDelete = async (row: RoleVO) => {
   })
   if (!confirmed) return
   try {
-    await deleteAdminRoleApi(row.roleId)
+    await deleteAdminRoleApi(row.roleId, {
+      confirm: true,
+      dryRun: false,
+      reason: `删除角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-role-delete-${row.roleId}`)
+    })
     ElMessage.success('角色已删除')
     await fetchRoles()
   } catch (error) {

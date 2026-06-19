@@ -63,8 +63,8 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :loading="loading" :disabled="loading" @click="handleSearch">查询</el-button>
+            <el-button :disabled="loading" @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -107,9 +107,9 @@
               :title="errorMessage ? '生成任务加载失败' : taskEmptyTitle"
               :description="errorMessage || taskEmptyDescription"
             >
-              <el-button v-if="errorMessage" type="primary" @click="fetchTasks">重试</el-button>
-              <el-button v-else-if="hasTaskFilters" type="primary" @click="handleReset">清空筛选</el-button>
-              <el-button v-else @click="fetchTasks">刷新任务</el-button>
+              <el-button v-if="errorMessage" type="primary" :loading="loading" @click="fetchTasks">重试</el-button>
+              <el-button v-else-if="hasTaskFilters" type="primary" :disabled="loading" @click="handleReset">清空筛选</el-button>
+              <el-button v-else :loading="loading" @click="fetchTasks">刷新任务</el-button>
             </AppState>
           </template>
         </el-table>
@@ -157,6 +157,7 @@ type AgentTaskColumnKey =
 
 const router = useRouter()
 const loading = ref(false)
+const taskRequestSeq = ref(0)
 const errorMessage = ref('')
 const tasks = ref<AgentTaskVO[]>([])
 const total = ref(0)
@@ -297,18 +298,23 @@ const getErrorMessage = (error: unknown) => {
 }
 
 const fetchTasks = async () => {
+  const requestSeq = ++taskRequestSeq.value
   loading.value = true
   errorMessage.value = ''
   try {
     const result = await getAdminAgentTasksApi(query)
+    if (requestSeq !== taskRequestSeq.value) return
     tasks.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
+    if (requestSeq !== taskRequestSeq.value) return
     tasks.value = []
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
-    loading.value = false
+    if (requestSeq === taskRequestSeq.value) {
+      loading.value = false
+    }
   }
 }
 

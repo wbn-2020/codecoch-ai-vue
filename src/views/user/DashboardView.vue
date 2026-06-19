@@ -37,7 +37,7 @@
           </div>
           <code>
             <span>生成时间：{{ formatDateTime(overview?.generatedAt) }}</span>
-            <span>今日任务：{{ todayDoneCount }}/{{ todayTotalCount }}</span>
+            <span>Agent 今日任务：{{ todayDoneCount }}/{{ todayTotalCount }}</span>
             <span>默认下一步：{{ primaryNextAction.title }}</span>
             <span>错题复盘：{{ wrongQuestions.length }} 道待关注</span>
           </code>
@@ -165,14 +165,14 @@
         <div class="section-heading">
           <div>
             <p class="section-kicker">学习计划</p>
-            <h2>学习计划与今日任务</h2>
+            <h2>学习计划进度</h2>
           </div>
           <el-button text @click="go('/study-plans')">查看计划</el-button>
         </div>
 
         <div class="study-summary">
           <div>
-            <span>今日任务</span>
+            <span>学习计划今日任务</span>
             <strong>{{ overview?.todayCompletedTaskCount ?? 0 }}/{{ overview?.todayTaskCount ?? 0 }}</strong>
           </div>
           <div>
@@ -348,6 +348,7 @@ import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/type
 import type { WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface MetricItem {
   label: string
@@ -376,12 +377,8 @@ let secondaryDataCancelled = false
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
-const todayTotalCount = computed(() => agentTasks.value.length || overview.value?.todayTaskCount || 0)
-const todayDoneCount = computed(() =>
-  agentTasks.value.length
-    ? agentTasks.value.filter((task) => task.status === 'DONE').length
-    : overview.value?.todayCompletedTaskCount || 0
-)
+const todayTotalCount = computed(() => agentTasks.value.length)
+const todayDoneCount = computed(() => agentTasks.value.filter((task) => task.status === 'DONE').length)
 
 const primaryNextAction = computed(() => {
   const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
@@ -389,7 +386,7 @@ const primaryNextAction = computed(() => {
     return {
       title: displayAgentTaskTitle(firstTodo),
       cta: '继续今日任务',
-      path: firstTodo.actionUrl && firstTodo.actionUrl.startsWith('/') ? firstTodo.actionUrl : '/agent/today',
+      path: sanitizeLocalActionPath(firstTodo.actionUrl, '/agent/today'),
       icon: BookOpenCheck
     }
   }
@@ -429,7 +426,7 @@ const todayFocusCards = computed(() => {
       title: displayAgentTaskTitle(task),
       desc: displayAgentTaskDescription(task),
       reason: task.reason || task.relatedSkillName || '来自今日训练任务',
-      path: task.actionUrl && task.actionUrl.startsWith('/') ? task.actionUrl : '/agent/today',
+      path: sanitizeLocalActionPath(task.actionUrl, '/agent/today'),
       badge: formatStatus(task.status)
     }))
   }
@@ -467,9 +464,9 @@ const todayFocusCards = computed(() => {
 
 const metrics = computed<MetricItem[]>(() => [
   {
-    label: '今日任务',
+    label: 'Agent 今日任务',
     value: `${todayDoneCount.value}/${todayTotalCount.value}`,
-    hint: primaryNextAction.value.title,
+    hint: agentTasksError.value ? '打开今日任务页重试' : primaryNextAction.value.title,
     icon: BookOpenCheck,
     tone: 'tone-green',
     path: '/agent/today'

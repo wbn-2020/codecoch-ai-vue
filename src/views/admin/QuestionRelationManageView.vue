@@ -254,6 +254,7 @@ import type {
 } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const relationTypeOptions: Array<{ label: string; value: QuestionRelationType }> = [
   { label: '同一意图', value: 'SAME_INTENT' },
@@ -434,7 +435,13 @@ const handleCreate = async () => {
 
   saving.value = true
   try {
-    await createQuestionRelationApi(questionId, payload)
+    await createQuestionRelationApi(questionId, {
+      ...payload,
+      confirm: true,
+      dryRun: false,
+      reason: payload.reason || `admin question relation create confirmed source=${questionId} target=${targetQuestionId}`,
+      idempotencyKey: createOperationIdempotencyKey(`question-relation-create-${questionId}-${targetQuestionId}`)
+    })
     ElMessage.success('题目关系已新增')
     queryForm.questionId = questionId
     await fetchRelations()
@@ -461,7 +468,12 @@ const handleDelete = async (row: QuestionRelationVO) => {
   })
   if (!confirmed) return
   try {
-    await deleteQuestionRelationApi(questionId, row.id)
+    await deleteQuestionRelationApi(questionId, row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: `admin question relation delete confirmed id=${row.id}`,
+      idempotencyKey: createOperationIdempotencyKey(`question-relation-delete-${row.id}`)
+    })
     ElMessage.success('题目关系已删除')
     await fetchRelations()
   } catch (error) {

@@ -1,9 +1,9 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
+  AdminAgentRunDetailVO,
   AdminAgentRunQueryDTO,
   AdminAgentTaskQueryDTO,
-  AgentRunDetailVO,
   AgentTaskVO
 } from '@/types/agent'
 import type { AiLogRawAccessDTO } from '@/types/ai'
@@ -19,7 +19,7 @@ const parseJsonField = (value: unknown) => {
   }
 }
 
-const normalizeRun = (run: AgentRunDetailVO & { inputSnapshotJson?: string | null; outputJson?: string | null }) => ({
+const normalizeRun = (run: AdminAgentRunDetailVO): AdminAgentRunDetailVO => ({
   ...run,
   inputSnapshot: parseJsonField(run.inputSnapshot ?? run.inputSnapshotJson),
   output: parseJsonField(run.output ?? run.outputJson),
@@ -29,26 +29,51 @@ const normalizeRun = (run: AgentRunDetailVO & { inputSnapshotJson?: string | nul
   tasks: run.tasks || []
 })
 
+const normalizeDateParam = (value?: string) => value ? value.slice(0, 10) : undefined
+
+const toAdminAgentRunQueryParams = (params?: AdminAgentRunQueryDTO) => ({
+  pageNo: params?.pageNo ?? params?.pageNum,
+  pageSize: params?.pageSize,
+  userId: params?.userId,
+  agentType: params?.agentType,
+  status: params?.status,
+  triggerType: params?.triggerType,
+  startDate: normalizeDateParam(params?.startDate ?? params?.startTime),
+  endDate: normalizeDateParam(params?.endDate ?? params?.endTime)
+})
+
+const toAdminAgentTaskQueryParams = (params?: AdminAgentTaskQueryDTO) => ({
+  pageNo: params?.pageNo ?? params?.pageNum,
+  pageSize: params?.pageSize,
+  userId: params?.userId,
+  startDate: params?.startDate,
+  endDate: params?.endDate,
+  targetJobId: params?.targetJobId,
+  taskType: params?.taskType,
+  status: params?.status,
+  priority: params?.priority
+})
+
 export const getAdminAgentRunsApi = (params?: AdminAgentRunQueryDTO) => {
   return request
-    .get<PageResult<AgentRunDetailVO>, PageResult<AgentRunDetailVO>>('/admin/agent/runs', {
-      params: compactQueryParams(params)
+    .get<PageResult<AdminAgentRunDetailVO>, PageResult<AdminAgentRunDetailVO>>('/admin/agent/runs', {
+      params: compactQueryParams(toAdminAgentRunQueryParams(params))
     })
     .then((result) => normalizePageResult(result, params, normalizeRun))
 }
 
 export const getAdminAgentRunDetailApi = (id: number) => {
-  return request.get<AgentRunDetailVO, AgentRunDetailVO>(`/admin/agent/runs/${id}`).then(normalizeRun)
+  return request.get<AdminAgentRunDetailVO, AdminAgentRunDetailVO>(`/admin/agent/runs/${id}`).then(normalizeRun)
 }
 
 export const getAdminAgentRunRawApi = (id: number, data: AiLogRawAccessDTO) => {
-  return request.post<AgentRunDetailVO, AgentRunDetailVO>(`/admin/agent/runs/${id}/raw`, data).then(normalizeRun)
+  return request.post<AdminAgentRunDetailVO, AdminAgentRunDetailVO>(`/admin/agent/runs/${id}/raw`, data).then(normalizeRun)
 }
 
 export const getAdminAgentTasksApi = (params?: AdminAgentTaskQueryDTO) => {
   return request
     .get<PageResult<AgentTaskVO>, PageResult<AgentTaskVO>>('/admin/agent/tasks', {
-      params: compactQueryParams(params)
+      params: compactQueryParams(toAdminAgentTaskQueryParams(params))
     })
     .then((result) => normalizePageResult(result, params, (task) => ({ ...task, status: task.status || 'TODO' })))
 }

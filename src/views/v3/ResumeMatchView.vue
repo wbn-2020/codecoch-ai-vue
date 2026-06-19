@@ -33,6 +33,23 @@
       />
     </section>
 
+    <section v-if="isVersionEntry" class="content-panel match-version-notice">
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="已从简历版本进入匹配"
+        :description="versionEntryDescription"
+      />
+      <div class="version-entry-actions">
+        <el-button :disabled="!form.resumeId" @click="goSelectedResumeVersions">
+          <GitCompareArrows :size="16" />
+          返回版本
+        </el-button>
+        <el-button type="primary" plain :disabled="!form.resumeId" @click="goSelectedResumeEdit">编辑当前简历</el-button>
+      </div>
+    </section>
+
     <section class="match-layout">
       <div class="content-panel form-panel" v-loading="loading">
         <div class="section-head">
@@ -45,7 +62,13 @@
 
         <el-form label-position="top">
           <el-form-item label="简历">
-            <el-select v-model="form.resumeId" filterable placeholder="选择简历" class="full">
+            <el-select
+              v-model="form.resumeId"
+              filterable
+              placeholder="选择简历"
+              class="full"
+              :disabled="isVersionResumeLocked"
+            >
               <el-option
                 v-for="resume in resumes"
                 :key="resume.id"
@@ -54,6 +77,15 @@
               />
             </el-select>
           </el-form-item>
+          <el-alert
+            v-if="versionResumeMismatch"
+            class="quality-gate-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="简历版本入口已绑定原简历"
+            description="当前简历与入口版本不一致，已阻止提交。请返回版本页重新选择，或清空版本入口后再切换简历。"
+          />
           <el-form-item label="目标岗位">
             <el-select v-model="form.targetJobId" filterable placeholder="选择岗位目标" class="full">
               <el-option
@@ -64,6 +96,20 @@
               />
             </el-select>
           </el-form-item>
+          <el-alert
+            v-if="matchQualityIssues.length"
+            class="quality-gate-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="用于 AI 匹配前请先补齐资料"
+            :description="matchQualityDescription"
+          />
+          <div v-if="matchQualityIssues.length" class="quality-gate-actions">
+            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeEdit">补简历信息</el-button>
+            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeProjects">补项目经历</el-button>
+            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">分析岗位</el-button>
+          </div>
           <el-checkbox v-model="form.forceRefresh">强制重新生成报告</el-checkbox>
           <div class="submit-row">
             <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submitMatch">
@@ -120,10 +166,10 @@
             <el-button type="primary" @click="loadReports">重试</el-button>
           </AppState>
           <AppState v-else-if="!reports.length" type="empty" title="暂无匹配报告" description="提交一次岗位匹配后，这里会显示最新报告。" />
-          <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: { resumeId: report.resumeId, targetJobId: report.targetJobId } })">
+          <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: matchReportRouteQuery(report) })">
             <span>
               <strong>{{ report.jobTitle || '未命名岗位' }}</strong>
-              <small>{{ report.resumeTitle || '未命名简历' }} · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
+              <small>{{ report.resumeTitle || '未命名简历' }}<template v-if="report.resumeVersionId"> · {{ resumeVersionLabel(report) }}</template> · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
               <small v-if="report.status === 'FAILED'" class="report-error">
                 {{ toFriendlyMessage(report.errorMessage, '本次报告暂不适合直接继续训练，可进入详情查看处理线索并重新生成。') }}
               </small>
@@ -215,7 +261,59 @@ const form = reactive({
   forceRefresh: false
 })
 
-const canSubmit = computed(() => Boolean(form.resumeId && form.targetJobId && !submitting.value))
+const versionSourceId = computed(() => {
+  const value = Number(route.query.resumeVersionId)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
+const routeResumeId = computed(() => {
+  const value = Number(route.query.resumeId)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
+const isVersionEntry = computed(() => route.query.source === 'resume-version' || Boolean(versionSourceId.value))
+const isVersionResumeLocked = computed(() => Boolean(versionSourceId.value && routeResumeId.value))
+const versionResumeMismatch = computed(() =>
+  Boolean(isVersionResumeLocked.value && form.resumeId && routeResumeId.value && form.resumeId !== routeResumeId.value)
+)
+const versionEntryDescription = computed(() =>
+  versionSourceId.value
+    ? `来源版本 ID：${versionSourceId.value}。本次匹配会绑定该版本快照，并锁定入口简历，避免版本和简历混用。`
+    : '当前入口来自版本页；选择具体版本后，匹配报告会保留版本来源。'
+)
+const selectedResume = computed(() => resumes.value.find((item) => item.id === form.resumeId) || null)
+const selectedTarget = computed(() => {
+  const matched = targets.value.find((item) => item.id === form.targetJobId)
+  if (matched) return matched
+  if (currentTarget.value && (!form.targetJobId || currentTarget.value.id === form.targetJobId)) {
+    return currentTarget.value
+  }
+  return null
+})
+const selectedTargetReady = computed(() => {
+  const target = selectedTarget.value
+  if (!target) return false
+  const parseStatus = String(target.parseStatus || '').toUpperCase()
+  return parseStatus === 'PARSED' || Boolean(target.analysisSummary || target.requiredSkills || target.interviewFocusPoints)
+})
+const matchQualityIssues = computed(() => {
+  const issues: string[] = []
+  const resume = selectedResume.value
+  const target = selectedTarget.value
+  if (resume) {
+    if (!resume.targetPosition?.trim()) issues.push('简历缺少求职方向')
+    if (!(resume.summary?.trim() || resume.workExperience?.trim())) issues.push('简历缺少个人摘要或工作经历')
+    if (typeof resume.projectCount === 'number' && resume.projectCount <= 0) issues.push('简历缺少项目经历')
+  }
+  if (target && !selectedTargetReady.value) issues.push('目标岗位还没有完成结构化分析')
+  return issues
+})
+const matchQualityDescription = computed(() =>
+  matchQualityIssues.value.length
+    ? `当前还差：${matchQualityIssues.value.join('、')}。补齐后再生成报告，能减少空结果和不可用匹配。`
+    : ''
+)
+const canSubmit = computed(() =>
+  Boolean(form.resumeId && form.targetJobId && !submitting.value && !matchQualityIssues.value.length && !versionResumeMismatch.value)
+)
 const recentMatchSseEvents = computed(() => matchSseEvents.value.slice(-3))
 const latestMatchSseMessage = computed(() => {
   const recent = recentMatchSseEvents.value
@@ -414,7 +512,7 @@ const loadInitial = async () => {
     }
 
     currentTarget.value = currentResult.status === 'fulfilled' ? currentResult.value || null : null
-    form.resumeId = Number(route.query.resumeId) || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
+    form.resumeId = routeResumeId.value || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
     form.targetJobId = Number(route.query.targetJobId) || currentTarget.value?.id || targets.value[0]?.id
     partialLoadWarning.value = warnings.filter(Boolean).join('；')
   } catch (error) {
@@ -439,12 +537,44 @@ const loadReports = async () => {
 
 const submitMatch = async () => {
   if (!form.resumeId || !form.targetJobId) return
+  if (versionResumeMismatch.value) {
+    if (routeResumeId.value) {
+      form.resumeId = routeResumeId.value
+    }
+    ElMessage.warning('当前简历版本入口已绑定原简历，请不要混用其他简历。')
+    return
+  }
+  if (matchQualityIssues.value.length) {
+    ElMessage.warning(matchQualityDescription.value)
+    return
+  }
   const payload: ResumeJobMatchCreateDTO = {
     resumeId: form.resumeId,
     targetJobId: form.targetJobId,
+    ...(versionSourceId.value ? { resumeVersionId: versionSourceId.value } : {}),
     forceRefresh: form.forceRefresh
   }
   startMatchSse(payload)
+}
+
+const goSelectedResumeEdit = () => {
+  if (!form.resumeId) return
+  router.push(`/resumes/${form.resumeId}/edit`)
+}
+
+const goSelectedResumeProjects = () => {
+  if (!form.resumeId) return
+  router.push({ path: '/projects', query: { resumeId: form.resumeId } })
+}
+
+const goSelectedResumeVersions = () => {
+  if (!form.resumeId) return
+  router.push(`/resumes/${form.resumeId}/versions`)
+}
+
+const goSelectedTargetAnalysis = () => {
+  if (!form.targetJobId) return
+  router.push(`/job-targets/${form.targetJobId}/analysis`)
 }
 
 const routeToReport = async (reportId?: number, payload?: ResumeJobMatchCreateDTO) => {
@@ -452,9 +582,24 @@ const routeToReport = async (reportId?: number, payload?: ResumeJobMatchCreateDT
   navigatingToReport = true
   await router.push({
     path: `/resume-match/${reportId}`,
-    query: { resumeId: payload.resumeId, targetJobId: payload.targetJobId }
+    query: {
+      resumeId: payload.resumeId,
+      targetJobId: payload.targetJobId,
+      ...(payload.resumeVersionId ? { resumeVersionId: payload.resumeVersionId } : {})
+    }
   })
 }
+
+const resumeVersionLabel = (report: Pick<ResumeJobMatchReportListVO, 'resumeVersionId' | 'resumeVersionNo' | 'resumeVersionName'>) => {
+  if (!report.resumeVersionId) return ''
+  return report.resumeVersionName || (report.resumeVersionNo ? `V${report.resumeVersionNo}` : `版本 ${report.resumeVersionId}`)
+}
+
+const matchReportRouteQuery = (report: ResumeJobMatchReportListVO) => ({
+  resumeId: report.resumeId,
+  targetJobId: report.targetJobId,
+  ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {})
+})
 
 const goMatchTaskCenter = () => {
   const route = matchTaskRoute.value
@@ -466,6 +611,7 @@ const refreshMatchReportsAfterInterrupt = async () => {
   await loadReports()
   const relatedReport = reports.value.find((item) =>
     item.resumeId === form.resumeId && item.targetJobId === form.targetJobId
+    && (!versionSourceId.value || item.resumeVersionId === versionSourceId.value)
   )
   if (relatedReport) {
     captureMatchTask(relatedReport)
@@ -585,6 +731,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .section-head { justify-content: space-between; margin-bottom: 18px; }
 .full { width: 100%; }
 .submit-row { flex-wrap: wrap; margin-top: 18px; }
+.match-version-notice { display: grid; gap: 12px; }
+.version-entry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .match-stream { display: grid; gap: 10px; margin-top: 18px; padding: 12px; border: 1px solid rgba(99, 102, 241, 0.24); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
 .match-stream p { margin: 0; color: #fca5a5; font-size: 12px; }
 .match-stream__head, .match-stream__events, .match-stream__task, .match-stream__recovery { display: flex; align-items: center; gap: 8px; }
@@ -596,6 +744,9 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .match-stream__task span { min-width: 0; overflow-wrap: anywhere; }
 .match-stream__recovery { justify-content: space-between; flex-wrap: wrap; padding-top: 2px; color: #a5b4fc; font-size: 12px; line-height: 1.5; }
 .match-stream__recovery span { min-width: 0; overflow-wrap: anywhere; }
+.quality-gate-alert { margin: 8px 0 10px; }
+.quality-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 12px; }
+.quality-gate-actions :deep(.el-button) { margin-left: 0; }
 .report-list { min-height: 220px; display: grid; gap: 12px; }
 .report-card { display: grid; grid-template-columns: minmax(0, 1fr) auto 54px; gap: 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.34); color: var(--app-text); text-align: left; cursor: pointer; }
 .report-card strong, .report-card small { display: block; overflow-wrap: anywhere; }
@@ -607,5 +758,5 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 @media (max-width: 960px) { .page-hero, .match-layout { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } }
 
 
-@media (max-width: 720px) { .page-hero, .match-layout { flex-direction: column; align-items: stretch; } .hero-actions { flex-wrap: wrap; } }
+@media (max-width: 720px) { .page-hero, .match-layout { flex-direction: column; align-items: stretch; } .hero-actions, .version-entry-actions { flex-wrap: wrap; } .version-entry-actions :deep(.el-button) { width: 100%; } }
 </style>

@@ -38,8 +38,6 @@ type FeatureAction = {
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
 }
 
-const featureTitle = computed(() => typeof route.query.title === 'string' ? route.query.title : '')
-
 const capabilityMap: Record<string, { availability: string; actions: FeatureAction[] }> = {
   每日复盘: {
     availability: '需要先完成或跳过今日任务，并由管理员开放复盘入口后再使用。',
@@ -98,6 +96,11 @@ const capabilityMap: Record<string, { availability: string; actions: FeatureActi
     ]
   }
 }
+
+const featureTitle = computed(() => {
+  const title = typeof route.query.title === 'string' ? route.query.title : ''
+  return Object.prototype.hasOwnProperty.call(capabilityMap, title) ? title : ''
+})
 
 const currentCapability = computed(() => capabilityMap[featureTitle.value])
 

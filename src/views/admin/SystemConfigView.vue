@@ -192,6 +192,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { SystemConfigCreateDTO, SystemConfigQueryDTO, SystemConfigVO } from '@/types/system'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type SystemConfigColumnKey =
   | 'configKey'
@@ -324,10 +325,20 @@ const handleSave = async () => {
     if (editingConfigId.value) {
       await updateSystemConfigApi(editingConfigId.value, {
         configValue: form.configValue || '',
-        description: form.description
+        description: form.description,
+        confirm: true,
+        dryRun: false,
+        reason: 'Admin confirmed system config update from system config page.',
+        idempotencyKey: createOperationIdempotencyKey(`system-config-update-${editingConfigId.value}`)
       })
     } else {
-      await createSystemConfigApi(form)
+      await createSystemConfigApi({
+        ...form,
+        confirm: true,
+        dryRun: false,
+        reason: 'Admin confirmed system config create from system config page.',
+        idempotencyKey: createOperationIdempotencyKey('system-config-create')
+      })
     }
     ElMessage.success('系统配置已保存')
     dialogVisible.value = false
@@ -353,7 +364,12 @@ const handleDelete = async (row: SystemConfigVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteSystemConfigApi(row.id)
+  await deleteSystemConfigApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed system config delete from system config page.',
+    idempotencyKey: createOperationIdempotencyKey(`system-config-delete-${row.id}`)
+  })
   ElMessage.success('系统配置已删除')
   await fetchConfigs()
 }

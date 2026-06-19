@@ -189,9 +189,10 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
-import type { AdminAnalyticsDictionaryQuery, AdminAnalyticsMetricDefinitionVO } from '@/types/analytics'
+import type { AdminAnalyticsDictionaryQuery, AdminAnalyticsMetricDefinitionVO, AdminAnalyticsMetricSaveDTO } from '@/types/analytics'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import {
   translateMetricCategory,
   translateMetricDefinition,
@@ -326,7 +327,7 @@ const saveMetric = async () => {
   }
   savingMetric.value = true
   try {
-    const payload = {
+    const payload: AdminAnalyticsMetricSaveDTO = {
       metricCode: metricForm.metricCode.trim(),
       metricName: metricForm.metricName.trim(),
       category: metricForm.category.trim(),
@@ -347,10 +348,18 @@ const saveMetric = async () => {
       confirmButtonText: '确认保存'
     })
     if (!confirmed) return
+    const operation = metricForm.id ? `analytics-metric-update-${metricForm.id}` : 'analytics-metric-create'
+    const confirmedPayload: AdminAnalyticsMetricSaveDTO = {
+      ...payload,
+      confirm: true,
+      dryRun: false,
+      reason: `admin analytics metric ${metricForm.id ? 'update' : 'create'} confirmed; code=${payload.metricCode}`,
+      idempotencyKey: createOperationIdempotencyKey(operation)
+    }
     if (metricForm.id) {
-      await updateAdminAnalyticsMetricApi(metricForm.id, payload)
+      await updateAdminAnalyticsMetricApi(metricForm.id, confirmedPayload)
     } else {
-      await createAdminAnalyticsMetricApi(payload)
+      await createAdminAnalyticsMetricApi(confirmedPayload)
     }
     ElMessage.success('指标已保存')
     metricDialogVisible.value = false

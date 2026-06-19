@@ -289,7 +289,7 @@
             <div class="vector-action-group vector-action-group--risk">
               <span class="vector-action-group__label">知识库与删除补偿</span>
               <el-button
-                v-permission="'admin:analytics:ai'"
+                v-permission="'admin:question:embedding:rebuild'"
                 type="warning"
                 plain
                 :icon="RefreshCw"
@@ -301,7 +301,7 @@
                 重建知识库索引
               </el-button>
               <el-button
-                v-permission="'admin:analytics:ai'"
+                v-permission="'admin:question:embedding:rebuild'"
                 type="warning"
                 plain
                 :icon="RefreshCw"
@@ -313,7 +313,7 @@
                 重试知识库失败
               </el-button>
               <el-button
-                v-permission="'admin:analytics:ai'"
+                v-permission="'admin:question:embedding:rebuild'"
                 type="danger"
                 plain
                 :icon="RefreshCw"
@@ -455,8 +455,8 @@
                 <el-table-column v-if="isQuestionFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
                 <el-table-column v-if="isQuestionFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
-                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
-                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    <el-tooltip v-if="row.lastError" :content="safeOperationalErrorText(row.lastError)" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ safeOperationalErrorText(row.lastError) }}</span>
                     </el-tooltip>
                     <span v-else class="vector-empty-text">--</span>
                   </template>
@@ -489,10 +489,14 @@
 
             <el-tab-pane :label="`知识库片段 ${vectorFailureCounts.knowledge}`" name="knowledge">
               <el-table :data="vectorFailures?.knowledgeFailures || []" class="ops-table" :size="vectorFailureTableSize">
-                <el-table-column v-if="isKnowledgeFailureColumnVisible('chunkId')" label="片段编号" prop="chunkId" min-width="100" />
+                <el-table-column v-if="isKnowledgeFailureColumnVisible('chunkId')" label="片段编号" min-width="100">
+                  <template #default="{ row }">
+                    {{ row.chunkIdMasked || row.chunkId || '--' }}
+                  </template>
+                </el-table-column>
                 <el-table-column v-if="isKnowledgeFailureColumnVisible('owner')" label="用户 / 资料" min-width="150">
                   <template #default="{ row }">
-                    <span>用户 {{ row.userId || '--' }} / 资料 {{ row.documentId || '--' }}</span>
+                    <span>用户 {{ row.userIdMasked || row.userId || '--' }} / 资料 {{ row.documentIdMasked || row.documentId || '--' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column v-if="isKnowledgeFailureColumnVisible('chunkIndex')" label="片段序号" prop="chunkIndex" min-width="90" />
@@ -509,8 +513,8 @@
                 <el-table-column v-if="isKnowledgeFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
                 <el-table-column v-if="isKnowledgeFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
-                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
-                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    <el-tooltip v-if="row.lastError" :content="safeOperationalErrorText(row.lastError)" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ safeOperationalErrorText(row.lastError) }}</span>
                     </el-tooltip>
                     <span v-else class="vector-empty-text">--</span>
                   </template>
@@ -519,7 +523,13 @@
                   <template #default="{ row }">
                     <div class="vector-row-actions">
                       <el-tooltip content="查看片段" placement="top">
-                        <el-button link type="primary" :icon="ExternalLink" @click="openKnowledgeFailure(row.documentId, row.chunkId)" />
+                        <el-button
+                          link
+                          type="primary"
+                          :icon="ExternalLink"
+                          :disabled="!row.documentId && !row.chunkId"
+                          @click="openKnowledgeFailure(row.documentId, row.chunkId)"
+                        />
                       </el-tooltip>
                       <el-tooltip content="复制错误" placement="top">
                         <el-button link type="info" :icon="Copy" :disabled="!row.lastError" @click="copyVectorText(row.lastError, '错误已复制')" />
@@ -550,7 +560,7 @@
                 </el-table-column>
                 <el-table-column v-if="isDeleteOutboxFailureColumnVisible('pointId')" label="索引点编号" min-width="220">
                   <template #default="{ row }">
-                    <span class="vector-point-text">{{ row.pointId || '--' }}</span>
+                    <span class="vector-point-text">{{ row.pointIdMasked || row.pointId || '--' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column v-if="isDeleteOutboxFailureColumnVisible('bizType')" label="业务" prop="bizType" min-width="120" />
@@ -563,8 +573,8 @@
                 <el-table-column v-if="isDeleteOutboxFailureColumnVisible('updatedAt')" label="更新时间" prop="updatedAt" min-width="170" />
                 <el-table-column v-if="isDeleteOutboxFailureColumnVisible('error')" label="错误" min-width="260">
                   <template #default="{ row }">
-                    <el-tooltip v-if="row.lastError" :content="row.lastError" placement="top" :show-after="300">
-                      <span class="vector-error-text">{{ row.lastError }}</span>
+                    <el-tooltip v-if="row.lastError" :content="safeOperationalErrorText(row.lastError)" placement="top" :show-after="300">
+                      <span class="vector-error-text">{{ safeOperationalErrorText(row.lastError) }}</span>
                     </el-tooltip>
                     <span v-else class="vector-empty-text">--</span>
                   </template>
@@ -573,7 +583,13 @@
                   <template #default="{ row }">
                     <div class="vector-row-actions">
                       <el-tooltip content="复制索引点编号" placement="top">
-                        <el-button link type="info" :icon="Copy" :disabled="!row.pointId" @click="copyVectorText(row.pointId, '索引点编号已复制')" />
+                        <el-button
+                          link
+                          type="info"
+                          :icon="Copy"
+                          :disabled="!row.pointId && !row.pointIdMasked"
+                          @click="copyVectorText(row.pointId || row.pointIdMasked, '索引点编号已复制')"
+                        />
                       </el-tooltip>
                     </div>
                   </template>
@@ -659,8 +675,8 @@
             <el-table-column v-if="isVectorJobColumnVisible('finishedAt')" label="完成时间" prop="finishedAt" min-width="170" />
             <el-table-column v-if="isVectorJobColumnVisible('error')" label="错误" min-width="240">
               <template #default="{ row }">
-                <el-tooltip v-if="row.lastError || row.errorMessage" :content="row.lastError || row.errorMessage" placement="top" :show-after="300">
-                  <span class="vector-error-text">{{ row.lastError || row.errorMessage }}</span>
+                <el-tooltip v-if="row.lastError || row.errorMessage" :content="safeOperationalErrorText(row.lastError || row.errorMessage)" placement="top" :show-after="300">
+                  <span class="vector-error-text">{{ safeOperationalErrorText(row.lastError || row.errorMessage) }}</span>
                 </el-tooltip>
                 <span v-else class="vector-empty-text">--</span>
               </template>
@@ -745,10 +761,14 @@ import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview, type DangerActionPreviewOptions } from '@/utils/dangerAction'
 import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
+import { redactSensitiveText } from '@/utils/sensitiveText'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const router = useRouter()
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
+const authStore = useAuthStore()
+const canMaintainVectorIndex = computed(() => authStore.hasPermission('admin:question:embedding:rebuild'))
 const retryingVectorDeletes = ref(false)
 const rebuildingQuestionVectors = ref(false)
 const retryingQuestionVectors = ref(false)
@@ -1359,9 +1379,11 @@ const vectorModelHint = (model?: string, dimension?: number) => {
   return `${modelText} / ${dimension || '--'} 维`
 }
 
+const safeOperationalErrorText = (value?: string) => redactSensitiveText(value, 180) || '--'
+
 const copyVectorText = async (value?: string, message = '已复制') => {
   if (!value) return
-  await navigator.clipboard.writeText(value)
+  await navigator.clipboard.writeText(safeOperationalErrorText(value))
   ElMessage.success(message)
 }
 
@@ -1637,7 +1659,21 @@ const confirmVectorAction = (options: DangerActionPreviewOptions) =>
     confirmButtonText: options.confirmButtonText || '确认执行'
   })
 
+const createVectorMaintenanceIdempotencyKey = (operation: string) => {
+  const random = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return `${operation}:${random}`.replace(/[^A-Za-z0-9:_-]/g, '_').slice(0, 128)
+}
+
+const guardVectorMaintenance = () => {
+  if (canMaintainVectorIndex.value) return true
+  ElMessage.warning('当前账号没有语义索引维护权限')
+  return false
+}
+
 const handleRebuildQuestionVectors = async () => {
+  if (!guardVectorMaintenance()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
     title: '题目语义索引重建高风险确认',
@@ -1651,7 +1687,13 @@ const handleRebuildQuestionVectors = async () => {
   if (!confirmed) return
   rebuildingQuestionVectors.value = true
   try {
-    const result = await rebuildQuestionEmbeddingApi(5000)
+    const result = await rebuildQuestionEmbeddingApi({
+      limit: 5000,
+      confirm: true,
+      dryRun: false,
+      reason: 'admin ops manual rebuild question embeddings',
+      idempotencyKey: createVectorMaintenanceIdempotencyKey('admin-ops-question-rebuild')
+    })
     const summary = questionVectorSummary(result)
     recordQuestionVectorAction('题目语义索引重建', result)
     ElMessage.success(summary)
@@ -1663,6 +1705,7 @@ const handleRebuildQuestionVectors = async () => {
 }
 
 const handleRetryQuestionVectors = async () => {
+  if (!guardVectorMaintenance()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
     title: '题目失败索引重试确认',
@@ -1676,7 +1719,13 @@ const handleRetryQuestionVectors = async () => {
   if (!confirmed) return
   retryingQuestionVectors.value = true
   try {
-    const result = await retryFailedQuestionEmbeddingApi(1000)
+    const result = await retryFailedQuestionEmbeddingApi({
+      limit: 1000,
+      confirm: true,
+      dryRun: false,
+      reason: 'admin ops manual retry failed question embeddings',
+      idempotencyKey: createVectorMaintenanceIdempotencyKey('admin-ops-question-retry')
+    })
     const summary = questionVectorSummary(result)
     recordQuestionVectorAction('题目失败索引重试', result)
     ElMessage.success(summary)
@@ -1688,6 +1737,7 @@ const handleRetryQuestionVectors = async () => {
 }
 
 const handleRebuildKnowledgeVectors = async () => {
+  if (!guardVectorMaintenance()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
     title: '知识库语义索引重建高风险确认',
@@ -1701,7 +1751,13 @@ const handleRebuildKnowledgeVectors = async () => {
   if (!confirmed) return
   rebuildingKnowledgeVectors.value = true
   try {
-    const result = await rebuildAdminKnowledgeVectorsApi(5000)
+    const result = await rebuildAdminKnowledgeVectorsApi({
+      limit: 5000,
+      confirm: true,
+      dryRun: false,
+      reason: 'admin ops manual rebuild knowledge vectors',
+      idempotencyKey: createVectorMaintenanceIdempotencyKey('admin-ops-knowledge-rebuild')
+    })
     const summary = knowledgeVectorSummary(result)
     recordKnowledgeVectorAction('知识库语义索引重建', result)
     ElMessage.success(summary)
@@ -1713,6 +1769,7 @@ const handleRebuildKnowledgeVectors = async () => {
 }
 
 const handleRetryKnowledgeVectors = async () => {
+  if (!guardVectorMaintenance()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmVectorAction({
     title: '知识库失败索引重试确认',
@@ -1726,7 +1783,13 @@ const handleRetryKnowledgeVectors = async () => {
   if (!confirmed) return
   retryingKnowledgeVectors.value = true
   try {
-    const result = await retryAdminKnowledgeVectorsApi(1000)
+    const result = await retryAdminKnowledgeVectorsApi({
+      limit: 1000,
+      confirm: true,
+      dryRun: false,
+      reason: 'admin ops manual retry failed knowledge vectors',
+      idempotencyKey: createVectorMaintenanceIdempotencyKey('admin-ops-knowledge-retry')
+    })
     const summary = knowledgeVectorSummary(result)
     recordKnowledgeVectorAction('知识库失败索引重试', result)
     ElMessage.success(summary)
@@ -1737,6 +1800,7 @@ const handleRetryKnowledgeVectors = async () => {
   }
 }
 const handleRetryVectorDeletes = async () => {
+  if (!guardVectorMaintenance()) return
   if (!guardAdminMobileWrite()) return
   const retryable = vectorDeleteOutbox.value?.retryable || 0
   const confirmed = await confirmVectorAction({
@@ -1751,7 +1815,13 @@ const handleRetryVectorDeletes = async () => {
   if (!confirmed) return
   retryingVectorDeletes.value = true
   try {
-    const result = await retryAdminVectorDeletesApi(500)
+    const result = await retryAdminVectorDeletesApi({
+      limit: 500,
+      confirm: true,
+      dryRun: false,
+      reason: 'admin ops manual retry vector delete outbox',
+      idempotencyKey: createVectorMaintenanceIdempotencyKey('admin-ops-delete-retry')
+    })
     const summary = `补偿完成：匹配 ${result.matched || 0} 条，删除 ${result.deleted || 0} 条，失败 ${result.failed || 0} 条`
     recordVectorDeleteAction('索引删除补偿重试', summary, result)
     if ((result.errors || []).length || result.failed) {

@@ -52,8 +52,8 @@ type BackendPromptTemplateDetailVO = BackendPromptTemplateVO & {
   activeVersion?: PromptTemplateVersionVO
 }
 
-const normalizeAiCallLog = (log: BackendAiCallLogVO): AiCallLogVO => {
-  const rawFieldsIncluded = log.rawFieldsIncluded === true
+const normalizeAiCallLog = (log: BackendAiCallLogVO, allowRaw = false): AiCallLogVO => {
+  const rawFieldsIncluded = allowRaw && log.rawFieldsIncluded === true
   return {
     ...log,
     scene: log.scene || log.callType || '',
@@ -98,14 +98,23 @@ const normalizePromptTemplate = (prompt: BackendPromptTemplateVO): PromptTemplat
   templateCode: prompt.templateCode || prompt.promptType || prompt.scene || '',
   promptType: prompt.promptType || prompt.scene || prompt.templateCode || '',
   templateContent: prompt.templateContent || prompt.content || prompt.promptContent || '',
+  contentLength: prompt.contentLength,
+  contentHash: prompt.contentHash,
+  templateContentLength: prompt.templateContentLength,
+  templateContentHash: prompt.templateContentHash,
   systemPrompt: prompt.systemPrompt || '',
   userPromptTemplate: prompt.userPromptTemplate || '',
   variables: prompt.variables || prompt.variableDesc || '',
   version: prompt.version || 'V1',
+  activeVersionId: prompt.activeVersionId ?? null,
+  enabled: prompt.enabled,
   status: prompt.status ?? 1,
   description: prompt.description || '',
   createdAt: prompt.createdAt || prompt.createTime,
-  updatedAt: prompt.updatedAt || prompt.updateTime
+  updatedAt: prompt.updatedAt || prompt.updateTime,
+  rawFieldsAvailable: prompt.rawFieldsAvailable,
+  rawFieldsIncluded: prompt.rawFieldsIncluded,
+  rawAccessPermission: prompt.rawAccessPermission
 })
 
 const normalizePromptTemplateDetail = (prompt: BackendPromptTemplateDetailVO): PromptTemplateDetailVO => ({
@@ -123,7 +132,13 @@ const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => (
   name: data.name,
   description: data.description,
   ...(includeContent ? { content: data.content } : {}),
-  status: data.status
+  status: data.status,
+  confirm: data.confirm,
+  dryRun: data.dryRun,
+  reason: data.reason,
+  idempotencyKey: data.idempotencyKey,
+  expectedStatus: data.expectedStatus,
+  expectedActiveVersionId: data.expectedActiveVersionId
 })
 
 export const getAdminAiPromptsApi = (params: PromptTemplateQueryDTO) => {
@@ -162,6 +177,12 @@ export const getPromptTemplateDetailApi = (id: number) => {
     .then(normalizePromptTemplateDetail)
 }
 
+export const getPromptTemplateRawApi = (id: number, data: AiLogRawAccessDTO) => {
+  return request
+    .post<BackendPromptTemplateDetailVO, BackendPromptTemplateDetailVO>(`/admin/ai/prompt-templates/${id}/raw`, data)
+    .then(normalizePromptTemplateDetail)
+}
+
 export const getPromptTemplateVersionsApi = (templateId: number, params?: PromptTemplateVersionQuery) => {
   return request
     .get<PageResult<PromptTemplateVersionVO>, PageResult<PromptTemplateVersionVO>>(
@@ -169,6 +190,13 @@ export const getPromptTemplateVersionsApi = (templateId: number, params?: Prompt
       { params: compactQueryParams(params) }
     )
     .then((result) => normalizePageResult(result, params))
+}
+
+export const getPromptTemplateVersionRawApi = (versionId: number, data: AiLogRawAccessDTO) => {
+  return request.post<PromptTemplateVersionVO, PromptTemplateVersionVO>(
+    `/admin/ai/prompt-template-versions/${versionId}/raw`,
+    data
+  )
 }
 
 export const createPromptTemplateVersionApi = (templateId: number, data: CreatePromptTemplateVersionDTO) => {
@@ -212,12 +240,33 @@ export const testPromptTemplateVersionApi = (versionId: number, data?: TestPromp
   )
 }
 
-export const deleteAdminAiPromptApi = (id: number) => {
-  return request.delete<null, null>(`/admin/ai/prompts/${id}`)
+export const deleteAdminAiPromptApi = (
+  id: number,
+  data: {
+    confirm: boolean
+    dryRun?: boolean
+    reason: string
+    idempotencyKey: string
+    expectedStatus?: number | null
+    expectedActiveVersionId?: number | null
+  }
+) => {
+  return request.delete<null, null>(`/admin/ai/prompts/${id}`, { data })
 }
 
-export const updateAdminAiPromptStatusApi = (id: number, status: number) => {
-  return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status })
+export const updateAdminAiPromptStatusApi = (
+  id: number,
+  status: number,
+  confirmation: {
+    confirm: boolean
+    dryRun?: boolean
+    reason: string
+    idempotencyKey: string
+    expectedStatus?: number | null
+    expectedActiveVersionId?: number | null
+  }
+) => {
+  return request.put<null, null>(`/admin/ai/prompts/${id}/status`, { status, ...confirmation })
 }
 
 export const getAdminAiLogsApi = async (params: AiCallLogQueryDTO) => {
@@ -264,5 +313,5 @@ export const getAdminAiLogDetailApi = async (id: number) => {
 
 export const getAdminAiLogRawApi = async (id: number, data: AiLogRawAccessDTO) => {
   const result = await request.post<BackendAiCallLogVO, BackendAiCallLogVO>(`/admin/ai/logs/${id}/raw`, data)
-  return normalizeAiCallLog(result)
+  return normalizeAiCallLog(result, true)
 }

@@ -111,6 +111,11 @@
         <el-table v-loading="loading" :data="logs" row-key="id" :size="tableSize">
           <el-table-column v-if="isColumnVisible('createdAt')" prop="createdAt" label="生成时间" min-width="170" />
           <el-table-column v-if="isColumnVisible('modelName')" prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
+          <el-table-column v-if="isColumnVisible('resultSource')" label="来源" width="120">
+            <template #default="{ row }">
+              <el-tag :type="resultSourceTagType(row)" effect="plain">{{ resultSourceLabel(row) }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column v-if="isColumnVisible('traceId')" label="追踪号" min-width="150" show-overflow-tooltip>
             <template #default="{ row }">{{ displayAiTraceId(row) }}</template>
           </el-table-column>
@@ -195,6 +200,9 @@
           <el-descriptions-item label="处理场景">{{ getSceneLabel(detail.scene || detail.callType) }}</el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="生成来源">
+            <el-tag :type="resultSourceTagType(detail)" effect="plain">{{ resultSourceLabel(detail) }}</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="关联业务">{{ detail.businessId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="调用资源">{{ detail.totalTokens ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ detail.elapsedMs ?? detail.latencyMs ?? '-' }} ms</el-descriptions-item>
@@ -283,6 +291,7 @@ import type { AiCallLogQueryDTO, AiCallLogVO, AiScene } from '@/types/ai'
 import { translateFailureReason } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const sceneOptions = [
   { label: 'AI 题目生成', value: 'AI_QUESTION_GENERATE' },
@@ -313,6 +322,7 @@ const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = us
 type AiLogColumnKey =
   | 'createdAt'
   | 'modelName'
+  | 'resultSource'
   | 'traceId'
   | 'scene'
   | 'tokens'
@@ -331,6 +341,7 @@ const {
 } = useAdminTableView<AiLogColumnKey>('admin:ai-call-log', [
   { key: 'createdAt', label: '生成时间', required: true },
   { key: 'modelName', label: '模型' },
+  { key: 'resultSource', label: '来源' },
   { key: 'traceId', label: '追踪号' },
   { key: 'scene', label: '场景 / 类型' },
   { key: 'tokens', label: '消耗' },
@@ -371,6 +382,28 @@ const logEmptyDescription = computed(() =>
 const logEmptyActionLabel = computed(() => (hasLogFilters.value ? '清空筛选' : '刷新列表'))
 
 const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || (value ? '场景待确认' : '-')
+
+const normalizedResultSource = (row?: Pick<AiCallLogVO, 'resultSource' | 'fallback' | 'modelName'> | null) => {
+  const source = String(row?.resultSource || '').toUpperCase()
+  if (source) return source
+  if (row?.fallback) return 'FALLBACK'
+  return String(row?.modelName || '').toLowerCase().includes('mock') ? 'MOCK' : 'LLM'
+}
+
+const resultSourceLabel = (row?: AiCallLogVO | null) => {
+  const source = normalizedResultSource(row)
+  if (row?.resultSourceLabel) return row.resultSourceLabel
+  if (source === 'MOCK') return '模拟数据'
+  if (source === 'FALLBACK') return '降级兜底'
+  return '真实模型'
+}
+
+const resultSourceTagType = (row?: AiCallLogVO | null) => {
+  const source = normalizedResultSource(row)
+  if (source === 'MOCK') return 'info'
+  if (source === 'FALLBACK') return 'warning'
+  return 'success'
+}
 
 const compactText = (value?: string, maxLength = 120) => {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
@@ -586,7 +619,9 @@ const loadRawDetail = async () => {
   try {
     detail.value = await getAdminAiLogRawApi(detail.value.id, {
       accessReason,
-      confirmSensitiveAccess: true
+      confirmSensitiveAccess: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`ai-log-raw-${detail.value.id}`)
     })
     rawDetailVisible.value = true
     ElMessage.success('敏感诊断内容已按权限加载，访问原因已写入审计')

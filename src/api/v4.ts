@@ -111,6 +111,7 @@ export interface JobApplicationVO {
   id: number
   targetJobId?: number
   resumeVersionId?: number
+  matchReportId?: number
   companyName?: string
   jobTitle?: string
   source?: string
@@ -120,6 +121,21 @@ export interface JobApplicationVO {
   note?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobApplicationStatsVO {
+  total?: number
+  activeCount?: number
+  overdueFollowUpCount?: number
+  dueTodayFollowUpCount?: number
+  noFollowUpCount?: number
+  staleActiveCount?: number
+  interviewCount?: number
+  offerCount?: number
+  rejectedCount?: number
+  closedCount?: number
+  statusCounts?: Record<string, number>
+  generatedAt?: string
 }
 
 export interface JobApplicationEventVO {
@@ -346,6 +362,13 @@ export interface KnowledgeVectorRebuildVO {
   embeddingEnabled?: boolean
   semanticEnabled?: boolean
   embeddingDisabledReason?: string
+  requiresConfirmation?: boolean
+  dryRun?: boolean
+  operation?: string
+  requestedLimit?: number
+  accessReason?: string
+  idempotencyKey?: string
+  confirmationMessage?: string
   documentCount?: number
   chunkCount?: number
   vectorUpdated?: number
@@ -359,6 +382,24 @@ export interface KnowledgeVectorRebuildVO {
   vectorScopeType?: string
   vectorScopeId?: string
   vectorJobStatus?: string
+}
+
+export interface KnowledgeMutationConfirmationParams {
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
+export interface KnowledgeVectorMaintenanceParams extends KnowledgeMutationConfirmationParams {
+  documentId?: number
+  limit?: number
+}
+
+export interface KnowledgeDuplicateCleanupParams extends KnowledgeMutationConfirmationParams {
+  limit?: number
+  documentId?: number
+  documentType?: string
 }
 
 export interface KnowledgeEvaluationSampleDTO {
@@ -568,6 +609,9 @@ export const applyResumeVersionSuggestionApi = (versionId: number, data?: Resume
 export const getApplicationsApi = (params?: { status?: string }) =>
   request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params: compactQueryParams(params) }).then((data) => data || [])
 
+export const getApplicationStatsApi = () =>
+  request.get<JobApplicationStatsVO, JobApplicationStatsVO>('/applications/stats')
+
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
 
@@ -640,25 +684,29 @@ export const getKnowledgeExactDuplicatesApi = (params?: { limit?: number; docume
     .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
-export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number; documentId?: number; documentType?: string }) =>
+export const cleanupKnowledgeExactDuplicatesApi = (params?: KnowledgeDuplicateCleanupParams) =>
   request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
     params: compactQueryParams(params)
   })
 
-export const deleteKnowledgeDocumentApi = (id: number) =>
-  request.delete<null, null>(`/agent/knowledge/documents/${id}`)
-
-export const deleteKnowledgeChunkApi = (chunkId: number) =>
-  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`)
-
-export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
-  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
-    params: documentId ? { documentId } : undefined
+export const deleteKnowledgeDocumentApi = (id: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.delete<null, null>(`/agent/knowledge/documents/${id}`, {
+    params: compactQueryParams(params)
   })
 
-export const retryFailedKnowledgeVectorsApi = (limit?: number) =>
+export const deleteKnowledgeChunkApi = (chunkId: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`, {
+    params: compactQueryParams(params)
+  })
+
+export const rebuildKnowledgeVectorsApi = (params?: KnowledgeVectorMaintenanceParams) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
+    params: compactQueryParams(params)
+  })
+
+export const retryFailedKnowledgeVectorsApi = (params?: KnowledgeVectorMaintenanceParams) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/retry-failed', undefined, {
-    params: limit ? { limit } : undefined
+    params: compactQueryParams(params)
   })
 
 export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
@@ -688,6 +736,13 @@ export const askKnowledgeStreamApi = (
   data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string },
   handlers: KnowledgeAskStreamHandlers
 ): StreamSseHandle => {
+  let errorDispatched = false
+  const dispatchStreamError = (message: string) => {
+    if (errorDispatched) return
+    errorDispatched = true
+    handlers.onError?.(message)
+  }
+
   return streamSse({
     url: buildSseUrl('/agent/knowledge/ask/stream', {}),
     method: 'POST',
@@ -709,13 +764,13 @@ export const askKnowledgeStreamApi = (
             handlers.onDone?.(payload.aiCallLogId as number | undefined)
             break
           case 'error':
-            handlers.onError?.(toFriendlyMessage(payload.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
+            dispatchStreamError(toFriendlyMessage(payload.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
             break
           default:
             break
         }
       },
-      onError: (error) => handlers.onError?.(toFriendlyMessage(error.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
+      onError: (error) => dispatchStreamError(toFriendlyMessage(error.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
     }
   })
 }

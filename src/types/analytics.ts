@@ -88,6 +88,10 @@ export interface AdminAnalyticsMetricSaveDTO {
   dataSource?: string
   refreshFrequency?: string
   enabled?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface AdminAnalyticsJobLogVO {
@@ -113,6 +117,10 @@ export interface AnalyticsJobRunDTO {
   targetJobId?: number
   taskCount?: number
   maxTotalMinutes?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface AgentFeedbackStatsVO {
@@ -185,6 +193,7 @@ export interface VectorStoreHealthVO {
     enabled?: boolean
     provider?: string
     baseUrl?: string
+    baseUrlMasked?: string
     defaultLimit?: number
     requestTimeout?: string
     knowledgeCollection?: string
@@ -212,6 +221,13 @@ export interface VectorStoreHealthVO {
 export interface VectorDeleteRetryResultVO {
   vectorEnabled?: boolean
   requested?: number
+  requiresConfirmation?: boolean
+  dryRun?: boolean
+  operation?: string
+  requestedLimit?: number
+  accessReason?: string
+  idempotencyKey?: string
+  message?: string
   matched?: number
   deleted?: number
   failed?: number
@@ -240,6 +256,9 @@ export interface VectorKnowledgeFailureVO {
   chunkId?: number
   userId?: number
   documentId?: number
+  chunkIdMasked?: string
+  userIdMasked?: string
+  documentIdMasked?: string
   chunkIndex?: number
   indexStatus?: string
   embeddingModel?: string
@@ -252,6 +271,7 @@ export interface VectorKnowledgeFailureVO {
 export interface VectorDeleteOutboxFailureVO {
   collectionName?: string
   pointId?: string
+  pointIdMasked?: string
   bizType?: string
   status?: string
   retryCount?: number
@@ -356,6 +376,10 @@ export interface PromptRegressionCaseSaveDTO {
   inputJson?: string
   expectedSchemaJson?: string
   enabled?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface PromptRegressionResultVO {
@@ -382,4 +406,8 @@ export interface PromptRegressionQuery {
 export interface PromptRegressionRunDTO {
   caseId?: number
   promptVersionId?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }

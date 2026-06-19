@@ -8,11 +8,13 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc -b --noEmit",
-    "check:quality": "npm run type-check && npm run check:mojibake && npm run check:ui-copy",
+    "check:quality": "npm run type-check && npm run check:mojibake && npm run check:ui-copy && npm run check:v4-contracts && npm run check:phase10",
     "check:mojibake": "node scripts/check-mojibake.mjs",
     "check:mojibake:frontend": "node scripts/check-mojibake.mjs --frontend",
     "check:mojibake:backend": "node scripts/check-mojibake.mjs --backend",
-    "check:ui-copy": "node scripts/check-ui-copy.mjs"
+    "check:ui-copy": "node scripts/check-ui-copy.mjs",
+    "check:v4-contracts": "node scripts/test-v4-contracts.mjs",
+    "check:phase10": "node scripts/test-phase10-core-privacy-guards.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

@@ -113,13 +113,33 @@
           </AppState>
           <AppState
             v-else-if="!items.length"
+            class="recommendation-empty-state"
             type="empty"
-            title="还没有可用推荐"
-            description="可以基于最近的能力画像、匹配报告或学习计划生成一组题。"
+            :title="recommendationEmptyState.title"
+            :description="recommendationEmptyState.description"
           >
-            <el-button type="primary" :loading="generating" @click="generateRecommendations">生成推荐</el-button>
-            <el-button type="success" @click="startFallbackPractice">推荐依据不足，先练一组</el-button>
-            <el-button @click="router.push('/resumes')">补齐简历与岗位</el-button>
+            <div class="recommendation-empty-actions">
+              <el-button
+                v-if="recommendationEmptyState.showFallback"
+                type="success"
+                @click="startFallbackPractice"
+              >
+                {{ recommendationEmptyState.fallbackText }}
+              </el-button>
+              <el-button
+                v-if="recommendationEmptyState.showGenerate"
+                type="primary"
+                plain
+                :loading="generating"
+                :disabled="!canGenerate"
+                @click="generateRecommendations"
+              >
+                {{ recommendationEmptyState.generateText }}
+              </el-button>
+              <el-button v-if="recommendationEmptyState.showResumeLink" @click="router.push('/resumes')">
+                补齐简历与岗位
+              </el-button>
+            </div>
           </AppState>
 
           <div v-else class="question-stack">
@@ -454,7 +474,7 @@ const topSkillNames = computed(() => {
   return [...new Set(names)].slice(0, 8)
 })
 const sourceDescription = computed(() => sourceDescriptions[query.source])
-const canGenerate = computed(() => !generating.value)
+const canGenerate = computed(() => !generating.value && !loading.value)
 const generationStatusText = computed(() => {
   const status = String(generationDiagnostic.value?.status || '').toUpperCase()
   if (status === 'SUCCESS') return '生成成功'
@@ -504,6 +524,63 @@ const recommendationSummary = computed(() => {
   if (!items.value.length) return '生成推荐后，这里会按风险顺序展示今天优先练习的题；资料不足时也可以直接随机练一组。'
   if (!hasPracticeQuestions.value) return '本轮推荐暂时不能直接进入专项题，已为你准备一组通用练习，可以先练再回来刷新推荐。'
   return `已准备 ${practiceQuestionIds.value.length} 道可练习题，建议按顺序完成并提交 AI 点评。`
+})
+const recommendationEmptyState = computed(() => {
+  const status = String(generationDiagnostic.value?.status || '').toUpperCase()
+  if (generating.value) {
+    return {
+      title: '正在生成推荐题',
+      description: '系统正在读取推荐依据并提交生成任务，完成后会刷新本页结果。',
+      showGenerate: false,
+      generateText: '生成中',
+      showFallback: false,
+      fallbackText: '先练一组',
+      showResumeLink: false
+    }
+  }
+  if (generationDiagnostic.value?.asyncMessageId || generationDiagnostic.value?.asyncTraceId || status === 'PROCESSING' || status === 'PENDING') {
+    return {
+      title: '推荐任务已提交',
+      description: '题组还在生成或等待异步任务回写。可以稍后刷新，当前不需要重复提交。',
+      showGenerate: false,
+      generateText: '生成推荐',
+      showFallback: true,
+      fallbackText: '等待期间先练一组',
+      showResumeLink: false
+    }
+  }
+  if (status === 'FAILED' || generationDiagnostic.value?.errorMessage) {
+    return {
+      title: '推荐生成没有完成',
+      description: generationDiagnostic.value?.errorMessage || '本次推荐任务失败，可以重试生成，或先进入通用训练保持节奏。',
+      showGenerate: true,
+      generateText: '重新生成',
+      showFallback: true,
+      fallbackText: '先练一组',
+      showResumeLink: true
+    }
+  }
+  if (generationDiagnostic.value?.fallback || !query.sourceId) {
+    const reason = matchReportContextWarning.value || generationDiagnostic.value?.errorMessage || fallbackNoticeDesc.value
+    return {
+      title: fallbackNoticeTitle.value,
+      description: reason,
+      showGenerate: true,
+      generateText: '重新查找依据',
+      showFallback: true,
+      fallbackText: fallbackKeyword.value ? '按岗位关键词先练一组' : '先练一组通用题',
+      showResumeLink: query.source === 'matchReport' || query.source === 'gap'
+    }
+  }
+  return {
+    title: '暂时没有推荐题',
+    description: '已经找到推荐依据，但本轮没有返回可练题。可以重新生成，或先做一组通用训练。',
+    showGenerate: true,
+    generateText: '重新生成',
+    showFallback: true,
+    fallbackText: '先练一组',
+    showResumeLink: false
+  }
 })
 const coachSteps = computed(() => [
   {
@@ -870,11 +947,7 @@ const buildQuestionQuery = (item: QuestionRecommendationItemVO) => {
     skillName: trimForQuery(item.skillName || item.skillCode, 60),
     gapSeverity: item.gapSeverity,
     trustStatus: item.trustStatus || generationDiagnostic.value?.trustStatus,
-    evidenceSummary: trimForQuery(item.evidenceSummary || generationDiagnostic.value?.evidenceSummary),
     fallback: item.fallback || generationDiagnostic.value?.fallback,
-    recommendReason: trimForQuery(item.recommendReason || item.questionContent),
-    answerHint: trimForQuery(item.answerHint),
-    evaluatePoints: trimForQuery(item.evaluatePoints),
     questionIds: itemPracticeQuestionId(item)
   })
 }
@@ -885,10 +958,9 @@ const buildPracticeQuery = (questionIds: number[], item?: QuestionRecommendation
   sourceType: item?.sourceType || sourceTypeBySource[query.source],
   sourceId: item?.sourceId || query.sourceId,
   trustStatus: item?.trustStatus || generationDiagnostic.value?.trustStatus,
-  evidenceSummary: trimForQuery(item?.evidenceSummary || generationDiagnostic.value?.evidenceSummary),
   fallback: item?.fallback || generationDiagnostic.value?.fallback,
   skillName: trimForQuery(item?.skillName || item?.skillCode || topSkillNames.value[0], 60),
-  recommendReason: trimForQuery(item?.recommendReason),
+  autoStart: questionIds.length ? true : undefined,
   count: Math.min(questionIds.length || query.questionCount, query.questionCount)
 })
 
@@ -933,12 +1005,10 @@ const startFallbackPractice = () => {
       trustStatus: 'FALLBACK',
       count: query.questionCount,
       keyword: fallbackKeyword.value || undefined,
-      evidenceSummary: fallbackEvidenceSummary.value,
       targetJobId: getQueryNumber('targetJobId'),
       resumeId: getQueryNumber('resumeId'),
       matchReportId: getQueryNumber('matchReportId'),
-      skillProfileId: getQueryNumber('skillProfileId') || getQueryNumber('profileId'),
-      recommendReason: fallbackEvidenceSummary.value
+      skillProfileId: getQueryNumber('skillProfileId') || getQueryNumber('profileId')
     })
   })
 }
@@ -1108,7 +1178,7 @@ onMounted(loadRecommendations)
 
 .fallback-notice {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(260px, 1fr);
   gap: 10px;
   align-items: flex-start;
   padding: 12px;
@@ -1137,9 +1207,10 @@ onMounted(loadRecommendations)
 }
 
 .fallback-notice__actions {
+  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -1188,9 +1259,31 @@ onMounted(loadRecommendations)
 
 .training-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(420px, 1fr) minmax(300px, 320px);
   gap: 18px;
   align-items: start;
+}
+
+.recommendation-empty-state {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+
+  :deep(.app-state__content) {
+    max-width: 560px;
+  }
+}
+
+.recommendation-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .section-head {
@@ -1447,6 +1540,7 @@ onMounted(loadRecommendations)
   }
 
   .fallback-notice__actions {
+    grid-column: auto;
     display: grid;
     grid-template-columns: 1fr;
     justify-content: stretch;

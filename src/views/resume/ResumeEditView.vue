@@ -137,20 +137,20 @@
           </div>
         </section>
 
-        <section v-if="isEdit && resumeId" class="content-card editor-section project-section">
+        <section class="content-card editor-section project-section">
           <div class="section-heading project-header">
             <div class="section-heading__left">
               <div class="section-icon">
                 <Layers3 :size="18" />
               </div>
               <div>
-                <h2>项目经历</h2>
-                <p>手动维护项目背景、职责、难点和优化结果，AI 建议只在生成后作为参考。</p>
+                <h2>{{ isEdit ? '项目经历' : '项目经历' }}</h2>
+                <p>{{ isEdit ? '手动维护项目背景、职责、难点和优化结果，AI 建议只在生成后作为参考。' : '创建简历时先补一段核心项目，保存后会自动挂到这份简历下。' }}</p>
               </div>
             </div>
             <el-button type="primary" @click="openProjectDialog()">
               <Plus :size="16" />
-              新增项目
+              {{ isEdit ? '新增项目' : '添加项目草稿' }}
             </el-button>
           </div>
 
@@ -158,7 +158,7 @@
             <div v-if="projects.length === 0" class="project-empty">
               <FolderOpen :size="30" />
               <h3>暂无项目经历</h3>
-              <p>项目经历会帮助面试创建页构建更完整的简历上下文。</p>
+              <p>{{ isEdit ? '项目经历会帮助面试创建页构建更完整的简历上下文。' : '建议至少补一个能讲清背景、职责、技术难点和结果的项目。' }}</p>
             </div>
             <article v-for="project in projects" v-else :key="project.projectId" class="project-card">
               <div class="project-card__main">
@@ -412,6 +412,11 @@ const route = useRoute()
 const router = useRouter()
 const resumeId = computed(() => getRouteNumberParam(route.params.id as string))
 const isEdit = computed(() => Boolean(resumeId.value))
+const routeTargetJobId = computed(() => {
+  const rawValue = Array.isArray(route.query.targetJobId) ? route.query.targetJobId[0] : route.query.targetJobId
+  const value = Number(rawValue)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -532,6 +537,42 @@ const getOptimizeSuggestionFieldName = (item: ResumeRewriteSuggestion, index: nu
 const getOptimizeSuggestionFieldKey = (item: ResumeRewriteSuggestion) =>
   item.fieldKey || item.section || item.fieldName || (item.projectName ? 'project' : undefined)
 
+const toProjectDraft = (payload: ResumeProjectDTO, projectId: number): ResumeProjectVO => ({
+  ...payload,
+  id: projectId,
+  projectId,
+  projectTime: payload.projectTime || payload.projectPeriod || '',
+  projectPeriod: payload.projectPeriod || payload.projectTime || '',
+  projectBackground: payload.projectBackground || payload.description || '',
+  description: payload.description || payload.projectBackground || '',
+  responsibility: payload.responsibility || payload.role || '',
+  role: payload.role || payload.responsibility || '',
+  technicalChallenges: payload.technicalChallenges || payload.technicalDifficulties || '',
+  technicalDifficulties: payload.technicalDifficulties || payload.technicalChallenges || '',
+  optimizationResult: payload.optimizationResult || payload.optimizationResults || '',
+  optimizationResults: payload.optimizationResults || payload.optimizationResult || '',
+  sort: payload.sort ?? payload.sortOrder ?? 0,
+  sortOrder: payload.sortOrder ?? payload.sort ?? 0
+})
+
+const persistDraftProjects = async (createdResumeId: number) => {
+  const draftProjects = projects.value.filter((project) => project.projectId < 0)
+  if (!draftProjects.length) return
+
+  let failedCount = 0
+  for (const project of draftProjects) {
+    try {
+      await createResumeProjectApi(createdResumeId, project)
+    } catch {
+      failedCount++
+    }
+  }
+
+  if (failedCount) {
+    ElMessage.warning(`简历已创建，${failedCount} 条项目草稿保存失败，请在编辑页补充。`)
+  }
+}
+
 const selectAllOptimizeSuggestions = () => {
   selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
 }
@@ -618,6 +659,7 @@ const refreshOptimizeRecords = async () => {
 }
 
 const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
+  targetJobId: routeTargetJobId.value,
   targetPosition: optimizeForm.targetPosition || form.targetPosition,
   experienceYears: optimizeForm.experienceYears,
   industryDirection: optimizeForm.industryDirection,
@@ -751,6 +793,7 @@ const handleSave = async () => {
       await fetchDetail()
     } else {
       const created = await createResumeApi(form)
+      await persistDraftProjects(created.id)
       if (form.isDefault === 1) {
         await setDefaultResumeApi(created.id)
       }
@@ -769,12 +812,26 @@ const openProjectDialog = (project?: ResumeProjectVO) => {
 }
 
 const handleSaveProject = async () => {
-  if (!resumeId.value || !projectFormRef.value) return
+  if (!projectFormRef.value) return
   const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
   if (!payload) return
   projectSaving.value = true
   try {
     const projectPayload = { ...payload }
+    if (!resumeId.value) {
+      const projectId = editingProjectId.value || -Date.now()
+      const draftProject = toProjectDraft(projectPayload, projectId)
+      if (editingProjectId.value) {
+        projects.value = projects.value.map((project) => project.projectId === editingProjectId.value ? draftProject : project)
+      } else {
+        projects.value = [...projects.value, draftProject]
+      }
+      ElMessage.success('项目草稿已加入，保存简历后会一起创建')
+      projectDialogVisible.value = false
+      editingProjectId.value = null
+      editingProject.value = null
+      return
+    }
     if (editingProjectId.value) {
       await updateResumeProjectApi(resumeId.value, editingProjectId.value, projectPayload)
     } else {
@@ -793,7 +850,11 @@ const handleSaveProject = async () => {
 }
 
 const handleDeleteProject = async (project: ResumeProjectVO) => {
-  if (!resumeId.value) return
+  if (!resumeId.value) {
+    projects.value = projects.value.filter((item) => item.projectId !== project.projectId)
+    ElMessage.success('项目草稿已移除')
+    return
+  }
   const confirmed = await confirmDangerActionPreview({
     title: '删除项目经历',
     action: '删除该简历中的项目经历',
