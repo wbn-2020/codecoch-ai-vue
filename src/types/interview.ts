@@ -392,6 +392,7 @@ export interface InterviewReportNextActionVO {
   description?: string
   priority?: number
   actionUrl?: string
+  actionSource?: 'BACKEND' | 'STATIC_FALLBACK' | string
   relatedBizType?: string
   relatedBizId?: number
   evidence?: string

@@ -100,6 +100,12 @@
             </el-table-column>
             <el-table-column v-if="isColumnVisible('triggerType')" prop="triggerType" label="触发" width="100" />
             <el-table-column v-if="isColumnVisible('modelName')" prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('resultSource')" label="来源" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="normalizedRunResultSource(row)" :type="resultSourceTagType(row)" effect="plain">{{ resultSourceLabel(row) }}</el-tag>
+                <span v-else>--</span>
+              </template>
+            </el-table-column>
             <el-table-column v-if="isColumnVisible('durationMs')" label="耗时" width="110">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
@@ -163,6 +169,10 @@
             <el-descriptions-item label="提示词类型">{{ detail.promptType || '--' }}</el-descriptions-item>
             <el-descriptions-item label="提示词版本">{{ detail.promptVersionId ?? '--' }}</el-descriptions-item>
             <el-descriptions-item label="模型">{{ detail.modelName || '--' }}</el-descriptions-item>
+            <el-descriptions-item label="结果来源">
+              <el-tag v-if="normalizedRunResultSource(detail)" :type="resultSourceTagType(detail)" effect="plain">{{ resultSourceLabel(detail) }}</el-tag>
+              <span v-else>--</span>
+            </el-descriptions-item>
             <el-descriptions-item label="生成记录编号">{{ detail.aiCallLogId ?? '--' }}</el-descriptions-item>
             <el-descriptions-item label="耗时">{{ detail.durationMs ?? '--' }} ms</el-descriptions-item>
             <el-descriptions-item label="追踪号">{{ detail.traceId || '--' }}</el-descriptions-item>
@@ -301,6 +311,7 @@ type AgentRunColumnKey =
   | 'status'
   | 'triggerType'
   | 'modelName'
+  | 'resultSource'
   | 'durationMs'
   | 'errorMessage'
   | 'createdAt'
@@ -339,6 +350,7 @@ const {
   { key: 'status', label: '状态', required: true },
   { key: 'triggerType', label: '触发方式' },
   { key: 'modelName', label: '模型' },
+  { key: 'resultSource', label: '来源' },
   { key: 'durationMs', label: '耗时' },
   { key: 'errorMessage', label: '错误信息' },
   { key: 'createdAt', label: '创建时间' },
@@ -465,6 +477,31 @@ const taskStatusMap = {
 }
 
 const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || '优先级待确认' : '--')
+const normalizedRunResultSource = (
+  run?: Pick<AdminAgentRunDetailVO, 'resultSource' | 'fallback' | 'mock' | 'modelName'> | null
+) => {
+  const source = String(run?.resultSource || '').toUpperCase()
+  if (source) return source
+  if (run?.fallback) return 'FALLBACK'
+  if (run?.mock) return 'MOCK'
+  return String(run?.modelName || '').toLowerCase().includes('mock') ? 'MOCK' : ''
+}
+
+const resultSourceLabel = (run?: AdminAgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (run?.resultSourceLabel) return run.resultSourceLabel
+  if (source === 'MOCK') return '模拟数据'
+  if (source === 'FALLBACK') return '降级兜底'
+  if (source === 'LLM') return '真实模型'
+  return '--'
+}
+
+const resultSourceTagType = (run?: AdminAgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (source === 'MOCK') return 'info'
+  if (source === 'FALLBACK') return 'warning'
+  return 'success'
+}
 
 const formatJson = (value: unknown) => {
   if (!value) return '--'

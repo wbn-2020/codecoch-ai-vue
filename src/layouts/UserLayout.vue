@@ -7,7 +7,7 @@
       :unread-count="unreadCount"
       :unread-available="unreadAvailable"
       :notification-tooltip="notificationTooltip"
-      :can-access-admin="authStore.canAccessAdmin"
+      :can-access-admin="Boolean(adminEntryPath)"
       @open-command="commandPaletteOpen = true"
       @go-admin="goAdmin"
       @user-command="handleCommand"
@@ -34,7 +34,7 @@ import { getUnreadCountApi } from '@/api/notification'
 import { appConfig } from '@/config'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
-import { firstAccessibleAdminPath } from '@/router/adminAccess'
+import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
 import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
@@ -49,6 +49,7 @@ const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
@@ -56,7 +57,15 @@ const commandPaletteOpen = ref(false)
 const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（稍后刷新未读数）')
 
 const goAdmin = async () => {
-  await router.push(firstAccessibleAdminPath(authStore) || '/403')
+  try {
+    await authStore.verifyAdminSession()
+  } catch {
+    await router.push('/auth-unavailable')
+    return
+  }
+
+  const path = resolveAdminEntryPath(authStore)
+  await router.push(path || '/403')
 }
 
 const fetchUnreadCount = async () => {

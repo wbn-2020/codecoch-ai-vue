@@ -17,7 +17,7 @@ export const getJobTargetsApi = (params?: TargetJobQueryDTO) => {
     .get<TargetJobVO[] | PageResult<TargetJobVO>, TargetJobVO[] | PageResult<TargetJobVO>>('/job-targets', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizePageResult(result, params).records)
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }).records)
 }
 
 export const createJobTargetApi = (data: TargetJobSaveDTO) => {

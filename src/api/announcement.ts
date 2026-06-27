@@ -11,7 +11,7 @@ export const getAdminAnnouncementsApi = async (params: AnnouncementQueryDTO) => 
   >('/admin/announcements', {
     params: compactQueryParams(params)
   })
-  return normalizePageResult(result, params)
+  return normalizePageResult(result, params, { allowArrayFallback: true })
 }
 
 export const getAdminAnnouncementDetailApi = (id: number) => {

@@ -195,6 +195,7 @@ import AppState from '@/components/common/AppState.vue'
 import type { ResumeVO } from '@/types/resume'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const router = useRouter()
@@ -478,7 +479,12 @@ const rollback = async (versionId: number) => {
     confirmButtonText: '确认回滚'
   })
   if (!confirmed) return
-  await rollbackResumeVersionApi(resumeId.value as number, versionId)
+  await rollbackResumeVersionApi(resumeId.value as number, versionId, {
+    confirm: true,
+    dryRun: false,
+    reason: 'user resume rollback version',
+    idempotencyKey: createOperationIdempotencyKey(`resume-version-rollback-${versionId}`)
+  })
   ElMessage.success('版本已回滚')
   await load()
 }
@@ -518,7 +524,11 @@ const applySuggestion = async () => {
       optimizeRecordId: suggestionForm.optimizeRecordId,
       suggestionType: suggestionForm.suggestionType || undefined,
       status: suggestionForm.status,
-      note: suggestionForm.note || undefined
+      note: suggestionForm.note || undefined,
+      confirm: true,
+      dryRun: false,
+      reason: 'user resume apply ai suggestion',
+      idempotencyKey: createOperationIdempotencyKey(`resume-version-apply-${version.id}`)
     })
     suggestionVisible.value = false
     ElMessage.success('建议采纳记录已保存')

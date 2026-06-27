@@ -45,9 +45,33 @@ It expands to:
 
 ```powershell
 npm run type-check
+npm run test:unit:run
 npm run check:mojibake
 npm run check:ui-copy
+npm run check:v4-contracts
+npm run check:wave-contracts
+npm run check:phase10
+npm run check:quality-gates
 ```
+
+`test:unit:run` executes the real frontend unit-test harness:
+
+```powershell
+npm run test:unit:run
+```
+
+Current scope is intentionally narrow:
+
+- shared component behavior such as `AppState`
+- shared utility hardening such as `routeSecurity`
+
+`check:wave-contracts` keeps report-driven regression scripts in the main local gate:
+
+```powershell
+npm run check:wave-contracts
+```
+
+It covers analytics error-state, knowledge dangerous confirmation, Agent task action routing, admin button-level RBAC, and the admin overview RBAC contract without starting any service.
 
 Run the production build only when you are ready to regenerate `dist`:
 
@@ -67,6 +91,13 @@ Then verify the report-driven workflows manually:
 
 ## CI Follow-Up
 
-The frontend repository currently has no `.github/workflows` directory. When CI wiring is explicitly approved, add a GitHub Actions workflow that runs `npm run check:quality` before build jobs.
+The frontend repository now includes `.github/workflows/frontend-quality.yml`.
 
-Do not wire CI automatically without review, because workflow files change what remote CI runners execute on push or pull request. Keep logs bounded and keep the gate non-destructive: type-check, mojibake scan, and UI-copy scan first; build only in the release job that is allowed to regenerate artifacts.
+It keeps CI non-destructive:
+
+- `npm ci --ignore-scripts`
+- `npm run check:quality`
+
+It does not start any service, browser, Docker, database, Redis, MQ, ES, or Qdrant dependency.
+
+Build jobs can remain separate; the quality workflow exists to keep type-check, unit tests, and report-driven contract checks attached to pull requests and pushes.

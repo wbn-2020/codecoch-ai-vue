@@ -144,15 +144,18 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑提示词模板' : '新增提示词模板'" width="820px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑提示词模板元数据' : '新增提示词模板'" width="820px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="112px">
         <el-form-item label="模板名称" prop="name">
           <el-input v-model.trim="form.name" />
         </el-form-item>
         <el-form-item label="模板类型" prop="scene">
-          <el-select v-model="form.scene" style="width: 100%">
+          <el-select v-model="form.scene" style="width: 100%" :disabled="Boolean(editingId)">
             <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
+          <div v-if="editingId" class="field-note">
+            模板类型不在当前编辑态变更；如需调整提示词正文或发布版本，请走版本管理。
+          </div>
         </el-form-item>
         <el-form-item label="模板内容" prop="content">
           <el-input
@@ -163,19 +166,25 @@
             :placeholder="editingId ? '提示词内容请通过版本管理新增版本修改' : '请输入模板内容'"
           />
           <div v-if="editingId" class="field-note">
-            提示词内容请通过版本管理新增版本修改，本次保存只更新名称、类型、描述和状态。
+            <span>提示词正文不能在这里直接保存，请通过版本管理新增版本修改。本次保存只更新模板名称和描述。</span>
+            <el-button link type="primary" @click="openEditingVersionDrawer">去版本管理</el-button>
           </div>
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item v-if="!editingId" label="状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
+        </el-form-item>
+        <el-form-item v-else label="当前状态">
+          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" disabled />
+          <div class="field-note">模板启停请回列表页操作，不通过“编辑元数据”提交。</div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'admin:ai:prompt:write'" type="primary" :loading="saving" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleSave">保存</el-button>
+        <el-button v-if="editingId" link type="primary" @click="openEditingVersionDrawer">去版本管理</el-button>
+        <el-button v-permission="'admin:ai:prompt:write'" type="primary" :loading="saving" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleSave">{{ editingId ? '保存元数据' : '保存' }}</el-button>
       </template>
     </el-dialog>
 
@@ -641,7 +650,7 @@ import {
   disablePromptTemplateVersionApi,
   rollbackPromptTemplateVersionApi,
   testPromptTemplateVersionApi,
-  updateAdminAiPromptApi,
+  updateAdminAiPromptMetadataApi,
   updateAdminAiPromptStatusApi
 } from '@/api/aiAdmin'
 import AppState from '@/components/common/AppState.vue'
@@ -833,6 +842,9 @@ const canWritePrompt = computed(() => authStore.hasPermission('admin:ai:prompt:w
 const canTestPrompt = computed(() => authStore.hasPermission('admin:ai:prompt:test'))
 const canPublishPrompt = computed(() => authStore.hasPermission('admin:ai:prompt:publish'))
 const canViewPromptRaw = computed(() => authStore.hasPermission('admin:ai:prompt:raw:view'))
+const editingPrompt = computed(() =>
+  editingId.value ? prompts.value.find((item) => item.id === editingId.value) || null : null
+)
 const promptStateExpectation = (row?: PromptTemplateVO | null) => ({
   expectedStatus: row?.status ?? null,
   expectedActiveVersionId: row?.activeVersionId ?? null
@@ -1007,6 +1019,12 @@ const openDialog = (row?: PromptTemplateVO) => {
   dialogVisible.value = true
 }
 
+const openEditingVersionDrawer = async () => {
+  if (!editingPrompt.value) return
+  dialogVisible.value = false
+  await openVersionDrawer(editingPrompt.value)
+}
+
 const openVersionDrawer = async (row: PromptTemplateVO) => {
   currentPrompt.value = row
   versionQuery.pageNo = 1
@@ -1088,39 +1106,61 @@ const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
   await formRef.value.validate()
-  const actionLabel = editingId.value ? '更新提示词模板' : '新增提示词模板'
+  const isEditingMetadata = Boolean(editingId.value)
+  const actionLabel = isEditingMetadata ? '更新提示词模板元数据' : '新增提示词模板'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
     action: `${actionLabel}「${form.name}」`,
-    target: `模板编码：${form.scene || '-'}；场景：${getSceneLabel(form.scene)}；状态：${form.status === 1 ? '启用' : '停用'}`,
-    impact: '模板保存后会影响面试提问、评分、追问、报告生成或其它使用该场景的 AI 能力。',
-    rollback: editingId.value
-      ? '可再次编辑模板基础信息；已产生的 AI 调用和历史版本不会自动回到修改前。'
+    target: isEditingMetadata
+      ? `模板名称：${form.name || '-'}；场景：${getSceneLabel(form.scene)}；当前状态：${form.status === 1 ? '启用' : '停用'}`
+      : `模板编码：${form.scene || '-'}；场景：${getSceneLabel(form.scene)}；状态：${form.status === 1 ? '启用' : '停用'}`,
+    impact: isEditingMetadata
+      ? '本次仅保存模板名称和描述，不会直接修改提示词正文、当前生效版本或启停状态。'
+      : '模板保存后会影响面试提问、评分、追问、报告生成或其它使用该场景的 AI 能力。',
+    rollback: isEditingMetadata
+      ? '可再次编辑模板元数据；正文变更需新增版本，已产生的 AI 调用和历史版本不会自动回到修改前。'
       : '如新增错误，可在确认没有业务依赖后停用或删除该模板。',
-    audit: '模板保存会记录操作人、模板编码、场景和时间，便于追踪提示词治理变更。',
-    tips: [
-      `初始内容长度：${form.content?.length || 0} 字符`,
-      '确认模板编码和场景不会与现有模板混淆。',
-      '确认内容不包含真实用户敏感信息或临时调试字段。'
-    ],
+    audit: isEditingMetadata
+      ? '模板元数据保存会记录操作人、模板、场景和时间，便于追踪提示词治理变更。'
+      : '模板保存会记录操作人、模板编码、场景和时间，便于追踪提示词治理变更。',
+    tips: isEditingMetadata
+      ? [
+          '提示词正文如需修改，请点击“去版本管理”新增版本。',
+          '模板启停请回列表页操作，不通过当前编辑弹窗提交。',
+          '确认模板描述与当前生效版本语义保持一致。'
+        ]
+      : [
+          `初始内容长度：${form.content?.length || 0} 字符`,
+          '确认模板编码和场景不会与现有模板混淆。',
+          '确认内容不包含真实用户敏感信息或临时调试字段。'
+        ],
     confirmButtonText: '确认保存'
   })
   if (!confirmed) return
   saving.value = true
   try {
     const editingPrompt = editingId.value ? prompts.value.find((item) => item.id === editingId.value) : null
-    const payload: PromptTemplateDTO = {
-      ...form,
-      ...promptConfirmPayload(
-        editingId.value ? `prompt-template-update-${editingId.value}` : 'prompt-template-create',
-        editingId.value
-          ? 'Admin confirmed prompt template metadata update from prompt management page.'
-          : 'Admin confirmed prompt template create from prompt management page.',
-        editingPrompt
-      )
-    }
+    const confirmationPayload = promptConfirmPayload(
+      editingId.value ? `prompt-template-update-${editingId.value}` : 'prompt-template-create',
+      editingId.value
+        ? 'Admin confirmed prompt template metadata update from prompt management page.'
+        : 'Admin confirmed prompt template create from prompt management page.',
+      editingPrompt
+    )
+    const payload: PromptTemplateDTO = editingId.value
+      ? {
+          name: form.name,
+          scene: form.scene,
+          status: form.status,
+          description: form.description,
+          ...confirmationPayload
+        } as PromptTemplateDTO
+      : {
+          ...form,
+          ...confirmationPayload
+        }
     if (editingId.value) {
-      await updateAdminAiPromptApi(editingId.value, payload)
+      await updateAdminAiPromptMetadataApi(editingId.value, payload)
     } else {
       await createAdminAiPromptApi(payload)
     }

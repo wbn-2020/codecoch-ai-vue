@@ -52,7 +52,7 @@ export const getQuestionGroupsApi = (params?: {
     .get<BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>, BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>>('/admin/question-groups', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizeGroupList(normalizePageResult(result).records))
+    .then((result) => normalizeGroupList(normalizePageResult(result, undefined, { allowArrayFallback: true }).records))
 }
 
 export const createQuestionGroupApi = (data: QuestionGroupDTO) => {

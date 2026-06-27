@@ -43,7 +43,7 @@ export const getQuestionCategoriesApi = (params?: { status?: number | ''; keywor
     .get<BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>, BackendQuestionCategoryVO[] | PageResult<BackendQuestionCategoryVO>>('/admin/question-categories', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizeCategoryList(normalizePageResult(result).records))
+    .then((result) => normalizeCategoryList(normalizePageResult(result, undefined, { allowArrayFallback: true }).records))
 }
 
 export const createQuestionCategoryApi = (data: QuestionCategoryDTO) => {

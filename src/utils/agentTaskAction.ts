@@ -2,6 +2,7 @@ import type { AgentTaskVO } from '@/types/agent'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 const TASK_CENTER_PATH = '/agent/tasks'
+const PREVIEW_BLOCKED_PATHS = ['/resume-versions', '/applications']
 
 const normalizeType = (value?: string | null) => String(value || '').toUpperCase()
 
@@ -10,6 +11,11 @@ const EVIDENCE_BOUND_TASK_TYPES = new Set([
   'INTERVIEW',
   'APPLICATION_FOLLOW_UP',
   'RESUME_OPTIMIZE'
+])
+
+const REVIEW_ACTION_URL_TASK_TYPES = new Set([
+  'SKILL_REVIEW',
+  'KNOWLEDGE_REVIEW'
 ])
 
 export const isEvidenceBoundAgentTask = (task?: AgentTaskVO | null) =>
@@ -29,9 +35,12 @@ export const isAgentJobApplicationTask = (task?: AgentTaskVO | null) => {
   return type === 'APPLICATION_FOLLOW_UP' || bizType === 'JOB_APPLICATION'
 }
 
+const isReviewActionUrlTask = (task?: AgentTaskVO | null) =>
+  REVIEW_ACTION_URL_TASK_TYPES.has(normalizeType(task?.taskType))
+
 const isQuestionTask = (task?: AgentTaskVO | null) => {
   const type = normalizeType(task?.taskType)
-  return type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')
+  return type.includes('QUESTION')
 }
 
 const isInterviewTask = (task?: AgentTaskVO | null) => {
@@ -43,9 +52,13 @@ const isResumeTask = (task?: AgentTaskVO | null) => normalizeType(task?.taskType
 
 const isStudyTask = (task?: AgentTaskVO | null) => normalizeType(task?.taskType).includes('STUDY')
 
+const isPreviewBlockedPath = (path: string) =>
+  PREVIEW_BLOCKED_PATHS.some((item) => path === item || path.startsWith(`${item}/`))
+
 const routeAllowedForTask = (task: AgentTaskVO, value: string) => {
   const [path = ''] = value.split('?')
-  if (!path || path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/register')) return false
+  if (!path || path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/register') || isPreviewBlockedPath(path)) return false
+  if (isReviewActionUrlTask(task)) return path !== TASK_CENTER_PATH
   if (isAgentJobApplicationTask(task)) return path === TASK_CENTER_PATH || path.startsWith('/applications')
   if (isQuestionTask(task)) return path === TASK_CENTER_PATH || path.startsWith('/questions')
   if (isInterviewTask(task)) return path === TASK_CENTER_PATH || path.startsWith('/interviews')
@@ -97,10 +110,10 @@ export const buildAgentTaskActionPath = (task?: AgentTaskVO | null, fallback = T
   const params = new URLSearchParams(rawQuery)
 
   if (isAgentJobApplicationTask(task)) {
-    path = actionUrl && path !== TASK_CENTER_PATH ? path : '/applications'
+    path = actionUrl ? path : fallback
   } else if (isQuestionTask(task)) {
-    path = '/questions/practice'
-    if (!params.get('mode')) params.set('mode', 'category')
+    path = actionUrl && path !== TASK_CENTER_PATH ? path : '/questions/practice'
+    if (path === '/questions/practice' && !params.get('mode')) params.set('mode', 'category')
   } else if (isInterviewTask(task)) {
     path = actionUrl && path !== TASK_CENTER_PATH ? path : '/interviews/create'
   } else if (isResumeTask(task)) {

@@ -139,11 +139,11 @@
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
             查看能力画像
           </el-button>
-          <el-button :disabled="!report.resumeId" @click="goReportResumeVersions">
+          <el-button :disabled="!canAccessResumeVersionPreview || !report.resumeId" @click="goReportResumeVersions">
             查看简历版本
           </el-button>
           <el-button
-            :disabled="!isSuccessReport || !report.resumeId"
+            :disabled="!isSuccessReport || !canAccessResumeVersionPreview || !report.resumeId"
             :loading="versionSaving"
             @click="saveReportAsResumeVersion"
           >
@@ -151,7 +151,7 @@
             保存报告建议为版本
           </el-button>
           <el-button
-            :disabled="!isSuccessReport || !report.targetJobId"
+            :disabled="!isSuccessReport || !canAccessApplicationPreview || !report.targetJobId"
             :loading="applicationCreating"
             @click="createApplicationFromReport"
           >
@@ -208,6 +208,7 @@ import { generateSkillProfileApi } from '@/api/skillProfile'
 import { createApplicationApi, createResumeVersionApi, getApplicationsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
+import { appConfig } from '@/config'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
@@ -241,6 +242,8 @@ const isTrustedSuccessReport = computed(() =>
   && String(report.value?.trustStatus || '').toUpperCase() === 'VERIFIED'
   && !schemaWarningItems.value.length
 )
+const canAccessResumeVersionPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
+const canAccessApplicationPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
 const actionPanelHint = computed(() => {
   if (!isSuccessReport.value) return '报告成功后才会开放能力画像、学习计划和岗位面试。'
   if (!isTrustedSuccessReport.value) return '当前报告只适合查看和确认；建议重新生成可直接使用的报告后再继续训练。'

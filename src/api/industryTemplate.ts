@@ -15,7 +15,7 @@ export const getAdminIndustryTemplatesApi = (params?: AdminIndustryTemplateQuery
       '/admin/industry-templates',
       { params: compactQueryParams(params) }
     )
-    .then((result) => normalizePageResult(result, params).records)
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }).records)
 }
 
 export const getAdminIndustryTemplateDetailApi = (id: number) => {

@@ -340,6 +340,7 @@
         <ul>
           <li v-for="item in completionReviewItems" :key="item">{{ item }}</li>
         </ul>
+        <p class="review-hint">下一步建议：优先点击「{{ completionReviewNextAction.label }}」继续。</p>
         <p v-if="completionReviewNote" class="review-note">备注：{{ completionReviewNote }}</p>
       </div>
       <template #footer>
@@ -399,6 +400,8 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import request from '@/utils/request'
 
 interface HomeTask {
   key: string
@@ -611,29 +614,29 @@ const completionReviewItems = computed(() => {
   const skill = task?.relatedSkillName || task?.targetJobTitle || '当前方向'
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) {
     return [
-      `掌握度：已完成一轮「${skill}」训练，先把能稳定讲清楚的点记为可复用表达。`,
-      '暴露短板：如果回答仍停在概念层，优先补项目场景、指标、取舍和追问边界。',
-      '下一步建议：进入专项练习或错题本，再刷一组同方向题，巩固今天暴露的问题。'
+      `回到「${skill}」专项练习，再完成 1 组同方向题目，巩固刚完成的内容。`,
+      '把刚才仍不稳定的知识点补进错题或笔记，避免下一轮回答再次卡住。',
+      '如果还缺项目语境，先补场景、指标和取舍，再继续下一题。'
     ]
   }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) {
     return [
-      `掌握度：已完成一次「${skill}」复盘，先确认哪些回答能支撑目标岗位要求。`,
-    '暴露短板：重点查看低分项、追问失败点和缺少细节支撑的项目描述。',
-      '下一步建议：把 1 个薄弱点回填到题库训练或下一次模拟面试，优先练项目背景、指标和取舍。'
+      `先查看这次「${skill}」里最低分的 1 个点，确认下一轮优先修哪一项。`,
+      '把缺少细节支撑的项目经历补成可直接回答的表达，再继续后续训练。',
+      '继续做一轮相关题目或下一次模拟面试，验证刚才的调整是否生效。'
     ]
   }
   if (type.includes('RESUME')) {
     return [
-      `掌握度：已完成一次「${skill}」简历证据整理，先确认新增内容能被面试官追问。`,
-    '暴露短板：如果仍缺少数字、业务场景或个人职责，匹配结论的参考价值会下降。',
-    '下一步建议：用目标岗位关键词再跑一次匹配，把仍缺少细节的技能放回今日训练。'
+      `先检查这次补充的「${skill}」证据，确认它能直接支撑目标岗位要求。`,
+      '把仍缺数字、业务场景或职责边界的内容补完整，再进入下一步。',
+      '回到简历匹配再跑一轮，确认今天这项修改是否真正提升匹配度。'
     ]
   }
   return [
-    '掌握度：本次任务已经完成，先确认是否产出了可复用结论。',
-    '暴露短板：把仍不确定、无法举例或无法落到项目里的点写进反馈。',
-    '下一步建议：继续推进下一项待办，保持今天的训练闭环。'
+    '先确认这次任务已经沉淀出可复用的结论、素材或表达。',
+    '把仍不确定、无法举例或暂时落不到项目里的点补进反馈里。',
+    '继续处理下一项今日任务，保持今天的训练闭环。'
   ]
 })
 
@@ -643,7 +646,7 @@ const completionReviewNextAction = computed(() => {
   const type = String(task?.taskType || '').toUpperCase()
   if (hasAgentTaskActionEntry(task)) {
     return {
-      label: isAgentJobApplicationTask(task) ? '查看投递进度' : '打开任务入口',
+      label: isAgentJobApplicationTask(task) ? '查看投递进度' : '继续当前任务',
       path: buildAgentTaskActionPath(task, '/agent/today')
     }
   }
@@ -891,6 +894,30 @@ const mobileQuickActions = computed(() => [
 
 const go = (path: string) => {
   router.push(path)
+}
+
+const getTaskRunId = (task?: AgentTaskVO | null) => task?.agentRunId ?? task?.runId ?? null
+const getTaskPlanDate = (task?: AgentTaskVO | null) =>
+  task?.activationHandoffs?.find((item) => item?.planDate)?.planDate
+  || task?.dueDate
+  || dailyPlan.value?.planDate
+  || dailyPlan.value?.date
+  || formatLocalDate()
+  || undefined
+
+const trackCompletionReviewCtaClick = (targetPath: string) => {
+  const task = completionReviewTask.value
+  if (!task?.id || !targetPath) return
+  void request.post('/agent/metrics/events', {
+    eventCode: 'feedback_cta_clicked',
+    taskId: task.id,
+    runId: getTaskRunId(task) ?? undefined,
+    planDate: getTaskPlanDate(task),
+    targetPath,
+    sourcePage: 'dashboard_home'
+  }, {
+    silentError: true
+  }).catch(() => undefined)
 }
 
 const shouldForceRefresh = (force: unknown = true) => force !== false
@@ -1155,15 +1182,19 @@ const generatePlan = async () => {
   dailyPlanGenerating.value = true
   dailyPlanError.value = ''
   try {
+    const planDate = formatLocalDate()
+    const idempotencyKey = createOperationIdempotencyKey(`jobcoach-home-daily-plan-${planDate}-${currentTargetJobId.value || 'default'}`)
     dailyPlan.value = await generateDailyPlanApi({
-      date: formatLocalDate(),
+      date: planDate,
       targetJobId: currentTargetJobId.value || undefined,
+      requestId: idempotencyKey,
+      idempotencyKey,
       taskCount: 4,
       maxTotalMinutes: 90,
       forceRegenerate: true
     })
     agentTasks.value = dailyPlan.value.tasks || agentTasks.value
-    invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
+    invalidateUserHomeTrainingCaches(planDate, currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
   } catch (error) {
     dailyPlanError.value = getErrorMessage(error, '今日计划生成失败，未新增任务；可以稍后重试，或先去题库/面试训练。')
@@ -1224,8 +1255,10 @@ const completeTask = async (taskId: number) => {
 }
 
 const goCompletionNextAction = () => {
+  const targetPath = completionReviewNextAction.value.path
+  trackCompletionReviewCtaClick(targetPath)
   completionReviewVisible.value = false
-  go(completionReviewNextAction.value.path)
+  go(targetPath)
 }
 
 onMounted(() => {
@@ -2024,6 +2057,10 @@ onBeforeUnmount(() => {
   color: #2563eb;
   font-size: 13px;
   font-weight: 800;
+}
+
+.review-hint {
+  font-weight: 600;
 }
 
 .review-note {

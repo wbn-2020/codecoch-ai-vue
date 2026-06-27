@@ -116,10 +116,10 @@ const baseMenuSections: UserMenuSection[] = [
     icon: Files,
     forceGroup: true,
     children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files },
+      { label: '简历版本', path: '/resume-versions', icon: Files, previewOnly: true },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass },
+      { label: '求职进度', path: '/applications', icon: Compass, previewOnly: true },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal }

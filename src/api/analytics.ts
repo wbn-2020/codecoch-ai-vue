@@ -212,7 +212,7 @@ export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQue
       '/admin/analytics/metrics',
       { params: compactQueryParams(requestParams) }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 }
 
 export const createAdminAnalyticsMetricApi = (data: AdminAnalyticsMetricSaveDTO) =>
@@ -241,7 +241,7 @@ export const getPromptRegressionCasesApi = (params?: PromptRegressionQuery) =>
       '/admin/agent/prompt-regression/cases',
       { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
   request
@@ -249,7 +249,7 @@ export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
       '/admin/agent/prompt-regression/results',
       { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const createPromptRegressionCaseApi = (data: PromptRegressionCaseSaveDTO) =>
   request.post<PromptRegressionCaseVO, PromptRegressionCaseVO>('/admin/agent/prompt-regression/cases', data)

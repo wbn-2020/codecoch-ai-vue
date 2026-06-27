@@ -248,6 +248,7 @@ const normalizeNextActions = (
         description: String(item.description || ''),
         priority: Number(item.priority || index + 1),
         actionUrl: String(item.actionUrl || ''),
+        actionSource: String(item.actionSource || 'BACKEND'),
         relatedBizType: String(item.relatedBizType || ''),
         relatedBizId: item.relatedBizId !== undefined && item.relatedBizId !== null ? Number(item.relatedBizId) : undefined,
         evidence: String(item.evidence || '')
@@ -277,6 +278,7 @@ const normalizeNextActions = (
       actionUrl: reportId
         ? `/questions/practice?mode=recommended&source=interviewReport&reportId=${reportId}`
         : '/questions/practice?mode=recommended&source=interviewReport',
+      actionSource: 'STATIC_FALLBACK',
       relatedBizType: 'INTERVIEW_REPORT',
       relatedBizId: reportId,
       evidence: '推荐题可用'
@@ -289,6 +291,7 @@ const normalizeNextActions = (
       description: '把复盘建议转成可执行计划。',
       priority: fallback.length + 1,
       actionUrl: `/study-plans?source=interviewReport&reportId=${reportId}`,
+      actionSource: 'STATIC_FALLBACK',
       relatedBizType: 'INTERVIEW_REPORT',
       relatedBizId: reportId,
       evidence: source?.summary || source?.reportContent || ''
@@ -303,6 +306,7 @@ const normalizeNextActions = (
       actionUrl: reportId
         ? `/interviews/create?source=interviewReport&reportId=${reportId}&interviewId=${interviewId}`
         : '/interviews/create',
+      actionSource: 'STATIC_FALLBACK',
       relatedBizType: 'INTERVIEW_SESSION',
       relatedBizId: interviewId,
       evidence: source?.evidenceSummary || ''
@@ -315,6 +319,7 @@ const normalizeNextActions = (
       description: '把主要问题补回简历和项目经历。',
       priority: fallback.length + 1,
       actionUrl: reportId ? `/resumes?source=interviewReport&reportId=${reportId}` : '/resumes',
+      actionSource: 'STATIC_FALLBACK',
       relatedBizType: 'INTERVIEW_REPORT',
       relatedBizId: reportId,
       evidence: source?.mainProblems || source?.projectProblems || source?.projectExpressionProblems || source?.weaknesses || ''

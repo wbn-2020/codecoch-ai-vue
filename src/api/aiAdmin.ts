@@ -125,7 +125,7 @@ const normalizePromptTemplateDetail = (prompt: BackendPromptTemplateDetailVO): P
 const normalizePromptPage = (
   result: PageResult<BackendPromptTemplateVO> | BackendPromptTemplateVO[],
   params?: PromptTemplateQueryDTO
-): PageResult<PromptTemplateVO> => normalizePageResult(result, params, normalizePromptTemplate)
+): PageResult<PromptTemplateVO> => normalizePageResult(result, params, normalizePromptTemplate, { allowArrayFallback: true })
 
 const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => ({
   scene: data.scene,
@@ -162,7 +162,7 @@ export const createAdminAiPromptApi = (data: PromptTemplateDTO) => {
     .then(normalizePromptTemplate)
 }
 
-export const updateAdminAiPromptApi = (id: number, data: PromptTemplateDTO) => {
+export const updateAdminAiPromptMetadataApi = (id: number, data: PromptTemplateDTO) => {
   return request
     .put<BackendPromptTemplateVO, BackendPromptTemplateVO>(
       `/admin/ai/prompts/${id}`,

@@ -35,10 +35,10 @@ const pick = <T = any>(item: any, ...keys: string[]): T | undefined => {
 const cleanParams = (params?: Record<string, any>) => compactQueryParams(params || {})
 
 const normalizeListResult = <T, U = T>(result: PageResult<T> | T[] | unknown, mapper: (item: T) => U) =>
-  normalizePageResult(result as PageResult<T> | T[], undefined, mapper).records
+  normalizePageResult(result as PageResult<T> | T[], undefined, mapper, { allowArrayFallback: true }).records
 
 const normalizeIdListResult = (result: number[] | MenuVO[] | PageResult<number | MenuVO> | unknown) =>
-  normalizePageResult(result as PageResult<number | MenuVO> | Array<number | MenuVO>).records
+  normalizePageResult(result as PageResult<number | MenuVO> | Array<number | MenuVO>, undefined, { allowArrayFallback: true }).records
     .map((item: any) => (typeof item === 'number' ? item : normalizeId(item)))
     .filter(Boolean)
 
@@ -232,7 +232,7 @@ export const getAdminTasksApi = (params: AdminListQuery) =>
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/tasks', {
       params: cleanParams({ ...withCommonParams(params), bizType: params.type })
     })
-    .then((result) => normalizePageResult(result, params, normalizeTask))
+    .then((result) => normalizePageResult(result, params, normalizeTask, { allowArrayFallback: true }))
 
 export const getAdminTaskDetailApi = (id: number) =>
   request.get<any, any>(`/admin/tasks/${id}`).then(normalizeTask)
@@ -267,7 +267,7 @@ export const getAdminNotificationsApi = (params: AdminListQuery) =>
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/notifications', {
       params: cleanParams({ ...withCommonParams(params), readStatus: params.status, sendStatus: params.sendStatus })
     })
-    .then((result) => normalizePageResult(result, params, normalizeNotice))
+    .then((result) => normalizePageResult(result, params, normalizeNotice, { allowArrayFallback: true }))
 
 export const sendAdminNotificationApi = (data: NotificationSendDTO) =>
   request.post<AdminNotificationVO, AdminNotificationVO>('/admin/notifications', data)
@@ -288,7 +288,7 @@ export const deleteAdminNotificationApi = (id: number, data: AdminOperationConfi
 export const getAdminOperationLogsApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/operation-logs', { params: withCommonParams(params) })
-    .then((result) => normalizePageResult(result, params, normalizeOperationLog))
+    .then((result) => normalizePageResult(result, params, normalizeOperationLog, { allowArrayFallback: true }))
 
 export const getAdminLogSummaryApi = () =>
   request.get<AdminLogSummaryVO, AdminLogSummaryVO>('/admin/logs/summary')
@@ -298,7 +298,7 @@ export const getAdminLoginLogsApi = (params: AdminListQuery) =>
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/login-logs', {
       params: cleanParams({ ...withCommonParams(params), loginStatus: params.status })
     })
-    .then((result) => normalizePageResult(result, params, normalizeLoginLog))
+    .then((result) => normalizePageResult(result, params, normalizeLoginLog, { allowArrayFallback: true }))
 
 export const getAdminSlowSqlLogsApi = (params: AdminListQuery) =>
   request
@@ -310,7 +310,7 @@ export const getAdminSlowSqlLogsApi = (params: AdminListQuery) =>
         minCostMs: params.minCostMs
       })
     })
-    .then((result) => normalizePageResult(result, params, normalizeSlowSqlLog))
+    .then((result) => normalizePageResult(result, params, normalizeSlowSqlLog, { allowArrayFallback: true }))
 
 export const getAdminMenusApi = () =>
   request
@@ -332,7 +332,7 @@ export const getAdminAiModelsApi = (params: AdminListQuery) =>
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/ai/models', {
       params: cleanParams({ ...withCommonParams(params), enabled: params.status })
     })
-    .then((result) => normalizePageResult(result, params, normalizeAiModel))
+    .then((result) => normalizePageResult(result, params, normalizeAiModel, { allowArrayFallback: true }))
 
 export const createAdminAiModelApi = (data: AiModelConfigDTO & AdminOperationConfirmPayload) =>
   request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)
@@ -352,7 +352,7 @@ export const deleteAdminAiModelApi = (id: number, data: AdminOperationConfirmPay
 export const getAdminInterviewsApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interviews', { params: withCommonParams(params) })
-    .then((result) => normalizePageResult(result, params, normalizeInterview))
+    .then((result) => normalizePageResult(result, params, normalizeInterview, { allowArrayFallback: true }))
 
 export const getAdminInterviewDetailApi = (id: number) =>
   request.get<any, any>(`/admin/interviews/${id}`).then(normalizeInterview)
@@ -360,7 +360,7 @@ export const getAdminInterviewDetailApi = (id: number) =>
 export const getAdminInterviewReportsApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/interview-reports', { params: withCommonParams(params) })
-    .then((result) => normalizePageResult(result, params, normalizeReport))
+    .then((result) => normalizePageResult(result, params, normalizeReport, { allowArrayFallback: true }))
 
 export const getAdminInterviewReportDetailApi = (id: number) =>
   request.get<any, any>(`/admin/interview-reports/${id}`).then(normalizeReport)

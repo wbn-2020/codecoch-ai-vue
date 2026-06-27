@@ -4,7 +4,6 @@ import { routes } from '@/router/routes'
 import { useAuthStore } from '@/stores/auth'
 
 const ADMIN_ROOT = '/admin'
-const ADMIN_BASELINE_PERMISSIONS = new Set(['admin:system:overview'])
 
 const isHiddenRoute = (route: RouteRecordRaw) => Boolean(route.meta?.hidden || route.redirect)
 
@@ -24,12 +23,7 @@ export const canAccessAdminPermissions = (
     return false
   }
 
-  if (authStore.hasAnyPermission(normalizedPermissions)) {
-    return true
-  }
-
-  const onlyBaselinePermissions = normalizedPermissions.every((permission) => ADMIN_BASELINE_PERMISSIONS.has(permission))
-  return authStore.isAdmin && onlyBaselinePermissions
+  return authStore.hasAnyPermission(normalizedPermissions)
 }
 
 const canAccessRoute = (route: RouteRecordRaw, authStore: ReturnType<typeof useAuthStore>) => {
@@ -46,3 +40,14 @@ export const firstAccessibleAdminPath = (authStore: ReturnType<typeof useAuthSto
   }
   return child.path ? `${ADMIN_ROOT}/${child.path}`.replace(/\/$/, '') : ADMIN_ROOT
 }
+
+export const resolveAdminEntryPath = (authStore: ReturnType<typeof useAuthStore>) => {
+  if (!authStore.canAccessAdmin) {
+    return null
+  }
+
+  return firstAccessibleAdminPath(authStore)
+}
+
+export const resolveAuthenticatedEntryPath = (authStore: ReturnType<typeof useAuthStore>) =>
+  resolveAdminEntryPath(authStore) || '/dashboard'

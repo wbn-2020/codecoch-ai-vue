@@ -10,7 +10,7 @@
         <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
       </div>
       <div class="report-actions">
-        <el-button @click="router.push('/dashboard')">
+        <el-button @click="handleStaticTodayAction()">
           <LayoutDashboard :size="16" />
           今日计划
         </el-button>
@@ -18,7 +18,7 @@
           <History :size="16" />
           返回历史
         </el-button>
-        <el-button v-if="interviewId" type="primary" @click="router.push('/interviews/create')">
+        <el-button v-if="interviewId" type="primary" @click="handleStaticInterviewAction()">
           <RotateCcw :size="16" />
           重新面试
         </el-button>
@@ -191,6 +191,10 @@
               </el-button>
             </article>
           </div>
+        </div>
+        <div v-else-if="nextActionUnavailableReason" class="next-action-empty">
+          <strong>暂未生成结构化闭环行动</strong>
+          <p>{{ nextActionUnavailableReason }}</p>
         </div>
 
         <div class="coach-next">
@@ -434,11 +438,11 @@
           <p>报告已生成，可继续发起新面试、进入题库练习或生成学习计划。</p>
         </div>
         <div class="action-buttons">
-          <el-button type="primary" @click="router.push('/interviews/create')">
+          <el-button type="primary" @click="handleStaticInterviewAction(true)">
             <RotateCcw :size="16" />
             重新面试
           </el-button>
-          <el-button :disabled="!recommendedQuestionIds.length" @click="goPracticeQuestion">
+          <el-button :disabled="!recommendedQuestionIds.length" @click="handleStaticPracticeAction(true)">
             <BookOpenCheck :size="16" />
             重练薄弱题
           </el-button>
@@ -446,7 +450,7 @@
             <CalendarClock :size="16" />
             生成学习计划
           </el-button>
-          <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
+          <el-button @click="handleStaticTodayAction(true)">返回今日计划</el-button>
         </div>
       </div>
     </section>
@@ -457,10 +461,13 @@
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
+import {
+  recordAgentMetricEventApi
+} from '@/api/agent'
 import {
   getInterviewReportApi,
   retryInterviewReportApi
@@ -491,6 +498,8 @@ const retrying = ref(false)
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
+const nextActionShownMetricKey = ref('')
+const staticActionShownMetricKey = ref('')
 const pollCount = ref(0)
 const pollFailures = ref(0)
 const taskReportId = ref<number | undefined>()
@@ -566,6 +575,19 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
   return [...report.value.nextActions]
     .filter((action) => action && action.actionType && action.title)
     .sort((left, right) => (left.priority || 0) - (right.priority || 0))
+})
+const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
+  String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
+const backendNextActions = computed(() => nextActions.value.filter((action) => !isStaticFallbackNextAction(action)))
+const nextActionUnavailableReason = computed(() => {
+  if (!isGenerated.value || nextActions.value.length) return ''
+  if (recommendedQuestionIds.value.length) {
+    return '报告没有返回结构化 nextActions 字段，页面先使用推荐题、重新面试和今日计划入口承接下一轮训练，并记录实验点击指标。'
+  }
+  if (qaMessages.value.length) {
+    return '报告有问答证据，但暂未形成可跳转的训练动作。可以先重新面试或回到今日计划，避免把低置信建议包装成确定结论。'
+  }
+  return '报告缺少足够问答和短板证据，本轮不硬生成训练建议；建议先补一次完整模拟面试。'
 })
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
@@ -904,7 +926,62 @@ const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') =>
   await router.push(actionUrl || fallback)
 }
 
+const reportMetricId = () => report.value?.reportId || report.value?.id
+const canTrackReportNextActionMetric = () => isGenerated.value && Boolean(reportMetricId())
+
+const trackInterviewNextActionMetric = (eventCode: 'interview_report_next_action_shown' | 'interview_report_next_action_clicked', action?: InterviewReportNextActionVO) => {
+  const metricId = reportMetricId()
+  if (!metricId || !canTrackReportNextActionMetric()) return
+  void recordAgentMetricEventApi({
+    eventCode,
+    sourcePage: 'interview_report',
+    targetPath: action?.actionUrl,
+    bizType: 'interview_report',
+    bizId: String(metricId),
+    metadata: {
+      interviewId,
+      actionType: action?.actionType,
+      actionSource: action?.actionSource || (action ? 'BACKEND' : undefined),
+      priority: action?.priority,
+      title: action?.title,
+      actionCount: nextActions.value.length,
+      backendActionCount: backendNextActions.value.length
+    }
+  }, { silentError: true }).catch(() => undefined)
+}
+
+const staticNextAction = (actionType: string, title: string, actionUrl: string, priority = 90): InterviewReportNextActionVO => ({
+  actionType,
+  title,
+  actionUrl,
+  priority,
+  actionSource: 'STATIC_FALLBACK',
+  description: '静态兜底训练入口'
+})
+
+const handleStaticTodayAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('TODAY_PLAN', '返回今日计划', '/dashboard', 93))
+  }
+  await router.push('/dashboard')
+}
+
+const handleStaticInterviewAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('INTERVIEW', '重新面试', '/interviews/create', 91))
+  }
+  await router.push('/interviews/create')
+}
+
+const handleStaticPracticeAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('QUESTION_PRACTICE', '重练薄弱题', '/questions/practice', 92))
+  }
+  await goPracticeQuestion()
+}
+
 const handleNextAction = async (action: InterviewReportNextActionVO) => {
+  trackInterviewNextActionMetric('interview_report_next_action_clicked', action)
   const actionType = String(action.actionType || '').toUpperCase()
   if (actionType === 'STUDY_PLAN') {
     await handleGenerateStudyPlan()
@@ -1095,6 +1172,25 @@ const handleGenerateStudyPlan = async () => {
 }
 
 onMounted(loadReportOrSubmitTask)
+watch(backendNextActions, (actions) => {
+  const metricId = reportMetricId()
+  if (!metricId || !canTrackReportNextActionMetric() || !actions.length) return
+  const key = `${metricId}:${actions.map((action) => `${action.actionType || ''}:${action.priority || 0}`).join('|')}`
+  if (nextActionShownMetricKey.value === key) return
+  nextActionShownMetricKey.value = key
+  trackInterviewNextActionMetric('interview_report_next_action_shown', actions[0])
+})
+watch(isGenerated, (generated) => {
+  const metricId = reportMetricId()
+  if (!generated || !metricId || backendNextActions.value.length) return
+  const key = `${metricId}:static-action-zone`
+  if (staticActionShownMetricKey.value === key) return
+  staticActionShownMetricKey.value = key
+  trackInterviewNextActionMetric(
+    'interview_report_next_action_shown',
+    staticNextAction('STATIC_ACTION_ZONE', '下一步行动', '', 99)
+  )
+})
 onBeforeUnmount(() => {
   stopPolling()
 })
@@ -1149,6 +1245,31 @@ onBeforeUnmount(() => {
 
 .next-action-section {
   margin-top: 20px;
+}
+
+.next-action-empty {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+
+  strong,
+  p {
+    margin: 0;
+  }
+
+  strong {
+    display: block;
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin-top: 6px;
+    line-height: 1.65;
+  }
 }
 
 .next-action-grid {

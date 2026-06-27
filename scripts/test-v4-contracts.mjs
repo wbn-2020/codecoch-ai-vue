@@ -33,6 +33,9 @@ const adminGovernanceApiFile = path.join(frontendRoot, 'src/api/adminGovernance.
 const aiAdminApiFile = path.join(frontendRoot, 'src/api/aiAdmin.ts')
 const adminAgentApiFile = path.join(frontendRoot, 'src/api/adminAgent.ts')
 const systemApiFile = path.join(frontendRoot, 'src/api/system.ts')
+const userLayoutFile = path.join(frontendRoot, 'src/layouts/UserLayout.vue')
+const routerGuardsFile = path.join(frontendRoot, 'src/router/guards.ts')
+const adminAccessFile = path.join(frontendRoot, 'src/router/adminAccess.ts')
 const adminOpsPageFile = path.join(frontendRoot, 'src/views/admin/AdminOpsOverviewView.vue')
 const adminAsyncTaskPageFile = path.join(frontendRoot, 'src/views/admin/AsyncTaskView.vue')
 const adminAiCallLogPageFile = path.join(frontendRoot, 'src/views/admin/AiCallLogView.vue')
@@ -110,6 +113,9 @@ const [
   aiAdminApi,
   adminAgentApi,
   systemApi,
+  userLayout,
+  routerGuards,
+  adminAccess,
   adminOpsPage,
   adminAsyncTaskPage,
   adminAiCallLogPage,
@@ -183,6 +189,9 @@ const [
   read(aiAdminApiFile),
   read(adminAgentApiFile),
   read(systemApiFile),
+  read(userLayoutFile),
+  read(routerGuardsFile),
+  read(adminAccessFile),
   read(adminOpsPageFile),
   read(adminAsyncTaskPageFile),
   read(adminAiCallLogPageFile),
@@ -532,13 +541,32 @@ for (const [routePath, component] of routeChecks) {
   record('route', routePath, contains(routes, `path: '${routePath}'`) && contains(routes, component), component)
 }
 
-const requiredSidebarPaths = ['/resume-versions', '/applications']
-for (const routePath of requiredSidebarPaths) {
-  const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
-  record('sidebar', routePath, Boolean(line) && !line.includes('previewOnly'), line.trim())
+const previewRoutePaths = ['resume-versions', 'applications', 'resumes/:id/versions']
+for (const routePath of previewRoutePaths) {
+  const line = routes.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
+  record(
+    'route-preview',
+    routePath,
+    Boolean(line) && line.includes('previewOnly: true'),
+    line.trim()
+  )
 }
 
-const previewSidebarPaths = ['/agent/reviews', '/growth/profile', '/agent/memory', '/knowledge']
+recordContainsAll(
+  'resume-match-loop',
+  'match-detail-preview-cta-gated-by-v4-flag',
+  resumeMatchDetailPage,
+  [
+    'canAccessResumeVersionPreview',
+    'canAccessApplicationPreview',
+    ":disabled=\"!canAccessResumeVersionPreview || !report.resumeId\"",
+    ":disabled=\"!isSuccessReport || !canAccessResumeVersionPreview || !report.resumeId\"",
+    ":disabled=\"!isSuccessReport || !canAccessApplicationPreview || !report.targetJobId\""
+  ],
+  'Resume match detail gates resume-version and application CTAs behind the V4 preview flag instead of exposing dead-end links'
+)
+
+const previewSidebarPaths = ['/agent/reviews', '/growth/profile', '/agent/memory', '/knowledge', '/resume-versions', '/applications']
 for (const routePath of previewSidebarPaths) {
   const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
   record(
@@ -900,7 +928,8 @@ const adminSystemGovernanceChecks = [
     2600,
     [
       'confirmDangerActionPreview({',
-      'updateSystemConfigApi(editingConfigId.value, {',
+      'const updatePayload: Parameters<typeof updateSystemConfigApi>[1] = {',
+      'updateSystemConfigApi(editingConfigId.value, updatePayload)',
       'createSystemConfigApi({',
       'confirm: true',
       'dryRun: false',
@@ -955,6 +984,161 @@ const adminSystemGovernanceChecks = [
 
 for (const [name, text, marker, length, needles, evidence] of adminSystemGovernanceChecks) {
   recordContainsAll('admin-system-governance', name, sliceFrom(text, marker, length), needles, evidence)
+}
+
+const promptTemplateContractChecks = [
+  [
+    'prompt-template-metadata-api-omits-content',
+    aiAdminApi,
+    'export const updateAdminAiPromptMetadataApi',
+    300,
+    [
+      '`/admin/ai/prompts/${id}`',
+      'toBackendPromptDTO(data, false)'
+    ],
+    'Prompt template metadata update API routes through toBackendPromptDTO(data, false) so metadata saves do not send正文 content'
+  ],
+  [
+    'prompt-template-editing-content-locked-to-versioning',
+    adminPromptTemplatePage,
+    '<el-form-item label="模板内容" prop="content">',
+    1200,
+    [
+      ':readonly="Boolean(editingId)"',
+      "editingId ? '提示词内容请通过版本管理新增版本修改' : '请输入模板内容'",
+      '提示词正文不能在这里直接保存，请通过版本管理新增版本修改。本次保存只更新模板名称和描述。',
+      '@click="openEditingVersionDrawer"'
+    ],
+    'Prompt template edit form keeps正文 read-only during metadata edits and points正文 changes to 版本管理'
+  ],
+  [
+    'prompt-template-metadata-save-payload-stays-metadata-only',
+    adminPromptTemplatePage,
+    'const handleSave = async',
+    2600,
+    [
+      '提示词正文如需修改，请点击“去版本管理”新增版本。',
+      'const payload: PromptTemplateDTO = editingId.value',
+      'name: form.name',
+      'scene: form.scene',
+      'status: form.status',
+      'description: form.description',
+      'await updateAdminAiPromptMetadataApi(editingId.value, payload)'
+    ],
+    'Prompt template metadata save only submits metadata fields and keeps正文 edits on the version-management flow'
+  ]
+]
+
+for (const [name, text, marker, length, needles, evidence] of promptTemplateContractChecks) {
+  recordContainsAll('prompt-template-contract', name, sliceFrom(text, marker, length), needles, evidence)
+}
+
+const systemConfigContractChecks = [
+  [
+    'system-config-update-api-id-and-key-paths',
+    systemApi,
+    'export const updateSystemConfigByIdApi',
+    1000,
+    [
+      'export const updateSystemConfigByIdApi',
+      '`/admin/configs/${id}`',
+      'export const updateSystemConfigByKeyApi',
+      '`/admin/configs/keys/${encodeURIComponent(configKey)}`',
+      'export const updateSystemConfigApi',
+      ') => updateSystemConfigByIdApi(id, data)'
+    ],
+    'System config front-end keeps both id and key update paths while the default update helper still resolves to id writes'
+  ],
+  [
+    'system-config-controller-id-and-key-routes',
+    systemConfigController,
+    '@PutMapping("/admin/configs/{id}")',
+    1500,
+    [
+      '@PutMapping("/admin/configs/{id}")',
+      'public Result<SystemConfigVO> updateConfigById(@PathVariable Long id, @RequestBody SystemConfigSaveDTO dto)',
+      '() -> systemConfigService.updateConfigById(id, dto)',
+      '@PutMapping({"/admin/configs/keys/{configKey}", "/admin/configs/key/{configKey}"})',
+      'public Result<SystemConfigVO> updateConfigByKey(@PathVariable String configKey, @RequestBody SystemConfigSaveDTO dto)',
+      '() -> systemConfigService.updateConfigByKey(configKey, dto)'
+    ],
+    'SystemConfigController exposes matching id/key update mappings for the current front-end contract'
+  ],
+  [
+    'system-config-page-result-normalization',
+    systemApi,
+    'const normalizeConfigPage',
+    900,
+    [
+      'const normalizeConfigPage',
+      'records: Array.isArray(result.records) ? result.records.map(normalizeSystemConfig) : []',
+      'export const getSystemConfigsApi = async',
+      'params: compactQueryParams(params)',
+      'return normalizeConfigPage(result)'
+    ],
+    'System config list contract still normalizes real paged records before page consumers read them'
+  ]
+]
+
+for (const [name, text, marker, length, needles, evidence] of systemConfigContractChecks) {
+  recordContainsAll('system-config-contract', name, sliceFrom(text, marker, length), needles, evidence)
+}
+
+const adminEntryContractChecks = [
+  [
+    'user-layout-admin-entry-verifies-admin-session',
+    userLayout,
+    'const goAdmin = async',
+    500,
+    [
+      'await authStore.verifyAdminSession()',
+      "await router.push('/auth-unavailable')",
+      'const path = resolveAdminEntryPath(authStore)',
+      "await router.push(path || '/403')"
+    ],
+    'User-side admin entry verifies admin session before routing into admin pages'
+  ],
+  [
+    'router-guard-admin-route-session-gate',
+    routerGuards,
+    'if (isAdminRoute) {',
+    900,
+    [
+      'await authStore.verifyAdminSession()',
+      "path: '/login'",
+      "path: '/auth-unavailable'"
+    ],
+    'Admin route guard verifies admin session and falls back to login or auth-unavailable when the session check fails'
+  ],
+  [
+    'router-guard-auth-entry-uses-current-authenticated-helper',
+    routerGuards,
+    'if (isPublic) {',
+    1400,
+    [
+      'if (isAuthPage && authStore.isLoggedIn)',
+      'await authStore.verifyToken()',
+      'return safeRedirectPath(to.query.redirect) || resolveAuthenticatedEntryPath(authStore)'
+    ],
+    'Logged-in users hitting auth/public entries are redirected by resolveAuthenticatedEntryPath instead of a legacy hard-coded helper name'
+  ],
+  [
+    'admin-access-current-entry-helper-naming',
+    adminAccess,
+    'export const resolveAdminEntryPath',
+    500,
+    [
+      'export const resolveAdminEntryPath',
+      'return firstAccessibleAdminPath(authStore)',
+      'export const resolveAuthenticatedEntryPath',
+      "resolveAdminEntryPath(authStore) || '/dashboard'"
+    ],
+    'Admin access helpers use current resolveAdminEntryPath / resolveAuthenticatedEntryPath naming and fall back to /dashboard'
+  ]
+]
+
+for (const [name, text, marker, length, needles, evidence] of adminEntryContractChecks) {
+  recordContainsAll('admin-entry-contract', name, sliceFrom(text, marker, length), needles, evidence)
 }
 
 const adminAiModelGovernanceChecks = [

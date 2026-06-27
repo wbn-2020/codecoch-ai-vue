@@ -26,22 +26,50 @@
         title="部分成长数据暂时不可用"
         :description="partialLoadWarning"
       />
+      <section v-if="overview && !loading" class="growth-explain-strip">
+        <el-tag effect="plain">时间窗：{{ overview.timeWindow || `最近 ${rangeDays} 天` }}</el-tag>
+        <el-tag effect="plain" :type="confidenceTagType">可信度：{{ confidenceLabel }}</el-tag>
+        <el-tag effect="plain">证据数量：{{ overview.evidenceCount ?? 0 }}</el-tag>
+        <el-tag v-for="label in dataSourceLabels" :key="label" effect="plain" type="info">{{ label }}</el-tag>
+      </section>
+
+      <AppState
+        v-if="isColdStart && !loading"
+        class="growth-cold-state"
+        type="empty"
+        title="资料还不够，暂不展示强评分"
+        :description="overview?.coldStartReason || '最近训练证据不足，暂不展示 readiness 分数、百分位或差距类结论。先补齐任务、题库或面试证据后再查看趋势。'"
+      >
+        <div class="empty-actions">
+          <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
+          <el-button @click="goQuestionTraining">去题库练习</el-button>
+          <el-button @click="goInterviewCreate">创建模拟面试</el-button>
+        </div>
+        <ul v-if="nextEvidenceActions.length" class="evidence-action-list">
+          <li v-for="action in nextEvidenceActions" :key="action">{{ action }}</li>
+        </ul>
+      </AppState>
+
       <section class="v4-grid" v-loading="loading">
         <article class="v4-card">
           <span>准备度</span>
-          <strong>{{ overview?.readinessScore ?? 0 }}</strong>
+          <strong>{{ showStrongScore ? overview?.readinessScore : '待补证据' }}</strong>
+          <small>{{ showStrongScore ? '基于近期任务和教练运行记录' : '证据不足时不展示评分' }}</small>
         </article>
         <article class="v4-card">
           <span>任务完成率</span>
-          <strong>{{ overview?.taskCompletionRate ?? 0 }}%</strong>
+          <strong>{{ showStrongScore ? formatPercent(overview?.taskCompletionRate) : '--' }}</strong>
+          <small>{{ showStrongScore ? '仅展示可信时间窗内结果' : '完成更多任务后显示' }}</small>
         </article>
         <article class="v4-card">
           <span>今日计划成功率</span>
-          <strong>{{ overview?.agentSuccessRate ?? 0 }}%</strong>
+          <strong>{{ showStrongScore ? formatPercent(overview?.agentSuccessRate) : '--' }}</strong>
+          <small>{{ showStrongScore ? '来自 AI 教练运行记录' : '运行记录不足时隐藏' }}</small>
         </article>
         <article class="v4-card">
           <span>启用记忆数</span>
           <strong>{{ overview?.totalMemoryCount ?? 0 }}</strong>
+          <small>{{ overview?.totalReviewCount ?? 0 }} 条复盘记录</small>
         </article>
       </section>
 
@@ -54,14 +82,14 @@
             </div>
           </div>
           <div class="skill-strip">
-            <el-tag v-for="item in overview?.topSkills || []" :key="item.name" effect="plain">
+            <el-tag v-for="item in visibleTopSkills" :key="item.name" effect="plain">
               {{ item.name }} · {{ item.value }}
             </el-tag>
             <AppState
-              v-if="!(overview?.topSkills || []).length && !loading"
+              v-if="!visibleTopSkills.length && !loading"
               type="empty"
-              title="还没有重点技能"
-              description="完成带技能标签的题库练习、今日任务或模拟面试后，系统会汇总你最近反复暴露的技能点。"
+              :title="topSkillEmptyTitle"
+              :description="topSkillEmptyDescription"
             >
               <div class="empty-actions">
                 <el-button type="primary" @click="goQuestionTraining">进入题库训练</el-button>
@@ -70,18 +98,20 @@
             </AppState>
           </div>
           <div class="trend-list">
-            <article v-for="item in skillTrend" :key="`${item.snapshotDate}-${item.skillCode || item.id}`" class="trend-row">
+            <article v-for="item in visibleSkillTrend" :key="`${item.snapshotDate}-${item.skillCode || item.id}`" class="trend-row">
               <div>
                 <strong>{{ item.skillName || item.skillCode || '未知技能' }}</strong>
-                <span>{{ item.snapshotDate || '--' }} · 任务 {{ item.taskCount ?? 0 }} · 完成 {{ item.doneCount ?? 0 }}</span>
+                <span>{{ item.snapshotDate || '--' }} · {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? item.taskCount ?? 0 }}</span>
+                <small class="trend-meta">可信度：{{ confidenceText(item.confidenceLevel) }} · 来源：{{ trendSourceText(item) }}</small>
+                <small v-if="item.coldStartReason" class="trend-cold">{{ item.coldStartReason }}</small>
               </div>
               <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
             </article>
             <AppState
-              v-if="!skillTrend.length && !loading"
+              v-if="!visibleSkillTrend.length && !loading"
               type="empty"
-              title="还没有技能趋势"
-              description="趋势需要连续几天的训练记录；先完成今日任务或专项练习，再回来查看技能分数变化。"
+              title="还没有可信技能趋势"
+              description="技能趋势需要足够任务证据和时间窗。当前只展示补资料入口，不把零散记录包装成结论。"
             >
               <div class="empty-actions">
                 <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
@@ -101,20 +131,22 @@
             </div>
           </div>
           <div class="trend-list">
-            <article v-for="item in readinessTrend" :key="item.id" class="trend-row">
+            <article v-for="item in visibleReadinessTrend" :key="item.id" class="trend-row">
               <div>
                 <strong>{{ item.scoreDate || '--' }}</strong>
                 <span>
-                  完成率 {{ item.taskCompletionRate ?? 0 }}% · 今日计划 {{ item.agentSuccessRate ?? 0 }}%
+                  {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? 0 }} · 完成率 {{ item.taskCompletionRate ?? 0 }}% · 今日计划 {{ item.agentSuccessRate ?? 0 }}%
                 </span>
+                <small class="trend-meta">可信度：{{ confidenceText(item.confidenceLevel) }} · 来源：{{ trendSourceText(item) }}</small>
+                <small v-if="item.coldStartReason" class="trend-cold">{{ item.coldStartReason }}</small>
               </div>
               <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
             </article>
             <AppState
-              v-if="!readinessTrend.length && !loading"
+              v-if="!visibleReadinessTrend.length && !loading"
               type="empty"
-              title="还没有准备度趋势"
-              description="准备度会结合任务完成、今日计划和复盘信号；先生成今日计划并完成一项动作，趋势会更有参考价值。"
+              title="还没有可信准备度趋势"
+              description="准备度趋势只在数据门槛满足后展示。当前不会展示 readiness 分数、百分位或差距类结论。"
             >
               <div class="empty-actions">
                 <el-button type="primary" @click="goTodayPlan">生成今日计划</el-button>
@@ -129,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -159,6 +191,48 @@ const rangeOptions = [
 ]
 
 const boundedPercent = (value?: number) => Math.max(0, Math.min(100, Number(value || 0)))
+const showStrongScore = computed(() => overview.value?.displayPolicy?.showStrongScore === true && overview.value?.readinessScore !== undefined && overview.value?.readinessScore !== null)
+const showTopSkillTrend = computed(() => overview.value?.displayPolicy?.showTopSkillTrend !== false && showStrongScore.value)
+const showReadinessTrend = computed(() => overview.value?.displayPolicy?.showReadinessTrend !== false && showStrongScore.value)
+const visibleTopSkills = computed(() => showTopSkillTrend.value ? (overview.value?.topSkills || []) : [])
+const hasDisplayableTrendConfidence = (level?: string) => {
+  const normalized = String(level || 'LOW').toUpperCase()
+  return normalized === 'MEDIUM' || normalized === 'HIGH'
+}
+const visibleSkillTrend = computed(() => showTopSkillTrend.value ? skillTrend.value.filter((item) => hasDisplayableTrendConfidence(item.confidenceLevel)) : [])
+const visibleReadinessTrend = computed(() => showReadinessTrend.value ? readinessTrend.value.filter((item) => hasDisplayableTrendConfidence(item.confidenceLevel)) : [])
+const isColdStart = computed(() => Boolean(overview.value) && !showStrongScore.value)
+const dataSourceLabels = computed(() => overview.value?.dataSourceLabels || [])
+const nextEvidenceActions = computed(() => overview.value?.nextEvidenceActions || [])
+const topSkillEmptyTitle = computed(() => showTopSkillTrend.value ? '还没有重点技能' : '重点技能暂不展示强趋势')
+const topSkillEmptyDescription = computed(() =>
+  showTopSkillTrend.value
+    ? '完成带技能标签的题库练习、今日任务或模拟面试后，系统会汇总你最近反复暴露的技能点。'
+    : '当前证据还不够稳定，页面只保留补资料入口，不把零散技能记录包装成 Top 趋势。'
+)
+const confidenceLabel = computed(() => {
+  const level = String(overview.value?.confidenceLevel || 'LOW').toUpperCase()
+  if (level === 'HIGH') return '高'
+  if (level === 'MEDIUM') return '中'
+  return '低'
+})
+const confidenceTagType = computed(() => {
+  const level = String(overview.value?.confidenceLevel || 'LOW').toUpperCase()
+  if (level === 'HIGH') return 'success'
+  if (level === 'MEDIUM') return 'warning'
+  return 'info'
+})
+const formatPercent = (value?: number) => `${Math.max(0, Math.min(100, Number(value || 0))).toFixed(0)}%`
+const confidenceText = (level?: string) => {
+  const normalized = String(level || 'LOW').toUpperCase()
+  if (normalized === 'HIGH') return '高'
+  if (normalized === 'MEDIUM') return '中'
+  return '低'
+}
+const trendSourceText = (item: SkillGrowthSnapshotVO | ReadinessScoreRecordVO) => {
+  const labels = item.dataSourceLabels?.filter(Boolean)
+  return labels?.length ? labels.join('、') : dataSourceLabels.value.join('、')
+}
 
 const goTodayPlan = () => router.push('/agent/today')
 const goQuestionTraining = () => router.push('/questions/recommendations')
@@ -261,7 +335,8 @@ onMounted(load)
 }
 
 .v4-actions,
-.skill-strip {
+.skill-strip,
+.growth-explain-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -275,6 +350,11 @@ onMounted(load)
 }
 
 .partial-alert {
+  margin-bottom: 16px;
+}
+
+.growth-explain-strip,
+.growth-cold-state {
   margin-bottom: 16px;
 }
 
@@ -298,6 +378,24 @@ onMounted(load)
   display: block;
   margin-top: 8px;
   font-size: 24px;
+  line-height: 1.25;
+}
+
+.v4-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.evidence-action-list {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--app-text-muted);
+  line-height: 1.6;
 }
 
 .section-head {
@@ -335,6 +433,19 @@ onMounted(load)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.trend-row small {
+  display: block;
+  margin-top: 5px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.trend-cold {
+  color: #fbbf24;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {

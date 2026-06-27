@@ -1,9 +1,14 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type {
+  ActivationHandoffVO,
+  AgentCoachActionDTO,
+  AgentCoachActionVO,
   AgentRunDetailVO,
   AgentFeedbackDTO,
   AgentFeedbackVO,
+  AgentMetricAckVO,
+  AgentMetricEventDTO,
   AgentTaskCompleteDTO,
   AgentTaskQueryDTO,
   AgentTaskSkipDTO,
@@ -14,6 +19,9 @@ import type {
   DailyPlanVO
 } from '@/types/agent'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
+
+const normalizeActivationHandoffs = (handoffs?: ActivationHandoffVO[] | null) =>
+  Array.isArray(handoffs) ? handoffs.filter(Boolean) : []
 
 const normalizeTask = (task: AgentTaskVO): AgentTaskVO => {
   const agentRunId = task.agentRunId ?? task.runId ?? null
@@ -27,10 +35,21 @@ const normalizeTask = (task: AgentTaskVO): AgentTaskVO => {
     trustStatus: task.trustStatus ? String(task.trustStatus).toUpperCase() : task.trustStatus,
     reviewSource: task.reviewSource ? String(task.reviewSource).toUpperCase() : task.reviewSource,
     reviewNextActions: Array.isArray(task.reviewNextActions) ? task.reviewNextActions.filter(Boolean) : [],
+    estimatedEffortMinutes: task.estimatedEffortMinutes ?? task.estimatedMinutes ?? null,
+    actionType: task.actionType ?? null,
+    activationHandoffs: normalizeActivationHandoffs(task.activationHandoffs),
     fallback: Boolean(task.fallback),
     status
   }
 }
+
+const normalizeCoachAction = (action: AgentCoachActionVO): AgentCoachActionVO => ({
+  ...action,
+  actionType: action.actionType ? String(action.actionType).toUpperCase() : action.actionType,
+  resultSource: action.resultSource ? String(action.resultSource).toUpperCase() : action.resultSource,
+  reasons: Array.isArray(action.reasons) ? action.reasons.filter(Boolean).slice(0, 3) : [],
+  evidenceRefs: Array.isArray(action.evidenceRefs) ? action.evidenceRefs.filter(Boolean) : []
+})
 
 const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
   const tasks = (plan.tasks || []).map(normalizeTask)
@@ -38,9 +57,12 @@ const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
   const hasVisibleRun = Boolean(plan.runId && ['RUNNING', 'SUCCESS', 'FAILED'].includes(status))
   return {
     ...plan,
+    date: plan.date || plan.planDate,
+    planDate: plan.planDate || plan.date,
     status: status || plan.status,
     focusSkills: plan.focusSkills || [],
     tasks,
+    activationHandoffs: normalizeActivationHandoffs(plan.activationHandoffs),
     empty: Boolean(plan.empty || (!plan.runId && !hasVisibleRun && !tasks.length))
   }
 }
@@ -124,8 +146,27 @@ export const restoreAgentTaskApi = (id: number) => {
   return request.post<AgentTaskVO, AgentTaskVO>(`/agent/tasks/${id}/restore`).then(normalizeTask)
 }
 
+export const performAgentCoachActionApi = (
+  data: AgentCoachActionDTO,
+  options?: { signal?: AbortSignal; silentError?: boolean }
+) => {
+  return request
+    .post<AgentCoachActionVO, AgentCoachActionVO>('/agent/coach/contextual-actions', data, {
+      signal: options?.signal,
+      silentError: options?.silentError
+    })
+    .then(normalizeCoachAction)
+}
+
 export const submitAgentFeedbackApi = (data: AgentFeedbackDTO) => {
   return request.post<AgentFeedbackVO, AgentFeedbackVO>('/agent/feedback', data)
+}
+
+export const recordAgentMetricEventApi = (
+  data: AgentMetricEventDTO,
+  options?: { silentError?: boolean }
+) => {
+  return request.post<AgentMetricAckVO, AgentMetricAckVO>('/agent/metrics/events', data, options)
 }
 
 export const getAgentRunDetailApi = (id: number) => {

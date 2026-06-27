@@ -2177,7 +2177,12 @@ const deleteKnowledgeEvalCase = async (id?: number) => {
   })
   if (!confirmed) return
   try {
-    await deleteKnowledgeEvalCaseApi(id)
+    await deleteKnowledgeEvalCaseApi(id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge delete eval case',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-delete-eval-case')
+    })
     ElMessage.success('评估样本已删除')
     await fetchKnowledgeEvalCases()
   } catch (error) {
@@ -2557,7 +2562,12 @@ const handleRestoreVersion = async (version: KnowledgeDocumentVersionVO) => {
   if (!confirmed) return
   restoringVersionId.value = version.id
   try {
-    const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id)
+    const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge restore document version',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-restore-version')
+    })
     ElMessage.success(`已恢复到 v${version.versionNo || 0}`)
     versionDocument.value = result
     documentVersions.value = await getKnowledgeDocumentVersionsApi(result.id)

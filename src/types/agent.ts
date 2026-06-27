@@ -16,10 +16,40 @@ export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'SKIPPED' | 'EXPIRED' 
 export type AgentRunStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELED' | string
 export type AgentTriggerType = 'MANUAL' | 'AUTO' | string
 export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
+export type AgentRunResultSource = 'LLM' | 'MOCK' | 'FALLBACK' | string
+export type AgentCoachActionType = 'EXPLAIN_RECOMMENDATION' | 'REVIEW_COMPLETED_TASK'
+export type AgentMetricEventCode =
+  | 'task_completed'
+  | 'feedback_cta_clicked'
+  | 'reminder_shown'
+  | 'reminder_clicked'
+  | 'reminder_target_invalid'
+  | 'interview_report_next_action_shown'
+  | 'interview_report_next_action_clicked'
+  | 'ai_coach_action_started'
+  | 'ai_coach_action_succeeded'
+  | 'ai_coach_action_failed'
+  | 'ai_coach_action_canceled'
+  | 'focus_session_started'
+  | 'focus_session_finished'
+  | 'focus_session_canceled'
+  | string
 
 export interface AgentSkillRefVO {
   code?: string
   name?: string
+}
+
+export interface ActivationHandoffVO {
+  code?: string
+  stage?: string
+  firstOccurrence?: boolean | null
+  runId?: number | null
+  taskId?: number | null
+  targetJobId?: number | null
+  planDate?: string | null
+  occurredAt?: string | null
+  requestId?: string | null
 }
 
 export interface AgentTaskVO {
@@ -39,11 +69,13 @@ export interface AgentTaskVO {
   reason?: string
   priority?: AgentTaskPriority
   estimatedMinutes?: number
+  estimatedEffortMinutes?: number | null
   relatedSkillCode?: string
   relatedSkillName?: string
   relatedBizType?: string
   relatedBizId?: number
   actionUrl?: string
+  actionType?: string | null
   sourceType?: string | null
   sourceId?: number | null
   trustStatus?: AgentTrustStatus | null
@@ -62,6 +94,7 @@ export interface AgentTaskVO {
   completedAt?: string
   skippedAt?: string
   createdAt?: string
+  activationHandoffs?: ActivationHandoffVO[]
 }
 
 export interface DailyPlanVO {
@@ -69,8 +102,10 @@ export interface DailyPlanVO {
   targetJobId?: number
   targetJobTitle?: string
   date?: string
+  planDate?: string
   summary?: string | null
   status?: AgentRunStatus
+  requestId?: string | null
   errorCode?: string | null
   errorMessage?: string | null
   failureAction?: string | null
@@ -88,11 +123,15 @@ export interface DailyPlanVO {
   startedAt?: string
   finishedAt?: string
   createdAt?: string
+  activationHandoffs?: ActivationHandoffVO[]
 }
 
 export interface DailyPlanGenerateDTO {
   targetJobId?: number
   date?: string
+  requestId?: string
+  idempotencyKey?: string
+  executionToken?: string
   maxTotalMinutes?: number
   taskCount?: number
   forceRegenerate?: boolean
@@ -132,6 +171,29 @@ export interface AgentTaskSkipDTO {
   skipReason?: string
 }
 
+export interface AgentCoachActionDTO {
+  taskId: number
+  actionType: AgentCoachActionType
+  requestId?: string
+  idempotencyKey?: string
+}
+
+export interface AgentCoachActionVO {
+  actionType?: AgentCoachActionType | string
+  taskId?: number
+  summary?: string | null
+  reasons?: string[]
+  evidenceRefs?: string[]
+  nextAction?: string | null
+  requestId?: string | null
+  traceId?: string | null
+  idempotencyKey?: string | null
+  resultSource?: AgentRunResultSource | null
+  aiCallLogId?: number | null
+  latencyMs?: number | null
+  estimatedCost?: number | null
+}
+
 export interface AgentFeedbackDTO {
   agentTaskId?: number
   agentRunId?: number
@@ -141,9 +203,31 @@ export interface AgentFeedbackDTO {
 
 export interface AgentFeedbackVO extends AgentFeedbackDTO {
   id: number
-  userId?: number
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AgentMetricEventDTO {
+  eventCode: AgentMetricEventCode
+  idempotencyKey?: string
+  taskId?: number
+  runId?: number
+  planDate?: string
+  targetJobId?: number
+  requestId?: string
+  sourcePage?: string
+  targetPath?: string
+  notificationId?: string
+  bizType?: string
+  bizId?: string
+  occurredAt?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface AgentMetricAckVO {
+  eventId?: string
+  eventCode?: string
+  acceptedAt?: string
 }
 
 export interface AgentRunDetailVO {
@@ -163,6 +247,10 @@ export interface AgentRunDetailVO {
   modelName?: string
   traceId?: string
   aiCallLogId?: number
+  resultSource?: AgentRunResultSource | null
+  resultSourceLabel?: string | null
+  fallback?: boolean | null
+  mock?: boolean | null
   tokenInput?: number
   tokenOutput?: number
   durationMs?: number

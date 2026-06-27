@@ -144,6 +144,14 @@ const clearError = () => {
   alertType.value = 'error'
 }
 
+const syncRouteReasonNotice = () => {
+  if (String(route.query.reason || '') !== 'logout-required-for-password-reset') return
+
+  alertTitle.value = '请先切换目标账号'
+  alertType.value = 'warning'
+  errorMessage.value = '检测到密码重置链接。为避免当前登录账号与重置目标账号混淆，请先重新登录目标账号，再从邮件中重新打开重置链接。'
+}
+
 const getDefaultPostLoginRoute = (): RouteLocationRaw => {
   if (!authStore.canAccessAdmin) return '/dashboard'
   const adminPath = firstAccessibleAdminPath(authStore)
@@ -198,10 +206,19 @@ const fillDemoAccount = () => {
   clearError()
 }
 
+syncRouteReasonNotice()
+
 watch(
   () => [form.username, form.password],
   () => {
     if (errorMessage.value) clearError()
+  }
+)
+
+watch(
+  () => route.query.reason,
+  () => {
+    syncRouteReasonNotice()
   }
 )
 </script>

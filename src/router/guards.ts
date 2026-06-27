@@ -2,7 +2,7 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
-import { canAccessAdminPermissions, firstAccessibleAdminPath } from '@/router/adminAccess'
+import { canAccessAdminPermissions, firstAccessibleAdminPath, resolveAuthenticatedEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 import { getToken } from '@/utils/token'
@@ -52,8 +52,31 @@ const forbiddenRoute = (to: RouteLocationNormalized, reason: string) => ({
 
 const safeRedirectPath = (value: unknown) => sanitizeLocalRedirectPath(value)
 
-const defaultAuthenticatedPath = (authStore: AuthStore) =>
-  authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
+const readHashToken = (hash: string) => {
+  if (!hash) return ''
+
+  const normalizedHash = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!normalizedHash) return ''
+
+  const directParams = new URLSearchParams(normalizedHash)
+  const directToken = directParams.get('token')
+  if (directToken) {
+    return directToken
+  }
+
+  const queryIndex = normalizedHash.indexOf('?')
+  if (queryIndex >= 0) {
+    const nestedParams = new URLSearchParams(normalizedHash.slice(queryIndex + 1))
+    return nestedParams.get('token') || ''
+  }
+
+  return ''
+}
+
+const hasResetPasswordToken = (to: RouteLocationNormalized) => {
+  const queryToken = typeof to.query.token === 'string' ? to.query.token.trim() : ''
+  return Boolean(queryToken || readHashToken(to.hash))
+}
 
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
@@ -62,7 +85,7 @@ export const setupRouterGuards = (router: Router) => {
     document.title = title
 
     const isPublic = Boolean(to.meta.public)
-    const isAuthPage = to.path === '/login' || to.path === '/register'
+    const isAuthPage = to.matched.some((record) => record.meta.authPage)
 
     const localToken = getToken()
 
@@ -79,9 +102,23 @@ export const setupRouterGuards = (router: Router) => {
 
     if (isPublic) {
       if (isAuthPage && authStore.isLoggedIn) {
+        const forceLogoutForPasswordReset =
+          to.path === '/login' && String(to.query.reason || '') === 'logout-required-for-password-reset'
+        if (forceLogoutForPasswordReset) {
+          return true
+        }
+
         try {
           await authStore.verifyToken()
-          return safeRedirectPath(to.query.redirect) || defaultAuthenticatedPath(authStore)
+          if (to.path === '/reset-password' && hasResetPasswordToken(to)) {
+            return {
+              path: '/login',
+              query: {
+                reason: 'logout-required-for-password-reset'
+              }
+            }
+          }
+          return safeRedirectPath(to.query.redirect) || resolveAuthenticatedEntryPath(authStore)
         } catch {
           return true
         }

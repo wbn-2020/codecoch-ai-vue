@@ -108,6 +108,15 @@
                 <dd>{{ displayModelService(detail.modelName) }}</dd>
               </div>
               <div>
+                <dt>结果来源</dt>
+                <dd>
+                  <el-tag v-if="normalizedRunResultSource(detail)" :type="resultSourceTagType(detail)" effect="plain" size="small">
+                    {{ resultSourceLabel(detail) }}
+                  </el-tag>
+                  <span v-else>--</span>
+                </dd>
+              </div>
+              <div>
                 <dt>计划模板</dt>
                 <dd>{{ promptTypeLabel(detail.promptType) }}</dd>
               </div>
@@ -290,6 +299,30 @@ const promptTypeLabel = (value?: string | null) => {
 }
 
 const displayModelService = (value?: string | null) => (value ? '智能生成服务' : '--')
+const normalizedRunResultSource = (run?: Pick<AgentRunDetailVO, 'resultSource' | 'fallback' | 'mock' | 'modelName'> | null) => {
+  const source = String(run?.resultSource || '').toUpperCase()
+  if (source) return source
+  if (run?.fallback) return 'FALLBACK'
+  if (run?.mock) return 'MOCK'
+  return String(run?.modelName || '').toLowerCase().includes('mock') ? 'MOCK' : ''
+}
+
+const resultSourceLabel = (run?: AgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (run?.resultSourceLabel) return run.resultSourceLabel
+  if (source === 'MOCK') return '模拟数据'
+  if (source === 'FALLBACK') return '降级兜底'
+  if (source === 'LLM') return '真实模型'
+  return '--'
+}
+
+const resultSourceTagType = (run?: AgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (source === 'MOCK') return 'info'
+  if (source === 'FALLBACK') return 'warning'
+  return 'success'
+}
+
 const displayTaskTitle = (task: AgentTaskVO) => {
   if (task.title) return task.title
   if (task.relatedSkillName) return `${task.relatedSkillName} ${taskTypeLabel(task.taskType)}`

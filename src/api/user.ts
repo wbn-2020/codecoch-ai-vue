@@ -114,7 +114,7 @@ export const getAdminUsersApi = (params: AdminUserQuery) => {
     .get<PageResult<AdminUserVO> | AdminUserVO[], PageResult<AdminUserVO> | AdminUserVO[]>('/admin/users', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizePageResult(result, params, normalizeAdminUser))
+    .then((result) => normalizePageResult(result, params, normalizeAdminUser, { allowArrayFallback: true }))
 }
 
 export const updateAdminUserStatusApi = (id: number, data: UserStatusUpdateDTO) => {
@@ -127,7 +127,7 @@ export const resetAdminUserPasswordApi = (id: number, data: AdminOperationConfir
 
 export const getAdminUserRolesApi = (id: number) => {
   return request.get<RoleVO[] | PageResult<RoleVO>, RoleVO[] | PageResult<RoleVO>>(`/admin/users/${id}/roles`)
-    .then((result) => normalizePageResult(result, undefined, normalizeRole).records)
+    .then((result) => normalizePageResult(result, undefined, normalizeRole, { allowArrayFallback: true }).records)
 }
 
 export const assignAdminUserRolesApi = (id: number, data: AdminUserAssignRolesDTO) => {
@@ -136,7 +136,7 @@ export const assignAdminUserRolesApi = (id: number, data: AdminUserAssignRolesDT
 
 export const getAdminRolesApi = () => {
   return request.get<RoleVO[] | PageResult<RoleVO>, RoleVO[] | PageResult<RoleVO>>('/admin/roles')
-    .then((result) => normalizePageResult(result, undefined, normalizeRole).records)
+    .then((result) => normalizePageResult(result, undefined, normalizeRole, { allowArrayFallback: true }).records)
 }
 
 export const createAdminRoleApi = (data: RoleSaveDTO) => {

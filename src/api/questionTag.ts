@@ -40,7 +40,7 @@ export const getQuestionTagsApi = (params?: { status?: number | ''; keyword?: st
     .get<BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>, BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>>('/admin/question-tags', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizeTagList(normalizePageResult(result).records))
+    .then((result) => normalizeTagList(normalizePageResult(result, undefined, { allowArrayFallback: true }).records))
 }
 
 export const createQuestionTagApi = (data: QuestionTagDTO) => {

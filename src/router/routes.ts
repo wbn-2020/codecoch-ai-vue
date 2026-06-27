@@ -3,10 +3,10 @@
 import AuthUnavailableView from '@/views/error/AuthUnavailableView.vue'
 
 export const routes: RouteRecordRaw[] = [
-  { path: '/login', name: 'Login', component: () => import('@/views/auth/LoginView.vue'), meta: { public: true, title: '登录' } },
-  { path: '/register', name: 'Register', component: () => import('@/views/auth/RegisterView.vue'), meta: { public: true, title: '注册' } },
-  { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/auth/ForgotPasswordView.vue'), meta: { public: true, title: '找回密码' } },
-  { path: '/reset-password', name: 'ResetPassword', component: () => import('@/views/auth/ResetPasswordView.vue'), meta: { public: true, title: '重置密码' } },
+  { path: '/login', name: 'Login', component: () => import('@/views/auth/LoginView.vue'), meta: { public: true, authPage: true, title: '登录' } },
+  { path: '/register', name: 'Register', component: () => import('@/views/auth/RegisterView.vue'), meta: { public: true, authPage: true, title: '注册' } },
+  { path: '/forgot-password', name: 'ForgotPassword', component: () => import('@/views/auth/ForgotPasswordView.vue'), meta: { public: true, authPage: true, title: '找回密码' } },
+  { path: '/reset-password', name: 'ResetPassword', component: () => import('@/views/auth/ResetPasswordView.vue'), meta: { public: true, authPage: true, title: '重置密码' } },
   { path: '/auth-unavailable', name: 'AuthUnavailable', component: AuthUnavailableView, meta: { public: true, title: '认证服务暂不可用' } },
   { path: '/feature-unavailable', name: 'FeatureUnavailable', component: () => import('@/views/error/FeatureUnavailableView.vue'), meta: { public: true, title: '能力暂未开放' } },
   { path: '/403', name: 'Forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { public: true, title: '无权限' } },
@@ -39,7 +39,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'resumes/manage', name: 'ResumeList', component: () => import('@/views/resume/ResumeListView.vue'), meta: { title: '简历列表' } },
       { path: 'resumes/create', name: 'ResumeCreate', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '新建简历' } },
       { path: 'resumes/:id/edit', name: 'ResumeEdit', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '编辑简历' } },
-      { path: 'resumes/:id/versions', name: 'ResumeVersionsByResume', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本' } },
+      { path: 'resumes/:id/versions', name: 'ResumeVersionsByResume', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本', previewOnly: true } },
       { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: '简历匹配' } },
       { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: '简历匹配详情' } },
       { path: 'resume-job-match', redirect: '/resume-match', meta: { hidden: true, commandHidden: true } },
@@ -62,8 +62,8 @@ export const routes: RouteRecordRaw[] = [
       { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '就绪度趋势', previewOnly: true } },
       { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: { title: '长期记忆', previewOnly: true } },
       { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: '个人知识库', previewOnly: true } },
-      { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本' } },
-      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理' } },
+      { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本', previewOnly: true } },
+      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理', previewOnly: true } },
       { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },
       { path: 'agent/runs/:id', name: 'AgentRunDetail', component: () => import('@/views/agent/AgentRunDetailView.vue'), meta: { title: '生成详情' } }
