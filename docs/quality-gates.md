@@ -46,13 +46,28 @@ It expands to:
 ```powershell
 npm run type-check
 npm run test:unit:run
-npm run check:mojibake
+npm run check:mojibake:frontend
 npm run check:ui-copy
-npm run check:v4-contracts
 npm run check:wave-contracts
-npm run check:phase10
 npm run check:quality-gates
 ```
+
+`check:quality` is the frontend repository gate, so it stays runnable in a frontend-only checkout. Its mojibake scan stays limited to frontend files, and it excludes workspace-level scripts that read `../CodeCoachAI-java`.
+
+Run the cross-repo workspace gate only when the sibling backend repository is present:
+
+```powershell
+npm run check:quality:workspace
+```
+
+It expands the frontend-only gate with:
+
+```powershell
+npm run check:v4-contracts
+npm run check:phase10
+```
+
+Run `npm run check:mojibake:backend` separately from the backend workspace or in a multi-repo release check when you need cross-repo validation.
 
 `test:unit:run` executes the real frontend unit-test harness:
 
@@ -98,6 +113,6 @@ It keeps CI non-destructive:
 - `npm ci --ignore-scripts`
 - `npm run check:quality`
 
-It does not start any service, browser, Docker, database, Redis, MQ, ES, or Qdrant dependency.
+It does not depend on a sibling backend checkout and does not start any service, browser, Docker, database, Redis, MQ, ES, or Qdrant dependency.
 
-Build jobs can remain separate; the quality workflow exists to keep type-check, unit tests, and report-driven contract checks attached to pull requests and pushes.
+Build jobs can remain separate; the quality workflow exists to keep frontend-only type-check, unit tests, and report-driven contract checks attached to pull requests and pushes.

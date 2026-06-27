@@ -23,8 +23,16 @@ const scriptContains = (scriptName, expected) =>
   typeof scripts[scriptName] === 'string' && scripts[scriptName].includes(expected)
 
 expect(scriptContains('check:quality', 'npm run test:unit:run'), 'check:quality must run frontend unit tests')
+expect(scriptContains('check:quality', 'npm run check:mojibake:frontend'), 'check:quality must run the frontend-only mojibake scan')
+expect(!scriptContains('check:quality', 'npm run check:mojibake &&'), 'check:quality must not run the cross-repo mojibake scan by default')
+expect(!scriptContains('check:quality', 'npm run check:v4-contracts'), 'check:quality must stay runnable in a frontend-only checkout without backend contract files')
+expect(!scriptContains('check:quality', 'npm run check:phase10'), 'check:quality must stay runnable in a frontend-only checkout without backend privacy contract files')
 expect(scriptContains('check:quality', 'npm run check:wave-contracts'), 'check:quality must run wave-level frontend contract checks')
 expect(scriptContains('check:quality', 'npm run check:quality-gates'), 'check:quality must run quality gate self-checks')
+expect(
+  scripts['check:quality:workspace'] === 'npm run check:quality && npm run check:v4-contracts && npm run check:phase10',
+  'check:quality:workspace must extend the frontend-only gate with cross-repo workspace contract checks'
+)
 expect(scripts['test:unit'] === 'vitest --config vitest.config.ts', 'test:unit must use the shared Vitest config')
 expect(scripts['test:unit:run'] === 'vitest run --config vitest.config.ts', 'test:unit:run must run Vitest in non-watch mode')
 expect(scriptContains('check:wave-contracts', 'scripts/test-wave1-1-r-analytics-error-contract.mjs'), 'check:wave-contracts must cover analytics error-state contract')
