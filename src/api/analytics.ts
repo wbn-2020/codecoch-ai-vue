@@ -161,24 +161,38 @@ export const getAdminVectorIndexJobsApi = (params?: VectorIndexJobQuery) =>
     })
     .then((result) => normalizePageResult(result, params))
 
-export const retryAdminVectorDeletesApi = (limit?: number) =>
+export interface VectorMaintenanceRequest {
+  limit?: number
+  confirm?: boolean
+  reason?: string
+  dryRun?: boolean
+  idempotencyKey?: string
+}
+
+const normalizeVectorMaintenanceParams = (input?: number | VectorMaintenanceRequest) => {
+  if (typeof input === 'number') return compactQueryParams({ limit: input })
+  return compactQueryParams(input)
+}
+
+export const retryAdminVectorDeletesApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<VectorDeleteRetryResultVO, VectorDeleteRetryResultVO>(
     '/admin/analytics/vector-store/delete-outbox/retry',
     undefined,
-    { params: { limit } }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
-export const rebuildAdminKnowledgeVectorsApi = (limit?: number) =>
+
+export const rebuildAdminKnowledgeVectorsApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
     '/admin/analytics/vector-store/knowledge/rebuild',
     undefined,
-    { params: limit ? { limit } : undefined }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
 
-export const retryAdminKnowledgeVectorsApi = (limit?: number) =>
+export const retryAdminKnowledgeVectorsApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
     '/admin/analytics/vector-store/knowledge/retry-failed',
     undefined,
-    { params: limit ? { limit } : undefined }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
 
 export const getQuestionDuplicateConfigApi = () =>
@@ -198,7 +212,7 @@ export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQue
       '/admin/analytics/metrics',
       { params: compactQueryParams(requestParams) }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 }
 
 export const createAdminAnalyticsMetricApi = (data: AdminAnalyticsMetricSaveDTO) =>
@@ -215,8 +229,8 @@ export const getAdminAnalyticsJobsApi = (params?: AdminAnalyticsJobQuery) =>
     )
     .then((result) => normalizePageResult(result, params))
 
-export const rerunAdminAnalyticsJobApi = (id: number) =>
-  request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>(`/admin/analytics/jobs/${id}/rerun`)
+export const rerunAdminAnalyticsJobApi = (id: number, data?: Pick<AnalyticsJobRunDTO, 'confirm' | 'dryRun' | 'reason' | 'idempotencyKey'>) =>
+  request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>(`/admin/analytics/jobs/${id}/rerun`, data || {})
 
 export const runAdminAnalyticsDailyPlanApi = (data?: AnalyticsJobRunDTO) =>
   request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>('/admin/analytics/jobs/agent-daily-plan/run', data || {})
@@ -227,7 +241,7 @@ export const getPromptRegressionCasesApi = (params?: PromptRegressionQuery) =>
       '/admin/agent/prompt-regression/cases',
       { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
   request
@@ -235,7 +249,7 @@ export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
       '/admin/agent/prompt-regression/results',
       { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const createPromptRegressionCaseApi = (data: PromptRegressionCaseSaveDTO) =>
   request.post<PromptRegressionCaseVO, PromptRegressionCaseVO>('/admin/agent/prompt-regression/cases', data)
@@ -246,5 +260,11 @@ export const updatePromptRegressionCaseApi = (id: number, data: PromptRegression
 export const runPromptRegressionApi = (data?: PromptRegressionRunDTO) =>
   request.post<PromptRegressionResultVO, PromptRegressionResultVO>(
     `/admin/agent/prompt-regression/cases/${data?.caseId}/run`,
-    { promptVersionId: data?.promptVersionId }
+    {
+      promptVersionId: data?.promptVersionId,
+      confirm: data?.confirm,
+      dryRun: data?.dryRun,
+      reason: data?.reason,
+      idempotencyKey: data?.idempotencyKey
+    }
   )

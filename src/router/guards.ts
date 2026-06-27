@@ -2,8 +2,9 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
-import { canAccessAdminPermissions, firstAccessibleAdminPath } from '@/router/adminAccess'
+import { canAccessAdminPermissions, firstAccessibleAdminPath, resolveAuthenticatedEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
+import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 import { getToken } from '@/utils/token'
 
 const isAuthFailure = (error: unknown) => {
@@ -37,29 +38,45 @@ const isFeatureEnabled = (featureFlag: string) => {
 const isPreviewRoute = (to: RouteLocationNormalized) =>
   to.matched.some((record) => record.meta.previewOnly)
 
-const forbiddenRoute = (to: RouteLocationNormalized, reason: string, detail: Record<string, string | string[] | undefined> = {}) => ({
+const safeForbiddenTarget = (to: RouteLocationNormalized) => to.path || '/'
+const safeRedirectTarget = (to: RouteLocationNormalized) => buildSafeRedirectTarget(to.path, to.query)
+
+const forbiddenRoute = (to: RouteLocationNormalized, reason: string) => ({
   path: '/403',
   query: {
     reason,
-    target: to.fullPath,
-    title: String(to.meta.title || ''),
-    ...Object.fromEntries(
-      Object.entries(detail)
-        .filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value))
-        .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)])
-    )
+    target: safeForbiddenTarget(to),
+    title: String(to.meta.title || '')
   }
 })
 
-const safeRedirectPath = (value: unknown) => {
-  if (typeof value !== 'string') return ''
-  if (!value.startsWith('/') || value.startsWith('//')) return ''
-  if (value === '/login' || value === '/register') return ''
-  return value
+const safeRedirectPath = (value: unknown) => sanitizeLocalRedirectPath(value)
+
+const readHashToken = (hash: string) => {
+  if (!hash) return ''
+
+  const normalizedHash = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!normalizedHash) return ''
+
+  const directParams = new URLSearchParams(normalizedHash)
+  const directToken = directParams.get('token')
+  if (directToken) {
+    return directToken
+  }
+
+  const queryIndex = normalizedHash.indexOf('?')
+  if (queryIndex >= 0) {
+    const nestedParams = new URLSearchParams(normalizedHash.slice(queryIndex + 1))
+    return nestedParams.get('token') || ''
+  }
+
+  return ''
 }
 
-const defaultAuthenticatedPath = (authStore: AuthStore) =>
-  authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
+const hasResetPasswordToken = (to: RouteLocationNormalized) => {
+  const queryToken = typeof to.query.token === 'string' ? to.query.token.trim() : ''
+  return Boolean(queryToken || readHashToken(to.hash))
+}
 
 export const setupRouterGuards = (router: Router) => {
   router.beforeEach(async (to) => {
@@ -68,7 +85,7 @@ export const setupRouterGuards = (router: Router) => {
     document.title = title
 
     const isPublic = Boolean(to.meta.public)
-    const isAuthPage = to.path === '/login' || to.path === '/register'
+    const isAuthPage = to.matched.some((record) => record.meta.authPage)
 
     const localToken = getToken()
 
@@ -85,9 +102,23 @@ export const setupRouterGuards = (router: Router) => {
 
     if (isPublic) {
       if (isAuthPage && authStore.isLoggedIn) {
+        const forceLogoutForPasswordReset =
+          to.path === '/login' && String(to.query.reason || '') === 'logout-required-for-password-reset'
+        if (forceLogoutForPasswordReset) {
+          return true
+        }
+
         try {
           await authStore.verifyToken()
-          return safeRedirectPath(to.query.redirect) || defaultAuthenticatedPath(authStore)
+          if (to.path === '/reset-password' && hasResetPasswordToken(to)) {
+            return {
+              path: '/login',
+              query: {
+                reason: 'logout-required-for-password-reset'
+              }
+            }
+          }
+          return safeRedirectPath(to.query.redirect) || resolveAuthenticatedEntryPath(authStore)
         } catch {
           return true
         }
@@ -104,7 +135,7 @@ export const setupRouterGuards = (router: Router) => {
         path: '/feature-unavailable',
         query: {
           title: String(to.meta.title || ''),
-          redirect: to.fullPath
+          redirect: safeRedirectTarget(to)
         }
       }
     }
@@ -114,7 +145,7 @@ export const setupRouterGuards = (router: Router) => {
         path: '/feature-unavailable',
         query: {
           title: String(to.meta.title || ''),
-          redirect: to.fullPath
+          redirect: safeRedirectTarget(to)
         }
       }
     }
@@ -123,7 +154,7 @@ export const setupRouterGuards = (router: Router) => {
       return {
         path: '/login',
         query: {
-          redirect: to.fullPath
+          redirect: safeRedirectTarget(to)
         }
       }
     }
@@ -140,7 +171,7 @@ export const setupRouterGuards = (router: Router) => {
           return {
             path: '/login',
             query: {
-              redirect: to.fullPath
+              redirect: safeRedirectTarget(to)
             }
           }
         }
@@ -148,7 +179,7 @@ export const setupRouterGuards = (router: Router) => {
         return {
           path: '/auth-unavailable',
           query: {
-            redirect: to.fullPath
+            redirect: safeRedirectTarget(to)
           }
         }
       }
@@ -164,7 +195,7 @@ export const setupRouterGuards = (router: Router) => {
             return {
               path: '/login',
               query: {
-                redirect: to.fullPath
+                redirect: safeRedirectTarget(to)
               }
             }
           }
@@ -172,7 +203,7 @@ export const setupRouterGuards = (router: Router) => {
           return {
             path: '/auth-unavailable',
             query: {
-              redirect: to.fullPath
+              redirect: safeRedirectTarget(to)
             }
           }
         }
@@ -180,19 +211,13 @@ export const setupRouterGuards = (router: Router) => {
     }
 
     if (isAdminRoute && !authStore.canAccessAdmin) {
-      return forbiddenRoute(to, 'requiresAdmin', {
-        userRoles: authStore.roles,
-        userPermissions: authStore.permissions.slice(0, 20)
-      })
+      return forbiddenRoute(to, 'requiresAdmin')
     }
 
     if (to.path === '/admin') {
       const firstAdminPath = firstAccessibleAdminPath(authStore)
       if (!firstAdminPath) {
-        return forbiddenRoute(to, 'noAdminMenu', {
-          userRoles: authStore.roles,
-          userPermissions: authStore.permissions.slice(0, 20)
-        })
+        return forbiddenRoute(to, 'noAdminMenu')
       }
       if (firstAdminPath !== '/admin') {
         return firstAdminPath
@@ -204,10 +229,7 @@ export const setupRouterGuards = (router: Router) => {
       return Array.isArray(roles) ? roles.map(String) : []
     })
     if (requiredRoles.length > 0 && !authStore.hasAnyRole(requiredRoles)) {
-      return forbiddenRoute(to, 'missingRole', {
-        requiredRoles,
-        userRoles: authStore.roles
-      })
+      return forbiddenRoute(to, 'missingRole')
     }
 
     const missingPermissionRecord = to.matched.find((record) => {
@@ -219,12 +241,7 @@ export const setupRouterGuards = (router: Router) => {
       )
     })
     if (missingPermissionRecord) {
-      const permissions = missingPermissionRecord.meta.requiredPermissions
-      const requiredPermissions = Array.isArray(permissions) ? permissions.map(String) : [String(permissions)]
-      return forbiddenRoute(to, 'missingPermission', {
-        requiredPermissions,
-        userPermissions: authStore.permissions.slice(0, 20)
-      })
+      return forbiddenRoute(to, 'missingPermission')
     }
 
     return true

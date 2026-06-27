@@ -271,7 +271,7 @@
 
 <script setup lang="ts">
 import { Download, FolderSearch } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -281,6 +281,7 @@ import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminFileQueryDTO, FileInfoVO } from '@/types/file'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type FileColumnKey =
   | 'id'
@@ -550,17 +551,48 @@ const downloadFile = async (row?: FileInfoVO | null) => {
     ElMessage.warning('当前文件状态不可下载')
     return
   }
+  let accessReason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      '请填写本次下载用户文件的访问原因',
+      `下载文件 ${row.originalFilename || row.id}`,
+      {
+        confirmButtonText: '确认下载',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          if (!text) return '请填写访问原因'
+          if (text.length > 300) return '访问原因不能超过 300 个字符'
+          return true
+        }
+      }
+    )
+    accessReason = String(result.value || '').trim()
+  } catch {
+    return
+  }
   downloadingIds.value = new Set(downloadingIds.value).add(row.id)
   try {
-    const blob = await downloadAdminFileApi(row.id)
+    const blob = await downloadAdminFileApi(row.id, {
+      accessReason,
+      confirmSensitiveAccess: true,
+      confirm: true,
+      dryRun: false,
+      reason: accessReason,
+      idempotencyKey: createOperationIdempotencyKey(`admin-file-download-${row.id}`)
+    })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.originalFilename || `file_${row.id}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    try {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = row.originalFilename || `file_${row.id}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } finally {
+      URL.revokeObjectURL(url)
+    }
   } finally {
     const next = new Set(downloadingIds.value)
     next.delete(row.id)

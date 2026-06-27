@@ -165,6 +165,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { QuestionTagDTO, QuestionTagVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type TagColumnKey = 'name' | 'status' | 'description' | 'createdAt' | 'updatedAt'
 
@@ -290,10 +291,21 @@ const handleSave = async () => {
   if (!confirmed) return
   saving.value = true
   try {
+    const confirmedPayload: QuestionTagDTO = {
+      ...form,
+      confirm: true,
+      dryRun: false,
+      reason: editingId.value
+        ? 'Admin confirmed question tag update from management page.'
+        : 'Admin confirmed question tag create from management page.',
+      idempotencyKey: createOperationIdempotencyKey(
+        editingId.value ? 'question-tag-update' : 'question-tag-create'
+      )
+    }
     if (editingId.value) {
-      await updateQuestionTagApi(editingId.value, form)
+      await updateQuestionTagApi(editingId.value, confirmedPayload)
     } else {
-      await createQuestionTagApi(form)
+      await createQuestionTagApi(confirmedPayload)
     }
     ElMessage.success('标签已保存')
     dialogVisible.value = false
@@ -316,7 +328,12 @@ const handleDelete = async (row: QuestionTagVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionTagApi(row.id)
+  await deleteQuestionTagApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed question tag delete from management page.',
+    idempotencyKey: createOperationIdempotencyKey('question-tag-delete')
+  })
   ElMessage.success('标签已删除')
   await fetchTags()
 }

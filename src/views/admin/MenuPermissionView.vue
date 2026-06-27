@@ -121,6 +121,7 @@ import type { MenuVO } from '@/types/adminGovernance'
 import type { RoleVO } from '@/types/user'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const roleLoading = ref(false)
 const menuLoading = ref(false)
@@ -181,7 +182,7 @@ const menuPathMap: Record<string, string> = {
   '/admin/ai/logs': 'AI 运行记录',
   '/admin/ai/models': 'AI 模型配置',
   '/admin/ai/prompt-regression': '提示词回归',
-  '/admin/ops/overview': '运维监控',
+  '/admin/ops/overview': 'AI 运营看板（旧路径）',
   '/admin/analytics/ai': 'AI 运营看板',
   '/admin/analytics/agent': '生成效果分析',
   '/admin/analytics/metrics': '指标字典',
@@ -359,7 +360,13 @@ const handleSave = async () => {
   if (!roleId) return
   saving.value = true
   try {
-    await grantAdminRoleMenusApi(roleId, { menuIds: currentGrantMenuIds.value })
+    await grantAdminRoleMenusApi(roleId, {
+      menuIds: currentGrantMenuIds.value,
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed role menu permission grant from menu permission page.',
+      idempotencyKey: createOperationIdempotencyKey(`role-menu-grant-${roleId}`)
+    })
     originalGrantMenuIds.value = [...currentGrantMenuIds.value]
     ElMessage.success('角色菜单授权已保存')
   } finally { saving.value = false }

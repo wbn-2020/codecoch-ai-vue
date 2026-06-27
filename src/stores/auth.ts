@@ -71,6 +71,8 @@ const normalizePermissions = (permissions?: unknown): string[] => {
   return Array.from(new Set(toAuthItems(permissions).map(normalizePermissionCode).filter(Boolean))) as string[]
 }
 
+const hasAdminPermission = (permissions: string[]) => permissions.some((permission) => permission.startsWith('admin:'))
+
 const mergeAuthArrays = (...items: Array<unknown>): unknown[] => items.flatMap(toAuthItems)
 
 const pickPayloadValues = (source: unknown, keys: string[]) => {
@@ -201,7 +203,7 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
     isAdmin: (state) => state.roles.includes('ADMIN'),
-    canAccessAdmin: (state) => state.roles.includes('ADMIN'),
+    canAccessAdmin: (state) => state.roles.includes('ADMIN') || hasAdminPermission(state.permissions),
     hasRole: (state) => {
       return (roleCode: RoleCode) => {
         const normalized = normalizeRoleCode(roleCode)
@@ -322,7 +324,7 @@ export const useAuthStore = defineStore('auth', {
     async logout() {
       try {
         if (this.token) {
-          await logoutApi()
+          await logoutApi({ silentError: true })
         }
       } finally {
         this.clearAuth()

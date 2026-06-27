@@ -8,11 +8,18 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc -b --noEmit",
-    "check:quality": "npm run type-check && npm run check:mojibake && npm run check:ui-copy",
+    "test:unit": "vitest --config vitest.config.ts",
+    "test:unit:run": "vitest run --config vitest.config.ts",
+    "check:quality": "npm run type-check && npm run test:unit:run && npm run check:mojibake:frontend && npm run check:ui-copy && npm run check:wave-contracts && npm run check:quality-gates",
+    "check:quality:workspace": "npm run check:quality && npm run check:v4-contracts && npm run check:phase10",
     "check:mojibake": "node scripts/check-mojibake.mjs",
     "check:mojibake:frontend": "node scripts/check-mojibake.mjs --frontend",
     "check:mojibake:backend": "node scripts/check-mojibake.mjs --backend",
-    "check:ui-copy": "node scripts/check-ui-copy.mjs"
+    "check:ui-copy": "node scripts/check-ui-copy.mjs",
+    "check:v4-contracts": "node scripts/test-v4-contracts.mjs",
+    "check:wave-contracts": "node scripts/test-wave1-1-r-analytics-error-contract.mjs && node scripts/test-wave1-1-r-knowledge-dangerous-confirm-contract.mjs && node scripts/test-wave3-agent-task-actions.mjs && node scripts/test-wave4-rbac-button-permissions.mjs && node tests/rbac-overview-contract.test.mjs && node tests/page-normalizer-contract.test.mjs",
+    "check:phase10": "node scripts/test-phase10-core-privacy-guards.mjs",
+    "check:quality-gates": "node scripts/test-quality-gate-contracts.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -35,11 +42,14 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.5",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.7.0",
+    "happy-dom": "^20.10.6",
     "sass": "^1.83.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.6.3",
     "vite": "^6.0.5",
+    "vitest": "^4.1.9",
     "vue-tsc": "^2.2.0"
   }
 }

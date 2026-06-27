@@ -187,6 +187,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { QuestionCategoryVO, QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type GroupColumnKey =
   | 'name'
@@ -331,10 +332,21 @@ const handleSave = async () => {
   if (!confirmed) return
   saving.value = true
   try {
+    const confirmedPayload: QuestionGroupDTO = {
+      ...payload,
+      confirm: true,
+      dryRun: false,
+      reason: editingId.value
+        ? 'Admin confirmed question group update from management page.'
+        : 'Admin confirmed question group create from management page.',
+      idempotencyKey: createOperationIdempotencyKey(
+        editingId.value ? 'question-group-update' : 'question-group-create'
+      )
+    }
     if (editingId.value) {
-      await updateQuestionGroupApi(editingId.value, payload)
+      await updateQuestionGroupApi(editingId.value, confirmedPayload)
     } else {
-      await createQuestionGroupApi(payload)
+      await createQuestionGroupApi(confirmedPayload)
     }
     ElMessage.success('问题组已保存')
     dialogVisible.value = false
@@ -357,7 +369,12 @@ const handleDelete = async (row: QuestionGroupVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionGroupApi(row.id)
+  await deleteQuestionGroupApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed question group delete from management page.',
+    idempotencyKey: createOperationIdempotencyKey('question-group-delete')
+  })
   ElMessage.success('问题组已删除')
   await fetchGroups()
 }

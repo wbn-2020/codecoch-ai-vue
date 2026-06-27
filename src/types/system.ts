@@ -16,6 +16,7 @@ export interface AdminOverviewVO {
 export interface SystemConfigQueryDTO extends PageQuery {
   keyword?: string
   configKey?: string
+  configType?: string
   status?: number | ''
 }
 

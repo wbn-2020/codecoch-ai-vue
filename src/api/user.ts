@@ -3,6 +3,8 @@ import type { PageResult } from '@/types/api'
 import type {
   AdminUserQuery,
   AdminUserVO,
+  AdminOperationConfirmDTO,
+  AdminUserAssignRolesDTO,
   PasswordUpdateDTO,
   RoleSaveDTO,
   RoleVO,
@@ -112,16 +114,29 @@ export const getAdminUsersApi = (params: AdminUserQuery) => {
     .get<PageResult<AdminUserVO> | AdminUserVO[], PageResult<AdminUserVO> | AdminUserVO[]>('/admin/users', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizePageResult(result, params, normalizeAdminUser))
+    .then((result) => normalizePageResult(result, params, normalizeAdminUser, { allowArrayFallback: true }))
 }
 
 export const updateAdminUserStatusApi = (id: number, data: UserStatusUpdateDTO) => {
   return request.put<null, null>(`/admin/users/${id}/status`, data)
 }
 
+export const resetAdminUserPasswordApi = (id: number, data: AdminOperationConfirmDTO) => {
+  return request.post<string, string>(`/admin/users/${id}/reset-password`, data)
+}
+
+export const getAdminUserRolesApi = (id: number) => {
+  return request.get<RoleVO[] | PageResult<RoleVO>, RoleVO[] | PageResult<RoleVO>>(`/admin/users/${id}/roles`)
+    .then((result) => normalizePageResult(result, undefined, normalizeRole, { allowArrayFallback: true }).records)
+}
+
+export const assignAdminUserRolesApi = (id: number, data: AdminUserAssignRolesDTO) => {
+  return request.post<null, null>(`/admin/users/${id}/assign-roles`, data)
+}
+
 export const getAdminRolesApi = () => {
   return request.get<RoleVO[] | PageResult<RoleVO>, RoleVO[] | PageResult<RoleVO>>('/admin/roles')
-    .then((result) => normalizePageResult(result, undefined, normalizeRole).records)
+    .then((result) => normalizePageResult(result, undefined, normalizeRole, { allowArrayFallback: true }).records)
 }
 
 export const createAdminRoleApi = (data: RoleSaveDTO) => {
@@ -132,8 +147,8 @@ export const updateAdminRoleApi = (id: number, data: RoleSaveDTO) => {
   return request.put<null, null>(`/admin/roles/${id}`, data)
 }
 
-export const deleteAdminRoleApi = (id: number) => {
-  return request.delete<null, null>(`/admin/roles/${id}`)
+export const deleteAdminRoleApi = (id: number, data: AdminOperationConfirmDTO) => {
+  return request.delete<null, null>(`/admin/roles/${id}`, { data })
 }
 
 export const updateAdminRoleStatusApi = (id: number, data: UserStatusUpdateDTO) => {

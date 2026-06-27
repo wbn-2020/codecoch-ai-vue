@@ -105,9 +105,9 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '今日任务', path: '/agent/today', icon: MagicStick },
       { label: '任务中心', path: '/agent/tasks', icon: Calendar },
       { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Preview', previewOnly: true },
-      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Preview', previewOnly: true },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Preview', previewOnly: true }
+      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, previewOnly: true },
+      { label: '成长档案', path: '/growth/profile', icon: Medal, previewOnly: true },
+      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, previewOnly: true }
     ]
   },
   {
@@ -116,10 +116,10 @@ const baseMenuSections: UserMenuSection[] = [
     icon: Files,
     forceGroup: true,
     children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files, featureFlag: 'v4Preview', previewOnly: true },
+      { label: '简历版本', path: '/resume-versions', icon: Files, previewOnly: true },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass, featureFlag: 'v4Preview', previewOnly: true },
+      { label: '求职进度', path: '/applications', icon: Compass, previewOnly: true },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal }
@@ -167,7 +167,7 @@ const baseMenuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Preview', previewOnly: true },
+      { label: '个人知识库', path: '/knowledge', icon: Reading, previewOnly: true },
       { label: '修改密码', path: '/password', icon: Key },
       { label: '个人资料', path: '/profile', icon: User }
     ]

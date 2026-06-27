@@ -227,6 +227,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { REQUEST_ERROR_EVENT, type RequestErrorDiagnostic } from '@/utils/errorEvents'
+import { buildSafeRedirectTarget } from '@/utils/routeSecurity'
 
 const router = useRouter()
 const route = useRoute()
@@ -374,13 +375,15 @@ const requestDiagnosticStatusLabel = (status?: string | number) => {
   return '状态待确认'
 }
 
+const currentSafePagePath = () => buildSafeRedirectTarget(route.path, route.query)
+
 const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
   const text = [
     `时间：${formatTime(item.occurredAt)}`,
     `请求地址：${item.method || '-'} ${item.url || '-'}`,
     `状态：${requestDiagnosticStatusLabel(item.status)} / ${item.code || '-'}`,
     `追踪号：${item.traceId || '-'}`,
-    `当前页面：${route.fullPath}`,
+    `当前页面：${currentSafePagePath()}`,
     '建议动作：可先重新加载当前页；如有追踪号，可按追踪号查询任务、生成记录或审计记录。',
     `错误：${item.message}`
   ].join('\n')

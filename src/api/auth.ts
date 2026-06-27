@@ -13,8 +13,10 @@ export const registerApi = (data: RegisterDTO, options?: { silentError?: boolean
   })
 }
 
-export const logoutApi = () => {
-  return request.post<null, null>('/auth/logout')
+export const logoutApi = (options?: { silentError?: boolean }) => {
+  return request.post<null, null>('/auth/logout', null, {
+    silentError: options?.silentError
+  })
 }
 
 export const getCurrentUserApi = () => {

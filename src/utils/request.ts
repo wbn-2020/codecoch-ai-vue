@@ -14,6 +14,8 @@ import {
 import { emitAuthRefreshed } from '@/utils/authEvents'
 import { emitRequestError } from '@/utils/errorEvents'
 import { toFriendlyMessage } from '@/utils/error'
+import { buildSafeRedirectFromLocation, sanitizeDiagnosticUrl } from '@/utils/routeSecurity'
+import { redactSensitiveText } from '@/utils/sensitiveText'
 import { clearLocalAuth, getToken, setToken } from '@/utils/token'
 import { storage } from '@/utils/storage'
 
@@ -40,7 +42,9 @@ interface ApiCodeError extends Error {
 const DEMO_READ_ONLY_ALLOW_METHODS = new Set(['get', 'head', 'options'])
 const DEMO_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
-  '/auth/refresh-token'
+  '/auth/register',
+  '/auth/refresh-token',
+  '/auth/logout'
 ]
 const ADMIN_MOBILE_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
@@ -56,7 +60,7 @@ const request = axios.create({
 const handleTokenExpired = () => {
   clearLocalAuth()
   if (window.location.pathname !== '/login') {
-    const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+    const redirect = encodeURIComponent(buildSafeRedirectFromLocation(window.location.pathname, window.location.search))
     window.location.href = `/login?redirect=${redirect}`
   }
 }
@@ -111,10 +115,10 @@ const emitResponseDiagnostic = (
 ) => {
   emitRequestError({
     method: String(config?.method || 'GET').toUpperCase(),
-    url: config?.url,
+    url: sanitizeDiagnosticUrl(config?.url),
     status: payload.status,
     code: payload.code,
-    message: toFriendlyMessage(payload.message, '请求失败，请稍后重试。'),
+    message: redactSensitiveText(toFriendlyMessage(payload.message, '请求失败，请稍后重试。')),
     traceId: payload.traceId
   })
 }
@@ -217,6 +221,8 @@ const refreshToken = async () => {
   return refreshingToken
 }
 
+export const refreshAccessToken = () => refreshToken()
+
 const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
   if (!config || config._retry) {
     handleTokenExpired()
@@ -318,6 +324,25 @@ request.interceptors.response.use(
     }
 
     const silentError = (error.config as RetryableRequestConfig | undefined)?.silentError
+
+    if (error.response?.status === 403) {
+      const payload = error.response.data
+      const message = toFriendlyMessage(
+        payload?.message || error.message,
+        '当前账号无权执行该操作，操作未提交。'
+      )
+      if (!silentError) {
+        emitResponseDiagnostic(error.config as InternalAxiosRequestConfig | undefined, {
+          status: error.response.status,
+          code: payload?.code || HTTP_STATUS_CODE.FORBIDDEN,
+          message,
+          traceId: payload?.traceId
+        })
+        ElMessage.error(message)
+      }
+      return Promise.reject(payload || error)
+    }
+
     const message = toFriendlyMessage(
       error.response?.data?.message || error.message,
       '\u7f51\u7edc\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'

@@ -45,9 +45,48 @@ It expands to:
 
 ```powershell
 npm run type-check
-npm run check:mojibake
+npm run test:unit:run
+npm run check:mojibake:frontend
 npm run check:ui-copy
+npm run check:wave-contracts
+npm run check:quality-gates
 ```
+
+`check:quality` is the frontend repository gate, so it stays runnable in a frontend-only checkout. Its mojibake scan stays limited to frontend files, and it excludes workspace-level scripts that read `../CodeCoachAI-java`.
+
+Run the cross-repo workspace gate only when the sibling backend repository is present:
+
+```powershell
+npm run check:quality:workspace
+```
+
+It expands the frontend-only gate with:
+
+```powershell
+npm run check:v4-contracts
+npm run check:phase10
+```
+
+Run `npm run check:mojibake:backend` separately from the backend workspace or in a multi-repo release check when you need cross-repo validation.
+
+`test:unit:run` executes the real frontend unit-test harness:
+
+```powershell
+npm run test:unit:run
+```
+
+Current scope is intentionally narrow:
+
+- shared component behavior such as `AppState`
+- shared utility hardening such as `routeSecurity`
+
+`check:wave-contracts` keeps report-driven regression scripts in the main local gate:
+
+```powershell
+npm run check:wave-contracts
+```
+
+It covers analytics error-state, knowledge dangerous confirmation, Agent task action routing, admin button-level RBAC, and the admin overview RBAC contract without starting any service.
 
 Run the production build only when you are ready to regenerate `dist`:
 
@@ -67,6 +106,13 @@ Then verify the report-driven workflows manually:
 
 ## CI Follow-Up
 
-The frontend repository currently has no `.github/workflows` directory. When CI wiring is explicitly approved, add a GitHub Actions workflow that runs `npm run check:quality` before build jobs.
+The frontend repository now includes `.github/workflows/frontend-quality.yml`.
 
-Do not wire CI automatically without review, because workflow files change what remote CI runners execute on push or pull request. Keep logs bounded and keep the gate non-destructive: type-check, mojibake scan, and UI-copy scan first; build only in the release job that is allowed to regenerate artifacts.
+It keeps CI non-destructive:
+
+- `npm ci --ignore-scripts`
+- `npm run check:quality`
+
+It does not depend on a sibling backend checkout and does not start any service, browser, Docker, database, Redis, MQ, ES, or Qdrant dependency.
+
+Build jobs can remain separate; the quality workflow exists to keep frontend-only type-check, unit tests, and report-driven contract checks attached to pull requests and pushes.

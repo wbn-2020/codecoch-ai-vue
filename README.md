@@ -6,11 +6,17 @@ CodeCoachAI 前端仓库，承载用户侧、管理后台和 V4/V4-A 联动页�
 
 - 管理后台 Prompt 回归：`/admin/ai/prompt-regression`
 - Agent 任务与运行详情：`/agent/tasks`、`/agent/runs/:id`
-- 个人知识库：`/knowledge`
-- 投递管理：`/applications`
+- 个人知识库：`/knowledge`（previewOnly，V4-E 预留）
+- 投递管理：`/applications`（已作为 Agent 投递跟进闭环入口开放；完整 V4-D 能力另行验收）
 - 简历中心：`/resumes`
 - 文件治理与下载：管理后台文件页
-- AI 与 V4 相关页面：成长画像、面试、学习计划、知识库等
+- AI 与 V4 相关页面：面试、学习计划已接入；成长画像、长期记忆、知识库仍按 previewOnly 预留
+
+## 当前阶段边界
+
+- V4-A 主线以 JobCoachAgent 今日计划、今日任务、任务中心、生成详情和任务完成/跳过闭环为准。
+- `/applications` 当前服务于 `APPLICATION_FOLLOW_UP` 任务深链和求职进度记录，不等同于完整 V4-D 验收完成。
+- `/agent/reviews`、`/growth/*`、`/agent/memory`、`/knowledge` 当前仍是 previewOnly/后续阶段能力，不应作为 V4-A 必验收入口。
 
 ## 本地运行
 
@@ -39,8 +45,8 @@ npm run build
 
 - Prompt 回归页的列表、创建、运行与结果查看
 - 简历上传、解析状态查询与文件下载
-- 知识库检索
-- 投递管理与 V4 页面导航
+- 知识库检索（previewOnly 页面预留）
+- 投递管理与 V4 页面导航（投递跟进闭环已开放，完整 V4-D 按后续阶段验收）
 
 上线前建议再复核：
 

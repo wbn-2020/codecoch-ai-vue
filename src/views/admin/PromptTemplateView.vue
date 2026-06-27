@@ -144,15 +144,18 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑提示词模板' : '新增提示词模板'" width="820px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑提示词模板元数据' : '新增提示词模板'" width="820px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="112px">
         <el-form-item label="模板名称" prop="name">
           <el-input v-model.trim="form.name" />
         </el-form-item>
         <el-form-item label="模板类型" prop="scene">
-          <el-select v-model="form.scene" style="width: 100%">
+          <el-select v-model="form.scene" style="width: 100%" :disabled="Boolean(editingId)">
             <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
+          <div v-if="editingId" class="field-note">
+            模板类型不在当前编辑态变更；如需调整提示词正文或发布版本，请走版本管理。
+          </div>
         </el-form-item>
         <el-form-item label="模板内容" prop="content">
           <el-input
@@ -163,19 +166,25 @@
             :placeholder="editingId ? '提示词内容请通过版本管理新增版本修改' : '请输入模板内容'"
           />
           <div v-if="editingId" class="field-note">
-            提示词内容请通过版本管理新增版本修改，本次保存只更新名称、类型、描述和状态。
+            <span>提示词正文不能在这里直接保存，请通过版本管理新增版本修改。本次保存只更新模板名称和描述。</span>
+            <el-button link type="primary" @click="openEditingVersionDrawer">去版本管理</el-button>
           </div>
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item v-if="!editingId" label="状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
+        </el-form-item>
+        <el-form-item v-else label="当前状态">
+          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" disabled />
+          <div class="field-note">模板启停请回列表页操作，不通过“编辑元数据”提交。</div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-permission="'admin:ai:prompt:write'" type="primary" :loading="saving" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleSave">保存</el-button>
+        <el-button v-if="editingId" link type="primary" @click="openEditingVersionDrawer">去版本管理</el-button>
+        <el-button v-permission="'admin:ai:prompt:write'" type="primary" :loading="saving" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleSave">{{ editingId ? '保存元数据' : '保存' }}</el-button>
       </template>
     </el-dialog>
 
@@ -268,8 +277,22 @@
           <el-table-column type="expand">
             <template #default="{ row }">
               <div class="version-content-preview">
+                <div class="version-raw-meta">
+                  <span>长度 {{ row.contentLength || 0 }}</span>
+                  <span>Hash {{ row.contentHash || '-' }}</span>
+                  <span>模型参数 Hash {{ row.modelParamsHash || '-' }}</span>
+                  <el-button
+                    v-if="row.rawFieldsAvailable && canViewPromptRaw"
+                    link
+                    type="primary"
+                    :loading="versionRawLoading[row.id]"
+                    @click="loadVersionRaw(row)"
+                  >
+                    {{ versionRawMap[row.id] ? '刷新原文' : '查看原文' }}
+                  </el-button>
+                </div>
+                <pre v-if="versionRawMap[row.id]?.content">{{ versionRawMap[row.id]?.content }}</pre>
                 <strong>提示词内容预览</strong>
-                <pre>{{ row.content || '暂无内容' }}</pre>
               </div>
             </template>
           </el-table-column>
@@ -411,51 +434,64 @@
             <span>执行模式</span>
             <strong>{{ formatExecutionMode(testResult.mockMode) }}</strong>
           </article>
+          <article>
+            <span>渲染内容</span>
+            <strong>{{ testResult.renderedPromptLength ?? 0 }} 字符</strong>
+          </article>
+          <article>
+            <span>AI 响应</span>
+            <strong>{{ testResult.aiResponseLength ?? 0 }} 字符</strong>
+          </article>
         </div>
         <el-collapse v-if="testResult.aiCallLogId" class="prompt-log-diagnostics">
           <el-collapse-item title="技术诊断（运行定位，按需展开）" name="test-call-log">
             <div class="prompt-log-diagnostic-list">
               <span>AI 运行记录 {{ testResult.aiCallLogId }}</span>
+              <span>Raw 权限 {{ testResult.rawAccessPermission || 'admin:ai:log:raw:view' }}</span>
+              <el-button v-if="testingVersion" text type="primary" @click="openVersionCallLogs(testingVersion)">
+                查看版本运行记录
+              </el-button>
             </div>
           </el-collapse-item>
         </el-collapse>
         <div class="version-content-preview">
           <div class="version-content-preview__head">
-            <strong>渲染内容预览</strong>
-            <el-button
-              v-if="testResult.renderedPrompt"
-              text
-              type="primary"
-              @click="revealPromptTestContent('renderedPrompt')"
-            >
-              {{ renderedPromptVisible ? '隐藏完整内容' : '查看完整内容' }}
-            </el-button>
+            <strong>渲染内容摘要</strong>
           </div>
-          <p v-if="testResult.renderedPrompt && !renderedPromptVisible" class="sensitive-preview-hint">
-            已生成渲染内容，共 {{ testResult.renderedPrompt.length }} 字符。完整内容可能包含提示词变量和测试输入，查看会先进行敏感访问确认。
+          <p class="sensitive-preview-hint">
+            完整渲染内容已由后端隐藏。请使用 AI 运行记录的敏感访问流程查看 raw 字段。
           </p>
-          <pre v-else>{{ testResult.renderedPrompt || '暂无渲染结果' }}</pre>
+          <div class="prompt-test-meta">
+            <span>长度</span>
+            <strong>{{ testResult.renderedPromptLength ?? 0 }} 字符</strong>
+            <span>SHA-256</span>
+            <code>{{ shortHash(testResult.renderedPromptHash) }}</code>
+          </div>
         </div>
         <div class="version-content-preview">
           <div class="version-content-preview__head">
             <strong>AI 响应</strong>
-            <el-button
-              v-if="testResult.aiResponse"
-              text
-              type="primary"
-              @click="revealPromptTestContent('aiResponse')"
-            >
-              {{ aiResponseVisible ? '隐藏完整内容' : '查看完整内容' }}
-            </el-button>
           </div>
-          <p v-if="testResult.aiResponse && !aiResponseVisible" class="sensitive-preview-hint">
-            已返回 AI 响应，共 {{ testResult.aiResponse.length }} 字符。完整内容可能包含测试输入和模型输出细节，查看会先进行敏感访问确认。
+          <p class="sensitive-preview-hint">
+            完整 AI 响应已由后端隐藏。需要排障时从 AI 运行记录按权限申请查看。
           </p>
-          <pre v-else>{{ testResult.aiResponse || '未调用 AI 或暂无 AI 响应' }}</pre>
+          <div class="prompt-test-meta">
+            <span>长度</span>
+            <strong>{{ testResult.aiResponseLength ?? 0 }} 字符</strong>
+            <span>SHA-256</span>
+            <code>{{ shortHash(testResult.aiResponseHash) }}</code>
+          </div>
         </div>
         <div class="version-content-preview">
-          <strong>输入变量</strong>
-          <pre>{{ formatJson(testResult.inputVariables || {}) }}</pre>
+          <strong>输入变量摘要</strong>
+          <div class="prompt-test-meta">
+            <span>数量</span>
+            <strong>{{ testResult.inputVariableCount ?? 0 }}</strong>
+            <span>变量键</span>
+            <code>{{ testResult.inputVariableKeys?.join('、') || '-' }}</code>
+            <span>SHA-256</span>
+            <code>{{ shortHash(testResult.inputVariablesHash) }}</code>
+          </div>
         </div>
       </section>
 
@@ -608,12 +644,13 @@ import {
   deleteAdminAiPromptApi,
   getAdminAiPromptsApi,
   getPromptTemplateCallLogsApi,
+  getPromptTemplateVersionRawApi,
   getPromptTemplateVersionCallLogsApi,
   getPromptTemplateVersionsApi,
   disablePromptTemplateVersionApi,
   rollbackPromptTemplateVersionApi,
   testPromptTemplateVersionApi,
-  updateAdminAiPromptApi,
+  updateAdminAiPromptMetadataApi,
   updateAdminAiPromptStatusApi
 } from '@/api/aiAdmin'
 import AppState from '@/components/common/AppState.vue'
@@ -635,6 +672,8 @@ import type {
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import { useAuthStore } from '@/stores/auth'
 
 const sceneOptions = [
   { label: '八股文提问模板', value: AI_SCENE.INTERVIEW_QUESTION_GENERATE },
@@ -659,14 +698,14 @@ const versionSaving = ref(false)
 const versionFormRef = ref<FormInstance>()
 const currentPrompt = ref<PromptTemplateVO | null>(null)
 const versions = ref<PromptTemplateVersionVO[]>([])
+const versionRawMap = reactive<Record<number, PromptTemplateVersionVO>>({})
+const versionRawLoading = ref<Record<number, boolean>>({})
 const testDialogVisible = ref(false)
 const testLoading = ref(false)
 const testingVersion = ref<PromptTemplateVersionVO | null>(null)
 const testInputJson = ref('{}')
 const testCallAi = ref(false)
 const testResult = ref<TestPromptTemplateVersionVO | null>(null)
-const renderedPromptVisible = ref(false)
-const aiResponseVisible = ref(false)
 const callLogDrawerVisible = ref(false)
 const callLogLoading = ref(false)
 const callLogError = ref('')
@@ -675,6 +714,7 @@ const callLogTargetId = ref<number | null>(null)
 const callLogTitle = ref('')
 const callLogs = ref<AiCallLogVO[]>([])
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
+const authStore = useAuthStore()
 const callLogTotal = ref(0)
 
 type PromptColumnKey = 'promptName' | 'templateCode' | 'scene' | 'version' | 'status' | 'updatedAt'
@@ -753,7 +793,7 @@ const form = reactive<PromptTemplateDTO>({
   scene: AI_SCENE.INTERVIEW_QUESTION_GENERATE,
   name: '',
   content: '',
-  status: 1,
+  status: 0,
   description: ''
 })
 
@@ -798,6 +838,32 @@ const versionRules: FormRules<CreatePromptTemplateVersionDTO> = {
 const enabledCount = computed(() => prompts.value.filter((item) => item.status === 1).length)
 const sceneCount = computed(() => new Set(prompts.value.map((item) => item.promptType || item.scene).filter(Boolean)).size)
 const hasPromptFilters = computed(() => Boolean(query.keyword || query.scene || query.status !== ''))
+const canWritePrompt = computed(() => authStore.hasPermission('admin:ai:prompt:write'))
+const canTestPrompt = computed(() => authStore.hasPermission('admin:ai:prompt:test'))
+const canPublishPrompt = computed(() => authStore.hasPermission('admin:ai:prompt:publish'))
+const canViewPromptRaw = computed(() => authStore.hasPermission('admin:ai:prompt:raw:view'))
+const editingPrompt = computed(() =>
+  editingId.value ? prompts.value.find((item) => item.id === editingId.value) || null : null
+)
+const promptStateExpectation = (row?: PromptTemplateVO | null) => ({
+  expectedStatus: row?.status ?? null,
+  expectedActiveVersionId: row?.activeVersionId ?? null
+})
+const currentPromptActiveVersionId = () => currentPrompt.value?.activeVersionId ?? null
+const promptConfirmPayload = (operation: string, reason: string, row?: PromptTemplateVO | null) => ({
+  confirm: true,
+  dryRun: false,
+  reason,
+  idempotencyKey: createOperationIdempotencyKey(operation),
+  ...promptStateExpectation(row)
+})
+const promptVersionConfirmPayload = (operation: string, reason: string) => ({
+  confirm: true,
+  dryRun: false,
+  reason,
+  idempotencyKey: createOperationIdempotencyKey(operation),
+  expectedCurrentActiveVersionId: currentPromptActiveVersionId()
+})
 const promptEmptyTitle = computed(() =>
   hasPromptFilters.value ? '当前筛选没有提示词模板' : '暂无提示词模板'
 )
@@ -832,6 +898,9 @@ const fetchPrompts = async () => {
   try {
     const result = await getAdminAiPromptsApi(query)
     prompts.value = result.records || []
+    if (currentPrompt.value?.id) {
+      currentPrompt.value = prompts.value.find((item) => item.id === currentPrompt.value?.id) || currentPrompt.value
+    }
     total.value = result.total || 0
   } catch (error) {
     prompts.value = []
@@ -855,6 +924,10 @@ const resetVersionForm = () => {
 
 const resetVersionList = () => {
   versions.value = []
+  Object.keys(versionRawMap).forEach((key) => {
+    delete versionRawMap[Number(key)]
+  })
+  versionRawLoading.value = {}
   versionPagination.total = 0
   versionError.value = ''
 }
@@ -882,15 +955,74 @@ const applyPrompt = (prompt?: PromptTemplateVO) => {
     name: prompt?.promptName || prompt?.name || '',
     scene: prompt?.promptType || prompt?.scene || AI_SCENE.INTERVIEW_QUESTION_GENERATE,
     content: prompt?.templateContent || prompt?.content || '',
-    status: prompt?.status ?? 1,
+    status: prompt?.status ?? 0,
     description: prompt?.description || ''
   })
 }
 
+const guardPromptPermission = (allowed: boolean, message: string) => {
+  if (allowed) return true
+  ElMessage.warning(message)
+  return false
+}
+
+const guardPromptWrite = () => guardPromptPermission(canWritePrompt.value, '当前账号没有提示词模板写入权限')
+const guardPromptTest = () => guardPromptPermission(canTestPrompt.value, '当前账号没有提示词测试权限')
+const guardPromptPublish = () => guardPromptPermission(canPublishPrompt.value, '当前账号没有提示词发布权限')
+
+const loadVersionRaw = async (row: PromptTemplateVersionVO) => {
+  if (!canViewPromptRaw.value) {
+    ElMessage.warning('当前账号没有提示词原文查看权限')
+    return
+  }
+  if (!row.id || versionRawLoading.value[row.id]) return
+  let accessReason = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      '请填写本次查看提示词原文的访问原因',
+      `查看版本 ${row.versionCode}`,
+      {
+        confirmButtonText: '确认查看',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          if (!text) return '请填写访问原因'
+          if (text.length > 300) return '访问原因不能超过 300 个字符'
+          return true
+        }
+      }
+    )
+    accessReason = String(result.value || '').trim()
+  } catch {
+    return
+  }
+  versionRawLoading.value = { ...versionRawLoading.value, [row.id]: true }
+  try {
+    versionRawMap[row.id] = await getPromptTemplateVersionRawApi(row.id, {
+      accessReason,
+      confirmSensitiveAccess: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`prompt-template-version-raw-${row.id}`)
+    })
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '提示词原文加载失败，请稍后重试'))
+  } finally {
+    versionRawLoading.value = { ...versionRawLoading.value, [row.id]: false }
+  }
+}
+
 const openDialog = (row?: PromptTemplateVO) => {
+  if (!guardPromptWrite()) return
   editingId.value = row?.id || null
   applyPrompt(row)
   dialogVisible.value = true
+}
+
+const openEditingVersionDrawer = async () => {
+  if (!editingPrompt.value) return
+  dialogVisible.value = false
+  await openVersionDrawer(editingPrompt.value)
 }
 
 const openVersionDrawer = async (row: PromptTemplateVO) => {
@@ -970,33 +1102,67 @@ const handleCallLogReset = () => {
 }
 
 const handleSave = async () => {
+  if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
   await formRef.value.validate()
-  const actionLabel = editingId.value ? '更新提示词模板' : '新增提示词模板'
+  const isEditingMetadata = Boolean(editingId.value)
+  const actionLabel = isEditingMetadata ? '更新提示词模板元数据' : '新增提示词模板'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
     action: `${actionLabel}「${form.name}」`,
-    target: `模板编码：${form.scene || '-'}；场景：${getSceneLabel(form.scene)}；状态：${form.status === 1 ? '启用' : '停用'}`,
-    impact: '模板保存后会影响面试提问、评分、追问、报告生成或其它使用该场景的 AI 能力。',
-    rollback: editingId.value
-      ? '可再次编辑模板基础信息；已产生的 AI 调用和历史版本不会自动回到修改前。'
+    target: isEditingMetadata
+      ? `模板名称：${form.name || '-'}；场景：${getSceneLabel(form.scene)}；当前状态：${form.status === 1 ? '启用' : '停用'}`
+      : `模板编码：${form.scene || '-'}；场景：${getSceneLabel(form.scene)}；状态：${form.status === 1 ? '启用' : '停用'}`,
+    impact: isEditingMetadata
+      ? '本次仅保存模板名称和描述，不会直接修改提示词正文、当前生效版本或启停状态。'
+      : '模板保存后会影响面试提问、评分、追问、报告生成或其它使用该场景的 AI 能力。',
+    rollback: isEditingMetadata
+      ? '可再次编辑模板元数据；正文变更需新增版本，已产生的 AI 调用和历史版本不会自动回到修改前。'
       : '如新增错误，可在确认没有业务依赖后停用或删除该模板。',
-    audit: '模板保存会记录操作人、模板编码、场景和时间，便于追踪提示词治理变更。',
-    tips: [
-      `初始内容长度：${form.content?.length || 0} 字符`,
-      '确认模板编码和场景不会与现有模板混淆。',
-      '确认内容不包含真实用户敏感信息或临时调试字段。'
-    ],
+    audit: isEditingMetadata
+      ? '模板元数据保存会记录操作人、模板、场景和时间，便于追踪提示词治理变更。'
+      : '模板保存会记录操作人、模板编码、场景和时间，便于追踪提示词治理变更。',
+    tips: isEditingMetadata
+      ? [
+          '提示词正文如需修改，请点击“去版本管理”新增版本。',
+          '模板启停请回列表页操作，不通过当前编辑弹窗提交。',
+          '确认模板描述与当前生效版本语义保持一致。'
+        ]
+      : [
+          `初始内容长度：${form.content?.length || 0} 字符`,
+          '确认模板编码和场景不会与现有模板混淆。',
+          '确认内容不包含真实用户敏感信息或临时调试字段。'
+        ],
     confirmButtonText: '确认保存'
   })
   if (!confirmed) return
   saving.value = true
   try {
+    const editingPrompt = editingId.value ? prompts.value.find((item) => item.id === editingId.value) : null
+    const confirmationPayload = promptConfirmPayload(
+      editingId.value ? `prompt-template-update-${editingId.value}` : 'prompt-template-create',
+      editingId.value
+        ? 'Admin confirmed prompt template metadata update from prompt management page.'
+        : 'Admin confirmed prompt template create from prompt management page.',
+      editingPrompt
+    )
+    const payload: PromptTemplateDTO = editingId.value
+      ? {
+          name: form.name,
+          scene: form.scene,
+          status: form.status,
+          description: form.description,
+          ...confirmationPayload
+        } as PromptTemplateDTO
+      : {
+          ...form,
+          ...confirmationPayload
+        }
     if (editingId.value) {
-      await updateAdminAiPromptApi(editingId.value, form)
+      await updateAdminAiPromptMetadataApi(editingId.value, payload)
     } else {
-      await createAdminAiPromptApi(form)
+      await createAdminAiPromptApi(payload)
     }
     ElMessage.success('提示词模板已保存')
     dialogVisible.value = false
@@ -1007,6 +1173,7 @@ const handleSave = async () => {
 }
 
 const handleCreateVersion = async () => {
+  if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!versionFormRef.value || !currentPrompt.value?.id) return
   await versionFormRef.value.validate()
@@ -1032,7 +1199,11 @@ const handleCreateVersion = async () => {
       versionName: versionForm.versionName || undefined,
       content: versionForm.content,
       status: versionForm.status || 'DRAFT',
-      changeLog: versionForm.changeLog || undefined
+      changeLog: versionForm.changeLog || undefined,
+      confirm: true,
+      dryRun: false,
+      reason: `Admin confirmed prompt version create; templateId=${currentPrompt.value.id}; version=${versionForm.versionCode}`,
+      idempotencyKey: createOperationIdempotencyKey(`prompt-version-create-${currentPrompt.value.id}`)
     })
     ElMessage.success('提示词版本已创建')
     resetVersionForm()
@@ -1043,33 +1214,12 @@ const handleCreateVersion = async () => {
 }
 
 const openTestDialog = (row: PromptTemplateVersionVO) => {
+  if (!guardPromptTest()) return
   testingVersion.value = row
   testInputJson.value = '{}'
   testCallAi.value = false
   testResult.value = null
-  renderedPromptVisible.value = false
-  aiResponseVisible.value = false
   testDialogVisible.value = true
-}
-
-const revealPromptTestContent = async (kind: 'renderedPrompt' | 'aiResponse') => {
-  const visibleRef = kind === 'renderedPrompt' ? renderedPromptVisible : aiResponseVisible
-  if (visibleRef.value) {
-    visibleRef.value = false
-    return
-  }
-  const contentLabel = kind === 'renderedPrompt' ? '渲染内容' : 'AI 响应'
-  const confirmed = await confirmDangerActionPreview({
-    title: `${contentLabel}敏感访问预览`,
-    action: `查看提示词测试${contentLabel}完整内容`,
-    target: testingVersion.value ? promptVersionTarget(testingVersion.value) : '当前提示词测试结果',
-    impact: `${contentLabel}可能包含提示词变量、测试输入、模型输出细节或敏感样例，查看后需要按敏感信息处理规范使用。`,
-    rollback: '查看行为无法撤销；如果发现输入包含真实用户敏感信息，应按内部审计和清理流程处理。',
-    audit: '本次前端确认会保留操作上下文，后续如进入后端敏感查看接口也会写入访问审计。',
-    tips: ['仅在排查提示词质量或测试结果异常时查看。', '不要把完整内容复制到第三方工具或无权限渠道。'],
-    confirmButtonText: '确认查看'
-  })
-  if (confirmed) visibleRef.value = true
 }
 
 const parseInputVariables = () => {
@@ -1093,6 +1243,7 @@ const parseInputVariables = () => {
 }
 
 const handleTestVersion = async () => {
+  if (!guardPromptTest()) return
   if (!testingVersion.value?.id) return
   const inputVariables = parseInputVariables()
   if (!inputVariables) return
@@ -1114,10 +1265,17 @@ const handleTestVersion = async () => {
   try {
     testResult.value = await testPromptTemplateVersionApi(testingVersion.value.id, {
       inputVariables,
-      callAi: testCallAi.value
+      callAi: testCallAi.value,
+      ...(testCallAi.value
+        ? {
+            confirmSensitiveAccess: true,
+            confirm: true,
+            dryRun: false,
+            reason: `Admin confirmed real AI prompt version test; versionId=${testingVersion.value.id}`,
+            idempotencyKey: createOperationIdempotencyKey(`prompt-version-test-${testingVersion.value.id}`)
+          }
+        : {})
     })
-    renderedPromptVisible.value = false
-    aiResponseVisible.value = false
     ElMessage.success('提示词版本测试完成')
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '测试失败，请稍后重试。'))
@@ -1159,6 +1317,7 @@ const confirmPromptVersionAction = async (
   })
 
 const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
+  if (!guardPromptPublish()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmPromptVersionAction(
     row,
@@ -1179,7 +1338,13 @@ const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
     return
   }
   try {
-    await activatePromptTemplateVersionApi(row.id, { changeLog })
+    await activatePromptTemplateVersionApi(row.id, {
+      changeLog,
+      ...promptVersionConfirmPayload(
+        `prompt-version-activate-${row.id}`,
+        `Admin confirmed prompt version activation; versionId=${row.id}; activeVersion=${currentPromptActiveVersionId() ?? 'none'}`
+      )
+    })
     ElMessage.success('提示词版本已激活')
     await fetchVersions()
     await fetchPrompts()
@@ -1189,6 +1354,7 @@ const handleActivateVersion = async (row: PromptTemplateVersionVO) => {
 }
 
 const handleRollbackVersion = async (row: PromptTemplateVersionVO) => {
+  if (!guardPromptPublish()) return
   if (!guardAdminMobileWrite()) return
   if (isVersionActive(row)) {
     ElMessage.warning('当前已是激活版本')
@@ -1221,7 +1387,13 @@ const handleRollbackVersion = async (row: PromptTemplateVersionVO) => {
     return
   }
   try {
-    await rollbackPromptTemplateVersionApi(row.id, { changeLog })
+    await rollbackPromptTemplateVersionApi(row.id, {
+      changeLog,
+      ...promptVersionConfirmPayload(
+        `prompt-version-rollback-${row.id}`,
+        `Admin confirmed prompt version rollback; versionId=${row.id}; activeVersion=${currentPromptActiveVersionId() ?? 'none'}`
+      )
+    })
     ElMessage.success('提示词版本已回滚')
     await fetchVersions()
     await fetchPrompts()
@@ -1231,6 +1403,7 @@ const handleRollbackVersion = async (row: PromptTemplateVersionVO) => {
 }
 
 const handleDisableVersion = async (row: PromptTemplateVersionVO) => {
+  if (!guardPromptPublish()) return
   if (!guardAdminMobileWrite()) return
   if (isVersionActive(row)) {
     ElMessage.warning('当前激活版本不能直接禁用')
@@ -1255,7 +1428,13 @@ const handleDisableVersion = async (row: PromptTemplateVersionVO) => {
     return
   }
   try {
-    await disablePromptTemplateVersionApi(row.id, { changeLog })
+    await disablePromptTemplateVersionApi(row.id, {
+      changeLog,
+      ...promptVersionConfirmPayload(
+        `prompt-version-disable-${row.id}`,
+        `Admin confirmed prompt version disable; versionId=${row.id}; activeVersion=${currentPromptActiveVersionId() ?? 'none'}`
+      )
+    })
     ElMessage.success('提示词版本已禁用')
     await fetchVersions()
   } catch (error) {
@@ -1264,6 +1443,7 @@ const handleDisableVersion = async (row: PromptTemplateVersionVO) => {
 }
 
 const handleStatus = async (row: PromptTemplateVO) => {
+  if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   const nextStatus = row.status === 1 ? 0 : 1
   const actionLabel = nextStatus === 1 ? '启用' : '禁用'
@@ -1281,9 +1461,21 @@ const handleStatus = async (row: PromptTemplateVO) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
+  if (nextStatus === 1) {
+    ElMessage.warning('Please activate a prompt version to enable this template.')
+    return
+  }
   try {
-    await updateAdminAiPromptStatusApi(row.id, nextStatus)
-    ElMessage.success(nextStatus === 1 ? '提示词模板已启用' : '提示词模板已禁用')
+    await updateAdminAiPromptStatusApi(
+      row.id,
+      nextStatus,
+      promptConfirmPayload(
+        `prompt-template-status-${row.id}`,
+        `Admin confirmed prompt template disable from prompt management page; templateId=${row.id}`,
+        row
+      )
+    )
+    ElMessage.success('提示词模板已禁用')
     await fetchPrompts()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, `${actionLabel}提示词模板失败，请确认权限或稍后重试。`))
@@ -1291,6 +1483,7 @@ const handleStatus = async (row: PromptTemplateVO) => {
 }
 
 const handleDelete = async (row: PromptTemplateVO) => {
+  if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   const confirmed = await confirmDangerActionPreview({
     title: '删除提示词模板预览',
@@ -1303,8 +1496,19 @@ const handleDelete = async (row: PromptTemplateVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
+  if (row.status === 1) {
+    ElMessage.warning('Please disable the prompt template before deleting it.')
+    return
+  }
   try {
-    await deleteAdminAiPromptApi(row.id)
+    await deleteAdminAiPromptApi(
+      row.id,
+      promptConfirmPayload(
+        `prompt-template-delete-${row.id}`,
+        `Admin confirmed prompt template delete from prompt management page; templateId=${row.id}`,
+        row
+      )
+    )
     ElMessage.success('提示词模板已删除')
     await fetchPrompts()
   } catch (error) {
@@ -1348,6 +1552,7 @@ const versionStatusType = (status?: string) => {
 }
 
 const formatJson = (value: unknown) => JSON.stringify(value, null, 2)
+const shortHash = (value?: string | null) => value ? value.slice(0, 16) : '-'
 
 const formatExecutionMode = (value?: boolean) => {
   if (typeof value !== 'boolean') return '-'
@@ -1562,6 +1767,44 @@ onMounted(fetchPrompts)
     color: var(--app-text-muted);
     font-size: 12px;
     line-height: 1.7;
+  }
+
+  .version-raw-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 10px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+
+    span {
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .prompt-test-meta {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 12px;
+    margin-top: 12px;
+    font-size: 12px;
+
+    span {
+      color: var(--app-text-muted);
+    }
+
+    strong,
+    code {
+      min-width: 0;
+      margin: 0;
+      color: var(--app-text-secondary);
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
   }
 
   pre {

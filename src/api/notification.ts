@@ -16,6 +16,10 @@ export interface NotificationVO {
   relatedType?: string
   bizId?: number | string
   bizType?: string
+  actionUrl?: string
+  fallbackPath?: string
+  fallbackLabel?: string
+  planDate?: string
 }
 
 export interface NotificationQueryDTO {

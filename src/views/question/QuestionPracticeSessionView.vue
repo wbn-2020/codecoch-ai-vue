@@ -127,7 +127,7 @@
             </div>
             <h2>{{ currentQuestion.title }}</h2>
             <div class="question-content">
-              <MarkdownPreview :content="currentQuestion.content || '暂无题干内容'" />
+              <MarkdownPreview :content="currentQuestionPrompt" />
             </div>
 
             <div v-if="!answered" class="answer-area">
@@ -157,14 +157,20 @@
                 :title="lastResult?.isCorrect ? '回答通过' : '需要补强'"
                 :description="resultDescription"
               />
+              <div class="coverage-list">
+                <article v-for="item in answerCoverageItems" :key="item.title" :class="{ done: item.done }">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.done ? '已覆盖' : item.hint }}</span>
+                </article>
+              </div>
               <div class="review-grid">
                 <section>
                   <h3>参考答案</h3>
-                  <MarkdownPreview :content="lastResult?.referenceAnswer || currentQuestion.referenceAnswer || '暂无参考答案'" />
+                  <MarkdownPreview :content="referenceAnswerText" />
                 </section>
                 <section>
                   <h3>点评与解析</h3>
-                  <MarkdownPreview :content="lastResult?.aiComment || currentQuestion.analysis || '暂无解析'" />
+                  <MarkdownPreview :content="analysisText" />
                 </section>
               </div>
               <div class="result-actions">
@@ -243,6 +249,22 @@
             <strong>{{ elapsedText }}</strong>
           </div>
         </div>
+        <el-alert
+          v-if="lastResult?.agentTaskCompleted"
+          class="agent-sync-alert"
+          type="success"
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            今日计划任务已同步完成
+          </template>
+          <p>{{ lastResult.agentTaskTitle || '题库练习任务' }}</p>
+          <small class="agent-sync-alert__meta">
+            <span>ID: {{ lastResult.agentTaskId ?? '--' }}</span>
+            <span>状态: {{ lastResult.agentTaskStatus || '--' }}</span>
+          </small>
+        </el-alert>
         <div class="result-final-actions">
           <el-button type="primary" @click="resetPractice">再练一轮</el-button>
           <el-button @click="router.push('/questions/wrong-records')">错题复盘</el-button>
@@ -292,7 +314,7 @@ import {
   Shuffle,
   Target
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -328,6 +350,11 @@ interface PracticeAnswerResult {
   referenceAnswer?: string
   answerResult?: string
   masteryStatus?: string
+  agentTaskCompleted?: boolean
+  agentTaskId?: number
+  agentTaskTitle?: string
+  agentTaskStatus?: string
+  agentReviewSummary?: string
 }
 
 const route = useRoute()
@@ -354,12 +381,17 @@ const initialMode = (() => {
 })()
 
 const routeQuestionIds = computed(parseQuestionIds)
-const routeRecommendReason = computed(() => queryString('recommendReason'))
+const routeRecommendReason = computed(() => '')
 const routeSourceType = computed(() => queryString('sourceType'))
 const routeSourceId = computed(() => queryString('sourceId'))
+const routeTargetJobId = computed(() => {
+  const value = Number(queryString('targetJobId'))
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
 const routeTrustStatus = computed(() => queryString('trustStatus'))
-const routeEvidenceSummary = computed(() => queryString('evidenceSummary'))
+const routeEvidenceSummary = computed(() => '')
 const routeFallback = computed(() => queryString('fallback') === 'true')
+const shouldAutoStart = computed(() => ['1', 'true'].includes(queryString('autoStart').toLowerCase()))
 const hasRouteSourceContext = computed(() => Boolean(
   routeSourceType.value ||
   routeSourceId.value ||
@@ -371,6 +403,8 @@ const routeSourceLabel = computed(() => {
   const labels: Record<string, string> = {
     RESUME_JOB_MATCH: '来自匹配报告',
     SKILL_PROFILE: '来自能力画像',
+    TARGET_JOB: '来自今日计划',
+    JOB_COACH_AGENT_TASK: '来自今日计划',
     STUDY_PLAN: '来自学习计划',
     FALLBACK: '通用练习'
   }
@@ -459,6 +493,51 @@ const elapsedText = computed(() => {
   return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 })
 const currentTags = computed(() => normalizeTagNames(currentQuestion.value?.tags).slice(0, 5))
+const currentQuestionPrompt = computed(() => {
+  const question = currentQuestion.value
+  if (!question) return ''
+  if (question.content?.trim()) return question.content
+  const topic = question.title || config.keyword || question.categoryName || '当前知识点'
+  const tags = currentTags.value.length ? `，可结合 ${currentTags.value.join('、')} 展开` : ''
+  return `请用真实面试口径回答「${topic}」：先说明概念或问题边界，再讲核心方案、关键取舍和项目中的落地证据${tags}。`
+})
+const referenceAnswerText = computed(() => {
+  if (lastResult.value?.referenceAnswer) return lastResult.value.referenceAnswer
+  if (currentQuestion.value?.referenceAnswer) return currentQuestion.value.referenceAnswer
+  return '参考答案暂未返回。建议按“概念边界 -> 核心方案 -> 风险取舍 -> 项目证据”的顺序补齐，并在答完后标记掌握状态。'
+})
+const analysisText = computed(() => {
+  if (lastResult.value?.aiComment) return lastResult.value.aiComment
+  if (currentQuestion.value?.analysis) return currentQuestion.value.analysis
+  return '点评内容暂未返回。先按下方覆盖检查复盘：是否讲清定义/场景、核心方案、风险取舍、项目指标；缺哪一项就把掌握状态标为“模糊”或“未掌握”。'
+})
+const answerCoverageItems = computed(() => {
+  const answer = userAnswer.value.trim()
+  const normalized = answer.toLowerCase()
+  const hasAny = (tokens: string[]) => tokens.some((token) => normalized.includes(token.toLowerCase()))
+  return [
+    {
+      title: '定义或场景',
+      done: answer.length >= 30 || hasAny(['是什么', '场景', '问题', '背景', '边界']),
+      hint: '先说明问题边界'
+    },
+    {
+      title: '方案或原理',
+      done: hasAny(['方案', '原理', '流程', '步骤', '实现', '机制', '架构']),
+      hint: '补核心方案'
+    },
+    {
+      title: '风险取舍',
+      done: hasAny(['风险', '缺点', '取舍', '代价', '一致性', '性能', '异常']),
+      hint: '补权衡和失败场景'
+    },
+    {
+      title: '项目证据',
+      done: hasAny(['项目', '线上', '指标', 'qps', '耗时', '监控', '压测', '用户']),
+      hint: '补项目指标或结果'
+    }
+  ]
+})
 const resultDescription = computed(() => {
   if (!lastResult.value?.answerResult) return ''
   const map: Record<string, string> = {
@@ -650,21 +729,28 @@ const submitAnswer = async () => {
   try {
     const result = await submitQuestionAnswerApi(currentQuestion.value.id, {
       userAnswer: userAnswer.value,
-      answerContent: userAnswer.value
+      answerContent: userAnswer.value,
+      targetJobId: routeTargetJobId.value
     })
-    const isCorrect = result.wrong === false || result.answerResult === 'CORRECT'
+    const normalizedAnswerResult = String(result.answerResult || '').toUpperCase()
+    const isCorrect = normalizedAnswerResult === 'CORRECT'
     currentQuestion.value.referenceAnswer = result.referenceAnswer || currentQuestion.value.referenceAnswer
     currentQuestion.value.analysis = result.analysis || currentQuestion.value.analysis
     currentQuestion.value.masteryStatus = result.masteryStatus || currentQuestion.value.masteryStatus
     currentQuestion.value.lastAnswer = userAnswer.value
-    currentQuestion.value.lastAnswerResult = result.answerResult || (result.wrong ? 'WRONG' : 'CORRECT')
+    currentQuestion.value.lastAnswerResult = normalizedAnswerResult || (result.wrong === true ? 'WRONG' : 'UNKNOWN')
     lastResult.value = {
       isCorrect,
       wrong: result.wrong,
       aiComment: result.analysis,
       referenceAnswer: result.referenceAnswer,
       answerResult: currentQuestion.value.lastAnswerResult,
-      masteryStatus: result.masteryStatus
+      masteryStatus: result.masteryStatus,
+      agentTaskCompleted: result.agentTaskCompleted,
+      agentTaskId: result.agentTaskId,
+      agentTaskTitle: result.agentTaskTitle,
+      agentTaskStatus: result.agentTaskStatus,
+      agentReviewSummary: result.agentReviewSummary
     }
     answeredCount.value++
     if (isCorrect) correctCount.value++
@@ -749,6 +835,12 @@ const resetPractice = () => {
   loadError.value = ''
   partialLoadWarning.value = ''
 }
+
+onMounted(() => {
+  if (shouldAutoStart.value && routeQuestionIds.value.length && !practicing.value && !finished.value) {
+    void startPractice()
+  }
+})
 
 onBeforeUnmount(stopTimer)
 </script>
@@ -1027,6 +1119,42 @@ onBeforeUnmount(stopTimer)
   margin-top: 18px;
 }
 
+.coverage-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+
+  article {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff7ed;
+  }
+
+  article.done {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-size: 13px;
+  }
+
+  span {
+    margin-top: 5px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
 .review-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1108,6 +1236,15 @@ onBeforeUnmount(stopTimer)
   margin-top: 18px;
 }
 
+.agent-sync-alert__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
 :deep(.app-state) {
   background: #f8fafc;
 }
@@ -1146,6 +1283,7 @@ onBeforeUnmount(stopTimer)
 
   .mode-grid,
   .review-grid,
+  .coverage-list,
   .result-stats {
     grid-template-columns: 1fr;
   }

@@ -19,6 +19,8 @@ export interface AgentReviewVO {
   createdAt?: string
 }
 
+export type GrowthConfidenceLevel = 'INSUFFICIENT' | 'LOW' | 'MEDIUM' | 'HIGH' | string
+
 export interface GrowthOverviewVO {
   readinessScore?: number
   taskCompletionRate?: number
@@ -26,6 +28,19 @@ export interface GrowthOverviewVO {
   totalReviewCount?: number
   totalMemoryCount?: number
   topSkills?: Array<{ name: string; value: number }>
+  confidenceLevel?: GrowthConfidenceLevel
+  evidenceCount?: number
+  timeWindow?: string
+  dataSourceLabels?: string[]
+  coldStartReason?: string
+  nextEvidenceActions?: string[]
+  displayPolicy?: {
+    showStrongScore?: boolean
+    showReadinessTrend?: boolean
+    showTopSkillTrend?: boolean
+    showPercentileComparison?: boolean
+    showGapPercentage?: boolean
+  }
 }
 
 export interface SkillGrowthSnapshotVO {
@@ -36,6 +51,12 @@ export interface SkillGrowthSnapshotVO {
   score?: number
   taskCount?: number
   doneCount?: number
+  confidenceLevel?: GrowthConfidenceLevel
+  evidenceCount?: number
+  timeWindow?: string
+  dataSourceLabels?: string[]
+  coldStartReason?: string
+  nextEvidenceActions?: string[]
 }
 
 export interface ReadinessScoreRecordVO {
@@ -45,6 +66,12 @@ export interface ReadinessScoreRecordVO {
   score?: number
   taskCompletionRate?: number
   agentSuccessRate?: number
+  confidenceLevel?: GrowthConfidenceLevel
+  evidenceCount?: number
+  timeWindow?: string
+  dataSourceLabels?: string[]
+  coldStartReason?: string
+  nextEvidenceActions?: string[]
 }
 
 export interface AgentMemoryVO {
@@ -97,6 +124,10 @@ export interface ResumeApplyAiSuggestionDTO {
   suggestionType?: string
   status?: string
   note?: string
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface ResumeSuggestionAdoptionVO extends ResumeApplyAiSuggestionDTO {
@@ -107,10 +138,18 @@ export interface ResumeSuggestionAdoptionVO extends ResumeApplyAiSuggestionDTO {
   updatedAt?: string
 }
 
+export interface ResumeMutationConfirmationParams {
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
 export interface JobApplicationVO {
   id: number
   targetJobId?: number
   resumeVersionId?: number
+  matchReportId?: number
   companyName?: string
   jobTitle?: string
   source?: string
@@ -120,6 +159,21 @@ export interface JobApplicationVO {
   note?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobApplicationStatsVO {
+  total?: number
+  activeCount?: number
+  overdueFollowUpCount?: number
+  dueTodayFollowUpCount?: number
+  noFollowUpCount?: number
+  staleActiveCount?: number
+  interviewCount?: number
+  offerCount?: number
+  rejectedCount?: number
+  closedCount?: number
+  statusCounts?: Record<string, number>
+  generatedAt?: string
 }
 
 export interface JobApplicationEventVO {
@@ -346,6 +400,13 @@ export interface KnowledgeVectorRebuildVO {
   embeddingEnabled?: boolean
   semanticEnabled?: boolean
   embeddingDisabledReason?: string
+  requiresConfirmation?: boolean
+  dryRun?: boolean
+  operation?: string
+  requestedLimit?: number
+  accessReason?: string
+  idempotencyKey?: string
+  confirmationMessage?: string
   documentCount?: number
   chunkCount?: number
   vectorUpdated?: number
@@ -359,6 +420,24 @@ export interface KnowledgeVectorRebuildVO {
   vectorScopeType?: string
   vectorScopeId?: string
   vectorJobStatus?: string
+}
+
+export interface KnowledgeMutationConfirmationParams {
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
+export interface KnowledgeVectorMaintenanceParams extends KnowledgeMutationConfirmationParams {
+  documentId?: number
+  limit?: number
+}
+
+export interface KnowledgeDuplicateCleanupParams extends KnowledgeMutationConfirmationParams {
+  limit?: number
+  documentId?: number
+  documentType?: string
 }
 
 export interface KnowledgeEvaluationSampleDTO {
@@ -532,7 +611,7 @@ export const getGrowthReadinessTrendApi = (params?: { days?: number }) =>
 export const getAgentMemoriesApi = (params?: { pageNo?: number; pageSize?: number; memoryType?: string; enabled?: number }) =>
   request
     .get<PageResult<AgentMemoryVO> | AgentMemoryVO[], PageResult<AgentMemoryVO> | AgentMemoryVO[]>('/agent/memories', { params: compactQueryParams(params) })
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const createAgentMemoryApi = (data: Partial<AgentMemoryVO>) =>
   request.post<AgentMemoryVO, AgentMemoryVO>('/agent/memories', data)
@@ -559,14 +638,19 @@ export const getResumeVersionDiffApi = (resumeId: number, versionId: number) =>
 export const getResumeVersionsPairDiffApi = (sourceVersionId: number, targetVersionId: number) =>
   request.get<ResumeVersionDiffVO, ResumeVersionDiffVO>(`/resume-versions/${sourceVersionId}/diff/${targetVersionId}`)
 
-export const rollbackResumeVersionApi = (resumeId: number, versionId: number) =>
-  request.post<ResumeVersionVO, ResumeVersionVO>(`/resumes/${resumeId}/versions/${versionId}/rollback`)
+export const rollbackResumeVersionApi = (resumeId: number, versionId: number, params?: ResumeMutationConfirmationParams) =>
+  request.post<ResumeVersionVO, ResumeVersionVO>(`/resumes/${resumeId}/versions/${versionId}/rollback`, undefined, {
+    params: compactQueryParams(params)
+  })
 
 export const applyResumeVersionSuggestionApi = (versionId: number, data?: ResumeApplyAiSuggestionDTO) =>
   request.post<ResumeSuggestionAdoptionVO, ResumeSuggestionAdoptionVO>(`/resume-versions/${versionId}/apply-ai-suggestion`, data || {})
 
 export const getApplicationsApi = (params?: { status?: string }) =>
   request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params: compactQueryParams(params) }).then((data) => data || [])
+
+export const getApplicationStatsApi = () =>
+  request.get<JobApplicationStatsVO, JobApplicationStatsVO>('/applications/stats')
 
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
@@ -596,7 +680,7 @@ export const uploadKnowledgeDocumentApi = (file: File, documentType?: string) =>
 export const getKnowledgeDocumentsApi = (params?: { pageNo?: number; pageSize?: number; title?: string; documentType?: string; status?: string }) =>
   request
     .get<PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[], PageResult<KnowledgeDocumentVO> | KnowledgeDocumentVO[]>('/agent/knowledge/documents', { params: compactQueryParams(params) })
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const getKnowledgeDocumentTypesApi = () =>
   request.get<string[], string[]>('/agent/knowledge/documents/types').then((data) => data || [])
@@ -618,8 +702,10 @@ export const getKnowledgeDocumentVersionsApi = (id: number) =>
     .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
     .then((data) => data || [])
 
-export const restoreKnowledgeDocumentVersionApi = (id: number, versionId: number) =>
-  request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}/versions/${versionId}/restore`)
+export const restoreKnowledgeDocumentVersionApi = (id: number, versionId: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}/versions/${versionId}/restore`, undefined, {
+    params: compactQueryParams(params)
+  })
 
 export const getKnowledgeDocumentChunksApi = (id: number) =>
   request.get<KnowledgeChunkVO[], KnowledgeChunkVO[]>(`/agent/knowledge/documents/${id}/chunks`).then((data) => data || [])
@@ -640,25 +726,29 @@ export const getKnowledgeExactDuplicatesApi = (params?: { limit?: number; docume
     .get<KnowledgeExactDuplicateGroupVO[], KnowledgeExactDuplicateGroupVO[]>('/agent/knowledge/duplicates/exact', { params: compactQueryParams(params) })
     .then((data) => data || [])
 
-export const cleanupKnowledgeExactDuplicatesApi = (params?: { dryRun?: boolean; limit?: number; documentId?: number; documentType?: string }) =>
+export const cleanupKnowledgeExactDuplicatesApi = (params?: KnowledgeDuplicateCleanupParams) =>
   request.post<KnowledgeDuplicateCleanupVO, KnowledgeDuplicateCleanupVO>('/agent/knowledge/duplicates/exact/cleanup', undefined, {
     params: compactQueryParams(params)
   })
 
-export const deleteKnowledgeDocumentApi = (id: number) =>
-  request.delete<null, null>(`/agent/knowledge/documents/${id}`)
-
-export const deleteKnowledgeChunkApi = (chunkId: number) =>
-  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`)
-
-export const rebuildKnowledgeVectorsApi = (documentId?: number) =>
-  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
-    params: documentId ? { documentId } : undefined
+export const deleteKnowledgeDocumentApi = (id: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.delete<null, null>(`/agent/knowledge/documents/${id}`, {
+    params: compactQueryParams(params)
   })
 
-export const retryFailedKnowledgeVectorsApi = (limit?: number) =>
+export const deleteKnowledgeChunkApi = (chunkId: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.delete<null, null>(`/agent/knowledge/chunks/${chunkId}`, {
+    params: compactQueryParams(params)
+  })
+
+export const rebuildKnowledgeVectorsApi = (params?: KnowledgeVectorMaintenanceParams) =>
+  request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/rebuild', undefined, {
+    params: compactQueryParams(params)
+  })
+
+export const retryFailedKnowledgeVectorsApi = (params?: KnowledgeVectorMaintenanceParams) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>('/agent/knowledge/vectors/retry-failed', undefined, {
-    params: limit ? { limit } : undefined
+    params: compactQueryParams(params)
   })
 
 export const searchKnowledgeApi = (params: { keyword: string; limit?: number; minScore?: number; documentId?: number; documentType?: string }) =>
@@ -688,6 +778,13 @@ export const askKnowledgeStreamApi = (
   data: { question: string; limit?: number; minScore?: number; documentId?: number; documentType?: string },
   handlers: KnowledgeAskStreamHandlers
 ): StreamSseHandle => {
+  let errorDispatched = false
+  const dispatchStreamError = (message: string) => {
+    if (errorDispatched) return
+    errorDispatched = true
+    handlers.onError?.(message)
+  }
+
   return streamSse({
     url: buildSseUrl('/agent/knowledge/ask/stream', {}),
     method: 'POST',
@@ -709,13 +806,13 @@ export const askKnowledgeStreamApi = (
             handlers.onDone?.(payload.aiCallLogId as number | undefined)
             break
           case 'error':
-            handlers.onError?.(toFriendlyMessage(payload.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
+            dispatchStreamError(toFriendlyMessage(payload.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
             break
           default:
             break
         }
       },
-      onError: (error) => handlers.onError?.(toFriendlyMessage(error.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
+      onError: (error) => dispatchStreamError(toFriendlyMessage(error.message, '\u77e5\u8bc6\u5e93\u95ee\u7b54\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'))
     }
   })
 }
@@ -731,8 +828,10 @@ export const getKnowledgeEvalCasesApi = (params?: KnowledgeEvalCaseQueryDTO) =>
 export const saveKnowledgeEvalCaseApi = (data: KnowledgeEvalCaseSaveDTO) =>
   request.post<KnowledgeEvalCaseVO, KnowledgeEvalCaseVO>('/agent/knowledge/eval/cases', data)
 
-export const deleteKnowledgeEvalCaseApi = (id: number) =>
-  request.delete<null, null>(`/agent/knowledge/eval/cases/${id}`)
+export const deleteKnowledgeEvalCaseApi = (id: number, params?: KnowledgeMutationConfirmationParams) =>
+  request.delete<null, null>(`/agent/knowledge/eval/cases/${id}`, {
+    params: compactQueryParams(params)
+  })
 
 export const runKnowledgeEvalApi = (data?: KnowledgeEvalRunRequestDTO) =>
   request.post<KnowledgeEvalRunVO, KnowledgeEvalRunVO>('/agent/knowledge/eval/runs', data || {})

@@ -227,8 +227,8 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   createResumeProjectApi,
@@ -244,6 +244,7 @@ import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const route = useRoute()
 const resumes = ref<ResumeVO[]>([])
 const selectedResumeId = ref<number>()
 const selectedDetail = ref<ResumeDetailVO>()
@@ -272,6 +273,11 @@ const rules: FormRules = {
 
 const selectedResume = computed(() => resumes.value.find((item) => item.id === selectedResumeId.value))
 const projects = computed(() => selectedDetail.value?.projects || [])
+
+const routeResumeId = computed(() => {
+  const value = Number(route.query.resumeId)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+})
 
 const completeProjects = computed(() =>
   projects.value.filter((project) => projectCompletionScore(project) >= 4).length
@@ -329,7 +335,7 @@ const loadResumes = async () => {
   try {
     const page = await getResumesApi({ pageNo: 1, pageSize: 50 })
     resumes.value = page.records || []
-    selectedResumeId.value ||= resumes.value[0]?.id
+    selectedResumeId.value = resolveInitialResumeId()
     if (selectedResumeId.value) await loadSelectedResume()
   } catch (err) {
     error.value = getErrorMessage(err, '简历列表加载失败。')
@@ -338,8 +344,20 @@ const loadResumes = async () => {
   }
 }
 
+const resolveInitialResumeId = () => {
+  const queryResumeId = routeResumeId.value
+  if (queryResumeId && resumes.value.some((resume) => resume.id === queryResumeId)) {
+    return queryResumeId
+  }
+  if (selectedResumeId.value && resumes.value.some((resume) => resume.id === selectedResumeId.value)) {
+    return selectedResumeId.value
+  }
+  return resumes.value[0]?.id
+}
+
 const selectResume = async (resumeId: number) => {
   selectedResumeId.value = resumeId
+  await router.replace({ path: '/projects', query: { resumeId } })
   await loadSelectedResume()
 }
 
@@ -424,6 +442,13 @@ const deleteProject = async (project: ResumeProjectVO) => {
 const formatDate = (value?: string) => (value ? formatDateTime(value) : '--')
 
 onMounted(loadResumes)
+
+watch(routeResumeId, async (resumeId) => {
+  if (!resumeId || resumeId === selectedResumeId.value) return
+  if (!resumes.value.some((resume) => resume.id === resumeId)) return
+  selectedResumeId.value = resumeId
+  await loadSelectedResume()
+})
 </script>
 
 <style scoped lang="scss">

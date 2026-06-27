@@ -14,7 +14,7 @@ export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILE
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewReportTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
-export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'delta' | 'token' | 'result' | 'done' | 'error'
 export type InterviewQuestionSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseStage =
   | 'VALIDATE_REQUEST'
@@ -227,6 +227,8 @@ export interface InterviewAnswerReviewSseEvent {
   requestId?: string
   type?: InterviewAnswerReviewSseEventType | string
   message?: string
+  content?: string
+  index?: number
   interviewId?: number
   questionId?: number
   answerId?: number
@@ -377,11 +379,48 @@ export interface RecommendedQuestionVO {
   recommendReason?: string
 }
 
+export type InterviewReportNextActionType =
+  | 'QUESTION_PRACTICE'
+  | 'STUDY_PLAN'
+  | 'INTERVIEW'
+  | 'RESUME_OPTIMIZE'
+  | string
+
+export interface InterviewReportNextActionVO {
+  actionType: InterviewReportNextActionType
+  title: string
+  description?: string
+  priority?: number
+  actionUrl?: string
+  actionSource?: 'BACKEND' | 'STATIC_FALLBACK' | string
+  relatedBizType?: string
+  relatedBizId?: number
+  evidence?: string
+}
+
+export interface InterviewReportMissingSkillVO {
+  id?: number
+  skillName?: string
+  severity?: string
+  gapDescription?: string
+  recommendedActions?: string[]
+  priority?: number
+  sourceType?: string
+  sourceBizId?: number
+}
+
 export interface InterviewReportVO {
   id?: number
   reportId?: number
   interviewId: number
   sessionId?: number
+  targetJobId?: number
+  skillProfileId?: number
+  matchReportId?: number
+  targetJobTitle?: string
+  targetCompanyName?: string
+  jdEvidenceSummary?: string
+  missingSkills?: InterviewReportMissingSkillVO[]
   reportStatus: ReportStatus
   status?: ReportStatus | InterviewStatus
   totalScore?: number
@@ -401,6 +440,7 @@ export interface InterviewReportVO {
   resumeSuggestions?: string
   resumeAdvice?: string
   recommendedQuestions?: Array<RecommendedQuestionVO | string>
+  nextActions?: InterviewReportNextActionVO[]
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]

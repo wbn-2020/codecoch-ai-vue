@@ -48,7 +48,7 @@
             </div>
             <div>
               <span>分析状态</span>
-              <JobTargetStatusTag :status="target?.parseStatus || analysis?.parseStatus" />
+              <JobTargetStatusTag :status="displayParseStatus" />
             </div>
             <div>
               <span>更新时间</span>
@@ -144,7 +144,7 @@
                 <h2>完整岗位描述</h2>
                 <p>这里展示你保存的岗位描述，重新分析会基于这段内容生成结构化信息。</p>
               </div>
-              <JobTargetStatusTag :status="target.parseStatus" />
+              <JobTargetStatusTag :status="displayParseStatus" />
             </div>
             <pre v-if="target.jdText">{{ target.jdText }}</pre>
             <AppState
@@ -175,9 +175,9 @@
 
             <AppState
               v-if="!analysis"
-              type="empty"
-              title="暂无岗位分析结果"
-              description="当前还没有分析结果，可以先触发分析。"
+              :type="analysisEmptyStateType"
+              :title="analysisEmptyStateTitle"
+              :description="analysisEmptyStateDescription"
             >
               <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发分析</el-button>
             </AppState>
@@ -240,6 +240,9 @@ const {
   addEvent: addParseSseEvent
 } = useSseState()
 let parseSseHandle: StreamSseHandle | null = null
+let parsePollTimer: ReturnType<typeof window.setTimeout> | null = null
+let parsePollAttempts = 0
+const MAX_PARSE_POLL_ATTEMPTS = 10
 
 const targetId = computed(() => {
   const raw = route.params.id
@@ -253,7 +256,26 @@ const targetSubtitle = computed(() => {
 })
 const recentParseSseEvents = computed(() => parseSseEvents.value.slice(-3))
 const currentParseStatus = computed(() => String(analysis.value?.parseStatus || target.value?.parseStatus || '').toUpperCase())
+const displayParseStatus = computed(() => {
+  if (hasStructuredAnalysis(analysis.value)) return 'PARSED'
+  return currentParseStatus.value || target.value?.parseStatus || analysis.value?.parseStatus
+})
 const targetHasRecoverableParseStatus = computed(() => ['PARSING', 'FAILED'].includes(currentParseStatus.value))
+const shouldAutoPollParse = computed(() => {
+  if (!target.value || parsing.value) return false
+  if (hasStructuredAnalysis(analysis.value)) return false
+  if (currentParseStatus.value === 'FAILED') return false
+  return currentParseStatus.value === 'PARSING' || Boolean(analysis.value?.asyncMessageId || analysis.value?.asyncTraceId)
+})
+const analysisEmptyStateType = computed(() => shouldAutoPollParse.value ? 'loading' : 'empty')
+const analysisEmptyStateTitle = computed(() =>
+  shouldAutoPollParse.value ? '岗位分析正在生成' : '暂无岗位分析结果'
+)
+const analysisEmptyStateDescription = computed(() =>
+  shouldAutoPollParse.value
+    ? '系统已提交岗位分析任务，页面会自动刷新结果；也可以去任务中心查看进度。'
+    : '当前还没有分析结果，可以先触发分析。'
+)
 const parseTaskDiagnostics = computed(() => {
   const result = analysis.value
   const items: string[] = []
@@ -346,14 +368,43 @@ const hasStructuredAnalysis = (result?: JobDescriptionAnalysisVO | null) => Bool
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
 
-const loadAll = async () => {
+const stopParsePolling = (reset = true) => {
+  if (parsePollTimer) {
+    window.clearTimeout(parsePollTimer)
+    parsePollTimer = null
+  }
+  if (reset) {
+    parsePollAttempts = 0
+  }
+}
+
+const scheduleParsePolling = () => {
+  if (parsePollTimer || parsePollAttempts >= MAX_PARSE_POLL_ATTEMPTS) return
+  parsePollTimer = window.setTimeout(() => {
+    parsePollTimer = null
+    parsePollAttempts += 1
+    void loadAll(true)
+  }, 4000)
+}
+
+const syncParsePollingState = () => {
+  if (shouldAutoPollParse.value) {
+    scheduleParsePolling()
+    return
+  }
+  stopParsePolling()
+}
+
+const loadAll = async (silent = false) => {
   if (!targetId.value) {
     loadError.value = '岗位目标链接不完整，请从岗位目标列表重新进入。'
     return
   }
-  loading.value = true
-  loadError.value = ''
-  partialLoadWarning.value = ''
+  if (!silent) {
+    loading.value = true
+    loadError.value = ''
+    partialLoadWarning.value = ''
+  }
   try {
     const [detailResult, analysisResult] = await Promise.allSettled([
       getJobTargetDetailApi(targetId.value),
@@ -361,9 +412,11 @@ const loadAll = async () => {
     ])
 
     if (!isFulfilled(detailResult)) {
-      target.value = null
-      analysis.value = null
-      loadError.value = getErrorMessage(detailResult.reason, '岗位目标暂时无法加载，请确认登录状态后重试。')
+      if (!silent) {
+        target.value = null
+        analysis.value = null
+        loadError.value = getErrorMessage(detailResult.reason, '岗位目标暂时无法加载，请确认登录状态后重试。')
+      }
       return
     }
 
@@ -375,17 +428,24 @@ const loadAll = async () => {
         analysis.value = null
       }
     } else {
-      partialLoadWarning.value = getErrorMessage(analysisResult.reason, '岗位分析结果暂时无法加载；岗位描述仍可查看，也可以重新分析。')
+      if (!silent) {
+        partialLoadWarning.value = getErrorMessage(analysisResult.reason, '岗位分析结果暂时无法加载；岗位描述仍可查看，也可以重新分析。')
+      }
       if (!hasParseTaskReceipt(analysis.value)) {
         analysis.value = null
       }
     }
   } catch (error) {
-    target.value = null
-    analysis.value = null
-    loadError.value = getErrorMessage(error, '岗位分析暂时无法加载，请确认登录状态后重试。')
+    if (!silent) {
+      target.value = null
+      analysis.value = null
+      loadError.value = getErrorMessage(error, '岗位分析暂时无法加载，请确认登录状态后重试。')
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
+    syncParsePollingState()
   }
 }
 
@@ -500,6 +560,7 @@ const applyParseSseEvent = (event: JobTargetParseSseEventType, data?: JobTargetP
 }
 
 const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
+  stopParsePolling()
   stopParseSse()
   resetParseSse()
   setParseSseConnecting()
@@ -536,6 +597,7 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
 }
 
 const submitParseTask = async (id: number, payload: JobDescriptionParseDTO) => {
+  stopParsePolling()
   stopParseSse()
   resetParseSse()
   setParseSseConnecting()
@@ -606,12 +668,16 @@ const goResumeMatch = () => {
 watch(
   () => route.params.id,
   () => {
+    stopParsePolling()
     loadAll()
   }
 )
 
 onMounted(loadAll)
-onBeforeUnmount(stopParseSse)
+onBeforeUnmount(() => {
+  stopParseSse()
+  stopParsePolling()
+})
 </script>
 
 <style scoped lang="scss">

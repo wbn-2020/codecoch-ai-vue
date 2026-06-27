@@ -212,7 +212,7 @@
               <p>展示运营指标定义，完整编辑入口在指标字典页面。</p>
             </div>
             <div class="panel-actions">
-              <el-button link type="primary" @click="$router.push('/admin/analytics/metrics')">打开</el-button>
+              <el-button v-permission="'admin:analytics:agent'" link type="primary" @click="$router.push('/admin/analytics/metrics')">打开</el-button>
               <div class="table-view-tools">
                 <el-segmented v-model="metricTableSize" :options="metricTableSizeOptions" />
                 <el-dropdown trigger="click" :hide-on-click="false">
@@ -247,7 +247,7 @@
             <template #empty>
               <AppState :type="metricEmptyType" :title="metricEmptyTitle" :description="metricEmptyDescription">
                 <div class="diagnostic-actions">
-                  <el-button type="primary" @click="$router.push('/admin/analytics/metrics')">打开指标字典</el-button>
+                  <el-button v-permission="'admin:analytics:agent'" type="primary" @click="$router.push('/admin/analytics/metrics')">打开指标字典</el-button>
                   <el-button @click="loadPage">重新加载</el-button>
                 </div>
               </AppState>
@@ -262,7 +262,7 @@
               <p>最近聚合任务，支持重跑单条日志。</p>
             </div>
             <div class="panel-actions">
-              <el-button link type="primary" @click="$router.push('/admin/analytics/jobs')">打开</el-button>
+              <el-button v-permission="'admin:analytics:agent'" link type="primary" @click="$router.push('/admin/analytics/jobs')">打开</el-button>
               <div class="table-view-tools">
                 <el-segmented v-model="jobTableSize" :options="jobTableSizeOptions" />
                 <el-dropdown trigger="click" :hide-on-click="false">
@@ -319,7 +319,7 @@
                   >
                     运行每日计划
                   </el-button>
-                  <el-button @click="$router.push('/admin/analytics/jobs')">打开聚合任务</el-button>
+                  <el-button v-permission="'admin:analytics:agent'" @click="$router.push('/admin/analytics/jobs')">打开聚合任务</el-button>
                 </div>
               </AppState>
             </template>
@@ -499,6 +499,8 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import { useAuthStore } from '@/stores/auth'
 
 type MetricColumnKey = 'metricCode' | 'metricName' | 'category' | 'enabled'
 type JobColumnKey = 'jobCode' | 'jobName' | 'status' | 'statDate' | 'operation'
@@ -556,6 +558,7 @@ const errorMessage = ref('')
 const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)
 const route = useRoute()
+const authStore = useAuthStore()
 const overview = ref<AdminAiOverviewVO>()
 const feedback = ref<AgentFeedbackStatsVO>()
 const aiResultFeedback = ref<AiResultFeedbackStatsVO>()
@@ -624,6 +627,8 @@ const clearSourceFailed = (label: string) => {
   partialErrors.value = partialErrors.value.filter((item) => item !== label)
 }
 
+const canViewAgentAnalytics = computed(() => authStore.hasPermission('admin:analytics:agent'))
+const canViewAiFeedbackStats = computed(() => authStore.hasPermission('admin:ai:feedback:stats'))
 const hasPageError = computed(() => Boolean(errorMessage.value))
 const pageActionDisabled = computed(() => hasPageError.value || isAdminMobileReadonly.value)
 const pageActionDisabledTitle = computed(() =>
@@ -799,6 +804,9 @@ const getErrorMessage = (error: unknown) => {
 const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
   result.status === 'fulfilled' ? result.value : fallback
 
+const optionalLoad = <T,>(allowed: boolean, loader: () => Promise<T>, fallback: T): Promise<T> =>
+  allowed ? loader() : Promise.resolve(fallback)
+
 const emptyPage = <T,>(pageNo = 1, pageSize = 6): PageResult<T> => ({
   records: [],
   total: 0,
@@ -935,15 +943,17 @@ const loadPage = async () => {
     totalTokens: 0
   }
   try {
+    const canLoadAgentAnalytics = canViewAgentAnalytics.value
+    const canLoadAiFeedbackStats = canViewAiFeedbackStats.value
     const [overviewResult, failureResult, opsResult, trainingResult, feedbackResult, aiResultFeedbackResult, metricsResult, jobsResult, vectorJobsResult] = await Promise.allSettled([
       getAdminAiOverviewApi(params),
       getAdminAiFailuresApi(params),
-      getAdminAnalyticsOverviewApi(params),
-      getAdminAnalyticsTrainingApi(params),
-      getAdminAgentFeedbackApi(params),
-      getAdminAiResultFeedbackStatsApi(params),
-      getAdminAnalyticsMetricsApi({ pageNo: 1, pageSize: 6 }),
-      getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 }),
+      optionalLoad(canLoadAgentAnalytics, () => getAdminAnalyticsOverviewApi(params), {} as AdminAnalyticsOverviewVO),
+      optionalLoad(canLoadAgentAnalytics, () => getAdminAnalyticsTrainingApi(params), {} as AdminAnalyticsTrainingVO),
+      optionalLoad<AgentFeedbackStatsVO | undefined>(canLoadAgentAnalytics, () => getAdminAgentFeedbackApi(params), undefined),
+      optionalLoad<AiResultFeedbackStatsVO | undefined>(canLoadAiFeedbackStats, () => getAdminAiResultFeedbackStatsApi(params), undefined),
+      optionalLoad(canLoadAgentAnalytics, () => getAdminAnalyticsMetricsApi({ pageNo: 1, pageSize: 6 }), emptyPage<AdminAnalyticsMetricDefinitionVO>()),
+      optionalLoad(canLoadAgentAnalytics, () => getAdminAnalyticsJobsApi({ pageNo: 1, pageSize: 6 }), emptyPage<AdminAnalyticsJobLogVO>()),
       getAdminVectorIndexJobsApi(vectorJobQueryParams())
     ])
     const sourceResults = [
@@ -1033,7 +1043,11 @@ const runDailyPlan = async () => {
       userIds,
       targetJobId: manualForm.value.targetJobId,
       taskCount: manualForm.value.taskCount,
-      maxTotalMinutes: manualForm.value.maxTotalMinutes
+      maxTotalMinutes: manualForm.value.maxTotalMinutes,
+      confirm: true,
+      dryRun: false,
+      reason: `手动运行每日计划聚合；statDate=${manualForm.value.statDate || 'default'}；users=${userIds.length || 'auto'}`,
+      idempotencyKey: createOperationIdempotencyKey('ai-ops-daily-plan')
     })
     ElMessage.success('每日计划聚合任务已提交')
     manualDialogVisible.value = false
@@ -1059,7 +1073,12 @@ const rerunJob = async (row: AdminAnalyticsJobLogVO) => {
   if (!confirmed) return
   rerunningId.value = id
   try {
-    await rerunAdminAnalyticsJobApi(id)
+    await rerunAdminAnalyticsJobApi(id, {
+      confirm: true,
+      dryRun: false,
+      reason: `重跑聚合任务；jobId=${id}；jobCode=${row.jobCode || 'UNKNOWN'}`,
+      idempotencyKey: createOperationIdempotencyKey(`ai-ops-rerun-${id}`)
+    })
     ElMessage.success('重跑请求已提交')
     await loadPage()
   } finally {

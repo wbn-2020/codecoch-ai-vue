@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker"><FileChartColumn :size="16" /> 匹配报告</div>
         <h1>{{ report?.jobTitle || '匹配报告详情' }}</h1>
-        <p>{{ report ? `${report.resumeTitle || '已绑定简历'} · ${report.companyName || '--'}` : '读取匹配报告、失败原因与短板建议。' }}</p>
+        <p>{{ report ? reportSubtitle : '读取匹配报告、失败原因与短板建议。' }}</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/resume-match')"><ArrowLeft :size="16" /> 返回匹配</el-button>
@@ -44,6 +44,15 @@
             <dd>{{ item.value }}</dd>
           </div>
         </dl>
+        <div class="repair-actions">
+          <article v-for="item in failureRepairActions" :key="item.key">
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.desc }}</p>
+            <el-button size="small" :type="item.primary ? 'primary' : ''" :plain="!item.primary" :loading="item.key === 'regenerate' && regenerating" @click="runFailureRepairAction(item.key)">
+              {{ item.action }}
+            </el-button>
+          </article>
+        </div>
       </section>
       <section v-else-if="isTrackingReport" class="content-panel report-tracker">
         <div>
@@ -71,7 +80,7 @@
       <section v-if="isSuccessReport" class="content-panel trust-panel">
         <div>
           <h2>AI 推荐来源</h2>
-          <p>这份匹配报告基于当前简历、目标岗位描述和岗位分析结果生成；如果来源或明细不完整，后续建议会先标记为待复核。</p>
+          <p>{{ trustPanelDescription }}</p>
         </div>
         <div class="trust-tags">
           <el-tag v-for="tag in reportTrustTags" :key="tag.label" :type="tag.type" effect="plain">{{ tag.label }}</el-tag>
@@ -130,6 +139,24 @@
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
             查看能力画像
           </el-button>
+          <el-button :disabled="!canAccessResumeVersionPreview || !report.resumeId" @click="goReportResumeVersions">
+            查看简历版本
+          </el-button>
+          <el-button
+            :disabled="!isSuccessReport || !canAccessResumeVersionPreview || !report.resumeId"
+            :loading="versionSaving"
+            @click="saveReportAsResumeVersion"
+          >
+            <FileText :size="16" />
+            保存报告建议为版本
+          </el-button>
+          <el-button
+            :disabled="!isSuccessReport || !canAccessApplicationPreview || !report.targetJobId"
+            :loading="applicationCreating"
+            @click="createApplicationFromReport"
+          >
+            记录为投递进度
+          </el-button>
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
             <RouteIcon :size="16" /> 差距学习计划
           </el-button>
@@ -172,27 +199,36 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FileChartColumn, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
+import { ArrowLeft, FileChartColumn, FileText, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getResumeJobMatchReportDetailApi, regenerateResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi } from '@/api/skillProfile'
+import { createApplicationApi, createResumeVersionApi, getApplicationsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
+import { appConfig } from '@/config'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
+import { redactSensitiveText } from '@/utils/sensitiveText'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const profileGenerating = ref(false)
 const regenerating = ref(false)
+const versionSaving = ref(false)
+const applicationCreating = ref(false)
 const loadError = ref('')
 const report = ref<ResumeJobMatchReportDetailVO | null>(null)
 let reportPollTimer: ReturnType<typeof setTimeout> | undefined
+let reportPollRetryCount = 0
+let reportPollFailureNoticeShown = false
 const RESUME_JOB_MATCH_TASK_BIZ_TYPE = 'resume-job-match.analyze'
+const REPORT_POLL_INTERVAL_MS = 2500
+const REPORT_POLL_MAX_RETRY_DELAY_MS = 10000
 
 const reportId = computed(() => Number(route.params.id) || 0)
 const isTrackingReport = computed(() => {
@@ -206,11 +242,32 @@ const isTrustedSuccessReport = computed(() =>
   && String(report.value?.trustStatus || '').toUpperCase() === 'VERIFIED'
   && !schemaWarningItems.value.length
 )
+const canAccessResumeVersionPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
+const canAccessApplicationPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
 const actionPanelHint = computed(() => {
   if (!isSuccessReport.value) return '报告成功后才会开放能力画像、学习计划和岗位面试。'
   if (!isTrustedSuccessReport.value) return '当前报告只适合查看和确认；建议重新生成可直接使用的报告后再继续训练。'
   return '基于该报告继续生成能力画像或差距学习计划。'
 })
+const reportResumeVersionLabel = computed(() => {
+  const current = report.value
+  if (!current?.resumeVersionId) return ''
+  return current.resumeVersionName
+    || (current.resumeVersionNo ? `V${current.resumeVersionNo}` : `版本 ${current.resumeVersionId}`)
+})
+const reportSubtitle = computed(() => {
+  if (!report.value) return ''
+  return [
+    report.value.resumeTitle || '已绑定简历',
+    reportResumeVersionLabel.value,
+    report.value.companyName || '--'
+  ].filter(Boolean).join(' · ')
+})
+const trustPanelDescription = computed(() =>
+  report.value?.resumeVersionId
+    ? '这份匹配报告已绑定简历版本快照、目标岗位描述和岗位分析结果；如果来源或明细不完整，后续建议会先标记为待复核。'
+    : '这份匹配报告基于当前简历、目标岗位描述和岗位分析结果生成；如果来源或明细不完整，后续建议会先标记为待复核。'
+)
 const diagnosticItems = computed(() => {
   if (!report.value) return []
   return [
@@ -223,9 +280,49 @@ const diagnosticItems = computed(() => {
     { label: '来源说明', value: report.value.evidenceSummary || '--' },
     { label: '报告处理', value: report.value.aiCallLogId ? '已保存' : '--' },
     { label: '关联简历', value: report.value.resumeId ? '已绑定' : '--' },
+    { label: '简历版本', value: reportResumeVersionLabel.value || '--' },
     { label: '目标岗位', value: report.value.targetJobId ? '已绑定' : '--' },
     { label: '更新时间', value: report.value.updatedAt ? formatDateTime(report.value.updatedAt) : '--' }
   ]
+})
+const failureRepairActions = computed(() => {
+  if (!report.value) return []
+  const hasResume = Boolean(report.value.resumeId)
+  const hasTarget = Boolean(report.value.targetJobId)
+  return [
+    {
+      key: 'project',
+      title: '补项目证据',
+      desc: hasResume
+        ? '补齐项目背景、个人职责、技术难点和量化结果，再重新生成匹配报告。'
+        : '当前报告没有绑定简历，请先回到简历中心确认使用的简历。',
+      action: hasResume ? '去补项目经历' : '查看简历中心',
+      primary: false
+    },
+    {
+      key: 'job-analysis',
+      title: '复核岗位分析',
+      desc: hasTarget
+        ? '确认岗位描述已结构化分析，避免岗位字段缺失导致匹配被拦截。'
+        : '当前报告没有绑定目标岗位，请先维护岗位目标。',
+      action: hasTarget ? '查看岗位分析' : '查看岗位目标',
+      primary: false
+    },
+    {
+      key: 'regenerate',
+      title: '重新生成报告',
+      desc: '资料补齐后再生成一次，系统会继续保留处理记录和失败原因。',
+      action: '重新生成',
+      primary: true
+    },
+    {
+      key: 'task',
+      title: '查看处理进度',
+      desc: '如果刚刚重新提交，可到任务中心查看排队、失败原因和关联记录。',
+      action: '任务中心',
+      primary: false
+    }
+  ] as Array<{ key: string; title: string; desc: string; action: string; primary: boolean }>
 })
 const scoreCards = computed(() => [
   { label: '综合匹配', value: report.value?.overallScore },
@@ -246,6 +343,12 @@ const reportTrustTags = computed(() => {
       label: report.value.resumeId ? '来自已绑定简历' : '尚未绑定简历',
       type: report.value.resumeId ? 'success' : 'warning'
     },
+    ...(report.value.resumeVersionId
+      ? [{
+          label: `基于${reportResumeVersionLabel.value || '简历版本'}`,
+          type: 'success'
+        }]
+      : []),
     {
       label: report.value.targetJobId ? '来自已绑定目标岗位' : '尚未绑定目标岗位',
       type: report.value.targetJobId ? 'success' : 'warning'
@@ -297,7 +400,7 @@ const diagnosticCopyText = computed(() => {
     `报告状态：${statusLabel(report.value.status)}`,
     `处理线索：${clue || '--'}`,
     `任务入口：/agent/tasks?${new URLSearchParams(taskQuery).toString()}`,
-    `失败原因：${toFriendlyMessage(report.value.errorMessage, '本次生成没有形成可直接使用的匹配报告，请重新生成。')}`,
+    `失败原因：${redactSensitiveText(toFriendlyMessage(report.value.errorMessage, '本次生成没有形成可直接使用的匹配报告，请重新生成。'), 160)}`,
     `来源状态：${trustStatusLabel(report.value.trustStatus, report.value.fallback)}`
   ].join('\n')
 })
@@ -461,6 +564,8 @@ const loadReport = async (silent = false) => {
   }
   try {
     report.value = await getResumeJobMatchReportDetailApi(reportId.value)
+    reportPollRetryCount = 0
+    reportPollFailureNoticeShown = false
     loadError.value = ''
     if (isTrackingReport.value) {
       scheduleReportPoll()
@@ -471,6 +576,13 @@ const loadReport = async (silent = false) => {
     if (!silent) {
       report.value = null
       loadError.value = getErrorMessage(error, '读取匹配报告详情失败。')
+    } else if (isTrackingReport.value) {
+      reportPollRetryCount += 1
+      if (!reportPollFailureNoticeShown) {
+        reportPollFailureNoticeShown = true
+        ElMessage.warning('报告生成进度暂时中断，正在继续重试。')
+      }
+      scheduleReportPoll(nextReportPollDelay())
     }
   } finally {
     if (!silent) {
@@ -486,11 +598,14 @@ const stopReportPoll = () => {
   }
 }
 
-const scheduleReportPoll = () => {
+const nextReportPollDelay = () =>
+  Math.min(REPORT_POLL_MAX_RETRY_DELAY_MS, REPORT_POLL_INTERVAL_MS * Math.max(1, reportPollRetryCount))
+
+const scheduleReportPoll = (delay = REPORT_POLL_INTERVAL_MS) => {
   stopReportPoll()
   reportPollTimer = setTimeout(() => {
     void loadReport(true)
-  }, 2500)
+  }, delay)
 }
 
 const generateProfile = async () => {
@@ -551,6 +666,92 @@ const goMatchTaskCenter = () => {
   })
 }
 
+const goReportResumeVersions = () => {
+  if (!report.value?.resumeId) return
+  router.push(`/resumes/${report.value.resumeId}/versions`)
+}
+
+const saveReportAsResumeVersion = async () => {
+  if (!report.value?.resumeId || !report.value?.reportId) return
+  if (!isSuccessReport.value) {
+    ElMessage.warning('报告成功后才能沉淀为简历版本。')
+    return
+  }
+  versionSaving.value = true
+  try {
+    const versionName = `匹配报告 ${report.value.reportId} 建议快照`
+    await createResumeVersionApi(report.value.resumeId, {
+      versionName,
+      sourceType: 'RESUME_JOB_MATCH',
+      sourceId: report.value.reportId
+    })
+    ElMessage.success('已保存为简历版本，可继续对比、复制或应用。')
+    await router.push(`/resumes/${report.value.resumeId}/versions`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '保存简历版本失败，请稍后重试。'))
+  } finally {
+    versionSaving.value = false
+  }
+}
+
+const existingApplicationForReport = async (matchReportId: number) => {
+  try {
+    const applications = await getApplicationsApi()
+    return applications.find((item) => item.matchReportId === matchReportId)
+  } catch {
+    return undefined
+  }
+}
+
+const createApplicationFromReport = async () => {
+  if (!report.value?.reportId || !report.value?.targetJobId) return
+  applicationCreating.value = true
+  try {
+    const existingApplication = await existingApplicationForReport(report.value.reportId)
+    if (existingApplication) {
+      ElMessage.success('该匹配报告已有投递进度，已为你打开进度列表。')
+      await router.push('/applications')
+      return
+    }
+    const application = await createApplicationApi({
+      targetJobId: report.value.targetJobId,
+      resumeVersionId: report.value.resumeVersionId,
+      matchReportId: report.value.reportId,
+      companyName: report.value.companyName,
+      jobTitle: report.value.jobTitle || 'Untitled Job',
+      source: 'RESUME_JOB_MATCH',
+      status: 'SAVED',
+      note: `来自匹配报告 ${report.value.reportId}`
+    })
+    ElMessage.success(application?.id ? '已记录到投递进度' : '已打开投递进度')
+    await router.push('/applications')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '记录投递进度失败。'))
+  } finally {
+    applicationCreating.value = false
+  }
+}
+
+const runFailureRepairAction = (key: string) => {
+  if (!report.value) return
+  if (key === 'project') {
+    router.push(report.value.resumeId
+      ? { path: '/projects', query: { resumeId: report.value.resumeId } }
+      : { path: '/resumes' }
+    )
+    return
+  }
+  if (key === 'job-analysis') {
+    router.push(report.value.targetJobId ? `/job-targets/${report.value.targetJobId}/analysis` : '/job-targets')
+    return
+  }
+  if (key === 'regenerate') {
+    void regenerateReport()
+    return
+  }
+  goMatchTaskCenter()
+}
+
 onMounted(loadReport)
 onBeforeUnmount(stopReportPoll)
 </script>
@@ -577,6 +778,10 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .diagnostic-list div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
 .diagnostic-list dt { color: var(--app-text-muted); font-size: 12px; }
 .diagnostic-list dd { margin: 6px 0 0; color: var(--app-text); overflow-wrap: anywhere; }
+.repair-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.repair-actions strong { font-size: 14px; }
+.repair-actions p { margin: 0; font-size: 12px; line-height: 1.6; }
 .score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 14px; }
 .score-card { padding: 16px; }
 .score-card span { color: var(--app-text-muted); font-size: 13px; }
@@ -602,6 +807,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .detail-grid,
   .score-grid,
   .diagnostic-list,
+  .repair-actions,
   .schema-warning-list li {
     grid-template-columns: 1fr;
     flex-direction: column;

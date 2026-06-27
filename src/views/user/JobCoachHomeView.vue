@@ -23,7 +23,7 @@
         </div>
       </div>
 
-      <aside class="hero-side" v-loading="overviewLoading || dailyPlanLoading">
+      <aside class="hero-side" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading">
         <div class="side-header">
           <span>计划可信度</span>
           <strong>{{ confidenceLabel }}</strong>
@@ -53,11 +53,54 @@
     </section>
 
     <section v-if="pageErrors.length" class="error-stack">
-      <article v-for="error in pageErrors" :key="error.key" class="state-strip state-strip--warning">
+      <article class="state-strip state-strip--warning state-strip--summary">
         <AlertTriangle :size="18" />
-        <span>{{ error.message }}</span>
-        <el-button text @click="error.retry">重试</el-button>
+        <div>
+          <strong>部分模块暂时加载失败，已保留可执行入口。</strong>
+          <span>{{ pageErrorSummary }}</span>
+          <small v-if="visiblePageErrorDetails.length">{{ visiblePageErrorDetails.join('；') }}</small>
+        </div>
+        <el-button text @click="retryPageErrors">重试全部</el-button>
       </article>
+    </section>
+
+    <section class="first-day-section" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading || agentTasksLoading">
+      <div class="section-head first-day-section__head">
+        <div>
+          <p class="section-kicker">3 分钟起步</p>
+          <h2>今天先完成这 4 个动作</h2>
+        </div>
+        <span class="first-day-progress">{{ firstDayReadyCount }}/{{ firstDayActions.length }} 已就绪</span>
+      </div>
+
+      <div class="first-day-actions">
+        <article
+          v-for="action in firstDayActions"
+          :key="action.key"
+          class="first-day-action"
+          :class="{ 'is-ready': action.ready, 'is-primary': action.primary }"
+        >
+          <div class="first-day-action__top">
+            <span class="first-day-action__icon">
+              <component :is="action.icon" :size="18" />
+            </span>
+            <span class="pill" :class="action.statusTone">{{ action.status }}</span>
+          </div>
+          <div>
+            <h3>{{ action.title }}</h3>
+            <p>{{ action.desc }}</p>
+          </div>
+          <el-button
+            :type="action.primary ? 'primary' : 'default'"
+            :plain="!action.primary"
+            :loading="action.loading"
+            @click="runFirstDayAction(action)"
+          >
+            <component :is="action.icon" :size="15" />
+            {{ action.cta }}
+          </el-button>
+        </article>
+      </div>
     </section>
 
     <section class="mobile-action-dock" aria-label="手机快速训练入口">
@@ -297,6 +340,7 @@
         <ul>
           <li v-for="item in completionReviewItems" :key="item">{{ item }}</li>
         </ul>
+        <p class="review-hint">下一步建议：优先点击「{{ completionReviewNextAction.label }}」继续。</p>
         <p v-if="completionReviewNote" class="review-note">备注：{{ completionReviewNote }}</p>
       </div>
       <template #footer>
@@ -340,16 +384,24 @@ import {
   fetchCachedDashboardOverview,
   fetchCachedLatestDailyPlan,
   fetchCachedTodayAgentTasks,
+  fetchCachedV3DashboardOverview,
   fetchCachedWrongQuestions,
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
-import type { UserDashboardOverviewVO } from '@/types/dashboard'
+import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
+import {
+  buildAgentTaskActionPath,
+  hasAgentTaskActionEntry,
+  isAgentJobApplicationTask
+} from '@/utils/agentTaskAction'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import request from '@/utils/request'
 
 interface HomeTask {
   key: string
@@ -367,12 +419,30 @@ interface HomeTask {
   tone: string
 }
 
+interface FirstDayAction {
+  key: string
+  title: string
+  desc: string
+  path: string
+  cta: string
+  status: string
+  statusTone: string
+  ready: boolean
+  primary: boolean
+  loading?: boolean
+  actionType?: 'generate-plan'
+  icon: Component
+}
+
 const router = useRouter()
 const authStore = useAuthStore()
 
 const overview = ref<UserDashboardOverviewVO | null>(null)
+const v3Overview = ref<V3DashboardOverviewVO | null>(null)
 const overviewLoading = ref(false)
+const v3OverviewLoading = ref(false)
 const overviewError = ref('')
+const v3OverviewError = ref('')
 
 const dailyPlan = ref<DailyPlanVO | null>(null)
 const dailyPlanLoading = ref(false)
@@ -393,6 +463,76 @@ const wrongQuestionsLoading = ref(false)
 const wrongQuestionsError = ref('')
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || '同学')
+const hasResumeSignal = computed(() => Boolean(overview.value?.resumeCount))
+const currentTargetJob = computed(() => v3Overview.value?.currentTargetJob || null)
+const currentTargetJobId = computed(() => {
+  const id = Number(currentTargetJob.value?.targetJobId || currentTargetJob.value?.id)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+})
+const hasTargetJobSignal = computed(() => Boolean(currentTargetJobId.value))
+const hasTodayPlanSignal = computed(() => Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length))
+const hasPracticeFeedbackSignal = computed(() => Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview))
+const firstDayActions = computed<FirstDayAction[]>(() => [
+  {
+    key: 'resume',
+    title: hasResumeSignal.value ? '简历证据已接入' : '补一份可匹配简历',
+    desc: hasResumeSignal.value
+      ? `已有 ${overview.value?.resumeCount || 0} 份简历，后续匹配和追问会围绕项目证据展开。`
+      : '没有简历时只能给通用建议，先上传或新建一份能被岗位匹配的简历。',
+    path: '/resumes',
+    cta: hasResumeSignal.value ? '查看简历' : '补充简历',
+    status: hasResumeSignal.value ? '已接入' : '待补充',
+    statusTone: hasResumeSignal.value ? 'pill--success' : 'pill--warning',
+    ready: hasResumeSignal.value,
+    primary: !hasResumeSignal.value,
+    icon: FileText
+  },
+  {
+    key: 'target-job',
+    title: hasTargetJobSignal.value ? '岗位方向已明确' : '选择目标岗位/JD',
+    desc: hasTargetJobSignal.value
+      ? targetJobText.value
+      : '设定岗位方向后，题目、面试和简历匹配会按同一个目标收束。',
+    path: hasTargetJobSignal.value ? '/job-targets' : '/job-targets/create',
+    cta: hasTargetJobSignal.value ? '查看岗位' : '设定岗位',
+    status: hasTargetJobSignal.value ? '已明确' : '待选择',
+    statusTone: hasTargetJobSignal.value ? 'pill--success' : 'pill--warning',
+    ready: hasTargetJobSignal.value,
+    primary: hasResumeSignal.value && !hasTargetJobSignal.value,
+    icon: Briefcase
+  },
+  {
+    key: 'today-plan',
+    title: hasTodayPlanSignal.value ? '今日任务已生成' : '生成今天的任务',
+    desc: hasTodayPlanSignal.value
+      ? `已有 ${agentTasks.value.length || dailyPlan.value?.tasks?.length || 0} 个动作可推进，先完成最上面的优先任务。`
+      : '用现有简历、岗位和训练反馈生成今天要做的 1-3 个动作。',
+    path: hasTodayPlanSignal.value ? '/agent/tasks' : '/agent/today',
+    cta: hasTodayPlanSignal.value ? '打开任务' : '生成计划',
+    status: hasTodayPlanSignal.value ? '有任务' : '待生成',
+    statusTone: hasTodayPlanSignal.value ? 'pill--success' : 'pill--warning',
+    ready: hasTodayPlanSignal.value,
+    primary: hasResumeSignal.value && hasTargetJobSignal.value && !hasTodayPlanSignal.value,
+    loading: dailyPlanGenerating.value || dailyPlanLoading.value,
+    actionType: hasTodayPlanSignal.value ? undefined : 'generate-plan',
+    icon: Sparkles
+  },
+  {
+    key: 'starter-training',
+    title: wrongQuestions.value.length ? '从错题反馈开始' : '先做一组 Java 训练',
+    desc: wrongQuestions.value.length
+      ? `${wrongQuestions.value.length} 道错题可用于校准今天的短板。`
+      : '资料还不完整时，也可以先刷一组通用 Java 题，马上产生训练反馈。',
+    path: wrongQuestions.value.length ? '/questions/wrong-records' : '/questions/practice',
+    cta: wrongQuestions.value.length ? '复盘错题' : '开始训练',
+    status: hasPracticeFeedbackSignal.value ? '有反馈' : '可开始',
+    statusTone: hasPracticeFeedbackSignal.value ? 'pill--success' : 'pill--neutral',
+    ready: hasPracticeFeedbackSignal.value,
+    primary: !hasTodayPlanSignal.value && !hasResumeSignal.value,
+    icon: BookOpenCheck
+  }
+])
+const firstDayReadyCount = computed(() => firstDayActions.value.filter((action) => action.ready).length)
 const activeTasks = computed(() => agentTasks.value.filter((task) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())))
 const taskCards = computed<HomeTask[]>(() => {
   const tasks = agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
@@ -474,47 +614,53 @@ const completionReviewItems = computed(() => {
   const skill = task?.relatedSkillName || task?.targetJobTitle || '当前方向'
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) {
     return [
-      `掌握度：已完成一轮「${skill}」训练，先把能稳定讲清楚的点记为可复用表达。`,
-      '暴露短板：如果回答仍停在概念层，优先补项目场景、指标、取舍和追问边界。',
-      '下一步建议：进入专项练习或错题本，再刷一组同方向题，巩固今天暴露的问题。'
+      `回到「${skill}」专项练习，再完成 1 组同方向题目，巩固刚完成的内容。`,
+      '把刚才仍不稳定的知识点补进错题或笔记，避免下一轮回答再次卡住。',
+      '如果还缺项目语境，先补场景、指标和取舍，再继续下一题。'
     ]
   }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) {
     return [
-      `掌握度：已完成一次「${skill}」复盘，先确认哪些回答能支撑目标岗位要求。`,
-    '暴露短板：重点查看低分项、追问失败点和缺少细节支撑的项目描述。',
-      '下一步建议：把 1 个薄弱点回填到题库训练或下一次模拟面试，优先练项目背景、指标和取舍。'
+      `先查看这次「${skill}」里最低分的 1 个点，确认下一轮优先修哪一项。`,
+      '把缺少细节支撑的项目经历补成可直接回答的表达，再继续后续训练。',
+      '继续做一轮相关题目或下一次模拟面试，验证刚才的调整是否生效。'
     ]
   }
   if (type.includes('RESUME')) {
     return [
-      `掌握度：已完成一次「${skill}」简历证据整理，先确认新增内容能被面试官追问。`,
-    '暴露短板：如果仍缺少数字、业务场景或个人职责，匹配结论的参考价值会下降。',
-    '下一步建议：用目标岗位关键词再跑一次匹配，把仍缺少细节的技能放回今日训练。'
+      `先检查这次补充的「${skill}」证据，确认它能直接支撑目标岗位要求。`,
+      '把仍缺数字、业务场景或职责边界的内容补完整，再进入下一步。',
+      '回到简历匹配再跑一轮，确认今天这项修改是否真正提升匹配度。'
     ]
   }
   return [
-    '掌握度：本次任务已经完成，先确认是否产出了可复用结论。',
-    '暴露短板：把仍不确定、无法举例或无法落到项目里的点写进反馈。',
-    '下一步建议：继续推进下一项待办，保持今天的训练闭环。'
+    '先确认这次任务已经沉淀出可复用的结论、素材或表达。',
+    '把仍不确定、无法举例或暂时落不到项目里的点补进反馈里。',
+    '继续处理下一项今日任务，保持今天的训练闭环。'
   ]
 })
 
 const completionReviewNextAction = computed(() => {
   const task = completionReviewTask.value
+  if (!task) return { label: '继续任务中心', path: '/agent/tasks' }
   const type = String(task?.taskType || '').toUpperCase()
-  if (task?.actionUrl) return { label: '打开任务入口', path: normalizeTaskPath(task.actionUrl) }
+  if (hasAgentTaskActionEntry(task)) {
+    return {
+      label: isAgentJobApplicationTask(task) ? '查看投递进度' : '继续当前任务',
+      path: buildAgentTaskActionPath(task, '/agent/today')
+    }
+  }
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) return { label: '继续专项练习', path: '/questions/practice' }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return { label: '查看面试历史', path: '/interviews/history' }
   if (type.includes('RESUME')) return { label: '查看简历匹配', path: '/resume-match' }
   return { label: '继续任务中心', path: '/agent/tasks' }
 })
 
-const targetJobText = computed(() =>
-  dailyPlan.value?.targetJobTitle
-    || overview.value?.recentInterview?.title
-    || '待选择目标岗位'
-)
+const targetJobText = computed(() => {
+  const job = currentTargetJob.value
+  if (!job) return '待选择目标岗位'
+  return [job.companyName, job.jobTitle, job.jobLevel].filter(Boolean).join(' · ') || '已选择目标岗位'
+})
 
 const topWeaknessText = computed(() => {
   const reportWeak = overview.value?.recentReport?.weakPoints?.[0]
@@ -539,34 +685,45 @@ const planStatusText = computed(() => {
   return '待生成'
 })
 
+const hasTrustedReport = computed(() => {
+  const report = overview.value?.recentReport
+  if (!report) return false
+  const status = String(report.status || '').toUpperCase()
+  const trustStatus = String(report.trustStatus || '').toUpperCase()
+  if (report.fallback || ['FAILED', 'FAIL', 'ERROR', 'UNSCORABLE'].includes(status)) return false
+  if (['FALLBACK', 'UNVERIFIED', 'REVIEW_REQUIRED'].includes(trustStatus)) return false
+  return !status || ['SUCCESS', 'GENERATED', 'COMPLETED'].includes(status) || trustStatus === 'VERIFIED'
+})
+
+const hasUntrustedRecentReport = computed(() => Boolean(overview.value?.recentReport && !hasTrustedReport.value))
+
 const confidencePercent = computed(() => {
   let score = 20
   if (overview.value?.resumeCount) score += 20
   if (targetJobText.value !== '待选择目标岗位') score += 15
-  if (overview.value?.recentReport) score += 20
+  if (hasTrustedReport.value) score += 20
   if (wrongQuestions.value.length) score += 10
   if (agentTasks.value.length || dailyPlan.value?.tasks?.length) score += 15
-  return Math.min(score, 100)
+  const cappedScore = hasUntrustedRecentReport.value ? Math.min(score, 70) : score
+  return Math.min(cappedScore, 100)
 })
 
 const confidenceLabel = computed(() => {
+  if (hasUntrustedRecentReport.value) return '待复核'
   if (confidencePercent.value >= 80) return '高'
   if (confidencePercent.value >= 55) return '中'
   return '待补资料'
 })
 const confidencePillClass = computed(() => {
+  if (hasUntrustedRecentReport.value) return 'pill--warning'
   if (confidencePercent.value >= 80) return 'pill--success'
   if (confidencePercent.value >= 55) return 'pill--neutral'
   return 'pill--warning'
 })
 
-const hasTrustedReport = computed(() => {
-  const status = String(overview.value?.recentReport?.status || '').toUpperCase()
-  return Boolean(overview.value?.recentReport && (!status || ['SUCCESS', 'GENERATED', 'COMPLETED'].includes(status)))
-})
-
 const recommendationBoundaryText = computed(() => {
   if (!overview.value?.resumeCount) return '当前是通用建议：补充简历后，匹配和训练建议会更贴近你的项目经历。'
+  if (hasUntrustedRecentReport.value) return '最近报告失败、降级或待复核，当前计划不会把它作为高可信依据。建议先重新生成报告或继续用简历、岗位和错题训练。'
   if (!hasTrustedReport.value) return '当前推荐先结合已有简历、岗位和错题记录；报告完成后会继续补充训练重点。'
   return '当前推荐已接入简历、训练反馈和报告内容；仍建议在开始训练前确认岗位方向是否最新。'
 })
@@ -592,7 +749,7 @@ const recommendationSources = computed(() => [
     desc: hasTrustedReport.value
       ? reportInsightText.value
       : overview.value?.recentReport
-        ? `报告状态：${formatStatus(overview.value.recentReport.status)}，完成后会补充到训练建议里。`
+        ? `报告状态：${formatStatus(overview.value.recentReport.status)}，失败或待复核报告不会作为高可信依据。`
         : '完成一次模拟面试后，薄弱点会回流到计划。',
     icon: BarChart3,
     missing: !hasTrustedReport.value
@@ -679,13 +836,17 @@ const reportInsightText = computed(() => {
 
 const emptyTaskText = computed(() => {
   if (dailyPlanError.value || agentTasksError.value) return '今日任务暂时加载失败，可以稍后重试，或先去刷题/面试。'
-  if (!overview.value?.resumeCount) return '先补简历或岗位后，今日计划会更可信。'
+  if (!overview.value?.resumeCount) return '先补简历后，今日计划会更可信。'
+  if (!hasTargetJobSignal.value) return '先设定目标岗位后，今日计划会更可信。'
   return '生成计划后，这里会出现今天最该推进的训练动作。'
 })
 
 const pageErrors = computed(() => [
   overviewError.value
     ? { key: 'overview', message: overviewError.value, retry: fetchOverview }
+    : null,
+  v3OverviewError.value
+    ? { key: 'v3-overview', message: v3OverviewError.value, retry: fetchV3Overview }
     : null,
   dailyPlanError.value
     ? { key: 'daily-plan', message: dailyPlanError.value, retry: fetchDailyPlan }
@@ -697,6 +858,14 @@ const pageErrors = computed(() => [
     ? { key: 'wrong-questions', message: wrongQuestionsError.value, retry: fetchWrongQuestions }
     : null
 ].filter((item): item is { key: string; message: string; retry: () => Promise<void> } => Boolean(item)))
+
+const pageErrorSummary = computed(() => {
+  const count = pageErrors.value.length
+  if (count <= 1) return '可以先从今日任务、题库或面试入口继续推进。'
+  return `${count} 个模块返回异常，可以先继续训练；系统不会因为局部失败阻断首页使用。`
+})
+
+const visiblePageErrorDetails = computed(() => pageErrors.value.slice(0, 2).map((item) => item.message))
 
 const tools = [
   { title: '面试历史', path: '/interviews/history', icon: History },
@@ -727,6 +896,30 @@ const go = (path: string) => {
   router.push(path)
 }
 
+const getTaskRunId = (task?: AgentTaskVO | null) => task?.agentRunId ?? task?.runId ?? null
+const getTaskPlanDate = (task?: AgentTaskVO | null) =>
+  task?.activationHandoffs?.find((item) => item?.planDate)?.planDate
+  || task?.dueDate
+  || dailyPlan.value?.planDate
+  || dailyPlan.value?.date
+  || formatLocalDate()
+  || undefined
+
+const trackCompletionReviewCtaClick = (targetPath: string) => {
+  const task = completionReviewTask.value
+  if (!task?.id || !targetPath) return
+  void request.post('/agent/metrics/events', {
+    eventCode: 'feedback_cta_clicked',
+    taskId: task.id,
+    runId: getTaskRunId(task) ?? undefined,
+    planDate: getTaskPlanDate(task),
+    targetPath,
+    sourcePage: 'dashboard_home'
+  }, {
+    silentError: true
+  }).catch(() => undefined)
+}
+
 const shouldForceRefresh = (force: unknown = true) => force !== false
 
 const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes'>): HomeTask => ({
@@ -736,7 +929,7 @@ const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes'>): HomeT
 })
 
 const toHomeTask = (task: AgentTaskVO): HomeTask => {
-  const icon = taskIcon(task.taskType)
+  const icon = taskIcon(task)
   return {
     key: `task-${task.id}`,
     taskId: task.id,
@@ -746,7 +939,7 @@ const toHomeTask = (task: AgentTaskVO): HomeTask => {
     reasons: taskReasons(task),
     benefit: taskBenefit(task),
     cta: '开始训练',
-    path: normalizeTaskPath(task.actionUrl),
+    path: buildAgentTaskActionPath(task, '/agent/today'),
     statusLabel: formatStatus(task.status || 'TODO'),
     minutes: Number(task.estimatedMinutes) || 20,
     icon: icon.icon,
@@ -781,6 +974,7 @@ const taskReasons = (task: AgentTaskVO) => [
 const taskBenefit = (task: AgentTaskVO) => {
   const skill = task.relatedSkillName || task.targetJobTitle || ''
   const type = String(task.taskType || '').toUpperCase()
+  if (isAgentJobApplicationTask(task)) return '把投递状态和下一次跟进沉淀回今日计划'
   if (type.includes('WRONG')) {
     return skill ? `把 ${skill} 的错题转成稳定掌握点` : '减少同类题反复出错'
   }
@@ -802,13 +996,9 @@ const taskBenefit = (task: AgentTaskVO) => {
   return '完成后会回流到下一轮智能教练推荐'
 }
 
-const normalizeTaskPath = (path?: string) => {
-  if (path && path.startsWith('/')) return path
-  return '/agent/today'
-}
-
-const taskIcon = (taskType?: string): { icon: Component; tone: string } => {
-  const type = String(taskType || '').toUpperCase()
+const taskIcon = (task?: AgentTaskVO): { icon: Component; tone: string } => {
+  if (isAgentJobApplicationTask(task)) return { icon: Briefcase, tone: 'tone-green' }
+  const type = String(task?.taskType || '').toUpperCase()
   if (type.includes('QUESTION')) return { icon: BookOpenCheck, tone: 'tone-blue' }
   if (type.includes('INTERVIEW')) return { icon: MessageSquare, tone: 'tone-green' }
   if (type.includes('RESUME')) return { icon: FileText, tone: 'tone-orange' }
@@ -824,6 +1014,7 @@ const displayAgentTaskTitle = (task: AgentTaskVO) => {
     WRONG_QUESTION_REVIEW: `${skill} 错题复盘`,
     INTERVIEW: '目标岗位模拟面试',
     RESUME_OPTIMIZE: `${skill} 简历证据优化`,
+    APPLICATION_FOLLOW_UP: '投递跟进',
     STUDY_TASK: `${skill} 学习任务`,
     REPORT_REVIEW: '面试报告复盘',
     SKILL_REVIEW: `${skill} 核心概念复习`,
@@ -839,6 +1030,7 @@ const displayAgentTaskDescription = (task: AgentTaskVO) => {
     WRONG_QUESTION_REVIEW: '复盘历史错题，确认相关知识点是否已经掌握。',
     INTERVIEW: '围绕目标岗位进行项目深挖和技术追问练习。',
     RESUME_OPTIMIZE: '检查项目经历是否清楚证明目标技能和业务影响。',
+    APPLICATION_FOLLOW_UP: '查看投递进度并补充沟通记录。',
     STUDY_TASK: '推进学习计划中的阶段任务。',
     REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
@@ -887,11 +1079,24 @@ const fetchOverview = async (force: unknown = true, preserveCurrent = false) => 
   }
 }
 
+const fetchV3Overview = async (force: unknown = true, preserveCurrent = false) => {
+  v3OverviewLoading.value = true
+  v3OverviewError.value = ''
+  try {
+    v3Overview.value = await fetchCachedV3DashboardOverview(shouldForceRefresh(force))
+  } catch (error) {
+    if (!preserveCurrent) v3Overview.value = null
+    v3OverviewError.value = getErrorMessage(error, '目标岗位状态暂时加载失败，可以先补简历或稍后重试。')
+  } finally {
+    v3OverviewLoading.value = false
+  }
+}
+
 const fetchDailyPlan = async (force: unknown = true, preserveCurrent = false) => {
   dailyPlanLoading.value = true
   dailyPlanError.value = ''
   try {
-    dailyPlan.value = await fetchCachedLatestDailyPlan(formatLocalDate(), shouldForceRefresh(force))
+    dailyPlan.value = await fetchCachedLatestDailyPlan(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value)
   } catch (error) {
     if (!preserveCurrent) dailyPlan.value = null
     dailyPlanError.value = getErrorMessage(error, '今日计划暂时不可用，可以手动生成或稍后重试。')
@@ -904,7 +1109,7 @@ const fetchAgentTasks = async (force: unknown = true, preserveCurrent = false) =
   agentTasksLoading.value = true
   agentTasksError.value = ''
   try {
-    const result = await fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force))
+    const result = await fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value)
     agentTasks.value = result.tasks || []
   } catch (error) {
     if (!preserveCurrent) agentTasks.value = []
@@ -951,9 +1156,15 @@ const deferSecondaryHomeData = (callback: () => void | Promise<void>, timeout = 
 const refreshTrainingSnapshotAfterMutation = async () => {
   await Promise.allSettled([
     fetchOverview(true, true),
+    fetchV3Overview(true, true),
     fetchDailyPlan(true, true),
     fetchAgentTasks(true, true)
   ])
+}
+
+const retryPageErrors = async () => {
+  const retries = pageErrors.value.map((item) => item.retry())
+  await Promise.allSettled(retries)
 }
 
 const mergeAgentTask = (updatedTask: AgentTaskVO) => {
@@ -971,20 +1182,33 @@ const generatePlan = async () => {
   dailyPlanGenerating.value = true
   dailyPlanError.value = ''
   try {
+    const planDate = formatLocalDate()
+    const idempotencyKey = createOperationIdempotencyKey(`jobcoach-home-daily-plan-${planDate}-${currentTargetJobId.value || 'default'}`)
     dailyPlan.value = await generateDailyPlanApi({
-      date: formatLocalDate(),
+      date: planDate,
+      targetJobId: currentTargetJobId.value || undefined,
+      requestId: idempotencyKey,
+      idempotencyKey,
       taskCount: 4,
       maxTotalMinutes: 90,
       forceRegenerate: true
     })
     agentTasks.value = dailyPlan.value.tasks || agentTasks.value
-    invalidateUserHomeTrainingCaches(formatLocalDate())
+    invalidateUserHomeTrainingCaches(planDate, currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
   } catch (error) {
     dailyPlanError.value = getErrorMessage(error, '今日计划生成失败，未新增任务；可以稍后重试，或先去题库/面试训练。')
   } finally {
     dailyPlanGenerating.value = false
   }
+}
+
+const runFirstDayAction = (action: FirstDayAction) => {
+  if (action.actionType === 'generate-plan') {
+    void generatePlan()
+    return
+  }
+  go(action.path)
 }
 
 const skipTask = async (taskId: number) => {
@@ -1004,7 +1228,7 @@ const skipTask = async (taskId: number) => {
   try {
     const skippedTask = await skipAgentTaskApi(taskId, { skipReason: '今日首页选择跳过' })
     mergeAgentTask(skippedTask)
-    invalidateUserHomeTrainingCaches(formatLocalDate())
+    invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
   } catch (error) {
     agentTasksError.value = getErrorMessage(error, '任务跳过失败，请稍后重试。')
@@ -1021,7 +1245,7 @@ const completeTask = async (taskId: number) => {
     completionReviewTask.value = completedTask
     completionReviewNote.value = ''
     completionReviewVisible.value = true
-    invalidateUserHomeTrainingCaches(formatLocalDate())
+    invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
   } catch (error) {
     agentTasksError.value = getErrorMessage(error, '任务完成状态保存失败，请稍后重试。')
@@ -1031,15 +1255,19 @@ const completeTask = async (taskId: number) => {
 }
 
 const goCompletionNextAction = () => {
+  const targetPath = completionReviewNextAction.value.path
+  trackCompletionReviewCtaClick(targetPath)
   completionReviewVisible.value = false
-  go(completionReviewNextAction.value.path)
+  go(targetPath)
 }
 
 onMounted(() => {
   secondaryDataCancelled = false
   fetchOverview(false)
-  fetchDailyPlan(false)
-  deferSecondaryHomeData(() => fetchAgentTasks(false), 900, 180)
+  void fetchV3Overview(false).finally(() => {
+    void fetchDailyPlan(false)
+    deferSecondaryHomeData(() => fetchAgentTasks(false), 900, 180)
+  })
   deferSecondaryHomeData(() => fetchWrongQuestions(false), 1800, 450)
 })
 
@@ -1056,6 +1284,7 @@ onBeforeUnmount(() => {
 }
 
 .home-hero,
+.first-day-section,
 .focus-card,
 .path-section,
 .task-section,
@@ -1284,8 +1513,94 @@ onBeforeUnmount(() => {
 .focus-card,
 .path-section,
 .task-section,
-.insight-card {
+.insight-card,
+.first-day-section {
   padding: 20px;
+}
+
+.first-day-section__head {
+  align-items: center;
+}
+
+.first-day-progress {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.first-day-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.first-day-action {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 176px;
+  padding: 14px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+
+  &.is-ready {
+    border-color: #bbf7d0;
+    background: #f7fef9;
+  }
+
+  &.is-primary {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+    transform: translateY(-1px);
+  }
+
+  h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: #526071;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  :deep(.el-button) {
+    width: 100%;
+    gap: 6px;
+  }
+}
+
+.first-day-action__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.first-day-action__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: #2563eb;
 }
 
 .focus-card--primary {
@@ -1744,6 +2059,10 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
+.review-hint {
+  font-weight: 600;
+}
+
 .review-note {
   padding: 10px 12px;
   border-radius: 8px;
@@ -1757,6 +2076,10 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .first-day-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .journey {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1768,6 +2091,7 @@ onBeforeUnmount(() => {
   }
 
   .home-hero,
+  .first-day-section,
   .focus-card,
   .path-section,
   .task-section,
@@ -1932,6 +2256,18 @@ onBeforeUnmount(() => {
   .task-row__body > div {
     display: grid;
     justify-content: stretch;
+  }
+
+  .first-day-section__head {
+    align-items: start;
+  }
+
+  .first-day-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .first-day-action {
+    min-height: auto;
   }
 
   .journey,

@@ -48,6 +48,7 @@ export interface AdminUserVO {
   nickname?: string
   avatarUrl?: string | null
   email?: string | null
+  emailMasked?: string | null
   status: UserStatus
   statusName?: string
   roles: RoleCode[]
@@ -68,8 +69,27 @@ export interface RoleSaveDTO {
   roleCode: RoleCode
   roleName: string
   description?: string
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface UserStatusUpdateDTO {
   status: UserStatus
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
+export interface AdminOperationConfirmDTO {
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+}
+
+export interface AdminUserAssignRolesDTO extends AdminOperationConfirmDTO {
+  roleIds: number[]
 }

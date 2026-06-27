@@ -30,3 +30,12 @@ export interface FileInfoVO {
   createdAt?: string
   updatedAt?: string
 }
+
+export interface AdminFileDownloadAccessDTO {
+  accessReason: string
+  confirmSensitiveAccess: boolean
+  confirm: boolean
+  dryRun: boolean
+  reason: string
+  idempotencyKey: string
+}

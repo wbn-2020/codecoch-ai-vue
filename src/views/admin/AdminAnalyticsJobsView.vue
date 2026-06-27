@@ -196,6 +196,7 @@ import type { AdminAnalyticsJobLogVO, AdminAnalyticsJobQuery } from '@/types/ana
 import { translateFailureReason, translateJobName } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const statusOptions = [
   { label: '待执行', value: 'PENDING' },
@@ -357,7 +358,11 @@ const runDailyPlan = async () => {
       userIds,
       targetJobId: manualForm.targetJobId,
       taskCount: manualForm.taskCount,
-      maxTotalMinutes: manualForm.maxTotalMinutes
+      maxTotalMinutes: manualForm.maxTotalMinutes,
+      confirm: true,
+      dryRun: false,
+      reason: `手动运行每日计划聚合；statDate=${manualForm.statDate || 'default'}；users=${userIds.length || 'auto'}`,
+      idempotencyKey: createOperationIdempotencyKey('analytics-daily-plan')
     })
     ElMessage.success('每日计划聚合任务已提交')
     manualDialogVisible.value = false
@@ -388,7 +393,12 @@ const rerun = async (row: AdminAnalyticsJobLogVO) => {
   if (!confirmed) return
   rerunningId.value = id
   try {
-    await rerunAdminAnalyticsJobApi(id)
+    await rerunAdminAnalyticsJobApi(id, {
+      confirm: true,
+      dryRun: false,
+      reason: `重跑聚合任务；jobId=${id}；jobCode=${row.jobCode || 'UNKNOWN'}`,
+      idempotencyKey: createOperationIdempotencyKey(`analytics-rerun-${id}`)
+    })
     ElMessage.success('重跑请求已提交')
     await fetchJobs()
   } finally {

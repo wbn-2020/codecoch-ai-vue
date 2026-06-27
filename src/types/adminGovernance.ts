@@ -94,6 +94,22 @@ export interface NotificationSendDTO {
   type: string
   targetType: 'ALL' | 'USER'
   targetUserId?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
+export interface AdminOperationConfirmPayload {
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+}
+
+export interface AdminTaskActionPayload extends AdminOperationConfirmPayload {
+  note: string
+  dryRun: boolean
 }
 
 export interface OperationLogVO {
@@ -182,7 +198,7 @@ export interface MenuVO {
   children?: MenuVO[]
 }
 
-export interface RoleMenuGrantDTO {
+export interface RoleMenuGrantDTO extends AdminOperationConfirmPayload {
   menuIds: number[]
 }
 

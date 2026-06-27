@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
-import type { QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
+import type { AdminOperationConfirmPayload, QuestionGroupDTO, QuestionGroupVO } from '@/types/question'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionGroupVO = Partial<QuestionGroupVO> & {
@@ -36,7 +36,11 @@ const toBackendGroupDTO = (data: QuestionGroupDTO) => ({
   groupName: data.name,
   categoryId: data.categoryId,
   description: data.description,
-  status: data.status
+  status: data.status,
+  confirm: data.confirm,
+  dryRun: data.dryRun,
+  reason: data.reason,
+  idempotencyKey: data.idempotencyKey
 })
 
 export const getQuestionGroupsApi = (params?: {
@@ -48,7 +52,7 @@ export const getQuestionGroupsApi = (params?: {
     .get<BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>, BackendQuestionGroupVO[] | PageResult<BackendQuestionGroupVO>>('/admin/question-groups', {
       params: compactQueryParams(params)
     })
-    .then((result) => normalizeGroupList(normalizePageResult(result).records))
+    .then((result) => normalizeGroupList(normalizePageResult(result, undefined, { allowArrayFallback: true }).records))
 }
 
 export const createQuestionGroupApi = (data: QuestionGroupDTO) => {
@@ -69,6 +73,6 @@ export const updateQuestionGroupApi = (id: number, data: QuestionGroupDTO) => {
     .then(normalizeQuestionGroup)
 }
 
-export const deleteQuestionGroupApi = (id: number) => {
-  return request.delete<null, null>(`/admin/question-groups/${id}`)
+export const deleteQuestionGroupApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.delete<null, null>(`/admin/question-groups/${id}`, { data })
 }

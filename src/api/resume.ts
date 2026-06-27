@@ -27,6 +27,9 @@ import { normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse } from '@/utils/sse'
 
 type UnknownRecord = Record<string, unknown>
+type LegacyResumeProjectRecord = Partial<ResumeProjectVO> & {
+  description?: string
+}
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -37,7 +40,7 @@ const toPositiveId = (value: unknown) => {
 }
 
 const normalizeProject = (project: ResumeProjectVO | null | undefined): ResumeProjectVO => {
-  const item: Partial<ResumeProjectVO> = isRecord(project) ? project as Partial<ResumeProjectVO> : {}
+  const item: LegacyResumeProjectRecord = isRecord(project) ? project as LegacyResumeProjectRecord : {}
   return {
     ...item,
     projectId: toPositiveId(item.projectId || item.id),
@@ -119,11 +122,11 @@ const toProjectPayload = (data: ResumeProjectDTO) => ({
   projectName: data.projectName,
   projectPeriod: data.projectPeriod || data.projectTime,
   projectTime: data.projectTime || data.projectPeriod,
-  projectBackground: data.projectBackground || data.description,
+  projectBackground: data.projectBackground,
   role: data.role || data.responsibility,
   responsibility: data.responsibility || data.role,
   techStack: data.techStack,
-  description: data.description || data.projectBackground,
+  description: data.projectBackground,
   coreFeatures: data.coreFeatures,
   technicalDifficulties: data.technicalDifficulties || data.technicalChallenges,
   technicalChallenges: data.technicalChallenges || data.technicalDifficulties,
@@ -144,7 +147,7 @@ export const getResumesApi = (params?: ResumeQueryDTO) => {
       params
     })
     .then((result) => {
-      const page = normalizePageResult<ResumeVO, ResumeVO | null>(result, params, normalizeResumeListItem)
+      const page = normalizePageResult<ResumeVO, ResumeVO | null>(result, params, normalizeResumeListItem, { allowArrayFallback: true })
       return {
         ...page,
         records: page.records.filter((item): item is ResumeVO => Boolean(item))
@@ -199,6 +202,7 @@ export const optimizeResumeApi = (resumeId: number, data?: ResumeOptimizeRequest
 
 const toResumeOptimizeSseQuery = (params: ResumeOptimizeSseParams) => ({
   resumeId: String(params.resumeId),
+  targetJobId: params.targetJobId != null ? String(params.targetJobId) : '',
   targetPosition: params.targetPosition || '',
   targetCompany: params.targetCompany || '',
   extraRequirements: params.extraRequirements || '',

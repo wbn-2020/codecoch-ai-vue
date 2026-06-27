@@ -45,6 +45,7 @@ import { useRoute } from 'vue-router'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import type { AiResultFeedbackType } from '@/types/aiFeedback'
 import { getErrorMessage } from '@/utils/error'
+import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 
 const props = withDefaults(defineProps<{
   scene: string
@@ -80,6 +81,11 @@ const feedbackTypes: Array<{ label: string; value: AiResultFeedbackType }> = [
   { label: '其他', value: 'OTHER' }
 ]
 
+const resolveSafePagePath = () => {
+  const safePropPath = sanitizeLocalRedirectPath(props.pagePath, '')
+  return safePropPath || buildSafeRedirectTarget(route.path, route.query)
+}
+
 const submitFeedback = async () => {
   submitting.value = true
   try {
@@ -91,7 +97,7 @@ const submitFeedback = async () => {
       feedbackType: feedbackType.value,
       rating: rating.value,
       comment: comment.value || undefined,
-      pagePath: props.pagePath || route.fullPath
+      pagePath: resolveSafePagePath()
     })
     submitted.value = true
     visible.value = false

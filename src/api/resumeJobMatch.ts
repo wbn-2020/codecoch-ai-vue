@@ -28,6 +28,7 @@ export const createResumeJobMatchReportApi = (data: ResumeJobMatchCreateDTO) => 
 const toResumeJobMatchCreateSseQuery = (data: ResumeJobMatchCreateDTO) => ({
   resumeId: String(data.resumeId),
   targetJobId: String(data.targetJobId),
+  resumeVersionId: data.resumeVersionId == null ? '' : String(data.resumeVersionId),
   forceRefresh: data.forceRefresh == null ? '' : String(data.forceRefresh)
 })
 
@@ -68,13 +69,18 @@ export const regenerateResumeJobMatchReportApi = (id: number) => {
   )
 }
 
-export const getLatestResumeJobMatchReportApi = (resumeId: number, targetJobId: number) => {
+export const getLatestResumeJobMatchReportApi = (
+  resumeId: number,
+  targetJobId: number,
+  resumeVersionId?: number
+) => {
   return request.get<ResumeJobMatchReportDetailVO | null, ResumeJobMatchReportDetailVO | null>(
     '/resume-job-match/latest',
     {
       params: {
         resumeId,
-        targetJobId
+        targetJobId,
+        resumeVersionId
       }
     }
   ).then((result) => (hasReportId(result) ? result : null))

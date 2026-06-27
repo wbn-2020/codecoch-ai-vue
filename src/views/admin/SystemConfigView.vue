@@ -78,7 +78,9 @@
           </template>
           <el-table-column v-if="isColumnVisible('configKey')" prop="configKey" label="配置 Key" min-width="200" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('configName')" prop="configName" label="配置名称" min-width="160" />
-          <el-table-column v-if="isColumnVisible('configValue')" prop="configValue" label="配置值" min-width="180" show-overflow-tooltip />
+          <el-table-column v-if="isColumnVisible('configValue')" label="配置值" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ displayConfigValue(row) }}</template>
+          </el-table-column>
           <el-table-column v-if="isColumnVisible('configType')" prop="configType" label="类型" width="110" />
           <el-table-column v-if="isColumnVisible('editable')" label="可编辑" width="100">
             <template #default="{ row }">{{ row.editable === 1 ? '是' : '否' }}</template>
@@ -147,7 +149,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="配置值" prop="configValue">
-          <el-input v-model="form.configValue" type="textarea" :rows="4" />
+          <div v-if="editingSensitiveConfig" class="sensitive-config-editor">
+            <el-checkbox v-model="replaceSensitiveValue">替换敏感值</el-checkbox>
+            <el-input
+              v-model="form.configValue"
+              type="textarea"
+              :rows="4"
+              :disabled="!replaceSensitiveValue"
+              :placeholder="replaceSensitiveValue ? '输入新的敏感配置值' : '留空保持当前敏感值'"
+            />
+          </div>
+          <el-input v-else v-model="form.configValue" type="textarea" :rows="4" />
         </el-form-item>
         <el-form-item label="说明">
           <el-input v-model="form.description" type="textarea" :rows="3" />
@@ -183,7 +195,7 @@ import {
   createSystemConfigApi,
   deleteSystemConfigApi,
   getSystemConfigsApi,
-  updateSystemConfigApi
+  updateSystemConfigByIdApi
 } from '@/api/system'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
@@ -192,6 +204,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { SystemConfigCreateDTO, SystemConfigQueryDTO, SystemConfigVO } from '@/types/system'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type SystemConfigColumnKey =
   | 'configKey'
@@ -226,6 +239,8 @@ const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
 const editingConfigId = ref<number | null>(null)
+const editingSensitiveConfig = ref(false)
+const replaceSensitiveValue = ref(false)
 const formRef = ref<FormInstance>()
 const configs = ref<SystemConfigVO[]>([])
 const total = ref(0)
@@ -233,6 +248,7 @@ const configError = ref('')
 
 const query = reactive<SystemConfigQueryDTO>({
   keyword: '',
+  configType: '',
   status: '',
   pageNo: 1,
   pageSize: 10
@@ -248,12 +264,37 @@ const form = reactive<SystemConfigCreateDTO>({
   description: ''
 })
 
-const rules: FormRules<SystemConfigCreateDTO> = {
-  configKey: [{ required: true, message: '请输入配置 Key', trigger: 'blur' }],
-  configValue: [{ required: true, message: '请输入配置值', trigger: 'blur' }]
+type SystemConfigSensitiveFields = SystemConfigVO & {
+  configValueMasked?: string | null
+  sensitiveConfig?: boolean
 }
 
-const hasConfigFilters = computed(() => Boolean(query.keyword || query.status !== ''))
+const isSensitiveConfig = (config?: SystemConfigVO) =>
+  Boolean((config as SystemConfigSensitiveFields | undefined)?.sensitiveConfig)
+
+const displayConfigValue = (row: SystemConfigVO) => {
+  const config = row as SystemConfigSensitiveFields
+  return config.sensitiveConfig ? config.configValueMasked || '******' : row.configValue || ''
+}
+
+const validateConfigValue = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+  if (editingSensitiveConfig.value && !replaceSensitiveValue.value) {
+    callback()
+    return
+  }
+  if (typeof value === 'string' && value.trim()) {
+    callback()
+    return
+  }
+  callback(new Error('请输入配置值'))
+}
+
+const rules: FormRules<SystemConfigCreateDTO> = {
+  configKey: [{ required: true, message: '请输入配置 Key', trigger: 'blur' }],
+  configValue: [{ validator: validateConfigValue, trigger: 'blur' }]
+}
+
+const hasConfigFilters = computed(() => Boolean(query.keyword || query.configType || query.status !== ''))
 const configEmptyTitle = computed(() => (hasConfigFilters.value ? '没有匹配当前筛选的系统配置' : '暂无系统配置'))
 const configEmptyDescription = computed(() =>
   hasConfigFilters.value
@@ -280,10 +321,12 @@ const fetchConfigs = async () => {
 const openDialog = (row?: SystemConfigVO) => {
   if (!guardAdminMobileWrite()) return
   editingConfigId.value = row?.id || null
+  editingSensitiveConfig.value = Boolean(editingConfigId.value && isSensitiveConfig(row))
+  replaceSensitiveValue.value = !editingSensitiveConfig.value
   Object.assign(form, {
     configKey: row?.configKey || '',
     configName: row?.configName || '',
-    configValue: row?.configValue || '',
+    configValue: editingSensitiveConfig.value ? '' : row?.configValue || '',
     configType: row?.configType || 'STRING',
     editable: row?.editable ?? 1,
     status: row?.status ?? 1,
@@ -322,12 +365,25 @@ const handleSave = async () => {
   saving.value = true
   try {
     if (editingConfigId.value) {
-      await updateSystemConfigApi(editingConfigId.value, {
-        configValue: form.configValue || '',
-        description: form.description
-      })
+      const updatePayload: Parameters<typeof updateSystemConfigByIdApi>[1] = {
+        description: form.description,
+        confirm: true,
+        dryRun: false,
+        reason: 'Admin confirmed system config update from system config page.',
+        idempotencyKey: createOperationIdempotencyKey(`system-config-update-${editingConfigId.value}`)
+      }
+      if (!editingSensitiveConfig.value || replaceSensitiveValue.value) {
+        updatePayload.configValue = form.configValue || ''
+      }
+      await updateSystemConfigByIdApi(editingConfigId.value, updatePayload)
     } else {
-      await createSystemConfigApi(form)
+      await createSystemConfigApi({
+        ...form,
+        confirm: true,
+        dryRun: false,
+        reason: 'Admin confirmed system config create from system config page.',
+        idempotencyKey: createOperationIdempotencyKey('system-config-create')
+      })
     }
     ElMessage.success('系统配置已保存')
     dialogVisible.value = false
@@ -353,7 +409,12 @@ const handleDelete = async (row: SystemConfigVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteSystemConfigApi(row.id)
+  await deleteSystemConfigApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed system config delete from system config page.',
+    idempotencyKey: createOperationIdempotencyKey(`system-config-delete-${row.id}`)
+  })
   ElMessage.success('系统配置已删除')
   await fetchConfigs()
 }
@@ -366,6 +427,7 @@ const handleSearch = () => {
 const handleReset = () => {
   Object.assign(query, {
     keyword: '',
+    configType: '',
     status: '',
     pageNo: 1,
     pageSize: 10
@@ -435,6 +497,12 @@ onMounted(fetchConfigs)
 
 .risk-operation-trigger {
   font-weight: 600;
+}
+
+.sensitive-config-editor {
+  display: grid;
+  width: 100%;
+  gap: 8px;
 }
 
 @media (max-width: 900px) {

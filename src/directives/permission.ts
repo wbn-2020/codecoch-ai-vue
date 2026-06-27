@@ -44,6 +44,7 @@ const permissionLabelMap: Record<string, string> = {
   'admin:system:overview': '运营首页查看',
   'admin:user:list': '用户管理查看',
   'admin:user:write': '用户管理维护',
+  'admin:user:password:reset': '用户密码重置',
   'admin:role:list': '角色管理查看',
   'admin:role:write': '角色管理维护',
   'admin:role:assign': '角色授权',
@@ -67,6 +68,7 @@ const permissionLabelMap: Record<string, string> = {
   'admin:ai:prompt:write': '提示词模板维护',
   'admin:ai:prompt:test': '提示词测试',
   'admin:ai:prompt:publish': '提示词发布',
+  'admin:ai:prompt:raw:view': '提示词原文查看',
   'admin:ai:log:list': 'AI 运行记录查看',
   'admin:ai:log:raw:view': 'AI 原文诊断查看',
   'admin:ai:model:list': 'AI 模型配置查看',
@@ -83,6 +85,9 @@ const permissionLabelMap: Record<string, string> = {
   'admin:task:list': '任务中心查看',
   'admin:task:retry': '任务重试',
   'admin:notice:list': '通知管理查看',
+  'admin:announcement:list': '公告管理查看',
+  'admin:announcement:write': '公告维护',
+  'admin:announcement:publish': '公告发布',
   'admin:system:config:list': '系统配置查看',
   'admin:system:config:write': '系统配置维护',
   'admin:audit:operation-log': '操作日志查看',
@@ -124,8 +129,6 @@ function checkPermission(el: HTMLElement, binding: DirectiveBinding<string | str
   el.setAttribute('aria-disabled', 'true')
   el.setAttribute('aria-label', missingHint)
   el.setAttribute('data-permission-hint', missingHint)
-  el.setAttribute('data-permission-short', buildMissingShortText(requiredAuthorities))
-  el.setAttribute('data-permission-count', String(requiredAuthorities.length))
   el.setAttribute('title', missingHint)
 }
 
@@ -164,8 +167,6 @@ function restorePermissionElement(el: HTMLElement, state: PermissionElementState
   el.classList.remove('is-permission-disabled')
   el.removeAttribute('aria-disabled')
   el.removeAttribute('data-permission-hint')
-  el.removeAttribute('data-permission-short')
-  el.removeAttribute('data-permission-count')
 
   if (!state.wasDisabled) return
 
@@ -197,12 +198,6 @@ function buildMissingHint(requiredAuthorities: string[]) {
     return `当前账号缺少“${labels[0]}”权限，操作未提交。权限码：${requiredAuthorities[0]}。`
   }
   return `当前账号需要具备以下任一权限：${labels.map((label) => `“${label}”`).join('、')}；当前账号未具备，操作未提交。权限码：${requiredAuthorities.join('、')}。`
-}
-
-function buildMissingShortText(requiredAuthorities: string[]) {
-  const labels = requiredAuthorities.map(formatPermissionLabel)
-  if (requiredAuthorities.length === 1) return `缺少 ${labels[0]}`
-  return `缺少 ${requiredAuthorities.length} 项权限`
 }
 
 function formatPermissionLabel(authority: string) {

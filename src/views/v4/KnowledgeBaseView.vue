@@ -1122,11 +1122,12 @@
 <script setup lang="ts">
 import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, type UploadFile } from 'element-plus'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 import {
   askKnowledgeApi,
@@ -1182,6 +1183,7 @@ import {
   type KnowledgeSearchTraceVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import type { StreamSseHandle } from '@/utils/sse'
 
 const loading = ref(false)
 const route = useRoute()
@@ -1208,6 +1210,8 @@ const versionsLoadingId = ref<number | null>(null)
 const restoringVersionId = ref<number | null>(null)
 const similarLoadingId = ref<number | null>(null)
 const chunkDetailLoadingId = ref<number | null>(null)
+let activeKnowledgeAskStream: StreamSseHandle | null = null
+let knowledgeAskRunId = 0
 const deletingChunkId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
@@ -2173,7 +2177,12 @@ const deleteKnowledgeEvalCase = async (id?: number) => {
   })
   if (!confirmed) return
   try {
-    await deleteKnowledgeEvalCaseApi(id)
+    await deleteKnowledgeEvalCaseApi(id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge delete eval case',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-delete-eval-case')
+    })
     ElMessage.success('评估样本已删除')
     await fetchKnowledgeEvalCases()
   } catch (error) {
@@ -2181,11 +2190,18 @@ const deleteKnowledgeEvalCase = async (id?: number) => {
   }
 }
 
+const cancelActiveKnowledgeAskStream = () => {
+  activeKnowledgeAskStream?.cancel()
+  activeKnowledgeAskStream = null
+}
+
 const handleAsk = async () => {
   if (!question.value.trim()) {
     ElMessage.warning('请先输入问题')
     return
   }
+  cancelActiveKnowledgeAskStream()
+  const askRunId = ++knowledgeAskRunId
   asking.value = true
   answer.value = ''
   askInsufficientReferences.value = false
@@ -2216,16 +2232,19 @@ const handleAsk = async () => {
           resolve()
         }
       }
-      askKnowledgeStreamApi(payload, {
+      const stream = askKnowledgeStreamApi(payload, {
         onReferences: (references) => {
+          if (knowledgeAskRunId !== askRunId) return
           askReferences.value = references
           askReferenceCount.value = references.length
           askInsufficientReferences.value = references.length === 0
         },
         onToken: (delta) => {
+          if (knowledgeAskRunId !== askRunId) return
           answer.value += delta
         },
         onCitation: (result) => {
+          if (knowledgeAskRunId !== askRunId) return
           if (result.answer) answer.value = result.answer
           askCitationValid.value = result.citationValid
           askAnswerGrounded.value = result.answerGrounded
@@ -2238,6 +2257,10 @@ const handleAsk = async () => {
         },
         onDone: () => finish(),
         onError: async (message) => {
+          if (knowledgeAskRunId !== askRunId) {
+            finish()
+            return
+          }
           // 流式失败时降级到同步接口，保证可用性
           try {
             const result = await askKnowledgeApi(payload)
@@ -2259,9 +2282,20 @@ const handleAsk = async () => {
           }
         }
       })
+      activeKnowledgeAskStream = stream
+      void stream.finished
+        .catch(() => undefined)
+        .finally(() => {
+          if (activeKnowledgeAskStream === stream) {
+            activeKnowledgeAskStream = null
+          }
+          finish()
+        })
     })
   } finally {
-    asking.value = false
+    if (knowledgeAskRunId === askRunId) {
+      asking.value = false
+    }
   }
 }
 
@@ -2373,7 +2407,12 @@ const handleDeleteDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewIt
   if (!confirmed) return
   deletingChunkId.value = item.chunkId
   try {
-    await deleteKnowledgeChunkApi(item.chunkId)
+    await deleteKnowledgeChunkApi(item.chunkId, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge delete near duplicate chunk',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-delete-chunk')
+    })
     ElMessage.success('近重复候选已删除')
     similarChunkMap.value = {}
     if (selectedChunkDetail.value?.id === item.chunkId) {
@@ -2423,7 +2462,13 @@ const handleCleanupExactDuplicates = async () => {
       confirmButtonText: '确认清理'
     })
     if (!confirmed) return
-    const result = await cleanupKnowledgeExactDuplicatesApi({ dryRun: false, ...exactDuplicateScopeParams() })
+    const result = await cleanupKnowledgeExactDuplicatesApi({
+      ...exactDuplicateScopeParams(),
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge cleanup exact duplicate chunks',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-duplicate-cleanup')
+    })
     exactDuplicateCleanup.value = result
     ElMessage.success(`已清理 ${result.deletedCount || 0} 个重复片段`)
     exactDuplicateGroups.value = await getKnowledgeExactDuplicatesApi(exactDuplicateScopeParams())
@@ -2448,7 +2493,12 @@ const handleDeleteChunk = async (chunk: KnowledgeChunkVO) => {
   if (!confirmed) return
   deletingChunkId.value = chunk.id
   try {
-    await deleteKnowledgeChunkApi(chunk.id)
+    await deleteKnowledgeChunkApi(chunk.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge delete chunk',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-delete-chunk')
+    })
     ElMessage.success('片段已删除')
     similarChunkMap.value = {}
     if (selectedDocument.value?.id) {
@@ -2512,7 +2562,12 @@ const handleRestoreVersion = async (version: KnowledgeDocumentVersionVO) => {
   if (!confirmed) return
   restoringVersionId.value = version.id
   try {
-    const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id)
+    const result = await restoreKnowledgeDocumentVersionApi(versionDocument.value.id, version.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge restore document version',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-restore-version')
+    })
     ElMessage.success(`已恢复到 v${version.versionNo || 0}`)
     versionDocument.value = result
     documentVersions.value = await getKnowledgeDocumentVersionsApi(result.id)
@@ -2631,6 +2686,10 @@ const showKnowledgeIndexResult = (result: KnowledgeDocumentVO, actionLabel: stri
   ElMessage.success(message)
 }
 
+const createKnowledgeVectorIdempotencyKey = (operation: string) => {
+  return createOperationIdempotencyKey(operation)
+}
+
 const handleRebuildVectors = async (documentId?: number, documentTitle?: string) => {
   if (!semanticEnabled.value) {
     ElMessage.warning(semanticDisabledReason.value)
@@ -2651,7 +2710,13 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
   rebuilding.value = true
   rebuildTargetLabel.value = scopeLabel
   try {
-    const result = await rebuildKnowledgeVectorsApi(documentId)
+    const result = await rebuildKnowledgeVectorsApi({
+      documentId,
+      confirm: true,
+      dryRun: false,
+      reason: documentId ? 'user knowledge manual rebuild document vector' : 'user knowledge manual rebuild all vectors',
+      idempotencyKey: createKnowledgeVectorIdempotencyKey('knowledge-rebuild')
+    })
     rebuildResult.value = result
     const duplicateSummary = result.duplicateChunkCount ? `，重复片段 ${result.duplicateChunkCount || 0} 个` : ''
     const summary = `重建完成：文档 ${result.documentCount || 0} 篇，片段 ${result.chunkCount || 0} 个，索引 ${result.vectorUpdated || 0} 条${duplicateSummary}`
@@ -2685,7 +2750,13 @@ const handleRetryFailedVectors = async () => {
   retryingFailedVectors.value = true
   rebuildTargetLabel.value = '失败或超时待索引记录'
   try {
-    const result = await retryFailedKnowledgeVectorsApi(500)
+    const result = await retryFailedKnowledgeVectorsApi({
+      limit: 500,
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge manual retry failed vectors',
+      idempotencyKey: createKnowledgeVectorIdempotencyKey('knowledge-retry')
+    })
     rebuildResult.value = result
     rebuildDialogVisible.value = true
     const deleteSummary = result.vectorDeleted ? `，清理索引 ${result.vectorDeleted || 0} 条` : ''
@@ -2714,7 +2785,12 @@ const handleDelete = async (row: KnowledgeDocumentVO) => {
   if (!confirmed) return
   deletingId.value = row.id
   try {
-    await deleteKnowledgeDocumentApi(row.id)
+    await deleteKnowledgeDocumentApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'user knowledge delete document',
+      idempotencyKey: createOperationIdempotencyKey('knowledge-delete-document')
+    })
     ElMessage.success('资料已删除')
     searchResults.value = []
     askReferences.value = []
@@ -2858,6 +2934,11 @@ const openKnowledgeVectorJob = (result?: KnowledgeVectorRebuildVO | null) => {
 onMounted(async () => {
   await refreshKnowledgePage()
   await openKnowledgeFailureFromQuery()
+})
+
+onBeforeUnmount(() => {
+  knowledgeAskRunId += 1
+  cancelActiveKnowledgeAskStream()
 })
 
 watch(

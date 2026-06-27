@@ -83,8 +83,8 @@
             <el-date-picker v-model="timeRange" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" start-placeholder="开始时间" end-placeholder="结束时间" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :loading="loading" :disabled="loading" @click="handleSearch">查询</el-button>
+            <el-button :disabled="loading" @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -100,6 +100,12 @@
             </el-table-column>
             <el-table-column v-if="isColumnVisible('triggerType')" prop="triggerType" label="触发" width="100" />
             <el-table-column v-if="isColumnVisible('modelName')" prop="modelName" label="模型" min-width="140" show-overflow-tooltip />
+            <el-table-column v-if="isColumnVisible('resultSource')" label="来源" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="normalizedRunResultSource(row)" :type="resultSourceTagType(row)" effect="plain">{{ resultSourceLabel(row) }}</el-tag>
+                <span v-else>--</span>
+              </template>
+            </el-table-column>
             <el-table-column v-if="isColumnVisible('durationMs')" label="耗时" width="110">
               <template #default="{ row }">{{ row.durationMs ?? '--' }} ms</template>
             </el-table-column>
@@ -122,9 +128,9 @@
               :title="errorMessage ? '运行记录加载失败' : runEmptyTitle"
               :description="errorMessage || runEmptyDescription"
             >
-              <el-button v-if="errorMessage" type="primary" @click="fetchRuns">重试</el-button>
-              <el-button v-else-if="hasRunFilters" type="primary" @click="handleReset">清空筛选</el-button>
-              <el-button v-else @click="fetchRuns">刷新</el-button>
+              <el-button v-if="errorMessage" type="primary" :loading="loading" @click="fetchRuns">重试</el-button>
+              <el-button v-else-if="hasRunFilters" type="primary" :disabled="loading" @click="handleReset">清空筛选</el-button>
+              <el-button v-else :loading="loading" @click="fetchRuns">刷新</el-button>
             </AppState>
           </template>
         </el-table>
@@ -163,6 +169,10 @@
             <el-descriptions-item label="提示词类型">{{ detail.promptType || '--' }}</el-descriptions-item>
             <el-descriptions-item label="提示词版本">{{ detail.promptVersionId ?? '--' }}</el-descriptions-item>
             <el-descriptions-item label="模型">{{ detail.modelName || '--' }}</el-descriptions-item>
+            <el-descriptions-item label="结果来源">
+              <el-tag v-if="normalizedRunResultSource(detail)" :type="resultSourceTagType(detail)" effect="plain">{{ resultSourceLabel(detail) }}</el-tag>
+              <span v-else>--</span>
+            </el-descriptions-item>
             <el-descriptions-item label="生成记录编号">{{ detail.aiCallLogId ?? '--' }}</el-descriptions-item>
             <el-descriptions-item label="耗时">{{ detail.durationMs ?? '--' }} ms</el-descriptions-item>
             <el-descriptions-item label="追踪号">{{ detail.traceId || '--' }}</el-descriptions-item>
@@ -288,9 +298,10 @@ import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import { useAuthStore } from '@/stores/auth'
-import type { AdminAgentRunQueryDTO, AgentRunDetailVO } from '@/types/agent'
+import type { AdminAgentRunDetailVO, AdminAgentRunQueryDTO } from '@/types/agent'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type AgentRunColumnKey =
   | 'id'
@@ -300,6 +311,7 @@ type AgentRunColumnKey =
   | 'status'
   | 'triggerType'
   | 'modelName'
+  | 'resultSource'
   | 'durationMs'
   | 'errorMessage'
   | 'createdAt'
@@ -310,12 +322,13 @@ const route = useRoute()
 const authStore = useAuthStore()
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const loading = ref(false)
+const runRequestSeq = ref(0)
 const detailLoading = ref(false)
 const errorMessage = ref('')
 const detailError = ref('')
-const runs = ref<AgentRunDetailVO[]>([])
-const detail = ref<AgentRunDetailVO>()
-const rawDetail = ref<AgentRunDetailVO>()
+const runs = ref<AdminAgentRunDetailVO[]>([])
+const detail = ref<AdminAgentRunDetailVO>()
+const rawDetail = ref<AdminAgentRunDetailVO>()
 const detailId = ref<number>()
 const total = ref(0)
 const timeRange = ref<[string, string] | ''>('')
@@ -337,6 +350,7 @@ const {
   { key: 'status', label: '状态', required: true },
   { key: 'triggerType', label: '触发方式' },
   { key: 'modelName', label: '模型' },
+  { key: 'resultSource', label: '来源' },
   { key: 'durationMs', label: '耗时' },
   { key: 'errorMessage', label: '错误信息' },
   { key: 'createdAt', label: '创建时间' },
@@ -423,7 +437,7 @@ const getErrorMessage = (error: unknown, fallback = '生成运行记录加载失
   return normalizeErrorMessage(error, fallback)
 }
 
-const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+const agentErrorInfo = (run: Pick<AdminAgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
   const value = `${run.errorCode || ''} ${run.errorMessage || ''}`.toUpperCase()
   if (value.includes('TARGET_JOB')) {
     return {
@@ -449,7 +463,7 @@ const agentErrorInfo = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'
   }
 }
 
-const displayAgentError = (run: Pick<AgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
+const displayAgentError = (run: Pick<AdminAgentRunDetailVO, 'errorCode' | 'errorMessage'>) => {
   if (!run.errorCode && !run.errorMessage) return '--'
   return agentErrorInfo(run).title
 }
@@ -463,6 +477,31 @@ const taskStatusMap = {
 }
 
 const priorityLabel = (value?: string | null) => (value ? priorityMap[value] || '优先级待确认' : '--')
+const normalizedRunResultSource = (
+  run?: Pick<AdminAgentRunDetailVO, 'resultSource' | 'fallback' | 'mock' | 'modelName'> | null
+) => {
+  const source = String(run?.resultSource || '').toUpperCase()
+  if (source) return source
+  if (run?.fallback) return 'FALLBACK'
+  if (run?.mock) return 'MOCK'
+  return String(run?.modelName || '').toLowerCase().includes('mock') ? 'MOCK' : ''
+}
+
+const resultSourceLabel = (run?: AdminAgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (run?.resultSourceLabel) return run.resultSourceLabel
+  if (source === 'MOCK') return '模拟数据'
+  if (source === 'FALLBACK') return '降级兜底'
+  if (source === 'LLM') return '真实模型'
+  return '--'
+}
+
+const resultSourceTagType = (run?: AdminAgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (source === 'MOCK') return 'info'
+  if (source === 'FALLBACK') return 'warning'
+  return 'success'
+}
 
 const formatJson = (value: unknown) => {
   if (!value) return '--'
@@ -507,18 +546,23 @@ const formatSensitiveSummary = (value: unknown) => {
 }
 
 const fetchRuns = async () => {
+  const requestSeq = ++runRequestSeq.value
   loading.value = true
   errorMessage.value = ''
   try {
     const result = await getAdminAgentRunsApi(query)
+    if (requestSeq !== runRequestSeq.value) return
     runs.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
+    if (requestSeq !== runRequestSeq.value) return
     runs.value = []
     total.value = 0
     errorMessage.value = getErrorMessage(error)
   } finally {
-    loading.value = false
+    if (requestSeq === runRequestSeq.value) {
+      loading.value = false
+    }
   }
 }
 
@@ -600,7 +644,9 @@ const loadRunRawDetail = async () => {
   try {
     rawDetail.value = await getAdminAgentRunRawApi(detail.value.id, {
       accessReason,
-      confirmSensitiveAccess: true
+      confirmSensitiveAccess: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`agent-run-raw-${detail.value.id}`)
     })
     rawDetailVisible.value = true
     ElMessage.success('敏感生成内容已按权限加载，访问原因已写入审计')

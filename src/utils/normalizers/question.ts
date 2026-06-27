@@ -110,7 +110,7 @@ export const normalizeUserQuestion = (item: BackendQuestionVO): QuestionVO => ({
 })
 
 export const normalizeUserQuestionPage = (
-  result: PageResult<BackendQuestionVO> | BackendQuestionVO[],
+  result: PageResult<BackendQuestionVO>,
   params?: { pageNo?: number; pageNum?: number; pageSize?: number }
 ): PageResult<QuestionVO> =>
   normalizePageResult(result, params, normalizeUserQuestion)
@@ -147,4 +147,4 @@ export const normalizeAdminQuestion = (item: BackendAdminQuestionVO): AdminQuest
 export const normalizeAdminQuestionPage = (
   result: PageResult<BackendAdminQuestionVO> | BackendAdminQuestionVO[],
   params?: { pageNo?: number; pageNum?: number; pageSize?: number }
-): PageResult<AdminQuestionVO> => normalizePageResult(result, params, normalizeAdminQuestion)
+): PageResult<AdminQuestionVO> => normalizePageResult(result, params, normalizeAdminQuestion, { allowArrayFallback: true })

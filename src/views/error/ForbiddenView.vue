@@ -9,28 +9,9 @@
           <span>目标页面</span>
           <strong>{{ targetPath }}</strong>
         </div>
-        <div v-if="requiredPermissions.length">
-          <span>需要权限</span>
-          <strong>{{ requiredPermissions.join('、') }}</strong>
-        </div>
-        <div v-if="missingPermissions.length">
-          <span>缺少权限</span>
-          <strong>{{ missingPermissions.join('、') }}</strong>
-        </div>
-        <div v-if="requiredRoles.length">
-          <span>需要角色</span>
-          <strong>{{ requiredRoles.join('、') }}</strong>
-        </div>
-        <div v-if="missingRoles.length">
-          <span>缺少角色</span>
-          <strong>{{ missingRoles.join('、') }}</strong>
-        </div>
-        <div v-if="userRoles.length || userPermissions.length">
+        <div>
           <span>当前账号</span>
-          <small>
-            角色：{{ userRoles.length ? userRoles.join('、') : '角色待确认' }}；
-            权限：{{ userPermissions.length ? userPermissions.join('、') : '权限待确认' }}
-          </small>
+          <small>{{ accountSummary }}</small>
         </div>
         <div>
           <span>处理结果</span>
@@ -59,29 +40,25 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const targetPath = computed(() => String(route.query.target || ''))
-const queryList = (name: string) => {
-  const value = route.query[name]
-  const raw = Array.isArray(value) ? value.join(',') : String(value || '')
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
+const safeDisplayPath = (value: unknown) => {
+  if (typeof value !== 'string' || !value.startsWith('/')) return ''
+  try {
+    const url = new URL(value, window.location.origin)
+    if (url.origin !== window.location.origin) return ''
+    return url.pathname || ''
+  } catch {
+    return value.split('?')[0].split('#')[0]
+  }
 }
 
-const requiredPermissions = computed(() => queryList('requiredPermissions'))
-const requiredRoles = computed(() => queryList('requiredRoles'))
-const userPermissions = computed(() => queryList('userPermissions'))
-const userRoles = computed(() => queryList('userRoles'))
-const missingPermissions = computed(() =>
-  requiredPermissions.value.filter((permission) => !userPermissions.value.includes(permission))
-)
-const missingRoles = computed(() =>
-  requiredRoles.value.filter((role) => !userRoles.value.includes(role))
-)
+const targetPath = computed(() => safeDisplayPath(route.query.target))
 const isAdminAccessFailure = computed(() =>
   String(route.query.reason || '') === 'requiresAdmin' || targetPath.value.startsWith('/admin')
 )
+const accountSummary = computed(() => {
+  const username = authStore.userInfo?.username || authStore.userInfo?.nickname || '当前登录账号'
+  return `${username}；当前账号权限不足`
+})
 
 const reasonText = computed(() => {
   const reason = String(route.query.reason || '')
@@ -98,7 +75,7 @@ const resolutionText = computed(() => {
   if (isAdminAccessFailure.value && !authStore.canAccessAdmin) {
     return '当前操作未执行。如果刚切换过普通用户，请重新登录管理员账号后继续访问。'
   }
-  if (missingPermissions.value.length || missingRoles.value.length) {
+  if (String(route.query.reason || '') === 'missingPermission' || String(route.query.reason || '') === 'missingRole') {
     return '当前操作未执行。请联系管理员补充分配缺少的角色或权限后重试。'
   }
   return '当前操作未执行。如需开通访问范围，请联系管理员处理。'

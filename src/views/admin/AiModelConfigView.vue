@@ -126,6 +126,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminListQuery, AiModelConfigDTO, AiModelConfigVO } from '@/types/adminGovernance'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type AiModelColumnKey =
   | 'id'
@@ -229,10 +230,21 @@ const handleSave = async () => {
   if (!confirmed) return
   saving.value = true
   try {
-    const payload = { ...form }
+    const payload: AiModelConfigDTO = { ...form }
     if (!payload.apiKey) delete payload.apiKey
-    if (editingId.value) await updateAdminAiModelApi(editingId.value, payload)
-    else await createAdminAiModelApi(payload)
+    const confirmedPayload = {
+      ...payload,
+      confirm: true,
+      dryRun: false,
+      reason: editingId.value
+        ? 'Admin confirmed AI model config update from model management page.'
+        : 'Admin confirmed AI model config create from model management page.',
+      idempotencyKey: createOperationIdempotencyKey(
+        editingId.value ? `ai-model-update-${editingId.value}` : 'ai-model-create'
+      )
+    }
+    if (editingId.value) await updateAdminAiModelApi(editingId.value, confirmedPayload)
+    else await createAdminAiModelApi(confirmedPayload)
     ElMessage.success('模型配置已保存')
     dialogVisible.value = false
     await fetchModels()
@@ -258,7 +270,12 @@ const handleStatus = async (row: AiModelConfigVO, status: number) => {
     await fetchModels()
     return
   }
-  await updateAdminAiModelStatusApi(row.id, status)
+  await updateAdminAiModelStatusApi(row.id, status, {
+    confirm: true,
+    dryRun: false,
+    reason: `Admin confirmed AI model ${status === 1 ? 'enable' : 'disable'} from model management page.`,
+    idempotencyKey: createOperationIdempotencyKey(`ai-model-status-${row.id}`)
+  })
   ElMessage.success('状态已更新')
   await fetchModels()
 }
@@ -275,7 +292,12 @@ const handleDefault = async (row: AiModelConfigVO) => {
     confirmButtonText: '确认设为默认'
   })
   if (!confirmed) return
-  await setDefaultAdminAiModelApi(row.id)
+  await setDefaultAdminAiModelApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed default AI model switch from model management page.',
+    idempotencyKey: createOperationIdempotencyKey(`ai-model-default-${row.id}`)
+  })
   ElMessage.success('默认模型已更新')
   await fetchModels()
 }
@@ -292,7 +314,12 @@ const handleDelete = async (row: AiModelConfigVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteAdminAiModelApi(row.id)
+  await deleteAdminAiModelApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed AI model delete from model management page.',
+    idempotencyKey: createOperationIdempotencyKey(`ai-model-delete-${row.id}`)
+  })
   ElMessage.success('模型已删除')
   await fetchModels()
 }

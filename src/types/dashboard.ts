@@ -98,6 +98,9 @@ export interface UserDashboardRecentReportVO {
   generatedAt?: string
   weakPoints?: string[]
   suggestions?: string[]
+  trustStatus?: string
+  evidenceSummary?: string
+  fallback?: boolean
 }
 
 export interface UserDashboardActiveStudyPlanVO {

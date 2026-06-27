@@ -12,11 +12,13 @@ export interface ResumeJobMatchSchemaWarning {
 export interface ResumeJobMatchCreateDTO {
   resumeId: number
   targetJobId: number
+  resumeVersionId?: number
   forceRefresh?: boolean
 }
 
 export interface ResumeJobMatchQueryDTO extends PageQuery {
   resumeId?: number
+  resumeVersionId?: number
   targetJobId?: number
   status?: ResumeJobMatchStatus | ''
 }
@@ -24,6 +26,9 @@ export interface ResumeJobMatchQueryDTO extends PageQuery {
 export interface ResumeJobMatchSubmitVO {
   reportId: number
   resumeId: number
+  resumeVersionId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
   targetJobId: number
   jdAnalysisId?: number
   aiCallLogId?: number
@@ -49,6 +54,9 @@ export interface ResumeJobMatchReportListVO {
   reportId: number
   resumeId: number
   resumeTitle?: string
+  resumeVersionId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
   targetJobId: number
   jobTitle?: string
   companyName?: string

@@ -213,6 +213,11 @@
             </div>
 
             <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+            <div v-if="task.reviewSummary" class="task-review-summary">
+              <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
+              <p>{{ task.reviewSummary }}</p>
+              <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
+            </div>
             <p v-if="taskFailureText(task)" class="task-failure">{{ taskFailureText(task) }}</p>
             <p v-if="task.skipReason && normalizeStatus(task.status) === 'SKIPPED'" class="task-skip-reason">跳过原因：{{ task.skipReason }}</p>
           </div>
@@ -234,12 +239,20 @@
                 开始
               </el-button>
               <el-button
-                v-else-if="normalizeStatus(task.status) === 'DOING'"
+                v-else-if="normalizeStatus(task.status) === 'DOING' && canManuallyCloseTask(task)"
                 type="success"
                 :disabled="isTaskPending(task)"
                 @click="openCompleteDialog(task)"
               >
                 完成
+              </el-button>
+              <el-button
+                v-else-if="normalizeStatus(task.status) === 'DOING' && hasAgentTaskActionEntry(task)"
+                type="primary"
+                :disabled="isTaskPending(task)"
+                @click="openTaskPrimaryEntry(task)"
+              >
+                去处理
               </el-button>
               <el-button
                 v-else-if="normalizeStatus(task.status) === 'SKIPPED'"
@@ -274,13 +287,33 @@
               >
                 查看结果
               </el-button>
-              <el-button v-else type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-button>
+              <el-button v-else-if="canManuallyCloseTask(task)" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-button>
+              <el-button v-else :disabled="!hasRecoverableEntry(task)" @click="openTaskPrimaryEntry(task)">查看任务</el-button>
+              <div v-if="isFocusActive(task)" class="focus-session-bar">
+                <div>
+                  <span>专注训练中</span>
+                  <strong>{{ focusSessionLabel }}</strong>
+                  <small>完成专注只记录训练事件，不会自动修改任务状态。</small>
+                </div>
+                <div class="focus-session-actions">
+                  <el-button size="small" type="success" plain @click="finishFocusSession(task)">完成专注</el-button>
+                  <el-button size="small" text @click="cancelFocusSession(task)">取消</el-button>
+                </div>
+              </div>
+              <el-button
+                v-if="canStartFocusSession(task)"
+                plain
+                :disabled="isFocusStartDisabled(task)"
+                @click="startFocusSession(task)"
+              >
+                专注
+              </el-button>
 
               <el-dropdown trigger="click">
                 <el-button class="more-button" :icon="MoreHorizontal" :disabled="isTaskPending(task)">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="task.actionUrl" @click="goAction(task.actionUrl)">打开任务入口</el-dropdown-item>
+                    <el-dropdown-item v-if="hasAgentTaskActionEntry(task)" @click="goAction(buildAgentTaskActionPath(task))">打开任务入口</el-dropdown-item>
                     <el-dropdown-item v-if="getTaskRunId(task)" @click="openRunDetail(task)">查看生成详情</el-dropdown-item>
                     <el-dropdown-item v-if="canManuallyCloseTask(task)" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
                     <el-dropdown-item
@@ -293,6 +326,8 @@
                     <el-dropdown-item v-if="normalizeStatus(task.status) === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">
                       恢复待办
                     </el-dropdown-item>
+                    <el-dropdown-item v-if="task.reason" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'EXPLAIN_RECOMMENDATION')">AI 解释推荐理由</el-dropdown-item>
+                    <el-dropdown-item v-if="normalizeStatus(task.status) === 'DONE'" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'REVIEW_COMPLETED_TASK')">AI 复盘本次任务</el-dropdown-item>
                     <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -357,6 +392,7 @@
         <ul>
           <li v-for="item in completionReviewItems" :key="item">{{ item }}</li>
         </ul>
+        <p class="review-hint">下一步建议：优先点击「{{ completionReviewNextAction.label }}」继续。</p>
         <p v-if="completionReviewNote" class="review-note">备注：{{ completionReviewNote }}</p>
       </div>
       <template #footer>
@@ -365,6 +401,17 @@
         <el-button type="primary" @click="goCompletionNextAction">{{ completionReviewNextAction.label }}</el-button>
       </template>
     </el-dialog>
+
+    <AgentCoachActionDialog
+      v-model:visible="coachDialogVisible"
+      :loading="coachDialogLoading"
+      :canceled="coachDialogCanceled"
+      :error-message="coachDialogError"
+      :task="coachDialogTask"
+      :result="coachActionResult"
+      @cancel="cancelCoachAction"
+      @next-action="goCoachNextAction"
+    />
 
     <el-drawer v-model="asyncDetailVisible" title="处理进度详情" size="520px">
       <div v-loading="asyncDetailLoading" class="async-detail">
@@ -452,17 +499,27 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   completeAgentTaskApi,
   getAgentTasksApi,
+  recordAgentMetricEventApi,
   restoreAgentTaskApi,
   skipAgentTaskApi,
   startAgentTaskApi,
   submitAgentFeedbackApi
 } from '@/api/agent'
 import { getUserAsyncTaskDetailApi, getUserAsyncTasksApi } from '@/api/task'
+import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
+import {
+  buildAgentTaskActionPath,
+  hasAgentTaskActionEntry,
+  isAgentJobApplicationTask,
+  isEvidenceBoundAgentTask
+} from '@/utils/agentTaskAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface SelectOption {
   label: string
@@ -497,6 +554,18 @@ const feedbackForm = reactive({
 const completionReviewVisible = ref(false)
 const completionReviewTask = ref<AgentTaskVO>()
 const completionReviewNote = ref('')
+const {
+  coachDialogVisible,
+  coachDialogLoading,
+  coachDialogError,
+  coachDialogCanceled,
+  coachDialogTask,
+  coachActionResult,
+  coachNextActionPath,
+  openCoachAction,
+  cancelCoachAction,
+  trackCoachNextAction
+} = useAgentCoachAction('agent_tasks', '/agent/tasks')
 
 const recoveryLinks: Array<{ label: string; desc: string; path: string; icon: Component }> = [
   { label: '岗位分析', desc: '查看分析进度和失败原因', path: '/job-targets', icon: FileSearch },
@@ -534,6 +603,7 @@ const taskTypeOptions: SelectOption[] = [
   { label: '简历匹配', value: 'RESUME_MATCH' },
   { label: '推荐题生成', value: 'QUESTION_RECOMMENDATION' },
   { label: '面试报告', value: 'INTERVIEW_REPORT' },
+  { label: '投递跟进', value: 'APPLICATION_FOLLOW_UP' },
   { label: '刷题练习', value: 'QUESTION_PRACTICE' },
   { label: '错题复习', value: 'WRONG_QUESTION_REVIEW' },
   { label: '模拟面试', value: 'INTERVIEW' },
@@ -599,9 +669,16 @@ const feedbackTypeOptions: SelectOption[] = [
 ]
 
 type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+type FocusMetricCode = 'focus_session_started' | 'focus_session_finished' | 'focus_session_canceled'
+interface FocusSessionState {
+  taskId: number
+  sessionId: string
+  startedAt: string
+}
 
 const pendingTaskActions = ref<Set<string>>(new Set())
 const pendingAsyncDetailIds = ref<Set<number>>(new Set())
+const focusSession = ref<FocusSessionState | null>(null)
 
 const taskActionKey = (task: AgentTaskVO, action: TaskAction) => `${task.id}:${action}`
 const isTaskActionPending = (task: AgentTaskVO, action: TaskAction) => pendingTaskActions.value.has(taskActionKey(task, action))
@@ -666,40 +743,48 @@ const metrics = computed(() => [
 
 const completionReviewItems = computed(() => {
   const task = completionReviewTask.value
+  if (task?.reviewNextActions?.length) {
+    return task.reviewNextActions
+  }
   const type = String(task?.taskType || '').toUpperCase()
   const skill = task?.relatedSkillName || task?.targetJobTitle || '当前方向'
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) {
     return [
-      `掌握度：已完成一轮「${skill}」训练，先把能稳定讲清楚的点记为可复用表达。`,
-      '当前短板：如果回答仍停在概念层，优先补项目场景、指标、取舍和追问边界。',
-      '下一步建议：进入专项练习或错题本，再刷一组同方向题，巩固今天发现的问题。'
+      `回到「${skill}」专项练习，再完成 1 组同方向题目，巩固刚完成的内容。`,
+      '把刚才仍不稳定的知识点补进错题或笔记，避免下一轮回答再次卡住。',
+      '如果还缺项目语境，先补场景、指标和取舍，再继续下一题。'
     ]
   }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) {
     return [
-      `掌握度：已完成一次「${skill}」复盘，先确认哪些回答能支撑目标岗位要求。`,
-      '当前短板：重点查看低分项、追问失败点和项目描述里还缺少支撑的部分。',
-      '下一步建议：把 1 个薄弱点回填到题库训练或下一次模拟面试，优先练项目背景、指标和取舍。'
+      `先查看这次「${skill}」里最低分的 1 个点，确认下一轮优先修哪一项。`,
+      '把缺少细节支撑的项目经历补成可直接回答的表达，再继续后续训练。',
+      '继续做一轮相关题目或下一次模拟面试，验证刚才的调整是否生效。'
     ]
   }
   if (type.includes('RESUME')) {
     return [
-      `掌握度：已完成一次「${skill}」项目经历整理，先确认新增内容能被面试官追问。`,
-      '当前短板：如果仍缺少数字、业务场景或个人职责，匹配建议会不够稳定。',
-      '下一步建议：用目标岗位关键词再跑一次匹配，把仍缺项目支撑的技能放回今日训练。'
+      `先检查这次补充的「${skill}」证据，确认它能直接支撑目标岗位要求。`,
+      '把仍缺数字、业务场景或职责边界的内容补完整，再进入下一步。',
+      '回到简历匹配再跑一轮，确认今天这项修改是否真正提升匹配度。'
     ]
   }
   return [
-    '掌握度：本次任务已经完成，先确认是否产出了可复用结论。',
-    '当前短板：把仍不确定、无法举例或无法落到项目里的点写进反馈。',
-    '下一步建议：继续推进下一项待办，保持今天的训练闭环。'
+    '先确认这次任务已经沉淀出可复用的结论、素材或表达。',
+    '把仍不确定、无法举例或暂时落不到项目里的点补进反馈里。',
+    '继续处理下一项今日任务，保持今天的训练闭环。'
   ]
 })
 
 const completionReviewNextAction = computed(() => {
   const task = completionReviewTask.value
   const type = String(task?.taskType || '').toUpperCase()
-  if (task?.actionUrl) return { label: '打开任务入口', path: task.actionUrl }
+  if (task && hasAgentTaskActionEntry(task)) {
+    return {
+      label: isAgentJobApplicationTask(task) ? '查看投递进度' : '继续当前任务',
+      path: buildAgentTaskActionPath(task)
+    }
+  }
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) return { label: '继续专项练习', path: '/questions/practice' }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return { label: '查看面试历史', path: '/interviews/history' }
   if (type.includes('RESUME')) return { label: '查看简历匹配', path: '/resume-match' }
@@ -732,6 +817,7 @@ const displayTaskTitle = (row: AgentTaskVO) => {
     RESUME_MATCH: '简历匹配报告',
     QUESTION_RECOMMENDATION: '推荐题生成',
     INTERVIEW_REPORT: '面试报告生成',
+    APPLICATION_FOLLOW_UP: '投递跟进',
     STUDY_TASK: `${skill} 学习任务`,
     REPORT_REVIEW: '面试报告复盘',
     SKILL_REVIEW: `${skill} 核心概念复习`,
@@ -752,6 +838,7 @@ const displayTaskDescription = (row: AgentTaskVO) => {
     RESUME_MATCH: '对比简历和岗位描述的匹配度，失败后回到匹配详情查看原因并重新生成。',
     QUESTION_RECOMMENDATION: '基于画像、匹配报告或通用练习策略生成练习题。',
     INTERVIEW_REPORT: '生成面试复盘、薄弱点和后续学习建议。',
+    APPLICATION_FOLLOW_UP: '查看投递进度，补充沟通记录，并安排下一次跟进。',
     STUDY_TASK: '完成学习计划中的阶段任务。',
     REPORT_REVIEW: '复盘报告结论，提炼下一步改进动作。',
     SKILL_REVIEW: '梳理概念、应用场景、常见误区和项目表达。',
@@ -772,6 +859,59 @@ const getPriorityLabel = (value?: string) => priorityMap[value || ''] || (value 
 const getAsyncBizLabel = (value?: string | null) => asyncBizTypeMap[value || ''] || '处理进度'
 
 const getTaskRunId = (task: AgentTaskVO) => task.agentRunId ?? task.runId ?? null
+const getTaskPlanDate = (task?: AgentTaskVO) =>
+  task?.activationHandoffs?.find((item) => item?.planDate)?.planDate
+  || task?.dueDate
+  || undefined
+
+const trackCompletionReviewCtaClick = (targetPath: string) => {
+  const task = completionReviewTask.value
+  if (!task?.id || !targetPath) return
+  void recordAgentMetricEventApi({
+    eventCode: 'feedback_cta_clicked',
+    taskId: task.id,
+    runId: getTaskRunId(task) ?? undefined,
+    planDate: getTaskPlanDate(task),
+    targetPath,
+    sourcePage: 'agent_tasks'
+  }, { silentError: true }).catch(() => undefined)
+}
+
+const focusSessionLabel = computed(() => {
+  if (!focusSession.value) return ''
+  const startedAt = new Date(focusSession.value.startedAt)
+  if (Number.isNaN(startedAt.getTime())) return '已开始'
+  return `${startedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 开始`
+})
+
+const focusDurationMinutes = () => {
+  if (!focusSession.value) return 0
+  const started = new Date(focusSession.value.startedAt).getTime()
+  if (!Number.isFinite(started)) return 0
+  return Math.max(0, Math.round((Date.now() - started) / 60000))
+}
+
+const trackFocusSessionMetric = (eventCode: FocusMetricCode, task: AgentTaskVO, extra: Record<string, unknown> = {}) => {
+  if (!task?.id) return
+  void recordAgentMetricEventApi({
+    eventCode,
+    taskId: task.id,
+    runId: getTaskRunId(task) ?? undefined,
+    planDate: getTaskPlanDate(task),
+    targetJobId: task.targetJobId,
+    sourcePage: 'agent_tasks',
+    bizType: 'agent_task_focus',
+    bizId: String(task.id),
+    metadata: {
+      sessionId: focusSession.value?.sessionId,
+      taskType: task.taskType,
+      taskStatus: task.status,
+      relatedSkillName: task.relatedSkillName,
+      estimatedMinutes: task.estimatedMinutes,
+      ...extra
+    }
+  }, { silentError: true }).catch(() => undefined)
+}
 
 const sourceTypeLabel = (value?: string | null) => {
   const type = String(value || '').toUpperCase()
@@ -786,6 +926,8 @@ const sourceTypeLabel = (value?: string | null) => {
     INTERVIEW_REPORT: '面试报告',
     RESUME_OPTIMIZE: '项目经历',
     TRAINING_MATERIAL: '训练素材',
+    APPLICATION_FOLLOW_UP: '投递跟进',
+    JOB_APPLICATION: '投递进度',
     JOB_COACH_AGENT_TASK: '智能教练'
   }
   return map[type] || '智能教练'
@@ -886,13 +1028,52 @@ const goRecovery = async (path: string) => {
   await router.push(path)
 }
 
-const hasRecoverableEntry = (task: AgentTaskVO) => Boolean(task.actionUrl || getTaskRunId(task))
-const canManuallyCloseTask = (task: AgentTaskVO) => ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status))
+const hasRecoverableEntry = (task: AgentTaskVO) => Boolean(hasAgentTaskActionEntry(task) || getTaskRunId(task))
+const canManuallyCloseTask = (task: AgentTaskVO) =>
+  ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status)) && !isEvidenceBoundAgentTask(task)
 const canManuallySkipTask = (task: AgentTaskVO) => ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status))
+const canStartFocusSession = (task: AgentTaskVO) => ['TODO', 'DOING'].includes(normalizeStatus(task.status))
+const isFocusActive = (task: AgentTaskVO) => focusSession.value?.taskId === task.id
+const isFocusStartDisabled = (task: AgentTaskVO) => Boolean(focusSession.value && !isFocusActive(task)) || isTaskPending(task)
+
+const startFocusSession = (task: AgentTaskVO) => {
+  if (focusSession.value) {
+    if (isFocusActive(task)) {
+      ElMessage.info('这项任务已经在专注训练中')
+    } else {
+      ElMessage.warning('请先完成或取消当前专注训练')
+    }
+    return
+  }
+  focusSession.value = {
+    taskId: task.id,
+    sessionId: `focus-${task.id}-${Date.now()}`,
+    startedAt: new Date().toISOString()
+  }
+  trackFocusSessionMetric('focus_session_started', task)
+  ElMessage.success('专注训练已开始，任务状态不会自动改变')
+}
+
+const finishFocusSession = (task: AgentTaskVO) => {
+  if (!isFocusActive(task)) return
+  trackFocusSessionMetric('focus_session_finished', task, {
+    durationMinutes: focusDurationMinutes()
+  })
+  focusSession.value = null
+  ElMessage.success('专注训练已记录；如需完成任务，请再手动点击完成')
+}
+
+const cancelFocusSession = (task: AgentTaskVO) => {
+  if (!isFocusActive(task)) return
+  trackFocusSessionMetric('focus_session_canceled', task, {
+    durationMinutes: focusDurationMinutes()
+  })
+  focusSession.value = null
+}
 
 const openTaskPrimaryEntry = async (task: AgentTaskVO) => {
-  if (task.actionUrl) {
-    await goAction(task.actionUrl)
+  if (hasAgentTaskActionEntry(task)) {
+    await goAction(buildAgentTaskActionPath(task))
     return
   }
   await openRunDetail(task)
@@ -907,11 +1088,12 @@ const openRunDetail = async (task: AgentTaskVO) => {
 
 const goAction = async (url: string) => {
   if (!url) return
-  if (/^https?:\/\//i.test(url)) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+  const safePath = sanitizeLocalActionPath(url)
+  if (!safePath) {
+    ElMessage.warning('任务链接暂不支持跳转到站外地址')
     return
   }
-  await router.push(url.startsWith('/') ? url : `/${url}`)
+  await router.push(safePath)
 }
 
 const getAsyncTaskEntry = (task: AsyncTaskVO) => {
@@ -1322,6 +1504,15 @@ const handleAsyncDiagnosticClear = () => {
 }
 
 const openCompleteDialog = (task: AgentTaskVO) => {
+  if (!canManuallyCloseTask(task)) {
+    if (hasAgentTaskActionEntry(task)) {
+      ElMessage.info('该任务需要完成对应业务动作后自动核验')
+      void goAction(buildAgentTaskActionPath(task))
+      return
+    }
+    ElMessage.warning('该任务暂不支持手动标记完成')
+    return
+  }
   selectedTask.value = task
   dialogMode.value = 'complete'
   note.value = ''
@@ -1344,10 +1535,10 @@ const submitAction = async () => {
   }
   await withTaskPending(task, dialogMode.value, async () => {
     if (dialogMode.value === 'complete') {
-      await completeAgentTaskApi(task.id, { note: note.value || undefined })
+      const completedTask = await completeAgentTaskApi(task.id, { note: note.value || undefined })
       ElMessage.success('任务已完成')
-      completionReviewTask.value = task
-      completionReviewNote.value = note.value.trim()
+      completionReviewTask.value = completedTask || task
+      completionReviewNote.value = completedTask?.reviewNote || note.value.trim()
       completionReviewVisible.value = true
     } else {
       await skipAgentTaskApi(task.id, { skipReason: note.value || undefined })
@@ -1360,9 +1551,10 @@ const submitAction = async () => {
 
 const handleStartTask = async (task: AgentTaskVO) => {
   await withTaskPending(task, 'start', async () => {
-    await startAgentTaskApi(task.id)
+    const startedTask = await startAgentTaskApi(task.id)
     ElMessage.success('任务已开始')
     await fetchTasks()
+    await goAction(buildAgentTaskActionPath(startedTask || task))
   })
 }
 
@@ -1405,8 +1597,16 @@ const openFeedbackFromReview = () => {
 }
 
 const goCompletionNextAction = async () => {
+  const targetPath = completionReviewNextAction.value.path
+  trackCompletionReviewCtaClick(targetPath)
   completionReviewVisible.value = false
-  await goAction(completionReviewNextAction.value.path)
+  await goAction(targetPath)
+}
+
+const goCoachNextAction = async () => {
+  trackCoachNextAction()
+  coachDialogVisible.value = false
+  await goAction(coachNextActionPath.value)
 }
 
 const firstRouteQueryString = (value: unknown) => {
@@ -1909,6 +2109,28 @@ onMounted(() => {
   overflow-wrap: anywhere;
 }
 
+.task-review-summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.task-review-summary span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-review-summary p,
+.task-review-summary small {
+  display: block;
+  margin: 4px 0 0;
+  line-height: 1.55;
+}
+
 .task-reason,
 .task-skip-reason,
 .task-failure {
@@ -1961,6 +2183,43 @@ onMounted(() => {
 .task-actions :deep(.el-button) {
   width: 100%;
   margin-left: 0;
+}
+
+.focus-session-bar {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+}
+
+.focus-session-bar div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.focus-session-bar span {
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.focus-session-bar strong {
+  color: #14532d;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.focus-session-bar small {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.focus-session-actions {
+  display: grid;
+  gap: 8px;
 }
 
 .more-button {
@@ -2016,6 +2275,10 @@ onMounted(() => {
   color: #2563eb;
   font-size: 13px;
   font-weight: 800;
+}
+
+.review-hint {
+  font-weight: 600;
 }
 
 .review-note {

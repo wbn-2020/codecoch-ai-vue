@@ -167,6 +167,7 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { QuestionCategoryDTO, QuestionCategoryVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type CategoryColumnKey = 'name' | 'sort' | 'status' | 'description' | 'createdAt' | 'updatedAt'
 
@@ -297,10 +298,21 @@ const handleSave = async () => {
   if (!confirmed) return
   saving.value = true
   try {
+    const confirmedPayload: QuestionCategoryDTO = {
+      ...form,
+      confirm: true,
+      dryRun: false,
+      reason: editingId.value
+        ? 'Admin confirmed question category update from management page.'
+        : 'Admin confirmed question category create from management page.',
+      idempotencyKey: createOperationIdempotencyKey(
+        editingId.value ? 'question-category-update' : 'question-category-create'
+      )
+    }
     if (editingId.value) {
-      await updateQuestionCategoryApi(editingId.value, form)
+      await updateQuestionCategoryApi(editingId.value, confirmedPayload)
     } else {
-      await createQuestionCategoryApi(form)
+      await createQuestionCategoryApi(confirmedPayload)
     }
     ElMessage.success('分类已保存')
     dialogVisible.value = false
@@ -323,7 +335,12 @@ const handleDelete = async (row: QuestionCategoryVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionCategoryApi(row.id)
+  await deleteQuestionCategoryApi(row.id, {
+    confirm: true,
+    dryRun: false,
+    reason: 'Admin confirmed question category delete from management page.',
+    idempotencyKey: createOperationIdempotencyKey('question-category-delete')
+  })
   ElMessage.success('分类已删除')
   await fetchCategories()
 }

@@ -28,8 +28,34 @@ type BackendPage<T> = Partial<PageResult<T>> & {
 
 type PageLikeRecord<T> = BackendPage<T> & Record<string, unknown>
 
-const RECORD_KEYS = ['records', 'list', 'rows', 'items', 'content', 'results', 'resultList', 'dataList', 'data', 'pageData', 'result'] as const
+export interface NormalizePageResultOptions {
+  allowArrayFallback?: boolean
+}
+
+const DIRECT_RECORD_KEYS = ['records', 'list', 'rows', 'items', 'content', 'results', 'resultList', 'dataList'] as const
+const RECORD_KEYS = [...DIRECT_RECORD_KEYS, 'data', 'pageData', 'result'] as const
 const WRAPPER_KEYS = ['data', 'page', 'result', 'pageInfo', 'pagination', 'payload', 'body', 'pageData'] as const
+const PAGE_META_KEYS = [
+  'pageNo',
+  'pageNum',
+  'current',
+  'currentPage',
+  'pageIndex',
+  'number',
+  'pageSize',
+  'size',
+  'perPage',
+  'limit',
+  'total',
+  'totalCount',
+  'totalElements',
+  'totalSize',
+  'rowCount',
+  'count',
+  'pages',
+  'totalPages',
+  'pageCount'
+] as const
 
 const asRecord = <T>(value: unknown): PageLikeRecord<T> | null => {
   if (!value || Array.isArray(value) || typeof value !== 'object') return null
@@ -70,43 +96,53 @@ export const compactQueryParams = <T extends object>(params?: T) =>
       })
   ) as Partial<T>
 
-const findRecords = <T>(source: PageLikeRecord<T>): T[] | undefined => {
-  for (const key of RECORD_KEYS) {
+const findRecords = <T>(source: PageLikeRecord<T>, keys: ReadonlyArray<(typeof RECORD_KEYS)[number]> = RECORD_KEYS): T[] | undefined => {
+  for (const key of keys) {
     const value = source[key]
     if (Array.isArray(value)) return value as T[]
   }
   return undefined
 }
 
-const findPageContainer = <T>(source: unknown, depth = 0): PageLikeRecord<T> | T[] => {
-  if (Array.isArray(source)) return source
+const hasDirectRecords = <T>(source: PageLikeRecord<T>) => Boolean(findRecords(source, DIRECT_RECORD_KEYS))
+
+const hasPageMetadata = <T>(source: PageLikeRecord<T>) => PAGE_META_KEYS.some((key) => toNumber(source[key]) !== undefined)
+
+const findPageContainer = <T>(source: unknown, depth = 0): PageLikeRecord<T> | null => {
+  if (Array.isArray(source)) return null
 
   const record = asRecord<T>(source)
-  if (!record) return {} as PageLikeRecord<T>
+  if (!record) return null
 
-  if (findRecords(record)) return record
-  if (depth >= 3) return record
+  if (hasDirectRecords(record) || hasPageMetadata(record)) return record
+  if (depth >= 3) return null
 
   for (const key of WRAPPER_KEYS) {
     const nested = record[key]
     if (!nested) continue
 
     if (Array.isArray(nested)) {
-      return record
+      if (hasPageMetadata(record)) {
+        return {
+          ...record,
+          records: nested
+        }
+      }
+      continue
     }
 
     const nestedRecord = asRecord<T>(nested)
     if (!nestedRecord) continue
 
-    const nestedContainer = findPageContainer<T>(nestedRecord, depth + 1)
-    if (Array.isArray(nestedContainer)) {
+    if (hasDirectRecords(nestedRecord) || hasPageMetadata(nestedRecord)) {
       return {
         ...record,
-        records: nestedContainer
+        ...nestedRecord
       }
     }
 
-    if (findRecords(nestedContainer)) {
+    const nestedContainer = findPageContainer<T>(nestedRecord, depth + 1)
+    if (nestedContainer) {
       return {
         ...record,
         ...nestedContainer
@@ -114,27 +150,45 @@ const findPageContainer = <T>(source: unknown, depth = 0): PageLikeRecord<T> | T
     }
   }
 
-  return record
+  return null
+}
+
+const toArrayPageResult = <T, U>(
+  records: T[],
+  params: PageQuery | undefined,
+  mapper: (item: T) => U
+): PageResult<U> => {
+  const pageNo = params?.pageNo || params?.pageNum || 1
+  const pageSize = params?.pageSize || records.length || 10
+  return {
+    records: records.map(mapper),
+    total: records.length,
+    pageNo,
+    pageNum: pageNo,
+    pageSize,
+    pages: Math.max(1, Math.ceil(records.length / pageSize))
+  }
 }
 
 export const normalizePageResult = <T, U = T>(
   result: BackendPage<T> | T[],
   params?: PageQuery,
-  mapper: (item: T) => U = (item) => item as unknown as U
+  mapperOrOptions: ((item: T) => U) | NormalizePageResultOptions = (item) => item as unknown as U,
+  options?: NormalizePageResultOptions
 ): PageResult<U> => {
-  const container = findPageContainer<T>(result)
+  const mapper = typeof mapperOrOptions === 'function' ? mapperOrOptions : ((item: T) => item as unknown as U)
+  const normalizeOptions = typeof mapperOrOptions === 'function' ? options : mapperOrOptions
 
-  if (Array.isArray(container)) {
-    const pageNo = params?.pageNo || params?.pageNum || 1
-    const pageSize = params?.pageSize || container.length || 10
-    return {
-      records: container.map(mapper),
-      total: container.length,
-      pageNo,
-      pageNum: pageNo,
-      pageSize,
-      pages: Math.max(1, Math.ceil(container.length / pageSize))
+  if (Array.isArray(result)) {
+    if (!normalizeOptions?.allowArrayFallback) {
+      throw new TypeError('normalizePageResult expected a paginated response object. Pass allowArrayFallback to accept raw array responses.')
     }
+    return toArrayPageResult(result, params, mapper)
+  }
+
+  const container = findPageContainer<T>(result)
+  if (!container) {
+    throw new TypeError('normalizePageResult could not find a paginated response shape.')
   }
 
   const springPageNo = toNumber(container.number)

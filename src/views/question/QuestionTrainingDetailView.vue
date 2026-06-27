@@ -41,7 +41,7 @@
                 <strong>{{ recommendationContext.skillName || '岗位短板训练' }}</strong>
               </div>
               <el-tag :type="recommendationContext.trustType" effect="plain">{{ recommendationContext.trustLabel }}</el-tag>
-              <p>{{ recommendationContext.evidenceSummary || recommendationContext.reason || '这道题来自当前推荐题组，用于补齐面试风险点。' }}</p>
+              <p>这道题来自当前推荐题组，用于补齐面试风险点。</p>
               <small v-if="recommendationContext.boundary">{{ recommendationContext.boundary }}</small>
               <el-tag v-if="recommendationContext.gapSeverity" :type="severityTag(recommendationContext.gapSeverity)" effect="plain">
                 {{ severityLabel(recommendationContext.gapSeverity) }}
@@ -242,31 +242,23 @@ const displayTags = computed<QuestionTagVO[]>(() => {
 const tagNames = computed(() => displayTags.value.map((tag) => tag.name).filter(Boolean))
 const recommendationContext = computed(() => {
   const skillName = queryString('skillName')
-  const reason = queryString('recommendReason')
-  const answerHint = queryString('answerHint')
-  const evaluatePoints = queryString('evaluatePoints')
   const gapSeverity = queryString('gapSeverity')
   const sourceType = queryString('sourceType')
   const sourceId = queryString('sourceId')
   const trustStatus = queryString('trustStatus')
-  const evidenceSummary = queryString('evidenceSummary')
   const fallback = queryString('fallback') === 'true'
   return {
     skillName,
-    reason,
-    answerHint,
-    evaluatePoints,
     gapSeverity,
     sourceType,
     sourceId,
     trustStatus,
-    evidenceSummary,
     fallback,
     sourceLabel: sourceLabel(sourceType, sourceId),
     trustLabel: trustLabel(trustStatus, fallback),
     trustType: trustType(trustStatus, fallback),
     boundary: trustBoundary(trustStatus, fallback, sourceType),
-    hasContext: Boolean(skillName || reason || answerHint || evaluatePoints || gapSeverity || sourceType || evidenceSummary || queryString('recommendationItemId'))
+    hasContext: Boolean(skillName || gapSeverity || sourceType || queryString('recommendationItemId'))
   }
 })
 
@@ -300,7 +292,7 @@ const projectTemplates = computed(() => [
   },
   {
     title: '追问准备',
-    content: recommendationContext.value.answerHint || recommendationContext.value.evaluatePoints || '准备一个失败案例或权衡点，证明你不是只会背标准答案。'
+    content: '准备一个失败案例或权衡点，证明你不是只会背标准答案。'
   }
 ])
 
@@ -367,11 +359,9 @@ const practiceQuery = computed(() => {
     mode: 'recommended',
     questionIds: currentQuestionIds,
     skillName: mainSkillName.value,
-    recommendReason: recommendationContext.value.reason,
     sourceType: queryString('sourceType'),
     sourceId: queryString('sourceId'),
     trustStatus: queryString('trustStatus'),
-    evidenceSummary: queryString('evidenceSummary'),
     fallback: queryString('fallback')
   })
 })

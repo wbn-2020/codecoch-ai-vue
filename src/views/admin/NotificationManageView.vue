@@ -141,6 +141,7 @@ import type { AdminListQuery, AdminNotificationVO, NotificationSendDTO } from '@
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 type NotificationColumnKey =
   | 'id'
@@ -293,8 +294,29 @@ const handleSend = async () => {
   if (!confirmed) return
   saving.value = true
   try {
-    if (form.targetType === 'ALL') await broadcastAdminNotificationApi(form)
-    else await sendAdminNotificationApi(form)
+    const operationReason = isBroadcast
+      ? 'admin notification broadcast confirmed'
+      : `admin notification send confirmed target=${form.targetUserId}`
+    if (form.targetType === 'ALL') {
+      await broadcastAdminNotificationApi({
+        title: form.title,
+        content: form.content,
+        type: form.type,
+        targetType: form.targetType,
+        confirm: true,
+        dryRun: false,
+        reason: operationReason,
+        idempotencyKey: createOperationIdempotencyKey('admin-notice-broadcast')
+      })
+    } else {
+      await sendAdminNotificationApi({
+        ...form,
+        confirm: true,
+        dryRun: false,
+        reason: operationReason,
+        idempotencyKey: createOperationIdempotencyKey(`admin-notice-send-${form.targetUserId}`)
+      })
+    }
     ElMessage.success('通知已发送')
     dialogVisible.value = false
     await fetchNotices()
@@ -316,7 +338,12 @@ const handleDelete = async (row: AdminNotificationVO) => {
   })
   if (!confirmed) return
   try {
-    await deleteAdminNotificationApi(row.id)
+    await deleteAdminNotificationApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: `admin notification delete confirmed id=${row.id}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-notice-delete-${row.id}`)
+    })
     ElMessage.success('通知已删除')
     await fetchNotices()
   } catch (error) {

@@ -98,9 +98,34 @@ const success = ref(false)
 const successMessage = ref('新密码已生效，即将跳转到登录页...')
 const errorMessage = ref('')
 
+const readHashToken = (hash: string) => {
+  if (!hash) return ''
+
+  const normalizedHash = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!normalizedHash) return ''
+
+  const directParams = new URLSearchParams(normalizedHash)
+  const directToken = directParams.get('token')
+  if (directToken) {
+    return directToken
+  }
+
+  const queryIndex = normalizedHash.indexOf('?')
+  if (queryIndex >= 0) {
+    const nestedParams = new URLSearchParams(normalizedHash.slice(queryIndex + 1))
+    return nestedParams.get('token') || ''
+  }
+
+  return ''
+}
+
 const token = computed(() => {
   const t = route.query.token
-  return typeof t === 'string' ? t : ''
+  if (typeof t === 'string' && t) {
+    return t
+  }
+
+  return readHashToken(route.hash)
 })
 
 const form = reactive({

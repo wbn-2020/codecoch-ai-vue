@@ -123,7 +123,11 @@
               <MessageSquare :size="16" />
               面试房间
             </el-button>
-            <el-button :disabled="!canOpenReportPage(item)" @click="router.push(`/interviews/${item.interviewId}/report`)">
+            <el-button
+              v-if="showReportSecondaryAction(item)"
+              :disabled="!canOpenReportPage(item)"
+              @click="router.push(`/interviews/${item.interviewId}/report`)"
+            >
               <FileText :size="16" />
               {{ reportActionLabel(item) }}
             </el-button>
@@ -257,14 +261,16 @@ const primaryActionLabel = (row: InterviewListVO) => {
   if (!isInterviewDone(row.status)) return '继续面试'
   if (isReportSuccess(row.reportStatus)) return '查看复盘'
   if (isReportInProgress(row.reportStatus)) return '查看进度'
-  if (isReportFailed(row.reportStatus)) return '查看失败'
+  if (isReportFailed(row.reportStatus)) return '处理报告失败'
   if (canSubmitOrViewReport(row.status)) return '生成报告'
   return '查看详情'
 }
 
+const showReportSecondaryAction = (row: InterviewListVO) => !isReportFailed(row.reportStatus)
+
 const reportActionLabel = (row: InterviewListVO) => {
   if (isReportInProgress(row.reportStatus)) return '查看进度'
-  if (isReportFailed(row.reportStatus)) return '查看失败'
+  if (isReportFailed(row.reportStatus)) return '失败原因'
   if (canSubmitOrViewReport(row.status) && !isReportSuccess(row.reportStatus)) return '生成报告'
   return '面试报告'
 }

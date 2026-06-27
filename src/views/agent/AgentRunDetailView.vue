@@ -108,6 +108,15 @@
                 <dd>{{ displayModelService(detail.modelName) }}</dd>
               </div>
               <div>
+                <dt>结果来源</dt>
+                <dd>
+                  <el-tag v-if="normalizedRunResultSource(detail)" :type="resultSourceTagType(detail)" effect="plain" size="small">
+                    {{ resultSourceLabel(detail) }}
+                  </el-tag>
+                  <span v-else>--</span>
+                </dd>
+              </div>
+              <div>
                 <dt>计划模板</dt>
                 <dd>{{ promptTypeLabel(detail.promptType) }}</dd>
               </div>
@@ -169,8 +178,13 @@
                   <span>{{ task.estimatedMinutes ?? 0 }} 分钟</span>
                   <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
                 </div>
+                <div v-if="task.reviewSummary" class="task-review-summary">
+                  <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
+                  <p>{{ task.reviewSummary }}</p>
+                  <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
+                </div>
               </div>
-              <el-button class="task-action" @click="router.push('/agent/tasks')">
+              <el-button class="task-action" @click="router.push(buildAgentTaskActionPath(task, '/agent/tasks'))">
                 去处理
                 <ChevronRight :size="16" />
               </el-button>
@@ -191,6 +205,7 @@ import { getAgentRunDetailApi } from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { AgentRunDetailVO, AgentTaskVO } from '@/types/agent'
+import { buildAgentTaskActionPath } from '@/utils/agentTaskAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
@@ -228,7 +243,8 @@ const taskTypeMap: Record<string, string> = {
   STUDY_TASK: '学习任务',
   REPORT_REVIEW: '报告复盘',
   SKILL_REVIEW: '技能复习',
-  KNOWLEDGE_REVIEW: '知识复盘'
+  KNOWLEDGE_REVIEW: '知识复盘',
+  APPLICATION_FOLLOW_UP: '投递跟进'
 }
 
 const priorityMap: Record<string, string> = {
@@ -283,6 +299,30 @@ const promptTypeLabel = (value?: string | null) => {
 }
 
 const displayModelService = (value?: string | null) => (value ? '智能生成服务' : '--')
+const normalizedRunResultSource = (run?: Pick<AgentRunDetailVO, 'resultSource' | 'fallback' | 'mock' | 'modelName'> | null) => {
+  const source = String(run?.resultSource || '').toUpperCase()
+  if (source) return source
+  if (run?.fallback) return 'FALLBACK'
+  if (run?.mock) return 'MOCK'
+  return String(run?.modelName || '').toLowerCase().includes('mock') ? 'MOCK' : ''
+}
+
+const resultSourceLabel = (run?: AgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (run?.resultSourceLabel) return run.resultSourceLabel
+  if (source === 'MOCK') return '模拟数据'
+  if (source === 'FALLBACK') return '降级兜底'
+  if (source === 'LLM') return '真实模型'
+  return '--'
+}
+
+const resultSourceTagType = (run?: AgentRunDetailVO | null) => {
+  const source = normalizedRunResultSource(run)
+  if (source === 'MOCK') return 'info'
+  if (source === 'FALLBACK') return 'warning'
+  return 'success'
+}
+
 const displayTaskTitle = (task: AgentTaskVO) => {
   if (task.title) return task.title
   if (task.relatedSkillName) return `${task.relatedSkillName} ${taskTypeLabel(task.taskType)}`
@@ -632,6 +672,28 @@ onMounted(fetchDetail)
   background: #f8fafc;
   color: #475569;
   font-size: 12px;
+}
+
+.task-review-summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.task-review-summary span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-review-summary p,
+.task-review-summary small {
+  display: block;
+  margin: 4px 0 0;
+  line-height: 1.55;
 }
 
 .task-action {
