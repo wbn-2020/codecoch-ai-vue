@@ -9,3 +9,11 @@ pnpm-debug.log*
 vite-dev*.log
 logs/
 *.tar
+
+# Local editor/project metadata
+.idea/
+
+# Local smoke-test and browser/debug artifacts
+.codex-logs/
+.tmp-chrome-smoke/
+tmp-smoke-*.png
