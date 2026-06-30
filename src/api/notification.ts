@@ -15,6 +15,13 @@ export interface NotificationVO {
   relatedType?: string
   bizId?: number | string
   bizType?: string
+  actionUrl?: string
+  fallbackPath?: string
+  fallbackLabel?: string
+  planDate?: string
+  resolvedStatus?: number | string
+  resolvedAt?: string
+  resolvedReason?: string
 }
 
 export interface NotificationQueryDTO {
@@ -33,10 +40,16 @@ type BackendNotificationVO = NotificationVO & {
   readStatus?: number | string
   bizId?: number | string
   bizType?: string
+  resolvedStatus?: number | string
 }
 
 const normalizeReadFlag = (value: unknown) => {
   if (value === 1 || value === '1' || value === true || value === 'READ') return 1
+  return 0
+}
+
+const normalizeResolvedFlag = (value: unknown) => {
+  if (value === 1 || value === '1' || value === true || value === 'RESOLVED') return 1
   return 0
 }
 
@@ -55,7 +68,9 @@ const normalizeNotification = (item: BackendNotificationVO): NotificationVO => (
   isRead: item.isRead ?? normalizeReadFlag(item.readStatus),
   createdAt: formatDateTime(item.createdAt),
   relatedId: item.relatedId ?? item.bizId,
-  relatedType: normalizeRelatedType(item.relatedType ?? item.bizType)
+  relatedType: normalizeRelatedType(item.relatedType ?? item.bizType),
+  resolvedStatus: normalizeResolvedFlag(item.resolvedStatus),
+  resolvedAt: item.resolvedAt ? formatDateTime(item.resolvedAt) : undefined
 })
 
 const normalizeUnreadCount = (result: UnreadCountVO | number) => {

@@ -134,7 +134,10 @@ onBeforeUnmount(() => {
 
 watch(
   () => route.fullPath,
-  () => tagsStore.addVisitedView(route),
+  () => {
+    tagsStore.addVisitedView(route)
+    fetchUnreadCount()
+  },
   { immediate: true }
 )
 

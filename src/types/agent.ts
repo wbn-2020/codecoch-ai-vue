@@ -108,10 +108,12 @@ export interface AgentTaskSkipDTO {
   skipReason?: string
 }
 
+export type AgentFeedbackType = 'HELPFUL' | 'NOT_HELPFUL' | 'TOO_HARD' | 'TOO_EASY' | 'IRRELEVANT' | string
+
 export interface AgentFeedbackDTO {
   agentTaskId?: number
   agentRunId?: number
-  feedbackType: 'HELPFUL' | 'NOT_HELPFUL' | 'TOO_HARD' | 'TOO_EASY' | 'IRRELEVANT' | string
+  feedbackType: AgentFeedbackType
   comment?: string
 }
 

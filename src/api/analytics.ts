@@ -99,6 +99,19 @@ const normalizeAdminAiOverview = (data: Partial<AdminAiOverviewVO> = {}): AdminA
   totalTokens: Number(data.totalTokens || 0)
 })
 
+const normalizeAgentFeedbackStats = (data: Partial<AgentFeedbackStatsVO> = {}): AgentFeedbackStatsVO => ({
+  totalFeedbackCount: Number(data.totalFeedbackCount || 0),
+  adoptedCount: Number(data.adoptedCount || 0),
+  ignoredCount: Number(data.ignoredCount || 0),
+  likedCount: Number(data.likedCount || 0),
+  dislikedCount: Number(data.dislikedCount || 0),
+  adoptionRate: Number(data.adoptionRate || 0),
+  typeDistribution: (data.typeDistribution || []).map((item) => ({
+    feedbackType: item.feedbackType || 'UNKNOWN',
+    count: Number(item.count || 0)
+  }))
+})
+
 export const getPersonalAgentOverviewApi = () =>
   request
     .get<PersonalAgentOverviewVO, PersonalAgentOverviewVO>('/analytics/personal/agent-overview')
@@ -146,7 +159,9 @@ export const getAdminAnalyticsTrainingApi = (params?: AnalyticsRangeQuery) =>
   request.get<AdminAnalyticsTrainingVO, AdminAnalyticsTrainingVO>('/admin/analytics/training', { params })
 
 export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
-  request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
+  request
+    .get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
+    .then(normalizeAgentFeedbackStats)
 
 export const getAdminVectorStoreHealthApi = () =>
   request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/analytics/vector-store/health')

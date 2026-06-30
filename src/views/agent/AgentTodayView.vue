@@ -40,6 +40,12 @@
         </article>
       </section>
 
+      <NextActionBanner
+        :action="readinessResult.nextAction"
+        :notice="readinessResult.sourceNotice"
+        @open="openPath"
+      />
+
       <section class="content-card">
         <div class="content-card__body">
           <div class="section-head">
@@ -94,7 +100,23 @@
                       <span>{{ task.estimatedMinutes ?? 0 }} 分钟</span>
                       <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
                     </div>
-                    <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+                    <AgentTaskEvidence
+                      :evidence="describeAgentTaskEvidence(task)"
+                      :open="isTaskFeedbackOpen(task)"
+                      :feedback-recorded="hasFeedbackRecorded(task)"
+                      @open="openPath"
+                      @update:open="setTaskFeedbackOpen(task, $event)"
+                    >
+                      <AgentTaskFeedback
+                        class="task-feedback-panel"
+                        :agent-task-id="task.id"
+                        :agent-run-id="task.agentRunId"
+                        :disabled="isTaskOperationPending(task)"
+                        :submitted="hasFeedbackRecorded(task)"
+                        success-title="已记录反馈"
+                        @submitted="handleTaskFeedbackSubmitted(task)"
+                      />
+                    </AgentTaskEvidence>
                   </div>
                   <div class="task-actions">
                     <el-button
@@ -102,33 +124,35 @@
                       size="small"
                       type="primary"
                       :loading="isTaskActionPending(task, 'start')"
-                      :disabled="isTaskPending(task)"
+                      :disabled="isTaskOperationPending(task)"
                       @click="handleStartTask(task)"
                     >
                       开始
                     </el-button>
-                    <el-button v-else-if="task.status === 'DOING'" size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
+                    <el-button v-else-if="task.status === 'DOING'" size="small" type="success" :disabled="isTaskOperationPending(task)" @click="openCompleteDialog(task)">完成</el-button>
                     <el-button
                       v-else-if="task.status === 'SKIPPED'"
                       size="small"
                       type="warning"
                       :loading="isTaskActionPending(task, 'restore')"
-                      :disabled="isTaskPending(task)"
+                      :disabled="isTaskOperationPending(task)"
                       @click="handleRestoreTask(task)"
                     >
                       恢复
                     </el-button>
                     <el-button v-else-if="task.status === 'DONE'" size="small" disabled>已完成</el-button>
-                    <el-button v-else size="small" type="success" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">完成</el-button>
+                    <el-button v-else size="small" type="success" :disabled="isTaskOperationPending(task)" @click="openCompleteDialog(task)">完成</el-button>
                     <el-dropdown trigger="click">
                       <el-button size="small" text class="task-more-button" :icon="MoreHorizontal">更多</el-button>
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item v-if="task.actionUrl" @click="goAction(task.actionUrl)">打开任务入口</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status !== 'DONE'" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status !== 'DONE' && task.status !== 'SKIPPED'" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
-                          <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE'" :disabled="isTaskOperationPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status !== 'DONE' && task.status !== 'SKIPPED'" :disabled="isTaskOperationPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
+                          <el-dropdown-item v-if="task.status === 'SKIPPED'" :disabled="isTaskOperationPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
+                          <el-dropdown-item divided :disabled="isTaskOperationPending(task)" @click="openFeedbackDialog(task)">
+                            {{ hasFeedbackRecorded(task) ? '查看反馈' : '提交反馈' }}
+                          </el-dropdown-item>
                         </el-dropdown-menu>
                       </template>
                     </el-dropdown>
@@ -189,22 +213,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="feedbackDialogVisible" title="Agent 反馈" width="460px">
-      <el-form label-position="top">
-        <el-form-item label="反馈类型">
-          <el-select v-model="feedbackForm.feedbackType" style="width: 100%">
-            <el-option v-for="item in feedbackTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="feedbackForm.comment" type="textarea" :rows="4" maxlength="300" show-word-limit />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="feedbackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="feedbackTask ? isTaskActionPending(feedbackTask, 'feedback') : false" @click="submitFeedback">提交</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -221,12 +229,16 @@ import {
   getTodayAgentTasksApi,
   restoreAgentTaskApi,
   skipAgentTaskApi,
-  startAgentTaskApi,
-  submitAgentFeedbackApi
+  startAgentTaskApi
 } from '@/api/agent'
+import AgentTaskFeedback from '@/components/agent/AgentTaskFeedback.vue'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import AgentTaskEvidence from '@/components/job-readiness/AgentTaskEvidence.vue'
+import NextActionBanner from '@/components/job-readiness/NextActionBanner.vue'
+import { buildReadinessResult, describeAgentTaskEvidence, resolveSafeActionPath } from '@/features/job-readiness/readiness'
+import type { NextAction } from '@/features/job-readiness/types'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
 import type { TargetJobVO } from '@/types/jobTarget'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
@@ -251,12 +263,6 @@ const taskDialogVisible = ref(false)
 const taskDialogMode = ref<'complete' | 'skip'>('complete')
 const selectedTask = ref<AgentTaskVO>()
 const taskNote = ref('')
-const feedbackDialogVisible = ref(false)
-const feedbackTask = ref<AgentTaskVO>()
-const feedbackForm = reactive({
-  feedbackType: 'HELPFUL',
-  comment: ''
-})
 
 const generateForm = reactive({
   targetJobId: undefined as number | undefined,
@@ -291,26 +297,18 @@ const priorityMap: Record<string, string> = {
   LOW: '低优先级'
 }
 
-const feedbackTypeOptions = [
-  { label: '有帮助', value: 'HELPFUL' },
-  { label: '没有帮助', value: 'NOT_HELPFUL' },
-  { label: '内容不准确', value: 'INACCURATE' },
-  { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
-  { label: '疑似幻觉', value: 'HALLUCINATION' },
-  { label: '太难', value: 'TOO_HARD' },
-  { label: '太简单', value: 'TOO_EASY' },
-  { label: '不相关', value: 'IRRELEVANT' }
-]
-
 const emptyPlanDescription = '先确认目标岗位和默认简历；如果缺少弱点证据，可以先完成一次题目练习或模拟面试，再生成今日计划。'
 
-type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+type TaskAction = 'start' | 'complete' | 'skip' | 'restore'
 
 const pendingTaskActions = ref<Set<string>>(new Set())
+const taskFeedbackOpenState = reactive<Record<number, boolean>>({})
+const taskFeedbackRecordedState = reactive<Record<number, boolean>>({})
 
 const taskActionKey = (task: AgentTaskVO, action: TaskAction) => `${task.id}:${action}`
 const isTaskActionPending = (task: AgentTaskVO, action: TaskAction) => pendingTaskActions.value.has(taskActionKey(task, action))
 const isTaskPending = (task: AgentTaskVO) => Array.from(pendingTaskActions.value).some((key) => key.startsWith(`${task.id}:`))
+const isTaskOperationPending = (task: AgentTaskVO) => ['start', 'complete', 'skip', 'restore'].some((action) => isTaskActionPending(task, action as TaskAction))
 
 const setTaskActionPending = (task: AgentTaskVO, action: TaskAction, pending: boolean) => {
   const next = new Set(pendingTaskActions.value)
@@ -339,6 +337,11 @@ const isPlanEmpty = computed(() => !loading.value && !taskList.value.length && (
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
+const readinessResult = computed(() => buildReadinessResult({
+  sourceHint: 'agent-execution',
+  dailyPlan: plan.value,
+  todayTasks: todayTasks.value
+}))
 const planStatus = computed(() => String(plan.value?.status || '').toUpperCase())
 const planStatusType = computed(() => (planStatus.value === 'FAILED' ? 'error' : planStatus.value === 'RUNNING' ? 'warning' : 'info'))
 const planStatusTitle = computed(() => {
@@ -419,7 +422,13 @@ const displayTaskDescription = (task: AgentTaskVO) => {
   return map[task.taskType || ''] || cleanUserText(task.description, '暂无任务描述')
 }
 
-const displayTaskReason = (task: AgentTaskVO) => cleanUserText(task.reason, '')
+const isTaskFeedbackOpen = (task: AgentTaskVO) => Boolean(taskFeedbackOpenState[task.id])
+
+const setTaskFeedbackOpen = (task: AgentTaskVO, open: boolean) => {
+  taskFeedbackOpenState[task.id] = open
+}
+
+const hasFeedbackRecorded = (task: AgentTaskVO) => Boolean(taskFeedbackRecordedState[task.id])
 
 const formatTargetOption = (target: TargetJobVO) => {
   const title = target.jobTitle || `岗位 #${target.id}`
@@ -562,35 +571,24 @@ const handleRestoreTask = async (task: AgentTaskVO) => {
 }
 
 const openFeedbackDialog = (task: AgentTaskVO) => {
-  feedbackTask.value = task
-  Object.assign(feedbackForm, {
-    feedbackType: 'HELPFUL',
-    comment: ''
-  })
-  feedbackDialogVisible.value = true
+  setTaskFeedbackOpen(task, true)
 }
 
-const submitFeedback = async () => {
-  const task = feedbackTask.value
-  if (!task) return
-  await withTaskPending(task, 'feedback', async () => {
-    await submitAgentFeedbackApi({
-      agentTaskId: task.id,
-      agentRunId: task.agentRunId,
-      feedbackType: feedbackForm.feedbackType,
-      comment: feedbackForm.comment || undefined
-    })
-    feedbackDialogVisible.value = false
-    ElMessage.success('反馈已提交')
-  })
+const handleTaskFeedbackSubmitted = (task: AgentTaskVO) => {
+  taskFeedbackRecordedState[task.id] = true
+  taskFeedbackOpenState[task.id] = true
+}
+
+const openPath = (path: string | NextAction['path']) => {
+  router.push(path)
 }
 
 const goAction = (actionUrl: string) => {
-  if (actionUrl.startsWith('/')) {
-    router.push(actionUrl)
-    return
+  const resolved = resolveSafeActionPath(actionUrl)
+  if (resolved.unavailableReason) {
+    ElMessage.warning(resolved.unavailableReason)
   }
-  ElMessage.warning('任务链接暂不支持跳转到站外地址')
+  router.push(resolved.path)
 }
 
 onMounted(() => {
@@ -743,6 +741,28 @@ onMounted(() => {
 
 .task-reason {
   margin-bottom: 0;
+}
+
+.task-feedback-panel {
+  margin-top: 4px;
+}
+
+.task-feedback-panel :deep(.agent-task-feedback) {
+  gap: 14px;
+  padding: 14px;
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.3);
+  box-shadow: none;
+}
+
+.task-feedback-panel :deep(.agent-task-feedback__title h3) {
+  font-size: 14px;
+}
+
+.task-feedback-panel :deep(.agent-task-feedback__title p),
+.task-feedback-panel :deep(.agent-task-feedback__comment-head span),
+.task-feedback-panel :deep(.agent-task-feedback__comment-head label) {
+  font-size: 12px;
 }
 
 .task-actions {

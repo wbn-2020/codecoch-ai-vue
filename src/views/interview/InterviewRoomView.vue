@@ -439,6 +439,24 @@ const reportStatusText = computed(() => {
   return '完成面试后生成'
 })
 
+const buildInterviewContextQuery = () => {
+  const query: Record<string, string> = {}
+  ;['source', 'applicationId', 'targetJobId', 'resumeId', 'resumeVersionId', 'matchReportId', 'skillProfileId'].forEach((key) => {
+    const value = route.query[key]
+    const first = Array.isArray(value) ? value[0] : value
+    if (first) query[key] = String(first)
+  })
+  return query
+}
+
+const goReport = async () => {
+  if (!interviewId) return
+  await router.push({
+    path: `/interviews/${interviewId}/report`,
+    query: buildInterviewContextQuery()
+  })
+}
+
 const outlineStages = computed(() => current.value?.outline || [])
 
 const outlineStageState = (stage: { stageOrder: number; status?: string }) => {
@@ -714,7 +732,7 @@ const handleFinish = async (_manual: boolean) => {
   try {
     const result = await finishInterviewApi(interviewId)
     ElMessage.success(result.message || '正在结束面试并提交报告生成任务')
-    await router.push(`/interviews/${interviewId}/report`)
+    await goReport()
   } finally {
     finishing.value = false
   }
@@ -726,7 +744,7 @@ const handleViewReport = async () => {
     ElMessage.info('完成面试后系统会生成报告，当前还不能查看。')
     return
   }
-  await router.push(`/interviews/${interviewId}/report`)
+  await goReport()
 }
 
 const handleManualFinish = async () => {

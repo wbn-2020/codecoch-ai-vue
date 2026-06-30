@@ -63,6 +63,47 @@
           <el-empty v-if="!taskStats.priorityDistribution.length && !loading" description="暂无优先级数据" />
         </section>
       </div>
+
+      <div class="admin-dashboard-grid analytics-lower-grid">
+        <section class="admin-panel">
+          <div class="admin-panel__header">
+            <div>
+              <h2>反馈概览</h2>
+              <p>统计 Agent 反馈总量、有用反馈、负向反馈与采纳表现。</p>
+            </div>
+            <el-tag effect="plain">agent feedback</el-tag>
+          </div>
+          <div v-if="feedbackErrorMessage" class="admin-empty-wrap">
+            <AppState type="disabled" title="反馈统计暂时不可用" :description="feedbackErrorMessage" />
+          </div>
+          <template v-else>
+            <div v-if="hasFeedbackData" class="feedback-grid">
+              <article v-for="item in feedbackMetrics" :key="item.key" class="feedback-card">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.hint }}</small>
+              </article>
+            </div>
+            <el-empty v-else-if="!loading" description="暂无反馈统计数据" />
+          </template>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel__header">
+            <div>
+              <h2>反馈类型分布</h2>
+              <p>按反馈类型观察推荐结果的主要问题与正向信号。</p>
+            </div>
+          </div>
+          <div v-if="feedbackErrorMessage" class="admin-empty-wrap">
+            <el-empty description="反馈类型分布暂不可用" />
+          </div>
+          <template v-else>
+            <div ref="feedbackChartRef" class="analytics-chart analytics-chart--small"></div>
+            <el-empty v-if="!feedbackTypeDistribution.length && !loading" description="暂无反馈类型数据" />
+          </template>
+        </section>
+      </div>
     </template>
   </div>
 </template>
@@ -71,14 +112,16 @@
 import { Activity, RefreshCw } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { getAdminAgentOverviewApi, getAdminAgentTasksApi, getAdminAgentTrendApi } from '@/api/analytics'
+import { getAdminAgentFeedbackApi, getAdminAgentOverviewApi, getAdminAgentTasksApi, getAdminAgentTrendApi } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
-import type { AdminAgentOverviewVO, AdminAgentTaskStatsVO, MetricPointVO, TrendPointVO } from '@/types/analytics'
+import type { AdminAgentOverviewVO, AdminAgentTaskStatsVO, AgentFeedbackStatsVO, MetricPointVO, TrendPointVO } from '@/types/analytics'
+import { translateFeedbackType } from '@/utils/adminDisplay'
 import echarts, { type ECharts, type EChartsOption } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const errorMessage = ref('')
+const feedbackErrorMessage = ref('')
 const rangeDays = ref(7)
 const overview = ref<AdminAgentOverviewVO>()
 const taskStats = ref<AdminAgentTaskStatsVO>({
@@ -89,10 +132,20 @@ const taskStats = ref<AdminAgentTaskStatsVO>({
   taskTypeDistribution: [],
   priorityDistribution: []
 })
+const feedbackStats = ref<AgentFeedbackStatsVO>({
+  totalFeedbackCount: 0,
+  adoptedCount: 0,
+  ignoredCount: 0,
+  likedCount: 0,
+  dislikedCount: 0,
+  adoptionRate: 0,
+  typeDistribution: []
+})
 const trend = ref<TrendPointVO[]>([])
 const trendChartRef = ref<HTMLElement>()
 const typeChartRef = ref<HTMLElement>()
 const priorityChartRef = ref<HTMLElement>()
+const feedbackChartRef = ref<HTMLElement>()
 let charts: ECharts[] = []
 
 const rangeOptions = [
@@ -106,6 +159,76 @@ const metrics = computed(() => [
   { key: 'success', label: '运行成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgDurationMs || 0}ms` },
   { key: 'tasks', label: '任务总数', value: overview.value?.totalAgentTasks || 0, hint: `完成 ${overview.value?.doneTaskCount || 0} / 跳过 ${overview.value?.skippedTaskCount || 0}` },
   { key: 'completion', label: '任务完成率', value: `${overview.value?.taskCompletionRate || 0}%`, hint: 'DONE / total agent_task' }
+])
+
+const feedbackTypeDistribution = computed<MetricPointVO[]>(() =>
+  (feedbackStats.value.typeDistribution || []).map((item) => ({
+    name: item.feedbackType || 'UNKNOWN',
+    value: Number(item.count || 0)
+  }))
+)
+
+const hasFeedbackData = computed(() => (feedbackStats.value.totalFeedbackCount || 0) > 0)
+
+const formatRateLabel = (value?: number | null) => {
+  if (value == null || Number.isNaN(value)) return '--'
+  return `${value}%`
+}
+
+const helpfulRate = computed(() => {
+  const total = Number(feedbackStats.value.totalFeedbackCount || 0)
+  if (!total) return null
+  return Number((((feedbackStats.value.likedCount || 0) / total) * 100).toFixed(1))
+})
+
+const helpfulRateLabel = computed(() => formatRateLabel(helpfulRate.value))
+
+const negativeFeedbackCount = computed(() => {
+  const distribution = feedbackStats.value.typeDistribution || []
+  if (distribution.length) {
+    return distribution.reduce((sum, item) => {
+      const type = String(item.feedbackType || '').toUpperCase()
+      return sum + (type === 'HELPFUL' ? 0 : Number(item.count || 0))
+    }, 0)
+  }
+  return Math.max(0, Number(feedbackStats.value.totalFeedbackCount || 0) - Number(feedbackStats.value.likedCount || 0))
+})
+
+const negativeRate = computed(() => {
+  const total = Number(feedbackStats.value.totalFeedbackCount || 0)
+  if (!total) return null
+  return Number(((negativeFeedbackCount.value / total) * 100).toFixed(1))
+})
+
+const negativeRateLabel = computed(() => formatRateLabel(negativeRate.value))
+
+const adoptionRateLabel = computed(() => formatRateLabel(feedbackStats.value.adoptionRate))
+
+const feedbackMetrics = computed(() => [
+  {
+    key: 'total',
+    label: '反馈总数',
+    value: feedbackStats.value.totalFeedbackCount || 0,
+    hint: `反馈周期：近 ${rangeDays.value} 天`
+  },
+  {
+    key: 'helpful',
+    label: '有用反馈数',
+    value: feedbackStats.value.likedCount || 0,
+    hint: `有用率 ${helpfulRateLabel.value}`
+  },
+  {
+    key: 'negative',
+    label: '负向反馈数',
+    value: negativeFeedbackCount.value,
+    hint: `占比 ${negativeRateLabel.value}`
+  },
+  {
+    key: 'adoption',
+    label: '采纳率',
+    value: adoptionRateLabel.value,
+    hint: `已采纳 ${feedbackStats.value.adoptedCount || 0}`
+  }
 ])
 
 const getErrorMessage = (error: unknown) => {
@@ -157,11 +280,25 @@ const renderCharts = async () => {
     chart.setOption(pieOption('优先级', taskStats.value.priorityDistribution))
     charts.push(chart)
   }
+  if (feedbackChartRef.value && feedbackTypeDistribution.value.length) {
+    const chart = echarts.init(feedbackChartRef.value)
+    chart.setOption(
+      pieOption(
+        '反馈类型',
+        feedbackTypeDistribution.value.map((item) => ({
+          name: translateFeedbackType(item.name),
+          value: item.value
+        }))
+      )
+    )
+    charts.push(chart)
+  }
 }
 
 const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
+  feedbackErrorMessage.value = ''
   try {
     const params = { days: rangeDays.value }
     const [overviewData, trendData, taskData] = await Promise.all([
@@ -172,12 +309,35 @@ const loadPage = async () => {
     overview.value = overviewData
     trend.value = trendData
     taskStats.value = taskData
-    await renderCharts()
   } catch (error) {
     overview.value = undefined
     trend.value = []
+    taskStats.value = {
+      totalAgentTasks: 0,
+      doneTaskCount: 0,
+      skippedTaskCount: 0,
+      taskCompletionRate: 0,
+      taskTypeDistribution: [],
+      priorityDistribution: []
+    }
     errorMessage.value = getErrorMessage(error)
+  }
+
+  try {
+    feedbackStats.value = await getAdminAgentFeedbackApi({ days: rangeDays.value })
+  } catch (error) {
+    feedbackStats.value = {
+      totalFeedbackCount: 0,
+      adoptedCount: 0,
+      ignoredCount: 0,
+      likedCount: 0,
+      dislikedCount: 0,
+      adoptionRate: 0,
+      typeDistribution: []
+    }
+    feedbackErrorMessage.value = getErrorMessage(error)
   } finally {
+    await renderCharts()
     loading.value = false
   }
 }
@@ -210,12 +370,43 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px 20px;
+}
+
+.feedback-card {
+  display: grid;
+  gap: 6px;
+  min-height: 108px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.feedback-card span,
+.feedback-card small {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.feedback-card strong {
+  font-size: 22px;
+}
+
 .admin-empty-wrap {
   padding: 24px 0;
 }
 
 @media (max-width: 900px) {
   .analytics-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback-grid {
     grid-template-columns: 1fr;
   }
 }

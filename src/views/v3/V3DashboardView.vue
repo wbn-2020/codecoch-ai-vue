@@ -12,6 +12,15 @@
       </div>
     </section>
 
+    <div class="v3-readiness">
+      <NextActionBanner
+        :action="readinessResult.nextAction"
+        :notice="readinessResult.sourceNotice"
+        @open="openReadinessPath"
+      />
+      <ReadinessProgressPanel :result="readinessResult" @open="openReadinessPath" />
+    </div>
+
     <section v-if="errors.length" class="content-panel error-strip">
       <el-alert v-for="error in errors" :key="error" type="warning" show-icon :closable="false" :title="error" />
     </section>
@@ -146,10 +155,11 @@
         <div class="section-head"><div><h2>最近通知</h2><p>同步与你的训练和求职进度相关的提醒。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
         <AppState v-if="notificationLoading" type="loading" title="正在读取通知" />
         <div v-else-if="notifications.length" class="notification-list">
-          <article v-for="item in notifications" :key="item.id">
+          <button v-for="item in notifications" :key="item.id" type="button" @click="openNotification(item)">
             <strong>{{ item.title }}</strong>
             <span>{{ item.content || item.type }} · {{ item.createdAt }}</span>
-          </article>
+            <small>{{ notificationActionLabel(item) }}</small>
+          </button>
         </div>
         <AppState v-else type="empty" title="暂无通知" description="当前没有新的通知。" />
       </div>
@@ -174,12 +184,20 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter, type LocationQueryRaw } from 'vue-router'
 
 import { getV3DashboardOverviewApi } from '@/api/dashboard'
-import { getNotificationsApi, type NotificationVO } from '@/api/notification'
+import { getNotificationsApi, markNotificationReadApi, type NotificationVO } from '@/api/notification'
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { getApplicationStatsApi, type JobApplicationStatsVO } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import NextActionBanner from '@/components/job-readiness/NextActionBanner.vue'
+import ReadinessProgressPanel from '@/components/job-readiness/ReadinessProgressPanel.vue'
+import { appConfig } from '@/config'
+import { buildReadinessResult } from '@/features/job-readiness/readiness'
+import type { NextAction } from '@/features/job-readiness/types'
+import { resolveNotificationAction } from '@/features/notifications'
 import type { V3DashboardNextActionVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
+import { notifyUnreadChanged } from '@/utils/notificationEvents'
 
 const router = useRouter()
 const overviewLoading = ref(false)
@@ -191,11 +209,23 @@ const notificationError = ref('')
 const overview = ref<V3DashboardOverviewVO | null>(null)
 const skillOverview = ref<SkillProfileOverviewVO | null>(null)
 const notifications = ref<NotificationVO[]>([])
+const applicationStats = ref<JobApplicationStatsVO | null>(null)
+const applicationError = ref('')
 
 const loading = computed(() => overviewLoading.value || skillLoading.value || notificationLoading.value)
-const errors = computed(() => [overviewError.value, skillError.value, notificationError.value].filter(Boolean))
+const errors = computed(() => [overviewError.value, skillError.value, notificationError.value, applicationError.value].filter(Boolean))
+const readinessResult = computed(() => buildReadinessResult({
+  v3Overview: overview.value,
+  skillOverview: skillOverview.value
+}))
 const currentTargetJobId = computed(() => overview.value?.currentTargetJob?.targetJobId || overview.value?.currentTargetJob?.id)
 const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchReportId || overview.value?.latestMatch?.reportId)
+const applicationFollowUpCount = computed(() =>
+  (applicationStats.value?.overdueFollowUpCount || 0) + (applicationStats.value?.dueTodayFollowUpCount || 0)
+)
+const applicationFollowUpPath = computed(() =>
+  appConfig.enableV4Preview ? '/applications?followUp=due-today' : '/agent/today'
+)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
 const activeStudyPlanTitle = computed(() => {
   const plan = activeStudyProgress.value
@@ -288,6 +318,15 @@ const normalizeNextActions = (value: V3DashboardOverviewVO['nextActions']) => {
   })
 }
 const metrics = computed(() => [
+  {
+    label: '投递跟进',
+    value: applicationFollowUpCount.value,
+    hint: appConfig.enableV4Preview
+      ? `逾期 ${applicationStats.value?.overdueFollowUpCount || 0} · 今日 ${applicationStats.value?.dueTodayFollowUpCount || 0}`
+      : '进入今日任务',
+    path: applicationFollowUpPath.value,
+    icon: ListChecks
+  },
   { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
   { label: '面试', value: overview.value?.interviewCount ?? 0, hint: '模拟面试记录', path: '/interviews/history', icon: Bell },
   { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
@@ -361,12 +400,46 @@ const reportInsightText = computed(() => {
   return [...weakPoints.slice(0, 2), ...suggestions.slice(0, 1)].filter(Boolean).join(' · ')
 })
 const entries = computed(() => [
+  {
+    title: '投递跟进',
+    desc: appConfig.enableV4Preview
+      ? `逾期 ${applicationStats.value?.overdueFollowUpCount || 0} · 今日 ${applicationStats.value?.dueTodayFollowUpCount || 0}`
+      : '进入今日任务继续推进',
+    path: applicationFollowUpPath.value,
+    icon: ListChecks
+  },
   { title: '岗位目标', desc: '维护当前主目标和 JD', path: '/job-targets', icon: Crosshair },
   { title: '简历匹配', desc: '生成匹配报告', path: { path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId.value }) }, icon: GitCompareArrows },
   { title: '能力画像', desc: '查看短板和动作', path: { path: '/skill-profile', query: compactQuery({ targetJobId: currentTargetJobId.value, matchReportId: latestMatchReportId.value }) }, icon: Radar },
   { title: '推荐题目', desc: '按短板练习', path: { path: '/questions/recommendations', query: recommendationQuery.value }, icon: ListChecks },
   { title: '模拟面试', desc: '按岗位目标创建面试', path: { path: '/interviews/create', query: interviewRetryQuery.value }, icon: Bell }
 ])
+
+const openReadinessPath = (path: string | NextAction['path']) => {
+  router.push(path)
+}
+
+const notificationActionLabel = (item: NotificationVO) => {
+  const action = resolveNotificationAction(item)
+  return action.kind === 'route' ? action.label : '查看详情'
+}
+
+const markNotificationReadBeforeJump = async (item: NotificationVO) => {
+  if (item.isRead !== 0) return
+  try {
+    await markNotificationReadApi(item.id)
+    item.isRead = 1
+    notifyUnreadChanged()
+  } catch {
+    // 跳转是主路径，已读回写失败不阻塞用户继续处理通知。
+  }
+}
+
+const openNotification = async (item: NotificationVO) => {
+  await markNotificationReadBeforeJump(item)
+  const action = resolveNotificationAction(item)
+  await router.push(action.kind === 'route' ? action.path : '/notifications')
+}
 
 const loadOverview = async () => {
   overviewLoading.value = true
@@ -408,15 +481,30 @@ const loadNotifications = async () => {
   }
 }
 
-const loadDashboard = () => Promise.all([loadOverview(), loadSkill(), loadNotifications()])
+const loadApplications = async () => {
+  applicationError.value = ''
+  if (!appConfig.enableV4Preview) {
+    applicationStats.value = null
+    return
+  }
+  try {
+    applicationStats.value = await getApplicationStatsApi()
+  } catch (error) {
+    applicationStats.value = null
+    applicationError.value = getErrorMessage(error, '投递跟进统计暂时不可用。')
+  }
+}
+
+const loadDashboard = () => Promise.all([loadOverview(), loadSkill(), loadNotifications(), loadApplications()])
 
 onMounted(loadDashboard)
 </script>
 
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 18px; }
-.page-hero, .content-panel, .metric-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
+.page-hero, .content-panel, .metric-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); box-shadow: var(--app-shadow); }
 .page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.v3-readiness { display: grid; gap: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1, h2, p { margin: 0; }
@@ -447,12 +535,12 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .loop-summary strong { font-size: 24px; }
 .loop-summary span, .loop-summary small { color: var(--app-text-muted); line-height: 1.5; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.notification-list article, .entry-grid button, .next-action-list button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
-.notification-list article { display: block; }
-.next-action-list button { color: var(--app-text); text-align: left; cursor: pointer; }
+.notification-list button, .entry-grid button, .next-action-list button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list button, .next-action-list button { color: var(--app-text); text-align: left; cursor: pointer; }
 .next-action-list strong, .next-action-list span { display: block; }
 .next-action-list span { margin-top: 6px; color: var(--app-text-muted); }
-.notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
+.notification-list span, .notification-list small { display: block; margin-top: 6px; color: var(--app-text-muted); }
+.notification-list small { color: var(--app-primary); font-size: 12px; }
 .entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .entry-grid button { color: var(--app-text); text-align: left; cursor: pointer; }
 .entry-grid strong, .entry-grid span { display: block; margin-top: 8px; }

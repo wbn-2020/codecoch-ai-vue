@@ -111,6 +111,15 @@ export interface JobApplicationVO {
   id: number
   targetJobId?: number
   resumeVersionId?: number
+  resumeId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
+  resumeVersionCurrentFlag?: number
+  latestEventId?: number
+  latestEventType?: string
+  latestEventTime?: string
+  latestEventSummary?: string
+  matchReportId?: number
   companyName?: string
   jobTitle?: string
   source?: string
@@ -132,6 +141,21 @@ export interface JobApplicationEventVO {
   reviewJson?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobApplicationStatsVO {
+  total?: number
+  activeCount?: number
+  overdueFollowUpCount?: number
+  dueTodayFollowUpCount?: number
+  noFollowUpCount?: number
+  staleActiveCount?: number
+  interviewCount?: number
+  offerCount?: number
+  rejectedCount?: number
+  closedCount?: number
+  statusCounts?: Record<string, number>
+  generatedAt?: string
 }
 
 export interface KnowledgeDocumentVO {
@@ -561,6 +585,9 @@ export const applyResumeVersionSuggestionApi = (versionId: number, data?: Resume
 
 export const getApplicationsApi = (params?: { status?: string }) =>
   request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params }).then((data) => data || [])
+
+export const getApplicationStatsApi = () =>
+  request.get<JobApplicationStatsVO, JobApplicationStatsVO>('/applications/stats')
 
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)

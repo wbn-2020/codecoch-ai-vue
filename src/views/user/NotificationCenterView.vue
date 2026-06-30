@@ -38,6 +38,20 @@
         </el-select>
       </div>
 
+      <div class="notification-overview">
+        <div class="overview-item">
+          <span>未读通知</span>
+          <strong>{{ unreadCount }}</strong>
+        </div>
+        <div class="overview-item">
+          <span>当前页可行动</span>
+          <strong>{{ currentPageActionableCount }}</strong>
+        </div>
+        <div class="overview-note">
+          今日行动完整排序以 Dashboard 为准；这里仅统计当前已加载通知中的可行动项。
+        </div>
+      </div>
+
       <div v-if="errorMessage && !loading" class="notification-error">
         <AppState
           type="error"
@@ -63,10 +77,22 @@
           <div class="notification-body">
             <div class="notification-head">
               <strong>{{ item.title }}</strong>
-              <el-tag size="small" effect="plain">{{ typeLabel(item.type) }}</el-tag>
+              <el-tag size="small" effect="plain">{{ displayNotification(item).typeLabel }}</el-tag>
+              <el-tag v-if="displayNotification(item).actionable" size="small" type="success" effect="plain">
+                {{ displayNotification(item).actionLabel }}
+              </el-tag>
+              <el-tag v-if="isResolvedNotification(item)" size="small" type="info" effect="plain">
+                已处理
+              </el-tag>
             </div>
             <p v-if="item.content">{{ item.content }}</p>
             <span class="notification-time">{{ formatDateTime(item.createdAt) }}</span>
+          </div>
+          <el-button class="notification-detail-button" text @click.stop="openNotificationDetail(item)">
+            详情
+          </el-button>
+          <div class="notification-action">
+            <ExternalLink v-if="displayNotification(item).actionable" :size="16" />
           </div>
         </article>
       </div>
@@ -91,10 +117,14 @@
     >
       <div v-if="selectedNotification" class="notification-detail">
         <div class="detail-meta">
-          <el-tag effect="plain">{{ typeLabel(selectedNotification.type) }}</el-tag>
+          <el-tag effect="plain">{{ displayNotification(selectedNotification).typeLabel }}</el-tag>
+          <el-tag v-if="isResolvedNotification(selectedNotification)" type="success" effect="plain">业务已处理</el-tag>
           <span>{{ formatDateTime(selectedNotification.createdAt) }}</span>
         </div>
         <p class="detail-content">{{ selectedNotification.content || '这条通知暂无正文内容。' }}</p>
+        <p v-if="isResolvedNotification(selectedNotification)" class="resolved-note">
+          {{ resolvedDescription(selectedNotification) }}
+        </p>
         <el-alert
           v-if="notificationTarget"
           type="info"
@@ -140,6 +170,12 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
+import {
+  getNotificationDisplay,
+  isActionableNotification,
+  isResolvedNotification,
+  resolveNotificationAction
+} from '@/features/notifications'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 import { notifyUnreadChanged } from '@/utils/notificationEvents'
 
@@ -161,44 +197,52 @@ const query = reactive<NotificationQueryDTO>({
 })
 
 const notificationTypeOptions = Object.entries(notificationTypeLabels).map(([value, label]) => ({ value, label }))
+notificationTypeOptions.push(
+  { value: 'AGENT_REMINDER', label: 'Agent 提醒' },
+  { value: 'APPLICATION_FOLLOW_UP_REMINDER', label: '投递跟进' },
+  { value: 'INTERVIEW_REPORT_READY', label: '面试/报告' }
+)
 
-const typeLabel = formatNotificationType
-
-const pickRelatedId = (item?: NotificationVO) => {
-  const value = item?.relatedId ?? item?.bizId
-  const id = Number(value)
-  return Number.isFinite(id) && id > 0 ? id : undefined
+const resolveActionPath = (item?: NotificationVO) => {
+  if (!item) return ''
+  const action = resolveNotificationAction(item)
+  return action.kind === 'route' ? action.path : ''
 }
+
+const displayNotification = (item: NotificationVO) => {
+  const display = getNotificationDisplay(item)
+  const path = resolveActionPath(item)
+  return {
+    ...display,
+    typeLabel: display.label || formatNotificationType(item.type),
+    actionLabel: display.actionLabel || item.fallbackLabel || '前往处理',
+    actionable: !isResolvedNotification(item) && Boolean(display.actionable || path)
+  }
+}
+
+const resolvedDescription = (item: NotificationVO) => {
+  const parts = ['业务已处理']
+  if (item.resolvedAt) parts.push(formatDateTime(item.resolvedAt))
+  if (item.resolvedReason) parts.push(item.resolvedReason)
+  return parts.join(' · ')
+}
+
+const resolveActionLabel = (item?: NotificationVO) => {
+  if (!item) return ''
+  const action = resolveNotificationAction(item)
+  return action.label || displayNotification(item).actionLabel
+}
+
+const currentPageActionableCount = computed(() =>
+  notifications.value.filter((item) => isActionableNotification(item)).length
+)
 
 const notificationTarget = computed(() => {
   const item = selectedNotification.value
   if (!item) return null
-  const relatedType = (item.relatedType || item.bizType || item.type || '').toUpperCase()
-  const id = pickRelatedId(item)
-
-  if ((relatedType.includes('INTERVIEW') && relatedType.includes('REPORT')) || relatedType === 'REPORT_DONE') {
-    return id ? { label: '面试报告', path: `/interviews/${id}/report` } : { label: '面试历史', path: '/interviews/history' }
-  }
-  if (relatedType.includes('INTERVIEW')) {
-    return id ? { label: '面试详情', path: `/interviews/${id}` } : { label: '面试历史', path: '/interviews/history' }
-  }
-  if (relatedType.includes('RESUME') && relatedType.includes('MATCH')) {
-    return id ? { label: '简历匹配详情', path: `/resume-match/${id}` } : { label: '简历匹配', path: '/resume-match' }
-  }
-  if (relatedType.includes('RESUME')) {
-    return { label: '简历中心', path: '/resumes' }
-  }
-  if (relatedType.includes('STUDY') || relatedType.includes('PLAN')) {
-    return { label: '学习计划', path: '/study-plans' }
-  }
-  if (relatedType.includes('QUESTION')) {
-    return id ? { label: '题目详情', path: `/questions/${id}` } : { label: '题库', path: '/questions' }
-  }
-  if (relatedType.includes('AGENT_RUN')) {
-    return id ? { label: 'Agent 运行详情', path: `/agent/runs/${id}` } : { label: 'Agent 任务', path: '/agent/tasks' }
-  }
-  if (relatedType.includes('TASK')) {
-    return { label: '每日任务', path: '/daily-tasks' }
+  const resolvedPath = resolveActionPath(item)
+  if (resolvedPath) {
+    return { label: resolveActionLabel(item) || '关联业务', path: resolvedPath }
   }
   return null
 })
@@ -236,7 +280,7 @@ const handleFilter = () => {
   fetchNotifications()
 }
 
-const handleClickNotification = async (item: NotificationVO) => {
+const markReadIfNeeded = async (item: NotificationVO) => {
   if (item.isRead === 0) {
     try {
       await markNotificationReadApi(item.id)
@@ -246,6 +290,21 @@ const handleClickNotification = async (item: NotificationVO) => {
     } catch {
       // silent
     }
+  }
+}
+
+const openNotificationDetail = async (item: NotificationVO) => {
+  await markReadIfNeeded(item)
+  selectedNotification.value = item
+  detailVisible.value = true
+}
+
+const handleClickNotification = async (item: NotificationVO) => {
+  await markReadIfNeeded(item)
+  if (isActionableNotification(item)) {
+    const path = resolveActionPath(item)
+    await router.push(path)
+    return
   }
   selectedNotification.value = item
   detailVisible.value = true
@@ -330,6 +389,45 @@ onMounted(() => {
   gap: 16px;
 }
 
+.notification-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 180px)) minmax(0, 1fr);
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.overview-item,
+.overview-note {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.overview-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+
+  strong {
+    color: #f8fafc;
+    font-size: 22px;
+  }
+}
+
+.overview-note {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .unread-badge {
   display: inline-flex;
   align-items: center;
@@ -383,6 +481,18 @@ onMounted(() => {
       color: #f8fafc;
     }
   }
+}
+
+.notification-detail-button {
+  flex: 0 0 auto;
+}
+
+.notification-action {
+  display: inline-flex;
+  flex: 0 0 24px;
+  justify-content: flex-end;
+  margin-top: 3px;
+  color: var(--cc-ai-cyan);
 }
 
 .notification-dot {
@@ -452,6 +562,13 @@ onMounted(() => {
   white-space: pre-wrap;
 }
 
+.resolved-note {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 @media (max-width: 760px) {
   .notification-hero {
     flex-direction: column;
@@ -461,6 +578,10 @@ onMounted(() => {
   .notification-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .notification-overview {
+    grid-template-columns: 1fr;
   }
 }
 </style>

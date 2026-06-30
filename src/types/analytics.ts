@@ -115,6 +115,11 @@ export interface AnalyticsJobRunDTO {
   maxTotalMinutes?: number
 }
 
+export interface AgentFeedbackTypeCountVO {
+  feedbackType?: string
+  count?: number
+}
+
 export interface AgentFeedbackStatsVO {
   totalFeedbackCount?: number
   adoptedCount?: number
@@ -122,10 +127,7 @@ export interface AgentFeedbackStatsVO {
   likedCount?: number
   dislikedCount?: number
   adoptionRate?: number
-  typeDistribution?: Array<{
-    feedbackType?: string
-    count?: number
-  }>
+  typeDistribution?: AgentFeedbackTypeCountVO[]
 }
 
 export interface AdminAnalyticsOverviewVO {

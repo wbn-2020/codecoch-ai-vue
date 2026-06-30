@@ -51,6 +51,7 @@ export interface IndustryTemplateVO {
 }
 
 export interface InterviewCreateDTO {
+  applicationId?: number
   resumeId?: number
   basedOnResume?: boolean
   interviewName?: string
@@ -86,6 +87,7 @@ export interface InterviewStageVO {
 
 export interface InterviewSessionVO {
   interviewId: number
+  applicationId?: number
   interviewName?: string
   interviewMode?: string
   industryTemplateId?: number
@@ -119,6 +121,7 @@ export interface InterviewQuestionVO {
 
 export interface InterviewCurrentVO {
   interviewId: number
+  applicationId?: number
   sessionId?: number
   status: InterviewStatus
   interviewStatus?: InterviewStatus
@@ -273,6 +276,7 @@ export interface InterviewQueryDTO extends PageQuery {
 
 export interface InterviewListVO {
   interviewId: number
+  applicationId?: number
   interviewName?: string
   interviewMode: string
   resumeName?: string
@@ -320,6 +324,7 @@ export interface InterviewMessageVO {
 
 export interface InterviewDetailVO {
   interviewId: number
+  applicationId?: number
   interviewName?: string
   interviewMode: string
   targetPosition?: string
@@ -363,7 +368,11 @@ export interface InterviewReportVO {
   id?: number
   reportId?: number
   interviewId: number
+  applicationId?: number
   sessionId?: number
+  targetJobId?: number
+  skillProfileId?: number
+  matchReportId?: number
   reportStatus: ReportStatus
   status?: ReportStatus | InterviewStatus
   totalScore?: number

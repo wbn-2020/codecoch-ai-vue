@@ -79,6 +79,7 @@ const normalizeQuestion = (question: any) => {
 const normalizeCurrent = (current: any): InterviewCurrentVO => ({
   ...current,
   interviewId: current.interviewId || current.id,
+  applicationId: current.applicationId,
   sessionId: current.sessionId || current.interviewId || current.id,
   status: current.interviewStatus || current.status,
   interviewStatus: current.interviewStatus || current.status,
@@ -89,6 +90,7 @@ const normalizeCurrent = (current: any): InterviewCurrentVO => ({
 const normalizeSession = (session: any): InterviewSessionVO => ({
   ...session,
   interviewId: session.interviewId || session.id,
+  applicationId: session.applicationId,
   interviewName: session.interviewName || session.title,
   interviewMode: session.interviewMode || session.mode,
   stageList: (session.stageList || session.stages || []).map(normalizeStage)
@@ -179,6 +181,7 @@ const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterview
 const normalizeListItem = (item: any): InterviewListVO => ({
   ...item,
   interviewId: item.interviewId || item.id,
+  applicationId: item.applicationId,
   interviewName: item.interviewName || item.title,
   interviewMode: item.interviewMode || item.mode,
   questionCount: item.questionCount || item.answeredQuestionCount,
@@ -190,6 +193,7 @@ const normalizeListItem = (item: any): InterviewListVO => ({
 const normalizeDetail = (detail: any): InterviewDetailVO => ({
   ...detail,
   interviewId: detail.interviewId || detail.id,
+  applicationId: detail.applicationId,
   interviewName: detail.interviewName || detail.title,
   interviewMode: detail.interviewMode || detail.mode,
   stages: (detail.stages || []).map(normalizeStage),
@@ -213,6 +217,7 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
     id: source.id || source.reportId,
     reportId: source.reportId || source.id,
     interviewId: source.interviewId || source.sessionId || interviewId,
+    applicationId: source.applicationId,
     sessionId: source.sessionId || source.interviewId || interviewId,
     status,
     reportStatus: status || (hasReportContent ? 'GENERATED' : 'NOT_GENERATED'),
@@ -237,6 +242,7 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
 }
 
 const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDTO) => ({
+  applicationId: data.applicationId,
   interviewMode: data.interviewMode,
   resumeId: data.resumeId,
   title: data.interviewName,

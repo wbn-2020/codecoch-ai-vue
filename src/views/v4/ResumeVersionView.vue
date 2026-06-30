@@ -42,13 +42,19 @@
             </div>
           </div>
           <div class="v4-list" v-loading="loading">
-            <article v-for="item in versions" :key="item.id" class="v4-row">
+            <article
+              v-for="item in versions"
+              :key="item.id"
+              class="v4-row"
+              :class="{ 'v4-row--selected': selectedVersionId === item.id }"
+            >
               <div class="v4-row-head">
                 <div>
                   <strong>V{{ item.versionNo ?? '--' }} · {{ item.versionName || `版本 #${item.id}` }}</strong>
                   <p class="muted">{{ item.sourceType || '--' }} · {{ item.createdAt || '--' }}</p>
                 </div>
                 <div class="v4-actions">
+                  <el-tag v-if="selectedVersionId === item.id" type="warning">投递关联版本</el-tag>
                   <el-tag v-if="item.currentFlag" type="success">当前版本</el-tag>
                   <el-button link type="primary" @click="showCurrentDiff(item.id)">对比当前</el-button>
                   <el-button link type="primary" @click="openCopy(item)">复制</el-button>
@@ -140,7 +146,7 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getResumesApi } from '@/api/resume'
@@ -148,6 +154,7 @@ import {
   applyResumeVersionSuggestionApi,
   copyResumeVersionApi,
   createResumeVersionApi,
+  getResumeVersionDetailApi,
   getResumeVersionDiffApi,
   getResumeVersionsApi,
   getResumeVersionsPairDiffApi,
@@ -162,6 +169,7 @@ import { toFriendlyMessage } from '@/utils/error'
 const route = useRoute()
 const initialResumeId = Number(route.params.id)
 const resumeId = ref<number | undefined>(Number.isFinite(initialResumeId) && initialResumeId > 0 ? initialResumeId : undefined)
+const selectedVersionId = ref<number | undefined>()
 const resumes = ref<ResumeVO[]>([])
 const loading = ref(false)
 const resumeLoading = ref(false)
@@ -192,6 +200,18 @@ const getErrorMessage = (error: unknown) => {
   return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
+const getQueryNumber = (name: string) => {
+  const value = route.query[name]
+  const first = Array.isArray(value) ? value[0] : value
+  const parsed = Number(first)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+const getRouteResumeId = () => {
+  const value = Number(route.params.id)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
 const versionLabel = (item: ResumeVersionVO) =>
   `V${item.versionNo ?? '--'} · ${item.versionName || `#${item.id}`}`
 
@@ -208,6 +228,13 @@ const load = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
+    selectedVersionId.value = getQueryNumber('versionId')
+    const routeResumeId = getRouteResumeId()
+    if (routeResumeId) {
+      resumeId.value = routeResumeId
+    } else if (selectedVersionId.value) {
+      resumeId.value = undefined
+    }
     if (!(await ensureResumeId())) {
       versions.value = []
       return
@@ -318,6 +345,14 @@ const ensureResumeId = async () => {
   if (resumeId.value) {
     return true
   }
+  if (selectedVersionId.value) {
+    const version = await getResumeVersionDetailApi(selectedVersionId.value).catch(() => null)
+    if (version?.resumeId) {
+      resumeId.value = version.resumeId
+      return true
+    }
+    selectedVersionId.value = undefined
+  }
   if (!resumes.value.length) {
     await loadResumeOptions()
   }
@@ -329,9 +364,18 @@ const ensureResumeId = async () => {
 }
 
 onMounted(async () => {
+  selectedVersionId.value = getQueryNumber('versionId')
   await loadResumeOptions()
   await load()
 })
+
+watch(
+  () => route.query.versionId,
+  async () => {
+    selectedVersionId.value = getQueryNumber('versionId')
+    await load()
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -404,6 +448,11 @@ onMounted(async () => {
   border: 1px solid var(--app-border);
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.58);
+}
+
+.v4-row--selected {
+  border-color: rgba(251, 191, 36, 0.52);
+  background: rgba(251, 191, 36, 0.08);
 }
 
 .v4-row-head {

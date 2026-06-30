@@ -45,6 +45,15 @@
       </div>
     </section>
 
+    <div v-loading="readinessLoading" class="dashboard-readiness">
+      <NextActionBanner
+        :action="readinessResult.nextAction"
+        :notice="readinessError || readinessResult.sourceNotice"
+        @open="go"
+      />
+      <ReadinessProgressPanel :result="readinessResult" @open="go" />
+    </div>
+
     <!-- Error alert -->
     <section v-if="overviewError" class="cc-glass dashboard-alert">
       <AlertTriangle :size="18" />
@@ -72,19 +81,26 @@
     </section>
 
     <!-- Today's Focus -->
-    <section class="cc-glass dashboard-section today-focus-section" v-loading="agentTasksLoading">
+    <section class="cc-glass dashboard-section today-focus-section" v-loading="todayActionsLoading">
       <div class="section-heading">
         <div>
           <p class="section-kicker">今日闭环</p>
           <h2>今天先做这几件事</h2>
         </div>
-        <el-button text @click="go('/agent/today')">进入今日任务</el-button>
+        <el-button text @click="go('/notifications')">通知中心</el-button>
       </div>
 
-      <div v-if="agentTasksError" class="dashboard-inline-error">
+      <div v-if="todayActionErrors.length" class="today-source-errors">
+        <span v-for="error in todayActionErrors" :key="error">
+          <AlertTriangle :size="14" />
+          {{ error }}
+        </span>
+      </div>
+
+      <div v-if="!todayFocusCards.length && todayActionErrors.length" class="dashboard-inline-error">
         <AlertTriangle :size="16" />
-        <span>{{ agentTasksError }}</span>
-        <el-button text @click="fetchAgentTasks">重试</el-button>
+        <span>今日行动暂时无法完整生成，可以直接进入今日任务或通知中心。</span>
+        <el-button text @click="refreshTodayActions">重试</el-button>
       </div>
 
       <div v-else class="today-focus-grid">
@@ -93,7 +109,7 @@
           :key="item.key"
           class="today-focus-card"
           type="button"
-          @click="go(item.path)"
+          @click="handleTodayActionClick(item)"
         >
           <span class="today-focus-card__index">{{ item.index }}</span>
           <span class="today-focus-card__content">
@@ -310,14 +326,25 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getTodayAgentTasksApi } from '@/api/agent'
-import { getUserDashboardOverviewApi } from '@/api/dashboard'
+import { getUserDashboardOverviewApi, getV3DashboardOverviewApi } from '@/api/dashboard'
+import { getNotificationsApi, markNotificationReadApi, type NotificationVO } from '@/api/notification'
 import { getWrongQuestionsApi } from '@/api/question'
+import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { getApplicationStatsApi, type JobApplicationStatsVO } from '@/api/v4'
+import NextActionBanner from '@/components/job-readiness/NextActionBanner.vue'
+import ReadinessProgressPanel from '@/components/job-readiness/ReadinessProgressPanel.vue'
+import { appConfig } from '@/config'
+import { buildReadinessResult } from '@/features/job-readiness/readiness'
+import type { NextAction } from '@/features/job-readiness/types'
+import { buildTodayActions } from '@/features/today-actions'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO } from '@/types/agent'
-import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
+import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
+import type { SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+import { notifyUnreadChanged } from '@/utils/notificationEvents'
 
 interface MetricItem {
   label: string
@@ -335,6 +362,10 @@ const overviewLoading = ref(false)
 const overviewError = ref(false)
 const overviewErrorMessage = ref('')
 const overview = ref<UserDashboardOverviewVO | null>(null)
+const readinessLoading = ref(false)
+const readinessError = ref('')
+const v3Overview = ref<V3DashboardOverviewVO | null>(null)
+const skillOverview = ref<SkillProfileOverviewVO | null>(null)
 
 const wrongQuestionsLoading = ref(false)
 const wrongQuestionsError = ref('')
@@ -342,6 +373,11 @@ const wrongQuestions = ref<WrongQuestionVO[]>([])
 const agentTasksLoading = ref(false)
 const agentTasksError = ref('')
 const agentTasks = ref<AgentTaskVO[]>([])
+const applicationStats = ref<JobApplicationStatsVO | null>(null)
+const applicationStatsError = ref('')
+const notificationsLoading = ref(false)
+const notificationsError = ref('')
+const notifications = ref<NotificationVO[]>([])
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
@@ -351,6 +387,31 @@ const todayDoneCount = computed(() =>
     ? agentTasks.value.filter((task) => task.status === 'DONE').length
     : overview.value?.todayCompletedTaskCount || 0
 )
+const applicationFollowUpCount = computed(() =>
+  (applicationStats.value?.overdueFollowUpCount || 0) + (applicationStats.value?.dueTodayFollowUpCount || 0)
+)
+const applicationFollowUpPath = computed(() =>
+  appConfig.enableV4Preview ? '/applications?followUp=due-today' : '/agent/today'
+)
+const todayActionsLoading = computed(() => agentTasksLoading.value || notificationsLoading.value)
+const todayActionErrors = computed(() => [
+  agentTasksError.value,
+  applicationStatsError.value,
+  notificationsError.value
+].filter(Boolean))
+const readinessResult = computed(() => buildReadinessResult({
+  userOverview: overview.value,
+  v3Overview: v3Overview.value,
+  skillOverview: skillOverview.value,
+  todayTasks: v3Overview.value
+    ? {
+        tasks: agentTasks.value,
+        total: todayTotalCount.value,
+        doneCount: todayDoneCount.value,
+        todoCount: Math.max(todayTotalCount.value - todayDoneCount.value, 0)
+      }
+    : undefined
+}))
 
 const primaryNextAction = computed(() => {
   const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
@@ -389,52 +450,42 @@ const primaryNextAction = computed(() => {
   }
 })
 
-const todayFocusCards = computed(() => {
-  const openTasks = agentTasks.value.filter((task) => task.status !== 'DONE' && task.status !== 'SKIPPED').slice(0, 3)
-  if (openTasks.length) {
-    return openTasks.map((task, index) => ({
-      key: `agent-${task.id}`,
-      index: index + 1,
-      title: displayAgentTaskTitle(task),
-      desc: displayAgentTaskDescription(task),
-      reason: task.reason || task.relatedSkillName || '来自今日训练任务',
-      path: task.actionUrl && task.actionUrl.startsWith('/') ? task.actionUrl : '/agent/today',
-      badge: formatStatus(task.status)
-    }))
-  }
-
-  return [
-    {
-      key: 'generate-plan',
-      index: 1,
-      title: '生成今日训练计划',
-      desc: '根据目标岗位和最近训练记录生成 3-5 个任务。',
-      reason: '适合每天开始训练前先执行',
-      path: '/agent/today',
-      badge: '待处理'
-    },
-    {
-      key: 'resume',
-      index: 2,
-      title: overview.value?.resumeCount ? '检查简历匹配状态' : '补充第一份简历',
-      desc: overview.value?.resumeCount ? resumeOptimizeText.value : '上传或创建简历后，系统才能给出岗位匹配建议。',
-      reason: '简历证据会影响任务推荐质量',
-      path: '/resumes',
-      badge: entryStatusText(findEntryStatus('resume')?.status)
-    },
-    {
-      key: 'interview-or-wrong',
-      index: 3,
-      title: wrongQuestions.value.length ? '复盘最近错题' : '完成一次模拟面试',
-      desc: wrongQuestions.value.length ? `${wrongQuestions.value.length} 道错题可用于校准薄弱点。` : '用一次模拟面试补充系统对表达和项目深度的判断。',
-      reason: '练习证据越多，明天的计划越准',
-      path: wrongQuestions.value.length ? '/questions/wrong-records' : '/interviews/create',
-      badge: wrongQuestions.value.length ? '待复习' : '待处理'
+const todayFocusCards = computed(() =>
+  buildTodayActions({
+    agentTasks: agentTasks.value,
+    applicationStats: appConfig.enableV4Preview ? applicationStats.value : null,
+    notifications: notifications.value,
+    readinessAction: readinessResult.value.nextAction
+  }, {
+    notificationResolver: {
+      enableV4Preview: appConfig.enableV4Preview
     }
-  ]
-})
+  }).map((item, index) => ({
+    key: item.key,
+    index: index + 1,
+    title: item.title,
+    desc: item.description,
+    reason: item.reason,
+    path: item.actionPath,
+    badge: item.priority === 'urgent' ? '紧急' : item.priority === 'high' ? '优先' : item.source === 'readiness' ? '下一步' : '待处理',
+    source: item.source,
+    notificationId: item.notificationId,
+    unread: item.unread
+  }))
+)
 
 const metrics = computed<MetricItem[]>(() => [
+  {
+    label: '投递跟进',
+    value: applicationFollowUpCount.value,
+    hint: appConfig.enableV4Preview
+      ? `逾期 ${applicationStats.value?.overdueFollowUpCount || 0} · 今日 ${applicationStats.value?.dueTodayFollowUpCount || 0}`
+      : 'V4 预览关闭，先进入今日任务',
+    icon: Route,
+    tone: 'tone-amber',
+    path: applicationFollowUpPath.value,
+    disabled: !appConfig.enableV4Preview && !applicationFollowUpCount.value
+  },
   {
     label: '简历数量',
     value: overview.value?.resumeCount ?? 0,
@@ -486,6 +537,16 @@ const metrics = computed<MetricItem[]>(() => [
 ])
 
 const actionCards = computed(() => [
+  {
+    title: '今日投递跟进',
+    desc: applicationStatsError.value
+      ? '投递统计暂时不可用，可直接进入今日任务'
+      : `逾期 ${applicationStats.value?.overdueFollowUpCount || 0} 条，今日 ${applicationStats.value?.dueTodayFollowUpCount || 0} 条`,
+    icon: Route,
+    tone: 'tone-amber',
+    path: applicationFollowUpPath.value,
+    badge: appConfig.enableV4Preview ? (applicationFollowUpCount.value > 0 ? '待跟进' : '可用') : '今日任务'
+  },
   {
     title: '开始 AI 模拟面试',
     desc: '选择岗位、难度和简历后开始训练',
@@ -556,8 +617,34 @@ const activePlanText = computed(() => {
 
 const findEntryStatus = (key: string) => entryStatuses.value.find((item) => item.key === key)
 
-const go = (path: string) => {
+const go = (path: string | NextAction['path']) => {
   router.push(path)
+}
+
+const markNotificationActionRead = async (notificationId?: number | string) => {
+  const id = Number(notificationId)
+  if (!Number.isFinite(id) || id <= 0) return
+  try {
+    await markNotificationReadApi(id)
+    notifications.value = notifications.value.map((item) =>
+      item.id === id ? { ...item, isRead: 1 } : item
+    )
+    notifyUnreadChanged()
+  } catch {
+    // 跳转是主路径，已读回写失败不阻塞用户继续处理行动。
+  }
+}
+
+const handleTodayActionClick = async (item: {
+  path: string
+  source?: string
+  notificationId?: number | string
+  unread?: boolean
+}) => {
+  if (item.source === 'notification' && item.unread) {
+    await markNotificationActionRead(item.notificationId)
+  }
+  go(item.path)
 }
 
 const displayAgentTaskTitle = (task: AgentTaskVO) => {
@@ -648,6 +735,41 @@ const fetchOverview = async () => {
   }
 }
 
+const fetchReadinessContext = async () => {
+  readinessLoading.value = true
+  readinessError.value = ''
+  try {
+    const [v3Res, skillRes] = await Promise.allSettled([
+      getV3DashboardOverviewApi(),
+      getSkillProfileOverviewApi()
+    ])
+
+    if (v3Res.status === 'fulfilled') {
+      v3Overview.value = v3Res.value
+    } else {
+      v3Overview.value = null
+      readinessError.value = getErrorMessage(
+        v3Res.reason,
+        '求职准备完整上下文暂时不可用，已保留原工作台内容。'
+      )
+    }
+
+    if (skillRes.status === 'fulfilled') {
+      skillOverview.value = skillRes.value
+    } else {
+      skillOverview.value = null
+      if (!readinessError.value) {
+        readinessError.value = getErrorMessage(
+          skillRes.reason,
+          '能力画像概览暂时不可用，就绪度已降级计算。'
+        )
+      }
+    }
+  } finally {
+    readinessLoading.value = false
+  }
+}
+
 const fetchWrongQuestions = async () => {
   wrongQuestionsLoading.value = true
   wrongQuestionsError.value = ''
@@ -676,10 +798,45 @@ const fetchAgentTasks = async () => {
   }
 }
 
+const fetchApplicationStats = async () => {
+  applicationStatsError.value = ''
+  if (!appConfig.enableV4Preview) {
+    applicationStats.value = null
+    return
+  }
+  try {
+    applicationStats.value = await getApplicationStatsApi()
+  } catch (error) {
+    applicationStats.value = null
+    applicationStatsError.value = getErrorMessage(error, '投递跟进统计暂时加载失败。')
+  }
+}
+
+const fetchNotifications = async () => {
+  notificationsLoading.value = true
+  notificationsError.value = ''
+  try {
+    const page = await getNotificationsApi({ pageNo: 1, pageSize: 5, isRead: 0 })
+    notifications.value = page.records || []
+  } catch (error) {
+    notifications.value = []
+    notificationsError.value = getErrorMessage(error, '通知提醒暂时加载失败。')
+  } finally {
+    notificationsLoading.value = false
+  }
+}
+
+const refreshTodayActions = () => {
+  fetchAgentTasks()
+  fetchApplicationStats()
+  fetchNotifications()
+}
+
 onMounted(() => {
   fetchOverview()
+  fetchReadinessContext()
   fetchWrongQuestions()
-  fetchAgentTasks()
+  refreshTodayActions()
 })
 </script>
 
@@ -703,8 +860,34 @@ onMounted(() => {
   padding: 20px;
 }
 
+.dashboard-readiness {
+  display: grid;
+  gap: 16px;
+}
+
 .today-focus-section {
   border-color: rgba(34, 211, 238, 0.24);
+}
+
+.today-source-errors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 10px;
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    color: #fde68a;
+    font-size: 12px;
+    line-height: 1.45;
+  }
 }
 
 .dashboard-alert {

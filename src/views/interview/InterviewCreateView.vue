@@ -277,6 +277,7 @@ import {
   interviewPracticeModeOptions,
   targetPositionOptions
 } from '@/constants/enums'
+import { buildInterviewCreatePayload } from '@/features/interview-create'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
@@ -411,6 +412,15 @@ const getQueryString = (name: string) => {
 const getQueryNumber = (name: string) => {
   const value = Number(getQueryString(name))
   return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+const buildInterviewContextQuery = () => {
+  const query: Record<string, string> = {}
+  ;['source', 'applicationId', 'targetJobId', 'resumeId', 'resumeVersionId', 'matchReportId', 'skillProfileId'].forEach((key) => {
+    const value = getQueryString(key)
+    if (value) query[key] = String(value)
+  })
+  return query
 }
 
 const parseTemplateItems = (value?: string) => {
@@ -615,19 +625,20 @@ const handleCreate = async () => {
   creating.value = true
   try {
     const template = selectedIndustryTemplate.value
-    const payload: InterviewCreateDTO = {
-      ...form,
-      interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
-      practiceMode: form.practiceMode,
-      industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
-      industryDirection: isIndustryMode.value
-        ? template?.industryCode || template?.industryName || form.industryDirection
-        : form.industryDirection,
-      resumeId: useResume.value || isJobTargetFlow.value ? form.resumeId : undefined
-    }
+    const payload = buildInterviewCreatePayload({
+      form,
+      context: { applicationId: getQueryNumber('applicationId') },
+      isIndustryMode: isIndustryMode.value,
+      useResume: useResume.value,
+      isJobTargetFlow: isJobTargetFlow.value,
+      selectedIndustryTemplate: template
+    })
     const result = await createInterviewWithRouteContext(payload)
     ElMessage.success('面试已创建')
-    await router.push(`/interviews/room/${result.interviewId}`)
+    await router.push({
+      path: `/interviews/room/${result.interviewId}`,
+      query: buildInterviewContextQuery()
+    })
   } finally {
     creating.value = false
   }

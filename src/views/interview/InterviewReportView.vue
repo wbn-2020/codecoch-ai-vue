@@ -18,7 +18,7 @@
           <History :size="16" />
           返回历史
         </el-button>
-        <el-button v-if="interviewId" type="primary" @click="router.push('/interviews/create')">
+        <el-button v-if="interviewId" type="primary" @click="router.push({ path: '/interviews/create', query: interviewContextQuery })">
           <RotateCcw :size="16" />
           重新面试
         </el-button>
@@ -93,6 +93,28 @@
             compact
           />
         </div>
+
+        <el-alert
+          v-if="applicationId"
+          class="application-sync"
+          type="success"
+          show-icon
+          :closable="false"
+          title="这份报告来自投递链路"
+          description="可以把面试完成结果写回投递事件，方便在投递工作台继续跟进。"
+        >
+          <template #default>
+            <el-button
+              type="primary"
+              plain
+              :loading="syncingApplicationEvent"
+              :disabled="applicationEventSynced"
+              @click="syncReportToApplication"
+            >
+              {{ applicationEventSynced ? '已同步到投递' : '同步到投递事件' }}
+            </el-button>
+          </template>
+        </el-alert>
 
         <div class="dimension-section">
           <div class="section-head">
@@ -300,6 +322,7 @@ import {
   retryInterviewReportApi,
   streamInterviewReportApi
 } from '@/api/interview'
+import { createApplicationEventApi, getApplicationEventsApi, type JobApplicationEventVO } from '@/api/v4'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
@@ -313,7 +336,7 @@ import type {
   RecommendedQuestionVO,
   StageReportVO
 } from '@/types/interview'
-import { toFriendlyMessage } from '@/utils/error'
+import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -322,6 +345,8 @@ const interviewId = getRouteNumberParam(route.params.id as string)
 const loading = ref(false)
 const retrying = ref(false)
 const studyPlanGenerating = ref(false)
+const syncingApplicationEvent = ref(false)
+const applicationEventSynced = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const pollCount = ref(0)
 const pollFailures = ref(0)
@@ -332,6 +357,29 @@ const sseAiCallLogId = ref<number | undefined>()
 const sseEvents = ref<Array<{ key: string; event: string; stage?: string; message?: string }>>([])
 let pollTimer: number | undefined
 let reportSseHandle: ReturnType<typeof streamInterviewReportApi> | null = null
+
+const getQueryString = (name: string) => {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+const getQueryNumber = (name: string) => {
+  const value = Number(getQueryString(name))
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+const applicationId = computed(() => report.value?.applicationId || getQueryNumber('applicationId'))
+const interviewContextQuery = computed(() => {
+  const query: Record<string, string> = {}
+  ;['source', 'applicationId', 'targetJobId', 'resumeId', 'resumeVersionId', 'matchReportId', 'skillProfileId'].forEach((key) => {
+    const value = getQueryString(key)
+    if (value) query[key] = String(value)
+  })
+  if (report.value?.applicationId) {
+    query.applicationId = String(report.value.applicationId)
+  }
+  return query
+})
 
 const normalizedStatus = computed(() => {
   const status = report.value?.reportStatus || report.value?.status || ''
@@ -502,6 +550,7 @@ const fetchReport = async () => {
       schedulePolling()
     } else {
       stopPolling()
+      await refreshApplicationEventSyncState()
     }
   } catch (error) {
     pollFailures.value += 1
@@ -520,6 +569,7 @@ const refreshFinalReport = async () => {
   if (!interviewId) return
   report.value = await getInterviewReportApi(interviewId)
   stopPolling()
+  await refreshApplicationEventSyncState()
 }
 
 const runSyncFallback = async (forceRegenerate: boolean) => {
@@ -639,6 +689,7 @@ const loadReportOrStartSse = async () => {
     pollFailures.value = 0
     if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
+      await refreshApplicationEventSyncState()
       return
     }
     startReportSse(false)
@@ -652,6 +703,71 @@ const loadReportOrStartSse = async () => {
 const handleRetry = async () => {
   if (!interviewId) return
   startReportSse(true)
+}
+
+const parseApplicationEventReview = (event: JobApplicationEventVO) => {
+  if (event.review && typeof event.review === 'object') return event.review
+  if (!event.reviewJson) return {}
+  try {
+    const parsed = JSON.parse(event.reviewJson)
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+const hasSyncedReportEvent = async (reportId?: number) => {
+  if (!applicationId.value || !interviewId) return false
+  const events = await getApplicationEventsApi(applicationId.value)
+  return events.some((event) => {
+    if (String(event.eventType || '').toUpperCase() !== 'INTERVIEW_COMPLETED') return false
+    const review = parseApplicationEventReview(event)
+    return Number(review.interviewId) === interviewId || Boolean(reportId && Number(review.reportId) === reportId)
+  })
+}
+
+const refreshApplicationEventSyncState = async () => {
+  if (!applicationId.value || !interviewId || !report.value || !isGenerated.value) return
+  const reportId = report.value.reportId || report.value.id
+  try {
+    applicationEventSynced.value = await hasSyncedReportEvent(reportId)
+  } catch {
+    applicationEventSynced.value = false
+  }
+}
+
+const syncReportToApplication = async () => {
+  if (!applicationId.value || !interviewId || !report.value) return
+  syncingApplicationEvent.value = true
+  try {
+    const reportId = report.value.reportId || report.value.id
+    if (await hasSyncedReportEvent(reportId)) {
+      applicationEventSynced.value = true
+      ElMessage.info('这份报告已经同步到投递事件')
+      return
+    }
+    await createApplicationEventApi(applicationId.value, {
+      eventType: 'INTERVIEW_COMPLETED',
+      eventTime: report.value.generatedAt || report.value.createdAt || undefined,
+      summary: `面试报告已生成，综合得分 ${displayTotalScore.value}`,
+      reviewJson: JSON.stringify({
+        source: 'interview-report',
+        interviewId,
+        reportId,
+        reportStatus: report.value.reportStatus || report.value.status,
+        totalScore: report.value.totalScore,
+        targetJobId: report.value.targetJobId || getQueryNumber('targetJobId'),
+        resumeVersionId: getQueryNumber('resumeVersionId'),
+        matchReportId: report.value.matchReportId || getQueryNumber('matchReportId')
+      })
+    })
+    applicationEventSynced.value = true
+    ElMessage.success('已同步到投递事件')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '投递事件同步失败，请稍后重试。'))
+  } finally {
+    syncingApplicationEvent.value = false
+  }
 }
 
 const handleGenerateStudyPlan = async () => {
@@ -893,6 +1009,10 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 14px;
+}
+
+.application-sync {
+  margin: 14px 0 6px;
 }
 
 .dimension-section {
