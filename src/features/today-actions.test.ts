@@ -168,4 +168,25 @@ describe('today action aggregation', () => {
       { key: 'readiness-next-action', source: 'readiness', actionPath: '/agent/today' }
     ])
   })
+
+  it('falls back unsafe agent action paths to today agent page', () => {
+    const actions = buildTodayActions({
+      agentTasks: [
+        agentTask({ id: 12, title: 'Review report', actionUrl: '//evil.example' }),
+        agentTask({ id: 13, title: 'Unknown path', actionUrl: '/not-exists' }),
+        agentTask({ id: 14, title: 'Preview path', actionUrl: '/applications' })
+      ]
+    }, {
+      notificationResolver: {
+        enableV4Preview: false,
+        knownPaths: ['/agent/today']
+      }
+    })
+
+    expect(actions.map((item) => item.actionPath)).toEqual([
+      '/agent/today',
+      '/agent/today',
+      '/agent/today'
+    ])
+  })
 })

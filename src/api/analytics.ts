@@ -16,6 +16,7 @@ import type {
   AgentFeedbackStatsVO,
   AnalyticsJobRunDTO,
   AnalyticsRangeQuery,
+  CareerInsightOverviewVO,
   MetricPointVO,
   PromptRegressionCaseSaveDTO,
   PersonalAgentOverviewVO,
@@ -126,6 +127,12 @@ export const getPersonalSkillDistributionApi = (params?: AnalyticsRangeQuery) =>
   request
     .get<MetricPointVO[], MetricPointVO[]>('/analytics/personal/skill-distribution', { params })
     .then(normalizeMetricList)
+
+export const getPersonalCareerInsightsApi = (params?: AnalyticsRangeQuery, options?: { silentError?: boolean }) =>
+  request.get<CareerInsightOverviewVO, CareerInsightOverviewVO>('/analytics/personal/career-insights', {
+    params,
+    silentError: options?.silentError
+  })
 
 export const getAdminAgentOverviewApi = (params?: AnalyticsRangeQuery) =>
   request

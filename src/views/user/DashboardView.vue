@@ -122,6 +122,44 @@
       </div>
     </section>
 
+    <!-- Career Insights -->
+    <section
+      v-if="careerInsightsVisible"
+      class="cc-glass dashboard-section career-insight-section"
+      v-loading="careerInsightsLoading"
+    >
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">本周求职洞察</p>
+          <h2>最近 30 天优先改进</h2>
+        </div>
+        <el-button text @click="go('/analytics/personal')">查看完整洞察</el-button>
+      </div>
+
+      <div v-if="careerInsightActions.length" class="career-insight-grid">
+        <button
+          v-for="item in careerInsightActions"
+          :key="item.key"
+          class="career-insight-card"
+          type="button"
+          @click="go(item.actionPath)"
+        >
+          <span class="career-insight-card__content">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.description }}</span>
+            <small>{{ item.evidence || item.unavailableReason || '来自最近求职数据。' }}</small>
+          </span>
+          <span class="cc-badge" :class="badgeClass(careerPriorityBadge(item.priority))">
+            {{ careerPriorityBadge(item.priority) }}
+          </span>
+        </button>
+      </div>
+      <el-empty
+        v-else
+        :description="careerInsightsError || '继续记录投递和面试后，这里会生成趋势建议。'"
+      />
+    </section>
+
     <!-- Quick Actions -->
     <section class="cc-glass dashboard-section">
       <div class="section-heading">
@@ -326,6 +364,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getTodayAgentTasksApi } from '@/api/agent'
+import { getPersonalCareerInsightsApi } from '@/api/analytics'
 import { getUserDashboardOverviewApi, getV3DashboardOverviewApi } from '@/api/dashboard'
 import { getNotificationsApi, markNotificationReadApi, type NotificationVO } from '@/api/notification'
 import { getWrongQuestionsApi } from '@/api/question'
@@ -336,6 +375,12 @@ import ReadinessProgressPanel from '@/components/job-readiness/ReadinessProgress
 import { appConfig } from '@/config'
 import { buildReadinessResult } from '@/features/job-readiness/readiness'
 import type { NextAction } from '@/features/job-readiness/types'
+import {
+  type CareerActionPriority,
+  type CareerInsightOverviewVO,
+  toDashboardCareerInsightItems
+} from '@/features/career-insights'
+import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import { buildTodayActions } from '@/features/today-actions'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO } from '@/types/agent'
@@ -378,6 +423,10 @@ const applicationStatsError = ref('')
 const notificationsLoading = ref(false)
 const notificationsError = ref('')
 const notifications = ref<NotificationVO[]>([])
+const careerInsightsLoading = ref(false)
+const careerInsightsLoaded = ref(false)
+const careerInsightsError = ref('')
+const careerInsights = ref<CareerInsightOverviewVO | null>(null)
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
@@ -416,10 +465,15 @@ const readinessResult = computed(() => buildReadinessResult({
 const primaryNextAction = computed(() => {
   const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
   if (firstTodo) {
+    const safeActionPath = resolveAppRoutePath(firstTodo.actionUrl, {
+      fallbackPath: '/agent/today',
+      enableV4Preview: appConfig.enableV4Preview,
+      knownPaths: defaultUserKnownPaths
+    }).path
     return {
       title: displayAgentTaskTitle(firstTodo),
       cta: '继续今日任务',
-      path: firstTodo.actionUrl && firstTodo.actionUrl.startsWith('/') ? firstTodo.actionUrl : '/agent/today',
+      path: safeActionPath,
       icon: BookOpenCheck
     }
   }
@@ -472,6 +526,27 @@ const todayFocusCards = computed(() =>
     notificationId: item.notificationId,
     unread: item.unread
   }))
+)
+
+const todayCareerInsightDedupeKeys = computed(() =>
+  todayFocusCards.value.flatMap((item) => {
+    if (item.key === 'application-follow-up-overdue') return ['application-follow-up:overdue']
+    if (item.key === 'application-follow-up-due-today') return ['application-follow-up:due-today']
+    if (item.source === 'readiness') return ['readiness:next-action']
+    return []
+  })
+)
+
+const careerInsightActions = computed(() =>
+  toDashboardCareerInsightItems(careerInsights.value?.recommendedActions, {
+    enableV4Preview: appConfig.enableV4Preview,
+    maxItems: 3,
+    existingDedupeKeys: todayCareerInsightDedupeKeys.value
+  })
+)
+
+const careerInsightsVisible = computed(() =>
+  careerInsightsLoading.value || careerInsightsLoaded.value || careerInsightActions.value.length > 0
 )
 
 const metrics = computed<MetricItem[]>(() => [
@@ -697,7 +772,16 @@ const formatStatus = (status?: string) => {
 
 const entryStatusText = (status?: string) => formatStatus(status || 'TODO')
 
+const careerPriorityBadge = (priority: CareerActionPriority) => {
+  if (priority === 'urgent') return '紧急'
+  if (priority === 'high') return '优先'
+  if (priority === 'low') return '观察'
+  return '建议'
+}
+
 const badgeClass = (badge: string) => {
+  if (badge === '紧急') return 'cc-badge--danger'
+  if (badge === '优先' || badge === '建议' || badge === '待跟进') return 'cc-badge--warning'
   if (badge === '可用') return 'cc-badge--success'
   if (badge === '待复习') return 'cc-badge--warning'
   if (badge === '失败') return 'cc-badge--danger'
@@ -826,6 +910,21 @@ const fetchNotifications = async () => {
   }
 }
 
+const fetchCareerInsights = async () => {
+  careerInsightsLoading.value = true
+  careerInsightsError.value = ''
+  try {
+    careerInsights.value = await getPersonalCareerInsightsApi({ days: 30 }, { silentError: true })
+    careerInsightsLoaded.value = true
+  } catch (error) {
+    careerInsights.value = null
+    careerInsightsLoaded.value = true
+    careerInsightsError.value = getErrorMessage(error, '求职洞察暂时加载失败，可以进入完整洞察页稍后重试。')
+  } finally {
+    careerInsightsLoading.value = false
+  }
+}
+
 const refreshTodayActions = () => {
   fetchAgentTasks()
   fetchApplicationStats()
@@ -837,6 +936,7 @@ onMounted(() => {
   fetchReadinessContext()
   fetchWrongQuestions()
   refreshTodayActions()
+  fetchCareerInsights()
 })
 </script>
 
@@ -1151,6 +1251,55 @@ onMounted(() => {
   }
 }
 
+.career-insight-section {
+  border-color: rgba(129, 140, 248, 0.22);
+}
+
+.career-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.career-insight-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.58);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.career-insight-card:hover {
+  border-color: rgba(129, 140, 248, 0.42);
+  background: rgba(99, 102, 241, 0.08);
+  transform: translateY(-2px);
+}
+
+.career-insight-card__content {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+
+  strong {
+    color: #f8fafc;
+    line-height: 1.35;
+  }
+
+  span,
+  small {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
 .action-card,
 .info-item,
 .entry-item,
@@ -1303,7 +1452,8 @@ onMounted(() => {
 @media (max-width: 1280px) {
   .dashboard-metrics,
   .action-grid,
-  .today-focus-grid {
+  .today-focus-grid,
+  .career-insight-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -1324,6 +1474,7 @@ onMounted(() => {
   .dashboard-metrics,
   .action-grid,
   .today-focus-grid,
+  .career-insight-grid,
   .study-summary {
     grid-template-columns: 1fr;
   }
@@ -1333,6 +1484,14 @@ onMounted(() => {
 
     .cc-badge {
       grid-column: 2;
+      justify-self: flex-start;
+    }
+  }
+
+  .career-insight-card {
+    grid-template-columns: minmax(0, 1fr);
+
+    .cc-badge {
       justify-self: flex-start;
     }
   }

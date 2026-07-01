@@ -1,4 +1,5 @@
 import { appConfig } from '@/config'
+import { defaultUserKnownPaths, isKnownAppPath, isV4PreviewPath, routePathOnly } from '@/features/route-safety'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
@@ -16,48 +17,6 @@ import type {
 
 const completedStatuses = new Set(['SUCCESS', 'DONE', 'COMPLETED', 'FINISHED', 'GENERATED', 'PARSED', 'ANALYZED'])
 
-const v4PreviewPaths = [
-  '/knowledge',
-  '/applications',
-  '/resume-versions',
-  '/agent/memory',
-  '/agent/reviews',
-  '/growth/profile',
-  '/growth/skills',
-  '/growth/readiness'
-]
-
-const v4PreviewMatchers = [
-  /^\/resumes\/[^/]+\/versions(?:\/.*)?$/
-]
-
-const defaultKnownPaths = [
-  '/dashboard',
-  '/dashboard/v3',
-  '/profile',
-  '/notifications',
-  '/job-targets',
-  '/resumes',
-  '/resume-match',
-  '/skill-profile',
-  '/agent/today',
-  '/agent/tasks',
-  '/agent/runs',
-  '/questions',
-  '/questions/practice',
-  '/questions/wrong-records',
-  '/questions/favorites',
-  '/questions/recommendations',
-  '/study-plans',
-  '/study-plans/from-gap',
-  '/interviews',
-  '/interviews/create',
-  '/interviews/history',
-  '/daily-tasks',
-  '/analytics/personal',
-  ...v4PreviewPaths
-]
-
 const fallbackActionPath = '/agent/today'
 
 const isCompletedStatus = (value?: string) => completedStatuses.has(String(value || '').toUpperCase())
@@ -70,14 +29,9 @@ const compactQuery = (query: Record<string, string | number | undefined>) =>
 
 const hasAgentTasks = (tasks?: AgentTodayTaskVO | null) => Boolean(tasks?.tasks?.length || tasks?.total)
 
-const isKnownPath = (path: string, knownPaths: string[]) =>
-  knownPaths.some((knownPath) => path === knownPath || path.startsWith(`${knownPath}/`))
+const isKnownPath = isKnownAppPath
 
-const getPathWithoutQuery = (path: string) => path.split(/[?#]/)[0] || path
-
-const isV4PreviewPath = (path: string) =>
-  v4PreviewPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||
-  v4PreviewMatchers.some((matcher) => matcher.test(path))
+const getPathWithoutQuery = routePathOnly
 
 const withQuery = (path: string, query: Record<string, string | number | undefined>): ReadinessRoute => {
   const compacted = compactQuery(query)
@@ -155,7 +109,7 @@ export const resolveSafeActionPath = (
   path?: string,
   options: ActionResolverOptions = appConfig
 ): { path: string; unavailableReason?: string } => {
-  const knownPaths = options.knownPaths || defaultKnownPaths
+  const knownPaths = options.knownPaths || defaultUserKnownPaths
 
   if (!path || !path.startsWith('/')) {
     return {

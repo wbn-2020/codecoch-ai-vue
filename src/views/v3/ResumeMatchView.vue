@@ -183,6 +183,16 @@ const statusTag = (status?: string) => {
 
 const isReportSuccess = (status?: string) => status === 'SUCCESS'
 
+const getQueryString = (name: string) => {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+const getQueryNumber = (name: string) => {
+  const value = Number(getQueryString(name))
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
 const matchSseStageLabel = (stage?: string) => {
   const normalized = (stage || '').trim().toUpperCase()
   const labels: Record<string, string> = {
@@ -230,8 +240,8 @@ const loadInitial = async () => {
     resumes.value = resumePage.records || []
     targets.value = targetList || []
     currentTarget.value = current || null
-    form.resumeId = Number(route.query.resumeId) || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
-    form.targetJobId = Number(route.query.targetJobId) || current?.id || targets.value[0]?.id
+    form.resumeId = getQueryNumber('resumeId') || resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
+    form.targetJobId = getQueryNumber('targetJobId') || current?.id || targets.value[0]?.id
   } catch (error) {
     loadError.value = getErrorMessage(error, '读取简历或岗位目标失败，请确认登录状态后重试。')
   } finally {
@@ -257,6 +267,7 @@ const submitMatch = async () => {
   const payload: ResumeJobMatchCreateDTO = {
     resumeId: form.resumeId,
     targetJobId: form.targetJobId,
+    resumeVersionId: getQueryNumber('resumeVersionId'),
     forceRefresh: form.forceRefresh
   }
   startMatchSse(payload)
@@ -267,7 +278,11 @@ const routeToReport = async (reportId?: number, payload?: ResumeJobMatchCreateDT
   navigatingToReport = true
   await router.push({
     path: `/resume-match/${reportId}`,
-    query: { resumeId: payload.resumeId, targetJobId: payload.targetJobId }
+    query: {
+      resumeId: payload.resumeId,
+      targetJobId: payload.targetJobId,
+      ...(payload.resumeVersionId ? { resumeVersionId: payload.resumeVersionId } : {})
+    }
   })
 }
 

@@ -588,7 +588,11 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
 
   let matchReportId = getQueryNumber('matchReportId')
   if (!matchReportId && resumeId && targetJobId) {
-    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId).catch(() => null)
+    const latestMatch = await getLatestResumeJobMatchReportApi(
+      resumeId,
+      targetJobId,
+      getQueryNumber('resumeVersionId')
+    ).catch(() => null)
     matchReportId = latestMatch?.reportId
   }
 

@@ -1,5 +1,12 @@
 import { appConfig } from '@/config'
 import type { NotificationVO } from '@/api/notification'
+import {
+  defaultUserKnownPaths,
+  isKnownAppPath,
+  isV4PreviewPath,
+  resolveAppRoutePath,
+  routePathOnly
+} from '@/features/route-safety'
 
 export type NotificationCategory =
   | 'agent'
@@ -70,46 +77,6 @@ export type NotificationActionResolution =
       blockedPath?: string
     }
 
-const v4PreviewPaths = [
-  '/knowledge',
-  '/applications',
-  '/resume-versions',
-  '/agent/memory',
-  '/agent/reviews',
-  '/growth/profile',
-  '/growth/skills',
-  '/growth/readiness'
-]
-
-const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
-
-const defaultKnownPaths = [
-  '/dashboard',
-  '/dashboard/v3',
-  '/profile',
-  '/notifications',
-  '/job-targets',
-  '/resumes',
-  '/resume-match',
-  '/skill-profile',
-  '/agent/today',
-  '/agent/tasks',
-  '/agent/runs',
-  '/questions',
-  '/questions/practice',
-  '/questions/wrong-records',
-  '/questions/favorites',
-  '/questions/recommendations',
-  '/study-plans',
-  '/study-plans/from-gap',
-  '/interviews',
-  '/interviews/create',
-  '/interviews/history',
-  '/daily-tasks',
-  '/analytics/personal',
-  ...v4PreviewPaths
-]
-
 const defaultPreviewFallbackPath = '/agent/today'
 
 const labelByCategory: Record<NotificationCategory, string> = {
@@ -160,15 +127,6 @@ export const isResolvedNotification = (
   return normalizeToken(value).includes('RESOLVED')
 }
 
-const pathWithoutQuery = (path: string) => path.split(/[?#]/)[0] || path
-
-const isKnownPath = (path: string, knownPaths: string[]) =>
-  knownPaths.some((knownPath) => path === knownPath || path.startsWith(`${knownPath}/`))
-
-const isV4PreviewPath = (path: string) =>
-  v4PreviewPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||
-  v4PreviewMatchers.some((matcher) => matcher.test(path))
-
 const getPrimaryId = (item: NotificationVO) => {
   const value = item.bizId ?? item.relatedId
   const id = Number(value)
@@ -194,7 +152,7 @@ const resolveSafePath = (
     return { path: undefined, unavailableReason: 'actionUrl 不是安全的站内路径。', blockedPath: rawPath }
   }
 
-  const routePath = pathWithoutQuery(rawPath)
+  const routePath = routePathOnly(rawPath)
 
   if (!options.enableV4Preview && isV4PreviewPath(routePath)) {
     return {
@@ -204,11 +162,15 @@ const resolveSafePath = (
     }
   }
 
-  if (!isKnownPath(routePath, options.knownPaths)) {
+  if (!isKnownAppPath(routePath, options.knownPaths)) {
     return { path: undefined, unavailableReason: '通知目标路径不存在或未开放。', blockedPath: rawPath }
   }
 
-  return { path: rawPath }
+  return resolveAppRoutePath(rawPath, {
+    fallbackPath: options.previewFallbackPath,
+    enableV4Preview: options.enableV4Preview,
+    knownPaths: options.knownPaths
+  })
 }
 
 export const normalizeNotificationType = (item: NotificationVO): NotificationTypeMeta => {
@@ -305,7 +267,7 @@ export const resolveNotificationAction = (
   const label = getNotificationActionLabel(item)
   const resolverOptions = {
     enableV4Preview: Boolean(options.enableV4Preview),
-    knownPaths: options.knownPaths || defaultKnownPaths,
+    knownPaths: options.knownPaths || defaultUserKnownPaths,
     previewFallbackPath: options.previewFallbackPath || defaultPreviewFallbackPath
   }
   let lastFailure: Pick<NotificationActionResolution, 'unavailableReason' | 'blockedPath'> = {}

@@ -3,6 +3,7 @@ import {
   resolveNotificationAction,
   type NotificationActionResolverOptions
 } from './notifications'
+import { defaultUserKnownPaths, resolveAppRoutePath } from './route-safety'
 
 export type TodayActionSource = 'notification' | 'agent-task' | 'application-follow-up' | 'readiness'
 export type TodayActionPriority = 'urgent' | 'high' | 'normal' | 'low'
@@ -191,12 +192,21 @@ const notificationRank = (notification: TodayActionNotification, priority: Today
   return 80
 }
 
-const toAgentTaskAction = (task: TodayActionAgentTask, index: number): RankedTodayActionItem | undefined => {
+const toAgentTaskAction = (
+  task: TodayActionAgentTask,
+  index: number,
+  options?: NotificationActionResolverOptions
+): RankedTodayActionItem | undefined => {
   if (!isOpenAgentTask(task)) return undefined
 
   const id = toText(task.id) || String(index + 1)
   const priorityToken = toToken(task.priority)
   const priority: TodayActionPriority = priorityToken === 'LOW' ? 'normal' : 'high'
+  const resolvedAction = resolveAppRoutePath(task.actionUrl, {
+    fallbackPath: '/agent/today',
+    enableV4Preview: options?.enableV4Preview,
+    knownPaths: options?.knownPaths || defaultUserKnownPaths
+  })
   const title = toText(task.title) || `Agent 任务 #${id}`
 
   return {
@@ -207,7 +217,7 @@ const toAgentTaskAction = (task: TodayActionAgentTask, index: number): RankedTod
     description: toText(task.description) || '继续推进今天尚未完成的 Agent 任务。',
     reason: toText(task.reason) || toText(task.relatedSkillName) || '来自今日 Agent 任务列表。',
     actionLabel: '打开任务',
-    actionPath: normalizePath(task.actionUrl, '/agent/today'),
+    actionPath: resolvedAction.path,
     dueText: toText(task.dueDate) || undefined,
     rank: 25 + index,
     dedupeKeys: [`agent-task:${id}`]
@@ -350,7 +360,9 @@ export const buildTodayActions = (
 ): TodayActionItem[] => {
   const actions: RankedTodayActionItem[] = [
     ...toApplicationFollowUpActions(input.applicationStats),
-    ...(input.agentTasks || []).map(toAgentTaskAction).filter((item): item is RankedTodayActionItem => Boolean(item)),
+    ...(input.agentTasks || [])
+      .map((task, index) => toAgentTaskAction(task, index, options.notificationResolver))
+      .filter((item): item is RankedTodayActionItem => Boolean(item)),
     ...(input.notifications || [])
       .map((notification, index) => toNotificationAction(notification, index, options.notificationResolver))
       .filter((item): item is RankedTodayActionItem => Boolean(item))

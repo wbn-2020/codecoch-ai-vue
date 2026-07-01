@@ -5,6 +5,7 @@ export type ResumeJobMatchStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILE
 export interface ResumeJobMatchCreateDTO {
   resumeId: number
   targetJobId: number
+  resumeVersionId?: number
   forceRefresh?: boolean
 }
 
@@ -17,6 +18,9 @@ export interface ResumeJobMatchQueryDTO extends PageQuery {
 export interface ResumeJobMatchSubmitVO {
   reportId: number
   resumeId: number
+  resumeVersionId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
   targetJobId: number
   jdAnalysisId?: number
   aiCallLogId?: number
@@ -29,6 +33,9 @@ export interface ResumeJobMatchSubmitVO {
 export interface ResumeJobMatchReportListVO {
   reportId: number
   resumeId: number
+  resumeVersionId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
   resumeTitle?: string
   targetJobId: number
   jobTitle?: string

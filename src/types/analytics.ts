@@ -66,6 +66,103 @@ export interface AnalyticsRangeQuery {
   days?: number
 }
 
+export type CareerInsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string
+export type CareerActionPriority = 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT' | string
+
+export interface CareerFunnelVO {
+  latestReadinessScore?: number | null
+  agentTaskDoneCount?: number | null
+  agentTaskCount?: number | null
+  agentTaskCompletionRate?: number | null
+  applicationCount?: number | null
+  followedUpApplicationCount?: number | null
+  interviewApplicationCount?: number | null
+  offerApplicationCount?: number | null
+  rejectedOrClosedApplicationCount?: number | null
+  interviewRate?: number | null
+  offerRate?: number | null
+}
+
+export interface CareerInsightItemVO {
+  type?: string
+  title?: string
+  description?: string
+  severity?: CareerInsightSeverity
+  evidence?: string
+  actionLabel?: string
+  actionPath?: string
+}
+
+export interface ApplicationQualityVO {
+  totalApplications?: number | null
+  withResumeVersionCount?: number | null
+  withFollowUpCount?: number | null
+  overdueFollowUpCount?: number | null
+  staleApplicationCount?: number | null
+  noEventApplicationCount?: number | null
+  resumeVersionCoverageRate?: number | null
+  followUpCoverageRate?: number | null
+  warnings?: CareerInsightItemVO[] | null
+}
+
+export interface ResumeVersionEffectItemVO {
+  resumeId?: number | null
+  resumeVersionId?: number | null
+  versionNo?: number | null
+  versionName?: string
+  currentFlag?: number | null
+  applicationCount?: number | null
+  interviewCount?: number | null
+  offerCount?: number | null
+  sampleLevel?: string
+  insightLabel?: string
+}
+
+export interface ResumeVersionEffectVO {
+  versionUsedCount?: number | null
+  currentVersionApplicationCount?: number | null
+  applicationsWithoutVersionCount?: number | null
+  versions?: ResumeVersionEffectItemVO[] | null
+}
+
+export interface WeaknessInsightItemVO {
+  name?: string
+  category?: string
+  count?: number | null
+  evidence?: string
+  recommendedActionType?: string
+  actionPath?: string
+}
+
+export interface InterviewWeaknessInsightVO {
+  rangeDays?: number | null
+  interviewCount?: number | null
+  reportCount?: number | null
+  topWeaknesses?: WeaknessInsightItemVO[] | null
+}
+
+export interface CareerRecommendedActionVO {
+  id?: string
+  type?: string
+  title?: string
+  description?: string
+  priority?: CareerActionPriority
+  evidence?: string
+  actionLabel?: string
+  actionPath?: string
+}
+
+export interface CareerInsightOverviewVO {
+  rangeDays?: number | null
+  generatedAt?: string
+  funnel?: CareerFunnelVO | null
+  applicationQuality?: ApplicationQualityVO | null
+  resumeVersionEffect?: ResumeVersionEffectVO | null
+  interviewWeaknesses?: InterviewWeaknessInsightVO | null
+  recommendedActions?: CareerRecommendedActionVO[] | null
+  dataWarnings?: string[] | null
+}
+
 export interface AdminAnalyticsMetricDefinitionVO {
   id: number
   metricCode?: string
