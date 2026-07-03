@@ -50,4 +50,3 @@ if (failures.length) {
 }
 
 console.log('Phase 7 first-day onboarding checks passed.')
-

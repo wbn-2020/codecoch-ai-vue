@@ -52,6 +52,7 @@ export interface IndustryTemplateVO {
 }
 
 export interface InterviewCreateDTO {
+  applicationId?: number
   resumeId?: number
   basedOnResume?: boolean
   interviewName?: string
@@ -66,6 +67,12 @@ export interface InterviewCreateDTO {
   questionCount?: number
   recommendationSource?: string
   recommendationReason?: string
+  trainingScene?: string
+  targetSkillDomain?: string
+  targetSkillCodes?: string[]
+  targetLevel?: string
+  projectEvidenceIds?: number[]
+  followUpIntensity?: string
 }
 
 export interface InterviewCreateByJobTargetDTO extends InterviewCreateDTO {
@@ -409,6 +416,51 @@ export interface InterviewReportMissingSkillVO {
   sourceBizId?: number
 }
 
+export interface InterviewRubricScoreVO {
+  dimension: string
+  score?: number
+  comment?: string
+  evidenceSummary?: string
+  improvementSuggestion?: string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+}
+
+export interface InterviewFollowUpTraceVO {
+  followUpMessageId?: number
+  questionSummary?: string
+  answerSummary?: string
+  followUpIntent?: string
+  followUpReason?: string
+  exposedRisk?: string
+  followUpQuestion?: string
+}
+
+export interface InterviewAdviceEvidenceSourceVO {
+  sourceType?: string
+  sourceSummary?: string
+  sourceId?: number
+}
+
+export interface InterviewAdviceEvidenceVO {
+  title?: string
+  content?: string
+  confidence?: string
+  actionUrl?: string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+  evidenceSources?: InterviewAdviceEvidenceSourceVO[]
+}
+
+export interface InterviewAbilityProfileUpdateVO {
+  skillCode?: string
+  candidateStatus?: string
+  confidence?: string
+  evidenceSummary?: string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+}
+
 export interface InterviewReportVO {
   id?: number
   reportId?: number
@@ -441,6 +493,10 @@ export interface InterviewReportVO {
   resumeAdvice?: string
   recommendedQuestions?: Array<RecommendedQuestionVO | string>
   nextActions?: InterviewReportNextActionVO[]
+  rubricScores?: InterviewRubricScoreVO[]
+  followUpTree?: InterviewFollowUpTraceVO[]
+  adviceEvidence?: InterviewAdviceEvidenceVO[]
+  abilityProfileUpdates?: InterviewAbilityProfileUpdateVO[]
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]

@@ -20,6 +20,9 @@ export interface NotificationVO {
   fallbackPath?: string
   fallbackLabel?: string
   planDate?: string
+  resolvedStatus?: number | string | boolean | null
+  resolvedAt?: string | null
+  resolvedReason?: string | null
 }
 
 export interface NotificationQueryDTO {

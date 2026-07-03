@@ -148,8 +148,16 @@ export interface ResumeMutationConfirmationParams {
 export interface JobApplicationVO {
   id: number
   targetJobId?: number
+  resumeId?: number
   resumeVersionId?: number
+  resumeVersionNo?: number
+  resumeVersionName?: string
+  resumeVersionCurrentFlag?: number
   matchReportId?: number
+  latestEventId?: number
+  latestEventType?: string
+  latestEventTime?: string
+  latestEventSummary?: string
   companyName?: string
   jobTitle?: string
   source?: string

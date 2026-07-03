@@ -53,10 +53,10 @@ export interface ResumeJobMatchSubmitVO {
 export interface ResumeJobMatchReportListVO {
   reportId: number
   resumeId: number
-  resumeTitle?: string
   resumeVersionId?: number
   resumeVersionNo?: number
   resumeVersionName?: string
+  resumeTitle?: string
   targetJobId: number
   jobTitle?: string
   companyName?: string

@@ -170,6 +170,7 @@
                 <p class="project-desc">{{ project.projectBackground || project.description || '暂无项目背景' }}</p>
               </div>
               <div class="project-actions">
+                <el-button type="primary" plain @click="openProjectEvidenceCreate(project)">沉淀为项目素材</el-button>
                 <el-button @click="openProjectDialog(project)">编辑</el-button>
                 <el-button type="danger" plain @click="handleDeleteProject(project)">删除</el-button>
               </div>
@@ -809,6 +810,17 @@ const openProjectDialog = (project?: ResumeProjectVO) => {
   editingProjectId.value = project?.projectId || null
   editingProject.value = project || null
   projectDialogVisible.value = true
+}
+
+const openProjectEvidenceCreate = (project: ResumeProjectVO) => {
+  if (!resumeId.value || !project.projectId) return
+  router.push({
+    path: '/project-evidence/create',
+    query: {
+      sourceResumeId: String(resumeId.value),
+      sourceResumeProjectId: String(project.projectId)
+    }
+  })
 }
 
 const handleSaveProject = async () => {

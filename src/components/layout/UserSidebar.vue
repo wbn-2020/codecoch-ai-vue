@@ -105,6 +105,8 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '今日任务', path: '/agent/today', icon: MagicStick },
       { label: '任务中心', path: '/agent/tasks', icon: Calendar },
       { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
+      { label: '求职实验台', path: '/job-experiments', icon: TrendCharts },
+      { label: '作品集演示', path: '/portfolio-demo', icon: DocumentChecked },
       { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, previewOnly: true },
       { label: '成长档案', path: '/growth/profile', icon: Medal, previewOnly: true },
       { label: '长期记忆', path: '/agent/memory', icon: MagicStick, previewOnly: true }
@@ -119,10 +121,12 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '简历版本', path: '/resume-versions', icon: Files, previewOnly: true },
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
+      { label: '项目素材', path: '/project-evidence', icon: Files },
       { label: '求职进度', path: '/applications', icon: Compass, previewOnly: true },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
-      { label: '能力画像', path: '/skill-profile', icon: Medal }
+      { label: '能力画像', path: '/skill-profile', icon: Medal },
+      { label: '能力地图', path: '/ability-map', icon: Medal }
     ]
   },
   {
@@ -199,6 +203,8 @@ const activePath = computed(() => {
   if (route.path.startsWith('/agent/today') || route.path.startsWith('/agent/runs')) return '/agent/today'
   if (route.path.startsWith('/agent/tasks')) return '/agent/tasks'
   if (route.path.startsWith('/analytics/personal')) return '/analytics/personal'
+  if (route.path.startsWith('/job-experiments')) return '/job-experiments'
+  if (route.path.startsWith('/portfolio-demo')) return '/portfolio-demo'
   if (route.path.startsWith('/agent/reviews')) return '/agent/reviews'
   if (route.path.startsWith('/growth/profile') || route.path.startsWith('/growth/skills') || route.path.startsWith('/growth/readiness')) return '/growth/profile'
   if (route.path.startsWith('/agent/memory')) return '/agent/memory'
@@ -208,12 +214,14 @@ const activePath = computed(() => {
   if (route.path.startsWith('/job-targets')) return '/job-targets'
   if (route.path.startsWith('/resume-match')) return '/resume-match'
   if (route.path.startsWith('/skill-profile')) return '/skill-profile'
+  if (route.path.startsWith('/ability-map')) return '/ability-map'
   if (route.path.startsWith('/study-plans/from-gap')) return '/study-plans/from-gap'
   if (route.path.startsWith('/questions/recommendations')) return '/questions/recommendations'
   if (route.path.startsWith('/questions/practice')) return '/questions/practice'
   if (route.path.startsWith('/questions/wrong-records')) return '/questions/wrong-records'
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
+  if (route.path.startsWith('/project-evidence')) return '/project-evidence'
   if (route.path.startsWith('/resumes')) return '/resumes'
   if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/study-plans')) return '/study-plans'
