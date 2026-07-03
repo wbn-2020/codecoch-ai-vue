@@ -88,6 +88,7 @@ const getTaskTypeActionLabel = (taskType?: string) => {
 
 const getTaskSourceLabel = (task: AgentTaskVO) => {
   const bizType = String(task.relatedBizType || '').toUpperCase()
+  if (bizType.includes('PROJECT_EVIDENCE')) return '来自项目素材'
   if (bizType.includes('TARGET_JOB') || task.targetJobId) return '来自目标岗位'
   if (bizType.includes('SKILL')) return '来自能力画像'
   if (bizType.includes('MATCH') || bizType.includes('REPORT')) return '来自匹配报告'
@@ -310,6 +311,7 @@ export const describeAgentTaskEvidence = (
   options: ActionResolverOptions = appConfig
 ): AgentTaskEvidence => {
   const resolved = resolveSafeActionPath(task.actionUrl, options)
+  const isProjectEvidenceTask = String(task.relatedBizType || '').toUpperCase().includes('PROJECT_EVIDENCE')
 
   return {
     sourceLabel: getTaskSourceLabel(task),
@@ -317,7 +319,7 @@ export const describeAgentTaskEvidence = (
     bizLabel: getTaskBizLabel(task),
     reason: task.reason || task.description || 'Agent 根据当前求职准备上下文生成了这项任务。',
     safePath: resolved.path,
-    actionLabel: getTaskTypeActionLabel(task.taskType),
+    actionLabel: isProjectEvidenceTask ? '完善项目素材' : getTaskTypeActionLabel(task.taskType),
     unavailableReason: resolved.unavailableReason
   }
 }

@@ -26,6 +26,12 @@ export const buildInterviewCreatePayload = ({
   applicationId: context?.applicationId ?? form.applicationId,
   interviewMode: isIndustryMode ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
   practiceMode: form.practiceMode,
+  trainingScene: form.trainingScene,
+  targetSkillDomain: form.targetSkillDomain,
+  targetSkillCodes: form.targetSkillCodes,
+  targetLevel: form.targetLevel,
+  projectEvidenceIds: form.projectEvidenceIds,
+  followUpIntensity: form.followUpIntensity,
   industryTemplateId: isIndustryMode ? form.industryTemplateId : undefined,
   industryDirection: isIndustryMode
     ? selectedIndustryTemplate?.industryCode || selectedIndustryTemplate?.industryName || form.industryDirection

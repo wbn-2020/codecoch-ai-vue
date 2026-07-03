@@ -12,6 +12,7 @@ export type InterviewStatus =
   | string
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
+export type TrainingScene = 'PROJECT_DEEP_DIVE' | 'JAVA_SPECIALTY' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewQuestionSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
@@ -64,6 +65,12 @@ export interface InterviewCreateDTO {
   interviewerStyle?: string
   practiceMode?: string
   questionCount?: number
+  trainingScene?: TrainingScene
+  targetSkillDomain?: string
+  targetSkillCodes?: string[]
+  targetLevel?: string
+  projectEvidenceIds?: number[]
+  followUpIntensity?: string
 }
 
 export interface InterviewCreateByJobTargetDTO extends InterviewCreateDTO {
@@ -93,6 +100,12 @@ export interface InterviewSessionVO {
   industryTemplateId?: number
   industryDirection?: string
   industryContext?: string
+  trainingScene?: TrainingScene
+  targetSkillDomain?: string
+  targetSkillCodes?: string[]
+  targetLevel?: string
+  projectEvidenceIds?: number[]
+  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   stageList?: InterviewStageVO[]
@@ -283,6 +296,12 @@ export interface InterviewListVO {
   targetPosition?: string
   industryTemplateId?: number
   industryDirection?: string
+  trainingScene?: TrainingScene
+  targetSkillDomain?: string
+  targetSkillCodes?: string[]
+  targetLevel?: string
+  projectEvidenceIds?: number[]
+  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   totalScore?: number
@@ -334,6 +353,12 @@ export interface InterviewDetailVO {
   industryContext?: string
   difficulty?: string
   interviewerStyle?: string
+  trainingScene?: TrainingScene
+  targetSkillDomain?: string
+  targetSkillCodes?: string[]
+  targetLevel?: string
+  projectEvidenceIds?: number[]
+  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   resumeSnapshot?: ResumeSnapshotVO
@@ -362,6 +387,64 @@ export interface RecommendedQuestionVO {
   difficulty?: string
   reason?: string
   recommendReason?: string
+}
+
+export type RubricDimension =
+  | 'EXPRESSION_STRUCTURE'
+  | 'TECHNICAL_DEPTH'
+  | 'BUSINESS_UNDERSTANDING'
+  | 'RISK_AWARENESS'
+  | 'IMPLEMENTABILITY'
+  | string
+
+export interface InterviewRubricScoreVO {
+  dimension: RubricDimension
+  score?: number
+  comment?: string
+  evidenceSummary?: string
+  improvementSuggestion?: string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+}
+
+export interface InterviewFollowUpTraceVO {
+  questionMessageId?: number
+  answerMessageId?: number
+  followUpMessageId?: number
+  questionSummary?: string
+  answerSummary?: string
+  followUpQuestion?: string
+  followUpIntent?: string
+  followUpReason?: string
+  exposedRisk?: string
+  evidenceSource?: string
+}
+
+export interface InterviewAdviceEvidenceSourceVO {
+  sourceType?: string
+  sourceId?: number | string
+  sourceSummary?: string
+}
+
+export interface InterviewAdviceEvidenceVO {
+  title?: string
+  content?: string
+  adviceType?: string
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW' | string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+  feedbackStatus?: string
+  actionUrl?: string
+  evidenceSources?: InterviewAdviceEvidenceSourceVO[]
+}
+
+export interface InterviewAbilityProfileUpdateVO {
+  skillCode?: string
+  candidateStatus?: string
+  confidence?: string
+  evidenceCount?: number
+  sampleInsufficient?: boolean
+  sampleWarning?: string
 }
 
 export interface InterviewReportVO {
@@ -394,6 +477,10 @@ export interface InterviewReportVO {
   recommendedQuestions?: Array<RecommendedQuestionVO | string>
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
+  rubricScores?: InterviewRubricScoreVO[]
+  followUpTree?: InterviewFollowUpTraceVO[]
+  adviceEvidence?: InterviewAdviceEvidenceVO[]
+  abilityProfileUpdates?: InterviewAbilityProfileUpdateVO[]
   messages?: InterviewMessageVO[]
   generatedAt?: string
   createdAt?: string

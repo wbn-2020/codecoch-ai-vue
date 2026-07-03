@@ -34,6 +34,7 @@ export const defaultUserKnownPaths = [
   '/weakness-analysis',
   '/projects',
   '/job-targets',
+  '/project-evidence',
   '/resumes',
   '/resume-match',
   '/interviews',
@@ -47,11 +48,14 @@ export const defaultUserKnownPaths = [
   '/study-plans',
   '/study-plans/from-gap',
   '/skill-profile',
+  '/ability-map',
   '/agent/today',
   '/agent/tasks',
   '/agent/runs',
   '/daily-tasks',
   '/analytics/personal',
+  '/job-experiments',
+  '/portfolio-demo',
   ...v4PreviewPaths
 ]
 

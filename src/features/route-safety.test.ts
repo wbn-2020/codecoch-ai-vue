@@ -31,4 +31,26 @@ describe('resolveAppRoutePath', () => {
     expect(result.path).toBe('/agent/today')
     expect(result.blockedPath).toBe('/applications?followUp=due-today')
   })
+
+  it('allows ability map routes with training query params', () => {
+    const result = resolveAppRoutePath('/ability-map?trainingScene=JAVA_SPECIALTY', {
+      fallbackPath: '/dashboard',
+      enableV4Preview: false
+    })
+
+    expect(result.path).toBe('/ability-map?trainingScene=JAVA_SPECIALTY')
+    expect(result.blockedPath).toBeUndefined()
+  })
+
+  it('allows Phase 3 job experiment and portfolio demo routes', () => {
+    expect(resolveAppRoutePath('/job-experiments/42/review', {
+      fallbackPath: '/dashboard',
+      enableV4Preview: false
+    }).path).toBe('/job-experiments/42/review')
+
+    expect(resolveAppRoutePath('/portfolio-demo', {
+      fallbackPath: '/dashboard',
+      enableV4Preview: false
+    }).path).toBe('/portfolio-demo')
+  })
 })

@@ -33,4 +33,39 @@ describe('interview create payload', () => {
       interviewMode: INTERVIEW_MODE.TECHNICAL_BASIC
     })
   })
+
+  it('keeps training context fields on the existing create payload', () => {
+    const payload = buildInterviewCreatePayload({
+      form: {
+        interviewName: 'Java专项',
+        interviewMode: INTERVIEW_MODE.TECHNICAL_BASIC,
+        targetPosition: 'Java 后端开发',
+        experienceLevel: '3_YEARS',
+        industryDirection: 'GENERAL',
+        difficulty: 'MEDIUM',
+        interviewerStyle: 'NORMAL',
+        practiceMode: 'FORMAL',
+        questionCount: 6,
+        trainingScene: 'JAVA_SPECIALTY',
+        targetSkillDomain: 'JVM',
+        targetSkillCodes: ['JVM_MEMORY_GC'],
+        targetLevel: 'COMPETENT',
+        projectEvidenceIds: [11, 12],
+        followUpIntensity: 'DEEP'
+      },
+      isIndustryMode: false,
+      useResume: false,
+      isJobTargetFlow: false
+    })
+
+    expect(payload).toMatchObject({
+      resumeId: undefined,
+      trainingScene: 'JAVA_SPECIALTY',
+      targetSkillDomain: 'JVM',
+      targetSkillCodes: ['JVM_MEMORY_GC'],
+      targetLevel: 'COMPETENT',
+      projectEvidenceIds: [11, 12],
+      followUpIntensity: 'DEEP'
+    })
+  })
 })

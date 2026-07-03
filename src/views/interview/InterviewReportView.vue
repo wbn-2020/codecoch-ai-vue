@@ -146,6 +146,106 @@
     <section v-if="report && isGenerated" class="analysis-grid">
       <article class="analysis-card wide">
         <div class="section-head">
+          <h2>Rubric 五维评分</h2>
+          <p>表达结构、技术深度、业务理解、风险意识、可落地性。</p>
+        </div>
+        <div v-if="rubricScores.length" class="rubric-grid">
+          <section v-for="item in rubricScores" :key="item.dimension" class="rubric-card">
+            <div class="rubric-card__head">
+              <strong>{{ rubricLabel(item.dimension) }}</strong>
+              <el-tag size="small" effect="plain">{{ item.score ?? '-' }}/5</el-tag>
+            </div>
+            <p>{{ item.comment || '暂无解释' }}</p>
+            <small>证据：{{ item.evidenceSummary || '暂无稳定证据' }}</small>
+            <small>建议：{{ item.improvementSuggestion || '继续补充样本后复盘' }}</small>
+            <el-alert
+              v-if="item.sampleInsufficient"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="item.sampleWarning || '样本不足，仅作为候选判断'"
+            />
+          </section>
+        </div>
+        <el-empty v-else description="暂无 Rubric 评分数据" />
+      </article>
+
+      <article class="analysis-card wide">
+        <div class="section-head">
+          <h2>追问树回放</h2>
+          <p>展示 AI 为什么追问、触发原因和暴露风险。</p>
+        </div>
+        <div v-if="followUpTree.length" class="trace-list">
+          <section v-for="(item, index) in followUpTree" :key="item.followUpMessageId || index" class="trace-item">
+            <div class="trace-step">{{ index + 1 }}</div>
+            <div>
+              <strong>{{ item.followUpIntent || 'FOLLOW_UP' }}</strong>
+              <p v-if="item.questionSummary">原问题：{{ item.questionSummary }}</p>
+              <p v-if="item.answerSummary">回答暴露：{{ item.answerSummary }}</p>
+              <p>追问原因：{{ item.followUpReason || '暂无原因' }}</p>
+              <p>风险提示：{{ item.exposedRisk || '暂无风险摘要' }}</p>
+              <small v-if="item.followUpQuestion">追问：{{ item.followUpQuestion }}</small>
+            </div>
+          </section>
+        </div>
+        <el-empty v-else description="暂无追问树数据" />
+      </article>
+
+      <article class="analysis-card wide">
+        <div class="section-head">
+          <h2>AI 建议证据链</h2>
+          <p>每条建议展示来源、置信度和样本不足提示。</p>
+        </div>
+        <div v-if="adviceEvidence.length" class="advice-grid">
+          <section v-for="(item, index) in adviceEvidence" :key="`${item.title || 'advice'}-${index}`" class="advice-card">
+            <div class="advice-card__head">
+              <strong>{{ item.title || '建议' }}</strong>
+              <el-tag :type="confidenceTagType(item.confidence)" size="small" effect="plain">
+                {{ confidenceLabel(item.confidence) }}
+              </el-tag>
+            </div>
+            <p>{{ item.content || '暂无建议内容' }}</p>
+            <el-alert
+              v-if="item.sampleInsufficient"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="item.sampleWarning || '样本不足，不能作为强结论'"
+            />
+            <div v-if="item.evidenceSources?.length" class="evidence-list">
+              <span v-for="(source, sourceIndex) in item.evidenceSources" :key="`${source.sourceType}-${sourceIndex}`">
+                {{ source.sourceType || 'SOURCE' }}：{{ source.sourceSummary || '暂无摘要' }}
+              </span>
+            </div>
+            <div class="advice-actions">
+              <AiResultFeedback
+                scene="INTERVIEW_REPORT_ADVICE"
+                biz-type="INTERVIEW_REPORT"
+                :biz-id="report.reportId || report.id"
+                label="反馈建议"
+                compact
+              />
+              <el-button size="small" type="primary" plain @click="goAdviceAction(item.actionUrl)">去处理</el-button>
+            </div>
+          </section>
+        </div>
+        <el-empty v-else description="暂无建议证据链" />
+      </article>
+
+      <article v-if="abilityProfileUpdates.length" class="analysis-card wide">
+        <div class="section-head">
+          <h2>能力画像更新候选</h2>
+          <p>训练结果只形成候选，不把样本不足的判断写成强结论。</p>
+        </div>
+        <div class="profile-update-list">
+          <el-tag v-for="item in abilityProfileUpdates" :key="`${item.skillCode}-${item.candidateStatus}`" effect="plain">
+            {{ item.skillCode }} · {{ item.candidateStatus }} · {{ confidenceLabel(item.confidence) }}
+          </el-tag>
+        </div>
+      </article>
+
+      <article class="analysis-card wide">
+        <div class="section-head">
           <h2>AI 总结</h2>
           <p>整体评价 / 报告正文</p>
         </div>
@@ -328,13 +428,19 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
+import {
+  confidenceLabel,
+  confidenceTagType,
+  type DisplayRecommendedQuestion,
+  normalizeInterviewReportSections,
+  rubricLabel
+} from '@/features/interview-report'
+import { resolveAppRoutePath } from '@/features/route-safety'
 import type {
   InterviewMessageVO,
   InterviewReportSseEvent,
   InterviewReportSseEventType,
   InterviewReportVO,
-  RecommendedQuestionVO,
-  StageReportVO
 } from '@/types/interview'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
@@ -393,34 +499,14 @@ const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
 
-type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
-
-const objectItems = <T>(value: unknown): T[] => {
-  return Array.isArray(value)
-    ? (value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as T[])
-    : []
-}
-
-const normalizeRecommendedQuestions = (value: unknown): DisplayRecommendedQuestion[] => {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((item) => {
-      if (typeof item === 'string') {
-        return { title: item }
-      }
-      if (item && typeof item === 'object' && !Array.isArray(item)) {
-        return item as DisplayRecommendedQuestion
-      }
-      return null
-    })
-    .filter((item): item is DisplayRecommendedQuestion => Boolean(item))
-}
-
-const stageReports = computed<StageReportVO[]>(() => objectItems<StageReportVO>(report.value?.stageReports || report.value?.stageScores))
-const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normalizeRecommendedQuestions(report.value?.recommendedQuestions))
-const qaMessages = computed<InterviewMessageVO[]>(() =>
-  objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
-)
+const reportSections = computed(() => normalizeInterviewReportSections(report.value))
+const stageReports = computed(() => reportSections.value.stageReports)
+const recommendedQuestions = computed(() => reportSections.value.recommendedQuestions)
+const qaMessages = computed(() => reportSections.value.qaMessages)
+const rubricScores = computed(() => reportSections.value.rubricScores)
+const followUpTree = computed(() => reportSections.value.followUpTree)
+const adviceEvidence = computed(() => reportSections.value.adviceEvidence)
+const abilityProfileUpdates = computed(() => reportSections.value.abilityProfileUpdates)
 const hasValidTotalScore = computed(() => {
   const score = Number(report.value?.totalScore)
   return isGenerated.value && Number.isFinite(score) && score > 0
@@ -437,6 +523,14 @@ const sseMetaText = computed(() => {
   if (sseReportId.value) items.push(`报告 #${sseReportId.value}`)
   return items.join(' / ')
 })
+
+const goAdviceAction = async (actionUrl?: string) => {
+  const result = resolveAppRoutePath(actionUrl, { fallbackPath: '/agent/today' })
+  if (result.unavailableReason) {
+    ElMessage.warning(result.unavailableReason)
+  }
+  await router.push(result.path)
+}
 
 const cleanDisplayText = (value?: string | null, fallback = '') => toFriendlyMessage(value || '', fallback)
 
@@ -1049,6 +1143,96 @@ onBeforeUnmount(() => {
   }
 }
 
+.rubric-grid,
+.advice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rubric-card,
+.advice-card,
+.trace-item {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.3);
+  padding: 14px;
+}
+
+.rubric-card__head,
+.advice-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.rubric-card p,
+.advice-card p,
+.trace-item p {
+  margin: 0 0 8px;
+  color: var(--app-text);
+  line-height: 1.7;
+}
+
+.rubric-card small,
+.trace-item small {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trace-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.trace-step {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.16);
+  color: var(--cc-ai-cyan);
+  font-weight: 700;
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.advice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-update-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .qa-list {
   display: flex;
   flex-direction: column;
@@ -1119,7 +1303,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1080px) {
   .overview-grid,
-  .analysis-grid {
+  .analysis-grid,
+  .rubric-grid,
+  .advice-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1147,7 +1333,9 @@ onBeforeUnmount(() => {
   }
 
   .overview-grid,
-  .analysis-grid {
+  .analysis-grid,
+  .rubric-grid,
+  .advice-grid {
     grid-template-columns: 1fr;
   }
 }

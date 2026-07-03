@@ -155,6 +155,80 @@
           <div class="form-section">
             <div class="section-title">
               <span>{{ isIndustryMode ? '04' : '03' }}</span>
+              训练上下文
+            </div>
+            <div class="form-grid">
+              <el-form-item label="训练场景">
+                <el-select v-model="form.trainingScene" clearable style="width: 100%" @change="handleTrainingSceneChange">
+                  <el-option label="Java 专项训练" value="JAVA_SPECIALTY" />
+                  <el-option label="项目深挖训练" value="PROJECT_DEEP_DIVE" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="追问强度">
+                <el-select v-model="form.followUpIntensity" style="width: 100%">
+                  <el-option label="标准" value="NORMAL" />
+                  <el-option label="轻追问" value="LIGHT" />
+                  <el-option label="强追问" value="DEEP" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="isJavaSpecialtyTraining" label="能力域">
+                <el-select v-model="form.targetSkillDomain" v-loading="abilityMapLoading" clearable style="width: 100%">
+                  <el-option
+                    v-for="domain in abilityDomains"
+                    :key="domain.domainCode"
+                    :label="domain.domainName"
+                    :value="domain.domainCode"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="isJavaSpecialtyTraining" label="能力点">
+                <el-select v-model="form.targetSkillCodes" multiple collapse-tags collapse-tags-tooltip clearable style="width: 100%">
+                  <el-option
+                    v-for="skill in targetSkillOptions"
+                    :key="skill.code"
+                    :label="skill.name"
+                    :value="skill.code"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="isJavaSpecialtyTraining" label="目标水平">
+                <el-select v-model="form.targetLevel" style="width: 100%">
+                  <el-option label="基础" value="BASIC" />
+                  <el-option label="合格" value="COMPETENT" />
+                  <el-option label="强项" value="STRONG" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="isProjectDeepDiveTraining" label="项目素材">
+                <el-select
+                  v-model="form.projectEvidenceIds"
+                  v-loading="projectEvidenceLoading"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  clearable
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="project in projectEvidences"
+                    :key="project.id"
+                    :label="project.title"
+                    :value="project.id"
+                  />
+                </el-select>
+                <div v-if="projectEvidenceError" class="field-error">
+                  <span>{{ projectEvidenceError }}</span>
+                  <el-button link type="primary" :loading="projectEvidenceLoading" @click="fetchProjectEvidences">重试</el-button>
+                </div>
+                <div v-else-if="!projectEvidenceLoading && !projectEvidences.length" class="field-empty">
+                  暂无项目素材，可先使用简历上下文或进入项目素材补充。
+                </div>
+              </el-form-item>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title">
+              <span>{{ isIndustryMode ? '05' : '04' }}</span>
               简历上下文
             </div>
             <div class="resume-switch">
@@ -235,6 +309,18 @@
             <span>简历上下文</span>
             <strong>{{ selectedResumeName }}</strong>
           </div>
+          <div>
+            <span>训练场景</span>
+            <strong>{{ selectedTrainingSceneName }}</strong>
+          </div>
+          <div v-if="isJavaSpecialtyTraining">
+            <span>能力目标</span>
+            <strong>{{ selectedSkillSummary }}</strong>
+          </div>
+          <div v-if="isProjectDeepDiveTraining">
+            <span>项目素材</span>
+            <strong>{{ selectedProjectEvidenceSummary }}</strong>
+          </div>
         </div>
 
         <div class="pending-box">
@@ -264,8 +350,10 @@ import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play,
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getAbilityMapApi } from '@/api/abilityMap'
 import { createInterviewApi, createInterviewByJobTargetApi, getIndustryTemplatesApi } from '@/api/interview'
 import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
+import { getProjectEvidenceListApi } from '@/api/projectEvidence'
 import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { getResumesApi } from '@/api/resume'
 import {
@@ -278,7 +366,9 @@ import {
   targetPositionOptions
 } from '@/constants/enums'
 import { buildInterviewCreatePayload } from '@/features/interview-create'
+import type { AbilityDomainVO, AbilitySkillNodeVO } from '@/types/abilityMap'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
+import type { ProjectEvidenceListVO } from '@/types/projectEvidence'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
 import { getErrorMessage } from '@/utils/error'
@@ -291,9 +381,14 @@ const resumeLoading = ref(false)
 const resumeLoadError = ref('')
 const industryTemplateLoading = ref(false)
 const industryTemplateError = ref('')
+const abilityMapLoading = ref(false)
+const projectEvidenceLoading = ref(false)
+const projectEvidenceError = ref('')
 const useResume = ref(true)
 const resumes = ref<ResumeVO[]>([])
 const industryTemplates = ref<IndustryTemplateVO[]>([])
+const abilityDomains = ref<AbilityDomainVO[]>([])
+const projectEvidences = ref<ProjectEvidenceListVO[]>([])
 const selectedModeKey = ref('technical')
 const sourceTargetJobId = ref<number>()
 const fallbackTargetJobId = ref<number>()
@@ -309,7 +404,13 @@ const form = reactive<InterviewCreateDTO>({
   interviewerStyle: 'NORMAL',
   practiceMode: 'FORMAL',
   resumeId: undefined,
-  questionCount: 8
+  questionCount: 8,
+  trainingScene: 'JAVA_SPECIALTY',
+  targetSkillDomain: undefined,
+  targetSkillCodes: [],
+  targetLevel: 'COMPETENT',
+  projectEvidenceIds: [],
+  followUpIntensity: 'NORMAL'
 })
 
 const modeCards = [
@@ -319,6 +420,7 @@ const modeCards = [
     desc: '围绕 Java 基础、JVM、并发、Spring 体系展开。',
     badge: '已接入',
     value: INTERVIEW_MODE.TECHNICAL_BASIC,
+    trainingScene: 'JAVA_SPECIALTY',
     icon: BrainCircuit
   },
   {
@@ -327,6 +429,7 @@ const modeCards = [
     desc: '结合简历项目经历，追问架构设计、难点和优化。',
     badge: '已接入',
     value: INTERVIEW_MODE.PROJECT_DEEP_DIVE,
+    trainingScene: 'PROJECT_DEEP_DIVE',
     icon: BriefcaseBusiness
   },
   {
@@ -349,6 +452,9 @@ const modeCards = [
 ]
 
 const isIndustryMode = computed(() => selectedModeKey.value === 'industry')
+const isJavaSpecialtyTraining = computed(() => form.trainingScene === 'JAVA_SPECIALTY')
+const isProjectDeepDiveTraining = computed(() => form.trainingScene === 'PROJECT_DEEP_DIVE')
+const hasSelectedProjectEvidence = computed(() => Boolean(form.projectEvidenceIds?.length))
 
 const selectedIndustryTemplate = computed(() =>
   industryTemplates.value.find((item) => item.industryTemplateId === form.industryTemplateId)
@@ -366,8 +472,10 @@ const templateHighlights = computed(() => {
 
 const resumeRequired = computed(
   () =>
-    form.interviewMode === INTERVIEW_MODE.PROJECT_DEEP_DIVE ||
-    form.interviewMode === INTERVIEW_MODE.COMPREHENSIVE
+    !isJavaSpecialtyTraining.value &&
+    !(isProjectDeepDiveTraining.value && hasSelectedProjectEvidence.value) &&
+    (form.interviewMode === INTERVIEW_MODE.PROJECT_DEEP_DIVE ||
+      form.interviewMode === INTERVIEW_MODE.COMPREHENSIVE)
 )
 
 const isJobTargetFlow = computed(() => {
@@ -399,6 +507,33 @@ const selectedResumeName = computed(() => {
 
 const selectedModeDesc = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.desc || '当前模式')
 const selectedModeTitle = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.title || '当前模式')
+const selectedTrainingSceneName = computed(() => {
+  if (isJavaSpecialtyTraining.value) return 'Java 专项训练'
+  if (isProjectDeepDiveTraining.value) return '项目深挖训练'
+  return '常规模拟'
+})
+const targetSkillOptions = computed<AbilitySkillNodeVO[]>(() => {
+  const domain = abilityDomains.value.find((item) => item.domainCode === form.targetSkillDomain)
+  return domain?.skills || abilityDomains.value.flatMap((item) => item.skills)
+})
+const selectedSkillSummary = computed(() => {
+  const selectedCodes = new Set(form.targetSkillCodes || [])
+  if (!selectedCodes.size) {
+    return abilityDomains.value.find((item) => item.domainCode === form.targetSkillDomain)?.domainName || '未指定'
+  }
+  return targetSkillOptions.value
+    .filter((skill) => selectedCodes.has(skill.code))
+    .map((skill) => skill.name)
+    .join('、') || '未指定'
+})
+const selectedProjectEvidenceSummary = computed(() => {
+  const selectedIds = new Set(form.projectEvidenceIds || [])
+  if (!selectedIds.size) return '未选择'
+  const names = projectEvidences.value
+    .filter((item) => selectedIds.has(item.id))
+    .map((item) => item.title)
+  return names.length ? names.join('、') : `${selectedIds.size} 个项目素材`
+})
 
 const optionLabel = (options: SelectOption[], value?: string) => {
   return options.find((item) => item.value === value)?.label || value || '-'
@@ -412,6 +547,21 @@ const getQueryString = (name: string) => {
 const getQueryNumber = (name: string) => {
   const value = Number(getQueryString(name))
   return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+const getQueryStringList = (name: string) => {
+  const value = route.query[name]
+  const values = Array.isArray(value) ? value : value ? [value] : []
+  return values
+    .flatMap((item) => String(item).split(','))
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const getQueryNumberList = (name: string) => {
+  return getQueryStringList(name)
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0)
 }
 
 const buildInterviewContextQuery = () => {
@@ -450,6 +600,21 @@ const applyIndustryTemplate = (template?: IndustryTemplateVO) => {
 const selectMode = (item: (typeof modeCards)[number]) => {
   selectedModeKey.value = item.key
   form.interviewMode = item.value
+  form.trainingScene = 'trainingScene' in item ? item.trainingScene : undefined
+  if (form.trainingScene === 'JAVA_SPECIALTY') {
+    useResume.value = false
+    form.projectEvidenceIds = []
+  } else if (form.trainingScene === 'PROJECT_DEEP_DIVE') {
+    form.targetSkillDomain = undefined
+    form.targetSkillCodes = []
+    if (!hasSelectedProjectEvidence.value) {
+      useResume.value = true
+    }
+  } else {
+    form.targetSkillDomain = undefined
+    form.targetSkillCodes = []
+    form.projectEvidenceIds = []
+  }
   if ('industry' in item && item.industry) {
     applyIndustryTemplate(selectedIndustryTemplate.value || industryTemplates.value[0])
     return
@@ -465,6 +630,15 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => form.targetSkillDomain,
+  () => {
+    if (!form.targetSkillCodes?.length) return
+    const available = new Set(targetSkillOptions.value.map((skill) => skill.code))
+    form.targetSkillCodes = form.targetSkillCodes.filter((code) => available.has(code))
+  }
 )
 
 watch(useResume, (enabled) => {
@@ -520,6 +694,79 @@ const fetchIndustryTemplates = async () => {
     industryTemplateError.value = '行业模板暂时加载失败，可以先使用其他面试模式。'
   } finally {
     industryTemplateLoading.value = false
+  }
+}
+
+const fetchAbilityMap = async () => {
+  abilityMapLoading.value = true
+  try {
+    const result = await getAbilityMapApi()
+    abilityDomains.value = result.domains || []
+  } catch {
+    abilityDomains.value = []
+  } finally {
+    abilityMapLoading.value = false
+  }
+}
+
+const fetchProjectEvidences = async () => {
+  projectEvidenceLoading.value = true
+  projectEvidenceError.value = ''
+  try {
+    const result = await getProjectEvidenceListApi({ pageNo: 1, pageSize: 50 })
+    projectEvidences.value = result.records || []
+  } catch (error) {
+    projectEvidences.value = []
+    projectEvidenceError.value = getErrorMessage(error, '项目素材暂时加载失败')
+  } finally {
+    projectEvidenceLoading.value = false
+  }
+}
+
+const handleTrainingSceneChange = () => {
+  if (isJavaSpecialtyTraining.value) {
+    selectedModeKey.value = 'technical'
+    form.interviewMode = INTERVIEW_MODE.TECHNICAL_BASIC
+    form.projectEvidenceIds = []
+    useResume.value = false
+    return
+  }
+  if (isProjectDeepDiveTraining.value) {
+    selectedModeKey.value = 'project'
+    form.interviewMode = INTERVIEW_MODE.PROJECT_DEEP_DIVE
+    form.targetSkillDomain = undefined
+    form.targetSkillCodes = []
+    if (!hasSelectedProjectEvidence.value) {
+      useResume.value = true
+    }
+    return
+  }
+  form.targetSkillDomain = undefined
+  form.targetSkillCodes = []
+  form.projectEvidenceIds = []
+}
+
+const applyTrainingRouteContext = () => {
+  const scene = getQueryString('trainingScene')
+  if (scene === 'JAVA_SPECIALTY' || scene === 'PROJECT_DEEP_DIVE') {
+    form.trainingScene = scene
+    handleTrainingSceneChange()
+  }
+  const targetSkillDomain = getQueryString('targetSkillDomain')
+  if (targetSkillDomain) {
+    form.targetSkillDomain = targetSkillDomain
+  }
+  const targetSkillCodes = getQueryStringList('targetSkillCodes')
+  if (targetSkillCodes.length) {
+    form.targetSkillCodes = targetSkillCodes
+  }
+  const targetLevel = getQueryString('targetLevel')
+  if (targetLevel) {
+    form.targetLevel = targetLevel
+  }
+  const projectEvidenceIds = getQueryNumberList('projectEvidenceIds')
+  if (projectEvidenceIds.length) {
+    form.projectEvidenceIds = projectEvidenceIds
   }
 }
 
@@ -621,6 +868,10 @@ const handleCreate = async () => {
     ElMessage.warning('请选择行业模板后再开始面试')
     return
   }
+  if (isProjectDeepDiveTraining.value && !form.resumeId && !hasSelectedProjectEvidence.value) {
+    ElMessage.warning('项目深挖训练需要选择简历或项目素材')
+    return
+  }
   if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {
     ElMessage.warning(isJobTargetFlow.value ? '目标岗位链路创建面试需要先选择简历' : '项目深挖或综合模拟面试需要先选择简历')
     return
@@ -649,7 +900,8 @@ const handleCreate = async () => {
 }
 
 onMounted(async () => {
-  await Promise.allSettled([fetchResumes(), fetchIndustryTemplates()])
+  applyTrainingRouteContext()
+  await Promise.allSettled([fetchResumes(), fetchIndustryTemplates(), fetchAbilityMap(), fetchProjectEvidences()])
   await applyRouteContext()
 })
 </script>
