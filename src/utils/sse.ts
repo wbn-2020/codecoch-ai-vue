@@ -1,5 +1,7 @@
 import { appConfig } from '@/config'
+import { HTTP_STATUS_CODE } from '@/constants/http'
 import { toFriendlyMessage } from '@/utils/error'
+import { refreshAccessToken } from '@/utils/request'
 import { getToken } from '@/utils/token'
 
 export type SseStandardEventName = 'start' | 'delta' | 'metadata' | 'done' | 'error'
@@ -94,7 +96,25 @@ const isStartLikeEvent = (event: SseEventName) => {
 }
 
 const createSseError = (data?: SseEventData) => {
-  return new Error(toFriendlyMessage(data?.message || data?.code, '流式生成异常，请稍后重试。'))
+  return new Error(toFriendlyMessage(data?.message || data?.code, '生成进度暂时不可用，请稍后刷新查看结果。'))
+}
+
+const isAuthFailureCode = (code?: unknown) =>
+  code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+
+const isAuthFailureResponse = async (response: Response) => {
+  if (response.status === 401) return true
+  if (!response.ok) return false
+
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) return false
+
+  try {
+    const payload = await response.clone().json()
+    return isAuthFailureCode(payload?.code)
+  } catch {
+    return false
+  }
 }
 
 export const streamSse = <T extends SseEventData = SseEventData>({
@@ -114,6 +134,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
   }
 
   let hasStarted = false
+  let receivedDone = false
   const emittedKeys = new Set<string>()
 
   const finished = (async () => {
@@ -121,25 +142,41 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       if (controller.signal.aborted) return
 
       if (!window.fetch || !window.ReadableStream) {
-        throw new Error('当前浏览器暂不支持流式进度，已尝试切换为普通生成。')
+        throw new Error('当前浏览器暂不支持实时进度，已尝试切换为普通生成方式。')
       }
 
-      const token = getToken()
-      const requestHeaders: HeadersInit = {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(headers || {})
+      const buildRequestHeaders = (): HeadersInit => {
+        const token = getToken()
+        return {
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(headers || {})
+        }
       }
 
-      const response = await fetch(url, {
+      const requestBody = body === undefined ? undefined : JSON.stringify(body)
+      const fetchWithCurrentToken = () => fetch(url, {
         method,
-        headers: requestHeaders,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: buildRequestHeaders(),
+        body: requestBody,
         signal: controller.signal
       })
 
+      const retryAfterAuthRefresh = async () => {
+        await refreshAccessToken()
+        if (controller.signal.aborted) return null
+        return fetchWithCurrentToken()
+      }
+
+      let response = await fetchWithCurrentToken()
+      if (await isAuthFailureResponse(response)) {
+        const refreshedResponse = await retryAfterAuthRefresh()
+        if (!refreshedResponse) return
+        response = refreshedResponse
+      }
+
       if (!response.ok || !response.body) {
-        throw new Error(`流式请求失败（${response.status}），请稍后重试。`)
+        throw new Error('生成进度暂时不可用，系统会继续处理，请稍后刷新查看结果。')
       }
 
       const reader = response.body.getReader()
@@ -158,6 +195,9 @@ export const streamSse = <T extends SseEventData = SseEventData>({
           hasStarted = true
         }
         handlers?.onEvent?.(parsed.event, parsed.data, parsed)
+        if (parsed.event === 'done') {
+          receivedDone = true
+        }
         if (parsed.event === 'error') {
           throw createSseError(parsed.data)
         }
@@ -176,6 +216,9 @@ export const streamSse = <T extends SseEventData = SseEventData>({
         emitBlock(buffer)
       }
 
+      if (!receivedDone) {
+        throw new Error('生成连接提前中断，系统可能仍在处理，请稍后刷新结果。')
+      }
       handlers?.onDone?.()
     } catch (error) {
       if (controller.signal.aborted) return

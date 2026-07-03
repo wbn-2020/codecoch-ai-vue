@@ -84,6 +84,7 @@ import { onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { forgotPasswordApi, type ForgotPasswordDTO } from '@/api/auth'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -105,7 +106,7 @@ const rules: FormRules<ForgotPasswordDTO> = {
   ]
 }
 
-const getErrorMessage = (error: unknown, fallback: string) => {
+const getAuthErrorMessage = (error: unknown, fallback: string) => {
   if (error && typeof error === 'object') {
     const payload = error as { message?: string; response?: { data?: { message?: string } } }
     const message = payload.response?.data?.message || payload.message || ''
@@ -113,9 +114,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
       return '请求过于频繁，请稍后再试。'
     }
     if (message.toLowerCase().includes('network')) {
-      return '网络连接异常，请确认后端服务是否可用后重试。'
+      return '网络连接异常，请确认服务是否可用后重试。'
     }
-    return message || fallback
+    return normalizeErrorMessage(error, fallback)
   }
   return fallback
 }
@@ -149,13 +150,10 @@ const handleSubmit = async () => {
       successMessage.value =
         result.message ||
         `如果 ${form.email} 已绑定账号，请检查收件箱或垃圾邮件，并在链接过期前完成密码重置。`
-      if (import.meta.env.DEV && result.resetToken) {
-        successMessage.value = `${successMessage.value} 测试环境 resetToken：${result.resetToken}`
-      }
       startCountdown(60)
       ElMessage.success('重置链接已发送，请查收邮箱')
     } catch (error: unknown) {
-      errorMessage.value = getErrorMessage(error, '重置链接发送失败，请稍后重试')
+      errorMessage.value = getAuthErrorMessage(error, '重置链接发送失败，请稍后重试')
     } finally {
       loading.value = false
     }

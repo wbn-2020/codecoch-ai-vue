@@ -12,9 +12,9 @@ export type InterviewStatus =
   | string
 export type ReportStatus = 'NOT_GENERATED' | 'GENERATING' | 'GENERATED' | 'FAILED' | string
 export type NextAction = 'FOLLOW_UP' | 'NEXT_QUESTION' | 'NEXT_STAGE' | 'FINISH' | string
-export type TrainingScene = 'PROJECT_DEEP_DIVE' | 'JAVA_SPECIALTY' | string
 export type InterviewReportSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
-export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
+export type InterviewReportTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
+export type InterviewAnswerReviewSseEventType = 'start' | 'progress' | 'delta' | 'token' | 'result' | 'done' | 'error'
 export type InterviewQuestionSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 export type InterviewAnswerReviewSseStage =
   | 'VALIDATE_REQUEST'
@@ -65,7 +65,9 @@ export interface InterviewCreateDTO {
   interviewerStyle?: string
   practiceMode?: string
   questionCount?: number
-  trainingScene?: TrainingScene
+  recommendationSource?: string
+  recommendationReason?: string
+  trainingScene?: string
   targetSkillDomain?: string
   targetSkillCodes?: string[]
   targetLevel?: string
@@ -94,18 +96,11 @@ export interface InterviewStageVO {
 
 export interface InterviewSessionVO {
   interviewId: number
-  applicationId?: number
   interviewName?: string
   interviewMode?: string
   industryTemplateId?: number
   industryDirection?: string
   industryContext?: string
-  trainingScene?: TrainingScene
-  targetSkillDomain?: string
-  targetSkillCodes?: string[]
-  targetLevel?: string
-  projectEvidenceIds?: number[]
-  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   stageList?: InterviewStageVO[]
@@ -134,7 +129,6 @@ export interface InterviewQuestionVO {
 
 export interface InterviewCurrentVO {
   interviewId: number
-  applicationId?: number
   sessionId?: number
   status: InterviewStatus
   interviewStatus?: InterviewStatus
@@ -208,6 +202,11 @@ export interface FinishInterviewVO {
   reportId?: number
   finishedAt?: string
   message?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
 }
 
 export interface RetryReportVO {
@@ -215,6 +214,16 @@ export interface RetryReportVO {
   reportStatus: ReportStatus
   reportId?: number
   message?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: InterviewReportTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
 }
 
 export interface InterviewAnswerReviewSseParams {
@@ -225,6 +234,8 @@ export interface InterviewAnswerReviewSseEvent {
   requestId?: string
   type?: InterviewAnswerReviewSseEventType | string
   message?: string
+  content?: string
+  index?: number
   interviewId?: number
   questionId?: number
   answerId?: number
@@ -289,19 +300,12 @@ export interface InterviewQueryDTO extends PageQuery {
 
 export interface InterviewListVO {
   interviewId: number
-  applicationId?: number
   interviewName?: string
   interviewMode: string
   resumeName?: string
   targetPosition?: string
   industryTemplateId?: number
   industryDirection?: string
-  trainingScene?: TrainingScene
-  targetSkillDomain?: string
-  targetSkillCodes?: string[]
-  targetLevel?: string
-  projectEvidenceIds?: number[]
-  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   totalScore?: number
@@ -343,7 +347,6 @@ export interface InterviewMessageVO {
 
 export interface InterviewDetailVO {
   interviewId: number
-  applicationId?: number
   interviewName?: string
   interviewMode: string
   targetPosition?: string
@@ -353,12 +356,6 @@ export interface InterviewDetailVO {
   industryContext?: string
   difficulty?: string
   interviewerStyle?: string
-  trainingScene?: TrainingScene
-  targetSkillDomain?: string
-  targetSkillCodes?: string[]
-  targetLevel?: string
-  projectEvidenceIds?: number[]
-  followUpIntensity?: string
   status: InterviewStatus
   reportStatus: ReportStatus
   resumeSnapshot?: ResumeSnapshotVO
@@ -389,16 +386,38 @@ export interface RecommendedQuestionVO {
   recommendReason?: string
 }
 
-export type RubricDimension =
-  | 'EXPRESSION_STRUCTURE'
-  | 'TECHNICAL_DEPTH'
-  | 'BUSINESS_UNDERSTANDING'
-  | 'RISK_AWARENESS'
-  | 'IMPLEMENTABILITY'
+export type InterviewReportNextActionType =
+  | 'QUESTION_PRACTICE'
+  | 'STUDY_PLAN'
+  | 'INTERVIEW'
+  | 'RESUME_OPTIMIZE'
   | string
 
+export interface InterviewReportNextActionVO {
+  actionType: InterviewReportNextActionType
+  title: string
+  description?: string
+  priority?: number
+  actionUrl?: string
+  actionSource?: 'BACKEND' | 'STATIC_FALLBACK' | string
+  relatedBizType?: string
+  relatedBizId?: number
+  evidence?: string
+}
+
+export interface InterviewReportMissingSkillVO {
+  id?: number
+  skillName?: string
+  severity?: string
+  gapDescription?: string
+  recommendedActions?: string[]
+  priority?: number
+  sourceType?: string
+  sourceBizId?: number
+}
+
 export interface InterviewRubricScoreVO {
-  dimension: RubricDimension
+  dimension: string
   score?: number
   comment?: string
   evidenceSummary?: string
@@ -408,33 +427,28 @@ export interface InterviewRubricScoreVO {
 }
 
 export interface InterviewFollowUpTraceVO {
-  questionMessageId?: number
-  answerMessageId?: number
   followUpMessageId?: number
   questionSummary?: string
   answerSummary?: string
-  followUpQuestion?: string
   followUpIntent?: string
   followUpReason?: string
   exposedRisk?: string
-  evidenceSource?: string
+  followUpQuestion?: string
 }
 
 export interface InterviewAdviceEvidenceSourceVO {
   sourceType?: string
-  sourceId?: number | string
   sourceSummary?: string
+  sourceId?: number
 }
 
 export interface InterviewAdviceEvidenceVO {
   title?: string
   content?: string
-  adviceType?: string
-  confidence?: 'HIGH' | 'MEDIUM' | 'LOW' | string
+  confidence?: string
+  actionUrl?: string
   sampleInsufficient?: boolean
   sampleWarning?: string
-  feedbackStatus?: string
-  actionUrl?: string
   evidenceSources?: InterviewAdviceEvidenceSourceVO[]
 }
 
@@ -442,7 +456,7 @@ export interface InterviewAbilityProfileUpdateVO {
   skillCode?: string
   candidateStatus?: string
   confidence?: string
-  evidenceCount?: number
+  evidenceSummary?: string
   sampleInsufficient?: boolean
   sampleWarning?: string
 }
@@ -451,11 +465,14 @@ export interface InterviewReportVO {
   id?: number
   reportId?: number
   interviewId: number
-  applicationId?: number
   sessionId?: number
   targetJobId?: number
   skillProfileId?: number
   matchReportId?: number
+  targetJobTitle?: string
+  targetCompanyName?: string
+  jdEvidenceSummary?: string
+  missingSkills?: InterviewReportMissingSkillVO[]
   reportStatus: ReportStatus
   status?: ReportStatus | InterviewStatus
   totalScore?: number
@@ -475,16 +492,27 @@ export interface InterviewReportVO {
   resumeSuggestions?: string
   resumeAdvice?: string
   recommendedQuestions?: Array<RecommendedQuestionVO | string>
-  questionReviews?: InterviewMessageVO[]
-  qaReview?: InterviewMessageVO[]
+  nextActions?: InterviewReportNextActionVO[]
   rubricScores?: InterviewRubricScoreVO[]
   followUpTree?: InterviewFollowUpTraceVO[]
   adviceEvidence?: InterviewAdviceEvidenceVO[]
   abilityProfileUpdates?: InterviewAbilityProfileUpdateVO[]
+  questionReviews?: InterviewMessageVO[]
+  qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]
   generatedAt?: string
   createdAt?: string
   failedReason?: string
   failureReason?: string
   errorMessage?: string
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: InterviewReportTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
 }

@@ -2,8 +2,8 @@
   <main class="error-page">
     <section class="error-card">
       <h1>404</h1>
-      <p>你访问的页面不存在，可能路径已调整或尚未进入 V1 当前阶段。</p>
-      <el-button type="primary" @click="router.push('/dashboard')">返回工作台</el-button>
+      <p>你访问的页面不存在，可能路径已调整或当前暂未开放。</p>
+      <el-button type="primary" @click="router.push('/dashboard')">返回今日计划</el-button>
     </section>
   </main>
 </template>

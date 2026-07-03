@@ -41,7 +41,7 @@ export interface TargetJobVO {
 }
 
 export interface JobDescriptionAnalysisVO {
-  id: number
+  id?: number | null
   targetJobId: number
   userId?: number
   jobTitle?: string
@@ -57,8 +57,12 @@ export interface JobDescriptionAnalysisVO {
   interviewFocusPoints?: unknown
   skillWeights?: unknown
   summary?: string
-  rawResult?: unknown
   aiCallLogId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   parseStatus?: TargetJobParseStatus
   parseErrorMessage?: string
   createdAt?: string

@@ -24,6 +24,18 @@ a {
   text-decoration: none;
 }
 
+.is-permission-disabled {
+  position: relative;
+  opacity: 0.56;
+  cursor: not-allowed !important;
+  filter: grayscale(0.18);
+}
+
+.is-permission-disabled,
+.is-permission-disabled * {
+  pointer-events: auto;
+}
+
 #app {
   min-height: 100vh;
   background: transparent;

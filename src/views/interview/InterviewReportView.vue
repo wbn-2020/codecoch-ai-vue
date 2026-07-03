@@ -1,24 +1,24 @@
-﻿<template>
+<template>
   <div class="interview-report page-shell">
     <section class="report-top">
       <div>
         <div class="eyebrow">
           <ChartNoAxesCombined :size="16" />
-          AI Interview Report
+          面试复盘
         </div>
         <h1>结构化 AI 面试报告</h1>
-        <p>汇总面试表现、阶段评分、题目点评和后续练习建议。</p>
+        <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
       </div>
       <div class="report-actions">
-        <el-button @click="router.push('/dashboard')">
+        <el-button @click="handleStaticTodayAction()">
           <LayoutDashboard :size="16" />
-          工作台
+          今日计划
         </el-button>
         <el-button @click="router.push('/interviews/history')">
           <History :size="16" />
           返回历史
         </el-button>
-        <el-button v-if="interviewId" type="primary" @click="router.push({ path: '/interviews/create', query: interviewContextQuery })">
+        <el-button v-if="interviewId" type="primary" @click="handleStaticInterviewAction()">
           <RotateCcw :size="16" />
           重新面试
         </el-button>
@@ -28,17 +28,42 @@
     <section v-if="isGenerating" class="content-card">
       <div class="content-card__body generating-panel">
         <el-icon class="generating-icon"><Loading /></el-icon>
-        <h2>报告生成进度</h2>
-        <p>{{ sseMessage || '系统正在根据真实问答记录生成结构化报告。' }}</p>
+        <h2>报告生成中</h2>
+        <p>{{ generatingMessage }}</p>
+        <el-alert
+          v-if="reportRecoveryNotice"
+          class="report-recovery-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="报告读取暂时不可用"
+          :description="reportRecoveryNotice"
+        />
         <el-progress :percentage="pollProgress" :show-text="false" />
-        <div class="sse-stage-list">
-          <article v-for="item in sseEvents" :key="item.key" class="sse-stage-item">
-            <span>{{ sseEventLabel(item.event) }}</span>
-            <strong>{{ item.stage || item.message || '-' }}</strong>
-            <p>{{ item.message || item.stage || '-' }}</p>
+        <div class="task-stage-list">
+          <article v-for="item in generatingStages" :key="item.key" class="task-stage-item">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.desc }}</p>
           </article>
         </div>
-        <div v-if="sseMetaText" class="sse-meta">{{ sseMetaText }}</div>
+        <div v-if="taskMetaText" class="task-meta">{{ taskMetaText }}</div>
+        <div class="async-diagnostics">
+          <span v-if="asyncReceipt.messageId">生成任务已提交</span>
+          <span v-if="asyncReceipt.traceId">处理线索已记录</span>
+          <span>面试记录已绑定</span>
+          <span v-if="asyncReceipt.sendStatus">提交状态 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
+        </div>
+        <div class="generating-actions">
+          <el-button type="primary" @click="goReportTaskCenter">
+            <ListChecks :size="16" />
+            去任务中心查看
+          </el-button>
+          <el-button @click="router.push('/interviews/history')">
+            <History :size="16" />
+            稍后回来
+          </el-button>
+        </div>
       </div>
     </section>
 
@@ -51,8 +76,8 @@
             <StatusTag :status="report.reportStatus" />
           </div>
           <div class="overview-card">
-            <span>面试编号</span>
-            <strong>#{{ report.interviewId || interviewId }}</strong>
+            <span>面试记录</span>
+            <strong>{{ report.interviewId || interviewId }}</strong>
           </div>
           <div class="overview-card">
             <span>生成时间</span>
@@ -83,46 +108,123 @@
           title="综合得分已生成。"
         />
 
+        <div class="report-trust-strip">
+          <el-tag v-for="tag in reportTrustTags" :key="tag.label" :type="tag.type" effect="plain">
+            {{ tag.label }}
+          </el-tag>
+        </div>
+
         <div class="report-feedback-row">
           <AiResultFeedback
             scene="INTERVIEW_REPORT"
             biz-type="INTERVIEW_REPORT"
             :biz-id="report.reportId || report.id"
-            :ai-call-log-id="sseAiCallLogId"
             label="反馈报告问题"
             compact
           />
         </div>
 
-        <el-alert
-          v-if="applicationId"
-          class="application-sync"
-          type="success"
-          show-icon
-          :closable="false"
-          title="这份报告来自投递链路"
-          description="可以把面试完成结果写回投递事件，方便在投递工作台继续跟进。"
-        >
-          <template #default>
-            <el-button
-              type="primary"
-              plain
-              :loading="syncingApplicationEvent"
-              :disabled="applicationEventSynced"
-              @click="syncReportToApplication"
-            >
-              {{ applicationEventSynced ? '已同步到投递' : '同步到投递事件' }}
+        <div v-if="hasJdAlignment" class="target-job-alignment">
+          <div class="section-head">
+            <h2>目标岗位对齐</h2>
+            <p>把本轮面试结果连接回 JD、能力画像和匹配报告，优先修补岗位要求里的短板。</p>
+          </div>
+          <div class="alignment-card-grid">
+            <article v-for="card in jdAlignmentCards" :key="card.label" class="alignment-card">
+              <span>{{ card.label }}</span>
+              <strong>{{ card.value }}</strong>
+              <el-tag size="small" :type="card.type" effect="plain">{{ card.hint }}</el-tag>
+            </article>
+          </div>
+          <div v-if="missingSkillRows.length" class="missing-skill-list">
+            <article v-for="skill in missingSkillRows" :key="skill.id || skill.skillName" class="missing-skill-item">
+              <header>
+                <strong>{{ skill.skillName }}</strong>
+                <el-tag size="small" :type="severityTagType(skill.severity)" effect="plain">{{ skill.severity || '待评估' }}</el-tag>
+              </header>
+                    <p>{{ skill.gapDescription || '这项能力与目标岗位要求存在差距，建议回到能力画像补充证据。' }}</p>
+              <ul v-if="skill.recommendedActions?.length">
+                <li v-for="action in skill.recommendedActions.slice(0, 2)" :key="action">{{ action }}</li>
+              </ul>
+            </article>
+          </div>
+          <div class="alignment-actions">
+            <el-button :disabled="!report.targetJobId" @click="goTargetJobAnalysis">
+              <Target :size="16" />
+              查看岗位分析
             </el-button>
-          </template>
-        </el-alert>
+            <el-button :disabled="!report.skillProfileId && !report.targetJobId && !report.matchReportId" @click="goSkillProfile">
+              <Radar :size="16" />
+              查看能力画像
+            </el-button>
+            <el-button type="primary" @click="goJdGapPractice">
+              <ArrowRight :size="16" />
+              练 JD 短板题
+            </el-button>
+          </div>
+        </div>
+
+        <div v-if="nextActions.length" class="next-action-section">
+          <div class="section-head">
+            <h2>闭环行动</h2>
+            <p>把这份报告接到下一轮训练，按优先级继续推进。</p>
+          </div>
+          <div class="next-action-grid">
+            <article
+              v-for="action in nextActions"
+              :key="`${action.actionType}-${action.priority}`"
+              class="next-action-card"
+            >
+              <div class="next-action-card__main">
+                <span>{{ nextActionTypeLabel(action.actionType) }}</span>
+                <strong>{{ action.title }}</strong>
+                <p>{{ action.description || action.evidence || '继续完成下一步训练。' }}</p>
+                <small v-if="action.evidence">{{ action.evidence }}</small>
+              </div>
+              <el-button
+                type="primary"
+                plain
+                :loading="action.actionType === 'STUDY_PLAN' && studyPlanGenerating"
+                @click="handleNextAction(action)"
+              >
+                {{ nextActionButtonLabel(action.actionType) }}
+              </el-button>
+            </article>
+          </div>
+        </div>
+        <div v-else-if="nextActionUnavailableReason" class="next-action-empty">
+          <strong>暂未生成结构化闭环行动</strong>
+          <p>{{ nextActionUnavailableReason }}</p>
+        </div>
+
+        <div class="coach-next">
+          <div class="section-head">
+            <h2>下一轮训练建议</h2>
+            <p>把报告里的短板转成可执行动作，而不是只看一个分数。</p>
+          </div>
+          <div class="next-grid">
+            <article v-for="item in coachNextSteps" :key="item.title">
+              <span>{{ item.kicker }}</span>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.desc }}</p>
+            </article>
+          </div>
+        </div>
 
         <div class="dimension-section">
           <div class="section-head">
             <h2>评分维度</h2>
-            <p>按面试阶段展示能力表现，暂无拆分时保持空状态。</p>
+            <p>按面试阶段展示能力表现，暂未拆分时保持空状态。</p>
           </div>
           <ReportChart v-if="stageReports.length" :stages="stageReports" />
-          <el-empty v-else description="暂无维度评分数据" />
+          <AppState
+            v-else
+            type="empty"
+            title="暂未拆分维度评分"
+            description="本次报告可能只返回了总评，或问答样本不足以拆分阶段得分。建议结合问答明细和短板建议继续复盘。"
+          >
+            <el-button type="primary" plain @click="router.push('/interviews/history')">查看面试历史</el-button>
+          </AppState>
         </div>
       </div>
 
@@ -135,122 +237,32 @@
           :description="failureReason"
         />
         <div class="retry-row">
-          <el-button type="primary" :loading="retrying || sseGenerating" :disabled="sseGenerating" @click="handleRetry">重新生成报告</el-button>
+          <el-button type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
           <el-button @click="router.push('/interviews/history')">返回历史</el-button>
         </div>
       </div>
 
-      <el-empty v-else-if="!loading" description="报告暂不可用，可能仍在生成中" />
+      <AppState
+        v-else-if="!loading"
+        type="empty"
+        title="报告暂不可用"
+        description="报告可能仍在生成中，或当前面试记录没有可展示的复盘结果。可以去任务中心继续查看生成进度。"
+      >
+        <el-button type="primary" @click="goReportTaskCenter">去任务中心查看</el-button>
+        <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+      </AppState>
     </section>
 
     <section v-if="report && isGenerated" class="analysis-grid">
       <article class="analysis-card wide">
         <div class="section-head">
-          <h2>Rubric 五维评分</h2>
-          <p>表达结构、技术深度、业务理解、风险意识、可落地性。</p>
-        </div>
-        <div v-if="rubricScores.length" class="rubric-grid">
-          <section v-for="item in rubricScores" :key="item.dimension" class="rubric-card">
-            <div class="rubric-card__head">
-              <strong>{{ rubricLabel(item.dimension) }}</strong>
-              <el-tag size="small" effect="plain">{{ item.score ?? '-' }}/5</el-tag>
-            </div>
-            <p>{{ item.comment || '暂无解释' }}</p>
-            <small>证据：{{ item.evidenceSummary || '暂无稳定证据' }}</small>
-            <small>建议：{{ item.improvementSuggestion || '继续补充样本后复盘' }}</small>
-            <el-alert
-              v-if="item.sampleInsufficient"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="item.sampleWarning || '样本不足，仅作为候选判断'"
-            />
-          </section>
-        </div>
-        <el-empty v-else description="暂无 Rubric 评分数据" />
-      </article>
-
-      <article class="analysis-card wide">
-        <div class="section-head">
-          <h2>追问树回放</h2>
-          <p>展示 AI 为什么追问、触发原因和暴露风险。</p>
-        </div>
-        <div v-if="followUpTree.length" class="trace-list">
-          <section v-for="(item, index) in followUpTree" :key="item.followUpMessageId || index" class="trace-item">
-            <div class="trace-step">{{ index + 1 }}</div>
-            <div>
-              <strong>{{ item.followUpIntent || 'FOLLOW_UP' }}</strong>
-              <p v-if="item.questionSummary">原问题：{{ item.questionSummary }}</p>
-              <p v-if="item.answerSummary">回答暴露：{{ item.answerSummary }}</p>
-              <p>追问原因：{{ item.followUpReason || '暂无原因' }}</p>
-              <p>风险提示：{{ item.exposedRisk || '暂无风险摘要' }}</p>
-              <small v-if="item.followUpQuestion">追问：{{ item.followUpQuestion }}</small>
-            </div>
-          </section>
-        </div>
-        <el-empty v-else description="暂无追问树数据" />
-      </article>
-
-      <article class="analysis-card wide">
-        <div class="section-head">
-          <h2>AI 建议证据链</h2>
-          <p>每条建议展示来源、置信度和样本不足提示。</p>
-        </div>
-        <div v-if="adviceEvidence.length" class="advice-grid">
-          <section v-for="(item, index) in adviceEvidence" :key="`${item.title || 'advice'}-${index}`" class="advice-card">
-            <div class="advice-card__head">
-              <strong>{{ item.title || '建议' }}</strong>
-              <el-tag :type="confidenceTagType(item.confidence)" size="small" effect="plain">
-                {{ confidenceLabel(item.confidence) }}
-              </el-tag>
-            </div>
-            <p>{{ item.content || '暂无建议内容' }}</p>
-            <el-alert
-              v-if="item.sampleInsufficient"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="item.sampleWarning || '样本不足，不能作为强结论'"
-            />
-            <div v-if="item.evidenceSources?.length" class="evidence-list">
-              <span v-for="(source, sourceIndex) in item.evidenceSources" :key="`${source.sourceType}-${sourceIndex}`">
-                {{ source.sourceType || 'SOURCE' }}：{{ source.sourceSummary || '暂无摘要' }}
-              </span>
-            </div>
-            <div class="advice-actions">
-              <AiResultFeedback
-                scene="INTERVIEW_REPORT_ADVICE"
-                biz-type="INTERVIEW_REPORT"
-                :biz-id="report.reportId || report.id"
-                label="反馈建议"
-                compact
-              />
-              <el-button size="small" type="primary" plain @click="goAdviceAction(item.actionUrl)">去处理</el-button>
-            </div>
-          </section>
-        </div>
-        <el-empty v-else description="暂无建议证据链" />
-      </article>
-
-      <article v-if="abilityProfileUpdates.length" class="analysis-card wide">
-        <div class="section-head">
-          <h2>能力画像更新候选</h2>
-          <p>训练结果只形成候选，不把样本不足的判断写成强结论。</p>
-        </div>
-        <div class="profile-update-list">
-          <el-tag v-for="item in abilityProfileUpdates" :key="`${item.skillCode}-${item.candidateStatus}`" effect="plain">
-            {{ item.skillCode }} · {{ item.candidateStatus }} · {{ confidenceLabel(item.confidence) }}
-          </el-tag>
-        </div>
-      </article>
-
-      <article class="analysis-card wide">
-        <div class="section-head">
           <h2>AI 总结</h2>
-          <p>整体评价 / 报告正文</p>
+          <p>整体评价与报告正文</p>
         </div>
         <MarkdownPreview v-if="report.reportContent || report.summary" :content="report.reportContent || report.summary" />
-        <el-empty v-else description="暂无总结" />
+        <AppState v-else type="empty" title="总结暂未生成" :description="emptyReportCopy.summary">
+          <el-button type="primary" plain :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -258,7 +270,9 @@
           <h2>表现亮点</h2>
         </div>
         <MarkdownPreview v-if="report.strengths" :content="report.strengths" />
-        <el-empty v-else description="暂无亮点数据" />
+        <AppState v-else type="empty" title="亮点暂未提取" :description="emptyReportCopy.strengths">
+          <el-button plain @click="router.push('/interviews/create')">重新面试</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -266,7 +280,9 @@
           <h2>明显短板</h2>
         </div>
         <MarkdownPreview v-if="report.mainProblems || report.weaknesses" :content="report.mainProblems || report.weaknesses" />
-        <el-empty v-else description="暂无短板数据" />
+        <AppState v-else type="empty" title="短板暂未提取" :description="emptyReportCopy.weaknesses">
+          <el-button type="primary" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">生成学习计划</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -274,7 +290,9 @@
           <h2>建议提升方向</h2>
         </div>
         <MarkdownPreview v-if="report.reviewSuggestions || report.suggestions" :content="report.reviewSuggestions || report.suggestions" />
-        <el-empty v-else description="暂无建议数据" />
+        <AppState v-else type="empty" title="提升建议暂未生成" :description="emptyReportCopy.suggestions">
+          <el-button type="primary" plain :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -282,7 +300,9 @@
           <h2>薄弱知识点</h2>
         </div>
         <MarkdownPreview v-if="weakPointText" :content="weakPointText" />
-        <el-empty v-else description="暂无薄弱知识点" />
+        <AppState v-else type="empty" title="暂未识别薄弱知识点" :description="emptyReportCopy.weakPoints">
+          <el-button type="primary" plain :disabled="!recommendedQuestionIds.length" @click="goPracticeQuestion">练推荐题</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -293,7 +313,9 @@
           v-if="report.projectProblems || report.projectExpressionProblems"
           :content="report.projectProblems || report.projectExpressionProblems"
         />
-        <el-empty v-else description="暂无项目表达问题" />
+        <AppState v-else type="empty" title="项目表达问题暂未提取" :description="emptyReportCopy.project">
+          <el-button plain @click="router.push('/projects')">整理项目经历</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -301,7 +323,9 @@
           <h2>简历修改建议</h2>
         </div>
         <MarkdownPreview v-if="report.resumeSuggestions || report.resumeAdvice" :content="report.resumeSuggestions || report.resumeAdvice" />
-        <el-empty v-else description="暂无简历修改建议" />
+        <AppState v-else type="empty" title="简历建议暂未生成" :description="emptyReportCopy.resume">
+          <el-button plain @click="router.push('/resumes')">查看简历与岗位</el-button>
+        </AppState>
       </article>
 
       <article class="analysis-card">
@@ -321,12 +345,15 @@
               <strong>{{ item.title || item.questionTitle || '推荐题目' }}</strong>
               <span v-if="item.reason || item.recommendReason">{{ item.reason || item.recommendReason }}</span>
             </div>
+            <el-tag size="small" type="info" effect="plain">来自面试报告</el-tag>
             <el-tag v-if="item.questionId" size="small" type="success" effect="plain">可练习</el-tag>
             <el-tag v-else size="small" type="warning" effect="plain">仅建议</el-tag>
-            <el-tag v-if="item.difficulty" size="small" effect="plain">{{ item.difficulty }}</el-tag>
+            <el-tag v-if="item.difficulty" size="small" effect="plain">{{ difficultyLabel(item.difficulty) }}</el-tag>
           </button>
         </div>
-        <el-empty v-else description="暂无推荐题目" />
+        <AppState v-else type="empty" title="暂未生成推荐题目" :description="emptyReportCopy.questions">
+          <el-button type="primary" plain @click="router.push('/questions')">进入题库训练</el-button>
+        </AppState>
       </article>
     </section>
 
@@ -336,22 +363,43 @@
           <h2>阶段得分</h2>
           <p>阶段名称、类型、得分、总结、短板与建议会在报告生成后展示。</p>
         </div>
-        <el-table :data="stageReports" row-key="stageId">
-          <el-table-column prop="stageName" label="阶段" min-width="160" />
-          <el-table-column prop="stageType" label="类型" min-width="140" />
-          <el-table-column prop="score" label="得分" width="90" />
-          <el-table-column prop="summary" label="总结" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="weaknesses" label="短板" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="suggestions" label="建议" min-width="220" show-overflow-tooltip />
-        </el-table>
+        <div class="stage-report-list">
+          <article v-for="(stage, index) in stageReports" :key="stage.stageId || index" class="stage-report-card">
+            <header>
+              <div>
+                <span>阶段 {{ index + 1 }}</span>
+                <strong>{{ stage.stageName || '未命名阶段' }}</strong>
+                <p>{{ stage.stageType || '未标注类型' }}</p>
+              </div>
+              <div class="stage-score-pill">
+                <span>得分</span>
+                <strong>{{ stage.score ?? '--' }}</strong>
+              </div>
+            </header>
+            <div class="stage-report-content">
+              <div class="stage-copy">
+                <label>总结</label>
+                <p>{{ stage.summary || '暂无阶段总结' }}</p>
+              </div>
+              <div class="stage-copy">
+                <label>短板</label>
+                <p>{{ stage.weaknesses || '暂无短板记录' }}</p>
+              </div>
+              <div class="stage-copy">
+                <label>建议</label>
+                <p>{{ stage.suggestions || '暂无改进建议' }}</p>
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
-    <section v-if="qaMessages.length && isGenerated" class="content-card">
+    <section v-if="qaMessages.length && (isGenerated || isFailed || isUnscorable)" class="content-card">
       <div class="content-card__body">
         <div class="section-head">
-          <h2>题目明细</h2>
-          <p>展示问题、回答、AI 评分、点评、推荐方向和追问记录。</p>
+          <h2>{{ isGenerated ? '题目明细' : '已保留问答明细' }}</h2>
+          <p>{{ isGenerated ? '展示问题、回答、AI 评分、点评、推荐方向和追问记录。' : '完整报告暂不可用，但本次面试的问题、回答、评分和追问仍可继续复盘。' }}</p>
         </div>
         <div class="qa-list">
           <article v-for="message in qaMessages" :key="message.messageId" class="qa-item">
@@ -390,19 +438,19 @@
           <p>报告已生成，可继续发起新面试、进入题库练习或生成学习计划。</p>
         </div>
         <div class="action-buttons">
-          <el-button type="primary" @click="router.push('/interviews/create')">
+          <el-button type="primary" @click="handleStaticInterviewAction(true)">
             <RotateCcw :size="16" />
             重新面试
           </el-button>
-          <el-button :disabled="!firstRecommendedQuestionPath" @click="goPracticeQuestion">
+          <el-button :disabled="!recommendedQuestionIds.length" @click="handleStaticPracticeAction(true)">
             <BookOpenCheck :size="16" />
-            练习相关题目
+            重练薄弱题
           </el-button>
           <el-button type="success" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">
             <CalendarClock :size="16" />
             生成学习计划
           </el-button>
-          <el-button @click="router.push('/dashboard')">返回工作台</el-button>
+          <el-button @click="handleStaticTodayAction(true)">返回今日计划</el-button>
         </div>
       </div>
     </section>
@@ -412,80 +460,73 @@
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashboard, RotateCcw } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
-  finishInterviewApi,
+  recordAgentMetricEventApi
+} from '@/api/agent'
+import {
   getInterviewReportApi,
-  retryInterviewReportApi,
-  streamInterviewReportApi
+  retryInterviewReportApi
 } from '@/api/interview'
-import { createApplicationEventApi, getApplicationEventsApi, type JobApplicationEventVO } from '@/api/v4'
 import { generateStudyPlanApi } from '@/api/studyPlan'
+import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
-import {
-  confidenceLabel,
-  confidenceTagType,
-  type DisplayRecommendedQuestion,
-  normalizeInterviewReportSections,
-  rubricLabel
-} from '@/features/interview-report'
-import { resolveAppRoutePath } from '@/features/route-safety'
+import { difficultyOptions } from '@/constants/enums'
 import type {
   InterviewMessageVO,
-  InterviewReportSseEvent,
-  InterviewReportSseEventType,
+  InterviewReportNextActionVO,
   InterviewReportVO,
+  RecommendedQuestionVO,
+  StageReportVO
 } from '@/types/interview'
-import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
 const interviewId = getRouteNumberParam(route.params.id as string)
+type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
 const retrying = ref(false)
 const studyPlanGenerating = ref(false)
-const syncingApplicationEvent = ref(false)
-const applicationEventSynced = ref(false)
 const report = ref<InterviewReportVO | null>(null)
+const reportRecoveryNotice = ref('')
+const nextActionShownMetricKey = ref('')
+const staticActionShownMetricKey = ref('')
 const pollCount = ref(0)
 const pollFailures = ref(0)
-const sseGenerating = ref(false)
-const sseMessage = ref('')
-const sseReportId = ref<number | undefined>()
-const sseAiCallLogId = ref<number | undefined>()
-const sseEvents = ref<Array<{ key: string; event: string; stage?: string; message?: string }>>([])
-let pollTimer: number | undefined
-let reportSseHandle: ReturnType<typeof streamInterviewReportApi> | null = null
-
-const getQueryString = (name: string) => {
-  const value = route.query[name]
-  return Array.isArray(value) ? value[0] : value
-}
-
-const getQueryNumber = (name: string) => {
-  const value = Number(getQueryString(name))
-  return Number.isFinite(value) && value > 0 ? value : undefined
-}
-
-const applicationId = computed(() => report.value?.applicationId || getQueryNumber('applicationId'))
-const interviewContextQuery = computed(() => {
-  const query: Record<string, string> = {}
-  ;['source', 'applicationId', 'targetJobId', 'resumeId', 'resumeVersionId', 'matchReportId', 'skillProfileId'].forEach((key) => {
-    const value = getQueryString(key)
-    if (value) query[key] = String(value)
-  })
-  if (report.value?.applicationId) {
-    query.applicationId = String(report.value.applicationId)
-  }
-  return query
+const taskReportId = ref<number | undefined>()
+const asyncReceipt = ref({
+  messageId: typeof route.query.asyncMessageId === 'string' ? route.query.asyncMessageId : '',
+  traceId: typeof route.query.asyncTraceId === 'string' ? route.query.asyncTraceId : '',
+  bizType: typeof route.query.asyncBizType === 'string' ? route.query.asyncBizType : 'interview.report',
+  bizId: typeof route.query.asyncBizId === 'string' ? route.query.asyncBizId : (interviewId ? String(interviewId) : ''),
+  sendStatus: typeof route.query.asyncSendStatus === 'string' ? route.query.asyncSendStatus : ''
 })
+let pollTimer: number | undefined
+
+const asyncSendStatusLabel = (value?: string | null) => {
+  const status = String(value || '').toUpperCase()
+  const labels: Record<string, string> = {
+    SENT: '已提交',
+    SUCCESS: '已提交',
+    QUEUED: '排队中',
+    PENDING: '排队中',
+    FAILED: '提交失败',
+    ERROR: '提交失败',
+    SKIPPED: '暂未提交',
+    DISABLED: '暂未提交',
+    UNAVAILABLE: '暂不可用'
+  }
+  return labels[status] || '待确认'
+}
 
 const normalizedStatus = computed(() => {
   const status = report.value?.reportStatus || report.value?.status || ''
@@ -494,19 +535,68 @@ const normalizedStatus = computed(() => {
 
 const successReportStatuses = ['GENERATED', 'COMPLETED', 'SUCCESS']
 const unscorableReportStatuses = ['UNSCORABLE', 'NOT_SCORABLE', 'INSUFFICIENT_SAMPLE', 'SAMPLE_INSUFFICIENT']
-const isGenerating = computed(() => sseGenerating.value || ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
+const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
 
-const reportSections = computed(() => normalizeInterviewReportSections(report.value))
-const stageReports = computed(() => reportSections.value.stageReports)
-const recommendedQuestions = computed(() => reportSections.value.recommendedQuestions)
-const qaMessages = computed(() => reportSections.value.qaMessages)
-const rubricScores = computed(() => reportSections.value.rubricScores)
-const followUpTree = computed(() => reportSections.value.followUpTree)
-const adviceEvidence = computed(() => reportSections.value.adviceEvidence)
-const abilityProfileUpdates = computed(() => reportSections.value.abilityProfileUpdates)
+type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
+
+const objectItems = <T>(value: unknown): T[] => {
+  return Array.isArray(value)
+    ? (value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as T[])
+    : []
+}
+
+const normalizeRecommendedQuestions = (value: unknown): DisplayRecommendedQuestion[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { title: item }
+      }
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        return item as DisplayRecommendedQuestion
+      }
+      return null
+    })
+    .filter((item): item is DisplayRecommendedQuestion => Boolean(item))
+}
+
+const difficultyLabel = (value?: string) => {
+  if (!value) return ''
+  return difficultyOptions.find((item) => item.value === value)?.label || '难度待确认'
+}
+
+const stageReports = computed<StageReportVO[]>(() => objectItems<StageReportVO>(report.value?.stageReports || report.value?.stageScores))
+const recommendedQuestions = computed<DisplayRecommendedQuestion[]>(() => normalizeRecommendedQuestions(report.value?.recommendedQuestions))
+const nextActions = computed<InterviewReportNextActionVO[]>(() => {
+  if (!isGenerated.value || !Array.isArray(report.value?.nextActions)) return []
+  return [...report.value.nextActions]
+    .filter((action) => action && action.actionType && action.title)
+    .sort((left, right) => (left.priority || 0) - (right.priority || 0))
+})
+const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
+  String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
+const backendNextActions = computed(() => nextActions.value.filter((action) => !isStaticFallbackNextAction(action)))
+const nextActionUnavailableReason = computed(() => {
+  if (!isGenerated.value || nextActions.value.length) return ''
+  if (recommendedQuestionIds.value.length) {
+    return '报告没有返回结构化 nextActions 字段，页面先使用推荐题、重新面试和今日计划入口承接下一轮训练，并记录实验点击指标。'
+  }
+  if (qaMessages.value.length) {
+    return '报告有问答证据，但暂未形成可跳转的训练动作。可以先重新面试或回到今日计划，避免把低置信建议包装成确定结论。'
+  }
+  return '报告缺少足够问答和短板证据，本轮不硬生成训练建议；建议先补一次完整模拟面试。'
+})
+const qaMessages = computed<InterviewMessageVO[]>(() =>
+  objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
+)
+const recommendedQuestionIds = computed(() =>
+  recommendedQuestions.value
+    .map((item) => Number(item.questionId || item.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+)
 const hasValidTotalScore = computed(() => {
   const score = Number(report.value?.totalScore)
   return isGenerated.value && Number.isFinite(score) && score > 0
@@ -514,50 +604,217 @@ const hasValidTotalScore = computed(() => {
 const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
 const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
+const generatingMessage = computed(() =>
+  asyncReceipt.value.messageId
+    ? '报告生成进度已提交到任务中心，可以离开页面，稍后回来查看结果。'
+    : '系统正在根据真实问答记录生成结构化报告。'
+)
+const generatingStages = computed(() => [
+  {
+    key: 'submitted',
+    label: '已提交',
+    title: asyncReceipt.value.messageId ? '报告生成任务已提交' : '等待处理进度',
+    desc: asyncReceipt.value.sendStatus ? `提交状态：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已创建报告生成任务'
+  },
+  {
+    key: 'tracking',
+    label: '可追踪',
+    title: '面试记录已绑定',
+    desc: asyncReceipt.value.traceId ? '处理线索已记录，可稍后继续查看' : '刷新后仍可在任务中心按面试记录继续查找'
+  },
+  {
+    key: 'polling',
+    label: '轮询中',
+    title: `第 ${pollCount.value} 次状态检查`,
+    desc: '报告完成后会自动展示复盘；耗时较长时可以稍后回来'
+  }
+])
+
+const compactRouterQuery = (params: Record<string, RouterQueryValue>) => {
+  const result: LocationQueryRaw = {}
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    result[key] = String(value)
+  })
+  return result
+}
+
+const goReportTaskCenter = () => {
+  router.push({
+    path: '/agent/tasks',
+    query: compactRouterQuery({
+      messageId: asyncReceipt.value.messageId,
+      traceId: asyncReceipt.value.traceId,
+      bizType: asyncReceipt.value.bizType || 'interview.report',
+      bizId: asyncReceipt.value.bizId || interviewId
+    })
+  })
+}
+
+const reportContextQuery = () => compactRouterQuery({
+  source: 'interviewReport',
+  interviewId,
+  reportId: report.value?.reportId || report.value?.id,
+  targetJobId: report.value?.targetJobId,
+  profileId: report.value?.skillProfileId,
+  skillProfileId: report.value?.skillProfileId,
+  matchReportId: report.value?.matchReportId
+})
+
+const goTargetJobAnalysis = async () => {
+  if (!report.value?.targetJobId) {
+    ElMessage.info('这份报告还没有绑定目标岗位')
+    return
+  }
+  await router.push({
+    path: `/job-targets/${report.value.targetJobId}/analysis`,
+    query: reportContextQuery()
+  })
+}
+
+const goSkillProfile = async () => {
+  if (!report.value?.skillProfileId && !report.value?.targetJobId && !report.value?.matchReportId) {
+    ElMessage.info('这份报告还没有可查看的能力画像上下文')
+    return
+  }
+  await router.push({
+    path: '/skill-profile',
+    query: reportContextQuery()
+  })
+}
+
+const goJdGapPractice = async () => {
+  if (report.value?.skillProfileId) {
+    await router.push({
+      path: '/questions/recommendations',
+      query: compactRouterQuery({
+        source: 'gap',
+        sourceId: report.value.skillProfileId,
+        interviewId,
+        reportId: report.value.reportId || report.value.id,
+        targetJobId: report.value.targetJobId,
+        profileId: report.value.skillProfileId,
+        skillProfileId: report.value.skillProfileId,
+        matchReportId: report.value.matchReportId,
+        questionCount: 5
+      })
+    })
+    return
+  }
+  if (report.value?.matchReportId) {
+    await router.push({
+      path: '/questions/recommendations',
+      query: compactRouterQuery({
+        source: 'matchReport',
+        sourceId: report.value.matchReportId,
+        interviewId,
+        reportId: report.value.reportId || report.value.id,
+        targetJobId: report.value.targetJobId,
+        profileId: report.value.skillProfileId,
+        skillProfileId: report.value.skillProfileId,
+        matchReportId: report.value.matchReportId,
+        questionCount: 5
+      })
+    })
+    return
+  }
+  await goPracticeQuestion()
+}
+
 const failureReason = computed(() => toFriendlyMessage(
   report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
   isUnscorable.value ? '本次面试答题样本不足或题目明细不完整，暂时无法生成可信评分。请继续答题或重新生成报告。' : '报告生成失败，请稍后重试。'
 ))
-const sseMetaText = computed(() => {
+const taskMetaText = computed(() => {
   const items = []
-  if (sseReportId.value) items.push(`报告 #${sseReportId.value}`)
+  const reportId = taskReportId.value || report.value?.reportId || report.value?.id
+  if (reportId) items.push('报告记录已保存')
+  if (asyncReceipt.value.messageId) items.push('生成任务已提交')
+  if (asyncReceipt.value.traceId) items.push('处理线索已记录')
   return items.join(' / ')
 })
-
-const goAdviceAction = async (actionUrl?: string) => {
-  const result = resolveAppRoutePath(actionUrl, { fallbackPath: '/agent/today' })
-  if (result.unavailableReason) {
-    ElMessage.warning(result.unavailableReason)
+const reportTrustTags = computed(() => [
+  {
+    label: report.value?.evidenceSummary || '面试报告证据待确认',
+    type: trustStatusType(report.value?.trustStatus, report.value?.fallback ? 'warning' : 'info')
+  },
+  {
+    label: report.value?.reportId || report.value?.id ? '报告记录已保存' : '报告记录待确认',
+    type: report.value?.reportId || report.value?.id ? 'success' : 'warning'
+  },
+  {
+    label: qaMessages.value.length ? `基于 ${qaMessages.value.length} 条真实问答` : '问答样本不足，可信度降低',
+    type: qaMessages.value.length ? 'success' : 'warning'
+  },
+  {
+    label: hasValidTotalScore.value ? '评分可用' : '评分不可用或待复核',
+    type: hasValidTotalScore.value ? 'success' : 'warning'
+  },
+  {
+    label: recommendedQuestionIds.value.length ? `${recommendedQuestionIds.value.length} 道推荐题可练习` : '推荐题仅供参考',
+    type: recommendedQuestionIds.value.length ? 'success' : 'info'
   }
-  await router.push(result.path)
+] as Array<{ label: string; type: 'success' | 'warning' | 'info' }>)
+
+const missingSkillRows = computed(() =>
+  Array.isArray(report.value?.missingSkills)
+    ? report.value.missingSkills
+        .filter((item) => item && item.skillName)
+        .slice(0, 5)
+    : []
+)
+
+const hasJdAlignment = computed(() => Boolean(
+  report.value?.targetJobId ||
+  report.value?.targetJobTitle ||
+  report.value?.skillProfileId ||
+  report.value?.matchReportId ||
+  missingSkillRows.value.length
+))
+
+const jdAlignmentCards = computed(() => {
+  const targetTitle = report.value?.targetJobTitle || (report.value?.targetJobId ? `目标岗位 #${report.value.targetJobId}` : '未绑定目标岗位')
+  const targetValue = report.value?.targetCompanyName
+    ? `${targetTitle} · ${report.value.targetCompanyName}`
+    : targetTitle
+  return [
+    {
+      label: '目标岗位',
+      value: targetValue,
+      hint: report.value?.targetJobId ? '报告已绑定岗位/JD' : '建议先绑定目标岗位',
+      type: report.value?.targetJobId ? 'success' : 'warning'
+    },
+    {
+      label: '能力画像',
+      value: report.value?.skillProfileId ? `画像 #${report.value.skillProfileId}` : '画像待生成',
+      hint: missingSkillRows.value.length ? `${missingSkillRows.value.length} 个 JD 短板` : '可从匹配报告生成画像',
+      type: report.value?.skillProfileId ? 'success' : 'info'
+    },
+    {
+      label: '匹配报告',
+      value: report.value?.matchReportId ? `报告 #${report.value.matchReportId}` : '未关联匹配报告',
+      hint: report.value?.jdEvidenceSummary || '用于判断 JD 覆盖和追问方向',
+      type: report.value?.matchReportId ? 'success' : 'info'
+    }
+  ] as Array<{ label: string; value: string; hint: string; type: 'success' | 'warning' | 'info' }>
+})
+
+const severityTagType = (severity?: string): 'danger' | 'warning' | 'info' | 'success' => {
+  const value = String(severity || '').toUpperCase()
+  if (['HIGH', 'CRITICAL', 'SEVERE'].includes(value)) return 'danger'
+  if (['MEDIUM', 'MIDDLE'].includes(value)) return 'warning'
+  if (['LOW'].includes(value)) return 'info'
+  return 'info'
 }
 
-const cleanDisplayText = (value?: string | null, fallback = '') => toFriendlyMessage(value || '', fallback)
-
-const sseEventLabel = (event?: string) => {
-  const map: Record<string, string> = {
-    start: '开始',
-    progress: '生成中',
-    delta: '生成中',
-    metadata: '状态更新',
-    result: '结果返回',
-    done: '完成',
-    error: '失败'
-  }
-  return map[String(event || '').toLowerCase()] || '状态更新'
-}
-
-const sseStageLabel = (stage?: string) => {
-  const map: Record<string, string> = {
-    VALIDATE_REQUEST: '校验请求',
-    LOAD_INTERVIEW: '读取面试记录',
-    BUILD_PROMPT: '生成提示词',
-    CALL_AI_REPORT: '调用 AI 生成报告',
-    PARSE_AI_REPORT: '解析报告内容',
-    SAVE_REPORT: '保存报告',
-    COMPLETE: '生成完成'
-  }
-  return map[String(stage || '').toUpperCase()] || cleanDisplayText(stage, '')
+const trustStatusType = (
+  value?: string | null,
+  fallback: 'success' | 'warning' | 'info' = 'info'
+): 'success' | 'warning' | 'info' => {
+  if (value === 'VERIFIED') return 'success'
+  if (value === 'FALLBACK') return 'warning'
+  if (value === 'PARTIAL') return 'info'
+  return fallback
 }
 
 const displayQuestionScore = (message: InterviewMessageVO) => {
@@ -573,15 +830,46 @@ const weakPointText = computed(() => {
   return value || ''
 })
 
-const firstRecommendedQuestionPath = computed(() => {
-  const first = recommendedQuestions.value.find((item) => item.questionId)
-  const id = first?.questionId
-  return id ? `/questions/${id}` : ''
+const coachNextSteps = computed(() => [
+  {
+    kicker: '题库',
+    title: recommendedQuestionIds.value.length ? `重练 ${recommendedQuestionIds.value.length} 道薄弱题` : '等待推荐题',
+    desc: recommendedQuestionIds.value.length
+      ? '优先完成报告推荐题，再回到面试房间验证表达。'
+      : '当前报告没有可跳转题目，可以从题库训练页重新生成推荐。'
+  },
+  {
+    kicker: '表达',
+    title: report.value?.projectProblems || report.value?.projectExpressionProblems ? '补项目证据链' : '沉淀项目说法',
+    desc: '把项目背景、个人职责、指标、取舍和复盘补成一段可复用回答。'
+  },
+  {
+    kicker: '计划',
+    title: report.value?.reviewSuggestions || report.value?.suggestions ? '生成学习计划' : '补齐复盘材料',
+    desc: '把报告建议转成今日计划，避免复盘停留在页面里。'
+  }
+])
+
+const emptyReportCopy = computed(() => {
+  const qaCount = qaMessages.value.length
+  const sampleHint = qaCount
+    ? `当前报告基于 ${qaCount} 条问答生成，部分模块可能因为证据不足没有拆分。`
+    : '当前报告没有拿到足够的问答样本，AI 只能给出有限复盘。'
+  return {
+    summary: `${sampleHint} 可重新生成报告，或回到面试历史确认问答是否完整。`,
+    strengths: `${sampleHint} 亮点通常需要明确回答、项目证据或指标支撑。`,
+    weaknesses: `${sampleHint} 如果没有短板条目，先用学习计划把低分项和推荐题转成下一步训练。`,
+    suggestions: `${sampleHint} 提升建议缺失时，可以重新生成报告或根据低分维度手动生成学习计划。`,
+    weakPoints: `${sampleHint} 推荐题可用时优先练推荐题；没有推荐题时先回到题库训练做一组基础练习。`,
+    project: `${sampleHint} 项目表达问题需要回答里出现项目背景、职责、指标和取舍，缺失时建议先整理项目经历。`,
+    resume: `${sampleHint} 简历建议依赖岗位、简历和面试回答之间的证据链，缺失时先回到简历与岗位页补资料。`,
+    questions: `${sampleHint} 推荐题缺失不会阻塞复盘，可以先进入题库训练，再把错题带回下一次模拟面试。`
+  }
 })
 
 const openRecommendedQuestion = async (item: DisplayRecommendedQuestion) => {
   if (!item.questionId) {
-    ElMessage.warning('该推荐项尚未匹配到正式题库，不能作为题目 ID 跳转')
+    ElMessage.warning('这条推荐暂时不能直接打开题目详情，可以先从推荐训练进入练习。')
     return
   }
   const query: Record<string, string> = { source: 'interviewReport' }
@@ -595,11 +883,127 @@ const openRecommendedQuestion = async (item: DisplayRecommendedQuestion) => {
 }
 
 const goPracticeQuestion = async () => {
-  if (!firstRecommendedQuestionPath.value) {
+  if (!recommendedQuestionIds.value.length) {
     ElMessage.info('暂无可跳转的推荐题目')
     return
   }
-  await router.push(firstRecommendedQuestionPath.value)
+  const query: Record<string, string> = {
+    mode: 'recommended',
+    questionIds: recommendedQuestionIds.value.join(','),
+    source: 'interviewReport',
+    count: String(recommendedQuestionIds.value.length)
+  }
+  if (interviewId) query.interviewId = String(interviewId)
+  const reportId = report.value?.reportId || report.value?.id
+  if (reportId) query.reportId = String(reportId)
+  await router.push({
+    path: '/questions/practice',
+    query
+  })
+}
+
+const nextActionTypeLabel = (type?: string) => {
+  const labels: Record<string, string> = {
+    QUESTION_PRACTICE: '题库练习',
+    STUDY_PLAN: '学习计划',
+    INTERVIEW: '模拟面试',
+    RESUME_OPTIMIZE: '简历优化'
+  }
+  return labels[String(type || '').toUpperCase()] || '下一步'
+}
+
+const nextActionButtonLabel = (type?: string) => {
+  const labels: Record<string, string> = {
+    QUESTION_PRACTICE: '去练习',
+    STUDY_PLAN: '生成计划',
+    INTERVIEW: '再面一轮',
+    RESUME_OPTIMIZE: '去优化'
+  }
+  return labels[String(type || '').toUpperCase()] || '开始'
+}
+
+const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') => {
+  await router.push(actionUrl || fallback)
+}
+
+const reportMetricId = () => report.value?.reportId || report.value?.id
+const canTrackReportNextActionMetric = () => isGenerated.value && Boolean(reportMetricId())
+
+const trackInterviewNextActionMetric = (eventCode: 'interview_report_next_action_shown' | 'interview_report_next_action_clicked', action?: InterviewReportNextActionVO) => {
+  const metricId = reportMetricId()
+  if (!metricId || !canTrackReportNextActionMetric()) return
+  void recordAgentMetricEventApi({
+    eventCode,
+    sourcePage: 'interview_report',
+    targetPath: action?.actionUrl,
+    bizType: 'interview_report',
+    bizId: String(metricId),
+    metadata: {
+      interviewId,
+      actionType: action?.actionType,
+      actionSource: action?.actionSource || (action ? 'BACKEND' : undefined),
+      priority: action?.priority,
+      title: action?.title,
+      actionCount: nextActions.value.length,
+      backendActionCount: backendNextActions.value.length
+    }
+  }, { silentError: true }).catch(() => undefined)
+}
+
+const staticNextAction = (actionType: string, title: string, actionUrl: string, priority = 90): InterviewReportNextActionVO => ({
+  actionType,
+  title,
+  actionUrl,
+  priority,
+  actionSource: 'STATIC_FALLBACK',
+  description: '静态兜底训练入口'
+})
+
+const handleStaticTodayAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('TODAY_PLAN', '返回今日计划', '/dashboard', 93))
+  }
+  await router.push('/dashboard')
+}
+
+const handleStaticInterviewAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('INTERVIEW', '重新面试', '/interviews/create', 91))
+  }
+  await router.push('/interviews/create')
+}
+
+const handleStaticPracticeAction = async (trackMetric = false) => {
+  if (trackMetric) {
+    trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('QUESTION_PRACTICE', '重练薄弱题', '/questions/practice', 92))
+  }
+  await goPracticeQuestion()
+}
+
+const handleNextAction = async (action: InterviewReportNextActionVO) => {
+  trackInterviewNextActionMetric('interview_report_next_action_clicked', action)
+  const actionType = String(action.actionType || '').toUpperCase()
+  if (actionType === 'STUDY_PLAN') {
+    await handleGenerateStudyPlan()
+    return
+  }
+  if (actionType === 'QUESTION_PRACTICE') {
+    if (recommendedQuestionIds.value.length) {
+      await goPracticeQuestion()
+      return
+    }
+    await pushNextActionUrl(action.actionUrl, '/questions/practice')
+    return
+  }
+  if (actionType === 'INTERVIEW') {
+    await pushNextActionUrl(action.actionUrl, '/interviews/create')
+    return
+  }
+  if (actionType === 'RESUME_OPTIMIZE') {
+    await pushNextActionUrl(action.actionUrl, '/resumes')
+    return
+  }
+  await pushNextActionUrl(action.actionUrl)
 }
 
 const stopPolling = () => {
@@ -609,25 +1013,28 @@ const stopPolling = () => {
   }
 }
 
-const stopReportSse = () => {
-  reportSseHandle?.abort()
-  reportSseHandle = null
-  sseGenerating.value = false
-}
-
-const resetSseState = () => {
-  sseMessage.value = ''
-  sseReportId.value = undefined
-  sseAiCallLogId.value = undefined
-  sseEvents.value = []
-  pollCount.value = 0
+const rememberAsyncReceipt = (result?: {
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
+}) => {
+  if (!result) return
+  asyncReceipt.value = {
+    messageId: result.asyncMessageId || asyncReceipt.value.messageId,
+    traceId: result.asyncTraceId || asyncReceipt.value.traceId,
+    bizType: result.asyncBizType || asyncReceipt.value.bizType || 'interview.report',
+    bizId: result.asyncBizId || asyncReceipt.value.bizId || (interviewId ? String(interviewId) : ''),
+    sendStatus: result.asyncSendStatus || asyncReceipt.value.sendStatus
+  }
 }
 
 const schedulePolling = () => {
   stopPolling()
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
-    ElMessage.warning('报告生成时间较长，请稍后刷新查看')
+    ElMessage.warning('报告生成时间较长，可到任务中心按面试记录继续查看。')
     return
   }
   pollTimer = window.setTimeout(fetchReport, 2000)
@@ -644,13 +1051,12 @@ const fetchReport = async () => {
       schedulePolling()
     } else {
       stopPolling()
-      await refreshApplicationEventSyncState()
     }
   } catch (error) {
     pollFailures.value += 1
     if (pollFailures.value >= 3) {
       stopPolling()
-      ElMessage.error('报告状态查询失败，请稍后刷新')
+      ElMessage.error(toFriendlyMessage(error, '报告状态查询失败，请稍后刷新。'))
     } else {
       schedulePolling()
     }
@@ -659,136 +1065,63 @@ const fetchReport = async () => {
   }
 }
 
-const refreshFinalReport = async () => {
+const markReportUnavailable = (message: string) => {
   if (!interviewId) return
-  report.value = await getInterviewReportApi(interviewId)
+  reportRecoveryNotice.value = message
+  report.value = {
+    interviewId,
+    reportStatus: 'FAILED',
+    status: 'FAILED',
+    failureReason: message,
+    trustStatus: 'FALLBACK',
+    evidenceSummary: '报告读取失败，未自动重新提交生成任务。',
+    fallback: true
+  }
   stopPolling()
-  await refreshApplicationEventSyncState()
 }
 
-const runSyncFallback = async (forceRegenerate: boolean) => {
+const runSyncFallback = async () => {
   if (!interviewId) return
   const id = interviewId
-  retrying.value = forceRegenerate
+  retrying.value = true
   try {
-    if (forceRegenerate) {
-      await retryInterviewReportApi(id)
-    } else {
-      await finishInterviewApi(id)
-    }
+    rememberAsyncReceipt(await retryInterviewReportApi(id))
     report.value = {
       interviewId: id,
       reportStatus: 'GENERATING',
-      status: 'GENERATING'
+      status: 'GENERATING',
+      asyncMessageId: asyncReceipt.value.messageId,
+      asyncTraceId: asyncReceipt.value.traceId,
+      asyncBizType: asyncReceipt.value.bizType,
+      asyncBizId: asyncReceipt.value.bizId,
+      asyncSendStatus: asyncReceipt.value.sendStatus
     }
     pollFailures.value = 0
+    reportRecoveryNotice.value = ''
     schedulePolling()
   } finally {
     retrying.value = false
   }
 }
 
-const applySseEvent = (event: InterviewReportSseEventType | string, data?: InterviewReportSseEvent) => {
-  const eventLabel = sseEventLabel(event)
-  const message = cleanDisplayText(data?.message, eventLabel)
-  const stage = sseStageLabel(data?.stage ? String(data.stage) : '')
-  const metadata = data?.metadata && typeof data.metadata === 'object' ? data.metadata : {}
-  const reportId = data?.reportId || Number(metadata.reportId || 0)
-  const aiCallLogId = data?.aiCallLogId || Number(metadata.aiCallLogId || 0)
-  if (reportId) sseReportId.value = reportId
-  if (aiCallLogId) sseAiCallLogId.value = aiCallLogId
-  if (data?.result && typeof data.result === 'object') {
-    const result = data.result as Partial<InterviewReportVO>
-    if (result.reportId || result.id) sseReportId.value = result.reportId || result.id
-  }
-  sseMessage.value = message || stage || sseMessage.value
-  sseEvents.value.push({
-    key: `${Date.now()}-${sseEvents.value.length}`,
-    event,
-    stage,
-    message
-  })
-  pollCount.value = Math.min(30, pollCount.value + (event === 'progress' || event === 'delta' ? 5 : 2))
-}
-
-const startReportSse = (forceRegenerate = false) => {
-  if (!interviewId || sseGenerating.value) return
-  const id = interviewId
-  stopPolling()
-  stopReportSse()
-  resetSseState()
-  sseGenerating.value = true
-  report.value = {
-    ...(report.value || {}),
-    interviewId: id,
-    reportId: report.value?.reportId || report.value?.id,
-    reportStatus: 'GENERATING',
-    status: 'GENERATING'
-  }
-
-  reportSseHandle = streamInterviewReportApi(
-    {
-      interviewId: id,
-      reportId: report.value?.reportId || report.value?.id,
-      forceRegenerate
-    },
-    {
-      onEvent: async (event, data) => {
-        applySseEvent(event, data)
-        if ((event === 'result' || event === 'done') && data?.result && typeof data.result === 'object') {
-          report.value = {
-            ...(data.result as InterviewReportVO),
-            interviewId: id,
-            reportStatus: 'GENERATING',
-            status: 'GENERATING'
-          }
-        }
-        if (event === 'done') {
-          sseGenerating.value = false
-          await refreshFinalReport()
-          ElMessage.success('报告生成完成')
-        }
-      },
-      onError: async (error, hasStarted) => {
-        sseGenerating.value = false
-        reportSseHandle = null
-        if (!hasStarted) {
-          ElMessage.warning('报告生成流未启动，已切换为同步生成')
-          await runSyncFallback(forceRegenerate)
-          return
-        }
-        report.value = {
-          ...(report.value || {}),
-          interviewId: id,
-          reportStatus: 'FAILED',
-          status: 'FAILED',
-          failedReason: toFriendlyMessage(error.message, '报告生成失败，请稍后重试。')
-        }
-        ElMessage.error(toFriendlyMessage(error.message, '报告生成失败，请稍后重试。'))
-      },
-      onDone: () => {
-        sseGenerating.value = false
-        reportSseHandle = null
-      }
-    }
-  )
-  void reportSseHandle.finished.catch(() => undefined)
-}
-
-const loadReportOrStartSse = async () => {
+const loadReportOrSubmitTask = async () => {
   if (!interviewId) return
   loading.value = true
+  reportRecoveryNotice.value = ''
   try {
     report.value = await getInterviewReportApi(interviewId)
     pollFailures.value = 0
     if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
-      await refreshApplicationEventSyncState()
       return
     }
-    startReportSse(false)
-  } catch {
-    startReportSse(false)
+    if (isGenerating.value) {
+      schedulePolling()
+      return
+    }
+    markReportUnavailable('当前报告暂时不可用，页面没有自动重新提交生成任务。请先到任务中心确认进度，或点击“重新生成报告”手动触发。')
+  } catch (error) {
+    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新提交生成任务。你可以稍后回来，或到任务中心按面试记录继续查看。'))
   } finally {
     loading.value = false
   }
@@ -796,72 +1129,7 @@ const loadReportOrStartSse = async () => {
 
 const handleRetry = async () => {
   if (!interviewId) return
-  startReportSse(true)
-}
-
-const parseApplicationEventReview = (event: JobApplicationEventVO) => {
-  if (event.review && typeof event.review === 'object') return event.review
-  if (!event.reviewJson) return {}
-  try {
-    const parsed = JSON.parse(event.reviewJson)
-    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
-  } catch {
-    return {}
-  }
-}
-
-const hasSyncedReportEvent = async (reportId?: number) => {
-  if (!applicationId.value || !interviewId) return false
-  const events = await getApplicationEventsApi(applicationId.value)
-  return events.some((event) => {
-    if (String(event.eventType || '').toUpperCase() !== 'INTERVIEW_COMPLETED') return false
-    const review = parseApplicationEventReview(event)
-    return Number(review.interviewId) === interviewId || Boolean(reportId && Number(review.reportId) === reportId)
-  })
-}
-
-const refreshApplicationEventSyncState = async () => {
-  if (!applicationId.value || !interviewId || !report.value || !isGenerated.value) return
-  const reportId = report.value.reportId || report.value.id
-  try {
-    applicationEventSynced.value = await hasSyncedReportEvent(reportId)
-  } catch {
-    applicationEventSynced.value = false
-  }
-}
-
-const syncReportToApplication = async () => {
-  if (!applicationId.value || !interviewId || !report.value) return
-  syncingApplicationEvent.value = true
-  try {
-    const reportId = report.value.reportId || report.value.id
-    if (await hasSyncedReportEvent(reportId)) {
-      applicationEventSynced.value = true
-      ElMessage.info('这份报告已经同步到投递事件')
-      return
-    }
-    await createApplicationEventApi(applicationId.value, {
-      eventType: 'INTERVIEW_COMPLETED',
-      eventTime: report.value.generatedAt || report.value.createdAt || undefined,
-      summary: `面试报告已生成，综合得分 ${displayTotalScore.value}`,
-      reviewJson: JSON.stringify({
-        source: 'interview-report',
-        interviewId,
-        reportId,
-        reportStatus: report.value.reportStatus || report.value.status,
-        totalScore: report.value.totalScore,
-        targetJobId: report.value.targetJobId || getQueryNumber('targetJobId'),
-        resumeVersionId: getQueryNumber('resumeVersionId'),
-        matchReportId: report.value.matchReportId || getQueryNumber('matchReportId')
-      })
-    })
-    applicationEventSynced.value = true
-    ElMessage.success('已同步到投递事件')
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '投递事件同步失败，请稍后重试。'))
-  } finally {
-    syncingApplicationEvent.value = false
-  }
+  await runSyncFallback()
 }
 
 const handleGenerateStudyPlan = async () => {
@@ -875,19 +1143,56 @@ const handleGenerateStudyPlan = async () => {
     const result = await generateStudyPlanApi({ reportId })
     if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
       ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
+      if (result.planId) {
+        await router.push(`/study-plans?planId=${result.planId}`)
+      }
+      return
+    } else if (result.asyncMessageId || result.asyncTraceId || result.asyncBizType) {
+      ElMessage.success('学习计划已提交，可在任务中心查看进度')
+      await router.push({
+        path: '/agent/tasks',
+        query: compactRouterQuery({
+          messageId: result.asyncMessageId,
+          traceId: result.asyncTraceId,
+          bizType: result.asyncBizType || 'study-plan.generate',
+          bizId: result.asyncBizId || result.planId
+        })
+      })
+      return
+    } else if (!result.planId) {
+      ElMessage.warning('学习计划已提交，但暂未返回计划记录，可稍后到学习计划页刷新查看。')
+      return
     } else {
       ElMessage.success('学习计划已生成')
     }
-    await router.push(`/study-plans?planId=${result.planId || ''}`)
+    await router.push(`/study-plans?planId=${result.planId}`)
   } finally {
     studyPlanGenerating.value = false
   }
 }
 
-onMounted(loadReportOrStartSse)
+onMounted(loadReportOrSubmitTask)
+watch(backendNextActions, (actions) => {
+  const metricId = reportMetricId()
+  if (!metricId || !canTrackReportNextActionMetric() || !actions.length) return
+  const key = `${metricId}:${actions.map((action) => `${action.actionType || ''}:${action.priority || 0}`).join('|')}`
+  if (nextActionShownMetricKey.value === key) return
+  nextActionShownMetricKey.value = key
+  trackInterviewNextActionMetric('interview_report_next_action_shown', actions[0])
+})
+watch(isGenerated, (generated) => {
+  const metricId = reportMetricId()
+  if (!generated || !metricId || backendNextActions.value.length) return
+  const key = `${metricId}:static-action-zone`
+  if (staticActionShownMetricKey.value === key) return
+  staticActionShownMetricKey.value = key
+  trackInterviewNextActionMetric(
+    'interview_report_next_action_shown',
+    staticNextAction('STATIC_ACTION_ZONE', '下一步行动', '', 99)
+  )
+})
 onBeforeUnmount(() => {
   stopPolling()
-  stopReportSse()
 })
 </script>
 
@@ -899,10 +1204,9 @@ onBeforeUnmount(() => {
 .report-top,
 .analysis-card {
   border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.78);
+  border-radius: 8px;
+  background: #ffffff;
   box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
 }
 
 .report-top {
@@ -939,6 +1243,88 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.next-action-section {
+  margin-top: 20px;
+}
+
+.next-action-empty {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+
+  strong,
+  p {
+    margin: 0;
+  }
+
+  strong {
+    display: block;
+    color: #0f172a;
+    font-size: 15px;
+  }
+
+  p {
+    margin-top: 6px;
+    line-height: 1.65;
+  }
+}
+
+.next-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.next-action-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #f8fafc;
+
+  .el-button {
+    flex: 0 0 auto;
+  }
+}
+
+.next-action-card__main {
+  min-width: 0;
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 16px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p,
+  small {
+    display: block;
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    font-size: 12px;
+  }
+}
+
 .recommended-item {
   display: flex;
   align-items: center;
@@ -947,16 +1333,16 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.46);
+  border-radius: 8px;
+  background: #ffffff;
   color: var(--app-text);
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 
   &:hover {
-    border-color: rgba(129, 140, 248, 0.42);
-    background: rgba(15, 23, 42, 0.72);
+    border-color: rgba(37, 99, 235, 0.36);
+    background: #eff6ff;
   }
 
   strong {
@@ -978,11 +1364,77 @@ onBeforeUnmount(() => {
   opacity: 0.78;
 }
 
+.stage-report-list {
+  display: grid;
+  gap: 14px;
+}
+
+.stage-report-card {
+  padding: 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  span,
+  label {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+    line-height: 1.7;
+  }
+}
+
+.stage-score-pill {
+  min-width: 88px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  text-align: center;
+
+  strong {
+    color: #2563eb;
+    font-size: 24px;
+  }
+}
+
+.stage-report-content {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.stage-copy {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
 .eyebrow {
-  color: var(--cc-ai-cyan);
+  color: #2563eb;
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .report-actions,
@@ -1014,21 +1466,21 @@ onBeforeUnmount(() => {
   animation: spin 1.1s linear infinite;
 }
 
-.sse-stage-list {
+.task-stage-list {
   display: grid;
   gap: 10px;
   margin-top: 18px;
   text-align: left;
 }
 
-.sse-stage-item {
+.task-stage-item {
   padding: 12px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: rgba(2, 6, 23, 0.38);
+  border-radius: 8px;
+  background: #f8fafc;
 
   span {
-    color: var(--cc-ai-cyan);
+    color: #2563eb;
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -1046,10 +1498,38 @@ onBeforeUnmount(() => {
   }
 }
 
-.sse-meta {
+.task-meta {
   margin-top: 12px;
   color: var(--app-text-muted);
   font-size: 12px;
+}
+
+.async-diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+
+  span {
+    max-width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+}
+
+.generating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 @keyframes spin {
@@ -1067,8 +1547,8 @@ onBeforeUnmount(() => {
 .score-hero,
 .overview-card {
   border: 1px solid var(--app-border);
-  border-radius: 16px;
-  background: rgba(2, 6, 23, 0.36);
+  border-radius: 8px;
+  background: #f8fafc;
   padding: 18px;
 
   span {
@@ -1085,7 +1565,7 @@ onBeforeUnmount(() => {
 }
 
 .score-hero {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.08));
+  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
 
   strong {
     margin: 8px 0 12px;
@@ -1099,18 +1579,156 @@ onBeforeUnmount(() => {
   margin: 16px 0;
 }
 
+.report-trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
 .report-feedback-row {
   display: flex;
   justify-content: flex-end;
   margin-top: 14px;
 }
 
-.application-sync {
-  margin: 14px 0 6px;
+.target-job-alignment {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.alignment-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alignment-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin: 8px 0 10px;
+    color: var(--app-text);
+    font-size: 15px;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+}
+
+.missing-skill-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.missing-skill-item {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  strong {
+    min-width: 0;
+    color: var(--app-text);
+    font-size: 14px;
+    word-break: break-word;
+  }
+
+  p {
+    margin: 10px 0 0;
+    color: var(--app-text-muted);
+    line-height: 1.7;
+  }
+
+  ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: #334155;
+    line-height: 1.7;
+  }
+}
+
+.alignment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .dimension-section {
   margin-top: 20px;
+}
+
+.coach-next {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.next-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+
+  article {
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong,
+  p {
+    display: block;
+    margin: 0;
+  }
+
+  strong {
+    margin-top: 8px;
+    color: var(--app-text);
+    font-size: 15px;
+  }
+
+  p {
+    margin-top: 8px;
+    color: var(--app-text-muted);
+    line-height: 1.6;
+  }
 }
 
 .section-head {
@@ -1143,96 +1761,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.rubric-grid,
-.advice-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.rubric-card,
-.advice-card,
-.trace-item {
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.3);
-  padding: 14px;
-}
-
-.rubric-card__head,
-.advice-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.rubric-card p,
-.advice-card p,
-.trace-item p {
-  margin: 0 0 8px;
-  color: var(--app-text);
-  line-height: 1.7;
-}
-
-.rubric-card small,
-.trace-item small {
-  display: block;
-  margin-top: 8px;
-  color: var(--app-text-muted);
-  line-height: 1.6;
-}
-
-.trace-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.trace-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
-}
-
-.trace-step {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(6, 182, 212, 0.16);
-  color: var(--cc-ai-cyan);
-  font-weight: 700;
-}
-
-.evidence-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-
-  span {
-    color: var(--app-text-muted);
-    font-size: 13px;
-    line-height: 1.5;
-  }
-}
-
-.advice-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.profile-update-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .qa-list {
   display: flex;
   flex-direction: column;
@@ -1242,8 +1770,8 @@ onBeforeUnmount(() => {
 .qa-item {
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.34);
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
 .qa-head {
@@ -1260,7 +1788,7 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: var(--cc-ai-cyan);
+    color: #2563eb;
     font-weight: 700;
   }
 }
@@ -1304,8 +1832,11 @@ onBeforeUnmount(() => {
 @media (max-width: 1080px) {
   .overview-grid,
   .analysis-grid,
-  .rubric-grid,
-  .advice-grid {
+  .next-grid,
+  .next-action-grid,
+  .stage-report-content,
+  .alignment-card-grid,
+  .missing-skill-list {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1334,9 +1865,51 @@ onBeforeUnmount(() => {
 
   .overview-grid,
   .analysis-grid,
-  .rubric-grid,
-  .advice-grid {
+  .next-grid,
+  .next-action-grid,
+  .stage-report-content,
+  .alignment-card-grid,
+  .missing-skill-list {
     grid-template-columns: 1fr;
+  }
+
+  .next-action-card {
+    flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
+  }
+
+  .alignment-actions .el-button {
+    width: 100%;
+  }
+
+  .stage-report-card header {
+    flex-direction: column;
+  }
+}
+
+
+@media (max-width: 720px) {
+  .page-hero,
+  .history-hero,
+  .detail-hero,
+  .report-top,
+  .room-topbar,
+  .notification-hero,
+  .create-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions,
+  .report-actions,
+  .topbar-actions,
+  .card-actions,
+  .filter-bar,
+  .notification-toolbar {
+    justify-content: flex-start;
   }
 }
 </style>

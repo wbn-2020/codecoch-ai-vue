@@ -10,13 +10,13 @@
         <p>查看系统通知、报告完成提醒、任务提醒和公告。</p>
       </div>
       <div class="hero-actions">
-        <el-button :loading="markingAll" @click="handleMarkAllRead">
+        <el-button :loading="markingAll" :disabled="unreadCount <= 0" @click="handleMarkAllRead">
           <CheckCheck :size="16" />
           全部已读
         </el-button>
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
-          工作台
+          今日计划
         </el-button>
       </div>
     </section>
@@ -38,26 +38,17 @@
         </el-select>
       </div>
 
-      <div class="notification-overview">
-        <div class="overview-item">
-          <span>未读通知</span>
-          <strong>{{ unreadCount }}</strong>
-        </div>
-        <div class="overview-item">
-          <span>当前页可行动</span>
-          <strong>{{ currentPageActionableCount }}</strong>
-        </div>
-        <div class="overview-note">
-          今日行动完整排序以 Dashboard 为准；这里仅统计当前已加载通知中的可行动项。
-        </div>
-      </div>
-
       <div v-if="errorMessage && !loading" class="notification-error">
         <AppState
           type="error"
-          title="通知接口请求失败"
+          title="通知加载失败"
           :description="errorMessage"
-        />
+        >
+          <el-button type="primary" :loading="loading" @click="loadNotificationCenter">
+            <RefreshCw :size="16" />
+            重新加载
+          </el-button>
+        </AppState>
       </div>
 
       <div class="notification-list" v-loading="loading">
@@ -77,22 +68,10 @@
           <div class="notification-body">
             <div class="notification-head">
               <strong>{{ item.title }}</strong>
-              <el-tag size="small" effect="plain">{{ displayNotification(item).typeLabel }}</el-tag>
-              <el-tag v-if="displayNotification(item).actionable" size="small" type="success" effect="plain">
-                {{ displayNotification(item).actionLabel }}
-              </el-tag>
-              <el-tag v-if="isResolvedNotification(item)" size="small" type="info" effect="plain">
-                已处理
-              </el-tag>
+              <el-tag size="small" effect="plain">{{ notificationTypeText(item.type) }}</el-tag>
             </div>
             <p v-if="item.content">{{ item.content }}</p>
             <span class="notification-time">{{ formatDateTime(item.createdAt) }}</span>
-          </div>
-          <el-button class="notification-detail-button" text @click.stop="openNotificationDetail(item)">
-            详情
-          </el-button>
-          <div class="notification-action">
-            <ExternalLink v-if="displayNotification(item).actionable" :size="16" />
           </div>
         </article>
       </div>
@@ -117,27 +96,24 @@
     >
       <div v-if="selectedNotification" class="notification-detail">
         <div class="detail-meta">
-          <el-tag effect="plain">{{ displayNotification(selectedNotification).typeLabel }}</el-tag>
-          <el-tag v-if="isResolvedNotification(selectedNotification)" type="success" effect="plain">业务已处理</el-tag>
+          <el-tag effect="plain">{{ notificationTypeText(selectedNotification.type) }}</el-tag>
           <span>{{ formatDateTime(selectedNotification.createdAt) }}</span>
         </div>
         <p class="detail-content">{{ selectedNotification.content || '这条通知暂无正文内容。' }}</p>
-        <p v-if="isResolvedNotification(selectedNotification)" class="resolved-note">
-          {{ resolvedDescription(selectedNotification) }}
-        </p>
         <el-alert
           v-if="notificationTarget"
           type="info"
           :closable="false"
           show-icon
-          :title="`关联业务：${notificationTarget.label}`"
+          :title="`关联页面：${notificationTarget.label}`"
+          :description="notificationTarget.fallbackLabel ? `若目标不可用，将回退到“${notificationTarget.fallbackLabel}”` : undefined"
         />
         <el-alert
           v-else
           type="warning"
           :closable="false"
           show-icon
-          title="这条通知没有配置可跳转的业务页面，可以仅查看并关闭。"
+          title="这条通知没有配置可跳转页面，可以仅查看并关闭。"
         />
       </div>
       <template #footer>
@@ -157,7 +133,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard } from 'lucide-vue-next'
+import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -170,14 +146,12 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
-import {
-  getNotificationDisplay,
-  isActionableNotification,
-  isResolvedNotification,
-  resolveNotificationAction
-} from '@/features/notifications'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
+import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 import { notifyUnreadChanged } from '@/utils/notificationEvents'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
+import request from '@/utils/request'
 
 const router = useRouter()
 const loading = ref(false)
@@ -188,6 +162,7 @@ const unreadCount = ref(0)
 const errorMessage = ref('')
 const detailVisible = ref(false)
 const selectedNotification = ref<NotificationVO>()
+const shownReminderIds = ref<Set<string>>(new Set())
 
 const query = reactive<NotificationQueryDTO>({
   pageNo: 1,
@@ -197,54 +172,186 @@ const query = reactive<NotificationQueryDTO>({
 })
 
 const notificationTypeOptions = Object.entries(notificationTypeLabels).map(([value, label]) => ({ value, label }))
-notificationTypeOptions.push(
-  { value: 'AGENT_REMINDER', label: 'Agent 提醒' },
-  { value: 'APPLICATION_FOLLOW_UP_REMINDER', label: '投递跟进' },
-  { value: 'INTERVIEW_REPORT_READY', label: '面试/报告' }
-)
 
-const resolveActionPath = (item?: NotificationVO) => {
-  if (!item) return ''
-  const action = resolveNotificationAction(item)
-  return action.kind === 'route' ? action.path : ''
+const typeLabel = formatNotificationType
+const notificationTypeText = (type?: string | null) => {
+  if (type === 'AGENT_REMINDER') return '训练回访提醒'
+  return typeLabel(type)
 }
 
-const displayNotification = (item: NotificationVO) => {
-  const display = getNotificationDisplay(item)
-  const path = resolveActionPath(item)
-  return {
-    ...display,
-    typeLabel: display.label || formatNotificationType(item.type),
-    actionLabel: display.actionLabel || item.fallbackLabel || '前往处理',
-    actionable: !isResolvedNotification(item) && Boolean(display.actionable || path)
+const pickRelatedId = (item?: NotificationVO) => {
+  const value = item?.relatedId ?? item?.bizId
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
+const pickRelatedKey = (item?: NotificationVO) => {
+  const value = item?.relatedId ?? item?.bizId
+  return String(value ?? '').trim()
+}
+
+const withQuery = (path: string, query: Record<string, string | undefined>) => {
+  const params = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params.set(key, value)
+  })
+  const queryString = params.toString()
+  return queryString ? `${path}?${queryString}` : path
+}
+
+const normalizeTypeToken = (value?: string) => String(value || '').replace(/[.-]/g, '_').toUpperCase()
+const isReminderNotification = (item?: NotificationVO) => normalizeTypeToken(item?.type) === 'AGENT_REMINDER'
+const buildReminderTargetKey = (item?: NotificationVO, targetRef = '', fallbackRef = '') => {
+  if (!item?.id) return `notification:unknown:${targetRef || fallbackRef || 'missing'}`
+  return `notification:${item.id}:${targetRef || fallbackRef || 'missing'}`
+}
+
+const trackReminderEvent = (eventCode: 'reminder_shown' | 'reminder_clicked' | 'reminder_target_invalid',
+                             item?: NotificationVO,
+                             metadata: Record<string, unknown> = {}) => {
+  if (!item?.id) return
+  void request.post('/agent/metrics/events', {
+    eventCode,
+    notificationId: String(item.id),
+    bizType: item.bizType || item.relatedType,
+    bizId: item.bizId == null ? undefined : String(item.bizId),
+    targetPath: typeof metadata.targetPath === 'string' ? metadata.targetPath : undefined,
+    sourcePage: 'notification_center',
+    metadata
+  }, {
+    silentError: true
+  }).catch(() => undefined)
+}
+
+const markReminderShown = (items: NotificationVO[]) => {
+  if (!Array.isArray(items) || !items.length) return
+  const next = new Set(shownReminderIds.value)
+  for (const item of items) {
+    if (!isReminderNotification(item)) continue
+    const key = String(item.id)
+    if (next.has(key)) continue
+    next.add(key)
+    trackReminderEvent('reminder_shown', item, {
+      relatedType: item.relatedType || item.bizType || item.type,
+      readStatus: item.isRead
+    })
   }
+  shownReminderIds.value = next
 }
 
-const resolvedDescription = (item: NotificationVO) => {
-  const parts = ['业务已处理']
-  if (item.resolvedAt) parts.push(formatDateTime(item.resolvedAt))
-  if (item.resolvedReason) parts.push(item.resolvedReason)
-  return parts.join(' · ')
+type NotificationTarget = {
+  label: string
+  path: string
+  fallbackLabel?: string
+  fallbackPath: string
+  targetKey: string
+  trustedInferredPath?: boolean
 }
 
-const resolveActionLabel = (item?: NotificationVO) => {
-  if (!item) return ''
-  const action = resolveNotificationAction(item)
-  return action.label || displayNotification(item).actionLabel
-}
-
-const currentPageActionableCount = computed(() =>
-  notifications.value.filter((item) => isActionableNotification(item)).length
-)
-
-const notificationTarget = computed(() => {
-  const item = selectedNotification.value
+const inferNotificationTarget = (item?: NotificationVO): Omit<NotificationTarget, 'targetKey'> | null => {
   if (!item) return null
-  const resolvedPath = resolveActionPath(item)
-  if (resolvedPath) {
-    return { label: resolveActionLabel(item) || '关联业务', path: resolvedPath }
+  const relatedType = normalizeTypeToken(item.relatedType || item.bizType || item.type || '')
+  const title = String(item.title || '')
+  const content = String(item.content || '')
+  const id = pickRelatedId(item)
+  const batchId = pickRelatedKey(item)
+
+  if ((relatedType.includes('INTERVIEW') && relatedType.includes('REPORT')) || relatedType === 'REPORT_DONE') {
+    return id
+      ? { label: '面试报告', path: `/interviews/${id}/report`, fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+      : { label: '面试历史', path: '/interviews/history', fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+  }
+  if (relatedType.includes('INTERVIEW')) {
+    return id
+      ? { label: '面试详情', path: `/interviews/${id}`, fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+      : { label: '面试历史', path: '/interviews/history', fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+  }
+  if (relatedType.includes('RESUME') && relatedType.includes('MATCH')) {
+    return id
+      ? { label: '简历匹配详情', path: `/resume-match/${id}`, fallbackLabel: '简历匹配', fallbackPath: '/resume-match' }
+      : { label: '简历匹配', path: '/resume-match', fallbackLabel: '简历匹配', fallbackPath: '/resume-match' }
+  }
+  if (relatedType.includes('RESUME')) {
+    return { label: '简历中心', path: '/resumes', fallbackLabel: '简历中心', fallbackPath: '/resumes' }
+  }
+  if (relatedType.includes('STUDY') || relatedType.includes('PLAN')) {
+    return id
+      ? { label: '学习计划', path: `/study-plans?planId=${id}`, fallbackLabel: '学习计划', fallbackPath: '/study-plans' }
+      : { label: '学习计划', path: '/study-plans', fallbackLabel: '学习计划', fallbackPath: '/study-plans' }
+  }
+  if (relatedType === 'QUESTION_GENERATE') {
+    return {
+      label: 'Question generation task',
+      path: withQuery('/agent/tasks', {
+        bizType: 'question.generate',
+        bizId: batchId,
+        batchId
+      }),
+      fallbackLabel: 'Task center',
+      fallbackPath: '/agent/tasks',
+      trustedInferredPath: true
+    }
+  }
+  if (relatedType === 'QUESTION_RECOMMENDATION_GENERATE') {
+    return {
+      label: 'Question recommendations',
+      path: withQuery('/questions/recommendations', { batchId }),
+      fallbackLabel: 'Question recommendations',
+      fallbackPath: '/questions/recommendations',
+      trustedInferredPath: true
+    }
+  }
+  if (relatedType.includes('QUESTION')) {
+    return id
+      ? { label: '题目详情', path: `/questions/${id}`, fallbackLabel: '题库', fallbackPath: '/questions' }
+      : { label: '题库', path: '/questions', fallbackLabel: '题库', fallbackPath: '/questions' }
+  }
+  if (relatedType === 'AGENT_RUN') {
+    return id
+      ? { label: '查看昨日训练详情', path: `/agent/runs/${id}`, fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
+      : { label: '回到今日计划继续训练', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
+  }
+  if (relatedType === 'AGENT_TASK') {
+    const bizId = item.bizId ?? item.relatedId
+    const taskPath = bizId ? `/agent/tasks?bizType=agent.daily-plan.generate&bizId=${bizId}` : '/agent/tasks'
+    return { label: '去任务中心继续该训练', path: taskPath, fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
+  }
+  if (relatedType === 'AGENT_TODAY') {
+    return { label: '回到今日计划', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
+  }
+  if (relatedType === 'AGENT_DASHBOARD') {
+    return { label: '去训练入口面板', path: '/dashboard', fallbackLabel: '仪表盘', fallbackPath: '/dashboard' }
+  }
+  if (relatedType.includes('TASK') && (title.includes('训练') || content.includes('训练'))) {
+    return { label: '回到今日计划', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
+  }
+  if (relatedType.includes('TASK')) {
+    return { label: '每日任务', path: '/daily-tasks', fallbackLabel: '仪表盘', fallbackPath: '/dashboard' }
   }
   return null
+}
+
+const notificationTarget = computed<NotificationTarget | null>(() => {
+  const item = selectedNotification.value
+  if (!item) return null
+  const inferredTarget = inferNotificationTarget(item)
+  const hasBackendActionUrl = Boolean(String(item.actionUrl || '').trim())
+  const preferredPath = String(item.actionUrl || inferredTarget?.path || '').trim()
+  const fallbackPath = String(item.fallbackPath || inferredTarget?.fallbackPath || '/dashboard').trim()
+  const targetKey = buildReminderTargetKey(item, preferredPath, fallbackPath)
+
+  if (!preferredPath && !fallbackPath) {
+    return null
+  }
+
+  return {
+    label: inferredTarget?.label || item.fallbackLabel || '关联页面',
+    path: preferredPath || fallbackPath,
+    fallbackLabel: item.fallbackLabel || inferredTarget?.fallbackLabel,
+    fallbackPath,
+    targetKey,
+    trustedInferredPath: !hasBackendActionUrl && inferredTarget?.trustedInferredPath === true
+  }
 })
 
 const fetchNotifications = async () => {
@@ -257,10 +364,11 @@ const fetchNotifications = async () => {
     notifications.value = result.records || []
     total.value = result.total || 0
     errorMessage.value = ''
-  } catch {
+    markReminderShown(notifications.value)
+  } catch (error) {
     notifications.value = []
     total.value = 0
-    errorMessage.value = '通知中心接口未联调或暂时不可用，当前页面不会将失败请求伪装成空列表。'
+    errorMessage.value = getErrorMessage(error, '通知暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -280,43 +388,89 @@ const handleFilter = () => {
   fetchNotifications()
 }
 
-const markReadIfNeeded = async (item: NotificationVO) => {
+const loadNotificationCenter = () => {
+  fetchNotifications()
+  fetchUnreadCount()
+}
+
+const handleClickNotification = async (item: NotificationVO) => {
   if (item.isRead === 0) {
     try {
       await markNotificationReadApi(item.id)
       item.isRead = 1
       unreadCount.value = Math.max(0, unreadCount.value - 1)
       notifyUnreadChanged()
-    } catch {
-      // silent
+    } catch (error) {
+      ElMessage.warning(getErrorMessage(error, '已打开通知详情，但已读状态暂时没有保存成功，请稍后重试。'))
     }
-  }
-}
-
-const openNotificationDetail = async (item: NotificationVO) => {
-  await markReadIfNeeded(item)
-  selectedNotification.value = item
-  detailVisible.value = true
-}
-
-const handleClickNotification = async (item: NotificationVO) => {
-  await markReadIfNeeded(item)
-  if (isActionableNotification(item)) {
-    const path = resolveActionPath(item)
-    await router.push(path)
-    return
   }
   selectedNotification.value = item
   detailVisible.value = true
 }
 
 const jumpToNotificationTarget = async () => {
-  if (!notificationTarget.value) return
+  const item = selectedNotification.value
+  if (!notificationTarget.value) {
+    trackReminderEvent('reminder_target_invalid', item, {
+      reason: 'missing_target',
+      targetKey: buildReminderTargetKey(item)
+    })
+    ElMessage.warning('这条提醒暂时没有可跳转目标，请先回到训练入口查看。')
+    return
+  }
   detailVisible.value = false
-  await router.push(notificationTarget.value.path)
+  const targetPath = notificationTarget.value.trustedInferredPath
+    ? notificationTarget.value.path
+    : sanitizeLocalActionPath(notificationTarget.value.path, '')
+  const fallbackPath = sanitizeLocalActionPath(notificationTarget.value.fallbackPath, '/dashboard')
+  if (!targetPath) {
+    trackReminderEvent('reminder_target_invalid', item, {
+      reason: 'unsafe_target_path',
+      targetKey: notificationTarget.value.targetKey,
+      targetPath: notificationTarget.value.path,
+      fallbackPath
+    })
+    ElMessage.warning('提醒目标暂时不可用，已回退到可继续训练的入口页。')
+    await router.push(fallbackPath)
+    return
+  }
+  try {
+    if (isReminderNotification(item)) {
+      trackReminderEvent('reminder_clicked', item, {
+        targetKey: notificationTarget.value.targetKey,
+        targetPath,
+        fallbackPath
+      })
+    }
+    await router.push(targetPath)
+  } catch {
+    trackReminderEvent('reminder_target_invalid', item, {
+      reason: 'navigation_failed',
+      targetKey: notificationTarget.value.targetKey,
+      targetPath,
+      fallbackPath
+    })
+    ElMessage.warning('提醒目标暂时不可用，已回退到可继续训练的入口页。')
+    await router.push(fallbackPath)
+  }
 }
 
 const handleMarkAllRead = async () => {
+  if (unreadCount.value <= 0) {
+    ElMessage.info('当前没有未读通知')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '全部标记为已读',
+    action: '将当前账号的未读通知全部标记为已读',
+    target: `${unreadCount.value} 条未读通知`,
+    impact: '未读数量会清零，通知列表中的未读提醒会消失；通知正文仍然保留，可以继续在通知中心查看。',
+    rollback: '已读状态不能批量恢复为未读；如需定位重要提醒，请在通知列表或关联页面继续查看。',
+    audit: '本次操作会按当前账号提交，通知中心会刷新未读数。',
+    tips: ['确认已经处理完需要立即关注的未读提醒。', '确认只改变已读状态，不会删除通知内容。'],
+    confirmButtonText: '全部标记已读'
+  })
+  if (!confirmed) return
   markingAll.value = true
   try {
     await markAllNotificationsReadApi()
@@ -328,16 +482,15 @@ const handleMarkAllRead = async () => {
       notifications.value.forEach((item) => { item.isRead = 1 })
     }
     ElMessage.success('已全部标记为已读')
-  } catch {
-    ElMessage.error('操作失败')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '全部标记为已读失败，请稍后重试。'))
   } finally {
     markingAll.value = false
   }
 }
 
 onMounted(() => {
-  fetchNotifications()
-  fetchUnreadCount()
+  loadNotificationCenter()
 })
 </script>
 
@@ -387,45 +540,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.notification-overview {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(120px, 180px)) minmax(0, 1fr);
-  gap: 12px;
-  padding: 0 20px 20px;
-}
-
-.overview-item,
-.overview-note {
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
-}
-
-.overview-item {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-
-  span {
-    color: var(--app-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    color: #f8fafc;
-    font-size: 22px;
-  }
-}
-
-.overview-note {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  color: var(--app-text-muted);
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .unread-badge {
@@ -481,18 +595,6 @@ onMounted(() => {
       color: #f8fafc;
     }
   }
-}
-
-.notification-detail-button {
-  flex: 0 0 auto;
-}
-
-.notification-action {
-  display: inline-flex;
-  flex: 0 0 24px;
-  justify-content: flex-end;
-  margin-top: 3px;
-  color: var(--cc-ai-cyan);
 }
 
 .notification-dot {
@@ -562,13 +664,6 @@ onMounted(() => {
   white-space: pre-wrap;
 }
 
-.resolved-note {
-  margin: 0;
-  color: var(--app-text-muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 @media (max-width: 760px) {
   .notification-hero {
     flex-direction: column;
@@ -579,9 +674,28 @@ onMounted(() => {
     flex-direction: column;
     align-items: flex-start;
   }
+}
 
-  .notification-overview {
-    grid-template-columns: 1fr;
+
+@media (max-width: 720px) {
+  .page-hero,
+  .history-hero,
+  .detail-hero,
+  .report-top,
+  .room-topbar,
+  .notification-hero,
+  .create-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions,
+  .report-actions,
+  .topbar-actions,
+  .card-actions,
+  .filter-bar,
+  .notification-toolbar {
+    justify-content: flex-start;
   }
 }
 </style>

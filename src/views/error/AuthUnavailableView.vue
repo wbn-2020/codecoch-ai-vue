@@ -14,12 +14,13 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 
+import { sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
+
 const route = useRoute()
 const router = useRouter()
 
 const retry = () => {
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-  router.replace(redirect)
+  router.replace(sanitizeLocalRedirectPath(route.query.redirect, '/dashboard'))
 }
 </script>
 

@@ -7,6 +7,13 @@ export type AnswerResult = 'CORRECT' | 'PARTIAL_CORRECT' | 'WRONG' | string
 export type PracticeReviewStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | string
 export type PracticeSource = 'QUESTION_BANK' | string
 
+export interface AdminOperationConfirmPayload {
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
 export interface QuestionCategoryVO {
   id: number
   name: string
@@ -106,6 +113,7 @@ export interface QuestionAnswerDTO {
   answerContent?: string
   selfResult?: AnswerResult
   masteryStatus?: MasteryStatus
+  targetJobId?: number
 }
 
 export interface QuestionAnswerResultVO {
@@ -117,6 +125,11 @@ export interface QuestionAnswerResultVO {
   masteryStatus?: MasteryStatus
   wrongRecordGenerated?: boolean
   wrong?: boolean
+  agentTaskCompleted?: boolean
+  agentTaskId?: number
+  agentTaskTitle?: string
+  agentTaskStatus?: string
+  agentReviewSummary?: string
   answeredAt: string
 }
 
@@ -124,6 +137,7 @@ export interface PracticeSubmitDTO {
   answerContent: string
   answerDurationSeconds?: number
   source?: PracticeSource
+  targetJobId?: number
 }
 
 export interface PracticeRecordQueryDTO extends PageQuery {
@@ -159,10 +173,13 @@ export interface PracticeRecordVO {
   suggestedFollowUps?: string[] | string
   referenceAnswer?: string
   referenceAnswerSnapshot?: string
-  questionSnapshotJson?: string
-  reviewJson?: string
   aiCallLogId?: number
   errorMessage?: string
+  agentTaskCompleted?: boolean
+  agentTaskId?: number
+  agentTaskTitle?: string
+  agentTaskStatus?: string
+  agentReviewSummary?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -255,7 +272,7 @@ export interface AdminQuestionVO {
   updatedAt?: string
 }
 
-export interface QuestionCreateDTO {
+export interface QuestionCreateDTO extends AdminOperationConfirmPayload {
   title: string
   content: string
   referenceAnswer: string
@@ -308,13 +325,13 @@ export interface QuestionRelationVO {
   targetQuestion?: QuestionSummaryVO
 }
 
-export interface QuestionRelationCreateDTO {
+export interface QuestionRelationCreateDTO extends AdminOperationConfirmPayload {
   targetQuestionId: number
   relationType?: QuestionRelationType | ''
   reason?: string
 }
 
-export interface AiQuestionGenerateRequestDTO {
+export interface AiQuestionGenerateRequestDTO extends AdminOperationConfirmPayload {
   targetPosition?: string
   technologyStack?: string
   knowledgePoint?: string
@@ -336,13 +353,18 @@ export interface AiQuestionGenerateResultVO {
   generatedCount?: number
   reviewIds?: number[]
   aiCallLogId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   message?: string
   failedReason?: string
 }
 
 export type AiQuestionGenerateSseEventType = 'start' | 'progress' | 'result' | 'done' | 'error'
 
-export interface AiQuestionGenerateSseParams {
+export interface AiQuestionGenerateSseParams extends AdminOperationConfirmPayload {
   targetPosition?: string
   technologyStack?: string
   knowledgePoint?: string
@@ -350,6 +372,10 @@ export interface AiQuestionGenerateSseParams {
   difficulty?: QuestionDifficulty | ''
   experienceYears?: number
   count?: number
+  generateReferenceAnswer?: boolean
+  generateFollowUps?: boolean
+  generateTagSuggestions?: boolean
+  generateCategorySuggestion?: boolean
   extraRequirements?: string
 }
 
@@ -417,7 +443,7 @@ export interface QuestionReviewDetailVO extends QuestionReviewListVO {
   updatedAt?: string
 }
 
-export interface QuestionReviewApproveDTO {
+export interface QuestionReviewApproveDTO extends AdminOperationConfirmPayload {
   title?: string
   content?: string
   referenceAnswer?: string
@@ -433,16 +459,16 @@ export interface QuestionReviewApproveDTO {
   editedReason?: string
 }
 
-export interface QuestionReviewRejectDTO {
+export interface QuestionReviewRejectDTO extends AdminOperationConfirmPayload {
   rejectReason: string
 }
 
-export interface BatchQuestionReviewApproveDTO {
+export interface BatchQuestionReviewApproveDTO extends AdminOperationConfirmPayload {
   reviewIds: number[]
   approveData?: QuestionReviewApproveDTO
 }
 
-export interface BatchQuestionReviewRejectDTO {
+export interface BatchQuestionReviewRejectDTO extends AdminOperationConfirmPayload {
   reviewIds: number[]
   rejectReason: string
 }
@@ -469,7 +495,7 @@ export interface QuestionDuplicateReviewQueryDTO extends PageQuery {
   keyword?: string
 }
 
-export interface QuestionDuplicateCheckDTO {
+export interface QuestionDuplicateCheckDTO extends AdminOperationConfirmPayload {
   questionId?: number
   questionIds?: number[]
 }
@@ -525,7 +551,7 @@ export interface QuestionDuplicateEvaluationSampleDTO {
   note?: string
 }
 
-export interface QuestionDuplicateEvaluationDTO {
+export interface QuestionDuplicateEvaluationDTO extends AdminOperationConfirmPayload {
   samples?: QuestionDuplicateEvaluationSampleDTO[]
 }
 
@@ -593,7 +619,7 @@ export interface QuestionDuplicateEvalCaseQueryDTO extends PageQuery {
   enabled?: number
 }
 
-export interface QuestionDuplicateEvalCaseSaveDTO {
+export interface QuestionDuplicateEvalCaseSaveDTO extends AdminOperationConfirmPayload {
   id?: number
   caseId?: string
   sourceQuestionId?: number
@@ -603,7 +629,7 @@ export interface QuestionDuplicateEvalCaseSaveDTO {
   enabled?: number
 }
 
-export interface QuestionDuplicateEvalRunRequestDTO {
+export interface QuestionDuplicateEvalRunRequestDTO extends AdminOperationConfirmPayload {
   caseIds?: number[]
   onlyEnabled?: boolean
   limit?: number
@@ -707,16 +733,16 @@ export interface QuestionDuplicateReviewDetailVO extends QuestionDuplicateReview
   targetQuestion?: QuestionSummaryVO
 }
 
-export interface QuestionDuplicateMergeDTO {
+export interface QuestionDuplicateMergeDTO extends AdminOperationConfirmPayload {
   relationType?: QuestionRelationType
   reason?: string
 }
 
-export interface QuestionDuplicateIgnoreDTO {
+export interface QuestionDuplicateIgnoreDTO extends AdminOperationConfirmPayload {
   ignoredReason?: string
 }
 
-export interface QuestionCategoryDTO {
+export interface QuestionCategoryDTO extends AdminOperationConfirmPayload {
   name: string
   code?: string
   parentId?: number
@@ -725,14 +751,14 @@ export interface QuestionCategoryDTO {
   description?: string
 }
 
-export interface QuestionTagDTO {
+export interface QuestionTagDTO extends AdminOperationConfirmPayload {
   name: string
   code?: string
   status?: number
   description?: string
 }
 
-export interface QuestionGroupDTO {
+export interface QuestionGroupDTO extends AdminOperationConfirmPayload {
   name: string
   canonicalAnswer?: string
   categoryId?: number

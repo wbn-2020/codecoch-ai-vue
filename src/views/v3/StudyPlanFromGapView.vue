@@ -2,7 +2,7 @@
   <div class="v3-page">
     <section class="page-hero">
       <div>
-        <div class="hero-kicker"><RouteIcon :size="16" /> Gap Driven Plan</div>
+        <div class="hero-kicker"><RouteIcon :size="16" /> 短板学习计划</div>
         <h1>差距学习计划</h1>
         <p>从能力画像中选择短板项，配置周期和每日时长后生成学习计划。</p>
       </div>
@@ -18,6 +18,14 @@
           <div><h2>选择短板</h2><p>优先使用当前能力画像，也可以从岗位目标自动匹配。</p></div>
           <el-button text :loading="loading" @click="loadProfile">刷新</el-button>
         </div>
+        <el-alert
+          v-if="contextWarning && !loadError"
+          class="context-alert"
+          type="warning"
+          :title="contextWarning"
+          :closable="false"
+          show-icon
+        />
         <AppState v-if="loadError" type="error" title="短板加载失败" :description="loadError"><el-button type="primary" @click="loadProfile">重试</el-button></AppState>
         <AppState v-else-if="!gapItems.length" type="empty" title="暂无可选短板" description="请先生成能力画像，或刷新后再试。" />
         <el-checkbox-group v-else v-model="form.gapItemIds" class="gap-list">
@@ -48,7 +56,7 @@
             <el-date-picker v-model="form.startDate" value-format="YYYY-MM-DD" type="date" class="full" placeholder="默认今天" />
           </el-form-item>
         </el-form>
-        <el-alert v-if="profileId" type="info" :closable="false" show-icon :title="`Profile #${profileId}`" />
+        <el-alert v-if="profileId" type="info" :closable="false" show-icon title="已关联能力画像" />
         <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generatePlan">
           <Sparkles :size="16" /> 生成学习计划
         </el-button>
@@ -69,6 +77,7 @@ import { getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileO
 import { generateStudyPlanFromGapApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import type { SkillGapItemVO } from '@/types/skillProfile'
+import type { StudyPlanGenerateVO } from '@/types/studyPlan'
 import { getErrorMessage } from '@/utils/error'
 
 const route = useRoute()
@@ -76,12 +85,16 @@ const router = useRouter()
 const loading = ref(false)
 const generating = ref(false)
 const loadError = ref('')
+const contextWarning = ref('')
 const loadedProfileId = ref<number | undefined>()
 const loadedTargetJobId = ref<number | undefined>()
+const loadedMatchReportId = ref<number | undefined>()
 const gapItems = ref<SkillGapItemVO[]>([])
+const STUDY_PLAN_TASK_BIZ_TYPE = 'study-plan.generate'
 
 const profileId = computed(() => Number(route.query.profileId) || loadedProfileId.value)
 const targetJobId = computed(() => Number(route.query.targetJobId) || loadedTargetJobId.value)
+const matchReportId = computed(() => loadedMatchReportId.value)
 const canGenerate = computed(() => Boolean(profileId.value && form.gapItemIds.length && !generating.value))
 const buildContextQuery = (extra: Record<string, unknown>): LocationQueryRaw => {
   const query: LocationQueryRaw = {}
@@ -92,6 +105,16 @@ const buildContextQuery = (extra: Record<string, unknown>): LocationQueryRaw => 
   })
   return query
 }
+
+const hasAsyncStudyPlanReceipt = (result?: StudyPlanGenerateVO | null) =>
+  Boolean(result?.asyncMessageId || result?.asyncTraceId || result?.asyncBizType)
+
+const buildStudyPlanTaskCenterQuery = (result: StudyPlanGenerateVO) => buildContextQuery({
+  messageId: result.asyncMessageId,
+  traceId: result.asyncTraceId,
+  bizType: result.asyncBizType || STUDY_PLAN_TASK_BIZ_TYPE,
+  bizId: result.asyncBizId || result.planId
+})
 
 const form = reactive({
   gapItemIds: [] as number[],
@@ -108,7 +131,7 @@ const severityLabels: Record<string, string> = {
   NORMAL: '普通'
 }
 
-const gapTitle = (gap: SkillGapItemVO) => gap.skillName || gap.category || `短板 #${gap.id}`
+const gapTitle = (gap: SkillGapItemVO) => gap.skillName || gap.category || '待补强能力项'
 
 const gapMeta = (gap: SkillGapItemVO) => {
   const category = gap.category || '未分类'
@@ -125,16 +148,23 @@ const gapDescription = (gap: SkillGapItemVO) =>
 const loadProfile = async () => {
   loading.value = true
   loadError.value = ''
+  contextWarning.value = ''
   try {
     if (!targetJobId.value && !profileId.value) {
-      const currentTarget = await getCurrentJobTargetApi().catch(() => null)
-      loadedTargetJobId.value = currentTarget?.id
+      try {
+        const currentTarget = await getCurrentJobTargetApi()
+        loadedTargetJobId.value = currentTarget?.id
+      } catch (error) {
+        loadedTargetJobId.value = undefined
+        contextWarning.value = getErrorMessage(error, '当前主目标岗位暂时无法读取；如果没有带入能力画像，请先从能力画像页进入。')
+      }
     }
     const routeProfileId = Number(route.query.profileId) || undefined
     if (routeProfileId) {
       const detail = await getSkillProfileByIdApi(routeProfileId)
       loadedProfileId.value = detail?.profileId || routeProfileId
       loadedTargetJobId.value = detail?.targetJobId
+      loadedMatchReportId.value = detail?.matchReportId
       gapItems.value = detail?.gapItems || []
     } else {
       const overview = await getSkillProfileOverviewApi(targetJobId.value)
@@ -143,11 +173,14 @@ const loadProfile = async () => {
       if (targetJobId.value) {
         try {
           const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
+          loadedMatchReportId.value = detail?.matchReportId
           gapItems.value = detail?.gapItems?.length ? detail.gapItems : overview.topGaps || []
         } catch {
+          loadedMatchReportId.value = undefined
           gapItems.value = overview.topGaps || []
         }
       } else {
+        loadedMatchReportId.value = undefined
         gapItems.value = overview.topGaps || []
       }
     }
@@ -173,11 +206,19 @@ const generatePlan = async () => {
       planTitle: form.planTitle || undefined
     })
     if (result.planStatus === 'FAILED') {
-      ElMessage.error(result.failureReason || '学习计划生成失败，请稍后重试')
+      ElMessage.error(getErrorMessage({ message: result.failureReason }, '学习计划生成失败，请稍后重试。'))
+      return
+    }
+    if (hasAsyncStudyPlanReceipt(result)) {
+      ElMessage.success('学习计划已提交，可在任务中心查看进度')
+      await router.push({
+        path: '/agent/tasks',
+        query: buildStudyPlanTaskCenterQuery(result)
+      })
       return
     }
     if (!result.planId) {
-      ElMessage.error('学习计划生成失败，请稍后重试。')
+      ElMessage.error('学习计划生成失败：系统没有返回可查看的计划编号，请稍后重试。')
       return
     }
     ElMessage.success('学习计划已生成')
@@ -187,7 +228,7 @@ const generatePlan = async () => {
         planId: result.planId,
         skillProfileId: profileId.value,
         targetJobId: targetJobId.value,
-        matchReportId: Number(route.query.matchReportId) || undefined,
+        matchReportId: matchReportId.value,
         resumeId: Number(route.query.resumeId) || undefined
       })
     })
@@ -211,6 +252,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
 .content-panel { padding: 20px; min-width: 0; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
+.context-alert { margin-bottom: 14px; }
 .gap-list { display: grid; gap: 12px; }
 .gap-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); cursor: pointer; }
 .gap-card strong, .gap-card small, .gap-card em { display: block; overflow-wrap: anywhere; }

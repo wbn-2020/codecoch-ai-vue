@@ -10,10 +10,10 @@
       <el-alert
         v-if="errorMessage"
         class="auth-alert"
-        type="error"
+        :type="alertType"
         show-icon
         :closable="false"
-        title="登录失败"
+        :title="alertTitle"
         :description="errorMessage"
       />
 
@@ -37,7 +37,14 @@
             show-password
           />
         </el-form-item>
-        <el-button class="auth-form__submit" type="primary" size="large" :loading="loading" @click="handleSubmit">
+        <el-button
+          class="auth-form__submit"
+          type="primary"
+          size="large"
+          :loading="loading"
+          :disabled="loading"
+          @click="handleSubmit"
+        >
           登录
         </el-button>
         <el-button
@@ -65,13 +72,15 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
-import { resolveAppRoutePath } from '@/features/route-safety'
 import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
 import { appConfig } from '@/config'
+import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
+import { sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 
 const router = useRouter()
 const route = useRoute()
@@ -79,6 +88,8 @@ const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const errorMessage = ref('')
+const alertTitle = ref('登录失败')
+const alertType = ref<'error' | 'warning'>('error')
 const hasDemoAccount = Boolean(appConfig.demoUsername && appConfig.demoPassword)
 
 const form = reactive<LoginDTO>({
@@ -94,6 +105,9 @@ const rules: FormRules<LoginDTO> = {
   ]
 }
 
+const trimAuthErrorPrefix = (message: string) =>
+  message.replace(/^(登录失败|认证失败|请求失败)[，,：:\s]*/u, '').trim() || message
+
 const getLoginErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object') {
     const payload = error as {
@@ -103,7 +117,7 @@ const getLoginErrorMessage = (error: unknown) => {
     }
     const message = payload.response?.data?.message || payload.message || ''
     if (payload.response?.status === 0 || message.includes('Network')) {
-      return '网络连接异常，请确认后端服务是否可用后重试。'
+      return '网络连接异常，请确认服务是否可用后重试。'
     }
     if (payload.response?.status && payload.response.status >= 500) {
       return '认证服务暂时不可用，请稍后重试。'
@@ -114,28 +128,72 @@ const getLoginErrorMessage = (error: unknown) => {
     if (message.includes('用户') || message.toLowerCase().includes('user')) {
       return '账号不存在或不可用，请确认用户名是否正确。'
     }
-    return message || '登录失败，请检查账号状态后重试。'
+    return trimAuthErrorPrefix(normalizeErrorMessage(error, '请检查账号状态后重试。'))
   }
-  return '登录失败，请检查账号状态后重试。'
+  return '请检查账号状态后重试。'
+}
+
+const getPostLoginNavigationErrorMessage = (error: unknown) => {
+  console.error('[auth] post-login navigation failed', error)
+  return '登录已成功，但目标页面加载失败。请刷新页面或从侧边栏重新进入；若持续出现，请联系管理员。'
+}
+
+const clearError = () => {
+  errorMessage.value = ''
+  alertTitle.value = '登录失败'
+  alertType.value = 'error'
+}
+
+const syncRouteReasonNotice = () => {
+  if (String(route.query.reason || '') !== 'logout-required-for-password-reset') return
+
+  alertTitle.value = '请先切换目标账号'
+  alertType.value = 'warning'
+  errorMessage.value = '检测到密码重置链接。为避免当前登录账号与重置目标账号混淆，请先重新登录目标账号，再从邮件中重新打开重置链接。'
+}
+
+const getDefaultPostLoginRoute = (): RouteLocationRaw => {
+  if (!authStore.canAccessAdmin) return '/dashboard'
+  const adminPath = firstAccessibleAdminPath(authStore)
+  if (adminPath) return adminPath
+  return {
+    path: '/403',
+    query: {
+      reason: 'noAdminMenu',
+      target: '/admin',
+      title: '管理后台'
+    }
+  }
 }
 
 const handleSubmit = async () => {
+  if (loading.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (!valid) return
+    if (!valid || loading.value) return
 
     loading.value = true
-    errorMessage.value = ''
+    clearError()
     try {
       await authStore.login(form, { silentError: true })
-      ElMessage.success('登录成功')
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-      const defaultPath = authStore.canAccessAdmin ? firstAccessibleAdminPath(authStore) || '/admin' : '/dashboard'
-      const safeRedirect = resolveAppRoutePath(redirect, { fallbackPath: defaultPath }).path
-      await router.replace(safeRedirect)
     } catch (error) {
+      alertTitle.value = '登录失败'
+      alertType.value = 'error'
       errorMessage.value = getLoginErrorMessage(error)
+      loading.value = false
+      return
+    }
+
+    try {
+      ElMessage.success('登录成功')
+      const redirect = sanitizeLocalRedirectPath(route.query.redirect)
+      await router.replace(redirect || getDefaultPostLoginRoute())
+    } catch (error) {
+      alertTitle.value = '登录后页面加载失败'
+      alertType.value = 'warning'
+      errorMessage.value = getPostLoginNavigationErrorMessage(error)
+      ElMessage.warning(errorMessage.value)
     } finally {
       loading.value = false
     }
@@ -145,13 +203,22 @@ const handleSubmit = async () => {
 const fillDemoAccount = () => {
   form.username = appConfig.demoUsername
   form.password = appConfig.demoPassword
-  errorMessage.value = ''
+  clearError()
 }
+
+syncRouteReasonNotice()
 
 watch(
   () => [form.username, form.password],
   () => {
-    if (errorMessage.value) errorMessage.value = ''
+    if (errorMessage.value) clearError()
+  }
+)
+
+watch(
+  () => route.query.reason,
+  () => {
+    syncRouteReasonNotice()
   }
 )
 </script>

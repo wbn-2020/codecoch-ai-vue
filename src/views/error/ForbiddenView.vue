@@ -10,14 +10,21 @@
           <strong>{{ targetPath }}</strong>
         </div>
         <div>
+          <span>当前账号</span>
+          <small>{{ accountSummary }}</small>
+        </div>
+        <div>
           <span>处理结果</span>
-          <small>当前操作未执行。如需开通访问范围，请联系管理员处理。</small>
+          <small>{{ resolutionText }}</small>
         </div>
       </div>
 
       <div class="error-actions">
-        <el-button type="primary" @click="router.push('/dashboard')">返回工作台</el-button>
+        <el-button type="primary" @click="router.push('/dashboard')">返回今日计划</el-button>
         <el-button v-if="authStore.canAccessAdmin" @click="router.push('/admin')">管理首页</el-button>
+        <el-button v-else-if="isAdminAccessFailure" type="warning" plain @click="reloginAsAdmin">
+          重新登录管理员账号
+        </el-button>
       </div>
     </section>
   </main>
@@ -33,16 +40,52 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const targetPath = computed(() => String(route.query.target || ''))
+const safeDisplayPath = (value: unknown) => {
+  if (typeof value !== 'string' || !value.startsWith('/')) return ''
+  try {
+    const url = new URL(value, window.location.origin)
+    if (url.origin !== window.location.origin) return ''
+    return url.pathname || ''
+  } catch {
+    return value.split('?')[0].split('#')[0]
+  }
+}
+
+const targetPath = computed(() => safeDisplayPath(route.query.target))
+const isAdminAccessFailure = computed(() =>
+  String(route.query.reason || '') === 'requiresAdmin' || targetPath.value.startsWith('/admin')
+)
+const accountSummary = computed(() => {
+  const username = authStore.userInfo?.username || authStore.userInfo?.nickname || '当前登录账号'
+  return `${username}；当前账号权限不足`
+})
+
 const reasonText = computed(() => {
   const reason = String(route.query.reason || '')
   if (reason === 'requiresAdmin') return '当前账号没有管理端访问角色。'
   if (reason === 'noAdminMenu') return '当前账号没有任何可进入的管理菜单。'
   if (reason === 'missingRole') return '当前账号缺少访问该页面所需角色。'
   if (reason === 'missingPermission') return '当前账号缺少访问该页面所需权限。'
-  if (reason === 'apiForbidden') return '接口返回无权限，当前操作未执行。'
+  if (reason === 'apiForbidden') return '当前账号无权执行该操作，已停止本次提交。'
+  if (reason === 'featureDisabled') return '该功能当前未开放，已停止本次访问。'
   return '当前账号没有访问该页面的权限。'
 })
+
+const resolutionText = computed(() => {
+  if (isAdminAccessFailure.value && !authStore.canAccessAdmin) {
+    return '当前操作未执行。如果刚切换过普通用户，请重新登录管理员账号后继续访问。'
+  }
+  if (String(route.query.reason || '') === 'missingPermission' || String(route.query.reason || '') === 'missingRole') {
+    return '当前操作未执行。请联系管理员补充分配缺少的角色或权限后重试。'
+  }
+  return '当前操作未执行。如需开通访问范围，请联系管理员处理。'
+})
+
+const reloginAsAdmin = () => {
+  const redirect = targetPath.value && targetPath.value.startsWith('/admin') ? targetPath.value : '/admin'
+  authStore.clearAuth()
+  router.push({ path: '/login', query: { redirect } })
+}
 </script>
 
 <style scoped lang="scss">

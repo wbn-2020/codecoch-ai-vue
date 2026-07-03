@@ -9,8 +9,14 @@ import type {
   ResumeJobMatchSseEventType,
   ResumeJobMatchSubmitVO
 } from '@/types/resumeJobMatch'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse } from '@/utils/sse'
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+const hasReportId = (value: unknown): value is ResumeJobMatchReportDetailVO =>
+  isRecord(value) && Number.isFinite(Number(value.reportId)) && Number(value.reportId) > 0
 
 export const createResumeJobMatchReportApi = (data: ResumeJobMatchCreateDTO) => {
   return request.post<ResumeJobMatchSubmitVO, ResumeJobMatchSubmitVO>(
@@ -46,7 +52,7 @@ export const getResumeJobMatchReportsApi = (params?: ResumeJobMatchQueryDTO) => 
   return request
     .get<PageResult<ResumeJobMatchReportListVO>, PageResult<ResumeJobMatchReportListVO>>(
       '/resume-job-match/reports',
-      { params }
+      { params: compactQueryParams(params) }
     )
     .then((result) => normalizePageResult(result, params))
 }
@@ -63,15 +69,19 @@ export const regenerateResumeJobMatchReportApi = (id: number) => {
   )
 }
 
-export const getLatestResumeJobMatchReportApi = (resumeId: number, targetJobId: number, resumeVersionId?: number) => {
-  return request.get<ResumeJobMatchReportDetailVO, ResumeJobMatchReportDetailVO>(
+export const getLatestResumeJobMatchReportApi = (
+  resumeId: number,
+  targetJobId: number,
+  resumeVersionId?: number
+) => {
+  return request.get<ResumeJobMatchReportDetailVO | null, ResumeJobMatchReportDetailVO | null>(
     '/resume-job-match/latest',
     {
       params: {
         resumeId,
         targetJobId,
-        ...(resumeVersionId ? { resumeVersionId } : {})
+        resumeVersionId
       }
     }
-  )
+  ).then((result) => (hasReportId(result) ? result : null))
 }

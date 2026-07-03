@@ -4,6 +4,7 @@ export interface AdminFileQueryDTO extends PageQuery {
   userId?: number
   bizType?: string
   status?: string
+  parseStatus?: string
 }
 
 export interface FileInfoVO {
@@ -28,4 +29,13 @@ export interface FileInfoVO {
   confirmedAt?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AdminFileDownloadAccessDTO {
+  accessReason: string
+  confirmSensitiveAccess: boolean
+  confirm: boolean
+  dryRun: boolean
+  reason: string
+  idempotencyKey: string
 }

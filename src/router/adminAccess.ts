@@ -7,12 +7,29 @@ const ADMIN_ROOT = '/admin'
 
 const isHiddenRoute = (route: RouteRecordRaw) => Boolean(route.meta?.hidden || route.redirect)
 
+type AdminPermissionInput = string | string[] | undefined
+
+const normalizeAdminPermissions = (permissions: AdminPermissionInput) => {
+  if (Array.isArray(permissions)) return permissions.map(String).filter(Boolean)
+  return permissions ? [String(permissions)] : []
+}
+
+export const canAccessAdminPermissions = (
+  permissions: AdminPermissionInput,
+  authStore: ReturnType<typeof useAuthStore>
+) => {
+  const normalizedPermissions = normalizeAdminPermissions(permissions)
+  if (normalizedPermissions.length === 0) {
+    return false
+  }
+
+  return authStore.hasAnyPermission(normalizedPermissions)
+}
+
 const canAccessRoute = (route: RouteRecordRaw, authStore: ReturnType<typeof useAuthStore>) => {
   const permissions = route.meta?.requiredPermissions
-  if (!Array.isArray(permissions) || permissions.length === 0) {
-    return true
-  }
-  return authStore.hasAnyPermission(permissions.map(String))
+  if (!permissions) return false
+  return canAccessAdminPermissions(permissions as AdminPermissionInput, authStore)
 }
 
 export const firstAccessibleAdminPath = (authStore: ReturnType<typeof useAuthStore>) => {
@@ -23,3 +40,14 @@ export const firstAccessibleAdminPath = (authStore: ReturnType<typeof useAuthSto
   }
   return child.path ? `${ADMIN_ROOT}/${child.path}`.replace(/\/$/, '') : ADMIN_ROOT
 }
+
+export const resolveAdminEntryPath = (authStore: ReturnType<typeof useAuthStore>) => {
+  if (!authStore.canAccessAdmin) {
+    return null
+  }
+
+  return firstAccessibleAdminPath(authStore)
+}
+
+export const resolveAuthenticatedEntryPath = (authStore: ReturnType<typeof useAuthStore>) =>
+  resolveAdminEntryPath(authStore) || '/dashboard'

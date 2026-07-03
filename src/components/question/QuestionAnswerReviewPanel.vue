@@ -107,7 +107,14 @@
         <h3>最近点评历史</h3>
         <el-button text :loading="historyLoading" @click="fetchHistory">刷新</el-button>
       </div>
-      <el-empty v-if="!historyLoading && history.length === 0" description="暂无点评历史" />
+      <AppState
+        v-if="!historyLoading && history.length === 0"
+        type="empty"
+        title="还没有 AI 点评历史"
+        description="提交一次答案后，这里会保留最近点评记录，方便对比分数、亮点、不足和追问建议。"
+      >
+        <el-button type="primary" plain :disabled="!answerContent.trim()" :loading="submitting" @click="handleSubmit">提交一次点评</el-button>
+      </AppState>
       <button
         v-for="item in history"
         v-else
@@ -133,6 +140,7 @@ import {
   getQuestionAnswerReviewsApi,
   submitQuestionAnswerReviewApi
 } from '@/api/question'
+import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import type { PracticeRecordVO, QuestionDetailVO } from '@/types/question'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
@@ -214,7 +222,7 @@ const handleSubmit = async () => {
     await fetchHistory()
     ElMessage.success('AI 点评已生成')
   } catch (error) {
-    submitError.value = getErrorMessage(error, 'AI 点评请求失败')
+    submitError.value = getErrorMessage(error, '点评暂时生成失败，请稍后重试')
   } finally {
     submitting.value = false
   }

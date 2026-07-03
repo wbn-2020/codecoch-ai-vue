@@ -2,6 +2,7 @@ import request from '@/utils/request'
 
 export interface WeakCategoryVO {
   categoryId: number
+  categoryName?: string
   totalCount: number
   wrongCount: number
   wrongRate: number

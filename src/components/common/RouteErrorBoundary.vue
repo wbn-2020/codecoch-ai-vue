@@ -2,12 +2,12 @@
   <div v-if="errorMessage" class="route-error-boundary">
     <AppState
       type="error"
-      title="页面加载失败"
+      title="当前页面暂时不可用"
       :description="errorMessage"
     >
       <div class="route-error-boundary__actions">
         <el-button type="primary" @click="reset">重试</el-button>
-        <el-button @click="router.push(fallbackPath)">返回安全入口</el-button>
+        <el-button @click="router.push(fallbackPath)">返回可继续的页面</el-button>
       </div>
     </AppState>
   </div>
@@ -46,7 +46,7 @@ watch(
 onErrorCaptured((error) => {
   errorMessage.value = toFriendlyMessage(
     error instanceof Error ? error.message : error,
-    '\u9875\u9762\u7ec4\u4ef6\u8fd0\u884c\u5f02\u5e38\uff0c\u8bf7\u91cd\u8bd5\u6216\u8fd4\u56de\u5b89\u5168\u5165\u53e3\u3002'
+    '当前页面暂时没有加载成功，请重试或返回可继续的页面。'
   )
   return false
 })

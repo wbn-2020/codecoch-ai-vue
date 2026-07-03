@@ -4,19 +4,19 @@
       <div>
         <div class="eyebrow">
           <Route :size="16" />
-          Learning Plan
+          训练路线
         </div>
-        <h1>AI 学习计划</h1>
-        <p>基于真实面试报告生成阶段化训练计划，任务状态与计划详情均来自后端学习计划接口。</p>
+        <h1>把面试报告变成一条可执行的训练路线</h1>
+        <p>从面试报告生成阶段化计划，按日期安排任务，并记录完成、跳过和恢复状态。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="fetchPlans">
           <RefreshCcw :size="16" />
-          刷新列表
+          刷新路线
         </el-button>
         <el-button type="primary" @click="router.push('/interviews/history')">
           <History :size="16" />
-          面试报告
+          从面试报告开始
         </el-button>
       </div>
     </section>
@@ -25,14 +25,14 @@
       <div class="content-card__body">
         <div class="section-head">
           <div>
-            <p class="section-kicker">Generate</p>
-            <h2>生成配置</h2>
+            <p class="section-kicker">从报告生成</p>
+            <h2>选择一份真实报告，生成下一轮训练路线</h2>
           </div>
-          <el-tag effect="plain" type="success">真实接口</el-tag>
+          <el-tag effect="plain" type="success">已接入</el-tag>
         </div>
 
         <el-form class="generate-form" :model="generateForm" label-position="top">
-          <el-form-item label="报告 ID">
+        <el-form-item label="关联面试报告">
             <el-input-number v-model="generateForm.reportId" :min="1" :precision="0" controls-position="right" />
           </el-form-item>
           <el-form-item label="目标岗位">
@@ -55,13 +55,13 @@
               :rows="3"
               maxlength="300"
               show-word-limit
-              placeholder="可选：补充希望强化的知识点或复习节奏"
+              placeholder="可选：例如优先补 Redis、Spring Cloud 或项目表达"
             />
           </el-form-item>
           <el-form-item class="form-actions">
             <el-button type="primary" :loading="generating" :disabled="!generateForm.reportId" @click="handleGenerate">
               <Sparkles :size="16" />
-              生成学习计划
+              生成训练路线
             </el-button>
           </el-form-item>
         </el-form>
@@ -69,9 +69,13 @@
         <div v-if="streamStatus" class="stream-panel">
           <div class="stream-panel__head">
             <span>{{ streamStatus }}</span>
-            <el-button v-if="generating" link type="warning" @click="cancelStream">取消</el-button>
+            <el-button v-if="generating" link type="warning" @click="requestCancelStream">取消</el-button>
           </div>
-          <pre>{{ streamContent || '等待流式事件返回...' }}</pre>
+          <pre>{{ streamContent || '正在整理训练路线，耗时较长时可以稍后刷新列表查看结果。' }}</pre>
+          <div class="stream-panel__actions">
+            <el-button @click="fetchPlans">刷新路线列表</el-button>
+            <el-button @click="goStudyPlanTaskCenterByForm">去任务中心查看</el-button>
+          </div>
         </div>
       </div>
     </section>
@@ -81,8 +85,8 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Plans</p>
-              <h2>学习计划列表</h2>
+              <p class="section-kicker">我的路线</p>
+              <h2>正在推进的训练路线</h2>
             </div>
             <el-select v-model="query.planStatus" class="status-filter" placeholder="全部状态" clearable @change="fetchPlans">
               <el-option label="生成中" value="GENERATING" />
@@ -103,7 +107,7 @@
                 @click="selectPlan(plan.id)"
               >
                 <span class="plan-item__main">
-                  <strong>{{ plan.planTitle || `学习计划 #${plan.id}` }}</strong>
+                  <strong>{{ plan.planTitle || '学习计划' }}</strong>
                   <span>{{ plan.targetPosition || '未设置目标岗位' }}</span>
                 </span>
                 <span class="plan-item__meta">
@@ -114,7 +118,15 @@
                 </span>
               </button>
             </template>
-            <el-empty v-else description="暂无学习计划，先从面试报告生成一份真实计划" />
+            <AppState
+              v-else
+              type="empty"
+              title="还没有训练路线"
+              description="学习计划需要基于面试报告或能力短板生成。先完成一次模拟面试，或从已有报告进入生成流程。"
+            >
+              <el-button type="primary" @click="router.push('/interviews/history')">从面试报告开始</el-button>
+              <el-button @click="router.push('/interviews/create')">先做一次面试</el-button>
+            </AppState>
           </div>
 
           <el-pagination
@@ -134,9 +146,9 @@
           <template v-if="selectedPlan">
             <div class="detail-head">
               <div>
-                <p class="section-kicker">Detail</p>
-                <h2>{{ selectedPlan.planTitle || `学习计划 #${selectedPlan.id}` }}</h2>
-                <p>{{ selectedPlan.planSummary || '后端暂未返回计划摘要' }}</p>
+                <p class="section-kicker">路线详情</p>
+                <h2>{{ selectedPlan.planTitle || '学习计划' }}</h2>
+                <p>{{ selectedPlan.planSummary || '这份路线暂时还没有摘要' }}</p>
               </div>
               <el-tag :type="statusType(selectedPlan.planStatus)" effect="plain">
                 {{ statusText(selectedPlan.planStatus) }}
@@ -145,16 +157,25 @@
 
             <div v-if="selectedPlan.planStatus === 'GENERATING'" class="status-panel">
               <el-icon class="loading-icon"><Loading /></el-icon>
-              <span>学习计划生成中，可等待自动刷新或手动刷新列表。</span>
+              <span>学习计划正在生成，可以离开页面；稍后回到这里或任务中心继续查看。</span>
+              <div class="status-panel__actions">
+                <el-button size="small" @click="fetchPlans">刷新路线</el-button>
+                <el-button size="small" type="primary" plain @click="goSelectedPlanTaskCenter">去任务中心</el-button>
+              </div>
             </div>
-            <el-alert
-              v-else-if="selectedPlan.planStatus === 'FAILED'"
-              type="error"
-              show-icon
-              :closable="false"
-              title="学习计划生成失败"
-              :description="toFriendlyMessage(selectedPlan.failureReason, '请稍后重试或返回报告重新生成')"
-            />
+            <div v-else-if="selectedPlan.planStatus === 'FAILED'" class="status-panel status-panel--error">
+              <el-alert
+                type="error"
+                show-icon
+                :closable="false"
+                title="学习计划生成失败"
+                :description="toFriendlyMessage(selectedPlan.failureReason, '请稍后重试或返回报告重新生成')"
+              />
+              <div class="status-panel__actions">
+                <el-button size="small" @click="fetchPlans">刷新路线</el-button>
+                <el-button size="small" type="primary" plain @click="goSelectedPlanTaskCenter">去任务中心</el-button>
+              </div>
+            </div>
 
             <div class="progress-row">
               <span>任务进度</span>
@@ -164,10 +185,10 @@
             <section class="daily-view-panel">
               <div class="daily-view-panel__head">
                 <div>
-                  <p class="section-kicker">日视图</p>
-                  <h3>plannedDate 日任务 / 日报视图</h3>
+                  <p class="section-kicker">当天安排</p>
+                  <h3>这一天要练什么</h3>
                   <span>
-                    {{ dailyView?.date || dailyDate }} · 优先按 plannedDate 匹配任务
+                    {{ dailyView?.date || dailyDate }} · 按计划日期展示当天任务
                   </span>
                 </div>
                 <div class="daily-view-panel__actions">
@@ -181,7 +202,7 @@
                   />
                   <el-button :loading="dailyLoading" @click="fetchDailyView">
                     <RefreshCcw :size="16" />
-                    刷新日报
+                    刷新当天任务
                   </el-button>
                 </div>
               </div>
@@ -234,33 +255,40 @@
                       </div>
                       <p>{{ task.taskDescription || '暂无任务描述' }}</p>
                       <div class="task-tags">
-                        <span v-if="task.taskType">{{ task.taskType }}</span>
+                        <span v-if="task.taskType">{{ taskTypeText(task.taskType) }}</span>
                         <span>{{ formatPlannedDate(task.plannedDate) }}</span>
                         <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
                         <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
                         <span v-for="questionId in task.relatedQuestionIds || []" :key="questionId">
-                          题目 #{{ questionId }}
+                          关联练习题已记录
                         </span>
                         <span v-for="resource in task.resources || []" :key="resource">{{ resource }}</span>
                       </div>
                       <div class="task-actions">
                         <template v-if="isPendingTask(task.taskStatus)">
                           <el-button size="small" type="success" plain @click="completeTask(task.id)">完成</el-button>
-                          <el-button size="small" plain @click="skipTask(task.id)">跳过</el-button>
+                          <el-button size="small" plain @click="skipTask(task)">跳过</el-button>
                         </template>
                         <el-button v-else size="small" plain @click="restoreTask(task.id)">恢复待完成</el-button>
                       </div>
                     </article>
                   </template>
-                  <el-empty v-else description="当前日期暂无任务" />
+                  <AppState
+                    v-else
+                    type="empty"
+                    title="这一天没有安排任务"
+                    description="当前日期可能不在计划周期内，或任务已被移动到其他日期。可以切换日期、查看完整路线，或生成新的训练路线。"
+                  >
+                    <el-button @click="resetDailyDateToToday">查看今天</el-button>
+                  </AppState>
                 </div>
               </div>
             </section>
 
             <div class="all-task-head">
-              <p class="section-kicker">All Tasks</p>
-              <h3>全部任务明细</h3>
-              <span>下方列表展示当前计划的全部任务，不按上方所选日期过滤。</span>
+              <p class="section-kicker">完整路线</p>
+              <h3>所有训练任务</h3>
+              <span>这里保留当前路线的全部任务，方便你查看后续阶段，不和上方日期筛选混在一起。</span>
             </div>
 
             <div class="task-list" v-loading="detailLoading">
@@ -288,15 +316,30 @@
                       进行中
                     </el-button>
                     <el-button size="small" type="success" plain @click="completeTask(task.id)">完成</el-button>
-                    <el-button size="small" plain @click="skipTask(task.id)">跳过</el-button>
+                    <el-button size="small" plain @click="skipTask(task)">跳过</el-button>
                   </div>
                 </article>
               </template>
-              <el-empty v-else description="当前计划暂无任务明细" />
+              <AppState
+                v-else
+                type="empty"
+                title="当前路线还没有任务明细"
+                description="计划可能仍在生成中，或生成结果没有拆分成可执行任务。可以刷新路线，或回到面试报告重新生成。"
+              >
+                <el-button type="primary" :loading="detailLoading" @click="selectedPlan && selectPlan(selectedPlan.id, false)">刷新路线详情</el-button>
+                <el-button @click="router.push('/interviews/history')">返回面试报告</el-button>
+              </AppState>
             </div>
           </template>
 
-          <el-empty v-else description="请选择左侧学习计划查看详情" />
+          <AppState
+            v-else
+            type="empty"
+            title="请选择一条训练路线"
+            description="左侧选择计划后，这里会展示当天任务、完整路线和完成/跳过操作；没有计划时可从面试报告生成。"
+          >
+            <el-button type="primary" @click="router.push('/interviews/history')">从面试报告生成</el-button>
+          </AppState>
         </div>
       </section>
     </div>
@@ -318,20 +361,25 @@ import {
   streamStudyPlanGenerateApi,
   updateStudyTaskStatusApi
 } from '@/api/studyPlan'
+import AppState from '@/components/common/AppState.vue'
 import type {
   SseEventVO,
   StudyPlanDailyViewVO,
   StudyPlanDetailVO,
   StudyPlanGenerateDTO,
+  StudyPlanGenerateVO,
   StudyPlanListVO,
   StudyPlanQueryDTO,
   StudyTaskStatus,
   StudyTaskVO
 } from '@/types/studyPlan'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
+type RouterQueryValue = string | number | boolean | null | undefined
+const STUDY_PLAN_TASK_BIZ_TYPE = 'study-plan.generate'
 
 const listLoading = ref(false)
 const detailLoading = ref(false)
@@ -348,6 +396,7 @@ const streamContent = ref('')
 const streamStatus = ref('')
 let streamController: AbortController | undefined
 let pollTimer: number | undefined
+const streamAbortReason = ref<'user' | 'dispose' | ''>('')
 
 const query = reactive<StudyPlanQueryDTO>({
   pageNo: 1,
@@ -373,6 +422,46 @@ const selectedPlanId = computed(() => {
 
 const dailyTasks = computed(() => dailyView.value?.tasks || [])
 
+const compactRouterQuery = (params: Record<string, RouterQueryValue>) => {
+  const result: Record<string, string> = {}
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    result[key] = String(value)
+  })
+  return result
+}
+
+const hasAsyncStudyPlanReceipt = (result?: StudyPlanGenerateVO | null) =>
+  Boolean(result?.asyncMessageId || result?.asyncTraceId || result?.asyncBizType)
+
+const studyPlanTaskCenterQuery = (result: StudyPlanGenerateVO) => compactRouterQuery({
+  messageId: result.asyncMessageId,
+  traceId: result.asyncTraceId,
+  bizType: result.asyncBizType || STUDY_PLAN_TASK_BIZ_TYPE,
+  bizId: result.asyncBizId || result.planId
+})
+
+const goStudyPlanTaskCenter = (result: StudyPlanGenerateVO) => router.push({
+  path: '/agent/tasks',
+  query: studyPlanTaskCenterQuery(result)
+})
+
+const goSelectedPlanTaskCenter = () => router.push({
+  path: '/agent/tasks',
+  query: compactRouterQuery({
+    bizType: STUDY_PLAN_TASK_BIZ_TYPE,
+    bizId: selectedPlan.value?.id || selectedPlanId.value
+  })
+})
+
+const goStudyPlanTaskCenterByForm = () => router.push({
+  path: '/agent/tasks',
+  query: compactRouterQuery({
+    bizType: STUDY_PLAN_TASK_BIZ_TYPE,
+    bizId: selectedPlan.value?.id || selectedPlanId.value || generateForm.reportId
+  })
+})
+
 function formatDate(date: Date) {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
@@ -391,7 +480,7 @@ const schedulePlanPoll = () => {
   clearPoll()
   if (!selectedPlan.value || selectedPlan.value.planStatus !== 'GENERATING') return
   if (pollCount.value >= 30) {
-    ElMessage.warning('学习计划生成时间较长，请稍后手动刷新')
+    ElMessage.warning('学习计划生成时间较长，可以稍后刷新路线或到任务中心查看进度')
     return
   }
   pollTimer = window.setTimeout(async () => {
@@ -459,6 +548,11 @@ const fetchDailyView = async () => {
   }
 }
 
+const resetDailyDateToToday = () => {
+  dailyDate.value = formatDate(new Date())
+  fetchDailyView()
+}
+
 const handlePageChange = (pageNo: number) => {
   query.pageNo = pageNo
   fetchPlans()
@@ -466,12 +560,13 @@ const handlePageChange = (pageNo: number) => {
 
 const handleGenerate = async () => {
   if (!generateForm.reportId) {
-    ElMessage.warning('请先填写真实报告 ID')
+    ElMessage.warning('请先关联一份面试报告')
     return
   }
   generating.value = true
   streamContent.value = ''
-  streamStatus.value = '正在建立学习计划流式生成连接'
+  streamStatus.value = '正在提交学习计划生成任务'
+  streamAbortReason.value = ''
   let streamStarted = false
   let streamPlanId = 0
   try {
@@ -488,13 +583,13 @@ const handleGenerate = async () => {
         onEvent: (event, data) => {
           if (event === 'start') {
             streamStarted = true
-            streamStatus.value = toFriendlyMessage(data?.message, '学习计划流式生成中')
+            streamStatus.value = toFriendlyMessage(data?.message, '学习计划正在生成')
           }
           if (event === 'metadata') {
             streamPlanId = resolveStreamPlanId(data) || streamPlanId
           }
           if (event === 'done') {
-            streamStatus.value = '学习计划流式生成完成'
+            streamStatus.value = '学习计划已生成'
           }
         },
         onChunk: (content) => {
@@ -507,7 +602,7 @@ const handleGenerate = async () => {
       planId: streamPlanId,
       planStatus: 'ACTIVE'
     }
-    ElMessage.success('学习计划已通过流式生成完成')
+    ElMessage.success('学习计划已生成')
     if (result.planId) {
       pollCount.value = 0
       await router.replace({ path: '/study-plans', query: { planId: String(result.planId) } })
@@ -517,24 +612,39 @@ const handleGenerate = async () => {
       await fetchPlans()
     }
   } catch (error) {
-    if (streamController?.signal.aborted) {
-      ElMessage.warning('已取消学习计划流式生成')
+    const abortReason: string = streamController?.signal.aborted
+      ? streamAbortReason.value || 'dispose'
+      : streamAbortReason.value
+    if (abortReason || streamController?.signal.aborted) {
+      if (abortReason === 'user') {
+        streamStatus.value = '已取消本次生成，可稍后重新提交或刷新查看是否已有计划'
+        ElMessage.warning('已取消学习计划生成')
+      }
       return
     }
     if (streamStarted) {
-      streamStatus.value = '流式生成失败，请刷新后查看是否已有生成结果'
-      ElMessage.error(getErrorMessage(error, '流式生成失败，请刷新后查看是否已有生成结果'))
+      streamStatus.value = '学习计划生成暂时中断，请刷新后查看是否已有生成结果'
+      ElMessage.error(getErrorMessage(error, '学习计划生成暂时中断，请刷新后查看是否已有生成结果'))
       await fetchPlans()
       return
     }
-    streamStatus.value = '流式连接失败，已回退到同步生成接口'
+    streamStatus.value = '生成过程暂时不稳定，已改用普通生成方式'
     const result = await generateStudyPlanApi({
       ...generateForm,
       targetPosition: generateForm.targetPosition || undefined,
       industryDirection: generateForm.industryDirection || undefined,
       extraRequirements: generateForm.extraRequirements || undefined
     })
-    ElMessage.success(result.planStatus === 'FAILED' ? '学习计划任务已返回失败状态' : '学习计划已提交生成')
+    if (hasAsyncStudyPlanReceipt(result)) {
+      ElMessage.success('学习计划已提交，可在任务中心查看进度')
+      await goStudyPlanTaskCenter(result)
+      return
+    }
+    if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
+      ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请查看原因后重试'))
+    } else {
+      ElMessage.success('学习计划已生成')
+    }
     if (result.planId) {
       pollCount.value = 0
       await router.replace({ path: '/study-plans', query: { planId: String(result.planId) } })
@@ -546,6 +656,7 @@ const handleGenerate = async () => {
   } finally {
     generating.value = false
     streamController = undefined
+    streamAbortReason.value = ''
   }
 }
 
@@ -556,9 +667,26 @@ const resolveStreamPlanId = (event?: SseEventVO) => {
   return Number.isFinite(id) && id > 0 ? id : 0
 }
 
-const cancelStream = () => {
-  streamController?.abort()
-  streamController = undefined
+const abortStream = (reason: 'user' | 'dispose') => {
+  if (!streamController) return
+  streamAbortReason.value = reason
+  streamController.abort()
+}
+
+const requestCancelStream = async () => {
+  if (!streamController) return
+  const confirmed = await confirmDangerActionPreview({
+    title: '取消生成',
+    action: '停止当前学习路线生成',
+    target: `关联报告 ${generateForm.reportId ? '已选择' : '未选择'}，计划周期 ${generateForm.expectedDurationDays} 天`,
+    impact: '当前页面的生成过程会停止；如果后台已经生成出计划，可稍后刷新路线列表查看，否则需要重新提交生成。',
+    rollback: '取消不会自动恢复本次输出；重新生成时会基于当前表单重新提交一次。',
+    audit: '页面会保留已经返回的片段，便于判断是否需要刷新查看结果或重新生成。',
+    tips: ['确认不是因为等待时间较长而误触；长任务也可以稍后从路线列表刷新查看。', '如果只是想离开页面，系统会自动清理当前连接。'],
+    confirmButtonText: '确认取消'
+  })
+  if (!confirmed) return
+  abortStream('user')
 }
 
 const refreshSelectedPlan = async () => {
@@ -581,8 +709,19 @@ const completeTask = async (taskId: number) => {
   await refreshSelectedPlan()
 }
 
-const skipTask = async (taskId: number) => {
-  await updateStudyTaskStatusApi(taskId, 'SKIPPED')
+const skipTask = async (task: StudyTaskVO) => {
+  const confirmed = await confirmDangerActionPreview({
+    title: '跳过训练任务',
+    action: '把这条训练任务标记为跳过',
+    target: task.taskTitle || task.taskDescription || `训练任务 ${task.id}`,
+    impact: '这条任务会从当前待办节奏中移出，今日完成率和路线进度会按跳过状态重新计算。',
+    rollback: '如果只是暂时不做，可以先标记为进行中；误跳过后可回到路线详情重新调整任务状态或重新生成路线。',
+    audit: '任务状态变更会保留在训练路线中，后续复盘会看到它曾被跳过。',
+    tips: ['确认这条任务今天确实不准备继续推进。', '如果任务太大，优先拆小或改为进行中，而不是直接跳过。'],
+    confirmButtonText: '确认跳过'
+  })
+  if (!confirmed) return
+  await updateStudyTaskStatusApi(task.id, 'SKIPPED')
   ElMessage.success('任务已跳过')
   await refreshSelectedPlan()
 }
@@ -605,7 +744,7 @@ const statusText = (status?: string) => {
     FAILED: '失败',
     ARCHIVED: '已归档'
   }
-  return map[String(status || '').toUpperCase()] || status || '未知'
+  return map[String(status || '').toUpperCase()] || '状态待确认'
 }
 
 const statusType = (status?: string) => {
@@ -624,7 +763,7 @@ const taskStatusText = (status?: string) => {
     COMPLETED: '已完成',
     SKIPPED: '已跳过'
   }
-  return map[String(status || '').toUpperCase()] || status || '未知'
+  return map[String(status || '').toUpperCase()] || '状态待确认'
 }
 
 const taskStatusType = (status?: string) => {
@@ -635,13 +774,26 @@ const taskStatusType = (status?: string) => {
   return ''
 }
 
+const taskTypeText = (value?: string) => {
+  const map: Record<string, string> = {
+    PROJECT: '项目表达',
+    INTERVIEW: '模拟面试',
+    ALGORITHM: '算法训练',
+    KNOWLEDGE: '知识巩固',
+    RESUME: '简历优化',
+    REVIEW: '复盘整理',
+    PRACTICE: '专项练习'
+  }
+  return map[String(value || '').toUpperCase()] || '训练任务'
+}
+
 const priorityText = (priority: string) => {
   const map: Record<string, string> = {
     HIGH: '高优先级',
     MEDIUM: '中优先级',
     LOW: '低优先级'
   }
-  return map[String(priority).toUpperCase()] || priority
+  return map[String(priority).toUpperCase()] || '优先级待确认'
 }
 
 const formatPlannedDate = (value?: string) => value || '未规划日期'
@@ -649,7 +801,7 @@ const formatPlannedDate = (value?: string) => value || '未规划日期'
 onMounted(fetchPlans)
 onBeforeUnmount(() => {
   clearPoll()
-  cancelStream()
+  abortStream('dispose')
 })
 </script>
 
@@ -776,6 +928,13 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.stream-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .study-layout {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.4fr);
@@ -854,6 +1013,7 @@ onBeforeUnmount(() => {
 .status-panel {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
   padding: 12px;
@@ -861,6 +1021,18 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: rgba(245, 158, 11, 0.1);
   color: #fde68a;
+}
+
+.status-panel--error {
+  display: grid;
+  align-items: stretch;
+}
+
+.status-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .loading-icon {
@@ -1098,5 +1270,187 @@ onBeforeUnmount(() => {
   .daily-metrics {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.study-plan-page {
+  display: grid;
+  gap: 18px;
+}
+
+.study-hero,
+.content-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  backdrop-filter: none;
+}
+
+.study-hero {
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(240, 253, 250, 0.92)),
+    #ffffff;
+
+  h1 {
+    max-width: 720px;
+    color: #172033;
+    line-height: 1.18;
+  }
+
+  p {
+    max-width: 760px;
+    color: #64748b;
+  }
+}
+
+.eyebrow,
+.section-kicker,
+.task-stage,
+.stream-panel__head {
+  color: #2563eb;
+  letter-spacing: 0;
+}
+
+.section-head,
+.detail-head {
+  h2 {
+    color: #172033;
+  }
+
+  p {
+    color: #64748b;
+  }
+}
+
+.generate-card {
+  margin-bottom: 18px;
+}
+
+.stream-panel {
+  border-color: #bfdbfe;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  pre {
+    color: #334155;
+  }
+}
+
+.plan-list {
+  min-height: 320px;
+}
+
+.plan-item {
+  border-color: #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  &:hover,
+  &.is-active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+  }
+}
+
+.plan-item__main {
+  strong {
+    color: #172033;
+  }
+
+  span {
+    color: #64748b;
+  }
+}
+
+.plan-item__meta {
+  color: #64748b;
+}
+
+.status-panel {
+  border-color: #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.progress-row {
+  color: #64748b;
+}
+
+.daily-view-panel {
+  border-color: #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.daily-view-panel__head {
+  h3 {
+    color: #172033;
+  }
+
+  span {
+    color: #64748b;
+  }
+}
+
+.daily-metric {
+  border-color: #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  span {
+    color: #64748b;
+  }
+
+  strong {
+    color: #172033;
+  }
+
+  &.is-success strong {
+    color: #15803d;
+  }
+
+  &.is-warning strong {
+    color: #b45309;
+  }
+
+  &.is-muted strong {
+    color: #64748b;
+  }
+
+  &.is-primary strong {
+    color: #2563eb;
+  }
+}
+
+.daily-task-item,
+.task-item {
+  border-color: #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  h3 {
+    color: #172033;
+  }
+
+  p {
+    color: #64748b;
+  }
+}
+
+.all-task-head {
+  h3 {
+    color: #172033;
+  }
+
+  span {
+    color: #64748b;
+  }
+}
+
+.task-tags span {
+  border-color: #dbe3ef;
+  background: #f8fafc;
+  color: #475569;
 }
 </style>

@@ -25,7 +25,7 @@
       <el-input v-model="form.technicalChallenges" type="textarea" :rows="3" placeholder="说明性能、并发、数据一致性或工程治理问题" />
     </el-form-item>
     <el-form-item label="优化结果">
-      <el-input v-model="form.optimizationResult" type="textarea" :rows="2" placeholder="填写真实优化结果，不填写无法解释的数据" />
+      <el-input v-model="form.optimizationResult" type="textarea" :rows="2" placeholder="填写采纳后的优化结果，保留可解释、可核实的内容" />
     </el-form-item>
     <div class="project-form-grid">
       <el-form-item label="补充说明">

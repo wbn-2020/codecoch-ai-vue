@@ -2,7 +2,7 @@
   <div class="page-shell v4-version-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 简历版本</div>
+        <div class="v4-eyebrow">简历版本管理</div>
         <h1>简历版本</h1>
         <p>创建快照、复制版本、对比版本差异、回滚版本，并记录 AI 优化建议采纳情况。</p>
       </div>
@@ -24,6 +24,10 @@
           />
         </el-select>
         <el-button :loading="loading || resumeLoading" @click="load">加载</el-button>
+        <el-button :disabled="!resumeId" @click="goResumeMatch()">
+          <GitCompareArrows :size="16" />
+          进入岗位匹配
+        </el-button>
         <el-button type="primary" :disabled="!resumeId" :loading="saving" @click="create">创建版本</el-button>
       </div>
     </section>
@@ -41,29 +45,36 @@
               <h2>版本列表</h2>
             </div>
           </div>
-          <div class="v4-list" v-loading="loading">
-            <article
-              v-for="item in versions"
-              :key="item.id"
-              class="v4-row"
-              :class="{ 'v4-row--selected': selectedVersionId === item.id }"
-            >
+            <div class="v4-list" v-loading="loading">
+            <article v-for="item in versions" :key="item.id" class="v4-row">
               <div class="v4-row-head">
                 <div>
-                  <strong>V{{ item.versionNo ?? '--' }} · {{ item.versionName || `版本 #${item.id}` }}</strong>
-                  <p class="muted">{{ item.sourceType || '--' }} · {{ item.createdAt || '--' }}</p>
+                  <strong>V{{ item.versionNo ?? '--' }} · {{ item.versionName || '简历版本' }}</strong>
+                  <p class="muted">{{ sourceTypeLabel(item.sourceType) }} · {{ item.createdAt || '--' }}</p>
                 </div>
                 <div class="v4-actions">
-                  <el-tag v-if="selectedVersionId === item.id" type="warning">投递关联版本</el-tag>
                   <el-tag v-if="item.currentFlag" type="success">当前版本</el-tag>
                   <el-button link type="primary" @click="showCurrentDiff(item.id)">对比当前</el-button>
                   <el-button link type="primary" @click="openCopy(item)">复制</el-button>
-                  <el-button link type="success" @click="openSuggestion(item)">应用建议</el-button>
+                  <el-button link type="success" @click="openSuggestion(item)">应用版本并记录采纳</el-button>
+                  <el-button link type="primary" @click="goResumeMatch(item.id)">去匹配</el-button>
                   <el-button link type="warning" @click="rollback(item.id)">回滚</el-button>
                 </div>
               </div>
             </article>
-            <el-empty v-if="!versions.length && !loading" description="暂无版本，请输入简历 ID 后创建快照。" />
+            <AppState
+              v-if="!versions.length && !loading"
+              type="empty"
+              :title="versionEmptyTitle"
+              :description="versionEmptyDescription"
+            >
+              <div class="empty-actions">
+                <el-button v-if="!resumeId && !resumes.length" type="primary" @click="goCreateResume">新建简历</el-button>
+                <el-button v-else-if="resumeId" type="primary" :loading="saving" @click="create">创建首个版本</el-button>
+                <el-button v-else type="primary" @click="selectDefaultResume">选择默认简历</el-button>
+                <el-button @click="goResumeHub">返回简历中心</el-button>
+              </div>
+            </AppState>
           </div>
         </div>
       </section>
@@ -74,6 +85,7 @@
             <div>
               <p class="section-kicker">双版本对比</p>
               <h2>对比两个版本</h2>
+              <p class="muted">匹配报告当前按简历正文生成；如需验证历史版本，请先复制或回滚为当前简历后再进入匹配。</p>
             </div>
           </div>
           <div class="pair-diff-bar">
@@ -97,11 +109,18 @@
           <strong>{{ diff?.targetLabel || '版本/目标' }}</strong>
         </div>
         <div v-for="field in diff?.fields || []" :key="field.field" class="diff-row" :class="{ changed: field.changed }">
-          <strong>{{ field.field }}</strong>
+          <strong>{{ formatFieldLabel(field.field) }}</strong>
           <span>{{ formatValue(field.sourceValue ?? field.currentValue) }}</span>
           <span>{{ formatValue(field.targetValue ?? field.versionValue) }}</span>
         </div>
-        <el-empty v-if="!(diff?.fields || []).length" description="暂无差异字段" />
+        <AppState
+          v-if="!(diff?.fields || []).length"
+          type="empty"
+          title="没有可展示的差异字段"
+          description="两个版本可能内容一致，或本次对比暂未返回字段明细。可以换一组版本对比，或回到版本列表确认版本号。"
+        >
+          <el-button type="primary" plain @click="diffVisible = false">返回版本列表</el-button>
+        </AppState>
       </div>
     </el-dialog>
 
@@ -117,13 +136,23 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="suggestionVisible" title="应用 AI 建议" width="520px">
+    <el-dialog v-model="suggestionVisible" title="应用版本并记录 AI 建议采纳" width="520px">
+      <el-alert
+        class="suggestion-apply-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="该操作会改写当前简历正文"
+        description="系统会先把当前简历恢复为选中的版本快照，再保存一条 AI 建议采纳记录。只想保留证据时，请先复制版本或取消操作。"
+      />
       <el-form label-position="top">
-        <el-form-item label="优化记录 ID">
+        <el-form-item label="关联优化记录">
           <el-input-number v-model="suggestionForm.optimizeRecordId" :min="1" controls-position="right" />
         </el-form-item>
         <el-form-item label="建议类型">
-          <el-input v-model.trim="suggestionForm.suggestionType" placeholder="PROJECT_DEPTH / KEYWORD / CUSTOM" />
+          <el-select v-model="suggestionForm.suggestionType" clearable allow-create filterable placeholder="选择或输入建议类型" style="width: 100%">
+            <el-option v-for="item in suggestionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="suggestionForm.status" style="width: 100%">
@@ -138,23 +167,23 @@
       </el-form>
       <template #footer>
         <el-button @click="suggestionVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="applySuggestion">应用</el-button>
+        <el-button type="primary" :loading="saving" @click="applySuggestion">应用版本并记录</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { GitCompareArrows } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { getResumesApi } from '@/api/resume'
 import {
   applyResumeVersionSuggestionApi,
   copyResumeVersionApi,
   createResumeVersionApi,
-  getResumeVersionDetailApi,
   getResumeVersionDiffApi,
   getResumeVersionsApi,
   getResumeVersionsPairDiffApi,
@@ -164,12 +193,14 @@ import {
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import type { ResumeVO } from '@/types/resume'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
+const router = useRouter()
 const initialResumeId = Number(route.params.id)
 const resumeId = ref<number | undefined>(Number.isFinite(initialResumeId) && initialResumeId > 0 ? initialResumeId : undefined)
-const selectedVersionId = ref<number | undefined>()
 const resumes = ref<ResumeVO[]>([])
 const loading = ref(false)
 const resumeLoading = ref(false)
@@ -193,48 +224,138 @@ const suggestionForm = reactive({
   note: ''
 })
 
+const suggestionTypeOptions = [
+  { label: '项目深度', value: 'PROJECT_DEPTH' },
+  { label: '关键词优化', value: 'KEYWORD' },
+  { label: '自定义建议', value: 'CUSTOM' }
+]
+
+const suggestionStatusLabels: Record<string, string> = {
+  APPLIED: '已采纳',
+  REJECTED: '已拒绝',
+  PARTIAL: '部分采纳'
+}
+
+const selectedResume = computed(() => resumes.value.find((item) => item.id === resumeId.value))
+const selectedResumeLabel = computed(() => selectedResume.value ? resumeLabel(selectedResume.value) : '已选择简历')
+
+const versionEmptyTitle = computed(() => {
+  if (!resumeId.value) return '先选择一份简历'
+  return '这份简历还没有版本'
+})
+
+const versionEmptyDescription = computed(() => {
+  if (!resumeId.value && !resumes.value.length) {
+    return '简历版本会围绕具体简历生成快照；先在简历中心创建或上传简历，再回来做版本对比。'
+  }
+  if (!resumeId.value) {
+    return '选择上方简历后，可以创建首个快照，用来对比后续优化前后的变化。'
+  }
+  return `当前选择的是「${selectedResumeLabel.value}」，创建首个版本后才能复制、对比或回滚。`
+})
+
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, '简历版本暂时加载失败，请稍后重试。')
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
-}
-
-const getQueryNumber = (name: string) => {
-  const value = route.query[name]
-  const first = Array.isArray(value) ? value[0] : value
-  const parsed = Number(first)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-}
-
-const getRouteResumeId = () => {
-  const value = Number(route.params.id)
-  return Number.isFinite(value) && value > 0 ? value : undefined
+  return '简历版本暂时加载失败，请稍后重试。'
 }
 
 const versionLabel = (item: ResumeVersionVO) =>
-  `V${item.versionNo ?? '--'} · ${item.versionName || `#${item.id}`}`
+  `V${item.versionNo ?? '--'} · ${item.versionName || '简历版本'}`
+
+const suggestionTypeLabel = (value?: string) =>
+  suggestionTypeOptions.find((item) => item.value === value)?.label || value || '未选择建议类型'
+
+const suggestionStatusLabel = (value?: string) =>
+  suggestionStatusLabels[String(value || '').toUpperCase()] || value || '未选择状态'
 
 const resumeLabel = (item: ResumeVO) =>
-  `${item.resumeName || item.title || `简历 #${item.id}`}${item.targetPosition ? ` / ${item.targetPosition}` : ''}`
+  `${item.resumeName || item.title || '简历'}${item.targetPosition ? ` / ${item.targetPosition}` : ''}`
+
+const sourceTypeLabel = (value?: string | null) => {
+  const type = String(value || '').toUpperCase()
+  const map: Record<string, string> = {
+    MANUAL: '手动创建',
+    AI_OPTIMIZE: 'AI 优化记录',
+    COPY: '复制版本',
+    ROLLBACK: '回滚生成',
+    UPLOAD: '上传简历'
+  }
+  return type ? map[type] || '来源待确认' : '--'
+}
+
+const diffFieldLabels: Record<string, string> = {
+  resumeName: '简历名称',
+  title: '标题',
+  targetPosition: '目标岗位',
+  summary: '摘要',
+  education: '教育经历',
+  workExperience: '工作经历',
+  projectExperience: '项目经历',
+  skills: '技能',
+  skillTags: '技能标签',
+  certificates: '证书',
+  languages: '语言能力',
+  advantages: '优势',
+  selfEvaluation: '自我评价',
+  expectedSalary: '期望薪资',
+  city: '城市',
+  content: '内容',
+  description: '说明'
+}
+
+const formatFieldLabel = (field?: string | null) => {
+  const value = String(field || '').trim()
+  if (!value) return '字段'
+  return diffFieldLabels[value] || value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
+}
+
+const isDiffRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const formatDiffStructuredValue = (value: unknown, depth = 0): string => {
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  const indent = '  '.repeat(depth)
+  if (Array.isArray(value)) {
+    if (!value.length) return ''
+    return value
+      .map((item, index) => {
+        const formatted = formatDiffStructuredValue(item, depth + 1)
+        if (!formatted) return ''
+        return `${indent}${index + 1}. ${isDiffRecord(item) || Array.isArray(item) ? '\n' : ''}${formatted}`
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  if (isDiffRecord(value)) {
+    return Object.entries(value)
+      .map(([key, item]) => {
+        const formatted = formatDiffStructuredValue(item, depth + 1)
+        if (!formatted) return ''
+        return `${indent}- ${formatFieldLabel(key)}：${isDiffRecord(item) || Array.isArray(item) ? '\n' : ''}${formatted}`
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return String(value)
+}
 
 const formatValue = (value: unknown) => {
   if (value === undefined || value === null || value === '') return '--'
   if (typeof value === 'string') return value
-  return JSON.stringify(value)
+  return formatDiffStructuredValue(value) || '--'
 }
 
 const load = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    selectedVersionId.value = getQueryNumber('versionId')
-    const routeResumeId = getRouteResumeId()
-    if (routeResumeId) {
-      resumeId.value = routeResumeId
-    } else if (selectedVersionId.value) {
-      resumeId.value = undefined
-    }
     if (!(await ensureResumeId())) {
       versions.value = []
       return
@@ -250,14 +371,53 @@ const load = async () => {
 
 const create = async () => {
   if (!(await ensureResumeId())) return
+  const versionName = `V${versions.value.length + 1}`
+  const confirmed = await confirmDangerActionPreview({
+    title: '创建简历版本',
+    action: '为当前简历创建一份可追溯快照',
+    target: `${selectedResumeLabel.value} · ${versionName}`,
+    impact: '新版本会进入版本列表，后续复制、对比、回滚、AI 优化建议采纳和面试/训练证据追踪都可能引用这份快照。',
+    rollback: '创建快照不会覆盖当前简历；如版本名称或来源不符合预期，可以后续复制、对比或回滚到其它版本。',
+    audit: '创建版本会记录当前简历、版本号和账号信息，便于追踪后续投递和训练依据。',
+    tips: ['确认当前简历内容已经保存。', '确认这份快照适合作为后续优化前后的对比基准。'],
+    confirmButtonText: '确认创建'
+  })
+  if (!confirmed) return
   saving.value = true
   try {
-    await createResumeVersionApi(resumeId.value as number, { versionName: `V${versions.value.length + 1}` })
+    await createResumeVersionApi(resumeId.value as number, { versionName })
     ElMessage.success('版本已创建')
     await load()
   } finally {
     saving.value = false
   }
+}
+
+const selectDefaultResume = async () => {
+  if (!resumes.value.length) {
+    await loadResumeOptions()
+  }
+  const defaultResume = resumes.value.find((item) => item.isDefault === 1) || resumes.value[0]
+  if (!defaultResume?.id) {
+    ElMessage.info('请先创建一份简历')
+    return
+  }
+  resumeId.value = defaultResume.id
+  await load()
+}
+
+const goCreateResume = () => router.push('/resumes/create')
+const goResumeHub = () => router.push('/resumes')
+const goResumeMatch = (resumeVersionId?: number) => {
+  if (!resumeId.value) return
+  router.push({
+    path: '/resume-match',
+    query: {
+      resumeId: String(resumeId.value),
+      source: 'resume-version',
+      ...(resumeVersionId ? { resumeVersionId: String(resumeVersionId) } : {})
+    }
+  })
 }
 
 const openCopy = (item: ResumeVersionVO) => {
@@ -267,10 +427,24 @@ const openCopy = (item: ResumeVersionVO) => {
 }
 
 const copyVersion = async () => {
-  if (!copySource.value) return
+  if (!copySource.value || saving.value) return
+  if (!(await ensureResumeId())) return
+  const source = copySource.value
+  const versionName = copyName.value || `${source.versionName || `V${source.versionNo ?? source.id}`} 副本`
+  const confirmed = await confirmDangerActionPreview({
+    title: '复制简历版本预览',
+    action: '复制一份历史版本作为新的可追溯快照',
+    target: `${selectedResumeLabel.value} · ${versionLabel(source)}；复制为：${versionName}`,
+    impact: '复制后会新增一条简历版本，后续对比、回滚、AI 优化建议采纳和面试/训练证据追踪都可能引用这份副本。',
+    rollback: '复制不会覆盖当前简历正文；如副本名称或来源不合适，可以继续复制其他版本或回滚到合适版本。',
+    audit: '复制操作会记录当前简历、来源版本和新版本名称。',
+    tips: ['确认来源版本就是要保留的内容。', '建议使用能说明用途的版本名称，方便后续对比。'],
+    confirmButtonText: '确认复制版本'
+  })
+  if (!confirmed) return
   saving.value = true
   try {
-    await copyResumeVersionApi(resumeId.value as number, copySource.value.id, { versionName: copyName.value || undefined })
+    await copyResumeVersionApi(resumeId.value as number, source.id, { versionName })
     copyVisible.value = false
     ElMessage.success('版本已复制')
     await load()
@@ -292,9 +466,25 @@ const showPairDiff = async () => {
 }
 
 const rollback = async (versionId: number) => {
-  await ElMessageBox.confirm('确认回滚到该版本？', '回滚确认', { type: 'warning' })
   if (!(await ensureResumeId())) return
-  await rollbackResumeVersionApi(resumeId.value as number, versionId)
+  const version = versions.value.find((item) => item.id === versionId)
+  const confirmed = await confirmDangerActionPreview({
+    title: '回滚简历版本',
+    action: '将当前简历回滚到选中的历史版本',
+    target: version?.versionName || '选中的简历版本',
+    impact: '当前简历内容会按该版本恢复，后续简历匹配、面试追问和训练推荐可能使用回滚后的内容作为证据。',
+    rollback: '如需恢复其他版本，需要再次从版本列表选择并回滚；页面不会自动保存本次回滚前的临时编辑内容。',
+    audit: '回滚操作会记录当前简历和目标版本，便于后续追踪来源。',
+    tips: ['确认当前简历没有未保存的编辑。', '确认该版本内容适合作为后续投递和训练依据。'],
+    confirmButtonText: '确认回滚'
+  })
+  if (!confirmed) return
+  await rollbackResumeVersionApi(resumeId.value as number, versionId, {
+    confirm: true,
+    dryRun: false,
+    reason: 'user resume rollback version',
+    idempotencyKey: createOperationIdempotencyKey(`resume-version-rollback-${versionId}`)
+  })
   ElMessage.success('版本已回滚')
   await load()
 }
@@ -311,14 +501,34 @@ const openSuggestion = (item: ResumeVersionVO) => {
 }
 
 const applySuggestion = async () => {
-  if (!suggestionVersion.value) return
+  if (!suggestionVersion.value || saving.value) return
+  const version = suggestionVersion.value
+  const confirmed = await confirmDangerActionPreview({
+    title: '记录 AI 建议采纳预览',
+    action: '把当前简历恢复为该版本快照，并保存这条 AI 建议采纳状态',
+    target: `${versionLabel(version)}；状态：${suggestionStatusLabel(suggestionForm.status)}`,
+    impact: '确认后当前简历正文会被该版本快照覆盖，并形成一条 AI 优化建议采纳记录；后续简历匹配、面试追问和训练推荐可能使用覆盖后的内容作为证据。',
+    rollback: '如需恢复覆盖前内容，需要从版本列表选择其他版本回滚；采纳记录如不准确，可以再次补充采纳状态或备注修正。',
+    audit: `关联优化记录：${suggestionForm.optimizeRecordId || '未关联'}；建议类型：${suggestionTypeLabel(suggestionForm.suggestionType)}`,
+    tips: [
+      '确认该版本快照适合成为当前简历正文后再继续。',
+      '确认采纳状态和备注能说明为什么采用或拒绝这条建议。',
+      suggestionForm.note ? '备注会作为后续复盘线索，请避免填写无关隐私内容。' : '建议补充一句备注，方便之后回看。'
+    ],
+    confirmButtonText: '确认应用并记录'
+  })
+  if (!confirmed) return
   saving.value = true
   try {
-    await applyResumeVersionSuggestionApi(suggestionVersion.value.id, {
+    await applyResumeVersionSuggestionApi(version.id, {
       optimizeRecordId: suggestionForm.optimizeRecordId,
       suggestionType: suggestionForm.suggestionType || undefined,
       status: suggestionForm.status,
-      note: suggestionForm.note || undefined
+      note: suggestionForm.note || undefined,
+      confirm: true,
+      dryRun: false,
+      reason: 'user resume apply ai suggestion',
+      idempotencyKey: createOperationIdempotencyKey(`resume-version-apply-${version.id}`)
     })
     suggestionVisible.value = false
     ElMessage.success('建议采纳记录已保存')
@@ -345,37 +555,19 @@ const ensureResumeId = async () => {
   if (resumeId.value) {
     return true
   }
-  if (selectedVersionId.value) {
-    const version = await getResumeVersionDetailApi(selectedVersionId.value).catch(() => null)
-    if (version?.resumeId) {
-      resumeId.value = version.resumeId
-      return true
-    }
-    selectedVersionId.value = undefined
-  }
   if (!resumes.value.length) {
     await loadResumeOptions()
   }
   if (!resumeId.value) {
-    errorMessage.value = '请先创建一份简历，再使用简历版本功能'
     return false
   }
   return true
 }
 
 onMounted(async () => {
-  selectedVersionId.value = getQueryNumber('versionId')
   await loadResumeOptions()
   await load()
 })
-
-watch(
-  () => route.query.versionId,
-  async () => {
-    selectedVersionId.value = getQueryNumber('versionId')
-    await load()
-  }
-)
 </script>
 
 <style scoped lang="scss">
@@ -428,6 +620,17 @@ watch(
   align-items: center;
 }
 
+.suggestion-apply-alert {
+  margin-bottom: 14px;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .section-head {
   align-items: flex-start;
   justify-content: space-between;
@@ -448,11 +651,6 @@ watch(
   border: 1px solid var(--app-border);
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.58);
-}
-
-.v4-row--selected {
-  border-color: rgba(251, 191, 36, 0.52);
-  background: rgba(251, 191, 36, 0.08);
 }
 
 .v4-row-head {

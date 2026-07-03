@@ -11,10 +11,8 @@ const props = defineProps<{
 }>()
 
 const label = computed(() => {
-  if (props.map && props.status !== undefined && props.status !== null) {
-    return props.map[String(props.status)] || String(props.status)
-  }
-
+  const value = props.status === undefined || props.status === null ? '' : String(props.status)
+  if (props.map && value && props.map[value]) return props.map[value]
   if (props.status === 1 || props.status === true) return '启用'
   if (props.status === 0 || props.status === false) return '禁用'
   const builtinMap: Record<string, string> = {
@@ -37,10 +35,8 @@ const label = computed(() => {
     VAGUE: '模糊',
     UNKNOWN: '未掌握'
   }
-  if (props.status !== undefined && props.status !== null && builtinMap[String(props.status)]) {
-    return builtinMap[String(props.status)]
-  }
-  return props.status ? String(props.status) : '-'
+  if (value && builtinMap[value]) return builtinMap[value]
+  return value ? '状态待确认' : '-'
 })
 
 const type = computed(() => {

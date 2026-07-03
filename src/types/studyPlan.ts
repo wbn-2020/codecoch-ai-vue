@@ -46,6 +46,13 @@ export interface StudyPlanGenerateVO {
   planStatus: StudyPlanStatus
   planTitle?: string
   taskCount?: number
+  skillGapCount?: number
+  aiCallLogId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   failureReason?: string
 }
 

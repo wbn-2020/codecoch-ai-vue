@@ -18,6 +18,7 @@ import type {
   InterviewReportSseEvent,
   InterviewReportSseEventType,
   InterviewReportSseParams,
+  InterviewReportNextActionVO,
   InterviewReportVO,
   InterviewSessionVO,
   RetryReportVO
@@ -79,7 +80,6 @@ const normalizeQuestion = (question: any) => {
 const normalizeCurrent = (current: any): InterviewCurrentVO => ({
   ...current,
   interviewId: current.interviewId || current.id,
-  applicationId: current.applicationId,
   sessionId: current.sessionId || current.interviewId || current.id,
   status: current.interviewStatus || current.status,
   interviewStatus: current.interviewStatus || current.status,
@@ -90,7 +90,6 @@ const normalizeCurrent = (current: any): InterviewCurrentVO => ({
 const normalizeSession = (session: any): InterviewSessionVO => ({
   ...session,
   interviewId: session.interviewId || session.id,
-  applicationId: session.applicationId,
   interviewName: session.interviewName || session.title,
   interviewMode: session.interviewMode || session.mode,
   stageList: (session.stageList || session.stages || []).map(normalizeStage)
@@ -162,11 +161,183 @@ const parseArrayValue = <T>(value: T[] | string | undefined | null): T[] => {
   }
 }
 
+const pickValue = (source: any, keys: string[]) => {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null && source?.[key] !== '') {
+      return source[key]
+    }
+  }
+  return undefined
+}
+
+const normalizeOptionalNumber = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : undefined
+}
+
+const normalizeTextArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value !== 'string') return []
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim()).filter(Boolean)
+    }
+  } catch {
+    // split plain text below
+  }
+  return trimmed
+    .split(/[,\n;锛涖€侊紝]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const normalizeMissingSkills = (value: unknown) =>
+  parseArrayValue<any>(value as any)
+    .map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+      const skillName = String(pickValue(item, ['skillName', 'skill_name', 'name']) || '').trim()
+      if (!skillName) return null
+      return {
+        id: normalizeOptionalNumber(pickValue(item, ['id', 'gapItemId', 'gap_item_id'])),
+        skillName,
+        severity: String(pickValue(item, ['severity', 'gapSeverity', 'gap_severity']) || ''),
+        gapDescription: String(pickValue(item, ['gapDescription', 'gap_description', 'description']) || ''),
+        recommendedActions: normalizeTextArray(pickValue(item, ['recommendedActions', 'recommended_actions', 'recommendedActionsJson', 'recommended_actions_json'])),
+        priority: normalizeOptionalNumber(pickValue(item, ['priority', 'rank'])),
+        sourceType: String(pickValue(item, ['sourceType', 'source_type']) || ''),
+        sourceBizId: normalizeOptionalNumber(pickValue(item, ['sourceBizId', 'source_biz_id']))
+      }
+    })
+    .filter(Boolean)
+
+const normalizeRecommendedQuestions = (value: any): Array<Record<string, any> | string> => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item
+      if (item && typeof item === 'object') return item
+      return null
+    })
+    .filter(Boolean) as Array<Record<string, any> | string>
+}
+
+const isSuccessfulReportStatus = (status?: unknown) =>
+  ['GENERATED', 'SUCCESS', 'COMPLETED'].includes(String(status || '').toUpperCase())
+
+const normalizeNextActions = (
+  source: any,
+  reportId?: number,
+  interviewId?: number,
+  reportStatus?: unknown
+): InterviewReportNextActionVO[] => {
+  if (!isSuccessfulReportStatus(reportStatus)) return []
+
+  const actions = Array.isArray(source?.nextActions) ? source.nextActions : []
+  const normalized = actions
+    .map((item: any, index: number) => {
+      if (!item || typeof item !== 'object') return null
+      return {
+        actionType: String(item.actionType || ''),
+        title: String(item.title || ''),
+        description: String(item.description || ''),
+        priority: Number(item.priority || index + 1),
+        actionUrl: String(item.actionUrl || ''),
+        actionSource: String(item.actionSource || 'BACKEND'),
+        relatedBizType: String(item.relatedBizType || ''),
+        relatedBizId: item.relatedBizId !== undefined && item.relatedBizId !== null ? Number(item.relatedBizId) : undefined,
+        evidence: String(item.evidence || '')
+      } as InterviewReportNextActionVO
+    })
+    .filter((item: InterviewReportNextActionVO | null): item is InterviewReportNextActionVO =>
+      Boolean(item?.actionType && item.title)
+    )
+    .sort((left: InterviewReportNextActionVO, right: InterviewReportNextActionVO) =>
+      (left.priority || 0) - (right.priority || 0)
+    )
+
+  if (normalized.length) return normalized
+
+  const recommendedQuestions = normalizeRecommendedQuestions(source?.recommendedQuestions)
+  const hasQuestions = recommendedQuestions.length > 0
+  const hasProblems = Boolean(source?.mainProblems || source?.weaknesses || source?.projectProblems || source?.projectExpressionProblems)
+  const canStudyPlan = Boolean(reportId)
+  const canInterview = Boolean(interviewId)
+  const fallback: InterviewReportNextActionVO[] = []
+  if (hasQuestions) {
+    fallback.push({
+      actionType: 'QUESTION_PRACTICE',
+      title: '练推荐题',
+      description: '把报告里的推荐题转成下一轮练习。',
+      priority: 1,
+      actionUrl: reportId
+        ? `/questions/practice?mode=recommended&source=interviewReport&reportId=${reportId}`
+        : '/questions/practice?mode=recommended&source=interviewReport',
+      actionSource: 'STATIC_FALLBACK',
+      relatedBizType: 'INTERVIEW_REPORT',
+      relatedBizId: reportId,
+      evidence: '推荐题可用'
+    })
+  }
+  if (canStudyPlan) {
+    fallback.push({
+      actionType: 'STUDY_PLAN',
+      title: '生成学习计划',
+      description: '把复盘建议转成可执行计划。',
+      priority: fallback.length + 1,
+      actionUrl: `/study-plans?source=interviewReport&reportId=${reportId}`,
+      actionSource: 'STATIC_FALLBACK',
+      relatedBizType: 'INTERVIEW_REPORT',
+      relatedBizId: reportId,
+      evidence: source?.summary || source?.reportContent || ''
+    })
+  }
+  if (canInterview) {
+    fallback.push({
+      actionType: 'INTERVIEW',
+      title: '开启下一轮模拟面试',
+      description: '基于这次复盘继续练下一轮。',
+      priority: fallback.length + 1,
+      actionUrl: reportId
+        ? `/interviews/create?source=interviewReport&reportId=${reportId}&interviewId=${interviewId}`
+        : '/interviews/create',
+      actionSource: 'STATIC_FALLBACK',
+      relatedBizType: 'INTERVIEW_SESSION',
+      relatedBizId: interviewId,
+      evidence: source?.evidenceSummary || ''
+    })
+  }
+  if (hasProblems) {
+    fallback.push({
+      actionType: 'RESUME_OPTIMIZE',
+      title: '优化简历与项目表达',
+      description: '把主要问题补回简历和项目经历。',
+      priority: fallback.length + 1,
+      actionUrl: reportId ? `/resumes?source=interviewReport&reportId=${reportId}` : '/resumes',
+      actionSource: 'STATIC_FALLBACK',
+      relatedBizType: 'INTERVIEW_REPORT',
+      relatedBizId: reportId,
+      evidence: source?.mainProblems || source?.projectProblems || source?.projectExpressionProblems || source?.weaknesses || ''
+    })
+  }
+  return fallback
+}
+
 const normalizeFinish = (result: any, interviewId: number): FinishInterviewVO => ({
   ...result,
   interviewId: result.interviewId || result.id || interviewId,
   reportId: result.reportId || result.report?.id,
-  message: result.message || '面试已结束'
+  message: result.message || '面试已结束',
+  asyncMessageId: result.asyncMessageId || result.messageId || result.report?.asyncMessageId,
+  asyncTraceId: result.asyncTraceId || result.traceId || result.report?.asyncTraceId,
+  asyncBizType: result.asyncBizType || result.bizType || result.report?.asyncBizType,
+  asyncBizId: result.asyncBizId || result.bizId || result.report?.asyncBizId,
+  asyncSendStatus: result.asyncSendStatus || result.sendStatus || result.report?.asyncSendStatus
 })
 
 const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterviewVO => ({
@@ -175,13 +346,17 @@ const normalizeAsyncFinish = (result: any, interviewId: number): FinishInterview
   status: result.status || result.interviewStatus || 'REPORT_GENERATING',
   reportStatus: result.reportStatus || result.report?.status || result.report?.reportStatus || 'GENERATING',
   reportId: result.reportId || result.report?.id,
-  message: result.message || '面试已结束，报告正在生成'
+  message: result.message || '面试已结束，报告正在生成',
+  asyncMessageId: result.asyncMessageId || result.messageId || result.report?.asyncMessageId,
+  asyncTraceId: result.asyncTraceId || result.traceId || result.report?.asyncTraceId,
+  asyncBizType: result.asyncBizType || result.bizType || result.report?.asyncBizType,
+  asyncBizId: result.asyncBizId || result.bizId || result.report?.asyncBizId,
+  asyncSendStatus: result.asyncSendStatus || result.sendStatus || result.report?.asyncSendStatus
 })
 
 const normalizeListItem = (item: any): InterviewListVO => ({
   ...item,
   interviewId: item.interviewId || item.id,
-  applicationId: item.applicationId,
   interviewName: item.interviewName || item.title,
   interviewMode: item.interviewMode || item.mode,
   questionCount: item.questionCount || item.answeredQuestionCount,
@@ -193,7 +368,6 @@ const normalizeListItem = (item: any): InterviewListVO => ({
 const normalizeDetail = (detail: any): InterviewDetailVO => ({
   ...detail,
   interviewId: detail.interviewId || detail.id,
-  applicationId: detail.applicationId,
   interviewName: detail.interviewName || detail.title,
   interviewMode: detail.interviewMode || detail.mode,
   stages: (detail.stages || []).map(normalizeStage),
@@ -211,16 +385,25 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
   const source = { ...nestedReport, ...report }
   const status = source.reportStatus || source.status || nestedReport.status || nestedReport.reportStatus
   const hasReportContent = Boolean(source.totalScore || source.summary || source.reportContent || source.generatedAt || source.createdAt)
+  const reportId = source.id || source.reportId
+  const sourceInterviewId = source.interviewId || source.sessionId || interviewId
+  const reportStatus = status || (hasReportContent ? 'GENERATED' : 'NOT_GENERATED')
 
   return {
     ...source,
-    id: source.id || source.reportId,
-    reportId: source.reportId || source.id,
-    interviewId: source.interviewId || source.sessionId || interviewId,
-    applicationId: source.applicationId,
+    id: reportId,
+    reportId,
+    interviewId: sourceInterviewId,
     sessionId: source.sessionId || source.interviewId || interviewId,
+    targetJobId: normalizeOptionalNumber(pickValue(source, ['targetJobId', 'target_job_id'])),
+    skillProfileId: normalizeOptionalNumber(pickValue(source, ['skillProfileId', 'skill_profile_id'])),
+    matchReportId: normalizeOptionalNumber(pickValue(source, ['matchReportId', 'match_report_id'])),
+    targetJobTitle: String(pickValue(source, ['targetJobTitle', 'target_job_title', 'jobTitle', 'job_title']) || ''),
+    targetCompanyName: String(pickValue(source, ['targetCompanyName', 'target_company_name', 'companyName', 'company_name']) || ''),
+    jdEvidenceSummary: String(pickValue(source, ['jdEvidenceSummary', 'jd_evidence_summary']) || ''),
+    missingSkills: normalizeMissingSkills(pickValue(source, ['missingSkills', 'missing_skills'])),
     status,
-    reportStatus: status || (hasReportContent ? 'GENERATED' : 'NOT_GENERATED'),
+    reportStatus,
     stageReports: parseArrayValue(source.stageReports || source.stageScores),
     stageScores: parseArrayValue(source.stageScores || source.stageReports),
     weakPoints: source.weakPoints || source.weakKnowledgePoints || [],
@@ -238,15 +421,26 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
     adviceEvidence: parseArrayValue(source.adviceEvidence || source.adviceItems || source.recommendations),
     abilityProfileUpdates: parseArrayValue(source.abilityProfileUpdates || source.abilityUpdates),
     messages: parseArrayValue(source.messages || source.qaReview || source.questionReviews),
+    recommendedQuestions: normalizeRecommendedQuestions(source.recommendedQuestions),
+    nextActions: normalizeNextActions(source, reportId, sourceInterviewId, reportStatus),
     summary: source.summary || source.reportContent || '',
     reportContent: source.reportContent || source.summary || '',
     generatedAt: source.generatedAt || source.createdAt,
-    failedReason: source.failedReason || source.failureReason || source.errorMessage || ''
+    failedReason: source.failedReason || source.failureReason || source.errorMessage || '',
+    asyncMessageId: source.asyncMessageId || source.messageId,
+    asyncTraceId: source.asyncTraceId || source.traceId,
+    asyncBizType: source.asyncBizType || source.bizType,
+    asyncBizId: source.asyncBizId || source.bizId,
+    asyncSendStatus: source.asyncSendStatus || source.sendStatus,
+    sourceType: source.sourceType,
+    sourceId: source.sourceId,
+    trustStatus: source.trustStatus,
+    evidenceSummary: source.evidenceSummary,
+    fallback: source.fallback
   }
 }
 
 const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDTO) => ({
-  applicationId: data.applicationId,
   interviewMode: data.interviewMode,
   resumeId: data.resumeId,
   title: data.interviewName,
@@ -257,6 +451,10 @@ const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDT
   industryDirection: data.industryDirection,
   difficulty: data.difficulty,
   interviewerStyle: data.interviewerStyle,
+  practiceMode: data.practiceMode,
+  recommendationSource: data.recommendationSource,
+  recommendationReason: data.recommendationReason,
+  applicationId: data.applicationId,
   basedOnResume: data.basedOnResume ?? Boolean(data.resumeId),
   trainingScene: data.trainingScene,
   targetSkillDomain: data.targetSkillDomain,

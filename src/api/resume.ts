@@ -26,26 +26,46 @@ import type {
 import { normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse } from '@/utils/sse'
 
-const normalizeProject = (project: ResumeProjectVO): ResumeProjectVO => ({
-  ...project,
-  projectId: project.projectId || project.id || 0,
-  projectTime: project.projectTime || project.projectPeriod || '',
-  projectPeriod: project.projectPeriod || project.projectTime || '',
-  projectBackground: project.projectBackground || project.description || '',
-  responsibility: project.responsibility || project.role || '',
-  coreFeatures: project.coreFeatures || project.highlights || '',
-  technicalChallenges: project.technicalChallenges || project.technicalDifficulties || '',
-  technicalDifficulties: project.technicalDifficulties || project.technicalChallenges || '',
-  optimizationResult: project.optimizationResult || project.optimizationResults || '',
-  optimizationResults: project.optimizationResults || project.optimizationResult || '',
-  sort: project.sort ?? project.sortOrder ?? 0,
-  sortOrder: project.sortOrder ?? project.sort ?? 0
-})
+type UnknownRecord = Record<string, unknown>
+type LegacyResumeProjectRecord = Partial<ResumeProjectVO> & {
+  description?: string
+}
 
-const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T): T => {
-  const item = resume as T & Partial<ResumeVO & ResumeDetailVO>
+const isRecord = (value: unknown): value is UnknownRecord =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+const toPositiveId = (value: unknown) => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0
+}
+
+const normalizeProject = (project: ResumeProjectVO | null | undefined): ResumeProjectVO => {
+  const item: LegacyResumeProjectRecord = isRecord(project) ? project as LegacyResumeProjectRecord : {}
   return {
     ...item,
+    projectId: toPositiveId(item.projectId || item.id),
+    projectTime: item.projectTime || item.projectPeriod || '',
+    projectPeriod: item.projectPeriod || item.projectTime || '',
+    projectBackground: item.projectBackground || item.description || '',
+    responsibility: item.responsibility || item.role || '',
+    coreFeatures: item.coreFeatures || item.highlights || '',
+    technicalChallenges: item.technicalChallenges || item.technicalDifficulties || '',
+    technicalDifficulties: item.technicalDifficulties || item.technicalChallenges || '',
+    optimizationResult: item.optimizationResult || item.optimizationResults || '',
+    optimizationResults: item.optimizationResults || item.optimizationResult || '',
+    sort: item.sort ?? item.sortOrder ?? 0,
+    sortOrder: item.sortOrder ?? item.sort ?? 0
+  } as ResumeProjectVO
+}
+
+const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T | null | undefined): T => {
+  const item = isRecord(resume)
+    ? resume as T & Partial<ResumeVO & ResumeDetailVO>
+    : {} as T & Partial<ResumeVO & ResumeDetailVO>
+  const projects = Array.isArray(item.projects) ? item.projects.map(normalizeProject) : []
+  return {
+    ...item,
+    id: toPositiveId(item.id),
     resumeName: item.resumeName || item.title || '',
     targetPosition: item.targetPosition || '',
     skills: item.skills || item.skillStack || '',
@@ -54,8 +74,31 @@ const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T): T => {
     workExperience: item.workExperience || item.workSummary || '',
     education: item.education || item.educationExperience || '',
     educationExperience: item.educationExperience || item.education || '',
-    projects: item.projects?.map(normalizeProject) || []
+    isDefault: item.isDefault ?? 0,
+    status: item.status ?? 0,
+    projects
   } as T
+}
+
+const normalizeResumeListItem = (resume: ResumeVO | null | undefined) => {
+  const item = normalizeResume<ResumeVO>(resume)
+  return item.id ? item : null
+}
+
+const requireResumeDetail = (resume: ResumeDetailVO | null | undefined) => {
+  const item = normalizeResume<ResumeDetailVO>(resume)
+  if (!item.id) {
+    throw new Error('简历详情暂时不可用，请返回简历清单重新选择。')
+  }
+  return item
+}
+
+const requireProjectResult = (project: ResumeProjectVO | null | undefined) => {
+  const item = normalizeProject(project)
+  if (!item.projectId) {
+    throw new Error('项目经历保存结果暂时不可用，请刷新后确认。')
+  }
+  return item
 }
 
 const toResumePayload = (data: ResumeCreateDTO | ResumeUpdateDTO) => ({
@@ -79,11 +122,11 @@ const toProjectPayload = (data: ResumeProjectDTO) => ({
   projectName: data.projectName,
   projectPeriod: data.projectPeriod || data.projectTime,
   projectTime: data.projectTime || data.projectPeriod,
-  projectBackground: data.projectBackground || data.description,
+  projectBackground: data.projectBackground,
   role: data.role || data.responsibility,
   responsibility: data.responsibility || data.role,
   techStack: data.techStack,
-  description: data.description || data.projectBackground,
+  description: data.projectBackground,
   coreFeatures: data.coreFeatures,
   technicalDifficulties: data.technicalDifficulties || data.technicalChallenges,
   technicalChallenges: data.technicalChallenges || data.technicalDifficulties,
@@ -103,13 +146,19 @@ export const getResumesApi = (params?: ResumeQueryDTO) => {
     .get<PageResult<ResumeVO> | ResumeVO[], PageResult<ResumeVO> | ResumeVO[]>('/resumes', {
       params
     })
-    .then((result) => normalizePageResult(result, params, normalizeResume))
+    .then((result) => {
+      const page = normalizePageResult<ResumeVO, ResumeVO | null>(result, params, normalizeResumeListItem, { allowArrayFallback: true })
+      return {
+        ...page,
+        records: page.records.filter((item): item is ResumeVO => Boolean(item))
+      }
+    })
 }
 
 export const createResumeApi = (data: ResumeCreateDTO) => {
   return request
     .post<ResumeDetailVO, ResumeDetailVO>('/resumes', toResumePayload(data))
-    .then(normalizeResume)
+    .then(requireResumeDetail)
 }
 
 export const uploadResumeFileApi = (file: File) => {
@@ -153,6 +202,7 @@ export const optimizeResumeApi = (resumeId: number, data?: ResumeOptimizeRequest
 
 const toResumeOptimizeSseQuery = (params: ResumeOptimizeSseParams) => ({
   resumeId: String(params.resumeId),
+  targetJobId: params.targetJobId != null ? String(params.targetJobId) : '',
   targetPosition: params.targetPosition || '',
   targetCompany: params.targetCompany || '',
   extraRequirements: params.extraRequirements || '',
@@ -200,20 +250,23 @@ export const applyResumeOptimizeResultApi = (
       `/resumes/optimize-records/${recordId}/apply`,
       data
     )
-    .then((result) => ({
-      ...result,
-      resumeDetail: result.resumeDetail ? normalizeResume(result.resumeDetail) : undefined
-    }))
+    .then((result) => {
+      const item = isRecord(result) ? result as ApplyResumeOptimizeResultVO : {} as ApplyResumeOptimizeResultVO
+      return {
+        ...item,
+        resumeDetail: item.resumeDetail ? normalizeResume(item.resumeDetail) : undefined
+      }
+    })
 }
 
 export const getResumeDetailApi = (id: number) => {
-  return request.get<ResumeDetailVO, ResumeDetailVO>(`/resumes/${id}`).then(normalizeResume)
+  return request.get<ResumeDetailVO, ResumeDetailVO>(`/resumes/${id}`).then(requireResumeDetail)
 }
 
 export const updateResumeApi = (id: number, data: ResumeUpdateDTO) => {
   return request
     .put<ResumeDetailVO, ResumeDetailVO>(`/resumes/${id}`, toResumePayload(data))
-    .then(normalizeResume)
+    .then(requireResumeDetail)
 }
 
 export const deleteResumeApi = (id: number) => {
@@ -227,7 +280,7 @@ export const setDefaultResumeApi = (id: number) => {
 export const createResumeProjectApi = (resumeId: number, data: ResumeProjectDTO) => {
   return request
     .post<ResumeProjectVO, ResumeProjectVO>(`/resumes/${resumeId}/projects`, toProjectPayload(data))
-    .then(normalizeProject)
+    .then(requireProjectResult)
 }
 
 export const updateResumeProjectApi = (
@@ -238,7 +291,7 @@ export const updateResumeProjectApi = (
   return request.put<ResumeProjectVO, ResumeProjectVO>(
     `/resumes/${resumeId}/projects/${projectId}`,
     toProjectPayload(data)
-  ).then(normalizeProject)
+  ).then(requireProjectResult)
 }
 
 export const deleteResumeProjectApi = (resumeId: number, projectId: number) => {

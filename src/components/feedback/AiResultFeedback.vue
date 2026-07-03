@@ -14,7 +14,7 @@
             </el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="可信评分">
+        <el-form-item label="结果评分">
           <el-rate v-model="rating" :max="5" />
         </el-form-item>
         <el-form-item label="补充说明">
@@ -24,7 +24,7 @@
             :rows="4"
             maxlength="300"
             show-word-limit
-            placeholder="可说明哪一段不准确、缺少证据或与你的经历不符"
+            placeholder="可说明哪一段不准确、资料不完整或与你的经历不符"
           />
         </el-form-item>
       </el-form>
@@ -45,6 +45,7 @@ import { useRoute } from 'vue-router'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import type { AiResultFeedbackType } from '@/types/aiFeedback'
 import { getErrorMessage } from '@/utils/error'
+import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 
 const props = withDefaults(defineProps<{
   scene: string
@@ -74,11 +75,16 @@ const comment = ref('')
 const feedbackTypes: Array<{ label: string; value: AiResultFeedbackType }> = [
   { label: '内容不准', value: 'INACCURATE' },
   { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
-  { label: '疑似幻觉', value: 'HALLUCINATION' },
+  { label: '内容不符合实际', value: 'HALLUCINATION' },
   { label: '不相关', value: 'IRRELEVANT' },
   { label: '有帮助', value: 'HELPFUL' },
   { label: '其他', value: 'OTHER' }
 ]
+
+const resolveSafePagePath = () => {
+  const safePropPath = sanitizeLocalRedirectPath(props.pagePath, '')
+  return safePropPath || buildSafeRedirectTarget(route.path, route.query)
+}
 
 const submitFeedback = async () => {
   submitting.value = true
@@ -91,7 +97,7 @@ const submitFeedback = async () => {
       feedbackType: feedbackType.value,
       rating: rating.value,
       comment: comment.value || undefined,
-      pagePath: props.pagePath || route.fullPath
+      pagePath: resolveSafePagePath()
     })
     submitted.value = true
     visible.value = false

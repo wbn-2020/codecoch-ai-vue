@@ -125,6 +125,11 @@ export interface ResumeUploadVO {
   analysisRecordId: number
   resumeId?: number | null
   parseStatus: ResumeParseStatus
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   originalFilename?: string
   fileSize?: number
   fileExt?: string
@@ -136,6 +141,11 @@ export interface ResumeParseStatusVO {
   resumeId?: number | null
   fileId?: number
   parseStatus: ResumeParseStatus
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   errorMessage?: string
   message?: string
   updatedAt?: string
@@ -160,6 +170,7 @@ export interface ResumeConfirmAnalysisVO {
 }
 
 export interface ResumeOptimizeRequestDTO {
+  targetJobId?: number
   targetPosition?: string
   targetCompany?: string
   extraRequirements?: string
@@ -173,6 +184,7 @@ export type ResumeOptimizeSseEventType = 'start' | 'progress' | 'result' | 'done
 
 export interface ResumeOptimizeSseParams {
   resumeId: number
+  targetJobId?: number
   targetPosition?: string
   targetCompany?: string
   extraRequirements?: string
@@ -224,14 +236,27 @@ export interface ResumeOptimizeResultJson {
 export interface ResumeOptimizeSubmitVO {
   optimizeRecordId: number
   resumeId: number
+  targetJobId?: number
+  aiCallLogId?: number | null
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   optimizeStatus: ResumeOptimizeStatus
-  resultJson?: ResumeOptimizeResultJson | null
+  overallScore?: number
+  overallComment?: string
+  rewriteSuggestions?: ResumeRewriteSuggestion[]
+  riskWarnings?: Array<Record<string, unknown>>
+  possibleInterviewQuestions?: Array<Record<string, unknown>>
+  nextActions?: string[]
   errorMessage?: string
 }
 
 export interface ResumeOptimizeRecordVO {
   optimizeRecordId: number
   resumeId: number
+  targetJobId?: number
   targetPosition?: string
   experienceYears?: number
   industryDirection?: string
@@ -244,7 +269,14 @@ export interface ResumeOptimizeRecordVO {
 }
 
 export interface ResumeOptimizeDetailVO extends ResumeOptimizeRecordVO {
-  resultJson?: ResumeOptimizeResultJson | null
+  overallScore?: number
+  targetPositionMatch?: Record<string, unknown>
+  sectionScores?: Record<string, number>
+  problems?: Array<Record<string, unknown>>
+  rewriteSuggestions?: ResumeRewriteSuggestion[]
+  riskWarnings?: Array<Record<string, unknown>>
+  possibleInterviewQuestions?: Array<Record<string, unknown>>
+  nextActions?: string[]
   fieldPatches?: Record<string, unknown> | null
 }
 

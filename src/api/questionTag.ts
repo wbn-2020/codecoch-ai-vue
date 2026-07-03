@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
-import type { QuestionTagDTO, QuestionTagVO } from '@/types/question'
-import { normalizePageResult } from '@/utils/page'
+import type { AdminOperationConfirmPayload, QuestionTagDTO, QuestionTagVO } from '@/types/question'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 type BackendQuestionTagVO = Partial<QuestionTagVO> & {
   tagName?: string
@@ -28,13 +28,19 @@ const normalizeTagList = (list: BackendQuestionTagVO[] = []) =>
 
 const toBackendTagDTO = (data: QuestionTagDTO) => ({
   tagName: data.name,
-  status: data.status
+  status: data.status,
+  confirm: data.confirm,
+  dryRun: data.dryRun,
+  reason: data.reason,
+  idempotencyKey: data.idempotencyKey
 })
 
 export const getQuestionTagsApi = (params?: { status?: number | ''; keyword?: string }) => {
   return request
-    .get<BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>, BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>>('/admin/question-tags', { params })
-    .then((result) => normalizeTagList(normalizePageResult(result).records))
+    .get<BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>, BackendQuestionTagVO[] | PageResult<BackendQuestionTagVO>>('/admin/question-tags', {
+      params: compactQueryParams(params)
+    })
+    .then((result) => normalizeTagList(normalizePageResult(result, undefined, { allowArrayFallback: true }).records))
 }
 
 export const createQuestionTagApi = (data: QuestionTagDTO) => {
@@ -52,6 +58,6 @@ export const updateQuestionTagApi = (id: number, data: QuestionTagDTO) => {
     .then(normalizeQuestionTag)
 }
 
-export const deleteQuestionTagApi = (id: number) => {
-  return request.delete<null, null>(`/admin/question-tags/${id}`)
+export const deleteQuestionTagApi = (id: number, data: AdminOperationConfirmPayload) => {
+  return request.delete<null, null>(`/admin/question-tags/${id}`, { data })
 }

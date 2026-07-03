@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { KnowledgeVectorRebuildVO } from '@/api/v4'
-import { normalizePageResult } from '@/utils/page'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import type {
   AdminAnalyticsDictionaryQuery,
   AdminAnalyticsMetricSaveDTO,
@@ -16,7 +16,6 @@ import type {
   AgentFeedbackStatsVO,
   AnalyticsJobRunDTO,
   AnalyticsRangeQuery,
-  CareerInsightOverviewVO,
   MetricPointVO,
   PromptRegressionCaseSaveDTO,
   PersonalAgentOverviewVO,
@@ -100,19 +99,6 @@ const normalizeAdminAiOverview = (data: Partial<AdminAiOverviewVO> = {}): AdminA
   totalTokens: Number(data.totalTokens || 0)
 })
 
-const normalizeAgentFeedbackStats = (data: Partial<AgentFeedbackStatsVO> = {}): AgentFeedbackStatsVO => ({
-  totalFeedbackCount: Number(data.totalFeedbackCount || 0),
-  adoptedCount: Number(data.adoptedCount || 0),
-  ignoredCount: Number(data.ignoredCount || 0),
-  likedCount: Number(data.likedCount || 0),
-  dislikedCount: Number(data.dislikedCount || 0),
-  adoptionRate: Number(data.adoptionRate || 0),
-  typeDistribution: (data.typeDistribution || []).map((item) => ({
-    feedbackType: item.feedbackType || 'UNKNOWN',
-    count: Number(item.count || 0)
-  }))
-})
-
 export const getPersonalAgentOverviewApi = () =>
   request
     .get<PersonalAgentOverviewVO, PersonalAgentOverviewVO>('/analytics/personal/agent-overview')
@@ -120,85 +106,93 @@ export const getPersonalAgentOverviewApi = () =>
 
 export const getPersonalTaskTrendApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<TrendPointVO[], TrendPointVO[]>('/analytics/personal/task-trend', { params })
+    .get<TrendPointVO[], TrendPointVO[]>('/analytics/personal/task-trend', { params: compactQueryParams(params) })
     .then(normalizeTrendList)
 
 export const getPersonalSkillDistributionApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<MetricPointVO[], MetricPointVO[]>('/analytics/personal/skill-distribution', { params })
+    .get<MetricPointVO[], MetricPointVO[]>('/analytics/personal/skill-distribution', { params: compactQueryParams(params) })
     .then(normalizeMetricList)
-
-export const getPersonalCareerInsightsApi = (params?: AnalyticsRangeQuery, options?: { silentError?: boolean }) =>
-  request.get<CareerInsightOverviewVO, CareerInsightOverviewVO>('/analytics/personal/career-insights', {
-    params,
-    silentError: options?.silentError
-  })
 
 export const getAdminAgentOverviewApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<AdminAgentOverviewVO, AdminAgentOverviewVO>('/admin/analytics/agent/overview', { params })
+    .get<AdminAgentOverviewVO, AdminAgentOverviewVO>('/admin/analytics/agent/overview', { params: compactQueryParams(params) })
     .then(normalizeAdminAgentOverview)
 
 export const getAdminAgentTrendApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<TrendPointVO[], TrendPointVO[]>('/admin/analytics/agent/trend', { params })
+    .get<TrendPointVO[], TrendPointVO[]>('/admin/analytics/agent/trend', { params: compactQueryParams(params) })
     .then(normalizeTrendList)
 
 export const getAdminAgentTasksApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<AdminAgentTaskStatsVO, AdminAgentTaskStatsVO>('/admin/analytics/agent/tasks', { params })
+    .get<AdminAgentTaskStatsVO, AdminAgentTaskStatsVO>('/admin/analytics/agent/tasks', { params: compactQueryParams(params) })
     .then(normalizeAdminTaskStats)
 
 export const getAdminAiOverviewApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<AdminAiOverviewVO, AdminAiOverviewVO>('/admin/analytics/ai/overview', { params })
+    .get<AdminAiOverviewVO, AdminAiOverviewVO>('/admin/analytics/ai/overview', { params: compactQueryParams(params) })
     .then(normalizeAdminAiOverview)
 
 export const getAdminAiFailuresApi = (params?: AnalyticsRangeQuery) =>
   request
-    .get<MetricPointVO[], MetricPointVO[]>('/admin/analytics/ai/failures', { params })
+    .get<MetricPointVO[], MetricPointVO[]>('/admin/analytics/ai/failures', { params: compactQueryParams(params) })
     .then(normalizeMetricList)
 
 export const getAdminAnalyticsOverviewApi = (params?: AnalyticsRangeQuery) =>
-  request.get<AdminAnalyticsOverviewVO, AdminAnalyticsOverviewVO>('/admin/analytics/overview', { params })
+  request.get<AdminAnalyticsOverviewVO, AdminAnalyticsOverviewVO>('/admin/analytics/overview', { params: compactQueryParams(params) })
 
 export const getAdminAnalyticsTrainingApi = (params?: AnalyticsRangeQuery) =>
-  request.get<AdminAnalyticsTrainingVO, AdminAnalyticsTrainingVO>('/admin/analytics/training', { params })
+  request.get<AdminAnalyticsTrainingVO, AdminAnalyticsTrainingVO>('/admin/analytics/training', { params: compactQueryParams(params) })
 
 export const getAdminAgentFeedbackApi = (params?: AnalyticsRangeQuery) =>
-  request
-    .get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params })
-    .then(normalizeAgentFeedbackStats)
+  request.get<AgentFeedbackStatsVO, AgentFeedbackStatsVO>('/admin/analytics/agent/feedback', { params: compactQueryParams(params) })
 
 export const getAdminVectorStoreHealthApi = () =>
   request.get<VectorStoreHealthVO, VectorStoreHealthVO>('/admin/analytics/vector-store/health')
 
 export const getAdminVectorStoreFailuresApi = (params?: VectorFailureQuery) =>
-  request.get<VectorFailureDetailsVO, VectorFailureDetailsVO>('/admin/analytics/vector-store/failures', { params })
+  request.get<VectorFailureDetailsVO, VectorFailureDetailsVO>('/admin/analytics/vector-store/failures', { params: compactQueryParams(params) })
 
 export const getAdminVectorIndexJobsApi = (params?: VectorIndexJobQuery) =>
   request
-    .get<PageResult<VectorIndexJobVO>, PageResult<VectorIndexJobVO>>('/admin/analytics/vector-store/jobs', { params })
+    .get<PageResult<VectorIndexJobVO>, PageResult<VectorIndexJobVO>>('/admin/analytics/vector-store/jobs', {
+      params: params ? compactQueryParams(params) : undefined
+    })
     .then((result) => normalizePageResult(result, params))
 
-export const retryAdminVectorDeletesApi = (limit?: number) =>
+export interface VectorMaintenanceRequest {
+  limit?: number
+  confirm?: boolean
+  reason?: string
+  dryRun?: boolean
+  idempotencyKey?: string
+}
+
+const normalizeVectorMaintenanceParams = (input?: number | VectorMaintenanceRequest) => {
+  if (typeof input === 'number') return compactQueryParams({ limit: input })
+  return compactQueryParams(input)
+}
+
+export const retryAdminVectorDeletesApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<VectorDeleteRetryResultVO, VectorDeleteRetryResultVO>(
     '/admin/analytics/vector-store/delete-outbox/retry',
     undefined,
-    { params: { limit } }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
-export const rebuildAdminKnowledgeVectorsApi = (limit?: number) =>
+
+export const rebuildAdminKnowledgeVectorsApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
     '/admin/analytics/vector-store/knowledge/rebuild',
     undefined,
-    { params: limit ? { limit } : undefined }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
 
-export const retryAdminKnowledgeVectorsApi = (limit?: number) =>
+export const retryAdminKnowledgeVectorsApi = (input?: number | VectorMaintenanceRequest) =>
   request.post<KnowledgeVectorRebuildVO, KnowledgeVectorRebuildVO>(
     '/admin/analytics/vector-store/knowledge/retry-failed',
     undefined,
-    { params: limit ? { limit } : undefined }
+    { params: normalizeVectorMaintenanceParams(input) }
   )
 
 export const getQuestionDuplicateConfigApi = () =>
@@ -216,9 +210,9 @@ export const getAdminAnalyticsMetricsApi = (params?: AdminAnalyticsDictionaryQue
   return request
     .get<PageResult<AdminAnalyticsMetricDefinitionVO> | AdminAnalyticsMetricDefinitionVO[], PageResult<AdminAnalyticsMetricDefinitionVO> | AdminAnalyticsMetricDefinitionVO[]>(
       '/admin/analytics/metrics',
-      { params: requestParams }
+      { params: compactQueryParams(requestParams) }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 }
 
 export const createAdminAnalyticsMetricApi = (data: AdminAnalyticsMetricSaveDTO) =>
@@ -231,12 +225,12 @@ export const getAdminAnalyticsJobsApi = (params?: AdminAnalyticsJobQuery) =>
   request
     .get<PageResult<AdminAnalyticsJobLogVO>, PageResult<AdminAnalyticsJobLogVO>>(
       '/admin/analytics/jobs',
-      { params }
+      { params: params ? compactQueryParams(params) : undefined }
     )
     .then((result) => normalizePageResult(result, params))
 
-export const rerunAdminAnalyticsJobApi = (id: number) =>
-  request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>(`/admin/analytics/jobs/${id}/rerun`)
+export const rerunAdminAnalyticsJobApi = (id: number, data?: Pick<AnalyticsJobRunDTO, 'confirm' | 'dryRun' | 'reason' | 'idempotencyKey'>) =>
+  request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>(`/admin/analytics/jobs/${id}/rerun`, data || {})
 
 export const runAdminAnalyticsDailyPlanApi = (data?: AnalyticsJobRunDTO) =>
   request.post<AdminAnalyticsJobLogVO, AdminAnalyticsJobLogVO>('/admin/analytics/jobs/agent-daily-plan/run', data || {})
@@ -245,17 +239,17 @@ export const getPromptRegressionCasesApi = (params?: PromptRegressionQuery) =>
   request
     .get<PageResult<PromptRegressionCaseVO> | PromptRegressionCaseVO[], PageResult<PromptRegressionCaseVO> | PromptRegressionCaseVO[]>(
       '/admin/agent/prompt-regression/cases',
-      { params }
+      { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
   request
     .get<PageResult<PromptRegressionResultVO> | PromptRegressionResultVO[], PageResult<PromptRegressionResultVO> | PromptRegressionResultVO[]>(
       '/admin/agent/prompt-regression/results',
-      { params }
+      { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params))
+    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
 
 export const createPromptRegressionCaseApi = (data: PromptRegressionCaseSaveDTO) =>
   request.post<PromptRegressionCaseVO, PromptRegressionCaseVO>('/admin/agent/prompt-regression/cases', data)
@@ -266,5 +260,11 @@ export const updatePromptRegressionCaseApi = (id: number, data: PromptRegression
 export const runPromptRegressionApi = (data?: PromptRegressionRunDTO) =>
   request.post<PromptRegressionResultVO, PromptRegressionResultVO>(
     `/admin/agent/prompt-regression/cases/${data?.caseId}/run`,
-    { promptVersionId: data?.promptVersionId }
+    {
+      promptVersionId: data?.promptVersionId,
+      confirm: data?.confirm,
+      dryRun: data?.dryRun,
+      reason: data?.reason,
+      idempotencyKey: data?.idempotencyKey
+    }
   )

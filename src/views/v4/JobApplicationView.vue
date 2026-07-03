@@ -2,16 +2,13 @@
   <div class="page-shell v4-application-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">V4 求职进度</div>
-        <h1>投递工作台</h1>
-        <p>把投递记录、跟进提醒、关联简历版本和面试入口收敛到一个可执行的求职工作台。</p>
+        <div class="v4-eyebrow">求职进度管理</div>
+        <h1>求职进度</h1>
+        <p>跟踪收藏岗位、投递记录、面试阶段、跟进事项和结构化求职事件。</p>
       </div>
       <div class="v4-actions">
-        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="handleStatusChange">
-          <el-option v-for="item in statuses" :key="item" :label="statusLabel(item)" :value="item" />
-        </el-select>
-        <el-select v-model="followUpFilter" style="width: 180px" @change="syncFollowUpQuery">
-          <el-option v-for="item in followUpFilters" :key="item.value" :label="item.label" :value="item.value" />
+        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="loadApplications">
+          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-button type="primary" @click="openCreate">新增进度</el-button>
         <el-button :loading="loading" @click="load">刷新</el-button>
@@ -22,110 +19,72 @@
       <el-button type="primary" @click="load">重试</el-button>
     </AppState>
 
-    <template v-else>
-      <section class="workbench-overview" v-loading="statsLoading">
-        <button
-          v-for="item in overview.stageCards"
-          :key="item.key"
-          class="overview-card"
-          type="button"
-          :class="`overview-card--${item.tone}`"
-          @click="applyStageCard(item.key)"
-        >
+    <section v-if="!errorMessage" class="application-stats" v-loading="statsLoading">
+      <el-alert
+        v-if="statsWarning"
+        class="stats-warning"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="statsWarning"
+      />
+      <div class="stats-grid">
+        <button v-for="item in metricItems" :key="item.key" class="metric-card" type="button" @click="item.onClick?.()">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
-          <small>{{ item.description }}</small>
+          <small>{{ item.hint }}</small>
         </button>
-      </section>
+      </div>
+      <div class="status-funnel" aria-label="Application status funnel">
+        <button
+          v-for="item in funnelItems"
+          :key="item.value"
+          class="funnel-item"
+          :class="{ 'is-active': status === item.value }"
+          type="button"
+          @click="applyStatusFilter(item.value)"
+        >
+          <span>{{ item.label }}</span>
+          <strong>{{ item.count }}</strong>
+        </button>
+      </div>
+    </section>
 
-      <section class="follow-up-panel">
-        <div class="follow-up-panel__head">
-          <div>
-            <p class="section-kicker">Follow Up</p>
-            <h2>今日待跟进</h2>
-            <span v-if="statsError" class="panel-warning">{{ statsError }}</span>
-          </div>
-          <div class="follow-up-counts">
-            <el-tag type="danger" effect="plain">逾期 {{ overview.stats.overdueFollowUpCount }}</el-tag>
-            <el-tag type="warning" effect="plain">今日 {{ overview.stats.dueTodayFollowUpCount }}</el-tag>
-            <el-tag type="info" effect="plain">未设置 {{ overview.stats.noFollowUpCount }}</el-tag>
-          </div>
-        </div>
-
-        <div v-if="dueFollowUps.length" class="due-list">
-          <article v-for="item in dueFollowUps" :key="item.id" class="due-item">
+    <section v-if="!errorMessage" class="content-card">
+      <div class="content-card__body v4-list" v-loading="loading">
+        <article v-for="item in applications" :key="item.id" class="v4-row">
+          <div class="v4-row-head">
             <div>
               <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
-              <span>{{ getFollowUpState(item).description }}</span>
+              <p class="muted">
+                {{ sourceLabel(item.source) }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
+              </p>
+              <p v-if="item.matchReportId" class="muted">匹配报告 #{{ item.matchReportId }}</p>
+              <p class="muted">{{ item.note || '--' }}</p>
             </div>
-            <el-button type="primary" link @click="openFollowUpCreate(item)">记录跟进</el-button>
-          </article>
-        </div>
-        <el-empty v-else description="今天暂无必须处理的跟进项" />
-      </section>
-
-      <section class="content-card">
-        <div class="content-card__body v4-list" v-loading="loading">
-          <div class="list-head">
-            <div>
-              <p class="section-kicker">Applications</p>
-              <h2>投递记录</h2>
-              <span v-if="latestEventsError" class="panel-warning">{{ latestEventsError }}</span>
+            <div class="v4-actions">
+              <el-tag>{{ statusLabel(item.status) }}</el-tag>
+              <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
+                <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
+              </template>
+              <el-button link type="primary" @click="openEvents(item)">事件</el-button>
+              <el-button link type="primary" @click="openEdit(item)">编辑</el-button>
             </div>
-            <span>{{ filteredApplications.length }} / {{ applications.length }} 条</span>
           </div>
-
-          <article v-for="item in filteredApplications" :key="item.id" class="v4-row">
-            <div class="v4-row-head">
-              <div class="application-title">
-                <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
-                <div class="row-tags">
-                  <el-tag :type="tagType(getStageMeta(item).tone)" effect="plain">{{ getStageMeta(item).label }}</el-tag>
-                  <el-tag :type="tagType(getFollowUpState(item).tone)" effect="light">
-                    {{ getFollowUpState(item).label }}
-                  </el-tag>
-                </div>
-              </div>
-              <div class="row-actions">
-                <el-button link type="primary" @click="openEvents(item)">事件</el-button>
-                <el-button link type="primary" @click="openFollowUpCreate(item)">加跟进</el-button>
-                <el-dropdown trigger="click" @command="handleResultEventCommand(item, $event)">
-                  <el-button link type="primary">记结果</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item v-for="type in resultEventTypes" :key="type" :command="type">
-                        {{ eventTypeLabel(type) }}
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-                <el-button link type="primary" @click="goInterview(item)">去面试</el-button>
-                <el-button link type="primary" @click="goResumeVersion(item)">去版本</el-button>
-                <el-button link type="primary" @click="openEdit(item)">编辑</el-button>
-              </div>
-            </div>
-
-            <div class="application-meta">
-              <span>{{ item.source || 'CUSTOM' }}</span>
-              <span>投递 {{ displayDate(item.appliedAt) }}</span>
-              <span>下次跟进 {{ displayDate(item.nextFollowUpAt) }}</span>
-              <span>{{ getResumeVersionLabel(item) }}</span>
-            </div>
-            <p class="stage-desc">{{ getStageMeta(item).description }}</p>
-            <div v-if="getLatestEvent(item)" class="latest-event">
-              <el-tag :type="tagType(getLatestEvent(item)?.meta.tone || 'info')" effect="plain">
-                最近 {{ getLatestEvent(item)?.meta.label }}
-              </el-tag>
-              <span>{{ getLatestEvent(item)?.timeText }}</span>
-              <strong>{{ getLatestEvent(item)?.summaryText }}</strong>
-            </div>
-            <p v-else-if="latestEventLoading" class="muted latest-event-placeholder">最近事件加载中...</p>
-            <p v-if="item.note" class="muted">{{ item.note }}</p>
-          </article>
-          <el-empty v-if="!filteredApplications.length && !loading" description="暂无匹配的求职进度记录" />
-        </div>
-      </section>
-    </template>
+        </article>
+        <AppState
+          v-if="!applications.length && !loading"
+          type="empty"
+          :title="applicationEmptyTitle"
+          :description="applicationEmptyDescription"
+        >
+          <div class="empty-actions">
+            <el-button v-if="status" @click="clearStatusFilter">清空状态筛选</el-button>
+            <el-button type="primary" @click="openCreate">新增第一条进度</el-button>
+          </div>
+        </AppState>
+      </div>
+    </section>
 
     <el-dialog v-model="dialogVisible" title="求职进度" width="620px">
       <el-form label-position="top">
@@ -137,19 +96,15 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status" style="width: 100%">
-            <el-option v-for="item in statuses" :key="item" :label="statusLabel(item)" :value="item" />
+            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="来源">
-          <el-input v-model.trim="form.source" placeholder="BOSS / LinkedIn / Referral / CUSTOM" />
+          <el-select v-model="form.source" allow-create clearable filterable placeholder="选择或输入来源" style="width: 100%">
+            <el-option v-for="item in sourceOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
         </el-form-item>
-        <el-form-item label="目标岗位 ID">
-          <el-input-number v-model="form.targetJobId" :min="1" controls-position="right" />
-        </el-form-item>
-        <el-form-item label="匹配报告 ID">
-          <el-input-number v-model="form.matchReportId" :min="1" controls-position="right" />
-        </el-form-item>
-        <el-form-item label="简历版本 ID">
+        <el-form-item label="关联简历版本">
           <el-input-number v-model="form.resumeVersionId" :min="1" controls-position="right" />
         </el-form-item>
         <el-form-item label="下次跟进时间">
@@ -170,56 +125,68 @@
         <el-button type="primary" @click="openEventCreate">新增事件</el-button>
         <el-button :loading="eventsLoading" @click="loadEvents">刷新</el-button>
       </div>
-      <el-alert
-        v-if="eventsError"
-        class="event-alert"
-        type="error"
-        :closable="false"
-        show-icon
-        :title="eventsError"
-      />
-      <div class="event-timeline" v-loading="eventsLoading">
-        <article v-for="item in eventTimeline" :key="item.id" class="event-row" :class="`event-row--${item.meta.tone}`">
-          <span class="event-dot"></span>
-          <div class="event-row__body">
-            <div class="event-row__head">
-              <div>
-                <el-tag :type="tagType(item.meta.tone)" effect="plain">{{ item.meta.label }}</el-tag>
-                <strong>{{ item.summaryText }}</strong>
-              </div>
-              <span>{{ item.timeText }}</span>
-            </div>
-            <p>{{ item.meta.description }}</p>
-            <pre v-if="item.reviewJson || item.review">{{ item.reviewJson || JSON.stringify(item.review, null, 2) }}</pre>
+      <div class="event-list" v-loading="eventsLoading">
+        <article v-for="item in events" :key="item.id" class="event-row">
+          <div class="event-row__head">
+            <strong>{{ eventTypeLabel(item.eventType) }}</strong>
+            <span>{{ item.eventTime || '--' }}</span>
+          </div>
+          <p>{{ item.summary || '--' }}</p>
+          <div v-if="formatApplicationReview(item)" class="event-row__review">
+            {{ formatApplicationReview(item) }}
           </div>
         </article>
-        <el-empty v-if="!eventTimeline.length && !eventsLoading" description="当前进度暂无事件" />
+        <AppState
+          v-if="eventsError && !eventsLoading"
+          type="error"
+          title="求职事件加载失败"
+          :description="eventsError"
+        >
+          <div class="empty-actions">
+            <el-button type="primary" :loading="eventsLoading" @click="loadEvents">重新加载</el-button>
+          </div>
+        </AppState>
+        <AppState
+          v-else-if="!events.length && !eventsLoading"
+          type="empty"
+          title="当前进度还没有事件"
+          description="可以记录一次跟进、面试安排、复盘或录用通知/拒信，后续回看会更清楚。"
+        >
+          <div class="empty-actions">
+            <el-button type="primary" @click="openEventCreate">新增事件</el-button>
+          </div>
+        </AppState>
       </div>
     </el-drawer>
 
     <el-dialog v-model="eventDialogVisible" title="新增求职事件" width="560px">
       <el-form label-position="top">
         <el-form-item label="事件类型">
-          <el-select v-model="eventForm.eventType" style="width: 100%">
-            <el-option v-for="item in eventTypes" :key="item" :label="eventTypeLabel(item)" :value="item" />
+          <el-select v-model="eventForm.eventType" allow-create filterable placeholder="选择或输入事件类型" style="width: 100%">
+            <el-option v-for="item in eventTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-alert
+          v-if="eventStatusImpactText"
+          class="event-impact-alert"
+          type="info"
+          show-icon
+          :closable="false"
+          :title="eventStatusImpactText"
+        />
         <el-form-item label="事件时间">
           <el-date-picker v-model="eventForm.eventTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" />
         </el-form-item>
         <el-form-item label="摘要">
           <el-input v-model="eventForm.summary" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
-        <el-form-item v-if="eventForm.eventType === 'FOLLOW_UP'" label="下一次跟进时间">
-          <el-date-picker
-            v-model="followUpNextAt"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="记录本次跟进后，安排下一次提醒"
+        <el-form-item label="复盘要点">
+          <el-input
+            v-model="eventForm.reviewJson"
+            type="textarea"
+            :rows="4"
+            placeholder="例如：二面反馈偏重项目复盘，下一步补充缓存和消息队列案例。"
           />
-        </el-form-item>
-        <el-form-item label="结构化记录 JSON">
-          <el-input v-model="eventForm.reviewJson" type="textarea" :rows="4" placeholder='{"score":80}' />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -232,83 +199,68 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createApplicationApi,
   createApplicationEventApi,
   getApplicationEventsApi,
-  getApplicationsApi,
   getApplicationStatsApi,
-  getResumeVersionDetailApi,
+  getApplicationsApi,
   updateApplicationApi,
   type JobApplicationEventVO,
   type JobApplicationStatsVO,
-  type JobApplicationVO,
-  type ResumeVersionVO
+  type JobApplicationVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
-import {
-  buildApplicationEventTimeline,
-  buildBackendLatestApplicationEvent,
-  buildApplicationInterviewRoute,
-  buildApplicationResumeVersionRoute,
-  buildApplicationWorkbenchOverview,
-  filterApplicationsByFollowUp,
-  formatApplicationResumeVersionLabel,
-  getApplicationEventMeta,
-  getApplicationFollowUpState,
-  getApplicationStageMeta,
-  getDueFollowUpApplications,
-  hasBackendLatestEventSummary,
-  hasBackendResumeVersionSummary,
-  isApplicationActiveStatus,
-  type ApplicationFollowUpFilter,
-  type ApplicationStageKey,
-  type ApplicationTimelineEvent,
-  type ApplicationWorkbenchContext
-} from '@/features/applications'
+import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
-import { formatDateTime, formatLocalDateTime } from '@/utils/format'
+import { formatLocalDateTime } from '@/utils/format'
 
-const statuses = ['SAVED', 'PREPARING', 'APPLIED', 'INTERVIEWING', 'OFFER', 'REJECTED', 'CLOSED']
-const eventTypes = ['NOTE', 'FOLLOW_UP', 'INTERVIEW', 'OFFER', 'REJECTED', 'CLOSED']
-const resultEventTypes = ['INTERVIEW', 'OFFER', 'REJECTED', 'CLOSED']
-const latestEventPreviewLimit = 12
-const followUpFilters: Array<{ label: string; value: ApplicationFollowUpFilter }> = [
-  { label: '全部跟进', value: 'all' },
-  { label: '已逾期', value: 'overdue' },
-  { label: '今日待跟进', value: 'due-today' },
-  { label: '未来跟进', value: 'upcoming' },
-  { label: '未设置跟进', value: 'missing' }
+const statusOptions = [
+  { label: '已收藏', value: 'SAVED' },
+  { label: '准备中', value: 'PREPARING' },
+  { label: '已投递', value: 'APPLIED' },
+  { label: '面试中', value: 'INTERVIEWING' },
+  { label: '已收到录用通知', value: 'OFFER' },
+  { label: '已拒信', value: 'REJECTED' },
+  { label: '已关闭', value: 'CLOSED' }
 ]
 
-const route = useRoute()
-const router = useRouter()
+const sourceOptions = [
+  { label: 'BOSS 直聘', value: 'BOSS' },
+  { label: 'LinkedIn', value: 'LinkedIn' },
+  { label: '内推', value: 'Referral' },
+  { label: '官网投递', value: 'OFFICIAL_SITE' },
+  { label: '自定义来源', value: 'CUSTOM' }
+]
+
+const eventTypeOptions = [
+  { label: '已投递', value: 'APPLIED' },
+  { label: '跟进事项', value: 'FOLLOW_UP' },
+  { label: '面试安排', value: 'INTERVIEW' },
+  { label: '录用通知', value: 'OFFER' },
+  { label: '普通记录', value: 'NOTE' },
+  { label: '拒信记录', value: 'REJECTION' },
+  { label: '关闭记录', value: 'CLOSED' }
+]
+
 const loading = ref(false)
 const statsLoading = ref(false)
-const latestEventLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
-const statsError = ref('')
-const latestEventsError = ref('')
+const statsWarning = ref('')
 const status = ref('')
-const followUpFilter = ref<ApplicationFollowUpFilter>('all')
-const stageFilter = ref<'all' | 'active'>('all')
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const applications = ref<JobApplicationVO[]>([])
-const stats = ref<JobApplicationStatsVO | null>(null)
-const resumeVersions = ref<Record<number, ResumeVersionVO | null>>({})
+const applicationStats = ref<JobApplicationStatsVO>()
 const eventsVisible = ref(false)
 const eventsLoading = ref(false)
-const eventsError = ref('')
 const eventDialogVisible = ref(false)
 const selectedApplication = ref<JobApplicationVO>()
 const events = ref<JobApplicationEventVO[]>([])
-const latestEventsByApplicationId = ref<Record<number, ApplicationTimelineEvent | undefined>>({})
-const routeActionHandled = ref(false)
+const eventsError = ref('')
 
 const form = reactive<Partial<JobApplicationVO>>({
   status: 'SAVED',
@@ -324,185 +276,305 @@ const eventForm = reactive<Partial<JobApplicationEventVO>>({
   summary: '',
   reviewJson: ''
 })
-const followUpNextAt = ref('')
 
-const overview = computed(() => buildApplicationWorkbenchOverview(stats.value))
-const eventTimeline = computed(() => buildApplicationEventTimeline(events.value))
-const filteredApplications = computed(() => {
-  const followUpItems = filterApplicationsByFollowUp(applications.value, followUpFilter.value)
-  if (stageFilter.value === 'active') {
-    return followUpItems.filter((item) => isApplicationActiveStatus(item.status))
+const applicationEmptyTitle = computed(() => status.value ? '当前状态没有进度' : '还没有求职进度')
+const applicationEmptyDescription = computed(() =>
+  status.value
+    ? '当前筛选状态下没有记录，清空筛选后可以查看全部进度。'
+    : '先记录一条公司、岗位、来源和下次跟进时间，例如 BOSS、LinkedIn、内推或官网投递。'
+)
+const statusLabel = (value?: string) => statusOptions.find((item) => item.value === value)?.label || (value ? '状态待确认' : '--')
+const sourceLabel = (value?: string) => sourceOptions.find((item) => item.value === value)?.label || (value ? '自定义来源' : '来源待填写')
+const eventTypeLabel = (value?: string) => eventTypeOptions.find((item) => item.value === value)?.label || (value ? '记录事项' : '--')
+
+const statsNumber = (value?: number) => value ?? 0
+const metricItems = computed(() => [
+  {
+    key: 'total',
+    label: 'Total',
+    value: statsNumber(applicationStats.value?.total),
+    hint: 'All applications',
+    onClick: clearStatusFilter
+  },
+  {
+    key: 'active',
+    label: 'Active',
+    value: statsNumber(applicationStats.value?.activeCount),
+    hint: 'In progress'
+  },
+  {
+    key: 'overdue',
+    label: 'Overdue',
+    value: statsNumber(applicationStats.value?.overdueFollowUpCount),
+    hint: 'Follow-up missed'
+  },
+  {
+    key: 'dueToday',
+    label: 'Due today',
+    value: statsNumber(applicationStats.value?.dueTodayFollowUpCount),
+    hint: 'Follow-up today'
+  },
+  {
+    key: 'stale',
+    label: 'Stale',
+    value: statsNumber(applicationStats.value?.staleActiveCount),
+    hint: 'No update 14d'
   }
-  return followUpItems
+])
+const funnelItems = computed(() =>
+  statusOptions.map((item) => ({
+    ...item,
+    count: statsNumber(applicationStats.value?.statusCounts?.[item.value])
+  }))
+)
+
+type FollowUpTag = {
+  label: string
+  type: 'danger' | 'warning' | 'success' | 'info'
+}
+
+const parseDateTime = (value?: string | null): Date | null => {
+  const raw = value?.trim()
+  if (!raw) return null
+
+  const localDateTime = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/)
+  if (localDateTime) {
+    const [, year, month, day, hour = '0', minute = '0', second = '0'] = localDateTime
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
+    const validLocalDate =
+      date.getFullYear() === Number(year) &&
+      date.getMonth() === Number(month) - 1 &&
+      date.getDate() === Number(day) &&
+      date.getHours() === Number(hour) &&
+      date.getMinutes() === Number(minute) &&
+      date.getSeconds() === Number(second)
+    return validLocalDate && !Number.isNaN(date.getTime()) ? date : null
+  }
+
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const isSameDate = (left: Date, right: Date) =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate()
+
+const isDateOnlyValue = (value?: string | null) => Boolean(value?.trim().match(/^\d{4}-\d{2}-\d{2}$/))
+
+const followUpTag = (item: JobApplicationVO): FollowUpTag | null => {
+  const followUpAt = parseDateTime(item.nextFollowUpAt)
+  if (!followUpAt) return null
+
+  const now = new Date()
+  if (isDateOnlyValue(item.nextFollowUpAt) && isSameDate(followUpAt, now)) return { label: '今日跟进', type: 'warning' }
+  if (followUpAt.getTime() < now.getTime()) return { label: '已到跟进时间', type: 'danger' }
+  if (isSameDate(followUpAt, now)) return { label: '今日跟进', type: 'warning' }
+  return { label: '已设置跟进', type: 'success' }
+}
+
+const normalizeCode = (value?: string) => value?.trim().toUpperCase()
+const statusFromEventType = (eventType?: string) => {
+  const normalized = normalizeCode(eventType)
+  if (!normalized) return undefined
+  if (['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'].includes(normalized)) return 'APPLIED'
+  if (normalized === 'INTERVIEW' || normalized.startsWith('INTERVIEW_')) return 'INTERVIEWING'
+  if (['OFFER', 'OFFER_RECEIVED'].includes(normalized)) return 'OFFER'
+  if (['REJECTION', 'REJECTED'].includes(normalized)) return 'REJECTED'
+  if (normalized === 'CLOSED') return 'CLOSED'
+  return undefined
+}
+const statusRank = (value?: string) => {
+  const ranks: Record<string, number> = {
+    SAVED: 0,
+    PREPARING: 1,
+    APPLIED: 2,
+    INTERVIEWING: 3,
+    OFFER: 4,
+    REJECTED: 5,
+    CLOSED: 6
+  }
+  const normalized = normalizeCode(value)
+  return normalized ? ranks[normalized] : undefined
+}
+const canApplyEventStatusChange = (currentStatus?: string, nextStatus?: string) => {
+  if (!nextStatus) return false
+  const current = normalizeCode(currentStatus)
+  const next = normalizeCode(nextStatus)
+  if (!next || current === next) return false
+  const currentRank = statusRank(current)
+  const nextRank = statusRank(next)
+  return nextRank != null && (currentRank == null || nextRank > currentRank)
+}
+const eventStatusImpact = computed(() => statusFromEventType(eventForm.eventType))
+const eventStatusImpactText = computed(() => {
+  const nextStatus = eventStatusImpact.value
+  if (!nextStatus) return ''
+  const currentStatus = selectedApplication.value?.status
+  if (canApplyEventStatusChange(currentStatus, nextStatus)) {
+    return `保存后会同步主状态为：${statusLabel(nextStatus)}`
+  }
+  return `该事件会进入时间线；当前主状态为 ${statusLabel(currentStatus)}，不会被回退为 ${statusLabel(nextStatus)}。`
 })
-const dueFollowUps = computed(() => getDueFollowUpApplications(applications.value).slice(0, 5))
+const eventStatusImpactTip = computed(() =>
+  eventStatusImpactText.value || '当前事件类型不会自动改动主状态，只会写入事件时间线。'
+)
+
+const reviewFieldLabels: Record<string, string> = {
+  score: '评分',
+  nextStep: '下一步',
+  nextSteps: '下一步',
+  action: '行动',
+  actionItems: '行动项',
+  summary: '复盘',
+  strengths: '亮点',
+  weakness: '短板',
+  risks: '风险提醒',
+  improvement: '改进点',
+  note: '备注',
+  result: '结果'
+}
+
+const stringifyReviewValue = (value: unknown): string => {
+  if (value == null || value === '') return ''
+  if (Array.isArray(value)) {
+    return value.map((item) => stringifyReviewValue(item)).filter(Boolean).join('；')
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => {
+        const text = stringifyReviewValue(item)
+        return text ? `${reviewFieldLabels[key] || key}：${text}` : ''
+      })
+      .filter(Boolean)
+      .join('；')
+  }
+  return String(value)
+}
+
+const parseReviewValue = (item: JobApplicationEventVO): Record<string, unknown> | string | null => {
+  if (item.review && Object.keys(item.review).length) return item.review
+  const raw = item.reviewJson?.trim()
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return stringifyReviewValue(parsed)
+  } catch {
+    return raw
+  }
+}
+
+const formatApplicationReview = (item: JobApplicationEventVO) => {
+  const review = parseReviewValue(item)
+  if (!review) return ''
+  if (typeof review === 'string') return review
+
+  return Object.entries(review)
+    .map(([key, value]) => {
+      const text = stringifyReviewValue(value)
+      return text ? `${reviewFieldLabels[key] || key}：${text}` : ''
+    })
+    .filter(Boolean)
+    .join('；')
+}
+
+const applicationTargetText = () => {
+  const company = form.companyName?.trim() || '未填写公司'
+  const job = form.jobTitle?.trim() || '未填写岗位'
+  const nextFollowUp = form.nextFollowUpAt ? `；下次跟进：${form.nextFollowUpAt}` : ''
+  return `${company} · ${job}；状态：${statusLabel(form.status)}；来源：${sourceLabel(form.source)}${nextFollowUp}`
+}
+
+const selectedApplicationText = () => {
+  const item = selectedApplication.value
+  if (!item) return '未选择求职进度'
+  return `${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'}；当前状态：${statusLabel(item.status)}`
+}
+
+const previewApplicationSave = () =>
+  confirmDangerActionPreview({
+    title: editingId.value ? '更新求职进度预览' : '新增求职进度预览',
+    action: editingId.value ? '更新一条求职进度' : '新增一条求职进度',
+    target: applicationTargetText(),
+    impact:
+      '会写入求职进度列表，并可能被后续今日行动、求职复盘、成长画像和训练建议引用；状态、来源和跟进时间会影响下一步提醒。',
+    rollback: '保存后不会自动恢复旧状态；如公司、岗位、状态或跟进时间填错，需要再次编辑该进度修正。',
+    audit: '可按求职进度记录、更新时间和关联事件追踪本次变更。',
+    tips: [
+      '确认公司、岗位和状态不是临时占位。',
+      '确认下次跟进时间会作为后续行动建议参考。',
+      form.resumeVersionId ? '已关联简历版本。' : '未关联简历版本时，后续复盘可能缺少投递简历快照。'
+    ],
+    confirmButtonText: '确认保存'
+  })
+
+const previewApplicationEventSave = () =>
+  confirmDangerActionPreview({
+    title: '新增求职事件预览',
+    action: '新增一条求职事件',
+    target: `${selectedApplicationText()}；事件：${eventTypeLabel(eventForm.eventType)}；时间：${eventForm.eventTime || '未填写'}`,
+    impact:
+      '会写入当前求职进度的事件时间线，并可能被后续面试复盘、跟进提醒、今日行动和求职状态判断引用。',
+    rollback: '当前页面不会自动撤回已保存事件；如记录不准确，需要新增修正事件或在后续治理入口处理。',
+    audit: '可按求职进度、事件时间和事件类型追踪本次记录。',
+    tips: [
+      '确认事件类型与真实进展一致，例如面试、跟进、录用通知或拒信。',
+      eventStatusImpactTip.value,
+      eventForm.summary?.trim() ? '摘要会作为后续复盘参考，请避免填写敏感联系方式或无关私密内容。' : '建议补充一句摘要，方便后续回看。',
+      eventForm.reviewJson?.trim() ? '复盘要点会影响后续行动建议，请确认内容准确。' : '未填写复盘要点时，后续建议主要依赖事件类型和摘要。'
+    ],
+    confirmButtonText: '确认保存事件'
+  })
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '接口请求失败，请稍后重试。')
+    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
   }
-  return '接口请求失败，请稍后重试。'
+  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
 }
 
-const normalizeFollowUpFilter = (value: unknown): ApplicationFollowUpFilter => {
-  const text = String(value || 'all')
-  return followUpFilters.some((item) => item.value === text) ? (text as ApplicationFollowUpFilter) : 'all'
-}
-
-const statusLabel = (value?: string) => getApplicationStageMeta(value).label
-const getStageMeta = (item: JobApplicationVO) => getApplicationStageMeta(item.status)
-const getFollowUpState = (item: JobApplicationVO) => getApplicationFollowUpState(item.nextFollowUpAt)
-const displayDate = (value?: string) => (value ? formatDateTime(value) : '--')
-
-const getDefaultNextFollowUpAt = () => {
-  const next = new Date()
-  next.setDate(next.getDate() + 7)
-  next.setHours(9, 0, 0, 0)
-  return formatLocalDateTime(next)
-}
-
-const tagType = (tone: string) => {
-  if (tone === 'danger') return 'danger'
-  if (tone === 'warning') return 'warning'
-  if (tone === 'success') return 'success'
-  if (tone === 'primary') return 'primary'
-  return 'info'
-}
-
-const eventTypeLabel = (value?: string) => getApplicationEventMeta(value).label
-
-const getLatestEvent = (item: JobApplicationVO) =>
-  buildBackendLatestApplicationEvent(item) || latestEventsByApplicationId.value[item.id]
-
-const getApplicationContext = (item: JobApplicationVO): ApplicationWorkbenchContext => {
-  const version = item.resumeVersionId ? resumeVersions.value[item.resumeVersionId] : undefined
-  return {
-    applicationId: item.id,
-    targetJobId: item.targetJobId,
-    resumeId: item.resumeId ?? version?.resumeId,
-    resumeVersionId: item.resumeVersionId,
-    matchReportId: item.matchReportId,
-    source: 'application',
-    nextFollowUpAt: item.nextFollowUpAt
-  }
-}
-
-const getResumeVersionLabel = (item: JobApplicationVO) => {
-  if (!item.resumeVersionId) return formatApplicationResumeVersionLabel(null)
-  if (hasBackendResumeVersionSummary(item)) {
-    return formatApplicationResumeVersionLabel({
-      resumeVersionId: item.resumeVersionId,
-      versionNo: item.resumeVersionNo,
-      versionName: item.resumeVersionName,
-      currentFlag: item.resumeVersionCurrentFlag
-    })
-  }
-  const version = resumeVersions.value[item.resumeVersionId]
-  return formatApplicationResumeVersionLabel({
-    resumeVersionId: item.resumeVersionId,
-    versionNo: version?.versionNo,
-    versionName: version?.versionName,
-    currentFlag: version?.currentFlag
-  })
-}
-
-const loadResumeVersions = async (items: JobApplicationVO[]) => {
-  const ids = [...new Set(items
-    .filter((item) => !hasBackendResumeVersionSummary(item))
-    .map((item) => item.resumeVersionId)
-    .filter((id): id is number => Boolean(id)))]
-    .filter((id) => !(id in resumeVersions.value))
-  if (!ids.length) return
-  const results = await Promise.allSettled(ids.map((id) => getResumeVersionDetailApi(id)))
-  const next = { ...resumeVersions.value }
-  results.forEach((result, index) => {
-    next[ids[index]] = result.status === 'fulfilled' ? result.value : null
-  })
-  resumeVersions.value = next
-}
-
-const updateLatestEventCache = (applicationId: number, rawEvents: JobApplicationEventVO[]) => {
-  latestEventsByApplicationId.value = {
-    ...latestEventsByApplicationId.value,
-    [applicationId]: buildApplicationEventTimeline(rawEvents)[0]
-  }
-}
-
-const loadLatestEvents = async (items: JobApplicationVO[]) => {
-  const candidates = items
-    .filter((item) => item.id && !hasBackendLatestEventSummary(item) && !(item.id in latestEventsByApplicationId.value))
-    .slice(0, latestEventPreviewLimit)
-  if (!candidates.length) return
-
-  latestEventLoading.value = true
-  latestEventsError.value = ''
-  const results = await Promise.allSettled(candidates.map((item) => getApplicationEventsApi(item.id)))
-  const next = { ...latestEventsByApplicationId.value }
-  let failedCount = 0
-  results.forEach((result, index) => {
-    const applicationId = candidates[index].id
-    if (result.status === 'fulfilled') {
-      next[applicationId] = buildApplicationEventTimeline(result.value)[0]
-    } else {
-      failedCount += 1
-      next[applicationId] = undefined
-    }
-  })
-  latestEventsByApplicationId.value = next
-  if (failedCount) {
-    latestEventsError.value = `${failedCount} 条投递的最近事件暂时不可用`
-  }
-  latestEventLoading.value = false
-}
-
-const loadStats = async () => {
-  statsLoading.value = true
-  statsError.value = ''
-  try {
-    stats.value = await getApplicationStatsApi()
-  } catch (error) {
-    stats.value = null
-    statsError.value = getErrorMessage(error)
-  } finally {
-    statsLoading.value = false
-  }
-}
-
-const handleRouteAction = () => {
-  if (routeActionHandled.value) return
-  if (route.query.action !== 'create-event') return
-  const applicationId = Number(route.query.applicationId)
-  const item = applications.value.find((entry) => entry.id === applicationId)
-  if (!item) return
-  routeActionHandled.value = true
-  openFollowUpCreate(item, {
-    eventType: String(route.query.eventType || 'FOLLOW_UP'),
-    eventTime: String(route.query.eventTime || '') || undefined
-  })
-}
-
-const load = async () => {
+const loadApplications = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const items = await getApplicationsApi({ status: status.value || undefined })
-    applications.value = items
-    latestEventsByApplicationId.value = {}
-    await loadResumeVersions(items)
-    void loadLatestEvents(items)
-    handleRouteAction()
+    applications.value = await getApplicationsApi({ status: status.value || undefined })
   } catch (error) {
     applications.value = []
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
   }
-  void loadStats()
 }
 
-const handleStatusChange = () => {
-  stageFilter.value = 'all'
-  void load()
+const loadStats = async () => {
+  statsLoading.value = true
+  statsWarning.value = ''
+  try {
+    applicationStats.value = await getApplicationStatsApi()
+  } catch (error) {
+    applicationStats.value = undefined
+    statsWarning.value = getErrorMessage(error)
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+const load = async () => {
+  await Promise.allSettled([loadApplications(), loadStats()])
+}
+
+const applyStatusFilter = async (value: string) => {
+  status.value = value
+  await loadApplications()
+}
+
+const clearStatusFilter = async () => {
+  status.value = ''
+  await loadApplications()
 }
 
 const openCreate = () => {
@@ -513,8 +585,6 @@ const openCreate = () => {
     companyName: '',
     source: 'CUSTOM',
     note: '',
-    targetJobId: undefined,
-    matchReportId: undefined,
     resumeVersionId: undefined,
     nextFollowUpAt: ''
   })
@@ -528,6 +598,9 @@ const openEdit = (item: JobApplicationVO) => {
 }
 
 const save = async () => {
+  if (saving.value) return
+  const confirmed = await previewApplicationSave()
+  if (!confirmed) return
   saving.value = true
   try {
     if (editingId.value) {
@@ -547,6 +620,8 @@ const save = async () => {
 
 const openEvents = async (item: JobApplicationVO) => {
   selectedApplication.value = item
+  events.value = []
+  eventsError.value = ''
   eventsVisible.value = true
   await loadEvents()
 }
@@ -556,13 +631,10 @@ const loadEvents = async () => {
   eventsLoading.value = true
   eventsError.value = ''
   try {
-    const result = await getApplicationEventsApi(selectedApplication.value.id)
-    events.value = result
-    updateLatestEventCache(selectedApplication.value.id, result)
+    events.value = await getApplicationEventsApi(selectedApplication.value.id)
   } catch (error) {
     events.value = []
     eventsError.value = getErrorMessage(error)
-    ElMessage.error(getErrorMessage(error))
   } finally {
     eventsLoading.value = false
   }
@@ -575,64 +647,42 @@ const openEventCreate = () => {
     summary: '',
     reviewJson: ''
   })
-  followUpNextAt.value = ''
   eventDialogVisible.value = true
-}
-
-const openFollowUpCreate = (item: JobApplicationVO, preset?: Partial<JobApplicationEventVO>) => {
-  selectedApplication.value = item
-  Object.assign(eventForm, {
-    eventType: preset?.eventType || 'FOLLOW_UP',
-    eventTime: preset?.eventTime || formatLocalDateTime(),
-    summary: preset?.summary || `跟进 ${item.companyName || '目标公司'} · ${item.jobTitle || '目标岗位'}`,
-    reviewJson: ''
-  })
-  followUpNextAt.value = getDefaultNextFollowUpAt()
-  eventDialogVisible.value = true
-}
-
-const openResultEventCreate = (item: JobApplicationVO, eventType: string) => {
-  const meta = getApplicationEventMeta(eventType)
-  selectedApplication.value = item
-  Object.assign(eventForm, {
-    eventType,
-    eventTime: formatLocalDateTime(),
-    summary: `${meta.label}：${item.companyName || '目标公司'} · ${item.jobTitle || '目标岗位'}`,
-    reviewJson: ''
-  })
-  followUpNextAt.value = ''
-  eventDialogVisible.value = true
-}
-
-const handleResultEventCommand = (item: JobApplicationVO, command: unknown) => {
-  openResultEventCreate(item, String(command || 'NOTE'))
 }
 
 const createEvent = async () => {
   if (!selectedApplication.value) return
+  if (saving.value) return
+  const confirmed = await previewApplicationEventSave()
+  if (!confirmed) return
+  const applicationId = selectedApplication.value.id
+  const previousApplication = selectedApplication.value
+  const nextStatus = eventStatusImpact.value
+  const shouldSyncStatus = canApplyEventStatusChange(previousApplication.status, nextStatus)
   saving.value = true
   try {
-    await createApplicationEventApi(selectedApplication.value.id, {
+    await createApplicationEventApi(applicationId, {
       eventType: eventForm.eventType,
       eventTime: eventForm.eventTime,
       summary: eventForm.summary,
       reviewJson: eventForm.reviewJson || undefined
     })
-    if (eventForm.eventType === 'FOLLOW_UP' && followUpNextAt.value) {
-      try {
-        await updateApplicationApi(selectedApplication.value.id, {
-          nextFollowUpAt: followUpNextAt.value
-        })
-      } catch {
-        eventDialogVisible.value = false
-        ElMessage.warning('事件已保存，但下次跟进时间更新失败，请稍后在编辑里补充。')
-        await Promise.all([loadEvents(), load()]).catch(() => undefined)
-        return
-      }
-    }
     eventDialogVisible.value = false
     ElMessage.success('事件已保存')
-    await Promise.all([loadEvents(), load()])
+    await load()
+    const refreshed = applications.value.find((item) => item.id === applicationId)
+    if (refreshed) {
+      selectedApplication.value = refreshed
+    } else {
+      selectedApplication.value = {
+        ...previousApplication,
+        ...(shouldSyncStatus && nextStatus ? { status: nextStatus } : {})
+      }
+      if (status.value && shouldSyncStatus) {
+        ElMessage.info('主状态已同步，当前筛选条件下该进度已从列表移出。')
+      }
+    }
+    await loadEvents()
   } catch (error) {
     ElMessage.error(getErrorMessage(error))
   } finally {
@@ -640,83 +690,15 @@ const createEvent = async () => {
   }
 }
 
-const goRoute = (target: RouteLocationRaw) => {
-  router.push(target)
-}
-
-const goInterview = (item: JobApplicationVO) => {
-  goRoute(buildApplicationInterviewRoute(getApplicationContext(item)) as RouteLocationRaw)
-}
-
-const goResumeVersion = (item: JobApplicationVO) => {
-  goRoute(buildApplicationResumeVersionRoute(getApplicationContext(item)) as RouteLocationRaw)
-}
-
-const applyStageCard = (key: ApplicationStageKey) => {
-  stageFilter.value = 'all'
-  const followUpStageMap: Partial<Record<ApplicationStageKey, ApplicationFollowUpFilter>> = {
-    'follow-up-overdue': 'overdue',
-    'follow-up-due-today': 'due-today',
-    'follow-up-missing': 'missing'
-  }
-  const nextFollowUpFilter = followUpStageMap[key]
-  if (nextFollowUpFilter) {
-    followUpFilter.value = nextFollowUpFilter
-    status.value = ''
-    void load()
-    syncFollowUpQuery()
-    return
-  }
-  if (key === 'active') stageFilter.value = 'active'
-  if (key === 'total' || key === 'active' || key === 'interviewing' || key === 'offer' || key === 'rejected' || key === 'closed') {
-    const nextStatus: Record<string, string> = {
-      interviewing: 'INTERVIEWING',
-      offer: 'OFFER',
-      rejected: 'REJECTED',
-      closed: 'CLOSED'
-    }
-    status.value = nextStatus[key] || ''
-    void load()
-  }
-  syncFollowUpQuery()
-}
-
-const syncFollowUpQuery = () => {
-  const query = { ...route.query }
-  if (followUpFilter.value === 'all') {
-    delete query.followUp
-  } else {
-    query.followUp = followUpFilter.value
-  }
-  router.replace({ query })
-}
-
-watch(
-  () => route.query.followUp,
-  (value) => {
-    followUpFilter.value = normalizeFollowUpFilter(value)
-  },
-  { immediate: true }
-)
-
 onMounted(load)
 </script>
 
 <style scoped lang="scss">
-.v4-application-page {
-  gap: 18px;
-}
-
 .v4-page-header,
 .v4-row-head,
 .v4-actions,
 .drawer-actions,
-.event-row__head,
-.row-tags,
-.row-actions,
-.follow-up-panel__head,
-.follow-up-counts,
-.latest-event {
+.event-row__head {
   display: flex;
   gap: 16px;
 }
@@ -731,275 +713,163 @@ onMounted(load)
   box-shadow: var(--app-shadow);
 }
 
-.v4-page-header h1,
-.follow-up-panel h2,
-.list-head h2 {
-  margin: 8px 0 0;
-}
-
 .v4-page-header h1 {
+  margin: 8px 0 0;
   font-size: 28px;
 }
 
 .v4-page-header p,
 .muted,
 .event-row p,
-.event-row span,
-.stage-desc,
-.application-meta,
-.due-item span,
-.overview-card small,
-.list-head span,
-.panel-warning,
-.latest-event {
+.event-row span {
   color: var(--app-text-muted);
   line-height: 1.7;
 }
 
-.v4-eyebrow,
-.section-kicker {
-  margin: 0;
+.v4-eyebrow {
   color: #93c5fd;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .v4-actions,
-.drawer-actions,
-.row-actions,
-.row-tags,
-.follow-up-counts {
+.drawer-actions {
   flex-wrap: wrap;
   align-items: center;
 }
 
-.workbench-overview {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
-.overview-card {
-  display: grid;
-  gap: 8px;
-  min-height: 128px;
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
-  color: var(--app-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.overview-card strong {
-  font-size: 30px;
-}
-
-.overview-card--success {
-  border-color: rgba(34, 197, 94, 0.28);
-}
-
-.overview-card--warning {
-  border-color: rgba(251, 191, 36, 0.32);
-}
-
-.overview-card--danger {
-  border-color: rgba(248, 113, 113, 0.32);
-}
-
-.follow-up-panel,
-.content-card {
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow);
-}
-
-.follow-up-panel {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
-}
-
-.follow-up-panel__head,
-.v4-row-head,
-.event-row__head,
-.list-head {
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.due-list,
 .v4-list,
-.event-timeline {
+.event-list {
   display: grid;
   gap: 12px;
 }
 
-.due-item,
+.application-stats {
+  display: grid;
+  gap: 12px;
+}
+
+.stats-warning {
+  border-radius: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card,
+.funnel-item {
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+  min-height: 96px;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.metric-card span,
+.funnel-item span {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.metric-card strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.metric-card small {
+  color: var(--app-text-muted);
+}
+
+.status-funnel {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(92px, 1fr));
+  overflow-x: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.funnel-item {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border-width: 0 1px 0 0;
+  background: transparent;
+}
+
+.funnel-item:last-child {
+  border-right: 0;
+}
+
+.funnel-item.is-active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #bfdbfe;
+}
+
 .v4-row,
 .event-row {
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(15, 23, 42, 0.58);
 }
 
-.due-item {
-  display: flex;
+.v4-row-head,
+.event-row__head {
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.due-item strong,
-.due-item span,
-.application-title strong,
-.application-meta span {
-  overflow-wrap: anywhere;
-}
-
-.list-head {
-  display: flex;
-  gap: 12px;
-}
-
-.application-title {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.application-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-  margin-top: 12px;
-  font-size: 13px;
-}
-
-.stage-desc,
-.event-row p {
-  margin: 8px 0 0;
-}
-
-.latest-event {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-top: 10px;
-  font-size: 13px;
-}
-
-.latest-event strong {
-  color: var(--app-text);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.latest-event-placeholder {
-  margin-top: 10px;
-  font-size: 13px;
-}
-
-.event-alert {
-  margin-bottom: 12px;
-}
-
-.event-timeline {
-  position: relative;
-  padding-left: 18px;
-}
-
-.event-timeline::before {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 7px;
-  width: 1px;
-  background: rgba(148, 163, 184, 0.22);
-  content: '';
-}
-
-.event-row {
-  position: relative;
-}
-
-.event-dot {
-  position: absolute;
-  top: 20px;
-  left: -20px;
-  width: 11px;
-  height: 11px;
-  border: 2px solid rgba(96, 165, 250, 0.84);
-  border-radius: 999px;
-  background: #020617;
-}
-
-.event-row--success .event-dot {
-  border-color: rgba(34, 197, 94, 0.88);
-}
-
-.event-row--warning .event-dot {
-  border-color: rgba(251, 191, 36, 0.88);
-}
-
-.event-row--danger .event-dot {
-  border-color: rgba(248, 113, 113, 0.88);
-}
-
-.event-row__body {
-  min-width: 0;
-}
-
-.event-row__head > div {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.event-row__head strong {
-  overflow-wrap: anywhere;
 }
 
 .drawer-actions {
   margin-bottom: 16px;
 }
 
-.event-row pre {
-  overflow: auto;
-  max-height: 180px;
+.event-impact-alert {
+  margin: -4px 0 16px;
+}
+
+.event-row p {
+  margin: 8px 0 0;
+}
+
+.event-row__review {
   margin: 10px 0 0;
   padding: 10px;
   border-radius: 8px;
   background: #020617;
   color: #dbeafe;
-  white-space: pre-wrap;
-}
-
-@media (max-width: 1200px) {
-  .workbench-overview {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  line-height: 1.7;
 }
 
 @media (max-width: 900px) {
   .v4-page-header,
   .v4-row-head,
-  .event-row__head,
-  .follow-up-panel__head,
-  .due-item,
-  .list-head {
+  .event-row__head {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .workbench-overview {
-    grid-template-columns: 1fr;
   }
 }
 </style>

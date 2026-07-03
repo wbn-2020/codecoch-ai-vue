@@ -22,16 +22,16 @@
       </div>
       <div class="v3-hero__panel">
         <span class="v3-status-pill">{{ statusLabel }}</span>
-        <strong>V3 前端基础骨架</strong>
-        <p>本页提供真实路由入口和联调状态说明，不展示演示业务结果。</p>
+        <strong>能力建设中</strong>
+        <p>本页会指向可继续操作的入口；暂未完善的能力不会展示模拟结果。</p>
       </div>
     </section>
 
     <div class="v3-grid">
       <section class="v3-section">
         <div class="v3-section__head">
-          <span>数据契约</span>
-          <el-tag effect="plain" type="success">真实数据</el-tag>
+          <span>相关能力</span>
+          <el-tag effect="plain" type="success">已接入</el-tag>
         </div>
         <ul class="v3-api-list">
           <li v-for="item in apiItems" :key="item">
@@ -43,7 +43,7 @@
       <section class="v3-section">
         <div class="v3-section__head">
           <span>当前范围</span>
-          <el-tag effect="plain" type="warning">待实现业务区块</el-tag>
+          <el-tag effect="plain" type="warning">继续完善中</el-tag>
         </div>
         <ul class="v3-scope-list">
           <li v-for="item in scopeItems" :key="item">{{ item }}</li>

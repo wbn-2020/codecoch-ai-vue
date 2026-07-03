@@ -15,7 +15,9 @@ export interface IndustryTemplateVO {
   updatedAt?: string
 }
 
-export interface AdminIndustryTemplateQuery {
+import type { PageQuery } from './api'
+
+export interface AdminIndustryTemplateQuery extends PageQuery {
   keyword?: string
   enabled?: number | ''
 }

@@ -1,33 +1,39 @@
 import { defineStore } from 'pinia'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
+import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
+
 const TAGS_KEY = 'codecoachai-visited-tags'
 const MAX_TAGS_PER_SCOPE = 12
 const RETIRED_TAG_PATHS = new Set(['/admin/ops/overview'])
 
 const TAG_TITLE_MAP: Record<string, string> = {
-  '/dashboard': '工作台',
-  '/dashboard/v3': 'V3 驾驶舱',
+  '/dashboard': '今日计划',
+  '/onboarding': '新手引导',
+  '/dashboard/v3': '求职闭环',
   '/profile': '个人资料',
   '/password': '修改密码',
   '/notifications': '通知中心',
   '/questions': '题库',
-  '/questions/practice': '刷题练习',
+  '/questions/practice': '专项练习',
   '/questions/wrong-records': '错题本',
   '/questions/favorites': '收藏题目',
-  '/questions/recommendations': '推荐题目',
+  '/questions/recommendations': '题库训练',
   '/job-targets': '岗位目标',
-  '/resumes': '简历中心',
+  '/resumes': '简历与岗位',
+  '/resumes/manage': '简历列表',
   '/resume-match': '简历匹配',
   '/skill-profile': '能力画像',
+  '/project-evidence': '项目素材',
   '/ability-map': '能力地图',
-  '/study-plans': '学习计划',
-  '/daily-tasks': '每日任务',
-  '/knowledge': '知识库',
-  '/agent/today': '今日 Agent',
-  '/agent/tasks': 'Agent 任务',
   '/job-experiments': '求职实验台',
   '/portfolio-demo': '作品集演示',
+  '/study-plans': '学习计划',
+  '/daily-tasks': '每日任务',
+  '/tools': '记录与工具',
+  '/knowledge': '知识库',
+  '/agent/today': '今日计划',
+  '/agent/tasks': '任务中心',
   '/admin/dashboard': '管理首页',
   '/admin/files': '文件治理',
   '/admin/users': '用户管理',
@@ -42,22 +48,23 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/admin/question-groups': '问题组管理',
   '/admin/industry-templates': '行业模板',
   '/admin/ai/prompts': 'Prompt 模板',
-  '/admin/ai/logs': 'AI 调用日志',
+  '/admin/ai/logs': 'AI 运行记录',
   '/admin/ai/models': 'AI 模型配置',
-  '/admin/analytics/agent': 'Agent 效果分析',
-  '/admin/analytics/ai': 'AI Ops 看板',
+  '/admin/analytics/agent': '生成效果分析',
+  '/admin/analytics/ai': 'AI 运营看板',
   '/admin/analytics/metrics': '指标字典',
   '/admin/analytics/jobs': '聚合任务',
   '/admin/ai/prompt-regression': 'Prompt 回归',
   '/admin/menus': '菜单权限',
   '/admin/notices': '通知管理',
+  '/admin/announcements': '公告管理',
   '/admin/operation-logs': '操作日志',
   '/admin/login-logs': '登录日志',
   '/admin/slow-sql-logs': '慢 SQL 查询',
   '/admin/interviews': '面试记录',
   '/admin/interview-reports': '面试报告',
-  '/admin/agent/runs': 'Agent 运行',
-  '/admin/agent/tasks': 'Agent 任务',
+  '/admin/agent/runs': '生成运行记录',
+  '/admin/agent/tasks': '生成任务处理',
   '/admin/async-tasks': '任务中心',
   '/admin/system/configs': '系统配置'
 }
@@ -74,7 +81,7 @@ export interface VisitedTag {
 }
 
 const userHomeTag: VisitedTag = {
-  title: '工作台',
+  title: '今日计划',
   path: '/dashboard',
   fullPath: '/dashboard',
   name: 'Dashboard',
@@ -112,6 +119,16 @@ const resolveTagTitle = (path: string, fallback?: unknown) => {
   return TAG_TITLE_MAP[path] || String(fallback || path)
 }
 
+const sanitizeTagFullPath = (path: string, fullPath?: unknown) => {
+  const fallback = buildSafeRedirectTarget(path)
+  const sanitized = sanitizeLocalRedirectPath(
+    typeof fullPath === 'string' ? fullPath : path,
+    fallback,
+    []
+  )
+  return sanitized.split('?')[0] === path ? sanitized : fallback
+}
+
 const ensureAffix = (tags: VisitedTag[]): VisitedTag[] => {
   // 保证 user / admin 两个 affix 始终存在，且 affix 永远排在最前
   const withoutAffix = tags.filter(
@@ -132,7 +149,7 @@ const readTags = (): VisitedTag[] => {
           .map((item) => ({
             title: resolveTagTitle(String(item.path), item.title),
             path: String(item.path),
-            fullPath: String(item.fullPath || item.path),
+            fullPath: sanitizeTagFullPath(String(item.path), item.fullPath || item.path),
             name: item.name ? String(item.name) : undefined,
             affix: Boolean(item.affix),
             // 兼容旧数据（没有 scope 的认为是 admin）
@@ -178,7 +195,7 @@ export const useTagsViewStore = defineStore('tagsView', {
       const tag: VisitedTag = {
         title: resolveTagTitle(route.path, route.meta?.title || route.name || route.path),
         path: route.path,
-        fullPath: route.fullPath,
+        fullPath: buildSafeRedirectTarget(route.path, route.query),
         name: route.name ? String(route.name) : undefined,
         affix: Boolean(route.meta?.affix),
         scope

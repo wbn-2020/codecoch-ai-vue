@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { AxiosError } from 'axios'
 import { formatDateTime } from '@/utils/format'
+import { compactQueryParams, normalizePageResult } from '@/utils/page'
 
 export interface NotificationVO {
   id: number
@@ -19,9 +20,9 @@ export interface NotificationVO {
   fallbackPath?: string
   fallbackLabel?: string
   planDate?: string
-  resolvedStatus?: number | string
-  resolvedAt?: string
-  resolvedReason?: string
+  resolvedStatus?: number | string | boolean | null
+  resolvedAt?: string | null
+  resolvedReason?: string | null
 }
 
 export interface NotificationQueryDTO {
@@ -40,16 +41,10 @@ type BackendNotificationVO = NotificationVO & {
   readStatus?: number | string
   bizId?: number | string
   bizType?: string
-  resolvedStatus?: number | string
 }
 
 const normalizeReadFlag = (value: unknown) => {
   if (value === 1 || value === '1' || value === true || value === 'READ') return 1
-  return 0
-}
-
-const normalizeResolvedFlag = (value: unknown) => {
-  if (value === 1 || value === '1' || value === true || value === 'RESOLVED') return 1
   return 0
 }
 
@@ -68,9 +63,7 @@ const normalizeNotification = (item: BackendNotificationVO): NotificationVO => (
   isRead: item.isRead ?? normalizeReadFlag(item.readStatus),
   createdAt: formatDateTime(item.createdAt),
   relatedId: item.relatedId ?? item.bizId,
-  relatedType: normalizeRelatedType(item.relatedType ?? item.bizType),
-  resolvedStatus: normalizeResolvedFlag(item.resolvedStatus),
-  resolvedAt: item.resolvedAt ? formatDateTime(item.resolvedAt) : undefined
+  relatedType: normalizeRelatedType(item.relatedType ?? item.bizType)
 })
 
 const normalizeUnreadCount = (result: UnreadCountVO | number) => {
@@ -92,13 +85,11 @@ export const getNotificationsApi = (params: NotificationQueryDTO) => {
     query.readStatus = params.isRead
   }
   delete query.isRead
+  const requestParams = compactQueryParams(query)
 
   return request
-    .get<PageResult<BackendNotificationVO>, PageResult<BackendNotificationVO>>('/notifications', { params: query })
-    .then((result) => ({
-      ...result,
-      records: (result.records || []).map(normalizeNotification)
-    }))
+    .get<PageResult<BackendNotificationVO>, PageResult<BackendNotificationVO>>('/notifications', { params: requestParams })
+    .then((result) => normalizePageResult(result, params, normalizeNotification))
 }
 
 export const getUnreadCountApi = () => {

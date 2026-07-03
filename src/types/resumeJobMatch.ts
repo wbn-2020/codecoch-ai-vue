@@ -1,6 +1,13 @@
 import type { PageQuery } from './api'
 
 export type ResumeJobMatchStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | string
+export type ResumeJobMatchTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
+
+export interface ResumeJobMatchSchemaWarning {
+  field?: string
+  message?: string
+  [key: string]: unknown
+}
 
 export interface ResumeJobMatchCreateDTO {
   resumeId: number
@@ -11,6 +18,7 @@ export interface ResumeJobMatchCreateDTO {
 
 export interface ResumeJobMatchQueryDTO extends PageQuery {
   resumeId?: number
+  resumeVersionId?: number
   targetJobId?: number
   status?: ResumeJobMatchStatus | ''
 }
@@ -24,8 +32,20 @@ export interface ResumeJobMatchSubmitVO {
   targetJobId: number
   jdAnalysisId?: number
   aiCallLogId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   status: ResumeJobMatchStatus
   errorMessage?: string
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: ResumeJobMatchTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
+  schemaWarnings?: ResumeJobMatchSchemaWarning[]
+  schemaWarningCount?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -48,6 +68,13 @@ export interface ResumeJobMatchReportListVO {
   status: ResumeJobMatchStatus
   summary?: string
   errorMessage?: string
+  sourceType?: string
+  sourceId?: number
+  trustStatus?: ResumeJobMatchTrustStatus
+  evidenceSummary?: string
+  fallback?: boolean
+  schemaWarnings?: ResumeJobMatchSchemaWarning[]
+  schemaWarningCount?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -68,13 +95,17 @@ export interface ResumeJobMatchDetailItemVO {
 export interface ResumeJobMatchReportDetailVO extends ResumeJobMatchReportListVO {
   userId?: number
   jdAnalysisId?: number
+  asyncMessageId?: string | null
+  asyncTraceId?: string | null
+  asyncBizType?: string | null
+  asyncBizId?: string | null
+  asyncSendStatus?: string | null
   strengths?: unknown
   gaps?: unknown
   resumeRisks?: unknown
   optimizationSuggestions?: unknown
   recommendedLearningTopics?: unknown
   recommendedInterviewTopics?: unknown
-  rawResult?: unknown
   aiCallLogId?: number
   details?: ResumeJobMatchDetailItemVO[]
 }

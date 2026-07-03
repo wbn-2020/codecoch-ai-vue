@@ -12,6 +12,7 @@ export interface AdminListQuery extends PageQuery {
   module?: string
   action?: string
   traceId?: string
+  sendStatus?: string
   loginType?: string
   mapperId?: string
   sqlCommandType?: string
@@ -33,6 +34,7 @@ export interface AdminLogSummaryVO {
 
 export interface AsyncTaskVO {
   id: number
+  messageId?: string
   taskId?: string
   taskType?: string
   taskName?: string
@@ -42,6 +44,8 @@ export interface AsyncTaskVO {
   deadLetter?: boolean | number
   bizId?: string
   bizType?: string
+  userId?: number
+  traceId?: string
   errorMessage?: string
   payload?: string
   payloadPreview?: string
@@ -77,6 +81,9 @@ export interface AdminNotificationVO {
   targetType?: string
   targetUserId?: number
   status?: string | number
+  sendStatus?: string
+  sendError?: string
+  sentAt?: string
   createdAt?: string
   publishedAt?: string
 }
@@ -87,6 +94,22 @@ export interface NotificationSendDTO {
   type: string
   targetType: 'ALL' | 'USER'
   targetUserId?: number
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+}
+
+export interface AdminOperationConfirmPayload {
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+}
+
+export interface AdminTaskActionPayload extends AdminOperationConfirmPayload {
+  note: string
+  dryRun: boolean
 }
 
 export interface OperationLogVO {
@@ -175,7 +198,7 @@ export interface MenuVO {
   children?: MenuVO[]
 }
 
-export interface RoleMenuGrantDTO {
+export interface RoleMenuGrantDTO extends AdminOperationConfirmPayload {
   menuIds: number[]
 }
 

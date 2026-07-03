@@ -25,16 +25,25 @@ export interface PromptTemplateVO {
   scene?: AiScene
   templateContent?: string
   content?: string
+  contentLength?: number
+  contentHash?: string
+  templateContentLength?: number
+  templateContentHash?: string
   systemPrompt?: string
   userPromptTemplate?: string
   variables?: string
   variableDesc?: string
   version?: string
+  activeVersionId?: number | null
+  enabled?: number
   status: number
   description?: string
   createdAt?: string
   updatedAt?: string
   updateTime?: string
+  rawFieldsAvailable?: boolean
+  rawFieldsIncluded?: boolean
+  rawAccessPermission?: string
 }
 
 export interface PromptTemplateDetailVO extends PromptTemplateVO {
@@ -47,6 +56,12 @@ export interface PromptTemplateDTO {
   content: string
   status: number
   description?: string
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
+  expectedStatus?: number | null
+  expectedActiveVersionId?: number | null
 }
 
 export interface PromptTemplateVersionVO {
@@ -55,9 +70,13 @@ export interface PromptTemplateVersionVO {
   scene: AiScene
   versionCode: string
   versionName?: string
-  content: string
+  content?: string
+  contentLength?: number
+  contentHash?: string
   variablesJson?: string
   modelParamsJson?: string
+  modelParamsLength?: number
+  modelParamsHash?: string
   status: PromptTemplateVersionStatus | string
   isActive: number
   createdBy?: number
@@ -66,6 +85,9 @@ export interface PromptTemplateVersionVO {
   changeLog?: string
   createdAt?: string
   updatedAt?: string
+  rawFieldsAvailable?: boolean
+  rawFieldsIncluded?: boolean
+  rawAccessPermission?: string
 }
 
 export interface CreatePromptTemplateVersionDTO {
@@ -76,6 +98,10 @@ export interface CreatePromptTemplateVersionDTO {
   modelParamsJson?: string
   status?: PromptTemplateVersionStatus
   changeLog?: string
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface PromptTemplateVersionQuery extends PageQuery {
@@ -85,19 +111,39 @@ export interface PromptTemplateVersionQuery extends PageQuery {
 
 export interface ActivatePromptTemplateVersionDTO {
   changeLog?: string
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+  expectedCurrentActiveVersionId?: number | null
 }
 
 export interface PromptVersionRollbackDTO {
   changeLog?: string
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+  expectedCurrentActiveVersionId?: number | null
 }
 
 export interface DisablePromptTemplateVersionDTO {
   changeLog?: string
+  confirm: boolean
+  dryRun?: boolean
+  reason: string
+  idempotencyKey: string
+  expectedCurrentActiveVersionId?: number | null
 }
 
 export interface TestPromptTemplateVersionDTO {
   inputVariables?: Record<string, string>
   callAi?: boolean
+  confirmSensitiveAccess?: boolean
+  confirm?: boolean
+  dryRun?: boolean
+  reason?: string
+  idempotencyKey?: string
 }
 
 export interface TestPromptTemplateVersionVO {
@@ -105,11 +151,18 @@ export interface TestPromptTemplateVersionVO {
   templateId: number
   scene: AiScene
   versionCode: string
-  renderedPrompt: string
-  inputVariables?: Record<string, string>
-  aiResponse?: string
+  renderedPromptLength?: number
+  renderedPromptHash?: string
+  inputVariableCount?: number
+  inputVariableKeys?: string[]
+  inputVariablesHash?: string
+  aiResponseLength?: number
+  aiResponseHash?: string
   aiCallLogId?: number
   mockMode?: boolean
+  rawFieldsAvailable?: boolean
+  rawFieldsIncluded?: boolean
+  rawAccessPermission?: string
 }
 
 export interface AiCallLogQueryDTO extends PageQuery {
@@ -143,6 +196,9 @@ export interface AiCallLogVO {
   status: string | number
   provider?: string
   modelName?: string
+  resultSource?: 'LLM' | 'MOCK' | 'FALLBACK' | string
+  resultSourceLabel?: string
+  fallback?: boolean
   traceId?: string
   traceIdShort?: string
   shortTraceId?: string
@@ -190,4 +246,11 @@ export interface AiCallLogVO {
   outputTokens?: number
   totalTokens?: number
   createdAt?: string
+}
+
+export interface AiLogRawAccessDTO {
+  accessReason: string
+  confirmSensitiveAccess: boolean
+  dryRun?: boolean
+  idempotencyKey: string
 }

@@ -4,10 +4,10 @@
       <div>
         <div class="eyebrow">
           <Sparkles :size="16" />
-          AI 面试配置
+          创建面试
         </div>
         <h1>创建 AI 模拟面试</h1>
-        <p>基于简历、岗位方向和技术栈生成 Java 面试训练，创建后可直接进入面试房间。</p>
+        <p>像准备真实面试一样选择训练场景、绑定简历和目标岗位，再进入可追问的面试房间。</p>
         <div class="hero-tags">
           <el-tag effect="plain">创建后直接开始</el-tag>
           <el-tag effect="plain" type="success">支持简历上下文</el-tag>
@@ -17,7 +17,7 @@
       <div class="hero-actions">
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
-          返回工作台
+          返回今日计划
         </el-button>
         <el-button @click="router.push('/resumes')">
           <Files :size="16" />
@@ -30,254 +30,273 @@
       </div>
     </section>
 
+    <section class="quick-start-panel">
+      <div class="quick-start-panel__copy">
+        <span class="quick-label">推荐开练</span>
+        <h2>{{ quickInterviewTitle }}</h2>
+        <p>{{ quickInterviewDesc }}</p>
+        <div class="quick-context-grid">
+          <article v-for="item in quickStartItems" :key="item.label">
+            <component :is="item.icon" :size="17" />
+            <div>
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </article>
+        </div>
+        <ul class="quick-reason-list">
+          <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+      <div class="quick-start-panel__actions">
+        <el-alert v-if="quickStartNotice" :title="quickStartNotice" type="warning" :closable="false" show-icon />
+        <el-alert v-if="routeContextNotice" :title="routeContextNotice" type="warning" :closable="false" show-icon />
+        <el-button
+          v-if="!configExpanded"
+          type="success"
+          size="large"
+          :loading="creating || resumeLoading || matchReportVerifyLoading"
+          @click="handleQuickCreate"
+        >
+          <Play :size="17" />
+          一键开始推荐面试
+        </el-button>
+        <el-button size="large" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
+          <Sparkles :size="17" />
+          套用推荐配置
+        </el-button>
+        <el-button size="large" @click="scrollToConfig">
+          <Settings2 :size="17" />
+          调整配置
+        </el-button>
+      </div>
+    </section>
+
     <div class="create-grid">
-      <section class="config-panel">
+      <section ref="configPanelRef" class="config-panel">
         <div class="panel-head">
           <div>
-            <h2>面试类型</h2>
-            <p>选择本次训练的重点，系统会按配置生成更贴近目标岗位的追问。</p>
+            <h2>高级配置</h2>
+            <p>推荐配置已经准备好；只有需要改场景、题量、行业模板或简历上下文时再展开。</p>
           </div>
+          <el-button class="panel-head__action" type="primary" plain @click="toggleConfigExpanded">
+            <Settings2 :size="16" />
+            {{ configExpanded ? '收起配置' : '展开配置' }}
+          </el-button>
         </div>
 
-        <div class="mode-grid">
-          <button
-            v-for="item in modeCards"
-            :key="item.key"
-            class="mode-card"
-            :class="{ active: selectedModeKey === item.key }"
-            type="button"
-            @click="selectMode(item)"
-          >
-            <component :is="item.icon" :size="20" />
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.desc }}</span>
-            <em>{{ item.badge }}</em>
-          </button>
-        </div>
-
-        <el-form ref="formRef" class="config-form" :model="form" :rules="rules" label-position="top">
-          <div class="form-section">
-            <div class="section-title">
-              <span>01</span>
-              基础配置
-            </div>
-            <div class="form-grid">
-              <el-form-item label="面试名称">
-                <el-input v-model.trim="form.interviewName" placeholder="可选，例如：Java 微服务中级模拟面试" />
-              </el-form-item>
-              <el-form-item label="目标岗位" prop="targetPosition">
-                <el-select v-model="form.targetPosition" style="width: 100%">
-                  <el-option v-for="item in targetPositionOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="经验年限" prop="experienceLevel">
-                <el-select v-model="form.experienceLevel" style="width: 100%">
-                  <el-option v-for="item in experienceLevelOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="难度等级" prop="difficulty">
-                <el-select v-model="form.difficulty" style="width: 100%">
-                  <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-            </div>
+        <div v-if="!configExpanded" class="config-collapsed">
+          <div class="config-collapsed__head">
+            <span>推荐开练</span>
+            <strong>{{ quickInterviewTitle }}</strong>
+            <p>{{ quickInterviewDesc }}</p>
           </div>
-
-          <div class="form-section">
-            <div class="section-title">
-              <span>02</span>
-              训练范围
-            </div>
-            <div class="form-grid">
-              <el-form-item label="行业方向" prop="industryDirection">
-                <el-select v-model="form.industryDirection" style="width: 100%">
-                  <el-option v-for="item in industryDirectionOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="面试官风格" prop="interviewerStyle">
-                <el-select v-model="form.interviewerStyle" style="width: 100%">
-                  <el-option v-for="item in interviewerStyleOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="面试模式">
-                <el-select v-model="form.practiceMode" style="width: 100%">
-                  <el-option v-for="item in interviewPracticeModeOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-                <div class="field-hint">正式模式：面试结束后统一生成报告；练习模式：每题后可查看详细点评。</div>
-              </el-form-item>
-              <el-form-item label="题目数量">
-                <el-input-number v-model="form.questionCount" :min="1" :max="20" />
-              </el-form-item>
-            </div>
-          </div>
-
-          <div v-if="isIndustryMode" class="form-section">
-            <div class="section-title">
-              <span>03</span>
-              行业模板
-            </div>
-            <el-form-item label="行业场景模板" prop="industryTemplateId">
-              <el-select
-                v-model="form.industryTemplateId"
-                v-loading="industryTemplateLoading"
-                placeholder="请选择行业场景模板"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="template in industryTemplates"
-                  :key="template.industryTemplateId"
-                  :label="template.industryName"
-                  :value="template.industryTemplateId"
-                />
-              </el-select>
-              <div v-if="industryTemplateError" class="field-empty">
-                {{ industryTemplateError }}
-              </div>
-              <div v-else-if="!industryTemplateLoading && !industryTemplates.length" class="field-empty">
-                暂无可用行业模板，可以先选择技术八股、项目深挖或综合模拟。
-              </div>
-            </el-form-item>
-
-            <article v-if="selectedIndustryTemplate" class="template-preview">
-              <div class="template-preview__head">
-                <div>
-                  <strong>{{ selectedIndustryTemplate.industryName }}</strong>
-                  <span>{{ selectedIndustryTemplate.description || '暂无行业说明' }}</span>
-                </div>
-                <el-tag effect="plain">{{ selectedIndustryTemplate.industryCode || 'INDUSTRY' }}</el-tag>
-              </div>
-              <div class="template-tags">
-                <span v-for="item in templateHighlights" :key="item">{{ item }}</span>
+          <div class="config-collapsed__grid">
+            <article v-for="item in quickStartItems" :key="item.label" class="config-collapsed__item">
+              <component :is="item.icon" :size="17" />
+              <div>
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
               </div>
             </article>
           </div>
+          <div class="config-collapsed__actions">
+            <el-button :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
+              <Sparkles :size="16" />
+              套用推荐配置
+            </el-button>
+            <el-button type="primary" plain @click="toggleConfigExpanded">
+              <Settings2 :size="16" />
+              微调高级配置
+            </el-button>
+          </div>
+        </div>
 
-          <div class="form-section">
-            <div class="section-title">
-              <span>{{ isIndustryMode ? '04' : '03' }}</span>
-              训练上下文
+        <template v-else>
+          <div class="mode-grid">
+            <button
+              v-for="item in modeCards"
+              :key="item.key"
+              class="mode-card"
+              :class="{ active: selectedModeKey === item.key }"
+              type="button"
+              @click="selectMode(item)"
+            >
+              <component :is="item.icon" :size="20" />
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.desc }}</span>
+              <em>{{ item.badge }}</em>
+            </button>
+          </div>
+
+          <el-form ref="formRef" class="config-form" :model="form" :rules="rules" label-position="top">
+            <div class="form-section">
+              <div class="section-title">
+                <span>01</span>
+                基础配置
+              </div>
+              <div class="form-grid">
+                <el-form-item label="面试名称">
+                  <el-input v-model.trim="form.interviewName" placeholder="可选，例如：Java 微服务中级模拟面试" />
+                </el-form-item>
+                <el-form-item label="目标岗位" prop="targetPosition">
+                  <el-select v-model="form.targetPosition" style="width: 100%">
+                    <el-option v-for="item in targetPositionOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="经验年限" prop="experienceLevel">
+                  <el-select v-model="form.experienceLevel" style="width: 100%">
+                    <el-option v-for="item in experienceLevelOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="难度等级" prop="difficulty">
+                  <el-select v-model="form.difficulty" style="width: 100%">
+                    <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+              </div>
             </div>
-            <div class="form-grid">
-              <el-form-item label="训练场景">
-                <el-select v-model="form.trainingScene" clearable style="width: 100%" @change="handleTrainingSceneChange">
-                  <el-option label="Java 专项训练" value="JAVA_SPECIALTY" />
-                  <el-option label="项目深挖训练" value="PROJECT_DEEP_DIVE" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="追问强度">
-                <el-select v-model="form.followUpIntensity" style="width: 100%">
-                  <el-option label="标准" value="NORMAL" />
-                  <el-option label="轻追问" value="LIGHT" />
-                  <el-option label="强追问" value="DEEP" />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="isJavaSpecialtyTraining" label="能力域">
-                <el-select v-model="form.targetSkillDomain" v-loading="abilityMapLoading" clearable style="width: 100%">
-                  <el-option
-                    v-for="domain in abilityDomains"
-                    :key="domain.domainCode"
-                    :label="domain.domainName"
-                    :value="domain.domainCode"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="isJavaSpecialtyTraining" label="能力点">
-                <el-select v-model="form.targetSkillCodes" multiple collapse-tags collapse-tags-tooltip clearable style="width: 100%">
-                  <el-option
-                    v-for="skill in targetSkillOptions"
-                    :key="skill.code"
-                    :label="skill.name"
-                    :value="skill.code"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="isJavaSpecialtyTraining" label="目标水平">
-                <el-select v-model="form.targetLevel" style="width: 100%">
-                  <el-option label="基础" value="BASIC" />
-                  <el-option label="合格" value="COMPETENT" />
-                  <el-option label="强项" value="STRONG" />
-                </el-select>
-              </el-form-item>
-              <el-form-item v-if="isProjectDeepDiveTraining" label="项目素材">
+
+            <div class="form-section">
+              <div class="section-title">
+                <span>02</span>
+                训练范围
+              </div>
+              <div class="form-grid">
+                <el-form-item label="行业方向" prop="industryDirection">
+                  <el-select v-model="form.industryDirection" style="width: 100%">
+                    <el-option v-for="item in industryDirectionOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="面试官风格" prop="interviewerStyle">
+                  <el-select v-model="form.interviewerStyle" style="width: 100%">
+                    <el-option v-for="item in interviewerStyleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="面试模式">
+                  <el-select v-model="form.practiceMode" style="width: 100%">
+                    <el-option v-for="item in interviewPracticeModeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                  <div class="field-hint">正式模式：面试结束后统一生成报告；练习模式：每题后可查看详细点评。</div>
+                </el-form-item>
+                <el-form-item label="题目数量">
+                  <el-input-number v-model="form.questionCount" :min="1" :max="20" />
+                </el-form-item>
+              </div>
+            </div>
+
+            <div v-if="isIndustryMode" class="form-section">
+              <div class="section-title">
+                <span>03</span>
+                行业模板
+              </div>
+              <el-form-item label="行业场景模板" prop="industryTemplateId">
                 <el-select
-                  v-model="form.projectEvidenceIds"
-                  v-loading="projectEvidenceLoading"
-                  multiple
-                  collapse-tags
-                  collapse-tags-tooltip
-                  clearable
+                  v-model="form.industryTemplateId"
+                  v-loading="industryTemplateLoading"
+                  placeholder="请选择行业场景模板"
                   style="width: 100%"
                 >
                   <el-option
-                    v-for="project in projectEvidences"
-                    :key="project.id"
-                    :label="project.title"
-                    :value="project.id"
+                    v-for="template in industryTemplates"
+                    :key="template.industryTemplateId"
+                    :label="template.industryName"
+                    :value="template.industryTemplateId"
                   />
                 </el-select>
-                <div v-if="projectEvidenceError" class="field-error">
-                  <span>{{ projectEvidenceError }}</span>
-                  <el-button link type="primary" :loading="projectEvidenceLoading" @click="fetchProjectEvidences">重试</el-button>
+                <div v-if="industryTemplateError" class="field-empty">
+                  {{ industryTemplateError }}
                 </div>
-                <div v-else-if="!projectEvidenceLoading && !projectEvidences.length" class="field-empty">
-                  暂无项目素材，可先使用简历上下文或进入项目素材补充。
+                <div v-else-if="!industryTemplateLoading && !industryTemplates.length" class="field-empty">
+                  暂无可用行业模板，可以先选择技术八股、项目深挖或综合模拟。
+                </div>
+              </el-form-item>
+
+              <article v-if="selectedIndustryTemplate" class="template-preview">
+                <div class="template-preview__head">
+                  <div>
+                    <strong>{{ selectedIndustryTemplate.industryName }}</strong>
+                    <span>{{ selectedIndustryTemplate.description || '暂无行业说明' }}</span>
+                  </div>
+                  <el-tag effect="plain">{{ selectedIndustryTemplate.industryCode || '行业模板' }}</el-tag>
+                </div>
+                <div class="template-tags">
+                  <span v-for="item in templateHighlights" :key="item">{{ item }}</span>
+                </div>
+              </article>
+            </div>
+
+            <div class="form-section">
+              <div class="section-title">
+                <span>{{ isIndustryMode ? '04' : '03' }}</span>
+                简历上下文
+              </div>
+              <div class="resume-switch">
+                <div>
+                  <strong>基于简历生成追问</strong>
+                  <p>项目深挖和综合模拟建议选择简历，方便围绕你的真实经历追问。</p>
+                </div>
+                <el-switch v-model="useResume" />
+              </div>
+              <el-form-item v-if="useResume || isJobTargetFlow" label="选择简历" prop="resumeId">
+                <el-select
+                  v-model="form.resumeId"
+                  filterable
+                  placeholder="请选择简历"
+                  style="width: 100%"
+                  v-loading="resumeLoading"
+                >
+                  <el-option
+                    v-for="resume in resumes"
+                    :key="resume.id"
+                    :label="resume.isDefault === 1 ? `${resume.resumeName}（默认）` : resume.resumeName"
+                    :value="resume.id"
+                  />
+                </el-select>
+                <div v-if="resumeLoadError" class="field-error">
+                  <span>{{ resumeLoadError }}</span>
+                  <el-button link type="primary" :loading="resumeLoading" @click="fetchResumes">重试</el-button>
+                </div>
+                <div v-else-if="!resumeLoading && !resumes.length" class="field-empty">
+                  暂无可选简历，请先进入简历中心创建后再开启简历上下文。
                 </div>
               </el-form-item>
             </div>
-          </div>
 
-          <div class="form-section">
-            <div class="section-title">
-              <span>{{ isIndustryMode ? '05' : '04' }}</span>
-              简历上下文
+            <el-alert
+              v-if="resumeRequired || isJobTargetFlow"
+              class="create-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="isJobTargetFlow ? '目标岗位链路需要选择简历，并会使用目标岗位信息创建岗位面试。' : '当前面试模式建议选择简历，便于进行项目深挖和综合追问。'"
+            />
+            <el-alert
+              v-if="routeContextNotice"
+              class="create-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="routeContextNotice"
+            />
+            <div class="config-form-actions">
+              <el-button type="primary" size="large" :loading="creating" @click="handleCreate">
+                <Play :size="16" />
+                按当前配置开始
+              </el-button>
+              <el-button size="large" :disabled="creating" @click="applyQuickRecommendation">
+                <Sparkles :size="16" />
+                套用推荐配置
+              </el-button>
             </div>
-            <div class="resume-switch">
-              <div>
-                <strong>基于简历生成追问</strong>
-                <p>项目深挖和综合模拟建议选择简历，方便围绕你的真实经历追问。</p>
-              </div>
-              <el-switch v-model="useResume" />
-            </div>
-            <el-form-item v-if="useResume || isJobTargetFlow" label="选择简历" prop="resumeId">
-              <el-select
-                v-model="form.resumeId"
-                filterable
-                placeholder="请选择简历"
-                style="width: 100%"
-                v-loading="resumeLoading"
-              >
-                <el-option
-                  v-for="resume in resumes"
-                  :key="resume.id"
-                  :label="resume.isDefault === 1 ? `${resume.resumeName}（默认）` : resume.resumeName"
-                  :value="resume.id"
-                />
-              </el-select>
-              <div v-if="resumeLoadError" class="field-error">
-                <span>{{ resumeLoadError }}</span>
-                <el-button link type="primary" :loading="resumeLoading" @click="fetchResumes">重试</el-button>
-              </div>
-              <div v-else-if="!resumeLoading && !resumes.length" class="field-empty">
-                暂无可选简历，请先进入简历中心创建后再开启简历上下文。
-              </div>
-            </el-form-item>
-          </div>
-
-          <el-alert
-            v-if="resumeRequired || isJobTargetFlow"
-            class="create-alert"
-            type="warning"
-            :closable="false"
-            show-icon
-            :title="isJobTargetFlow ? '目标岗位链路需要选择简历，并会使用 targetJobId 创建岗位面试。' : '当前面试模式建议选择简历，便于进行项目深挖和综合追问。'"
-          />
-        </el-form>
+          </el-form>
+        </template>
       </section>
 
       <aside class="preview-panel">
         <div class="panel-head">
           <div>
-            <h2>配置预览</h2>
+            <h2>本轮预览</h2>
             <p>提交前核对训练范围，确保面试问题围绕当前目标展开。</p>
           </div>
         </div>
@@ -286,6 +305,43 @@
           <span>训练模式</span>
           <strong>{{ selectedModeTitle }}</strong>
           <p>{{ selectedModeDesc }}</p>
+        </div>
+
+        <div class="quick-create-card">
+          <span>推荐一键开练</span>
+          <strong>{{ quickInterviewTitle }}</strong>
+          <p>{{ quickInterviewDesc }}</p>
+          <ul class="quick-create-reasons">
+            <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
+          </ul>
+          <el-button plain @click="scrollToConfig">
+            <Settings2 :size="16" />
+            查看并调整配置
+          </el-button>
+        </div>
+
+        <details class="context-trust-card">
+          <summary class="context-trust-card__head">
+            <span>推荐依据与可信边界</span>
+            <el-tag :type="quickRecommendationTrustType" effect="plain">{{ quickRecommendationTrustLabel }}</el-tag>
+          </summary>
+          <p>{{ quickRecommendationBoundaryText }}</p>
+          <div class="context-trust-list">
+            <article v-for="item in quickContextTrustItems" :key="item.label" :class="{ 'is-missing': item.missing }">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+        </details>
+
+        <div class="wizard-flow">
+          <article v-for="(step, index) in wizardSteps" :key="step.title" :class="{ active: index === 0 }">
+            <span>{{ index + 1 }}</span>
+            <div>
+              <strong>{{ step.title }}</strong>
+              <p>{{ step.desc }}</p>
+            </div>
+          </article>
         </div>
 
         <div class="summary-list">
@@ -309,33 +365,25 @@
             <span>简历上下文</span>
             <strong>{{ selectedResumeName }}</strong>
           </div>
-          <div>
-            <span>训练场景</span>
-            <strong>{{ selectedTrainingSceneName }}</strong>
-          </div>
-          <div v-if="isJavaSpecialtyTraining">
-            <span>能力目标</span>
-            <strong>{{ selectedSkillSummary }}</strong>
-          </div>
-          <div v-if="isProjectDeepDiveTraining">
-            <span>项目素材</span>
-            <strong>{{ selectedProjectEvidenceSummary }}</strong>
-          </div>
         </div>
 
         <div class="pending-box">
           <Zap :size="17" />
           <div>
-            <strong>行业场景</strong>
-            <p>选择行业模板后，面试会更关注该场景下的业务理解、技术取舍和项目表达。</p>
+            <strong>本轮重点</strong>
+            <p>{{ selectedModeTip }}</p>
           </div>
         </div>
 
         <div class="preview-actions">
-          <el-button @click="router.push('/dashboard')">返回工作台</el-button>
-          <el-button type="primary" size="large" :loading="creating" @click="handleCreate">
-            <Play :size="16" />
-            开始面试
+          <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
+          <el-button v-if="configExpanded" plain size="large" @click="toggleConfigExpanded">
+            <Settings2 :size="16" />
+            收起配置
+          </el-button>
+          <el-button v-else type="primary" plain size="large" @click="toggleConfigExpanded">
+            <Settings2 :size="16" />
+            展开配置
           </el-button>
         </div>
       </aside>
@@ -346,15 +394,13 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play, Sparkles, Target, Zap } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play, Settings2, Sparkles, Target, Zap } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getAbilityMapApi } from '@/api/abilityMap'
 import { createInterviewApi, createInterviewByJobTargetApi, getIndustryTemplatesApi } from '@/api/interview'
 import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
-import { getProjectEvidenceListApi } from '@/api/projectEvidence'
-import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
+import { getLatestResumeJobMatchReportApi, getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { getResumesApi } from '@/api/resume'
 import {
   difficultyOptions,
@@ -365,10 +411,8 @@ import {
   interviewPracticeModeOptions,
   targetPositionOptions
 } from '@/constants/enums'
-import { buildInterviewCreatePayload } from '@/features/interview-create'
-import type { AbilityDomainVO, AbilitySkillNodeVO } from '@/types/abilityMap'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
-import type { ProjectEvidenceListVO } from '@/types/projectEvidence'
+import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
 import { getErrorMessage } from '@/utils/error'
@@ -376,22 +420,36 @@ import { getErrorMessage } from '@/utils/error'
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
+const configPanelRef = ref<HTMLElement>()
+const configExpanded = ref(false)
 const creating = ref(false)
 const resumeLoading = ref(false)
 const resumeLoadError = ref('')
+const matchReportVerifyLoading = ref(false)
+const matchReportVerifyMessage = ref('')
+const routeContextWarning = ref('')
 const industryTemplateLoading = ref(false)
 const industryTemplateError = ref('')
-const abilityMapLoading = ref(false)
-const projectEvidenceLoading = ref(false)
-const projectEvidenceError = ref('')
 const useResume = ref(true)
 const resumes = ref<ResumeVO[]>([])
 const industryTemplates = ref<IndustryTemplateVO[]>([])
-const abilityDomains = ref<AbilityDomainVO[]>([])
-const projectEvidences = ref<ProjectEvidenceListVO[]>([])
 const selectedModeKey = ref('technical')
 const sourceTargetJobId = ref<number>()
 const fallbackTargetJobId = ref<number>()
+const verifiedMatchReport = ref<ResumeJobMatchReportDetailVO | null>(null)
+let industryTemplatesPromise: Promise<void> | null = null
+
+interface ModeCard {
+  key: string
+  title: string
+  desc: string
+  badge: string
+  value: string
+  icon: Component
+  industry?: boolean
+  forceResume?: boolean
+  defaults?: Partial<InterviewCreateDTO>
+}
 
 const form = reactive<InterviewCreateDTO>({
   interviewName: '',
@@ -404,41 +462,89 @@ const form = reactive<InterviewCreateDTO>({
   interviewerStyle: 'NORMAL',
   practiceMode: 'FORMAL',
   resumeId: undefined,
-  questionCount: 8,
-  trainingScene: 'JAVA_SPECIALTY',
-  targetSkillDomain: undefined,
-  targetSkillCodes: [],
-  targetLevel: 'COMPETENT',
-  projectEvidenceIds: [],
-  followUpIntensity: 'NORMAL'
+  questionCount: 8
 })
 
-const modeCards = [
+const modeCards: ModeCard[] = [
   {
-    key: 'technical',
-    title: '技术八股',
-    desc: '围绕 Java 基础、JVM、并发、Spring 体系展开。',
-    badge: '已接入',
-    value: INTERVIEW_MODE.TECHNICAL_BASIC,
-    trainingScene: 'JAVA_SPECIALTY',
-    icon: BrainCircuit
+    key: 'resume',
+    title: '简历押题',
+    desc: '先围绕简历和岗位描述生成最可能被问到的问题。',
+    badge: '推荐',
+    value: INTERVIEW_MODE.PROJECT_DEEP_DIVE,
+    icon: Files,
+    forceResume: true,
+    defaults: {
+      interviewerStyle: 'PROJECT_DEEP_DIVE',
+      questionCount: 6
+    }
   },
   {
     key: 'project',
     title: '项目深挖',
-    desc: '结合简历项目经历，追问架构设计、难点和优化。',
-    badge: '已接入',
+    desc: '追问项目背景、难点、取舍、指标和事故复盘。',
+    badge: '项目',
     value: INTERVIEW_MODE.PROJECT_DEEP_DIVE,
-    trainingScene: 'PROJECT_DEEP_DIVE',
-    icon: BriefcaseBusiness
+    icon: BriefcaseBusiness,
+    forceResume: true,
+    defaults: {
+      interviewerStyle: 'PROJECT_DEEP_DIVE',
+      questionCount: 6
+    }
   },
   {
-    key: 'comprehensive',
-    title: '综合模拟',
-    desc: '按面试节奏综合考察技术、项目与表达。',
-    badge: '已接入',
+    key: 'technical',
+    title: '技术面',
+    desc: '围绕 Java 基础、JVM、并发、Spring 体系展开。',
+    badge: '基础盘',
+    value: INTERVIEW_MODE.TECHNICAL_BASIC,
+    icon: BrainCircuit,
+    defaults: {
+      interviewerStyle: 'NORMAL',
+      questionCount: 8
+    }
+  },
+  {
+    key: 'system',
+    title: '系统设计',
+    desc: '训练限流、缓存、库存、搜索、链路治理等方案设计。',
+    badge: '方案',
     value: INTERVIEW_MODE.COMPREHENSIVE,
-    icon: Target
+    icon: Target,
+    forceResume: true,
+    defaults: {
+      difficulty: 'HARD',
+      interviewerStyle: 'ARCHITECTURE',
+      questionCount: 5
+    }
+  },
+  {
+    key: 'hr',
+    title: 'HR 行为面',
+    desc: '练自我介绍、动机、冲突处理、离职原因和职业规划。',
+    badge: '表达',
+    value: INTERVIEW_MODE.COMPREHENSIVE,
+    icon: Sparkles,
+    defaults: {
+      difficulty: 'MEDIUM',
+      interviewerStyle: 'GUIDING',
+      questionCount: 6
+    }
+  },
+  {
+    key: 'pressure',
+    title: '压力追问',
+    desc: '模拟连续追问和质疑，训练边界澄清与稳定表达。',
+    badge: '压测',
+    value: INTERVIEW_MODE.COMPREHENSIVE,
+    icon: Zap,
+    forceResume: true,
+    defaults: {
+      difficulty: 'HARD',
+      interviewerStyle: 'STRICT',
+      practiceMode: 'PRACTICE',
+      questionCount: 6
+    }
   },
   {
     key: 'industry',
@@ -447,14 +553,16 @@ const modeCards = [
     badge: '场景模板',
     value: INTERVIEW_MODE.COMPREHENSIVE,
     industry: true,
-    icon: Sparkles
+    icon: BriefcaseBusiness,
+    forceResume: true,
+    defaults: {
+      interviewerStyle: 'PROJECT_DEEP_DIVE',
+      questionCount: 8
+    }
   }
 ]
 
 const isIndustryMode = computed(() => selectedModeKey.value === 'industry')
-const isJavaSpecialtyTraining = computed(() => form.trainingScene === 'JAVA_SPECIALTY')
-const isProjectDeepDiveTraining = computed(() => form.trainingScene === 'PROJECT_DEEP_DIVE')
-const hasSelectedProjectEvidence = computed(() => Boolean(form.projectEvidenceIds?.length))
 
 const selectedIndustryTemplate = computed(() =>
   industryTemplates.value.find((item) => item.industryTemplateId === form.industryTemplateId)
@@ -470,12 +578,8 @@ const templateHighlights = computed(() => {
   ].slice(0, 8)
 })
 
-const resumeRequired = computed(
-  () =>
-    !isJavaSpecialtyTraining.value &&
-    !(isProjectDeepDiveTraining.value && hasSelectedProjectEvidence.value) &&
-    (form.interviewMode === INTERVIEW_MODE.PROJECT_DEEP_DIVE ||
-      form.interviewMode === INTERVIEW_MODE.COMPREHENSIVE)
+const resumeRequired = computed(() =>
+  ['resume', 'project', 'system', 'pressure', 'industry'].includes(selectedModeKey.value)
 )
 
 const isJobTargetFlow = computed(() => {
@@ -507,36 +611,248 @@ const selectedResumeName = computed(() => {
 
 const selectedModeDesc = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.desc || '当前模式')
 const selectedModeTitle = computed(() => modeCards.find((item) => item.key === selectedModeKey.value)?.title || '当前模式')
-const selectedTrainingSceneName = computed(() => {
-  if (isJavaSpecialtyTraining.value) return 'Java 专项训练'
-  if (isProjectDeepDiveTraining.value) return '项目深挖训练'
-  return '常规模拟'
+const defaultResumeId = computed(() =>
+  form.resumeId ||
+  resumes.value.find((item) => item.isDefault === 1)?.id ||
+  resumes.value[0]?.id
+)
+const quickResumeId = computed(() => {
+  const resumeId = defaultResumeId.value
+  if (!resumeId || resumeLoadError.value) return undefined
+  return resumes.value.some((item) => Number(item.id) === Number(resumeId)) ? resumeId : undefined
 })
-const targetSkillOptions = computed<AbilitySkillNodeVO[]>(() => {
-  const domain = abilityDomains.value.find((item) => item.domainCode === form.targetSkillDomain)
-  return domain?.skills || abilityDomains.value.flatMap((item) => item.skills)
+const quickResumeName = computed(() => {
+  const resumeId = quickResumeId.value
+  if (!resumeId) return '无简历，轻量技术面'
+  return resumes.value.find((item) => item.id === resumeId)?.resumeName || '已选择简历'
 })
-const selectedSkillSummary = computed(() => {
-  const selectedCodes = new Set(form.targetSkillCodes || [])
-  if (!selectedCodes.size) {
-    return abilityDomains.value.find((item) => item.domainCode === form.targetSkillDomain)?.domainName || '未指定'
+const interviewModeTitleMap: Record<string, string> = {
+  [INTERVIEW_MODE.TECHNICAL_BASIC]: '技术基础',
+  [INTERVIEW_MODE.PROJECT_DEEP_DIVE]: '项目深挖',
+  [INTERVIEW_MODE.COMPREHENSIVE]: '综合模拟'
+}
+const selectedModeTitleForPayload = (payload: Pick<InterviewCreateDTO, 'interviewMode'>) =>
+  interviewModeTitleMap[payload.interviewMode || ''] || '推荐面试'
+const quickTargetJobId = computed(() =>
+  sourceTargetJobId.value ||
+  getQueryNumber('targetJobId') ||
+  fallbackTargetJobId.value
+)
+const quickMatchReportId = computed(() => getQueryNumber('matchReportId'))
+const isTrustedMatchReport = (report?: ResumeJobMatchReportDetailVO | null) => {
+  const hasSchemaWarningCount = report?.schemaWarningCount != null
+  const warningCount = Number(report?.schemaWarningCount ?? 0)
+  const hasSchemaWarnings =
+    warningCount > 0 ||
+    (Array.isArray(report?.schemaWarnings) && report.schemaWarnings.length > 0)
+  return String(report?.status || '').toUpperCase() === 'SUCCESS' &&
+    !report?.fallback &&
+    String(report?.trustStatus || '').toUpperCase() === 'VERIFIED' &&
+    hasSchemaWarningCount &&
+    !hasSchemaWarnings
+}
+const matchReportEvidence = computed(() => {
+  const matchReportId = quickMatchReportId.value
+  if (!matchReportId) {
+    return {
+      verified: false,
+      reportId: undefined,
+      reason: '匹配报告不足：不会引用失败或缺失报告作证据',
+      value: '未使用失败/缺失报告',
+      boundary: '没有可信匹配报告时，不会把失败、缺失或待复核报告当成押题依据。'
+    }
   }
-  return targetSkillOptions.value
-    .filter((skill) => selectedCodes.has(skill.code))
-    .map((skill) => skill.name)
-    .join('、') || '未指定'
+  if (matchReportVerifyLoading.value) {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: '正在核验匹配报告，核验完成前不会作为面试推荐依据使用',
+      value: '匹配报告正在核验',
+      boundary: '匹配报告正在核验中，系统会先按已有资料生成普通推荐，避免误用失败报告。'
+    }
+  }
+  if (matchReportVerifyMessage.value) {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: matchReportVerifyMessage.value,
+      value: '匹配报告未通过核验',
+      boundary: '当前匹配报告没有通过成功状态或上下文核验，不会进入本轮推荐依据。'
+    }
+  }
+  const report = verifiedMatchReport.value
+  if (!report || String(report.status || '').toUpperCase() !== 'SUCCESS') {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: '匹配报告尚未确认成功，不会作为押题依据',
+      value: '匹配报告未确认成功',
+      boundary: '只有生成成功、证据已核验且属于当前简历和岗位的匹配报告，才会作为推荐面试的可信依据。'
+    }
+  }
+  if (!isTrustedMatchReport(report)) {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: '匹配报告已生成但证据待复核，不会作为推荐面试依据',
+      value: '匹配报告证据待复核',
+      boundary: '只有证据已核验、没有资料依据不足或内容待复核提示的匹配报告，才会作为推荐面试依据。'
+    }
+  }
+  const resumeId = defaultResumeId.value
+  const targetJobId = quickTargetJobId.value
+  if (!resumeId || !targetJobId) {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: '匹配报告已成功，但当前简历或目标岗位资料不足，暂不作为面试推荐依据',
+      value: '可信报告待绑定上下文',
+      boundary: '可信报告还需要和当前简历、目标岗位对齐后才会作为押题依据。'
+    }
+  }
+  if (Number(report.resumeId) !== Number(resumeId) || Number(report.targetJobId) !== Number(targetJobId)) {
+    return {
+      verified: false,
+      reportId: matchReportId,
+      reason: '匹配报告与当前简历或目标岗位不一致，本轮按普通推荐处理',
+      value: '匹配报告上下文不一致',
+      boundary: '匹配报告和当前简历/岗位不一致时，不会把它混入本轮面试证据。'
+    }
+  }
+  return {
+    verified: true,
+    reportId: report.reportId || matchReportId,
+    reason: '来自可信匹配报告',
+    value: '可信匹配报告已绑定',
+    boundary: '将使用可信匹配报告、当前简历和目标岗位作为追问依据；提交前请确认岗位描述仍是本轮目标。'
+  }
 })
-const selectedProjectEvidenceSummary = computed(() => {
-  const selectedIds = new Set(form.projectEvidenceIds || [])
-  if (!selectedIds.size) return '未选择'
-  const names = projectEvidences.value
-    .filter((item) => selectedIds.has(item.id))
-    .map((item) => item.title)
-  return names.length ? names.join('、') : `${selectedIds.size} 个项目素材`
+const quickRecommendation = computed(() => {
+  const resumeId = quickResumeId.value
+  const targetJobId = quickTargetJobId.value
+  const matchReport = matchReportEvidence.value
+  const hasJobContext = Boolean(targetJobId)
+  const hasMatchContext = matchReport.verified
+  const mode = resumeId ? INTERVIEW_MODE.PROJECT_DEEP_DIVE : INTERVIEW_MODE.TECHNICAL_BASIC
+  const questionCount = hasMatchContext ? 8 : resumeId ? 6 : 5
+  const difficulty = hasMatchContext ? 'HARD' : resumeId ? 'MEDIUM' : 'EASY'
+  const interviewerStyle = hasMatchContext ? 'STRICT' : resumeId ? 'PROJECT_DEEP_DIVE' : 'NORMAL'
+  const title = hasMatchContext
+    ? '岗位匹配押题 8 题'
+    : resumeId
+      ? '简历押题 6 题'
+      : '轻量技术面 5 题'
+  const desc = hasMatchContext
+    ? '将使用当前岗位、默认简历和可信匹配报告，优先追问高风险短板。'
+    : resumeId && hasJobContext
+      ? '将使用当前简历和目标岗位，直接进入项目深挖面试。'
+      : resumeId
+        ? '将使用默认简历，先围绕项目经历做一轮高命中追问。'
+        : '暂时没有简历也能开始，先用 Java 技术基础题保持训练节奏。'
+  const reasons = [
+    resumeId ? `来自简历：${quickResumeName.value}` : '资料不足：未绑定简历，本轮使用通用练习配置',
+    hasJobContext ? `来自目标岗位：${form.targetPosition || '当前目标岗位'}` : '目标岗位不足：按 Java 后端通用方向开练',
+    matchReport.reason,
+    `推荐强度：${optionLabel(difficultyOptions, difficulty)} · ${questionCount} 题 · ${optionLabel(interviewerStyleOptions, interviewerStyle)}`
+  ]
+  return {
+    title,
+    desc,
+    reasons,
+    payload: {
+      interviewName: hasMatchContext ? '一键推荐岗位匹配押题面试' : resumeId ? '一键推荐简历押题面试' : '一键轻量技术面试',
+      interviewMode: mode,
+      targetPosition: form.targetPosition || 'Java 后端开发',
+      experienceLevel: form.experienceLevel || '3_YEARS',
+      industryDirection: form.industryDirection || 'GENERAL',
+      difficulty,
+      interviewerStyle,
+      practiceMode: 'PRACTICE',
+      questionCount,
+      resumeId,
+      basedOnResume: Boolean(resumeId),
+      recommendationSource: hasMatchContext ? 'MATCH_REPORT' : resumeId ? 'DEFAULT_RESUME' : 'LIGHTWEIGHT',
+      recommendationReason: reasons.join('；')
+    } as InterviewCreateDTO
+  }
 })
+const quickInterviewTitle = computed(() => quickRecommendation.value.title)
+const quickInterviewDesc = computed(() => quickRecommendation.value.desc)
+const quickRecommendationTrustLabel = computed(() => {
+  if (quickRecommendation.value.payload.recommendationSource === 'MATCH_REPORT') return '可信依据'
+  if (quickRecommendation.value.payload.recommendationSource === 'DEFAULT_RESUME') return '依据较完整'
+  return '基础推荐'
+})
+const quickRecommendationTrustType = computed<'success' | 'warning' | 'info'>(() => {
+  if (quickRecommendation.value.payload.recommendationSource === 'MATCH_REPORT') return 'success'
+  if (quickRecommendation.value.payload.recommendationSource === 'DEFAULT_RESUME') return 'info'
+  return 'warning'
+})
+const quickRecommendationBoundaryText = computed(() => {
+  if (quickRecommendation.value.payload.recommendationSource === 'MATCH_REPORT') {
+    return matchReportEvidence.value.boundary
+  }
+  if (quickRecommendation.value.payload.recommendationSource === 'DEFAULT_RESUME') {
+    return matchReportEvidence.value.boundary
+  }
+  return '当前资料不足，只生成轻量技术面；不会把不确定资料当作简历、岗位或匹配报告证据。'
+})
+const quickContextTrustItems = computed(() => {
+  const payload = quickRecommendation.value.payload
+  return [
+    {
+      label: '简历证据',
+      value: payload.resumeId ? quickResumeName.value : '未绑定，使用通用练习配置',
+      missing: !payload.resumeId
+    },
+    {
+      label: '目标岗位',
+      value: quickTargetJobId.value ? form.targetPosition || '当前目标岗位' : '通用 Java 后端方向',
+      missing: !quickTargetJobId.value
+    },
+    {
+      label: '匹配报告',
+      value: matchReportEvidence.value.value,
+      missing: payload.recommendationSource !== 'MATCH_REPORT'
+    }
+  ]
+})
+const quickStartItems = computed(() => [
+  { label: '简历上下文', value: quickResumeName.value, icon: Files },
+  { label: '目标岗位', value: form.targetPosition || 'Java 后端开发', icon: Target },
+  { label: '面试强度', value: `${selectedModeTitleForPayload(quickRecommendation.value.payload)} · ${quickRecommendation.value.payload.questionCount} 题`, icon: Zap }
+])
+const quickStartNotice = computed(() => {
+  if (resumeLoadError.value) return '简历列表暂时不可用，可先进入轻量技术面试。'
+  if (!quickResumeId.value) return '还没有可用简历，系统会先创建轻量技术面试。'
+  return ''
+})
+const routeContextNotice = computed(() =>
+  routeContextWarning.value || (!matchReportVerifyLoading.value ? matchReportVerifyMessage.value : '')
+)
+const buildQuickPayload = (): InterviewCreateDTO => ({ ...quickRecommendation.value.payload })
+const selectedModeTip = computed(() => {
+  const map: Record<string, string> = {
+    resume: '适合面试前 1-2 天，用简历和目标岗位描述做一次高命中押题。',
+    project: '回答时必须补业务背景、个人职责、指标、取舍和复盘，不只讲技术名词。',
+    technical: '适合日常基本功训练，答完后重点复盘不会展开的知识点。',
+    system: '适合中高级岗位，重点看方案边界、容量估算、降级和可观测性。',
+    hr: '适合终面或主管面前准备，把经历讲得稳定、具体、可信。',
+    pressure: '适合模拟连续质疑，训练先澄清问题边界再回答。',
+    industry: '选择行业模板后，会更关注该场景下的业务理解、技术取舍和项目表达。'
+  }
+  return map[selectedModeKey.value] || selectedModeDesc.value
+})
+const wizardSteps = computed(() => [
+  { title: '选择场景', desc: selectedModeTitle.value },
+  { title: '绑定简历', desc: selectedResumeName.value },
+  { title: '对齐岗位', desc: form.targetPosition || '未选择目标岗位' },
+  { title: '设置强度', desc: `${optionLabel(difficultyOptions, form.difficulty)} · ${form.questionCount} 题` },
+  { title: '开始训练', desc: '创建后直接进入面试房间' }
+])
 
 const optionLabel = (options: SelectOption[], value?: string) => {
-  return options.find((item) => item.value === value)?.label || value || '-'
+  return options.find((item) => item.value === value)?.label || (value ? '选项待确认' : '-')
 }
 
 const getQueryString = (name: string) => {
@@ -549,28 +865,62 @@ const getQueryNumber = (name: string) => {
   return Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-const getQueryStringList = (name: string) => {
-  const value = route.query[name]
-  const values = Array.isArray(value) ? value : value ? [value] : []
-  return values
-    .flatMap((item) => String(item).split(','))
-    .map((item) => item.trim())
-    .filter(Boolean)
+const loadCurrentTargetForInterview = async (failureMessage: string) => {
+  try {
+    const currentTarget = await getCurrentJobTargetApi()
+    routeContextWarning.value = ''
+    return currentTarget
+  } catch (error) {
+    routeContextWarning.value = getErrorMessage(error, failureMessage)
+    return null
+  }
 }
 
-const getQueryNumberList = (name: string) => {
-  return getQueryStringList(name)
-    .map((item) => Number(item))
-    .filter((item) => Number.isFinite(item) && item > 0)
+const loadLatestVerifiedMatchReportId = async (resumeId: number, targetJobId: number) => {
+  try {
+    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId)
+    if (isTrustedMatchReport(latestMatch)) {
+      return latestMatch?.reportId
+    }
+    if (latestMatch?.reportId) {
+      const status = String(latestMatch.status || '').toUpperCase()
+      routeContextWarning.value = status === 'SUCCESS'
+        ? '最近匹配报告证据待复核，不会作为本轮面试推荐依据。'
+        : '最近匹配报告尚未成功生成，不会作为本轮面试推荐依据。'
+    }
+    return undefined
+  } catch (error) {
+    routeContextWarning.value = getErrorMessage(error, '最新简历匹配报告暂时无法读取，本轮面试会继续创建，但不会附带不可核验的匹配报告证据。')
+    return undefined
+  }
 }
 
-const buildInterviewContextQuery = () => {
-  const query: Record<string, string> = {}
-  ;['source', 'applicationId', 'targetJobId', 'resumeId', 'resumeVersionId', 'matchReportId', 'skillProfileId'].forEach((key) => {
-    const value = getQueryString(key)
-    if (value) query[key] = String(value)
-  })
-  return query
+const verifyRouteMatchReport = async () => {
+  const matchReportId = quickMatchReportId.value
+  verifiedMatchReport.value = null
+  matchReportVerifyMessage.value = ''
+  if (!matchReportId) return
+
+  matchReportVerifyLoading.value = true
+  try {
+    const report = await getResumeJobMatchReportDetailApi(matchReportId)
+    const status = String(report.status || '').toUpperCase()
+    if (status !== 'SUCCESS') {
+      matchReportVerifyMessage.value = status === 'FAILED'
+        ? '匹配报告生成失败，不会作为推荐面试依据'
+        : '匹配报告尚未成功生成，不会作为推荐面试依据'
+      return
+    }
+    if (!isTrustedMatchReport(report)) {
+      matchReportVerifyMessage.value = '匹配报告已生成但证据待复核，不会作为推荐面试依据'
+      return
+    }
+    verifiedMatchReport.value = report
+  } catch (error) {
+    matchReportVerifyMessage.value = getErrorMessage(error, '匹配报告暂时无法核验，推荐面试不会把它作为可信依据。')
+  } finally {
+    matchReportVerifyLoading.value = false
+  }
 }
 
 const parseTemplateItems = (value?: string) => {
@@ -597,29 +947,37 @@ const applyIndustryTemplate = (template?: IndustryTemplateVO) => {
   form.industryDirection = template.industryCode || template.industryName || form.industryDirection
 }
 
-const selectMode = (item: (typeof modeCards)[number]) => {
+const selectMode = (item: ModeCard) => {
   selectedModeKey.value = item.key
   form.interviewMode = item.value
-  form.trainingScene = 'trainingScene' in item ? item.trainingScene : undefined
-  if (form.trainingScene === 'JAVA_SPECIALTY') {
-    useResume.value = false
-    form.projectEvidenceIds = []
-  } else if (form.trainingScene === 'PROJECT_DEEP_DIVE') {
-    form.targetSkillDomain = undefined
-    form.targetSkillCodes = []
-    if (!hasSelectedProjectEvidence.value) {
-      useResume.value = true
-    }
-  } else {
-    form.targetSkillDomain = undefined
-    form.targetSkillCodes = []
-    form.projectEvidenceIds = []
+  if (item.defaults) {
+    Object.assign(form, item.defaults)
+  }
+  if (item.forceResume) {
+    useResume.value = true
   }
   if ('industry' in item && item.industry) {
-    applyIndustryTemplate(selectedIndustryTemplate.value || industryTemplates.value[0])
+    if (!industryTemplates.value.length) {
+      void fetchIndustryTemplates()
+    } else {
+      applyIndustryTemplate(selectedIndustryTemplate.value || industryTemplates.value[0])
+    }
     return
   }
   form.industryTemplateId = undefined
+}
+
+const scrollToConfig = async () => {
+  configExpanded.value = true
+  await nextTick()
+  configPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const toggleConfigExpanded = () => {
+  configExpanded.value = !configExpanded.value
+  if (configExpanded.value) {
+    void scrollToConfig()
+  }
 }
 
 watch(
@@ -630,15 +988,6 @@ watch(
     }
   },
   { immediate: true }
-)
-
-watch(
-  () => form.targetSkillDomain,
-  () => {
-    if (!form.targetSkillCodes?.length) return
-    const available = new Set(targetSkillOptions.value.map((skill) => skill.code))
-    form.targetSkillCodes = form.targetSkillCodes.filter((code) => available.has(code))
-  }
 )
 
 watch(useResume, (enabled) => {
@@ -680,94 +1029,30 @@ const fetchResumes = async () => {
   }
 }
 
-const fetchIndustryTemplates = async () => {
+const fetchIndustryTemplates = (force = false) => {
+  if (!force && industryTemplates.value.length) return Promise.resolve()
+  if (!force && industryTemplatesPromise) return industryTemplatesPromise
+
   industryTemplateLoading.value = true
   industryTemplateError.value = ''
-  try {
-    const result = await getIndustryTemplatesApi()
-    industryTemplates.value = result || []
-    if (isIndustryMode.value && !form.industryTemplateId) {
-      applyIndustryTemplate(industryTemplates.value[0])
-    }
-  } catch {
-    industryTemplates.value = []
-    industryTemplateError.value = '行业模板暂时加载失败，可以先使用其他面试模式。'
-  } finally {
-    industryTemplateLoading.value = false
-  }
-}
 
-const fetchAbilityMap = async () => {
-  abilityMapLoading.value = true
-  try {
-    const result = await getAbilityMapApi()
-    abilityDomains.value = result.domains || []
-  } catch {
-    abilityDomains.value = []
-  } finally {
-    abilityMapLoading.value = false
-  }
-}
+  industryTemplatesPromise = getIndustryTemplatesApi()
+    .then((result) => {
+      industryTemplates.value = result || []
+      if (isIndustryMode.value && !form.industryTemplateId) {
+        applyIndustryTemplate(industryTemplates.value[0])
+      }
+    })
+    .catch(() => {
+      industryTemplates.value = []
+      industryTemplateError.value = '行业模板暂时加载失败，可以先使用其他面试模式。'
+    })
+    .finally(() => {
+      industryTemplateLoading.value = false
+      industryTemplatesPromise = null
+    })
 
-const fetchProjectEvidences = async () => {
-  projectEvidenceLoading.value = true
-  projectEvidenceError.value = ''
-  try {
-    const result = await getProjectEvidenceListApi({ pageNo: 1, pageSize: 50 })
-    projectEvidences.value = result.records || []
-  } catch (error) {
-    projectEvidences.value = []
-    projectEvidenceError.value = getErrorMessage(error, '项目素材暂时加载失败')
-  } finally {
-    projectEvidenceLoading.value = false
-  }
-}
-
-const handleTrainingSceneChange = () => {
-  if (isJavaSpecialtyTraining.value) {
-    selectedModeKey.value = 'technical'
-    form.interviewMode = INTERVIEW_MODE.TECHNICAL_BASIC
-    form.projectEvidenceIds = []
-    useResume.value = false
-    return
-  }
-  if (isProjectDeepDiveTraining.value) {
-    selectedModeKey.value = 'project'
-    form.interviewMode = INTERVIEW_MODE.PROJECT_DEEP_DIVE
-    form.targetSkillDomain = undefined
-    form.targetSkillCodes = []
-    if (!hasSelectedProjectEvidence.value) {
-      useResume.value = true
-    }
-    return
-  }
-  form.targetSkillDomain = undefined
-  form.targetSkillCodes = []
-  form.projectEvidenceIds = []
-}
-
-const applyTrainingRouteContext = () => {
-  const scene = getQueryString('trainingScene')
-  if (scene === 'JAVA_SPECIALTY' || scene === 'PROJECT_DEEP_DIVE') {
-    form.trainingScene = scene
-    handleTrainingSceneChange()
-  }
-  const targetSkillDomain = getQueryString('targetSkillDomain')
-  if (targetSkillDomain) {
-    form.targetSkillDomain = targetSkillDomain
-  }
-  const targetSkillCodes = getQueryStringList('targetSkillCodes')
-  if (targetSkillCodes.length) {
-    form.targetSkillCodes = targetSkillCodes
-  }
-  const targetLevel = getQueryString('targetLevel')
-  if (targetLevel) {
-    form.targetLevel = targetLevel
-  }
-  const projectEvidenceIds = getQueryNumberList('projectEvidenceIds')
-  if (projectEvidenceIds.length) {
-    form.projectEvidenceIds = projectEvidenceIds
-  }
+  return industryTemplatesPromise
 }
 
 const applyRouteContext = async () => {
@@ -784,15 +1069,20 @@ const applyRouteContext = async () => {
   }
 
   if (!targetJobId) {
-    const currentTarget = await getCurrentJobTargetApi().catch(() => null)
+    const currentTarget = await loadCurrentTargetForInterview('当前主目标岗位暂时无法读取，可继续手动配置面试；系统不会把缺失岗位当成推荐依据。')
     targetJobId = currentTarget?.id
     if (targetJobId) fallbackTargetJobId.value = targetJobId
   }
   if (!targetJobId) return
 
   if (isV3Source || source === 'job-target') {
-    selectedModeKey.value = 'comprehensive'
-    form.interviewMode = INTERVIEW_MODE.COMPREHENSIVE
+    const resumeMode = modeCards.find((item) => item.key === 'resume')
+    if (resumeMode) {
+      selectMode(resumeMode)
+    } else {
+      selectedModeKey.value = 'resume'
+      form.interviewMode = INTERVIEW_MODE.PROJECT_DEEP_DIVE
+    }
   }
   if (isV3Source || getQueryNumber('targetJobId')) {
     sourceTargetJobId.value = targetJobId
@@ -804,8 +1094,8 @@ const applyRouteContext = async () => {
       form.targetPosition = targetJob.jobTitle || form.targetPosition
       form.interviewName =
         form.interviewName || `${targetJob.jobTitle || '目标岗位'}模拟面试`
-    } catch {
-      ElMessage.warning('目标岗位信息加载失败，将使用当前面试配置创建')
+    } catch (error) {
+      ElMessage.warning(getErrorMessage(error, '目标岗位信息加载失败，将使用当前面试配置创建。'))
     }
   }
 
@@ -824,7 +1114,7 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
   }
 
   if (!targetJobId) {
-    const currentTarget = await getCurrentJobTargetApi().catch(() => null)
+    const currentTarget = await loadCurrentTargetForInterview('当前主目标岗位暂时无法读取，目标岗位链路将要求你手动选择简历和岗位后再创建。')
     targetJobId = currentTarget?.id
   }
 
@@ -833,19 +1123,14 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
     resumeId = resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
   }
 
-  let matchReportId = getQueryNumber('matchReportId')
+  let matchReportId = matchReportEvidence.value.verified ? matchReportEvidence.value.reportId : undefined
   if (!matchReportId && resumeId && targetJobId) {
-    const latestMatch = await getLatestResumeJobMatchReportApi(
-      resumeId,
-      targetJobId,
-      getQueryNumber('resumeVersionId')
-    ).catch(() => null)
-    matchReportId = latestMatch?.reportId
+    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId)
   }
 
   if (!resumeId || !targetJobId) {
-    ElMessage.warning('目标岗位链路创建面试需要有效的 resumeId 和 targetJobId')
-    throw new Error('Missing resumeId or targetJobId for job target interview creation')
+    ElMessage.warning('目标岗位链路创建面试需要有效的简历和目标岗位信息')
+    throw new Error('目标岗位链路创建面试需要有效的简历和目标岗位信息。')
   }
 
   return createInterviewByJobTargetApi({
@@ -859,6 +1144,9 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
 
 const handleCreate = async () => {
   if (!formRef.value) return
+  if (isIndustryMode.value && !industryTemplates.value.length && !industryTemplateLoading.value) {
+    await fetchIndustryTemplates()
+  }
   try {
     await formRef.value.validate()
   } catch {
@@ -866,10 +1154,6 @@ const handleCreate = async () => {
   }
   if (isIndustryMode.value && !form.industryTemplateId) {
     ElMessage.warning('请选择行业模板后再开始面试')
-    return
-  }
-  if (isProjectDeepDiveTraining.value && !form.resumeId && !hasSelectedProjectEvidence.value) {
-    ElMessage.warning('项目深挖训练需要选择简历或项目素材')
     return
   }
   if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {
@@ -880,29 +1164,70 @@ const handleCreate = async () => {
   creating.value = true
   try {
     const template = selectedIndustryTemplate.value
-    const payload = buildInterviewCreatePayload({
-      form,
-      context: { applicationId: getQueryNumber('applicationId') },
-      isIndustryMode: isIndustryMode.value,
-      useResume: useResume.value,
-      isJobTargetFlow: isJobTargetFlow.value,
-      selectedIndustryTemplate: template
-    })
+    const payload: InterviewCreateDTO = {
+      ...form,
+      interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
+      practiceMode: form.practiceMode,
+      industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
+      industryDirection: isIndustryMode.value
+        ? template?.industryCode || template?.industryName || form.industryDirection
+        : form.industryDirection,
+      resumeId: useResume.value || isJobTargetFlow.value ? form.resumeId : undefined
+    }
     const result = await createInterviewWithRouteContext(payload)
     ElMessage.success('面试已创建')
-    await router.push({
-      path: `/interviews/room/${result.interviewId}`,
-      query: buildInterviewContextQuery()
-    })
+    await router.push(`/interviews/room/${result.interviewId}`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '面试创建失败，请检查配置后稍后重试。'))
+  } finally {
+    creating.value = false
+  }
+}
+
+const applyQuickRecommendation = () => {
+  const payload = buildQuickPayload()
+  const mode = modeCards.find((item) => item.value === payload.interviewMode && item.forceResume === Boolean(payload.resumeId))
+    || modeCards.find((item) => item.value === payload.interviewMode)
+  if (mode) {
+    selectedModeKey.value = mode.key
+  }
+  form.interviewName = payload.interviewName
+  form.interviewMode = payload.interviewMode
+  form.targetPosition = payload.targetPosition
+  form.experienceLevel = payload.experienceLevel
+  form.industryDirection = payload.industryDirection
+  form.difficulty = payload.difficulty
+  form.interviewerStyle = payload.interviewerStyle
+  form.practiceMode = payload.practiceMode
+  form.questionCount = payload.questionCount
+  form.resumeId = payload.resumeId
+  useResume.value = Boolean(payload.resumeId)
+  ElMessage.success('已套用推荐配置，可直接开始或继续微调')
+  void scrollToConfig()
+}
+
+const handleQuickCreate = async () => {
+  if (resumeLoading.value || matchReportVerifyLoading.value) return
+  creating.value = true
+  try {
+    const payload = buildQuickPayload()
+
+    const result = payload.resumeId
+      ? await createInterviewWithRouteContext(payload)
+      : await createInterviewApi(payload)
+    ElMessage.success(payload.resumeId ? '已创建推荐面试' : '已创建轻量技术面')
+    await router.push(`/interviews/room/${result.interviewId}`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '推荐面试创建失败，请稍后重试或先调整配置。'))
   } finally {
     creating.value = false
   }
 }
 
 onMounted(async () => {
-  applyTrainingRouteContext()
-  await Promise.allSettled([fetchResumes(), fetchIndustryTemplates(), fetchAbilityMap(), fetchProjectEvidences()])
+  await fetchResumes()
   await applyRouteContext()
+  await verifyRouteMatchReport()
 })
 </script>
 
@@ -915,12 +1240,11 @@ onMounted(async () => {
 .config-panel,
 .preview-panel {
   border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
+  border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.12), transparent 34%),
-    rgba(15, 23, 42, 0.78);
+    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 38%),
+    #ffffff;
   box-shadow: var(--app-shadow);
-  backdrop-filter: blur(18px);
 }
 
 .create-hero {
@@ -954,10 +1278,9 @@ onMounted(async () => {
 }
 
 .eyebrow {
-  color: var(--cc-ai-cyan);
+  color: #2563eb;
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .hero-tags {
@@ -969,10 +1292,230 @@ onMounted(async () => {
   align-content: flex-start;
 }
 
+.quick-start-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid rgba(22, 163, 74, 0.26);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0fdf4, #eff6ff);
+  box-shadow: var(--app-shadow);
+}
+
+.quick-start-panel__copy {
+  min-width: 0;
+
+  h2 {
+    margin: 6px 0 8px;
+    color: #14532d;
+    font-size: 24px;
+    line-height: 1.28;
+  }
+
+  p {
+    max-width: 720px;
+    margin: 0;
+    color: #475569;
+    line-height: 1.7;
+  }
+}
+
+.quick-label {
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quick-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+
+  article {
+    display: flex;
+    min-width: 0;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(22, 163, 74, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  svg {
+    flex: 0 0 auto;
+    color: #16a34a;
+  }
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    overflow: hidden;
+    margin-top: 4px;
+    color: #0f172a;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.quick-reason-list,
+.quick-create-reasons {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    padding-left: 14px;
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.55;
+
+    &::before {
+      position: absolute;
+      top: 0.62em;
+      left: 0;
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: #16a34a;
+      content: '';
+    }
+  }
+}
+
+.quick-create-reasons {
+  margin-top: 8px;
+
+  li {
+    color: #475569;
+  }
+}
+
+.context-trust-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  &[open] {
+    background: #ffffff;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.context-trust-card__head {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 12px;
+    content: '展开';
+  }
+
+  .context-trust-card[open] &::after {
+    content: '收起';
+  }
+
+  > span {
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  :deep(.el-tag) {
+    flex: 0 1 auto;
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+.context-trust-list {
+  display: grid;
+  gap: 8px;
+
+  article {
+    display: grid;
+    gap: 3px;
+    padding: 9px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+
+    span {
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      color: #0f172a;
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &.is-missing {
+      border-color: #fed7aa;
+      background: #fff7ed;
+
+      strong {
+        color: #9a3412;
+      }
+    }
+  }
+}
+
+.quick-start-panel__actions {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+
+  :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .create-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
+  margin-top: 18px;
 }
 
 .config-panel,
@@ -982,8 +1525,19 @@ onMounted(async () => {
 
 .preview-panel {
   position: sticky;
-  top: 18px;
+  top: 82px;
   align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.config-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
 }
 
 .panel-head {
@@ -1005,9 +1559,97 @@ onMounted(async () => {
   }
 }
 
+.panel-head__action {
+  flex: 0 0 auto;
+}
+
+.config-collapsed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(22, 163, 74, 0.08), transparent 42%),
+    #f8fafc;
+}
+
+.config-collapsed__head {
+  span {
+    color: #16a34a;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--app-text);
+    font-size: 18px;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+}
+
+.config-collapsed__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.config-collapsed__item {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+
+  svg {
+    flex: 0 0 auto;
+    color: #2563eb;
+  }
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+
+  strong {
+    margin-top: 4px;
+    color: var(--app-text);
+    font-size: 13px;
+  }
+}
+
+.config-collapsed__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .mode-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 22px;
 }
@@ -1020,8 +1662,8 @@ onMounted(async () => {
   gap: 10px;
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.34);
+  border-radius: 8px;
+  background: #ffffff;
   color: var(--app-text);
   text-align: left;
   cursor: pointer;
@@ -1038,15 +1680,16 @@ onMounted(async () => {
   }
 
   em {
-    color: var(--cc-ai-cyan);
+    color: #2563eb;
     font-size: 12px;
     font-style: normal;
+    font-weight: 700;
   }
 
   &:hover:not(.disabled),
   &.active {
-    border-color: rgba(129, 140, 248, 0.58);
-    background: rgba(99, 102, 241, 0.16);
+    border-color: rgba(37, 99, 235, 0.42);
+    background: #eff6ff;
     transform: translateY(-2px);
   }
 
@@ -1065,8 +1708,8 @@ onMounted(async () => {
 .form-section {
   padding: 18px;
   border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.26);
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
 .section-title {
@@ -1083,8 +1726,8 @@ onMounted(async () => {
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    background: rgba(99, 102, 241, 0.2);
-    color: #c4b5fd;
+    background: #dbeafe;
+    color: #1d4ed8;
     font-size: 12px;
   }
 }
@@ -1120,15 +1763,15 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  color: #fca5a5;
+  color: #dc2626;
   font-size: 12px;
 }
 
 .template-preview {
   padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.52);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .template-preview__head {
@@ -1139,7 +1782,7 @@ onMounted(async () => {
 
   strong {
     display: block;
-    color: #f8fafc;
+    color: var(--app-text);
   }
 
   span {
@@ -1159,10 +1802,10 @@ onMounted(async () => {
 
   span {
     padding: 5px 8px;
-    border: 1px solid rgba(148, 163, 184, 0.16);
+    border: 1px solid #dbeafe;
     border-radius: 999px;
-    background: rgba(2, 6, 23, 0.42);
-    color: #cbd5e1;
+    background: #eff6ff;
+    color: #1d4ed8;
     font-size: 12px;
   }
 }
@@ -1172,11 +1815,13 @@ onMounted(async () => {
 }
 
 .summary-card,
+.quick-create-card,
 .summary-list,
-.pending-box {
+.pending-box,
+.wizard-flow {
   border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.36);
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
 .summary-card {
@@ -1199,7 +1844,81 @@ onMounted(async () => {
   }
 
   &.primary {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.08));
+    background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+  }
+}
+
+.quick-create-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 16px;
+  border-color: rgba(22, 163, 74, 0.24);
+  background: #f0fdf4;
+
+  span,
+  p {
+    color: var(--app-text-muted);
+  }
+
+  strong {
+    color: #166534;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .el-button {
+    margin-top: 4px;
+    width: 100%;
+  }
+}
+
+.wizard-flow {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+
+  article {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+
+    &.active {
+      background: #ffffff;
+    }
+  }
+
+  article > span {
+    display: inline-flex;
+    flex: 0 0 26px;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong,
+  p {
+    display: block;
+    margin: 0;
+  }
+
+  p {
+    margin-top: 4px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 
@@ -1238,7 +1957,7 @@ onMounted(async () => {
 
   svg {
     flex: 0 0 auto;
-    color: var(--cc-warning);
+    color: #f59e0b;
   }
 
   strong {
@@ -1259,12 +1978,35 @@ onMounted(async () => {
 
 @media (max-width: 1180px) {
   .create-grid,
-  .mode-grid {
+  .mode-grid,
+  .quick-start-panel {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .quick-context-grid {
+    grid-template-columns: 1fr;
   }
 
   .preview-panel {
     position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 1181px) {
+  .create-hero,
+  .quick-start-panel {
+    padding: 18px;
+  }
+
+  .preview-panel {
+    top: 68px;
+    max-height: calc(100vh - 82px);
+  }
+
+  .wizard-flow article {
+    padding: 9px 10px;
   }
 }
 
@@ -1275,12 +2017,55 @@ onMounted(async () => {
 
   .create-grid,
   .mode-grid,
-  .form-grid {
+  .config-collapsed__grid,
+  .form-grid,
+  .quick-start-panel {
     grid-template-columns: 1fr;
+  }
+
+  .quick-start-panel {
+    padding: 18px;
   }
 
   .hero-actions,
   .preview-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .hero-actions :deep(.el-button),
+  .preview-actions :deep(.el-button),
+  .config-collapsed__actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .context-trust-card__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+@media (max-width: 720px) {
+  .page-hero,
+  .history-hero,
+  .detail-hero,
+  .report-top,
+  .room-topbar,
+  .notification-hero,
+  .create-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions,
+  .report-actions,
+  .topbar-actions,
+  .card-actions,
+  .filter-bar,
+  .notification-toolbar {
     justify-content: flex-start;
   }
 }
