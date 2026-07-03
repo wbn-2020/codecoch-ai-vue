@@ -210,12 +210,12 @@ export const buildReadinessResult = (params: {
     buildStep(
       'jd-analysis',
       2,
-      '完成 JD 分析',
+      '完成岗位描述分析',
       '解析岗位要求，提取技能、经验和面试重点。',
       hasJdAnalysis,
       hasTarget ? `/job-targets/${currentTargetJobId}/analysis` : '/job-targets',
-      hasJdAnalysis ? '查看分析' : '分析 JD',
-      hasJdAnalysis ? '目标岗位已完成解析。' : '需要先完成岗位 JD 分析。'
+      hasJdAnalysis ? '查看分析' : '分析岗位描述',
+      hasJdAnalysis ? '目标岗位已完成解析。' : '需要先完成岗位描述分析。'
     ),
     buildStep(
       'resume',

@@ -3,7 +3,7 @@ import type { JobSearchExperimentMetricsVO } from '@/types/jobExperiment'
 export const jobExperimentRelationOptions = [
   { label: '简历版本', value: 'RESUME_VERSION' },
   { label: '岗位目标', value: 'TARGET_JOB' },
-  { label: 'JD 分析', value: 'JD_ANALYSIS' },
+  { label: '岗位描述分析', value: 'JD_ANALYSIS' },
   { label: '投递记录', value: 'JOB_APPLICATION' },
   { label: '项目证据', value: 'PROJECT_EVIDENCE' }
 ]

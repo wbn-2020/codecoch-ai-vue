@@ -16,7 +16,7 @@ describe('portfolio demo helpers', () => {
         readOnly: true
       },
       steps: [
-        { key: 'jd', title: '目标 JD', route: '/portfolio-demo?step=jd', entityType: 'TARGET_JOB', demoData: true },
+        { key: 'jd', title: '目标岗位', route: '/portfolio-demo?step=jd', entityType: 'TARGET_JOB', demoData: true },
         { key: 'experiment', title: '求职实验', route: '/job-experiments/9?demoFlag=true', entityType: 'JOB_EXPERIMENT', demoData: true },
         { key: 'unsafe-experiment', title: '真实实验', route: '/job-experiments/9', entityType: 'JOB_EXPERIMENT', demoData: true }
       ],
@@ -44,7 +44,7 @@ describe('portfolio demo helpers', () => {
         readOnly: true
       },
       steps: [
-        { key: 'jd', title: '目标 JD', route: '/portfolio-demo?step=jd', entityType: 'TARGET_JOB' }
+        { key: 'jd', title: '目标岗位', route: '/portfolio-demo?step=jd', entityType: 'TARGET_JOB' }
       ],
       opsSteps: []
     } satisfies PortfolioDemoStorylineVO
