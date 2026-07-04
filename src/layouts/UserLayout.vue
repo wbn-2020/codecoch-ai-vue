@@ -117,12 +117,14 @@ const handleCommand = async (command: string) => {
 }
 
 onMounted(() => {
+  document.body.classList.add('is-user-layout-active')
   unreadRefreshCancelled = false
   deferNonCriticalWork(fetchUnreadCount)
   window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
 
 onBeforeUnmount(() => {
+  document.body.classList.remove('is-user-layout-active')
   unreadRefreshCancelled = true
   window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
@@ -133,7 +135,8 @@ onBeforeUnmount(() => {
 .jobcoach-layout {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(238, 244, 255, 0.96), rgba(246, 248, 252, 0.98) 360px),
+    linear-gradient(180deg, rgba(222, 232, 246, 0.94) 0, rgba(238, 243, 248, 0.98) 320px),
+    linear-gradient(135deg, rgba(29, 78, 216, 0.08), rgba(14, 116, 144, 0.05) 44%, transparent 72%),
     var(--user-bg);
   color: var(--user-text);
 }
@@ -142,7 +145,7 @@ onBeforeUnmount(() => {
   width: min(100%, 1280px);
   min-height: calc(100vh - 68px);
   margin: 0 auto;
-  padding: 24px 28px 44px;
+  padding: 22px 28px 42px;
 }
 
 .demo-readonly-banner {
@@ -150,10 +153,13 @@ onBeforeUnmount(() => {
   padding: 10px 14px;
   border: 1px solid rgba(245, 158, 11, 0.34);
   border-radius: var(--user-radius-sm);
-  background: var(--user-warning-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 246, 230, 0.9)),
+    var(--user-warning-soft);
   color: #9a3412;
   font-size: 13px;
   line-height: 1.6;
+  box-shadow: var(--user-shadow-xs);
 }
 
 @media (max-width: 720px) {
@@ -165,7 +171,7 @@ onBeforeUnmount(() => {
 
   .jobcoach-main {
     min-height: calc(100vh - 62px);
-    padding: 16px 14px calc(var(--user-mobile-nav-height) + 32px + env(safe-area-inset-bottom, 0px));
+    padding: 16px 14px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 20px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

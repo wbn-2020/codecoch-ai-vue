@@ -16,7 +16,17 @@
     <section v-else-if="loadError" class="content-panel">
       <AppState type="error" title="报告加载失败" :description="loadError"><el-button type="primary" @click="loadReport">重新加载</el-button></AppState>
     </section>
-    <section v-else-if="!report" class="content-panel"><AppState type="empty" title="报告不存在" description="当前路由没有可展示的匹配报告。" /></section>
+    <section v-else-if="!report" class="content-panel">
+      <AppState
+        type="empty"
+        title="没有可验证的 JD 匹配报告"
+        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到实验台选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
+      >
+        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">回实验台生成报告</el-button>
+        <el-button @click="goMatchTaskCenter">查看任务中心</el-button>
+        <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
+      </AppState>
+    </section>
 
     <template v-else>
       <section v-if="report.status === 'FAILED'" class="content-panel failure-panel">
@@ -197,6 +207,9 @@
           </el-button>
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             <RouteIcon :size="16" /> 差距学习计划
+          </el-button>
+          <el-button :disabled="!isTrustedSuccessReport" @click="goGapQuestionGroup">
+            练差距题组
           </el-button>
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             创建岗位面试
@@ -977,6 +990,20 @@ const goMatchTaskCenter = () => {
   router.push({
     path: '/agent/tasks',
     query: matchTaskCenterQuery.value
+  })
+}
+
+const goGapQuestionGroup = () => {
+  if (!report.value) return
+  router.push({
+    path: '/questions/recommendations',
+    query: compactQuery({
+      source: 'resumeMatchReport',
+      matchReportId: report.value.reportId ? String(report.value.reportId) : undefined,
+      targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
+      resumeId: report.value.resumeId ? String(report.value.resumeId) : undefined,
+      resumeVersionId: report.value.resumeVersionId ? String(report.value.resumeVersionId) : undefined
+    })
   })
 }
 

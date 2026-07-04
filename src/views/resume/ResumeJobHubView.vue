@@ -19,6 +19,10 @@
             <GitCompareArrows :size="17" />
             JD 匹配实验台
           </el-button>
+          <el-button size="large" @click="router.push('/project-evidence')">
+            <ListChecks :size="17" />
+            项目证据库
+          </el-button>
           <el-button size="large" text :loading="loading || secondaryLoading" @click="loadAll">
             <RefreshCw :size="17" />
             刷新
@@ -81,12 +85,7 @@
       </aside>
     </section>
 
-    <section v-if="loadError" class="hub-panel">
-      <AppState type="error" title="简历实验室加载失败" :description="loadError">
-        <el-button type="primary" @click="loadAll">重新加载</el-button>
-      </AppState>
-    </section>
-    <section v-else-if="secondaryLoading" class="hub-panel hub-warning">
+    <section v-if="secondaryLoading" class="hub-panel hub-warning">
       <el-alert
         type="info"
         show-icon
@@ -209,7 +208,7 @@
             <p class="section-kicker">项目证据</p>
             <h2>把项目经历改成可证明材料</h2>
           </div>
-          <el-button text :disabled="!defaultResume" @click="goResumeAction">维护项目</el-button>
+          <el-button text @click="router.push('/project-evidence')">打开证据库</el-button>
         </div>
 
         <div v-if="projectCards.length" class="project-list">
@@ -233,7 +232,7 @@
           title="还没有可用于追问的项目"
           description="在简历中补充项目背景、技术决策和结果指标后，面试房间和题目训练才能引用真实证据。"
         >
-          <el-button type="primary" :disabled="!defaultResume" @click="goResumeAction">补充项目经历</el-button>
+          <el-button type="primary" @click="router.push('/project-evidence')">进入项目证据库</el-button>
         </AppState>
       </section>
     </div>
@@ -299,7 +298,6 @@ interface ProjectCard {
 const router = useRouter()
 const loading = ref(false)
 const secondaryLoading = ref(false)
-const loadError = ref('')
 const partialLoadWarning = ref('')
 const resumes = ref<ResumeVO[]>([])
 const targets = ref<TargetJobVO[]>([])
@@ -359,7 +357,27 @@ const toTextList = (value: unknown): string[] => {
 
 const firstItems = (value: unknown, count = 3) => toTextList(value).slice(0, count)
 
-const canMatch = computed(() => Boolean(defaultResume.value?.id && currentTarget.value?.id))
+const toPositiveId = (value: unknown): number | null => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null
+}
+
+const getResumeEditPath = () => {
+  const resumeId = toPositiveId(defaultResume.value?.id)
+  return resumeId ? `/resumes/${resumeId}/edit` : '/resumes/create'
+}
+
+const getTargetAnalysisPath = () => {
+  const targetId = toPositiveId(currentTarget.value?.id)
+  return targetId ? `/job-targets/${targetId}/analysis` : '/job-targets/create'
+}
+
+const getMatchReportPath = () => {
+  const reportId = toPositiveId(latestMatch.value?.reportId)
+  return reportId ? `/resume-match/${reportId}` : '/resume-match'
+}
+
+const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
 const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
 
@@ -448,15 +466,15 @@ const primaryAction = computed(() => {
   if (!currentTarget.value) return { label: '添加目标岗位', path: '/job-targets/create' }
   if (evidenceLoading.value) return { label: '查看匹配准备', path: '/resume-match' }
   if (!latestMatch.value) return { label: '生成 JD 匹配报告', path: '/resume-match' }
-  if (latestMatch.value.status === 'FAILED') return { label: '重新生成 JD 匹配报告', path: `/resume-match/${latestMatch.value.reportId}` }
+  if (latestMatch.value.status === 'FAILED') return { label: '重新生成 JD 匹配报告', path: getMatchReportPath() }
   if (hasSuccessfulMatch.value && !projectCards.value.length) {
     return {
       label: '补项目证据',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      path: '/project-evidence'
     }
   }
   if (hasSuccessfulMatch.value) return { label: '进入模拟面试', path: '/interviews/create' }
-  return { label: '查看匹配进度', path: `/resume-match/${latestMatch.value.reportId}` }
+  return { label: '查看匹配进度', path: getMatchReportPath() }
 })
 
 const nextStep = computed(() => {
@@ -497,7 +515,7 @@ const nextStep = computed(() => {
       title: '重新生成 JD 匹配报告',
       desc: '上次报告没有成功，先恢复匹配结果再进入推荐题和岗位面试。',
       cta: '查看失败原因',
-      path: `/resume-match/${latestMatch.value.reportId}`
+      path: getMatchReportPath()
     }
   }
   if (!hasSuccessfulMatch.value) {
@@ -505,7 +523,7 @@ const nextStep = computed(() => {
       title: '等待匹配完成',
       desc: '报告未成功前不把推荐题和面试训练标成已具备依据，避免误导训练方向。',
       cta: '查看匹配进度',
-      path: `/resume-match/${latestMatch.value.reportId}`
+      path: getMatchReportPath()
     }
   }
   if (!projectCards.value.length) {
@@ -513,7 +531,7 @@ const nextStep = computed(() => {
       title: '补项目证据',
       desc: '报告已经生成，但当前简历还缺少可复盘项目，建议先补项目背景、技术决策和结果指标。',
       cta: '补项目经历',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      path: '/project-evidence'
     }
   }
   return {
@@ -528,13 +546,13 @@ const journeySteps = computed(() => [
   {
     title: '简历诊断',
     desc: defaultResume.value ? '已有可用简历' : '待创建或上传',
-    path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create',
-    done: Boolean(defaultResume.value)
+    path: getResumeEditPath(),
+    done: Boolean(toPositiveId(defaultResume.value?.id))
   },
   {
     title: '岗位分析',
     desc: currentTarget.value?.parseStatus === 'PARSED' ? '已分析目标岗位' : '待分析岗位要求',
-    path: currentTarget.value ? `/job-targets/${currentTarget.value.id}/analysis` : '/job-targets/create',
+    path: getTargetAnalysisPath(),
     done: currentTarget.value?.parseStatus === 'PARSED'
   },
   {
@@ -544,13 +562,13 @@ const journeySteps = computed(() => [
       : latestMatch.value?.status === 'FAILED'
         ? '上次失败，可重新生成'
         : '待生成匹配报告',
-    path: latestMatch.value ? `/resume-match/${latestMatch.value.reportId}` : '/resume-match',
+    path: getMatchReportPath(),
     done: latestMatch.value?.status === 'SUCCESS'
   },
   {
     title: '项目证据',
     desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习` : '待补项目指标',
-    path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create',
+    path: '/project-evidence',
     done: projectCards.value.length > 0
   },
   {
@@ -633,7 +651,7 @@ const riskItems = computed(() => {
         title: skillGaps[0] || '完善技能画像',
         desc: skillGaps[1] || '补齐项目证据后，覆盖率会更真实。',
         cta: '补简历',
-        path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+        path: getResumeEditPath()
       },
       {
         source: '下一步训练',
@@ -651,7 +669,7 @@ const riskItems = computed(() => {
       title: defaultResume.value ? '补项目指标和技术决策' : '先创建可解析简历',
       desc: defaultResume.value ? '项目经历需要能回答“为什么这么做、结果如何证明”。' : '没有简历时，项目技能卡会先保持空白，补充资料后再生成。',
       cta: defaultResume.value ? '编辑简历' : '创建简历',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      path: getResumeEditPath()
     },
     {
       source: '岗位上下文',
@@ -671,8 +689,8 @@ const riskItems = computed(() => {
       source: '项目卡片',
       title: projectCards.value.length ? '复盘项目证据' : '补项目经历',
       desc: projectCards.value.length ? '把项目背景、技术决策和结果指标补齐。' : '项目卡会帮助你把简历改成可追问证据。',
-      cta: defaultResume.value ? '维护项目' : '创建简历',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      cta: '打开证据库',
+      path: '/project-evidence'
     }
   ]
 })
@@ -710,13 +728,6 @@ const parseStatusType = (status?: string) => {
   return 'info'
 }
 
-const matchStatusType = (status?: string) => {
-  if (status === 'SUCCESS') return 'success'
-  if (status === 'FAILED') return 'danger'
-  if (status === 'PROCESSING' || status === 'PENDING') return 'warning'
-  return 'info'
-}
-
 const matchStatusLabel = (status?: string) => {
   if (status === 'SUCCESS') return '已完成'
   if (status === 'FAILED') return '生成失败'
@@ -742,39 +753,38 @@ const goPrimaryAction = () => {
 }
 
 const goResumeAction = () => {
-  router.push(defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create')
+  router.push(getResumeEditPath())
 }
 
 const goTargetAction = () => {
-  router.push(currentTarget.value ? `/job-targets/${currentTarget.value.id}/analysis` : '/job-targets/create')
+  router.push(getTargetAnalysisPath())
 }
 
 const goMatchAction = () => {
-  if (latestMatch.value) {
+  const reportId = toPositiveId(latestMatch.value?.reportId)
+  const resumeId = toPositiveId(latestMatch.value?.resumeId ?? defaultResume.value?.id)
+  const targetJobId = toPositiveId(latestMatch.value?.targetJobId ?? currentTarget.value?.id)
+  const query = {
+    ...(resumeId ? { resumeId } : {}),
+    ...(targetJobId ? { targetJobId } : {})
+  }
+
+  if (reportId) {
     router.push({
-      path: `/resume-match/${latestMatch.value.reportId}`,
-      query: {
-        resumeId: latestMatch.value.resumeId,
-        targetJobId: latestMatch.value.targetJobId
-      }
+      path: `/resume-match/${reportId}`,
+      query
     })
     return
   }
 
   router.push({
     path: '/resume-match',
-    query: {
-      resumeId: defaultResume.value?.id,
-      targetJobId: currentTarget.value?.id
-    }
+    query
   })
 }
 
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
-
-const isPositiveId = (value: unknown): value is number =>
-  Number.isFinite(Number(value)) && Number(value) > 0
 
 let loadRunId = 0
 let evidenceLoadTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -790,17 +800,19 @@ const loadEvidenceData = async (runId: number, baseWarnings: string[]) => {
   const warnings = [...baseWarnings]
   const resume = defaultResume.value
   const target = currentTarget.value
+  const resumeId = toPositiveId(resume?.id)
+  const targetId = toPositiveId(target?.id)
 
   try {
     const [detailResult, matchResult, overviewResult] = await Promise.allSettled([
-      resume && isPositiveId(resume.id)
-        ? getResumeDetailApi(resume.id)
+      resumeId
+        ? getResumeDetailApi(resumeId)
         : Promise.resolve(null),
-      resume && target && isPositiveId(resume.id) && isPositiveId(target.id)
-        ? getLatestResumeJobMatchReportApi(resume.id, target.id)
+      resumeId && targetId
+        ? getLatestResumeJobMatchReportApi(resumeId, targetId)
         : Promise.resolve(null),
-      target && isPositiveId(target.id)
-        ? getSkillProfileOverviewApi(target.id)
+      targetId
+        ? getSkillProfileOverviewApi(targetId)
         : Promise.resolve(null)
     ])
 
@@ -854,7 +866,6 @@ const loadAll = async () => {
   clearEvidenceLoadTimer()
   loading.value = true
   secondaryLoading.value = false
-  loadError.value = ''
   partialLoadWarning.value = ''
   latestMatch.value = null
   skillOverview.value = null
@@ -882,11 +893,6 @@ const loadAll = async () => {
       warnings.push(getErrorMessage(targetResult.reason, '岗位目标读取失败'))
     }
 
-    if (!isFulfilled(resumeResult) && !isFulfilled(targetResult)) {
-      loadError.value = warnings.join('；') || '简历实验室数据暂时不可用。'
-      return
-    }
-
     defaultResume.value = resumes.value.find((item) => item.isDefault === 1) || resumes.value[0] || null
     if (!isFulfilled(currentResult)) {
       warnings.push(getErrorMessage(currentResult.reason, '当前岗位读取失败，已先使用岗位列表中的信息'))
@@ -898,13 +904,16 @@ const loadAll = async () => {
 
     partialLoadWarning.value = warnings.filter(Boolean).join('；')
   } catch (error) {
-    loadError.value = getErrorMessage(error, '简历实验室数据暂时不可用。')
+    resumes.value = []
+    targets.value = []
+    defaultResume.value = null
+    currentTarget.value = null
+    warnings = [getErrorMessage(error, '基础数据暂时不可用，已保留创建简历、JD 匹配和项目证据入口。')]
+    partialLoadWarning.value = warnings.join('；')
   } finally {
     if (runId === loadRunId) {
       loading.value = false
-      if (!loadError.value) {
-        deferEvidenceLoad(runId, warnings)
-      }
+      deferEvidenceLoad(runId, warnings)
     }
   }
 }

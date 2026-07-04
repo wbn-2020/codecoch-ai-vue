@@ -40,18 +40,18 @@
       <div class="hero-metrics">
         <div class="metric-tile">
           <span>今日题组</span>
-          <strong>{{ items.length }}</strong>
-          <small>{{ items.length ? '来自当前推荐结果' : '暂无专项题' }}</small>
+          <strong>{{ todayGroupMetric.value }}</strong>
+          <small>{{ todayGroupMetric.note }}</small>
         </div>
         <div class="metric-tile">
           <span>可直接练</span>
-          <strong>{{ actionableItems.length }}</strong>
-          <small>{{ hasPracticeQuestions ? '可进入题目详情' : '先用通用训练兜底' }}</small>
+          <strong>{{ actionableMetric.value }}</strong>
+          <small>{{ actionableMetric.note }}</small>
         </div>
         <div class="metric-tile">
           <span>优先补强</span>
-          <strong>{{ highRiskCount }}</strong>
-          <small>{{ highRiskCount ? '高风险题优先' : '按题组顺序完成' }}</small>
+          <strong>{{ priorityMetric.value }}</strong>
+          <small>{{ priorityMetric.note }}</small>
         </div>
       </div>
     </section>
@@ -77,7 +77,7 @@
             <p>{{ fallbackNoticeDesc }}</p>
           </div>
           <div class="fallback-notice__actions">
-            <el-button type="success" plain @click="startFallbackPractice">先练一组</el-button>
+            <el-button type="primary" plain @click="startFallbackPractice">先练一组</el-button>
             <el-button text type="primary" @click="router.push('/resumes')">补简历和岗位</el-button>
           </div>
         </div>
@@ -138,7 +138,7 @@
             <div class="recommendation-empty-actions">
               <el-button
                 v-if="recommendationEmptyState.showFallback"
-                type="success"
+                type="primary"
                 @click="startFallbackPractice"
               >
                 {{ recommendationEmptyState.fallbackText }}
@@ -241,7 +241,7 @@
             <p class="side-muted">
               如果暂时没有简历、岗位描述或学习计划，不会伪造专项推荐；先完成一组通用训练，练完后再回到题组刷新来源。
             </p>
-            <el-button type="success" plain @click="startFallbackPractice">
+            <el-button type="primary" plain @click="startFallbackPractice">
               {{ fallbackPanelActionText }}
             </el-button>
           </div>
@@ -484,6 +484,30 @@ const primaryPracticeLabel = computed(() => hasPracticeQuestions.value ? '开始
 const highRiskCount = computed(() =>
   items.value.filter((item) => ['CRITICAL', 'HIGH'].includes(String(item.gapSeverity || ''))).length
 )
+const todayGroupMetric = computed(() => {
+  if (items.value.length) {
+    return { value: String(items.value.length), note: '来自当前推荐结果' }
+  }
+  return {
+    value: '可开始',
+    note: fallbackKeyword.value ? '先按岗位关键词练一组' : '先进入通用训练'
+  }
+})
+const actionableMetric = computed(() => {
+  if (hasPracticeQuestions.value) {
+    return { value: String(actionableItems.value.length), note: '可进入题目详情' }
+  }
+  return { value: '1 组', note: '已提供兜底训练入口' }
+})
+const priorityMetric = computed(() => {
+  if (highRiskCount.value) {
+    return { value: String(highRiskCount.value), note: '高风险题优先' }
+  }
+  return {
+    value: fallbackKeyword.value ? '关键词' : '通用',
+    note: hasPracticeQuestions.value ? '按题组顺序完成' : '先保持训练节奏'
+  }
+})
 const topSkillNames = computed(() => {
   const names = items.value
     .map((item) => item.skillName || item.skillCode)

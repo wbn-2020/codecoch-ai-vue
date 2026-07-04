@@ -102,6 +102,21 @@
           <el-button @click="router.push('/onboarding')">先建立目标</el-button>
         </AppState>
 
+        <section v-if="showMissingReportGuide" class="missing-report-guide">
+          <div>
+            <span class="quick-label">当前没有可查看的面试报告</span>
+            <h2>先完成一次面试，再到报告页生成复盘</h2>
+            <p>报告不会凭空生成：需要先进入面试房间完成答题，结束面试后点击“生成报告”。报告生成后会展示短板、推荐题和下一轮训练入口。</p>
+          </div>
+          <div class="missing-report-actions">
+            <el-button type="primary" @click="openMissingReportGuidePrimary">
+              {{ focusInterview && !isInterviewDone(focusInterview.status) ? '继续完成面试' : '去生成报告' }}
+            </el-button>
+            <el-button @click="router.push('/interviews/create')">新建一轮面试</el-button>
+            <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
+          </div>
+        </section>
+
         <article v-for="item in interviews" :key="item.interviewId" class="interview-card">
           <div class="card-main">
             <div class="card-head">
@@ -237,6 +252,9 @@ const focusInterview = computed(() =>
   generatedReports.value[0] ||
   interviews.value[0]
 )
+const showMissingReportGuide = computed(() =>
+  Boolean(interviews.value.length && !generatedReports.value.length && !loading.value && !loadError.value)
+)
 const averageScore = computed(() => {
   const scores = generatedReports.value
     .map((item) => Number(item.totalScore))
@@ -310,6 +328,12 @@ const openPrimary = async (row: InterviewListVO) => {
     return
   }
   await router.push(`/interviews/${row.interviewId}`)
+}
+
+const openMissingReportGuidePrimary = async () => {
+  const row = focusInterview.value || interviews.value[0]
+  if (!row) return
+  await openPrimary(row)
 }
 
 const formatDateTime = (value?: string) => {
@@ -440,7 +464,8 @@ onMounted(fetchInterviews)
   }
 }
 
-.next-step-panel {
+.next-step-panel,
+.missing-report-guide {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -465,6 +490,32 @@ onMounted(fetchInterviews)
   .el-button {
     flex: 0 0 auto;
   }
+}
+
+.missing-report-guide {
+  border: 1px dashed #bfdbfe;
+  background: #eff6ff;
+  box-shadow: none;
+
+  h2 {
+    margin: 6px 0 8px;
+    color: #0f172a;
+    font-size: 20px;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.65;
+  }
+}
+
+.missing-report-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .quick-label {
@@ -677,7 +728,8 @@ onMounted(fetchInterviews)
 
   .history-hero,
   .card-head,
-  .next-step-panel {
+  .next-step-panel,
+  .missing-report-guide {
     flex-direction: column;
   }
 
@@ -704,11 +756,13 @@ onMounted(fetchInterviews)
     justify-content: flex-start;
   }
 
-  .next-step-panel {
+  .next-step-panel,
+  .missing-report-guide {
     align-items: stretch;
   }
 
   .next-step-panel :deep(.el-button),
+  .missing-report-actions :deep(.el-button),
   .hero-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;

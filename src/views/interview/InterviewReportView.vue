@@ -299,11 +299,13 @@
       <AppState
         v-else-if="!loading"
         type="empty"
-        title="报告暂不可用"
-        description="报告可能仍在生成中，或当前面试记录没有可展示的复盘结果。可以去任务中心继续查看生成进度。"
+        title="还没有可验证的面试报告"
+        description="页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。若本轮面试已结束，可以手动重新生成报告；如果还没完成答题，请先回到历史记录继续面试。"
       >
-        <el-button type="primary" @click="goReportTaskCenter">去任务中心查看</el-button>
+        <el-button v-if="interviewId" type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+        <el-button @click="goReportTaskCenter">去任务中心查看</el-button>
         <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+        <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
       </AppState>
     </section>
 

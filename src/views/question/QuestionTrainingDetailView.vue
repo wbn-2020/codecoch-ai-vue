@@ -450,8 +450,9 @@ onMounted(fetchDetail)
 }
 
 .detail-hero {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
   padding: 28px;
   border: 1px solid rgba(37, 99, 235, 0.16);
@@ -470,6 +471,7 @@ onMounted(fetchDetail)
     margin-top: 12px;
     font-size: 30px;
     line-height: 1.25;
+    overflow-wrap: anywhere;
   }
 
   p {
@@ -478,6 +480,10 @@ onMounted(fetchDetail)
     color: var(--app-text-muted);
     line-height: 1.7;
   }
+}
+
+.detail-hero > div:first-child {
+  min-width: 0;
 }
 
 .eyebrow,
@@ -499,6 +505,7 @@ onMounted(fetchDetail)
 .hero-actions {
   align-self: flex-start;
   flex-wrap: wrap;
+  max-width: 360px;
   justify-content: flex-end;
 }
 
@@ -764,6 +771,20 @@ onMounted(fetchDetail)
   :deep(.el-radio-button__inner) {
     width: 100%;
     border-left: 1px solid var(--el-border-color);
+    background: #ffffff;
+    color: var(--app-text);
+    box-shadow: none;
+  }
+
+  :deep(.el-radio-button__inner:hover) {
+    color: #1d4ed8;
+  }
+
+  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+    box-shadow: none;
   }
 }
 
@@ -814,6 +835,7 @@ onMounted(fetchDetail)
 
   .hero-actions {
     justify-content: flex-start;
+    max-width: 100%;
   }
 
   .review-layout {

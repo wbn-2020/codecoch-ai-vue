@@ -10,7 +10,7 @@
         <p>系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。</p>
         <div class="hero-tags">
           <el-tag effect="plain">创建后直接开始</el-tag>
-          <el-tag effect="plain" type="success">支持简历上下文</el-tag>
+          <el-tag effect="plain" type="info">支持简历上下文</el-tag>
           <el-tag effect="plain" type="warning">行业场景可用</el-tag>
         </div>
       </div>
@@ -34,11 +34,18 @@
       <div class="quick-start-panel__copy">
         <div class="quick-start-panel__head">
           <div>
-            <span class="quick-label">推荐开练</span>
+            <span class="quick-label">推荐面试计划</span>
             <h2>{{ quickInterviewTitle }}</h2>
             <p>{{ quickInterviewDesc }}</p>
           </div>
           <el-tag :type="quickRecommendationTrustType" effect="plain">{{ quickRecommendationTrustLabel }}</el-tag>
+        </div>
+        <div class="recommended-plan-grid">
+          <article v-for="item in quickPlanItems" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <p>{{ item.desc }}</p>
+          </article>
         </div>
         <div class="quick-context-grid">
           <article v-for="item in quickStartItems" :key="item.label">
@@ -67,8 +74,9 @@
         <el-alert v-if="quickStartNotice" :title="quickStartNotice" type="warning" :closable="false" show-icon />
         <el-alert v-if="routeContextNotice" :title="routeContextNotice" type="warning" :closable="false" show-icon />
         <el-button
-          type="success"
+          type="primary"
           size="large"
+          class="quick-primary-cta"
           :loading="creating || resumeLoading || matchReportVerifyLoading"
           @click="handleQuickCreate"
         >
@@ -77,11 +85,11 @@
         </el-button>
         <el-button size="large" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
           <Sparkles :size="17" />
-          套用推荐配置
+          使用推荐并微调
         </el-button>
         <el-button size="large" @click="scrollToConfig">
           <Settings2 :size="17" />
-          调整配置
+          查看可选微调
         </el-button>
       </div>
     </section>
@@ -90,18 +98,18 @@
       <section ref="configPanelRef" class="config-panel">
         <div class="panel-head">
           <div>
-            <h2>高级配置</h2>
-            <p>推荐配置已经准备好；只有需要改场景、题量、行业模板或简历上下文时再展开。</p>
+            <h2>可选微调</h2>
+            <p>默认按上方推荐计划开始；只有想换场景、题量、行业模板或简历上下文时再展开。</p>
           </div>
           <el-button class="panel-head__action" type="primary" plain @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            {{ configExpanded ? '收起配置' : '展开配置' }}
+            {{ configExpanded ? '收起微调' : '展开微调' }}
           </el-button>
         </div>
 
         <div v-if="!configExpanded" class="config-collapsed">
           <div class="config-collapsed__head">
-            <span>推荐开练</span>
+            <span>已准备好本轮计划</span>
             <strong>{{ quickInterviewTitle }}</strong>
             <p>{{ quickInterviewDesc }}</p>
           </div>
@@ -117,11 +125,11 @@
           <div class="config-collapsed__actions">
             <el-button :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
               <Sparkles :size="16" />
-              套用推荐配置
+              使用推荐并微调
             </el-button>
             <el-button type="primary" plain @click="toggleConfigExpanded">
               <Settings2 :size="16" />
-              微调高级配置
+              微调计划
             </el-button>
           </div>
         </div>
@@ -147,7 +155,7 @@
             <div class="form-section">
               <div class="section-title">
                 <span>01</span>
-                基础配置
+                面试目标
               </div>
               <div class="form-grid">
                 <el-form-item label="面试名称">
@@ -174,7 +182,7 @@
             <div class="form-section">
               <div class="section-title">
                 <span>02</span>
-                训练范围
+                训练节奏
               </div>
               <div class="form-grid">
                 <el-form-item label="行业方向" prop="industryDirection">
@@ -296,11 +304,11 @@
             <div class="config-form-actions">
               <el-button type="primary" size="large" :loading="creating" @click="handleCreate">
                 <Play :size="16" />
-                按当前配置开始
+                按当前计划开始
               </el-button>
               <el-button size="large" :disabled="creating" @click="applyQuickRecommendation">
                 <Sparkles :size="16" />
-                套用推荐配置
+                恢复推荐计划
               </el-button>
             </div>
           </el-form>
@@ -310,8 +318,8 @@
       <aside class="preview-panel">
         <div class="panel-head">
           <div>
-            <h2>本轮预览</h2>
-            <p>提交前核对训练范围，确保面试问题围绕当前目标展开。</p>
+            <h2>本轮面试计划</h2>
+            <p>按推荐计划可直接开始，也可以展开左侧做少量微调。</p>
           </div>
         </div>
 
@@ -322,7 +330,7 @@
         </div>
 
         <div class="quick-create-card">
-          <span>推荐一键开练</span>
+          <span>推荐计划</span>
           <strong>{{ quickInterviewTitle }}</strong>
           <p>{{ quickInterviewDesc }}</p>
           <ul class="quick-create-reasons">
@@ -330,7 +338,7 @@
           </ul>
           <el-button plain @click="scrollToConfig">
             <Settings2 :size="16" />
-            查看并调整配置
+            查看可选微调
           </el-button>
         </div>
 
@@ -393,11 +401,11 @@
           <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
           <el-button v-if="configExpanded" plain size="large" @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            收起配置
+            收起微调
           </el-button>
           <el-button v-else type="primary" plain size="large" @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            展开配置
+            展开微调
           </el-button>
         </div>
       </aside>
@@ -836,6 +844,26 @@ const quickStartItems = computed(() => [
   { label: '目标岗位', value: form.targetPosition || 'Java 后端开发', icon: Target },
   { label: '面试强度', value: `${selectedModeTitleForPayload(quickRecommendation.value.payload)} · ${quickRecommendation.value.payload.questionCount} 题`, icon: Zap }
 ])
+const quickPlanItems = computed(() => {
+  const payload = quickRecommendation.value.payload
+  return [
+    {
+      label: '训练目标',
+      value: selectedModeTitleForPayload(payload),
+      desc: payload.resumeId ? '围绕真实经历和目标岗位追问' : '先用通用技术面保持练习节奏'
+    },
+    {
+      label: '节奏安排',
+      value: `${payload.questionCount} 题 · ${optionLabel(difficultyOptions, payload.difficulty)}`,
+      desc: payload.practiceMode === 'PRACTICE' ? '练习模式，便于及时复盘' : '正式模式，结束后统一生成报告'
+    },
+    {
+      label: '依据边界',
+      value: quickRecommendationTrustLabel.value,
+      desc: payload.recommendationSource === 'MATCH_REPORT' ? '使用已核验报告，不混入失败证据' : '资料不足处会降级为基础推荐'
+    }
+  ]
+})
 const quickStartNotice = computed(() => {
   if (resumeLoadError.value) return '简历列表暂时不可用，可先进入轻量技术面试。'
   if (!quickResumeId.value) return '还没有可用简历，系统会先创建轻量技术面试。'
@@ -1216,7 +1244,7 @@ const applyQuickRecommendation = () => {
   form.questionCount = payload.questionCount
   form.resumeId = payload.resumeId
   useResume.value = Boolean(payload.resumeId)
-  ElMessage.success('已套用推荐配置，可直接开始或继续微调')
+  ElMessage.success('已使用推荐计划，可直接开始或继续微调')
   void scrollToConfig()
 }
 
@@ -1232,7 +1260,7 @@ const handleQuickCreate = async () => {
     ElMessage.success(payload.resumeId ? '已创建推荐面试' : '已创建轻量技术面')
     await router.push(`/interviews/room/${result.interviewId}`)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '推荐面试创建失败，请稍后重试或先调整配置。'))
+    ElMessage.error(getErrorMessage(error, '推荐面试创建失败，请稍后重试或先微调计划。'))
   } finally {
     creating.value = false
   }
@@ -1308,14 +1336,16 @@ onMounted(async () => {
 
 .quick-start-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 20px;
-  width: min(960px, 100%);
+  width: 100%;
   margin: 18px auto 0;
-  padding: 26px;
-  border: 1px solid rgba(22, 163, 74, 0.26);
+  padding: 24px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
   border-radius: 8px;
-  background: #f7fef9;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 42%),
+    #ffffff;
   box-shadow: var(--app-shadow);
 }
 
@@ -1324,7 +1354,7 @@ onMounted(async () => {
 
   h2 {
     margin: 6px 0 8px;
-    color: #14532d;
+    color: #0f172a;
     font-size: 24px;
     line-height: 1.28;
   }
@@ -1354,14 +1384,54 @@ onMounted(async () => {
 }
 
 .quick-label {
-  color: #166534;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 800;
 }
 
-.quick-context-grid {
+.recommended-plan-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #f8fbff;
+  }
+
+  span,
+  strong,
+  p {
+    display: block;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    margin-top: 6px;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  p {
+    margin: 7px 0 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.quick-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 10px;
   margin-top: 16px;
 
@@ -1370,14 +1440,14 @@ onMounted(async () => {
     min-width: 0;
     gap: 10px;
     padding: 12px;
-    border: 1px solid rgba(22, 163, 74, 0.18);
+    border: 1px solid rgba(37, 99, 235, 0.14);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.72);
   }
 
   svg {
     flex: 0 0 auto;
-    color: #16a34a;
+    color: #2563eb;
   }
 
   span,
@@ -1421,7 +1491,7 @@ onMounted(async () => {
       width: 5px;
       height: 5px;
       border-radius: 999px;
-      background: #16a34a;
+      background: #2563eb;
       content: '';
     }
   }
@@ -1564,9 +1634,14 @@ onMounted(async () => {
   }
 }
 
+.quick-primary-cta {
+  min-height: 44px;
+  font-weight: 700;
+}
+
 .create-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
   margin-top: 18px;
 }
@@ -1574,6 +1649,24 @@ onMounted(async () => {
 .config-panel,
 .preview-panel {
   padding: 22px;
+  background: #ffffff;
+}
+
+.config-panel,
+.preview-panel,
+.quick-start-panel {
+  :deep(.el-input__wrapper),
+  :deep(.el-select__wrapper),
+  :deep(.el-input-number .el-input__wrapper),
+  :deep(.el-textarea__inner) {
+    background-color: #ffffff;
+    box-shadow: 0 0 0 1px #dbe3ef inset;
+  }
+
+  :deep(.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger)) {
+    background-color: #ffffff;
+    color: #334155;
+  }
 }
 
 .preview-panel {
@@ -1630,7 +1723,7 @@ onMounted(async () => {
 
 .config-collapsed__head {
   span {
-    color: #16a34a;
+    color: #2563eb;
     font-size: 12px;
     font-weight: 800;
   }
@@ -1897,7 +1990,7 @@ onMounted(async () => {
   }
 
   &.primary {
-    background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+    background: #eff6ff;
   }
 }
 
@@ -1906,8 +1999,8 @@ onMounted(async () => {
   gap: 8px;
   margin-top: 14px;
   padding: 16px;
-  border-color: rgba(22, 163, 74, 0.24);
-  background: #f0fdf4;
+  border-color: rgba(37, 99, 235, 0.2);
+  background: #f8fbff;
 
   span,
   p {
@@ -1915,7 +2008,7 @@ onMounted(async () => {
   }
 
   strong {
-    color: #166534;
+    color: #1d4ed8;
     font-size: 18px;
   }
 
@@ -1997,6 +2090,8 @@ onMounted(async () => {
   }
 
   strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
   }
 }
@@ -2031,7 +2126,8 @@ onMounted(async () => {
 
 @media (max-width: 1180px) {
   .create-grid,
-  .mode-grid {
+  .mode-grid,
+  .recommended-plan-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -2069,6 +2165,7 @@ onMounted(async () => {
 
   .create-grid,
   .mode-grid,
+  .recommended-plan-grid,
   .config-collapsed__grid,
   .form-grid,
   .quick-start-panel {

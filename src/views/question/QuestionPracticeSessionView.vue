@@ -1037,9 +1037,10 @@ onBeforeUnmount(stopTimer)
   strong {
     width: 28px;
     height: 28px;
+    border: 1px solid #bfdbfe;
     border-radius: 8px;
-    background: #2563eb;
-    color: #ffffff;
+    background: #eff6ff;
+    color: #1d4ed8;
     line-height: 28px;
     text-align: center;
   }
@@ -1266,6 +1267,22 @@ onBeforeUnmount(stopTimer)
 
 .answer-area {
   margin-top: 18px;
+}
+
+.answer-area :deep(.el-textarea__inner) {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+  color: var(--app-text);
+}
+
+.answer-area :deep(.el-textarea__inner::placeholder) {
+  color: #94a3b8;
+}
+
+.answer-area :deep(.el-input__count) {
+  background: transparent;
+  color: #64748b;
 }
 
 .answer-frame {

@@ -12,10 +12,14 @@
         </p>
       </div>
 
-      <aside class="hero-side" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading">
+      <aside class="hero-side" :aria-busy="isHomeLoading">
         <div class="side-header">
           <span>{{ readinessDisplay.label }}</span>
           <strong>{{ readinessDisplay.value }}</strong>
+        </div>
+        <div v-if="isHomeLoading" class="inline-loading-strip">
+          <span></span>
+          <p>正在刷新今日冲刺信息</p>
         </div>
         <div class="confidence-meter" aria-hidden="true">
           <span :style="{ width: evidenceProgressWidth }"></span>
@@ -42,7 +46,11 @@
       </aside>
     </section>
 
-    <section class="cockpit-grid" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading || agentTasksLoading">
+    <section class="cockpit-grid" :aria-busy="isHomeLoading">
+      <div v-if="isHomeLoading" class="dashboard-loading-note">
+        <span></span>
+        <p>今日行动正在同步，现有入口可继续使用。</p>
+      </div>
       <article class="cockpit-card target-card">
         <div class="card-heading">
           <span class="card-kicker">目标岗位</span>
@@ -132,13 +140,17 @@
       </article>
     </section>
 
-    <section v-if="shouldShowFirstDayActions" class="first-day-section" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading || agentTasksLoading">
+    <section v-if="shouldShowFirstDayActions" class="first-day-section" :aria-busy="isHomeLoading">
       <div class="section-head first-day-section__head">
         <div>
           <p class="section-kicker">3 分钟起步</p>
           <h2>先补齐驾驶舱需要的 4 个证据</h2>
         </div>
         <span class="first-day-progress">{{ firstDayReadyCount }}/{{ firstDayActions.length }} 已就绪</span>
+      </div>
+      <div v-if="isHomeLoading" class="dashboard-loading-note dashboard-loading-note--section">
+        <span></span>
+        <p>正在检查资料接入状态，先保留可执行入口。</p>
       </div>
 
       <div class="first-day-actions">
@@ -239,7 +251,11 @@
           <ClipboardList :size="26" />
           <strong>今天还没有安排任务</strong>
           <span>{{ emptyTaskText }}</span>
-          <el-button type="primary" :loading="dailyPlanGenerating" @click="generatePlan">生成今日计划</el-button>
+          <div class="empty-panel__actions">
+            <el-button type="primary" :loading="dailyPlanGenerating" @click="generatePlan">生成今日计划</el-button>
+            <el-button @click="go('/questions/practice')">先做题库训练</el-button>
+            <el-button @click="go('/interviews/create')">创建模拟面试</el-button>
+          </div>
         </div>
       </section>
 
@@ -499,6 +515,7 @@ const currentTargetJobId = computed(() => {
 const hasTargetJobSignal = computed(() => Boolean(currentTargetJobId.value))
 const hasTodayPlanSignal = computed(() => Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length))
 const hasPracticeFeedbackSignal = computed(() => Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview))
+const isHomeLoading = computed(() => overviewLoading.value || v3OverviewLoading.value || dailyPlanLoading.value || agentTasksLoading.value)
 const firstDayActions = computed<FirstDayAction[]>(() => [
   {
     key: 'resume',
@@ -1533,6 +1550,59 @@ onBeforeUnmount(() => {
   }
 }
 
+.inline-loading-strip,
+.dashboard-loading-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+
+  span {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.1);
+    animation: dashboard-loading-pulse 1.4s ease-in-out infinite;
+  }
+
+  p {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.dashboard-loading-note {
+  grid-column: 1 / -1;
+}
+
+.dashboard-loading-note--section {
+  margin: 14px 0 0;
+}
+
+@keyframes dashboard-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .hero-side dl {
   display: grid;
   gap: 12px;
@@ -2132,6 +2202,14 @@ onBeforeUnmount(() => {
   }
 }
 
+.empty-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .insight-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2427,7 +2505,8 @@ onBeforeUnmount(() => {
   }
 
   .focus-actions :deep(.el-button),
-  .section-actions :deep(.el-button) {
+  .section-actions :deep(.el-button),
+  .empty-panel__actions :deep(.el-button) {
     width: 100%;
   }
 
@@ -2483,6 +2562,12 @@ onBeforeUnmount(() => {
 
   .task-row__actions {
     justify-items: start;
+  }
+
+  .empty-panel__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 }
 </style>

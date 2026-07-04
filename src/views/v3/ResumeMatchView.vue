@@ -243,7 +243,18 @@
           <AppState v-if="reportsError" type="error" title="匹配报告加载失败" :description="reportsError">
             <el-button type="primary" @click="loadReports">重试</el-button>
           </AppState>
-          <AppState v-else-if="!reports.length" type="empty" title="暂无匹配报告" description="提交一次岗位匹配后，这里会显示最新报告。" />
+          <AppState
+            v-else-if="!reports.length"
+            type="empty"
+            title="还没有可查看的 JD 匹配报告"
+            :description="emptyReportStateDescription"
+          >
+            <el-button type="primary" :disabled="emptyReportPrimaryDisabled" :loading="submitting" @click="handleEmptyReportPrimaryAction">
+              {{ emptyReportPrimaryActionLabel }}
+            </el-button>
+            <el-button @click="router.push('/resumes/create')">创建/上传简历</el-button>
+            <el-button @click="router.push('/job-targets')">选择或补充 JD</el-button>
+          </AppState>
           <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: matchReportRouteQuery(report) })">
             <span>
               <strong>{{ report.jobTitle || '未命名岗位' }}</strong>
@@ -505,6 +516,24 @@ const reportHistoryHint = computed(() =>
     ? `仅展示与版本 ${versionSourceId.value} 相关的最近报告，避免和其他简历版本混用。`
     : '展示最近生成的匹配报告，便于回到详情继续修复简历、重跑报告或进入训练。'
 )
+const emptyReportStateDescription = computed(() => {
+  if (!form.resumeId && !form.targetJobId) return '先选择一份简历和一个岗位描述，再点击“生成 JD 匹配报告”。报告生成后，详情页会展示真实返回的匹配度、差距、风险和训练入口。'
+  if (!form.resumeId) return '还缺少实验简历。先创建或选择简历，再回到这里选择 JD 并生成报告。'
+  if (!form.targetJobId) return '还缺少岗位描述。先选择或补充岗位目标，再生成报告。'
+  if (versionResumeMismatch.value) return '当前版本入口和所选简历不一致。请返回简历版本页重新选择，或使用入口绑定的原简历后再生成报告。'
+  if (matchQualityIssues.value.length) return `当前资料还不适合生成报告：${matchQualityIssues.value.join('、')}。补齐后再生成，避免空报告或低置信结论。`
+  return '简历和 JD 已就绪，可以生成一份报告；生成完成后会出现在这里，详情页再承接学习计划、岗位面试和短板题组。'
+})
+const emptyReportPrimaryActionLabel = computed(() => {
+  if (!form.resumeId) return '先创建简历'
+  if (!form.targetJobId) return '先选择 JD'
+  if (versionResumeMismatch.value) return '返回版本记录'
+  if (matchQualityIssues.value.length) return '先补齐资料'
+  return '生成 JD 匹配报告'
+})
+const emptyReportPrimaryDisabled = computed(() =>
+  Boolean(submitting.value)
+)
 const canSubmit = computed(() =>
   Boolean(form.resumeId && form.targetJobId && !submitting.value && !matchQualityIssues.value.length && !versionResumeMismatch.value)
 )
@@ -753,6 +782,26 @@ const submitMatch = async () => {
     forceRefresh: form.forceRefresh
   }
   startMatchSse(payload)
+}
+
+const handleEmptyReportPrimaryAction = () => {
+  if (!form.resumeId) {
+    router.push('/resumes/create')
+    return
+  }
+  if (!form.targetJobId) {
+    router.push('/job-targets')
+    return
+  }
+  if (versionResumeMismatch.value) {
+    goSelectedResumeVersions()
+    return
+  }
+  if (matchQualityIssues.value.length) {
+    ElMessage.warning(matchQualityDescription.value)
+    return
+  }
+  void submitMatch()
 }
 
 const goSelectedResumeEdit = () => {

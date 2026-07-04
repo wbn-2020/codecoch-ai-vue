@@ -123,6 +123,7 @@
         class="mobile-bottom-nav__item"
         :class="{ 'is-active': isActive(item) }"
         type="button"
+        :aria-label="item.label"
         :aria-current="isActive(item) ? 'page' : undefined"
         :title="item.label"
         @click="go(item.path)"
@@ -204,7 +205,7 @@ const navItems: NavItem[] = [
   {
     key: 'interviews',
     label: '模拟面试',
-    mobileLabel: '模拟面试',
+    mobileLabel: '面试',
     desc: '推荐开练、训练房间、复盘记录和报告',
     path: '/interviews/create',
     icon: MessageSquare,
@@ -213,7 +214,7 @@ const navItems: NavItem[] = [
   {
     key: 'resume',
     label: '简历实验',
-    mobileLabel: '简历实验',
+    mobileLabel: '简历',
     desc: '简历、岗位目标、匹配分析和项目证据',
     path: '/resumes',
     icon: FileText,
@@ -222,7 +223,7 @@ const navItems: NavItem[] = [
   {
     key: 'ability',
     label: '能力图谱',
-    mobileLabel: '能力图谱',
+    mobileLabel: '能力',
     desc: '能力图谱、成长趋势、能力画像和个人分析',
     path: '/ability-map',
     icon: Sparkles,
@@ -665,6 +666,7 @@ watch(
 
   .mobile-bottom-nav {
     position: fixed;
+    box-sizing: border-box;
     right: 10px;
     bottom: calc(var(--user-mobile-nav-gap, 10px) + env(safe-area-inset-bottom, 0px));
     left: 10px;
@@ -672,7 +674,7 @@ watch(
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    min-height: 60px;
+    height: var(--user-mobile-nav-height, 72px);
     padding: 6px;
     border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 8px;
@@ -686,7 +688,8 @@ watch(
     place-items: center;
     gap: 3px;
     min-width: 0;
-    min-height: 48px;
+    min-height: 0;
+    height: 100%;
     padding: 4px 2px;
     border-radius: 8px;
     color: #64748b;

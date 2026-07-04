@@ -7,15 +7,15 @@
           题库训练
         </p>
         <h1>题库训练中心</h1>
-        <p>按岗位、分类、标签和掌握状态筛题，把刷题变成围绕目标岗位的专项补强。</p>
+        <p>先选一题开始表达，再用 AI 点评、参考思路和复盘记录把它沉淀成面试可用的回答。</p>
         <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/questions/recommendations')">
+          <el-button type="primary" size="large" @click="router.push('/questions/practice')">
+            <Dumbbell :size="17" />
+            开始训练
+          </el-button>
+          <el-button size="large" @click="router.push('/questions/recommendations')">
             <Sparkles :size="17" />
             看今日推荐
-          </el-button>
-          <el-button size="large" @click="router.push('/questions/practice')">
-            <Dumbbell :size="17" />
-            开始专项练习
           </el-button>
           <el-button size="large" text @click="router.push('/questions/wrong-records')">
             <RotateCcw :size="17" />
@@ -29,55 +29,45 @@
       </div>
 
       <aside class="hero-panel">
-        <div class="hero-panel__stat">
-          <span>可练题</span>
+        <p class="hero-panel__label">当前训练池</p>
+        <div class="hero-panel__focus">
           <strong>{{ total }}</strong>
+          <span>道可训练题</span>
         </div>
-        <div class="hero-panel__stat">
-          <span>本页已收藏</span>
-          <strong>{{ favoriteCount }}</strong>
+        <p>{{ trainingFocusText }}</p>
+        <div class="hero-panel__steps">
+          <span>选题</span>
+          <span>先答</span>
+          <span>点评</span>
+          <span>复盘</span>
         </div>
-        <div class="hero-panel__stat">
-          <span>本页已掌握</span>
-          <strong>{{ masteredCount }}</strong>
-        </div>
-        <div class="hero-panel__stat">
-          <span>本页待补强</span>
-          <strong>{{ weakCount }}</strong>
-        </div>
-        <p>统计只来自当前题库返回结果；未评估的题会保持“待训练”，不替你下结论。</p>
       </aside>
     </section>
 
-    <section class="metric-grid">
-      <article class="metric-card">
-        <span>可练题</span>
-        <strong>{{ total }}</strong>
-        <p>符合筛选条件的题目总数。</p>
+    <section class="training-strip">
+      <article class="training-note">
+        <span>今天先练</span>
+        <strong>{{ weakCount ? `${weakCount} 道待补强题` : '任选一题开练' }}</strong>
+        <p>未评估、模糊和未掌握会优先提示，但不会伪造你的能力结论。</p>
       </article>
-      <article class="metric-card">
-        <span>本页已收藏</span>
-        <strong>{{ favoriteCount }}</strong>
-        <p>适合面试前反复复习的题目。</p>
+      <article class="training-note">
+        <span>复盘资产</span>
+        <strong>{{ favoriteCount }} 道本页收藏</strong>
+        <p>收藏不抢主动作，只作为面试前回看和串联表达的入口。</p>
       </article>
-      <article class="metric-card">
-        <span>本页已掌握</span>
-        <strong>{{ masteredCount }}</strong>
-        <p>掌握状态为已掌握的题目。</p>
-      </article>
-      <article class="metric-card">
-        <span>本页待补强</span>
-        <strong>{{ weakCount }}</strong>
-        <p>模糊、未掌握或未评估，需要优先回看的题。</p>
+      <article class="training-note is-muted">
+        <span>已掌握</span>
+        <strong>{{ masteredCount }} 道可低频回看</strong>
+        <p>已掌握题建议用于巩固表达，不占用主训练精力。</p>
       </article>
     </section>
 
     <section class="content-card question-workbench">
       <div class="content-card__body workbench-head">
         <div>
-          <p class="section-kicker">训练筛选</p>
-          <h2>缩小今天要练的题</h2>
-          <p class="section-desc">筛选只是辅助，题卡里的“开始训练”才是主动作。</p>
+          <p class="section-kicker">训练题卡</p>
+          <h2>选择一道题，进入先答后评</h2>
+          <p class="section-desc">{{ currentResultLabel }}</p>
         </div>
         <div class="workbench-actions">
           <el-button text :loading="loading" @click="fetchQuestions">刷新</el-button>
@@ -86,21 +76,30 @@
         </div>
       </div>
 
-      <div class="content-card__body">
-        <QuestionFilters
-          :model="query"
-          :categories="categoryOptions"
-          :tags="tagOptions"
-          @search="handleSearch"
-          @reset="handleReset"
-        />
-      </div>
+      <details class="filter-drawer" :open="hasActiveFilters">
+        <summary>
+          <span>
+            <SlidersHorizontal :size="16" />
+            调整训练范围
+          </span>
+          <small>筛选是辅助，题卡里的“开始训练”是主动作</small>
+        </summary>
+        <div class="filter-drawer__body">
+          <QuestionFilters
+            :model="query"
+            :categories="categoryOptions"
+            :tags="tagOptions"
+            @search="handleSearch"
+            @reset="handleReset"
+          />
+        </div>
+      </details>
 
       <div class="question-feed" v-loading="loading">
         <AppState
           v-if="!loading && loadError"
           type="error"
-          title="题目列表加载失败"
+          title="训练题加载失败"
           :description="loadError"
         >
           <el-button type="primary" @click="fetchQuestions">重新加载</el-button>
@@ -120,34 +119,41 @@
           v-else
           :key="item.id"
           class="question-card"
-          @click="router.push(`/questions/${item.id}`)"
+          @click="openQuestion(item)"
         >
-          <div class="question-card__main">
-            <div class="question-card__head">
-              <div>
-                <h3>{{ item.title }}</h3>
-                <QuestionMeta
-                  :category-name="item.categoryName"
-                  :difficulty="item.difficulty"
-                  :question-type="item.questionType"
-                  :tags="item.tags"
-                />
-              </div>
-              <StatusTag :status="item.masteryStatus" :map="masteryMap" />
+          <div class="question-card__top">
+            <div>
+              <p class="question-card__eyebrow">训练题</p>
+              <h3>{{ item.title }}</h3>
+              <QuestionMeta
+                :category-name="item.categoryName"
+                :difficulty="item.difficulty"
+                :question-type="item.questionType"
+                :tags="item.tags"
+              />
             </div>
-
-            <p class="question-desc">
-              {{ item.experienceLevel || '进入训练页后先用自己的话回答，再看 AI 点评、参考思路和下一步。' }}
-            </p>
+            <StatusTag :status="item.masteryStatus" :map="masteryMap" />
           </div>
 
-          <div class="question-card__side">
-            <div class="side-meta">
-              <span>训练状态</span>
-              <strong>{{ masteryLabel(item.masteryStatus) }}</strong>
+          <div class="question-card__insights">
+            <div>
+              <span>为什么练这题</span>
+              <p>{{ trainingReason(item) }}</p>
             </div>
+            <div>
+              <span>训练状态</span>
+              <p>{{ trainingState(item) }}</p>
+            </div>
+            <div>
+              <span>下一步</span>
+              <p>{{ nextAction(item) }}</p>
+            </div>
+          </div>
+
+          <div class="question-card__footer">
+            <p>{{ item.experienceLevel || '进入训练页后先用自己的话回答，再看 AI 点评、参考思路和下一步。' }}</p>
             <div class="side-actions">
-              <el-button type="primary" @click.stop="router.push(`/questions/${item.id}`)">
+              <el-button type="primary" @click.stop="openQuestion(item)">
                 <PlayCircle :size="16" />
                 开始训练
               </el-button>
@@ -157,19 +163,20 @@
                 :loading="favoriteChangingId === item.id"
                 @click.stop="toggleFavorite(item)"
               >
-                {{ item.favorite ? '取消收藏' : '收藏' }}
+                {{ item.favorite ? '已收藏' : '收藏复习' }}
               </el-button>
             </div>
           </div>
         </article>
       </div>
 
-      <div class="pagination-wrap">
+      <div v-if="total > 0" class="pagination-wrap">
+        <span>换一组训练题</span>
         <el-pagination
           v-model:current-page="query.pageNo"
           v-model:page-size="query.pageSize"
           background
-          layout="total, sizes, prev, pager, next"
+          layout="prev, pager, next, sizes"
           :total="total"
           :page-sizes="[10, 20, 50]"
           @change="fetchQuestions"
@@ -183,7 +190,7 @@
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpenCheck, Bookmark, Dumbbell, PlayCircle, RotateCcw, Sparkles } from 'lucide-vue-next'
+import { BookOpenCheck, Bookmark, Dumbbell, PlayCircle, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
 
 import { favoriteQuestionApi, getQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
@@ -250,7 +257,52 @@ const tagOptions = computed<QuestionTagVO[]>(() => {
 const favoriteCount = computed(() => questions.value.filter((item) => item.favorite).length)
 const masteredCount = computed(() => questions.value.filter((item) => item.masteryStatus === 'MASTERED').length)
 const weakCount = computed(() => questions.value.filter((item) => !item.masteryStatus || item.masteryStatus === 'VAGUE' || item.masteryStatus === 'UNKNOWN').length)
-const masteryLabel = (status?: string) => masteryMap[status as keyof typeof masteryMap] || '待训练'
+const hasActiveFilters = computed(() =>
+  Boolean(query.keyword || query.categoryId || query.tagId || query.difficulty || query.masteryStatus || query.favoriteOnly)
+)
+const currentResultLabel = computed(() => {
+  if (loading.value) return '正在整理可训练题，稍后选择一题开始。'
+  if (loadError.value) return '训练题暂时没有加载成功，可以重试或切到专项练习。'
+  if (!total.value) return hasActiveFilters.value ? '当前筛选没有命中题目，可以放宽训练范围。' : '暂无可训练题，先从今日推荐或专项练习进入。'
+  return hasActiveFilters.value
+    ? `已按当前训练范围筛出 ${total.value} 道题。`
+    : `当前题库共有 ${total.value} 道可训练题。`
+})
+const trainingFocusText = computed(() => {
+  if (weakCount.value > 0) return `本页有 ${weakCount.value} 道待补强题，建议先从这些题开始练表达。`
+  if (favoriteCount.value > 0) return `本页有 ${favoriteCount.value} 道收藏题，适合做面试前的稳定复习。`
+  return '当前结果没有明显薄弱标记，可以选择和目标岗位最相关的一题开始。'
+})
+
+const openQuestion = (item: QuestionVO) => {
+  router.push(`/questions/${item.id}`)
+}
+
+const trainingReason = (item: QuestionVO) => {
+  const difficulty = String(item.difficulty || '').toUpperCase()
+  if (!item.masteryStatus) return '这道题还没有训练记录，适合用来建立第一版回答。'
+  if (item.masteryStatus === 'UNKNOWN') return '当前标记为未掌握，优先练能快速补齐面试短板。'
+  if (item.masteryStatus === 'VAGUE') return '当前还比较模糊，适合把概念和项目表达重新讲清楚。'
+  if (item.favorite) return '你已经收藏过它，适合面试前反复打磨稳定说法。'
+  if (difficulty === 'HARD') return '这是一道高难题，适合训练拆解问题和组织答案的能力。'
+  if (item.categoryName) return `围绕「${item.categoryName}」补强，让同类问题的回答更连贯。`
+  return '作为通用训练题，适合保持答题手感和表达节奏。'
+}
+
+const trainingState = (item: QuestionVO) => {
+  if (item.masteryStatus === 'MASTERED') return item.answered ? '已练过且标记为已掌握，可低频回看。' : '已标记为已掌握，建议用来巩固表达。'
+  if (item.masteryStatus === 'VAGUE') return '还没讲透，建议先写答题骨架再看点评。'
+  if (item.masteryStatus === 'UNKNOWN') return '需要补强，训练后再更新掌握状态。'
+  return '尚未评估，先完成一次作答再判断掌握程度。'
+}
+
+const nextAction = (item: QuestionVO) => {
+  if (item.masteryStatus === 'MASTERED') return '进入训练页快速复述，确认面试表达是否稳定。'
+  if (item.masteryStatus === 'VAGUE') return '先用自己的话回答，再对照 AI 点评补齐遗漏。'
+  if (item.masteryStatus === 'UNKNOWN') return '从基础定义、使用场景和项目例子三个点开答。'
+  if (item.favorite) return '把收藏原因讲成一段面试可复用的回答。'
+  return '点击开始训练，先答题，再看点评和参考思路。'
+}
 
 const fetchQuestions = async () => {
   loading.value = true
@@ -262,7 +314,7 @@ const fetchQuestions = async () => {
   } catch (error) {
     questions.value = []
     total.value = 0
-    loadError.value = toFriendlyMessage(error, '题目列表暂时加载失败，请稍后重试。')
+    loadError.value = toFriendlyMessage(error, '训练题暂时加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -328,10 +380,11 @@ onMounted(fetchQuestions)
 
 .hero-kicker,
 .hero-actions,
-.question-card__head,
+.question-card__top,
 .side-actions,
-.side-meta,
-.workbench-actions {
+.workbench-actions,
+.filter-drawer summary span,
+.hero-panel__steps {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -360,9 +413,9 @@ onMounted(fetchQuestions)
 
 .hero-copy p,
 .hero-panel p,
-.question-desc,
-.metric-card p,
-.side-meta span,
+.training-note p,
+.question-card__insights p,
+.question-card__footer p,
 .section-desc {
   color: var(--app-text-muted);
 }
@@ -380,7 +433,7 @@ onMounted(fetchQuestions)
 
 .hero-panel {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   align-content: start;
   padding: 18px;
   border: 1px solid var(--app-border);
@@ -388,50 +441,82 @@ onMounted(fetchQuestions)
   background: rgba(248, 250, 252, 0.88);
 }
 
-.hero-panel__stat {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.hero-panel__stat span {
+.hero-panel__label {
+  margin: 0;
   color: var(--app-text-muted);
   font-size: 12px;
+  font-weight: 800;
 }
 
-.hero-panel__stat strong {
+.hero-panel__focus {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hero-panel__focus strong {
   color: var(--app-text);
-  font-size: 18px;
-  line-height: 1.4;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.hero-panel__focus span {
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .hero-panel p {
-  margin: 2px 0 0;
+  margin: 0;
   line-height: 1.7;
 }
 
-.metric-grid {
+.hero-panel__steps {
+  flex-wrap: wrap;
+}
+
+.hero-panel__steps span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.training-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.metric-card {
+.training-note {
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #ffffff;
 }
 
-.metric-card strong {
+.training-note.is-muted {
+  background: #f8fafc;
+}
+
+.training-note span,
+.question-card__eyebrow,
+.question-card__insights span,
+.pagination-wrap span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.training-note strong {
   display: block;
   margin-top: 6px;
   color: var(--app-text);
-  font-size: 26px;
+  font-size: 20px;
 }
 
-.metric-card p {
+.training-note p {
   margin: 8px 0 0;
   line-height: 1.65;
 }
@@ -441,6 +526,9 @@ onMounted(fetchQuestions)
 }
 
 .workbench-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
   justify-content: space-between;
   padding-bottom: 18px;
 }
@@ -455,28 +543,75 @@ onMounted(fetchQuestions)
   line-height: 1.6;
 }
 
+.filter-drawer {
+  margin: 0 20px 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.filter-drawer summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.filter-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-drawer summary span {
+  color: var(--app-text);
+  font-weight: 800;
+}
+
+.filter-drawer summary small {
+  color: var(--app-text-muted);
+  line-height: 1.5;
+}
+
+.filter-drawer__body {
+  padding: 0 16px 16px;
+}
+
 .question-feed {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   padding: 0 20px 20px;
 }
 
 .question-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 16px;
-  padding: 16px 0 0;
-  border-top: 1px solid #edf2f7;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
   cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
-.question-card:first-child {
-  border-top: 0;
+.question-card:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
-.question-card__head {
+.question-card__top {
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.question-card__eyebrow {
+  margin: 0 0 6px;
 }
 
 .question-card h3 {
@@ -484,27 +619,36 @@ onMounted(fetchQuestions)
   line-height: 1.45;
 }
 
-.question-desc {
-  margin: 12px 0 0;
-  line-height: 1.7;
+.question-card__insights {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 12px;
 }
 
-.question-card__side {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  padding: 14px;
+.question-card__insights div {
+  min-width: 0;
+  padding: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #f8fafc;
 }
 
-.side-meta {
-  justify-content: space-between;
+.question-card__insights p {
+  margin: 6px 0 0;
+  line-height: 1.65;
 }
 
-.side-meta strong {
-  color: var(--app-text);
+.question-card__footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding-top: 2px;
+}
+
+.question-card__footer p {
+  margin: 0;
+  line-height: 1.7;
 }
 
 .side-actions {
@@ -520,14 +664,17 @@ onMounted(fetchQuestions)
 
 .pagination-wrap {
   display: flex;
+  align-items: center;
+  gap: 14px;
   justify-content: flex-end;
-  padding: 0 20px 20px;
+  padding: 2px 20px 20px;
 }
 
 @media (max-width: 1080px) {
   .hero-band,
-  .metric-grid,
-  .question-card {
+  .training-strip,
+  .question-card__insights,
+  .question-card__footer {
     grid-template-columns: 1fr;
   }
 }
@@ -544,7 +691,9 @@ onMounted(fetchQuestions)
   .workbench-head,
   .workbench-actions,
   .hero-actions,
-  .side-actions {
+  .side-actions,
+  .filter-drawer summary,
+  .pagination-wrap {
     flex-direction: column;
     align-items: stretch;
   }
@@ -558,9 +707,15 @@ onMounted(fetchQuestions)
   }
 
   .question-feed,
-  .pagination-wrap {
+  .pagination-wrap,
+  .filter-drawer {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .filter-drawer {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 </style>

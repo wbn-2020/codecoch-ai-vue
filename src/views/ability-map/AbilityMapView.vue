@@ -22,7 +22,7 @@
         </div>
       </div>
 
-      <aside class="next-training-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
         <div class="next-training-card__label">
           <Target :size="16" />
           下一组训练建议
@@ -108,7 +108,7 @@
           type="button"
           @click="activeDomainCode = domain.domainCode"
         >
-          <span>{{ domain.domainName || domain.domainCode || '未命名能力域' }}</span>
+          <span>{{ safeDomainName(domain) }}</span>
           <strong>{{ domain.assessedCount }}/{{ domain.totalCount }}</strong>
           <small>{{ domainWeakText(domain) }}</small>
         </button>
@@ -135,6 +135,46 @@
           </article>
         </div>
 
+        <section class="current-shortfall-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+          <div class="section-title">
+            <span>当前短板</span>
+            <em>{{ currentShortfallMeta }}</em>
+          </div>
+          <strong>{{ currentShortfallTitle }}</strong>
+          <p>{{ currentShortfallDescription }}</p>
+          <el-button
+            :type="currentShortfallSkill && abilityMap.hasTrainingData ? 'primary' : 'default'"
+            plain
+            @click="startCurrentShortfallTraining"
+          >
+            <Play :size="14" />
+            {{ currentShortfallActionLabel }}
+          </el-button>
+        </section>
+
+        <aside class="next-training-card next-training-card--mobile" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+          <div class="next-training-card__label">
+            <Target :size="16" />
+            下一组训练建议
+          </div>
+          <h2>{{ nextTrainingTitle }}</h2>
+          <p>{{ nextTrainingDescription }}</p>
+          <div class="next-training-card__meta">
+            <span>
+              <BookOpenCheck :size="15" />
+              {{ nextTrainingMeta }}
+            </span>
+            <span>
+              <ShieldCheck :size="15" />
+              {{ trainingTrustText }}
+            </span>
+          </div>
+          <el-button type="primary" size="large" @click="startRecommendedTraining">
+            {{ nextTrainingActionLabel }}
+            <ArrowRight :size="16" />
+          </el-button>
+        </aside>
+
         <div v-if="activeDomain?.skills?.length" class="skill-grid">
           <article
             v-for="skill in activeDomain.skills"
@@ -144,8 +184,8 @@
           >
             <div class="skill-card__head">
               <div>
-                <strong>{{ skill.name || skill.code || '未命名能力点' }}</strong>
-                <span>{{ skill.domainName || activeDomainName }}</span>
+                <strong>{{ safeSkillName(skill) }}</strong>
+                <span>{{ safeSkillDomainName(skill) }}</span>
               </div>
               <el-tag effect="plain" :type="statusTagType(skill.status)">
                 {{ honestStatusLabel(skill) }}
@@ -192,7 +232,7 @@
               class="priority-item"
               @click="startSkillTraining(skill)"
             >
-              <span>{{ skill.name || skill.code }}</span>
+              <span>{{ safeSkillName(skill) }}</span>
               <small>{{ skill.evidenceCount || 0 }} 条证据 · {{ confidenceText(skill) }}</small>
             </button>
           </div>
@@ -205,7 +245,7 @@
             <em>{{ abilityMap.hasTrainingData ? `${usableSkills.length} 项` : '未评估' }}</em>
           </div>
           <div v-if="abilityMap.hasTrainingData && usableSkills.length" class="chip-list">
-            <span v-for="skill in usableSkills.slice(0, 8)" :key="skill.code">{{ skill.name || skill.code }}</span>
+            <span v-for="skill in usableSkills.slice(0, 8)" :key="skill.code">{{ safeSkillName(skill) }}</span>
           </div>
           <p v-else class="insight-muted">{{ usablePanelEmptyText }}</p>
         </section>
@@ -258,12 +298,190 @@ const loadError = ref('')
 const activeDomainCode = ref('')
 const abilityMap = ref<AbilityMapVO>(normalizeAbilityMap())
 
+const domainFallbackCopy: Record<string, string> = {
+  JAVA_CORE: 'Java 基础',
+  COLLECTION: '集合框架',
+  CONCURRENCY: '并发编程',
+  JVM: 'JVM 与调优',
+  MYSQL: 'MySQL 数据库',
+  REDIS: 'Redis 缓存',
+  SPRING: 'Spring / Spring Boot',
+  MYBATIS: 'MyBatis',
+  MICROSERVICE: '微服务',
+  MESSAGE_QUEUE: '消息队列',
+  DISTRIBUTED: '分布式系统',
+  SYSTEM_DESIGN: '系统设计',
+  PROJECT_EXPRESSION: '项目表达',
+  ENGINEERING: '工程实践'
+}
+
+const skillFallbackCopy: Record<string, { name: string; description: string }> = {
+  JAVA_CORE: {
+    name: 'Java 基础',
+    description: '覆盖语法、面向对象、异常、泛型、IO 和常用 JDK 能力。'
+  },
+  COLLECTION_HASHMAP: {
+    name: '集合框架',
+    description: '覆盖 List、Map、HashMap、ConcurrentHashMap 和集合选型。'
+  },
+  JUC_THREAD_POOL: {
+    name: '并发编程',
+    description: '覆盖线程、锁、线程池、AQS、并发容器和可见性问题。'
+  },
+  JVM_MEMORY_GC: {
+    name: 'JVM 与 GC',
+    description: '覆盖内存模型、类加载、GC、调优和故障排查。'
+  },
+  MYSQL_INDEX_TX: {
+    name: 'MySQL 索引与事务',
+    description: '覆盖索引、事务、锁、执行计划和 SQL 优化。'
+  },
+  REDIS_CACHE: {
+    name: 'Redis 缓存',
+    description: '覆盖缓存设计、数据结构、持久化、分布式锁和高可用。'
+  },
+  SPRING_BOOT: {
+    name: 'Spring / Spring Boot',
+    description: '覆盖 IoC、AOP、事务、自动配置和 Web 开发。'
+  },
+  MYBATIS_ORM: {
+    name: 'MyBatis',
+    description: '覆盖 Mapper、动态 SQL、分页、缓存和常见坑。'
+  },
+  MICROSERVICE: {
+    name: '微服务',
+    description: '覆盖服务拆分、注册发现、配置、网关、限流和熔断。'
+  },
+  MESSAGE_QUEUE: {
+    name: '消息队列',
+    description: '覆盖异步解耦、可靠消息、顺序、幂等和积压治理。'
+  },
+  DISTRIBUTED_SYSTEM: {
+    name: '分布式系统',
+    description: '覆盖一致性、分布式事务、分布式锁、CAP 和高可用。'
+  },
+  SYSTEM_DESIGN: {
+    name: '系统设计',
+    description: '覆盖架构分层、容量估算、扩展性、可用性和取舍表达。'
+  },
+  PROJECT_EXPRESSION: {
+    name: '项目表达',
+    description: '覆盖项目背景、职责、难点、方案、结果和复盘表达。'
+  },
+  ENGINEERING_PRACTICE: {
+    name: '工程实践',
+    description: '覆盖测试、日志、监控、发布、代码质量和协作规范。'
+  }
+}
+
+const replacementCharCode = 0xfffd
+const euroSignCode = 0x20ac
+const privateUseStart = 0xe000
+const privateUseEnd = 0xf8ff
+const rareMojibakeCodePoints = new Set([
+  0x9225,
+  0x9227,
+  0x9286,
+  0x9358,
+  0x935a,
+  0x935d,
+  0x9369,
+  0x937a,
+  0x93b5,
+  0x93b6,
+  0x93c2,
+  0x93c4,
+  0x93c6,
+  0x93c8,
+  0x93c9,
+  0x93cd,
+  0x9410,
+  0x9413,
+  0x9422,
+  0x9436,
+  0x9473,
+  0x951b,
+  0x951f
+])
+const replacementMojibakeText = String.fromCodePoint(0x951f, 0x65a4, 0x62f7)
+
+const normalizeCodeKey = (value?: string) => String(value || '').trim().toUpperCase()
+
+const looksLikeMojibake = (value?: string) => {
+  const text = String(value || '').trim()
+  if (!text) return false
+  if (text.includes(replacementMojibakeText)) return true
+  let rareCount = 0
+  for (const char of text) {
+    const codePoint = char.codePointAt(0)
+    if (codePoint === replacementCharCode) return true
+    if (codePoint === euroSignCode) return true
+    if (typeof codePoint === 'number' && codePoint >= privateUseStart && codePoint <= privateUseEnd) return true
+    if (typeof codePoint === 'number' && rareMojibakeCodePoints.has(codePoint)) rareCount += 1
+  }
+  return rareCount >= 2
+}
+
+const sanitizeMojibakeText = (value: unknown, fallback: string) => {
+  const text = String(value || '').trim()
+  if (!text || looksLikeMojibake(text)) return fallback
+  return text
+}
+
+const fallbackDomainName = (domain?: Pick<AbilityDomainVO, 'domainCode'> | Pick<AbilitySkillNodeVO, 'domainCode'>) => {
+  const code = normalizeCodeKey(domain?.domainCode)
+  return domainFallbackCopy[code] || '未命名能力域'
+}
+
+const fallbackSkillName = (skill?: Pick<AbilitySkillNodeVO, 'code'>) => {
+  const code = normalizeCodeKey(skill?.code)
+  return skillFallbackCopy[code]?.name || skill?.code || '未命名能力点'
+}
+
+const fallbackSkillDescription = (skill?: Pick<AbilitySkillNodeVO, 'code'>) => {
+  const code = normalizeCodeKey(skill?.code)
+  return skillFallbackCopy[code]?.description || '围绕这个能力点做一组专项训练，先沉淀真实训练证据。'
+}
+
+const safeDomainName = (domain?: AbilityDomainVO) =>
+  sanitizeMojibakeText(domain?.domainName, fallbackDomainName(domain))
+
+const safeSkillName = (skill?: AbilitySkillNodeVO) =>
+  sanitizeMojibakeText(skill?.name, fallbackSkillName(skill))
+
+const safeSkillDomainName = (skill?: AbilitySkillNodeVO) =>
+  sanitizeMojibakeText(skill?.domainName, fallbackDomainName(skill))
+
+const safeSkillSummary = (skill: AbilitySkillNodeVO, fallback?: string) => {
+  const summary = sanitizeMojibakeText(skill.summary, '')
+  if (summary) return summary
+  return sanitizeMojibakeText(skill.description, fallback || fallbackSkillDescription(skill))
+}
+
+const sanitizeAbilityMap = (data?: AbilityMapVO | null): AbilityMapVO => {
+  const normalized = normalizeAbilityMap(data)
+  return {
+    ...normalized,
+    domains: normalized.domains.map((domain) => ({
+      ...domain,
+      domainName: safeDomainName(domain),
+      skills: (domain.skills || []).map((skill) => ({
+        ...skill,
+        name: safeSkillName(skill),
+        domainName: safeSkillDomainName(skill),
+        description: sanitizeMojibakeText(skill.description, fallbackSkillDescription(skill)),
+        summary: skill.summary ? sanitizeMojibakeText(skill.summary, '') : ''
+      }))
+    }))
+  }
+}
+
 const activeDomain = computed(() =>
   abilityMap.value.domains.find((domain) => domain.domainCode === activeDomainCode.value) ||
   abilityMap.value.domains[0]
 )
 
-const activeDomainName = computed(() => activeDomain.value?.domainName || activeDomain.value?.domainCode || '能力点')
+const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
 const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
 const weakSkills = computed(() => abilityMap.value.hasTrainingData ? allSkills.value.filter((skill) => skill.status === 'WEAK') : [])
 const usableSkills = computed(() =>
@@ -298,6 +516,11 @@ const activeDomainUsableSkills = computed(() =>
     ? (activeDomain.value?.skills || []).filter((skill) => ['COMPETENT', 'STRONG'].includes(String(skill.status)))
     : []
 )
+const activeDomainWeakSkills = computed(() =>
+  abilityMap.value.hasTrainingData
+    ? (activeDomain.value?.skills || []).filter((skill) => skill.status === 'WEAK')
+    : []
+)
 const domainMilestones = computed(() => [
   {
     label: '已评估',
@@ -322,17 +545,40 @@ const recommendedSkill = computed(() => {
   if (abilityMap.value.hasTrainingData && weakSkills.value.length) return weakSkills.value[0]
   return activeDomain.value?.skills?.[0] || allSkills.value[0]
 })
+const currentShortfallSkill = computed(() =>
+  activeDomainWeakSkills.value[0] || activeDomain.value?.skills?.find((skill) => !skill.evidenceCount) || activeDomain.value?.skills?.[0]
+)
+const currentShortfallMeta = computed(() => {
+  if (!activeDomain.value) return '等待能力域'
+  if (!abilityMap.value.hasTrainingData) return '未评估'
+  if (activeDomainWeakSkills.value.length) return `${activeDomainWeakSkills.value.length} 个薄弱项`
+  return '继续补证据'
+})
+const currentShortfallTitle = computed(() => {
+  if (!activeDomain.value) return '先选择一个能力域'
+  if (!abilityMap.value.hasTrainingData) return '当前短板尚未评估'
+  if (activeDomainWeakSkills.value[0]) return safeSkillName(activeDomainWeakSkills.value[0])
+  if (currentShortfallSkill.value) return `补齐证据：${safeSkillName(currentShortfallSkill.value)}`
+  return '暂无明确短板'
+})
+const currentShortfallDescription = computed(() => {
+  if (!activeDomain.value) return '能力目录加载后，会在这里给出当前能力域的训练入口。'
+  if (!abilityMap.value.hasTrainingData) return '这里不会把未评估能力当成薄弱或强项。先完成一组训练，再用真实证据判断短板。'
+  if (activeDomainWeakSkills.value[0]) return safeSkillSummary(activeDomainWeakSkills.value[0], '该能力点已有薄弱结论，建议优先用专项题补齐。')
+  return '当前能力域没有明确薄弱结论，优先训练证据较少的能力点，避免结论过早。'
+})
+const currentShortfallActionLabel = computed(() => abilityMap.value.hasTrainingData && activeDomainWeakSkills.value.length ? '训练当前短板' : '训练本域')
 const nextTrainingTitle = computed(() => {
   if (!allSkills.value.length) return '先建立能力目录'
   if (!abilityMap.value.hasTrainingData) return '先完成一次专项训练，建立评估证据'
-  if (recommendedSkill.value && weakSkills.value.length) return `优先训练：${recommendedSkill.value.name || recommendedSkill.value.code}`
+  if (recommendedSkill.value && weakSkills.value.length) return `优先训练：${safeSkillName(recommendedSkill.value)}`
   return '保持专项训练，补齐证据链'
 })
 const nextTrainingDescription = computed(() => {
   if (!allSkills.value.length) return '当前没有可训练的能力点，请先进入题库完成一组基础训练。'
   if (!abilityMap.value.hasTrainingData) return '目前没有训练数据，页面不会推断强弱。先围绕当前能力域做题，让图谱有真实证据。'
   if (recommendedSkill.value && weakSkills.value.length) {
-    return recommendedSkill.value.summary || recommendedSkill.value.description || '这个能力点已被评估为薄弱，建议用专项题组补齐概念、方案和项目表达。'
+    return safeSkillSummary(recommendedSkill.value, '这个能力点已被评估为薄弱，建议用专项题组补齐概念、方案和项目表达。')
   }
   return '当前没有明确薄弱项，建议继续训练证据较少的能力点，避免把“未评估”误当作“已掌握”。'
 })
@@ -367,7 +613,7 @@ const fetchAbilityMap = async () => {
   loadError.value = ''
   try {
     const result = await getAbilityMapApi()
-    abilityMap.value = normalizeAbilityMap(result)
+    abilityMap.value = sanitizeAbilityMap(result)
     activeDomainCode.value = activeDomainCode.value || abilityMap.value.domains[0]?.domainCode || ''
   } catch (error) {
     loadError.value = getErrorMessage(error, '能力图谱暂时加载失败')
@@ -389,9 +635,9 @@ const honestStatusLabel = (skill: AbilitySkillNodeVO) => {
 
 const skillSummary = (skill: AbilitySkillNodeVO) => {
   if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') {
-    return skill.description || '尚未产生训练评估，当前只作为能力点目录展示。'
+    return sanitizeMojibakeText(skill.description, fallbackSkillDescription(skill))
   }
-  return skill.summary || skill.description || '已有训练记录，但暂无摘要。建议继续用专项训练补齐证据。'
+  return safeSkillSummary(skill, '已有训练记录，但暂无摘要。建议继续用专项训练补齐证据。')
 }
 
 const confidenceText = (skill: AbilitySkillNodeVO) => {
@@ -421,7 +667,7 @@ const skillCardClass = (skill: AbilitySkillNodeVO) => {
 }
 
 const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
-  const keyword = skill?.name || skill?.code || activeDomainName.value
+  const keyword = skill ? safeSkillName(skill) : activeDomainName.value
   return {
     mode: 'category',
     keyword,
@@ -432,7 +678,7 @@ const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
 }
 
 const startDomainTraining = (domain?: AbilityDomainVO) => {
-  const keyword = domain?.domainName || domain?.domainCode || activeDomainName.value
+  const keyword = domain ? safeDomainName(domain) : activeDomainName.value
   router.push({
     path: '/questions/practice',
     query: {
@@ -450,6 +696,14 @@ const startSkillTraining = (skill: AbilitySkillNodeVO) => {
     path: '/questions/practice',
     query: practiceQueryForSkill(skill)
   })
+}
+
+const startCurrentShortfallTraining = () => {
+  if (currentShortfallSkill.value) {
+    startSkillTraining(currentShortfallSkill.value)
+    return
+  }
+  startDomainTraining(activeDomain.value)
 }
 
 const startRecommendedTraining = () => {
@@ -583,6 +837,10 @@ onMounted(fetchAbilityMap)
   }
 }
 
+.next-training-card--mobile {
+  display: none;
+}
+
 .signal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -669,7 +927,7 @@ onMounted(fetchAbilityMap)
 
 .map-workspace {
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) 320px;
+  grid-template-columns: 220px minmax(0, 1fr) 300px;
   gap: 16px;
   align-items: start;
 }
@@ -780,6 +1038,39 @@ onMounted(fetchAbilityMap)
   margin-bottom: 14px;
 }
 
+.current-shortfall-card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: #f8fbff;
+
+  > strong {
+    color: var(--app-text);
+    font-size: 18px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+    color: var(--app-text-muted);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  .el-button {
+    justify-self: start;
+  }
+
+  &.is-muted {
+    border-color: rgba(148, 163, 184, 0.24);
+    background: #f8fafc;
+  }
+}
+
 .milestone {
   min-width: 0;
   padding: 12px;
@@ -823,14 +1114,27 @@ onMounted(fetchAbilityMap)
 
 .skill-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  position: relative;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding-left: 18px;
+
+  &::before {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 5px;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #2563eb, #16a34a);
+    content: '';
+  }
 }
 
 .skill-card {
   display: flex;
+  position: relative;
   min-width: 0;
-  min-height: 230px;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
@@ -838,8 +1142,20 @@ onMounted(fetchAbilityMap)
   border-radius: 8px;
   background: #ffffff;
 
+  &::before {
+    position: absolute;
+    top: 20px;
+    left: -18px;
+    width: 12px;
+    height: 12px;
+    border: 3px solid #ffffff;
+    border-radius: 999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
+    content: '';
+  }
+
   p {
-    flex: 1;
     margin: 0;
     color: var(--app-text-muted);
     line-height: 1.65;
@@ -850,16 +1166,31 @@ onMounted(fetchAbilityMap)
 .skill-card.is-weak {
   border-color: rgba(239, 68, 68, 0.24);
   background: #fff7f7;
+
+  &::before {
+    background: #ef4444;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28);
+  }
 }
 
 .skill-card.is-strong,
 .skill-card.is-competent {
   border-color: rgba(22, 163, 74, 0.22);
   background: #f8fffb;
+
+  &::before {
+    background: #16a34a;
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.28);
+  }
 }
 
 .skill-card.is-unassessed {
   background: #f8fafc;
+
+  &::before {
+    background: #94a3b8;
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
+  }
 }
 
 .skill-card__head {
@@ -1023,8 +1354,64 @@ onMounted(fetchAbilityMap)
 }
 
 @media (max-width: 860px) {
+  .ability-map {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map-workspace {
+    order: 1;
+  }
+
+  .growth-hero {
+    order: 2;
+  }
+
+  .signal-grid {
+    order: 3;
+  }
+
+  .honesty-alert,
+  .load-error-card,
+  .empty-map-card {
+    order: 4;
+  }
+
+  .growth-hero__main,
+  .next-training-card--desktop {
+    display: none;
+  }
+
+  .growth-hero {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .next-training-card--mobile {
+    display: grid;
+    margin-bottom: 14px;
+  }
+
+  .domain-rail {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .domain-rail .section-title {
+    display: none;
+  }
+
+  .domain-item {
+    flex: 0 0 168px;
+    scroll-snap-align: start;
+  }
+
   .signal-grid,
-  .skill-grid,
   .domain-map-strip {
     grid-template-columns: 1fr;
   }
@@ -1038,7 +1425,7 @@ onMounted(fetchAbilityMap)
 
 @media (max-width: 640px) {
   .growth-hero {
-    padding: 18px;
+    padding: 0;
   }
 
   .growth-hero__main h1 {
@@ -1046,13 +1433,26 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
-    grid-template-columns: 1fr;
+    margin: 0 -2px;
   }
 
   .next-training-card,
+  .current-shortfall-card,
   .domain-panel,
   .insight-card {
     padding: 14px;
+  }
+
+  .domain-panel__head h2 {
+    font-size: 20px;
+  }
+
+  .skill-grid {
+    padding-left: 14px;
+  }
+
+  .skill-card::before {
+    left: -15px;
   }
 }
 </style>

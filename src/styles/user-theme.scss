@@ -1,37 +1,50 @@
 :root {
-  --user-bg: #f6f8fc;
-  --user-bg-soft: #eef4ff;
-  --user-surface: #ffffff;
-  --user-surface-muted: #f8fafc;
+  --user-bg: #eef3f8;
+  --user-bg-soft: #e6edf7;
+  --user-bg-panel: #f6f9fd;
+  --user-surface: #fbfcff;
+  --user-surface-muted: #f2f6fb;
   --user-surface-raised: #ffffff;
-  --user-border: #e4e7ec;
-  --user-border-strong: #cfd6e4;
+  --user-surface-tint: #f7faff;
+  --user-border: #d9e2ee;
+  --user-border-strong: #c3ccda;
 
   --user-text: #101828;
   --user-text-secondary: #344054;
   --user-text-muted: #667085;
   --user-text-subtle: #98a2b3;
 
-  --user-primary: #2563eb;
-  --user-primary-hover: #1d4ed8;
-  --user-primary-soft: #eff6ff;
-  --user-ai: #7c3aed;
-  --user-ai-soft: #f5f3ff;
-  --user-cyan: #0891b2;
-  --user-cyan-soft: #ecfeff;
+  --user-primary: #1d4ed8;
+  --user-primary-hover: #1e40af;
+  --user-primary-soft: #e8f1ff;
+  --user-primary-faint: #f3f7ff;
+  --user-primary-border: #93c5fd;
+  --user-ai: #6d28d9;
+  --user-ai-soft: #f1edff;
+  --user-cyan: #0e7490;
+  --user-cyan-soft: #e7f9fc;
   --user-success: #16a34a;
-  --user-success-soft: #dcfce7;
+  --user-success-hover: #15803d;
+  --user-success-soft: #e7f7ed;
+  --user-success-border: #86efac;
   --user-warning: #f59e0b;
-  --user-warning-soft: #fff7ed;
+  --user-warning-soft: #fff6e6;
   --user-danger: #ef4444;
-  --user-danger-soft: #fef2f2;
+  --user-danger-hover: #dc2626;
+  --user-danger-soft: #fff0f0;
+  --user-danger-border: #fca5a5;
+  --user-disabled: #9aa4b2;
+  --user-disabled-bg: #edf1f6;
+  --user-control-bg: #ffffff;
+  --user-control-bg-muted: #f8fafc;
 
   --user-radius-sm: 8px;
-  --user-radius-md: 12px;
-  --user-radius-lg: 16px;
-  --user-shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.06);
-  --user-shadow-md: 0 12px 34px rgba(15, 23, 42, 0.08);
-  --user-shadow-lg: 0 22px 60px rgba(15, 23, 42, 0.12);
+  --user-radius-md: 10px;
+  --user-radius-lg: 12px;
+  --user-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --user-shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.06);
+  --user-shadow-md: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --user-shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.1);
 }
 
 .jobcoach-layout {
@@ -45,8 +58,14 @@
   --app-text-muted: var(--user-text-muted);
   --app-primary: var(--user-primary);
   --app-primary-soft: var(--user-primary-soft);
+  --app-success-soft: var(--user-success-soft);
+  --app-warning-soft: var(--user-warning-soft);
+  --app-danger-soft: var(--user-danger-soft);
   --app-radius: var(--user-radius-sm);
   --app-shadow: var(--user-shadow-md);
+  --cc-ai: var(--user-ai);
+  --cc-ai-blue: var(--user-primary);
+  --cc-ai-cyan: var(--user-cyan);
 
   --user-mobile-top-height: 68px;
   --user-mobile-nav-height: 0px;
@@ -54,14 +73,30 @@
 
   --el-bg-color: var(--user-surface);
   --el-bg-color-overlay: var(--user-surface);
+  --el-fill-color: var(--user-surface-muted);
   --el-fill-color-blank: var(--user-surface);
   --el-fill-color-light: var(--user-surface-muted);
+  --el-fill-color-lighter: var(--user-primary-faint);
+  --el-fill-color-extra-light: var(--user-surface-tint);
+  --el-fill-color-dark: #e3e9f2;
+  --el-fill-color-darker: #d5deeb;
+  --el-mask-color: rgba(248, 250, 252, 0.72);
+  --el-mask-color-extra-light: rgba(248, 250, 252, 0.48);
   --el-border-color: var(--user-border);
   --el-border-color-light: #edf1f7;
+  --el-border-color-lighter: #eef3f8;
+  --el-border-color-extra-light: #f3f6fa;
+  --el-border-color-dark: var(--user-border-strong);
+  --el-border-color-darker: #aeb9c8;
   --el-border-radius-base: var(--user-radius-sm);
   --el-text-color-primary: var(--user-text);
   --el-text-color-regular: var(--user-text-secondary);
   --el-text-color-secondary: var(--user-text-muted);
+  --el-text-color-placeholder: var(--user-text-subtle);
+  --el-text-color-disabled: var(--user-disabled);
+  --el-disabled-bg-color: var(--user-disabled-bg);
+  --el-disabled-text-color: var(--user-disabled);
+  --el-disabled-border-color: #dde4ee;
   --el-color-primary: var(--user-primary);
   --el-color-primary-dark-2: var(--user-primary-hover);
   --el-color-primary-light-3: #60a5fa;
@@ -69,5 +104,23 @@
   --el-color-primary-light-7: #bfdbfe;
   --el-color-primary-light-8: #dbeafe;
   --el-color-primary-light-9: var(--user-primary-soft);
+  --el-color-success: var(--user-success);
+  --el-color-success-dark-2: var(--user-success-hover);
+  --el-color-success-light-3: #4ade80;
+  --el-color-success-light-5: #86efac;
+  --el-color-success-light-7: #bbf7d0;
+  --el-color-success-light-8: #dcfce7;
+  --el-color-success-light-9: var(--user-success-soft);
+  --el-color-warning: var(--user-warning);
+  --el-color-warning-light-9: var(--user-warning-soft);
+  --el-color-danger: var(--user-danger);
+  --el-color-danger-dark-2: var(--user-danger-hover);
+  --el-color-danger-light-3: #f87171;
+  --el-color-danger-light-5: #fca5a5;
+  --el-color-danger-light-7: #fecaca;
+  --el-color-danger-light-8: #fee2e2;
+  --el-color-danger-light-9: var(--user-danger-soft);
+  --el-box-shadow-light: var(--user-shadow-sm);
+  --el-box-shadow: var(--user-shadow-md);
   --el-mask-color: rgba(255, 255, 255, 0.72);
 }
