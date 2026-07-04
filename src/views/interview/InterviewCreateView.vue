@@ -4,10 +4,10 @@
       <div>
         <div class="eyebrow">
           <Sparkles :size="16" />
-          创建面试
+          推荐开练
         </div>
-        <h1>创建 AI 模拟面试</h1>
-        <p>像准备真实面试一样选择训练场景、绑定简历和目标岗位，再进入可追问的面试房间。</p>
+        <h1>先做一场最值得练的面试</h1>
+        <p>系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。</p>
         <div class="hero-tags">
           <el-tag effect="plain">创建后直接开始</el-tag>
           <el-tag effect="plain" type="success">支持简历上下文</el-tag>
@@ -32,9 +32,14 @@
 
     <section class="quick-start-panel">
       <div class="quick-start-panel__copy">
-        <span class="quick-label">推荐开练</span>
-        <h2>{{ quickInterviewTitle }}</h2>
-        <p>{{ quickInterviewDesc }}</p>
+        <div class="quick-start-panel__head">
+          <div>
+            <span class="quick-label">推荐开练</span>
+            <h2>{{ quickInterviewTitle }}</h2>
+            <p>{{ quickInterviewDesc }}</p>
+          </div>
+          <el-tag :type="quickRecommendationTrustType" effect="plain">{{ quickRecommendationTrustLabel }}</el-tag>
+        </div>
         <div class="quick-context-grid">
           <article v-for="item in quickStartItems" :key="item.label">
             <component :is="item.icon" :size="17" />
@@ -47,19 +52,28 @@
         <ul class="quick-reason-list">
           <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
         </ul>
+        <details class="quick-trust-card">
+          <summary>推荐依据与可信边界</summary>
+          <p>{{ quickRecommendationBoundaryText }}</p>
+          <div class="context-trust-list">
+            <article v-for="item in quickContextTrustItems" :key="item.label" :class="{ 'is-missing': item.missing }">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+        </details>
       </div>
       <div class="quick-start-panel__actions">
         <el-alert v-if="quickStartNotice" :title="quickStartNotice" type="warning" :closable="false" show-icon />
         <el-alert v-if="routeContextNotice" :title="routeContextNotice" type="warning" :closable="false" show-icon />
         <el-button
-          v-if="!configExpanded"
           type="success"
           size="large"
           :loading="creating || resumeLoading || matchReportVerifyLoading"
           @click="handleQuickCreate"
         >
           <Play :size="17" />
-          一键开始推荐面试
+          开始推荐面试
         </el-button>
         <el-button size="large" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
           <Sparkles :size="17" />
@@ -1294,13 +1308,14 @@ onMounted(async () => {
 
 .quick-start-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 20px;
-  margin-top: 18px;
-  padding: 22px;
+  width: min(960px, 100%);
+  margin: 18px auto 0;
+  padding: 26px;
   border: 1px solid rgba(22, 163, 74, 0.26);
   border-radius: 8px;
-  background: linear-gradient(135deg, #f0fdf4, #eff6ff);
+  background: #f7fef9;
   box-shadow: var(--app-shadow);
 }
 
@@ -1319,6 +1334,22 @@ onMounted(async () => {
     margin: 0;
     color: #475569;
     line-height: 1.7;
+  }
+}
+
+.quick-start-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  > div {
+    min-width: 0;
+  }
+
+  :deep(.el-tag) {
+    flex: 0 0 auto;
+    white-space: normal;
   }
 }
 
@@ -1401,6 +1432,28 @@ onMounted(async () => {
 
   li {
     color: #475569;
+  }
+}
+
+.quick-trust-card {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+
+  summary {
+    color: #1d4ed8;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  p {
+    margin: 10px 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
   }
 }
 
@@ -1978,8 +2031,7 @@ onMounted(async () => {
 
 @media (max-width: 1180px) {
   .create-grid,
-  .mode-grid,
-  .quick-start-panel {
+  .mode-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -2027,6 +2079,10 @@ onMounted(async () => {
     padding: 18px;
   }
 
+  .quick-start-panel__head {
+    flex-direction: column;
+  }
+
   .hero-actions,
   .preview-actions {
     display: grid;
@@ -2036,9 +2092,17 @@ onMounted(async () => {
 
   .hero-actions :deep(.el-button),
   .preview-actions :deep(.el-button),
-  .config-collapsed__actions :deep(.el-button) {
+  .config-collapsed__actions :deep(.el-button),
+  .config-form-actions :deep(.el-button),
+  .quick-start-panel__actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .config-form-actions,
+  .config-collapsed__actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .context-trust-card__head {

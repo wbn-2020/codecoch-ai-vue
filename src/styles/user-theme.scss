@@ -1,0 +1,73 @@
+:root {
+  --user-bg: #f6f8fc;
+  --user-bg-soft: #eef4ff;
+  --user-surface: #ffffff;
+  --user-surface-muted: #f8fafc;
+  --user-surface-raised: #ffffff;
+  --user-border: #e4e7ec;
+  --user-border-strong: #cfd6e4;
+
+  --user-text: #101828;
+  --user-text-secondary: #344054;
+  --user-text-muted: #667085;
+  --user-text-subtle: #98a2b3;
+
+  --user-primary: #2563eb;
+  --user-primary-hover: #1d4ed8;
+  --user-primary-soft: #eff6ff;
+  --user-ai: #7c3aed;
+  --user-ai-soft: #f5f3ff;
+  --user-cyan: #0891b2;
+  --user-cyan-soft: #ecfeff;
+  --user-success: #16a34a;
+  --user-success-soft: #dcfce7;
+  --user-warning: #f59e0b;
+  --user-warning-soft: #fff7ed;
+  --user-danger: #ef4444;
+  --user-danger-soft: #fef2f2;
+
+  --user-radius-sm: 8px;
+  --user-radius-md: 12px;
+  --user-radius-lg: 16px;
+  --user-shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.06);
+  --user-shadow-md: 0 12px 34px rgba(15, 23, 42, 0.08);
+  --user-shadow-lg: 0 22px 60px rgba(15, 23, 42, 0.12);
+}
+
+.jobcoach-layout {
+  color-scheme: light;
+
+  --app-bg: var(--user-bg);
+  --app-surface: var(--user-surface);
+  --app-surface-soft: var(--user-surface-muted);
+  --app-border: var(--user-border);
+  --app-text: var(--user-text);
+  --app-text-muted: var(--user-text-muted);
+  --app-primary: var(--user-primary);
+  --app-primary-soft: var(--user-primary-soft);
+  --app-radius: var(--user-radius-sm);
+  --app-shadow: var(--user-shadow-md);
+
+  --user-mobile-top-height: 68px;
+  --user-mobile-nav-height: 0px;
+  --user-mobile-nav-gap: 0px;
+
+  --el-bg-color: var(--user-surface);
+  --el-bg-color-overlay: var(--user-surface);
+  --el-fill-color-blank: var(--user-surface);
+  --el-fill-color-light: var(--user-surface-muted);
+  --el-border-color: var(--user-border);
+  --el-border-color-light: #edf1f7;
+  --el-border-radius-base: var(--user-radius-sm);
+  --el-text-color-primary: var(--user-text);
+  --el-text-color-regular: var(--user-text-secondary);
+  --el-text-color-secondary: var(--user-text-muted);
+  --el-color-primary: var(--user-primary);
+  --el-color-primary-dark-2: var(--user-primary-hover);
+  --el-color-primary-light-3: #60a5fa;
+  --el-color-primary-light-5: #93c5fd;
+  --el-color-primary-light-7: #bfdbfe;
+  --el-color-primary-light-8: #dbeafe;
+  --el-color-primary-light-9: var(--user-primary-soft);
+  --el-mask-color: rgba(255, 255, 255, 0.72);
+}

@@ -4,10 +4,16 @@
       <div>
         <div class="eyebrow">
           <MessageSquareText :size="16" />
-          答题训练
+          题目训练工作区
         </div>
-        <h1>{{ detail?.title || '题目详情' }}</h1>
-        <p>先自己组织语言，再看 AI 点评、参考答案、追问和项目结合说法。</p>
+        <h1>{{ detail?.title || '题目训练' }}</h1>
+        <p>先用自己的语言回答，再用 AI 点评、参考答案和追问清单修正面试表达。</p>
+        <div class="hero-rhythm" aria-label="训练节奏">
+          <span>1 读题</span>
+          <span>2 作答</span>
+          <span>3 点评</span>
+          <span>4 复盘</span>
+        </div>
       </div>
       <div class="hero-actions">
         <el-button @click="router.back()">返回</el-button>
@@ -22,93 +28,101 @@
       </div>
     </section>
 
-    <section class="detail-grid">
-      <main class="main-stack">
-        <section class="content-card" v-loading="loading">
-          <div v-if="detail" class="content-card__body question-card">
-            <div class="question-meta">
-              <QuestionMeta
-                :category-name="detail.category?.name || detail.categoryName"
-                :difficulty="detail.difficulty"
-                :question-type="detail.questionType"
-                :tags="displayTags"
-              />
+    <section class="workspace-grid">
+      <main class="content-card question-workspace" v-loading="loading">
+        <div v-if="detail" class="content-card__body question-card">
+          <div class="question-meta">
+            <QuestionMeta
+              :category-name="detail.category?.name || detail.categoryName"
+              :difficulty="detail.difficulty"
+              :question-type="detail.questionType"
+              :tags="displayTags"
+            />
+          </div>
+
+          <div v-if="recommendationContext.hasContext" class="recommendation-callout">
+            <div>
+              <span>{{ recommendationContext.sourceLabel }}</span>
+              <strong>{{ recommendationContext.skillName || '岗位短板训练' }}</strong>
             </div>
+            <el-tag :type="recommendationContext.trustType" effect="plain">{{ recommendationContext.trustLabel }}</el-tag>
+            <p>这道题来自当前训练上下文，用于补齐面试风险点；如果来源不足，请按通用训练处理。</p>
+            <small v-if="recommendationContext.boundary">{{ recommendationContext.boundary }}</small>
+            <el-tag v-if="recommendationContext.gapSeverity" :type="severityTag(recommendationContext.gapSeverity)" effect="plain">
+              {{ severityLabel(recommendationContext.gapSeverity) }}
+            </el-tag>
+          </div>
 
-            <div v-if="recommendationContext.hasContext" class="recommendation-callout">
-              <div>
-                <span>{{ recommendationContext.sourceLabel }}</span>
-                <strong>{{ recommendationContext.skillName || '岗位短板训练' }}</strong>
-              </div>
-              <el-tag :type="recommendationContext.trustType" effect="plain">{{ recommendationContext.trustLabel }}</el-tag>
-              <p>这道题来自当前推荐题组，用于补齐面试风险点。</p>
-              <small v-if="recommendationContext.boundary">{{ recommendationContext.boundary }}</small>
-              <el-tag v-if="recommendationContext.gapSeverity" :type="severityTag(recommendationContext.gapSeverity)" effect="plain">
-                {{ severityLabel(recommendationContext.gapSeverity) }}
-              </el-tag>
+          <section class="question-content">
+            <div class="section-title">
+              <span>当前题目</span>
+              <h2>先读题，再组织自己的回答</h2>
             </div>
+            <MarkdownPreview :content="detail.content || '暂无题干内容'" />
+          </section>
 
-            <section class="question-content">
-              <h2>题目内容</h2>
-              <MarkdownPreview :content="detail.content || '暂无题干内容'" />
-            </section>
-
-            <div class="answer-frame">
-              <span>建议回答结构</span>
-              <div class="answer-steps">
-                <em>场景</em>
-                <em>方案</em>
-                <em>权衡</em>
-                <em>项目指标</em>
-              </div>
+          <div class="answer-frame">
+            <span>面试表达结构</span>
+            <div class="answer-steps">
+              <em>场景边界</em>
+              <em>核心机制</em>
+              <em>取舍风险</em>
+              <em>项目证据</em>
             </div>
           </div>
-          <AppState v-else-if="!loading && loadError" type="error" title="题目加载失败" :description="loadError">
-            <el-button type="primary" @click="fetchDetail">重试</el-button>
-          </AppState>
-          <AppState v-else-if="!loading" type="empty" title="题目不存在" description="该题可能已下线或暂不可访问。" />
-        </section>
-
-        <section v-if="detail" class="content-card training-tabs-card">
-          <div class="content-card__body">
-            <el-tabs v-model="activeTab">
-              <el-tab-pane label="AI 点评" name="ai">
-                <QuestionAnswerReviewPanel :question="detail" />
-              </el-tab-pane>
-              <el-tab-pane label="参考答案" name="answer">
-                <div class="tab-section">
-                  <section>
-                    <h2>参考答案</h2>
-                    <MarkdownPreview :content="detail.referenceAnswer || '暂无参考答案'" />
-                  </section>
-                  <section>
-                    <h2>答案解析</h2>
-                    <MarkdownPreview :content="detail.analysis || '暂无解析'" />
-                  </section>
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="面试官追问" name="followups">
-                <div class="followup-grid">
-                  <article v-for="item in followUpQuestions" :key="item">
-                    <span>追问</span>
-                    <p>{{ item }}</p>
-                  </article>
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="项目结合说法" name="project">
-                <div class="project-template">
-                  <article v-for="item in projectTemplates" :key="item.title">
-                    <h3>{{ item.title }}</h3>
-                    <p>{{ item.content }}</p>
-                  </article>
-                </div>
-              </el-tab-pane>
-            </el-tabs>
-          </div>
-        </section>
+        </div>
+        <AppState v-else-if="!loading && loadError" type="error" title="题目加载失败" :description="loadError">
+          <el-button type="primary" @click="fetchDetail">重试</el-button>
+        </AppState>
+        <AppState v-else-if="!loading" type="empty" title="题目不存在" description="该题可能已下线或暂不可访问。" />
       </main>
 
-      <aside v-if="detail" class="side-stack">
+      <aside v-if="detail" class="answer-workspace">
+        <QuestionAnswerReviewPanel :question="detail" />
+      </aside>
+    </section>
+
+    <section v-if="detail" class="review-layout">
+      <main class="content-card review-card">
+        <div class="content-card__body">
+          <div class="section-title">
+            <span>提交后复盘</span>
+            <h2>把这道题转成下一轮可用表达</h2>
+          </div>
+          <el-tabs v-model="activeTab">
+            <el-tab-pane label="参考答案" name="answer">
+              <div class="tab-section">
+                <section>
+                  <h2>参考答案</h2>
+                  <MarkdownPreview :content="detail.referenceAnswer || '暂无参考答案。请先提交自己的回答，后续有数据时再对照修正。'" />
+                </section>
+                <section>
+                  <h2>答案解析</h2>
+                  <MarkdownPreview :content="detail.analysis || '暂无解析。可以先按回答结构自查：概念、机制、风险、项目证据是否完整。'" />
+                </section>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="面试官追问" name="followups">
+              <div class="followup-grid">
+                <article v-for="item in followUpQuestions" :key="item">
+                  <span>追问</span>
+                  <p>{{ item }}</p>
+                </article>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="项目结合说法" name="project">
+              <div class="project-template">
+                <article v-for="item in projectTemplates" :key="item.title">
+                  <h3>{{ item.title }}</h3>
+                  <p>{{ item.content }}</p>
+                </article>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </main>
+
+      <aside class="side-stack">
         <section class="content-card">
           <div class="content-card__body">
             <div class="side-title">
@@ -159,6 +173,14 @@
               <button type="button" @click="router.push('/questions/recommendations')">
                 <BookOpenCheck :size="16" />
                 <span>回推荐题</span>
+              </button>
+              <button type="button" @click="router.push('/questions/wrong-records')">
+                <History :size="16" />
+                <span>错题复盘</span>
+              </button>
+              <button type="button" @click="router.push('/questions/favorites')">
+                <Bookmark :size="16" />
+                <span>收藏复习</span>
               </button>
               <button type="button" @click="router.push('/interviews/create')">
                 <MessageSquare :size="16" />
@@ -215,7 +237,7 @@ const favoriteLoading = ref(false)
 const masteryLoading = ref(false)
 const detail = ref<QuestionDetailVO | null>(null)
 const masteryStatus = ref<MasteryStatus>(MASTERY_STATUS.UNKNOWN)
-const activeTab = ref('ai')
+const activeTab = ref('answer')
 
 const queryString = (name: string) => {
   const value = route.query[name]
@@ -460,6 +482,7 @@ onMounted(fetchDetail)
 
 .eyebrow,
 .hero-actions,
+.hero-rhythm,
 .side-title,
 .next-actions button {
   display: flex;
@@ -479,14 +502,36 @@ onMounted(fetchDetail)
   justify-content: flex-end;
 }
 
-.detail-grid {
+.hero-rhythm {
+  flex-wrap: wrap;
+  margin-top: 16px;
+
+  span {
+    padding: 6px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  gap: 18px;
+  align-items: start;
+}
+
+.review-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
   gap: 18px;
   align-items: start;
 }
 
-.main-stack,
+.answer-workspace,
 .side-stack {
   display: grid;
   gap: 14px;
@@ -496,6 +541,12 @@ onMounted(fetchDetail)
 .question-card {
   display: grid;
   gap: 16px;
+}
+
+.question-workspace,
+.answer-workspace,
+.review-card {
+  min-width: 0;
 }
 
 .recommendation-callout {
@@ -543,10 +594,32 @@ onMounted(fetchDetail)
   }
 }
 
-.question-content {
+.section-title {
+  margin-bottom: 12px;
+
+  span {
+    display: block;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
   h2 {
-    margin: 0 0 12px;
+    margin: 5px 0 0;
+    color: var(--app-text);
     font-size: 18px;
+    line-height: 1.45;
+  }
+}
+
+.question-content {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  :deep(.markdown-preview) {
+    overflow-wrap: anywhere;
   }
 }
 
@@ -581,11 +654,9 @@ onMounted(fetchDetail)
   }
 }
 
-.training-tabs-card {
+.answer-workspace {
   :deep(.answer-review-panel) {
-    border: 0;
-    padding: 0;
-    background: transparent;
+    min-height: 100%;
   }
 }
 
@@ -716,6 +787,13 @@ onMounted(fetchDetail)
     color: var(--app-text);
     cursor: pointer;
     text-align: left;
+
+    &:first-child {
+      border-color: rgba(37, 99, 235, 0.28);
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 800;
+    }
   }
 }
 
@@ -725,7 +803,8 @@ onMounted(fetchDetail)
 
 @media (max-width: 960px) {
   .detail-hero,
-  .detail-grid {
+  .workspace-grid,
+  .review-layout {
     grid-template-columns: 1fr;
   }
 
@@ -735,6 +814,15 @@ onMounted(fetchDetail)
 
   .hero-actions {
     justify-content: flex-start;
+  }
+
+  .review-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .side-stack {
+    order: 2;
   }
 }
 
@@ -755,6 +843,21 @@ onMounted(fetchDetail)
 
   .followup-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-actions :deep(.el-button),
+  .next-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .answer-steps {
+    width: 100%;
+
+    em {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
   }
 }
 </style>

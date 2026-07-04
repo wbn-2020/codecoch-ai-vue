@@ -4,15 +4,20 @@
       <div>
         <div class="hero-kicker">
           <FilePenLine :size="16" />
-          简历编辑
+          简历工作台
         </div>
-        <h1>{{ isEdit ? '编辑简历' : '新增简历' }}</h1>
-        <p>维护基本信息、求职目标、技术栈和项目经历，供后续面试训练读取。</p>
+        <h1>{{ isEdit ? '打磨 Offer 简历' : '创建简历草稿' }}</h1>
+        <p>边编辑边预览，把技术栈、项目经历和 AI 建议整理成可投递、可追问的真实简历。</p>
+        <div class="hero-status">
+          <span>{{ form.resumeName || '未命名简历' }}</span>
+          <span>{{ form.targetPosition || '待补目标岗位' }}</span>
+          <span>{{ completion }}% 已填写</span>
+        </div>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/resumes')">
           <ArrowLeft :size="16" />
-          返回我的简历
+          返回简历实验室
         </el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
           <Save :size="16" />
@@ -21,20 +26,34 @@
       </div>
     </section>
 
-    <div class="editor-layout">
-      <main class="editor-main">
-        <section class="content-card editor-section" v-loading="loading">
+    <div class="workspace-tabs">
+      <span>编辑</span>
+      <span>预览</span>
+      <span>AI 建议</span>
+      <span>项目</span>
+    </div>
+
+    <div class="editor-workspace">
+      <main class="editor-column editor-main">
+        <section class="content-card editor-section edit-card" v-loading="loading">
           <div class="section-heading">
             <div class="section-icon">
               <UserRound :size="18" />
             </div>
             <div>
-              <h2>基本信息</h2>
-              <p>用于识别简历和创建面试时展示候选人基础资料。</p>
+              <h2>结构化编辑</h2>
+              <p>先把真实信息写扎实，右侧预览会同步展示当前内容。</p>
             </div>
           </div>
 
           <el-form ref="formRef" class="resume-form" :model="form" :rules="rules" label-position="top">
+            <div class="editor-block">
+              <div class="block-head">
+                <span>基本信息</span>
+                <el-tag size="small" :type="form.resumeName && form.realName ? 'success' : 'warning'" effect="plain">
+                  {{ form.resumeName && form.realName ? '可识别' : '待补充' }}
+                </el-tag>
+              </div>
             <div class="form-grid">
               <el-form-item label="简历名称" prop="resumeName">
                 <el-input v-model.trim="form.resumeName" placeholder="例如：Java 后端 3 年经验简历" />
@@ -49,17 +68,14 @@
                 <el-input v-model.trim="form.phone" placeholder="用于补充联系方式" />
               </el-form-item>
             </div>
+            </div>
 
-            <div class="section-divider"></div>
-
-            <div class="section-heading compact">
-              <div class="section-icon">
-                <Target :size="18" />
-              </div>
-              <div>
-                <h2>求职目标</h2>
-                <p>面试创建页会读取简历和求职方向作为候选上下文。</p>
-              </div>
+            <div class="editor-block">
+              <div class="block-head">
+                <span>求职目标</span>
+                <el-tag size="small" :type="form.targetPosition ? 'success' : 'warning'" effect="plain">
+                  {{ form.targetPosition ? '已明确' : '待填写' }}
+                </el-tag>
             </div>
             <div class="form-grid">
               <el-form-item label="求职方向">
@@ -72,7 +88,15 @@
                 </div>
               </el-form-item>
             </div>
+            </div>
 
+            <div class="editor-block">
+              <div class="block-head">
+                <span>个人摘要</span>
+                <el-tag size="small" :type="form.summary ? 'success' : 'info'" effect="plain">
+                  {{ form.summary ? '已填写' : '可继续补充' }}
+                </el-tag>
+              </div>
             <el-form-item label="个人摘要">
               <el-input
                 v-model="form.summary"
@@ -81,17 +105,14 @@
                 placeholder="简要说明工作背景、优势方向、项目类型和求职重点"
               />
             </el-form-item>
+            </div>
 
-            <div class="section-divider"></div>
-
-            <div class="section-heading compact">
-              <div class="section-icon">
-                <Braces :size="18" />
-              </div>
-              <div>
-                <h2>技术栈</h2>
-                <p>用于后续项目深挖、技术八股和综合模拟面试的上下文选择。</p>
-              </div>
+            <div class="editor-block">
+              <div class="block-head">
+                <span>技能关键词</span>
+                <el-tag size="small" :type="skillTags.length ? 'success' : 'warning'" effect="plain">
+                  {{ skillTags.length ? `${skillTags.length} 个关键词` : '待填写' }}
+                </el-tag>
             </div>
             <el-form-item label="核心技术栈" prop="skills">
               <el-input
@@ -101,17 +122,14 @@
                 placeholder="Spring Boot、MySQL、Redis、MQ、Spring Cloud、Vue..."
               />
             </el-form-item>
+            </div>
 
-            <div class="section-divider"></div>
-
-            <div class="section-heading compact">
-              <div class="section-icon">
-                <Building2 :size="18" />
-              </div>
-              <div>
-                <h2>经历与补充</h2>
-                <p>保留现有字段结构，本页不提交新的字段。</p>
-              </div>
+            <div class="editor-block">
+              <div class="block-head">
+                <span>经历与教育</span>
+                <el-tag size="small" :type="form.workSummary || form.education ? 'success' : 'info'" effect="plain">
+                  {{ form.workSummary || form.education ? '已填写' : '可继续补充' }}
+                </el-tag>
             </div>
             <el-form-item label="工作经历 / 工作摘要">
               <el-input
@@ -129,6 +147,7 @@
                 placeholder="学校、专业、学历、时间范围等"
               />
             </el-form-item>
+            </div>
           </el-form>
 
           <div class="form-actions">
@@ -144,8 +163,8 @@
                 <Layers3 :size="18" />
               </div>
               <div>
-                <h2>{{ isEdit ? '项目经历' : '项目经历' }}</h2>
-                <p>{{ isEdit ? '手动维护项目背景、职责、难点和优化结果，AI 建议只在生成后作为参考。' : '创建简历时先补一段核心项目，保存后会自动挂到这份简历下。' }}</p>
+                <h2>项目经历</h2>
+                <p>{{ isEdit ? '把背景、职责、难点和结果写成可证明的经历，后续可沉淀为项目证据。' : '创建简历时可先补项目草稿，保存后会自动挂到这份简历下。' }}</p>
               </div>
             </div>
             <el-button type="primary" @click="openProjectDialog()">
@@ -170,7 +189,7 @@
                 <p class="project-desc">{{ project.projectBackground || project.description || '暂无项目背景' }}</p>
               </div>
               <div class="project-actions">
-                <el-button type="primary" plain @click="openProjectEvidenceCreate(project)">沉淀为项目素材</el-button>
+                <el-button type="primary" plain @click="openProjectEvidenceCreate(project)">补项目证据</el-button>
                 <el-button @click="openProjectDialog(project)">编辑</el-button>
                 <el-button type="danger" plain @click="handleDeleteProject(project)">删除</el-button>
               </div>
@@ -179,10 +198,80 @@
         </section>
       </main>
 
-      <aside class="editor-aside">
-        <section class="content-card side-panel">
+      <section class="preview-column content-card">
+        <div class="preview-toolbar">
+          <div>
+            <h2>A4 简历预览</h2>
+            <p>基于当前表单字段实时渲染，不代表最终 PDF 样式。</p>
+          </div>
+          <el-tag effect="plain">{{ isEdit ? '编辑中' : '草稿' }}</el-tag>
+        </div>
+        <div class="resume-paper-wrap">
+          <article class="resume-paper">
+            <header class="paper-header">
+              <h2>{{ previewName }}</h2>
+              <p v-if="form.targetPosition">{{ form.targetPosition }}</p>
+              <div v-if="contactItems.length" class="paper-contact">
+                <span v-for="item in contactItems" :key="item">{{ item }}</span>
+              </div>
+            </header>
+
+            <section v-if="form.summary" class="paper-section">
+              <h3>个人摘要</h3>
+              <p>{{ form.summary }}</p>
+            </section>
+
+            <section v-if="form.education" class="paper-section">
+              <h3>教育经历</h3>
+              <p>{{ form.education }}</p>
+            </section>
+
+            <section v-if="form.workSummary" class="paper-section">
+              <h3>工作经历</h3>
+              <p>{{ form.workSummary }}</p>
+            </section>
+
+            <section v-if="skillTags.length" class="paper-section">
+              <h3>技术栈</h3>
+              <div class="paper-tags">
+                <span v-for="tag in skillTags" :key="tag">{{ tag }}</span>
+              </div>
+            </section>
+
+            <section v-if="projects.length" class="paper-section">
+              <h3>项目经历</h3>
+              <article v-for="project in projects" :key="project.projectId" class="paper-project">
+                <div class="paper-project__head">
+                  <strong>{{ project.projectName || '未命名项目' }}</strong>
+                  <span>{{ project.projectTime || project.projectPeriod }}</span>
+                </div>
+                <p v-if="project.role || project.responsibility">{{ project.role || project.responsibility }}</p>
+                <p v-if="project.techStack" class="paper-muted">{{ project.techStack }}</p>
+                <ul>
+                  <li v-if="project.projectBackground || project.description">
+                    {{ project.projectBackground || project.description }}
+                  </li>
+                  <li v-if="project.technicalChallenges || project.technicalDifficulties">
+                    {{ project.technicalChallenges || project.technicalDifficulties }}
+                  </li>
+                  <li v-if="project.optimizationResult || project.optimizationResults">
+                    {{ project.optimizationResult || project.optimizationResults }}
+                  </li>
+                </ul>
+              </article>
+            </section>
+
+            <div v-if="!hasPreviewContent" class="paper-empty">
+              保存前先补充姓名、目标岗位、技术栈或项目经历，预览会在这里同步生成。
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <aside class="editor-column editor-aside">
+        <section class="content-card side-panel readiness-panel">
           <div class="completion-head">
-            <span>本地填写完整度</span>
+            <span>简历完整度</span>
             <strong>{{ completion }}%</strong>
           </div>
           <el-progress :percentage="completion" :stroke-width="10" :show-text="false" />
@@ -196,18 +285,9 @@
           </div>
         </section>
 
-        <section class="content-card side-panel">
-          <h3>面试联动</h3>
-          <p>面试页会从真实简历中选择上下文，不在本页改动面试入口。</p>
-          <el-button class="full-button" @click="router.push('/interviews/create')">
-            <MessagesSquare :size="16" />
-            去面试
-          </el-button>
-        </section>
-
         <section v-if="isEdit && resumeId" class="content-card side-panel ai-panel">
-          <h3>简历建议</h3>
-          <p>基于当前已保存简历生成建议。结果只展示改写方向，不会自动覆盖当前表单。</p>
+          <h3>AI 优化建议</h3>
+          <p>基于已保存简历生成建议。建议需要人工复核，应用时会创建草稿，不会覆盖当前简历。</p>
           <el-form class="optimize-form" :model="optimizeForm" label-position="top">
             <el-form-item label="目标岗位">
               <el-input v-model.trim="optimizeForm.targetPosition" placeholder="默认使用当前求职方向" />
@@ -223,6 +303,10 @@
             <Sparkles :size="16" />
             生成建议
           </el-button>
+
+          <div v-if="!optimizeRecords.length && !optimizeSseMessage" class="ai-empty">
+            暂无 AI 建议记录。保存简历后可生成一次优化建议。
+          </div>
 
           <div v-if="optimizeSseEvents.length || optimizeSseMessage" class="sse-progress">
             <div class="sse-progress__head">
@@ -243,7 +327,7 @@
               type="primary"
               @click="goOptimizeTaskCenter(optimizeTask)"
             >
-              查看任务中心
+              查看生成进度
             </el-button>
             <el-button
               v-if="showOptimizeRefreshAction"
@@ -259,7 +343,7 @@
 
           <div class="optimize-records">
             <div class="capability-item">
-              <span>最近记录</span>
+              <span>最近建议</span>
               <el-tag :type="latestOptimizeRecord?.optimizeStatus === 'FAILED' ? 'danger' : latestOptimizeRecord ? 'success' : 'info'" effect="plain">
                 {{ optimizeStatusText(latestOptimizeRecord?.optimizeStatus) }}
               </el-tag>
@@ -276,18 +360,18 @@
             </button>
           </div>
 
-        <div v-if="optimizeDetail" class="optimize-result">
-          <div class="score-line">
-            <span>综合评分</span>
-            <strong>{{ optimizeDetail.overallScore ?? '--' }}</strong>
-          </div>
+          <div v-if="optimizeDetail" class="optimize-result">
           <el-alert
             type="info"
             :closable="false"
             show-icon
-            title="已做脱敏展示"
-            description="这里只展示字段建议、改写方向和风险提示，不直接展开原始片段。"
+              title="建议仅供复核"
+              description="这里只展示字段建议、改写方向和风险提示；没有返回分数时不会补造分数。"
           />
+            <div v-if="optimizeDetail.overallScore !== undefined && optimizeDetail.overallScore !== null" class="score-line">
+              <span>综合评分</span>
+              <strong>{{ optimizeDetail.overallScore }}</strong>
+            </div>
           <p>{{ optimizeDetailSummary }}</p>
           <div v-if="optimizeSuggestions.length" class="rewrite-toolbar">
             <span>已选择 {{ selectedOptimizeSuggestionIndexes.length }} / {{ optimizeSuggestions.length }} 个字段建议</span>
@@ -315,6 +399,9 @@
               <p v-if="item.reason" class="rewrite-reason">{{ item.reason }}</p>
             </article>
           </div>
+            <div v-else class="ai-empty">
+              这条记录暂未返回可应用的字段建议，可刷新最近记录或补充目标岗位后重新生成。
+            </div>
             <el-tooltip :content="applyOptimizeDisabledReason" placement="top" :disabled="canApplyOptimizeResult">
               <el-button
                 class="full-button"
@@ -328,6 +415,15 @@
               </el-button>
             </el-tooltip>
           </div>
+        </section>
+
+        <section class="content-card side-panel">
+          <h3>闭环动作</h3>
+          <p>保存后可以把项目补成证据，也可以进入面试训练验证简历表达。</p>
+          <el-button class="full-button" @click="router.push('/interviews/create')">
+            <MessagesSquare :size="16" />
+            进入模拟面试
+          </el-button>
         </section>
 
         <section class="content-card side-panel">
@@ -361,8 +457,6 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
-  Braces,
-  Building2,
   CheckCircle2,
   Circle,
   FilePenLine,
@@ -373,7 +467,6 @@ import {
   Plus,
   Save,
   Sparkles,
-  Target,
   UserRound
 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -478,6 +571,35 @@ const completion = computed(() => {
   return Math.round((done / completionItems.value.length) * 100)
 })
 
+const previewName = computed(() => form.realName || form.resumeName || '未命名简历')
+
+const splitTextTags = (value?: string) =>
+  (value || '')
+    .split(/[，,、\n/|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const skillTags = computed(() => splitTextTags(form.skills).slice(0, 18))
+
+const contactItems = computed(() =>
+  [form.phone, form.email]
+    .map((item) => item?.trim())
+    .filter((item): item is string => Boolean(item))
+)
+
+const hasPreviewContent = computed(() =>
+  Boolean(
+    form.realName ||
+    form.resumeName ||
+    form.targetPosition ||
+    form.summary ||
+    form.education ||
+    form.workSummary ||
+    skillTags.value.length ||
+    projects.value.length
+  )
+)
+
 const latestOptimizeRecord = computed(() => optimizeRecords.value[0])
 
 const optimizeSuggestions = computed(() => optimizeDetail.value?.rewriteSuggestions || [])
@@ -493,7 +615,7 @@ const showOptimizeTaskCenterAction = computed(() => Boolean(optimizeTask.value))
 
 const optimizeRecoveryHint = computed(() => {
   if (showOptimizeTaskCenterAction.value) {
-    return '建议任务已进入任务中心，可以离开本页，完成后再刷新最近记录查看结果。'
+    return '建议已在后台生成，可以离开本页，完成后再刷新最近记录查看结果。'
   }
   if (optimizing.value) {
     return '建议生成可能需要一点时间。你可以停留等待，也可以稍后回到本页，从最近记录继续查看结果。'
@@ -675,13 +797,13 @@ const runSyncOptimizeFallback = async () => {
   if (hasOptimizeAsyncReceipt(result)) {
     optimizeTask.value = result
     optimizeSseStatus.value = '已提交'
-    optimizeSseMessage.value = '建议生成任务已提交，可在任务中心查看进度；完成后刷新最近记录查看结果。'
+    optimizeSseMessage.value = '建议已开始生成，可稍后刷新最近记录查看结果。'
     optimizeSseEvents.value = [{
       type: 'task',
-      stage: '任务中心',
-      message: '建议生成任务已提交'
+      stage: '生成进度',
+      message: '建议已开始生成'
     }]
-    ElMessage.success('建议生成任务已提交')
+    ElMessage.success('建议已开始生成')
     await fetchOptimizeRecords()
     return
   }
@@ -888,7 +1010,21 @@ onMounted(fetchDetail)
 
 <style scoped lang="scss">
 .resume-editor {
+  --resume-bg: #f6f8fc;
+  --resume-surface: #ffffff;
+  --resume-surface-soft: #f8fafc;
+  --resume-border: #e4e7ec;
+  --resume-border-strong: #cfd6e4;
+  --resume-text: #101828;
+  --resume-muted: #667085;
+  --resume-subtle: #98a2b3;
+  --resume-primary: #2563eb;
+  --resume-ai: #7c3aed;
+  --resume-success: #16a34a;
+  --resume-warning: #f59e0b;
+  --resume-danger: #ef4444;
   gap: 20px;
+  color: var(--resume-text);
 }
 
 .editor-hero {
@@ -896,32 +1032,37 @@ onMounted(fetchDetail)
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 26px;
-  border: 1px solid rgba(129, 140, 248, 0.26);
-  border-radius: var(--cc-radius-xl);
+  padding: 24px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 18px;
   background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.06)),
-    rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 34%),
+    linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 
   h1 {
     margin: 12px 0 0;
+    color: var(--resume-text);
     font-size: 30px;
+    letter-spacing: 0;
   }
 
   p {
     max-width: 680px;
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     line-height: 1.7;
   }
 }
 
 .hero-kicker,
 .hero-actions,
+.hero-status,
+.workspace-tabs,
 .section-heading,
 .section-heading__left,
 .section-icon,
+.block-head,
 .switch-line,
 .form-actions,
 .project-card,
@@ -930,6 +1071,9 @@ onMounted(fetchDetail)
 .completion-head,
 .completion-list span,
 .capability-item,
+.preview-toolbar,
+.paper-contact,
+.paper-project__head,
 .full-button {
   display: flex;
   align-items: center;
@@ -937,10 +1081,25 @@ onMounted(fetchDetail)
 
 .hero-kicker {
   gap: 8px;
-  color: var(--cc-ai-cyan);
+  color: var(--resume-primary);
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
+}
+
+.hero-status {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+
+  span {
+    padding: 6px 10px;
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #344054;
+    font-size: 12px;
+    font-weight: 700;
+  }
 }
 
 .hero-actions {
@@ -950,14 +1109,40 @@ onMounted(fetchDetail)
   gap: 10px;
 }
 
-.editor-layout {
+.workspace-tabs {
+  display: none;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px;
+  border: 1px solid var(--resume-border);
+  border-radius: 12px;
+  background: var(--resume-surface);
+
+  span {
+    flex: 1 0 auto;
+    min-width: 74px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: var(--resume-muted);
+    font-size: 13px;
+    text-align: center;
+
+    &:first-child {
+      background: var(--resume-primary);
+      color: #ffffff;
+      font-weight: 700;
+    }
+  }
+}
+
+.editor-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(360px, 440px) minmax(460px, 1fr) minmax(300px, 340px);
   gap: 18px;
   align-items: start;
 }
 
-.editor-main,
+.editor-column,
 .editor-aside {
   display: flex;
   flex-direction: column;
@@ -974,6 +1159,15 @@ onMounted(fetchDetail)
   padding: 22px;
 }
 
+.content-card,
+.preview-column,
+.side-panel {
+  border: 1px solid var(--resume-border);
+  border-radius: 14px;
+  background: var(--resume-surface);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
 .section-heading {
   align-items: flex-start;
   gap: 12px;
@@ -981,12 +1175,13 @@ onMounted(fetchDetail)
 
   h2 {
     margin: 0;
+    color: var(--resume-text);
     font-size: 19px;
   }
 
   p {
     margin: 7px 0 0;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1006,15 +1201,38 @@ onMounted(fetchDetail)
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid rgba(129, 140, 248, 0.28);
+  border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: 12px;
-  background: rgba(99, 102, 241, 0.16);
-  color: #c4b5fd;
+  background: #eff6ff;
+  color: var(--resume-primary);
 }
 
 .resume-form {
   :deep(.el-form-item) {
     margin-bottom: 18px;
+  }
+}
+
+.editor-block {
+  padding: 16px;
+  border: 1px solid var(--resume-border);
+  border-radius: 12px;
+  background: var(--resume-surface-soft);
+
+  & + .editor-block {
+    margin-top: 14px;
+  }
+}
+
+.block-head {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+
+  span {
+    color: #344054;
+    font-size: 14px;
+    font-weight: 800;
   }
 }
 
@@ -1033,7 +1251,7 @@ onMounted(fetchDetail)
 .switch-line {
   min-height: 32px;
   gap: 10px;
-  color: var(--app-text-muted);
+  color: var(--resume-muted);
   font-size: 13px;
 }
 
@@ -1055,14 +1273,14 @@ onMounted(fetchDetail)
 
 .project-empty {
   padding: 42px 20px;
-  border: 1px dashed rgba(148, 163, 184, 0.22);
-  border-radius: var(--app-radius);
-  color: var(--app-text-muted);
+  border: 1px dashed var(--resume-border-strong);
+  border-radius: 12px;
+  color: var(--resume-muted);
   text-align: center;
 
   h3 {
     margin: 14px 0 0;
-    color: var(--app-text);
+    color: var(--resume-text);
     font-size: 18px;
   }
 
@@ -1076,13 +1294,14 @@ onMounted(fetchDetail)
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: var(--app-radius);
-  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid var(--resume-border);
+  border-radius: 12px;
+  background: #ffffff;
 }
 
 .project-card__main {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .project-card__top {
@@ -1092,12 +1311,13 @@ onMounted(fetchDetail)
 
   h3 {
     margin: 0;
+    color: var(--resume-text);
     font-size: 16px;
   }
 
   span {
     flex: 0 0 auto;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 12px;
   }
 }
@@ -1105,18 +1325,170 @@ onMounted(fetchDetail)
 .project-meta,
 .project-desc {
   margin: 8px 0 0;
-  color: var(--app-text-muted);
+  color: var(--resume-muted);
   font-size: 13px;
   line-height: 1.6;
 }
 
 .project-desc {
-  color: #cbd5e1;
+  color: #344054;
 }
 
 .project-actions {
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.preview-column {
+  min-width: 0;
+  padding: 16px;
+}
+
+.preview-toolbar {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+
+  h2 {
+    margin: 0;
+    color: var(--resume-text);
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--resume-muted);
+    font-size: 12px;
+  }
+}
+
+.resume-paper-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 22px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(207, 214, 228, 0.38) 1px, transparent 1px),
+    linear-gradient(rgba(207, 214, 228, 0.38) 1px, transparent 1px),
+    #eef2f7;
+  background-size: 28px 28px;
+}
+
+.resume-paper {
+  width: min(100%, 720px);
+  min-height: 820px;
+  aspect-ratio: 210 / 297;
+  padding: 46px 52px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+  color: #111827;
+  overflow: hidden;
+}
+
+.paper-header {
+  padding-bottom: 18px;
+  border-bottom: 2px solid #111827;
+
+  h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 30px;
+    letter-spacing: 0;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 700;
+  }
+}
+
+.paper-contact {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 12px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.paper-section {
+  margin-top: 20px;
+
+  h3 {
+    margin: 0 0 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #111827;
+    color: #111827;
+    font-size: 15px;
+  }
+
+  p,
+  li {
+    color: #374151;
+    font-size: 12px;
+    line-height: 1.72;
+    white-space: pre-wrap;
+  }
+
+  ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+}
+
+.paper-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  span {
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #ecfdf3;
+    color: #027a48;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.paper-project {
+  & + .paper-project {
+    margin-top: 16px;
+  }
+}
+
+.paper-project__head {
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    color: #111827;
+    font-size: 13px;
+  }
+
+  span {
+    flex: 0 0 auto;
+    color: #667085;
+    font-size: 12px;
+  }
+}
+
+.paper-muted {
+  color: #667085 !important;
+}
+
+.paper-empty {
+  margin-top: 42px;
+  padding: 24px;
+  border: 1px dashed #cfd6e4;
+  border-radius: 10px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
 }
 
 .side-panel {
@@ -1124,12 +1496,13 @@ onMounted(fetchDetail)
 
   h3 {
     margin: 0 0 10px;
+    color: var(--resume-text);
     font-size: 16px;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 13px;
     line-height: 1.7;
   }
@@ -1137,7 +1510,7 @@ onMounted(fetchDetail)
   ul {
     margin: 10px 0 0;
     padding-left: 18px;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 13px;
     line-height: 1.8;
   }
@@ -1148,11 +1521,12 @@ onMounted(fetchDetail)
   margin-bottom: 12px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 13px;
   }
 
   strong {
+    color: var(--resume-primary);
     font-size: 24px;
   }
 }
@@ -1165,12 +1539,12 @@ onMounted(fetchDetail)
 
   span {
     gap: 6px;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 12px;
   }
 
   .done {
-    color: #86efac;
+    color: var(--resume-success);
   }
 }
 
@@ -1178,7 +1552,8 @@ onMounted(fetchDetail)
   justify-content: space-between;
   gap: 10px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid var(--resume-border);
+  color: #344054;
   font-size: 13px;
 
   &:last-of-type {
@@ -1194,10 +1569,10 @@ onMounted(fetchDetail)
 }
 
 .ai-panel {
-  border-color: rgba(129, 140, 248, 0.24);
+  border-color: rgba(124, 58, 237, 0.2);
   background:
-    linear-gradient(180deg, rgba(99, 102, 241, 0.1), rgba(2, 6, 23, 0.12)),
-    rgba(15, 23, 42, 0.72);
+    linear-gradient(180deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0)),
+    #ffffff;
 }
 
 .optimize-form {
@@ -1214,19 +1589,29 @@ onMounted(fetchDetail)
 
 .optimize-records {
   margin-top: 16px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid var(--resume-border);
+}
+
+.ai-empty {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--resume-border-strong);
+  border-radius: 10px;
+  color: var(--resume-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .sse-progress {
   margin-top: 14px;
   padding: 12px;
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  border: 1px solid rgba(124, 58, 237, 0.2);
   border-radius: 12px;
-  background: rgba(2, 6, 23, 0.24);
+  background: #f5f3ff;
 
   p {
     margin: 8px 0 0;
-    color: #cbd5e1;
+    color: #4b5563;
     font-size: 12px;
     line-height: 1.6;
   }
@@ -1237,13 +1622,13 @@ onMounted(fetchDetail)
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #dbeafe;
+  color: #5b21b6;
   font-size: 13px;
   font-weight: 700;
 }
 
 .sse-progress__hint {
-  color: #a5b4fc;
+  color: #6d28d9;
 }
 
 .sse-progress__action {
@@ -1258,7 +1643,7 @@ onMounted(fetchDetail)
   margin-top: 10px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -1269,9 +1654,9 @@ onMounted(fetchDetail)
   width: 100%;
   padding: 10px 0;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid var(--resume-border);
   background: transparent;
-  color: inherit;
+  color: var(--resume-text);
   text-align: left;
   cursor: pointer;
 
@@ -1281,26 +1666,26 @@ onMounted(fetchDetail)
   }
 
   span {
-    color: #dbeafe;
+    color: #344054;
     font-size: 13px;
   }
 
   small {
     margin-top: 4px;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
   }
 }
 
 .optimize-result {
   margin-top: 14px;
   padding: 14px;
-  border: 1px solid rgba(34, 211, 238, 0.18);
+  border: 1px solid rgba(124, 58, 237, 0.18);
   border-radius: 14px;
-  background: rgba(8, 47, 73, 0.18);
+  background: #ffffff;
 
   > p {
     margin: 10px 0 0;
-    color: #cbd5e1;
+    color: #344054;
   }
 }
 
@@ -1311,12 +1696,12 @@ onMounted(fetchDetail)
   gap: 10px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 13px;
   }
 
   strong {
-    color: #a5b4fc;
+    color: var(--resume-ai);
     font-size: 26px;
   }
 }
@@ -1329,20 +1714,20 @@ onMounted(fetchDetail)
 
   article {
     padding: 10px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--resume-border);
     border-radius: 10px;
-    background: rgba(2, 6, 23, 0.26);
+    background: var(--resume-surface-soft);
   }
 
   span {
-    color: #dbeafe;
+    color: #344054;
     font-size: 12px;
     font-weight: 700;
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--resume-muted);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -1354,7 +1739,7 @@ onMounted(fetchDetail)
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
-  color: var(--app-text-muted);
+  color: var(--resume-muted);
   font-size: 12px;
 }
 
@@ -1365,7 +1750,7 @@ onMounted(fetchDetail)
   gap: 8px;
 
   :deep(.el-checkbox__label) {
-    color: #dbeafe;
+    color: #344054;
     font-weight: 700;
   }
 }
@@ -1379,32 +1764,52 @@ onMounted(fetchDetail)
   div {
     min-width: 0;
     padding: 10px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--resume-border);
     border-radius: 8px;
-    background: rgba(15, 23, 42, 0.42);
+    background: #ffffff;
   }
 }
 
 .rewrite-reason {
-  color: #cbd5e1 !important;
+  color: #344054 !important;
 }
 
-@media (max-width: 1120px) {
-  .editor-layout {
-    grid-template-columns: 1fr;
+@media (max-width: 1320px) {
+  .editor-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr);
   }
 
   .editor-aside {
     position: static;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1020px) {
+  .editor-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-aside {
+    display: flex;
   }
 }
 
 @media (max-width: 760px) {
+  .workspace-tabs {
+    display: flex;
+  }
+
   .editor-hero,
   .project-header,
   .project-card,
-  .project-card__top {
+  .project-card__top,
+  .preview-toolbar,
+  .paper-project__head {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .hero-actions {
@@ -1412,8 +1817,45 @@ onMounted(fetchDetail)
   }
 
   .form-grid,
-  .completion-list {
+  .completion-list,
+  .rewrite-diff {
     grid-template-columns: 1fr;
+  }
+
+  .editor-section,
+  .preview-column,
+  .side-panel {
+    padding: 16px;
+  }
+
+  .resume-paper-wrap {
+    padding: 10px;
+  }
+
+  .resume-paper {
+    min-height: 620px;
+    padding: 28px 24px;
+  }
+
+  .paper-header h2 {
+    font-size: 24px;
+  }
+
+  .project-actions,
+  .hero-actions {
+    width: 100%;
+
+    .el-button {
+      flex: 1 1 140px;
+      margin-left: 0;
+    }
+  }
+
+  .resume-project-dialog {
+    :deep(.el-dialog) {
+      width: calc(100vw - 24px) !important;
+      max-width: none;
+    }
   }
 }
 </style>

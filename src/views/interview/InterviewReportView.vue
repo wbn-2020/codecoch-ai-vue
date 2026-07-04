@@ -1,6 +1,6 @@
 <template>
   <div class="interview-report page-shell">
-    <section class="report-top">
+    <section class="report-top report-top--compact">
       <div>
         <div class="eyebrow">
           <ChartNoAxesCombined :size="16" />
@@ -27,6 +27,7 @@
 
     <section v-if="isGenerating" class="content-card">
       <div class="content-card__body generating-panel">
+        <div class="state-eyebrow">报告生成中</div>
         <el-icon class="generating-icon"><Loading /></el-icon>
         <h2>报告生成中</h2>
         <p>{{ generatingMessage }}</p>
@@ -52,7 +53,7 @@
           <span v-if="asyncReceipt.messageId">生成任务已提交</span>
           <span v-if="asyncReceipt.traceId">处理线索已记录</span>
           <span>面试记录已绑定</span>
-          <span v-if="asyncReceipt.sendStatus">提交状态 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
+          <span v-if="asyncReceipt.sendStatus">生成进度 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
         </div>
         <div class="generating-actions">
           <el-button type="primary" @click="goReportTaskCenter">
@@ -69,11 +70,59 @@
 
     <section v-else class="content-card" v-loading="loading">
       <div v-if="report && isGenerated" class="content-card__body">
+        <div class="report-hero-grid">
+          <section class="report-score-panel" :class="{ 'report-score-panel--muted': isScoreUnavailable }">
+            <span class="panel-kicker">综合得分</span>
+            <div class="score-value">{{ displayTotalScore }}</div>
+            <p v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</p>
+            <p v-else>{{ scoreVerdict }}</p>
+            <div class="score-meta">
+              <StatusTag :status="report.reportStatus" />
+              <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
+            </div>
+          </section>
+
+          <section class="report-summary-panel">
+            <span class="panel-kicker">一句话总评</span>
+            <h2>{{ reportSummaryPreview.title }}</h2>
+            <p>{{ reportSummaryPreview.description }}</p>
+            <div class="evidence-strip">
+              <strong>证据摘要</strong>
+              <span>{{ evidenceSummaryPreview }}</span>
+            </div>
+          </section>
+
+          <section class="report-action-panel">
+            <span class="panel-kicker">最大短板</span>
+            <h2>{{ mainWeaknessPreview.title }}</h2>
+            <p>{{ mainWeaknessPreview.description }}</p>
+            <div class="primary-next-action">
+              <span>下一步主行动</span>
+              <strong>{{ primaryNextAction.title }}</strong>
+              <small>{{ primaryNextActionMeta }}</small>
+              <el-button
+                type="primary"
+                :disabled="!canUsePrimaryNextAction"
+                :loading="primaryNextAction.actionType === 'STUDY_PLAN' && studyPlanGenerating"
+                @click="handlePrimaryNextAction"
+              >
+                {{ nextActionButtonLabel(primaryNextAction.actionType) }}
+                <ArrowRight :size="16" />
+              </el-button>
+            </div>
+          </section>
+        </div>
+
+        <div class="report-support-strip">
+          <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
+          <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
+          <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
+        </div>
+
         <div class="overview-grid">
-          <div class="score-hero">
-            <span>综合得分</span>
-            <strong>{{ displayTotalScore }}</strong>
-            <StatusTag :status="report.reportStatus" />
+          <div class="overview-card">
+            <span>报告状态</span>
+            <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
           </div>
           <div class="overview-card">
             <span>面试记录</span>
@@ -229,6 +278,11 @@
       </div>
 
       <div v-else-if="isFailed || isUnscorable" class="content-card__body failed-panel">
+        <div class="state-eyebrow">{{ isUnscorable ? '不可评分' : '生成失败' }}</div>
+        <h2>{{ isUnscorable ? '本轮样本不足，暂不展示强结论' : '报告生成没有完成' }}</h2>
+        <p class="failed-panel__lead">
+          {{ isUnscorable ? '问答明细仍可继续复盘；页面不会补写分数、短板或推荐题。' : '可以重新生成报告，或先返回历史记录保留本轮面试证据。' }}
+        </p>
         <el-alert
           :type="isUnscorable ? 'warning' : 'error'"
           show-icon
@@ -589,6 +643,34 @@ const nextActionUnavailableReason = computed(() => {
   }
   return '报告缺少足够问答和短板证据，本轮不硬生成训练建议；建议先补一次完整模拟面试。'
 })
+const primaryNextAction = computed<InterviewReportNextActionVO>(() => {
+  if (nextActions.value.length) return nextActions.value[0]
+  if (recommendedQuestionIds.value.length) {
+    return staticNextAction('QUESTION_PRACTICE', '去题库重练薄弱题', '/questions/practice', 1)
+  }
+  const reportId = report.value?.reportId || report.value?.id
+  if (reportId && (report.value?.reviewSuggestions || report.value?.suggestions || report.value?.mainProblems || report.value?.weaknesses)) {
+    return staticNextAction('STUDY_PLAN', '生成学习计划', '/study-plans', 2)
+  }
+  if (report.value?.projectProblems || report.value?.projectExpressionProblems || report.value?.resumeSuggestions || report.value?.resumeAdvice) {
+    return staticNextAction('RESUME_OPTIMIZE', '整理项目证据和简历表达', '/resumes', 3)
+  }
+  return staticNextAction('INTERVIEW', '再来一轮模拟面试', '/interviews/create', 4)
+})
+const canUsePrimaryNextAction = computed(() => {
+  if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return recommendedQuestionIds.value.length > 0
+  if (primaryNextAction.value.actionType === 'STUDY_PLAN') return Boolean(report.value?.reportId || report.value?.id)
+  return true
+})
+const primaryNextActionMeta = computed(() => {
+  if (!isStaticFallbackNextAction(primaryNextAction.value)) {
+    return primaryNextAction.value.evidence || primaryNextAction.value.description || '来自后端返回的结构化 nextActions。'
+  }
+  if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return '基于报告返回的可跳转推荐题。'
+  if (primaryNextAction.value.actionType === 'STUDY_PLAN') return '基于报告内容的静态兜底入口，不伪装成 AI 个性化结论。'
+  if (primaryNextAction.value.actionType === 'RESUME_OPTIMIZE') return '用于补齐项目证据、简历和面试表达之间的闭环。'
+  return '当前证据不足，先用完整面试补样本。'
+})
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
@@ -603,6 +685,48 @@ const hasValidTotalScore = computed(() => {
 })
 const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
 const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
+const textExcerpt = (value?: string | null, fallback = '暂无可展示内容') => {
+  const text = String(value || '')
+    .replace(/[#>*_`~\[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return fallback
+  return text.length > 96 ? `${text.slice(0, 96)}...` : text
+}
+const scoreVerdict = computed(() => {
+  const score = Number(report.value?.totalScore)
+  if (!Number.isFinite(score) || score <= 0) return '评分暂不可用'
+  if (score >= 85) return '表现稳定，优先把亮点沉淀成可复用表达。'
+  if (score >= 70) return '基础可用，但仍有一处短板会影响面试说服力。'
+  if (score >= 60) return '能完成回答框架，需要尽快补强证据和技术深度。'
+  return '本轮暴露的问题较集中，建议先做专项训练再进入下一轮面试。'
+})
+const reportSummaryPreview = computed(() => ({
+  title: report.value?.summary || report.value?.reportContent ? 'AI 已生成总评' : '总评证据不足',
+  description: textExcerpt(
+    report.value?.summary || report.value?.reportContent,
+    qaMessages.value.length
+      ? '报告没有返回结构化总评，建议结合下方问答复盘查看具体表现。'
+      : '当前缺少足够问答样本，页面不会补写 AI 结论。'
+  )
+}))
+const mainWeaknessPreview = computed(() => ({
+  title: report.value?.mainProblems || report.value?.weaknesses ? '本轮最大短板' : '短板尚未被可靠识别',
+  description: textExcerpt(
+    report.value?.mainProblems || report.value?.weaknesses || weakPointText.value,
+    qaMessages.value.length
+      ? '后端没有返回明确短板，先从问答明细和低分项里定位训练点。'
+      : '问答样本不足时不强行归因，建议重新完成一轮更完整的模拟面试。'
+  )
+}))
+const evidenceSummaryPreview = computed(() =>
+  textExcerpt(
+    report.value?.evidenceSummary || report.value?.jdEvidenceSummary,
+    qaMessages.value.length
+      ? `已保留 ${qaMessages.value.length} 条问答作为复盘证据。`
+      : '暂无足够问答证据，结论可信度有限。'
+  )
+)
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
 const generatingMessage = computed(() =>
   asyncReceipt.value.messageId
@@ -614,7 +738,7 @@ const generatingStages = computed(() => [
     key: 'submitted',
     label: '已提交',
     title: asyncReceipt.value.messageId ? '报告生成任务已提交' : '等待处理进度',
-    desc: asyncReceipt.value.sendStatus ? `提交状态：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已创建报告生成任务'
+    desc: asyncReceipt.value.sendStatus ? `生成进度：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已创建报告生成任务'
   },
   {
     key: 'tracking',
@@ -978,6 +1102,11 @@ const handleStaticPracticeAction = async (trackMetric = false) => {
     trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('QUESTION_PRACTICE', '重练薄弱题', '/questions/practice', 92))
   }
   await goPracticeQuestion()
+}
+
+const handlePrimaryNextAction = async () => {
+  if (!canUsePrimaryNextAction.value) return
+  await handleNextAction(primaryNextAction.value)
 }
 
 const handleNextAction = async (action: InterviewReportNextActionVO) => {
@@ -1448,6 +1577,20 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.failed-panel {
+  h2 {
+    margin: 14px 0 8px;
+    font-size: 24px;
+  }
+}
+
+.failed-panel__lead {
+  max-width: 620px;
+  margin: 0 auto 18px;
+  color: var(--app-text-muted);
+  line-height: 1.7;
+}
+
 .generating-panel {
   h2 {
     margin: 12px 0 8px;
@@ -1542,6 +1685,191 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.report-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.15fr) minmax(260px, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.report-score-panel,
+.report-summary-panel,
+.report-action-panel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.report-score-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #0f172a;
+  color: #ffffff;
+
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.65;
+  }
+}
+
+.state-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.state-promise {
+  justify-content: center;
+  margin: 14px 0;
+
+  span {
+    padding: 7px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1e40af;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.report-score-panel--muted {
+  background: #334155;
+}
+
+.panel-kicker {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-score-panel .panel-kicker {
+  color: #93c5fd;
+}
+
+.score-value {
+  margin: 16px 0 10px;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 0.95;
+}
+
+.score-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.report-summary-panel,
+.report-action-panel {
+  background: #f8fafc;
+
+  h2 {
+    margin: 10px 0 8px;
+    color: #0f172a;
+    font-size: 22px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+}
+
+.evidence-strip {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: #1d4ed8;
+    font-size: 13px;
+  }
+
+  span {
+    margin-top: 6px;
+    color: #475569;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+}
+
+.primary-next-action {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+
+  span {
+    color: #15803d;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    color: #14532d;
+    font-size: 18px;
+    line-height: 1.35;
+  }
+
+  small {
+    color: #475569;
+    line-height: 1.55;
+  }
+
+  .el-button {
+    justify-self: start;
+    margin-top: 4px;
+  }
+}
+
+.report-support-strip,
+.state-promise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-support-strip {
+  margin: 0 0 16px;
+
+  span {
+    padding: 6px 10px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 12px;
+  }
 }
 
 .score-hero,
@@ -1831,6 +2159,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1080px) {
   .overview-grid,
+  .report-hero-grid,
   .analysis-grid,
   .next-grid,
   .next-action-grid,
@@ -1864,6 +2193,7 @@ onBeforeUnmount(() => {
   }
 
   .overview-grid,
+  .report-hero-grid,
   .analysis-grid,
   .next-grid,
   .next-action-grid,

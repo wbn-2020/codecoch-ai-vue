@@ -7,23 +7,23 @@
           错题复盘
         </p>
         <h1>把答错的题变成下一轮训练重点</h1>
-        <p>错题不再只是单独清单。这里按薄弱度、最近出错时间和掌握状态组织复盘入口，帮助你快速决定先重练哪一道。</p>
+        <p>错题不再只是记录集合。这里按薄弱度、最近出错时间和掌握状态组织复盘入口，帮助你快速决定先重练哪一道。</p>
         <div class="hero-actions">
-          <el-button @click="router.push('/questions/recommendations')">
+          <el-button @click="router.push('/questions')">
             <Sparkles :size="16" />
             题库训练
           </el-button>
-          <el-button type="primary" @click="router.push('/questions/practice')">
+          <el-button type="primary" @click="startWrongPractice">
             <PenLine :size="16" />
-            开始专项练习
+            进入复盘训练
           </el-button>
         </div>
       </div>
       <aside class="hero-panel">
         <div class="hero-panel__stat"><span>错题总数</span><strong>{{ total || records.length }}</strong></div>
-        <div class="hero-panel__stat"><span>本页待复盘</span><strong>{{ unresolvedRecords.length }}</strong></div>
+        <div class="hero-panel__stat"><span>今天应重练</span><strong>{{ todayReviewCount }}</strong></div>
         <div class="hero-panel__stat"><span>重复出错</span><strong>{{ repeatedWrongCount }}</strong></div>
-        <div class="hero-panel__stat"><span>困难题</span><strong>{{ hardWrongCount }}</strong></div>
+        <div class="hero-panel__stat"><span>已掌握</span><strong>{{ masteredWrongCount }}</strong></div>
         <p>先把重复出错的题挑出来，再去看答案和表达方式。</p>
       </aside>
     </section>
@@ -48,7 +48,7 @@
             <RefreshCw :size="16" />
             刷新
           </el-button>
-          <el-button @click="handleReset">重置筛选</el-button>
+          <el-button @click="handleReset">清空筛选</el-button>
         </div>
       </header>
 
@@ -71,13 +71,25 @@
 
       <div v-loading="loading" class="question-stream">
         <AppState
-          v-if="!records.length && !loading"
+          v-if="loadError && !loading"
+          type="error"
+          title="错题复盘加载失败"
+          :description="loadError"
+        >
+          <el-button type="primary" :loading="loading" @click="fetchRecords">
+            <RefreshCw :size="16" />
+            重新加载
+          </el-button>
+        </AppState>
+
+        <AppState
+          v-else-if="!records.length && !loading"
           type="empty"
           title="暂无错题记录"
           :description="wrongEmptyDescription"
         >
           <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
-          <el-button v-else type="primary" @click="router.push('/questions/practice')">开始一次刷题</el-button>
+          <el-button v-else type="primary" @click="startWrongPractice">开始错题训练</el-button>
         </AppState>
 
         <article v-for="record in records" :key="record.wrongRecordId" class="question-card">
@@ -147,6 +159,7 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { difficultyOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { WrongQuestionQueryDTO, WrongQuestionVO } from '@/types/question'
+import { getErrorMessage } from '@/utils/error'
 import { getOptionLabel } from '@/utils/format'
 
 const router = useRouter()
@@ -154,6 +167,7 @@ const loading = ref(false)
 const masteryChangingId = ref<number | null>(null)
 const records = ref<WrongQuestionVO[]>([])
 const total = ref(0)
+const loadError = ref('')
 
 const query = reactive<WrongQuestionQueryDTO>({
   keyword: '',
@@ -169,18 +183,18 @@ const masteryMap: Record<string, string> = {
 }
 
 const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
-const unresolvedRecords = computed(() => records.value.filter((record) => normalizeMastery(record.masteryStatus) !== 'MASTERED'))
-const repeatedWrongCount = computed(() => records.value.reduce((sum, record) => sum + Math.max((record.wrongCount || 0) - 1, 0), 0))
-const hardWrongCount = computed(() => records.value.filter((record) => String(record.difficulty || '').toUpperCase() === 'HARD').length)
+const repeatedWrongCount = computed(() => records.value.filter((record) => (record.wrongCount || 0) >= 2).length)
+const masteredWrongCount = computed(() => records.value.filter((record) => normalizeMastery(record.masteryStatus) === 'MASTERED').length)
+const todayReviewCount = computed(() => records.value.filter((record) => shouldReviewToday(record)).length)
 const wrongEmptyDescription = computed(() =>
   hasFilters.value ? '没有匹配当前筛选条件的错题。' : '完成刷题练习后，答错的题会自动沉淀到这里。'
 )
 
 const insightCards = computed(() => [
   { label: '错题总数', value: total.value || records.value.length, desc: '你的累计错题记录' },
-  { label: '本页待复盘', value: unresolvedRecords.value.length, desc: '未掌握或仍然模糊的题目' },
-  { label: '重复出错', value: repeatedWrongCount.value, desc: '本页错题的额外出错次数' },
-  { label: '困难题', value: hardWrongCount.value, desc: '建议优先拆成小步复盘' }
+  { label: '今天应重练', value: todayReviewCount.value, desc: '未掌握且更值得今天处理的题' },
+  { label: '重复出错', value: repeatedWrongCount.value, desc: '本页答错 2 次及以上的题' },
+  { label: '已掌握', value: masteredWrongCount.value, desc: '已标记掌握，可降低复盘频率' }
 ])
 
 const normalizeMastery = (value?: string) => String(value || 'UNKNOWN').toUpperCase()
@@ -204,18 +218,35 @@ const reviewHint = (record: WrongQuestionVO) => {
   return '适合作为热身复盘'
 }
 
+const shouldReviewToday = (record: WrongQuestionVO) => {
+  if (normalizeMastery(record.masteryStatus) === 'MASTERED') return false
+  return (record.wrongCount || 0) >= 2 || String(record.difficulty || '').toUpperCase() === 'HARD'
+}
+
+const startWrongPractice = () => {
+  router.push({
+    path: '/questions/practice',
+    query: { mode: 'wrong' }
+  })
+}
+
 const reviewStep = (record: WrongQuestionVO) => {
   if (normalizeMastery(record.masteryStatus) === 'MASTERED') return '确认是否需要降频，避免重复占用精力。'
   if ((record.wrongCount || 0) >= 3) return '先回看题干，再口述一版思路，最后补一遍答案结构。'
-  return '进入详情页，用 1 分钟重写结论，再对照答案修正。'
+  return '进入训练页，用 1 分钟重写结论，再对照答案修正。'
 }
 
 const fetchRecords = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const result = await getWrongQuestionsApi(query)
     records.value = result.records || []
     total.value = result.total || 0
+  } catch (error) {
+    records.value = []
+    total.value = 0
+    loadError.value = getErrorMessage(error, '错题复盘暂时加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -239,6 +270,8 @@ const markMastered = async (row: WrongQuestionVO) => {
     })
     row.masteryStatus = result.masteryStatus
     ElMessage.success('已标记为掌握')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '掌握状态暂时更新失败，请稍后重试。'))
   } finally {
     masteryChangingId.value = null
   }
@@ -491,6 +524,15 @@ onMounted(fetchRecords)
   flex-wrap: wrap;
 }
 
+.card-actions :deep(.el-button),
+.panel-actions :deep(.el-button),
+.hero-actions :deep(.el-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
@@ -531,6 +573,13 @@ onMounted(fetchRecords)
 
   .card-actions {
     flex-direction: column;
+  }
+
+  .card-actions :deep(.el-button),
+  .panel-actions :deep(.el-button),
+  .hero-actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>

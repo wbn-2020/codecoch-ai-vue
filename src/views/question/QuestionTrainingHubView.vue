@@ -4,45 +4,62 @@
       <div class="hero-copy">
         <div class="eyebrow">
           <BookOpenCheck :size="16" />
-          题库训练
+          今日训练题组
         </div>
-        <h1>今天先练这组题</h1>
-        <p>围绕简历匹配、岗位短板和学习计划生成推荐题，把刷题变成面试前的专项补强。</p>
+        <h1>{{ todayFocusTitle }}</h1>
+        <p>{{ todayFocusLead }}</p>
+        <div class="hero-actions">
+          <el-button type="primary" size="large" @click="startPrimaryPractice">
+            <Play :size="16" />
+            {{ primaryPracticeLabel }}
+          </el-button>
+          <el-button :loading="generating" :disabled="!canGenerate" size="large" @click="generateRecommendations">
+            <Sparkles :size="16" />
+            生成今日题组
+          </el-button>
+          <el-button :loading="loading" text @click="loadRecommendations">
+            <RefreshCw :size="16" />
+            刷新
+          </el-button>
+        </div>
       </div>
-      <div class="hero-actions">
-        <el-button :loading="loading" @click="loadRecommendations">
-          <RefreshCw :size="16" />
-          刷新
-        </el-button>
-        <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">
-          <Sparkles :size="16" />
-          生成推荐
-        </el-button>
-        <el-button type="success" @click="startPrimaryPractice">
+
+      <div class="today-plan-card">
+        <div class="plan-card-head">
           <Play :size="16" />
-          {{ primaryPracticeLabel }}
-        </el-button>
+          <span>今天练什么</span>
+        </div>
+        <strong>{{ todayPlanName }}</strong>
+        <p>{{ todayReasonText }}</p>
+        <div class="plan-card-meta">
+          <el-tag :type="todayTrustTag.type" effect="plain">{{ todayTrustTag.label }}</el-tag>
+          <el-tag effect="plain">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</el-tag>
+        </div>
       </div>
+
       <div class="hero-metrics">
         <div class="metric-tile">
-          <span>推荐题</span>
+          <span>今日题组</span>
           <strong>{{ items.length }}</strong>
+          <small>{{ items.length ? '来自当前推荐结果' : '暂无专项题' }}</small>
         </div>
         <div class="metric-tile">
-          <span>可练习</span>
+          <span>可直接练</span>
           <strong>{{ actionableItems.length }}</strong>
+          <small>{{ hasPracticeQuestions ? '可进入题目详情' : '先用通用训练兜底' }}</small>
         </div>
         <div class="metric-tile">
-          <span>高风险</span>
+          <span>优先补强</span>
           <strong>{{ highRiskCount }}</strong>
+          <small>{{ highRiskCount ? '高风险题优先' : '按题组顺序完成' }}</small>
         </div>
       </div>
     </section>
 
     <section class="training-controls content-card">
       <div class="content-card__body controls-body">
-        <div>
-          <h2>推荐依据</h2>
+        <div class="source-copy">
+          <h2>为什么练这组</h2>
           <p>{{ sourceDescription }}</p>
         </div>
         <div class="control-fields">
@@ -71,15 +88,15 @@
         </div>
         <div v-if="generationDiagnostic" class="generation-diagnostic">
           <div class="generation-diagnostic__main">
-            <span>{{ generationDiagnostic.batchId ? '推荐批次已记录' : '推荐批次待生成' }}</span>
+            <span>生成进度</span>
             <strong>{{ generationStatusText }}</strong>
           </div>
           <div class="generation-diagnostic__meta">
-            <span v-if="generationDiagnostic.questionCount">题量 {{ generationDiagnostic.questionCount }}</span>
-            <span v-if="generationDiagnostic.aiCallLogId">推荐依据已保存</span>
-            <span v-if="generationDiagnostic.asyncMessageId">任务已提交</span>
-            <span v-if="generationDiagnostic.asyncTraceId">处理线索已记录</span>
-            <span v-if="generationDiagnostic.sourceId">{{ generationSourceLabel }}已绑定</span>
+            <span v-if="generationDiagnostic.questionCount">计划 {{ generationDiagnostic.questionCount }} 题</span>
+            <span v-if="generationDiagnostic.aiCallLogId">依据已保存</span>
+            <span v-if="generationDiagnostic.asyncMessageId">已进入生成队列</span>
+            <span v-if="generationDiagnostic.asyncTraceId">可追踪进度</span>
+            <span v-if="generationDiagnostic.sourceId">{{ generationSourceLabel }}已匹配</span>
             <span v-if="generationDiagnostic.errorMessage" class="is-error">{{ generationDiagnostic.errorMessage }}</span>
           </div>
           <el-button
@@ -88,7 +105,7 @@
             type="primary"
             @click="openRecommendationTask"
           >
-            查看任务中心
+            查看生成进度
           </el-button>
         </div>
       </div>
@@ -99,7 +116,7 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <h2>推荐训练组</h2>
+              <h2>今日训练题组</h2>
               <p>{{ recommendationSummary }}</p>
             </div>
             <el-button text type="primary" @click="router.push('/questions/practice')">
@@ -150,7 +167,7 @@
               <div class="question-body">
                 <div class="question-title-row">
                   <div>
-                    <h3>{{ item.questionTitle || `推荐题 ${index + 1}` }}</h3>
+                    <h3>{{ item.questionTitle || `今日训练题 ${index + 1}` }}</h3>
                     <p>
                       {{ item.skillName || item.skillCode || '综合能力' }}
                       <span>·</span>
@@ -163,14 +180,14 @@
                     <el-tag :type="severityTag(item.gapSeverity)" effect="plain">
                       {{ severityLabel(item.gapSeverity) }}
                     </el-tag>
-                    <el-tag v-if="itemPracticeQuestionId(item)" type="success" effect="plain">已入库</el-tag>
-                    <el-tag v-else type="warning" effect="plain">待入库</el-tag>
+                    <el-tag v-if="itemPracticeQuestionId(item)" type="success" effect="plain">可直接练</el-tag>
+                    <el-tag v-else type="warning" effect="plain">需通用训练兜底</el-tag>
                   </div>
                 </div>
 
                 <div class="reason-box">
                   <div class="reason-title">
-                    <strong>推荐原因</strong>
+                    <strong>为什么练这题</strong>
                     <el-tag size="small" :type="trustTagForItem(item).type" effect="plain">{{ trustTagForItem(item).label }}</el-tag>
                   </div>
                   <span>{{ item.recommendReason || item.questionContent || '这道题用于补齐当前岗位方向下的面试风险点。' }}</span>
@@ -197,14 +214,14 @@
 
                 <div class="question-actions">
                   <el-button :disabled="!itemPracticeQuestionId(item)" type="primary" @click="openQuestion(item)">
-                    练这题
+                    开始这题
                     <ChevronRight :size="15" />
                   </el-button>
                   <el-button
                     :disabled="!itemPracticeQuestionId(item)"
                     @click="startSinglePractice(item)"
                   >
-                    加入练习
+                    作为小组训练
                   </el-button>
                 </div>
               </div>
@@ -218,11 +235,11 @@
           <div class="content-card__body">
             <div class="side-title">
               <Play :size="17" />
-              <h2>通用训练建议</h2>
+              <h2>没有可信来源时</h2>
             </div>
             <el-tag class="fallback-tag" type="warning" effect="plain">推荐依据不足</el-tag>
             <p class="side-muted">
-              如果暂时没有简历、岗位描述或学习计划，先完成一组可练的题，练完后再把错题和反馈回流到今日计划。
+              如果暂时没有简历、岗位描述或学习计划，不会伪造专项推荐；先完成一组通用训练，练完后再回到题组刷新来源。
             </p>
             <el-button type="success" plain @click="startFallbackPractice">
               {{ fallbackPanelActionText }}
@@ -234,10 +251,10 @@
           <div class="content-card__body">
             <div class="side-title">
               <Brain :size="17" />
-              <h2>训练建议</h2>
+              <h2>练完去哪</h2>
             </div>
             <ol class="coach-steps">
-              <li v-for="step in coachSteps" :key="step.title">
+              <li v-for="step in nextStepCards" :key="step.title">
                 <strong>{{ step.title }}</strong>
                 <span>{{ step.desc }}</span>
               </li>
@@ -276,12 +293,12 @@
           <div class="content-card__body">
             <div class="side-title">
               <AlertTriangle :size="17" />
-              <h2>高频风险</h2>
+              <h2>今日重点</h2>
             </div>
             <div v-if="topSkillNames.length" class="skill-chips">
               <el-tag v-for="skill in topSkillNames" :key="skill" effect="plain">{{ skill }}</el-tag>
             </div>
-            <p v-else class="side-muted">生成推荐后会汇总本轮最需要补强的知识点。</p>
+            <p v-else class="side-muted">有可信推荐后会汇总本轮最需要补强的知识点；当前先以通用训练保持节奏。</p>
           </div>
         </section>
       </aside>
@@ -473,14 +490,51 @@ const topSkillNames = computed(() => {
     .filter((name): name is string => Boolean(name))
   return [...new Set(names)].slice(0, 8)
 })
+const firstActionableItem = computed(() => actionableItems.value[0])
 const sourceDescription = computed(() => sourceDescriptions[query.source])
 const canGenerate = computed(() => !generating.value && !loading.value)
+const todayPlanName = computed(() => {
+  const firstItem = firstActionableItem.value || items.value[0]
+  if (firstItem?.skillName || firstItem?.skillCode) return firstItem.skillName || firstItem.skillCode || '今日训练题组'
+  if (fallbackKeyword.value) return `${fallbackKeyword.value} 通用训练`
+  if (query.source === 'matchReport') return '简历匹配短板训练'
+  if (query.source === 'studyPlan') return '学习计划题组'
+  return '通用训练题组'
+})
+const todayFocusTitle = computed(() => {
+  if (hasPracticeQuestions.value) return `今天先练：${todayPlanName.value}`
+  if (query.sourceId && !items.value.length) return '推荐题还没准备好，先保留通用训练入口'
+  return '暂无可信专项来源，先做通用训练'
+})
+const todayFocusLead = computed(() => {
+  if (hasPracticeQuestions.value) {
+    return `已从真实来源中整理出 ${practiceQuestionIds.value.length} 道可练题，先完成题组，再把反馈带回错题复盘和模拟面试。`
+  }
+  if (query.sourceId) return '已经找到推荐依据，但当前没有返回可直接练的题；可以重新生成，或先做一组通用题保持节奏。'
+  return '没有可靠简历、岗位、能力画像或学习计划时，不会伪造专项推荐；页面会诚实提供通用训练。'
+})
+const todayReasonText = computed(() => {
+  if (generationDiagnostic.value?.fallback || !query.sourceId) return fallbackEvidenceSummary.value
+  return generationDiagnostic.value?.evidenceSummary || sourceDescription.value
+})
+const todayTrustTag = computed(() => {
+  if (generationDiagnostic.value?.fallback || !query.sourceId) {
+    return { label: '来源不足，通用训练', type: 'warning' as const }
+  }
+  if (generationDiagnostic.value?.trustStatus) {
+    return {
+      label: generationStatusText.value,
+      type: trustStatusType(generationDiagnostic.value.trustStatus, 'success')
+    }
+  }
+  return { label: '来源已读取', type: 'success' as const }
+})
 const generationStatusText = computed(() => {
   const status = String(generationDiagnostic.value?.status || '').toUpperCase()
   if (status === 'SUCCESS') return '生成成功'
   if (status === 'FALLBACK' || generationDiagnostic.value?.fallback) return '推荐依据不足'
   if (status === 'FAILED') return '生成失败'
-  if (generationDiagnostic.value?.asyncMessageId || generationDiagnostic.value?.asyncTraceId) return '已提交生成任务'
+  if (generationDiagnostic.value?.asyncMessageId || generationDiagnostic.value?.asyncTraceId) return '题组准备中'
   if (status === 'PROCESSING') return '生成中'
   if (status === 'PENDING') return '待生成'
   return '推荐已生成'
@@ -521,7 +575,7 @@ const recommendationTrustTags = computed(() => [
   }
 ] as Array<{ label: string; type: 'success' | 'warning' | 'info' }>)
 const recommendationSummary = computed(() => {
-  if (!items.value.length) return '生成推荐后，这里会按风险顺序展示今天优先练习的题；资料不足时也可以直接随机练一组。'
+  if (!items.value.length) return '生成今日题组后，这里会按风险顺序展示今天优先练习的题；资料不足时也可以直接随机练一组。'
   if (!hasPracticeQuestions.value) return '本轮推荐暂时不能直接进入专项题，已为你准备一组通用练习，可以先练再回来刷新推荐。'
   return `已准备 ${practiceQuestionIds.value.length} 道可练习题，建议按顺序完成并提交 AI 点评。`
 })
@@ -529,7 +583,7 @@ const recommendationEmptyState = computed(() => {
   const status = String(generationDiagnostic.value?.status || '').toUpperCase()
   if (generating.value) {
     return {
-      title: '正在生成推荐题',
+      title: '正在生成今日题组',
       description: '系统正在读取推荐依据并提交生成任务，完成后会刷新本页结果。',
       showGenerate: false,
       generateText: '生成中',
@@ -540,10 +594,10 @@ const recommendationEmptyState = computed(() => {
   }
   if (generationDiagnostic.value?.asyncMessageId || generationDiagnostic.value?.asyncTraceId || status === 'PROCESSING' || status === 'PENDING') {
     return {
-      title: '推荐任务已提交',
-      description: '题组还在生成或等待异步任务回写。可以稍后刷新，当前不需要重复提交。',
+      title: '题组正在准备',
+      description: '今日题组还在生成或等待结果回写。可以稍后刷新，当前不需要重复提交。',
       showGenerate: false,
-      generateText: '生成推荐',
+      generateText: '生成今日题组',
       showFallback: true,
       fallbackText: '等待期间先练一组',
       showResumeLink: false
@@ -552,7 +606,7 @@ const recommendationEmptyState = computed(() => {
   if (status === 'FAILED' || generationDiagnostic.value?.errorMessage) {
     return {
       title: '推荐生成没有完成',
-      description: generationDiagnostic.value?.errorMessage || '本次推荐任务失败，可以重试生成，或先进入通用训练保持节奏。',
+      description: generationDiagnostic.value?.errorMessage || '本次题组生成没有完成，可以重试生成，或先进入通用训练保持节奏。',
       showGenerate: true,
       generateText: '重新生成',
       showFallback: true,
@@ -582,18 +636,18 @@ const recommendationEmptyState = computed(() => {
     showResumeLink: false
   }
 })
-const coachSteps = computed(() => [
+const nextStepCards = computed(() => [
   {
-    title: '先练高风险',
-    desc: highRiskCount.value ? `本轮有 ${highRiskCount.value} 个高风险题，优先处理。` : '先完成推荐题组前 3 题。'
+    title: '提交 AI 点评',
+    desc: hasPracticeQuestions.value ? '先进入题目详情作答，提交后看点评、参考答案和下一步。' : '通用训练同样可以提交答案，保留练习节奏。'
   },
   {
-    title: '每题都要说项目',
-    desc: '回答时补充业务场景、指标和权衡，避免只背概念。'
+    title: '复盘错题和收藏',
+    desc: highRiskCount.value ? `本轮有 ${highRiskCount.value} 个高风险点，练完优先沉淀到错题复盘。` : '把不确定的题加入错题或收藏，形成下一轮复习素材。'
   },
   {
-    title: '练完进面试房间',
-    desc: '把不会的题带进模拟面试，训练追问和表达节奏。'
+    title: '带去模拟面试',
+    desc: '把已练题转成面试表达，再回到能力图谱看下一组训练入口。'
   }
 ])
 
@@ -640,7 +694,7 @@ const trustTagForItem = (item: QuestionRecommendationItemVO): { label: string; t
     }
     return { label: labels[normalized] || '证据待确认', type: trustStatusType(item.trustStatus) }
   }
-  if (!itemPracticeQuestionId(item)) return { label: '仅建议，待入库', type: 'warning' }
+  if (!itemPracticeQuestionId(item)) return { label: '仅建议，暂不可直接练', type: 'warning' }
   const sourceType = item.sourceType || sourceTypeBySource[query.source]
   return { label: sourceTrustLabels[sourceType] || '来源已记录', type: 'success' }
 }
@@ -899,12 +953,12 @@ const generateRecommendations = async () => {
     }
 
     setGenerationDiagnosticFromResult(result)
-    ElMessage.success(result?.asyncMessageId ? '推荐生成已提交，可在任务中心查看进度。' : '推荐生成已提交')
+    ElMessage.success(result?.asyncMessageId ? '题组生成已提交，可查看进度。' : '题组生成已提交')
     if (!result?.asyncMessageId && result?.status === 'SUCCESS') {
       await loadRecommendations()
     }
   } catch (error) {
-    loadError.value = getErrorMessage(error, '生成推荐题失败，请稍后重试。')
+    loadError.value = getErrorMessage(error, '生成今日题组失败，请稍后重试。')
     ElMessage.error(loadError.value)
   } finally {
     generating.value = false
@@ -1039,7 +1093,7 @@ onMounted(loadRecommendations)
 
 .training-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 22px;
   padding: 28px;
   border: 1px solid rgba(37, 99, 235, 0.16);
@@ -1084,8 +1138,47 @@ onMounted(loadRecommendations)
 }
 
 .hero-actions {
-  justify-content: flex-end;
+  margin-top: 18px;
+  justify-content: flex-start;
   flex-wrap: wrap;
+}
+
+.today-plan-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+
+  strong {
+    color: var(--app-text);
+    font-size: 22px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+    color: var(--app-text-muted);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+}
+
+.plan-card-head,
+.plan-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-card-head {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .hero-metrics {
@@ -1112,6 +1205,14 @@ onMounted(loadRecommendations)
     margin-top: 6px;
     color: var(--app-text);
     font-size: 26px;
+  }
+
+  small {
+    display: block;
+    margin-top: 4px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 
@@ -1144,8 +1245,13 @@ onMounted(loadRecommendations)
   gap: 10px;
 }
 
+.source-copy {
+  min-width: 0;
+}
+
 .context-state {
   justify-content: center;
+  min-width: 0;
   min-height: 34px;
   padding: 7px 10px;
   border: 1px solid #e2e8f0;
@@ -1163,9 +1269,10 @@ onMounted(loadRecommendations)
 }
 
 .trust-strip {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 
   :deep(.el-tag) {
@@ -1177,6 +1284,7 @@ onMounted(loadRecommendations)
 }
 
 .fallback-notice {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: auto minmax(260px, 1fr);
   gap: 10px;
@@ -1374,6 +1482,12 @@ onMounted(loadRecommendations)
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+
+  :deep(.el-tag) {
+    height: auto;
+    min-height: 24px;
+    white-space: normal;
+  }
 }
 
 .reason-box {
@@ -1498,6 +1612,11 @@ onMounted(loadRecommendations)
     color: var(--app-text);
     cursor: pointer;
     text-align: left;
+    min-width: 0;
+
+    span {
+      overflow-wrap: anywhere;
+    }
   }
 }
 
@@ -1528,11 +1647,46 @@ onMounted(loadRecommendations)
   .control-fields {
     justify-content: flex-start;
   }
+
+  .context-state {
+    justify-content: flex-start;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 680px) {
   .training-hero {
     padding: 20px;
+  }
+
+  .hero-copy {
+    h1 {
+      font-size: 26px;
+    }
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
+
+  .control-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+
+    :deep(.el-segmented) {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    :deep(.el-input-number) {
+      width: 100%;
+    }
   }
 
   .fallback-notice {
@@ -1567,6 +1721,16 @@ onMounted(loadRecommendations)
 
   .question-badges {
     justify-content: flex-start;
+  }
+
+  .question-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
   }
 }
 </style>

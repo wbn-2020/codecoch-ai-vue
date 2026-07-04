@@ -4,7 +4,7 @@
       <div>
         <div class="eyebrow">
           <Dumbbell :size="16" />
-          专项练习
+          专项训练房间
         </div>
         <h1>{{ heroTitle }}</h1>
         <p>{{ heroSubtitle }}</p>
@@ -26,9 +26,27 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <h2>选择训练方式</h2>
-              <p>推荐题用于补短板，专项和错题用于集中突破。</p>
+              <h2>先配置本轮训练</h2>
+              <p>选择来源和题量后，进入连续作答、点评、复盘的训练节奏。</p>
             </div>
+          </div>
+
+          <div class="room-flow" aria-label="练习流程">
+            <article>
+              <strong>1</strong>
+              <span>选择模式</span>
+              <p>保留推荐、随机、专项、错题、收藏五种入口。</p>
+            </article>
+            <article>
+              <strong>2</strong>
+              <span>连续作答</span>
+              <p>每题先组织回答，再提交点评。</p>
+            </article>
+            <article>
+              <strong>3</strong>
+              <span>完成复盘</span>
+              <p>答完后进入错题、收藏、能力图谱或面试。</p>
+            </article>
           </div>
 
           <div class="mode-grid">
@@ -60,7 +78,7 @@
 
       <aside class="content-card">
         <div class="content-card__body setup-panel">
-          <h2>本轮设置</h2>
+          <h2>训练配置</h2>
           <el-form label-position="top">
             <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词">
               <el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable />
@@ -95,7 +113,7 @@
 
           <el-button class="start-button" type="primary" size="large" :loading="loadingQuestions" @click="startPractice">
             <Play :size="16" />
-            开始练习
+            开始本轮训练
           </el-button>
         </div>
       </aside>
@@ -104,6 +122,10 @@
     <section v-if="practicing" class="practice-workspace">
       <div class="practice-progress content-card">
         <div class="content-card__body progress-body">
+          <div class="room-status">
+            <strong>{{ currentModeLabel }}</strong>
+            <span>{{ answered ? '复盘当前题' : '等待作答' }}</span>
+          </div>
           <div class="progress-info">
             <span>{{ currentIndex + 1 }} / {{ questions.length }}</span>
             <span>已答 {{ answeredCount }}</span>
@@ -118,6 +140,10 @@
       <div class="active-grid">
         <main class="content-card question-panel">
           <div v-if="currentQuestion" class="content-card__body">
+            <div class="current-question-head">
+              <span>当前题</span>
+              <strong>{{ answered ? '已提交，进入点评复盘' : '先用自己的语言回答' }}</strong>
+            </div>
             <div class="question-meta">
               <el-tag effect="plain">{{ difficultyLabel(currentQuestion.difficulty) }}</el-tag>
               <el-tag v-if="currentQuestion.categoryName" effect="plain" type="info">
@@ -131,6 +157,15 @@
             </div>
 
             <div v-if="!answered" class="answer-area">
+              <div class="answer-frame">
+                <span>建议回答顺序</span>
+                <div>
+                  <em>概念边界</em>
+                  <em>核心方案</em>
+                  <em>风险取舍</em>
+                  <em>项目证据</em>
+                </div>
+              </div>
               <el-input
                 v-model="userAnswer"
                 type="textarea"
@@ -150,6 +185,10 @@
             </div>
 
             <div v-else class="result-area">
+              <div class="review-stage-head">
+                <span>AI 点评与复盘</span>
+                <strong>{{ isLastQuestion ? '复盘完这题即可查看完成结果' : '复盘完这题再进入下一题' }}</strong>
+              </div>
               <el-alert
                 :type="lastResult?.isCorrect ? 'success' : 'warning'"
                 show-icon
@@ -169,7 +208,7 @@
                   <MarkdownPreview :content="referenceAnswerText" />
                 </section>
                 <section>
-                  <h3>点评与解析</h3>
+                  <h3>AI 点评与解析</h3>
                   <MarkdownPreview :content="analysisText" />
                 </section>
               </div>
@@ -211,6 +250,17 @@
               <p class="side-muted">{{ sourceText }}</p>
             </div>
           </section>
+          <section class="content-card">
+            <div class="content-card__body">
+              <div class="side-title">
+                <BookOpenCheck :size="17" />
+                <h2>复盘提示</h2>
+              </div>
+              <p class="side-muted">
+                {{ answered ? '先看点评和参考答案，再标记掌握状态。没有数据时只展示可用内容，不生成虚假的训练结论。' : '参考答案会在提交后进入复盘区，先完成自己的回答。' }}
+              </p>
+            </div>
+          </section>
         </aside>
       </div>
     </section>
@@ -219,8 +269,8 @@
       <div class="content-card__body">
         <div class="section-head">
           <div>
-            <h2>练习完成</h2>
-            <p>把未掌握题继续带入错题复盘或模拟面试。</p>
+            <h2>本轮训练完成</h2>
+            <p>{{ completionInsight }}</p>
           </div>
         </div>
         <div class="result-stats">
@@ -257,19 +307,39 @@
           show-icon
         >
           <template #title>
-            今日计划任务已同步完成
+            今日计划已同步记录
           </template>
-          <p>{{ lastResult.agentTaskTitle || '题库练习任务' }}</p>
-          <small class="agent-sync-alert__meta">
-            <span>ID: {{ lastResult.agentTaskId ?? '--' }}</span>
-            <span>状态: {{ lastResult.agentTaskStatus || '--' }}</span>
-          </small>
+          <p>{{ lastResult.agentTaskTitle || '本轮题库训练已进入今日计划记录。' }}</p>
         </el-alert>
+        <div class="result-next-grid">
+          <article>
+            <span>错题复盘</span>
+            <p>把没有答稳的题变成下一轮重点。</p>
+            <el-button @click="router.push('/questions/wrong-records')">进入错题复盘</el-button>
+          </article>
+          <article>
+            <span>收藏复习</span>
+            <p>复盘高价值题，沉淀稳定表达。</p>
+            <el-button @click="router.push('/questions/favorites')">查看收藏题</el-button>
+          </article>
+          <article>
+            <span>能力图谱</span>
+            <p>查看已有训练数据是否形成能力证据。</p>
+            <el-button @click="router.push('/ability-map')">查看能力图谱</el-button>
+          </article>
+          <article>
+            <span>模拟面试</span>
+            <p>把刚练过的表达带入下一场面试。</p>
+            <el-button type="primary" @click="router.push('/interviews/create')">进入模拟面试</el-button>
+          </article>
+        </div>
         <div class="result-final-actions">
           <el-button type="primary" @click="resetPractice">再练一轮</el-button>
           <el-button @click="router.push('/questions/wrong-records')">错题复盘</el-button>
+          <el-button @click="router.push('/questions/favorites')">收藏复习</el-button>
+          <el-button @click="router.push('/ability-map')">能力图谱</el-button>
           <el-button @click="router.push('/interviews/create')">模拟面试</el-button>
-          <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
+          <el-button @click="router.push('/questions/recommendations')">回推荐题组</el-button>
         </div>
       </div>
     </section>
@@ -470,6 +540,7 @@ const heroSubtitle = computed(() => {
   if (config.mode === 'category') return '围绕一个知识点连续作答，补齐概念、方案和项目说法。'
   return '随机抽题保持训练节奏，答完后及时标记掌握状态。'
 })
+const currentModeLabel = computed(() => modeOptions.find((item) => item.value === config.mode)?.label || '题库训练')
 const sourceText = computed(() => {
   if (routeEvidenceSummary.value) return routeEvidenceSummary.value
   if (routeRecommendReason.value) return routeRecommendReason.value
@@ -486,6 +557,11 @@ const progressPercent = computed(() => {
 const accuracyText = computed(() => {
   if (!answeredCount.value) return '0%'
   return `${Math.round((correctCount.value / answeredCount.value) * 100)}%`
+})
+const completionInsight = computed(() => {
+  if (!answeredCount.value) return '本轮还没有提交答案，可以再练一轮或换一种模式重新开始。'
+  if (skippedCount.value) return '本轮有跳过题目，建议进入错题或收藏复盘，把不稳的题重新讲清楚。'
+  return '把已提交的回答沉淀到错题、收藏、能力图谱或下一场模拟面试里。'
 })
 const elapsedText = computed(() => {
   const min = Math.floor(elapsedSeconds.value / 60)
@@ -819,7 +895,7 @@ const finishPractice = async () => {
       impact: '本轮会立即进入练习结果页，未完成的题目不会继续出题，也不会自动生成答题记录。',
       rollback: '可以点击再练一轮重新开始，但本轮未答题目不会自动补回当前进度。',
       audit: '练习结果会保留本页已答、正确、跳过和用时统计，便于回到错题本或推荐题继续训练。',
-      tips: ['确认当前题目的回答已经提交或不需要继续作答。', '如果只是想离开页面，可优先返回任务中心或稍后再进练习入口。'],
+      tips: ['确认当前题目的回答已经提交或不需要继续作答。', '如果只是想离开页面，可稍后再从训练入口进入。'],
       confirmButtonText: '确认结束'
     })
     if (!confirmed) return
@@ -890,6 +966,8 @@ onBeforeUnmount(stopTimer)
 .result-actions,
 .result-final-actions,
 .side-title,
+.room-status,
+.current-question-head,
 .route-context {
   display: flex;
   align-items: center;
@@ -932,6 +1010,50 @@ onBeforeUnmount(stopTimer)
   p {
     margin-top: 6px;
     color: var(--app-text-muted);
+    line-height: 1.6;
+  }
+}
+
+.room-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  strong,
+  span,
+  p {
+    display: block;
+  }
+
+  strong {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #ffffff;
+    line-height: 28px;
+    text-align: center;
+  }
+
+  span {
+    margin-top: 10px;
+    color: var(--app-text);
+    font-weight: 800;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+    font-size: 13px;
     line-height: 1.6;
   }
 }
@@ -1068,9 +1190,27 @@ onBeforeUnmount(stopTimer)
 
 .progress-body {
   display: grid;
-  grid-template-columns: auto minmax(160px, 1fr) auto;
+  grid-template-columns: auto auto minmax(160px, 1fr) auto;
   gap: 14px;
   align-items: center;
+}
+
+.room-status {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 116px;
+
+  strong {
+    color: var(--app-text);
+    font-size: 14px;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
 }
 
 .progress-info {
@@ -1091,8 +1231,29 @@ onBeforeUnmount(stopTimer)
   }
 }
 
+.current-question-head {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-size: 13px;
+  }
+}
+
 .question-meta {
   flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .question-content {
@@ -1107,6 +1268,37 @@ onBeforeUnmount(stopTimer)
   margin-top: 18px;
 }
 
+.answer-frame {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  em {
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #2563eb;
+    font-style: normal;
+    font-weight: 700;
+  }
+}
+
 .answer-actions,
 .result-actions {
   flex-wrap: wrap;
@@ -1117,6 +1309,30 @@ onBeforeUnmount(stopTimer)
   display: grid;
   gap: 14px;
   margin-top: 18px;
+}
+
+.review-stage-head {
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    color: var(--app-text);
+    line-height: 1.5;
+  }
 }
 
 .coverage-list {
@@ -1236,6 +1452,39 @@ onBeforeUnmount(stopTimer)
   margin-top: 18px;
 }
 
+.result-next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  span {
+    display: block;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  p {
+    min-height: 44px;
+    margin: 8px 0 12px;
+    color: var(--app-text-muted);
+    line-height: 1.6;
+  }
+
+  :deep(.el-button) {
+    width: 100%;
+  }
+}
+
 .agent-sync-alert__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1251,6 +1500,11 @@ onBeforeUnmount(stopTimer)
 
 @media (max-width: 1080px) {
   .mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .room-flow,
+  .result-next-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1274,7 +1528,7 @@ onBeforeUnmount(stopTimer)
 
 @media (max-width: 640px) {
   .practice-session-page {
-    padding-bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(210px + env(safe-area-inset-bottom, 0px));
   }
 
   .session-hero {
@@ -1282,10 +1536,28 @@ onBeforeUnmount(stopTimer)
   }
 
   .mode-grid,
+  .room-flow,
   .review-grid,
   .coverage-list,
-  .result-stats {
+  .result-stats,
+  .result-next-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-actions :deep(.el-button),
+  .answer-actions :deep(.el-button),
+  .result-actions :deep(.el-button),
+  .result-final-actions :deep(.el-button) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .progress-body {
+    gap: 10px;
+  }
+
+  .progress-info {
+    white-space: normal;
   }
 
   .source-trust-box > div {

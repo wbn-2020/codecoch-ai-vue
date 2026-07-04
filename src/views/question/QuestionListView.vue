@@ -6,12 +6,12 @@
           <BookOpenCheck :size="16" />
           题库训练
         </p>
-        <h1>先练今天最影响面试的题</h1>
+        <h1>题库训练中心</h1>
         <p>按岗位、分类、标签和掌握状态筛题，把刷题变成围绕目标岗位的专项补强。</p>
         <div class="hero-actions">
           <el-button type="primary" size="large" @click="router.push('/questions/recommendations')">
             <Sparkles :size="17" />
-            查看推荐题
+            看今日推荐
           </el-button>
           <el-button size="large" @click="router.push('/questions/practice')">
             <Dumbbell :size="17" />
@@ -21,59 +21,63 @@
             <RotateCcw :size="17" />
             复盘错题
           </el-button>
+          <el-button size="large" text @click="router.push('/questions/favorites')">
+            <Bookmark :size="17" />
+            收藏复习
+          </el-button>
         </div>
       </div>
 
       <aside class="hero-panel">
         <div class="hero-panel__stat">
-          <span>当前页题目</span>
+          <span>可练题</span>
           <strong>{{ total }}</strong>
         </div>
         <div class="hero-panel__stat">
-          <span>已收藏</span>
+          <span>本页已收藏</span>
           <strong>{{ favoriteCount }}</strong>
         </div>
         <div class="hero-panel__stat">
-          <span>已掌握</span>
+          <span>本页已掌握</span>
           <strong>{{ masteredCount }}</strong>
         </div>
         <div class="hero-panel__stat">
-          <span>待补强</span>
+          <span>本页待补强</span>
           <strong>{{ weakCount }}</strong>
         </div>
-        <p>收藏、错题和掌握状态都会影响下一轮推荐，这里只呈现真实题库内容。</p>
+        <p>统计只来自当前题库返回结果；未评估的题会保持“待训练”，不替你下结论。</p>
       </aside>
     </section>
 
     <section class="metric-grid">
       <article class="metric-card">
-        <span>当前页题目</span>
+        <span>可练题</span>
         <strong>{{ total }}</strong>
         <p>符合筛选条件的题目总数。</p>
       </article>
       <article class="metric-card">
-        <span>已收藏</span>
+        <span>本页已收藏</span>
         <strong>{{ favoriteCount }}</strong>
         <p>适合面试前反复复习的题目。</p>
       </article>
       <article class="metric-card">
-        <span>已掌握</span>
+        <span>本页已掌握</span>
         <strong>{{ masteredCount }}</strong>
         <p>掌握状态为已掌握的题目。</p>
       </article>
       <article class="metric-card">
-        <span>待补强</span>
+        <span>本页待补强</span>
         <strong>{{ weakCount }}</strong>
-        <p>模糊或未掌握，需要优先回看的题。</p>
+        <p>模糊、未掌握或未评估，需要优先回看的题。</p>
       </article>
     </section>
 
     <section class="content-card question-workbench">
       <div class="content-card__body workbench-head">
         <div>
-          <p class="section-kicker">筛选器</p>
+          <p class="section-kicker">训练筛选</p>
           <h2>缩小今天要练的题</h2>
-          <p class="section-desc">先用筛选器找到当前岗位最需要补强的题。</p>
+          <p class="section-desc">筛选只是辅助，题卡里的“开始训练”才是主动作。</p>
         </div>
         <div class="workbench-actions">
           <el-button text :loading="loading" @click="fetchQuestions">刷新</el-button>
@@ -133,25 +137,27 @@
             </div>
 
             <p class="question-desc">
-              {{ item.experienceLevel || '这道题进入详情后，可以直接提交答案、看参考思路和回到训练记录。' }}
+              {{ item.experienceLevel || '进入训练页后先用自己的话回答，再看 AI 点评、参考思路和下一步。' }}
             </p>
           </div>
 
           <div class="question-card__side">
             <div class="side-meta">
-              <span>收藏</span>
-              <strong>{{ item.favorite ? '已收藏' : '未收藏' }}</strong>
+              <span>训练状态</span>
+              <strong>{{ masteryLabel(item.masteryStatus) }}</strong>
             </div>
             <div class="side-actions">
+              <el-button type="primary" @click.stop="router.push(`/questions/${item.id}`)">
+                <PlayCircle :size="16" />
+                开始训练
+              </el-button>
               <el-button
-                :type="item.favorite ? 'warning' : 'primary'"
+                :type="item.favorite ? 'warning' : 'default'"
+                plain
                 :loading="favoriteChangingId === item.id"
                 @click.stop="toggleFavorite(item)"
               >
                 {{ item.favorite ? '取消收藏' : '收藏' }}
-              </el-button>
-              <el-button text @click.stop="router.push(`/questions/${item.id}`)">
-                进入详情
               </el-button>
             </div>
           </div>
@@ -177,6 +183,7 @@
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { BookOpenCheck, Bookmark, Dumbbell, PlayCircle, RotateCcw, Sparkles } from 'lucide-vue-next'
 
 import { favoriteQuestionApi, getQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
@@ -242,7 +249,8 @@ const tagOptions = computed<QuestionTagVO[]>(() => {
 
 const favoriteCount = computed(() => questions.value.filter((item) => item.favorite).length)
 const masteredCount = computed(() => questions.value.filter((item) => item.masteryStatus === 'MASTERED').length)
-const weakCount = computed(() => questions.value.filter((item) => item.masteryStatus === 'VAGUE' || item.masteryStatus === 'UNKNOWN').length)
+const weakCount = computed(() => questions.value.filter((item) => !item.masteryStatus || item.masteryStatus === 'VAGUE' || item.masteryStatus === 'UNKNOWN').length)
+const masteryLabel = (status?: string) => masteryMap[status as keyof typeof masteryMap] || '待训练'
 
 const fetchQuestions = async () => {
   loading.value = true
@@ -503,6 +511,13 @@ onMounted(fetchQuestions)
   flex-wrap: wrap;
 }
 
+.side-actions :deep(.el-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
@@ -539,6 +554,7 @@ onMounted(fetchQuestions)
   .hero-actions :deep(.el-button),
   .side-actions :deep(.el-button) {
     width: 100%;
+    margin-left: 0;
   }
 
   .question-feed,

@@ -33,6 +33,20 @@
           <span>搜索</span>
         </button>
 
+        <el-dropdown class="desktop-more" trigger="click" @command="handleMoreCommand">
+          <button class="more-button" type="button" aria-label="打开更多入口">
+            <MoreHorizontal :size="17" />
+            <span>更多</span>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="link in secondaryLinks" :key="link.path" :command="link.path">
+                {{ link.label }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
         <el-tooltip :content="notificationTooltip" placement="bottom">
           <button class="icon-button" type="button" aria-label="通知中心" @click="go('/notifications')">
             <Bell :size="17" />
@@ -114,7 +128,7 @@
         @click="go(item.path)"
       >
         <component :is="item.icon" :size="18" />
-        <span>{{ item.label }}</span>
+        <span>{{ item.mobileLabel }}</span>
       </button>
     </nav>
   </header>
@@ -125,9 +139,9 @@ import {
   Bell,
   BookOpenCheck,
   FileText,
-  History,
   Menu,
   MessageSquare,
+  MoreHorizontal,
   Search,
   Shield,
   Sparkles,
@@ -157,6 +171,7 @@ const emit = defineEmits<{
 interface NavItem {
   key: string
   label: string
+  mobileLabel: string
   desc: string
   path: string
   icon: Component
@@ -169,24 +184,18 @@ const mobileOpen = ref(false)
 
 const navItems: NavItem[] = [
   {
-    key: 'today',
-    label: '今日计划',
-    desc: '今天先练什么、为什么练、下一步去哪',
+    key: 'dashboard',
+    label: '工作台',
+    mobileLabel: '工作台',
+    desc: 'Offer 冲刺驾驶舱、今日主行动和 AI 推荐依据',
     path: '/dashboard',
     icon: Target,
-    matches: ['/dashboard']
-  },
-  {
-    key: 'resume',
-    label: '简历与岗位',
-    desc: '简历诊断、岗位目标、岗位匹配和项目证据',
-    path: '/resumes',
-    icon: FileText,
-    matches: ['/resumes', '/job-targets', '/resume-match', '/projects', '/skill-profile']
+    matches: ['/dashboard', '/dashboard/v3', '/onboarding', '/agent/today', '/agent/tasks']
   },
   {
     key: 'questions',
-    label: '题库训练',
+    label: '题库',
+    mobileLabel: '题库',
     desc: '推荐题、专项练习、错题和收藏',
     path: '/questions/recommendations',
     icon: BookOpenCheck,
@@ -195,45 +204,48 @@ const navItems: NavItem[] = [
   {
     key: 'interviews',
     label: '模拟面试',
+    mobileLabel: '面试',
     desc: '创建面试、训练房间、历史记录和报告',
     path: '/interviews/create',
     icon: MessageSquare,
     matches: ['/interviews']
   },
   {
-    key: 'coach',
-    label: 'AI 教练',
-    desc: '今日任务、任务中心、长任务恢复和生成详情',
-    path: '/agent/today',
-    icon: Sparkles,
-    matches: ['/agent']
+    key: 'resume',
+    label: '简历实验',
+    mobileLabel: '简历',
+    desc: '简历、岗位目标、匹配分析和项目证据',
+    path: '/resumes',
+    icon: FileText,
+    matches: ['/resumes', '/job-targets', '/resume-match', '/project-evidence', '/projects']
   },
   {
-    key: 'records',
-    label: '记录与工具',
-    desc: '历史记录、训练分析、通知、学习计划和面试工具',
-    path: '/tools',
-    icon: History,
-    matches: ['/tools', '/analytics', '/notifications', '/study-plans', '/daily-tasks', '/weakness-analysis']
+    key: 'ability',
+    label: '能力图谱',
+    mobileLabel: '图谱',
+    desc: '能力图谱、成长趋势、能力画像和个人分析',
+    path: '/ability-map',
+    icon: Sparkles,
+    matches: ['/ability-map', '/growth', '/skill-profile', '/analytics/personal']
   }
 ]
 
-const mobilePrimaryKeys = new Set(['today', 'resume', 'questions', 'interviews', 'coach'])
-const mobilePrimaryItems = navItems.filter((item) => mobilePrimaryKeys.has(item.key))
-const currentMobileNavLabel = computed(() => navItems.find((item) => isActive(item))?.label || '今日计划')
+const mobilePrimaryItems = navItems
+const currentMobileNavLabel = computed(() => navItems.find((item) => isActive(item))?.label || '工作台')
 
 const secondaryLinks = [
+  { label: '今日任务', path: '/agent/today' },
+  { label: 'AI 任务中心', path: '/agent/tasks' },
+  { label: '记录与工具', path: '/tools' },
+  { label: '求职实验台', path: '/job-experiments' },
+  { label: '投递管理', path: '/applications' },
+  { label: '个人知识库', path: '/knowledge' },
   { label: '新手引导', path: '/onboarding' },
-  { label: '简历与岗位', path: '/resumes' },
-  { label: '任务中心', path: '/agent/tasks' },
   { label: '专项练习', path: '/questions/practice' },
   { label: '面试历史', path: '/interviews/history' }
 ]
 
 const isActive = (item: NavItem) => {
-  if (item.key === 'today') {
-    return route.path === '/dashboard' || route.path === '/dashboard/v3' || route.path.startsWith('/onboarding')
-  }
   return item.matches.some((prefix) => route.path.startsWith(prefix))
 }
 
@@ -244,6 +256,10 @@ const go = async (path: string) => {
 
 const handleUserCommand = (command: string) => {
   emit('user-command', command)
+}
+
+const handleMoreCommand = async (path: string) => {
+  await go(path)
 }
 
 watch(
@@ -279,6 +295,7 @@ watch(
 .brand,
 .nav-item,
 .command-button,
+.more-button,
 .icon-button,
 .admin-button,
 .user-trigger,
@@ -389,6 +406,28 @@ watch(
   background: #fff;
   color: #64748b;
   font-size: 13px;
+}
+
+.desktop-more {
+  display: inline-flex;
+}
+
+.more-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+
+  &:hover {
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+  }
 }
 
 .icon-button,
@@ -589,6 +628,7 @@ watch(
   }
 
   .command-button,
+  .desktop-more,
   .admin-button,
   .user-trigger span {
     display: none;

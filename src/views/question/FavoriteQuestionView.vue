@@ -4,27 +4,31 @@
       <div class="hero-copy">
         <p class="hero-kicker">
           <BookmarkCheck :size="16" />
-          收藏题清单
+          收藏复习
         </p>
         <h1>把高价值题目沉淀成复习路线</h1>
         <p>收藏题用于保存值得反复练的面试题。这里按题目卡片组织复习入口，支持继续训练和移出收藏。</p>
         <div class="hero-actions">
+          <el-button type="primary" @click="startFavoritePractice">
+            <BookmarkCheck :size="16" />
+            进入收藏训练
+          </el-button>
           <el-button @click="router.push('/questions/recommendations')">
             <Sparkles :size="16" />
-            题库训练
+            今日推荐
           </el-button>
-          <el-button type="primary" @click="router.push('/questions')">
+          <el-button @click="router.push('/questions')">
             <Search :size="16" />
-            去题库收藏
+            去题库添加题
           </el-button>
         </div>
       </div>
       <aside class="hero-panel">
         <div class="hero-panel__stat"><span>收藏总数</span><strong>{{ total || favorites.length }}</strong></div>
-        <div class="hero-panel__stat"><span>本页题目</span><strong>{{ favorites.length }}</strong></div>
+        <div class="hero-panel__stat"><span>本页可复习</span><strong>{{ favorites.length }}</strong></div>
         <div class="hero-panel__stat"><span>困难题</span><strong>{{ hardFavoriteCount }}</strong></div>
-        <div class="hero-panel__stat"><span>覆盖分类</span><strong>{{ categoryCount || taggedCount }}</strong></div>
-        <p>收藏清单只负责帮你挑出值得反复练的题，不会假装已经练完。</p>
+        <div class="hero-panel__stat"><span>有标签题</span><strong>{{ taggedCount }}</strong></div>
+        <p>收藏复习只负责帮你挑出值得反复练的题，不会假装已经练完。</p>
       </aside>
     </section>
 
@@ -39,16 +43,16 @@
     <section class="source-panel">
       <header class="panel-head">
         <div>
-          <p class="section-kicker">复习清单</p>
-          <h2>按收藏继续训练</h2>
-          <p>先按难度和标题筛一遍，再决定进入详情还是直接取消收藏。</p>
+          <p class="section-kicker">复习路线</p>
+          <h2>按收藏路线继续训练</h2>
+          <p>先按难度和标题筛一遍，再进入训练页组织答案；移出收藏放在次要位置。</p>
         </div>
         <div class="panel-actions">
           <el-button :loading="loading" @click="fetchFavorites">
             <RefreshCw :size="16" />
             刷新
           </el-button>
-          <el-button @click="handleReset">重置筛选</el-button>
+          <el-button @click="handleReset">清空筛选</el-button>
         </div>
       </header>
 
@@ -89,7 +93,7 @@
           :description="favoriteEmptyDescription"
         >
           <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
-          <el-button v-else type="primary" @click="router.push('/questions')">去题库收藏题目</el-button>
+          <el-button v-else type="primary" @click="router.push('/questions')">去题库添加收藏</el-button>
         </AppState>
 
         <article v-for="item in favorites" :key="getQuestionId(item)" class="question-card">
@@ -97,7 +101,7 @@
             <div class="question-head">
               <div>
                 <span class="question-time">{{ formatDate(item.createdAt) }}</span>
-                <h3>{{ item.title || '收藏题目' }}</h3>
+                <h3>{{ item.title || '收藏复习题' }}</h3>
               </div>
               <el-tag effect="plain">{{ getOptionLabel(difficultyOptions, item.difficulty) }}</el-tag>
             </div>
@@ -105,12 +109,12 @@
             <div class="tag-row">
               <span>{{ item.categoryName || '未分类' }}</span>
               <span>{{ getOptionLabel(difficultyOptions, item.difficulty) }}</span>
-              <span>已加入复习清单</span>
+              <span>{{ highValueLabel(item) }}</span>
               <span v-if="normalizeTags(item.tags).length">{{ normalizeTags(item.tags).slice(0, 2).join(' / ') }}</span>
             </div>
 
             <div class="review-block">
-              <strong>收藏理由</strong>
+              <strong>复习价值</strong>
               <p>{{ reviewReason(item) }}</p>
             </div>
           </div>
@@ -123,11 +127,11 @@
             </div>
             <div class="card-actions">
               <el-button type="primary" @click="router.push(`/questions/${getQuestionId(item)}`)">
-                练这题
+                复习这题
                 <ChevronRight :size="16" />
               </el-button>
-              <el-button type="danger" plain :loading="removingId === getQuestionId(item)" @click="removeFavorite(item)">
-                取消收藏
+              <el-button plain :loading="removingId === getQuestionId(item)" @click="removeFavorite(item)">
+                移出收藏
               </el-button>
             </div>
           </aside>
@@ -178,17 +182,16 @@ const query = reactive<QuestionQueryDTO>({
 
 const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
 const hardFavoriteCount = computed(() => favorites.value.filter((item) => String(item.difficulty || '').toUpperCase() === 'HARD').length)
-const categoryCount = computed(() => new Set(favorites.value.map((item) => item.categoryName).filter(Boolean)).size)
 const taggedCount = computed(() => favorites.value.filter((item) => normalizeTags(item.tags).length > 0).length)
 const favoriteEmptyDescription = computed(() =>
-  hasFilters.value ? '没有匹配当前筛选条件的收藏题。' : '收藏高价值题目后，这里会形成你的面试复习清单。'
+  hasFilters.value ? '没有匹配当前筛选条件的收藏题。' : '收藏高价值题目后，这里会形成你的面试复习路线。'
 )
 
 const insightCards = computed(() => [
   { label: '收藏总数', value: total.value || favorites.value.length, desc: '你的累计收藏题' },
-  { label: '本页题目', value: favorites.value.length, desc: '当前筛选结果中的可练题' },
+  { label: '本页可复习', value: favorites.value.length, desc: '当前筛选结果中的可练题' },
   { label: '困难题', value: hardFavoriteCount.value, desc: '适合安排到专项训练' },
-  { label: '覆盖分类', value: categoryCount.value || taggedCount.value, desc: categoryCount.value ? '本页题目涉及的分类数' : '本页带标签题目数量' }
+  { label: '有标签题', value: taggedCount.value, desc: '可按知识点串成复习路线' }
 ])
 
 const fetchFavorites = async () => {
@@ -242,7 +245,14 @@ const reviewReason = (item: FavoriteQuestionVO) => {
   const tags = normalizeTags(item.tags)
   if (tags.length) return `已关联 ${tags.slice(0, 3).join('、')}，适合复习时补充项目表达。`
   if (item.categoryName) return `收藏在「${item.categoryName}」分类下，建议和同类题一起训练。`
-  return '暂未关联分类或标签，可直接进入题目详情继续练习。'
+  return '暂未关联分类或标签，可直接进入训练页继续练习。'
+}
+
+const highValueLabel = (item: FavoriteQuestionVO) => {
+  if (String(item.difficulty || '').toUpperCase() === 'HARD') return '高价值难题'
+  if (normalizeTags(item.tags).length) return '已标记知识点'
+  if (item.categoryName) return '分类复习题'
+  return '收藏复习题'
 }
 
 const actionHint = (item: FavoriteQuestionVO) => {
@@ -253,9 +263,16 @@ const actionHint = (item: FavoriteQuestionVO) => {
 
 const nextStepHint = (item: FavoriteQuestionVO) => {
   const tags = normalizeTags(item.tags)
-  if (tags.length) return '先看标签，再进详情页补齐知识点。'
+  if (tags.length) return '先看标签，再进训练页补齐知识点。'
   if (item.categoryName) return '和同分类题目串起来练，效果更稳。'
-  return '直接点进题目详情，边看边练。'
+  return '直接进入训练页，边看边练。'
+}
+
+const startFavoritePractice = () => {
+  router.push({
+    path: '/questions/practice',
+    query: { mode: 'favorite' }
+  })
 }
 
 const removeFavorite = async (row: FavoriteQuestionVO) => {
@@ -520,6 +537,15 @@ onMounted(fetchFavorites)
   flex-wrap: wrap;
 }
 
+.card-actions :deep(.el-button),
+.panel-actions :deep(.el-button),
+.hero-actions :deep(.el-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
@@ -560,6 +586,13 @@ onMounted(fetchFavorites)
 
   .card-actions {
     flex-direction: column;
+  }
+
+  .card-actions :deep(.el-button),
+  .panel-actions :deep(.el-button),
+  .hero-actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>

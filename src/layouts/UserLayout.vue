@@ -138,55 +138,24 @@ watch(
 .jobcoach-layout {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(232, 241, 255, 0.95), rgba(248, 250, 252, 0.98) 360px),
-    #f8fafc;
-  color: #172033;
-  color-scheme: light;
-
-  --app-bg: #f8fafc;
-  --app-surface: #ffffff;
-  --app-surface-soft: #f8fafc;
-  --app-border: #e2e8f0;
-  --app-text: #172033;
-  --app-text-muted: #64748b;
-  --app-primary: #2563eb;
-  --app-primary-soft: #dbeafe;
-  --app-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
-  --user-mobile-top-height: 68px;
-  --user-mobile-nav-height: 0px;
-  --user-mobile-nav-gap: 0px;
-  --el-bg-color: #ffffff;
-  --el-bg-color-overlay: #ffffff;
-  --el-fill-color-blank: #ffffff;
-  --el-fill-color-light: #f8fafc;
-  --el-border-color: #dbe3ef;
-  --el-border-color-light: #e5eaf2;
-  --el-text-color-primary: #172033;
-  --el-text-color-regular: #334155;
-  --el-text-color-secondary: #64748b;
-  --el-color-primary: #2563eb;
-  --el-color-primary-light-3: #60a5fa;
-  --el-color-primary-light-5: #93c5fd;
-  --el-color-primary-light-7: #bfdbfe;
-  --el-color-primary-light-8: #dbeafe;
-  --el-color-primary-light-9: #eff6ff;
-  --el-color-primary-dark-2: #1d4ed8;
-  --el-mask-color: rgba(255, 255, 255, 0.72);
+    linear-gradient(180deg, rgba(238, 244, 255, 0.96), rgba(246, 248, 252, 0.98) 360px),
+    var(--user-bg);
+  color: var(--user-text);
 }
 
 .jobcoach-main {
-  width: min(100%, 1240px);
+  width: min(100%, 1280px);
   min-height: calc(100vh - 68px);
   margin: 0 auto;
-  padding: 22px 24px 42px;
+  padding: 24px 28px 44px;
 }
 
 .demo-readonly-banner {
   margin-bottom: 16px;
   padding: 10px 14px;
-  border: 1px solid rgba(244, 122, 31, 0.28);
-  border-radius: 8px;
-  background: #fff7ed;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-warning-soft);
   color: #9a3412;
   font-size: 13px;
   line-height: 1.6;

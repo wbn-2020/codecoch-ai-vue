@@ -1,0 +1,61 @@
+.jobcoach-layout {
+  .user-page-shell {
+    display: grid;
+    gap: 18px;
+  }
+
+  .user-card {
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-sm);
+    background: var(--user-surface);
+    box-shadow: var(--user-shadow-md);
+  }
+
+  .user-action-card {
+    border-color: #bfdbfe;
+    background: var(--user-primary-soft);
+  }
+
+  .user-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: var(--user-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .user-pill--success {
+    background: var(--user-success-soft);
+    color: #166534;
+  }
+
+  .user-pill--warning {
+    background: var(--user-warning-soft);
+    color: #9a3412;
+  }
+
+  .user-pill--danger {
+    background: var(--user-danger-soft);
+    color: #b91c1c;
+  }
+
+  .user-empty-state {
+    border: 1px dashed #cbd5e1;
+    border-radius: var(--user-radius-sm);
+    background: var(--user-surface-muted);
+    color: var(--user-text-muted);
+  }
+}

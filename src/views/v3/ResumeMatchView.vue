@@ -1,15 +1,15 @@
 <template>
   <div class="v3-page">
-    <section class="page-hero">
+    <section class="page-hero match-hero">
       <div class="hero-copy">
-        <div class="hero-kicker"><GitCompareArrows :size="16" /> 简历匹配</div>
-        <h1>简历岗位匹配</h1>
-        <p>把简历证据、岗位风险和训练缺口放在同一张卡里，再决定今天先补优势、风险还是下一步训练。</p>
+        <div class="hero-kicker"><FlaskConical :size="16" /> JD 匹配实验台</div>
+        <h1>判断这份简历能不能投这个岗位</h1>
+        <p>先检查简历版本、岗位 JD 和项目证据是否足够，再生成匹配报告。资料不足时先补关键输入，不包装成强结论。</p>
         <div class="hero-pills">
-          <span>优势</span>
-          <span>风险</span>
-          <span>缺口</span>
-          <span>下一步训练</span>
+          <span>准备度检查</span>
+          <span>版本快照</span>
+          <span>JD 输入</span>
+          <span>报告闭环</span>
         </div>
       </div>
       <div class="hero-actions">
@@ -39,7 +39,7 @@
         show-icon
         :closable="false"
         title="已从简历版本进入匹配"
-        :description="versionEntryDescription"
+        :description="versionSourceNotice"
       />
       <div class="version-entry-actions">
         <el-button :disabled="!form.resumeId" @click="goSelectedResumeVersions">
@@ -50,33 +50,122 @@
       </div>
     </section>
 
+    <section class="experiment-flow" aria-label="JD 匹配流程">
+      <article v-for="step in experimentSteps" :key="step.title" class="flow-step" :class="`flow-step--${step.tone}`">
+        <span>{{ step.index }}</span>
+        <div>
+          <strong>{{ step.title }}</strong>
+          <small>{{ step.desc }}</small>
+        </div>
+      </article>
+    </section>
+
     <section class="match-layout">
+      <div class="left-rail">
+        <div class="content-panel readiness-panel" v-loading="loading">
+          <div class="section-head">
+            <div>
+              <h2>投前准备度</h2>
+              <p>{{ readinessSummary }}</p>
+            </div>
+            <el-tag :type="readinessTagType" effect="plain">{{ readinessTagText }}</el-tag>
+          </div>
+          <div class="readiness-list">
+            <article v-for="item in readinessItems" :key="item.key" class="readiness-item" :class="`readiness-item--${item.tone}`">
+              <component :is="item.icon" :size="18" />
+              <div>
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.desc }}</span>
+              </div>
+            </article>
+          </div>
+          <div v-if="matchQualityIssues.length" class="quality-gate-actions">
+            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeEdit">补简历信息</el-button>
+            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeProjects">补项目经历</el-button>
+            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">分析岗位</el-button>
+          </div>
+        </div>
+
+        <div class="content-panel version-card">
+          <div class="section-head">
+            <div>
+              <h2>简历版本来源</h2>
+              <p>{{ versionSourceNotice }}</p>
+            </div>
+            <el-tag :type="isVersionEntry ? 'success' : 'info'" effect="plain">
+              {{ isVersionEntry ? '版本已绑定' : '使用当前简历' }}
+            </el-tag>
+          </div>
+          <dl class="source-facts">
+            <div>
+              <dt>简历</dt>
+              <dd>{{ selectedResumeMeta.title }}</dd>
+            </div>
+            <div>
+              <dt>版本</dt>
+              <dd>{{ selectedResumeMeta.version }}</dd>
+            </div>
+            <div>
+              <dt>项目证据</dt>
+              <dd>{{ selectedResumeMeta.projects }}</dd>
+            </div>
+          </dl>
+          <div class="version-entry-actions">
+            <el-button :disabled="!form.resumeId" @click="goSelectedResumeEdit">编辑简历</el-button>
+            <el-button :disabled="!form.resumeId" @click="goSelectedResumeVersions">版本记录</el-button>
+          </div>
+        </div>
+      </div>
+
       <div class="content-panel form-panel" v-loading="loading">
         <div class="section-head">
           <div>
-            <h2>发起匹配分析</h2>
-            <p>默认带入当前主目标岗位和默认简历，可手动切换，报告会给出后续训练建议。</p>
+            <h2>JD 输入与匹配启动</h2>
+            <p>默认带入当前主目标岗位和默认简历；如果岗位还未分析，先补 JD，再生成报告。</p>
           </div>
-          <el-tag v-if="currentTarget" type="success" effect="plain">当前岗位已读取</el-tag>
+          <el-tag v-if="currentTarget" type="success" effect="plain">已读取当前岗位</el-tag>
         </div>
 
-        <el-form label-position="top">
-          <el-form-item label="简历">
-            <el-select
-              v-model="form.resumeId"
-              filterable
-              placeholder="选择简历"
-              class="full"
-              :disabled="isVersionResumeLocked"
-            >
-              <el-option
-                v-for="resume in resumes"
-                :key="resume.id"
-                :label="`${resume.resumeName || resume.title || '简历'}${resume.isDefault === 1 ? ' · 默认' : ''}`"
-                :value="resume.id"
-              />
-            </el-select>
-          </el-form-item>
+        <el-form label-position="top" class="experiment-form">
+          <div class="input-grid">
+            <el-form-item label="实验简历">
+              <el-select
+                v-model="form.resumeId"
+                filterable
+                placeholder="选择简历"
+                class="full"
+                :disabled="isVersionResumeLocked"
+              >
+                <el-option
+                  v-for="resume in resumes"
+                  :key="resume.id"
+                  :label="`${resume.resumeName || resume.title || '简历'}${resume.isDefault === 1 ? ' · 默认' : ''}`"
+                  :value="resume.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="岗位描述 / 目标岗位">
+              <el-select v-model="form.targetJobId" filterable placeholder="选择岗位目标" class="full">
+                <el-option
+                  v-for="target in targets"
+                  :key="target.id"
+                  :label="`${target.jobTitle || '未命名岗位'} · ${target.companyName || '--'}`"
+                  :value="target.id"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+
+          <div class="jd-preview">
+            <div>
+              <span>当前 JD</span>
+              <strong>{{ selectedTargetMeta.title }}</strong>
+              <small>{{ selectedTargetMeta.company }}</small>
+            </div>
+            <p>{{ selectedTargetMeta.analysis }}</p>
+            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">查看/补充岗位分析</el-button>
+          </div>
+
           <el-alert
             v-if="versionResumeMismatch"
             class="quality-gate-alert"
@@ -86,16 +175,6 @@
             title="简历版本入口已绑定原简历"
             description="当前简历与入口版本不一致，已阻止提交。请返回版本页重新选择，或清空版本入口后再切换简历。"
           />
-          <el-form-item label="目标岗位">
-            <el-select v-model="form.targetJobId" filterable placeholder="选择岗位目标" class="full">
-              <el-option
-                v-for="target in targets"
-                :key="target.id"
-                :label="`${target.jobTitle || '未命名岗位'} · ${target.companyName || '--'}`"
-                :value="target.id"
-              />
-            </el-select>
-          </el-form-item>
           <el-alert
             v-if="matchQualityIssues.length"
             class="quality-gate-alert"
@@ -105,17 +184,16 @@
             title="用于 AI 匹配前请先补齐资料"
             :description="matchQualityDescription"
           />
-          <div v-if="matchQualityIssues.length" class="quality-gate-actions">
-            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeEdit">补简历信息</el-button>
-            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeProjects">补项目经历</el-button>
-            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">分析岗位</el-button>
-          </div>
-          <el-checkbox v-model="form.forceRefresh">强制重新生成报告</el-checkbox>
-          <div class="submit-row">
-            <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submitMatch">
-              <Sparkles :size="16" /> 提交匹配报告
-            </el-button>
-            <el-button :loading="loading" @click="loadInitial"><RefreshCw :size="16" /> 刷新数据</el-button>
+
+          <div class="launch-panel">
+            <el-checkbox v-model="form.forceRefresh">重新生成一份报告</el-checkbox>
+            <div class="submit-row">
+              <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submitMatch">
+                <Sparkles :size="16" /> 生成 JD 匹配报告
+              </el-button>
+              <el-button :loading="loading" @click="loadInitial"><RefreshCw :size="16" /> 刷新数据</el-button>
+            </div>
+            <p>报告会基于真实返回字段展示匹配度、优势、差距和建议；字段不足时只给待补齐提示。</p>
           </div>
         </el-form>
 
@@ -153,11 +231,11 @@
         />
       </div>
 
-      <div class="content-panel">
+      <div class="content-panel reports-panel">
         <div class="section-head">
           <div>
-            <h2>最近报告</h2>
-            <p>展示最近生成的匹配报告，便于直接回到详情继续训练。</p>
+            <h2>历史报告</h2>
+            <p>{{ reportHistoryHint }}</p>
           </div>
           <el-button text :loading="reportsLoading" @click="loadReports">刷新</el-button>
         </div>
@@ -193,7 +271,18 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Crosshair, FileText, GitCompareArrows, RefreshCw, Sparkles } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardCheck,
+  Crosshair,
+  FileText,
+  FlaskConical,
+  GitCompareArrows,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles
+} from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -274,10 +363,12 @@ const isVersionResumeLocked = computed(() => Boolean(versionSourceId.value && ro
 const versionResumeMismatch = computed(() =>
   Boolean(isVersionResumeLocked.value && form.resumeId && routeResumeId.value && form.resumeId !== routeResumeId.value)
 )
-const versionEntryDescription = computed(() =>
+const versionSourceNotice = computed(() =>
   versionSourceId.value
     ? `来源版本 ID：${versionSourceId.value}。本次匹配会绑定该版本快照，并锁定入口简历，避免版本和简历混用。`
-    : '当前入口来自版本页；选择具体版本后，匹配报告会保留版本来源。'
+    : isVersionEntry.value
+      ? '当前入口来自版本页；选择具体版本后，匹配报告会保留版本来源。'
+      : '当前使用所选简历的最新内容生成报告；如果要锁定投递版本，请从简历版本页进入。'
 )
 const selectedResume = computed(() => resumes.value.find((item) => item.id === form.resumeId) || null)
 const selectedTarget = computed(() => {
@@ -310,6 +401,109 @@ const matchQualityDescription = computed(() =>
   matchQualityIssues.value.length
     ? `当前还差：${matchQualityIssues.value.join('、')}。补齐后再生成报告，能减少空结果和不可用匹配。`
     : ''
+)
+const readinessTagType = computed(() => {
+  if (!form.resumeId || !form.targetJobId) return 'info'
+  if (versionResumeMismatch.value || matchQualityIssues.value.length) return 'warning'
+  return 'success'
+})
+const readinessTagText = computed(() => {
+  if (!form.resumeId || !form.targetJobId) return '等待输入'
+  if (versionResumeMismatch.value) return '版本需确认'
+  if (matchQualityIssues.value.length) return '先补资料'
+  return '可以生成'
+})
+const readinessSummary = computed(() => {
+  if (!form.resumeId && !form.targetJobId) return '先选择一份简历和一个目标岗位，系统才会判断是否适合生成报告。'
+  if (versionResumeMismatch.value) return '当前版本入口和所选简历不一致，已阻止提交，避免版本快照混用。'
+  if (matchQualityIssues.value.length) return matchQualityDescription.value
+  return '简历、目标岗位和版本来源已就绪，可以生成一份 JD 匹配报告。'
+})
+const selectedResumeMeta = computed(() => {
+  const resume = selectedResume.value
+  const projectCount = typeof resume?.projectCount === 'number' ? resume.projectCount : undefined
+  return {
+    title: resume?.resumeName || resume?.title || '尚未选择简历',
+    version: versionSourceId.value ? `版本 ${versionSourceId.value}` : '未锁定版本快照',
+    projects: projectCount == null ? '项目证据待确认' : projectCount > 0 ? `${projectCount} 个项目` : '缺少项目经历'
+  }
+})
+const selectedTargetMeta = computed(() => {
+  const target = selectedTarget.value
+  return {
+    title: target?.jobTitle || '尚未选择目标岗位',
+    company: target?.companyName || '公司信息待补充',
+    analysis: selectedTargetReady.value
+      ? (target?.analysisSummary || '岗位要求已结构化，可用于匹配。')
+      : '岗位还未完成结构化分析，建议先补充 JD 或运行岗位分析。'
+  }
+})
+const readinessItems = computed(() => [
+  {
+    key: 'resume',
+    title: form.resumeId ? '简历已选择' : '选择实验简历',
+    desc: form.resumeId
+      ? selectedResumeMeta.value.title
+      : '先选择一份要投递或要验证的简历。',
+    tone: form.resumeId ? 'ready' : 'todo',
+    icon: form.resumeId ? CheckCircle2 : FileText
+  },
+  {
+    key: 'version',
+    title: isVersionEntry.value ? '版本来源已记录' : '未锁定简历版本',
+    desc: isVersionEntry.value
+      ? versionSourceNotice.value
+      : '可以直接匹配当前简历，也可以从版本页进入以绑定快照。',
+    tone: versionResumeMismatch.value ? 'risk' : isVersionEntry.value ? 'ready' : 'neutral',
+    icon: versionResumeMismatch.value ? AlertTriangle : ShieldCheck
+  },
+  {
+    key: 'target',
+    title: selectedTargetReady.value ? '岗位已分析' : '补充岗位分析',
+    desc: selectedTargetMeta.value.analysis,
+    tone: selectedTargetReady.value ? 'ready' : 'todo',
+    icon: selectedTargetReady.value ? CheckCircle2 : Crosshair
+  },
+  {
+    key: 'quality',
+    title: matchQualityIssues.value.length ? '资料仍有缺口' : '匹配输入可用',
+    desc: matchQualityIssues.value.length
+      ? matchQualityIssues.value.join('、')
+      : '当前输入可以进入报告生成。',
+    tone: matchQualityIssues.value.length ? 'risk' : 'ready',
+    icon: matchQualityIssues.value.length ? AlertTriangle : ClipboardCheck
+  }
+] as Array<{ key: string; title: string; desc: string; tone: 'ready' | 'todo' | 'risk' | 'neutral'; icon: unknown }>)
+const experimentSteps = computed(() => [
+  {
+    index: '01',
+    title: '选定简历与版本',
+    desc: isVersionEntry.value ? '报告将绑定入口版本' : '可使用当前简历内容',
+    tone: versionResumeMismatch.value ? 'risk' : form.resumeId ? 'ready' : 'todo'
+  },
+  {
+    index: '02',
+    title: '确认岗位描述',
+    desc: selectedTargetReady.value ? '岗位要求已可用于匹配' : '先补充或分析岗位描述',
+    tone: selectedTargetReady.value ? 'ready' : 'todo'
+  },
+  {
+    index: '03',
+    title: '生成匹配报告',
+    desc: canSubmit.value ? '可以开始生成' : '等待准备度通过',
+    tone: canSubmit.value ? 'ready' : 'todo'
+  },
+  {
+    index: '04',
+    title: '进入训练闭环',
+    desc: reports.value.length ? '已有历史报告可复用' : '报告生成后形成行动入口',
+    tone: reports.value.length ? 'ready' : 'neutral'
+  }
+] as Array<{ index: string; title: string; desc: string; tone: 'ready' | 'todo' | 'risk' | 'neutral' }>)
+const reportHistoryHint = computed(() =>
+  versionSourceId.value
+    ? `仅展示与版本 ${versionSourceId.value} 相关的最近报告，避免和其他简历版本混用。`
+    : '展示最近生成的匹配报告，便于回到详情继续修复简历、重跑报告或进入训练。'
 )
 const canSubmit = computed(() =>
   Boolean(form.resumeId && form.targetJobId && !submitting.value && !matchQualityIssues.value.length && !versionResumeMismatch.value)
@@ -526,7 +720,11 @@ const loadReports = async () => {
   reportsLoading.value = true
   reportsError.value = ''
   try {
-    const page = await getResumeJobMatchReportsApi({ pageNo: 1, pageSize: 8 })
+    const page = await getResumeJobMatchReportsApi({
+      pageNo: 1,
+      pageSize: 8,
+      ...(versionSourceId.value ? { resumeVersionId: versionSourceId.value } : {})
+    })
     reports.value = page.records || []
   } catch (error) {
     reportsError.value = getErrorMessage(error, '读取匹配报告失败。')
@@ -564,7 +762,13 @@ const goSelectedResumeEdit = () => {
 
 const goSelectedResumeProjects = () => {
   if (!form.resumeId) return
-  router.push({ path: '/projects', query: { resumeId: form.resumeId } })
+  router.push({
+    path: '/project-evidence',
+    query: {
+      resumeId: form.resumeId,
+      ...(versionSourceId.value ? { resumeVersionId: versionSourceId.value } : {})
+    }
+  })
 }
 
 const goSelectedResumeVersions = () => {
@@ -717,7 +921,8 @@ onBeforeUnmount(stopMatchSse)
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 18px; }
 .page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
-.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; overflow: hidden; }
+.match-hero { background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(6, 182, 212, 0.08) 42%, rgba(22, 163, 74, 0.08)); }
 .hero-copy { min-width: 0; }
 .hero-kicker, .hero-actions, .submit-row, .section-head, .hero-pills { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
@@ -726,11 +931,46 @@ h1 { margin-top: 10px; font-size: 30px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .hero-pills { flex-wrap: wrap; margin-top: 14px; }
 .hero-pills span { padding: 4px 10px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 999px; background: rgba(148, 163, 184, 0.08); color: var(--app-text-muted); font-size: 12px; }
-.match-layout { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr); gap: 18px; }
+.experiment-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.flow-step { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.flow-step span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: rgba(37, 99, 235, 0.16); color: #bfdbfe; font-weight: 800; font-size: 12px; }
+.flow-step strong, .flow-step small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.flow-step small { margin-top: 5px; color: var(--app-text-muted); line-height: 1.5; }
+.flow-step--ready { border-color: rgba(22, 163, 74, 0.34); }
+.flow-step--ready span { background: rgba(22, 163, 74, 0.16); color: #86efac; }
+.flow-step--risk { border-color: rgba(245, 158, 11, 0.42); }
+.flow-step--risk span { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+.match-layout { display: grid; grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr) minmax(320px, 0.9fr); gap: 18px; align-items: start; }
+.left-rail { display: grid; gap: 18px; min-width: 0; }
 .content-panel { padding: 20px; min-width: 0; }
 .section-head { justify-content: space-between; margin-bottom: 18px; }
+.section-head > div { min-width: 0; }
+.section-head h2 { font-size: 18px; }
 .full { width: 100%; }
+.readiness-list { display: grid; gap: 10px; }
+.readiness-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.2); }
+.readiness-item svg { margin-top: 2px; color: var(--app-text-muted); }
+.readiness-item strong, .readiness-item span { display: block; overflow-wrap: anywhere; }
+.readiness-item span { margin-top: 5px; color: var(--app-text-muted); font-size: 12px; line-height: 1.6; }
+.readiness-item--ready { border-color: rgba(22, 163, 74, 0.28); }
+.readiness-item--ready svg { color: #22c55e; }
+.readiness-item--risk { border-color: rgba(245, 158, 11, 0.38); }
+.readiness-item--risk svg { color: #f59e0b; }
+.readiness-item--todo svg { color: #60a5fa; }
+.source-facts { display: grid; gap: 10px; margin: 0; }
+.source-facts div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.2); }
+.source-facts dt { color: var(--app-text-muted); font-size: 12px; }
+.source-facts dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.experiment-form { display: grid; gap: 14px; }
+.input-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.jd-preview { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid rgba(37, 99, 235, 0.24); border-radius: 8px; background: rgba(37, 99, 235, 0.08); }
+.jd-preview span, .jd-preview small { display: block; color: var(--app-text-muted); font-size: 12px; }
+.jd-preview strong { display: block; margin: 4px 0; overflow-wrap: anywhere; }
+.jd-preview p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.launch-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid rgba(6, 182, 212, 0.22); border-radius: 8px; background: rgba(6, 182, 212, 0.07); }
+.launch-panel p { margin: 0; font-size: 12px; }
 .submit-row { flex-wrap: wrap; margin-top: 18px; }
+.launch-panel .submit-row { margin-top: 0; }
 .match-version-notice { display: grid; gap: 12px; }
 .version-entry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .match-stream { display: grid; gap: 10px; margin-top: 18px; padding: 12px; border: 1px solid rgba(99, 102, 241, 0.24); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
@@ -747,6 +987,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .quality-gate-alert { margin: 8px 0 10px; }
 .quality-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 12px; }
 .quality-gate-actions :deep(.el-button) { margin-left: 0; }
+.reports-panel { align-self: stretch; }
 .report-list { min-height: 220px; display: grid; gap: 12px; }
 .report-card { display: grid; grid-template-columns: minmax(0, 1fr) auto 54px; gap: 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.34); color: var(--app-text); text-align: left; cursor: pointer; }
 .report-card strong, .report-card small { display: block; overflow-wrap: anywhere; }
@@ -755,8 +996,16 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .report-card .report-evidence { font-size: 12px; line-height: 1.5; }
 .report-card .report-warning { color: #fbbf24; font-size: 12px; line-height: 1.5; }
 .report-card b { text-align: right; font-size: 22px; }
-@media (max-width: 960px) { .page-hero, .match-layout { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } }
+@media (max-width: 1180px) { .match-layout { grid-template-columns: 1fr 1fr; } .reports-panel { grid-column: 1 / -1; } .experiment-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 960px) { .page-hero, .match-layout { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } .input-grid, .jd-preview { grid-template-columns: 1fr; } .reports-panel { grid-column: auto; } }
 
 
-@media (max-width: 720px) { .page-hero, .match-layout { flex-direction: column; align-items: stretch; } .hero-actions, .version-entry-actions { flex-wrap: wrap; } .version-entry-actions :deep(.el-button) { width: 100%; } }
+@media (max-width: 720px) {
+  .page-hero, .match-layout { flex-direction: column; align-items: stretch; }
+  .experiment-flow { grid-template-columns: 1fr; }
+  .hero-actions, .version-entry-actions, .submit-row { flex-wrap: wrap; }
+  .hero-actions :deep(.el-button), .version-entry-actions :deep(.el-button), .submit-row :deep(.el-button), .jd-preview :deep(.el-button) { width: 100%; margin-left: 0; }
+  .report-card { grid-template-columns: minmax(0, 1fr); }
+  .report-card b { text-align: left; }
+}
 </style>
