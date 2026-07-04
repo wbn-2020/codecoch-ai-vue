@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
@@ -127,11 +127,6 @@ onBeforeUnmount(() => {
   window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
 
-watch(
-  () => route.fullPath,
-  () => tagsStore.addVisitedView(route),
-  { immediate: true }
-)
 </script>
 
 <style scoped lang="scss">

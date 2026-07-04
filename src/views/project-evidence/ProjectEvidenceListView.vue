@@ -43,7 +43,7 @@
 
     <section class="content-card evidence-toolbar">
       <div>
-        <p class="section-kicker">Evidence Filter</p>
+        <p class="section-kicker">证据筛选</p>
         <h2>先找到最需要补强的项目</h2>
       </div>
       <div class="toolbar-controls">
@@ -208,7 +208,14 @@ const gapEvidenceCount = computed(() => items.value.filter((item) => missingFiel
 const missingFields = (item: ProjectEvidenceListVO) => normalizeMissingFields(item.missingFields)
 
 const completenessLabel = (item: ProjectEvidenceListVO) => {
-  const score = item.completenessScore ?? 0
+  const hasScore = item.completenessScore !== null && item.completenessScore !== undefined
+  const score = item.completenessScore
+  if (!hasScore) {
+    if (item.completenessStatus === 'READY') return '可追问'
+    if (item.completenessStatus === 'NEEDS_IMPROVEMENT') return '待补强'
+    if (item.completenessStatus === 'INCOMPLETE') return '证据不足'
+    return '完整度待确认'
+  }
   if (item.completenessStatus === 'READY') return `${score}% 可追问`
   if (item.completenessStatus === 'NEEDS_IMPROVEMENT') return `${score}% 待补强`
   if (item.completenessStatus === 'INCOMPLETE') return `${score}% 证据不足`

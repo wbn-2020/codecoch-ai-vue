@@ -4,7 +4,7 @@
       <div class="growth-hero__main">
         <div class="eyebrow">
           <Map :size="16" />
-          Java Backend Growth Map
+          Java 后端成长地图
         </div>
         <h1>能力图谱</h1>
         <p>

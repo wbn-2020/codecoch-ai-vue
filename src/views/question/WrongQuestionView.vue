@@ -9,9 +9,9 @@
         <h1>把答错的题变成下一轮训练重点</h1>
         <p>错题不再只是记录集合。这里按薄弱度、最近出错时间和掌握状态组织复盘入口，帮助你快速决定先重练哪一道。</p>
         <div class="hero-actions">
-          <el-button @click="router.push('/questions')">
+          <el-button @click="router.push('/questions/recommendations')">
             <Sparkles :size="16" />
-            题库训练
+            今日训练题组
           </el-button>
           <el-button type="primary" @click="startWrongPractice">
             <PenLine :size="16" />

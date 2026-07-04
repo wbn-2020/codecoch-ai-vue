@@ -204,8 +204,8 @@ const navItems: NavItem[] = [
   {
     key: 'interviews',
     label: '模拟面试',
-    mobileLabel: '面试',
-    desc: '创建面试、训练房间、历史记录和报告',
+    mobileLabel: '模拟面试',
+    desc: '推荐开练、训练房间、复盘记录和报告',
     path: '/interviews/create',
     icon: MessageSquare,
     matches: ['/interviews']
@@ -213,7 +213,7 @@ const navItems: NavItem[] = [
   {
     key: 'resume',
     label: '简历实验',
-    mobileLabel: '简历',
+    mobileLabel: '简历实验',
     desc: '简历、岗位目标、匹配分析和项目证据',
     path: '/resumes',
     icon: FileText,
@@ -222,7 +222,7 @@ const navItems: NavItem[] = [
   {
     key: 'ability',
     label: '能力图谱',
-    mobileLabel: '图谱',
+    mobileLabel: '能力图谱',
     desc: '能力图谱、成长趋势、能力画像和个人分析',
     path: '/ability-map',
     icon: Sparkles,
@@ -241,8 +241,8 @@ const secondaryLinks = [
   { label: '投递管理', path: '/applications' },
   { label: '个人知识库', path: '/knowledge' },
   { label: '新手引导', path: '/onboarding' },
-  { label: '专项练习', path: '/questions/practice' },
-  { label: '面试历史', path: '/interviews/history' }
+  { label: '专项训练房间', path: '/questions/practice' },
+  { label: '面试复盘记录', path: '/interviews/history' }
 ]
 
 const isActive = (item: NavItem) => {
@@ -699,11 +699,14 @@ watch(
     }
 
     span {
+      display: -webkit-box;
       max-width: 100%;
       overflow: hidden;
+      overflow-wrap: anywhere;
       text-align: center;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     &.is-active {

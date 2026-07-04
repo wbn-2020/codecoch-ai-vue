@@ -17,9 +17,9 @@
             <Sparkles :size="16" />
             今日推荐
           </el-button>
-          <el-button @click="router.push('/questions')">
+          <el-button @click="router.push('/questions/recommendations')">
             <Search :size="16" />
-            去题库添加题
+            去今日题组找题
           </el-button>
         </div>
       </div>
@@ -93,7 +93,7 @@
           :description="favoriteEmptyDescription"
         >
           <el-button v-if="hasFilters" @click="handleReset">清空筛选</el-button>
-          <el-button v-else type="primary" @click="router.push('/questions')">去题库添加收藏</el-button>
+          <el-button v-else type="primary" @click="router.push('/questions/recommendations')">去今日题组找题</el-button>
         </AppState>
 
         <article v-for="item in favorites" :key="getQuestionId(item)" class="question-card">

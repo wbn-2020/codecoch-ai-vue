@@ -368,7 +368,7 @@
           :content="report.projectProblems || report.projectExpressionProblems"
         />
         <AppState v-else type="empty" title="项目表达问题暂未提取" :description="emptyReportCopy.project">
-          <el-button plain @click="router.push('/projects')">整理项目经历</el-button>
+          <el-button plain @click="router.push('/project-evidence')">整理项目证据</el-button>
         </AppState>
       </article>
 
@@ -406,7 +406,7 @@
           </button>
         </div>
         <AppState v-else type="empty" title="暂未生成推荐题目" :description="emptyReportCopy.questions">
-          <el-button type="primary" plain @click="router.push('/questions')">进入题库训练</el-button>
+          <el-button type="primary" plain @click="router.push('/questions/recommendations')">进入今日训练题组</el-button>
         </AppState>
       </article>
     </section>

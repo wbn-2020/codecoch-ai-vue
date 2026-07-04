@@ -26,16 +26,16 @@
         <div class="content-card__body">
           <div class="section-head">
             <div>
-              <h2>先配置本轮训练</h2>
-              <p>选择来源和题量后，进入连续作答、点评、复盘的训练节奏。</p>
+              <h2>先决定这一轮补哪块短板</h2>
+              <p>从推荐题、错题、收藏或专项主题进入，答完后再看点评和复盘。</p>
             </div>
           </div>
 
           <div class="room-flow" aria-label="练习流程">
             <article>
               <strong>1</strong>
-              <span>选择模式</span>
-              <p>保留推荐、随机、专项、错题、收藏五种入口。</p>
+              <span>锁定来源</span>
+              <p>优先接住报告、错题和收藏里的真实训练线索。</p>
             </article>
             <article>
               <strong>2</strong>
@@ -78,7 +78,7 @@
 
       <aside class="content-card">
         <div class="content-card__body setup-panel">
-          <h2>训练配置</h2>
+          <h2>本轮训练节奏</h2>
           <el-form label-position="top">
             <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词">
               <el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable />

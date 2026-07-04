@@ -221,14 +221,31 @@
       </section>
 
       <section v-if="isSuccessReport" class="content-panel">
-        <div class="section-head"><div><h2>维度明细</h2><p>按技能维度展示分数、差距和建议。</p></div></div>
-        <el-table v-if="report.details?.length" :data="report.details">
-          <el-table-column prop="dimension" label="维度" min-width="120" />
-          <el-table-column prop="skillName" label="技能" min-width="140" />
-          <el-table-column prop="score" label="分数" width="90" />
-          <el-table-column prop="gapDescription" label="差距" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="suggestion" label="建议" min-width="220" show-overflow-tooltip />
-        </el-table>
+        <div class="section-head">
+          <div><h2>维度诊断</h2><p>按技能维度看风险、证据和下一步动作。</p></div>
+        </div>
+        <div v-if="report.details?.length" class="dimension-card-grid">
+          <article v-for="item in report.details" :key="item.id" class="dimension-card">
+            <div class="dimension-card__head">
+              <div>
+                <span>{{ item.dimension || '综合维度' }}</span>
+                <h3>{{ item.skillName || '待确认技能' }}</h3>
+              </div>
+              <el-tag :type="dimensionTone(item.score)" effect="plain">{{ dimensionScoreText(item.score) }}</el-tag>
+            </div>
+            <p v-if="item.evidence" class="dimension-card__evidence">{{ item.evidence }}</p>
+            <dl>
+              <div>
+                <dt>差距</dt>
+                <dd>{{ item.gapDescription || '当前报告没有拆分出明确差距。' }}</dd>
+              </div>
+              <div>
+                <dt>建议动作</dt>
+                <dd>{{ item.suggestion || '结合报告摘要和推荐训练继续补充证据。' }}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
         <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
       </section>
     </template>
@@ -308,6 +325,14 @@ function firstReadableSnippet(value: unknown, fallback = ''): string {
 const hasUsableScore = (value: unknown) => {
   const score = Number(value)
   return Number.isFinite(score) && score > 0
+}
+
+const dimensionScoreText = (value?: number) => hasUsableScore(value) ? `${value} 分` : '待确认'
+const dimensionTone = (value?: number) => {
+  if (!hasUsableScore(value)) return 'info'
+  if (Number(value) >= 80) return 'success'
+  if (Number(value) >= 60) return 'warning'
+  return 'danger'
 }
 
 const reportId = computed(() => Number(route.params.id) || 0)
@@ -774,7 +799,12 @@ const DataBlock = defineComponent({
   setup(props) {
     return () => h('article', { class: 'data-block' }, [
       h('h3', props.title),
-      props.value ? h('pre', stringify(props.value)) : h(AppState, { type: 'empty', title: `暂无${props.title}`, description: '当前报告没有拆分出这一项，建议先查看报告摘要、维度明细，或重新生成报告。' })
+      props.value
+        ? h('details', { class: 'data-block__details' }, [
+            h('summary', '查看技术明细'),
+            h('pre', stringify(props.value))
+          ])
+        : h(AppState, { type: 'empty', title: `暂无${props.title}`, description: '当前报告没有拆分出这一项，建议先查看报告摘要、维度诊断，或重新生成报告。' })
     ])
   }
 })
@@ -1109,7 +1139,18 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .json-sections { display: grid; gap: 14px; }
 .data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .data-block h3 { font-size: 15px; }
+.data-block__details { margin-top: 10px; }
+.data-block__details summary { cursor: pointer; color: var(--app-primary); font-size: 13px; font-weight: 700; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
+.dimension-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.dimension-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dimension-card__head span { color: var(--app-text-muted); font-size: 12px; }
+.dimension-card__head h3 { margin-top: 4px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.dimension-card__evidence { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(37, 99, 235, 0.08); font-size: 13px; }
+.dimension-card dl { display: grid; gap: 10px; margin: 12px 0 0; }
+.dimension-card dt { color: var(--app-text-muted); font-size: 12px; }
+.dimension-card dd { margin: 4px 0 0; color: var(--app-text); line-height: 1.65; overflow-wrap: anywhere; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
 @media (max-width: 1080px) { .score-grid, .detail-grid, .report-overview { grid-template-columns: 1fr 1fr; } .overview-main { grid-column: 1 / -1; } }
 @media (max-width: 760px) {
@@ -1118,6 +1159,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .score-grid,
   .report-overview,
   .overview-main,
+  .dimension-card-grid,
   .diagnostic-list,
   .repair-actions,
   .schema-warning-list li {

@@ -18,8 +18,9 @@
           <strong>{{ readinessDisplay.value }}</strong>
         </div>
         <div class="confidence-meter" aria-hidden="true">
-          <span :style="{ width: `${confidencePercent}%` }"></span>
+          <span :style="{ width: evidenceProgressWidth }"></span>
         </div>
+        <p class="evidence-progress-note">仅表示资料接入进度，不作为能力评分。</p>
         <dl>
           <div>
             <dt>目标岗位</dt>
@@ -177,7 +178,7 @@
         <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.statusLabel }}</small>
       </button>
       <div class="mobile-action-dock__meta">
-        <span><b>依据</b>{{ confidenceLabel }}</span>
+        <span><b>资料</b>{{ confidenceLabel }}</span>
         <span><b>耗时</b>{{ estimatedMinutes }} 分钟</span>
         <span><b>状态</b>{{ planStatusText }}</span>
       </div>
@@ -725,27 +726,26 @@ const hasTrustedReport = computed(() => {
 
 const hasUntrustedRecentReport = computed(() => Boolean(overview.value?.recentReport && !hasTrustedReport.value))
 
-const confidencePercent = computed(() => {
-  let score = 20
-  if (overview.value?.resumeCount) score += 20
-  if (targetJobText.value !== '待选择目标岗位') score += 15
-  if (hasTrustedReport.value) score += 20
-  if (wrongQuestions.value.length) score += 10
-  if (agentTasks.value.length || dailyPlan.value?.tasks?.length) score += 15
-  const cappedScore = hasUntrustedRecentReport.value ? Math.min(score, 70) : score
-  return Math.min(cappedScore, 100)
-})
+const evidenceProgressItems = computed(() => [
+  Boolean(overview.value?.resumeCount),
+  targetJobText.value !== '待选择目标岗位',
+  hasTrustedReport.value,
+  wrongQuestions.value.length > 0,
+  Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length)
+])
+const evidenceProgressCount = computed(() => evidenceProgressItems.value.filter(Boolean).length)
+const evidenceProgressWidth = computed(() => `${Math.max(12, evidenceProgressCount.value * 20)}%`)
 
 const confidenceLabel = computed(() => {
   if (hasUntrustedRecentReport.value) return '待复核'
-  if (confidencePercent.value >= 80) return '高'
-  if (confidencePercent.value >= 55) return '中'
+  if (evidenceProgressCount.value >= 4) return '证据较全'
+  if (evidenceProgressCount.value >= 2) return '继续补证据'
   return '待补资料'
 })
 const confidencePillClass = computed(() => {
   if (hasUntrustedRecentReport.value) return 'pill--warning'
-  if (confidencePercent.value >= 80) return 'pill--success'
-  if (confidencePercent.value >= 55) return 'pill--neutral'
+  if (evidenceProgressCount.value >= 4) return 'pill--success'
+  if (evidenceProgressCount.value >= 2) return 'pill--neutral'
   return 'pill--warning'
 })
 
@@ -771,16 +771,16 @@ const readinessDisplay = computed(() => {
 
   if (!hasResumeSignal.value || !hasTargetJobSignal.value) {
     return {
-      label: '准备状态',
+      label: '资料状态',
       value: '资料不足',
       detail: '补齐简历和目标岗位后，再展示有来源的匹配参考。'
     }
   }
 
   return {
-    label: '计划可信度',
+    label: '资料接入',
     value: confidenceLabel.value,
-    detail: '当前只按已接入资料完整度展示可信度，不把它包装成能力分或 Offer 概率。'
+    detail: '当前只按已接入资料展示进度，不把它包装成能力分或 Offer 概率。'
   }
 })
 

@@ -128,6 +128,11 @@
 
       <main class="conversation-panel">
         <template v-if="current">
+          <div class="training-boundary">
+            <ShieldCheck :size="16" />
+            <span>本房间仅用于模拟训练与复盘，不用于真实面试实时作答。</span>
+          </div>
+
           <el-alert
             v-if="current.status === 'NOT_STARTED'"
             class="state-alert"
@@ -375,7 +380,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Activity, Bot, FilePenLine, ListChecks, Rocket, Route, Send, Square, UserRound } from 'lucide-vue-next'
+import { Activity, Bot, FilePenLine, ListChecks, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -1109,6 +1114,7 @@ onBeforeUnmount(() => {
   }
 }
 
+.training-boundary,
 .session-card,
 .score-card,
 .message-card,
@@ -1122,6 +1128,17 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.66);
+}
+
+.training-boundary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  color: #c7d2fe;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .session-card {

@@ -72,10 +72,10 @@
 
         <div class="readiness-meter">
           <div>
-            <span>实验资料完整度</span>
-            <strong>{{ readinessScore }}</strong>
+            <span>实验资料接入</span>
+            <strong>{{ readinessProgressText }}</strong>
           </div>
-          <el-progress :percentage="readinessScore" :show-text="false" />
+          <el-progress :percentage="readinessProgressPercent" :show-text="false" />
           <p>{{ readinessHint }}</p>
         </div>
       </aside>
@@ -421,16 +421,17 @@ const friendlyMatchFailure = (message?: string | null) => {
   return '上次匹配报告没有成功生成，请进入详情查看处理建议并重新生成。'
 }
 
-const readinessScore = computed(() => {
-  let score = 0
-  if (defaultResume.value) score += 25
-  if (resumeDetail.value?.projects?.length) score += 15
-  if (currentTarget.value) score += 20
-  if (currentTarget.value?.parseStatus === 'PARSED') score += 15
-  if (hasSuccessfulMatch.value) score += 20
-  if ((skillOverview.value?.topGaps || []).length) score += 5
-  return Math.min(score, 100)
-})
+const readinessSignals = computed(() => [
+  Boolean(defaultResume.value),
+  Boolean(resumeDetail.value?.projects?.length),
+  Boolean(currentTarget.value),
+  currentTarget.value?.parseStatus === 'PARSED',
+  hasSuccessfulMatch.value,
+  Boolean((skillOverview.value?.topGaps || []).length)
+])
+const readinessReadyCount = computed(() => readinessSignals.value.filter(Boolean).length)
+const readinessProgressPercent = computed(() => Math.round((readinessReadyCount.value / readinessSignals.value.length) * 100))
+const readinessProgressText = computed(() => `${readinessReadyCount.value}/${readinessSignals.value.length} 项`)
 
 const readinessHint = computed(() => {
   if (!defaultResume.value) return '先补简历，避免后续页面展示缺少依据的匹配结果。'
