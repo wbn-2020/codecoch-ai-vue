@@ -31,6 +31,24 @@
       </div>
 
       <div class="experiment-stack">
+        <article class="resume-snapshot-card">
+          <div class="snapshot-head">
+            <span>A4 简历预览</span>
+            <el-tag :type="defaultResume ? 'success' : 'info'" effect="plain">
+              {{ defaultResume ? '实时工作台' : '待创建' }}
+            </el-tag>
+          </div>
+          <div class="snapshot-paper">
+            <strong>{{ defaultResumeTitle }}</strong>
+            <small>{{ currentTarget?.jobTitle || defaultResume?.targetPosition || '目标岗位待确认' }}</small>
+            <i v-for="line in resumeSnapshotLines" :key="line">{{ line }}</i>
+          </div>
+          <button type="button" @click="goResumeAction">
+            {{ defaultResume ? '边改边看预览' : '创建后生成预览' }}
+            <ArrowRight :size="14" />
+          </button>
+        </article>
+
         <article class="experiment-card">
           <div class="card-topline">
             <span>当前主简历</span>
@@ -384,6 +402,18 @@ const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value 
 const defaultResumeTitle = computed(() =>
   defaultResume.value?.resumeName || defaultResume.value?.title || '还没有可用简历'
 )
+
+const resumeSnapshotLines = computed(() => {
+  if (!defaultResume.value) {
+    return ['补姓名与目标岗位', '沉淀技术栈关键词', '添加可追问项目经历']
+  }
+  const lines = [
+    resumeDetail.value?.summary || defaultResume.value.summary || '',
+    resumeDetail.value?.skills || defaultResume.value.skills || '',
+    projectCards.value[0]?.summary || ''
+  ]
+  return lines.filter(Boolean).slice(0, 3)
+})
 
 const resumeSummary = computed(() => {
   if (!defaultResume.value) return '先创建或上传一份简历，后续匹配和今日计划才有真实依据。'
@@ -956,6 +986,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-card,
+.resume-snapshot-card,
 .experiment-card,
 .next-action-card {
   min-width: 0;
@@ -1039,6 +1070,67 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.resume-snapshot-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(255, 255, 255, 0.98)),
+    #ffffff;
+}
+
+.snapshot-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+
+  span {
+    color: #344054;
+    font-size: 13px;
+    font-weight: 700;
+  }
+}
+
+.snapshot-paper {
+  min-height: 184px;
+  padding: 18px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+
+  strong,
+  small,
+  i {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #101828;
+    font-size: 18px;
+  }
+
+  small {
+    margin-top: 4px;
+    color: #2563eb;
+    font-size: 12px;
+  }
+
+  i {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eef2f7;
+    color: #475467;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
 .experiment-card {
   display: flex;
   flex-direction: column;
@@ -1089,6 +1181,7 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+.resume-snapshot-card button,
 .experiment-card button,
 .project-card button {
   display: inline-flex;
@@ -1410,6 +1503,7 @@ onBeforeUnmount(() => {
   .hub-path,
   .lab-overview,
   .hero-card,
+  .resume-snapshot-card,
   .experiment-card,
   .next-action-card,
   .report-card,
@@ -1430,6 +1524,7 @@ onBeforeUnmount(() => {
 
   .hero-actions :deep(.el-button),
   .summary-actions :deep(.el-button),
+  .resume-snapshot-card button,
   .project-card button {
     width: 100%;
     justify-content: center;

@@ -50,15 +50,15 @@
         </div>
         <div v-if="taskMetaText" class="task-meta">{{ taskMetaText }}</div>
         <div class="async-diagnostics">
-          <span v-if="asyncReceipt.messageId">生成任务已提交</span>
-          <span v-if="asyncReceipt.traceId">处理线索已记录</span>
+          <span v-if="asyncReceipt.messageId">报告正在准备</span>
+          <span v-if="asyncReceipt.traceId">进度已记录</span>
           <span>面试记录已绑定</span>
           <span v-if="asyncReceipt.sendStatus">生成进度 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
         </div>
         <div class="generating-actions">
           <el-button type="primary" @click="goReportTaskCenter">
             <ListChecks :size="16" />
-            去任务中心查看
+            查看准备进度
           </el-button>
           <el-button @click="router.push('/interviews/history')">
             <History :size="16" />
@@ -117,6 +117,14 @@
           <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
           <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
           <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
+        </div>
+
+        <div class="report-professional-strip">
+          <article v-for="item in reportReviewCriteria" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.desc }}</small>
+          </article>
         </div>
 
         <div class="overview-grid">
@@ -303,7 +311,7 @@
         description="页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。若本轮面试已结束，可以手动重新生成报告；如果还没完成答题，请先回到历史记录继续面试。"
       >
         <el-button v-if="interviewId" type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
-        <el-button @click="goReportTaskCenter">去任务中心查看</el-button>
+        <el-button @click="goReportTaskCenter">查看准备进度</el-button>
         <el-button @click="router.push('/interviews/history')">返回历史</el-button>
         <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
       </AppState>
@@ -387,6 +395,17 @@
       <article class="analysis-card">
         <div class="section-head">
           <h2>推荐练习题目</h2>
+        </div>
+        <div v-if="recommendedQuestionIds.length" class="recommended-training-callout">
+          <div>
+            <span>下一步训练入口</span>
+            <strong>先重练报告暴露的薄弱题</strong>
+            <p>完成题库点评后，再回到模拟面试验证表达是否稳定。</p>
+          </div>
+          <el-button type="primary" @click="goPracticeQuestion">
+            <BookOpenCheck :size="16" />
+            练这 {{ recommendedQuestionIds.length }} 题
+          </el-button>
         </div>
         <div v-if="recommendedQuestions.length" class="recommended-list">
           <button
@@ -638,7 +657,7 @@ const backendNextActions = computed(() => nextActions.value.filter((action) => !
 const nextActionUnavailableReason = computed(() => {
   if (!isGenerated.value || nextActions.value.length) return ''
   if (recommendedQuestionIds.value.length) {
-    return '报告没有返回结构化 nextActions 字段，页面先使用推荐题、重新面试和今日计划入口承接下一轮训练，并记录实验点击指标。'
+    return '报告暂未给出结构化行动，页面先用推荐题、重新面试和今日计划入口承接下一轮训练。'
   }
   if (qaMessages.value.length) {
     return '报告有问答证据，但暂未形成可跳转的训练动作。可以先重新面试或回到今日计划，避免把低置信建议包装成确定结论。'
@@ -666,7 +685,7 @@ const canUsePrimaryNextAction = computed(() => {
 })
 const primaryNextActionMeta = computed(() => {
   if (!isStaticFallbackNextAction(primaryNextAction.value)) {
-    return primaryNextAction.value.evidence || primaryNextAction.value.description || '来自后端返回的结构化 nextActions。'
+    return primaryNextAction.value.evidence || primaryNextAction.value.description || '来自报告给出的结构化下一步行动。'
   }
   if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return '基于报告返回的可跳转推荐题。'
   if (primaryNextAction.value.actionType === 'STUDY_PLAN') return '基于报告内容的静态兜底入口，不伪装成 AI 个性化结论。'
@@ -717,7 +736,7 @@ const mainWeaknessPreview = computed(() => ({
   description: textExcerpt(
     report.value?.mainProblems || report.value?.weaknesses || weakPointText.value,
     qaMessages.value.length
-      ? '后端没有返回明确短板，先从问答明细和低分项里定位训练点。'
+      ? '报告没有给出明确短板，先从问答明细和低分项里定位训练点。'
       : '问答样本不足时不强行归因，建议重新完成一轮更完整的模拟面试。'
   )
 }))
@@ -729,24 +748,41 @@ const evidenceSummaryPreview = computed(() =>
       : '暂无足够问答证据，结论可信度有限。'
   )
 )
+const reportReviewCriteria = computed(() => [
+  {
+    label: '证据质量',
+    value: qaMessages.value.length ? `${qaMessages.value.length} 条问答` : '样本不足',
+    desc: qaMessages.value.length ? '判断来自真实问答记录' : '建议补一次完整面试再判断'
+  },
+  {
+    label: '主要判断',
+    value: hasValidTotalScore.value ? scoreVerdict.value : '暂不强行打分',
+    desc: isScoreUnavailable.value ? '保留复盘，不补写结论' : '结合总分、短板和问答明细阅读'
+  },
+  {
+    label: '下一步训练',
+    value: primaryNextAction.value.title,
+    desc: primaryNextActionMeta.value
+  }
+])
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
 const generatingMessage = computed(() =>
   asyncReceipt.value.messageId
-    ? '报告生成进度已提交到任务中心，可以离开页面，稍后回来查看结果。'
+    ? '报告正在准备，可以离开页面，稍后回来查看结果。'
     : '系统正在根据真实问答记录生成结构化报告。'
 )
 const generatingStages = computed(() => [
   {
     key: 'submitted',
     label: '已提交',
-    title: asyncReceipt.value.messageId ? '报告生成任务已提交' : '等待处理进度',
-    desc: asyncReceipt.value.sendStatus ? `生成进度：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已创建报告生成任务'
+    title: asyncReceipt.value.messageId ? '报告正在准备' : '等待处理进度',
+    desc: asyncReceipt.value.sendStatus ? `生成进度：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已开始准备报告'
   },
   {
     key: 'tracking',
     label: '可追踪',
     title: '面试记录已绑定',
-    desc: asyncReceipt.value.traceId ? '处理线索已记录，可稍后继续查看' : '刷新后仍可在任务中心按面试记录继续查找'
+    desc: asyncReceipt.value.traceId ? '进度已记录，可稍后继续查看' : '刷新后仍可按面试记录继续查找'
   },
   {
     key: 'polling',
@@ -855,8 +891,8 @@ const taskMetaText = computed(() => {
   const items = []
   const reportId = taskReportId.value || report.value?.reportId || report.value?.id
   if (reportId) items.push('报告记录已保存')
-  if (asyncReceipt.value.messageId) items.push('生成任务已提交')
-  if (asyncReceipt.value.traceId) items.push('处理线索已记录')
+  if (asyncReceipt.value.messageId) items.push('报告正在准备')
+  if (asyncReceipt.value.traceId) items.push('进度已记录')
   return items.join(' / ')
 })
 const reportTrustTags = computed(() => [
@@ -1165,7 +1201,7 @@ const schedulePolling = () => {
   stopPolling()
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
-    ElMessage.warning('报告生成时间较长，可到任务中心按面试记录继续查看。')
+    ElMessage.warning('报告准备时间较长，可稍后按面试记录继续查看。')
     return
   }
   pollTimer = window.setTimeout(fetchReport, 2000)
@@ -1205,7 +1241,7 @@ const markReportUnavailable = (message: string) => {
     status: 'FAILED',
     failureReason: message,
     trustStatus: 'FALLBACK',
-    evidenceSummary: '报告读取失败，未自动重新提交生成任务。',
+    evidenceSummary: '报告读取失败，未自动重新发起准备流程。',
     fallback: true
   }
   stopPolling()
@@ -1250,9 +1286,9 @@ const loadReportOrSubmitTask = async () => {
       schedulePolling()
       return
     }
-    markReportUnavailable('当前报告暂时不可用，页面没有自动重新提交生成任务。请先到任务中心确认进度，或点击“重新生成报告”手动触发。')
+    markReportUnavailable('当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。')
   } catch (error) {
-    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新提交生成任务。你可以稍后回来，或到任务中心按面试记录继续查看。'))
+    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'))
   } finally {
     loading.value = false
   }
@@ -1279,7 +1315,7 @@ const handleGenerateStudyPlan = async () => {
       }
       return
     } else if (result.asyncMessageId || result.asyncTraceId || result.asyncBizType) {
-      ElMessage.success('学习计划已提交，可在任务中心查看进度')
+      ElMessage.success('学习计划正在准备，可查看进度')
       await router.push({
         path: '/agent/tasks',
         query: compactRouterQuery({
@@ -1372,6 +1408,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.recommended-training-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: #eff6ff;
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  strong,
+  p {
+    display: block;
+    margin: 0;
+  }
+
+  span {
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    color: #0f172a;
+    line-height: 1.4;
+  }
+
+  p {
+    margin-top: 5px;
+    color: #475569;
+    line-height: 1.55;
+  }
+
+  .el-button {
+    flex: 0 0 auto;
+  }
 }
 
 .next-action-section {
@@ -1874,6 +1955,47 @@ onBeforeUnmount(() => {
   }
 }
 
+.report-professional-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span,
+  strong,
+  small {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 7px;
+    color: var(--app-text);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+}
+
 .score-hero,
 .overview-card {
   border: 1px solid var(--app-border);
@@ -2165,6 +2287,7 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
@@ -2199,6 +2322,7 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
@@ -2207,6 +2331,15 @@ onBeforeUnmount(() => {
 
   .next-action-card {
     flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
+  }
+
+  .recommended-training-callout {
+    flex-direction: column;
+    align-items: stretch;
 
     .el-button {
       width: 100%;

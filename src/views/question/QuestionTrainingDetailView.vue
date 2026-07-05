@@ -53,6 +53,14 @@
             </el-tag>
           </div>
 
+          <div class="training-purpose-grid">
+            <article v-for="item in trainingPurposeCards" :key="item.title">
+              <span>{{ item.kicker }}</span>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.desc }}</p>
+            </article>
+          </div>
+
           <section class="question-content">
             <div class="section-title">
               <span>当前题目</span>
@@ -315,6 +323,26 @@ const projectTemplates = computed(() => [
   {
     title: '追问准备',
     content: '准备一个失败案例或权衡点，证明你不是只会背标准答案。'
+  }
+])
+
+const trainingPurposeCards = computed(() => [
+  {
+    kicker: '为什么练',
+    title: recommendationContext.value.gapSeverity ? severityLabel(recommendationContext.value.gapSeverity) : mainSkillName.value,
+    desc: recommendationContext.value.hasContext
+      ? '这题用于验证当前训练来源里暴露的风险点，避免只看报告结论却没有落实到表达。'
+      : '这题用于补齐常见面试考点，先形成稳定回答，再结合自己的项目经历校准。'
+  },
+  {
+    kicker: '怎么答',
+    title: '按场景、机制、取舍、证据组织',
+    desc: '先讲问题背景，再讲方案和边界，最后补项目指标或失败复盘，减少空泛背诵。'
+  },
+  {
+    kicker: '练完去哪',
+    title: recommendationContext.value.fallback ? '回到题库继续沉淀反馈' : '回到推荐题组或错题复盘',
+    desc: '提交点评后，把不稳的知识点加入下一轮专项训练，必要时带入模拟面试验证表达。'
   }
 ])
 
@@ -601,6 +629,46 @@ onMounted(fetchDetail)
   }
 }
 
+.training-purpose-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+
+  article {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 6px;
+    color: var(--app-text);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+}
+
 .section-title {
   margin-bottom: 12px;
 
@@ -864,6 +932,10 @@ onMounted(fetchDetail)
   }
 
   .followup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .training-purpose-grid {
     grid-template-columns: 1fr;
   }
 

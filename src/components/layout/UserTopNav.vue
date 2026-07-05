@@ -5,7 +5,7 @@
         <span class="brand-mark">C</span>
         <span class="brand-copy">
           <strong>CodeCoachAI</strong>
-          <span>智能教练</span>
+          <span>智能求职教练</span>
         </span>
       </button>
 
@@ -188,7 +188,7 @@ const navItems: NavItem[] = [
     key: 'dashboard',
     label: '工作台',
     mobileLabel: '工作台',
-    desc: 'Offer 冲刺驾驶舱、今日主行动和 AI 推荐依据',
+    desc: 'Offer 冲刺驾驶舱、今日行动和 AI 推荐依据',
     path: '/dashboard',
     icon: Target,
     matches: ['/dashboard', '/dashboard/v3', '/onboarding', '/agent/today', '/agent/tasks']
@@ -276,17 +276,21 @@ watch(
   position: sticky;
   top: 0;
   z-index: 40;
-  min-height: 68px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.88);
-  color: #172033;
+  min-height: var(--user-mobile-top-height, 68px);
+  overflow-x: clip;
+  border-bottom: 1px solid rgba(0, 242, 254, 0.14);
+  background:
+    linear-gradient(180deg, rgba(7, 17, 31, 0.94), rgba(7, 17, 31, 0.8)),
+    rgba(7, 17, 31, 0.86);
+  color: var(--user-text);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24);
   backdrop-filter: blur(18px);
 }
 
 .topnav-inner {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   width: min(100%, 1240px);
   min-height: 68px;
   margin: 0 auto;
@@ -327,9 +331,10 @@ watch(
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: #2563eb;
-  color: #fff;
+  background: linear-gradient(135deg, var(--cc-cyan), var(--cc-blue));
+  color: #04111f;
   font-weight: 800;
+  box-shadow: 0 0 18px rgba(0, 242, 254, 0.28);
 }
 
 .brand-copy {
@@ -343,7 +348,7 @@ watch(
   }
 
   span {
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -351,10 +356,11 @@ watch(
 .desktop-nav {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  overflow: hidden;
 }
 
 .mobile-current-section {
@@ -366,25 +372,33 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 0;
   min-height: 38px;
-  padding: 0 11px;
+  padding: 0 10px;
   border-radius: 8px;
-  color: #475569;
+  color: var(--user-text-secondary);
   font-size: 14px;
   white-space: nowrap;
   transition:
     background 0.16s ease,
-    color 0.16s ease;
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   &:hover {
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: rgba(0, 242, 254, 0.09);
+    color: var(--user-primary);
   }
 
   &.is-active {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.16));
+    color: var(--user-text);
     font-weight: 700;
+    box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.28), 0 0 18px rgba(0, 242, 254, 0.14);
   }
 }
 
@@ -396,39 +410,30 @@ watch(
   gap: 8px;
 }
 
-.command-button {
+.command-button,
+.more-button,
+.admin-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid rgba(148, 203, 255, 0.16);
   border-radius: 8px;
-  background: #fff;
-  color: #64748b;
+  background: rgba(7, 17, 31, 0.54);
+  color: var(--user-text-secondary);
   font-size: 13px;
+  backdrop-filter: blur(10px);
+
+  &:hover {
+    border-color: var(--user-primary-border);
+    background: rgba(0, 242, 254, 0.09);
+    color: var(--user-primary);
+  }
 }
 
 .desktop-more {
   display: inline-flex;
-}
-
-.more-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  background: #fff;
-  color: #475569;
-  font-size: 13px;
-
-  &:hover {
-    border-color: #bfdbfe;
-    color: #1d4ed8;
-  }
 }
 
 .icon-button,
@@ -439,14 +444,16 @@ watch(
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid #dbe3ef;
+  border: 1px solid rgba(148, 203, 255, 0.16);
   border-radius: 8px;
-  background: #fff;
-  color: #475569;
+  background: rgba(7, 17, 31, 0.54);
+  color: var(--user-text-secondary);
+  backdrop-filter: blur(10px);
 
   &:hover {
-    border-color: #bfdbfe;
-    color: #1d4ed8;
+    border-color: var(--user-primary-border);
+    background: rgba(0, 242, 254, 0.09);
+    color: var(--user-primary);
   }
 }
 
@@ -460,31 +467,13 @@ watch(
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border: 2px solid #fff;
+  border: 2px solid rgba(7, 17, 31, 0.96);
   border-radius: 999px;
-  background: #d94c36;
+  background: rgba(251, 113, 133, 0.95);
   color: #fff;
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
-}
-
-.admin-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  background: #fff;
-  color: #475569;
-  font-size: 13px;
-
-  &:hover {
-    border-color: #bfdbfe;
-    color: #1d4ed8;
-  }
 }
 
 .user-trigger {
@@ -494,32 +483,31 @@ watch(
   min-height: 36px;
   max-width: 154px;
   padding: 2px 8px 2px 2px;
-  border: 1px solid transparent;
+  overflow: hidden;
+  border: 1px solid rgba(148, 203, 255, 0.16);
   border-radius: 999px;
+  background: rgba(7, 17, 31, 0.54);
+  color: var(--user-text-secondary);
+  backdrop-filter: blur(10px);
 
   span {
     min-width: 0;
     overflow: hidden;
-    color: #334155;
+    color: var(--user-text-secondary);
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &:hover {
-    border-color: #dbe3ef;
-    background: #fff;
+    border-color: var(--user-primary-border);
+    background: rgba(0, 242, 254, 0.09);
+    color: var(--user-primary);
   }
 }
 
-.mobile-toggle {
-  display: none;
-}
-
-.mobile-panel {
-  display: none;
-}
-
+.mobile-toggle,
+.mobile-panel,
 .mobile-bottom-nav {
   display: none;
 }
@@ -537,7 +525,7 @@ watch(
   transform: translateY(-6px);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .desktop-nav {
     display: none;
   }
@@ -554,29 +542,36 @@ watch(
     display: grid;
     gap: 8px;
     width: min(100%, 1240px);
-    max-height: calc(100vh - 68px);
+    max-height: calc(100vh - var(--user-mobile-top-height, 68px));
     margin: 0 auto;
     padding: 0 24px 18px;
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+    background: rgba(7, 17, 31, 0.84);
+    backdrop-filter: blur(16px);
   }
 
   .mobile-nav-item {
     display: grid;
     gap: 4px;
+    min-width: 0;
     padding: 12px;
-    border: 1px solid #e5eaf2;
+    overflow: hidden;
+    border: 1px solid rgba(148, 203, 255, 0.16);
     border-radius: 8px;
-    background: #fff;
+    background: rgba(15, 27, 49, 0.78);
     text-align: left;
 
     &.is-active {
-      border-color: #bfdbfe;
-      background: #eff6ff;
+      border-color: var(--user-primary-border);
+      background: rgba(0, 242, 254, 0.1);
     }
 
     small {
-      color: #64748b;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: var(--user-text-muted);
       font-size: 12px;
       line-height: 1.5;
     }
@@ -584,6 +579,7 @@ watch(
 
   .mobile-nav-item__main {
     display: inline-flex;
+    min-width: 0;
     align-items: center;
     gap: 8px;
   }
@@ -592,15 +588,16 @@ watch(
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    min-width: 0;
     padding-top: 4px;
 
     button {
       min-height: 32px;
       padding: 0 10px;
-      border: 1px solid #e5eaf2;
+      border: 1px solid rgba(148, 203, 255, 0.16);
       border-radius: 8px;
-      background: #f8fafc;
-      color: #475569;
+      background: rgba(7, 17, 31, 0.62);
+      color: var(--user-text-secondary);
       font-size: 13px;
     }
   }
@@ -624,10 +621,7 @@ watch(
     min-width: 0;
   }
 
-  .brand-copy {
-    display: none;
-  }
-
+  .brand-copy,
   .command-button,
   .desktop-more,
   .admin-button,
@@ -637,6 +631,7 @@ watch(
 
   .topnav-actions {
     gap: 6px;
+    min-width: 0;
   }
 
   .icon-button,
@@ -650,13 +645,29 @@ watch(
   .user-trigger {
     justify-content: center;
     padding: 0;
-    border-color: #dbe3ef;
-    background: #fff;
   }
 
   .brand-mark {
     width: 36px;
     height: 36px;
+  }
+
+  .mobile-current-section {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    max-width: 100%;
+    min-height: 28px;
+    padding: 0 9px;
+    overflow: hidden;
+    border: 1px solid var(--user-primary-border);
+    border-radius: 8px;
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--user-primary);
+    font-size: 12px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-panel {
@@ -676,10 +687,11 @@ watch(
     gap: 4px;
     height: var(--user-mobile-nav-height, 72px);
     padding: 6px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
+    overflow: hidden;
+    border: 1px solid rgba(0, 242, 254, 0.18);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 14px 38px rgba(15, 23, 42, 0.16);
+    background: rgba(7, 17, 31, 0.92);
+    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.42), 0 0 22px rgba(0, 242, 254, 0.1);
     backdrop-filter: blur(18px);
   }
 
@@ -692,7 +704,7 @@ watch(
     height: 100%;
     padding: 4px 2px;
     border-radius: 8px;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 10px;
     font-weight: 800;
     line-height: 1.15;
@@ -713,33 +725,14 @@ watch(
     }
 
     &.is-active {
-      background: #dbeafe;
-      color: #1d4ed8;
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.18), rgba(79, 172, 254, 0.14));
+      color: var(--user-primary);
     }
-  }
-
-  .mobile-current-section {
-    display: inline-flex;
-    align-items: center;
-    justify-self: start;
-    max-width: 100%;
-    min-height: 28px;
-    padding: 0 9px;
-    overflow: hidden;
-    border: 1px solid #dbeafe;
-    border-radius: 8px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-size: 12px;
-    font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 }
 
 @media (max-width: 374px) {
   .mobile-current-section {
-    min-width: 0;
     padding: 0 6px;
     font-size: 11px;
   }

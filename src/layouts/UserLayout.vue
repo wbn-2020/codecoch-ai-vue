@@ -1,6 +1,7 @@
 <template>
   <div class="jobcoach-layout">
     <UserTopNav
+      v-if="!isImmersivePage"
       :display-name="displayName"
       :avatar-text="avatarText"
       :avatar-url="authStore.userInfo?.avatarUrl || ''"
@@ -15,7 +16,7 @@
 
     <CommandPalette v-if="commandPaletteOpen" v-model="commandPaletteOpen" scope="user" />
 
-    <main class="jobcoach-main">
+    <main class="jobcoach-main" :class="{ 'is-immersive': isImmersivePage }">
       <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
         当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
       </div>
@@ -31,9 +32,9 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
-import { appConfig } from '@/config'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
+import { appConfig } from '@/config'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -50,6 +51,7 @@ const displayName = computed(
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
+const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
 
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
@@ -128,24 +130,34 @@ onBeforeUnmount(() => {
   unreadRefreshCancelled = true
   window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
-
 </script>
 
 <style scoped lang="scss">
 .jobcoach-layout {
   min-height: 100vh;
+  overflow-x: clip;
   background:
-    linear-gradient(180deg, rgba(222, 232, 246, 0.94) 0, rgba(238, 243, 248, 0.98) 320px),
-    linear-gradient(135deg, rgba(29, 78, 216, 0.08), rgba(14, 116, 144, 0.05) 44%, transparent 72%),
+    radial-gradient(circle at 10% 0, rgba(0, 242, 254, 0.16), transparent 28rem),
+    radial-gradient(circle at 86% 12%, rgba(139, 92, 246, 0.15), transparent 30rem),
+    var(--cc-grid),
     var(--user-bg);
+  background-size: auto, auto, var(--cc-grid-size), auto;
   color: var(--user-text);
 }
 
 .jobcoach-main {
   width: min(100%, 1280px);
+  min-width: 0;
   min-height: calc(100vh - 68px);
   margin: 0 auto;
   padding: 22px 28px 42px;
+  overflow-x: clip;
+
+  &.is-immersive {
+    width: 100%;
+    min-height: 100vh;
+    padding: 0;
+  }
 }
 
 .demo-readonly-banner {
@@ -154,9 +166,9 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(245, 158, 11, 0.34);
   border-radius: var(--user-radius-sm);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 246, 230, 0.9)),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(0, 242, 254, 0.04)),
     var(--user-warning-soft);
-  color: #9a3412;
+  color: #fde68a;
   font-size: 13px;
   line-height: 1.6;
   box-shadow: var(--user-shadow-xs);

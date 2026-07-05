@@ -94,7 +94,7 @@
           <div class="generation-diagnostic__meta">
             <span v-if="generationDiagnostic.questionCount">计划 {{ generationDiagnostic.questionCount }} 题</span>
             <span v-if="generationDiagnostic.aiCallLogId">依据已保存</span>
-            <span v-if="generationDiagnostic.asyncMessageId">已进入生成队列</span>
+            <span v-if="generationDiagnostic.asyncMessageId">稍后可查看结果</span>
             <span v-if="generationDiagnostic.asyncTraceId">可追踪进度</span>
             <span v-if="generationDiagnostic.sourceId">{{ generationSourceLabel }}已匹配</span>
             <span v-if="generationDiagnostic.errorMessage" class="is-error">{{ generationDiagnostic.errorMessage }}</span>
@@ -105,7 +105,7 @@
             type="primary"
             @click="openRecommendationTask"
           >
-            查看生成进度
+            查看准备进度
           </el-button>
         </div>
       </div>
@@ -452,9 +452,9 @@ const sourceTypeBySource: Record<Source, string> = {
 }
 
 const sourceDescriptions: Record<Source, string> = {
-  gap: '从能力画像和岗位要求短板里挑最高风险的知识点。',
-  matchReport: '从简历与岗位匹配报告里提取最可能被追问的题。',
-  studyPlan: '把当前学习计划转成可立即练习的题组。'
+  gap: '优先练岗位要求里最容易丢分的短板，先把高风险知识点转成可回答的题。',
+  matchReport: '优先练简历和岗位之间最容易被追问的差距，提前准备项目证据和追问边界。',
+  studyPlan: '把学习计划里的下一段目标拆成题组，练完后继续回流到今日计划和错题复盘。'
 }
 const sourceLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '能力短板',
@@ -539,7 +539,8 @@ const todayFocusLead = computed(() => {
 })
 const todayReasonText = computed(() => {
   if (generationDiagnostic.value?.fallback || !query.sourceId) return fallbackEvidenceSummary.value
-  return generationDiagnostic.value?.evidenceSummary || sourceDescription.value
+  const sourceText = generationDiagnostic.value?.evidenceSummary || sourceDescription.value
+  return `${sourceText} 练完后建议提交点评，并把错题或不稳回答带回下一轮训练。`
 })
 const todayTrustTag = computed(() => {
   if (generationDiagnostic.value?.fallback || !query.sourceId) {
@@ -581,7 +582,7 @@ const fallbackNoticeTitle = computed(() => {
 })
 const fallbackNoticeDesc = computed(() => {
   if (query.source === 'matchReport') return '这次没有可用的匹配结果；你可以先练一组，或补齐简历和岗位后重新生成。'
-  if (query.source === 'studyPlan') return '当前没有可转成题组的学习计划；可以先做一组通用训练，或回到今日计划生成任务。'
+  if (query.source === 'studyPlan') return '当前没有可转成题组的学习计划；可以先做一组通用训练，或回到今日计划安排下一步。'
   return '资料不足时会先给一组通用练习，帮你保持训练节奏；练完后错题和反馈仍可回流。'
 })
 const recommendationTrustTags = computed(() => [
@@ -607,8 +608,8 @@ const recommendationEmptyState = computed(() => {
   const status = String(generationDiagnostic.value?.status || '').toUpperCase()
   if (generating.value) {
     return {
-      title: '正在生成今日题组',
-      description: '系统正在读取推荐依据并提交生成任务，完成后会刷新本页结果。',
+      title: '正在准备今日题组',
+      description: '正在整理推荐依据，完成后会刷新本页结果；当前不需要重复提交。',
       showGenerate: false,
       generateText: '生成中',
       showFallback: false,
@@ -977,7 +978,7 @@ const generateRecommendations = async () => {
     }
 
     setGenerationDiagnosticFromResult(result)
-    ElMessage.success(result?.asyncMessageId ? '题组生成已提交，可查看进度。' : '题组生成已提交')
+    ElMessage.success(result?.asyncMessageId ? '题组正在准备，可查看进度。' : '题组已开始准备')
     if (!result?.asyncMessageId && result?.status === 'SUCCESS') {
       await loadRecommendations()
     }

@@ -127,6 +127,27 @@
           </el-button>
         </header>
 
+        <section class="growth-map-card" aria-label="成长地图阶段">
+          <div class="section-title">
+            <span>成长地图</span>
+            <em>{{ growthMapMeta }}</em>
+          </div>
+          <div class="growth-stage-track">
+            <article
+              v-for="stage in growthStages"
+              :key="stage.title"
+              class="growth-stage"
+              :class="{ active: stage.active }"
+            >
+              <span class="growth-stage__node">{{ stage.step }}</span>
+              <div>
+                <strong>{{ stage.title }}</strong>
+                <em>{{ stage.desc }}</em>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <div class="domain-map-strip">
           <article v-for="item in domainMilestones" :key="item.label" :class="['milestone', item.tone]">
             <span>{{ item.label }}</span>
@@ -142,14 +163,20 @@
           </div>
           <strong>{{ currentShortfallTitle }}</strong>
           <p>{{ currentShortfallDescription }}</p>
-          <el-button
-            :type="currentShortfallSkill && abilityMap.hasTrainingData ? 'primary' : 'default'"
-            plain
-            @click="startCurrentShortfallTraining"
-          >
-            <Play :size="14" />
-            {{ currentShortfallActionLabel }}
-          </el-button>
+          <div v-if="currentShortfallSkill" class="current-shortfall-card__meta">
+            <span>训练对象：{{ safeSkillName(currentShortfallSkill) }}</span>
+            <span>状态：{{ honestStatusLabel(currentShortfallSkill) }}</span>
+          </div>
+          <div class="current-shortfall-card__actions">
+            <el-button
+              :type="currentShortfallSkill && abilityMap.hasTrainingData ? 'primary' : 'default'"
+              plain
+              @click="startCurrentShortfallTraining"
+            >
+              <Play :size="14" />
+              {{ currentShortfallActionLabel }}
+            </el-button>
+          </div>
         </section>
 
         <aside class="next-training-card next-training-card--mobile" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
@@ -374,10 +401,77 @@ const skillFallbackCopy: Record<string, { name: string; description: string }> =
   }
 }
 
+const skillFallbackPatterns = [
+  { pattern: /JAVA|JDK|OOP/, copy: skillFallbackCopy.JAVA_CORE },
+  { pattern: /COLLECTION|HASH|MAP|LIST|SET/, copy: skillFallbackCopy.COLLECTION_HASHMAP },
+  { pattern: /JUC|THREAD|LOCK|AQS|CONCURRENT/, copy: skillFallbackCopy.JUC_THREAD_POOL },
+  { pattern: /JVM|GC|MEMORY|CLASSLOAD/, copy: skillFallbackCopy.JVM_MEMORY_GC },
+  { pattern: /MYSQL|SQL|INDEX|TX|TRANSACTION/, copy: skillFallbackCopy.MYSQL_INDEX_TX },
+  { pattern: /REDIS|CACHE/, copy: skillFallbackCopy.REDIS_CACHE },
+  { pattern: /SPRING|BOOT|MVC|IOC|AOP/, copy: skillFallbackCopy.SPRING_BOOT },
+  { pattern: /MYBATIS|ORM|MAPPER/, copy: skillFallbackCopy.MYBATIS_ORM },
+  { pattern: /MICRO|SERVICE|GATEWAY|NACOS|DUBBO/, copy: skillFallbackCopy.MICROSERVICE },
+  { pattern: /MQ|QUEUE|KAFKA|ROCKET|RABBIT/, copy: skillFallbackCopy.MESSAGE_QUEUE },
+  { pattern: /DISTRIBUTED|CAP|CONSISTENCY|LOCK/, copy: skillFallbackCopy.DISTRIBUTED_SYSTEM },
+  { pattern: /DESIGN|ARCH|SYSTEM/, copy: skillFallbackCopy.SYSTEM_DESIGN },
+  { pattern: /PROJECT|EXPRESSION|RESUME/, copy: skillFallbackCopy.PROJECT_EXPRESSION },
+  { pattern: /ENGINEER|TEST|LOG|MONITOR|DEPLOY/, copy: skillFallbackCopy.ENGINEERING_PRACTICE }
+]
+
+const domainFallbackPatterns = [
+  { pattern: /JAVA|JDK|OOP/, name: domainFallbackCopy.JAVA_CORE },
+  { pattern: /COLLECTION|HASH|MAP|LIST|SET/, name: domainFallbackCopy.COLLECTION },
+  { pattern: /CONCURRENCY|JUC|THREAD|LOCK|AQS/, name: domainFallbackCopy.CONCURRENCY },
+  { pattern: /JVM|GC|MEMORY/, name: domainFallbackCopy.JVM },
+  { pattern: /MYSQL|SQL|DATABASE|DB/, name: domainFallbackCopy.MYSQL },
+  { pattern: /REDIS|CACHE/, name: domainFallbackCopy.REDIS },
+  { pattern: /SPRING|BOOT|MVC/, name: domainFallbackCopy.SPRING },
+  { pattern: /MYBATIS|ORM|MAPPER/, name: domainFallbackCopy.MYBATIS },
+  { pattern: /MICRO|SERVICE|GATEWAY|DUBBO/, name: domainFallbackCopy.MICROSERVICE },
+  { pattern: /MQ|QUEUE|KAFKA|ROCKET|RABBIT/, name: domainFallbackCopy.MESSAGE_QUEUE },
+  { pattern: /DISTRIBUTED|CAP|CONSISTENCY/, name: domainFallbackCopy.DISTRIBUTED },
+  { pattern: /DESIGN|ARCH|SYSTEM/, name: domainFallbackCopy.SYSTEM_DESIGN },
+  { pattern: /PROJECT|EXPRESSION|RESUME/, name: domainFallbackCopy.PROJECT_EXPRESSION },
+  { pattern: /ENGINEER|TEST|LOG|MONITOR|DEPLOY/, name: domainFallbackCopy.ENGINEERING }
+]
+
 const replacementCharCode = 0xfffd
 const euroSignCode = 0x20ac
 const privateUseStart = 0xe000
 const privateUseEnd = 0xf8ff
+const latin1MojibakeCodePoints = new Set([
+  0x00c3,
+  0x00c2,
+  0x00e4,
+  0x00e5,
+  0x00e6,
+  0x00e7,
+  0x00e8,
+  0x00e9,
+  0x00ef,
+  0x00bd,
+  0x00be,
+  0x00a4,
+  0x00d0,
+  0x00d1
+])
+const suspiciousMojibakeFragments = [
+  '锟',
+  '鑳',
+  '鍥',
+  '捐',
+  '氨',
+  '璁',
+  '粌',
+  '钖',
+  '杽',
+  '鏆',
+  '绱㈠紩',
+  '瑕嗙洊',
+  '寮€',
+  '佹',
+  '€?'
+]
 const rareMojibakeCodePoints = new Set([
   0x9225,
   0x9227,
@@ -404,18 +498,26 @@ const rareMojibakeCodePoints = new Set([
   0x951f
 ])
 const replacementMojibakeText = String.fromCodePoint(0x951f, 0x65a4, 0x62f7)
+const euroQuestionMojibakeText = String.fromCodePoint(euroSignCode, 0x3f)
 
 const normalizeCodeKey = (value?: string) => String(value || '').trim().toUpperCase()
+const readableCodeText = (code: string, fallback: string) => {
+  if (!code) return fallback
+  return code.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 const looksLikeMojibake = (value?: string) => {
   const text = String(value || '').trim()
   if (!text) return false
   if (text.includes(replacementMojibakeText)) return true
+  if (text.includes(euroQuestionMojibakeText)) return true
+  if (suspiciousMojibakeFragments.some((fragment) => text.includes(fragment))) return true
   let rareCount = 0
   for (const char of text) {
     const codePoint = char.codePointAt(0)
     if (codePoint === replacementCharCode) return true
     if (codePoint === euroSignCode) return true
+    if (typeof codePoint === 'number' && latin1MojibakeCodePoints.has(codePoint)) return true
     if (typeof codePoint === 'number' && codePoint >= privateUseStart && codePoint <= privateUseEnd) return true
     if (typeof codePoint === 'number' && rareMojibakeCodePoints.has(codePoint)) rareCount += 1
   }
@@ -430,17 +532,17 @@ const sanitizeMojibakeText = (value: unknown, fallback: string) => {
 
 const fallbackDomainName = (domain?: Pick<AbilityDomainVO, 'domainCode'> | Pick<AbilitySkillNodeVO, 'domainCode'>) => {
   const code = normalizeCodeKey(domain?.domainCode)
-  return domainFallbackCopy[code] || '未命名能力域'
+  return domainFallbackCopy[code] || domainFallbackPatterns.find((item) => item.pattern.test(code))?.name || readableCodeText(code, '未命名能力域')
 }
 
 const fallbackSkillName = (skill?: Pick<AbilitySkillNodeVO, 'code'>) => {
   const code = normalizeCodeKey(skill?.code)
-  return skillFallbackCopy[code]?.name || skill?.code || '未命名能力点'
+  return skillFallbackCopy[code]?.name || skillFallbackPatterns.find((item) => item.pattern.test(code))?.copy.name || readableCodeText(code, '未命名能力点')
 }
 
 const fallbackSkillDescription = (skill?: Pick<AbilitySkillNodeVO, 'code'>) => {
   const code = normalizeCodeKey(skill?.code)
-  return skillFallbackCopy[code]?.description || '围绕这个能力点做一组专项训练，先沉淀真实训练证据。'
+  return skillFallbackCopy[code]?.description || skillFallbackPatterns.find((item) => item.pattern.test(code))?.copy.description || '围绕这个能力点做一组专项训练，先沉淀真实训练证据。'
 }
 
 const safeDomainName = (domain?: AbilityDomainVO) =>
@@ -548,6 +650,36 @@ const recommendedSkill = computed(() => {
 const currentShortfallSkill = computed(() =>
   activeDomainWeakSkills.value[0] || activeDomain.value?.skills?.find((skill) => !skill.evidenceCount) || activeDomain.value?.skills?.[0]
 )
+const growthMapMeta = computed(() => {
+  if (!activeDomain.value) return '等待能力域'
+  if (!abilityMap.value.hasTrainingData) return '先建立证据'
+  if (activeDomainWeakSkills.value.length) return '优先修补短板'
+  return '继续补齐证据'
+})
+const growthStages = computed(() => {
+  const total = activeDomain.value?.totalCount || activeDomain.value?.skills.length || 0
+  const assessed = activeDomain.value?.assessedCount || 0
+  const shortfall = currentShortfallSkill.value ? safeSkillName(currentShortfallSkill.value) : activeDomainName.value
+
+  if (!abilityMap.value.hasTrainingData) {
+    return [
+      { step: '1', title: '能力目录', desc: `${total} 个能力点待验证`, active: true },
+      { step: '2', title: '完成训练', desc: '先生成真实答题证据', active: false },
+      { step: '3', title: '定位短板', desc: '有评估后再推荐训练', active: false }
+    ]
+  }
+
+  return [
+    { step: '1', title: '能力目录', desc: `${total} 个能力点`, active: false },
+    { step: '2', title: '证据评估', desc: `${assessed}/${total} 已评估`, active: !activeDomainWeakSkills.value.length },
+    {
+      step: '3',
+      title: activeDomainWeakSkills.value.length ? '短板训练' : '下一步训练',
+      desc: `进入 ${shortfall}`,
+      active: true
+    }
+  ]
+})
 const currentShortfallMeta = computed(() => {
   if (!activeDomain.value) return '等待能力域'
   if (!abilityMap.value.hasTrainingData) return '未评估'
@@ -719,7 +851,23 @@ onMounted(fetchAbilityMap)
 
 <style scoped lang="scss">
 .ability-map {
+  min-width: 0;
+  overflow-x: hidden;
   color: var(--app-text);
+
+  :deep(.el-button) {
+    max-width: 100%;
+    min-height: 34px;
+    height: auto;
+    white-space: normal;
+  }
+
+  :deep(.el-tag) {
+    max-width: 100%;
+    height: auto;
+    min-height: 24px;
+    white-space: normal;
+  }
 }
 
 .growth-hero,
@@ -965,6 +1113,7 @@ onMounted(fetchAbilityMap)
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 10px;
+  min-width: 0;
   width: 100%;
   padding: 12px;
   border: 1px solid transparent;
@@ -1031,6 +1180,91 @@ onMounted(fetchAbilityMap)
   }
 }
 
+.growth-map-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.growth-stage-track {
+  display: grid;
+  position: relative;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+
+  &::before {
+    position: absolute;
+    top: 18px;
+    right: 16%;
+    left: 16%;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(37, 99, 235, 0.32), rgba(22, 163, 74, 0.32));
+    content: '';
+  }
+}
+
+.growth-stage {
+  display: grid;
+  position: relative;
+  z-index: 1;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+
+  strong,
+  em {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-size: 13px;
+  }
+
+  em {
+    margin-top: 3px;
+    color: var(--app-text-muted);
+    font-style: normal;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  &.active {
+    border-color: rgba(37, 99, 235, 0.34);
+    background: #eff6ff;
+  }
+}
+
+.growth-stage__node {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.26);
+}
+
+.growth-stage:not(.active) .growth-stage__node {
+  background: #94a3b8;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
+}
+
 .domain-map-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1069,6 +1303,28 @@ onMounted(fetchAbilityMap)
     border-color: rgba(148, 163, 184, 0.24);
     background: #f8fafc;
   }
+}
+
+.current-shortfall-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  span {
+    min-width: 0;
+    padding: 5px 8px;
+    border-radius: 8px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.current-shortfall-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .milestone {
@@ -1395,11 +1651,11 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    overflow-x: auto;
+    overflow: visible;
     padding: 8px;
-    scroll-snap-type: x mandatory;
   }
 
   .domain-rail .section-title {
@@ -1407,8 +1663,8 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-item {
-    flex: 0 0 168px;
-    scroll-snap-align: start;
+    width: 100%;
+    min-width: 0;
   }
 
   .signal-grid,
@@ -1416,10 +1672,31 @@ onMounted(fetchAbilityMap)
     grid-template-columns: 1fr;
   }
 
+  .growth-stage-track {
+    grid-template-columns: 1fr;
+
+    &::before {
+      top: 16px;
+      bottom: 16px;
+      left: 26px;
+      width: 2px;
+      height: auto;
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.32), rgba(22, 163, 74, 0.32));
+    }
+  }
+
   .domain-panel__head,
+  .skill-card__head,
   .load-error-card {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .skill-action,
+  .current-shortfall-card__actions .el-button,
+  .domain-panel__head .el-button,
+  .next-training-card .el-button {
+    width: 100%;
   }
 }
 
@@ -1433,10 +1710,12 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
+    grid-template-columns: 1fr;
     margin: 0 -2px;
   }
 
   .next-training-card,
+  .growth-map-card,
   .current-shortfall-card,
   .domain-panel,
   .insight-card {
@@ -1453,6 +1732,58 @@ onMounted(fetchAbilityMap)
 
   .skill-card::before {
     left: -15px;
+  }
+}
+
+.domain-panel {
+  background:
+    radial-gradient(circle at 22% 20%, rgba(0, 242, 254, 0.12), transparent 28%),
+    radial-gradient(circle at 78% 10%, rgba(139, 92, 246, 0.12), transparent 28%),
+    var(--cc-grid),
+    rgba(15, 27, 49, 0.72) !important;
+  background-size: auto, auto, var(--cc-grid-size), auto !important;
+}
+
+.domain-item {
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+
+  &.active {
+    box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.2), 0 0 16px rgba(0, 242, 254, 0.16);
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.skill-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  &.is-weak::before {
+    background: var(--cc-danger) !important;
+    box-shadow: 0 0 16px rgba(251, 113, 133, 0.5) !important;
+  }
+
+  &.is-strong::before,
+  &.is-competent::before {
+    background: var(--cc-success) !important;
+    box-shadow: 0 0 16px rgba(52, 211, 153, 0.48) !important;
+  }
+
+  &.is-unassessed::before {
+    background: #8ea6c2 !important;
+    box-shadow: 0 0 14px rgba(142, 166, 194, 0.34) !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .domain-rail {
+    border-radius: var(--user-radius-sm);
+    background: rgba(7, 17, 31, 0.48) !important;
   }
 }
 </style>

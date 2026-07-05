@@ -89,7 +89,7 @@ const normalizeCurrent = (current: any): InterviewCurrentVO => ({
 
 const normalizeSession = (session: any): InterviewSessionVO => ({
   ...session,
-  interviewId: session.interviewId || session.id,
+  interviewId: session.interviewId || session.id || session.sessionId,
   interviewName: session.interviewName || session.title,
   interviewMode: session.interviewMode || session.mode,
   stageList: (session.stageList || session.stages || []).map(normalizeStage)

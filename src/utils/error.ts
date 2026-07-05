@@ -1,4 +1,4 @@
-import { ElMessage } from 'element-plus'
+import { showUserMessage } from '@/utils/userMessage'
 
 const FRIENDLY_MESSAGE_MAP: Record<string, string> = {
   AGENT_TARGET_JOB_REQUIRED: '还没有当前目标岗位。请先创建或设置一个目标岗位，再生成今日计划。',
@@ -97,5 +97,5 @@ export const getErrorMessage = (error: unknown, fallback = '请求失败，请�
 }
 
 export const showErrorMessage = (message?: string): void => {
-  ElMessage.error(toFriendlyMessage(message, '请求失败，请稍后重试'))
+  showUserMessage.error(toFriendlyMessage(message, '请求失败，请稍后重试'))
 }

@@ -10,6 +10,17 @@
         <p class="hero-desc">
           这里会汇总目标岗位、真实训练反馈和 AI 推荐依据。资料不足时不生成能力分，只提示下一步该补哪块证据。
         </p>
+        <div class="today-brief">
+          <div>
+            <span>今天先做</span>
+            <strong>{{ primaryTask.title }}</strong>
+            <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.reason }}</small>
+          </div>
+          <el-button type="primary" @click="go(primaryTask.path)">
+            <PlayCircle :size="17" />
+            {{ primaryTask.cta }}
+          </el-button>
+        </div>
       </div>
 
       <aside class="hero-side" :aria-busy="isHomeLoading">
@@ -122,9 +133,9 @@
           </div>
         </div>
         <p class="training-note">
-          当前没有连续训练热力图接口，先展示今日任务与最近反馈，不推断历史热度。
+          这里只展示已能支持今天行动的任务、错题和报告反馈，不把缺失数据包装成结论。
         </p>
-        <el-button text @click="go('/agent/tasks')">进入 AI 任务中心</el-button>
+        <el-button text @click="go('/agent/today')">查看今日计划</el-button>
       </article>
     </section>
 
@@ -688,7 +699,7 @@ const completionReviewItems = computed(() => {
 
 const completionReviewNextAction = computed(() => {
   const task = completionReviewTask.value
-  if (!task) return { label: '继续任务中心', path: '/agent/tasks' }
+  if (!task) return { label: '继续今日计划', path: '/agent/tasks' }
   const type = String(task?.taskType || '').toUpperCase()
   if (hasAgentTaskActionEntry(task)) {
     return {
@@ -699,7 +710,7 @@ const completionReviewNextAction = computed(() => {
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) return { label: '继续专项练习', path: '/questions/practice' }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return { label: '查看面试历史', path: '/interviews/history' }
   if (type.includes('RESUME')) return { label: '查看简历匹配', path: '/resume-match' }
-  return { label: '继续任务中心', path: '/agent/tasks' }
+  return { label: '继续今日计划', path: '/agent/tasks' }
 })
 
 const targetJobText = computed(() => {
@@ -1313,9 +1324,9 @@ const skipTask = async (taskId: number) => {
     action: '将首页第 1 个训练任务标记为今天跳过',
     target: task?.title || '训练记录已保存',
     impact: '该任务会从今日优先动作中移出，今日任务完成率和后续推荐可能跟随变化。',
-    rollback: '可以在任务中心把任务恢复为待完成，或重新生成今日计划。',
+    rollback: '可以在今日任务列表把任务恢复为待完成，或重新生成今日计划。',
     audit: '训练记录、跳过状态和跳过原因会保留，便于稍后复盘。',
-    tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以进入任务中心稍后处理。'],
+    tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以稍后回到今日计划处理。'],
     confirmButtonText: '今天跳过'
   })
   if (!confirmed) return
@@ -1494,6 +1505,62 @@ onBeforeUnmount(() => {
   color: #526071;
   font-size: 15px;
   line-height: 1.8;
+}
+
+.today-brief {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 780px;
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
+    rgba(15, 23, 42, 0.92);
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(16px);
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  strong,
+  small {
+    display: block;
+  }
+
+  span {
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    font-size: 20px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    margin-top: 5px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  :deep(.el-button) {
+    flex: 0 0 auto;
+    gap: 6px;
+    border-color: rgba(255, 255, 255, 0.24);
+    background: #ffffff;
+    color: #0f172a;
+  }
 }
 
 .hero-actions {
@@ -2379,6 +2446,22 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  .today-brief {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px;
+
+    strong {
+      font-size: 16px;
+    }
+
+    :deep(.el-button) {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
   .hero-side {
     padding: 14px;
   }
@@ -2407,11 +2490,13 @@ onBeforeUnmount(() => {
     display: grid;
     gap: 8px;
     padding: 10px;
-    border: 1px solid #bfdbfe;
+    border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
-    backdrop-filter: blur(14px);
+    background:
+      linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.88)),
+      rgba(15, 23, 42, 0.9);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
+    backdrop-filter: blur(18px);
   }
 
   .mobile-action-dock__primary,
@@ -2427,7 +2512,7 @@ onBeforeUnmount(() => {
     display: grid;
     gap: 3px;
     padding: 10px;
-    background: #2563eb;
+    background: rgba(37, 99, 235, 0.92);
     color: #fff;
 
     span,
@@ -2454,8 +2539,8 @@ onBeforeUnmount(() => {
       min-width: 0;
       padding: 6px;
       border-radius: 8px;
-      background: #f8fafc;
-      color: #334155;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
       font-size: 11px;
       line-height: 1.3;
       overflow-wrap: anywhere;
@@ -2463,7 +2548,7 @@ onBeforeUnmount(() => {
     }
 
     b {
-      color: #64748b;
+      color: rgba(255, 255, 255, 0.62);
       font-size: 11px;
       font-weight: 700;
     }
@@ -2481,8 +2566,9 @@ onBeforeUnmount(() => {
     gap: 5px;
     min-height: 52px;
     padding: 8px 4px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0f2fe;
     font-size: 12px;
     line-height: 1.2;
     text-align: center;

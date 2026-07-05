@@ -3,6 +3,10 @@
     <section class="room-topbar">
       <div class="room-identity">
         <div class="eyebrow">
+          <el-button class="room-back" text @click="router.push('/interviews/history')">
+            <ArrowLeft :size="15" />
+            返回
+          </el-button>
           <Bot :size="16" />
           AI 面试训练室
         </div>
@@ -14,6 +18,9 @@
           <span class="cc-badge__dot"></span>
           {{ sseStatusLabel }}
         </span>
+        <span v-if="loading" class="topbar-chip topbar-chip--live">Loading</span>
+        <span v-if="submitting" class="topbar-chip topbar-chip--live">Scoring</span>
+        <span v-if="roomError" class="topbar-chip topbar-chip--danger">Error</span>
         <span class="topbar-chip">计时 {{ elapsedText }}</span>
         <span class="topbar-chip">{{ interviewStatusLabel(current?.status) }}</span>
         <el-button class="ghost-action" text @click="fetchCurrent">重新获取当前题</el-button>
@@ -128,73 +135,111 @@
 
       <main class="conversation-panel">
         <template v-if="current">
-          <div class="training-boundary">
-            <ShieldCheck :size="16" />
-            <span>本房间仅用于模拟训练与复盘，不用于真实面试实时作答。</span>
+          <div class="conversation-scroll">
+            <div class="training-boundary">
+              <ShieldCheck :size="16" />
+              <span>本房间仅用于模拟训练与复盘，不用于真实面试实时作答。</span>
+            </div>
+
+            <section class="ai-presence">
+              <div class="ai-orbit" :class="{ 'is-thinking': loading || submitting || starting }">
+                <span></span>
+                <span></span>
+                <Bot :size="30" />
+              </div>
+              <div class="ai-presence__copy">
+                <p>{{ roomPresenceLabel }}</p>
+                <h2>{{ roomPresenceTitle }}</h2>
+                <span>{{ roomPresenceHint }}</span>
+                <div class="ai-signal" :class="{ 'is-active': loading || submitting || starting }" aria-hidden="true">
+                  <i v-for="item in 18" :key="item"></i>
+                </div>
+              </div>
+            </section>
+
+            <div class="cockpit-state-strip">
+              <article v-for="item in cockpitStateItems" :key="item.key" :class="item.state">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </article>
+            </div>
+
+            <el-alert
+              v-if="current.status === 'NOT_STARTED'"
+              class="state-alert"
+              type="info"
+              show-icon
+              :closable="false"
+              title="准备好后开始第一题，系统会记录本轮作答并生成复盘。"
+            />
+
+            <el-alert
+              v-if="roomError"
+              class="state-alert"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="roomError"
+            />
+
+            <div v-if="current.status === 'NOT_STARTED'" class="start-card">
+              <Rocket :size="26" />
+              <div>
+                <h2>准备进入 AI 面试</h2>
+                <p>开始后将获取第一道题，并根据你的回答继续推进面试。</p>
+              </div>
+              <el-button type="primary" size="large" :loading="starting" @click="handleStart">开始面试</el-button>
+            </div>
+
+            <article v-if="current.currentQuestion" class="message-card ai question-card">
+              <div class="message-avatar message-avatar--ai">
+                <Bot :size="18" />
+              </div>
+              <div class="message-body">
+                <div class="message-head">
+                  <span class="question-kicker">
+                    AI 面试官
+                    <small>{{ currentQuestionMetaText }}</small>
+                  </span>
+                  <el-tag v-if="current.currentQuestion.isFollowUp" type="warning" effect="dark">追问</el-tag>
+                </div>
+                <h2>{{ current.currentQuestion.questionTitle || '当前问题' }}</h2>
+                <MarkdownPreview :content="current.currentQuestion.questionContent" />
+                <div v-if="current.currentQuestion.followUpReason" class="reason-box">
+                  <strong>追问原因</strong>
+                  <p>{{ current.currentQuestion.followUpReason }}</p>
+                </div>
+                <div v-if="current.currentQuestion.knowledgePoints?.length" class="tag-row">
+                  <el-tag v-for="item in current.currentQuestion.knowledgePoints" :key="item" effect="plain">{{ item }}</el-tag>
+                </div>
+              </div>
+            </article>
+
+            <AppState
+              v-else
+              type="empty"
+              :title="emptyQuestionTitle"
+              :description="emptyQuestionDescription"
+            >
+              <el-button v-if="current.status === 'NOT_STARTED'" type="primary" :loading="starting" @click="handleStart">开始面试</el-button>
+              <el-button v-else-if="current.status === 'COMPLETED'" type="primary" :disabled="!canViewReport" @click="handleViewReport">查看结构化报告</el-button>
+              <el-button v-else type="primary" @click="fetchCurrent">重新生成这一题</el-button>
+              <el-button v-if="current.status !== 'NOT_STARTED'" plain :loading="finishing" @click="handleManualFinish">结束并生成报告</el-button>
+            </AppState>
+
+            <article v-if="lastSubmittedAnswer" class="message-card user">
+              <div class="message-avatar">
+                <UserRound :size="18" />
+              </div>
+              <div class="message-body">
+                <div class="message-head">
+                  <strong>我的上一轮回答</strong>
+                  <span>{{ answerDurationText }}</span>
+                </div>
+                <p class="answer-preview">{{ lastSubmittedAnswer }}</p>
+              </div>
+            </article>
           </div>
-
-          <el-alert
-            v-if="current.status === 'NOT_STARTED'"
-            class="state-alert"
-            type="info"
-            show-icon
-            :closable="false"
-            title="准备好后开始第一题，系统会记录本轮作答并生成复盘。"
-          />
-
-          <div v-if="current.status === 'NOT_STARTED'" class="start-card">
-            <Rocket :size="26" />
-            <div>
-              <h2>准备进入 AI 面试</h2>
-              <p>开始后将获取第一道题，并根据你的回答继续推进面试。</p>
-            </div>
-            <el-button type="primary" size="large" :loading="starting" @click="handleStart">开始面试</el-button>
-          </div>
-
-          <article v-if="current.currentQuestion" class="question-card">
-            <div class="message-body">
-              <div class="message-head">
-                <span class="question-kicker">
-                  <Bot :size="16" />
-                  AI 面试官
-                </span>
-                <el-tag v-if="current.currentQuestion.isFollowUp" type="warning" effect="dark">追问</el-tag>
-              </div>
-              <h2>{{ current.currentQuestion.questionTitle || '当前问题' }}</h2>
-              <MarkdownPreview :content="current.currentQuestion.questionContent" />
-              <div v-if="current.currentQuestion.followUpReason" class="reason-box">
-                <strong>追问原因</strong>
-                <p>{{ current.currentQuestion.followUpReason }}</p>
-              </div>
-              <div v-if="current.currentQuestion.knowledgePoints?.length" class="tag-row">
-                <el-tag v-for="item in current.currentQuestion.knowledgePoints" :key="item" effect="plain">{{ item }}</el-tag>
-              </div>
-            </div>
-          </article>
-
-          <AppState
-            v-else
-            type="empty"
-            :title="current.status === 'NOT_STARTED' ? '等待开始面试' : '当前题暂未加载'"
-            :description="current.status === 'NOT_STARTED' ? '点击开始面试后，系统会拉取第一道题并开始计时。' : '题目可能仍在生成，或当前阶段还没有下一题。可以重新获取当前题，或结束面试生成报告。'"
-          >
-            <el-button v-if="current.status === 'NOT_STARTED'" type="primary" :loading="starting" @click="handleStart">开始面试</el-button>
-            <el-button v-else type="primary" @click="fetchCurrent">重新获取当前题</el-button>
-            <el-button v-if="current.status !== 'NOT_STARTED'" plain :loading="finishing" @click="handleManualFinish">结束面试</el-button>
-          </AppState>
-
-          <article v-if="lastSubmittedAnswer" class="message-card user">
-            <div class="message-avatar">
-              <UserRound :size="18" />
-            </div>
-            <div class="message-body">
-              <div class="message-head">
-                <strong>我的上一轮回答</strong>
-                <span>{{ answerDurationText }}</span>
-              </div>
-              <p class="answer-preview">{{ lastSubmittedAnswer }}</p>
-            </div>
-          </article>
 
           <div class="answer-console">
             <div class="console-head">
@@ -204,6 +249,11 @@
                 <p>{{ answerDisabled ? '当前状态不可提交回答' : '提交后 AI 会分析结构、亮点、不足，并决定是否追问。' }}</p>
               </div>
               <StatusTag :status="submitting ? 'AI_EVALUATING' : current.status" />
+            </div>
+            <div class="answer-dock-meta">
+              <span>{{ answerWordCount }} 字</span>
+              <span>{{ answerDurationText }}</span>
+              <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
             </div>
             <el-input
               ref="answerInputRef"
@@ -380,7 +430,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Activity, Bot, FilePenLine, ListChecks, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
+import { Activity, ArrowLeft, Bot, FilePenLine, ListChecks, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -566,6 +616,40 @@ const evaluationLevelLabel = (level?: string | null) => {
 
 const outlineStages = computed(() => current.value?.outline || [])
 
+const answerWordCount = computed(() => answerContent.value.trim().length)
+
+const currentQuestionMetaText = computed(() => {
+  const stageName = current.value?.currentStage?.stageName || '当前阶段'
+  const progress = current.value?.currentQuestion?.stageProgress
+  return [stageName, progress].filter(Boolean).join(' / ')
+})
+
+const cockpitStateItems = computed(() => {
+  const score = lastResult.value?.evaluation.score ?? lastResult.value?.score
+  const status = String(current.value?.status || '').toUpperCase()
+  const reportReady = ['COMPLETED', 'REPORT_GENERATING', 'REPORT_DONE', 'GENERATED', 'FINISHED'].includes(status)
+  return [
+    {
+      key: 'loading',
+      label: 'Loading',
+      value: loading.value ? '同步题目中' : roomError.value ? '加载失败' : '稳定',
+      state: roomError.value ? 'danger' : loading.value ? 'active' : 'idle'
+    },
+    {
+      key: 'scoring',
+      label: 'Scoring',
+      value: submitting.value ? (answerReviewMessage.value || 'AI 评分中') : score === undefined || score === null ? '待评分' : `${score} 分`,
+      state: submitting.value ? 'active' : score === undefined || score === null ? 'idle' : 'done'
+    },
+    {
+      key: 'session',
+      label: 'Session',
+      value: interviewStatusLabel(current.value?.status),
+      state: status === 'FAILED' ? 'danger' : reportReady ? 'done' : 'idle'
+    }
+  ]
+})
+
 const outlineStageState = (stage: { stageOrder: number; status?: string }) => {
   if (stage.status === 'COMPLETED') return 'completed'
   if (stage.status === 'IN_PROGRESS') return 'active'
@@ -597,6 +681,43 @@ const progressItems = computed(() => [
     state: lastResult.value ? 'done' : 'pending'
   }
 ])
+
+const roomPresenceLabel = computed(() => {
+  if (!current.value) return '等待进入房间'
+  if (starting.value) return '正在拉取第一题'
+  if (submitting.value) return 'AI 面试官正在听你作答'
+  if (loading.value) return 'AI 正在整理下一题'
+  if (current.value.status === 'COMPLETED') return '本轮面试已完成'
+  if (current.value.currentQuestion?.isFollowUp) return '追问进行中'
+  return '模拟面试进行中'
+})
+
+const roomPresenceTitle = computed(() => {
+  if (!current.value) return '从面试历史重新进入，或新建一场训练。'
+  if (current.value.status === 'NOT_STARTED') return '准备好后，AI 会从第一题开始推进。'
+  if (current.value.status === 'COMPLETED') return '可以生成报告，复盘刚才的回答。'
+  if (!current.value.currentQuestion) return '暂时没有新题，先复盘上一轮回答。'
+  return current.value.currentQuestion.isFollowUp ? '把刚才没讲透的地方补完整。' : '按结论、原理、项目实践和取舍展开。'
+})
+
+const roomPresenceHint = computed(() => {
+  if (submitting.value) return answerReviewMessage.value || '正在检查回答结构、技术深度与追问方向。'
+  if (current.value?.status === 'COMPLETED') return '报告会把短板转成题库训练和能力图谱行动。'
+  if (!current.value?.currentQuestion && current.value?.status !== 'NOT_STARTED') return '可重新生成这一题，也可以结束本轮生成报告。'
+  return current.value?.currentQuestion?.stageProgress || '本轮会保留完整问答记录，结束后用于复盘。'
+})
+
+const emptyQuestionTitle = computed(() => {
+  if (current.value?.status === 'NOT_STARTED') return '等待开始面试'
+  if (current.value?.status === 'COMPLETED') return '本轮问题已完成'
+  return loading.value ? 'AI 正在整理下一题' : '暂时没有新题'
+})
+
+const emptyQuestionDescription = computed(() => {
+  if (current.value?.status === 'NOT_STARTED') return '点击开始面试后，系统会拉取第一道题并开始计时。'
+  if (current.value?.status === 'COMPLETED') return '可以查看结构化报告，也可以从历史页再来一轮模拟面试。'
+  return '题目可能仍在生成，或当前阶段已结束。你可以重新生成这一题，复盘刚才的回答，或结束并生成报告。'
+})
 
 const latestScoreText = computed(() => {
   const score = lastResult.value?.evaluation.score ?? lastResult.value?.score
@@ -983,16 +1104,21 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .interview-room {
-  min-height: calc(100vh - 96px);
+  height: 100vh;
+  min-height: 720px;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
-  border-radius: 24px;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 0;
   background:
+    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
     radial-gradient(circle at 18% 0%, rgba(20, 184, 166, 0.16), transparent 32%),
     radial-gradient(circle at 92% 8%, rgba(59, 130, 246, 0.16), transparent 28%),
     linear-gradient(180deg, #07111f 0%, #0b1220 42%, #070b14 100%);
+  background-size: 38px 38px, 38px 38px, auto, auto, auto;
   color: #e5edf8;
 }
 
@@ -1000,10 +1126,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 10px 12px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(2, 6, 23, 0.62);
   backdrop-filter: blur(16px);
 }
@@ -1027,6 +1153,63 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.cc-badge {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.76);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cc-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.cc-badge--thinking,
+.cc-badge--streaming {
+  border-color: rgba(34, 211, 238, 0.34);
+  color: #a5f3fc;
+
+  .cc-badge__dot {
+    background: #22d3ee;
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.85);
+  }
+}
+
+.cc-badge--streaming .cc-badge__dot {
+  animation: dotBlink 1s ease-in-out infinite;
+}
+
+.cc-badge--success {
+  border-color: rgba(34, 197, 94, 0.32);
+  color: #bbf7d0;
+
+  .cc-badge__dot {
+    background: #22c55e;
+  }
+}
+
+@keyframes dotBlink {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .eyebrow,
 .answer-actions,
 .tag-row,
@@ -1045,6 +1228,15 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
 }
 
+.room-back {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.62);
+}
+
 .topbar-chip {
   display: inline-flex;
   min-height: 30px;
@@ -1058,17 +1250,32 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.topbar-chip--live {
+  border-color: rgba(34, 211, 238, 0.34);
+  background: rgba(8, 145, 178, 0.18);
+  color: #a5f3fc;
+}
+
+.topbar-chip--danger {
+  border-color: rgba(248, 113, 113, 0.36);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+}
+
 .ghost-action {
   color: #cbd5e1;
 }
 
 .war-room {
   display: grid;
-  min-height: calc(100vh - 214px);
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(280px, 340px);
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(208px, 248px) minmax(0, 1fr) minmax(260px, 308px);
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: rgba(2, 6, 23, 0.54);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(34, 211, 238, 0.12), transparent 36%),
+    rgba(2, 6, 23, 0.54);
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
 }
@@ -1077,20 +1284,32 @@ onBeforeUnmount(() => {
 .conversation-panel,
 .feedback-panel {
   min-width: 0;
-  padding: 18px;
+  min-height: 0;
+  padding: 14px;
 }
 
 .progress-panel,
 .feedback-panel {
+  overflow-y: auto;
   background: rgba(2, 6, 23, 0.38);
 }
 
 .conversation-panel {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
   border-right: 1px solid rgba(148, 163, 184, 0.16);
   border-left: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.2);
+}
+
+.conversation-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scroll-padding-bottom: 260px;
 }
 
 .panel-title,
@@ -1139,6 +1358,209 @@ onBeforeUnmount(() => {
   color: #c7d2fe;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.ai-presence {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.72), rgba(15, 23, 42, 0.84)),
+    rgba(2, 6, 23, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  p,
+  h2,
+  span {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    color: #67e8f9;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  h2 {
+    margin-top: 6px;
+    color: #f8fafc;
+    font-size: 20px;
+    line-height: 1.35;
+  }
+
+  span {
+    display: block;
+    margin-top: 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.ai-presence__copy {
+  min-width: 0;
+}
+
+.ai-orbit {
+  position: relative;
+  display: inline-flex;
+  width: 68px;
+  height: 68px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #cffafe;
+  background: rgba(14, 116, 144, 0.28);
+
+  span {
+    position: absolute;
+    inset: 7px;
+    border: 1px solid rgba(103, 232, 249, 0.3);
+    border-radius: 50%;
+  }
+
+  span:nth-child(2) {
+    inset: 16px;
+    border-color: rgba(45, 212, 191, 0.3);
+  }
+
+  &.is-thinking span {
+    animation: aiPulse 1.8s ease-in-out infinite;
+  }
+
+  &.is-thinking span:nth-child(2) {
+    animation-delay: 0.35s;
+  }
+}
+
+.ai-signal {
+  display: grid;
+  width: min(100%, 420px);
+  grid-template-columns: repeat(18, 1fr);
+  align-items: end;
+  gap: 3px;
+  height: 26px;
+  margin-top: 12px;
+
+  i {
+    display: block;
+    min-width: 2px;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #67e8f9, #14b8a6);
+    opacity: 0.45;
+    transform-origin: bottom;
+  }
+
+  @for $i from 1 through 18 {
+    i:nth-child(#{$i}) {
+      height: #{6 + (($i * 7) % 18)}px;
+    }
+  }
+
+  &.is-active i {
+    animation: waveBeat 1.1s ease-in-out infinite;
+  }
+
+  @for $i from 1 through 18 {
+    &.is-active i:nth-child(#{$i}) {
+      animation-delay: #{($i - 1) * 0.045}s;
+    }
+  }
+}
+
+@keyframes waveBeat {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.38;
+  }
+
+  50% {
+    transform: scaleY(1.18);
+    opacity: 0.95;
+  }
+}
+
+.cockpit-state-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+
+  article {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.42);
+
+    span,
+    strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    strong {
+      margin-top: 5px;
+      color: #e2e8f0;
+      font-size: 13px;
+    }
+
+    &.active {
+      border-color: rgba(34, 211, 238, 0.32);
+      background: rgba(8, 145, 178, 0.12);
+
+      strong {
+        color: #a5f3fc;
+      }
+    }
+
+    &.done {
+      border-color: rgba(34, 197, 94, 0.28);
+
+      strong {
+        color: #bbf7d0;
+      }
+    }
+
+    &.danger {
+      border-color: rgba(248, 113, 113, 0.34);
+      background: rgba(127, 29, 29, 0.16);
+
+      strong {
+        color: #fecaca;
+      }
+    }
+  }
+}
+
+@keyframes aiPulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.58;
+  }
+
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 .session-card {
@@ -1355,17 +1777,18 @@ onBeforeUnmount(() => {
 }
 
 .question-card {
-  margin-bottom: 16px;
-  padding: 22px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  padding: 16px;
   background:
     linear-gradient(135deg, rgba(20, 184, 166, 0.16), transparent 42%),
     rgba(15, 23, 42, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
   h2 {
-    margin: 8px 0 16px;
+    margin: 6px 0 12px;
     color: #f8fafc;
-    font-size: 24px;
+    font-size: 22px;
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
@@ -1379,6 +1802,16 @@ onBeforeUnmount(() => {
   color: #67e8f9;
   font-size: 12px;
   font-weight: 700;
+
+  small {
+    max-width: 52vw;
+    overflow: hidden;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .message-card {
@@ -1406,6 +1839,12 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   background: rgba(20, 184, 166, 0.16);
   color: #99f6e4;
+}
+
+.message-avatar--ai {
+  background: rgba(8, 145, 178, 0.2);
+  color: #a5f3fc;
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.18);
 }
 
 .message-body {
@@ -1444,20 +1883,25 @@ onBeforeUnmount(() => {
 }
 
 .answer-console {
-  padding: 18px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 14px;
+  border-radius: 14px;
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.86)),
-    rgba(15, 23, 42, 0.82);
+    linear-gradient(180deg, rgba(30, 41, 59, 0.86), rgba(15, 23, 42, 0.94)),
+    rgba(15, 23, 42, 0.9);
+  box-shadow: 0 -18px 40px rgba(2, 6, 23, 0.36);
 }
 
 .console-head {
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 
   h2 {
     margin: 4px 0 0;
     color: #f8fafc;
-    font-size: 20px;
+    font-size: 18px;
   }
 
   p {
@@ -1467,18 +1911,35 @@ onBeforeUnmount(() => {
   }
 }
 
+.answer-dock-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  span {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.46);
+    color: #94a3b8;
+    font-size: 11px;
+  }
+}
+
 .answer-actions {
   justify-content: flex-end;
   margin-top: 14px;
 }
 
 :deep(.answer-console .el-textarea__inner) {
-  min-height: 210px !important;
+  min-height: 144px !important;
+  max-height: 28vh;
   border-color: rgba(148, 163, 184, 0.24);
   background: rgba(2, 6, 23, 0.72);
   color: #e5edf8;
   line-height: 1.7;
   box-shadow: none;
+  resize: vertical;
 }
 
 :deep(.answer-console .el-textarea__inner::placeholder) {
@@ -1681,7 +2142,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1280px) {
   .war-room {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
 
   .feedback-panel {
@@ -1695,6 +2156,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 860px) {
+  .interview-room {
+    height: auto;
+    min-height: 100dvh;
+  }
+
   .room-topbar {
     flex-direction: column;
     align-items: stretch;
@@ -1706,6 +2172,7 @@ onBeforeUnmount(() => {
 
   .war-room {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .progress-panel {
@@ -1725,6 +2192,21 @@ onBeforeUnmount(() => {
     border-top: 1px solid rgba(148, 163, 184, 0.16);
     border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   }
+
+  .progress-panel,
+  .feedback-panel,
+  .conversation-scroll {
+    overflow: visible;
+  }
+
+  .answer-console {
+    position: static;
+    box-shadow: none;
+  }
+
+  :deep(.answer-console .el-textarea__inner) {
+    max-height: none;
+  }
 }
 
 
@@ -1738,8 +2220,8 @@ onBeforeUnmount(() => {
 
 @media (max-width: 520px) {
   .interview-room {
-    padding: 10px;
-    border-radius: 18px;
+    padding: 8px;
+    border-radius: 0;
   }
 
   .room-topbar,
@@ -1776,6 +2258,33 @@ onBeforeUnmount(() => {
 
   .question-card h2 {
     font-size: 20px;
+  }
+
+  .ai-presence {
+    grid-template-columns: 1fr;
+    padding: 14px;
+
+    h2 {
+      font-size: 18px;
+    }
+  }
+
+  .ai-orbit {
+    width: 58px;
+    height: 58px;
+  }
+
+  .answer-console {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .cockpit-state-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .question-kicker small {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .message-card,

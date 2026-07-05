@@ -286,12 +286,20 @@
             </div>
 
             <el-alert
-              v-if="resumeRequired || isJobTargetFlow"
+              v-if="resumeRequired"
               class="create-alert"
               type="warning"
               :closable="false"
               show-icon
-              :title="isJobTargetFlow ? '目标岗位链路需要选择简历，并会使用目标岗位信息创建岗位面试。' : '当前面试模式建议选择简历，便于进行项目深挖和综合追问。'"
+              title="当前面试模式建议选择简历，便于进行项目深挖和综合追问。"
+            />
+            <el-alert
+              v-if="isJobTargetFlow && !quickResumeId"
+              class="create-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。"
             />
             <el-alert
               v-if="routeContextNotice"
@@ -433,6 +441,7 @@ import {
   interviewPracticeModeOptions,
   targetPositionOptions
 } from '@/constants/enums'
+import { buildInterviewCreatePayload } from '@/features/interview-create'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { ResumeVO } from '@/types/resume'
@@ -608,7 +617,6 @@ const isJobTargetFlow = computed(() => {
   const source = getQueryString('source')?.toLowerCase()
   return Boolean(
     sourceTargetJobId.value ||
-    fallbackTargetJobId.value ||
     getQueryNumber('targetJobId') ||
     source === 'job-target' ||
     source === 'v3'
@@ -623,11 +631,11 @@ const rules = computed<FormRules<InterviewCreateDTO>>(() => ({
   industryTemplateId: isIndustryMode.value ? [{ required: true, message: '请选择行业模板', trigger: 'change' }] : [],
   difficulty: [{ required: true, message: '请选择难度等级', trigger: 'change' }],
   interviewerStyle: [{ required: true, message: '请选择面试官风格', trigger: 'change' }],
-  resumeId: resumeRequired.value || useResume.value || isJobTargetFlow.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
+  resumeId: resumeRequired.value || useResume.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
 }))
 
 const selectedResumeName = computed(() => {
-  if (!useResume.value && !isJobTargetFlow.value) return '不使用简历'
+  if (!useResume.value) return '不使用简历'
   return resumes.value.find((item) => item.id === form.resumeId)?.resumeName || '未选择'
 })
 
@@ -866,6 +874,8 @@ const quickPlanItems = computed(() => {
 })
 const quickStartNotice = computed(() => {
   if (resumeLoadError.value) return '简历列表暂时不可用，可先进入轻量技术面试。'
+  if (isJobTargetFlow.value && !quickTargetJobId.value && !quickResumeId.value) return '简历和目标岗位资料暂时不足，本轮会降级为轻量技术面；可补全简历和岗位目标后再重试。'
+  if (isJobTargetFlow.value && !quickTargetJobId.value) return '目标岗位暂时不可用，本轮会降级为普通面试；可稍后到岗位目标页补全后再重试。'
   if (!quickResumeId.value) return '还没有可用简历，系统会先创建轻量技术面试。'
   return ''
 })
@@ -1062,9 +1072,15 @@ const fetchResumes = async () => {
       (queryResumeId && resumes.value.some((item) => item.id === queryResumeId) ? queryResumeId : undefined) ||
       resumes.value.find((item) => item.isDefault === 1)?.id ||
       resumes.value[0]?.id
+    if (!form.resumeId && !resumeRequired.value) {
+      useResume.value = false
+    }
   } catch (error) {
     resumes.value = []
     form.resumeId = undefined
+    if (!resumeRequired.value) {
+      useResume.value = false
+    }
     resumeLoadError.value = getErrorMessage(error, '简历列表暂时加载失败，请重试后再选择简历上下文。')
   } finally {
     resumeLoading.value = false
@@ -1147,17 +1163,22 @@ const applyRouteContext = async () => {
 }
 
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
-  let targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
+  const targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
   const source = getQueryString('source')?.toLowerCase()
-  const shouldUseJobTargetApi = Boolean((targetJobId && payload.resumeId) || source === 'job-target' || source === 'v3')
+  const hasJobTargetIntent = source === 'job-target' || source === 'v3' || Boolean(sourceTargetJobId.value || getQueryNumber('targetJobId'))
 
-  if (!shouldUseJobTargetApi) {
+  if (!payload.resumeId) {
+    if (hasJobTargetIntent) {
+      routeContextWarning.value = '当前没有可用简历，已改用轻量技术面创建；可先创建简历后再使用岗位推荐面试。'
+    }
     return createInterviewApi(payload)
   }
 
   if (!targetJobId) {
-    const currentTarget = await loadCurrentTargetForInterview('当前主目标岗位暂时无法读取，目标岗位链路将要求你手动选择简历和岗位后再创建。')
-    targetJobId = currentTarget?.id
+    if (hasJobTargetIntent) {
+      routeContextWarning.value = '目标岗位信息暂时不可用，已改用普通面试创建；可稍后到岗位目标页补全后再重试。'
+    }
+    return createInterviewApi(payload)
   }
 
   let resumeId = payload.resumeId
@@ -1171,8 +1192,11 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
   }
 
   if (!resumeId || !targetJobId) {
-    ElMessage.warning('目标岗位链路创建面试需要有效的简历和目标岗位信息')
-    throw new Error('目标岗位链路创建面试需要有效的简历和目标岗位信息。')
+    return createInterviewApi({
+      ...payload,
+      resumeId: undefined,
+      basedOnResume: false
+    })
   }
 
   return createInterviewByJobTargetApi({
@@ -1182,6 +1206,20 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
     skillProfileId: getQueryNumber('skillProfileId'),
     matchReportId
   })
+}
+
+const resolveCreatedInterviewId = (result: unknown) => {
+  const session = result as { interviewId?: number | string; id?: number | string; sessionId?: number | string }
+  const value = Number(session?.interviewId || session?.id || session?.sessionId || 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+const enterCreatedInterviewRoom = async (result: unknown) => {
+  const createdInterviewId = resolveCreatedInterviewId(result)
+  if (!createdInterviewId) {
+    throw new Error('面试已创建，但没有返回可进入的面试房间编号。请从面试历史进入最近一次面试。')
+  }
+  await router.push(`/interviews/room/${createdInterviewId}`)
 }
 
 const handleCreate = async () => {
@@ -1198,29 +1236,27 @@ const handleCreate = async () => {
     ElMessage.warning('请选择行业模板后再开始面试')
     return
   }
-  if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {
-    ElMessage.warning(isJobTargetFlow.value ? '目标岗位链路创建面试需要先选择简历' : '项目深挖或综合模拟面试需要先选择简历')
+  if ((resumeRequired.value || useResume.value) && !form.resumeId) {
+    ElMessage.warning(useResume.value
+      ? '请先选择简历；也可以关闭简历上下文后改用轻量技术面。'
+      : '项目深挖或综合模拟面试需要先选择简历。')
     return
   }
 
   creating.value = true
   try {
-    const template = selectedIndustryTemplate.value
-    const payload: InterviewCreateDTO = {
-      ...form,
-      interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
-      practiceMode: form.practiceMode,
-      industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
-      industryDirection: isIndustryMode.value
-        ? template?.industryCode || template?.industryName || form.industryDirection
-        : form.industryDirection,
-      resumeId: useResume.value || isJobTargetFlow.value ? form.resumeId : undefined
-    }
+    const payload = buildInterviewCreatePayload({
+      form,
+      isIndustryMode: isIndustryMode.value,
+      useResume: useResume.value && Boolean(form.resumeId),
+      isJobTargetFlow: isJobTargetFlow.value,
+      selectedIndustryTemplate: selectedIndustryTemplate.value
+    })
     const result = await createInterviewWithRouteContext(payload)
-    ElMessage.success('面试已创建')
-    await router.push(`/interviews/room/${result.interviewId}`)
+    await enterCreatedInterviewRoom(result)
+    ElMessage.success('面试已创建，正在进入 AI 面试训练室')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '面试创建失败，请检查配置后稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '面试创建失败。请重试，或关闭简历上下文后先创建轻量技术面。'))
   } finally {
     creating.value = false
   }
@@ -1254,13 +1290,11 @@ const handleQuickCreate = async () => {
   try {
     const payload = buildQuickPayload()
 
-    const result = payload.resumeId
-      ? await createInterviewWithRouteContext(payload)
-      : await createInterviewApi(payload)
-    ElMessage.success(payload.resumeId ? '已创建推荐面试' : '已创建轻量技术面')
-    await router.push(`/interviews/room/${result.interviewId}`)
+    const result = await createInterviewWithRouteContext(payload)
+    await enterCreatedInterviewRoom(result)
+    ElMessage.success(payload.resumeId ? '已创建推荐面试，正在进入训练室' : '已创建轻量技术面，正在进入训练室')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '推荐面试创建失败，请稍后重试或先微调计划。'))
+    ElMessage.error(getErrorMessage(error, '推荐面试创建失败。请重试、先创建简历，或展开微调后改用轻量技术面。'))
   } finally {
     creating.value = false
   }
