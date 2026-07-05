@@ -53,6 +53,7 @@ import {
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { appConfig } from '@/config'
+import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 
 const props = defineProps<{
   collapsed?: boolean
@@ -65,7 +66,7 @@ interface UserMenuItem {
   label: string
   path: string
   icon: unknown
-  featureFlag?: 'v4Preview'
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge'
   previewOnly?: boolean
 }
 
@@ -78,10 +79,12 @@ interface UserMenuSection {
 }
 
 const isMenuItemVisible = (item: UserMenuItem) => {
-  if (item.previewOnly) return false
+  if (item.previewOnly) return isV4PreviewAccessEnabled()
   const featureFlag = item.featureFlag
   if (!featureFlag) return true
-  if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
+  if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
+  if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
+  if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
   return true
 }
 
@@ -107,9 +110,9 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
       { label: '求职实验台', path: '/job-experiments', icon: TrendCharts },
       { label: '作品集演示', path: '/portfolio-demo', icon: DocumentChecked },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, previewOnly: true },
-      { label: '成长档案', path: '/growth/profile', icon: Medal, previewOnly: true },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, previewOnly: true }
+      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Growth' },
+      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Growth' },
+      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Growth' }
     ]
   },
   {
@@ -171,7 +174,7 @@ const baseMenuSections: UserMenuSection[] = [
     forceGroup: true,
     children: [
       { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading, previewOnly: true },
+      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Knowledge' },
       { label: '修改密码', path: '/password', icon: Key },
       { label: '个人资料', path: '/profile', icon: User }
     ]

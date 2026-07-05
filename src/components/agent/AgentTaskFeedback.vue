@@ -178,7 +178,7 @@ const missingTargetMessage = '缺少 agentTaskId 或 agentRunId，当前反馈�
 
 const statusText = computed(() => {
   if (submitted.value) {
-    return '谢谢，系统会用这条反馈优化后续任务推荐。'
+    return '谢谢，反馈已记录，将用于后续分析和优化。'
   }
   if (!hasTarget.value) {
     return missingTargetMessage
@@ -224,7 +224,7 @@ const statusAlert = computed(() => {
     return {
       type: 'success' as const,
       title: '反馈已提交',
-      description: '你的意见已经记录，后续任务会尽量更贴近你的真实需求。'
+      description: '你的意见已记录，将作为后续分析和优化的参考。'
     }
   }
 

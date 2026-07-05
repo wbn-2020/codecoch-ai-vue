@@ -928,9 +928,9 @@ const loadCurrentTargetForInterview = async (failureMessage: string) => {
   }
 }
 
-const loadLatestVerifiedMatchReportId = async (resumeId: number, targetJobId: number) => {
+const loadLatestVerifiedMatchReportId = async (resumeId: number, targetJobId: number, resumeVersionId?: number) => {
   try {
-    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId)
+    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId, resumeVersionId)
     if (isTrustedMatchReport(latestMatch)) {
       return latestMatch?.reportId
     }
@@ -1188,7 +1188,7 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
 
   let matchReportId = matchReportEvidence.value.verified ? matchReportEvidence.value.reportId : undefined
   if (!matchReportId && resumeId && targetJobId) {
-    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId)
+    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId, getQueryNumber('resumeVersionId'))
   }
 
   if (!resumeId || !targetJobId) {

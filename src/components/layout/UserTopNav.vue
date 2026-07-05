@@ -153,6 +153,9 @@ import type { Component } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { appConfig } from '@/config'
+import { isV4PreviewAccessEnabled } from '@/features/route-safety'
+
 defineProps<{
   displayName: string
   avatarText: string
@@ -177,6 +180,13 @@ interface NavItem {
   path: string
   icon: Component
   matches: string[]
+}
+
+interface SecondaryLink {
+  label: string
+  path: string
+  previewOnly?: boolean
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge'
 }
 
 const router = useRouter()
@@ -234,17 +244,28 @@ const navItems: NavItem[] = [
 const mobilePrimaryItems = navItems
 const currentMobileNavLabel = computed(() => navItems.find((item) => isActive(item))?.label || '工作台')
 
-const secondaryLinks = [
+const baseSecondaryLinks: SecondaryLink[] = [
   { label: '今日任务', path: '/agent/today' },
   { label: 'AI 任务中心', path: '/agent/tasks' },
   { label: '记录与工具', path: '/tools' },
   { label: '求职实验台', path: '/job-experiments' },
-  { label: '投递管理', path: '/applications' },
-  { label: '个人知识库', path: '/knowledge' },
+  { label: '投递管理', path: '/applications', previewOnly: true },
+  { label: '个人知识库', path: '/knowledge', featureFlag: 'v4Knowledge' },
+  { label: '长期记忆', path: '/agent/memory', featureFlag: 'v4Growth' },
   { label: '新手引导', path: '/onboarding' },
   { label: '专项训练房间', path: '/questions/practice' },
   { label: '面试复盘记录', path: '/interviews/history' }
 ]
+
+const isSecondaryLinkVisible = (link: SecondaryLink) => {
+  if (link.previewOnly && !isV4PreviewAccessEnabled()) return false
+  if (link.featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
+  if (link.featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
+  if (link.featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
+  return true
+}
+
+const secondaryLinks = computed<SecondaryLink[]>(() => baseSecondaryLinks.filter(isSecondaryLinkVisible))
 
 const isActive = (item: NavItem) => {
   return item.matches.some((prefix) => route.path.startsWith(prefix))

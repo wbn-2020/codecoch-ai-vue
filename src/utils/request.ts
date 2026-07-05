@@ -43,7 +43,9 @@ const DEMO_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
   '/auth/register',
   '/auth/refresh-token',
-  '/auth/logout'
+  '/auth/logout',
+  '/portfolio-demo/load',
+  '/portfolio-demo/reset'
 ]
 const ADMIN_MOBILE_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
@@ -87,12 +89,24 @@ const createLocalBlockedError = (message: string, config: InternalAxiosRequestCo
   return error
 }
 
+const requestPathOnly = (url: string) => {
+  try {
+    return new URL(url, 'http://codecoachai.local').pathname
+  } catch {
+    return url.split(/[?#]/)[0]
+  }
+}
+
+export const isDemoReadOnlyWriteWhitelisted = (url?: string) => {
+  const path = requestPathOnly(String(url || ''))
+  return DEMO_READ_ONLY_WRITE_WHITELIST.includes(path)
+}
+
 const isDemoReadOnlyWrite = (config: InternalAxiosRequestConfig) => {
   if (!appConfig.demoReadOnly) return false
   const method = String(config.method || 'get').toLowerCase()
   if (DEMO_READ_ONLY_ALLOW_METHODS.has(method)) return false
-  const url = String(config.url || '')
-  return !DEMO_READ_ONLY_WRITE_WHITELIST.some((path) => url.includes(path))
+  return !isDemoReadOnlyWriteWhitelisted(String(config.url || ''))
 }
 
 const isAdminMobileReadOnlyWrite = (config: InternalAxiosRequestConfig) => {

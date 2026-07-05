@@ -16,8 +16,16 @@ export interface JobSearchExperimentSaveDTO {
   demoFlag?: boolean
 }
 
+export type JobExperimentRelationType =
+  | 'RESUME_VERSION'
+  | 'TARGET_JOB'
+  | 'JD_ANALYSIS'
+  | 'MATCH_REPORT'
+  | 'JOB_APPLICATION'
+  | 'PROJECT_EVIDENCE'
+
 export interface JobSearchExperimentRelationSaveDTO {
-  relationType: string
+  relationType: JobExperimentRelationType
   relationId: number
   relationSummary?: string
   metadata?: Record<string, unknown>
@@ -48,14 +56,18 @@ export interface JobSearchExperimentMetricsVO {
   sampleCount: number
   confidenceLevel: string
   sampleInsufficient: boolean
+  resumeVersionSampleInsufficient?: boolean
   sampleWarning?: string
   facts: string[]
+  unsupportedConclusions?: string[]
+  weakObservations?: string[]
+  resumeVersionUsageCounts?: Record<string, number>
 }
 
 export interface JobSearchExperimentRelationVO {
   id: number
   experimentId: number
-  relationType: string
+  relationType: JobExperimentRelationType | string
   relationId: number
   relationSummary?: string
   metadata?: Record<string, unknown>
@@ -71,12 +83,21 @@ export interface JobSearchExperimentReviewVO {
   unsupportedConclusion?: string
   sampleWarning?: string
   nextAction?: string
-  strategy?: Record<string, unknown>
+  strategy?: JobSearchExperimentStrategyVO
   aiTraceId?: string
   confidenceLevel?: string
   demoFlag?: number
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobSearchExperimentEvidenceSourceVO {
+  sourceType: JobExperimentRelationType | string
+  sourceId: number
+  sourceSummary?: string
+  trustStatus?: string
+  sourceUpdatedAt?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface JobSearchExperimentStrategyVO {
@@ -86,11 +107,9 @@ export interface JobSearchExperimentStrategyVO {
   sampleInsufficient?: boolean
   sampleWarning?: string
   actionUrl?: string
-  evidenceSources?: Array<{
-    sourceType: string
-    sourceId: number
-    sourceSummary?: string
-  }>
+  unsupportedConclusions?: string[]
+  weakObservations?: string[]
+  evidenceSources?: JobSearchExperimentEvidenceSourceVO[]
 }
 
 export interface JobSearchExperimentListVO {

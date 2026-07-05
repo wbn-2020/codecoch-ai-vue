@@ -24,7 +24,15 @@
     </section>
 
     <section class="content-card" v-loading="loading">
-      <div v-if="items.length" class="experiment-grid">
+      <AppState
+        v-if="errorMessage"
+        type="error"
+        title="求职实验加载失败"
+        :description="errorMessage"
+      >
+        <el-button type="primary" :loading="loading" @click="fetchList">重新加载</el-button>
+      </AppState>
+      <div v-else-if="items.length" class="experiment-grid">
         <article v-for="item in items" :key="item.id" class="experiment-card">
           <div class="card-head">
             <div>
@@ -41,8 +49,8 @@
           </div>
           <el-alert v-if="item.sampleWarning" type="warning" :closable="false" :title="item.sampleWarning" />
           <div class="card-actions">
-            <el-button @click="router.push(`/job-experiments/${item.id}`)">查看</el-button>
-            <el-button type="primary" plain @click="router.push(`/job-experiments/${item.id}/review`)">复盘</el-button>
+            <el-button @click="router.push(demoPath(`/job-experiments/${item.id}`))">查看</el-button>
+            <el-button type="primary" plain @click="router.push(demoPath(`/job-experiments/${item.id}/review`))">复盘</el-button>
           </div>
         </article>
       </div>
@@ -54,8 +62,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { getJobExperimentsApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
@@ -63,9 +71,21 @@ import { confidenceLabel, statusLabel } from '@/features/job-experiment'
 import type { JobSearchExperimentListVO, JobSearchExperimentQueryDTO } from '@/types/jobExperiment'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
+const errorMessage = ref('')
 const items = ref<JobSearchExperimentListVO[]>([])
-const query = reactive<JobSearchExperimentQueryDTO>({ pageNo: 1, pageSize: 20 })
+const isDemoContext = computed(() => route.query.demoFlag === 'true')
+const query = reactive<JobSearchExperimentQueryDTO>({
+  pageNo: 1,
+  pageSize: 20,
+  demoFlag: isDemoContext.value ? true : undefined
+})
+
+const demoPath = (path: string) => {
+  if (!isDemoContext.value || path.includes('demoFlag=')) return path
+  return path.includes('?') ? `${path}&demoFlag=true` : `${path}?demoFlag=true`
+}
 
 const statusTone = (status?: string) => {
   if (status === 'RUNNING') return 'success'
@@ -76,9 +96,13 @@ const statusTone = (status?: string) => {
 
 const fetchList = async () => {
   loading.value = true
+  errorMessage.value = ''
   try {
     const page = await getJobExperimentsApi(query)
     items.value = page.records || []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '求职实验加载失败，请稍后重试。'
+    items.value = []
   } finally {
     loading.value = false
   }

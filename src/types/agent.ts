@@ -57,6 +57,8 @@ export interface AgentTaskVO {
   agentRunId?: number | null
   runId?: number | null
   traceId?: string | null
+  aiCallLogId?: number | null
+  promptVersionId?: number | null
   errorCode?: string | null
   errorMessage?: string | null
   targetJobId?: number
@@ -279,6 +281,8 @@ export interface AdminAgentRunQueryDTO extends PageQuery {
   agentType?: string
   status?: AgentRunStatus | ''
   triggerType?: AgentTriggerType | ''
+  traceId?: string
+  aiCallLogId?: number
   startDate?: string
   endDate?: string
   startTime?: string

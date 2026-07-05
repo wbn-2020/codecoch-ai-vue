@@ -4,6 +4,8 @@ import { toFriendlyMessage } from '@/utils/error'
 
 export type SseStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error'
 
+const MAX_SSE_STATE_EVENTS = 200
+
 export interface UseSseStateOptions {
   /** 自动清除错误的延迟（ms），0 表示不自动清除 */
   autoClearErrorMs?: number
@@ -94,6 +96,9 @@ export const useSseState = (options: UseSseStateOptions = {}) => {
       message,
       timestamp: Date.now()
     })
+    if (events.value.length > MAX_SSE_STATE_EVENTS) {
+      events.value.splice(0, events.value.length - MAX_SSE_STATE_EVENTS)
+    }
   }
 
   onBeforeUnmount(() => {

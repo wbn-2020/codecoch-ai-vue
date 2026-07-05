@@ -1698,6 +1698,7 @@ const reviewError = ref('')
 const duplicateError = ref('')
 const generateError = ref('')
 const generateResult = ref<AiQuestionGenerateResultVO | null>(null)
+const MAX_GENERATE_SSE_EVENTS = 100
 const generateSseEvents = ref<Array<{ type: string; stage?: string; message: string; display: string }>>([])
 const generateSseMessage = ref('')
 const generateSseStatus = ref('未开始')
@@ -3236,6 +3237,9 @@ const pushGenerateSseEvent = (type: string, data?: AiQuestionGenerateSseEvent) =
     message,
     display: display || message
   })
+  if (generateSseEvents.value.length > MAX_GENERATE_SSE_EVENTS) {
+    generateSseEvents.value.splice(0, generateSseEvents.value.length - MAX_GENERATE_SSE_EVENTS)
+  }
 }
 
 const resolveGenerateResult = (

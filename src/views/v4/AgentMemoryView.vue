@@ -14,18 +14,44 @@
 
     <section class="content-card">
       <div class="content-card__body v4-list" v-loading="loading">
-        <article v-for="item in memories" :key="item.id" class="v4-row">
+        <article v-for="item in memories" :key="item.id" class="v4-row" :class="{ 'v4-row--disabled': !isMemoryEnabled(item) }">
           <div class="v4-row-head">
-            <div>
-              <strong>{{ memoryTypeLabel(item.memoryType) }}</strong>
+            <div class="v4-row-main">
+              <div class="v4-row-title">
+                <strong>{{ memoryTypeLabel(item.memoryType) }}</strong>
+                <el-tag size="small" :type="isMemoryEnabled(item) ? 'success' : 'info'" effect="plain">
+                  {{ memoryStatusLabel(item) }}
+                </el-tag>
+              </div>
               <p class="muted">{{ item.content }}</p>
-              <small class="muted">
-                {{ sourceTypeLabel(item.sourceType) }} · 可信度 {{ confidenceLabel(item.confidence) }}
-              </small>
+              <div class="v4-memory-meta">
+                <span class="v4-memory-meta__item">
+                  <span class="v4-memory-meta__label">来源</span>
+                  {{ sourceDetailLabel(item) }}
+                </span>
+                <span class="v4-memory-meta__item">
+                  <span class="v4-memory-meta__label">启用状态</span>
+                  {{ memoryStatusLabel(item) }}
+                </span>
+                <span class="v4-memory-meta__item">
+                  <span class="v4-memory-meta__label">可信度</span>
+                  <el-tag size="small" :type="confidenceTagType(item.confidence)" effect="plain">
+                    {{ confidenceLabel(item.confidence) }}
+                  </el-tag>
+                </span>
+                <span class="v4-memory-meta__item">
+                  <span class="v4-memory-meta__label">是否影响推荐</span>
+                  {{ recommendationUsageLabel(item) }}
+                </span>
+                <span class="v4-memory-meta__item v4-memory-meta__item--wide">
+                  <span class="v4-memory-meta__label">影响范围</span>
+                  {{ impactScopeLabel(item) }}
+                </span>
+              </div>
+              <p v-if="!isMemoryEnabled(item)" class="v4-memory-disabled-note">已停用：不会被后续推荐主动引用。</p>
             </div>
             <div class="v4-actions">
-              <el-tag :type="item.enabled ? 'success' : 'info'">{{ item.enabled ? '启用' : '停用' }}</el-tag>
-              <el-button link type="primary" @click="toggle(item)">{{ item.enabled ? '停用' : '启用' }}</el-button>
+              <el-button link type="primary" @click="toggle(item)">{{ isMemoryEnabled(item) ? '停用' : '启用' }}</el-button>
               <el-button link type="danger" @click="remove(item)">删除</el-button>
             </div>
           </div>
@@ -47,8 +73,8 @@
           description="可以先手动记录一个偏好、弱项或面试复盘结论；后续智能教练生成运行也可以沉淀可追踪记忆。"
         >
           <div class="empty-actions">
-            <el-button type="primary" @click="openCreate('WEAKNESS')">记录一个弱项</el-button>
-            <el-button @click="openCreate('PREFERENCE')">记录偏好</el-button>
+            <el-button type="primary" @click="openCreate('SKILL_GAP')">记录一个弱项</el-button>
+            <el-button @click="openCreate('JOB_SEARCH_PREFERENCE')">记录偏好</el-button>
           </div>
         </AppState>
       </div>
@@ -98,18 +124,19 @@ const form = reactive({ memoryType: 'USER_NOTE', content: '' })
 
 const memoryTypeOptions = [
   { label: '用户笔记', value: 'USER_NOTE' },
-  { label: '薄弱项', value: 'WEAKNESS' },
-  { label: '学习偏好', value: 'PREFERENCE' },
-  { label: '面试复盘', value: 'INTERVIEW_REVIEW' },
-  { label: '项目经验', value: 'PROJECT_EXPERIENCE' }
+  { label: '薄弱项', value: 'SKILL_GAP' },
+  { label: '求职偏好', value: 'JOB_SEARCH_PREFERENCE' },
+  { label: '面试偏好', value: 'INTERVIEW_PREFERENCE' },
+  { label: '职业目标', value: 'CAREER_GOAL' },
+  { label: '复盘摘要', value: 'REVIEW_SUMMARY' }
 ]
 
 const sourceTypeLabels: Record<string, string> = {
   MANUAL: '手动记录',
-  AGENT_RUN: '智能教练沉淀',
-  INTERVIEW: '面试复盘沉淀',
-  STUDY_TASK: '训练任务沉淀',
-  RESUME: '简历资料沉淀'
+  AGENT_REVIEW: '智能复盘沉淀',
+  AGENT_FEEDBACK: '反馈信号沉淀',
+  JOB_EXPERIMENT: '求职实验沉淀',
+  RESUME_JOB_MATCH: '简历匹配沉淀'
 }
 
 const memoryTypeLabel = (value?: string) =>
@@ -117,11 +144,36 @@ const memoryTypeLabel = (value?: string) =>
 
 const sourceTypeLabel = (value?: string) => sourceTypeLabels[String(value || 'MANUAL').toUpperCase()] || '来源待确认'
 
+const isMemoryEnabled = (item: AgentMemoryVO) => item.enabled !== 0
+
+const memoryStatusLabel = (item: AgentMemoryVO) => (isMemoryEnabled(item) ? '已启用' : '已停用')
+
+const sourceDetailLabel = (item: AgentMemoryVO) => {
+  const label = sourceTypeLabel(item.sourceType)
+  return item.sourceId ? `${label} #${item.sourceId}` : label
+}
+
 const confidenceLabel = (value?: number) => {
   if (value === undefined || value === null) return '未评估'
   const normalized = value > 1 ? value : value * 100
   return `${Math.round(normalized)}%`
 }
+
+const confidenceTagType = (value?: number) => {
+  if (value === undefined || value === null) return 'info'
+  const normalized = value > 1 ? value / 100 : value
+  if (normalized >= 0.8) return 'success'
+  if (normalized >= 0.5) return 'warning'
+  return 'danger'
+}
+
+const recommendationUsageLabel = (item: AgentMemoryVO) =>
+  isMemoryEnabled(item) ? '会影响后续推荐' : '不会被后续推荐主动引用'
+
+const impactScopeLabel = (item: AgentMemoryVO) =>
+  isMemoryEnabled(item)
+    ? '今日计划、复盘、题库训练、面试建议'
+    : '已停用，后续推荐不会主动引用'
 
 const load = async () => {
   loading.value = true
@@ -175,28 +227,29 @@ const create = async () => {
 }
 
 const toggle = async (item: AgentMemoryVO) => {
-  const actionLabel = item.enabled ? '停用' : '启用'
+  const enabled = isMemoryEnabled(item)
+  const actionLabel = enabled ? '停用' : '启用'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}长期记忆`,
     action: `${actionLabel}这条智能教练长期记忆`,
     target: `${memoryTypeLabel(item.memoryType)}：${item.content || '长期记忆'}`,
-    impact: item.enabled
-      ? '停用后，智能教练后续生成计划、复盘和推荐时不会主动使用这条记忆。'
+    impact: enabled
+      ? '停用后，这条记忆不会被后续推荐主动引用。'
       : '启用后，智能教练后续生成计划、复盘和推荐时可以继续使用这条记忆作为依据。',
-    rollback: item.enabled
+    rollback: enabled
       ? '如停用后发现仍需要这条记忆，可以重新启用。'
       : '如启用后发现内容不准确，可以再次停用或删除。',
     audit: `${actionLabel}操作会记录当前账号和这条记忆。`,
     tips: [
-      item.enabled ? '确认这条记忆暂时不适合继续影响推荐。' : '确认这条记忆内容仍然准确。',
+      enabled ? '确认这条记忆暂时不适合继续影响推荐。' : '确认这条记忆内容仍然准确。',
       '该操作不会删除记忆正文。'
     ],
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
   try {
-    item.enabled ? await disableAgentMemoryApi(item.id) : await enableAgentMemoryApi(item.id)
-    ElMessage.success(item.enabled ? '记忆已停用' : '记忆已启用')
+    enabled ? await disableAgentMemoryApi(item.id) : await enableAgentMemoryApi(item.id)
+    ElMessage.success(enabled ? '记忆已停用' : '记忆已启用')
     await load()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆状态更新失败，请稍后重试。'))
@@ -208,10 +261,10 @@ const remove = async (item: AgentMemoryVO) => {
     title: '删除长期记忆',
     action: '删除这条智能教练长期记忆',
     target: `${memoryTypeLabel(item.memoryType)}：${item.content || '长期记忆'}`,
-    impact: '删除后，智能教练后续生成计划、复盘和推荐时将不再主动使用这条偏好或弱项作为依据。',
+    impact: '删除后，智能教练后续生成计划、复盘和推荐时将不再主动使用这条记忆作为依据；历史建议可保留当时快照，后续建议不再引用。',
     rollback: '系统不会自动恢复已删除记忆；如误删，需要重新手动记录或等待后续运行再次沉淀。',
     audit: '删除操作会记录当前账号和这条记忆。',
-    tips: ['确认这条记忆已经不再准确或不希望继续影响推荐。', '确认删除后不会影响你正在进行的今日任务。'],
+    tips: ['确认这条记忆已经不再准确或不希望继续影响推荐。', '历史建议可保留当时快照，后续建议不再引用。'],
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
@@ -269,11 +322,65 @@ onMounted(load)
   background: rgba(15, 23, 42, 0.52);
 }
 
+.v4-row--disabled {
+  border-style: dashed;
+  background: rgba(15, 23, 42, 0.34);
+}
+
 .v4-row-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+}
+
+.v4-row-main {
+  min-width: 0;
+}
+
+.v4-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.v4-row-title strong {
+  line-height: 1.4;
+}
+
+.v4-memory-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.v4-memory-meta__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.v4-memory-meta__item--wide {
+  grid-column: 1 / -1;
+}
+
+.v4-memory-meta__label {
+  color: var(--app-text);
+  font-weight: 700;
+}
+
+.v4-memory-disabled-note {
+  margin: 10px 0 0;
+  color: #fbbf24;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .v4-actions {
@@ -294,6 +401,14 @@ onMounted(load)
   .v4-page-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .v4-row-head {
+    flex-direction: column;
+  }
+
+  .v4-memory-meta {
+    grid-template-columns: 1fr;
   }
 }
 </style>

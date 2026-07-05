@@ -62,15 +62,19 @@ const form = reactive<JobSearchExperimentSaveDTO>({
 
 const load = async () => {
   if (!isEdit.value) return
-  const detail = await getJobExperimentDetailApi(experimentId.value)
-  Object.assign(form, {
-    title: detail.title,
-    goal: detail.goal,
-    targetDirection: detail.targetDirection,
-    startDate: detail.startDate,
-    endDate: detail.endDate,
-    status: detail.status
-  })
+  try {
+    const detail = await getJobExperimentDetailApi(experimentId.value)
+    Object.assign(form, {
+      title: detail.title,
+      goal: detail.goal,
+      targetDirection: detail.targetDirection,
+      startDate: detail.startDate,
+      endDate: detail.endDate,
+      status: detail.status
+    })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '求职实验加载失败，请返回列表后重试。')
+  }
 }
 
 const save = async () => {
@@ -83,7 +87,10 @@ const save = async () => {
     const detail = isEdit.value
       ? await updateJobExperimentApi(experimentId.value, form)
       : await createJobExperimentApi(form)
+    ElMessage.success(isEdit.value ? '实验已更新' : '实验已创建')
     router.push(`/job-experiments/${detail.id}`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '求职实验保存失败，请稍后重试。')
   } finally {
     saving.value = false
   }

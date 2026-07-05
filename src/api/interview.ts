@@ -192,7 +192,7 @@ const normalizeTextArray = (value: unknown): string[] => {
     // split plain text below
   }
   return trimmed
-    .split(/[,\n;锛涖€侊紝]/)
+    .split(/[,\n;；、，]/)
     .map((item) => item.trim())
     .filter(Boolean)
 }

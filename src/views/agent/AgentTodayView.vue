@@ -160,6 +160,10 @@
                       <span v-for="label in taskTrustLabels(task)" :key="label">{{ label }}</span>
                     </div>
                     <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+                    <AgentTaskEvidence
+                      :suggestion="buildAgentTaskSuggestion(task)"
+                      @open="goAction"
+                    />
                     <div v-if="task.reviewSummary" class="task-review-summary">
                       <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
                       <p>{{ task.reviewSummary }}</p>
@@ -375,7 +379,7 @@
 import { ElMessage } from 'element-plus'
 import { MoreHorizontal, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   completeAgentTaskApi,
@@ -383,13 +387,14 @@ import {
   recordAgentMetricEventApi,
   restoreAgentTaskApi,
   skipAgentTaskApi,
-  startAgentTaskApi,
-  submitAgentFeedbackApi
+  startAgentTaskApi
 } from '@/api/agent'
+import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import AgentTaskEvidence from '@/components/job-readiness/AgentTaskEvidence.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
 import {
   fetchCachedLatestDailyPlan,
@@ -408,9 +413,11 @@ import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
-import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
+import { buildSafeRedirectTarget, sanitizeLocalActionPath } from '@/utils/routeSecurity'
+import { fromAgentTask } from '@/utils/suggestionAdapter'
 
 const router = useRouter()
+const route = useRoute()
 const today = formatLocalDate()
 
 const loading = ref(false)
@@ -598,6 +605,7 @@ const taskListEmptyDescription = computed(() =>
     ? '任务列表暂未返回，本次不能判断是否真的没有待办。请重新加载，或到任务中心继续查看今天的任务。'
     : '当前日期还没有生成训练任务。可以先生成今日计划，或进入题库和面试入口保持训练节奏。'
 )
+const agentTodayPagePath = computed(() => buildSafeRedirectTarget(route.path, route.query, '/agent/today'))
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
@@ -939,6 +947,71 @@ const taskTrustLabels = (task: AgentTaskVO) => {
   return Array.from(new Set(labels))
 }
 
+const buildAgentTaskSuggestion = (task: AgentTaskVO) => {
+  const actionUrl = sanitizeLocalActionPath(buildAgentTaskActionPath(task, '/agent/today'), '')
+  const suggestion = fromAgentTask({
+    ...task,
+    title: displayTaskTitle(task),
+    description: displayTaskDescription(task),
+    reason: displayTaskReason(task) || task.evidenceSummary || task.reviewSummary || task.description,
+    actionUrl
+  })
+  const sourceType = task.sourceType || task.relatedBizType || task.taskType || 'JOB_COACH_AGENT_TASK'
+  const sourceId = task.sourceId ?? task.relatedBizId ?? task.id
+  const sourceLabel = sourceTypeLabel(sourceType)
+  const evidenceSummary = cleanUserText(task.evidenceSummary, '') ||
+    taskEvidenceLabels(task).join('；') ||
+    cleanUserText(task.reason, '') ||
+    '推荐依据不足，已按当前任务上下文展示。'
+
+  return {
+    ...suggestion,
+    scene: 'AGENT_TASK_RECOMMENDATION',
+    bizType: 'AGENT_TASK',
+    bizId: task.id,
+    pagePath: agentTodayPagePath.value,
+    sourceType,
+    sourceId,
+    sourceLabel,
+    evidenceSummary,
+    trustStatus: task.trustStatus,
+    agentRunId: getTaskRunId(task),
+    traceId: task.traceId,
+    aiCallLogId: task.aiCallLogId,
+    actionUrl,
+    actionLabel: hasAgentTaskActionEntry(task) ? '打开任务入口' : '查看任务',
+    feedback: {
+      scene: 'AGENT_TASK_RECOMMENDATION',
+      bizType: 'AGENT_TASK',
+      bizId: task.id,
+      aiCallLogId: task.aiCallLogId ?? undefined,
+      pagePath: agentTodayPagePath.value
+    },
+    fallbackReason: task.fallback || String(task.trustStatus || '').toUpperCase() === 'FALLBACK'
+      ? '推荐依据不足，已使用降级任务建议。'
+      : undefined,
+    evidenceSources: [
+      {
+        id: `${sourceType}:${sourceId}`,
+        title: sourceLabel,
+        sourceLabel,
+        sourceType,
+        sourceId,
+        trustStatus: task.trustStatus,
+        evidenceSummary,
+        summary: evidenceSummary
+      }
+    ],
+    nextActions: actionUrl
+      ? [{
+          key: `agent-task-${task.id}-action`,
+          label: hasAgentTaskActionEntry(task) ? '打开任务入口' : '查看任务',
+          path: actionUrl
+        }]
+      : []
+  }
+}
+
 const formatTargetOption = (target: TargetJobVO) => {
   const title = target.jobTitle || '当前目标岗位'
   const company = target.companyName || '未填写公司'
@@ -1194,11 +1267,14 @@ const submitFeedback = async () => {
   const task = feedbackTask.value
   if (!task) return
   await withTaskPending(task, 'feedback', async () => {
-    await submitAgentFeedbackApi({
-      agentTaskId: task.id,
-      agentRunId: getTaskRunId(task) ?? undefined,
+    await submitAiResultFeedbackApi({
+      scene: 'AGENT_TASK_RECOMMENDATION',
+      bizType: 'AGENT_TASK',
+      bizId: task.id,
+      aiCallLogId: task.aiCallLogId ?? undefined,
       feedbackType: feedbackForm.feedbackType,
-      comment: feedbackForm.comment || undefined
+      comment: feedbackForm.comment || undefined,
+      pagePath: agentTodayPagePath.value
     })
     feedbackDialogVisible.value = false
     ElMessage.success('反馈已提交')
