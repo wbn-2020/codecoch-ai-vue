@@ -258,18 +258,18 @@ const inferNotificationTarget = (item?: NotificationVO): Omit<NotificationTarget
 
   if ((relatedType.includes('INTERVIEW') && relatedType.includes('REPORT')) || relatedType === 'REPORT_DONE') {
     return id
-      ? { label: '面试报告', path: `/interviews/${id}/report`, fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
-      : { label: '面试历史', path: '/interviews/history', fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+      ? { label: '面试报告', path: `/interviews/${id}/report`, fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
+      : { label: '面试复盘记录', path: '/interviews/history', fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
   }
   if (relatedType.includes('INTERVIEW')) {
     return id
-      ? { label: '面试详情', path: `/interviews/${id}`, fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
-      : { label: '面试历史', path: '/interviews/history', fallbackLabel: '面试历史', fallbackPath: '/interviews/history' }
+      ? { label: '面试详情', path: `/interviews/${id}`, fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
+      : { label: '面试复盘记录', path: '/interviews/history', fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
   }
   if (relatedType.includes('RESUME') && relatedType.includes('MATCH')) {
     return id
-      ? { label: '简历匹配详情', path: `/resume-match/${id}`, fallbackLabel: '简历匹配', fallbackPath: '/resume-match' }
-      : { label: '简历匹配', path: '/resume-match', fallbackLabel: '简历匹配', fallbackPath: '/resume-match' }
+      ? { label: 'JD 匹配报告', path: `/resume-match/${id}`, fallbackLabel: 'JD 匹配实验台', fallbackPath: '/resume-match' }
+      : { label: 'JD 匹配实验台', path: '/resume-match', fallbackLabel: 'JD 匹配实验台', fallbackPath: '/resume-match' }
   }
   if (relatedType.includes('RESUME')) {
     return { label: '简历中心', path: '/resumes', fallbackLabel: '简历中心', fallbackPath: '/resumes' }

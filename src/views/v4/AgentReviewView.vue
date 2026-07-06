@@ -1,22 +1,99 @@
 <template>
-  <div class="page-shell v4-review-page">
-    <section class="v4-page-header">
-      <div><div class="v4-eyebrow">每日复盘</div><h1>智能教练每日复盘</h1><p>根据当天训练任务完成、跳过和剩余情况生成可追踪复盘。</p></div>
-      <div class="v4-actions"><el-date-picker v-model="date" type="date" value-format="YYYY-MM-DD" :clearable="false" /><el-button type="primary" :loading="loading" @click="generate">生成复盘</el-button><el-button :loading="loading" @click="load">刷新</el-button></div>
+  <div class="page-shell agent-review-page">
+    <section class="review-header">
+      <div>
+        <div class="review-eyebrow">Agent daily review</div>
+        <h1>多日闭环复盘</h1>
+        <p>先展示任务事实，再说明限制、偏移、调整和下一步。样本不足或降级来源只作为弱调整信号。</p>
+      </div>
+      <div class="review-actions">
+        <el-date-picker v-model="date" type="date" value-format="YYYY-MM-DD" :clearable="false" />
+        <el-button type="primary" :loading="generating" @click="generate">生成复盘</el-button>
+        <el-button :loading="loading" @click="load">刷新</el-button>
+      </div>
     </section>
-    <section class="v4-grid"><article class="v4-card"><span>最近复盘数</span><strong>{{ reviews.length }}</strong></article><article class="v4-card"><span>最新准备度</span><strong>{{ latest?.readinessScore ?? 0 }}</strong></article><article class="v4-card"><span>最新完成率</span><strong>{{ latest?.completionRate ?? 0 }}%</strong></article></section>
-    <section class="content-card"><div class="content-card__body v4-list" v-loading="loading"><article v-for="item in reviews" :key="item.id" class="v4-row"><div class="v4-row-head"><div><strong>{{ item.reviewDate }}</strong><p class="muted">{{ item.summary }}</p></div><el-tag type="success" effect="plain">{{ item.readinessScore }}</el-tag></div><ul><li v-for="action in item.nextActions" :key="action">{{ action }}</li></ul></article><AppState v-if="errorMessage && !loading" type="error" title="每日复盘加载失败" :description="errorMessage"><div class="empty-actions"><el-button type="primary" :loading="loading" @click="load">重新加载</el-button><el-button @click="goTodayPlan">去今日任务</el-button></div></AppState><AppState v-else-if="!reviews.length && !loading" type="empty" title="还没有每日复盘" description="完成或跳过今日任务后，复盘会更准确；也可以先按当前日期生成一版，作为今天下一步行动的起点。"><div class="empty-actions"><el-button type="primary" :loading="loading" @click="generate">生成今日复盘</el-button><el-button @click="goTodayPlan">去今日任务</el-button></div></AppState></div></section>
+
+    <section class="review-metrics">
+      <article>
+        <span>最近复盘</span>
+        <strong>{{ reviews.length }}</strong>
+      </article>
+      <article>
+        <span>最新任务完成</span>
+        <strong>{{ latest?.doneCount ?? 0 }}</strong>
+      </article>
+      <article>
+        <span>跳过反馈</span>
+        <strong>{{ latest?.skippedCount ?? 0 }}</strong>
+      </article>
+      <article>
+        <span>下一步</span>
+        <strong>{{ latestNextActionCount }}</strong>
+      </article>
+    </section>
+
+    <section class="content-card">
+      <div class="content-card__body" v-loading="loading">
+        <AppState v-if="errorMessage && !loading" type="error" title="每日复盘加载失败" :description="errorMessage">
+          <div class="empty-actions">
+            <el-button type="primary" :loading="loading" @click="load">重新加载</el-button>
+            <el-button @click="goTodayPlan">去今日任务</el-button>
+          </div>
+        </AppState>
+
+        <AppState
+          v-else-if="!reviewCards.length && !loading"
+          type="empty"
+          title="还没有每日复盘"
+          description="完成或跳过今日任务后再生成复盘；没有复盘时，今日计划和任务中心仍可作为降级入口。"
+        >
+          <div class="empty-actions">
+            <el-button type="primary" :loading="generating" @click="generate">生成今日复盘</el-button>
+            <el-button @click="goTodayPlan">去今日任务</el-button>
+            <el-button @click="router.push('/agent/tasks')">查看任务中心</el-button>
+          </div>
+        </AppState>
+
+        <div v-else class="review-list">
+          <article v-for="card in reviewCards" :key="card.review.id" class="review-row">
+            <div class="review-row__head">
+              <div>
+                <span>{{ card.review.reviewDate || card.review.createdAt || '未标记日期' }}</span>
+                <h2>{{ card.review.summary || '每日复盘' }}</h2>
+              </div>
+              <div class="review-tags">
+                <el-tag effect="plain">{{ card.review.completionRate ?? 0 }}%</el-tag>
+                <el-tag v-if="card.review.fallback" type="warning" effect="plain">降级复盘</el-tag>
+                <el-tag v-if="card.review.confidenceLevel" type="info" effect="plain">{{ card.review.confidenceLevel }}</el-tag>
+              </div>
+            </div>
+
+            <div class="review-sections">
+              <section v-for="section in card.sections" :key="section.key">
+                <h3>{{ section.title }}</h3>
+                <ul>
+                  <li v-for="item in section.items" :key="item">{{ item }}</li>
+                </ul>
+              </section>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
+
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { generateAgentReviewApi, getAgentReviewsApi, type AgentReviewVO } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import { buildReviewSections } from '@/features/agent-loop/agentLoopAdapter'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+
 const today = formatLocalDate()
 const router = useRouter()
 const date = ref(today)
@@ -24,7 +101,26 @@ const loading = ref(false)
 const generating = ref(false)
 const reviews = ref<AgentReviewVO[]>([])
 const errorMessage = ref('')
+
 const latest = computed(() => reviews.value[0])
+const latestNextActionCount = computed(() => latest.value?.nextActions?.length || 0)
+
+const reviewCards = computed(() =>
+  reviews.value.map((review) => {
+    const sections = buildReviewSections(review)
+    return {
+      review,
+      sections: [
+        { key: 'facts', title: '事实', items: sections.facts },
+        { key: 'limits', title: '限制', items: sections.limits },
+        { key: 'drifts', title: '偏移', items: sections.drifts },
+        { key: 'adjustments', title: '调整', items: sections.adjustments },
+        { key: 'next', title: '下一步', items: sections.nextActions }
+      ]
+    }
+  })
+)
+
 const load = async () => {
   loading.value = true
   try {
@@ -37,21 +133,21 @@ const load = async () => {
     loading.value = false
   }
 }
+
 const generate = async () => {
   if (loading.value || generating.value) return
   const confirmed = await confirmDangerActionPreview({
     title: '生成每日复盘预览',
     action: '生成或刷新指定日期的每日复盘',
     target: `复盘日期：${date.value || today}`,
-    impact: '系统会读取当天训练任务完成、跳过和剩余情况，并写入一条可追踪复盘；后续今日任务、成长画像和训练建议可能引用这次复盘结果。',
-    rollback: '如果复盘内容不准确，可以在补充或修正当天任务后重新生成；已被用户采纳的行动建议不会自动撤回。',
-    audit: '复盘记录会保留日期、准备度、完成率和下一步行动，便于后续追踪。',
+    impact: '系统会读取当天任务完成、跳过和剩余情况，并写入一条可追踪复盘；低样本只会形成弱调整信号。',
+    rollback: '如果复盘不准确，可以补充或修正当天任务后重新生成；已采纳的行动建议不会自动撤回。',
+    audit: '复盘记录保留日期、任务计数、完成率和下一步动作，便于后续追踪。',
     tips: ['建议先确认当天任务状态已经同步。', '如果只是查看历史复盘，请使用刷新按钮。'],
     confirmButtonText: '确认生成复盘'
   })
   if (!confirmed) return
   generating.value = true
-  loading.value = true
   try {
     await generateAgentReviewApi({ date: date.value })
     ElMessage.success('复盘已生成')
@@ -60,23 +156,168 @@ const generate = async () => {
     ElMessage.error(getErrorMessage(error, '每日复盘生成失败，请稍后重试。'))
   } finally {
     generating.value = false
-    loading.value = false
   }
 }
+
 const goTodayPlan = () => router.push('/agent/today')
+
 onMounted(load)
-</script><style scoped lang="scss">
-.v4-page-header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding:24px; border:1px solid var(--app-border); border-radius:var(--app-radius); background:linear-gradient(135deg, rgba(59,130,246,.14), rgba(34,197,94,.08)), var(--app-surface); box-shadow:var(--app-shadow); }
-.v4-page-header h1 { margin:8px 0 0; font-size:28px; }
-.v4-page-header p, .muted { color:var(--app-text-muted); line-height:1.7; }
-.v4-eyebrow { color:#93c5fd; font-size:13px; font-weight:700; }
-.v4-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
-.v4-card { padding:16px; border:1px solid var(--app-border); border-radius:10px; background:rgba(15,23,42,.58); }
-.v4-card strong { display:block; margin-top:8px; font-size:24px; }
-.v4-list { display:grid; gap:12px; }
-.v4-row { padding:14px; border:1px solid var(--app-border); border-radius:10px; background:rgba(15,23,42,.52); }
-.v4-row-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
-.v4-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-.empty-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
-@media (max-width:900px){ .v4-page-header{align-items:flex-start; flex-direction:column;} .v4-grid{grid-template-columns:1fr;} }
+</script>
+
+<style scoped lang="scss">
+.agent-review-page {
+  display: grid;
+  gap: 18px;
+}
+
+.review-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
+}
+
+.review-header h1 {
+  margin: 8px 0 0;
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.review-header p {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--app-text-muted);
+  line-height: 1.7;
+}
+
+.review-eyebrow {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.review-actions,
+.empty-actions,
+.review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.review-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-metrics article {
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+.review-metrics span {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.review-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-text);
+  font-size: 26px;
+}
+
+.review-list {
+  display: grid;
+  gap: 14px;
+}
+
+.review-row {
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+.review-row__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.review-row__head span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-row__head h2 {
+  margin: 6px 0 0;
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.review-sections {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.review-sections section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.review-sections h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.review-sections ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.review-sections li {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .review-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .review-header,
+  .review-row__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .review-metrics,
+  .review-sections {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

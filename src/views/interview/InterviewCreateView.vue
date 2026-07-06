@@ -4,13 +4,13 @@
       <div>
         <div class="eyebrow">
           <Sparkles :size="16" />
-          创建面试
+          推荐开练
         </div>
-        <h1>创建 AI 模拟面试</h1>
-        <p>像准备真实面试一样选择训练场景、绑定简历和目标岗位，再进入可追问的面试房间。</p>
+        <h1>先做一场最值得练的面试</h1>
+        <p>系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。</p>
         <div class="hero-tags">
           <el-tag effect="plain">创建后直接开始</el-tag>
-          <el-tag effect="plain" type="success">支持简历上下文</el-tag>
+          <el-tag effect="plain" type="info">支持简历上下文</el-tag>
           <el-tag effect="plain" type="warning">行业场景可用</el-tag>
         </div>
       </div>
@@ -32,9 +32,21 @@
 
     <section class="quick-start-panel">
       <div class="quick-start-panel__copy">
-        <span class="quick-label">推荐开练</span>
-        <h2>{{ quickInterviewTitle }}</h2>
-        <p>{{ quickInterviewDesc }}</p>
+        <div class="quick-start-panel__head">
+          <div>
+            <span class="quick-label">推荐面试计划</span>
+            <h2>{{ quickInterviewTitle }}</h2>
+            <p>{{ quickInterviewDesc }}</p>
+          </div>
+          <el-tag :type="quickRecommendationTrustType" effect="plain">{{ quickRecommendationTrustLabel }}</el-tag>
+        </div>
+        <div class="recommended-plan-grid">
+          <article v-for="item in quickPlanItems" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <p>{{ item.desc }}</p>
+          </article>
+        </div>
         <div class="quick-context-grid">
           <article v-for="item in quickStartItems" :key="item.label">
             <component :is="item.icon" :size="17" />
@@ -47,27 +59,37 @@
         <ul class="quick-reason-list">
           <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
         </ul>
+        <details class="quick-trust-card">
+          <summary>推荐依据与可信边界</summary>
+          <p>{{ quickRecommendationBoundaryText }}</p>
+          <div class="context-trust-list">
+            <article v-for="item in quickContextTrustItems" :key="item.label" :class="{ 'is-missing': item.missing }">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+        </details>
       </div>
       <div class="quick-start-panel__actions">
         <el-alert v-if="quickStartNotice" :title="quickStartNotice" type="warning" :closable="false" show-icon />
         <el-alert v-if="routeContextNotice" :title="routeContextNotice" type="warning" :closable="false" show-icon />
         <el-button
-          v-if="!configExpanded"
-          type="success"
+          type="primary"
           size="large"
+          class="quick-primary-cta"
           :loading="creating || resumeLoading || matchReportVerifyLoading"
           @click="handleQuickCreate"
         >
           <Play :size="17" />
-          一键开始推荐面试
+          开始推荐面试
         </el-button>
         <el-button size="large" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
           <Sparkles :size="17" />
-          套用推荐配置
+          使用推荐并微调
         </el-button>
         <el-button size="large" @click="scrollToConfig">
           <Settings2 :size="17" />
-          调整配置
+          查看可选微调
         </el-button>
       </div>
     </section>
@@ -76,18 +98,18 @@
       <section ref="configPanelRef" class="config-panel">
         <div class="panel-head">
           <div>
-            <h2>高级配置</h2>
-            <p>推荐配置已经准备好；只有需要改场景、题量、行业模板或简历上下文时再展开。</p>
+            <h2>可选微调</h2>
+            <p>默认按上方推荐计划开始；只有想换场景、题量、行业模板或简历上下文时再展开。</p>
           </div>
           <el-button class="panel-head__action" type="primary" plain @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            {{ configExpanded ? '收起配置' : '展开配置' }}
+            {{ configExpanded ? '收起微调' : '展开微调' }}
           </el-button>
         </div>
 
         <div v-if="!configExpanded" class="config-collapsed">
           <div class="config-collapsed__head">
-            <span>推荐开练</span>
+            <span>已准备好本轮计划</span>
             <strong>{{ quickInterviewTitle }}</strong>
             <p>{{ quickInterviewDesc }}</p>
           </div>
@@ -103,11 +125,11 @@
           <div class="config-collapsed__actions">
             <el-button :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
               <Sparkles :size="16" />
-              套用推荐配置
+              使用推荐并微调
             </el-button>
             <el-button type="primary" plain @click="toggleConfigExpanded">
               <Settings2 :size="16" />
-              微调高级配置
+              微调计划
             </el-button>
           </div>
         </div>
@@ -133,7 +155,7 @@
             <div class="form-section">
               <div class="section-title">
                 <span>01</span>
-                基础配置
+                面试目标
               </div>
               <div class="form-grid">
                 <el-form-item label="面试名称">
@@ -160,7 +182,7 @@
             <div class="form-section">
               <div class="section-title">
                 <span>02</span>
-                训练范围
+                训练节奏
               </div>
               <div class="form-grid">
                 <el-form-item label="行业方向" prop="industryDirection">
@@ -264,12 +286,20 @@
             </div>
 
             <el-alert
-              v-if="resumeRequired || isJobTargetFlow"
+              v-if="resumeRequired"
               class="create-alert"
               type="warning"
               :closable="false"
               show-icon
-              :title="isJobTargetFlow ? '目标岗位链路需要选择简历，并会使用目标岗位信息创建岗位面试。' : '当前面试模式建议选择简历，便于进行项目深挖和综合追问。'"
+              title="当前面试模式建议选择简历，便于进行项目深挖和综合追问。"
+            />
+            <el-alert
+              v-if="isJobTargetFlow && !quickResumeId"
+              class="create-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。"
             />
             <el-alert
               v-if="routeContextNotice"
@@ -282,11 +312,11 @@
             <div class="config-form-actions">
               <el-button type="primary" size="large" :loading="creating" @click="handleCreate">
                 <Play :size="16" />
-                按当前配置开始
+                按当前计划开始
               </el-button>
               <el-button size="large" :disabled="creating" @click="applyQuickRecommendation">
                 <Sparkles :size="16" />
-                套用推荐配置
+                恢复推荐计划
               </el-button>
             </div>
           </el-form>
@@ -296,8 +326,8 @@
       <aside class="preview-panel">
         <div class="panel-head">
           <div>
-            <h2>本轮预览</h2>
-            <p>提交前核对训练范围，确保面试问题围绕当前目标展开。</p>
+            <h2>本轮面试计划</h2>
+            <p>按推荐计划可直接开始，也可以展开左侧做少量微调。</p>
           </div>
         </div>
 
@@ -308,7 +338,7 @@
         </div>
 
         <div class="quick-create-card">
-          <span>推荐一键开练</span>
+          <span>推荐计划</span>
           <strong>{{ quickInterviewTitle }}</strong>
           <p>{{ quickInterviewDesc }}</p>
           <ul class="quick-create-reasons">
@@ -316,7 +346,7 @@
           </ul>
           <el-button plain @click="scrollToConfig">
             <Settings2 :size="16" />
-            查看并调整配置
+            查看可选微调
           </el-button>
         </div>
 
@@ -379,11 +409,11 @@
           <el-button @click="router.push('/dashboard')">返回今日计划</el-button>
           <el-button v-if="configExpanded" plain size="large" @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            收起配置
+            收起微调
           </el-button>
           <el-button v-else type="primary" plain size="large" @click="toggleConfigExpanded">
             <Settings2 :size="16" />
-            展开配置
+            展开微调
           </el-button>
         </div>
       </aside>
@@ -411,6 +441,7 @@ import {
   interviewPracticeModeOptions,
   targetPositionOptions
 } from '@/constants/enums'
+import { buildInterviewCreatePayload } from '@/features/interview-create'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { ResumeVO } from '@/types/resume'
@@ -586,7 +617,6 @@ const isJobTargetFlow = computed(() => {
   const source = getQueryString('source')?.toLowerCase()
   return Boolean(
     sourceTargetJobId.value ||
-    fallbackTargetJobId.value ||
     getQueryNumber('targetJobId') ||
     source === 'job-target' ||
     source === 'v3'
@@ -601,11 +631,11 @@ const rules = computed<FormRules<InterviewCreateDTO>>(() => ({
   industryTemplateId: isIndustryMode.value ? [{ required: true, message: '请选择行业模板', trigger: 'change' }] : [],
   difficulty: [{ required: true, message: '请选择难度等级', trigger: 'change' }],
   interviewerStyle: [{ required: true, message: '请选择面试官风格', trigger: 'change' }],
-  resumeId: resumeRequired.value || useResume.value || isJobTargetFlow.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
+  resumeId: resumeRequired.value || useResume.value ? [{ required: true, message: '请选择简历', trigger: 'change' }] : []
 }))
 
 const selectedResumeName = computed(() => {
-  if (!useResume.value && !isJobTargetFlow.value) return '不使用简历'
+  if (!useResume.value) return '不使用简历'
   return resumes.value.find((item) => item.id === form.resumeId)?.resumeName || '未选择'
 })
 
@@ -822,8 +852,30 @@ const quickStartItems = computed(() => [
   { label: '目标岗位', value: form.targetPosition || 'Java 后端开发', icon: Target },
   { label: '面试强度', value: `${selectedModeTitleForPayload(quickRecommendation.value.payload)} · ${quickRecommendation.value.payload.questionCount} 题`, icon: Zap }
 ])
+const quickPlanItems = computed(() => {
+  const payload = quickRecommendation.value.payload
+  return [
+    {
+      label: '训练目标',
+      value: selectedModeTitleForPayload(payload),
+      desc: payload.resumeId ? '围绕真实经历和目标岗位追问' : '先用通用技术面保持练习节奏'
+    },
+    {
+      label: '节奏安排',
+      value: `${payload.questionCount} 题 · ${optionLabel(difficultyOptions, payload.difficulty)}`,
+      desc: payload.practiceMode === 'PRACTICE' ? '练习模式，便于及时复盘' : '正式模式，结束后统一生成报告'
+    },
+    {
+      label: '依据边界',
+      value: quickRecommendationTrustLabel.value,
+      desc: payload.recommendationSource === 'MATCH_REPORT' ? '使用已核验报告，不混入失败证据' : '资料不足处会降级为基础推荐'
+    }
+  ]
+})
 const quickStartNotice = computed(() => {
   if (resumeLoadError.value) return '简历列表暂时不可用，可先进入轻量技术面试。'
+  if (isJobTargetFlow.value && !quickTargetJobId.value && !quickResumeId.value) return '简历和目标岗位资料暂时不足，本轮会降级为轻量技术面；可补全简历和岗位目标后再重试。'
+  if (isJobTargetFlow.value && !quickTargetJobId.value) return '目标岗位暂时不可用，本轮会降级为普通面试；可稍后到岗位目标页补全后再重试。'
   if (!quickResumeId.value) return '还没有可用简历，系统会先创建轻量技术面试。'
   return ''
 })
@@ -876,9 +928,9 @@ const loadCurrentTargetForInterview = async (failureMessage: string) => {
   }
 }
 
-const loadLatestVerifiedMatchReportId = async (resumeId: number, targetJobId: number) => {
+const loadLatestVerifiedMatchReportId = async (resumeId: number, targetJobId: number, resumeVersionId?: number) => {
   try {
-    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId)
+    const latestMatch = await getLatestResumeJobMatchReportApi(resumeId, targetJobId, resumeVersionId)
     if (isTrustedMatchReport(latestMatch)) {
       return latestMatch?.reportId
     }
@@ -1020,9 +1072,15 @@ const fetchResumes = async () => {
       (queryResumeId && resumes.value.some((item) => item.id === queryResumeId) ? queryResumeId : undefined) ||
       resumes.value.find((item) => item.isDefault === 1)?.id ||
       resumes.value[0]?.id
+    if (!form.resumeId && !resumeRequired.value) {
+      useResume.value = false
+    }
   } catch (error) {
     resumes.value = []
     form.resumeId = undefined
+    if (!resumeRequired.value) {
+      useResume.value = false
+    }
     resumeLoadError.value = getErrorMessage(error, '简历列表暂时加载失败，请重试后再选择简历上下文。')
   } finally {
     resumeLoading.value = false
@@ -1105,17 +1163,22 @@ const applyRouteContext = async () => {
 }
 
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
-  let targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
+  const targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
   const source = getQueryString('source')?.toLowerCase()
-  const shouldUseJobTargetApi = Boolean((targetJobId && payload.resumeId) || source === 'job-target' || source === 'v3')
+  const hasJobTargetIntent = source === 'job-target' || source === 'v3' || Boolean(sourceTargetJobId.value || getQueryNumber('targetJobId'))
 
-  if (!shouldUseJobTargetApi) {
+  if (!payload.resumeId) {
+    if (hasJobTargetIntent) {
+      routeContextWarning.value = '当前没有可用简历，已改用轻量技术面创建；可先创建简历后再使用岗位推荐面试。'
+    }
     return createInterviewApi(payload)
   }
 
   if (!targetJobId) {
-    const currentTarget = await loadCurrentTargetForInterview('当前主目标岗位暂时无法读取，目标岗位链路将要求你手动选择简历和岗位后再创建。')
-    targetJobId = currentTarget?.id
+    if (hasJobTargetIntent) {
+      routeContextWarning.value = '目标岗位信息暂时不可用，已改用普通面试创建；可稍后到岗位目标页补全后再重试。'
+    }
+    return createInterviewApi(payload)
   }
 
   let resumeId = payload.resumeId
@@ -1125,12 +1188,15 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
 
   let matchReportId = matchReportEvidence.value.verified ? matchReportEvidence.value.reportId : undefined
   if (!matchReportId && resumeId && targetJobId) {
-    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId)
+    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId, getQueryNumber('resumeVersionId'))
   }
 
   if (!resumeId || !targetJobId) {
-    ElMessage.warning('目标岗位链路创建面试需要有效的简历和目标岗位信息')
-    throw new Error('目标岗位链路创建面试需要有效的简历和目标岗位信息。')
+    return createInterviewApi({
+      ...payload,
+      resumeId: undefined,
+      basedOnResume: false
+    })
   }
 
   return createInterviewByJobTargetApi({
@@ -1140,6 +1206,20 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
     skillProfileId: getQueryNumber('skillProfileId'),
     matchReportId
   })
+}
+
+const resolveCreatedInterviewId = (result: unknown) => {
+  const session = result as { interviewId?: number | string; id?: number | string; sessionId?: number | string }
+  const value = Number(session?.interviewId || session?.id || session?.sessionId || 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+const enterCreatedInterviewRoom = async (result: unknown) => {
+  const createdInterviewId = resolveCreatedInterviewId(result)
+  if (!createdInterviewId) {
+    throw new Error('面试已创建，但没有返回可进入的面试房间编号。请从面试历史进入最近一次面试。')
+  }
+  await router.push(`/interviews/room/${createdInterviewId}`)
 }
 
 const handleCreate = async () => {
@@ -1156,29 +1236,27 @@ const handleCreate = async () => {
     ElMessage.warning('请选择行业模板后再开始面试')
     return
   }
-  if ((resumeRequired.value || isJobTargetFlow.value) && !form.resumeId) {
-    ElMessage.warning(isJobTargetFlow.value ? '目标岗位链路创建面试需要先选择简历' : '项目深挖或综合模拟面试需要先选择简历')
+  if ((resumeRequired.value || useResume.value) && !form.resumeId) {
+    ElMessage.warning(useResume.value
+      ? '请先选择简历；也可以关闭简历上下文后改用轻量技术面。'
+      : '项目深挖或综合模拟面试需要先选择简历。')
     return
   }
 
   creating.value = true
   try {
-    const template = selectedIndustryTemplate.value
-    const payload: InterviewCreateDTO = {
-      ...form,
-      interviewMode: isIndustryMode.value ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
-      practiceMode: form.practiceMode,
-      industryTemplateId: isIndustryMode.value ? form.industryTemplateId : undefined,
-      industryDirection: isIndustryMode.value
-        ? template?.industryCode || template?.industryName || form.industryDirection
-        : form.industryDirection,
-      resumeId: useResume.value || isJobTargetFlow.value ? form.resumeId : undefined
-    }
+    const payload = buildInterviewCreatePayload({
+      form,
+      isIndustryMode: isIndustryMode.value,
+      useResume: useResume.value && Boolean(form.resumeId),
+      isJobTargetFlow: isJobTargetFlow.value,
+      selectedIndustryTemplate: selectedIndustryTemplate.value
+    })
     const result = await createInterviewWithRouteContext(payload)
-    ElMessage.success('面试已创建')
-    await router.push(`/interviews/room/${result.interviewId}`)
+    await enterCreatedInterviewRoom(result)
+    ElMessage.success('面试已创建，正在进入 AI 面试训练室')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '面试创建失败，请检查配置后稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '面试创建失败。请重试，或关闭简历上下文后先创建轻量技术面。'))
   } finally {
     creating.value = false
   }
@@ -1202,7 +1280,7 @@ const applyQuickRecommendation = () => {
   form.questionCount = payload.questionCount
   form.resumeId = payload.resumeId
   useResume.value = Boolean(payload.resumeId)
-  ElMessage.success('已套用推荐配置，可直接开始或继续微调')
+  ElMessage.success('已使用推荐计划，可直接开始或继续微调')
   void scrollToConfig()
 }
 
@@ -1212,13 +1290,11 @@ const handleQuickCreate = async () => {
   try {
     const payload = buildQuickPayload()
 
-    const result = payload.resumeId
-      ? await createInterviewWithRouteContext(payload)
-      : await createInterviewApi(payload)
-    ElMessage.success(payload.resumeId ? '已创建推荐面试' : '已创建轻量技术面')
-    await router.push(`/interviews/room/${result.interviewId}`)
+    const result = await createInterviewWithRouteContext(payload)
+    await enterCreatedInterviewRoom(result)
+    ElMessage.success(payload.resumeId ? '已创建推荐面试，正在进入训练室' : '已创建轻量技术面，正在进入训练室')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '推荐面试创建失败，请稍后重试或先调整配置。'))
+    ElMessage.error(getErrorMessage(error, '推荐面试创建失败。请重试、先创建简历，或展开微调后改用轻量技术面。'))
   } finally {
     creating.value = false
   }
@@ -1294,13 +1370,16 @@ onMounted(async () => {
 
 .quick-start-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 20px;
-  margin-top: 18px;
-  padding: 22px;
-  border: 1px solid rgba(22, 163, 74, 0.26);
+  width: 100%;
+  margin: 18px auto 0;
+  padding: 24px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
   border-radius: 8px;
-  background: linear-gradient(135deg, #f0fdf4, #eff6ff);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 42%),
+    #ffffff;
   box-shadow: var(--app-shadow);
 }
 
@@ -1309,7 +1388,7 @@ onMounted(async () => {
 
   h2 {
     margin: 6px 0 8px;
-    color: #14532d;
+    color: #0f172a;
     font-size: 24px;
     line-height: 1.28;
   }
@@ -1322,15 +1401,71 @@ onMounted(async () => {
   }
 }
 
+.quick-start-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  > div {
+    min-width: 0;
+  }
+
+  :deep(.el-tag) {
+    flex: 0 0 auto;
+    white-space: normal;
+  }
+}
+
 .quick-label {
-  color: #166534;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 800;
 }
 
-.quick-context-grid {
+.recommended-plan-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #f8fbff;
+  }
+
+  span,
+  strong,
+  p {
+    display: block;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    margin-top: 6px;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  p {
+    margin: 7px 0 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.quick-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 10px;
   margin-top: 16px;
 
@@ -1339,14 +1474,14 @@ onMounted(async () => {
     min-width: 0;
     gap: 10px;
     padding: 12px;
-    border: 1px solid rgba(22, 163, 74, 0.18);
+    border: 1px solid rgba(37, 99, 235, 0.14);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.72);
   }
 
   svg {
     flex: 0 0 auto;
-    color: #16a34a;
+    color: #2563eb;
   }
 
   span,
@@ -1390,7 +1525,7 @@ onMounted(async () => {
       width: 5px;
       height: 5px;
       border-radius: 999px;
-      background: #16a34a;
+      background: #2563eb;
       content: '';
     }
   }
@@ -1401,6 +1536,28 @@ onMounted(async () => {
 
   li {
     color: #475569;
+  }
+}
+
+.quick-trust-card {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+
+  summary {
+    color: #1d4ed8;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  p {
+    margin: 10px 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
   }
 }
 
@@ -1511,9 +1668,14 @@ onMounted(async () => {
   }
 }
 
+.quick-primary-cta {
+  min-height: 44px;
+  font-weight: 700;
+}
+
 .create-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
   margin-top: 18px;
 }
@@ -1521,6 +1683,24 @@ onMounted(async () => {
 .config-panel,
 .preview-panel {
   padding: 22px;
+  background: #ffffff;
+}
+
+.config-panel,
+.preview-panel,
+.quick-start-panel {
+  :deep(.el-input__wrapper),
+  :deep(.el-select__wrapper),
+  :deep(.el-input-number .el-input__wrapper),
+  :deep(.el-textarea__inner) {
+    background-color: #ffffff;
+    box-shadow: 0 0 0 1px #dbe3ef inset;
+  }
+
+  :deep(.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger)) {
+    background-color: #ffffff;
+    color: #334155;
+  }
 }
 
 .preview-panel {
@@ -1577,7 +1757,7 @@ onMounted(async () => {
 
 .config-collapsed__head {
   span {
-    color: #16a34a;
+    color: #2563eb;
     font-size: 12px;
     font-weight: 800;
   }
@@ -1844,7 +2024,7 @@ onMounted(async () => {
   }
 
   &.primary {
-    background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+    background: #eff6ff;
   }
 }
 
@@ -1853,8 +2033,8 @@ onMounted(async () => {
   gap: 8px;
   margin-top: 14px;
   padding: 16px;
-  border-color: rgba(22, 163, 74, 0.24);
-  background: #f0fdf4;
+  border-color: rgba(37, 99, 235, 0.2);
+  background: #f8fbff;
 
   span,
   p {
@@ -1862,7 +2042,7 @@ onMounted(async () => {
   }
 
   strong {
-    color: #166534;
+    color: #1d4ed8;
     font-size: 18px;
   }
 
@@ -1944,6 +2124,8 @@ onMounted(async () => {
   }
 
   strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
   }
 }
@@ -1979,7 +2161,7 @@ onMounted(async () => {
 @media (max-width: 1180px) {
   .create-grid,
   .mode-grid,
-  .quick-start-panel {
+  .recommended-plan-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -2017,6 +2199,7 @@ onMounted(async () => {
 
   .create-grid,
   .mode-grid,
+  .recommended-plan-grid,
   .config-collapsed__grid,
   .form-grid,
   .quick-start-panel {
@@ -2025,6 +2208,10 @@ onMounted(async () => {
 
   .quick-start-panel {
     padding: 18px;
+  }
+
+  .quick-start-panel__head {
+    flex-direction: column;
   }
 
   .hero-actions,
@@ -2036,9 +2223,17 @@ onMounted(async () => {
 
   .hero-actions :deep(.el-button),
   .preview-actions :deep(.el-button),
-  .config-collapsed__actions :deep(.el-button) {
+  .config-collapsed__actions :deep(.el-button),
+  .config-form-actions :deep(.el-button),
+  .quick-start-panel__actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .config-form-actions,
+  .config-collapsed__actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .context-trust-card__head {

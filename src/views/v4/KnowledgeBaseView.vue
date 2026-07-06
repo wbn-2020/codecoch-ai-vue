@@ -85,6 +85,76 @@
       </article>
     </section>
 
+    <section class="governance-strip">
+      <div class="governance-strip__head">
+        <div>
+          <p class="section-kicker">治理状态</p>
+          <strong>{{ knowledgeGovernanceHealthLabel }}</strong>
+          <small>{{ knowledgeGovernanceHealthDetail }}</small>
+        </div>
+        <el-tag :type="knowledgeGovernanceHealthType" effect="light">{{ knowledgeGovernanceHealthBadge }}</el-tag>
+      </div>
+      <div class="governance-grid">
+        <article v-for="item in knowledgeGovernanceItems" :key="item.key">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.detail }}</small>
+        </article>
+      </div>
+      <div v-if="knowledgeGovernanceWarnings.length" class="governance-alerts">
+        <el-alert
+          v-for="warning in knowledgeGovernanceWarnings"
+          :key="warning"
+          type="warning"
+          :closable="false"
+          :title="warning"
+        />
+      </div>
+    </section>
+
+    <section class="quality-gate-strip">
+      <div class="quality-gate-strip__head">
+        <div>
+          <p class="section-kicker">质量门槛</p>
+          <strong>强结论必须有可追溯来源</strong>
+          <small>引用不足、评测样本不足、候选记忆或低置信记忆只作为弱观察和治理入口。</small>
+        </div>
+      </div>
+      <div class="quality-gate-grid">
+        <article v-for="item in qualityGateItems" :key="item.key">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.status }}</strong>
+          <small>{{ item.detail }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="governance-action-strip">
+      <div class="governance-action-strip__head">
+        <div>
+          <p class="section-kicker">治理行动</p>
+          <strong>{{ governanceActionSummary }}</strong>
+          <small>优先处理会影响检索、问答引用和长期记忆可信度的问题。</small>
+        </div>
+        <el-button text type="primary" @click="refreshKnowledgePage">刷新治理状态</el-button>
+      </div>
+      <div class="governance-action-list">
+        <article v-for="item in knowledgeGovernanceActions" :key="item.key">
+          <div>
+            <div class="governance-action-title">
+              <strong>{{ item.title }}</strong>
+              <el-tag size="small" :type="item.tagType" effect="light">{{ item.priority }}</el-tag>
+            </div>
+            <p>{{ item.description }}</p>
+            <small>{{ item.impact }}</small>
+          </div>
+          <el-button size="small" :type="item.buttonType" plain @click="runGovernanceAction(item.action)">
+            {{ item.cta }}
+          </el-button>
+        </article>
+      </div>
+    </section>
+
     <section class="index-observability-strip">
       <article>
         <span>索引状态</span>
@@ -114,7 +184,7 @@
       </div>
       <div class="dedup-actions">
         <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" />
-        <el-button :icon="Search" :loading="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
+        <el-button :icon="Search" :loading="duplicateReviewLoading" :disabled="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
         <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates()">完全重复</el-button>
       </div>
     </section>
@@ -675,18 +745,18 @@
                 title="未找到足够相关的引用来源"
               />
               <el-alert
-                v-else-if="askAnswerGrounded === true"
+                v-else-if="askStronglyGrounded"
                 class="answer-alert"
                 type="success"
                 :closable="false"
                 title="可信回答：引用来源已通过校验"
               />
               <el-alert
-                v-else-if="askAnswerGrounded === false || askCitationWarning"
+                v-else-if="answerReferenceRisk"
                 class="answer-alert"
                 type="warning"
                 :closable="false"
-                :title="askCitationWarning || '生成结果未通过引用校验，未作为可信回答展示'"
+                :title="askCitationWarning || answerReferenceRiskMessage"
               />
               <div class="answer-quality">
                 <span>引用 {{ askReferenceCount }} 条</span>
@@ -905,7 +975,7 @@
             title="没有发现近重复候选"
             description="当前阈值下没有语义相近片段；如果仍怀疑重复，可以调低阈值、切换资料范围，或先重建检索索引后再扫描。"
           >
-            <el-button type="primary" plain :loading="duplicateReviewLoading" @click="loadDuplicateReview">重新扫描</el-button>
+            <el-button type="primary" plain :loading="duplicateReviewLoading" :disabled="duplicateReviewLoading" @click="loadDuplicateReview">重新扫描</el-button>
           </AppState>
         </div>
       </div>
@@ -1151,6 +1221,7 @@ import {
   getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
   getKnowledgeExactDuplicatesApi,
+  getAgentMemoriesApi,
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
@@ -1162,6 +1233,7 @@ import {
   traceKnowledgeSearchApi,
   updateKnowledgeDocumentApi,
   uploadKnowledgeDocumentApi,
+  type AgentMemoryVO,
   type KnowledgeChunkVO,
   type KnowledgeConfigVO,
   type KnowledgeDocumentOptionVO,
@@ -1220,6 +1292,7 @@ const allDocuments = ref<KnowledgeDocumentVO[]>([])
 const documents = ref<KnowledgeDocumentVO[]>([])
 const documentOptions = ref<KnowledgeDocumentOptionVO[]>([])
 const documentTypeOptions = ref<string[]>([])
+const agentMemories = ref<AgentMemoryVO[]>([])
 const searchResults = ref<KnowledgeSearchResultVO[]>([])
 const searchTrace = ref<KnowledgeSearchTraceVO | null>(null)
 const askReferences = ref<KnowledgeSearchResultVO[]>([])
@@ -1407,6 +1480,8 @@ const failedChunkCount = computed(() => Number(knowledgeStats.value?.indexStatus
 const pendingChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.PENDING || 0))
 
 const disabledChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.DISABLED || 0))
+
+const indexedChunkCount = computed(() => Number(knowledgeStats.value?.indexStatusCounts?.INDEXED || 0))
 
 const embeddingModelSummary = computed(() => {
   const counts = knowledgeStats.value?.embeddingModelCounts || {}
@@ -1604,7 +1679,7 @@ const knowledgeEvalLatestFailures = computed<KnowledgeEvalRunResultVO[]>(() =>
 
 const knowledgeEvalLatestTrustedCount = computed(() =>
   (knowledgeEvalLatestRun.value?.results || [])
-    .filter((item) => item.expectNoAnswer || (item.citationValid === true && item.answerGrounded === true))
+    .filter((item) => item.expectNoAnswer || (Number(item.referenceCount || 0) > 0 && item.citationValid === true && item.answerGrounded === true))
     .length
 )
 
@@ -1624,6 +1699,409 @@ const knowledgeEvalLatestRunSummary = computed(() => {
   const run = knowledgeEvalLatestRun.value
   return run ? `${run.runNo || '评估运行记录'} · ${evalRunStatusLabel(run.status)} · ${formatRate(run.passRate)}` : '暂无运行'
 })
+
+const enabledMemoryCount = computed(() =>
+  agentMemories.value.filter((item) => Number(item.enabled) === 1).length
+)
+
+const disabledMemoryCount = computed(() =>
+  agentMemories.value.filter((item) => Number(item.enabled) !== 1).length
+)
+
+const candidateMemoryCount = computed(() =>
+  agentMemories.value.filter((item) => {
+    const sourceType = String(item.sourceType || '').toUpperCase()
+    const generatedByAgent = ['AGENT', 'AI', 'REVIEW', 'SYSTEM'].some((key) => sourceType.includes(key))
+    return Number(item.enabled) !== 1 && generatedByAgent
+  }).length
+)
+
+const lowConfidenceMemoryCount = computed(() =>
+  agentMemories.value.filter((item) =>
+    Number(item.enabled) === 1 &&
+    typeof item.confidence === 'number' &&
+    item.confidence > 0 &&
+    item.confidence < 0.6
+  ).length
+)
+
+const memoryGovernanceLabel = computed(() => {
+  if (!agentMemories.value.length) return '暂无记忆'
+  if (candidateMemoryCount.value) return `${candidateMemoryCount.value} 条待确认`
+  if (lowConfidenceMemoryCount.value) return `${lowConfidenceMemoryCount.value} 条低置信`
+  return `${enabledMemoryCount.value} 条可用`
+})
+
+const memoryGovernanceDetail = computed(() => {
+  if (!agentMemories.value.length) return '长期记忆为空，后续建议不会引用记忆作为强证据。'
+  if (candidateMemoryCount.value) return '候选记忆需要用户确认后，才适合影响强推荐。'
+  if (lowConfidenceMemoryCount.value) return '低置信记忆仅作为复核提示，不应包装成强依据。'
+  if (disabledMemoryCount.value) return `${disabledMemoryCount.value} 条已停用或待确认记忆不会主动影响推荐。`
+  return '已启用记忆可作为证据来源，但仍需保留来源和置信度。'
+})
+
+const knowledgeGovernanceIndexLabel = computed(() => {
+  if (!chunkTotal.value) return '无片段'
+  if (!semanticEnabled.value) return '未启用'
+  return `${indexedChunkCount.value}/${chunkTotal.value}`
+})
+
+const knowledgeGovernanceIndexDetail = computed(() => {
+  if (!semanticEnabled.value) return semanticDisabledReason.value
+  const risks = [
+    failedChunkCount.value ? `${failedChunkCount.value} 失败` : '',
+    pendingChunkCount.value ? `${pendingChunkCount.value} 待索引` : '',
+    disabledChunkCount.value ? `${disabledChunkCount.value} 未启用` : ''
+  ].filter(Boolean)
+  return risks.length ? risks.join(' / ') : '索引覆盖正常'
+})
+
+const duplicateGovernanceLabel = computed(() =>
+  duplicateChunkTotal.value ? `${duplicateChunkTotal.value} 待治理` : '无明显重复'
+)
+
+const duplicateGovernanceDetail = computed(() => {
+  if (duplicateReview.value) return `近重复候选 ${duplicateReview.value.candidateCount || 0}，已扫描 ${duplicateReview.value.scannedChunkCount || 0}`
+  if (duplicateChunkTotal.value) return `${duplicateTypeSummary.value}，可扫描近重复或检查完全重复`
+  return `阈值 ${duplicateReviewThresholdLabel.value}，可按需扫描`
+})
+
+const answerReferenceRisk = computed(() =>
+  Boolean(
+    answer.value &&
+    (
+      askInsufficientReferences.value ||
+      !askReferenceCount.value ||
+      askCitationValid.value !== true ||
+      askAnswerGrounded.value !== true ||
+      askCitationWarning.value
+    )
+  )
+)
+
+const askStronglyGrounded = computed(() =>
+  Boolean(answer.value && askReferenceCount.value > 0 && askCitationValid.value === true && askAnswerGrounded.value === true)
+)
+
+const answerReferenceRiskMessage = computed(() => {
+  if (!askReferenceCount.value) return '当前回答没有返回引用来源，暂不作为可信结论展示。'
+  if (askCitationValid.value !== true) return '生成结果未通过引用校验，暂不作为可信结论展示。'
+  if (askAnswerGrounded.value !== true) return '回答依据未充分绑定资料来源，建议复核引用后再使用。'
+  return '当前回答需要复核引用来源，暂不作为强结论。'
+})
+
+const referenceGovernanceLabel = computed(() => {
+  if (askInsufficientReferences.value) return '引用不足'
+  if (answerReferenceRisk.value) return '需复核'
+  if (askStronglyGrounded.value) return '可信回答'
+  const total = knowledgeEvalLatestRun.value?.results?.length || 0
+  if (total) return `可信 ${knowledgeEvalLatestTrustedCount.value}/${total}`
+  return '待校验'
+})
+
+const referenceGovernanceDetail = computed(() => {
+  if (askInsufficientReferences.value) return '当前回答没有足够相关引用，建议补充资料或降低引用最低分'
+  if (askCitationWarning.value) return askCitationWarning.value
+  if (answer.value) return `引用 ${askReferenceCount.value} 条，最高分 ${scoreLabel(askTopReferenceScore.value)}`
+  if (knowledgeEvalLatestRun.value?.results?.length) return knowledgeEvalLatestTrustSummary.value
+  return '生成回答或运行评估后显示引用可信状态'
+})
+
+const evaluationGovernanceLabel = computed(() => {
+  if (knowledgeEvaluation.value) return formatRate(knowledgeEvaluation.value.passRate)
+  const run = knowledgeEvalLatestRun.value
+  if (run) return formatRate(run.passRate)
+  if (knowledgeEvalCaseTotal.value) return '待运行'
+  return '无样本'
+})
+
+const evaluationGovernanceDetail = computed(() => {
+  if (knowledgeEvaluation.value) {
+    return `当前评估通过 ${knowledgeEvaluation.value.passedCount || 0}/${knowledgeEvaluation.value.evaluatedCount || 0}`
+  }
+  const run = knowledgeEvalLatestRun.value
+  if (run) {
+    return `${evalRunStatusLabel(run.status)} · 失败 ${run.failedCount || 0} · ${knowledgeEvalLatestTrustSummary.value}`
+  }
+  if (knowledgeEvalCaseTotal.value) return `${knowledgeEvalCaseTotal.value} 个样本待运行`
+  return '可保存真实问题作为样本，持续评估检索和引用质量'
+})
+
+const referenceInsufficientLabel = computed(() => {
+  if (askInsufficientReferences.value) return '已触发'
+  if (answer.value && !askReferenceCount.value) return '无引用'
+  return '未触发'
+})
+
+const referenceInsufficientDetail = computed(() => {
+  if (askInsufficientReferences.value) return '问答结果已提示引用不足'
+  if (answer.value && !askReferenceCount.value) return '当前回答没有返回引用来源'
+  return `当前引用最低分 ${askMinScoreLabel.value}`
+})
+
+const knowledgeGovernanceRiskCount = computed(() => {
+  let count = 0
+  if (!documentTotal.value) count += 1
+  if (!semanticEnabled.value) count += 1
+  if (failedChunkCount.value > 0) count += 1
+  if (pendingChunkCount.value > 0) count += 1
+  if (duplicateChunkTotal.value > 0) count += 1
+  if (knowledgeEvalLatestTrustRiskCount.value > 0 || (knowledgeEvalLatestRun.value?.failedCount || 0) > 0) count += 1
+  if (answerReferenceRisk.value || askInsufficientReferences.value) count += 1
+  if (candidateMemoryCount.value > 0 || lowConfidenceMemoryCount.value > 0) count += 1
+  return count
+})
+
+const knowledgeGovernanceHealthType = computed(() => {
+  if (!documentTotal.value) return 'info'
+  if (failedChunkCount.value > 0 || answerReferenceRisk.value) return 'danger'
+  if (knowledgeGovernanceRiskCount.value > 0) return 'warning'
+  return 'success'
+})
+
+const knowledgeGovernanceHealthBadge = computed(() => {
+  if (knowledgeGovernanceHealthType.value === 'success') return '健康'
+  if (knowledgeGovernanceHealthType.value === 'danger') return '高优先级'
+  if (knowledgeGovernanceHealthType.value === 'warning') return '需关注'
+  return '待建设'
+})
+
+const knowledgeGovernanceHealthLabel = computed(() => {
+  if (!documentTotal.value) return '知识库待建设'
+  if (knowledgeGovernanceHealthType.value === 'success') return '知识健康状态良好'
+  return `${knowledgeGovernanceRiskCount.value} 项治理项需关注`
+})
+
+const knowledgeGovernanceHealthDetail = computed(() => {
+  if (!documentTotal.value) return '先添加可引用资料，再观察索引、重复、评测和引用可信状态。'
+  if (knowledgeGovernanceHealthType.value === 'success') return '索引、重复、评测和引用可信暂无明显风险。'
+  return '优先处理失败索引、重复片段、引用不足和评测失败项。'
+})
+
+const knowledgeGovernanceItems = computed(() => [
+  {
+    key: 'index',
+    label: '索引覆盖',
+    value: knowledgeGovernanceIndexLabel.value,
+    detail: knowledgeGovernanceIndexDetail.value
+  },
+  {
+    key: 'duplicate',
+    label: '重复治理',
+    value: duplicateGovernanceLabel.value,
+    detail: duplicateGovernanceDetail.value
+  },
+  {
+    key: 'reference',
+    label: '引用可信',
+    value: referenceGovernanceLabel.value,
+    detail: referenceGovernanceDetail.value
+  },
+  {
+    key: 'evaluation',
+    label: '评测结果',
+    value: evaluationGovernanceLabel.value,
+    detail: evaluationGovernanceDetail.value
+  },
+  {
+    key: 'memory',
+    label: '记忆治理',
+    value: memoryGovernanceLabel.value,
+    detail: memoryGovernanceDetail.value
+  },
+  {
+    key: 'insufficient-reference',
+    label: '引用不足',
+    value: referenceInsufficientLabel.value,
+    detail: referenceInsufficientDetail.value
+  }
+])
+
+const knowledgeGovernanceWarnings = computed(() => {
+  const warnings: string[] = []
+  if (!documentTotal.value) warnings.push('知识库暂无资料，无法形成可引用答案。')
+  if (!semanticEnabled.value) warnings.push(semanticDisabledReason.value)
+  if (failedChunkCount.value > 0) warnings.push(`${failedChunkCount.value} 个片段索引失败，建议重试失败索引或查看片段错误。`)
+  if (pendingChunkCount.value > 0) warnings.push(`${pendingChunkCount.value} 个片段仍待索引，评测和问答可信度可能暂不稳定。`)
+  if (duplicateChunkTotal.value > 0) warnings.push(`${duplicateChunkTotal.value} 个重复片段待治理，建议先扫描近重复或检查完全重复。`)
+  if (knowledgeEvalLatestTrustRiskCount.value > 0) warnings.push(`${knowledgeEvalLatestTrustRiskCount.value} 条评测结果存在引用或依据风险。`)
+  if (candidateMemoryCount.value > 0) warnings.push(`${candidateMemoryCount.value} 条候选记忆尚未确认，不应进入强推荐依据。`)
+  if (lowConfidenceMemoryCount.value > 0) warnings.push(`${lowConfidenceMemoryCount.value} 条低置信记忆仅作为复核提示。`)
+  if (askInsufficientReferences.value) warnings.push('当前问答引用不足，建议补充资料、缩小范围或降低引用最低分后重试。')
+  else if (answerReferenceRisk.value) warnings.push(referenceGovernanceDetail.value)
+  return Array.from(new Set(warnings))
+})
+
+const qualityGateItems = computed(() => [
+  {
+    key: 'citation',
+    label: '引用可信门槛',
+    status: askStronglyGrounded.value ? '可作为可信回答' : '需引用校验',
+    detail: askStronglyGrounded.value
+      ? `已绑定 ${askReferenceCount.value} 条引用，引用校验和回答依据均通过。`
+      : '无引用、引用不足或校验失败时，只能作为弱观察或补资料行动。'
+  },
+  {
+    key: 'eval-sample',
+    label: '评测样本门槛',
+    status: knowledgeEvalCaseTotal.value ? `${knowledgeEvalCaseTotal.value} 个样本` : '样本不足',
+    detail: knowledgeEvalCaseTotal.value
+      ? evaluationGovernanceDetail.value
+      : '没有评测样本时，不宣称知识库整体可靠，只提示补充样本。'
+  },
+  {
+    key: 'index',
+    label: '索引可用门槛',
+    status: failedChunkCount.value || pendingChunkCount.value || !semanticEnabled.value ? '需降级' : '可检索',
+    detail: knowledgeGovernanceIndexDetail.value
+  },
+  {
+    key: 'memory',
+    label: '记忆可信门槛',
+    status: candidateMemoryCount.value || lowConfidenceMemoryCount.value ? '需复核' : memoryGovernanceLabel.value,
+    detail: memoryGovernanceDetail.value
+  },
+  {
+    key: 'impact',
+    label: '破坏性动作门槛',
+    status: '已启用影响说明',
+    detail: '删除、清理、恢复和重建前均通过确认弹窗说明影响、回滚方式和审计口径。'
+  }
+])
+
+type KnowledgeGovernanceActionKind =
+  | 'ADD_DOCUMENT'
+  | 'RETRY_INDEX'
+  | 'SCAN_DUPLICATES'
+  | 'CHECK_EXACT_DUPLICATES'
+  | 'ADD_EVAL_CASE'
+  | 'RUN_EVAL'
+  | 'RETRY_ASK'
+  | 'OPEN_MEMORY'
+
+type KnowledgeGovernanceAction = {
+  key: string
+  title: string
+  description: string
+  impact: string
+  priority: string
+  tagType: 'success' | 'warning' | 'danger' | 'info'
+  buttonType: 'primary' | 'warning' | 'danger' | 'info'
+  cta: string
+  action: KnowledgeGovernanceActionKind
+}
+
+const knowledgeGovernanceActions = computed<KnowledgeGovernanceAction[]>(() => {
+  const actions: KnowledgeGovernanceAction[] = []
+  if (!documentTotal.value) {
+    actions.push({
+      key: 'add-document',
+      title: '补充可引用资料',
+      description: '知识库为空时不能形成可信回答。',
+      impact: '新增资料后仍需通过索引、引用校验和评测样本验证，不能立即宣称整体可靠。',
+      priority: '高',
+      tagType: 'danger',
+      buttonType: 'primary',
+      cta: '新增资料',
+      action: 'ADD_DOCUMENT'
+    })
+  }
+  if (failedChunkCount.value > 0) {
+    actions.push({
+      key: 'retry-index',
+      title: '重试失败索引',
+      description: `${failedChunkCount.value} 个片段索引失败，相关问答可能找不到引用。`,
+      impact: '重试会重新提交索引任务；若仍失败，应检查资料内容或语义检索配置。',
+      priority: '高',
+      tagType: 'danger',
+      buttonType: 'warning',
+      cta: '重试索引',
+      action: 'RETRY_INDEX'
+    })
+  }
+  if (duplicateChunkTotal.value > 0) {
+    actions.push({
+      key: 'scan-duplicates',
+      title: '审查重复或污染片段',
+      description: `${duplicateChunkTotal.value} 个重复片段可能放大相同资料的权重。`,
+      impact: '先扫描和查看候选，不自动删除；清理前会再次展示删除数量和影响。',
+      priority: '中',
+      tagType: 'warning',
+      buttonType: 'warning',
+      cta: '扫描重复',
+      action: 'SCAN_DUPLICATES'
+    })
+    actions.push({
+      key: 'exact-duplicates',
+      title: '检查完全重复片段',
+      description: '完全重复可先做 dry-run 预览，再决定是否清理。',
+      impact: '清理会删除重复片段并同步清理索引；误删需要重新导入或重新保存资料。',
+      priority: '中',
+      tagType: 'warning',
+      buttonType: 'warning',
+      cta: '检查重复',
+      action: 'CHECK_EXACT_DUPLICATES'
+    })
+  }
+  if (!knowledgeEvalCaseTotal.value) {
+    actions.push({
+      key: 'add-eval-case',
+      title: '新增评测样本',
+      description: '没有真实问题样本时，评测结果只能作为弱提示。',
+      impact: '样本会用于后续检索评估，建议绑定期望资料或标记为期望无答案。',
+      priority: '中',
+      tagType: 'warning',
+      buttonType: 'primary',
+      cta: '准备样本',
+      action: 'ADD_EVAL_CASE'
+    })
+  } else if ((knowledgeEvalLatestRun.value?.failedCount || 0) > 0 || knowledgeEvalLatestTrustRiskCount.value > 0) {
+    actions.push({
+      key: 'run-eval',
+      title: '复跑或复核评测',
+      description: evaluationGovernanceDetail.value,
+      impact: '运行评测可能调用知识问答能力并写入评测运行记录，失败项只生成治理提示。',
+      priority: '中',
+      tagType: 'warning',
+      buttonType: 'primary',
+      cta: '运行评测',
+      action: 'RUN_EVAL'
+    })
+  }
+  if (askInsufficientReferences.value || answerReferenceRisk.value) {
+    actions.push({
+      key: 'retry-ask',
+      title: '复核引用不足回答',
+      description: referenceGovernanceDetail.value,
+      impact: '当前回答不作为可信结论；建议补资料、缩小范围或调整最低引用分后重试。',
+      priority: '高',
+      tagType: 'danger',
+      buttonType: 'warning',
+      cta: '回到问答',
+      action: 'RETRY_ASK'
+    })
+  }
+  if (candidateMemoryCount.value || lowConfidenceMemoryCount.value || disabledMemoryCount.value) {
+    actions.push({
+      key: 'memory-governance',
+      title: '复核长期记忆',
+      description: memoryGovernanceDetail.value,
+      impact: '候选、停用或低置信记忆不应进入强证据；确认或删除应在记忆页完成。',
+      priority: candidateMemoryCount.value || lowConfidenceMemoryCount.value ? '中' : '低',
+      tagType: candidateMemoryCount.value || lowConfidenceMemoryCount.value ? 'warning' : 'info',
+      buttonType: 'primary',
+      cta: '打开记忆页',
+      action: 'OPEN_MEMORY'
+    })
+  }
+  return actions.slice(0, 6)
+})
+
+const governanceActionSummary = computed(() =>
+  knowledgeGovernanceActions.value.length
+    ? `${knowledgeGovernanceActions.value.length} 个可转行动`
+    : '暂无高优先级治理行动'
+)
 
 const knowledgeEvalHasCurrentQuery = computed(() => Boolean((question.value || keyword.value).trim()))
 const searchHasQuery = computed(() => Boolean(keyword.value.trim()))
@@ -2082,10 +2560,55 @@ const refreshKnowledgeEvalWorkspace = async () => {
   }
 }
 
+const fetchAgentMemoryGovernance = async () => {
+  clearPartialLoadWarnings('长期记忆治理加载失败')
+  try {
+    const result = await getAgentMemoriesApi({ pageNo: 1, pageSize: 200 })
+    agentMemories.value = result.records || []
+  } catch (error) {
+    agentMemories.value = []
+    addPartialLoadWarning('长期记忆治理加载失败', error)
+  }
+}
+
 const refreshKnowledgePage = async () => {
   partialLoadWarnings.value = []
   await loadDocuments()
-  await refreshKnowledgeEvalWorkspace()
+  await Promise.allSettled([refreshKnowledgeEvalWorkspace(), fetchAgentMemoryGovernance()])
+}
+
+const runGovernanceAction = async (action: KnowledgeGovernanceActionKind) => {
+  if (action === 'ADD_DOCUMENT') {
+    openCreate()
+    return
+  }
+  if (action === 'RETRY_INDEX') {
+    await handleRetryFailedVectors()
+    return
+  }
+  if (action === 'SCAN_DUPLICATES') {
+    await loadDuplicateReview()
+    return
+  }
+  if (action === 'CHECK_EXACT_DUPLICATES') {
+    await loadExactDuplicates()
+    return
+  }
+  if (action === 'ADD_EVAL_CASE') {
+    startNewKnowledgeEvalCase()
+    return
+  }
+  if (action === 'RUN_EVAL') {
+    await runKnowledgeEvalCases()
+    return
+  }
+  if (action === 'RETRY_ASK') {
+    seedKnowledgeEvalQuestion()
+    return
+  }
+  if (action === 'OPEN_MEMORY') {
+    router.push('/agent/memory')
+  }
 }
 
 const saveCurrentKnowledgeEvalCase = async () => {
@@ -2378,6 +2901,7 @@ const refreshDuplicateReview = async () => {
 }
 
 const loadDuplicateReview = async () => {
+  if (duplicateReviewLoading.value) return
   duplicateReviewVisible.value = true
   duplicateReviewLoading.value = true
   try {
@@ -3230,6 +3754,204 @@ watch(
   white-space: nowrap;
 }
 
+.governance-strip {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(20, 184, 166, 0.26);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, 0.1);
+}
+
+.governance-strip__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.governance-strip__head strong,
+.governance-strip__head small {
+  display: block;
+}
+
+.governance-strip__head strong {
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.governance-strip__head small {
+  margin-top: 5px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.governance-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.governance-grid article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.governance-grid span,
+.governance-grid small {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.governance-grid strong {
+  display: block;
+  margin: 5px 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-grid small {
+  overflow: hidden;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+.quality-gate-strip,
+.governance-action-strip {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 8px;
+  background: rgba(30, 64, 175, 0.1);
+}
+
+.governance-action-strip {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(120, 53, 15, 0.1);
+}
+
+.quality-gate-strip__head,
+.governance-action-strip__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quality-gate-strip__head strong,
+.quality-gate-strip__head small,
+.governance-action-strip__head strong,
+.governance-action-strip__head small {
+  display: block;
+}
+
+.quality-gate-strip__head strong,
+.governance-action-strip__head strong {
+  color: var(--app-text);
+  font-size: 17px;
+}
+
+.quality-gate-strip__head small,
+.governance-action-strip__head small {
+  margin-top: 5px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.quality-gate-grid,
+.governance-action-list {
+  display: grid;
+  gap: 10px;
+}
+
+.quality-gate-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.quality-gate-grid article,
+.governance-action-list article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.quality-gate-grid span,
+.quality-gate-grid small,
+.governance-action-list p,
+.governance-action-list small {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.quality-gate-grid span,
+.quality-gate-grid strong,
+.quality-gate-grid small,
+.governance-action-list small {
+  display: block;
+}
+
+.quality-gate-grid strong {
+  display: block;
+  margin: 5px 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quality-gate-grid small,
+.governance-action-list small {
+  overflow: hidden;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-action-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.governance-action-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.governance-action-title strong {
+  overflow: hidden;
+  color: var(--app-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-action-list p {
+  margin: 6px 0 4px;
+  line-height: 1.6;
+}
+
 .index-pill-row {
   display: flex;
   flex-wrap: wrap;
@@ -3827,6 +4549,8 @@ watch(
 
   .summary-grid,
   .config-strip,
+  .governance-grid,
+  .quality-gate-grid,
   .index-observability-strip,
   .duplicate-hotspot-strip,
   .knowledge-eval-dataset__body {
@@ -3840,6 +4564,9 @@ watch(
 
 @media (max-width: 760px) {
   .knowledge-hero,
+  .governance-strip__head,
+  .quality-gate-strip__head,
+  .governance-action-strip__head,
   .duplicate-review-strip,
   .result-row {
     align-items: flex-start;
@@ -3849,9 +4576,15 @@ watch(
 
   .summary-grid,
   .config-strip,
+  .governance-grid,
+  .quality-gate-grid,
   .index-observability-strip,
   .duplicate-hotspot-strip,
   .knowledge-eval-dataset__body {
+    grid-template-columns: 1fr;
+  }
+
+  .governance-action-list article {
     grid-template-columns: 1fr;
   }
 

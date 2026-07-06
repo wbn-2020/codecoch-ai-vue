@@ -4,10 +4,10 @@
       <div>
         <div class="eyebrow">
           <History :size="16" />
-          模拟面试记录
+          复盘路径中心
         </div>
-        <h1>按复盘路径回看每一轮面试</h1>
-        <p>这里按复盘路径组织每一轮记录，方便继续面试、查看报告、重练短板。</p>
+        <h1>下一步从这里继续</h1>
+        <p>优先处理未完成面试、生成中的报告和已出炉复盘，把每一轮面试接到下一次训练。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/tools')">
@@ -29,30 +29,48 @@
       </article>
     </section>
 
-    <section class="history-panel">
-      <div class="filter-bar">
-        <el-input
-          v-model="query.keyword"
-          clearable
-          placeholder="搜索面试名称、岗位或行业"
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix>
-            <Search :size="16" />
-          </template>
-        </el-input>
-        <el-select v-model="query.status" clearable placeholder="面试状态" @change="handleSearch">
-          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="query.reportStatus" clearable placeholder="报告状态" @change="handleSearch">
-          <el-option v-for="item in reportStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-button :loading="loading" @click="fetchInterviews">
-          <RefreshCw :size="16" />
-          刷新
-        </el-button>
+    <section v-if="focusInterview" class="next-step-panel">
+      <div>
+        <span class="quick-label">建议先处理</span>
+        <h2>{{ focusInterview.interviewName || focusInterview.targetPosition || '未命名模拟面试' }}</h2>
+        <p>{{ nextActionText(focusInterview) }}</p>
       </div>
+      <el-button type="primary" size="large" @click="openPrimary(focusInterview)">
+        {{ primaryActionLabel(focusInterview) }}
+        <ChevronRight :size="16" />
+      </el-button>
+    </section>
+
+    <section class="history-panel">
+      <details class="filter-drawer">
+        <summary>
+          <Search :size="16" />
+          筛一下复盘路径
+        </summary>
+        <div class="filter-bar">
+          <el-input
+            v-model="query.keyword"
+            clearable
+            placeholder="搜索面试名称、岗位或行业"
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <Search :size="16" />
+            </template>
+          </el-input>
+          <el-select v-model="query.status" clearable placeholder="面试状态" @change="handleSearch">
+            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-model="query.reportStatus" clearable placeholder="报告状态" @change="handleSearch">
+            <el-option v-for="item in reportStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-button :loading="loading" @click="fetchInterviews">
+            <RefreshCw :size="16" />
+            刷新
+          </el-button>
+        </div>
+      </details>
 
       <el-alert
         v-if="loadError"
@@ -84,6 +102,21 @@
           <el-button @click="router.push('/onboarding')">先建立目标</el-button>
         </AppState>
 
+        <section v-if="showMissingReportGuide" class="missing-report-guide">
+          <div>
+            <span class="quick-label">当前没有可查看的面试报告</span>
+            <h2>先完成一次面试，再到报告页生成复盘</h2>
+            <p>报告不会凭空生成：需要先进入面试房间完成答题，结束面试后点击“生成报告”。报告生成后会展示短板、推荐题和下一轮训练入口。</p>
+          </div>
+          <div class="missing-report-actions">
+            <el-button type="primary" @click="openMissingReportGuidePrimary">
+              {{ focusInterview && !isInterviewDone(focusInterview.status) ? '继续完成面试' : '去生成报告' }}
+            </el-button>
+            <el-button @click="router.push('/interviews/create')">新建一轮面试</el-button>
+            <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
+          </div>
+        </section>
+
         <article v-for="item in interviews" :key="item.interviewId" class="interview-card">
           <div class="card-main">
             <div class="card-head">
@@ -104,6 +137,7 @@
             </div>
 
             <div class="card-desc">
+              <span class="next-action-chip">下一步：{{ primaryActionLabel(item) }}</span>
               <p>{{ nextActionText(item) }}</p>
             </div>
           </div>
@@ -115,7 +149,7 @@
           </aside>
 
           <div class="card-actions">
-            <el-button type="primary" @click="openPrimary(item)">
+            <el-button class="card-primary-action" type="primary" @click="openPrimary(item)">
               {{ primaryActionLabel(item) }}
               <ChevronRight :size="16" />
             </el-button>
@@ -212,6 +246,15 @@ const canOpenReportPage = (row: InterviewListVO) =>
 
 const generatedReports = computed(() => interviews.value.filter((item) => isReportSuccess(item.reportStatus)))
 const activeInterviews = computed(() => interviews.value.filter((item) => !isInterviewDone(item.status)))
+const focusInterview = computed(() =>
+  activeInterviews.value[0] ||
+  interviews.value.find((item) => isReportInProgress(item.reportStatus) || isReportFailed(item.reportStatus)) ||
+  generatedReports.value[0] ||
+  interviews.value[0]
+)
+const showMissingReportGuide = computed(() =>
+  Boolean(interviews.value.length && !generatedReports.value.length && !loading.value && !loadError.value)
+)
 const averageScore = computed(() => {
   const scores = generatedReports.value
     .map((item) => Number(item.totalScore))
@@ -221,10 +264,10 @@ const averageScore = computed(() => {
 })
 
 const metrics = computed(() => [
-  { label: '全部记录', value: total.value || interviews.value.length, desc: '你的累计面试记录' },
-  { label: '本页已出报告', value: generatedReports.value.length, desc: '可以直接进入报告复盘' },
-  { label: '本页平均分', value: averageScore.value, desc: '只统计已生成且有分数的报告' },
-  { label: '可继续面试', value: activeInterviews.value.length, desc: '未完成记录可回到面试房间' }
+  { label: '复盘总数', value: total.value || interviews.value.length, desc: '累计面试路径' },
+  { label: '可继续', value: activeInterviews.value.length, desc: '先回房间完成答题' },
+  { label: '已出复盘', value: generatedReports.value.length, desc: '可直接查看报告' },
+  { label: '平均表现', value: averageScore.value, desc: '仅统计可信分数字段' }
 ])
 
 const displayInterviewScore = (row: InterviewListVO) => {
@@ -254,7 +297,7 @@ const nextActionText = (row: InterviewListVO) => {
   if (isReportInProgress(row.reportStatus)) return '报告正在生成，可以进入报告页查看进度，也可以到任务中心稍后继续。'
   if (isReportFailed(row.reportStatus)) return '报告生成失败，可以进入报告页查看失败原因，并重新提交生成任务。'
   if (canSubmitOrViewReport(row.status)) return '面试已结束，可以进入报告页提交生成任务；耗时较久时可在任务中心继续查看。'
-  return '面试已结束但报告未生成，可以进入详情或房间确认当前状态。'
+  return '面试已结束但报告未生成，可以回看本轮记录，确认是否需要补交复盘。'
 }
 
 const primaryActionLabel = (row: InterviewListVO) => {
@@ -263,7 +306,7 @@ const primaryActionLabel = (row: InterviewListVO) => {
   if (isReportInProgress(row.reportStatus)) return '查看进度'
   if (isReportFailed(row.reportStatus)) return '处理报告失败'
   if (canSubmitOrViewReport(row.status)) return '生成报告'
-  return '查看详情'
+  return '回看这轮'
 }
 
 const showReportSecondaryAction = (row: InterviewListVO) => !isReportFailed(row.reportStatus)
@@ -285,6 +328,12 @@ const openPrimary = async (row: InterviewListVO) => {
     return
   }
   await router.push(`/interviews/${row.interviewId}`)
+}
+
+const openMissingReportGuidePrimary = async () => {
+  const row = focusInterview.value || interviews.value[0]
+  if (!row) return
+  await openPrimary(row)
 }
 
 const formatDateTime = (value?: string) => {
@@ -331,6 +380,7 @@ onMounted(fetchInterviews)
 
 .history-hero,
 .metric-card,
+.next-step-panel,
 .history-panel,
 .interview-card {
   border: 1px solid var(--app-border);
@@ -414,6 +464,66 @@ onMounted(fetchInterviews)
   }
 }
 
+.next-step-panel,
+.missing-report-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border-color: rgba(37, 99, 235, 0.22);
+  background: #f8fbff;
+
+  h2 {
+    margin: 6px 0 8px;
+    color: var(--app-text);
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  p {
+    margin: 0;
+    color: var(--app-text-muted);
+    line-height: 1.65;
+  }
+
+  .el-button {
+    flex: 0 0 auto;
+  }
+}
+
+.missing-report-guide {
+  border: 1px dashed #bfdbfe;
+  background: #eff6ff;
+  box-shadow: none;
+
+  h2 {
+    margin: 6px 0 8px;
+    color: #0f172a;
+    font-size: 20px;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.65;
+  }
+}
+
+.missing-report-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.quick-label {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .history-panel {
   padding: 18px;
 }
@@ -424,7 +534,7 @@ onMounted(fetchInterviews)
 
 .filter-bar {
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-top: 12px;
 
   :deep(.el-input) {
     width: min(340px, 100%);
@@ -432,6 +542,29 @@ onMounted(fetchInterviews)
 
   :deep(.el-select) {
     width: 170px;
+  }
+}
+
+.filter-drawer {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
   }
 }
 
@@ -497,10 +630,23 @@ onMounted(fetchInterviews)
   margin-top: 12px;
 
   p {
-    margin: 0;
+    margin: 8px 0 0;
     color: var(--app-text-muted);
     line-height: 1.7;
   }
+}
+
+.next-action-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .score-panel {
@@ -534,8 +680,19 @@ onMounted(fetchInterviews)
 
 .card-actions {
   grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, auto) repeat(2, auto);
+  justify-content: end;
   padding-top: 14px;
   border-top: 1px solid var(--app-border);
+
+  :deep(.el-button) {
+    margin-left: 0;
+  }
+}
+
+.card-primary-action {
+  min-width: 180px;
 }
 
 .pagination-wrap {
@@ -570,7 +727,9 @@ onMounted(fetchInterviews)
   }
 
   .history-hero,
-  .card-head {
+  .card-head,
+  .next-step-panel,
+  .missing-report-guide {
     flex-direction: column;
   }
 
@@ -595,6 +754,27 @@ onMounted(fetchInterviews)
   .card-actions,
   .status-group {
     justify-content: flex-start;
+  }
+
+  .next-step-panel,
+  .missing-report-guide {
+    align-items: stretch;
+  }
+
+  .next-step-panel :deep(.el-button),
+  .missing-report-actions :deep(.el-button),
+  .hero-actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .card-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions :deep(.el-button) {
+    width: 100%;
+    min-width: 0;
   }
 
   .pagination-wrap {

@@ -1,3 +1,5 @@
+import type { PageQuery } from '@/types/api'
+
 export type AiResultFeedbackType =
   | 'HELPFUL'
   | 'NOT_HELPFUL'
@@ -23,7 +25,22 @@ export interface AiResultFeedbackCreateDTO {
 export interface AiResultFeedbackVO extends AiResultFeedbackCreateDTO {
   id: number
   userId?: number
+  username?: string
+  traceId?: string
+  aiCallLogTraceId?: string
   createdAt?: string
+}
+
+export interface AdminAiResultFeedbackQueryDTO extends PageQuery {
+  userId?: number
+  scene?: string
+  bizType?: string
+  bizId?: number
+  aiCallLogId?: number
+  traceId?: string
+  feedbackType?: AiResultFeedbackType | ''
+  startTime?: string
+  endTime?: string
 }
 
 export interface AiResultFeedbackStatsVO {

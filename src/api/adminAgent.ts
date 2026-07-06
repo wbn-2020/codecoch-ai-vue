@@ -38,6 +38,8 @@ const toAdminAgentRunQueryParams = (params?: AdminAgentRunQueryDTO) => ({
   agentType: params?.agentType,
   status: params?.status,
   triggerType: params?.triggerType,
+  traceId: params?.traceId,
+  aiCallLogId: params?.aiCallLogId,
   startDate: normalizeDateParam(params?.startDate ?? params?.startTime),
   endDate: normalizeDateParam(params?.endDate ?? params?.endTime)
 })

@@ -89,7 +89,7 @@ const normalizeCurrent = (current: any): InterviewCurrentVO => ({
 
 const normalizeSession = (session: any): InterviewSessionVO => ({
   ...session,
-  interviewId: session.interviewId || session.id,
+  interviewId: session.interviewId || session.id || session.sessionId,
   interviewName: session.interviewName || session.title,
   interviewMode: session.interviewMode || session.mode,
   stageList: (session.stageList || session.stages || []).map(normalizeStage)
@@ -192,7 +192,7 @@ const normalizeTextArray = (value: unknown): string[] => {
     // split plain text below
   }
   return trimmed
-    .split(/[,\n;锛涖€侊紝]/)
+    .split(/[,\n;；、，]/)
     .map((item) => item.trim())
     .filter(Boolean)
 }

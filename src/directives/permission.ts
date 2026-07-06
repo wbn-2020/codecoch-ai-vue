@@ -73,6 +73,8 @@ const permissionLabelMap: Record<string, string> = {
   'admin:ai:log:raw:view': 'AI 原文诊断查看',
   'admin:ai:model:list': 'AI 模型配置查看',
   'admin:ai:model:write': 'AI 模型配置维护',
+  'admin:ai:model:publish': 'AI 模型发布',
+  'admin:trace:cockpit:view': '链路驾驶舱查看',
   'admin:analytics:ai': 'AI 运营看板查看',
   'admin:analytics:agent': '生成效果分析查看',
   'admin:analytics:job:run': '聚合任务运行',

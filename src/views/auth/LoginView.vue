@@ -134,7 +134,10 @@ const getLoginErrorMessage = (error: unknown) => {
 }
 
 const getPostLoginNavigationErrorMessage = (error: unknown) => {
-  console.error('[auth] post-login navigation failed', error)
+  if (import.meta.env.DEV) {
+    const message = error instanceof Error ? error.message : String(error || '')
+    console.error('[auth] post-login navigation failed', message)
+  }
   return '登录已成功，但目标页面加载失败。请刷新页面或从侧边栏重新进入；若持续出现，请联系管理员。'
 }
 

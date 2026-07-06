@@ -2,6 +2,7 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
 
 import { appConfig } from '@/config'
 import { HTTP_STATUS_CODE } from '@/constants/http'
+import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 import { canAccessAdminPermissions, firstAccessibleAdminPath, resolveAuthenticatedEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
@@ -31,7 +32,10 @@ const refreshAuthInBackground = (authStore: AuthStore) => {
 }
 
 const isFeatureEnabled = (featureFlag: string) => {
-  if (featureFlag === 'v4Preview') return appConfig.enableV4Preview
+  if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
+  if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
+  if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
+  if (featureFlag === 'adminTraceCockpit') return appConfig.enableAdminTraceCockpit
   return true
 }
 
@@ -140,7 +144,7 @@ export const setupRouterGuards = (router: Router) => {
       }
     }
 
-    if (isPreviewRoute(to) && !appConfig.enableV4ExperimentalRoutes) {
+    if (isPreviewRoute(to) && !isV4PreviewAccessEnabled()) {
       return {
         path: '/feature-unavailable',
         query: {

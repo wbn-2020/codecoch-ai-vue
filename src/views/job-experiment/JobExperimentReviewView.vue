@@ -1,68 +1,352 @@
 <template>
   <div class="job-experiment-review page-shell" v-loading="loading">
-    <section class="content-card review-card" v-if="detail">
-      <div class="section-head">
-        <div>
+    <AppState
+      v-if="errorMessage"
+      type="error"
+      title="求职实验复盘加载失败"
+      :description="errorMessage"
+    >
+      <el-button @click="router.push(demoPath('/job-experiments'))">返回列表</el-button>
+      <el-button type="primary" :loading="loading" @click="load">重新加载</el-button>
+    </AppState>
+    <template v-else-if="detail">
+      <section class="review-hero">
+        <div class="hero-copy">
           <p class="hero-kicker">实验复盘</p>
           <h1>{{ detail.title }}</h1>
+          <p>{{ detail.goal || detail.targetDirection || '用事实、样本限制和下一步行动复盘求职实验。' }}</p>
+          <div class="hero-meta">
+            <el-tag v-if="detail.demoFlag" type="warning" effect="plain">演示数据</el-tag>
+            <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
+              {{ weakConclusion ? '低样本弱建议' : '可作为候选判断' }}
+            </el-tag>
+            <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
+          </div>
         </div>
         <div class="actions">
-          <el-button @click="router.push(`/job-experiments/${detail.id}`)">实验详情</el-button>
-          <el-button type="primary" :loading="generating" @click="generate">生成复盘</el-button>
+          <el-button :icon="ArrowLeft" @click="router.push(demoPath(`/job-experiments/${detail.id}`))">实验详情</el-button>
+          <el-button type="primary" :icon="RefreshCcw" :loading="generating" :disabled="isDemoContext()" @click="generate">生成复盘</el-button>
         </div>
-      </div>
-      <el-alert v-if="detail.metrics?.sampleWarning" type="warning" :closable="false" :title="detail.metrics.sampleWarning" />
-      <div class="review-grid">
-        <article>
-          <h2>事实摘要</h2>
-          <ul>
-            <li v-for="fact in detail.metrics?.facts || []" :key="fact">{{ fact }}</li>
-          </ul>
-        </article>
-        <article>
-          <h2>最新复盘</h2>
-          <p>{{ latest?.factSummary || '还没有生成复盘。' }}</p>
-          <p>{{ latest?.insightSummary }}</p>
-          <el-alert
-            v-if="weakConclusion"
-            type="warning"
-            :closable="false"
-            title="当前样本不足，复盘只能作为弱建议，不能输出强结论。"
-          />
-          <p class="warning">{{ latest?.unsupportedConclusion }}</p>
-        </article>
-      </div>
-      <section v-if="latest" class="next-action">
-        <h2>下一步行动</h2>
-        <p>{{ latest.nextAction }}</p>
-        <el-tag>{{ confidenceLabel(latest.confidenceLevel || detail.metrics?.confidenceLevel) }}</el-tag>
       </section>
-    </section>
+
+      <section class="review-section fact-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">FACTS</p>
+            <h2>事实摘要</h2>
+          </div>
+          <el-tag effect="plain">metrics.facts</el-tag>
+        </div>
+        <p class="summary-text">{{ factSummary }}</p>
+        <ul class="fact-list" v-if="factItems.length">
+          <li v-for="fact in factItems" :key="fact">{{ fact }}</li>
+        </ul>
+        <div class="metric-strip">
+          <div>
+            <strong>{{ detail.metrics?.applicationCount ?? 0 }}</strong>
+            <span>投递数</span>
+          </div>
+          <div>
+            <strong>{{ detail.metrics?.feedbackCount ?? 0 }}</strong>
+            <span>反馈数</span>
+          </div>
+          <div>
+            <strong>{{ detail.metrics?.interviewCompletedCount ?? 0 }}</strong>
+            <span>完成面试</span>
+          </div>
+          <div>
+            <strong>{{ detail.metrics?.sampleCount ?? detail.metrics?.applicationCount ?? 0 }}</strong>
+            <span>样本数</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="review-section sample-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">SAMPLE LIMIT</p>
+            <h2>样本限制</h2>
+          </div>
+          <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
+            {{ confidenceLabel(displayConfidenceLevel) }}
+          </el-tag>
+        </div>
+        <el-alert
+          v-if="sampleWarning"
+          type="warning"
+          :closable="false"
+          title="样本不足提醒"
+          :description="sampleWarning"
+        />
+        <p v-if="sampleWarning" class="sample-warning-text">{{ sampleWarning }}</p>
+        <p v-else class="summary-text">当前没有后端样本不足提醒，但复盘仍应结合证据链验证后再行动。</p>
+        <p class="limit-note">
+          {{ weakConclusion ? '当前复盘只能作为下一轮实验假设，不能输出强结论或显著优劣判断。' : '样本未触发强提醒，仍建议保留人工复核。' }}
+        </p>
+      </section>
+
+      <section class="review-section unsupported-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">UNSUPPORTED</p>
+            <h2>不支持结论</h2>
+          </div>
+          <el-tag type="warning" effect="plain">unsupportedConclusion</el-tag>
+        </div>
+        <div class="stack-list">
+          <article v-for="item in unsupportedConclusions" :key="`${item.conclusionType}-${item.blockedReason}`">
+            <strong>{{ item.conclusionType || '样本边界' }}</strong>
+            <p class="unsupported-text">{{ item.blockedReason }}</p>
+            <span>{{ item.requiredSampleHint || '补足样本和证据后再判断。' }}</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="review-section weak-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">WEAK OBSERVATIONS</p>
+            <h2>弱观察</h2>
+          </div>
+          <el-tag type="warning" effect="plain">{{ qualityGateLabel }}</el-tag>
+        </div>
+        <div v-if="weakObservations.length" class="stack-list">
+          <article v-for="item in weakObservations" :key="`${item.observationType}-${item.text}`">
+            <strong>{{ item.observationType || '观察' }}</strong>
+            <p>{{ item.text }}</p>
+            <span>{{ item.evidenceCount ?? 0 }} 条证据 · {{ confidenceLabel(item.confidenceLevel) }}</span>
+            <span v-if="item.actionHint">{{ item.actionHint }}</span>
+          </article>
+        </div>
+        <p v-else class="summary-text">暂无弱观察。先补投递、反馈、简历版本和项目证据，再观察趋势。</p>
+      </section>
+
+      <section class="review-section hypothesis-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">HYPOTHESES</p>
+            <h2>实验假设</h2>
+          </div>
+          <el-tag effect="plain">hypotheses</el-tag>
+        </div>
+        <div class="stack-list">
+          <article v-for="item in hypotheses" :key="`${item.targetDirection}-${item.assumption}`">
+            <strong>{{ item.targetDirection || detail.targetDirection || '当前方向' }}</strong>
+            <p>{{ item.assumption }}</p>
+            <span>{{ item.expectedSignal || '观察下一轮投递反馈、面试邀约和证据覆盖变化。' }}</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="review-section next-action">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">NEXT</p>
+            <h2>下一步行动</h2>
+          </div>
+          <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
+        </div>
+        <p class="summary-text">{{ nextActionText }}</p>
+        <div v-if="reviewNextActions.length" class="stack-list action-stack">
+          <article v-for="action in reviewNextActions" :key="`${action.actionType}-${action.title}`">
+            <strong>{{ action.title }}</strong>
+            <p>{{ action.reason || '把复盘变成下一轮可执行动作。' }}</p>
+            <el-button v-if="action.targetRoute" size="small" @click="goStrategyAction(action.targetRoute)">打开入口</el-button>
+          </article>
+        </div>
+        <div class="action-grid">
+          <el-button
+            v-for="action in nextActionLinks"
+            :key="action.path"
+            :icon="action.icon"
+            @click="router.push(demoPath(action.path))"
+          >
+            {{ action.label }}
+          </el-button>
+        </div>
+      </section>
+
+      <section class="review-section evidence-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">EVIDENCE SOURCES</p>
+            <h2>证据来源</h2>
+          </div>
+          <el-tag effect="plain">{{ explainableStrategy.qualityGate?.suggestionStrength || 'WEAK' }}</el-tag>
+        </div>
+        <p class="summary-text">{{ strategySummary }}</p>
+        <p class="strategy-content">{{ strategyContent }}</p>
+        <SuggestionEvidencePanel
+          :suggestion="explainableStrategy"
+          :default-open="true"
+          @open-action="goStrategyAction"
+        />
+        <div class="strategy-evidence-list" v-if="explainableStrategy.evidenceSources.length">
+          <el-tag
+            v-for="source in explainableStrategy.evidenceSources"
+            :key="`${source.sourceType || 'SOURCE'}:${source.sourceId ?? source.evidenceSummary}`"
+            effect="plain"
+          >
+            {{ strategyEvidenceLabel(source.sourceType) }} #{{ source.sourceId }} {{ source.evidenceSummary || source.sourceSummary || '' }}
+          </el-tag>
+        </div>
+        <p v-else class="summary-text">暂无可展示证据来源，请先在实验详情中绑定关联证据。</p>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, Bot, BriefcaseBusiness, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
 
 import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api/jobExperiment'
-import { confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
-import type { JobSearchExperimentDetailVO } from '@/types/jobExperiment'
+import AppState from '@/components/common/AppState.vue'
+import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
+import { buildJobExperimentReviewDisplayModel, confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
+import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
+import type { JobSearchExperimentDetailVO, JobSearchExperimentStrategyVO } from '@/types/jobExperiment'
+import type { ExplainableSuggestionVO } from '@/types/suggestion'
+import { getSuggestionSourceTypeLabel } from '@/types/suggestion'
+import { fromJobExperimentStrategy } from '@/utils/suggestionAdapter'
+
+type SuggestionPanelAction = {
+  path?: string
+  actionUrl?: string
+}
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const generating = ref(false)
+const errorMessage = ref('')
 const detail = ref<JobSearchExperimentDetailVO>()
 const latest = computed(() => detail.value?.latestReview || detail.value?.reviews?.[0])
-const weakConclusion = computed(() => shouldKeepConclusionWeak(detail.value?.metrics))
+const reviewStrategy = computed<JobSearchExperimentStrategyVO>(() => ({
+  ...(latest.value?.strategy || {}),
+  ...(detail.value?.strategy || {})
+}))
+const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latest.value, reviewStrategy.value))
+const weakConclusion = computed(() =>
+  shouldKeepConclusionWeak(detail.value?.metrics) ||
+  !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
+)
+const strategySampleInsufficient = computed(() =>
+  reviewDisplay.value.sampleBoundary.sampleInsufficient ?? detail.value?.metrics?.sampleInsufficient ?? reviewStrategy.value.sampleInsufficient ?? weakConclusion.value
+)
+const displayConfidenceLevel = computed(() =>
+  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latest.value?.confidenceLevel || 'LOW'
+)
+const factItems = computed(() => reviewDisplay.value.facts)
+const factSummary = computed(() =>
+  factItems.value[0] ||
+  latest.value?.factSummary ||
+  '还没有生成复盘。先补齐实验事实，再生成复盘会更可靠。'
+)
+const sampleWarning = computed(() =>
+  reviewDisplay.value.sampleBoundary.sampleWarning ||
+  reviewStrategy.value.sampleWarning ||
+  (strategySampleInsufficient.value ? '当前样本不足，复盘只能作为弱建议，不能输出强结论。' : '')
+)
+const unsupportedConclusions = computed(() => reviewDisplay.value.unsupportedConclusions)
+const weakObservations = computed(() => reviewDisplay.value.weakObservations)
+const hypotheses = computed(() => reviewDisplay.value.hypotheses)
+const reviewNextActions = computed(() => reviewDisplay.value.nextActions)
+const qualityGateLabel = computed(() => reviewDisplay.value.qualityGate.suggestionStrength || 'WEAK')
+const strategyTitle = computed(() => textFromStrategy('title') || '下一轮实验假设')
+const strategyContent = computed(() =>
+  textFromStrategy('content') ||
+  '先补齐目标岗位、简历、项目证据和投递反馈，再生成下一轮复盘。样本不足时只提出可验证行动。'
+)
+const strategySummary = computed(() =>
+  weakConclusion.value ? strategyContent.value : detail.value?.strategy ? factSummary.value : latest.value?.insightSummary || factSummary.value || '暂无洞察摘要。'
+)
+const strategyFeedbackContext = computed(() => {
+  const reviewId = latest.value?.id
+  return {
+    scene: 'JOB_EXPERIMENT_STRATEGY',
+    bizType: reviewId ? 'JOB_EXPERIMENT_REVIEW' : 'JOB_EXPERIMENT',
+    bizId: reviewId || detail.value?.id || id()
+  }
+})
+const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
+  fromJobExperimentStrategy({
+    ...reviewStrategy.value,
+    title: strategyTitle.value,
+    content: strategyContent.value,
+    confidenceLevel: displayConfidenceLevel.value,
+    sampleInsufficient: strategySampleInsufficient.value,
+    sampleWarning: sampleWarning.value,
+    evidenceSources: reviewDisplay.value.evidenceSources.length
+      ? reviewDisplay.value.evidenceSources.map((source) => ({
+          sourceType: source.sourceType || '',
+          sourceId: Number(source.sourceId || 0),
+          sourceSummary: source.evidenceSummary || source.sourceSummary || source.summary,
+          trustStatus: source.trustStatus,
+          metadata: source.metadata
+        }))
+      : reviewStrategy.value.evidenceSources,
+    unsupportedConclusions: unsupportedConclusions.value.map((item) => item.blockedReason),
+    weakObservations: weakObservations.value.map((item) => item.text),
+    qualityGate: reviewDisplay.value.qualityGate
+  }, {
+    scene: 'JOB_EXPERIMENT_STRATEGY',
+    bizType: strategyFeedbackContext.value.bizType,
+    bizId: strategyFeedbackContext.value.bizId,
+    experimentId: detail.value?.id || id(),
+    traceId: latest.value?.traceId || latest.value?.aiTraceId || undefined,
+    aiCallLogId: latest.value?.aiCallLogId ?? undefined,
+    resultSource: latest.value?.resultSource || 'RULE',
+    fallback: latest.value?.fallback ?? false
+  })
+)
+const nextActionText = computed(() =>
+  reviewNextActions.value[0]?.title ||
+  (weakConclusion.value
+    ? strategyContent.value
+    : detail.value?.strategy ? strategyContent.value : latest.value?.nextAction || strategyContent.value || '优先补齐 Agent 今日任务、简历、项目证据、目标岗位和模拟面试数据。')
+)
+const nextActionLinks = [
+  { label: 'Agent 今日任务', path: '/agent/today', icon: Bot },
+  { label: '简历', path: '/resumes', icon: FileText },
+  { label: '项目证据', path: '/project-evidence', icon: FolderKanban },
+  { label: '继续投递/目标岗位', path: '/job-targets', icon: BriefcaseBusiness },
+  { label: '模拟面试', path: '/interviews/create', icon: Mic }
+]
 
 const id = () => Number(route.params.id)
+const isDemoContext = () => route.query.demoFlag === 'true' || detail.value?.demoFlag === 1
+const demoPath = (path: string) => {
+  if (!isDemoContext()) return path
+  return path.includes('?') ? `${path}&demoFlag=true` : `${path}?demoFlag=true`
+}
+
+const textFromStrategy = (key: string) => {
+  const value = reviewStrategy.value[key as keyof JobSearchExperimentStrategyVO]
+  return typeof value === 'string' ? value : ''
+}
+
+const strategyEvidenceLabel = (sourceType?: string) => getSuggestionSourceTypeLabel(sourceType)
+
+const goStrategyAction = (action?: SuggestionPanelAction | string) => {
+  const actionUrl = typeof action === 'string' ? action : action?.path || action?.actionUrl
+  const safePath = resolveAppRoutePath(actionUrl || '/agent/today', {
+    fallbackPath: '/agent/today',
+    knownPaths: defaultUserKnownPaths
+  }).path
+  router.push(demoPath(safePath))
+}
 
 const load = async () => {
   loading.value = true
+  errorMessage.value = ''
   try {
     detail.value = await getJobExperimentDetailApi(id())
+  } catch (error) {
+    detail.value = undefined
+    errorMessage.value = error instanceof Error ? error.message : '求职实验复盘加载失败，请稍后重试。'
   } finally {
     loading.value = false
   }
@@ -73,6 +357,9 @@ const generate = async () => {
   try {
     await generateJobExperimentReviewApi(id())
     await load()
+    ElMessage.success('复盘建议已生成')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '复盘建议生成失败，请稍后重试。')
   } finally {
     generating.value = false
   }
@@ -82,22 +369,38 @@ onMounted(load)
 </script>
 
 <style scoped lang="scss">
-.review-card {
-  padding: 22px;
-}
-
+.review-hero,
 .section-head,
-.actions {
+.actions,
+.hero-meta {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.section-head {
+.review-hero {
   justify-content: space-between;
+  padding: 24px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
 }
 
-.hero-kicker {
+.hero-copy {
+  min-width: 0;
+}
+
+.actions,
+.hero-meta {
+  flex-wrap: wrap;
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
+.hero-kicker,
+.section-kicker {
   margin: 0;
   color: var(--app-primary);
   font-size: 12px;
@@ -105,22 +408,140 @@ onMounted(load)
   text-transform: uppercase;
 }
 
-.review-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-  margin-top: 18px;
+.review-hero h1,
+.review-section h2,
+.review-section p {
+  margin-top: 0;
 }
 
-.review-grid article,
-.next-action {
-  padding: 16px;
+.review-hero h1 {
+  margin-bottom: 8px;
+}
+
+.review-hero p,
+.summary-text,
+.limit-note {
+  color: var(--app-text-muted);
+  line-height: 1.7;
+}
+
+.review-section {
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.section-head {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.fact-list {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+  margin: 12px 0 0;
+}
+
+.stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.stack-list article {
+  padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.22);
 }
 
-.warning {
+.stack-list strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.stack-list p {
+  margin-bottom: 6px;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.stack-list span {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.action-stack {
+  margin-bottom: 14px;
+}
+
+.metric-strip,
+.action-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.metric-strip {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-top: 16px;
+}
+
+.metric-strip > div {
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.metric-strip strong {
+  display: block;
+  font-size: 26px;
+}
+
+.metric-strip span {
+  color: var(--app-text-muted);
+}
+
+.unsupported-text {
   color: #fbbf24;
+  line-height: 1.7;
+}
+
+.sample-warning-text {
+  margin-bottom: 8px;
+  color: #fbbf24;
+  line-height: 1.7;
+}
+
+.strategy-content {
+  margin-bottom: 0;
+  line-height: 1.7;
+}
+
+.strategy-evidence-list,
+.strategy-feedback-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+@media (max-width: 720px) {
+  .review-hero,
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
 }
 </style>

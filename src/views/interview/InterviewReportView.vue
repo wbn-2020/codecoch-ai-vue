@@ -1,6 +1,6 @@
 <template>
   <div class="interview-report page-shell">
-    <section class="report-top">
+    <section class="report-top report-top--compact">
       <div>
         <div class="eyebrow">
           <ChartNoAxesCombined :size="16" />
@@ -27,6 +27,7 @@
 
     <section v-if="isGenerating" class="content-card">
       <div class="content-card__body generating-panel">
+        <div class="state-eyebrow">报告生成中</div>
         <el-icon class="generating-icon"><Loading /></el-icon>
         <h2>报告生成中</h2>
         <p>{{ generatingMessage }}</p>
@@ -49,15 +50,15 @@
         </div>
         <div v-if="taskMetaText" class="task-meta">{{ taskMetaText }}</div>
         <div class="async-diagnostics">
-          <span v-if="asyncReceipt.messageId">生成任务已提交</span>
-          <span v-if="asyncReceipt.traceId">处理线索已记录</span>
+          <span v-if="asyncReceipt.messageId">报告正在准备</span>
+          <span v-if="asyncReceipt.traceId">进度已记录</span>
           <span>面试记录已绑定</span>
-          <span v-if="asyncReceipt.sendStatus">提交状态 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
+          <span v-if="asyncReceipt.sendStatus">生成进度 {{ asyncSendStatusLabel(asyncReceipt.sendStatus) }}</span>
         </div>
         <div class="generating-actions">
           <el-button type="primary" @click="goReportTaskCenter">
             <ListChecks :size="16" />
-            去任务中心查看
+            查看准备进度
           </el-button>
           <el-button @click="router.push('/interviews/history')">
             <History :size="16" />
@@ -69,11 +70,67 @@
 
     <section v-else class="content-card" v-loading="loading">
       <div v-if="report && isGenerated" class="content-card__body">
+        <div class="report-hero-grid">
+          <section class="report-score-panel" :class="{ 'report-score-panel--muted': isScoreUnavailable }">
+            <span class="panel-kicker">综合得分</span>
+            <div class="score-value">{{ displayTotalScore }}</div>
+            <p v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</p>
+            <p v-else>{{ scoreVerdict }}</p>
+            <div class="score-meta">
+              <StatusTag :status="report.reportStatus" />
+              <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
+            </div>
+          </section>
+
+          <section class="report-summary-panel">
+            <span class="panel-kicker">一句话总评</span>
+            <h2>{{ reportSummaryPreview.title }}</h2>
+            <p>{{ reportSummaryPreview.description }}</p>
+            <div class="evidence-strip">
+              <strong>证据摘要</strong>
+              <span>{{ evidenceSummaryPreview }}</span>
+            </div>
+          </section>
+
+          <section class="report-action-panel">
+            <span class="panel-kicker">最大短板</span>
+            <h2>{{ mainWeaknessPreview.title }}</h2>
+            <p>{{ mainWeaknessPreview.description }}</p>
+            <div class="primary-next-action">
+              <span>下一步主行动</span>
+              <strong>{{ primaryNextAction.title }}</strong>
+              <small>{{ primaryNextActionMeta }}</small>
+              <el-button
+                type="primary"
+                :disabled="!canUsePrimaryNextAction"
+                :loading="primaryNextAction.actionType === 'STUDY_PLAN' && studyPlanGenerating"
+                @click="handlePrimaryNextAction"
+              >
+                {{ nextActionButtonLabel(primaryNextAction.actionType) }}
+                <ArrowRight :size="16" />
+              </el-button>
+            </div>
+          </section>
+        </div>
+
+        <div class="report-support-strip">
+          <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
+          <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
+          <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
+        </div>
+
+        <div class="report-professional-strip">
+          <article v-for="item in reportReviewCriteria" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.desc }}</small>
+          </article>
+        </div>
+
         <div class="overview-grid">
-          <div class="score-hero">
-            <span>综合得分</span>
-            <strong>{{ displayTotalScore }}</strong>
-            <StatusTag :status="report.reportStatus" />
+          <div class="overview-card">
+            <span>报告状态</span>
+            <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
           </div>
           <div class="overview-card">
             <span>面试记录</span>
@@ -229,6 +286,11 @@
       </div>
 
       <div v-else-if="isFailed || isUnscorable" class="content-card__body failed-panel">
+        <div class="state-eyebrow">{{ isUnscorable ? '不可评分' : '生成失败' }}</div>
+        <h2>{{ isUnscorable ? '本轮样本不足，暂不展示强结论' : '报告生成没有完成' }}</h2>
+        <p class="failed-panel__lead">
+          {{ isUnscorable ? '问答明细仍可继续复盘；页面不会补写分数、短板或推荐题。' : '可以重新生成报告，或先返回历史记录保留本轮面试证据。' }}
+        </p>
         <el-alert
           :type="isUnscorable ? 'warning' : 'error'"
           show-icon
@@ -245,11 +307,13 @@
       <AppState
         v-else-if="!loading"
         type="empty"
-        title="报告暂不可用"
-        description="报告可能仍在生成中，或当前面试记录没有可展示的复盘结果。可以去任务中心继续查看生成进度。"
+        title="还没有可验证的面试报告"
+        description="页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。若本轮面试已结束，可以手动重新生成报告；如果还没完成答题，请先回到历史记录继续面试。"
       >
-        <el-button type="primary" @click="goReportTaskCenter">去任务中心查看</el-button>
+        <el-button v-if="interviewId" type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
+        <el-button @click="goReportTaskCenter">查看准备进度</el-button>
         <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+        <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
       </AppState>
     </section>
 
@@ -314,7 +378,7 @@
           :content="report.projectProblems || report.projectExpressionProblems"
         />
         <AppState v-else type="empty" title="项目表达问题暂未提取" :description="emptyReportCopy.project">
-          <el-button plain @click="router.push('/projects')">整理项目经历</el-button>
+          <el-button plain @click="router.push('/project-evidence')">整理项目证据</el-button>
         </AppState>
       </article>
 
@@ -331,6 +395,17 @@
       <article class="analysis-card">
         <div class="section-head">
           <h2>推荐练习题目</h2>
+        </div>
+        <div v-if="recommendedQuestionIds.length" class="recommended-training-callout">
+          <div>
+            <span>下一步训练入口</span>
+            <strong>先重练报告暴露的薄弱题</strong>
+            <p>完成题库点评后，再回到模拟面试验证表达是否稳定。</p>
+          </div>
+          <el-button type="primary" @click="goPracticeQuestion">
+            <BookOpenCheck :size="16" />
+            练这 {{ recommendedQuestionIds.length }} 题
+          </el-button>
         </div>
         <div v-if="recommendedQuestions.length" class="recommended-list">
           <button
@@ -352,7 +427,7 @@
           </button>
         </div>
         <AppState v-else type="empty" title="暂未生成推荐题目" :description="emptyReportCopy.questions">
-          <el-button type="primary" plain @click="router.push('/questions')">进入题库训练</el-button>
+          <el-button type="primary" plain @click="router.push('/questions/recommendations')">进入今日训练题组</el-button>
         </AppState>
       </article>
     </section>
@@ -582,12 +657,40 @@ const backendNextActions = computed(() => nextActions.value.filter((action) => !
 const nextActionUnavailableReason = computed(() => {
   if (!isGenerated.value || nextActions.value.length) return ''
   if (recommendedQuestionIds.value.length) {
-    return '报告没有返回结构化 nextActions 字段，页面先使用推荐题、重新面试和今日计划入口承接下一轮训练，并记录实验点击指标。'
+    return '报告暂未给出结构化行动，页面先用推荐题、重新面试和今日计划入口承接下一轮训练。'
   }
   if (qaMessages.value.length) {
     return '报告有问答证据，但暂未形成可跳转的训练动作。可以先重新面试或回到今日计划，避免把低置信建议包装成确定结论。'
   }
   return '报告缺少足够问答和短板证据，本轮不硬生成训练建议；建议先补一次完整模拟面试。'
+})
+const primaryNextAction = computed<InterviewReportNextActionVO>(() => {
+  if (nextActions.value.length) return nextActions.value[0]
+  if (recommendedQuestionIds.value.length) {
+    return staticNextAction('QUESTION_PRACTICE', '去题库重练薄弱题', '/questions/practice', 1)
+  }
+  const reportId = report.value?.reportId || report.value?.id
+  if (reportId && (report.value?.reviewSuggestions || report.value?.suggestions || report.value?.mainProblems || report.value?.weaknesses)) {
+    return staticNextAction('STUDY_PLAN', '生成学习计划', '/study-plans', 2)
+  }
+  if (report.value?.projectProblems || report.value?.projectExpressionProblems || report.value?.resumeSuggestions || report.value?.resumeAdvice) {
+    return staticNextAction('RESUME_OPTIMIZE', '整理项目证据和简历表达', '/resumes', 3)
+  }
+  return staticNextAction('INTERVIEW', '再来一轮模拟面试', '/interviews/create', 4)
+})
+const canUsePrimaryNextAction = computed(() => {
+  if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return recommendedQuestionIds.value.length > 0
+  if (primaryNextAction.value.actionType === 'STUDY_PLAN') return Boolean(report.value?.reportId || report.value?.id)
+  return true
+})
+const primaryNextActionMeta = computed(() => {
+  if (!isStaticFallbackNextAction(primaryNextAction.value)) {
+    return primaryNextAction.value.evidence || primaryNextAction.value.description || '来自报告给出的结构化下一步行动。'
+  }
+  if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return '基于报告返回的可跳转推荐题。'
+  if (primaryNextAction.value.actionType === 'STUDY_PLAN') return '基于报告内容的静态兜底入口，不伪装成 AI 个性化结论。'
+  if (primaryNextAction.value.actionType === 'RESUME_OPTIMIZE') return '用于补齐项目证据、简历和面试表达之间的闭环。'
+  return '当前证据不足，先用完整面试补样本。'
 })
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
@@ -603,24 +706,83 @@ const hasValidTotalScore = computed(() => {
 })
 const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
 const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
+const textExcerpt = (value?: string | null, fallback = '暂无可展示内容') => {
+  const text = String(value || '')
+    .replace(/[#>*_`~\[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return fallback
+  return text.length > 96 ? `${text.slice(0, 96)}...` : text
+}
+const scoreVerdict = computed(() => {
+  const score = Number(report.value?.totalScore)
+  if (!Number.isFinite(score) || score <= 0) return '评分暂不可用'
+  if (score >= 85) return '表现稳定，优先把亮点沉淀成可复用表达。'
+  if (score >= 70) return '基础可用，但仍有一处短板会影响面试说服力。'
+  if (score >= 60) return '能完成回答框架，需要尽快补强证据和技术深度。'
+  return '本轮暴露的问题较集中，建议先做专项训练再进入下一轮面试。'
+})
+const reportSummaryPreview = computed(() => ({
+  title: report.value?.summary || report.value?.reportContent ? 'AI 已生成总评' : '总评证据不足',
+  description: textExcerpt(
+    report.value?.summary || report.value?.reportContent,
+    qaMessages.value.length
+      ? '报告没有返回结构化总评，建议结合下方问答复盘查看具体表现。'
+      : '当前缺少足够问答样本，页面不会补写 AI 结论。'
+  )
+}))
+const mainWeaknessPreview = computed(() => ({
+  title: report.value?.mainProblems || report.value?.weaknesses ? '本轮最大短板' : '短板尚未被可靠识别',
+  description: textExcerpt(
+    report.value?.mainProblems || report.value?.weaknesses || weakPointText.value,
+    qaMessages.value.length
+      ? '报告没有给出明确短板，先从问答明细和低分项里定位训练点。'
+      : '问答样本不足时不强行归因，建议重新完成一轮更完整的模拟面试。'
+  )
+}))
+const evidenceSummaryPreview = computed(() =>
+  textExcerpt(
+    report.value?.evidenceSummary || report.value?.jdEvidenceSummary,
+    qaMessages.value.length
+      ? `已保留 ${qaMessages.value.length} 条问答作为复盘证据。`
+      : '暂无足够问答证据，结论可信度有限。'
+  )
+)
+const reportReviewCriteria = computed(() => [
+  {
+    label: '证据质量',
+    value: qaMessages.value.length ? `${qaMessages.value.length} 条问答` : '样本不足',
+    desc: qaMessages.value.length ? '判断来自真实问答记录' : '建议补一次完整面试再判断'
+  },
+  {
+    label: '主要判断',
+    value: hasValidTotalScore.value ? scoreVerdict.value : '暂不强行打分',
+    desc: isScoreUnavailable.value ? '保留复盘，不补写结论' : '结合总分、短板和问答明细阅读'
+  },
+  {
+    label: '下一步训练',
+    value: primaryNextAction.value.title,
+    desc: primaryNextActionMeta.value
+  }
+])
 const pollProgress = computed(() => Math.min(100, Math.round((pollCount.value / 30) * 100)))
 const generatingMessage = computed(() =>
   asyncReceipt.value.messageId
-    ? '报告生成进度已提交到任务中心，可以离开页面，稍后回来查看结果。'
+    ? '报告正在准备，可以离开页面，稍后回来查看结果。'
     : '系统正在根据真实问答记录生成结构化报告。'
 )
 const generatingStages = computed(() => [
   {
     key: 'submitted',
     label: '已提交',
-    title: asyncReceipt.value.messageId ? '报告生成任务已提交' : '等待处理进度',
-    desc: asyncReceipt.value.sendStatus ? `提交状态：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已创建报告生成任务'
+    title: asyncReceipt.value.messageId ? '报告正在准备' : '等待处理进度',
+    desc: asyncReceipt.value.sendStatus ? `生成进度：${asyncSendStatusLabel(asyncReceipt.value.sendStatus)}` : '已开始准备报告'
   },
   {
     key: 'tracking',
     label: '可追踪',
     title: '面试记录已绑定',
-    desc: asyncReceipt.value.traceId ? '处理线索已记录，可稍后继续查看' : '刷新后仍可在任务中心按面试记录继续查找'
+    desc: asyncReceipt.value.traceId ? '进度已记录，可稍后继续查看' : '刷新后仍可按面试记录继续查找'
   },
   {
     key: 'polling',
@@ -729,8 +891,8 @@ const taskMetaText = computed(() => {
   const items = []
   const reportId = taskReportId.value || report.value?.reportId || report.value?.id
   if (reportId) items.push('报告记录已保存')
-  if (asyncReceipt.value.messageId) items.push('生成任务已提交')
-  if (asyncReceipt.value.traceId) items.push('处理线索已记录')
+  if (asyncReceipt.value.messageId) items.push('报告正在准备')
+  if (asyncReceipt.value.traceId) items.push('进度已记录')
   return items.join(' / ')
 })
 const reportTrustTags = computed(() => [
@@ -980,6 +1142,11 @@ const handleStaticPracticeAction = async (trackMetric = false) => {
   await goPracticeQuestion()
 }
 
+const handlePrimaryNextAction = async () => {
+  if (!canUsePrimaryNextAction.value) return
+  await handleNextAction(primaryNextAction.value)
+}
+
 const handleNextAction = async (action: InterviewReportNextActionVO) => {
   trackInterviewNextActionMetric('interview_report_next_action_clicked', action)
   const actionType = String(action.actionType || '').toUpperCase()
@@ -1034,7 +1201,7 @@ const schedulePolling = () => {
   stopPolling()
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
-    ElMessage.warning('报告生成时间较长，可到任务中心按面试记录继续查看。')
+    ElMessage.warning('报告准备时间较长，可稍后按面试记录继续查看。')
     return
   }
   pollTimer = window.setTimeout(fetchReport, 2000)
@@ -1074,7 +1241,7 @@ const markReportUnavailable = (message: string) => {
     status: 'FAILED',
     failureReason: message,
     trustStatus: 'FALLBACK',
-    evidenceSummary: '报告读取失败，未自动重新提交生成任务。',
+    evidenceSummary: '报告读取失败，未自动重新发起准备流程。',
     fallback: true
   }
   stopPolling()
@@ -1119,9 +1286,9 @@ const loadReportOrSubmitTask = async () => {
       schedulePolling()
       return
     }
-    markReportUnavailable('当前报告暂时不可用，页面没有自动重新提交生成任务。请先到任务中心确认进度，或点击“重新生成报告”手动触发。')
+    markReportUnavailable('当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。')
   } catch (error) {
-    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新提交生成任务。你可以稍后回来，或到任务中心按面试记录继续查看。'))
+    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'))
   } finally {
     loading.value = false
   }
@@ -1148,7 +1315,7 @@ const handleGenerateStudyPlan = async () => {
       }
       return
     } else if (result.asyncMessageId || result.asyncTraceId || result.asyncBizType) {
-      ElMessage.success('学习计划已提交，可在任务中心查看进度')
+      ElMessage.success('学习计划正在准备，可查看进度')
       await router.push({
         path: '/agent/tasks',
         query: compactRouterQuery({
@@ -1241,6 +1408,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.recommended-training-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: #eff6ff;
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  strong,
+  p {
+    display: block;
+    margin: 0;
+  }
+
+  span {
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    color: #0f172a;
+    line-height: 1.4;
+  }
+
+  p {
+    margin-top: 5px;
+    color: #475569;
+    line-height: 1.55;
+  }
+
+  .el-button {
+    flex: 0 0 auto;
+  }
 }
 
 .next-action-section {
@@ -1448,6 +1660,20 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.failed-panel {
+  h2 {
+    margin: 14px 0 8px;
+    font-size: 24px;
+  }
+}
+
+.failed-panel__lead {
+  max-width: 620px;
+  margin: 0 auto 18px;
+  color: var(--app-text-muted);
+  line-height: 1.7;
+}
+
 .generating-panel {
   h2 {
     margin: 12px 0 8px;
@@ -1542,6 +1768,232 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.report-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.15fr) minmax(260px, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.report-score-panel,
+.report-summary-panel,
+.report-action-panel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.report-score-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #0f172a;
+  color: #ffffff;
+
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.65;
+  }
+}
+
+.state-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.state-promise {
+  justify-content: center;
+  margin: 14px 0;
+
+  span {
+    padding: 7px 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1e40af;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.report-score-panel--muted {
+  background: #334155;
+}
+
+.panel-kicker {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-score-panel .panel-kicker {
+  color: #93c5fd;
+}
+
+.score-value {
+  margin: 16px 0 10px;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 0.95;
+}
+
+.score-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.report-summary-panel,
+.report-action-panel {
+  background: #f8fafc;
+
+  h2 {
+    margin: 10px 0 8px;
+    color: #0f172a;
+    font-size: 22px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+}
+
+.evidence-strip {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: #1d4ed8;
+    font-size: 13px;
+  }
+
+  span {
+    margin-top: 6px;
+    color: #475569;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+}
+
+.primary-next-action {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+
+  span {
+    color: #15803d;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    color: #14532d;
+    font-size: 18px;
+    line-height: 1.35;
+  }
+
+  small {
+    color: #475569;
+    line-height: 1.55;
+  }
+
+  .el-button {
+    justify-self: start;
+    margin-top: 4px;
+  }
+}
+
+.report-support-strip,
+.state-promise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-support-strip {
+  margin: 0 0 16px;
+
+  span {
+    padding: 6px 10px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 12px;
+  }
+}
+
+.report-professional-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  span,
+  strong,
+  small {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 7px;
+    color: var(--app-text);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    margin-top: 6px;
+    color: var(--app-text-muted);
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
 }
 
 .score-hero,
@@ -1831,9 +2283,11 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1080px) {
   .overview-grid,
+  .report-hero-grid,
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
@@ -1864,9 +2318,11 @@ onBeforeUnmount(() => {
   }
 
   .overview-grid,
+  .report-hero-grid,
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
@@ -1875,6 +2331,15 @@ onBeforeUnmount(() => {
 
   .next-action-card {
     flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
+  }
+
+  .recommended-training-callout {
+    flex-direction: column;
+    align-items: stretch;
 
     .el-button {
       width: 100%;

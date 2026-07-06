@@ -1,4 +1,5 @@
 import type { PageQuery } from '@/types/api'
+import type { EvidenceSourceVO, ExplainableSuggestionVO, SuggestionQualityGateVO } from '@/types/suggestion'
 
 export interface JobSearchExperimentQueryDTO extends PageQuery {
   keyword?: string
@@ -16,8 +17,16 @@ export interface JobSearchExperimentSaveDTO {
   demoFlag?: boolean
 }
 
+export type JobExperimentRelationType =
+  | 'RESUME_VERSION'
+  | 'TARGET_JOB'
+  | 'JD_ANALYSIS'
+  | 'MATCH_REPORT'
+  | 'JOB_APPLICATION'
+  | 'PROJECT_EVIDENCE'
+
 export interface JobSearchExperimentRelationSaveDTO {
-  relationType: string
+  relationType: JobExperimentRelationType
   relationId: number
   relationSummary?: string
   metadata?: Record<string, unknown>
@@ -48,14 +57,76 @@ export interface JobSearchExperimentMetricsVO {
   sampleCount: number
   confidenceLevel: string
   sampleInsufficient: boolean
+  resumeVersionSampleInsufficient?: boolean
   sampleWarning?: string
   facts: string[]
+  unsupportedConclusions?: string[]
+  weakObservations?: string[]
+  resumeVersionUsageCounts?: Record<string, number>
+  sampleBoundary?: ExperimentSampleBoundaryVO
+}
+
+export interface ExperimentSampleBoundaryVO {
+  sampleLevel?: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | string
+  applicationCount?: number
+  feedbackCount?: number
+  interviewCompletedCount?: number
+  resumeVersionUsageCounts?: Record<string, number>
+  directionSampleCounts?: Record<string, number>
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+  blockedConclusionTypes?: string[]
+}
+
+export interface ExperimentHypothesisVO {
+  targetDirection?: string
+  assumption?: string
+  timeWindowStart?: string
+  timeWindowEnd?: string
+  expectedSignal?: string
+}
+
+export interface ExperimentWeakObservationVO {
+  observationType?: string
+  text: string
+  evidenceCount?: number
+  confidenceLevel?: string
+  actionHint?: string
+}
+
+export interface ExperimentUnsupportedConclusionVO {
+  conclusionType?: string
+  blockedReason: string
+  requiredSampleHint?: string
+}
+
+export interface ExperimentNextActionVO {
+  actionType?: string
+  title: string
+  reason?: string
+  targetRoute?: string
+  actionUrl?: string
+  targetRouteMissing?: boolean
+  qualityGate?: SuggestionQualityGateVO | null
+}
+
+export interface JobExperimentReviewDslVO {
+  facts?: string[]
+  limits?: ExperimentSampleBoundaryVO
+  sampleBoundary?: ExperimentSampleBoundaryVO
+  weakObservations?: ExperimentWeakObservationVO[]
+  unsupportedConclusions?: ExperimentUnsupportedConclusionVO[]
+  hypotheses?: ExperimentHypothesisVO[]
+  nextActions?: ExperimentNextActionVO[]
+  actionCandidates?: ExperimentNextActionVO[]
+  evidenceSources?: EvidenceSourceVO[]
+  qualityGate?: SuggestionQualityGateVO | null
 }
 
 export interface JobSearchExperimentRelationVO {
   id: number
   experimentId: number
-  relationType: string
+  relationType: JobExperimentRelationType | string
   relationId: number
   relationSummary?: string
   metadata?: Record<string, unknown>
@@ -71,12 +142,29 @@ export interface JobSearchExperimentReviewVO {
   unsupportedConclusion?: string
   sampleWarning?: string
   nextAction?: string
-  strategy?: Record<string, unknown>
+  strategy?: JobSearchExperimentStrategyVO
   aiTraceId?: string
+  traceId?: string
+  aiCallLogId?: number | null
+  resultSource?: string | null
+  fallback?: boolean | null
+  qualityGate?: SuggestionQualityGateVO | null
+  reviewDsl?: JobExperimentReviewDslVO
+  actionCandidates?: ExperimentNextActionVO[]
+  trustedSuggestion?: ExplainableSuggestionVO
   confidenceLevel?: string
   demoFlag?: number
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobSearchExperimentEvidenceSourceVO {
+  sourceType: JobExperimentRelationType | string
+  sourceId: number
+  sourceSummary?: string
+  trustStatus?: string
+  sourceUpdatedAt?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface JobSearchExperimentStrategyVO {
@@ -86,11 +174,15 @@ export interface JobSearchExperimentStrategyVO {
   sampleInsufficient?: boolean
   sampleWarning?: string
   actionUrl?: string
-  evidenceSources?: Array<{
-    sourceType: string
-    sourceId: number
-    sourceSummary?: string
-  }>
+  unsupportedConclusions?: string[]
+  weakObservations?: string[]
+  evidenceSources?: JobSearchExperimentEvidenceSourceVO[]
+  qualityGate?: SuggestionQualityGateVO | null
+  reviewDsl?: JobExperimentReviewDslVO
+  nextActions?: ExperimentNextActionVO[]
+  actionCandidates?: ExperimentNextActionVO[]
+  resultSource?: string | null
+  fallback?: boolean | null
 }
 
 export interface JobSearchExperimentListVO {
@@ -110,6 +202,8 @@ export interface JobSearchExperimentListVO {
   createdAt?: string
   updatedAt?: string
   metrics?: JobSearchExperimentMetricsVO
+  evidenceCoverage?: ExperimentEvidenceCoverageVO
+  sampleBoundary?: ExperimentSampleBoundaryVO
 }
 
 export interface JobSearchExperimentDetailVO extends JobSearchExperimentListVO {
@@ -118,6 +212,17 @@ export interface JobSearchExperimentDetailVO extends JobSearchExperimentListVO {
   latestReview?: JobSearchExperimentReviewVO
   metrics?: JobSearchExperimentMetricsVO
   strategy?: JobSearchExperimentStrategyVO
+  reviewDsl?: JobExperimentReviewDslVO
+  evidenceCoverage?: ExperimentEvidenceCoverageVO
+  sampleBoundary?: ExperimentSampleBoundaryVO
+  trustedSuggestion?: ExplainableSuggestionVO
+}
+
+export interface ExperimentEvidenceCoverageVO {
+  requiredTypes?: string[]
+  coveredTypes?: string[]
+  missingTypes?: string[]
+  items?: JobSearchExperimentRelationVO[]
 }
 
 export interface PortfolioDemoStatusVO {

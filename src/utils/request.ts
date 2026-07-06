@@ -1,6 +1,4 @@
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
-
 import { appConfig } from '@/config'
 import { clearAllRequestCache } from '@/composables/useRequestCache'
 import { HTTP_STATUS_CODE } from '@/constants/http'
@@ -14,6 +12,7 @@ import {
 import { emitAuthRefreshed } from '@/utils/authEvents'
 import { emitRequestError } from '@/utils/errorEvents'
 import { toFriendlyMessage } from '@/utils/error'
+import { showUserMessage } from '@/utils/userMessage'
 import { buildSafeRedirectFromLocation, sanitizeDiagnosticUrl } from '@/utils/routeSecurity'
 import { redactSensitiveText } from '@/utils/sensitiveText'
 import { clearLocalAuth, getToken, setToken } from '@/utils/token'
@@ -44,7 +43,9 @@ const DEMO_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
   '/auth/register',
   '/auth/refresh-token',
-  '/auth/logout'
+  '/auth/logout',
+  '/portfolio-demo/load',
+  '/portfolio-demo/reset'
 ]
 const ADMIN_MOBILE_READ_ONLY_WRITE_WHITELIST = [
   '/auth/login',
@@ -88,12 +89,24 @@ const createLocalBlockedError = (message: string, config: InternalAxiosRequestCo
   return error
 }
 
+const requestPathOnly = (url: string) => {
+  try {
+    return new URL(url, 'http://codecoachai.local').pathname
+  } catch {
+    return url.split(/[?#]/)[0]
+  }
+}
+
+export const isDemoReadOnlyWriteWhitelisted = (url?: string) => {
+  const path = requestPathOnly(String(url || ''))
+  return DEMO_READ_ONLY_WRITE_WHITELIST.includes(path)
+}
+
 const isDemoReadOnlyWrite = (config: InternalAxiosRequestConfig) => {
   if (!appConfig.demoReadOnly) return false
   const method = String(config.method || 'get').toLowerCase()
   if (DEMO_READ_ONLY_ALLOW_METHODS.has(method)) return false
-  const url = String(config.url || '')
-  return !DEMO_READ_ONLY_WRITE_WHITELIST.some((path) => url.includes(path))
+  return !isDemoReadOnlyWriteWhitelisted(String(config.url || ''))
 }
 
 const isAdminMobileReadOnlyWrite = (config: InternalAxiosRequestConfig) => {
@@ -247,14 +260,14 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (isDemoReadOnlyWrite(config)) {
     const message = '当前为体验模式，暂不保存本次更改。'
     emitLocalBlockDiagnostic(config, message)
-    ElMessage.warning(message)
+    showUserMessage.warning(message, { throttleMs: 2500 })
     return Promise.reject(createLocalBlockedError(message, config))
   }
 
   if (isAdminMobileReadOnlyWrite(config)) {
     const message = ADMIN_MOBILE_READONLY_BLOCK_MESSAGE
     emitLocalBlockDiagnostic(config, message)
-    ElMessage.warning(message)
+    showUserMessage.warning(message, { groupingKey: 'admin-mobile-readonly', throttleMs: 2500 })
     return Promise.reject(createLocalBlockedError(message, config))
   }
 
@@ -295,7 +308,7 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
         })
       }
       if (!silentError) {
-        ElMessage.error(toFriendlyMessage(result.message, '当前账号无权执行该操作，操作未提交。'))
+        showUserMessage.error(toFriendlyMessage(result.message, '当前账号无权执行该操作，操作未提交。'))
       }
       return Promise.reject(result)
     }
@@ -306,7 +319,7 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
         message: result.message,
         traceId: result.traceId
       })
-      ElMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
+      showUserMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
     }
     return Promise.reject(result)
 }
@@ -338,7 +351,7 @@ request.interceptors.response.use(
           message,
           traceId: payload?.traceId
         })
-        ElMessage.error(message)
+        showUserMessage.error(message)
       }
       return Promise.reject(payload || error)
     }
@@ -354,7 +367,7 @@ request.interceptors.response.use(
         message,
         traceId: error.response?.data?.traceId
       })
-      ElMessage.error(message)
+      showUserMessage.error(message)
     }
     return Promise.reject(error)
   }

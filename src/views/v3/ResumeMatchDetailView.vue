@@ -7,7 +7,7 @@
         <p>{{ report ? reportSubtitle : '读取匹配报告、失败原因与短板建议。' }}</p>
       </div>
       <div class="hero-actions">
-        <el-button @click="router.push('/resume-match')"><ArrowLeft :size="16" /> 返回匹配</el-button>
+        <el-button @click="router.push({ path: '/resume-match', query: returnMatchQuery })"><ArrowLeft :size="16" /> 返回实验台</el-button>
         <el-button :loading="loading" @click="loadReport"><RefreshCw :size="16" /> 刷新</el-button>
       </div>
     </section>
@@ -16,7 +16,17 @@
     <section v-else-if="loadError" class="content-panel">
       <AppState type="error" title="报告加载失败" :description="loadError"><el-button type="primary" @click="loadReport">重新加载</el-button></AppState>
     </section>
-    <section v-else-if="!report" class="content-panel"><AppState type="empty" title="报告不存在" description="当前路由没有可展示的匹配报告。" /></section>
+    <section v-else-if="!report" class="content-panel">
+      <AppState
+        type="empty"
+        title="没有可验证的 JD 匹配报告"
+        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到实验台选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
+      >
+        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">回实验台生成报告</el-button>
+        <el-button @click="goMatchTaskCenter">查看任务中心</el-button>
+        <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
+      </AppState>
+    </section>
 
     <template v-else>
       <section v-if="report.status === 'FAILED'" class="content-panel failure-panel">
@@ -69,7 +79,45 @@
         </div>
       </section>
 
-      <section v-if="isSuccessReport" class="score-grid">
+      <section v-if="showReportOverview" class="report-overview">
+        <article class="overview-main content-panel">
+          <div class="overview-score">
+            <span>综合匹配度</span>
+            <strong>{{ overallScoreText }}</strong>
+            <small>{{ scoreEvidenceText }}</small>
+          </div>
+          <div class="overview-conclusion">
+            <el-tag :type="overviewConclusion.type" effect="plain">{{ overviewConclusion.label }}</el-tag>
+            <h2>{{ overviewConclusion.title }}</h2>
+            <p>{{ overviewConclusion.desc }}</p>
+          </div>
+        </article>
+
+        <article class="overview-action content-panel">
+          <span>下一步主行动</span>
+          <h2>{{ primaryNextAction.title }}</h2>
+          <p>{{ primaryNextAction.desc }}</p>
+          <div class="overview-action__buttons">
+            <el-button
+              type="primary"
+              :disabled="primaryNextAction.disabled"
+              :loading="primaryNextAction.key === 'profile' && profileGenerating"
+              @click="runPrimaryNextAction"
+            >
+              {{ primaryNextAction.action }}
+            </el-button>
+            <el-button plain :loading="regenerating" @click="regenerateReport">重新生成报告</el-button>
+          </div>
+        </article>
+
+        <article v-for="item in reportInsightCards" :key="item.key" class="insight-card content-panel" :class="`insight-card--${item.tone}`">
+          <span>{{ item.label }}</span>
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.desc }}</p>
+        </article>
+      </section>
+
+      <section v-if="isSuccessReport && hasAnyDimensionScore" class="score-grid">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
@@ -136,7 +184,7 @@
           <el-button type="primary" :loading="profileGenerating" :disabled="!isTrustedSuccessReport" @click="generateProfile">
             <Radar :size="16" /> 生成/刷新能力画像
           </el-button>
-          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
+          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/skill-profile', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             查看能力画像
           </el-button>
           <el-button :disabled="!canAccessResumeVersionPreview || !report.resumeId" @click="goReportResumeVersions">
@@ -157,10 +205,13 @@
           >
             记录为投递进度
           </el-button>
-          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId } })">
+          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             <RouteIcon :size="16" /> 差距学习计划
           </el-button>
-          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId } })">
+          <el-button :disabled="!isTrustedSuccessReport" @click="goGapQuestionGroup">
+            练差距题组
+          </el-button>
+          <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             创建岗位面试
           </el-button>
           <template v-if="!isTrustedSuccessReport">
@@ -183,14 +234,31 @@
       </section>
 
       <section v-if="isSuccessReport" class="content-panel">
-        <div class="section-head"><div><h2>维度明细</h2><p>按技能维度展示分数、差距和建议。</p></div></div>
-        <el-table v-if="report.details?.length" :data="report.details">
-          <el-table-column prop="dimension" label="维度" min-width="120" />
-          <el-table-column prop="skillName" label="技能" min-width="140" />
-          <el-table-column prop="score" label="分数" width="90" />
-          <el-table-column prop="gapDescription" label="差距" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="suggestion" label="建议" min-width="220" show-overflow-tooltip />
-        </el-table>
+        <div class="section-head">
+          <div><h2>维度诊断</h2><p>按技能维度看风险、证据和下一步动作。</p></div>
+        </div>
+        <div v-if="report.details?.length" class="dimension-card-grid">
+          <article v-for="item in report.details" :key="item.id" class="dimension-card">
+            <div class="dimension-card__head">
+              <div>
+                <span>{{ item.dimension || '综合维度' }}</span>
+                <h3>{{ item.skillName || '待确认技能' }}</h3>
+              </div>
+              <el-tag :type="dimensionTone(item.score)" effect="plain">{{ dimensionScoreText(item.score) }}</el-tag>
+            </div>
+            <p v-if="item.evidence" class="dimension-card__evidence">{{ item.evidence }}</p>
+            <dl>
+              <div>
+                <dt>差距</dt>
+                <dd>{{ item.gapDescription || '当前报告没有拆分出明确差距。' }}</dd>
+              </div>
+              <div>
+                <dt>建议动作</dt>
+                <dd>{{ item.suggestion || '结合报告摘要和推荐训练继续补充证据。' }}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
         <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
       </section>
     </template>
@@ -230,12 +298,66 @@ const RESUME_JOB_MATCH_TASK_BIZ_TYPE = 'resume-job-match.analyze'
 const REPORT_POLL_INTERVAL_MS = 2500
 const REPORT_POLL_MAX_RETRY_DELAY_MS = 10000
 
+type OverviewTone = 'success' | 'warning' | 'info' | 'danger'
+type PrimaryActionKey = 'regenerate' | 'study-plan' | 'project-evidence' | 'interview' | 'profile'
+
+function firstReadableSnippet(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined || value === '') return fallback
+  if (typeof value === 'string') return value.trim() || fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = firstReadableSnippet(item)
+      if (text) return text
+    }
+    return fallback
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const direct = firstReadableSnippet(
+      record.title
+        || record.summary
+        || record.description
+        || record.gapDescription
+        || record.suggestion
+        || record.evidence
+        || record.reason
+        || record.action
+        || record.topic
+        || record.skillName
+    )
+    if (direct) return direct
+    for (const item of Object.values(record)) {
+      const text = firstReadableSnippet(item)
+      if (text) return text
+    }
+  }
+  return fallback
+}
+
+const hasUsableScore = (value: unknown) => {
+  const score = Number(value)
+  return Number.isFinite(score) && score > 0
+}
+
+const dimensionScoreText = (value?: number) => hasUsableScore(value) ? `${value} 分` : '待确认'
+const dimensionTone = (value?: number) => {
+  if (!hasUsableScore(value)) return 'info'
+  if (Number(value) >= 80) return 'success'
+  if (Number(value) >= 60) return 'warning'
+  return 'danger'
+}
+
 const reportId = computed(() => Number(route.params.id) || 0)
 const isTrackingReport = computed(() => {
   const status = report.value?.status
   return status === 'PENDING' || status === 'PROCESSING'
 })
 const isSuccessReport = computed(() => report.value?.status === 'SUCCESS')
+const isUnscorableReport = computed(() => {
+  const status = String(report.value?.status || '').toUpperCase()
+  return status === 'UNSCORABLE' || status === 'NO_SCORE'
+})
 const isTrustedSuccessReport = computed(() =>
   isSuccessReport.value
   && !report.value?.fallback
@@ -248,6 +370,21 @@ const actionPanelHint = computed(() => {
   if (!isSuccessReport.value) return '报告成功后才会开放能力画像、学习计划和岗位面试。'
   if (!isTrustedSuccessReport.value) return '当前报告只适合查看和确认；建议重新生成可直接使用的报告后再继续训练。'
   return '基于该报告继续生成能力画像或差距学习计划。'
+})
+const returnMatchQuery = computed(() => {
+  const current = report.value
+  if (current) {
+    return compactQuery({
+      resumeId: current.resumeId ? String(current.resumeId) : undefined,
+      targetJobId: current.targetJobId ? String(current.targetJobId) : undefined,
+      resumeVersionId: current.resumeVersionId ? String(current.resumeVersionId) : undefined
+    })
+  }
+  return compactQuery({
+    resumeId: typeof route.query.resumeId === 'string' ? route.query.resumeId : undefined,
+    targetJobId: typeof route.query.targetJobId === 'string' ? route.query.targetJobId : undefined,
+    resumeVersionId: typeof route.query.resumeVersionId === 'string' ? route.query.resumeVersionId : undefined
+  })
 })
 const reportResumeVersionLabel = computed(() => {
   const current = report.value
@@ -268,6 +405,101 @@ const trustPanelDescription = computed(() =>
     ? '这份匹配报告已绑定简历版本快照、目标岗位描述和岗位分析结果；如果来源或明细不完整，后续建议会先标记为待复核。'
     : '这份匹配报告基于当前简历、目标岗位描述和岗位分析结果生成；如果来源或明细不完整，后续建议会先标记为待复核。'
 )
+const showReportOverview = computed(() => Boolean(report.value && (isSuccessReport.value || isUnscorableReport.value)))
+const overallScoreText = computed(() => {
+  const score = report.value?.overallScore
+  return hasUsableScore(score) ? `${score}` : '未形成评分'
+})
+const scoreEvidenceText = computed(() => {
+  if (isUnscorableReport.value) return '本次报告未形成可信评分，页面不会补造分数。'
+  if (!isSuccessReport.value) return '报告生成完成后才会显示评分。'
+  if (!hasUsableScore(report.value?.overallScore)) return '后端未返回可信综合分，页面不会补造分数。'
+  return trustStatusLabel(report.value?.trustStatus, report.value?.fallback)
+})
+const overviewConclusion = computed((): { label: string; title: string; desc: string; type: OverviewTone } => {
+  if (isUnscorableReport.value) {
+    return {
+      label: '不可评分',
+      title: '本次报告没有形成可信匹配分',
+      desc: '可以先查看已返回的线索；若要进入训练闭环，建议补齐简历项目或岗位 JD 后重新生成。',
+      type: 'warning'
+    }
+  }
+  if (!isSuccessReport.value) {
+    return {
+      label: statusLabel(report.value?.status),
+      title: '报告还不能给出匹配结论',
+      desc: '等待报告生成完成，或根据失败原因重新生成。',
+      type: 'info'
+    }
+  }
+  if (!isTrustedSuccessReport.value) {
+    return {
+      label: '需要复核',
+      title: '先不要把这份报告当作投递结论',
+      desc: '当前报告来源不完整或存在待确认内容，适合查看线索，但不建议直接进入投递或训练闭环。',
+      type: 'warning'
+    }
+  }
+  const summary = firstReadableSnippet(report.value?.summary)
+  return {
+    label: '可用于决策',
+    title: hasUsableScore(report.value?.overallScore) ? '这份报告已形成综合匹配判断' : '这份报告已完成，但未返回综合评分',
+    desc: summary || '后端未返回一句话总结，请继续查看优势、差距、风险和维度明细。',
+    type: hasUsableScore(report.value?.overallScore) ? 'success' : 'info'
+  }
+})
+const primaryNextAction = computed((): {
+  key: PrimaryActionKey
+  title: string
+  desc: string
+  action: string
+  disabled: boolean
+} => {
+  if (!isSuccessReport.value || !isTrustedSuccessReport.value) {
+    return {
+      key: 'regenerate',
+      title: '先恢复一份可信报告',
+      desc: '当前报告还不适合继续生成能力画像、面试或学习计划。',
+      action: '重新生成报告',
+      disabled: false
+    }
+  }
+  if (firstReadableSnippet(report.value?.gaps)) {
+    return {
+      key: 'study-plan',
+      title: '把差距转成学习计划',
+      desc: '报告已经拆分出差距项，适合进入差距学习计划。',
+      action: '生成学习计划',
+      disabled: false
+    }
+  }
+  if (firstReadableSnippet(report.value?.resumeRisks)) {
+    return {
+      key: 'project-evidence',
+      title: '先补项目证据',
+      desc: '报告识别到简历风险，建议先补项目证据再继续投递。',
+      action: '补项目证据',
+      disabled: false
+    }
+  }
+  if (report.value?.targetJobId && report.value?.resumeId) {
+    return {
+      key: 'interview',
+      title: '进入岗位面试验证',
+      desc: '报告没有拆分出明确差距或风险时，可以用一次岗位面试验证表达和追问准备度。',
+      action: '创建岗位面试',
+      disabled: false
+    }
+  }
+  return {
+    key: 'profile',
+    title: '沉淀能力画像',
+    desc: '当前报告可以先沉淀为能力画像，作为后续训练依据。',
+    action: '生成能力画像',
+    disabled: !isTrustedSuccessReport.value
+  }
+})
 const diagnosticItems = computed(() => {
   if (!report.value) return []
   return [
@@ -331,6 +563,36 @@ const scoreCards = computed(() => [
   { label: '业务契合', value: report.value?.businessFitScore },
   { label: '沟通表达', value: report.value?.communicationScore }
 ])
+const hasAnyDimensionScore = computed(() => scoreCards.value.some((item) => hasUsableScore(item.value)))
+const reportInsightCards = computed(() => [
+  {
+    key: 'strength',
+    label: '优势',
+    title: firstReadableSnippet(report.value?.strengths, '报告未拆分出明确优势'),
+    desc: firstReadableSnippet(report.value?.strengths)
+      ? '来自报告的优势字段，建议在简历和面试开场中优先表达。'
+      : '可以继续查看维度明细，或重新生成一份结构更完整的报告。',
+    tone: firstReadableSnippet(report.value?.strengths) ? 'success' : 'neutral'
+  },
+  {
+    key: 'gap',
+    label: '差距',
+    title: firstReadableSnippet(report.value?.gaps, '报告未拆分出明确差距'),
+    desc: firstReadableSnippet(report.value?.gaps)
+      ? '来自报告的差距字段，可转入学习计划或题库训练。'
+      : '没有后端字段时不补造差距结论。',
+    tone: firstReadableSnippet(report.value?.gaps) ? 'warning' : 'neutral'
+  },
+  {
+    key: 'risk',
+    label: '风险',
+    title: firstReadableSnippet(report.value?.resumeRisks, '报告未拆分出简历风险'),
+    desc: firstReadableSnippet(report.value?.resumeRisks)
+      ? '来自报告的风险字段，建议先补项目证据或简历表达。'
+      : '没有风险字段时不默认判定为可投递。',
+    tone: firstReadableSnippet(report.value?.resumeRisks) ? 'danger' : 'neutral'
+  }
+] as Array<{ key: string; label: string; title: string; desc: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }>)
 const reportTrustTags = computed(() => {
   if (!report.value) return []
   const hasScore = Number.isFinite(Number(report.value.overallScore)) && Number(report.value.overallScore) > 0
@@ -411,7 +673,9 @@ const statusLabel = (status?: string) => {
     SUCCESS: '已完成',
     FAILED: '生成失败',
     PROCESSING: '生成中',
-    PENDING: '排队中'
+    PENDING: '排队中',
+    UNSCORABLE: '不可评分',
+    NO_SCORE: '未形成评分'
   }
   return map[String(status || '').toUpperCase()] || '状态待确认'
 }
@@ -548,7 +812,12 @@ const DataBlock = defineComponent({
   setup(props) {
     return () => h('article', { class: 'data-block' }, [
       h('h3', props.title),
-      props.value ? h('pre', stringify(props.value)) : h(AppState, { type: 'empty', title: `暂无${props.title}`, description: '当前报告没有拆分出这一项，建议先查看报告摘要、维度明细，或重新生成报告。' })
+      props.value
+        ? h('details', { class: 'data-block__details' }, [
+            h('summary', '查看技术明细'),
+            h('pre', stringify(props.value))
+          ])
+        : h(AppState, { type: 'empty', title: `暂无${props.title}`, description: '当前报告没有拆分出这一项，建议先查看报告摘要、维度诊断，或重新生成报告。' })
     ])
   }
 })
@@ -618,10 +887,65 @@ const generateProfile = async () => {
   try {
     const result = await generateSkillProfileApi({ matchReportId: report.value.reportId })
     ElMessage.success(result.status === 'FAILED' ? '能力画像生成返回失败状态' : '能力画像任务已提交')
-    await router.push({ path: '/skill-profile', query: { profileId: result.profileId, matchReportId: report.value.reportId, targetJobId: report.value.targetJobId, resumeId: report.value.resumeId } })
+    await router.push({
+      path: '/skill-profile',
+      query: {
+        profileId: result.profileId,
+        matchReportId: report.value.reportId,
+        targetJobId: report.value.targetJobId,
+        resumeId: report.value.resumeId,
+        ...(report.value.resumeVersionId ? { resumeVersionId: report.value.resumeVersionId } : {})
+      }
+    })
   } finally {
     profileGenerating.value = false
   }
+}
+
+const runPrimaryNextAction = () => {
+  if (!report.value) return
+  const action = primaryNextAction.value
+  if (action.key === 'regenerate') {
+    void regenerateReport()
+    return
+  }
+  if (action.key === 'study-plan') {
+    router.push({
+      path: '/study-plans/from-gap',
+      query: {
+        matchReportId: report.value.reportId,
+        targetJobId: report.value.targetJobId,
+        resumeId: report.value.resumeId,
+        ...(report.value.resumeVersionId ? { resumeVersionId: report.value.resumeVersionId } : {})
+      }
+    })
+    return
+  }
+  if (action.key === 'project-evidence') {
+    router.push({
+      path: '/project-evidence',
+      query: {
+        resumeId: report.value.resumeId,
+        matchReportId: report.value.reportId,
+        ...(report.value.resumeVersionId ? { resumeVersionId: report.value.resumeVersionId } : {})
+      }
+    })
+    return
+  }
+  if (action.key === 'interview') {
+    router.push({
+      path: '/interviews/create',
+      query: {
+        source: 'job-target',
+        targetJobId: report.value.targetJobId,
+        resumeId: report.value.resumeId,
+        matchReportId: report.value.reportId,
+        ...(report.value.resumeVersionId ? { resumeVersionId: report.value.resumeVersionId } : {})
+      }
+    })
+    return
+  }
+  void generateProfile()
 }
 
 const regenerateReport = async () => {
@@ -636,7 +960,10 @@ const regenerateReport = async () => {
         path: `/resume-match/${result.reportId}`,
         query: {
           resumeId: result.resumeId || sourceReport.resumeId,
-          targetJobId: result.targetJobId || sourceReport.targetJobId
+          targetJobId: result.targetJobId || sourceReport.targetJobId,
+          ...(result.resumeVersionId || sourceReport.resumeVersionId
+            ? { resumeVersionId: result.resumeVersionId || sourceReport.resumeVersionId }
+            : {})
         }
       })
       return
@@ -663,6 +990,20 @@ const goMatchTaskCenter = () => {
   router.push({
     path: '/agent/tasks',
     query: matchTaskCenterQuery.value
+  })
+}
+
+const goGapQuestionGroup = () => {
+  if (!report.value) return
+  router.push({
+    path: '/questions/recommendations',
+    query: compactQuery({
+      source: 'resumeMatchReport',
+      matchReportId: report.value.reportId ? String(report.value.reportId) : undefined,
+      targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
+      resumeId: report.value.resumeId ? String(report.value.resumeId) : undefined,
+      resumeVersionId: report.value.resumeVersionId ? String(report.value.resumeVersionId) : undefined
+    })
   })
 }
 
@@ -736,7 +1077,14 @@ const runFailureRepairAction = (key: string) => {
   if (!report.value) return
   if (key === 'project') {
     router.push(report.value.resumeId
-      ? { path: '/projects', query: { resumeId: report.value.resumeId } }
+      ? {
+          path: '/project-evidence',
+          query: {
+            resumeId: report.value.resumeId,
+            matchReportId: report.value.reportId,
+            ...(report.value.resumeVersionId ? { resumeVersionId: report.value.resumeVersionId } : {})
+          }
+        }
       : { path: '/resumes' }
     )
     return
@@ -782,6 +1130,25 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
 .repair-actions strong { font-size: 14px; }
 .repair-actions p { margin: 0; font-size: 12px; line-height: 1.6; }
+.report-overview { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); gap: 14px; align-items: stretch; }
+.overview-main { display: grid; grid-template-columns: minmax(160px, 0.38fr) minmax(0, 0.62fr); gap: 18px; align-items: center; background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(6, 182, 212, 0.08)); }
+.overview-score { display: grid; gap: 6px; padding: 18px; border: 1px solid rgba(37, 99, 235, 0.28); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.overview-score span, .overview-score small, .overview-action span, .insight-card span { color: var(--app-text-muted); font-size: 12px; }
+.overview-score strong { font-size: 34px; line-height: 1.05; overflow-wrap: anywhere; }
+.overview-score small { line-height: 1.5; }
+.overview-conclusion { min-width: 0; }
+.overview-conclusion h2 { margin-top: 10px; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.overview-conclusion p, .overview-action p, .insight-card p { overflow-wrap: anywhere; }
+.overview-action { display: grid; gap: 10px; align-content: center; background: rgba(22, 163, 74, 0.08); }
+.overview-action h2 { font-size: 19px; line-height: 1.35; overflow-wrap: anywhere; }
+.overview-action__buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.overview-action__buttons :deep(.el-button) { margin-left: 0; }
+.insight-card { display: grid; gap: 8px; align-content: start; box-shadow: none; }
+.insight-card h3 { font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.insight-card--success { border-color: rgba(22, 163, 74, 0.34); background: rgba(22, 163, 74, 0.07); }
+.insight-card--warning { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); }
+.insight-card--danger { border-color: rgba(239, 68, 68, 0.34); background: rgba(239, 68, 68, 0.07); }
+.insight-card--neutral { background: rgba(15, 23, 42, 0.2); }
 .score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 14px; }
 .score-card { padding: 16px; }
 .score-card span { color: var(--app-text-muted); font-size: 13px; }
@@ -799,13 +1166,27 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .json-sections { display: grid; gap: 14px; }
 .data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .data-block h3 { font-size: 15px; }
+.data-block__details { margin-top: 10px; }
+.data-block__details summary { cursor: pointer; color: var(--app-primary); font-size: 13px; font-weight: 700; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
+.dimension-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.dimension-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dimension-card__head span { color: var(--app-text-muted); font-size: 12px; }
+.dimension-card__head h3 { margin-top: 4px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.dimension-card__evidence { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(37, 99, 235, 0.08); font-size: 13px; }
+.dimension-card dl { display: grid; gap: 10px; margin: 12px 0 0; }
+.dimension-card dt { color: var(--app-text-muted); font-size: 12px; }
+.dimension-card dd { margin: 4px 0 0; color: var(--app-text); line-height: 1.65; overflow-wrap: anywhere; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
-@media (max-width: 1080px) { .score-grid, .detail-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1080px) { .score-grid, .detail-grid, .report-overview { grid-template-columns: 1fr 1fr; } .overview-main { grid-column: 1 / -1; } }
 @media (max-width: 760px) {
   .page-hero,
   .detail-grid,
   .score-grid,
+  .report-overview,
+  .overview-main,
+  .dimension-card-grid,
   .diagnostic-list,
   .repair-actions,
   .schema-warning-list li {
@@ -827,7 +1208,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .hero-actions,
   .section-head,
   .failure-buttons,
-  .tracker-actions {
+  .tracker-actions,
+  .overview-action__buttons {
     display: grid;
     grid-template-columns: 1fr;
     justify-content: stretch;
@@ -840,6 +1222,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .hero-actions :deep(.el-button),
   .failure-buttons :deep(.el-button),
   .tracker-actions :deep(.el-button),
+  .overview-action__buttons :deep(.el-button),
   .action-panel :deep(.el-button) {
     width: 100%;
     margin-left: 0;

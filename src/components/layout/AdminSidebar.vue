@@ -62,6 +62,7 @@ import {
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { appConfig } from '@/config'
 import { canAccessAdminPermissions } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 
@@ -78,6 +79,7 @@ interface AdminMenuItem {
   path: string
   icon: unknown
   permissions: string[]
+  featureFlag?: 'adminTraceCockpit'
 }
 
 interface AdminMenuSection {
@@ -135,6 +137,7 @@ const sections: AdminMenuSection[] = [
     children: [
       { label: '提示词模板', path: '/admin/ai/prompts', icon: Operation, permissions: ['admin:ai:prompt:list'] },
       { label: 'AI 运行记录', path: '/admin/ai/logs', icon: DataAnalysis, permissions: ['admin:ai:log:list'] },
+      { label: '链路驾驶舱', path: '/admin/trace-cockpit', icon: DataAnalysis, permissions: ['admin:trace:cockpit:view'], featureFlag: 'adminTraceCockpit' },
       { label: 'AI 模型配置', path: '/admin/ai/models', icon: Cpu, permissions: ['admin:ai:model:list'] },
       { label: '提示词回归', path: '/admin/ai/prompt-regression', icon: Operation, permissions: ['admin:agent:prompt-regression:list'] }
     ]
@@ -203,7 +206,12 @@ const handleSelect = () => {
   closeAllMenus()
 }
 
-const canSee = (item: AdminMenuItem) => canAccessAdminPermissions(item.permissions, authStore)
+const canAccessFeature = (item: AdminMenuItem) => {
+  if (item.featureFlag === 'adminTraceCockpit') return appConfig.enableAdminTraceCockpit
+  return true
+}
+
+const canSee = (item: AdminMenuItem) => canAccessFeature(item) && canAccessAdminPermissions(item.permissions, authStore)
 
 const visibleSections = computed(() =>
   sections

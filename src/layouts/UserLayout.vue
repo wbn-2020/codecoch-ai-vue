@@ -1,6 +1,7 @@
 <template>
   <div class="jobcoach-layout">
     <UserTopNav
+      v-if="!isImmersivePage"
       :display-name="displayName"
       :avatar-text="avatarText"
       :avatar-url="authStore.userInfo?.avatarUrl || ''"
@@ -15,7 +16,7 @@
 
     <CommandPalette v-if="commandPaletteOpen" v-model="commandPaletteOpen" scope="user" />
 
-    <main class="jobcoach-main">
+    <main class="jobcoach-main" :class="{ 'is-immersive': isImmersivePage }">
       <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
         当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
       </div>
@@ -27,13 +28,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
-import { appConfig } from '@/config'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
+import { appConfig } from '@/config'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -50,6 +51,7 @@ const displayName = computed(
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
+const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
 
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
@@ -117,79 +119,59 @@ const handleCommand = async (command: string) => {
 }
 
 onMounted(() => {
+  document.body.classList.add('is-user-layout-active')
   unreadRefreshCancelled = false
   deferNonCriticalWork(fetchUnreadCount)
   window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
 
 onBeforeUnmount(() => {
+  document.body.classList.remove('is-user-layout-active')
   unreadRefreshCancelled = true
   window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
-
-watch(
-  () => route.fullPath,
-  () => tagsStore.addVisitedView(route),
-  { immediate: true }
-)
 </script>
 
 <style scoped lang="scss">
 .jobcoach-layout {
   min-height: 100vh;
+  overflow-x: clip;
   background:
-    linear-gradient(180deg, rgba(232, 241, 255, 0.95), rgba(248, 250, 252, 0.98) 360px),
-    #f8fafc;
-  color: #172033;
-  color-scheme: light;
-
-  --app-bg: #f8fafc;
-  --app-surface: #ffffff;
-  --app-surface-soft: #f8fafc;
-  --app-border: #e2e8f0;
-  --app-text: #172033;
-  --app-text-muted: #64748b;
-  --app-primary: #2563eb;
-  --app-primary-soft: #dbeafe;
-  --app-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
-  --user-mobile-top-height: 68px;
-  --user-mobile-nav-height: 0px;
-  --user-mobile-nav-gap: 0px;
-  --el-bg-color: #ffffff;
-  --el-bg-color-overlay: #ffffff;
-  --el-fill-color-blank: #ffffff;
-  --el-fill-color-light: #f8fafc;
-  --el-border-color: #dbe3ef;
-  --el-border-color-light: #e5eaf2;
-  --el-text-color-primary: #172033;
-  --el-text-color-regular: #334155;
-  --el-text-color-secondary: #64748b;
-  --el-color-primary: #2563eb;
-  --el-color-primary-light-3: #60a5fa;
-  --el-color-primary-light-5: #93c5fd;
-  --el-color-primary-light-7: #bfdbfe;
-  --el-color-primary-light-8: #dbeafe;
-  --el-color-primary-light-9: #eff6ff;
-  --el-color-primary-dark-2: #1d4ed8;
-  --el-mask-color: rgba(255, 255, 255, 0.72);
+    radial-gradient(circle at 10% 0, rgba(0, 242, 254, 0.16), transparent 28rem),
+    radial-gradient(circle at 86% 12%, rgba(139, 92, 246, 0.15), transparent 30rem),
+    var(--cc-grid),
+    var(--user-bg);
+  background-size: auto, auto, var(--cc-grid-size), auto;
+  color: var(--user-text);
 }
 
 .jobcoach-main {
-  width: min(100%, 1240px);
+  width: min(100%, 1280px);
+  min-width: 0;
   min-height: calc(100vh - 68px);
   margin: 0 auto;
-  padding: 22px 24px 42px;
+  padding: 22px 28px 42px;
+  overflow-x: clip;
+
+  &.is-immersive {
+    width: 100%;
+    min-height: 100vh;
+    padding: 0;
+  }
 }
 
 .demo-readonly-banner {
   margin-bottom: 16px;
   padding: 10px 14px;
-  border: 1px solid rgba(244, 122, 31, 0.28);
-  border-radius: 8px;
-  background: #fff7ed;
-  color: #9a3412;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: var(--user-radius-sm);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(0, 242, 254, 0.04)),
+    var(--user-warning-soft);
+  color: #fde68a;
   font-size: 13px;
   line-height: 1.6;
+  box-shadow: var(--user-shadow-xs);
 }
 
 @media (max-width: 720px) {
@@ -201,7 +183,7 @@ watch(
 
   .jobcoach-main {
     min-height: calc(100vh - 62px);
-    padding: 16px 14px calc(var(--user-mobile-nav-height) + 32px + env(safe-area-inset-bottom, 0px));
+    padding: 16px 14px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 20px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

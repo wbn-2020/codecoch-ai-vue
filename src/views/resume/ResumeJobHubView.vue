@@ -1,37 +1,27 @@
 <template>
   <div class="resume-job-hub">
     <section class="hub-hero">
-      <div class="hero-copy">
+      <div class="hero-copy hero-card">
         <div class="hero-kicker">
           <FileText :size="16" />
-          简历与岗位
+          简历实验室
         </div>
-        <h1>简历与岗位</h1>
+        <h1>把简历、JD 和项目证据放在一张实验台上</h1>
         <p>
-          先确认当前投递版本和目标岗位描述，再把匹配风险、关键词缺口和项目证据转成今天能执行的训练动作。
+          先确认当前简历和目标岗位，再根据真实匹配报告、关键词覆盖和项目经历，决定下一步该补证据、改表达，还是进入训练。
         </p>
-        <div class="hero-facts">
-          <div class="hero-fact">
-            <span>当前简历</span>
-            <strong>{{ defaultResumeTitle }}</strong>
-          </div>
-          <div class="hero-fact">
-            <span>目标岗位</span>
-            <strong>{{ currentTarget?.jobTitle || '待补岗位描述' }}</strong>
-          </div>
-          <div class="hero-fact">
-            <span>匹配状态</span>
-            <strong>{{ matchScoreText }}</strong>
-          </div>
-        </div>
         <div class="hero-actions">
-          <el-button type="primary" size="large" @click="goPrimaryAction">
+          <el-button class="primary-action" type="primary" size="large" @click="goPrimaryAction">
             <Sparkles :size="17" />
             {{ primaryAction.label }}
           </el-button>
           <el-button size="large" @click="router.push('/resume-match')">
             <GitCompareArrows :size="17" />
-            发起岗位匹配
+            JD 匹配实验台
+          </el-button>
+          <el-button size="large" @click="router.push('/project-evidence')">
+            <ListChecks :size="17" />
+            项目证据库
           </el-button>
           <el-button size="large" text :loading="loading || secondaryLoading" @click="loadAll">
             <RefreshCw :size="17" />
@@ -40,20 +30,80 @@
         </div>
       </div>
 
-      <div class="hero-status">
-        <span>准备可信度</span>
-        <strong>{{ readinessScore }}</strong>
-        <el-progress :percentage="readinessScore" :show-text="false" />
-        <p>{{ readinessHint }}</p>
+      <div class="experiment-stack">
+        <article class="resume-snapshot-card">
+          <div class="snapshot-head">
+            <span>A4 简历预览</span>
+            <el-tag :type="defaultResume ? 'success' : 'info'" effect="plain">
+              {{ defaultResume ? '实时工作台' : '待创建' }}
+            </el-tag>
+          </div>
+          <div class="snapshot-paper">
+            <strong>{{ defaultResumeTitle }}</strong>
+            <small>{{ currentTarget?.jobTitle || defaultResume?.targetPosition || '目标岗位待确认' }}</small>
+            <i v-for="line in resumeSnapshotLines" :key="line">{{ line }}</i>
+          </div>
+          <button type="button" @click="goResumeAction">
+            {{ defaultResume ? '边改边看预览' : '创建后生成预览' }}
+            <ArrowRight :size="14" />
+          </button>
+        </article>
+
+        <article class="experiment-card">
+          <div class="card-topline">
+            <span>当前主简历</span>
+            <el-tag :type="defaultResume ? 'success' : 'warning'" effect="plain">
+              {{ defaultResume ? '已接入' : '待创建' }}
+            </el-tag>
+          </div>
+          <h2>{{ defaultResumeTitle }}</h2>
+          <p>{{ resumeSummary }}</p>
+          <button type="button" @click="goResumeAction">
+            {{ defaultResume ? '进入简历工作台' : '创建第一份简历' }}
+            <ArrowRight :size="14" />
+          </button>
+        </article>
+
+        <article class="experiment-card">
+          <div class="card-topline">
+            <span>目标岗位</span>
+            <el-tag :type="parseStatusType(currentTarget?.parseStatus)" effect="plain">
+              {{ parseStatusLabel(currentTarget?.parseStatus) }}
+            </el-tag>
+          </div>
+          <h2>{{ currentTarget?.jobTitle || '还没有目标岗位' }}</h2>
+          <p>{{ targetSummary }}</p>
+          <button type="button" @click="goTargetAction">
+            {{ currentTarget ? '查看岗位分析' : '添加目标岗位' }}
+            <ArrowRight :size="14" />
+          </button>
+        </article>
       </div>
+
+      <aside class="next-action-card">
+        <div class="next-action-head">
+          <span>下一步行动</span>
+          <ListChecks :size="18" />
+        </div>
+        <h2>{{ nextStep.title }}</h2>
+        <p>{{ nextStep.desc }}</p>
+        <el-button type="primary" size="large" @click="router.push(nextStep.path)">
+          {{ nextStep.cta }}
+          <ArrowRight :size="15" />
+        </el-button>
+
+        <div class="readiness-meter">
+          <div>
+            <span>实验资料接入</span>
+            <strong>{{ readinessProgressText }}</strong>
+          </div>
+          <el-progress :percentage="readinessProgressPercent" :show-text="false" />
+          <p>{{ readinessHint }}</p>
+        </div>
+      </aside>
     </section>
 
-    <section v-if="loadError" class="hub-panel">
-      <AppState type="error" title="简历与岗位加载失败" :description="loadError">
-        <el-button type="primary" @click="loadAll">重新加载</el-button>
-      </AppState>
-    </section>
-    <section v-else-if="secondaryLoading" class="hub-panel hub-warning">
+    <section v-if="secondaryLoading" class="hub-panel hub-warning">
       <el-alert
         type="info"
         show-icon
@@ -72,86 +122,51 @@
       />
     </section>
 
-    <section class="summary-grid" v-loading="loading">
-      <article class="summary-card">
-        <div class="summary-icon"><FileText :size="20" /></div>
-        <span>当前简历</span>
-        <h2>{{ defaultResumeTitle }}</h2>
-        <p>{{ resumeSummary }}</p>
-        <div class="summary-pills">
-          <span>{{ defaultResume ? '简历已接入' : '等待创建简历' }}</span>
-          <span>{{ defaultResume?.projectCount || 0 }} 个项目</span>
+    <section class="lab-overview" v-loading="loading">
+      <article class="report-card">
+        <div class="section-kicker">
+          <GitCompareArrows :size="15" />
+          JD 匹配状态
         </div>
-        <div class="summary-actions">
-          <el-button type="primary" text @click="goResumeAction">
-            {{ defaultResume ? '编辑简历' : '创建简历' }}
-            <ArrowRight :size="14" />
-          </el-button>
-          <el-button text @click="router.push('/resumes/manage')">简历清单</el-button>
+        <div class="report-score">
+          <strong>{{ matchScoreText }}</strong>
+          <span>{{ hasSuccessfulMatch ? '匹配结果' : matchStatusLabel(latestMatch?.status) || (canMatch ? '等待生成报告' : '资料未齐') }}</span>
         </div>
-      </article>
-
-      <article class="summary-card">
-        <div class="summary-icon"><Crosshair :size="20" /></div>
-        <span>目标岗位</span>
-        <h2>{{ currentTarget?.jobTitle || '还没有目标岗位' }}</h2>
-        <p>{{ targetSummary }}</p>
-        <div class="summary-pills">
-          <span>{{ parseStatusLabel(currentTarget?.parseStatus) }}</span>
-          <span>{{ currentTarget?.companyName || '公司待补充' }}</span>
-        </div>
-        <div class="summary-actions">
-          <el-button type="primary" text @click="goTargetAction">
-            {{ currentTarget ? '查看岗位分析' : '创建岗位目标' }}
-            <ArrowRight :size="14" />
-          </el-button>
-          <el-tag :type="parseStatusType(currentTarget?.parseStatus)" effect="plain">
-            {{ parseStatusLabel(currentTarget?.parseStatus) }}
-          </el-tag>
-        </div>
-      </article>
-
-      <article class="summary-card">
-        <div class="summary-icon"><GitCompareArrows :size="20" /></div>
-        <span>岗位匹配</span>
-        <h2>{{ matchScoreText }}</h2>
         <p>{{ matchSummary }}</p>
         <div class="summary-pills">
-          <span>{{ canMatch ? '可生成匹配报告' : '先补齐数据' }}</span>
-          <span>{{ matchStatusLabel(latestMatch?.status) }}</span>
+          <span>{{ canMatch ? '简历和岗位已可用于实验' : '需要简历和岗位' }}</span>
+          <span>{{ latestMatch ? matchStatusLabel(latestMatch.status) || '报告处理中' : '暂无最近报告' }}</span>
         </div>
         <div class="summary-actions">
           <el-button type="primary" text :disabled="!canMatch" @click="goMatchAction">
-            {{ latestMatch ? '查看匹配报告' : '生成匹配报告' }}
+            {{ latestMatch ? '查看 JD 匹配报告' : '生成 JD 匹配报告' }}
             <ArrowRight :size="14" />
           </el-button>
-          <el-tag :type="matchStatusType(latestMatch?.status)" effect="plain">
-            {{ matchStatusLabel(latestMatch?.status) || (canMatch ? '待生成' : '缺资料') }}
-          </el-tag>
+          <el-button text @click="router.push('/resumes/manage')">简历资产</el-button>
         </div>
       </article>
 
-      <article class="summary-card next-card">
-        <div class="summary-icon"><ListChecks :size="20" /></div>
-        <span>下一步</span>
-        <h2>{{ nextStep.title }}</h2>
-        <p>{{ nextStep.desc }}</p>
-        <div class="summary-actions">
-          <el-button type="primary" text @click="router.push(nextStep.path)">
-            {{ nextStep.cta }}
-            <ArrowRight :size="14" />
-          </el-button>
+      <article class="issue-card">
+        <div class="section-kicker">
+          <CircleAlert :size="15" />
+          当前最该处理
         </div>
+        <h2>{{ riskItems[0]?.title || nextStep.title }}</h2>
+        <p>{{ riskItems[0]?.desc || nextStep.desc }}</p>
+        <el-button text @click="router.push(riskItems[0]?.path || nextStep.path)">
+          {{ riskItems[0]?.cta || nextStep.cta }}
+          <ArrowRight :size="14" />
+        </el-button>
       </article>
     </section>
 
     <section class="hub-path">
       <div class="section-head">
         <div>
-          <p class="section-kicker">求职准备路径</p>
-          <h2>从简历证据到今日训练</h2>
+          <p class="section-kicker">投前准备链路</p>
+          <h2>从简历到 JD，再回流到项目证据和训练</h2>
         </div>
-        <el-button text @click="router.push('/dashboard')">回到今日计划</el-button>
+        <el-button text @click="router.push('/dashboard')">回到 Offer 工作台</el-button>
       </div>
       <div class="path-steps">
         <button
@@ -176,7 +191,7 @@
         <div class="section-head">
           <div>
             <p class="section-kicker">岗位关键词覆盖</p>
-            <h2>哪些岗位要求已经有简历证据</h2>
+            <h2>哪些岗位要求已经有真实证据</h2>
           </div>
           <el-button text :disabled="!latestMatch" @click="goMatchAction">报告详情</el-button>
         </div>
@@ -208,10 +223,10 @@
       <section class="hub-panel">
         <div class="section-head">
           <div>
-            <p class="section-kicker">项目技能卡</p>
-            <h2>把项目改成可追问证据</h2>
+            <p class="section-kicker">项目证据</p>
+            <h2>把项目经历改成可证明材料</h2>
           </div>
-          <el-button text :disabled="!defaultResume" @click="goResumeAction">维护项目</el-button>
+          <el-button text @click="router.push('/project-evidence')">打开证据库</el-button>
         </div>
 
         <div v-if="projectCards.length" class="project-list">
@@ -235,7 +250,7 @@
           title="还没有可用于追问的项目"
           description="在简历中补充项目背景、技术决策和结果指标后，面试房间和题目训练才能引用真实证据。"
         >
-          <el-button type="primary" :disabled="!defaultResume" @click="goResumeAction">补充项目经历</el-button>
+          <el-button type="primary" @click="router.push('/project-evidence')">进入项目证据库</el-button>
         </AppState>
       </section>
     </div>
@@ -265,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowRight, CheckCircle2, CircleAlert, Crosshair, FileText, GitCompareArrows, ListChecks, RefreshCw, Sparkles } from 'lucide-vue-next'
+import { ArrowRight, CheckCircle2, CircleAlert, FileText, GitCompareArrows, ListChecks, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -301,7 +316,6 @@ interface ProjectCard {
 const router = useRouter()
 const loading = ref(false)
 const secondaryLoading = ref(false)
-const loadError = ref('')
 const partialLoadWarning = ref('')
 const resumes = ref<ResumeVO[]>([])
 const targets = ref<TargetJobVO[]>([])
@@ -361,13 +375,45 @@ const toTextList = (value: unknown): string[] => {
 
 const firstItems = (value: unknown, count = 3) => toTextList(value).slice(0, count)
 
-const canMatch = computed(() => Boolean(defaultResume.value?.id && currentTarget.value?.id))
+const toPositiveId = (value: unknown): number | null => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null
+}
+
+const getResumeEditPath = () => {
+  const resumeId = toPositiveId(defaultResume.value?.id)
+  return resumeId ? `/resumes/${resumeId}/edit` : '/resumes/create'
+}
+
+const getTargetAnalysisPath = () => {
+  const targetId = toPositiveId(currentTarget.value?.id)
+  return targetId ? `/job-targets/${targetId}/analysis` : '/job-targets/create'
+}
+
+const getMatchReportPath = () => {
+  const reportId = toPositiveId(latestMatch.value?.reportId)
+  return reportId ? `/resume-match/${reportId}` : '/resume-match'
+}
+
+const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
 const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
 
 const defaultResumeTitle = computed(() =>
   defaultResume.value?.resumeName || defaultResume.value?.title || '还没有可用简历'
 )
+
+const resumeSnapshotLines = computed(() => {
+  if (!defaultResume.value) {
+    return ['补姓名与目标岗位', '沉淀技术栈关键词', '添加可追问项目经历']
+  }
+  const lines = [
+    resumeDetail.value?.summary || defaultResume.value.summary || '',
+    resumeDetail.value?.skills || defaultResume.value.skills || '',
+    projectCards.value[0]?.summary || ''
+  ]
+  return lines.filter(Boolean).slice(0, 3)
+})
 
 const resumeSummary = computed(() => {
   if (!defaultResume.value) return '先创建或上传一份简历，后续匹配和今日计划才有真实依据。'
@@ -423,16 +469,17 @@ const friendlyMatchFailure = (message?: string | null) => {
   return '上次匹配报告没有成功生成，请进入详情查看处理建议并重新生成。'
 }
 
-const readinessScore = computed(() => {
-  let score = 0
-  if (defaultResume.value) score += 25
-  if (resumeDetail.value?.projects?.length) score += 15
-  if (currentTarget.value) score += 20
-  if (currentTarget.value?.parseStatus === 'PARSED') score += 15
-  if (hasSuccessfulMatch.value) score += 20
-  if ((skillOverview.value?.topGaps || []).length) score += 5
-  return Math.min(score, 100)
-})
+const readinessSignals = computed(() => [
+  Boolean(defaultResume.value),
+  Boolean(resumeDetail.value?.projects?.length),
+  Boolean(currentTarget.value),
+  currentTarget.value?.parseStatus === 'PARSED',
+  hasSuccessfulMatch.value,
+  Boolean((skillOverview.value?.topGaps || []).length)
+])
+const readinessReadyCount = computed(() => readinessSignals.value.filter(Boolean).length)
+const readinessProgressPercent = computed(() => Math.round((readinessReadyCount.value / readinessSignals.value.length) * 100))
+const readinessProgressText = computed(() => `${readinessReadyCount.value}/${readinessSignals.value.length} 项`)
 
 const readinessHint = computed(() => {
   if (!defaultResume.value) return '先补简历，避免后续页面展示缺少依据的匹配结果。'
@@ -445,13 +492,19 @@ const readinessHint = computed(() => {
 })
 
 const primaryAction = computed(() => {
-  if (!defaultResume.value) return { label: '创建简历', path: '/resumes/create' }
-  if (!currentTarget.value) return { label: '创建目标岗位', path: '/job-targets/create' }
-  if (evidenceLoading.value) return { label: '进入匹配中心', path: '/resume-match' }
-  if (!latestMatch.value) return { label: '生成匹配报告', path: '/resume-match' }
-  if (latestMatch.value.status === 'FAILED') return { label: '重新生成匹配报告', path: `/resume-match/${latestMatch.value.reportId}` }
-  if (hasSuccessfulMatch.value) return { label: '进入推荐训练', path: '/questions/recommendations' }
-  return { label: '查看匹配进度', path: `/resume-match/${latestMatch.value.reportId}` }
+  if (!defaultResume.value) return { label: '创建第一份简历', path: '/resumes/create' }
+  if (!currentTarget.value) return { label: '添加目标岗位', path: '/job-targets/create' }
+  if (evidenceLoading.value) return { label: '查看匹配准备', path: '/resume-match' }
+  if (!latestMatch.value) return { label: '生成 JD 匹配报告', path: '/resume-match' }
+  if (latestMatch.value.status === 'FAILED') return { label: '重新生成 JD 匹配报告', path: getMatchReportPath() }
+  if (hasSuccessfulMatch.value && !projectCards.value.length) {
+    return {
+      label: '补项目证据',
+      path: '/project-evidence'
+    }
+  }
+  if (hasSuccessfulMatch.value) return { label: '进入模拟面试', path: '/interviews/create' }
+  return { label: '查看匹配进度', path: getMatchReportPath() }
 })
 
 const nextStep = computed(() => {
@@ -489,10 +542,10 @@ const nextStep = computed(() => {
   }
   if (latestMatch.value.status === 'FAILED') {
     return {
-      title: '重新生成匹配报告',
+      title: '重新生成 JD 匹配报告',
       desc: '上次报告没有成功，先恢复匹配结果再进入推荐题和岗位面试。',
       cta: '查看失败原因',
-      path: `/resume-match/${latestMatch.value.reportId}`
+      path: getMatchReportPath()
     }
   }
   if (!hasSuccessfulMatch.value) {
@@ -500,14 +553,22 @@ const nextStep = computed(() => {
       title: '等待匹配完成',
       desc: '报告未成功前不把推荐题和面试训练标成已具备依据，避免误导训练方向。',
       cta: '查看匹配进度',
-      path: `/resume-match/${latestMatch.value.reportId}`
+      path: getMatchReportPath()
+    }
+  }
+  if (!projectCards.value.length) {
+    return {
+      title: '补项目证据',
+      desc: '报告已经生成，但当前简历还缺少可复盘项目，建议先补项目背景、技术决策和结果指标。',
+      cta: '补项目经历',
+      path: '/project-evidence'
     }
   }
   return {
-    title: '转入训练',
-    desc: '把匹配报告里的薄弱点转成推荐题或岗位模拟面试。',
-    cta: '查看推荐题',
-    path: '/questions/recommendations'
+    title: '进入模拟面试',
+    desc: '用这份简历、目标岗位和项目证据进入岗位模拟面试，验证表达是否站得住。',
+    cta: '开始模拟面试',
+    path: '/interviews/create'
   }
 })
 
@@ -515,13 +576,13 @@ const journeySteps = computed(() => [
   {
     title: '简历诊断',
     desc: defaultResume.value ? '已有可用简历' : '待创建或上传',
-    path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create',
-    done: Boolean(defaultResume.value)
+    path: getResumeEditPath(),
+    done: Boolean(toPositiveId(defaultResume.value?.id))
   },
   {
     title: '岗位分析',
     desc: currentTarget.value?.parseStatus === 'PARSED' ? '已分析目标岗位' : '待分析岗位要求',
-    path: currentTarget.value ? `/job-targets/${currentTarget.value.id}/analysis` : '/job-targets/create',
+    path: getTargetAnalysisPath(),
     done: currentTarget.value?.parseStatus === 'PARSED'
   },
   {
@@ -531,13 +592,13 @@ const journeySteps = computed(() => [
       : latestMatch.value?.status === 'FAILED'
         ? '上次失败，可重新生成'
         : '待生成匹配报告',
-    path: latestMatch.value ? `/resume-match/${latestMatch.value.reportId}` : '/resume-match',
+    path: getMatchReportPath(),
     done: latestMatch.value?.status === 'SUCCESS'
   },
   {
     title: '项目证据',
     desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习` : '待补项目指标',
-    path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create',
+    path: '/project-evidence',
     done: projectCards.value.length > 0
   },
   {
@@ -620,7 +681,7 @@ const riskItems = computed(() => {
         title: skillGaps[0] || '完善技能画像',
         desc: skillGaps[1] || '补齐项目证据后，覆盖率会更真实。',
         cta: '补简历',
-        path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+        path: getResumeEditPath()
       },
       {
         source: '下一步训练',
@@ -638,7 +699,7 @@ const riskItems = computed(() => {
       title: defaultResume.value ? '补项目指标和技术决策' : '先创建可解析简历',
       desc: defaultResume.value ? '项目经历需要能回答“为什么这么做、结果如何证明”。' : '没有简历时，项目技能卡会先保持空白，补充资料后再生成。',
       cta: defaultResume.value ? '编辑简历' : '创建简历',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      path: getResumeEditPath()
     },
     {
       source: '岗位上下文',
@@ -658,8 +719,8 @@ const riskItems = computed(() => {
       source: '项目卡片',
       title: projectCards.value.length ? '复盘项目证据' : '补项目经历',
       desc: projectCards.value.length ? '把项目背景、技术决策和结果指标补齐。' : '项目卡会帮助你把简历改成可追问证据。',
-      cta: defaultResume.value ? '维护项目' : '创建简历',
-      path: defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create'
+      cta: '打开证据库',
+      path: '/project-evidence'
     }
   ]
 })
@@ -697,13 +758,6 @@ const parseStatusType = (status?: string) => {
   return 'info'
 }
 
-const matchStatusType = (status?: string) => {
-  if (status === 'SUCCESS') return 'success'
-  if (status === 'FAILED') return 'danger'
-  if (status === 'PROCESSING' || status === 'PENDING') return 'warning'
-  return 'info'
-}
-
 const matchStatusLabel = (status?: string) => {
   if (status === 'SUCCESS') return '已完成'
   if (status === 'FAILED') return '生成失败'
@@ -729,39 +783,38 @@ const goPrimaryAction = () => {
 }
 
 const goResumeAction = () => {
-  router.push(defaultResume.value ? `/resumes/${defaultResume.value.id}/edit` : '/resumes/create')
+  router.push(getResumeEditPath())
 }
 
 const goTargetAction = () => {
-  router.push(currentTarget.value ? `/job-targets/${currentTarget.value.id}/analysis` : '/job-targets/create')
+  router.push(getTargetAnalysisPath())
 }
 
 const goMatchAction = () => {
-  if (latestMatch.value) {
+  const reportId = toPositiveId(latestMatch.value?.reportId)
+  const resumeId = toPositiveId(latestMatch.value?.resumeId ?? defaultResume.value?.id)
+  const targetJobId = toPositiveId(latestMatch.value?.targetJobId ?? currentTarget.value?.id)
+  const query = {
+    ...(resumeId ? { resumeId } : {}),
+    ...(targetJobId ? { targetJobId } : {})
+  }
+
+  if (reportId) {
     router.push({
-      path: `/resume-match/${latestMatch.value.reportId}`,
-      query: {
-        resumeId: latestMatch.value.resumeId,
-        targetJobId: latestMatch.value.targetJobId
-      }
+      path: `/resume-match/${reportId}`,
+      query
     })
     return
   }
 
   router.push({
     path: '/resume-match',
-    query: {
-      resumeId: defaultResume.value?.id,
-      targetJobId: currentTarget.value?.id
-    }
+    query
   })
 }
 
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
-
-const isPositiveId = (value: unknown): value is number =>
-  Number.isFinite(Number(value)) && Number(value) > 0
 
 let loadRunId = 0
 let evidenceLoadTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -777,17 +830,19 @@ const loadEvidenceData = async (runId: number, baseWarnings: string[]) => {
   const warnings = [...baseWarnings]
   const resume = defaultResume.value
   const target = currentTarget.value
+  const resumeId = toPositiveId(resume?.id)
+  const targetId = toPositiveId(target?.id)
 
   try {
     const [detailResult, matchResult, overviewResult] = await Promise.allSettled([
-      resume && isPositiveId(resume.id)
-        ? getResumeDetailApi(resume.id)
+      resumeId
+        ? getResumeDetailApi(resumeId)
         : Promise.resolve(null),
-      resume && target && isPositiveId(resume.id) && isPositiveId(target.id)
-        ? getLatestResumeJobMatchReportApi(resume.id, target.id)
+      resumeId && targetId
+        ? getLatestResumeJobMatchReportApi(resumeId, targetId)
         : Promise.resolve(null),
-      target && isPositiveId(target.id)
-        ? getSkillProfileOverviewApi(target.id)
+      targetId
+        ? getSkillProfileOverviewApi(targetId)
         : Promise.resolve(null)
     ])
 
@@ -841,7 +896,6 @@ const loadAll = async () => {
   clearEvidenceLoadTimer()
   loading.value = true
   secondaryLoading.value = false
-  loadError.value = ''
   partialLoadWarning.value = ''
   latestMatch.value = null
   skillOverview.value = null
@@ -869,11 +923,6 @@ const loadAll = async () => {
       warnings.push(getErrorMessage(targetResult.reason, '岗位目标读取失败'))
     }
 
-    if (!isFulfilled(resumeResult) && !isFulfilled(targetResult)) {
-      loadError.value = warnings.join('；') || '简历与岗位数据暂时不可用。'
-      return
-    }
-
     defaultResume.value = resumes.value.find((item) => item.isDefault === 1) || resumes.value[0] || null
     if (!isFulfilled(currentResult)) {
       warnings.push(getErrorMessage(currentResult.reason, '当前岗位读取失败，已先使用岗位列表中的信息'))
@@ -885,13 +934,16 @@ const loadAll = async () => {
 
     partialLoadWarning.value = warnings.filter(Boolean).join('；')
   } catch (error) {
-    loadError.value = getErrorMessage(error, '简历与岗位数据暂时不可用。')
+    resumes.value = []
+    targets.value = []
+    defaultResume.value = null
+    currentTarget.value = null
+    warnings = [getErrorMessage(error, '基础数据暂时不可用，已保留创建简历、JD 匹配和项目证据入口。')]
+    partialLoadWarning.value = warnings.join('；')
   } finally {
     if (runId === loadRunId) {
       loading.value = false
-      if (!loadError.value) {
-        deferEvidenceLoad(runId, warnings)
-      }
+      deferEvidenceLoad(runId, warnings)
     }
   }
 }
@@ -908,41 +960,62 @@ onBeforeUnmount(() => {
 .resume-job-hub {
   min-height: 100%;
   padding: 24px;
-  color: #172033;
+  color: #101828;
   background:
-    radial-gradient(circle at 12% 0%, rgba(240, 128, 64, 0.12), transparent 30%),
-    linear-gradient(180deg, #fbfcff 0%, #f4f7fb 42%, #f7f8fb 100%);
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 6%, rgba(6, 182, 212, 0.12), transparent 26%),
+    linear-gradient(180deg, #f6f8fc 0%, #eef4ff 48%, #f7f9fc 100%);
 }
 
 .hub-hero,
 .hub-panel,
-.summary-card,
-.hub-path {
-  border: 1px solid rgba(136, 150, 176, 0.22);
+.hub-path,
+.lab-overview {
+  border: 1px solid rgba(207, 214, 228, 0.9);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 48px rgba(24, 39, 75, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
 }
 
 .hub-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.9fr) minmax(280px, 0.72fr);
+  gap: 16px;
   align-items: stretch;
-  padding: 28px;
+  padding: 16px;
+}
+
+.hero-card,
+.resume-snapshot-card,
+.experiment-card,
+.next-action-card {
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.hero-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(16, 24, 40, 0.96), rgba(30, 64, 175, 0.92)),
+    #101828;
 }
 
 .hero-copy h1 {
-  margin: 12px 0 10px;
+  max-width: 680px;
+  margin: 14px 0 12px;
   font-size: 34px;
-  line-height: 1.15;
+  line-height: 1.18;
   letter-spacing: 0;
 }
 
 .hero-copy p {
-  max-width: 760px;
+  max-width: 720px;
   margin: 0;
-  color: #5b677c;
+  color: rgba(255, 255, 255, 0.76);
   font-size: 15px;
   line-height: 1.8;
 }
@@ -953,129 +1026,268 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-items: center;
   margin: 0;
-  color: #e46f2b;
   font-size: 13px;
   font-weight: 700;
 }
 
-.hero-facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
+.hero-kicker {
+  color: #bfdbfe;
 }
 
-.hero-fact {
-  padding: 12px 14px;
-  border: 1px solid rgba(136, 150, 176, 0.18);
-  border-radius: 8px;
-  background: #fbfcff;
-}
-
-.hero-fact span,
-.summary-card span,
-.risk-card span {
-  color: #7a8496;
-  font-size: 13px;
-}
-
-.hero-fact strong {
-  display: block;
-  margin-top: 6px;
-  color: #172033;
-  font-size: 14px;
-  line-height: 1.5;
+.section-kicker {
+  color: #2563eb;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 28px;
 }
 
 .hero-actions :deep(.el-button),
 .summary-actions :deep(.el-button),
 .section-head :deep(.el-button),
-.risk-card :deep(.el-button) {
+.risk-card :deep(.el-button),
+.next-action-card :deep(.el-button),
+.issue-card :deep(.el-button) {
+  display: inline-flex;
+  min-width: 0;
+  gap: 6px;
+  align-items: center;
+  white-space: normal;
+}
+
+.hero-actions :deep(.el-button:not(.primary-action)) {
+  border-color: rgba(255, 255, 255, 0.38);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.experiment-stack {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.resume-snapshot-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(255, 255, 255, 0.98)),
+    #ffffff;
+}
+
+.snapshot-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+
+  span {
+    color: #344054;
+    font-size: 13px;
+    font-weight: 700;
+  }
+}
+
+.snapshot-paper {
+  min-height: 184px;
+  padding: 18px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+
+  strong,
+  small,
+  i {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #101828;
+    font-size: 18px;
+  }
+
+  small {
+    margin-top: 4px;
+    color: #2563eb;
+    font-size: 12px;
+  }
+
+  i {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eef2f7;
+    color: #475467;
+    font-size: 12px;
+    font-style: normal;
+  }
+}
+
+.experiment-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 176px;
+  padding: 18px;
+  border: 1px solid #e4e7ec;
+  background: #ffffff;
+}
+
+.card-topline,
+.next-action-head,
+.readiness-meter > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-topline span,
+.next-action-head span,
+.readiness-meter span,
+.risk-card span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.experiment-card h2,
+.next-action-card h2,
+.report-card h2,
+.issue-card h2 {
+  margin: 12px 0 8px;
+  color: #101828;
+  font-size: 20px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.experiment-card p,
+.next-action-card p,
+.report-card p,
+.issue-card p,
+.keyword-item p,
+.project-card p,
+.risk-card p {
+  margin: 0;
+  color: #667085;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.resume-snapshot-card button,
+.experiment-card button,
+.project-card button {
   display: inline-flex;
   gap: 6px;
   align-items: center;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  color: #2563eb;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
 }
 
-.hero-status {
+.next-action-card {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  min-height: 178px;
-  padding: 22px;
-  border: 1px solid rgba(228, 111, 43, 0.22);
-  border-radius: 8px;
-  background: #fff8f3;
+  padding: 20px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: linear-gradient(180deg, #eff6ff, #ffffff 58%);
 }
 
-.hero-status strong {
-  margin: 8px 0 12px;
+.next-action-card :deep(.el-button) {
+  width: 100%;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.readiness-meter {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid #dbe7ff;
+}
+
+.readiness-meter strong {
+  color: #2563eb;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.readiness-meter p {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.hub-path,
+.hub-panel,
+.lab-overview {
+  margin-top: 18px;
+  padding: 22px;
+}
+
+.lab-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 16px;
+}
+
+.report-card,
+.issue-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.issue-card {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.report-score {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  margin: 12px 0;
+}
+
+.report-score strong {
+  color: #101828;
   font-size: 42px;
   line-height: 1;
 }
 
-.hero-status p {
-  margin: 12px 0 0;
-  color: #6a5663;
-  line-height: 1.7;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 18px;
-}
-
-.summary-card {
-  min-height: 214px;
-  padding: 20px;
-}
-
-.summary-icon {
-  display: inline-flex;
-  width: 38px;
-  height: 38px;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-  border-radius: 8px;
-  color: #d95d1b;
-  background: #fff1e8;
-}
-
-.summary-card h2 {
-  min-height: 58px;
-  margin: 8px 0;
-  color: #172033;
-  font-size: 21px;
-  line-height: 1.35;
-}
-
-.summary-card p {
-  min-height: 52px;
-  margin: 0;
-  color: #657187;
-  line-height: 1.65;
+.report-score span {
+  color: #667085;
+  font-size: 13px;
 }
 
 .summary-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
-.summary-pills span {
+.summary-pills span,
+.project-meta span {
   padding: 4px 8px;
   border-radius: 999px;
-  color: #5d6575;
+  color: #344054;
   font-size: 12px;
   background: #eef2f7;
 }
@@ -1089,12 +1301,6 @@ onBeforeUnmount(() => {
   margin-top: 18px;
 }
 
-.hub-path,
-.hub-panel {
-  margin-top: 18px;
-  padding: 22px;
-}
-
 .section-head {
   display: flex;
   gap: 16px;
@@ -1105,6 +1311,7 @@ onBeforeUnmount(() => {
 
 .section-head h2 {
   margin: 4px 0 0;
+  color: #101828;
   font-size: 22px;
   line-height: 1.35;
 }
@@ -1117,11 +1324,11 @@ onBeforeUnmount(() => {
 
 .path-step {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 10px;
-  min-height: 92px;
+  min-height: 96px;
   padding: 14px;
-  border: 1px solid rgba(136, 150, 176, 0.2);
+  border: 1px solid #e4e7ec;
   border-radius: 8px;
   color: inherit;
   text-align: left;
@@ -1131,28 +1338,31 @@ onBeforeUnmount(() => {
 
 .path-step strong {
   align-self: center;
+  overflow-wrap: anywhere;
 }
 
 .path-step small {
   grid-column: 2;
-  color: #6b7588;
+  color: #667085;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .step-status {
   display: inline-flex;
   width: 26px;
   height: 26px;
+  flex: none;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #c97b25;
-  background: #fff4e7;
+  color: #b45309;
+  background: #fffbeb;
 }
 
 .step-status.is-done {
-  color: #16825c;
-  background: #e9f8f2;
+  color: #15803d;
+  background: #dcfce7;
 }
 
 .content-grid {
@@ -1171,7 +1381,8 @@ onBeforeUnmount(() => {
 .keyword-item,
 .project-card,
 .risk-card {
-  border: 1px solid rgba(136, 150, 176, 0.18);
+  min-width: 0;
+  border: 1px solid #e4e7ec;
   border-radius: 8px;
   background: #fbfcff;
 }
@@ -1184,27 +1395,25 @@ onBeforeUnmount(() => {
   padding: 14px;
 }
 
-.keyword-title-row {
+.keyword-title-row,
+.project-card-head {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+}
+
+.keyword-title-row {
+  align-items: center;
 }
 
 .keyword-item strong,
 .project-card strong,
 .risk-card strong {
   display: block;
-  color: #172033;
+  color: #101828;
   line-height: 1.45;
-}
-
-.keyword-item p,
-.project-card p,
-.risk-card p {
-  margin: 5px 0 0;
-  color: #667085;
-  line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 
 .keyword-score {
@@ -1223,38 +1432,11 @@ onBeforeUnmount(() => {
   padding: 16px;
 }
 
-.project-card-head {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.project-card button {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  color: #d95d1b;
-  font-weight: 700;
-  background: transparent;
-  cursor: pointer;
-}
-
 .project-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
-}
-
-.project-meta span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  color: #5d6575;
-  font-size: 12px;
-  background: #eef2f7;
 }
 
 .risk-grid {
@@ -1265,15 +1447,25 @@ onBeforeUnmount(() => {
   min-height: 182px;
 }
 
+.risk-card :deep(.el-button) {
+  margin-top: 10px;
+}
+
 @media (max-width: 1180px) {
-  .hero-facts,
-  .summary-grid,
-  .risk-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .hub-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.86fr);
+  }
+
+  .next-action-card {
+    grid-column: 1 / -1;
   }
 
   .path-steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .risk-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1283,15 +1475,15 @@ onBeforeUnmount(() => {
   }
 
   .hub-hero,
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-facts,
-  .summary-grid,
+  .lab-overview,
+  .content-grid,
   .path-steps,
   .risk-grid {
     grid-template-columns: 1fr;
+  }
+
+  .next-action-card {
+    grid-column: auto;
   }
 
   .section-head,
@@ -1299,32 +1491,56 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
-
-  .summary-card h2,
-  .summary-card p {
-    min-height: 0;
-  }
 }
 
 @media (max-width: 560px) {
-  .hero-copy h1 {
-    font-size: 28px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-  }
-
-  .hero-actions :deep(.el-button) {
-    width: 100%;
-    justify-content: center;
+  .resume-job-hub {
+    padding: 12px;
   }
 
   .hub-hero,
   .hub-panel,
   .hub-path,
-  .summary-card {
+  .lab-overview,
+  .hero-card,
+  .resume-snapshot-card,
+  .experiment-card,
+  .next-action-card,
+  .report-card,
+  .issue-card {
     padding: 16px;
+  }
+
+  .hero-copy h1 {
+    font-size: 28px;
+  }
+
+  .hero-actions,
+  .summary-actions,
+  .project-card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions :deep(.el-button),
+  .summary-actions :deep(.el-button),
+  .resume-snapshot-card button,
+  .project-card button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .keyword-item {
+    gap: 10px;
+  }
+
+  .keyword-score {
+    justify-content: flex-start;
+    white-space: normal;
+  }
+
+  .report-score strong {
+    font-size: 34px;
   }
 }
 </style>

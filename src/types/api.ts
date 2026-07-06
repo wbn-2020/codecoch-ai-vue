@@ -1,9 +1,11 @@
 export interface ApiResult<T = unknown> {
   code: number
   message: string
-  data: T
+  data?: T
   traceId?: string
 }
+
+export type ApiResponseEnvelope<T = unknown> = ApiResult<T>
 
 export interface PageQuery {
   pageNo?: number

@@ -174,6 +174,7 @@ export interface AiCallLogQueryDTO extends PageQuery {
   modelName?: string
   businessId?: string
   traceId?: string
+  requestId?: string
   startTime?: string
   endTime?: string
 }

@@ -6,16 +6,16 @@
       <div>
         <div class="safe-kicker">
           <FileText :size="16" />
-          简历与岗位
+          简历实验室
         </div>
-        <h1>先把简历和目标岗位补起来</h1>
+        <h1>先继续推进简历实验</h1>
         <p>
-          简历与岗位页暂时打不开，但你仍然可以继续完成新用户第一步：管理简历、创建简历、补岗位描述或发起岗位匹配。
+          当前实验室总览没有加载成功，可能是部分接口或资料状态暂时不可用。你仍然可以先创建简历、补目标岗位描述、整理项目证据，或直接进入匹配实验台。
         </p>
       </div>
       <el-button text :loading="retrying" @click="retryHub">
         <RefreshCw :size="16" />
-        重试简历与岗位页
+        重试实验室总览
       </el-button>
     </section>
 
@@ -39,11 +39,12 @@
     <section class="safe-note">
       <AppState
         type="error"
-        title="简历与岗位暂时打不开"
+        title="实验室总览暂时不可用"
         :description="hubError"
       >
         <div class="safe-note__actions">
-          <el-button type="primary" @click="router.push('/resumes/manage')">进入简历清单</el-button>
+          <el-button type="primary" @click="router.push('/resumes/create')">创建简历</el-button>
+          <el-button @click="router.push('/resume-match')">进入 JD 匹配</el-button>
           <el-button @click="router.push('/dashboard')">回到今日计划</el-button>
         </div>
       </AppState>
@@ -71,7 +72,7 @@ const ResumeJobHubView = defineAsyncComponent({
       retry()
       return
     }
-    hubError.value = getErrorMessage(error, '简历与岗位页暂时无法加载，请先使用下方入口继续完成简历和岗位准备。')
+    hubError.value = getErrorMessage(error, '简历实验室总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
     fail()
   }
 })
@@ -79,25 +80,25 @@ const ResumeJobHubView = defineAsyncComponent({
 const actionItems = [
   {
     title: '进入简历清单',
-    desc: '查看、编辑或设为默认简历。',
+    desc: '查看、编辑或设为默认简历，不需要等待总览恢复。',
     path: '/resumes/manage',
     icon: FileText
   },
   {
     title: '创建简历',
-    desc: '先补一份可用于匹配的简历。',
+    desc: '先补一份可用于 JD 匹配和面试追问的简历。',
     path: '/resumes/create',
     icon: Plus
   },
   {
     title: '补目标岗位',
-    desc: '粘贴岗位描述，生成后续训练依据。',
+    desc: '粘贴岗位描述，让后续训练有明确岗位上下文。',
     path: '/job-targets',
     icon: Briefcase
   },
   {
     title: '发起岗位匹配',
-    desc: '用简历和岗位描述生成匹配报告。',
+    desc: '用真实简历和 JD 生成匹配报告，不伪造成熟结论。',
     path: '/resume-match',
     icon: GitCompareArrows
   }
@@ -112,7 +113,7 @@ const retryHub = async () => {
 }
 
 onErrorCaptured((error) => {
-  hubError.value = getErrorMessage(error, '简历与岗位页暂时无法加载，请先使用下方入口继续完成简历和岗位准备。')
+  hubError.value = getErrorMessage(error, '简历实验室总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
   return false
 })
 </script>
@@ -130,9 +131,10 @@ onErrorCaptured((error) => {
   justify-content: space-between;
   gap: 18px;
   padding: 28px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--surface-color);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
 }
 
 .safe-kicker {
@@ -140,14 +142,14 @@ onErrorCaptured((error) => {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
-  color: var(--text-secondary);
+  color: var(--app-primary);
   font-size: 13px;
   font-weight: 700;
 }
 
 .safe-hero h1 {
   margin: 0;
-  color: var(--text-primary);
+  color: var(--app-text);
   font-size: 28px;
   line-height: 1.25;
 }
@@ -155,7 +157,7 @@ onErrorCaptured((error) => {
 .safe-hero p {
   max-width: 760px;
   margin: 12px 0 0;
-  color: var(--text-secondary);
+  color: var(--app-text-muted);
   line-height: 1.7;
 }
 
@@ -172,9 +174,9 @@ onErrorCaptured((error) => {
   flex-direction: column;
   gap: 10px;
   padding: 18px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--surface-color);
+  background: var(--app-surface);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -182,8 +184,8 @@ onErrorCaptured((error) => {
 }
 
 .safe-action:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-shadow);
   transform: translateY(-1px);
 }
 
@@ -194,30 +196,30 @@ onErrorCaptured((error) => {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: rgba(37, 99, 235, 0.1);
-  color: var(--primary-color);
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
 }
 
 .safe-action strong {
-  color: var(--text-primary);
+  color: var(--app-text);
   font-size: 16px;
 }
 
 .safe-action small {
   flex: 1;
-  color: var(--text-secondary);
+  color: var(--app-text-muted);
   font-size: 13px;
   line-height: 1.55;
 }
 
 .safe-action > svg:last-child {
-  color: var(--text-secondary);
+  color: var(--app-text-muted);
 }
 
 .safe-note {
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--surface-color);
+  background: var(--app-surface);
   padding: 18px;
 }
 

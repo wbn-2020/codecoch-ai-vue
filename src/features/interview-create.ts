@@ -36,5 +36,5 @@ export const buildInterviewCreatePayload = ({
   industryDirection: isIndustryMode
     ? selectedIndustryTemplate?.industryCode || selectedIndustryTemplate?.industryName || form.industryDirection
     : form.industryDirection,
-  resumeId: useResume || isJobTargetFlow ? form.resumeId : undefined
+  resumeId: useResume ? form.resumeId : undefined
 })

@@ -2,7 +2,7 @@
   <div class="project-evidence-detail page-shell" v-loading="loading">
     <section v-if="detail" class="detail-hero">
       <div>
-        <p class="hero-kicker">Project Evidence</p>
+        <p class="hero-kicker">项目证据</p>
         <h1>{{ detail.title }}</h1>
         <p>{{ detail.role || '未填写角色' }} / {{ detail.techStack || '未填写技术栈' }}</p>
       </div>
@@ -13,7 +13,7 @@
         </el-button>
         <el-button type="primary" @click="router.push(`/project-evidence/${detail.id}/edit`)">
           <Edit3 :size="16" />
-          编辑素材
+          编辑证据
         </el-button>
       </div>
     </section>
@@ -73,7 +73,7 @@
           :missing-fields="detail.missingFields"
         />
         <section class="content-card action-card">
-          <h3>面试素材</h3>
+          <h3>项目证据</h3>
           <p>保持项目事实、能力证据、生成讲述和 JD 覆盖一致，让这个项目可用于简历和面试。</p>
           <el-button class="full-button" type="primary" plain @click="router.push(`/project-evidence/${detail.id}/edit`)">
             补充项目事实
@@ -82,9 +82,9 @@
       </aside>
     </div>
 
-    <AppState v-else-if="!loading" type="empty" title="项目素材不存在" description="该素材可能已被删除，或当前账号无权访问。">
+    <AppState v-else-if="!loading" type="empty" title="项目证据不存在" description="该证据可能已被删除，或当前账号无权访问。">
       <div class="state-actions">
-        <el-button type="primary" @click="router.push('/project-evidence')">返回项目素材</el-button>
+        <el-button type="primary" @click="router.push('/project-evidence')">返回项目证据库</el-button>
       </div>
     </AppState>
   </div>

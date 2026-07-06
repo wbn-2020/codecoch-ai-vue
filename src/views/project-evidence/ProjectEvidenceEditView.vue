@@ -2,9 +2,9 @@
   <div class="project-evidence-edit page-shell">
     <section class="edit-hero">
       <div>
-        <p class="hero-kicker">Project Evidence</p>
-        <h1>{{ isEdit ? '编辑项目素材' : '新建项目素材' }}</h1>
-        <p>{{ sourceMode ? '从简历项目生成一份独立素材，后续编辑不会同步回简历。' : '手动维护项目事实、难点、结果和复盘素材。' }}</p>
+        <p class="hero-kicker">项目证据</p>
+        <h1>{{ isEdit ? '编辑项目证据' : '新增项目证据' }}</h1>
+        <p>{{ sourceMode ? '从简历项目生成一份独立证据，后续编辑不会同步回简历。' : '手动维护项目事实、难点、结果和复盘证据。' }}</p>
       </div>
       <el-button @click="goBack">
         <ArrowLeft :size="16" />
@@ -20,13 +20,13 @@
           type="info"
           show-icon
           :closable="false"
-          title="本次会从简历项目生成一份独立素材"
+          title="本次会从简历项目生成一份独立证据"
           description="生成后仅记录来源 resume_project，不会建立自动双向同步。"
         />
         <ProjectEvidenceForm ref="formRef" :model-value="formModel" />
         <div class="form-actions">
           <el-button @click="goBack">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="handleSave">保存素材</el-button>
+          <el-button type="primary" :loading="saving" @click="handleSave">保存证据</el-button>
         </div>
       </main>
 
@@ -38,8 +38,8 @@
           :missing-fields="detail.missingFields"
         />
         <section class="content-card side-note">
-          <h3>素材状态</h3>
-          <p>在这里维护项目事实和能力证据。面试素材生成、JD 覆盖和 Agent 任务交接可在详情页完成。</p>
+          <h3>证据状态</h3>
+          <p>在这里维护项目事实和能力证据。面试讲述生成、JD 覆盖和后续任务交接可在详情页完成。</p>
         </section>
       </aside>
     </div>
@@ -100,10 +100,10 @@ const importFromSource = async () => {
       sourceResumeId: sourceResumeId.value!,
       sourceResumeProjectId: sourceResumeProjectId.value!
     })
-    ElMessage.success('Project material imported from resume project.')
+    ElMessage.success('已从简历项目生成项目证据。')
     await router.replace(`/project-evidence/${saved.id}/edit`)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, 'Failed to import project material from resume project.'))
+    ElMessage.error(getErrorMessage(error, '从简历项目生成项目证据失败，请稍后重试。'))
   } finally {
     loading.value = false
   }
@@ -128,10 +128,10 @@ const handleSave = async () => {
     } else {
       saved = await createProjectEvidenceApi(payload)
     }
-    ElMessage.success('Project material saved.')
+    ElMessage.success('项目证据已保存。')
     await router.replace(`/project-evidence/${saved.id}`)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '项目素材保存失败，请稍后重试'))
+    ElMessage.error(getErrorMessage(error, '项目证据保存失败，请稍后重试'))
   } finally {
     saving.value = false
   }

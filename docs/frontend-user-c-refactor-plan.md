@@ -2,7 +2,7 @@
 
 ## 1. 背景与目标
 
-当前用户端主要沿用管理后台式布局与模块导航，用户进入系统后看到的是“工作台、题库、简历、面试、任务”等功能集合，而不是一条清晰的求职准备路径。`C:\my-claude\CodeCoachAI-product-prototype` 已更新为新版高保真原型，方向是将用户端重组为“Java 求职者的 AI JobCoach”，顶部主导航收敛为“今日计划、简历与岗位、题库训练、模拟面试、AI 教练、记录与工具”6 个入口，并围绕“今天先练什么、为什么练、下一步怎么做”强化求职准备闭环。
+当前用户端主要沿用管理后台式布局与模块导航，用户进入系统后看到的是“工作台、题库、简历、面试、任务”等功能集合，而不是一条清晰的求职准备路径。`<LOCAL_WORKSPACE>\CodeCoachAI-product-prototype` 已更新为新版高保真原型，方向是将用户端重组为“Java 求职者的 AI JobCoach”，顶部主导航收敛为“今日计划、简历与岗位、题库训练、模拟面试、AI 教练、记录与工具”6 个入口，并围绕“今天先练什么、为什么练、下一步怎么做”强化求职准备闭环。
 
 本计划用于指导 `CodeCoachAI-vue` 用户端重构，目标不是一次性重写全部业务，而是在不破坏现有 V1/V2/V3/V4-A 能力的前提下，逐步把普通用户体验从后台化界面改造成面向 C 端求职者的产品体验。
 
@@ -63,9 +63,9 @@
 
 截至 2026-06-06，本轮推进口径如下：
 
-- 后端仓库以 `C:\my-claude\CodeCoachAI-java` 的 `dev-logfix` 分支为唯一基线；后端 `AGENTS.md` 已删除，不再按旧后端说明推进。
-- 原型仓库 `C:\my-claude\CodeCoachAI-product-prototype` 只作为产品体验和交互参考，不代表所有能力都已具备后端实现。
-- 前端仓库 `C:\my-claude\CodeCoachAI-vue` 当前先补计划和契约文档，再进入编码；后续实现按阶段小步推进。
+- 后端仓库以 `<LOCAL_WORKSPACE>\CodeCoachAI-java` 的 `dev-logfix` 分支为唯一基线；后端 `AGENTS.md` 已删除，不再按旧后端说明推进。
+- 原型仓库 `<LOCAL_WORKSPACE>\CodeCoachAI-product-prototype` 只作为产品体验和交互参考，不代表所有能力都已具备后端实现。
+- 前端仓库 `<LOCAL_WORKSPACE>\CodeCoachAI-vue` 当前先补计划和契约文档，再进入编码；后续实现按阶段小步推进。
 - 第一阶段只做登录后普通用户 C 端壳层和“今日计划”MVP，不重写后台、不改管理端入口、不提前做自动投递、长期记忆、完整 BI。
 - 后端重构优先做 C 端 facade / VO 契约冻结，而不是拆掉现有业务接口。现有 `resume`、`question`、`interview`、`agent`、`user` 能力继续复用。
 - 所有新增 C 端接口必须以当前登录用户为数据边界，不能接收前端传入的 `userId` 作为归属依据。

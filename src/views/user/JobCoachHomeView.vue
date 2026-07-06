@@ -4,40 +4,45 @@
       <div class="hero-main">
         <p class="eyebrow">
           <Sparkles :size="16" />
-          今日计划
+          Offer 冲刺驾驶舱
         </p>
-        <h1>{{ displayName }}，今天先补最影响面试表现的短板</h1>
+        <h1>{{ displayName }}，把今天最该推进的动作放到最前面</h1>
         <p class="hero-desc">
-          CodeCoachAI 会根据你的简历、目标岗位、刷题和模拟面试记录，挑出今天最该完成的 1-3 个动作。资料还不完整时，先带你补齐关键证据。
+          这里会汇总目标岗位、真实训练反馈和 AI 推荐依据。资料不足时不生成能力分，只提示下一步该补哪块证据。
         </p>
-
-        <div class="hero-actions">
-          <el-button type="primary" size="large" :loading="agentTasksLoading" @click="go(primaryTask.path)">
-            <PlayCircle :size="18" />
+        <div class="today-brief">
+          <div>
+            <span>今天先做</span>
+            <strong>{{ primaryTask.title }}</strong>
+            <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.reason }}</small>
+          </div>
+          <el-button type="primary" @click="go(primaryTask.path)">
+            <PlayCircle :size="17" />
             {{ primaryTask.cta }}
-          </el-button>
-          <el-button size="large" @click="go('/agent/tasks')">
-            <ClipboardList :size="18" />
-            任务中心
           </el-button>
         </div>
       </div>
 
-      <aside class="hero-side" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading">
+      <aside class="hero-side" :aria-busy="isHomeLoading">
         <div class="side-header">
-          <span>计划可信度</span>
-          <strong>{{ confidenceLabel }}</strong>
+          <span>{{ readinessDisplay.label }}</span>
+          <strong>{{ readinessDisplay.value }}</strong>
+        </div>
+        <div v-if="isHomeLoading" class="inline-loading-strip">
+          <span></span>
+          <p>正在刷新今日冲刺信息</p>
         </div>
         <div class="confidence-meter" aria-hidden="true">
-          <span :style="{ width: `${confidencePercent}%` }"></span>
+          <span :style="{ width: evidenceProgressWidth }"></span>
         </div>
+        <p class="evidence-progress-note">仅表示资料接入进度，不作为能力评分。</p>
         <dl>
           <div>
             <dt>目标岗位</dt>
             <dd>{{ targetJobText }}</dd>
           </div>
           <div>
-            <dt>最大短板</dt>
+            <dt>当前优先线索</dt>
             <dd>{{ topWeaknessText }}</dd>
           </div>
           <div>
@@ -52,6 +57,90 @@
       </aside>
     </section>
 
+    <section class="cockpit-grid" :aria-busy="isHomeLoading">
+      <div v-if="isHomeLoading" class="dashboard-loading-note">
+        <span></span>
+        <p>今日行动正在同步，现有入口可继续使用。</p>
+      </div>
+      <article class="cockpit-card target-card">
+        <div class="card-heading">
+          <span class="card-kicker">目标岗位</span>
+          <span class="pill" :class="hasTargetJobSignal ? 'pill--success' : 'pill--warning'">
+            {{ hasTargetJobSignal ? '已选择' : '待选择' }}
+          </span>
+        </div>
+        <h2>{{ targetJobText }}</h2>
+        <p>{{ readinessDisplay.detail }}</p>
+        <div class="target-facts">
+          <span>资料：{{ firstDayReadyCount }}/{{ firstDayActions.length }} 项已接入</span>
+          <span>计划：{{ planStatusText }}</span>
+        </div>
+        <el-button text @click="go(hasTargetJobSignal ? '/job-targets' : '/job-targets/create')">
+          {{ hasTargetJobSignal ? '管理岗位目标' : '设定目标岗位' }}
+        </el-button>
+      </article>
+
+      <article class="cockpit-card primary-action-card">
+        <div class="card-heading">
+          <span class="card-kicker">今日主行动</span>
+          <span class="pill" :class="statusClass(primaryTask.statusLabel)">{{ primaryTask.statusLabel }}</span>
+        </div>
+        <h2>{{ primaryTask.title }}</h2>
+        <p>{{ primaryTask.description }}</p>
+        <ul class="reason-list">
+          <li v-for="reason in primaryTask.reasons" :key="reason">
+            <CheckCircle2 :size="15" />
+            <span>{{ reason }}</span>
+          </li>
+        </ul>
+        <div class="action-facts">
+          <span>依据：{{ primaryTask.reason }}</span>
+          <span>来源：{{ primaryTask.sourceLabel }}</span>
+          <span>边界：{{ primaryTask.trustBoundary }}</span>
+          <span>耗时：{{ primaryTask.minutes }} 分钟</span>
+          <span>收益：{{ primaryTask.benefit }}</span>
+        </div>
+        <div class="focus-actions">
+          <el-button type="primary" :loading="agentTasksLoading" @click="go(primaryTask.path)">
+            <PlayCircle :size="18" />
+            {{ primaryTask.cta }}
+          </el-button>
+          <el-button
+            v-if="primaryTask.taskId && canCompleteTask(primaryTask.taskId)"
+            type="success"
+            :loading="taskMutatingId === primaryTask.taskId"
+            @click="completeTask(primaryTask.taskId)"
+          >
+            完成并复盘
+          </el-button>
+          <el-button
+            v-if="primaryTask.taskId && canSkipTask(primaryTask.taskId)"
+            :loading="taskMutatingId === primaryTask.taskId"
+            @click="skipTask(primaryTask.taskId)"
+          >
+            今天跳过
+          </el-button>
+        </div>
+      </article>
+
+      <article class="cockpit-card training-card">
+        <div class="card-heading">
+          <span class="card-kicker">训练概览</span>
+          <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
+        </div>
+        <div class="training-snapshot">
+          <div v-for="item in trainingSnapshotItems" :key="item.label">
+            <strong>{{ item.value }}</strong>
+            <span>{{ item.label }}</span>
+          </div>
+        </div>
+        <p class="training-note">
+          这里只展示已能支持今天行动的任务、错题和报告反馈，不把缺失数据包装成结论。
+        </p>
+        <el-button text @click="go('/agent/today')">查看今日计划</el-button>
+      </article>
+    </section>
+
     <section v-if="pageErrors.length" class="error-stack">
       <article class="state-strip state-strip--warning state-strip--summary">
         <AlertTriangle :size="18" />
@@ -64,13 +153,82 @@
       </article>
     </section>
 
-    <section class="first-day-section" v-loading="overviewLoading || v3OverviewLoading || dailyPlanLoading || agentTasksLoading">
+    <section class="command-center-grid" aria-label="求职作战指挥台摘要">
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">Agent loop</span>
+          <span class="pill pill--neutral">{{ agentLoopHomeSummary.total }} tasks</span>
+        </div>
+        <div class="queue-metrics">
+          <span><strong>{{ agentLoopHomeSummary.done }}</strong>done</span>
+          <span><strong>{{ agentLoopHomeSummary.skipped }}</strong>skipped</span>
+          <span><strong>{{ agentLoopHomeSummary.active }}</strong>active</span>
+          <span><strong>{{ agentLoopHomeSummary.estimatedMinutes }}</strong>min</span>
+        </div>
+        <p>{{ agentLoopHomeAdjustment }}</p>
+        <div class="command-panel__actions">
+          <el-button text @click="go('/agent/reviews')">Review</el-button>
+          <el-button text @click="go('/agent/today')">Today</el-button>
+          <el-button text @click="go('/agent/tasks')">Tasks</el-button>
+        </div>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">行动队列</span>
+          <span class="pill pill--neutral">今日最多 {{ actionQueueSummary.todayKeyActionLimit }} 项</span>
+        </div>
+        <div class="queue-metrics">
+          <span><strong>{{ actionQueueSummary.todoCount }}</strong>待处理</span>
+          <span><strong>{{ actionQueueSummary.doingCount }}</strong>进行中</span>
+          <span><strong>{{ actionQueueSummary.doneCount + actionQueueSummary.skippedCount }}</strong>已回流</span>
+          <span><strong>{{ actionQueueSummary.estimatedTotalMinutes }}</strong>分钟</span>
+        </div>
+        <p>强推荐只来自有效证据；降级、演示、低样本或未知来源仍可执行，但会保守展示。</p>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">风险缺口</span>
+          <span class="pill" :class="careerRiskSignals.length ? 'pill--warning' : 'pill--success'">
+            {{ careerRiskSignals.length ? `${careerRiskSignals.length} 项待补` : '暂无阻断' }}
+          </span>
+        </div>
+        <div v-if="careerRiskSignals.length" class="compact-list">
+          <button v-for="risk in careerRiskSignals.slice(0, 3)" :key="risk.id" type="button" @click="go('/agent/today')">
+            <strong>{{ risk.title }}</strong>
+            <span>{{ risk.description }}</span>
+          </button>
+        </div>
+        <p v-else>当前资料可以支撑今日行动，完成后继续把反馈回流到下一轮计划。</p>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">最近产物</span>
+          <span class="pill pill--neutral">{{ careerRecentArtifacts.length }} 项</span>
+        </div>
+        <div v-if="careerRecentArtifacts.length" class="compact-list">
+          <button v-for="artifact in careerRecentArtifacts" :key="artifact.id" type="button" @click="go(artifact.actionUrl || '/agent/today')">
+            <strong>{{ artifact.title }}</strong>
+            <span>{{ artifact.summary || '回到产物页继续转成行动。' }}</span>
+          </button>
+        </div>
+        <p v-else>完成 JD 匹配、面试报告或今日计划后，这里会出现可转行动入口。</p>
+      </article>
+    </section>
+
+    <section v-if="shouldShowFirstDayActions" class="first-day-section" :aria-busy="isHomeLoading">
       <div class="section-head first-day-section__head">
         <div>
           <p class="section-kicker">3 分钟起步</p>
-          <h2>今天先完成这 4 个动作</h2>
+          <h2>先补齐驾驶舱需要的 4 个证据</h2>
         </div>
         <span class="first-day-progress">{{ firstDayReadyCount }}/{{ firstDayActions.length }} 已就绪</span>
+      </div>
+      <div v-if="isHomeLoading" class="dashboard-loading-note dashboard-loading-note--section">
+        <span></span>
+        <p>正在检查资料接入状态，先保留可执行入口。</p>
       </div>
 
       <div class="first-day-actions">
@@ -110,65 +268,88 @@
         <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.statusLabel }}</small>
       </button>
       <div class="mobile-action-dock__meta">
-        <span><b>依据</b>{{ confidenceLabel }}</span>
-        <span><b>耗时</b>{{ estimatedMinutes }} 分钟</span>
-        <span><b>状态</b>{{ planStatusText }}</span>
+        <span><b>状态</b>{{ primaryTask.statusLabel }}</span>
+        <span><b>边界</b>{{ primaryTask.trustBoundary }}</span>
       </div>
       <div class="mobile-action-dock__quick">
-        <button v-for="action in mobileQuickActions" :key="action.label" type="button" @click="go(action.path)">
+        <button v-for="action in mobileQuickActions.slice(0, 2)" :key="action.label" type="button" @click="go(action.path)">
           <component :is="action.icon" :size="17" />
           <span>{{ action.label }}</span>
         </button>
       </div>
     </section>
 
-    <section class="focus-grid">
-      <article class="focus-card focus-card--primary" v-loading="agentTasksLoading || dailyPlanLoading">
-        <div class="card-heading">
-          <span class="card-kicker">第 1 个动作</span>
-          <span class="pill" :class="statusClass(primaryTask.statusLabel)">{{ primaryTask.statusLabel }}</span>
+    <section class="workbench-grid">
+      <section class="task-section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">近期任务</p>
+            <h2>今天的任务流</h2>
+          </div>
+          <div class="section-actions">
+            <el-button text :loading="agentTasksLoading" @click="fetchAgentTasks">刷新</el-button>
+            <el-button @click="go('/agent/tasks')">查看全部</el-button>
+          </div>
         </div>
-        <h2>{{ primaryTask.title }}</h2>
-        <p>{{ primaryTask.description }}</p>
-        <ul class="reason-list">
-          <li v-for="reason in primaryTask.reasons" :key="reason">
-            <CheckCircle2 :size="15" />
-            <span>{{ reason }}</span>
-          </li>
-        </ul>
-        <div class="action-facts">
-          <span>依据：{{ primaryTask.reason }}</span>
-          <span>耗时：{{ primaryTask.minutes }} 分钟</span>
-          <span>收益：{{ primaryTask.benefit }}</span>
-        </div>
-        <div class="focus-actions">
-          <el-button type="primary" @click="go(primaryTask.path)">
-            {{ primaryTask.cta }}
-          </el-button>
-          <el-button
-            v-if="primaryTask.taskId && canCompleteTask(primaryTask.taskId)"
-            type="success"
-            :loading="taskMutatingId === primaryTask.taskId"
-            @click="completeTask(primaryTask.taskId)"
-          >
-            完成并复盘
-          </el-button>
-          <el-button
-            v-if="primaryTask.taskId && canSkipTask(primaryTask.taskId)"
-            :loading="taskMutatingId === primaryTask.taskId"
-            @click="skipTask(primaryTask.taskId)"
-          >
-            今天跳过
-          </el-button>
-        </div>
-      </article>
 
-      <article class="focus-card">
+        <div v-if="visibleTaskCards.length" class="task-list">
+          <article v-for="task in visibleTaskCards" :key="task.key" class="task-row">
+            <span class="task-row__type" :class="task.tone">
+              <component :is="task.icon" :size="18" />
+            </span>
+            <div class="task-row__body">
+              <div>
+                <strong>{{ task.title }}</strong>
+                <span class="pill" :class="statusClass(task.statusLabel)">{{ task.statusLabel }}</span>
+              </div>
+              <p>{{ task.description }}</p>
+              <div class="task-row__facts">
+                <span>依据：{{ task.reason }}</span>
+                <span>来源：{{ task.sourceLabel }}</span>
+                <span>边界：{{ task.trustBoundary }}</span>
+                <span>收益：{{ task.benefit }}</span>
+              </div>
+            </div>
+            <div class="task-row__actions">
+              <span>{{ task.minutes }} 分钟</span>
+              <el-button text @click="go(task.path)">开始</el-button>
+              <el-button
+                v-if="task.taskId && canCompleteTask(task.taskId)"
+                text
+                type="success"
+                :loading="taskMutatingId === task.taskId"
+                @click="completeTask(task.taskId)"
+              >
+                完成
+              </el-button>
+            </div>
+          </article>
+        </div>
+
+        <div v-else class="empty-panel">
+          <ClipboardList :size="26" />
+          <strong>今天还没有安排任务</strong>
+          <span>{{ emptyTaskText }}</span>
+          <div class="empty-panel__actions">
+            <el-button type="primary" :loading="dailyPlanGenerating" @click="generatePlan">生成今日计划</el-button>
+            <el-button @click="go('/questions/practice')">先做题库训练</el-button>
+            <el-button @click="go('/interviews/create')">创建模拟面试</el-button>
+          </div>
+        </div>
+      </section>
+
+      <article class="focus-card evidence-card">
         <div class="card-heading">
           <span class="card-kicker">AI 推荐依据</span>
           <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
         </div>
         <p class="source-boundary">{{ recommendationBoundaryText }}</p>
+        <div v-if="trustedSuggestionSummaries.length" class="trusted-summary-list">
+          <div v-for="summary in trustedSuggestionSummaries" :key="summary.id">
+            <strong>{{ summary.title }}</strong>
+            <span>{{ summary.sourceLabel }} · {{ summary.boundary }}</span>
+          </div>
+        </div>
         <div class="source-list">
           <div v-for="source in recommendationSources" :key="source.key" class="source-item" :class="{ 'is-missing': source.missing }">
             <component :is="source.icon" :size="17" />
@@ -179,58 +360,6 @@
           </div>
         </div>
       </article>
-    </section>
-
-    <section class="task-section">
-      <div class="section-head">
-        <div>
-          <p class="section-kicker">后续训练</p>
-          <h2>今天的任务流</h2>
-        </div>
-        <div class="section-actions">
-          <el-button :loading="agentTasksLoading" @click="fetchAgentTasks">刷新任务</el-button>
-          <el-button type="primary" @click="go('/agent/tasks')">查看全部</el-button>
-        </div>
-      </div>
-
-      <div v-if="taskCards.length" class="task-list">
-        <article v-for="task in taskCards" :key="task.key" class="task-row">
-          <span class="task-row__type" :class="task.tone">
-            <component :is="task.icon" :size="18" />
-          </span>
-          <div class="task-row__body">
-            <div>
-              <strong>{{ task.title }}</strong>
-              <span class="pill" :class="statusClass(task.statusLabel)">{{ task.statusLabel }}</span>
-            </div>
-            <p>{{ task.description }}</p>
-            <div class="task-row__facts">
-              <span>依据：{{ task.reason }}</span>
-              <span>收益：{{ task.benefit }}</span>
-            </div>
-          </div>
-          <div class="task-row__actions">
-            <span>{{ task.minutes }} 分钟</span>
-            <el-button text @click="go(task.path)">开始</el-button>
-            <el-button
-              v-if="task.taskId && canCompleteTask(task.taskId)"
-              text
-              type="success"
-              :loading="taskMutatingId === task.taskId"
-              @click="completeTask(task.taskId)"
-            >
-              完成
-            </el-button>
-          </div>
-        </article>
-      </div>
-
-      <div v-else class="empty-panel">
-        <ClipboardList :size="26" />
-        <strong>今天还没有安排任务</strong>
-        <span>{{ emptyTaskText }}</span>
-        <el-button type="primary" :loading="dailyPlanGenerating" @click="generatePlan">生成今日计划</el-button>
-      </div>
     </section>
 
     <section class="secondary-toggle-section">
@@ -366,7 +495,6 @@ import {
   History,
   MessageSquare,
   PlayCircle,
-  RefreshCw,
   Route,
   Sparkles,
   Target
@@ -374,6 +502,7 @@ import {
 import type { Component } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 
 import {
   completeAgentTaskApi,
@@ -388,6 +517,19 @@ import {
   fetchCachedWrongQuestions,
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
+import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
+import {
+  buildActionQueueSummary,
+  buildCareerActionQueue,
+  buildCareerRecentArtifacts,
+  buildCareerRiskSignals,
+  buildTrustedSuggestionSummaries,
+  canPromoteCareerAction,
+  getCareerActionSourceLabel,
+  getCareerActionTrustBoundary,
+  isCareerActionClosed,
+  type CareerActionItemVO
+} from '@/features/career-command-center'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
@@ -402,6 +544,7 @@ import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import request from '@/utils/request'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface HomeTask {
   key: string
@@ -417,6 +560,9 @@ interface HomeTask {
   minutes: number
   icon: Component
   tone: string
+  sourceLabel: string
+  trustBoundary: string
+  promoted: boolean
 }
 
 interface FirstDayAction {
@@ -472,6 +618,7 @@ const currentTargetJobId = computed(() => {
 const hasTargetJobSignal = computed(() => Boolean(currentTargetJobId.value))
 const hasTodayPlanSignal = computed(() => Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length))
 const hasPracticeFeedbackSignal = computed(() => Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview))
+const isHomeLoading = computed(() => overviewLoading.value || v3OverviewLoading.value || dailyPlanLoading.value || agentTasksLoading.value)
 const firstDayActions = computed<FirstDayAction[]>(() => [
   {
     key: 'resume',
@@ -534,18 +681,39 @@ const firstDayActions = computed<FirstDayAction[]>(() => [
 ])
 const firstDayReadyCount = computed(() => firstDayActions.value.filter((action) => action.ready).length)
 const activeTasks = computed(() => agentTasks.value.filter((task) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())))
+const careerActions = computed(() => buildCareerActionQueue(agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []))
+const actionQueueSummary = computed(() => buildActionQueueSummary(careerActions.value))
+const agentLoopHomeOverview = computed(() => buildAgentLoopOverview({
+  plan: dailyPlan.value,
+  todayTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || [],
+  historyTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+}))
+const agentLoopHomeSummary = computed(() => agentLoopHomeOverview.value.weekSummary)
+const agentLoopHomeAdjustment = computed(() => agentLoopHomeOverview.value.nextAdjustmentSummary)
+const primaryCareerAction = computed(() =>
+  careerActions.value.find(canPromoteCareerAction)
+  || careerActions.value.find((action) => !isCareerActionClosed(action))
+  || null
+)
 const taskCards = computed<HomeTask[]>(() => {
-  const tasks = agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
-  return tasks.slice(0, 5).map(toHomeTask)
+  return careerActions.value.slice(0, 5).map(toHomeTaskFromCareerAction)
 })
+const visibleTaskCards = computed(() => taskCards.value.slice(0, 3))
+const shouldShowFirstDayActions = computed(() => firstDayReadyCount.value < firstDayActions.value.length)
 
 const primaryTask = computed<HomeTask>(() => {
-  const task = activeTasks.value[0] || dailyPlan.value?.tasks?.find((item) => !['DONE', 'SKIPPED'].includes(String(item.status || '').toUpperCase()))
-  if (task) {
+  if (primaryCareerAction.value) {
+    const task = findTaskByCareerAction(primaryCareerAction.value)
+    const promoted = canPromoteCareerAction(primaryCareerAction.value)
     return {
-      ...toHomeTask(task),
-      cta: '开始第 1 个任务',
-      reasons: taskReasons(task)
+      ...toHomeTaskFromCareerAction(primaryCareerAction.value),
+      cta: promoted ? '开始第 1 个任务' : '查看今日任务',
+      reasons: [
+        primaryCareerAction.value.reason || '来自智能教练今日计划',
+        `来源：${getCareerActionSourceLabel(primaryCareerAction.value)}`,
+        getCareerActionTrustBoundary(primaryCareerAction.value)
+      ],
+      benefit: task ? taskBenefit(task) : '完成后会回流到下一轮智能教练推荐'
     }
   }
 
@@ -642,7 +810,7 @@ const completionReviewItems = computed(() => {
 
 const completionReviewNextAction = computed(() => {
   const task = completionReviewTask.value
-  if (!task) return { label: '继续任务中心', path: '/agent/tasks' }
+  if (!task) return { label: '继续今日计划', path: '/agent/tasks' }
   const type = String(task?.taskType || '').toUpperCase()
   if (hasAgentTaskActionEntry(task)) {
     return {
@@ -653,7 +821,7 @@ const completionReviewNextAction = computed(() => {
   if (type.includes('QUESTION') || type.includes('SKILL') || type.includes('KNOWLEDGE')) return { label: '继续专项练习', path: '/questions/practice' }
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return { label: '查看面试历史', path: '/interviews/history' }
   if (type.includes('RESUME')) return { label: '查看简历匹配', path: '/resume-match' }
-  return { label: '继续任务中心', path: '/agent/tasks' }
+  return { label: '继续今日计划', path: '/agent/tasks' }
 })
 
 const targetJobText = computed(() => {
@@ -697,29 +865,78 @@ const hasTrustedReport = computed(() => {
 
 const hasUntrustedRecentReport = computed(() => Boolean(overview.value?.recentReport && !hasTrustedReport.value))
 
-const confidencePercent = computed(() => {
-  let score = 20
-  if (overview.value?.resumeCount) score += 20
-  if (targetJobText.value !== '待选择目标岗位') score += 15
-  if (hasTrustedReport.value) score += 20
-  if (wrongQuestions.value.length) score += 10
-  if (agentTasks.value.length || dailyPlan.value?.tasks?.length) score += 15
-  const cappedScore = hasUntrustedRecentReport.value ? Math.min(score, 70) : score
-  return Math.min(cappedScore, 100)
-})
+const evidenceProgressItems = computed(() => [
+  Boolean(overview.value?.resumeCount),
+  targetJobText.value !== '待选择目标岗位',
+  hasTrustedReport.value,
+  wrongQuestions.value.length > 0,
+  Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length)
+])
+const evidenceProgressCount = computed(() => evidenceProgressItems.value.filter(Boolean).length)
+const evidenceProgressWidth = computed(() => `${Math.max(12, evidenceProgressCount.value * 20)}%`)
 
 const confidenceLabel = computed(() => {
   if (hasUntrustedRecentReport.value) return '待复核'
-  if (confidencePercent.value >= 80) return '高'
-  if (confidencePercent.value >= 55) return '中'
+  if (evidenceProgressCount.value >= 4) return '证据较全'
+  if (evidenceProgressCount.value >= 2) return '继续补证据'
   return '待补资料'
 })
 const confidencePillClass = computed(() => {
   if (hasUntrustedRecentReport.value) return 'pill--warning'
-  if (confidencePercent.value >= 80) return 'pill--success'
-  if (confidencePercent.value >= 55) return 'pill--neutral'
+  if (evidenceProgressCount.value >= 4) return 'pill--success'
+  if (evidenceProgressCount.value >= 2) return 'pill--neutral'
   return 'pill--warning'
 })
+
+const trustedLatestMatch = computed(() => {
+  const match = v3Overview.value?.latestMatch
+  if (!match || match.fallback) return null
+  const status = String(match.status || '').toUpperCase()
+  const trustStatus = String(match.trustStatus || '').toUpperCase()
+  if (['FAILED', 'FAIL', 'ERROR', 'UNSCORABLE'].includes(status)) return null
+  if (['FALLBACK', 'UNVERIFIED', 'REVIEW_REQUIRED'].includes(trustStatus)) return null
+  return typeof match.overallScore === 'number' ? match : null
+})
+
+const readinessDisplay = computed(() => {
+  const match = trustedLatestMatch.value
+  if (match) {
+    return {
+      label: '简历匹配参考',
+      value: `${Math.round(match.overallScore || 0)} 分`,
+      detail: match.summary || match.evidenceSummary || '来自最近一次岗位匹配报告，仅作为简历与目标岗位匹配参考。'
+    }
+  }
+
+  if (!hasResumeSignal.value || !hasTargetJobSignal.value) {
+    return {
+      label: '资料状态',
+      value: '资料不足',
+      detail: '补齐简历和目标岗位后，再展示有来源的匹配参考。'
+    }
+  }
+
+  return {
+    label: '资料接入',
+    value: confidenceLabel.value,
+    detail: '当前只按已接入资料展示进度，不把它包装成能力分或 Offer 概率。'
+  }
+})
+
+const trainingSnapshotItems = computed(() => [
+  {
+    label: '今日任务',
+    value: String(agentTasks.value.length || dailyPlan.value?.tasks?.length || overview.value?.todayTaskCount || 0)
+  },
+  {
+    label: '已完成',
+    value: String(overview.value?.todayCompletedTaskCount || agentTasks.value.filter((task) => String(task.status || '').toUpperCase() === 'DONE').length)
+  },
+  {
+    label: '最近错题',
+    value: String(wrongQuestions.value.length)
+  }
+])
 
 const recommendationBoundaryText = computed(() => {
   if (!overview.value?.resumeCount) return '当前是通用建议：补充简历后，匹配和训练建议会更贴近你的项目经历。'
@@ -867,6 +1084,23 @@ const pageErrorSummary = computed(() => {
 
 const visiblePageErrorDetails = computed(() => pageErrors.value.slice(0, 2).map((item) => item.message))
 
+const careerRiskSignals = computed(() => buildCareerRiskSignals({
+  hasResume: hasResumeSignal.value,
+  hasTargetJob: hasTargetJobSignal.value,
+  hasTodayPlan: hasTodayPlanSignal.value,
+  hasTrustedReport: hasTrustedReport.value,
+  hasUntrustedRecentReport: hasUntrustedRecentReport.value,
+  pageErrorCount: pageErrors.value.length
+}))
+
+const careerRecentArtifacts = computed(() => buildCareerRecentArtifacts({
+  latestMatch: (v3Overview.value?.latestMatch || null) as Record<string, unknown> | null,
+  recentReport: (overview.value?.recentReport || null) as Record<string, unknown> | null,
+  dailyPlan: dailyPlan.value
+}))
+
+const trustedSuggestionSummaries = computed(() => buildTrustedSuggestionSummaries([], careerActions.value))
+
 const tools = [
   { title: '面试历史', path: '/interviews/history', icon: History },
   { title: '训练分析', path: '/analytics/personal', icon: BarChart3 },
@@ -893,7 +1127,7 @@ const mobileQuickActions = computed(() => [
 ])
 
 const go = (path: string) => {
-  router.push(path)
+  router.push(sanitizeLocalActionPath(path, '/dashboard'))
 }
 
 const getTaskRunId = (task?: AgentTaskVO | null) => task?.agentRunId ?? task?.runId ?? null
@@ -922,10 +1156,14 @@ const trackCompletionReviewCtaClick = (targetPath: string) => {
 
 const shouldForceRefresh = (force: unknown = true) => force !== false
 
-const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes'>): HomeTask => ({
+const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes' | 'sourceLabel' | 'trustBoundary' | 'promoted'>
+  & Partial<Pick<HomeTask, 'sourceLabel' | 'trustBoundary' | 'promoted'>>): HomeTask => ({
   ...task,
   key: `fallback-${task.path}`,
-  minutes: 30
+  minutes: 30,
+  sourceLabel: task.sourceLabel || '本地可执行入口',
+  trustBoundary: task.trustBoundary || '资料不足时只提示下一步，不生成强判断',
+  promoted: task.promoted ?? false
 })
 
 const toHomeTask = (task: AgentTaskVO): HomeTask => {
@@ -943,7 +1181,58 @@ const toHomeTask = (task: AgentTaskVO): HomeTask => {
     statusLabel: formatStatus(task.status || 'TODO'),
     minutes: Number(task.estimatedMinutes) || 20,
     icon: icon.icon,
-    tone: icon.tone
+    tone: icon.tone,
+    sourceLabel: 'Agent 今日任务',
+    trustBoundary: task.fallback || task.mock ? '当前只能给出保守建议' : '可执行，建议完成后回流复盘',
+    promoted: !task.fallback && !task.mock
+  }
+}
+
+const findTaskByCareerAction = (action?: CareerActionItemVO | null) => {
+  if (!action?.sourceId) return undefined
+  return findTaskById(Number(action.sourceId))
+}
+
+const toHomeTaskFromCareerAction = (action: CareerActionItemVO): HomeTask => {
+  const task = findTaskByCareerAction(action)
+  const numericSourceId = Number(action.sourceId)
+  const base = task ? toHomeTask(task) : fallbackTask({
+    title: action.title,
+    description: action.description || '来自今日行动队列的可执行任务。',
+    reason: action.reason || '来自 Agent 今日计划',
+    cta: '查看任务',
+    path: action.actionUrl || '/agent/today',
+    statusLabel: formatStatus(action.status),
+    icon: Sparkles,
+    tone: 'tone-blue',
+    benefit: '完成后会回流到下一轮智能教练推荐',
+    reasons: [
+      action.reason || '来自智能教练今日计划',
+      `来源：${getCareerActionSourceLabel(action)}`,
+      getCareerActionTrustBoundary(action)
+    ],
+    sourceLabel: getCareerActionSourceLabel(action),
+    trustBoundary: getCareerActionTrustBoundary(action),
+    promoted: canPromoteCareerAction(action)
+  })
+  return {
+    ...base,
+    key: action.id,
+    taskId: Number.isFinite(numericSourceId) && numericSourceId > 0 ? numericSourceId : task?.id,
+    title: action.title || base.title,
+    description: action.description || base.description,
+    reason: action.reason || base.reason,
+    reasons: [
+      action.reason || base.reason,
+      `来源：${getCareerActionSourceLabel(action)}`,
+      getCareerActionTrustBoundary(action)
+    ],
+    path: action.actionUrl || base.path || '/agent/today',
+    statusLabel: formatStatus(action.status),
+    minutes: action.estimatedMinutes || base.minutes,
+    sourceLabel: getCareerActionSourceLabel(action),
+    trustBoundary: getCareerActionTrustBoundary(action),
+    promoted: canPromoteCareerAction(action)
   }
 }
 
@@ -1218,15 +1507,25 @@ const skipTask = async (taskId: number) => {
     action: '将首页第 1 个训练任务标记为今天跳过',
     target: task?.title || '训练记录已保存',
     impact: '该任务会从今日优先动作中移出，今日任务完成率和后续推荐可能跟随变化。',
-    rollback: '可以在任务中心把任务恢复为待完成，或重新生成今日计划。',
+    rollback: '可以在今日任务列表把任务恢复为待完成，或重新生成今日计划。',
     audit: '训练记录、跳过状态和跳过原因会保留，便于稍后复盘。',
-    tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以进入任务中心稍后处理。'],
+    tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以稍后回到今日计划处理。'],
     confirmButtonText: '今天跳过'
   })
   if (!confirmed) return
+  const promptResult = await ElMessageBox.prompt('请填写本轮跳过原因，方便下一轮计划避开不合适的安排。', '跳过原因', {
+    confirmButtonText: '确认跳过',
+    cancelButtonText: '取消',
+    inputType: 'textarea',
+    inputPlaceholder: '例如：今天时间不够、任务不符合当前岗位、需要先补资料',
+    inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写跳过原因',
+    inputErrorMessage: '请填写跳过原因'
+  }).catch(() => null)
+  const skipReason = String(promptResult?.value || '').trim()
+  if (!skipReason) return
   taskMutatingId.value = taskId
   try {
-    const skippedTask = await skipAgentTaskApi(taskId, { skipReason: '今日首页选择跳过' })
+    const skippedTask = await skipAgentTaskApi(taskId, { skipReason })
     mergeAgentTask(skippedTask)
     invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
@@ -1285,14 +1584,16 @@ onBeforeUnmount(() => {
 
 .home-hero,
 .first-day-section,
+.command-panel,
+.cockpit-card,
 .focus-card,
 .path-section,
 .task-section,
 .insight-card {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
+  box-shadow: var(--user-shadow-md);
 }
 
 .secondary-toggle-section {
@@ -1400,6 +1701,62 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
+.today-brief {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 780px;
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
+    rgba(15, 23, 42, 0.92);
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(16px);
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  strong,
+  small {
+    display: block;
+  }
+
+  span {
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    font-size: 20px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    margin-top: 5px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  :deep(.el-button) {
+    flex: 0 0 auto;
+    gap: 6px;
+    border-color: rgba(255, 255, 255, 0.24);
+    background: #ffffff;
+    color: #0f172a;
+  }
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1454,6 +1811,59 @@ onBeforeUnmount(() => {
   }
 }
 
+.inline-loading-strip,
+.dashboard-loading-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+
+  span {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.1);
+    animation: dashboard-loading-pulse 1.4s ease-in-out infinite;
+  }
+
+  p {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.dashboard-loading-note {
+  grid-column: 1 / -1;
+}
+
+.dashboard-loading-note--section {
+  margin: 14px 0 0;
+}
+
+@keyframes dashboard-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .hero-side dl {
   display: grid;
   gap: 12px;
@@ -1477,6 +1887,205 @@ onBeforeUnmount(() => {
   color: #172033;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.82fr) minmax(320px, 1.24fr) minmax(220px, 0.84fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.cockpit-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.cockpit-card h2 {
+  margin: 0;
+  color: var(--user-text);
+  font-size: 22px;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.cockpit-card p {
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.target-card {
+  background:
+    linear-gradient(135deg, rgba(8, 145, 178, 0.08), transparent 62%),
+    var(--user-surface);
+}
+
+.primary-action-card {
+  border-color: #bfdbfe;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 56%),
+    var(--user-surface);
+}
+
+.training-card {
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.08), transparent 58%),
+    var(--user-surface);
+}
+
+.command-center-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.command-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+
+  p {
+    margin: 0;
+    color: #526071;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+}
+
+.queue-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  span {
+    display: grid;
+    gap: 3px;
+    min-height: 60px;
+    padding: 9px;
+    border: 1px solid #e8edf5;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  strong {
+    color: #0f172a;
+    font-size: 20px;
+    line-height: 1;
+  }
+}
+
+.command-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.compact-list,
+.trusted-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-list button,
+.trusted-summary-list div {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.compact-list button {
+  cursor: pointer;
+
+  &:hover {
+    border-color: #bfdbfe;
+    background: #fff;
+  }
+}
+
+.compact-list strong,
+.trusted-summary-list strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.compact-list span,
+.trusted-summary-list span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.trusted-summary-list {
+  margin: 10px 0;
+}
+
+.target-facts,
+.action-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.target-facts span,
+.action-facts span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.training-snapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.training-snapshot div {
+  display: grid;
+  gap: 4px;
+  min-height: 70px;
+  padding: 10px;
+  border: 1px solid #e8edf5;
+  border-radius: var(--user-radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.training-snapshot strong {
+  color: var(--user-text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.training-snapshot span,
+.training-note {
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .error-stack {
@@ -1508,6 +2117,16 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
   gap: 18px;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 18px;
+}
+
+.evidence-card {
+  min-width: 0;
 }
 
 .focus-card,
@@ -1948,6 +2567,14 @@ onBeforeUnmount(() => {
   }
 }
 
+.empty-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .insight-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2071,6 +2698,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1080px) {
   .home-hero,
+  .cockpit-grid,
+  .command-center-grid,
+  .workbench-grid,
   .focus-grid,
   .insight-grid {
     grid-template-columns: 1fr;
@@ -2092,6 +2722,7 @@ onBeforeUnmount(() => {
 
   .home-hero,
   .first-day-section,
+  .cockpit-card,
   .focus-card,
   .path-section,
   .task-section,
@@ -2114,12 +2745,41 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  .today-brief {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px;
+
+    strong {
+      font-size: 16px;
+    }
+
+    :deep(.el-button) {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
   .hero-side {
     padding: 14px;
   }
 
   .hero-side dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cockpit-grid,
+  .workbench-grid {
+    gap: 10px;
+  }
+
+  .cockpit-card h2 {
+    font-size: 19px;
+  }
+
+  .training-snapshot {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .mobile-action-dock {
@@ -2129,11 +2789,13 @@ onBeforeUnmount(() => {
     display: grid;
     gap: 8px;
     padding: 10px;
-    border: 1px solid #bfdbfe;
+    border: 1px solid rgba(148, 163, 184, 0.28);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
-    backdrop-filter: blur(14px);
+    background:
+      linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.88)),
+      rgba(15, 23, 42, 0.9);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
+    backdrop-filter: blur(18px);
   }
 
   .mobile-action-dock__primary,
@@ -2149,7 +2811,7 @@ onBeforeUnmount(() => {
     display: grid;
     gap: 3px;
     padding: 10px;
-    background: #2563eb;
+    background: rgba(37, 99, 235, 0.92);
     color: #fff;
 
     span,
@@ -2167,7 +2829,7 @@ onBeforeUnmount(() => {
 
   .mobile-action-dock__meta {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
 
     span {
@@ -2176,8 +2838,8 @@ onBeforeUnmount(() => {
       min-width: 0;
       padding: 6px;
       border-radius: 8px;
-      background: #f8fafc;
-      color: #334155;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.9);
       font-size: 11px;
       line-height: 1.3;
       overflow-wrap: anywhere;
@@ -2185,7 +2847,7 @@ onBeforeUnmount(() => {
     }
 
     b {
-      color: #64748b;
+      color: rgba(255, 255, 255, 0.62);
       font-size: 11px;
       font-weight: 700;
     }
@@ -2193,7 +2855,7 @@ onBeforeUnmount(() => {
 
   .mobile-action-dock__quick {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -2203,8 +2865,9 @@ onBeforeUnmount(() => {
     gap: 5px;
     min-height: 52px;
     padding: 8px 4px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0f2fe;
     font-size: 12px;
     line-height: 1.2;
     text-align: center;
@@ -2227,7 +2890,8 @@ onBeforeUnmount(() => {
   }
 
   .focus-actions :deep(.el-button),
-  .section-actions :deep(.el-button) {
+  .section-actions :deep(.el-button),
+  .empty-panel__actions :deep(.el-button) {
     width: 100%;
   }
 
@@ -2283,6 +2947,12 @@ onBeforeUnmount(() => {
 
   .task-row__actions {
     justify-items: start;
+  }
+
+  .empty-panel__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 }
 </style>

@@ -46,6 +46,8 @@ export interface StreamSseHandle {
   finished: Promise<void>
 }
 
+const MAX_SSE_DEDUPE_KEYS = 500
+
 export const buildSseUrl = (path: string, params: Record<string, string>) => {
   const baseUrl = appConfig.apiBaseUrl || ''
   const normalizedBase = baseUrl.startsWith('http')
@@ -137,6 +139,14 @@ export const streamSse = <T extends SseEventData = SseEventData>({
   let receivedDone = false
   const emittedKeys = new Set<string>()
 
+  const rememberDedupeKey = (key: string) => {
+    emittedKeys.add(key)
+    if (emittedKeys.size > MAX_SSE_DEDUPE_KEYS) {
+      const oldestKey = emittedKeys.values().next().value
+      if (oldestKey) emittedKeys.delete(oldestKey)
+    }
+  }
+
   const finished = (async () => {
     try {
       if (controller.signal.aborted) return
@@ -189,7 +199,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
 
         const key = getDedupeKey(parsed.event, parsed.data)
         if (key && emittedKeys.has(key)) return
-        if (key) emittedKeys.add(key)
+        if (key) rememberDedupeKey(key)
 
         if (isStartLikeEvent(parsed.event)) {
           hasStarted = true
@@ -197,8 +207,10 @@ export const streamSse = <T extends SseEventData = SseEventData>({
         handlers?.onEvent?.(parsed.event, parsed.data, parsed)
         if (parsed.event === 'done') {
           receivedDone = true
+          emittedKeys.clear()
         }
         if (parsed.event === 'error') {
+          emittedKeys.clear()
           throw createSseError(parsed.data)
         }
       }
@@ -225,6 +237,7 @@ export const streamSse = <T extends SseEventData = SseEventData>({
       handlers?.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)
       throw error
     } finally {
+      emittedKeys.clear()
       signal?.removeEventListener('abort', abort)
     }
   })()

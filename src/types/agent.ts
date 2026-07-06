@@ -1,4 +1,5 @@
 import type { PageQuery } from '@/types/api'
+import type { EvidenceSourceVO, SuggestionQualityGateVO } from '@/types/suggestion'
 
 export type AgentTaskType =
   | 'QUESTION_PRACTICE'
@@ -15,7 +16,7 @@ export type AgentTaskPriority = 'HIGH' | 'MEDIUM' | 'LOW' | string
 export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'SKIPPED' | 'EXPIRED' | string
 export type AgentRunStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELED' | string
 export type AgentTriggerType = 'MANUAL' | 'AUTO' | string
-export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
+export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | 'DISABLED' | 'STALE' | 'UNKNOWN' | string
 export type AgentRunResultSource = 'LLM' | 'MOCK' | 'FALLBACK' | string
 export type AgentCoachActionType = 'EXPLAIN_RECOMMENDATION' | 'REVIEW_COMPLETED_TASK'
 export type AgentMetricEventCode =
@@ -56,7 +57,14 @@ export interface AgentTaskVO {
   id: number
   agentRunId?: number | null
   runId?: number | null
+  schemaVersion?: string | null
   traceId?: string | null
+  aiCallLogId?: number | null
+  promptVersionId?: number | null
+  asyncTaskId?: number | null
+  resultSource?: AgentRunResultSource | null
+  resultSourceLabel?: string | null
+  mock?: boolean | null
   errorCode?: string | null
   errorMessage?: string | null
   targetJobId?: number
@@ -80,6 +88,8 @@ export interface AgentTaskVO {
   sourceId?: number | null
   trustStatus?: AgentTrustStatus | null
   evidenceSummary?: string | null
+  evidenceSources?: EvidenceSourceVO[]
+  qualityGate?: SuggestionQualityGateVO | null
   fallback?: boolean | null
   reviewId?: number | null
   reviewSummary?: string | null
@@ -99,6 +109,16 @@ export interface AgentTaskVO {
 
 export interface DailyPlanVO {
   runId?: number | null
+  schemaVersion?: string | null
+  traceId?: string | null
+  aiCallLogId?: number | null
+  promptVersionId?: number | null
+  resultSource?: AgentRunResultSource | null
+  resultSourceLabel?: string | null
+  fallback?: boolean | null
+  mock?: boolean | null
+  evidenceSources?: EvidenceSourceVO[]
+  qualityGate?: SuggestionQualityGateVO | null
   targetJobId?: number
   targetJobTitle?: string
   date?: string
@@ -168,7 +188,7 @@ export interface AgentTaskCompleteDTO {
 }
 
 export interface AgentTaskSkipDTO {
-  skipReason?: string
+  skipReason: string
 }
 
 export interface AgentCoachActionDTO {
@@ -279,6 +299,8 @@ export interface AdminAgentRunQueryDTO extends PageQuery {
   agentType?: string
   status?: AgentRunStatus | ''
   triggerType?: AgentTriggerType | ''
+  traceId?: string
+  aiCallLogId?: number
   startDate?: string
   endDate?: string
   startTime?: string

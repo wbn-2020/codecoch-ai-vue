@@ -305,10 +305,10 @@ const firstQueryString = (value: unknown) => {
 const hasRouteQueryValue = (...keys: string[]) => keys.some((key) => firstQueryString(route.query[key]))
 
 const applyRouteQuery = () => {
-  if (!hasRouteQueryValue('status', 'type', 'keyword', 'messageId', 'traceId', 'bizType', 'bizId')) return false
+  if (!hasRouteQueryValue('status', 'type', 'keyword')) return false
   const status = firstQueryString(route.query.status)
-  const type = firstQueryString(route.query.type || route.query.bizType)
-  const keyword = firstQueryString(route.query.keyword || route.query.messageId || route.query.traceId || route.query.bizId)
+  const type = firstQueryString(route.query.type)
+  const keyword = firstQueryString(route.query.keyword)
   Object.assign(query, {
     keyword,
     status: status ? status.toUpperCase() : '',

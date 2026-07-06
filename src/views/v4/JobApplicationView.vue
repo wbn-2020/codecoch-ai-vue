@@ -3,12 +3,15 @@
     <section class="v4-page-header">
       <div>
         <div class="v4-eyebrow">求职进度管理</div>
-        <h1>求职进度</h1>
-        <p>跟踪收藏岗位、投递记录、面试阶段、跟进事项和结构化求职事件。</p>
+        <h1>投递漏斗</h1>
+        <p>跟踪目标池、准备、投递、面试、结果和复盘线索，只展示个人记录与跟进风险。</p>
       </div>
       <div class="v4-actions">
-        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="loadApplications">
+        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="applyStatusFilter">
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="followUpFilter" clearable placeholder="跟进筛选" style="width: 180px" @change="applyFollowUpFilter">
+          <el-option v-for="item in followUpFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-button type="primary" @click="openCreate">新增进度</el-button>
         <el-button :loading="loading" @click="load">刷新</el-button>
@@ -28,6 +31,22 @@
         :closable="false"
         :title="statsWarning"
       />
+      <el-alert
+        v-if="listContextNotice"
+        class="query-alert"
+        type="info"
+        show-icon
+        :closable="false"
+        :title="listContextNotice"
+      />
+      <el-alert
+        v-if="deepLinkMissing"
+        class="query-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="没有找到深链指定的投递记录，已保留当前列表，你可以新增记录或清空筛选后查看。"
+      />
       <div class="stats-grid">
         <button v-for="item in metricItems" :key="item.key" class="metric-card" type="button" @click="item.onClick?.()">
           <span>{{ item.label }}</span>
@@ -38,13 +57,16 @@
       <div class="status-funnel" aria-label="Application status funnel">
         <button
           v-for="item in funnelItems"
-          :key="item.value"
+          :key="item.key"
           class="funnel-item"
-          :class="{ 'is-active': status === item.value }"
+          :class="{ 'is-active': isFunnelItemActive(item) }"
           type="button"
-          @click="applyStatusFilter(item.value)"
+          @click="applyFunnelStage(item)"
         >
-          <span>{{ item.label }}</span>
+          <span>
+            {{ item.label }}
+            <small>{{ item.actionHint }}</small>
+          </span>
           <strong>{{ item.count }}</strong>
         </button>
       </div>
@@ -52,14 +74,30 @@
 
     <section v-if="!errorMessage" class="content-card">
       <div class="content-card__body v4-list" v-loading="loading">
-        <article v-for="item in applications" :key="item.id" class="v4-row">
+        <article v-for="item in applications" :key="item.id" class="v4-row" :class="{ 'is-highlighted': item.id === highlightedApplicationId }">
           <div class="v4-row-head">
             <div>
               <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
               <p class="muted">
                 {{ sourceLabel(item.source) }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
               </p>
-              <p v-if="item.matchReportId" class="muted">匹配报告 #{{ item.matchReportId }}</p>
+              <p class="muted row-meta">
+                <span>{{ resumeVersionLabel(item) }}</span>
+                <span v-if="item.matchReportId">匹配报告 #{{ item.matchReportId }}</span>
+                <span>{{ latestEventText(item) }}</span>
+              </p>
+              <div class="quality-tags">
+                <el-tag
+                  v-for="tag in dataQualityTags(item)"
+                  :key="`${item.id}-${tag.key}`"
+                  :type="tagType(tag.tone)"
+                  size="small"
+                  effect="plain"
+                  :title="tag.description"
+                >
+                  {{ tag.label }}
+                </el-tag>
+              </div>
               <p class="muted">{{ item.note || '--' }}</p>
             </div>
             <div class="v4-actions">
@@ -79,7 +117,7 @@
           :description="applicationEmptyDescription"
         >
           <div class="empty-actions">
-            <el-button v-if="status" @click="clearStatusFilter">清空状态筛选</el-button>
+            <el-button v-if="hasListFilter" @click="clearStatusFilter">清空筛选</el-button>
             <el-button type="primary" @click="openCreate">新增第一条进度</el-button>
           </div>
         </AppState>
@@ -199,7 +237,8 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   createApplicationApi,
@@ -213,19 +252,35 @@ import {
   type JobApplicationVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import {
+  applicationFollowUpFilterOptions,
+  applicationStatusOptions,
+  buildApplicationFunnelStages,
+  buildBackendLatestApplicationEvent,
+  canApplyApplicationEventStatusChange,
+  filterApplicationsByFollowUp,
+  formatApplicationResumeVersionLabel,
+  getApplicationDataQualityTags,
+  getApplicationEventMeta,
+  getApplicationFollowUpState,
+  getApplicationStageMeta,
+  getApplicationStatusFromEventType,
+  isApplicationActiveStatus,
+  parseApplicationListQuery,
+  shouldShowApplicationForFunnelStage,
+  type ApplicationDataQualityTag,
+  type ApplicationDeepLinkFollowUpFilter,
+  type ApplicationFunnelStage
+} from '@/features/applications'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatLocalDateTime } from '@/utils/format'
 
-const statusOptions = [
-  { label: '已收藏', value: 'SAVED' },
-  { label: '准备中', value: 'PREPARING' },
-  { label: '已投递', value: 'APPLIED' },
-  { label: '面试中', value: 'INTERVIEWING' },
-  { label: '已收到录用通知', value: 'OFFER' },
-  { label: '已拒信', value: 'REJECTED' },
-  { label: '已关闭', value: 'CLOSED' }
-]
+const route = useRoute()
+const router = useRouter()
+
+const statusOptions = applicationStatusOptions
+const followUpFilterOptions = applicationFollowUpFilterOptions
 
 const sourceOptions = [
   { label: 'BOSS 直聘', value: 'BOSS' },
@@ -251,9 +306,15 @@ const saving = ref(false)
 const errorMessage = ref('')
 const statsWarning = ref('')
 const status = ref('')
+const followUpFilter = ref<ApplicationDeepLinkFollowUpFilter | ''>('')
+const funnelStageFilter = ref<ApplicationFunnelStage['key'] | ''>('')
+const highlightedApplicationId = ref<number>()
+const pendingOpenEvents = ref(false)
+const deepLinkMissing = ref(false)
+const suppressNextRouteQuery = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
-const applications = ref<JobApplicationVO[]>([])
+const rawApplications = ref<JobApplicationVO[]>([])
 const applicationStats = ref<JobApplicationStatsVO>()
 const eventsVisible = ref(false)
 const eventsLoading = ref(false)
@@ -277,141 +338,122 @@ const eventForm = reactive<Partial<JobApplicationEventVO>>({
   reviewJson: ''
 })
 
-const applicationEmptyTitle = computed(() => status.value ? '当前状态没有进度' : '还没有求职进度')
+const hasListFilter = computed(() => Boolean(status.value || followUpFilter.value || funnelStageFilter.value))
+const applicationEmptyTitle = computed(() => hasListFilter.value ? '当前筛选没有进度' : '还没有求职进度')
 const applicationEmptyDescription = computed(() =>
-  status.value
-    ? '当前筛选状态下没有记录，清空筛选后可以查看全部进度。'
+  hasListFilter.value
+    ? '当前筛选条件下没有记录，清空筛选后可以查看全部投递进度。'
     : '先记录一条公司、岗位、来源和下次跟进时间，例如 BOSS、LinkedIn、内推或官网投递。'
 )
-const statusLabel = (value?: string) => statusOptions.find((item) => item.value === value)?.label || (value ? '状态待确认' : '--')
+const statusLabel = (value?: string) => getApplicationStageMeta(value).label || (value ? '状态待确认' : '--')
 const sourceLabel = (value?: string) => sourceOptions.find((item) => item.value === value)?.label || (value ? '自定义来源' : '来源待填写')
-const eventTypeLabel = (value?: string) => eventTypeOptions.find((item) => item.value === value)?.label || (value ? '记录事项' : '--')
+const eventTypeLabel = (value?: string) => getApplicationEventMeta(value).label || (value ? '记录事项' : '--')
 
 const statsNumber = (value?: number) => value ?? 0
+const applications = computed(() => {
+  let rows = [...rawApplications.value]
+  if (status.value) {
+    rows = rows.filter((item) => item.status === status.value)
+  }
+  if (followUpFilter.value) {
+    rows = filterApplicationsByFollowUp(rows, followUpFilter.value)
+  }
+  if (funnelStageFilter.value) {
+    rows = rows.filter((item) => shouldShowApplicationForFunnelStage(item, funnelStageFilter.value))
+  }
+
+  if (highlightedApplicationId.value && !rows.some((item) => item.id === highlightedApplicationId.value)) {
+    const target = rawApplications.value.find((item) => item.id === highlightedApplicationId.value)
+    if (target) return [target, ...rows]
+  }
+
+  return rows
+})
 const metricItems = computed(() => [
   {
     key: 'total',
-    label: 'Total',
+    label: '投递记录',
     value: statsNumber(applicationStats.value?.total),
-    hint: 'All applications',
+    hint: '所有个人投递记录',
     onClick: clearStatusFilter
   },
   {
     key: 'active',
-    label: 'Active',
+    label: '推进中',
     value: statsNumber(applicationStats.value?.activeCount),
-    hint: 'In progress'
+    hint: '仍需要关注的记录'
   },
   {
     key: 'overdue',
-    label: 'Overdue',
+    label: '逾期跟进',
     value: statsNumber(applicationStats.value?.overdueFollowUpCount),
-    hint: 'Follow-up missed'
+    hint: '只表示执行风险',
+    onClick: () => applyFollowUpFilter('overdue')
   },
   {
     key: 'dueToday',
-    label: 'Due today',
+    label: '今日跟进',
     value: statsNumber(applicationStats.value?.dueTodayFollowUpCount),
-    hint: 'Follow-up today'
+    hint: '今日行动候选',
+    onClick: () => applyFollowUpFilter('due-today')
+  },
+  {
+    key: 'missing',
+    label: '未设跟进',
+    value: statsNumber(applicationStats.value?.noFollowUpCount),
+    hint: '缺少下一次跟进时间',
+    onClick: () => applyFollowUpFilter('missing')
   },
   {
     key: 'stale',
-    label: 'Stale',
+    label: '久未更新',
     value: statsNumber(applicationStats.value?.staleActiveCount),
-    hint: 'No update 14d'
+    hint: '建议复核当前状态'
   }
 ])
-const funnelItems = computed(() =>
-  statusOptions.map((item) => ({
-    ...item,
-    count: statsNumber(applicationStats.value?.statusCounts?.[item.value])
-  }))
-)
+const funnelItems = computed(() => buildApplicationFunnelStages(rawApplications.value, applicationStats.value))
+const listContextNotice = computed(() => {
+  const parts: string[] = []
+  if (status.value) parts.push(`状态：${statusLabel(status.value)}`)
+  if (followUpFilter.value) {
+    parts.push(`跟进：${followUpFilterOptions.find((item) => item.value === followUpFilter.value)?.label || followUpFilter.value}`)
+  }
+  if (funnelStageFilter.value) {
+    parts.push(`漏斗：${funnelItems.value.find((item) => item.key === funnelStageFilter.value)?.label || funnelStageFilter.value}`)
+  }
+  if (highlightedApplicationId.value) parts.push(`定位投递 #${highlightedApplicationId.value}`)
+  return parts.length ? `当前列表筛选：${parts.join(' / ')}` : ''
+})
 
 type FollowUpTag = {
   label: string
   type: 'danger' | 'warning' | 'success' | 'info'
 }
 
-const parseDateTime = (value?: string | null): Date | null => {
-  const raw = value?.trim()
-  if (!raw) return null
-
-  const localDateTime = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/)
-  if (localDateTime) {
-    const [, year, month, day, hour = '0', minute = '0', second = '0'] = localDateTime
-    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
-    const validLocalDate =
-      date.getFullYear() === Number(year) &&
-      date.getMonth() === Number(month) - 1 &&
-      date.getDate() === Number(day) &&
-      date.getHours() === Number(hour) &&
-      date.getMinutes() === Number(minute) &&
-      date.getSeconds() === Number(second)
-    return validLocalDate && !Number.isNaN(date.getTime()) ? date : null
-  }
-
-  const date = new Date(raw)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-const isSameDate = (left: Date, right: Date) =>
-  left.getFullYear() === right.getFullYear() &&
-  left.getMonth() === right.getMonth() &&
-  left.getDate() === right.getDate()
-
-const isDateOnlyValue = (value?: string | null) => Boolean(value?.trim().match(/^\d{4}-\d{2}-\d{2}$/))
+const tagType = (tone?: ApplicationDataQualityTag['tone'] | 'primary'): 'danger' | 'warning' | 'success' | 'info' =>
+  tone === 'danger' || tone === 'warning' || tone === 'success' ? tone : 'info'
 
 const followUpTag = (item: JobApplicationVO): FollowUpTag | null => {
-  const followUpAt = parseDateTime(item.nextFollowUpAt)
-  if (!followUpAt) return null
-
-  const now = new Date()
-  if (isDateOnlyValue(item.nextFollowUpAt) && isSameDate(followUpAt, now)) return { label: '今日跟进', type: 'warning' }
-  if (followUpAt.getTime() < now.getTime()) return { label: '已到跟进时间', type: 'danger' }
-  if (isSameDate(followUpAt, now)) return { label: '今日跟进', type: 'warning' }
-  return { label: '已设置跟进', type: 'success' }
+  if (!isApplicationActiveStatus(item.status)) return null
+  const followUp = getApplicationFollowUpState(item.nextFollowUpAt)
+  if (followUp.key === 'missing') return null
+  return { label: followUp.label, type: tagType(followUp.tone) }
 }
 
-const normalizeCode = (value?: string) => value?.trim().toUpperCase()
-const statusFromEventType = (eventType?: string) => {
-  const normalized = normalizeCode(eventType)
-  if (!normalized) return undefined
-  if (['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'].includes(normalized)) return 'APPLIED'
-  if (normalized === 'INTERVIEW' || normalized.startsWith('INTERVIEW_')) return 'INTERVIEWING'
-  if (['OFFER', 'OFFER_RECEIVED'].includes(normalized)) return 'OFFER'
-  if (['REJECTION', 'REJECTED'].includes(normalized)) return 'REJECTED'
-  if (normalized === 'CLOSED') return 'CLOSED'
-  return undefined
+const dataQualityTags = (item: JobApplicationVO) => getApplicationDataQualityTags(item)
+const resumeVersionLabel = (item: JobApplicationVO) => formatApplicationResumeVersionLabel(item)
+const latestEventText = (item: JobApplicationVO) => {
+  const latestEvent = buildBackendLatestApplicationEvent(item)
+  if (!latestEvent) return '最新事件：暂无事件记录'
+  return `最新事件：${latestEvent.meta.label} · ${latestEvent.timeText} · ${latestEvent.summaryText}`
 }
-const statusRank = (value?: string) => {
-  const ranks: Record<string, number> = {
-    SAVED: 0,
-    PREPARING: 1,
-    APPLIED: 2,
-    INTERVIEWING: 3,
-    OFFER: 4,
-    REJECTED: 5,
-    CLOSED: 6
-  }
-  const normalized = normalizeCode(value)
-  return normalized ? ranks[normalized] : undefined
-}
-const canApplyEventStatusChange = (currentStatus?: string, nextStatus?: string) => {
-  if (!nextStatus) return false
-  const current = normalizeCode(currentStatus)
-  const next = normalizeCode(nextStatus)
-  if (!next || current === next) return false
-  const currentRank = statusRank(current)
-  const nextRank = statusRank(next)
-  return nextRank != null && (currentRank == null || nextRank > currentRank)
-}
-const eventStatusImpact = computed(() => statusFromEventType(eventForm.eventType))
+
+const eventStatusImpact = computed(() => getApplicationStatusFromEventType(eventForm.eventType))
 const eventStatusImpactText = computed(() => {
   const nextStatus = eventStatusImpact.value
   if (!nextStatus) return ''
   const currentStatus = selectedApplication.value?.status
-  if (canApplyEventStatusChange(currentStatus, nextStatus)) {
+  if (canApplyApplicationEventStatusChange(currentStatus, nextStatus)) {
     return `保存后会同步主状态为：${statusLabel(nextStatus)}`
   }
   return `该事件会进入时间线；当前主状态为 ${statusLabel(currentStatus)}，不会被回退为 ${statusLabel(nextStatus)}。`
@@ -541,9 +583,9 @@ const loadApplications = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    applications.value = await getApplicationsApi({ status: status.value || undefined })
+    rawApplications.value = await getApplicationsApi()
   } catch (error) {
-    applications.value = []
+    rawApplications.value = []
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
@@ -567,14 +609,90 @@ const load = async () => {
   await Promise.allSettled([loadApplications(), loadStats()])
 }
 
-const applyStatusFilter = async (value: string) => {
-  status.value = value
-  await loadApplications()
+const replaceListQuery = (suppressRouteApply = false) => {
+  const query: Record<string, string> = {}
+  if (status.value) query.status = status.value
+  if (followUpFilter.value) query.followUp = followUpFilter.value
+  suppressNextRouteQuery.value = suppressRouteApply
+  void router
+    .replace({ path: route.path, query })
+    .catch(() => undefined)
+    .finally(() => {
+      if (suppressRouteApply) globalThis.setTimeout(() => { suppressNextRouteQuery.value = false }, 0)
+    })
 }
 
-const clearStatusFilter = async () => {
+const applyStatusFilter = (value?: string) => {
+  status.value = value || ''
+  funnelStageFilter.value = ''
+  highlightedApplicationId.value = undefined
+  pendingOpenEvents.value = false
+  deepLinkMissing.value = false
+  replaceListQuery()
+}
+
+const applyFollowUpFilter = (value?: ApplicationDeepLinkFollowUpFilter | '') => {
+  followUpFilter.value = value || ''
+  funnelStageFilter.value = ''
+  highlightedApplicationId.value = undefined
+  pendingOpenEvents.value = false
+  deepLinkMissing.value = false
+  replaceListQuery()
+}
+
+const applyFunnelStage = (item: ApplicationFunnelStage) => {
+  followUpFilter.value = ''
+  highlightedApplicationId.value = undefined
+  pendingOpenEvents.value = false
+  deepLinkMissing.value = false
+  if (item.sourceStatuses.length === 1 && item.key !== 'RESULT') {
+    status.value = item.sourceStatuses[0]
+    funnelStageFilter.value = ''
+  } else {
+    status.value = ''
+    funnelStageFilter.value = item.key
+  }
+  replaceListQuery(Boolean(funnelStageFilter.value))
+}
+
+const isFunnelItemActive = (item: ApplicationFunnelStage) => {
+  if (funnelStageFilter.value) return funnelStageFilter.value === item.key
+  return item.sourceStatuses.length === 1 && status.value === item.sourceStatuses[0]
+}
+
+const clearStatusFilter = () => {
   status.value = ''
-  await loadApplications()
+  followUpFilter.value = ''
+  funnelStageFilter.value = ''
+  highlightedApplicationId.value = undefined
+  pendingOpenEvents.value = false
+  deepLinkMissing.value = false
+  replaceListQuery()
+}
+
+const applyRouteQuery = () => {
+  const queryState = parseApplicationListQuery(route.query as Record<string, unknown>)
+  status.value = queryState.status || ''
+  followUpFilter.value = queryState.followUp || ''
+  funnelStageFilter.value = ''
+  highlightedApplicationId.value = queryState.applicationId
+  pendingOpenEvents.value = Boolean(queryState.applicationId && queryState.openEvents)
+  deepLinkMissing.value = false
+}
+
+const resolveDeepLink = async () => {
+  const applicationId = highlightedApplicationId.value
+  if (!applicationId) {
+    deepLinkMissing.value = false
+    return
+  }
+  const target = rawApplications.value.find((item) => item.id === applicationId)
+  deepLinkMissing.value = !target && !loading.value
+  if (target && pendingOpenEvents.value) {
+    pendingOpenEvents.value = false
+    await nextTick()
+    await openEvents(target)
+  }
 }
 
 const openCreate = () => {
@@ -658,7 +776,7 @@ const createEvent = async () => {
   const applicationId = selectedApplication.value.id
   const previousApplication = selectedApplication.value
   const nextStatus = eventStatusImpact.value
-  const shouldSyncStatus = canApplyEventStatusChange(previousApplication.status, nextStatus)
+  const shouldSyncStatus = canApplyApplicationEventStatusChange(previousApplication.status, nextStatus)
   saving.value = true
   try {
     await createApplicationEventApi(applicationId, {
@@ -670,7 +788,7 @@ const createEvent = async () => {
     eventDialogVisible.value = false
     ElMessage.success('事件已保存')
     await load()
-    const refreshed = applications.value.find((item) => item.id === applicationId)
+    const refreshed = rawApplications.value.find((item) => item.id === applicationId)
     if (refreshed) {
       selectedApplication.value = refreshed
     } else {
@@ -690,7 +808,24 @@ const createEvent = async () => {
   }
 }
 
-onMounted(load)
+watch(
+  () => route.query,
+  async () => {
+    if (suppressNextRouteQuery.value) {
+      suppressNextRouteQuery.value = false
+      return
+    }
+    applyRouteQuery()
+    await resolveDeepLink()
+  },
+  { deep: true }
+)
+
+onMounted(async () => {
+  applyRouteQuery()
+  await load()
+  await resolveDeepLink()
+})
 </script>
 
 <style scoped lang="scss">
@@ -761,9 +896,13 @@ onMounted(load)
   border-radius: 8px;
 }
 
+.query-alert {
+  border-radius: 8px;
+}
+
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 12px;
 }
 
@@ -802,7 +941,7 @@ onMounted(load)
 
 .status-funnel {
   display: grid;
-  grid-template-columns: repeat(7, minmax(92px, 1fr));
+  grid-template-columns: repeat(7, minmax(126px, 1fr));
   overflow-x: auto;
   border: 1px solid var(--app-border);
   border-radius: 10px;
@@ -811,8 +950,8 @@ onMounted(load)
 
 .funnel-item {
   display: flex;
-  min-height: 58px;
-  align-items: center;
+  min-height: 76px;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 12px;
@@ -829,6 +968,14 @@ onMounted(load)
   color: #bfdbfe;
 }
 
+.funnel-item small {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .v4-row,
 .event-row {
   padding: 14px;
@@ -837,10 +984,26 @@ onMounted(load)
   background: rgba(15, 23, 42, 0.58);
 }
 
+.v4-row.is-highlighted {
+  border-color: rgba(59, 130, 246, 0.72);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.22);
+}
+
 .v4-row-head,
 .event-row__head {
   align-items: flex-start;
   justify-content: space-between;
+}
+
+.row-meta,
+.quality-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-tags {
+  margin: 8px 0;
 }
 
 .drawer-actions {

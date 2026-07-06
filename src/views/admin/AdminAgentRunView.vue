@@ -79,6 +79,12 @@
               <el-option label="自动" value="AUTO" />
             </el-select>
           </el-form-item>
+          <el-form-item label="追踪号">
+            <el-input v-model.trim="query.traceId" clearable placeholder="输入追踪号" style="width: 180px" />
+          </el-form-item>
+          <el-form-item label="生成记录编号">
+            <el-input-number v-model="query.aiCallLogId" :min="1" controls-position="right" />
+          </el-form-item>
           <el-form-item label="时间">
             <el-date-picker v-model="timeRange" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" start-placeholder="开始时间" end-placeholder="结束时间" />
           </el-form-item>
@@ -365,6 +371,8 @@ const query = reactive<AdminAgentRunQueryDTO>({
   agentType: '',
   status: '',
   triggerType: '',
+  traceId: '',
+  aiCallLogId: undefined,
   startTime: '',
   endTime: ''
 })
@@ -374,16 +382,26 @@ const firstQueryString = (value: unknown) => {
   return value == null ? '' : String(value)
 }
 
+const getDirectRunId = () => {
+  const value = firstQueryString(route.query.runId) || firstQueryString(route.query.agentRunId)
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
 const applyRouteQuery = () => {
-  const hasRouteFilter = ['status', 'agentType', 'triggerType'].some((key) => firstQueryString(route.query[key]))
+  const hasRouteFilter = ['status', 'agentType', 'triggerType', 'traceId', 'aiCallLogId'].some((key) => firstQueryString(route.query[key]))
   if (!hasRouteFilter) return false
   const status = firstQueryString(route.query.status)
   const agentType = firstQueryString(route.query.agentType)
   const triggerType = firstQueryString(route.query.triggerType)
+  const traceId = firstQueryString(route.query.traceId)
+  const aiCallLogId = Number(firstQueryString(route.query.aiCallLogId))
   Object.assign(query, {
     status: status ? status.toUpperCase() : '',
     agentType,
     triggerType,
+    traceId,
+    aiCallLogId: Number.isFinite(aiCallLogId) && aiCallLogId > 0 ? aiCallLogId : undefined,
     pageNum: 1
   })
   return true
@@ -412,7 +430,7 @@ const avgDuration = computed(() => {
   return Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
 })
 const hasRunFilters = computed(() =>
-  Boolean(query.userId || query.agentType || query.status || query.triggerType || query.startTime || query.endTime)
+  Boolean(query.userId || query.agentType || query.status || query.triggerType || query.traceId || query.aiCallLogId || query.startTime || query.endTime)
 )
 const runEmptyTitle = computed(() => hasRunFilters.value ? '没有匹配当前筛选的运行记录' : '暂无生成运行记录')
 const runEmptyDescription = computed(() => {
@@ -580,6 +598,8 @@ const handleReset = () => {
     agentType: '',
     status: '',
     triggerType: '',
+    traceId: '',
+    aiCallLogId: undefined,
     startTime: '',
     endTime: ''
   })
@@ -660,10 +680,10 @@ const loadRunRawDetail = async () => {
 }
 
 watch(
-  () => route.query.runId,
-  (value) => {
-    const id = Number(value)
-    if (Number.isFinite(id) && id > 0) {
+  () => [route.query.runId, route.query.agentRunId],
+  () => {
+    const id = getDirectRunId()
+    if (id) {
       openRunDetail(id)
     }
   },
@@ -671,7 +691,7 @@ watch(
 )
 
 watch(
-  () => [route.query.status, route.query.agentType, route.query.triggerType],
+  () => [route.query.status, route.query.agentType, route.query.triggerType, route.query.traceId, route.query.aiCallLogId],
   () => {
     if (applyRouteQuery()) {
       void fetchRuns()
