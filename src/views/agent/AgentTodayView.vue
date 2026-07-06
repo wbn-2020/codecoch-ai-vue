@@ -142,6 +142,20 @@
                 <el-tag v-for="skill in focusSkills" :key="skill.code || skill.name" effect="plain">{{ skill.name || skill.code }}</el-tag>
               </div>
 
+              <div v-if="agentLoopSnapshotVisible" class="agent-loop-snapshot">
+                <div>
+                  <span>Agent loop</span>
+                  <strong>{{ agentLoopKeyActionCount }} key actions</strong>
+                  <small>{{ agentLoopNextAdjustment }}</small>
+                </div>
+                <div class="agent-loop-snapshot__facts">
+                  <span>{{ agentLoopWeekSummary.done }} done</span>
+                  <span>{{ agentLoopWeekSummary.skipped }} skipped</span>
+                  <span>{{ agentLoopWeekSummary.active }} active</span>
+                </div>
+                <el-button text @click="router.push('/agent/reviews')">Open review</el-button>
+              </div>
+
               <div class="task-list">
                 <article v-for="task in taskList" :key="task.id" class="agent-task-card">
                   <div class="task-main">
@@ -401,8 +415,11 @@ import {
   fetchCachedTodayAgentTasks,
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
+import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
 import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
 import type { TargetJobVO } from '@/types/jobTarget'
+import type { ExplainableSuggestionVO } from '@/types/suggestion'
+import { getSuggestionSourceTypeLabel } from '@/types/suggestion'
 import {
   buildAgentTaskActionPath,
   hasAgentTaskActionEntry,
@@ -609,16 +626,47 @@ const agentTodayPagePath = computed(() => buildSafeRedirectTarget(route.path, ro
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
+const agentLoopOverview = computed(() => buildAgentLoopOverview({
+  plan: plan.value,
+  todayTasks: taskList.value,
+  historyTasks: taskList.value
+}))
+const agentLoopWeekSummary = computed(() => agentLoopOverview.value.weekSummary)
+const agentLoopKeyActionCount = computed(() => agentLoopOverview.value.keyActions.length)
+const agentLoopNextAdjustment = computed(() => agentLoopOverview.value.nextAdjustmentSummary)
+const agentLoopSnapshotVisible = computed(() => Boolean(taskList.value.length || plan.value))
 const canManuallyCompleteTask = (task: AgentTaskVO) =>
   !isEvidenceBoundAgentTask(task) && !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())
+const isOpenTaskStatus = (task: AgentTaskVO) => ['DOING', 'TODO'].includes(String(task.status || '').toUpperCase())
+const isUnfinishedTask = (task: AgentTaskVO) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())
+const isTrustedMobilePriorityTask = (task: AgentTaskVO) => {
+  const suggestion = fromAgentTask(task)
+  const strength = String(suggestion.qualityGate?.suggestionStrength || '').toUpperCase()
+  const trustStatus = String(suggestion.trustStatus || '').toUpperCase()
+  const confidenceLevel = String(suggestion.confidenceLevel || '').toUpperCase()
+  return !suggestion.fallback &&
+    !suggestion.mock &&
+    !['LOW', 'UNKNOWN'].includes(confidenceLevel) &&
+    !['FALLBACK', 'UNKNOWN', 'DISABLED', 'STALE'].includes(trustStatus) &&
+    !['FALLBACK', 'MOCK', 'LOW_SAMPLE', 'WEAK'].includes(strength)
+}
 const mobileNextTask = computed(() => {
-  const active = taskList.value.find((task) => ['DOING', 'TODO'].includes(String(task.status || '').toUpperCase()))
-  return active || taskList.value.find((task) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())) || null
+  const active = taskList.value.filter(isOpenTaskStatus)
+  return active.find(isTrustedMobilePriorityTask) ||
+    taskList.value.filter(isUnfinishedTask).find(isTrustedMobilePriorityTask) ||
+    null
 })
-const mobileNextTaskTitle = computed(() => mobileNextTask.value ? displayTaskTitle(mobileNextTask.value) : '生成今日计划')
+const mobileNextTaskTitle = computed(() => {
+  if (mobileNextTask.value) return displayTaskTitle(mobileNextTask.value)
+  return taskList.value.length ? '暂无可信优先任务' : '生成今日计划'
+})
 const mobileNextTaskSubtitle = computed(() => {
   const task = mobileNextTask.value
-  if (!task) return '还没有训练任务，先生成计划或进入刷题/面试'
+  if (!task) {
+    return taskList.value.length
+      ? '当前任务依据不足或为降级输出，请从列表中复核后处理'
+      : '还没有训练任务，先生成计划或进入刷题/面试'
+  }
   const normalizedStatus = String(task.status || '').toUpperCase()
   const status = taskStatusMap[normalizedStatus as keyof typeof taskStatusMap] || '待处理'
   const minutes = task.estimatedMinutes ? `${task.estimatedMinutes} 分钟` : '短训练'
@@ -627,7 +675,7 @@ const mobileNextTaskSubtitle = computed(() => {
 })
 const mobilePrimaryActionLabel = computed(() => {
   const task = mobileNextTask.value
-  if (!task) return '生成计划'
+  if (!task) return taskList.value.length ? '刷新' : '生成计划'
   const status = String(task.status || '').toUpperCase()
   if (status === 'TODO') return '开始'
   if (isEvidenceBoundAgentTask(task) && hasAgentTaskActionEntry(task)) return '去处理'
@@ -638,7 +686,7 @@ const mobilePrimaryActionLabel = computed(() => {
 })
 const mobilePrimaryActionLoading = computed(() => {
   const task = mobileNextTask.value
-  if (!task) return generating.value
+  if (!task) return taskList.value.length ? loading.value : generating.value
   const status = String(task.status || '').toUpperCase()
   if (status === 'TODO') return isTaskActionPending(task, 'start')
   if (status === 'SKIPPED') return isTaskActionPending(task, 'restore')
@@ -885,25 +933,7 @@ const cancelFocusSession = (task: AgentTaskVO) => {
   focusSession.value = null
 }
 
-const sourceTypeLabel = (value?: string | null) => {
-  const type = String(value || '').toUpperCase()
-  const map: Record<string, string> = {
-    TARGET_JOB: '目标岗位',
-    RESUME_JOB_MATCH: '匹配报告',
-    RESUME_MATCH: '匹配报告',
-    QUESTION_RECOMMENDATION: '推荐题',
-    QUESTION_PRACTICE: '题库练习',
-    WRONG_QUESTION_REVIEW: '错题复习',
-    INTERVIEW: '模拟面试',
-    INTERVIEW_REPORT: '面试报告',
-    RESUME_OPTIMIZE: '项目经历',
-    TRAINING_MATERIAL: '训练素材',
-    APPLICATION_FOLLOW_UP: '投递跟进',
-    JOB_APPLICATION: '投递进度',
-    JOB_COACH_AGENT_TASK: '智能教练'
-  }
-  return map[type] || '智能教练'
-}
+const sourceTypeLabel = (value?: string | null) => getSuggestionSourceTypeLabel(value)
 
 const trustStatusLabel = (value?: string | null, fallback?: boolean | null) => {
   const status = String(value || '').toUpperCase()
@@ -947,7 +977,7 @@ const taskTrustLabels = (task: AgentTaskVO) => {
   return Array.from(new Set(labels))
 }
 
-const buildAgentTaskSuggestion = (task: AgentTaskVO) => {
+const buildAgentTaskSuggestion = (task: AgentTaskVO): ExplainableSuggestionVO => {
   const actionUrl = sanitizeLocalActionPath(buildAgentTaskActionPath(task, '/agent/today'), '')
   const suggestion = fromAgentTask({
     ...task,
@@ -956,59 +986,13 @@ const buildAgentTaskSuggestion = (task: AgentTaskVO) => {
     reason: displayTaskReason(task) || task.evidenceSummary || task.reviewSummary || task.description,
     actionUrl
   })
-  const sourceType = task.sourceType || task.relatedBizType || task.taskType || 'JOB_COACH_AGENT_TASK'
-  const sourceId = task.sourceId ?? task.relatedBizId ?? task.id
-  const sourceLabel = sourceTypeLabel(sourceType)
-  const evidenceSummary = cleanUserText(task.evidenceSummary, '') ||
-    taskEvidenceLabels(task).join('；') ||
-    cleanUserText(task.reason, '') ||
-    '推荐依据不足，已按当前任务上下文展示。'
 
   return {
     ...suggestion,
-    scene: 'AGENT_TASK_RECOMMENDATION',
-    bizType: 'AGENT_TASK',
-    bizId: task.id,
     pagePath: agentTodayPagePath.value,
-    sourceType,
-    sourceId,
-    sourceLabel,
-    evidenceSummary,
-    trustStatus: task.trustStatus,
-    agentRunId: getTaskRunId(task),
-    traceId: task.traceId,
-    aiCallLogId: task.aiCallLogId,
-    actionUrl,
-    actionLabel: hasAgentTaskActionEntry(task) ? '打开任务入口' : '查看任务',
-    feedback: {
-      scene: 'AGENT_TASK_RECOMMENDATION',
-      bizType: 'AGENT_TASK',
-      bizId: task.id,
-      aiCallLogId: task.aiCallLogId ?? undefined,
-      pagePath: agentTodayPagePath.value
-    },
-    fallbackReason: task.fallback || String(task.trustStatus || '').toUpperCase() === 'FALLBACK'
+    fallbackReason: suggestion.fallback
       ? '推荐依据不足，已使用降级任务建议。'
-      : undefined,
-    evidenceSources: [
-      {
-        id: `${sourceType}:${sourceId}`,
-        title: sourceLabel,
-        sourceLabel,
-        sourceType,
-        sourceId,
-        trustStatus: task.trustStatus,
-        evidenceSummary,
-        summary: evidenceSummary
-      }
-    ],
-    nextActions: actionUrl
-      ? [{
-          key: `agent-task-${task.id}-action`,
-          label: hasAgentTaskActionEntry(task) ? '打开任务入口' : '查看任务',
-          path: actionUrl
-        }]
-      : []
+      : undefined
   }
 }
 
@@ -1227,7 +1211,7 @@ const submitTaskAction = async () => {
       completionReviewNote.value = completedTask?.reviewNote || taskNote.value.trim()
       completionReviewVisible.value = true
     } else {
-      await skipAgentTaskApi(task.id, { skipReason: taskNote.value || undefined })
+      await skipAgentTaskApi(task.id, { skipReason: taskNote.value.trim() })
       ElMessage.success('任务已跳过')
     }
     taskDialogVisible.value = false
@@ -1290,6 +1274,10 @@ const openFeedbackFromReview = () => {
 const handleMobilePrimaryAction = async () => {
   const task = mobileNextTask.value
   if (!task) {
+    if (taskList.value.length) {
+      await loadPage(true)
+      return
+    }
     openGenerateDialog()
     return
   }
@@ -1621,6 +1609,44 @@ onMounted(() => {
   margin-top: 14px;
 }
 
+.agent-loop-snapshot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.agent-loop-snapshot span,
+.agent-loop-snapshot small {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.agent-loop-snapshot strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--app-text);
+  font-size: 16px;
+}
+
+.agent-loop-snapshot__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-loop-snapshot__facts span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
 .task-list {
   display: grid;
   gap: 12px;
@@ -1748,6 +1774,7 @@ onMounted(() => {
 @media (max-width: 900px) {
   .agent-hero,
   .section-head,
+  .agent-loop-snapshot,
   .agent-task-card {
     align-items: flex-start;
     grid-template-columns: 1fr;

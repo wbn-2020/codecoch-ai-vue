@@ -31,9 +31,9 @@ describe('job experiment presentation helpers', () => {
 
   it('builds evidence coverage from supported relation types only', () => {
     const coverage = buildJobExperimentEvidenceCoverage([
-      { relationType: 'RESUME_VERSION' },
-      { relationType: 'MATCH_REPORT' },
-      { relationType: 'UNKNOWN_SOURCE' }
+      { id: 1, experimentId: 1, relationId: 101, relationType: 'RESUME_VERSION' },
+      { id: 2, experimentId: 1, relationId: 102, relationType: 'MATCH_REPORT' },
+      { id: 3, experimentId: 1, relationId: 103, relationType: 'UNKNOWN_SOURCE' }
     ])
 
     expect(coverage.total).toBe(6)

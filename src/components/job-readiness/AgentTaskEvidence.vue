@@ -18,6 +18,7 @@ import { computed, ref } from 'vue'
 
 import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
 import type { AgentTaskEvidence as AgentTaskEvidenceInfo } from '@/features/job-readiness/types'
+import type { ExplainableSuggestionVO } from '@/types/suggestion'
 
 interface PanelEvidenceSource {
   id?: string | number
@@ -27,7 +28,10 @@ interface PanelEvidenceSource {
   sourceType?: string
   sourceId?: string | number | null
   evidenceSummary?: string
+  sourceSummary?: string
   summary?: string
+  trustStatus?: string
+  metadata?: Record<string, unknown>
 }
 
 interface PanelAction {
@@ -40,6 +44,7 @@ interface PanelAction {
 
 interface PanelSuggestion {
   id: string
+  schemaVersion?: string
   scene?: string
   bizType?: string
   bizId?: number
@@ -51,20 +56,32 @@ interface PanelSuggestion {
   resultSource?: string
   trustStatus?: string
   fallback?: boolean
+  degraded?: boolean
+  mock?: boolean
   fallbackReason?: string
+  sampleInsufficient?: boolean
+  sampleWarning?: string
+  unsupportedConclusions?: string[]
+  weakObservations?: string[]
+  qualityGate?: Record<string, unknown>
   why?: string | string[]
   evidenceSources?: PanelEvidenceSource[]
+  evidences?: PanelEvidenceSource[]
   nextActions?: PanelAction[]
+  nextAction?: PanelAction
   pagePath?: string
   trace?: {
     aiCallLogId?: number
     traceId?: string
+    agentRunId?: number
+    promptVersionId?: number
+    asyncTaskId?: number
   }
 }
 
 const props = withDefaults(defineProps<{
   evidence?: AgentTaskEvidenceInfo
-  suggestion?: Record<string, unknown>
+  suggestion?: Record<string, unknown> | ExplainableSuggestionVO
   open?: boolean
   feedbackRecorded?: boolean
 }>(), {
@@ -151,6 +168,7 @@ const normalizePanelSuggestion = (suggestion: Record<string, unknown>): PanelSug
 
   return {
     id: String(suggestion.id || 'agent-task-evidence'),
+    schemaVersion: asString(suggestion.schemaVersion),
     scene: scene === 'AGENT_TASK' ? 'AGENT_TASK_RECOMMENDATION' : scene,
     bizType: asString(suggestion.bizType),
     bizId: asNumber(suggestion.bizId),
@@ -162,20 +180,36 @@ const normalizePanelSuggestion = (suggestion: Record<string, unknown>): PanelSug
     resultSource: asString(suggestion.resultSource),
     trustStatus: asString(suggestion.trustStatus),
     fallback,
+    degraded: Boolean(suggestion.degraded),
+    mock: Boolean(suggestion.mock),
     fallbackReason: asString(suggestion.fallbackReason) || (fallback ? '推荐依据不足，已使用降级建议。' : undefined),
+    sampleInsufficient: Boolean(suggestion.sampleInsufficient),
+    sampleWarning: asString(suggestion.sampleWarning),
+    unsupportedConclusions: Array.isArray(suggestion.unsupportedConclusions)
+      ? suggestion.unsupportedConclusions.filter(Boolean).map(String)
+      : undefined,
+    weakObservations: Array.isArray(suggestion.weakObservations)
+      ? suggestion.weakObservations.filter(Boolean).map(String)
+      : undefined,
+    qualityGate: asRecord(suggestion.qualityGate),
     why: Array.isArray(suggestion.why) ? suggestion.why.filter(Boolean).map(String) : asString(suggestion.why) || asString(suggestion.reason),
     evidenceSources: Array.isArray(suggestion.evidenceSources) ? suggestion.evidenceSources as PanelEvidenceSource[] : undefined,
+    evidences: Array.isArray(suggestion.evidences) ? suggestion.evidences as PanelEvidenceSource[] : undefined,
     nextActions,
+    nextAction: Object.keys(nextAction).length ? nextAction as unknown as PanelAction : undefined,
     pagePath: asString(suggestion.pagePath),
     trace: {
+      agentRunId: asNumber(trace.agentRunId),
       aiCallLogId: asNumber(trace.aiCallLogId),
-      traceId: asString(trace.traceId)
+      traceId: asString(trace.traceId),
+      promptVersionId: asNumber(trace.promptVersionId),
+      asyncTaskId: asNumber(trace.asyncTaskId)
     }
   }
 }
 
 const panelSuggestion = computed(() =>
-  props.suggestion ? normalizePanelSuggestion(props.suggestion) : toLegacySuggestion(props.evidence || fallbackEvidence)
+  props.suggestion ? normalizePanelSuggestion(props.suggestion as unknown as Record<string, unknown>) : toLegacySuggestion(props.evidence || fallbackEvidence)
 )
 
 const handleOpenAction = (action: { path?: string; actionUrl?: string; disabled?: boolean }) => {

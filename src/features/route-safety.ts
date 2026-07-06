@@ -28,8 +28,11 @@ export const v4PreviewPaths = [
 export const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
 
 export const defaultUserKnownPaths = [
+  '/onboarding',
   '/dashboard',
   '/dashboard/v3',
+  '/tools',
+  '/offer-help',
   '/profile',
   '/password',
   '/notifications',
@@ -39,6 +42,7 @@ export const defaultUserKnownPaths = [
   '/project-evidence',
   '/resumes',
   '/resume-match',
+  '/resume-job-match',
   '/interviews',
   '/interviews/create',
   '/interviews/history',
@@ -61,12 +65,81 @@ export const defaultUserKnownPaths = [
   ...v4PreviewPaths
 ]
 
-export const defaultKnownPaths = [...defaultUserKnownPaths, '/admin']
+export const defaultAdminKnownPaths = [
+  '/admin/dashboard',
+  '/admin/users',
+  '/admin/roles',
+  '/admin/questions',
+  '/admin/ai/questions/generate',
+  '/admin/question-reviews',
+  '/admin/question-review',
+  '/admin/question-duplicate-reviews',
+  '/admin/question-duplicates',
+  '/admin/question-relations',
+  '/admin/question-categories',
+  '/admin/question-tags',
+  '/admin/question-groups',
+  '/admin/industry-templates',
+  '/admin/files',
+  '/admin/ai/prompts',
+  '/admin/agent/prompts',
+  '/admin/ai/logs',
+  '/admin/trace-cockpit',
+  '/admin/ai/models',
+  '/admin/system/configs',
+  '/admin/system-config',
+  '/admin/menus',
+  '/admin/permissions',
+  '/admin/notices',
+  '/admin/announcements',
+  '/admin/notifications',
+  '/admin/operation-logs',
+  '/admin/logs/operations',
+  '/admin/logs/summary',
+  '/admin/login-logs',
+  '/admin/slow-sql-logs',
+  '/admin/logs/slow-sql',
+  '/admin/slow-sql',
+  '/admin/interviews',
+  '/admin/interview-reports',
+  '/admin/analytics/agent',
+  '/admin/agent/analytics',
+  '/admin/analytics/overview',
+  '/admin/analytics/training',
+  '/admin/analytics/ai',
+  '/admin/ai/feedback',
+  '/admin/ops/overview',
+  '/admin/ai/ops',
+  '/admin/knowledge',
+  '/admin/vector-indexes',
+  '/admin/analytics/metrics',
+  '/admin/metrics',
+  '/admin/analytics/jobs',
+  '/admin/scheduler',
+  '/admin/ai/prompt-regression',
+  '/admin/agent/runs',
+  '/admin/agent-runs',
+  '/admin/agent/tasks',
+  '/admin/agent-tasks',
+  '/admin/async-tasks',
+  '/admin/dead-letters',
+  '/admin/tasks',
+  '/admin/system-configs',
+  '/admin/configs'
+]
+
+export const defaultKnownPaths = [...defaultUserKnownPaths, ...defaultAdminKnownPaths]
 
 export const routePathOnly = (path: string) => path.split(/[?#]/)[0] || path
 
+const canMatchChildPath = (knownPath: string) =>
+  knownPath !== '/admin' && !knownPath.startsWith('/admin/')
+
 export const isKnownAppPath = (path: string, knownPaths: string[] = defaultKnownPaths) =>
-  knownPaths.some((knownPath) => path === knownPath || path.startsWith(`${knownPath}/`))
+  knownPaths.some((knownPath) => (
+    path === knownPath ||
+    (canMatchChildPath(knownPath) && path.startsWith(`${knownPath}/`))
+  ))
 
 export const isV4PreviewPath = (path: string) =>
   v4PreviewPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||

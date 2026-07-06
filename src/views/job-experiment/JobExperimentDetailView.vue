@@ -46,15 +46,15 @@
         </ul>
         <div class="sample-strip">
           <div>
-            <strong>{{ detail.metrics?.sampleCount ?? 0 }}</strong>
+            <strong>{{ detail.metrics?.sampleCount ?? sampleBoundary.applicationCount ?? 0 }}</strong>
             <span>样本数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.applicationCount ?? 0 }}</strong>
+            <strong>{{ sampleBoundary.applicationCount ?? 0 }}</strong>
             <span>投递数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.interviewCompletedCount ?? 0 }}</strong>
+            <strong>{{ sampleBoundary.interviewCompletedCount ?? 0 }}</strong>
             <span>完成面试</span>
           </div>
         </div>
@@ -134,6 +134,7 @@
         <div>
           <p class="section-kicker">关联证据覆盖</p>
           <h2>已覆盖 {{ evidenceCoverage.covered }}/{{ evidenceCoverage.total }}</h2>
+          <p class="muted">按简历版本、目标岗位、JD、匹配报告、投递记录、项目证据分组；缺失项只提示补证据，不做强归因。</p>
         </div>
         <el-button size="small" :icon="Plus" @click="relationDialog = true">添加关联</el-button>
       </div>
@@ -151,7 +152,13 @@
           <el-tag :type="item.covered ? 'success' : 'info'" effect="plain">
             {{ item.covered ? '已覆盖' : '缺口' }}
           </el-tag>
-          <p v-if="item.summaries[0]">{{ item.summaries[0] }}</p>
+          <p>{{ item.description }}</p>
+          <p class="missing-hint" v-if="!item.covered">{{ item.emptyHint }}</p>
+          <ul v-else class="relation-chip-list">
+            <li v-for="relation in item.relations.slice(0, 3)" :key="relation.id">
+              #{{ relation.relationId }} {{ relation.relationSummary || '未填写摘要' }}
+            </li>
+          </ul>
         </article>
       </div>
       <el-table class="relation-table" :data="visibleRelations" border empty-text="暂无可校验关联证据">
@@ -219,6 +226,7 @@
         </el-form-item>
         <el-form-item label="业务 ID">
           <el-input-number v-model="relationForm.relationId" :min="1" />
+          <p class="form-hint">MVP 保留高级 ID 输入，不新增重复后端绑定逻辑；选择器完善后可复用同一关系接口。</p>
         </el-form-item>
         <el-form-item label="安全摘要">
           <el-input v-model="relationForm.relationSummary" />
@@ -247,6 +255,7 @@ import {
 import AppState from '@/components/common/AppState.vue'
 import {
   buildJobExperimentEvidenceCoverage,
+  buildJobExperimentReviewDisplayModel,
   confidenceLabel,
   isSupportedJobExperimentRelationType,
   jobExperimentRelationLabel,
@@ -280,50 +289,32 @@ const latestReview = computed<JobSearchExperimentReviewVO | undefined>(() =>
   detail.value?.latestReview || detail.value?.reviews?.[0]
 )
 const reviewHistory = computed(() => detail.value?.reviews || [])
-const weakConclusion = computed(() => shouldKeepConclusionWeak(detail.value?.metrics))
+const reviewStrategy = computed(() => ({
+  ...(latestReview.value?.strategy || {}),
+  ...(detail.value?.strategy || {})
+}))
+const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latestReview.value, reviewStrategy.value))
+const sampleBoundary = computed(() => reviewDisplay.value.sampleBoundary)
+const weakConclusion = computed(() =>
+  shouldKeepConclusionWeak(detail.value?.metrics) ||
+  !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
+)
 const displayConfidenceLevel = computed(() =>
-  detail.value?.metrics?.confidenceLevel || detail.value?.strategy?.confidenceLevel || latestReview.value?.confidenceLevel || 'LOW'
+  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latestReview.value?.confidenceLevel || 'LOW'
 )
-const factItems = computed(() => detail.value?.metrics?.facts || [])
-const metricSampleWarning = computed(() => {
-  const metrics = detail.value?.metrics
-  return metrics && 'sampleWarning' in metrics ? metrics.sampleWarning || '' : undefined
-})
-const strategySampleWarning = computed(() => {
-  const strategy = detail.value?.strategy
-  return strategy && 'sampleWarning' in strategy ? strategy.sampleWarning || '' : undefined
-})
-const currentSampleWarning = computed(() => metricSampleWarning.value ?? strategySampleWarning.value)
-const sampleWarning = computed(() =>
-  currentSampleWarning.value !== undefined ? currentSampleWarning.value : latestReview.value?.sampleWarning || ''
-)
-const joinedCurrentUnsupportedConclusions = computed(() => {
-  const metrics = detail.value?.metrics
-  if (metrics && 'unsupportedConclusions' in metrics) {
-    return (metrics.unsupportedConclusions || []).join('；')
-  }
-  const strategy = detail.value?.strategy
-  if (strategy && 'unsupportedConclusions' in strategy) {
-    return (strategy.unsupportedConclusions || []).join('；')
-  }
-  return undefined
-})
+const factItems = computed(() => reviewDisplay.value.facts)
+const sampleWarning = computed(() => sampleBoundary.value.sampleWarning || reviewStrategy.value.sampleWarning || '')
 const unsupportedConclusion = computed(() =>
-  joinedCurrentUnsupportedConclusions.value !== undefined
-    ? joinedCurrentUnsupportedConclusions.value
-    : latestReview.value?.unsupportedConclusion ||
-      (weakConclusion.value
-        ? '当前样本不足，不能证明某个简历版本、岗位方向或项目证据一定带来更高转化。请把建议视为下一轮实验假设。'
-        : '暂无明确不支持结论；建议继续保留证据链，避免把单次成功或失败归因到单一因素。')
+  reviewDisplay.value.unsupportedConclusions.map((item) => item.blockedReason).join('；') ||
+  '暂无明确不支持结论；建议继续保留证据链，避免把单次成功或失败归因到单一因素。'
 )
-const strategyTitle = computed(() => detail.value?.strategy?.title || '下一轮实验假设')
+const strategyTitle = computed(() => reviewStrategy.value.title || '下一轮实验假设')
 const strategyContent = computed(() =>
-  detail.value?.strategy?.content ||
-  latestReview.value?.nextAction ||
+  reviewStrategy.value.content ||
   '先补齐目标岗位、匹配报告、投递与项目证据，再生成复盘。样本不足时只提出可验证行动，不输出强结论。'
 )
-const strategyEvidenceSources = computed(() => detail.value?.strategy?.evidenceSources || [])
-const strategyTagType = computed(() => (detail.value?.strategy?.sampleInsufficient || weakConclusion.value ? 'warning' : 'success'))
+const strategyEvidenceSources = computed(() => reviewDisplay.value.evidenceSources)
+const strategyTagType = computed(() => (reviewDisplay.value.qualityGate.gateStatus === 'PASS' && !weakConclusion.value ? 'success' : 'warning'))
 const visibleRelations = computed(() =>
   (detail.value?.relations || []).filter((relation) => isSupportedJobExperimentRelationType(relation.relationType))
 )
@@ -567,6 +558,24 @@ h2 {
   margin-bottom: 0;
   color: var(--app-text-muted);
   line-height: 1.6;
+}
+
+.missing-hint,
+.form-hint {
+  margin: 6px 0 0;
+  color: #fbbf24;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.relation-chip-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .relation-table {

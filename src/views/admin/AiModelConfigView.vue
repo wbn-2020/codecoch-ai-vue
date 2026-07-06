@@ -72,7 +72,7 @@
                 <el-button v-permission="'admin:ai:model:write'" link type="primary" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="openDialog(row)">编辑</el-button>
                 <span class="admin-row-actions__risk">
                   <el-dropdown
-                    v-permission="'admin:ai:model:write'"
+                    v-if="canManageModelWrite || canManageModelPublish"
                     trigger="click"
                     :disabled="isAdminMobileReadonly"
                     @command="(command: string | number | object) => handleRiskCommand(command, row)"
@@ -80,11 +80,11 @@
                     <el-button link type="warning" class="risk-operation-trigger" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()">更多操作</el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item command="toggle-status">
+                        <el-dropdown-item v-if="canManageModelPublish" v-permission="'admin:ai:model:publish'" command="toggle-status">
                           {{ getModelStatus(row) === 1 ? '停用模型' : '启用模型' }}
                         </el-dropdown-item>
-                        <el-dropdown-item command="set-default" :disabled="row.isDefault === 1">设为默认模型</el-dropdown-item>
-                        <el-dropdown-item command="delete" divided>删除模型</el-dropdown-item>
+                        <el-dropdown-item v-if="canManageModelPublish" v-permission="'admin:ai:model:publish'" command="set-default" :disabled="row.isDefault === 1">设为默认模型</el-dropdown-item>
+                        <el-dropdown-item v-if="canManageModelWrite" v-permission="'admin:ai:model:write'" command="delete" divided>删除模型</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -123,6 +123,7 @@ import { createAdminAiModelApi, deleteAdminAiModelApi, getAdminAiModelsApi, setD
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
+import { useAuthStore } from '@/stores/auth'
 import type { AdminListQuery, AiModelConfigDTO, AiModelConfigVO } from '@/types/adminGovernance'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
@@ -150,6 +151,7 @@ const formRef = ref<FormInstance>()
 const models = ref<AiModelConfigVO[]>([])
 const total = ref(0)
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
+const authStore = useAuthStore()
 const {
   tableSize,
   tableSizeOptions,
@@ -178,6 +180,8 @@ const rules: FormRules<AiModelConfigDTO> = {
   modelName: [{ required: true, message: '请输入模型名称', trigger: 'blur' }]
 }
 const getModelStatus = (row: AiModelConfigVO) => Number(row.enabled ?? row.status ?? 0)
+const canManageModelWrite = computed(() => authStore.hasAnyAuthority(['admin:ai:model:write', 'ADMIN']))
+const canManageModelPublish = computed(() => authStore.hasAnyAuthority(['admin:ai:model:publish', 'ADMIN']))
 const hasModelFilters = computed(() => Boolean(query.keyword || query.status !== ''))
 const modelEmptyTitle = computed(() =>
   hasModelFilters.value ? '当前筛选没有模型配置' : '暂无模型配置'
@@ -251,7 +255,7 @@ const handleSave = async () => {
   } finally { saving.value = false }
 }
 const handleStatus = async (row: AiModelConfigVO, status: number) => {
-  if (!guardAdminMobileWrite()) return
+  if (!canManageModelPublish.value || !guardAdminMobileWrite()) return
   const actionLabel = status === 1 ? '启用' : '停用'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}模型预览`,
@@ -280,7 +284,7 @@ const handleStatus = async (row: AiModelConfigVO, status: number) => {
   await fetchModels()
 }
 const handleDefault = async (row: AiModelConfigVO) => {
-  if (!guardAdminMobileWrite()) return
+  if (!canManageModelPublish.value || !guardAdminMobileWrite()) return
   const confirmed = await confirmDangerActionPreview({
     title: '默认模型切换预览',
     action: `将模型「${row.modelName}」设为默认`,
@@ -302,7 +306,7 @@ const handleDefault = async (row: AiModelConfigVO) => {
   await fetchModels()
 }
 const handleDelete = async (row: AiModelConfigVO) => {
-  if (!guardAdminMobileWrite()) return
+  if (!canManageModelWrite.value || !guardAdminMobileWrite()) return
   const confirmed = await confirmDangerActionPreview({
     title: '删除模型预览',
     action: `删除模型「${row.modelName}」`,

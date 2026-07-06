@@ -210,6 +210,7 @@
 
             <div class="task-diagnostics">
               <span v-for="item in taskDiagnosticItems(task)" :key="item">{{ item }}</span>
+              <span v-for="item in agentLoopDiagnosticItems(task)" :key="item">{{ item }}</span>
             </div>
 
             <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
@@ -510,6 +511,7 @@ import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vu
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
+import { buildAgentLoopActions } from '@/features/agent-loop/agentLoopRules'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
 import {
@@ -723,6 +725,13 @@ const highPriorityTasks = computed(() => tasks.value.filter((task) => normalizeS
 const recoverableTasks = computed(() => tasks.value.filter((task) => task.actionUrl || getTaskRunId(task) || task.relatedBizId))
 const activeAsyncTasks = computed(() => asyncTasks.value.filter((task) => ['PENDING', 'RUNNING'].includes(normalizeStatus(task.status))))
 const recoverableAsyncTasks = computed(() => asyncTasks.value.filter((task) => getAsyncTaskEntry(task) || task.traceId || task.messageId))
+const agentLoopActionsByTaskId = computed(() => {
+  const map = new Map<number, ReturnType<typeof buildAgentLoopActions>[number]>()
+  buildAgentLoopActions(tasks.value, { historyTasks: tasks.value }).forEach((action) => {
+    map.set(action.taskId, action)
+  })
+  return map
+})
 const asyncActiveFilterItems = computed(() => {
   const items: Array<{ key: string; label: string; value: string }> = []
   if (asyncQuery.bizType) items.push({ key: 'bizType', label: '关联功能', value: getAsyncBizLabel(asyncQuery.bizType) })
@@ -970,6 +979,22 @@ const taskDiagnosticItems = (task: AgentTaskVO) => {
   }
   if (task.actionUrl) {
     items.push('可从原页面继续')
+  }
+  return items
+}
+
+const agentLoopDiagnosticItems = (task: AgentTaskVO) => {
+  const action = agentLoopActionsByTaskId.value.get(task.id)
+  if (!action) return []
+  const items: string[] = [`Loop: ${action.planStrength}`]
+  if (!action.canPromoteToKeyAction) {
+    items.push('Weak action signal')
+  }
+  if (action.repeatedSkipCount >= 2) {
+    items.push('Repeated skip: split or downgrade next')
+  }
+  if (action.degradationReasons.length) {
+    items.push(`Degraded: ${action.degradationReasons.slice(0, 2).join(', ')}`)
   }
   return items
 }
@@ -1541,7 +1566,7 @@ const submitAction = async () => {
       completionReviewNote.value = completedTask?.reviewNote || note.value.trim()
       completionReviewVisible.value = true
     } else {
-      await skipAgentTaskApi(task.id, { skipReason: note.value || undefined })
+      await skipAgentTaskApi(task.id, { skipReason: note.value.trim() })
       ElMessage.success('任务已跳过')
     }
     dialogVisible.value = false

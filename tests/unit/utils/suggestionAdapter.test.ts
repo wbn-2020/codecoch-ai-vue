@@ -11,6 +11,7 @@ import {
   fromKnowledgeSearchResult,
   isAgentMemoryActive,
   isEvidenceSourceActive,
+  isStrongEvidenceSource,
   knowledgeTrustStatus,
   memoryTrustStatus,
   normalizeConfidenceLevel,
@@ -247,7 +248,65 @@ describe('suggestionAdapter', () => {
         insufficientReferences: true
       }
     })
-    expect(knowledgeTrustStatus({ citationValid: false, answerGrounded: true })).toBe('PARTIAL')
+    expect(knowledgeTrustStatus({ citationValid: false, answerGrounded: true })).toBe('FALLBACK')
+  })
+
+  it('keeps low-confidence knowledge citations out of strong evidence', () => {
+    const source = fromKnowledgeSearchResult({
+      documentId: 12,
+      chunkId: 35,
+      title: 'Low score notes',
+      snippet: 'A weakly related Redis note.',
+      sourceRef: 'notes.md#weak',
+      score: 0.24
+    }, 0, {
+      citationValid: true,
+      answerGrounded: true,
+      minScore: 0.45
+    })
+
+    expect(source).toMatchObject({
+      trustStatus: 'FALLBACK',
+      metadata: {
+        score: 0.24,
+        minScore: 0.45,
+        lowConfidence: true,
+        citationValid: true,
+        answerGrounded: true
+      }
+    })
+    expect(isEvidenceSourceActive(source)).toBe(true)
+    expect(isStrongEvidenceSource(source)).toBe(false)
+  })
+
+  it('propagates ask citation warnings and minimum score to references', () => {
+    const sources = fromKnowledgeAskReferences({
+      insufficientReferences: false,
+      citationValid: true,
+      answerGrounded: true,
+      citationWarning: '引用数量不足以支撑强结论',
+      minReferenceScore: 0.6,
+      references: [
+        {
+          documentId: 18,
+          chunkId: 19,
+          title: 'Offer review',
+          snippet: 'Only one marginal reference.',
+          sourceRef: 'offer.md#1',
+          score: 0.5
+        }
+      ]
+    })
+
+    expect(sources[0]).toMatchObject({
+      trustStatus: 'FALLBACK',
+      metadata: {
+        citationWarning: '引用数量不足以支撑强结论',
+        minScore: 0.6,
+        lowConfidence: true
+      }
+    })
+    expect(isStrongEvidenceSource(sources[0])).toBe(false)
   })
 
   it('keeps rich evidence metadata when normalizing existing evidence sources', () => {
@@ -296,6 +355,7 @@ describe('suggestionAdapter', () => {
       sourceId: 501,
       confidence: 0.82,
       enabled: 1,
+      confirmedAt: '2026-07-05T08:30:00',
       createdAt: '2026-07-01T08:00:00',
       updatedAt: '2026-07-05T08:00:00'
     })
@@ -348,5 +408,100 @@ describe('suggestionAdapter', () => {
     expect(fromAgentMemories([disabled, deleted], { activeOnly: true })).toEqual([])
     expect(memoryTrustStatus({ id: 80, enabled: 1, confidence: 0.4 })).toBe('FALLBACK')
     expect(memoryTrustStatus({ id: 81, enabled: 1 })).toBe('PARTIAL')
+  })
+
+  it('keeps unconfirmed non-manual memories out of active evidence', () => {
+    const candidate = {
+      id: 82,
+      memoryType: 'SKILL_GAP',
+      content: 'Review-generated memory waiting for user confirmation.',
+      sourceType: 'AGENT_REVIEW',
+      sourceId: 12,
+      confidence: 0.91,
+      enabled: 1
+    }
+
+    const source = fromAgentMemory(candidate)
+
+    expect(isAgentMemoryActive(candidate)).toBe(false)
+    expect(source).toMatchObject({
+      sourceType: 'AGENT_MEMORY',
+      trustStatus: 'PARTIAL',
+      metadata: {
+        memoryStatus: 'CANDIDATE',
+        confirmed: false,
+        active: false,
+        memorySourceType: 'AGENT_REVIEW'
+      }
+    })
+    expect(isEvidenceSourceActive(source)).toBe(false)
+    expect(fromAgentMemories([candidate], { activeOnly: true })).toEqual([])
+  })
+
+  it('keeps stale or expired memories out of active evidence', () => {
+    const expired = {
+      id: 85,
+      memoryType: 'JOB_STRATEGY',
+      content: 'Old strategy that should be reviewed.',
+      sourceType: 'MANUAL',
+      confidence: 0.92,
+      enabled: 1,
+      expiresAt: '2000-01-01T00:00:00'
+    }
+    const stale = {
+      id: 86,
+      memoryType: 'SKILL_GAP',
+      content: 'Marked stale by backend.',
+      sourceType: 'MANUAL',
+      confidence: 0.91,
+      enabled: 1,
+      memoryStatus: 'STALE',
+      stale: true
+    }
+
+    expect(isAgentMemoryActive(expired)).toBe(false)
+    expect(memoryTrustStatus(expired)).toBe('STALE')
+    expect(fromAgentMemory(expired)).toMatchObject({
+      trustStatus: 'STALE',
+      metadata: {
+        active: false,
+        expiresAt: '2000-01-01T00:00:00'
+      }
+    })
+    expect(isEvidenceSourceActive(fromAgentMemory(stale))).toBe(false)
+  })
+
+  it('allows manual and explicitly confirmed non-manual memories as active evidence', () => {
+    const manual = {
+      id: 83,
+      memoryType: 'USER_NOTE',
+      content: 'Prefers short focused practice blocks.',
+      sourceType: 'MANUAL',
+      confidence: 0.86,
+      enabled: 1
+    }
+    const confirmedReviewMemory = {
+      id: 84,
+      memoryType: 'SKILL_GAP',
+      content: 'Needs clearer trade-off explanation.',
+      sourceType: 'AGENT_REVIEW',
+      sourceId: 15,
+      confidence: 0.84,
+      enabled: 1,
+      memoryStatus: 'CONFIRMED',
+      confirmedAt: '2026-07-06T09:30:00'
+    }
+
+    expect(isAgentMemoryActive(manual)).toBe(true)
+    expect(isAgentMemoryActive(confirmedReviewMemory)).toBe(true)
+    expect(fromAgentMemory(manual).trustStatus).toBe('VERIFIED')
+    expect(fromAgentMemory(confirmedReviewMemory)).toMatchObject({
+      trustStatus: 'VERIFIED',
+      metadata: {
+        memoryStatus: 'CONFIRMED',
+        confirmed: true,
+        confirmedAt: '2026-07-06T09:30:00'
+      }
+    })
   })
 })

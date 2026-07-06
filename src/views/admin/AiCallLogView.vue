@@ -81,6 +81,9 @@
           <el-form-item label="追踪号">
             <el-input v-model.trim="query.traceId" clearable placeholder="输入追踪号" />
           </el-form-item>
+          <el-form-item label="请求号">
+            <el-input v-model.trim="query.requestId" clearable placeholder="输入请求号" />
+          </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px">
               <el-option label="成功" :value="1" />
@@ -357,6 +360,7 @@ const query = reactive<AiCallLogQueryDTO>({
   businessId: '',
   modelName: '',
   traceId: '',
+  requestId: '',
   status: '',
   pageNo: 1,
   pageSize: 10
@@ -369,7 +373,7 @@ const tokenTotal = computed(() => logs.value.reduce((sum, item) => sum + (item.t
 const modelCount = computed(() => new Set(logs.value.map((item) => item.modelName).filter(Boolean)).size)
 const canViewRawLog = computed(() => authStore.hasPermission('admin:ai:log:raw:view'))
 const hasLogFilters = computed(() =>
-  Boolean(query.userId || query.scene || query.businessId || query.modelName || query.traceId || query.status !== '')
+  Boolean(query.userId || query.scene || query.businessId || query.modelName || query.traceId || query.requestId || query.status !== '')
 )
 const logEmptyTitle = computed(() =>
   hasLogFilters.value ? '没有匹配当前筛选条件的智能生成记录' : '暂无智能生成记录'
@@ -521,10 +525,11 @@ const openDirectAiLogFromRoute = async () => {
 
 const applyRouteFilters = () => {
   const traceId = firstQueryString(route.query.traceId)
+  const requestId = firstQueryString(route.query.requestId)
   const status = firstQueryString(route.query.status)
   const businessId = firstQueryString(route.query.businessId || route.query.bizId)
   const source = firstQueryString(route.query.source)
-  if (!traceId && !status && !businessId) {
+  if (!traceId && !requestId && !status && !businessId) {
     if (!getDirectAiLogId()) {
       highlightedAiCallLogId.value = null
       directLogError.value = ''
@@ -533,6 +538,7 @@ const applyRouteFilters = () => {
   }
   Object.assign(query, {
     traceId,
+    requestId,
     status: parseAiLogStatusQuery(status),
     businessId,
     pageNo: 1
@@ -561,6 +567,7 @@ const handleReset = () => {
     businessId: '',
     modelName: '',
     traceId: '',
+    requestId: '',
     status: '',
     pageNo: 1,
     pageSize: 10
@@ -640,7 +647,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => [route.query.aiCallLogId, route.query.id, route.query.traceId, route.query.status, route.query.businessId, route.query.bizId, route.query.source],
+  () => [route.query.aiCallLogId, route.query.id, route.query.traceId, route.query.requestId, route.query.status, route.query.businessId, route.query.bizId, route.query.source],
   () => {
     if (applyRouteFilters()) {
       void fetchLogs()

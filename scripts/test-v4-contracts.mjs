@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -5,7 +6,9 @@ import { fileURLToPath } from 'node:url'
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = path.join(workspaceRoot, 'CodeCoachAI-java')
+const backendRoot = existsSync(path.join(workspaceRoot, 'codecoch-ai-java'))
+  ? path.join(workspaceRoot, 'codecoch-ai-java')
+  : path.join(workspaceRoot, 'CodeCoachAI-java')
 
 const read = (file) => readFile(file, 'utf8')
 const frontendApiFile = path.join(frontendRoot, 'src/api/v4.ts')
@@ -1151,11 +1154,23 @@ const adminAiModelGovernanceChecks = [
       'AdminOperationConfirmPayload',
       "request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)",
       'request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}`, data)',
-      'request.put<null, null>(`/admin/ai/models/${id}/status`, { status, ...data })',
-      'request.put<null, null>(`/admin/ai/models/${id}/default`, data)',
+      'request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/status`, { status, ...data })',
+      'request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/default`, data)',
       'request.delete<null, null>(`/admin/ai/models/${id}`, { data })'
     ],
-    'AI model governance API forwards admin confirmation payloads to create/update/status/default/delete endpoints'
+    'AI model governance API forwards confirmation payloads and types status/default responses as sanitized model configs'
+  ],
+  [
+    'ai-model-permission-labels',
+    adminAiModelConfigPage,
+    'admin-row-actions__risk',
+    1800,
+    [
+      "v-permission=\"'admin:ai:model:publish'\"",
+      "v-if=\"canManageModelPublish\"",
+      "v-if=\"canManageModelWrite\""
+    ],
+    'AI model page separates write/delete operations from publish operations in visible controls'
   ],
   [
     'ai-model-save-page-dry-run',

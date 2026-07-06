@@ -103,6 +103,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'ai/prompts', name: 'AdminAiPrompts', component: () => import('@/views/admin/PromptTemplateView.vue'), meta: { title: '提示词模板', icon: 'Operation', requiredPermissions: ['admin:ai:prompt:list'] } },
       { path: 'agent/prompts', redirect: '/admin/ai/prompts', meta: { hidden: true } },
       { path: 'ai/logs', name: 'AdminAiLogs', component: () => import('@/views/admin/AiCallLogView.vue'), meta: { title: 'AI 运行记录', icon: 'DataAnalysis', requiredPermissions: ['admin:ai:log:list'] } },
+      { path: 'trace-cockpit', name: 'AdminTraceCockpit', component: () => import('@/views/admin/AdminTraceCockpitView.vue'), meta: { title: '链路驾驶舱', icon: 'DataAnalysis', requiredPermissions: ['admin:trace:cockpit:view'], featureFlag: 'adminTraceCockpit' } },
       { path: 'ai/models', name: 'AdminAiModels', component: () => import('@/views/admin/AiModelConfigView.vue'), meta: { title: 'AI 模型配置', icon: 'Operation', requiredPermissions: ['admin:ai:model:list'] } },
       { path: 'system/configs', name: 'AdminSystemConfigs', component: () => import('@/views/admin/SystemConfigView.vue'), meta: { title: '系统配置', icon: 'Setting', requiredPermissions: ['admin:system:config:list'] } },
       { path: 'system-config', redirect: '/admin/system/configs', meta: { hidden: true } },

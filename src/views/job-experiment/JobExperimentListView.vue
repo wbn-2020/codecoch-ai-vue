@@ -45,7 +45,13 @@
           <div class="metrics">
             <span>{{ item.sampleCount || 0 }} 条样本</span>
             <span>{{ confidenceLabel(item.confidenceLevel) }}</span>
+            <span>{{ sampleBoundaryLabel(item) }}</span>
             <span v-if="item.demoFlag">演示数据</span>
+          </div>
+          <div class="evidence-row" v-if="item.metrics">
+            <span>投递 {{ item.metrics.applicationCount }}</span>
+            <span>简历 {{ item.metrics.resumeVersionCount }}</span>
+            <span>项目证据 {{ item.metrics.projectEvidenceCount }}</span>
           </div>
           <el-alert v-if="item.sampleWarning" type="warning" :closable="false" :title="item.sampleWarning" />
           <div class="card-actions">
@@ -106,6 +112,13 @@ const fetchList = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const sampleBoundaryLabel = (item: JobSearchExperimentListVO) => {
+  if (item.sampleBoundary?.sampleWarning || item.metrics?.sampleInsufficient) return '低样本'
+  if (item.confidenceLevel === 'HIGH') return '样本可复盘'
+  if (item.confidenceLevel === 'MEDIUM') return '弱观察'
+  return '样本待补'
 }
 
 onMounted(fetchList)
@@ -202,6 +215,23 @@ h1 {
 .metrics {
   flex-wrap: wrap;
   font-size: 12px;
+}
+
+.evidence-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.evidence-row span {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.2);
 }
 
 .card-actions {

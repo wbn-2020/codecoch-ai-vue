@@ -22,6 +22,7 @@ export interface ApplicationWorkbenchContext {
 }
 
 export type ApplicationFollowUpStateKey = 'missing' | 'overdue' | 'due-today' | 'upcoming'
+export type ApplicationDeepLinkFollowUpFilter = Extract<ApplicationFollowUpStateKey, 'missing' | 'overdue' | 'due-today'>
 
 export interface ApplicationFollowUpState {
   key: ApplicationFollowUpStateKey
@@ -53,6 +54,40 @@ export interface ApplicationStageCard {
   description: string
 }
 
+export type ApplicationFunnelStageKey =
+  | 'TARGET_POOL'
+  | 'PREPARING'
+  | 'APPLIED'
+  | 'FEEDBACK'
+  | 'INTERVIEW'
+  | 'RESULT'
+  | 'REVIEWED'
+
+export interface ApplicationFunnelStage {
+  key: ApplicationFunnelStageKey
+  label: string
+  count: number
+  sourceStatuses: string[]
+  sourceEventTypes: string[]
+  description: string
+  actionHint: string
+}
+
+export type ApplicationDataQualityTagKey =
+  | 'missing-resume-version'
+  | 'no-event'
+  | 'follow-up-overdue'
+  | 'follow-up-due-today'
+  | 'follow-up-missing'
+  | 'stale-active'
+
+export interface ApplicationDataQualityTag {
+  key: ApplicationDataQualityTagKey
+  label: string
+  tone: 'danger' | 'warning' | 'info' | 'success'
+  description: string
+}
+
 export interface ApplicationStatsSummary {
   total: number
   activeCount: number
@@ -72,6 +107,13 @@ export interface ApplicationWorkbenchOverview {
   stats: ApplicationStatsSummary
   stageCards: ApplicationStageCard[]
   followUpCards: ApplicationStageCard[]
+}
+
+export interface ApplicationListQueryState {
+  status?: string
+  followUp?: ApplicationDeepLinkFollowUpFilter
+  applicationId?: number
+  openEvents: boolean
 }
 
 export interface ApplicationResumeVersionLabelInput {
@@ -107,22 +149,99 @@ export interface ApplicationTimelineEvent extends JobApplicationEventVO {
 
 const activeStatuses = new Set(['SAVED', 'PREPARING', 'APPLIED', 'INTERVIEWING', 'OFFER'])
 const terminalStatuses = new Set(['REJECTED', 'CLOSED'])
+const resultStatuses = ['OFFER', 'REJECTED', 'CLOSED']
+const staleActiveDays = 14
+
+export const applicationStatusOptions = [
+  { label: '已收藏', value: 'SAVED' },
+  { label: '准备中', value: 'PREPARING' },
+  { label: '已投递', value: 'APPLIED' },
+  { label: '面试中', value: 'INTERVIEWING' },
+  { label: '已收到录用通知', value: 'OFFER' },
+  { label: '已拒信', value: 'REJECTED' },
+  { label: '已关闭', value: 'CLOSED' }
+]
+
+export const applicationFollowUpFilterOptions: Array<{ label: string; value: ApplicationDeepLinkFollowUpFilter }> = [
+  { label: '逾期跟进', value: 'overdue' },
+  { label: '今日跟进', value: 'due-today' },
+  { label: '未设置跟进', value: 'missing' }
+]
 
 const applicationStatusMeta: Record<string, ApplicationStageMeta> = {
   SAVED: { label: '已收藏', tone: 'info', description: '岗位已进入跟踪池，适合补齐简历和投递计划。' },
   PREPARING: { label: '准备中', tone: 'warning', description: '正在准备简历、作品或投递材料。' },
   APPLIED: { label: '已投递', tone: 'primary', description: '已完成投递，等待反馈或主动跟进。' },
   INTERVIEWING: { label: '面试中', tone: 'success', description: '已进入面试阶段，建议同步面试记录。' },
-  OFFER: { label: 'Offer', tone: 'success', description: '已收到 offer，记录关键结果。' },
+  OFFER: { label: '录用通知', tone: 'success', description: '已收到录用通知，记录关键结果。' },
   REJECTED: { label: '已拒绝', tone: 'danger', description: '流程已结束，适合沉淀复盘事件。' },
   CLOSED: { label: '已关闭', tone: 'info', description: '该投递已关闭，不再作为活跃跟进项。' }
+}
+
+const funnelStageMeta: Record<ApplicationFunnelStageKey, Omit<ApplicationFunnelStage, 'count'>> = {
+  TARGET_POOL: {
+    key: 'TARGET_POOL',
+    label: '目标池',
+    sourceStatuses: ['SAVED'],
+    sourceEventTypes: [],
+    description: '已收藏或记录的目标岗位，不代表已经完成投递。',
+    actionHint: '补齐 JD、岗位方向或决定是否进入准备。'
+  },
+  PREPARING: {
+    key: 'PREPARING',
+    label: '准备中',
+    sourceStatuses: ['PREPARING'],
+    sourceEventTypes: [],
+    description: '正在准备简历、项目证据或投递材料。',
+    actionHint: '绑定简历版本，补齐项目证据。'
+  },
+  APPLIED: {
+    key: 'APPLIED',
+    label: '已投递',
+    sourceStatuses: ['APPLIED'],
+    sourceEventTypes: ['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'],
+    description: '用户记录中已经完成投递动作。',
+    actionHint: '设置跟进时间，绑定匹配报告。'
+  },
+  FEEDBACK: {
+    key: 'FEEDBACK',
+    label: '有反馈',
+    sourceStatuses: [],
+    sourceEventTypes: ['FOLLOW_UP', 'FOLLOW_UP_DONE', 'INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'CLOSED', 'NOTE'],
+    description: '出现跟进、回复、拒信、面试或其他沟通记录。',
+    actionHint: '补充事件摘要，保留事实证据。'
+  },
+  INTERVIEW: {
+    key: 'INTERVIEW',
+    label: '面试中',
+    sourceStatuses: ['INTERVIEWING'],
+    sourceEventTypes: ['INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'],
+    description: '已进入面试或面试流程中。',
+    actionHint: '记录面试反馈或创建复练。'
+  },
+  RESULT: {
+    key: 'RESULT',
+    label: '结果',
+    sourceStatuses: resultStatuses,
+    sourceEventTypes: ['OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'CLOSED'],
+    description: '已有录用、拒信或关闭等明确阶段结果。',
+    actionHint: '记录结果原因，补一次复盘事件。'
+  },
+  REVIEWED: {
+    key: 'REVIEWED',
+    label: '已复盘',
+    sourceStatuses: [],
+    sourceEventTypes: ['REVIEW', 'REVIEWED', 'RETROSPECTIVE'],
+    description: '投递事件或求职实验中已有复盘线索。',
+    actionHint: '沉淀下一轮实验或归档。'
+  }
 }
 
 const stageCardMeta: Record<ApplicationStageKey, Pick<ApplicationStageCard, 'label' | 'tone' | 'description'>> = {
   total: { label: '投递总数', tone: 'primary', description: '所有投递记录的汇总' },
   active: { label: '进行中', tone: 'primary', description: '仍在推进中的投递' },
   interviewing: { label: '面试中', tone: 'success', description: '已进入面试阶段' },
-  offer: { label: 'Offer', tone: 'success', description: '已收到 offer 的投递' },
+  offer: { label: '录用通知', tone: 'success', description: '已收到录用通知的投递' },
   rejected: { label: '已拒绝', tone: 'danger', description: '已被拒绝或淘汰' },
   closed: { label: '已结束', tone: 'info', description: '已关闭的投递记录' },
   'follow-up-overdue': { label: '跟进过期', tone: 'danger', description: '超过计划跟进时间' },
@@ -138,8 +257,8 @@ const applicationEventMeta: Record<string, ApplicationEventMeta> = {
   INTERVIEW: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_SCHEDULED: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_COMPLETED: { label: '面试完成', tone: 'success', description: '面试已完成，报告或复盘结果已回流投递记录。' },
-  OFFER: { label: 'Offer', tone: 'success', description: '该投递收到 Offer 结果。' },
-  OFFER_RECEIVED: { label: 'Offer', tone: 'success', description: '该投递收到 Offer 结果。' },
+  OFFER: { label: '录用通知', tone: 'success', description: '该投递收到录用通知结果。' },
+  OFFER_RECEIVED: { label: '录用通知', tone: 'success', description: '该投递收到录用通知结果。' },
   REJECTED: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
   REJECTION: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
   CLOSED: { label: '关闭', tone: 'info', description: '该投递已关闭，不再推进。' },
@@ -235,6 +354,23 @@ const normalizeEventType = (value?: string | null) => {
   return text || 'NOTE'
 }
 
+const normalizeQueryValue = (value: unknown) => {
+  const first = Array.isArray(value) ? value[0] : value
+  return first == null ? '' : String(first).trim()
+}
+
+const isTruthyQueryValue = (value: unknown) => {
+  const normalized = normalizeQueryValue(value).toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
+}
+
+const parseQueryNumber = (value: unknown) => {
+  const normalized = normalizeQueryValue(value)
+  if (!normalized) return undefined
+  const parsed = Number(normalized)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 const hasOwn = (target: object, key: string) => Object.prototype.hasOwnProperty.call(target, key)
 
 export const hasBackendResumeVersionSummary = (
@@ -263,6 +399,11 @@ export const hasBackendLatestEventSummary = (
 
 const getApplicationEventSortDate = (event: JobApplicationEventVO): Date | undefined =>
   ensureLocalDate(event.eventTime) || ensureLocalDate(event.createdAt) || ensureLocalDate(event.updatedAt)
+
+const getLatestApplicationEventDate = (application: Partial<JobApplicationVO> | null | undefined) =>
+  ensureLocalDate(application?.latestEventTime) ||
+  ensureLocalDate(application?.updatedAt) ||
+  ensureLocalDate(application?.createdAt)
 
 const toTimelineEvent = (event: JobApplicationEventVO): ApplicationTimelineEvent => {
   const normalizedType = normalizeEventType(event.eventType)
@@ -326,6 +467,48 @@ export const buildApplicationWorkbenchOverview = (stats?: Partial<JobApplication
       buildStageCard('follow-up-stale', normalized.staleActiveCount)
     ]
   }
+}
+
+export const buildApplicationFunnelStages = (
+  applications: Partial<JobApplicationVO>[] = [],
+  stats?: Partial<JobApplicationStatsVO> | null
+): ApplicationFunnelStage[] => {
+  const normalizedStats = normalizeApplicationStats(stats)
+  const normalizedApplications = applications || []
+  const applicationStatusCounts = normalizedApplications.reduce<Record<string, number>>((counts, item) => {
+    const status = normalizeStatus(item.status)
+    if (status) counts[status] = (counts[status] || 0) + 1
+    return counts
+  }, {})
+  const statusCounts = Object.keys(normalizedStats.statusCounts).length
+    ? normalizedStats.statusCounts
+    : applicationStatusCounts
+  const countStatus = (statuses: string[]) => sumStatusCounts(statusCounts, statuses)
+  const hasLatestEvent = (application: Partial<JobApplicationVO>) =>
+    Boolean(application.latestEventId || application.latestEventType || application.latestEventTime || application.latestEventSummary)
+  const feedbackCount = normalizedApplications.filter((item) => {
+    const status = normalizeStatus(item.status)
+    return status !== 'SAVED' && hasLatestEvent(item)
+  }).length
+  const reviewedCount = normalizedApplications.filter((item) => {
+    const eventType = normalizeEventType(item.latestEventType)
+    const latestSummary = String(item.latestEventSummary || '').trim()
+    return ['REVIEW', 'REVIEWED', 'RETROSPECTIVE'].includes(eventType) || latestSummary.includes('复盘')
+  }).length
+  const counts: Record<ApplicationFunnelStageKey, number> = {
+    TARGET_POOL: countStatus(['SAVED']),
+    PREPARING: countStatus(['PREPARING']),
+    APPLIED: countStatus(['APPLIED']),
+    FEEDBACK: feedbackCount,
+    INTERVIEW: normalizedStats.interviewCount || countStatus(['INTERVIEWING']),
+    RESULT: countStatus(resultStatuses),
+    REVIEWED: reviewedCount
+  }
+
+  return (Object.keys(funnelStageMeta) as ApplicationFunnelStageKey[]).map((key) => ({
+    ...funnelStageMeta[key],
+    count: coerceNumber(counts[key], 0)
+  }))
 }
 
 export const getApplicationEventMeta = (eventType?: string | null): ApplicationEventMeta => {
@@ -415,6 +598,105 @@ export const getApplicationFollowUpState = (
     dueAt: formatLocalDateTime(next),
     dueInDays
   }
+}
+
+export const getApplicationStatusFromEventType = (eventType?: string | null) => {
+  const normalized = normalizeEventType(eventType)
+  if (['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'].includes(normalized)) return 'APPLIED'
+  if (normalized === 'INTERVIEW' || normalized.startsWith('INTERVIEW_')) return 'INTERVIEWING'
+  if (['OFFER', 'OFFER_RECEIVED'].includes(normalized)) return 'OFFER'
+  if (['REJECTION', 'REJECTED'].includes(normalized)) return 'REJECTED'
+  if (normalized === 'CLOSED') return 'CLOSED'
+  return undefined
+}
+
+export const getApplicationStatusRank = (status?: string | null) => {
+  const ranks: Record<string, number> = {
+    SAVED: 0,
+    PREPARING: 1,
+    APPLIED: 2,
+    INTERVIEWING: 3,
+    OFFER: 4,
+    REJECTED: 5,
+    CLOSED: 6
+  }
+  const normalized = normalizeStatus(status)
+  return normalized ? ranks[normalized] : undefined
+}
+
+export const canApplyApplicationEventStatusChange = (currentStatus?: string | null, nextStatus?: string | null) => {
+  if (!nextStatus) return false
+  const current = normalizeStatus(currentStatus)
+  const next = normalizeStatus(nextStatus)
+  if (!next || current === next) return false
+  const currentRank = getApplicationStatusRank(current)
+  const nextRank = getApplicationStatusRank(next)
+  return nextRank != null && (currentRank == null || nextRank > currentRank)
+}
+
+export const getApplicationDataQualityTags = (
+  application: Partial<JobApplicationVO>,
+  now: string | Date | number = new Date()
+): ApplicationDataQualityTag[] => {
+  const tags: ApplicationDataQualityTag[] = []
+  const active = isApplicationActiveStatus(application.status)
+
+  if (!application.resumeVersionId) {
+    tags.push({
+      key: 'missing-resume-version',
+      label: '未绑定简历版本',
+      tone: 'warning',
+      description: '这条记录暂时缺少投递时使用的简历版本，后续复盘只能作为事实记录。'
+    })
+  }
+
+  if (!application.latestEventId && !application.latestEventType && !application.latestEventTime && !application.latestEventSummary) {
+    tags.push({
+      key: 'no-event',
+      label: '无事件记录',
+      tone: 'info',
+      description: '还没有记录投递、跟进、面试或结果事件。'
+    })
+  }
+
+  if (active) {
+    const followUp = getApplicationFollowUpState(application.nextFollowUpAt, now)
+    if (followUp.key === 'overdue') {
+      tags.push({
+        key: 'follow-up-overdue',
+        label: '逾期跟进',
+        tone: 'danger',
+        description: '跟进时间已经过期，这是执行提醒，不代表岗位质量或个人能力结论。'
+      })
+    } else if (followUp.key === 'due-today') {
+      tags.push({
+        key: 'follow-up-due-today',
+        label: '今日跟进',
+        tone: 'warning',
+        description: '今天需要继续跟进，可作为今日行动候选。'
+      })
+    } else if (followUp.key === 'missing') {
+      tags.push({
+        key: 'follow-up-missing',
+        label: '未设置跟进',
+        tone: 'info',
+        description: '尚未填写下一次跟进时间。'
+      })
+    }
+
+    const reference = ensureLocalDate(now) || new Date()
+    const latestDate = getLatestApplicationEventDate(application)
+    if (latestDate && reference.getTime() - latestDate.getTime() >= staleActiveDays * 86400000) {
+      tags.push({
+        key: 'stale-active',
+        label: '久未更新',
+        tone: 'warning',
+        description: '这条活跃投递已较久没有更新，建议复核当前状态。'
+      })
+    }
+  }
+
+  return tags
 }
 
 export const formatApplicationResumeVersionLabel = (
@@ -540,6 +822,25 @@ export const shouldShowApplicationForFollowUpFilter = (
   return getApplicationFollowUpState(application.nextFollowUpAt, now).key === filter
 }
 
+export const shouldShowApplicationForFunnelStage = (
+  application: Partial<JobApplicationVO>,
+  stageKey?: ApplicationFunnelStageKey | ''
+) => {
+  if (!stageKey) return true
+  const normalizedStatus = normalizeStatus(application.status)
+  const meta = funnelStageMeta[stageKey]
+  if (!meta) return true
+  if (meta.sourceStatuses.includes(normalizedStatus || '')) return true
+  const normalizedEventType = normalizeEventType(application.latestEventType)
+  if (stageKey === 'FEEDBACK') {
+    return normalizedStatus !== 'SAVED' && Boolean(application.latestEventId || application.latestEventType || application.latestEventTime || application.latestEventSummary)
+  }
+  if (stageKey === 'REVIEWED') {
+    return ['REVIEW', 'REVIEWED', 'RETROSPECTIVE'].includes(normalizedEventType) || String(application.latestEventSummary || '').includes('复盘')
+  }
+  return meta.sourceEventTypes.includes(normalizedEventType)
+}
+
 export const filterApplicationsByFollowUp = (
   applications: JobApplicationVO[],
   filter: ApplicationFollowUpFilter,
@@ -570,3 +871,22 @@ export const summarizeApplicationStatus = (application?: Pick<JobApplicationVO, 
   followUp: getApplicationFollowUpState(application?.nextFollowUpAt),
   resumeVersionLabel: formatApplicationResumeVersionLabel(application?.resumeVersionId || null)
 })
+
+export const parseApplicationListQuery = (
+  query: Record<string, unknown>,
+  allowedStatuses: string[] = applicationStatusOptions.map((item) => item.value)
+): ApplicationListQueryState => {
+  const rawStatus = normalizeQueryValue(query.status).toUpperCase()
+  const status = allowedStatuses.includes(rawStatus) ? rawStatus : undefined
+  const rawFollowUp = normalizeQueryValue(query.followUp) as ApplicationDeepLinkFollowUpFilter | ''
+  const followUp = applicationFollowUpFilterOptions.some((item) => item.value === rawFollowUp)
+    ? (rawFollowUp as ApplicationDeepLinkFollowUpFilter)
+    : undefined
+
+  return {
+    status,
+    followUp,
+    applicationId: parseQueryNumber(query.applicationId),
+    openEvents: isTruthyQueryValue(query.openEvents)
+  }
+}

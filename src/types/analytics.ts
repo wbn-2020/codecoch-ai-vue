@@ -498,6 +498,7 @@ export interface PromptRegressionQuery {
   pageNum?: number
   pageSize?: number
   caseId?: number
+  promptTemplateId?: number
   promptType?: string
   enabled?: number | ''
 }

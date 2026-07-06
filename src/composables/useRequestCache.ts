@@ -14,20 +14,43 @@ export interface UseRequestCacheOptions<T> {
 interface CacheEntry<T> {
   data: T
   timestamp: number
+  expiresAt: number
 }
 
 // 全局缓存 Map，跨组件共享
 const globalCache = new Map<string, CacheEntry<unknown>>()
 const globalPendingRequests = new Map<string, Promise<unknown>>()
+const MAX_GLOBAL_CACHE_ENTRIES = 200
+
+const pruneRequestCache = () => {
+  const now = Date.now()
+  for (const [key, entry] of globalCache.entries()) {
+    if (now < entry.timestamp || entry.expiresAt <= now) {
+      globalCache.delete(key)
+    }
+  }
+  while (globalCache.size > MAX_GLOBAL_CACHE_ENTRIES) {
+    const oldestKey = globalCache.keys().next().value
+    if (!oldestKey) break
+    globalCache.delete(oldestKey)
+  }
+}
 
 export const getRequestCache = <T>(cacheKey: string, ttl: number): T | undefined => {
   const entry = globalCache.get(cacheKey)
-  if (!entry || Date.now() - entry.timestamp >= ttl) return undefined
+  if (!entry) return undefined
+  const now = Date.now()
+  if (now - entry.timestamp >= ttl || entry.expiresAt <= now) {
+    globalCache.delete(cacheKey)
+    return undefined
+  }
   return entry.data as T
 }
 
-export const setRequestCache = <T>(cacheKey: string, value: T) => {
-  globalCache.set(cacheKey, { data: value, timestamp: Date.now() })
+export const setRequestCache = <T>(cacheKey: string, value: T, ttl = 60000) => {
+  const now = Date.now()
+  globalCache.set(cacheKey, { data: value, timestamp: now, expiresAt: now + ttl })
+  pruneRequestCache()
 }
 
 export const invalidateRequestCache = (cacheKey: string) => {
@@ -62,7 +85,7 @@ export const fetchRequestCache = async <T>(
     .then(fetcher)
     .then((result) => {
       if (globalPendingRequests.get(cacheKey) === request) {
-        setRequestCache(cacheKey, result)
+        setRequestCache(cacheKey, result, ttl)
       }
       return result
     })

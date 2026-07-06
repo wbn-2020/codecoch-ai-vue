@@ -95,6 +95,8 @@
         </ul>
         <div class="action-facts">
           <span>依据：{{ primaryTask.reason }}</span>
+          <span>来源：{{ primaryTask.sourceLabel }}</span>
+          <span>边界：{{ primaryTask.trustBoundary }}</span>
           <span>耗时：{{ primaryTask.minutes }} 分钟</span>
           <span>收益：{{ primaryTask.benefit }}</span>
         </div>
@@ -151,6 +153,71 @@
       </article>
     </section>
 
+    <section class="command-center-grid" aria-label="求职作战指挥台摘要">
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">Agent loop</span>
+          <span class="pill pill--neutral">{{ agentLoopHomeSummary.total }} tasks</span>
+        </div>
+        <div class="queue-metrics">
+          <span><strong>{{ agentLoopHomeSummary.done }}</strong>done</span>
+          <span><strong>{{ agentLoopHomeSummary.skipped }}</strong>skipped</span>
+          <span><strong>{{ agentLoopHomeSummary.active }}</strong>active</span>
+          <span><strong>{{ agentLoopHomeSummary.estimatedMinutes }}</strong>min</span>
+        </div>
+        <p>{{ agentLoopHomeAdjustment }}</p>
+        <div class="command-panel__actions">
+          <el-button text @click="go('/agent/reviews')">Review</el-button>
+          <el-button text @click="go('/agent/today')">Today</el-button>
+          <el-button text @click="go('/agent/tasks')">Tasks</el-button>
+        </div>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">行动队列</span>
+          <span class="pill pill--neutral">今日最多 {{ actionQueueSummary.todayKeyActionLimit }} 项</span>
+        </div>
+        <div class="queue-metrics">
+          <span><strong>{{ actionQueueSummary.todoCount }}</strong>待处理</span>
+          <span><strong>{{ actionQueueSummary.doingCount }}</strong>进行中</span>
+          <span><strong>{{ actionQueueSummary.doneCount + actionQueueSummary.skippedCount }}</strong>已回流</span>
+          <span><strong>{{ actionQueueSummary.estimatedTotalMinutes }}</strong>分钟</span>
+        </div>
+        <p>强推荐只来自有效证据；降级、演示、低样本或未知来源仍可执行，但会保守展示。</p>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">风险缺口</span>
+          <span class="pill" :class="careerRiskSignals.length ? 'pill--warning' : 'pill--success'">
+            {{ careerRiskSignals.length ? `${careerRiskSignals.length} 项待补` : '暂无阻断' }}
+          </span>
+        </div>
+        <div v-if="careerRiskSignals.length" class="compact-list">
+          <button v-for="risk in careerRiskSignals.slice(0, 3)" :key="risk.id" type="button" @click="go('/agent/today')">
+            <strong>{{ risk.title }}</strong>
+            <span>{{ risk.description }}</span>
+          </button>
+        </div>
+        <p v-else>当前资料可以支撑今日行动，完成后继续把反馈回流到下一轮计划。</p>
+      </article>
+
+      <article class="command-panel">
+        <div class="card-heading">
+          <span class="card-kicker">最近产物</span>
+          <span class="pill pill--neutral">{{ careerRecentArtifacts.length }} 项</span>
+        </div>
+        <div v-if="careerRecentArtifacts.length" class="compact-list">
+          <button v-for="artifact in careerRecentArtifacts" :key="artifact.id" type="button" @click="go(artifact.actionUrl || '/agent/today')">
+            <strong>{{ artifact.title }}</strong>
+            <span>{{ artifact.summary || '回到产物页继续转成行动。' }}</span>
+          </button>
+        </div>
+        <p v-else>完成 JD 匹配、面试报告或今日计划后，这里会出现可转行动入口。</p>
+      </article>
+    </section>
+
     <section v-if="shouldShowFirstDayActions" class="first-day-section" :aria-busy="isHomeLoading">
       <div class="section-head first-day-section__head">
         <div>
@@ -201,12 +268,11 @@
         <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.statusLabel }}</small>
       </button>
       <div class="mobile-action-dock__meta">
-        <span><b>资料</b>{{ confidenceLabel }}</span>
-        <span><b>耗时</b>{{ estimatedMinutes }} 分钟</span>
-        <span><b>状态</b>{{ planStatusText }}</span>
+        <span><b>状态</b>{{ primaryTask.statusLabel }}</span>
+        <span><b>边界</b>{{ primaryTask.trustBoundary }}</span>
       </div>
       <div class="mobile-action-dock__quick">
-        <button v-for="action in mobileQuickActions" :key="action.label" type="button" @click="go(action.path)">
+        <button v-for="action in mobileQuickActions.slice(0, 2)" :key="action.label" type="button" @click="go(action.path)">
           <component :is="action.icon" :size="17" />
           <span>{{ action.label }}</span>
         </button>
@@ -239,6 +305,8 @@
               <p>{{ task.description }}</p>
               <div class="task-row__facts">
                 <span>依据：{{ task.reason }}</span>
+                <span>来源：{{ task.sourceLabel }}</span>
+                <span>边界：{{ task.trustBoundary }}</span>
                 <span>收益：{{ task.benefit }}</span>
               </div>
             </div>
@@ -276,6 +344,12 @@
           <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
         </div>
         <p class="source-boundary">{{ recommendationBoundaryText }}</p>
+        <div v-if="trustedSuggestionSummaries.length" class="trusted-summary-list">
+          <div v-for="summary in trustedSuggestionSummaries" :key="summary.id">
+            <strong>{{ summary.title }}</strong>
+            <span>{{ summary.sourceLabel }} · {{ summary.boundary }}</span>
+          </div>
+        </div>
         <div class="source-list">
           <div v-for="source in recommendationSources" :key="source.key" class="source-item" :class="{ 'is-missing': source.missing }">
             <component :is="source.icon" :size="17" />
@@ -428,6 +502,7 @@ import {
 import type { Component } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 
 import {
   completeAgentTaskApi,
@@ -442,6 +517,19 @@ import {
   fetchCachedWrongQuestions,
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
+import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
+import {
+  buildActionQueueSummary,
+  buildCareerActionQueue,
+  buildCareerRecentArtifacts,
+  buildCareerRiskSignals,
+  buildTrustedSuggestionSummaries,
+  canPromoteCareerAction,
+  getCareerActionSourceLabel,
+  getCareerActionTrustBoundary,
+  isCareerActionClosed,
+  type CareerActionItemVO
+} from '@/features/career-command-center'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
@@ -456,6 +544,7 @@ import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import request from '@/utils/request'
+import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface HomeTask {
   key: string
@@ -471,6 +560,9 @@ interface HomeTask {
   minutes: number
   icon: Component
   tone: string
+  sourceLabel: string
+  trustBoundary: string
+  promoted: boolean
 }
 
 interface FirstDayAction {
@@ -589,20 +681,39 @@ const firstDayActions = computed<FirstDayAction[]>(() => [
 ])
 const firstDayReadyCount = computed(() => firstDayActions.value.filter((action) => action.ready).length)
 const activeTasks = computed(() => agentTasks.value.filter((task) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())))
+const careerActions = computed(() => buildCareerActionQueue(agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []))
+const actionQueueSummary = computed(() => buildActionQueueSummary(careerActions.value))
+const agentLoopHomeOverview = computed(() => buildAgentLoopOverview({
+  plan: dailyPlan.value,
+  todayTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || [],
+  historyTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+}))
+const agentLoopHomeSummary = computed(() => agentLoopHomeOverview.value.weekSummary)
+const agentLoopHomeAdjustment = computed(() => agentLoopHomeOverview.value.nextAdjustmentSummary)
+const primaryCareerAction = computed(() =>
+  careerActions.value.find(canPromoteCareerAction)
+  || careerActions.value.find((action) => !isCareerActionClosed(action))
+  || null
+)
 const taskCards = computed<HomeTask[]>(() => {
-  const tasks = agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
-  return tasks.slice(0, 5).map(toHomeTask)
+  return careerActions.value.slice(0, 5).map(toHomeTaskFromCareerAction)
 })
 const visibleTaskCards = computed(() => taskCards.value.slice(0, 3))
 const shouldShowFirstDayActions = computed(() => firstDayReadyCount.value < firstDayActions.value.length)
 
 const primaryTask = computed<HomeTask>(() => {
-  const task = activeTasks.value[0] || dailyPlan.value?.tasks?.find((item) => !['DONE', 'SKIPPED'].includes(String(item.status || '').toUpperCase()))
-  if (task) {
+  if (primaryCareerAction.value) {
+    const task = findTaskByCareerAction(primaryCareerAction.value)
+    const promoted = canPromoteCareerAction(primaryCareerAction.value)
     return {
-      ...toHomeTask(task),
-      cta: '开始第 1 个任务',
-      reasons: taskReasons(task)
+      ...toHomeTaskFromCareerAction(primaryCareerAction.value),
+      cta: promoted ? '开始第 1 个任务' : '查看今日任务',
+      reasons: [
+        primaryCareerAction.value.reason || '来自智能教练今日计划',
+        `来源：${getCareerActionSourceLabel(primaryCareerAction.value)}`,
+        getCareerActionTrustBoundary(primaryCareerAction.value)
+      ],
+      benefit: task ? taskBenefit(task) : '完成后会回流到下一轮智能教练推荐'
     }
   }
 
@@ -973,6 +1084,23 @@ const pageErrorSummary = computed(() => {
 
 const visiblePageErrorDetails = computed(() => pageErrors.value.slice(0, 2).map((item) => item.message))
 
+const careerRiskSignals = computed(() => buildCareerRiskSignals({
+  hasResume: hasResumeSignal.value,
+  hasTargetJob: hasTargetJobSignal.value,
+  hasTodayPlan: hasTodayPlanSignal.value,
+  hasTrustedReport: hasTrustedReport.value,
+  hasUntrustedRecentReport: hasUntrustedRecentReport.value,
+  pageErrorCount: pageErrors.value.length
+}))
+
+const careerRecentArtifacts = computed(() => buildCareerRecentArtifacts({
+  latestMatch: (v3Overview.value?.latestMatch || null) as Record<string, unknown> | null,
+  recentReport: (overview.value?.recentReport || null) as Record<string, unknown> | null,
+  dailyPlan: dailyPlan.value
+}))
+
+const trustedSuggestionSummaries = computed(() => buildTrustedSuggestionSummaries([], careerActions.value))
+
 const tools = [
   { title: '面试历史', path: '/interviews/history', icon: History },
   { title: '训练分析', path: '/analytics/personal', icon: BarChart3 },
@@ -999,7 +1127,7 @@ const mobileQuickActions = computed(() => [
 ])
 
 const go = (path: string) => {
-  router.push(path)
+  router.push(sanitizeLocalActionPath(path, '/dashboard'))
 }
 
 const getTaskRunId = (task?: AgentTaskVO | null) => task?.agentRunId ?? task?.runId ?? null
@@ -1028,10 +1156,14 @@ const trackCompletionReviewCtaClick = (targetPath: string) => {
 
 const shouldForceRefresh = (force: unknown = true) => force !== false
 
-const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes'>): HomeTask => ({
+const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes' | 'sourceLabel' | 'trustBoundary' | 'promoted'>
+  & Partial<Pick<HomeTask, 'sourceLabel' | 'trustBoundary' | 'promoted'>>): HomeTask => ({
   ...task,
   key: `fallback-${task.path}`,
-  minutes: 30
+  minutes: 30,
+  sourceLabel: task.sourceLabel || '本地可执行入口',
+  trustBoundary: task.trustBoundary || '资料不足时只提示下一步，不生成强判断',
+  promoted: task.promoted ?? false
 })
 
 const toHomeTask = (task: AgentTaskVO): HomeTask => {
@@ -1049,7 +1181,58 @@ const toHomeTask = (task: AgentTaskVO): HomeTask => {
     statusLabel: formatStatus(task.status || 'TODO'),
     minutes: Number(task.estimatedMinutes) || 20,
     icon: icon.icon,
-    tone: icon.tone
+    tone: icon.tone,
+    sourceLabel: 'Agent 今日任务',
+    trustBoundary: task.fallback || task.mock ? '当前只能给出保守建议' : '可执行，建议完成后回流复盘',
+    promoted: !task.fallback && !task.mock
+  }
+}
+
+const findTaskByCareerAction = (action?: CareerActionItemVO | null) => {
+  if (!action?.sourceId) return undefined
+  return findTaskById(Number(action.sourceId))
+}
+
+const toHomeTaskFromCareerAction = (action: CareerActionItemVO): HomeTask => {
+  const task = findTaskByCareerAction(action)
+  const numericSourceId = Number(action.sourceId)
+  const base = task ? toHomeTask(task) : fallbackTask({
+    title: action.title,
+    description: action.description || '来自今日行动队列的可执行任务。',
+    reason: action.reason || '来自 Agent 今日计划',
+    cta: '查看任务',
+    path: action.actionUrl || '/agent/today',
+    statusLabel: formatStatus(action.status),
+    icon: Sparkles,
+    tone: 'tone-blue',
+    benefit: '完成后会回流到下一轮智能教练推荐',
+    reasons: [
+      action.reason || '来自智能教练今日计划',
+      `来源：${getCareerActionSourceLabel(action)}`,
+      getCareerActionTrustBoundary(action)
+    ],
+    sourceLabel: getCareerActionSourceLabel(action),
+    trustBoundary: getCareerActionTrustBoundary(action),
+    promoted: canPromoteCareerAction(action)
+  })
+  return {
+    ...base,
+    key: action.id,
+    taskId: Number.isFinite(numericSourceId) && numericSourceId > 0 ? numericSourceId : task?.id,
+    title: action.title || base.title,
+    description: action.description || base.description,
+    reason: action.reason || base.reason,
+    reasons: [
+      action.reason || base.reason,
+      `来源：${getCareerActionSourceLabel(action)}`,
+      getCareerActionTrustBoundary(action)
+    ],
+    path: action.actionUrl || base.path || '/agent/today',
+    statusLabel: formatStatus(action.status),
+    minutes: action.estimatedMinutes || base.minutes,
+    sourceLabel: getCareerActionSourceLabel(action),
+    trustBoundary: getCareerActionTrustBoundary(action),
+    promoted: canPromoteCareerAction(action)
   }
 }
 
@@ -1330,9 +1513,19 @@ const skipTask = async (taskId: number) => {
     confirmButtonText: '今天跳过'
   })
   if (!confirmed) return
+  const promptResult = await ElMessageBox.prompt('请填写本轮跳过原因，方便下一轮计划避开不合适的安排。', '跳过原因', {
+    confirmButtonText: '确认跳过',
+    cancelButtonText: '取消',
+    inputType: 'textarea',
+    inputPlaceholder: '例如：今天时间不够、任务不符合当前岗位、需要先补资料',
+    inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写跳过原因',
+    inputErrorMessage: '请填写跳过原因'
+  }).catch(() => null)
+  const skipReason = String(promptResult?.value || '').trim()
+  if (!skipReason) return
   taskMutatingId.value = taskId
   try {
-    const skippedTask = await skipAgentTaskApi(taskId, { skipReason: '今日首页选择跳过' })
+    const skippedTask = await skipAgentTaskApi(taskId, { skipReason })
     mergeAgentTask(skippedTask)
     invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
     await refreshTrainingSnapshotAfterMutation()
@@ -1391,6 +1584,7 @@ onBeforeUnmount(() => {
 
 .home-hero,
 .first-day-section,
+.command-panel,
 .cockpit-card,
 .focus-card,
 .path-section,
@@ -1742,6 +1936,110 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(135deg, rgba(124, 58, 237, 0.08), transparent 58%),
     var(--user-surface);
+}
+
+.command-center-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.command-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+
+  p {
+    margin: 0;
+    color: #526071;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+}
+
+.queue-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  span {
+    display: grid;
+    gap: 3px;
+    min-height: 60px;
+    padding: 9px;
+    border: 1px solid #e8edf5;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  strong {
+    color: #0f172a;
+    font-size: 20px;
+    line-height: 1;
+  }
+}
+
+.command-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.compact-list,
+.trusted-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-list button,
+.trusted-summary-list div {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.compact-list button {
+  cursor: pointer;
+
+  &:hover {
+    border-color: #bfdbfe;
+    background: #fff;
+  }
+}
+
+.compact-list strong,
+.trusted-summary-list strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.compact-list span,
+.trusted-summary-list span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.trusted-summary-list {
+  margin: 10px 0;
 }
 
 .target-facts,
@@ -2401,6 +2699,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1080px) {
   .home-hero,
   .cockpit-grid,
+  .command-center-grid,
   .workbench-grid,
   .focus-grid,
   .insight-grid {
@@ -2530,7 +2829,7 @@ onBeforeUnmount(() => {
 
   .mobile-action-dock__meta {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
 
     span {
@@ -2556,7 +2855,7 @@ onBeforeUnmount(() => {
 
   .mobile-action-dock__quick {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 

@@ -288,7 +288,8 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   createPromptRegressionCaseApi,
@@ -344,6 +345,7 @@ const {
 
 const loading = ref(false)
 const running = ref(false)
+const route = useRoute()
 const errorMessage = ref('')
 const caseErrorMessage = ref('')
 const resultErrorMessage = ref('')
@@ -364,6 +366,7 @@ const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = us
 const query = reactive<PromptRegressionQuery>({
   pageNo: 1,
   pageSize: 20,
+  promptTemplateId: undefined,
   promptType: '',
   enabled: ''
 })
@@ -425,6 +428,30 @@ const getErrorMessage = (error: unknown) => {
     return toFriendlyMessage((error as { message?: unknown }).message, '提示词回归数据加载失败，请稍后重试。')
   }
   return '提示词回归数据加载失败，请稍后重试。'
+}
+
+const firstQueryString = (value: unknown) => {
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value == null ? '' : String(value)
+}
+
+const parsePositiveNumber = (value: unknown) => {
+  const numberValue = Number(firstQueryString(value))
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined
+}
+
+const applyRouteQuery = () => {
+  const promptTemplateId = parsePositiveNumber(route.query.promptTemplateId)
+  const promptType = firstQueryString(route.query.promptType)
+  const enabled = firstQueryString(route.query.enabled)
+  if (!promptTemplateId && !promptType && !enabled) return false
+  Object.assign(query, {
+    promptTemplateId,
+    promptType,
+    enabled: enabled === '0' ? 0 : enabled === '1' ? 1 : '',
+    pageNo: 1
+  })
+  return true
 }
 
 const redactSensitiveText = (value: string) =>
@@ -516,6 +543,7 @@ const handleReset = () => {
   Object.assign(query, {
     pageNo: 1,
     pageSize: 20,
+    promptTemplateId: undefined,
     promptType: '',
     enabled: ''
   })
@@ -688,7 +716,19 @@ const runRegression = async () => {
   }
 }
 
-onMounted(loadPage)
+watch(
+  () => [route.query.promptTemplateId, route.query.promptType, route.query.enabled],
+  () => {
+    if (applyRouteQuery()) {
+      void loadPage()
+    }
+  }
+)
+
+onMounted(() => {
+  applyRouteQuery()
+  loadPage()
+})
 </script>
 
 <style scoped lang="scss">

@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import type { EvidenceSourceVO, SuggestionQualityGateVO, SuggestionTraceVO } from '@/types/suggestion'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
 import { toFriendlyMessage } from '@/utils/error'
@@ -9,6 +10,17 @@ export interface AgentReviewVO {
   targetJobId?: number
   reviewDate?: string
   summary?: string
+  facts?: string[]
+  limits?: string[]
+  driftReasons?: string[]
+  adjustments?: string[]
+  evidenceSources?: EvidenceSourceVO[]
+  evidenceCount?: number
+  confidenceLevel?: GrowthConfidenceLevel
+  qualityGate?: SuggestionQualityGateVO
+  trace?: SuggestionTraceVO
+  fallback?: boolean
+  unsupportedConclusions?: string[]
   doneCount?: number
   skippedCount?: number
   todoCount?: number
@@ -80,8 +92,19 @@ export interface AgentMemoryVO {
   content?: string
   sourceType?: string
   sourceId?: number
+  sourceSummary?: string
   confidence?: number
   enabled?: number
+  memoryStatus?: 'ENABLED' | 'DISABLED' | 'CANDIDATE' | 'PENDING_CONFIRMATION' | 'STALE' | 'DELETED' | string
+  trustStatus?: 'VERIFIED' | 'PARTIAL' | 'DISABLED' | 'STALE' | 'CANDIDATE' | string
+  confirmedAt?: string
+  confirmedBy?: number | string
+  disabledAt?: string
+  deletedAt?: string
+  expiresAt?: string
+  stale?: boolean
+  impactScopes?: string[]
+  riskFlags?: string[]
   createdAt?: string
   updatedAt?: string
 }
@@ -624,6 +647,7 @@ export const getAgentMemoriesApi = (params?: { pageNo?: number; pageSize?: numbe
 export const createAgentMemoryApi = (data: Partial<AgentMemoryVO>) =>
   request.post<AgentMemoryVO, AgentMemoryVO>('/agent/memories', data)
 
+export const confirmAgentMemoryApi = (id: number) => request.post<AgentMemoryVO, AgentMemoryVO>(`/agent/memories/${id}/confirm`)
 export const enableAgentMemoryApi = (id: number) => request.post<AgentMemoryVO, AgentMemoryVO>(`/agent/memories/${id}/enable`)
 export const disableAgentMemoryApi = (id: number) => request.post<AgentMemoryVO, AgentMemoryVO>(`/agent/memories/${id}/disable`)
 export const deleteAgentMemoryApi = (id: number) => request.delete<void, void>(`/agent/memories/${id}`)

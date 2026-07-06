@@ -80,8 +80,8 @@ describe('SuggestionEvidencePanel', () => {
     })
 
     expect(wrapper.text()).toContain('已降级')
-    expect(wrapper.text()).toContain('Mock')
-    expect(wrapper.text()).toContain('Fallback')
+    expect(wrapper.text()).toContain('演示/模拟数据')
+    expect(wrapper.text()).toContain('兜底建议')
     expect(wrapper.text()).toContain('模型超时，已使用摘要策略')
   })
 

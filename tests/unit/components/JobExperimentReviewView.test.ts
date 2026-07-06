@@ -182,7 +182,7 @@ describe('JobExperimentReviewView', () => {
     expect(wrapper.text()).toContain('事实摘要')
     expect(wrapper.text()).toContain('样本限制')
     expect(wrapper.text()).toContain('不支持结论')
-    expect(wrapper.text()).toContain('策略建议')
+    expect(wrapper.text()).toContain('EVIDENCE SOURCES')
     expect(wrapper.text()).toContain('下一步行动')
     expect(wrapper.text()).toContain('低置信度')
     expect(wrapper.text()).toContain('当前只有 4 次投递和 0 次完成面试，样本不足。')

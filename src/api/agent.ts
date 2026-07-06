@@ -136,9 +136,9 @@ export const startAgentTaskApi = (id: number) => {
   return request.post<AgentTaskVO, AgentTaskVO>(`/agent/tasks/${id}/start`).then(normalizeTask)
 }
 
-export const skipAgentTaskApi = (id: number, data?: AgentTaskSkipDTO) => {
+export const skipAgentTaskApi = (id: number, data: AgentTaskSkipDTO) => {
   return request
-    .post<AgentTaskVO, AgentTaskVO>(`/agent/tasks/${id}/skip`, data || {})
+    .post<AgentTaskVO, AgentTaskVO>(`/agent/tasks/${id}/skip`, data)
     .then(normalizeTask)
 }
 

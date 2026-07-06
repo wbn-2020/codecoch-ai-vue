@@ -382,6 +382,12 @@ const firstQueryString = (value: unknown) => {
   return value == null ? '' : String(value)
 }
 
+const getDirectRunId = () => {
+  const value = firstQueryString(route.query.runId) || firstQueryString(route.query.agentRunId)
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
 const applyRouteQuery = () => {
   const hasRouteFilter = ['status', 'agentType', 'triggerType', 'traceId', 'aiCallLogId'].some((key) => firstQueryString(route.query[key]))
   if (!hasRouteFilter) return false
@@ -674,10 +680,10 @@ const loadRunRawDetail = async () => {
 }
 
 watch(
-  () => route.query.runId,
-  (value) => {
-    const id = Number(value)
-    if (Number.isFinite(id) && id > 0) {
+  () => [route.query.runId, route.query.agentRunId],
+  () => {
+    const id = getDirectRunId()
+    if (id) {
       openRunDetail(id)
     }
   },

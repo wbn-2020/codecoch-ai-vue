@@ -185,7 +185,7 @@ const normalizeAiModel = (item: any): AiModelConfigVO => ({
   modelName: pick(item, 'modelCode', 'model_code', 'modelName', 'model_name', 'name') || '',
   displayName: pick(item, 'displayName', 'display_name', 'modelAlias', 'model_alias', 'modelName', 'model_name', 'name'),
   apiBaseUrl: pick(item, 'apiBaseUrl', 'api_base_url', 'baseUrl', 'base_url'),
-  apiKeyMasked: pick(item, 'apiKeyMasked', 'api_key_masked', 'maskedApiKey', 'masked_api_key', 'apiKey', 'api_key'),
+  apiKeyMasked: pick(item, 'apiKeyMasked', 'api_key_masked', 'maskedApiKey', 'masked_api_key'),
   enabled: item.enabled ?? item.status ?? 1,
   isDefault: item.isDefault ?? item.is_default ?? item.defaultModel ?? item.default_model ?? item.defaultFlag ?? 0,
   temperature: pick(item, 'temperature'),
@@ -341,10 +341,10 @@ export const updateAdminAiModelApi = (id: number, data: AiModelConfigDTO & Admin
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}`, data)
 
 export const updateAdminAiModelStatusApi = (id: number, status: number, data: AdminOperationConfirmPayload) =>
-  request.put<null, null>(`/admin/ai/models/${id}/status`, { status, ...data })
+  request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/status`, { status, ...data })
 
 export const setDefaultAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
-  request.put<null, null>(`/admin/ai/models/${id}/default`, data)
+  request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/default`, data)
 
 export const deleteAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
   request.delete<null, null>(`/admin/ai/models/${id}`, { data })
