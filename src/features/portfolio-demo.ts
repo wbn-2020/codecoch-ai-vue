@@ -1,4 +1,4 @@
-import { isV4PreviewAccessEnabled, resolveAppRoutePath, routePathOnly } from '@/features/route-safety'
+import { resolveAppRoutePath, routePathOnly } from '@/features/route-safety'
 import type { PortfolioDemoStorylineStepVO, PortfolioDemoStorylineVO } from '@/types/jobExperiment'
 
 export interface PortfolioDemoRequiredStep {
@@ -110,7 +110,9 @@ export const hasCompleteDemoMarkers = (story?: PortfolioDemoStorylineVO) =>
 export const resolvePortfolioDemoRoute = (route?: string | null) => {
   const resolved = resolveAppRoutePath(route, {
     fallbackPath: '/portfolio-demo',
-    enableV4Preview: isV4PreviewAccessEnabled(),
+    enableV4Preview: true,
+    enableV4Growth: true,
+    enableV4Knowledge: true,
     knownPaths: portfolioDemoKnownPaths
   })
   const rawRoute = String(route ?? '').trim()

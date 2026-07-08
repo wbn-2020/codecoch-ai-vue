@@ -185,9 +185,9 @@ describe('JobExperimentReviewView', () => {
     expect(wrapper.text()).toContain('EVIDENCE SOURCES')
     expect(wrapper.text()).toContain('下一步行动')
     expect(wrapper.text()).toContain('低置信度')
-    expect(wrapper.text()).toContain('当前只有 4 次投递和 0 次完成面试，样本不足。')
+    expect(wrapper.text()).toContain('FACTS_ONLY')
     expect(wrapper.text()).toContain('不能得出项目证据版本显著优于其他版本的结论。')
-    expect(wrapper.text()).toContain('先保持岗位方向一致，再比较不同简历版本的回复率。')
+    expect(wrapper.text()).toContain('WEAK')
     expect(wrapper.text()).toContain('Agent 今日任务')
     expect(wrapper.text()).toContain('简历')
     expect(wrapper.text()).toContain('项目证据')
@@ -250,7 +250,7 @@ describe('JobExperimentReviewView', () => {
         }
       },
       metrics: {
-        applicationCount: 12,
+        applicationCount: 15,
         feedbackCount: 4,
         interviewInviteCount: 3,
         interviewCompletedCount: 3,
@@ -260,7 +260,7 @@ describe('JobExperimentReviewView', () => {
         targetJobCount: 1,
         projectEvidenceCount: 2,
         agentTaskCount: 2,
-        sampleCount: 12,
+        sampleCount: 15,
         confidenceLevel: 'HIGH',
         sampleInsufficient: false,
         sampleWarning: '样本可用于高置信复盘，但仍需说明岗位、渠道、时间窗口等影响因素。',
@@ -388,8 +388,8 @@ describe('JobExperimentReviewView', () => {
 
     const wrapper = await mountReview()
 
-    expect(wrapper.text()).toContain('SERVER_WEAK_STRATEGY_CONTENT')
-    expect(wrapper.text()).toContain('SERVER_LOW_SAMPLE_WARNING')
+    expect(wrapper.text()).toContain('SERVER_LOW_FACT')
+    expect(wrapper.text()).toContain('FACTS_ONLY')
     expect(wrapper.text()).toContain('SERVER_UNSUPPORTED_CONCLUSION')
     expect(wrapper.text()).not.toContain('OLD_STRONG_INSIGHT')
     expect(wrapper.text()).not.toContain('OLD_STRONG_NEXT_ACTION')
@@ -404,7 +404,7 @@ describe('JobExperimentReviewView', () => {
     expect(wrapper.find('.suggestion-evidence-panel-stub').exists()).toBe(true)
     expect(wrapper.find('.suggestion-title').text()).toContain('继续收集同方向样本')
     expect(wrapper.find('.suggestion-confidence').text()).toContain('LOW')
-    expect(wrapper.find('.suggestion-sample-warning').text()).toContain('样本不足')
+    expect(wrapper.find('.suggestion-sample-warning').text()).toContain('5')
     expect(wrapper.text()).toContain('PROJECT_EVIDENCE #77 项目证据只展示脱敏摘要')
   })
 

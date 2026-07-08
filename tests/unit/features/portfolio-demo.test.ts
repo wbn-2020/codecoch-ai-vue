@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildPortfolioDemoCoverage,
@@ -11,6 +11,16 @@ import {
 } from '@/features/portfolio-demo'
 import { resolveAppRoutePath } from '@/features/route-safety'
 import type { PortfolioDemoStorylineVO } from '@/types/jobExperiment'
+
+vi.mock('@/config', () => ({
+  appConfig: {
+    enableV4PreviewAccess: true,
+    enableV4ExperimentalRoutes: true,
+    enableV4GrowthPreview: true,
+    enableV4KnowledgePreview: true,
+    enableAdminTraceCockpit: true
+  }
+}))
 
 const completeStory = (): PortfolioDemoStorylineVO => ({
   status: {
@@ -46,6 +56,22 @@ const completeStory = (): PortfolioDemoStorylineVO => ({
       route: '/project-evidence?demoFlag=true',
       entityType: 'PROJECT_EVIDENCE',
       evidenceSummary: '项目证据以摘要、能力标签和 JD 覆盖关系呈现。',
+      demoData: true
+    },
+    {
+      key: 'application-funnel',
+      title: 'Application funnel',
+      route: '/applications?demoFlag=true',
+      entityType: 'JOB_APPLICATION',
+      evidenceSummary: 'Application funnel keeps follow-up status and next action evidence visible.',
+      demoData: true
+    },
+    {
+      key: 'application-package',
+      title: 'Application package',
+      route: '/application-packages/preview?demoFlag=true',
+      entityType: 'APPLICATION_PACKAGE',
+      evidenceSummary: 'Application package preview groups JD, resume and project evidence before delivery.',
       demoData: true
     },
     {
@@ -87,7 +113,23 @@ const completeStory = (): PortfolioDemoStorylineVO => ({
       entityType: 'AGENT_TASK',
       evidenceSummary: '任务承接来自实验复盘、匹配缺口和面试反馈。',
       demoData: true
-    }
+    },
+    {
+      key: 'knowledge-impact',
+      title: 'Knowledge impact',
+      route: '/knowledge?demoFlag=true',
+      entityType: 'KNOWLEDGE',
+      evidenceSummary: 'Knowledge preview only exposes summaries, tags and source status.',
+      demoData: true
+    },
+    {
+      key: 'agent-memory',
+      title: 'Agent memory',
+      route: '/agent/memory?demoFlag=true',
+      entityType: 'AGENT_MEMORY',
+      evidenceSummary: 'Long-term memory governance shows status and user confirmation boundaries.',
+      demoData: true
+    },
   ],
   opsSteps: [
     {
@@ -131,6 +173,14 @@ const completeStory = (): PortfolioDemoStorylineVO => ({
       demoData: true
     },
     {
+      key: 'trace-cockpit',
+      title: 'Trace Cockpit',
+      route: '/admin/trace-cockpit?demoFlag=true',
+      entityType: 'TRACE_COCKPIT',
+      evidenceSummary: 'Trace cockpit connects AI logs, agent runs, async tasks and metrics without raw sensitive content.',
+      demoData: true
+    },
+    {
       key: 'metrics-dictionary',
       title: '指标字典',
       route: '/admin/analytics/metrics?demoFlag=true',
@@ -150,16 +200,20 @@ const completeStory = (): PortfolioDemoStorylineVO => ({
 })
 
 describe('portfolio demo phase one contract', () => {
-  it('defines the required 8 user route nodes and 7 ops route nodes', () => {
+  it('defines the required 12 user route nodes and 8 ops route nodes', () => {
     expect(requiredUserDemoSteps.map((step) => step.key)).toEqual([
       'target-job',
       'jd-match',
       'project-evidence',
+      'application-funnel',
+      'application-package',
       'interview-training',
       'interview-report',
       'ability-map',
       'job-experiment-review',
-      'agent-today'
+      'agent-today',
+      'knowledge-impact',
+      'agent-memory'
     ])
 
     expect(requiredOpsDemoSteps.map((step) => step.key)).toEqual([
@@ -168,6 +222,7 @@ describe('portfolio demo phase one contract', () => {
       'prompt-regression',
       'ai-call-logs',
       'async-tasks',
+      'trace-cockpit',
       'metrics-dictionary',
       'ai-ops-dashboard'
     ])
@@ -177,15 +232,15 @@ describe('portfolio demo phase one contract', () => {
     const story = completeStory()
     const coverage = buildPortfolioDemoCoverage(story)
 
-    expect(coverage.total).toBe(15)
-    expect(coverage.covered).toBe(15)
+    expect(coverage.total).toBe(20)
+    expect(coverage.covered).toBe(20)
     expect(coverage.ready).toBe(true)
     expect(coverage.missingKeys).toEqual([])
     expect(coverage.missingTitleKeys).toEqual([])
     expect(coverage.missingStatusKeys).toEqual([])
     expect(coverage.invalidRoutes).toEqual([])
     expect(hasCompleteDemoMarkers(story)).toBe(true)
-    expect(safeStoryRoutes(story)).toHaveLength(15)
+    expect(safeStoryRoutes(story)).toHaveLength(20)
   })
 
   it('surfaces missing phase-one nodes and incomplete node metadata', () => {
@@ -202,7 +257,7 @@ describe('portfolio demo phase one contract', () => {
     const coverage = buildPortfolioDemoCoverage(story)
 
     expect(coverage.ready).toBe(false)
-    expect(coverage.covered).toBe(13)
+    expect(coverage.covered).toBe(18)
     expect(coverage.missingKeys).toEqual(['interview-training'])
     expect(coverage.missingTitleKeys).toEqual(['agent-runs'])
     expect(coverage.missingEvidenceKeys).toEqual(['agent-runs'])
@@ -218,8 +273,9 @@ describe('portfolio demo phase one contract', () => {
 
   it('treats a required route with MISSING status as incomplete even when it has a fallback path', () => {
     const story = completeStory()
-    story.steps[6] = {
-      ...story.steps[6],
+    const reviewStepIndex = story.steps.findIndex((step) => step.key === 'job-experiment-review')
+    story.steps[reviewStepIndex] = {
+      ...story.steps[reviewStepIndex],
       status: 'MISSING',
       route: '/job-experiments?demoFlag=true'
     }
@@ -227,7 +283,7 @@ describe('portfolio demo phase one contract', () => {
     const coverage = buildPortfolioDemoCoverage(story)
 
     expect(coverage.ready).toBe(false)
-    expect(coverage.covered).toBe(14)
+    expect(coverage.covered).toBe(19)
     expect(coverage.missingStatusKeys).toEqual(['job-experiment-review'])
   })
 

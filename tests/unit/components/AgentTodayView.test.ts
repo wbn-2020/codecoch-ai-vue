@@ -17,7 +17,9 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/agent', () => ({
   completeAgentTaskApi: vi.fn(),
+  deferAgentTaskApi: vi.fn(),
   generateDailyPlanApi: vi.fn(),
+  getCurrentAgentWeekPlanApi: vi.fn().mockResolvedValue(null),
   recordAgentMetricEventApi: vi.fn(),
   restoreAgentTaskApi: vi.fn(),
   skipAgentTaskApi: vi.fn(),
@@ -29,8 +31,18 @@ vi.mock('@/api/aiFeedback', () => ({
 }))
 
 vi.mock('@/api/jobTarget', () => ({
-  getCurrentJobTargetApi: vi.fn().mockResolvedValue(null),
-  getJobTargetsApi: vi.fn().mockResolvedValue([])
+  getCurrentJobTargetApi: vi.fn().mockResolvedValue({
+    id: 7,
+    jobTitle: 'Frontend Engineer',
+    companyName: 'Demo Company',
+    currentFlag: 1
+  }),
+  getJobTargetsApi: vi.fn().mockResolvedValue([{
+    id: 7,
+    jobTitle: 'Frontend Engineer',
+    companyName: 'Demo Company',
+    currentFlag: 1
+  }])
 }))
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
@@ -167,6 +179,7 @@ describe('AgentTodayView agent task evidence', () => {
         stubs
       }
     })
+    await flushPromises()
     await flushPromises()
 
     const evidence = wrapper.find('.agent-task-evidence-stub')
