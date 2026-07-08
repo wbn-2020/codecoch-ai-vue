@@ -16,7 +16,6 @@ export interface RouteSafetyResult {
 
 export const v4PreviewPaths = [
   '/knowledge',
-  '/applications',
   '/resume-versions',
   '/agent/memory',
   '/agent/reviews',
@@ -43,6 +42,9 @@ export const defaultUserKnownPaths = [
   '/resumes',
   '/resume-match',
   '/resume-job-match',
+  '/applications',
+  '/application-packages',
+  '/application-packages/preview',
   '/interviews',
   '/interviews/create',
   '/interviews/history',
@@ -132,14 +134,26 @@ export const defaultKnownPaths = [...defaultUserKnownPaths, ...defaultAdminKnown
 
 export const routePathOnly = (path: string) => path.split(/[?#]/)[0] || path
 
+export const exactOnlyKnownPaths = [
+  '/application-packages',
+  '/application-packages/preview'
+]
+
+export const knownPathDynamicMatchers = [
+  /^\/application-packages\/[^/?#]+$/
+]
+
 const canMatchChildPath = (knownPath: string) =>
-  knownPath !== '/admin' && !knownPath.startsWith('/admin/')
+  knownPath !== '/admin' &&
+  !knownPath.startsWith('/admin/') &&
+  !exactOnlyKnownPaths.includes(knownPath)
 
 export const isKnownAppPath = (path: string, knownPaths: string[] = defaultKnownPaths) =>
   knownPaths.some((knownPath) => (
     path === knownPath ||
     (canMatchChildPath(knownPath) && path.startsWith(`${knownPath}/`))
-  ))
+  )) ||
+  knownPathDynamicMatchers.some((matcher) => matcher.test(path))
 
 export const isV4PreviewPath = (path: string) =>
   v4PreviewPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||

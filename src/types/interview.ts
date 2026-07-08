@@ -53,6 +53,11 @@ export interface IndustryTemplateVO {
 
 export interface InterviewCreateDTO {
   applicationId?: number
+  applicationPackageId?: string | number
+  targetJobId?: number
+  jdAnalysisId?: number
+  resumeVersionId?: number
+  matchReportId?: number
   resumeId?: number
   basedOnResume?: boolean
   interviewName?: string
@@ -79,7 +84,6 @@ export interface InterviewCreateByJobTargetDTO extends InterviewCreateDTO {
   resumeId: number
   targetJobId: number
   skillProfileId?: number
-  matchReportId?: number
 }
 
 export interface InterviewStageVO {
@@ -149,9 +153,114 @@ export interface InterviewOutlineStageVO {
 
 export interface InterviewAnswerDTO {
   messageId: number
+  questionId?: number
   answerContent: string
   answerDurationSeconds?: number
   clientSubmitTime?: string
+  voiceSubmissionId?: number
+  transcriptId?: number
+  transcriptConfidence?: number
+  answerSource?: 'TEXT' | 'VOICE_TRANSCRIPT' | 'MANUAL_TRANSCRIPT' | string
+}
+
+export type InterviewVoicePreviewState =
+  | 'idle'
+  | 'recording'
+  | 'recorded'
+  | 'uploading'
+  | 'transcribing'
+  | 'draft'
+  | 'confirmed'
+  | 'submitted'
+  | 'fallback_text'
+
+export type InterviewVoicePreviewFallbackReason =
+  | 'permission_denied'
+  | 'recording_failed'
+  | 'upload_failed'
+  | 'transcription_unavailable'
+  | 'low_confidence'
+  | 'manual_text'
+
+export type InterviewVoiceSubmissionStatus =
+  | 'UPLOADED'
+  | 'TRANSCRIBING'
+  | 'TRANSCRIBED'
+  | 'TRANSCRIBE_FAILED'
+  | 'CONFIRMED'
+  | 'DISCARDED'
+  | string
+
+export type InterviewTranscriptStatus =
+  | 'DRAFT'
+  | 'LOW_CONFIDENCE'
+  | 'CONFIRMED'
+  | 'REJECTED'
+  | 'FAILED'
+  | string
+
+export interface InterviewVoiceUploadVO {
+  fileId: number
+  userId?: number
+  bizType?: string
+  originalFilename?: string
+  fileSize?: number
+  fileExt?: string
+  mimeType?: string
+  storageProvider?: string
+  status?: string
+}
+
+export interface InterviewVoiceSubmissionCreateDTO {
+  fileId: number
+  questionMessageId: number
+  questionId?: number
+  audioDurationMs?: number
+  mimeType?: string
+  traceId?: string
+}
+
+export interface InterviewTranscriptConfirmDTO {
+  confirmedText: string
+  lowConfidenceAcknowledged?: boolean
+}
+
+export interface InterviewTranscriptVO {
+  transcriptId: number
+  voiceSubmissionId: number
+  sessionId?: number
+  questionMessageId?: number
+  questionId?: number
+  draftText?: string
+  confirmedText?: string
+  confidence?: number
+  confidenceLevel?: string
+  lowConfidence?: boolean
+  transcriptStatus: InterviewTranscriptStatus
+  asrProvider?: string
+  fallback?: boolean
+  fallbackReason?: string
+  traceId?: string
+  confirmedAt?: string
+  submittedAnswerMessageId?: number
+  submittedAt?: string
+}
+
+export interface InterviewVoiceSubmissionVO {
+  voiceSubmissionId: number
+  sessionId?: number
+  questionMessageId?: number
+  questionId?: number
+  fileId?: number
+  audioDurationMs?: number
+  mimeType?: string
+  voiceStatus: InterviewVoiceSubmissionStatus
+  traceId?: string
+  fallback?: boolean
+  fallbackReason?: string
+  transcript?: InterviewTranscriptVO
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface InterviewEvaluationVO {
@@ -192,6 +301,13 @@ export interface InterviewAnswerResultVO {
   interviewStatus: InterviewStatus
   reportStatus?: ReportStatus
   progress?: InterviewProgressVO
+  voiceSubmissionId?: number
+  transcriptId?: number
+  transcriptConfidence?: number
+  answerSource?: string
+  voiceLowConfidence?: boolean
+  voiceFallback?: boolean
+  voiceTraceId?: string
 }
 
 export interface FinishInterviewVO {
@@ -391,6 +507,10 @@ export type InterviewReportNextActionType =
   | 'STUDY_PLAN'
   | 'INTERVIEW'
   | 'RESUME_OPTIMIZE'
+  | 'PROJECT_EVIDENCE'
+  | 'KNOWLEDGE_CANDIDATE'
+  | 'JOB_FOLLOW_UP'
+  | 'REVIEW_EXPERIMENT'
   | string
 
 export interface InterviewReportNextActionVO {
@@ -403,6 +523,10 @@ export interface InterviewReportNextActionVO {
   relatedBizType?: string
   relatedBizId?: number
   evidence?: string
+  confidenceBoundary?: string
+  fallbackReason?: string
+  candidateOnly?: boolean
+  sourceFields?: string[]
 }
 
 export interface InterviewReportMissingSkillVO {
@@ -461,6 +585,35 @@ export interface InterviewAbilityProfileUpdateVO {
   sampleWarning?: string
 }
 
+export interface InterviewKnowledgeCandidateVO {
+  id: string
+  title: string
+  content?: string
+  sourceField: string
+  evidence?: string
+  confidence?: string
+  boundary: string
+  actionUrl?: string
+  candidateOnly: boolean
+}
+
+export interface InterviewVoiceTraceVO {
+  voiceSubmissionId?: number
+  transcriptId?: number
+  answerMessageId?: number
+  questionMessageId?: number
+  questionId?: number
+  answerSource?: string
+  transcriptStatus?: string
+  confidence?: number
+  lowConfidence?: boolean
+  fallback?: boolean
+  fallbackReason?: string
+  traceId?: string
+  confirmedAt?: string
+  submittedAt?: string
+}
+
 export interface InterviewReportVO {
   id?: number
   reportId?: number
@@ -497,6 +650,7 @@ export interface InterviewReportVO {
   followUpTree?: InterviewFollowUpTraceVO[]
   adviceEvidence?: InterviewAdviceEvidenceVO[]
   abilityProfileUpdates?: InterviewAbilityProfileUpdateVO[]
+  voiceTraces?: InterviewVoiceTraceVO[]
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]

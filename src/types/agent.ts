@@ -13,12 +13,39 @@ export type AgentTaskType =
   | string
 
 export type AgentTaskPriority = 'HIGH' | 'MEDIUM' | 'LOW' | string
-export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'SKIPPED' | 'EXPIRED' | string
+export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'DEFERRED' | 'SKIPPED' | 'EXPIRED' | string
 export type AgentRunStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELED' | string
 export type AgentTriggerType = 'MANUAL' | 'AUTO' | string
 export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | 'DISABLED' | 'STALE' | 'UNKNOWN' | string
 export type AgentRunResultSource = 'LLM' | 'MOCK' | 'FALLBACK' | string
 export type AgentCoachActionType = 'EXPLAIN_RECOMMENDATION' | 'REVIEW_COMPLETED_TASK'
+export type AgentMemoryStatus =
+  | 'CANDIDATE'
+  | 'PENDING_CONFIRMATION'
+  | 'ACTIVE'
+  | 'CONFIRMED'
+  | 'LOW_CONFIDENCE'
+  | 'DISABLED'
+  | 'DELETED'
+  | 'STALE'
+  | string
+export type AgentMemoryLifecycle =
+  | 'candidate'
+  | 'pending-confirmation'
+  | 'active'
+  | 'low-confidence'
+  | 'stale'
+  | 'disabled'
+  | 'deleted'
+  | 'partial'
+export type AgentMemoryImpactScope =
+  | 'AGENT_TASK'
+  | 'APPLICATION_PACKAGE'
+  | 'INTERVIEW_TRAINING'
+  | 'JOB_EXPERIMENT_REVIEW'
+  | 'QUESTION_RECOMMENDATION'
+  | 'RESUME_PROJECT_SUGGESTION'
+  | string
 export type AgentMetricEventCode =
   | 'task_completed'
   | 'feedback_cta_clicked'
@@ -39,6 +66,164 @@ export type AgentMetricEventCode =
 export interface AgentSkillRefVO {
   code?: string
   name?: string
+}
+
+export type AgentActionSourceType =
+  | 'application'
+  | 'applicationPackage'
+  | 'interviewReport'
+  | 'experimentReview'
+  | 'knowledgeGap'
+  | 'memoryPreference'
+  | 'agentTask'
+  | 'agentRun'
+  | 'dailyPlan'
+  | 'fallback'
+  | string
+
+export type AgentActionConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN' | string
+
+export type AgentPlanLayerKey = 'today' | 'week' | 'nextExperiment'
+
+export interface AgentActionSourceVO {
+  sourceType: AgentActionSourceType
+  sourceId?: number | string | null
+  sourceTitle: string
+  reason: string
+  evidence: string[]
+  confidence: AgentActionConfidence
+  fallback: boolean
+}
+
+export interface AgentPlanActionVO extends AgentActionSourceVO {
+  key: string
+  id?: number | string | null
+  title: string
+  description?: string
+  status?: AgentTaskStatus | string
+  priority?: AgentTaskPriority | string
+  actionPath?: string
+  dueText?: string
+  estimatedMinutes?: number | null
+}
+
+export interface AgentPlanLayerVO {
+  key: AgentPlanLayerKey
+  title: string
+  description: string
+  actions: AgentPlanActionVO[]
+  fallback: boolean
+  fallbackReason?: string
+}
+
+export interface AgentWeekPlanVO {
+  planDate?: string
+  targetJobId?: number
+  targetJobTitle?: string
+  today: AgentPlanLayerVO
+  week: AgentPlanLayerVO
+  nextExperiment: AgentPlanLayerVO
+}
+
+export interface AgentWeekPlanBackendItemVO {
+  id?: number
+  weekPlanId?: number
+  layer?: 'TODAY' | 'WEEK' | 'NEXT_EXPERIMENT' | string
+  actionType?: string
+  title?: string
+  description?: string
+  reason?: string
+  relatedBizType?: string
+  relatedBizId?: number | null
+  relatedBizTitle?: string
+  agentTaskId?: number | null
+  priority?: AgentTaskPriority
+  confidence?: number | string | null
+  confidenceLevel?: AgentActionConfidence | null
+  trustStatus?: AgentTrustStatus | null
+  fallback?: boolean | null
+  fallbackReason?: string | null
+  traceId?: string | null
+  snapshotVersion?: number
+  sampleInsufficient?: boolean | null
+  sampleWarning?: string | null
+  itemStatus?: AgentTaskStatus | string
+  plannedDate?: string
+  dueDate?: string
+  actionUrl?: string
+  evidence?: string[]
+  sortOrder?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AgentWeekPlanBackendVO {
+  id?: number
+  targetJobId?: number | null
+  agentRunId?: number | null
+  planDate?: string
+  weekStartDate?: string
+  weekEndDate?: string
+  planStatus?: string
+  summary?: string
+  focusJson?: string
+  traceId?: string
+  resultSource?: AgentRunResultSource | 'RULE' | string
+  fallback?: boolean | null
+  fallbackReason?: string | null
+  snapshotVersion?: number
+  dataSource?: 'BACKEND_PERSISTED' | string
+  generatedAt?: string
+  refreshedAt?: string
+  createdAt?: string
+  updatedAt?: string
+  items?: AgentWeekPlanBackendItemVO[]
+}
+
+export interface AgentWeekPlanGenerateDTO {
+  targetJobId?: number
+  date?: string
+  forceRegenerate?: boolean
+  requestId?: string
+  idempotencyKey?: string
+}
+
+export interface AgentPlanAdjustmentVO {
+  id?: number
+  weekPlanId?: number
+  weekPlanItemId?: number | null
+  agentTaskId?: number | null
+  adjustmentType?: string
+  fromStatus?: string
+  toStatus?: string
+  reason?: string
+  traceId?: string
+  snapshotVersion?: number
+  sourceType?: string
+  sourceId?: number | null
+  occurredAt?: string
+  metadataJson?: string
+  createdAt?: string
+}
+
+export interface AgentPlanInfluenceVO {
+  id?: number
+  weekPlanId?: number
+  weekPlanItemId?: number | null
+  sourceType?: string
+  sourceId?: number | null
+  sourceTitle?: string
+  consumerType?: string
+  consumerId?: number | null
+  usageReferenceId?: number | null
+  usageScene?: string
+  influenceStrength?: string
+  confidence?: number | string | null
+  traceId?: string
+  snapshotVersion?: number
+  snapshotHash?: string
+  fallback?: boolean | null
+  createdAt?: string
 }
 
 export interface ActivationHandoffVO {
@@ -86,6 +271,8 @@ export interface AgentTaskVO {
   actionType?: string | null
   sourceType?: string | null
   sourceId?: number | null
+  sourceTitle?: string | null
+  confidence?: AgentActionConfidence | number | null
   trustStatus?: AgentTrustStatus | null
   evidenceSummary?: string | null
   evidenceSources?: EvidenceSourceVO[]
@@ -99,9 +286,11 @@ export interface AgentTaskVO {
   reviewNote?: string | null
   status?: AgentTaskStatus
   skipReason?: string
+  deferReason?: string | null
   dueDate?: string
   startedAt?: string
   completedAt?: string
+  deferredAt?: string
   skippedAt?: string
   createdAt?: string
   activationHandoffs?: ActivationHandoffVO[]
@@ -134,6 +323,7 @@ export interface DailyPlanVO {
   durationMs?: number
   focusSkills?: AgentSkillRefVO[]
   tasks?: AgentTaskVO[]
+  weekPlan?: AgentWeekPlanVO | null
   empty?: boolean
   emptyMessage?: string
   asyncMessageId?: string | null
@@ -189,6 +379,97 @@ export interface AgentTaskCompleteDTO {
 
 export interface AgentTaskSkipDTO {
   skipReason: string
+}
+
+export interface AgentTaskDeferDTO {
+  deferAt?: string
+  deferReason: string
+  feedbackSummary?: string
+}
+
+export interface AgentMemoryImpactPreview {
+  scopes: AgentMemoryImpactScope[]
+  affectedActions: string[]
+  allowsAgentContext: boolean
+  contextEffect: string
+  disableOrDeleteFallback: string
+  evidenceBoundary: string
+}
+
+export interface AgentContextImpactConsumerVO {
+  consumerType?: string
+  consumerId?: number
+  traceId?: string
+  usageScene?: string
+  usageStrength?: 'WEAK' | 'MEDIUM' | 'STRONG' | string
+  confidence?: number
+  snapshotHash?: string
+  historical?: boolean
+  createdAt?: string
+  summary?: string
+}
+
+export interface AgentContextImpactPreviewVO {
+  sourceType?: string
+  sourceId?: number
+  sourceTitle?: string
+  referenceCount?: number
+  recentReferenceCount?: number
+  affectedModules?: string[]
+  affectedConsumers?: AgentContextImpactConsumerVO[]
+  futureContextImpact?: boolean
+  historicalOnly?: boolean
+  safeToDisable?: boolean
+  warnings?: string[]
+  recommendedActions?: string[]
+  previewSource?: 'BACKEND_REFERENCES' | 'ESTIMATED' | string
+  resultSource?: 'BACKEND_REFERENCES' | 'ESTIMATED' | string
+  generatedAt?: string
+  fallbackReason?: string
+}
+
+export interface AgentMemoryVO {
+  id: number
+  memoryType?: string
+  content?: string
+  sourceType?: string
+  sourceId?: number
+  sourceSummary?: string
+  confidence?: number
+  enabled?: number
+  memoryStatus?: AgentMemoryStatus
+  trustStatus?: AgentTrustStatus
+  confirmedAt?: string
+  confirmedBy?: number | string
+  disabledAt?: string
+  disabledReason?: string
+  deletedAt?: string
+  expiresAt?: string
+  stale?: boolean
+  lowConfidence?: boolean
+  canBeEvidence?: boolean
+  evidenceTrustStatus?: AgentTrustStatus
+  lifecycle?: AgentMemoryLifecycle
+  pendingConfirmation?: boolean
+  canEnterAgentContext?: boolean
+  impactScopes?: AgentMemoryImpactScope[]
+  impactPreview?: AgentMemoryImpactPreview
+  riskFlags?: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AgentMemoryQueryDTO extends PageQuery {
+  memoryType?: string
+  enabled?: number
+}
+
+export interface AgentMemoryCreateDTO {
+  memoryType?: string
+  content: string
+  sourceType?: string
+  sourceId?: number
+  confidence?: number
 }
 
 export interface AgentCoachActionDTO {

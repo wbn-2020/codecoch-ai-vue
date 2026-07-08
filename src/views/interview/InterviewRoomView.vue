@@ -255,6 +255,69 @@
               <span>{{ answerDurationText }}</span>
               <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
             </div>
+            <section class="voice-preview">
+              <div class="voice-preview__head">
+                <div>
+                  <span class="console-kicker">语音预览 P1</span>
+                  <strong>{{ voicePreviewTitle }}</strong>
+                  <p>{{ voicePreviewHint }}</p>
+                </div>
+                <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
+              </div>
+              <div class="voice-preview__actions">
+                <el-button
+                  :disabled="answerDisabled || !voicePreview.canRecord.value"
+                  @click="handleVoiceStart"
+                >
+                  <Mic :size="16" />
+                  开始录音
+                </el-button>
+                <el-button
+                  :disabled="!voicePreview.canStopRecording.value"
+                  @click="handleVoiceStop"
+                >
+                  <MicOff :size="16" />
+                  停止
+                </el-button>
+                <el-button
+                  :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+                  @click="handleVoiceFallback"
+                >
+                  <Keyboard :size="16" />
+                  文本降级
+                </el-button>
+              </div>
+              <el-input
+                v-if="voicePreview.canEditDraft.value"
+                v-model="voicePreview.draftText.value"
+                type="textarea"
+                :rows="3"
+                :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+                placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
+                @input="handleVoiceDraftInput"
+              />
+              <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
+                <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
+                <el-button
+                  type="primary"
+                  plain
+                  :loading="voiceConfirming"
+                  :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
+                  @click="handleVoiceConfirm"
+                >
+                  <Check :size="16" />
+                  确认到文本回答
+                </el-button>
+              </div>
+              <el-alert
+                v-if="voicePreview.errorMessage.value"
+                class="voice-preview__alert"
+                type="warning"
+                show-icon
+                :closable="false"
+                :title="voicePreview.errorMessage.value"
+              />
+            </section>
             <el-input
               ref="answerInputRef"
               v-model="answerContent"
@@ -266,7 +329,7 @@
             <div class="answer-actions">
               <el-button
                 type="primary"
-                :disabled="answerDisabled"
+                :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
                 :loading="submitting"
                 @click="handleSubmit"
               >
@@ -430,26 +493,36 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Activity, ArrowLeft, Bot, FilePenLine, ListChecks, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
+import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  confirmInterviewVoiceTranscriptApi,
+  createInterviewVoiceSubmissionApi,
   finishInterviewApi,
   getCurrentInterviewQuestionApi,
   startInterviewApi,
   streamInterviewAnswerReviewApi,
-  submitInterviewAnswerApi
+  submitInterviewAnswerApi,
+  transcribeInterviewVoiceSubmissionApi,
+  uploadInterviewVoiceAudioApi
 } from '@/api/interview'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
+import {
+  type InterviewVoiceConfirmedMeta,
+  type InterviewVoiceRecordedAudio,
+  useInterviewVoicePreview
+} from '@/features/interview-voice-preview'
 import type {
   InterviewAnswerDTO,
   InterviewAnswerResultVO,
   InterviewAnswerReviewSseEvent,
-  InterviewCurrentVO
+  InterviewCurrentVO,
+  InterviewVoicePreviewState
 } from '@/types/interview'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
@@ -480,6 +553,21 @@ let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
 let elapsedTimer: number | undefined
 const elapsedSeconds = ref(0)
+const confirmedVoiceMeta = ref<InterviewVoiceConfirmedMeta | null>(null)
+const confirmedVoiceText = ref('')
+const voiceConfirming = ref(false)
+
+const voicePreview = useInterviewVoicePreview({
+  onConfirmedText: (text, meta) => {
+    confirmedVoiceMeta.value = meta || null
+    confirmedVoiceText.value = text
+    answerContent.value = answerContent.value.trim()
+      ? `${answerContent.value.trim()}\n\n${text}`
+      : text
+    focusAnswerInput()
+  },
+  onRecordedAudio: (audio) => handleVoiceRecordedAudio(audio)
+})
 
 const answerReviewStageLabels: Record<string, string> = {
   VALIDATE_REQUEST: '检查回答',
@@ -617,6 +705,43 @@ const evaluationLevelLabel = (level?: string | null) => {
 const outlineStages = computed(() => current.value?.outline || [])
 
 const answerWordCount = computed(() => answerContent.value.trim().length)
+
+const voicePreviewStateLabels: Record<InterviewVoicePreviewState, string> = {
+  idle: '待录音',
+  recording: '录音中',
+  recorded: '已录音',
+  uploading: '上传中',
+  transcribing: '转写中',
+  draft: '草稿待确认',
+  confirmed: '已确认',
+  submitted: '已随文本提交',
+  fallback_text: '文本降级'
+}
+
+const voicePreviewStateLabel = computed(() => voicePreviewStateLabels[voicePreview.state.value])
+
+const voicePreviewTitle = computed(() => {
+  if (voicePreview.state.value === 'recording') return '正在本地录音'
+  if (voicePreview.state.value === 'uploading') return '正在上传录音'
+  if (voicePreview.state.value === 'transcribing') return '正在请求 ASR 转写'
+  if (voicePreview.state.value === 'confirmed') return '已写入正式回答'
+  if (voicePreview.state.value === 'submitted') return '已复用文本提交流程'
+  if (voicePreview.state.value === 'fallback_text') return '已切换到文本降级'
+  if (voicePreview.state.value === 'draft' || voicePreview.state.value === 'recorded') return '请确认转写草稿'
+  return '可选的本地语音预览'
+})
+
+const voicePreviewHint = computed(() => {
+  if (voicePreview.state.value === 'recording') return '音频只保存在当前页面内存中，不会默认长期保存。'
+  if (voicePreview.state.value === 'uploading') return '录音会以 INTERVIEW_VOICE 文件类型上传，未确认转写不会进入评分。'
+  if (voicePreview.state.value === 'transcribing') return 'ASR 不可用时会明确降级，不会伪造转写成功。'
+  if (voicePreview.state.value === 'recorded') return '录音已捕获，正在准备上传或等待手动降级。'
+  if (voicePreview.state.value === 'draft') return '确认前草稿不会进入评分、知识库、长期记忆或 Agent。'
+  if (voicePreview.state.value === 'confirmed') return '确认后的文本会和普通文本回答一样提交。'
+  if (voicePreview.state.value === 'submitted') return '本轮语音预览已结束，后续问题可重新录音。'
+  if (voicePreview.state.value === 'fallback_text') return '可以直接粘贴或编辑转写草稿，再确认到正式回答。'
+  return '仅做录音状态和手动转写草稿预览，不做语音评分、情绪识别、回放或表达诊断。'
+})
 
 const currentQuestionMetaText = computed(() => {
   const stageName = current.value?.currentStage?.stageName || '当前阶段'
@@ -811,12 +936,128 @@ const focusAnswerInput = () => {
   document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+const resetConfirmedVoiceAnswer = () => {
+  confirmedVoiceMeta.value = null
+  confirmedVoiceText.value = ''
+}
+
+const getVoiceAudioExtension = (mimeType: string) => {
+  const value = mimeType.toLowerCase()
+  if (value.includes('ogg')) return 'ogg'
+  if (value.includes('wav')) return 'wav'
+  if (value.includes('mpeg') || value.includes('mp3')) return 'mp3'
+  if (value.includes('mp4') || value.includes('m4a')) return 'm4a'
+  return 'webm'
+}
+
+const buildVoiceAudioFile = (audio: InterviewVoiceRecordedAudio) => {
+  const mimeType = audio.mimeType || audio.blob.type || 'audio/webm'
+  const extension = getVoiceAudioExtension(mimeType)
+  return new File([audio.blob], `interview-voice-${Date.now()}.${extension}`, { type: mimeType })
+}
+
+const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
+  if (!interviewId || !current.value?.currentQuestion) {
+    voicePreview.setError('upload_failed', 'No active interview question. Please refresh and retry.')
+    return
+  }
+
+  const question = current.value.currentQuestion
+  try {
+    voicePreview.setUploading()
+    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio))
+    voicePreview.setTranscribing()
+    const submission = await createInterviewVoiceSubmissionApi(interviewId, {
+      fileId: uploaded.fileId,
+      questionMessageId: question.messageId,
+      questionId: question.questionId,
+      audioDurationMs: audio.durationMs,
+      mimeType: audio.mimeType || audio.blob.type,
+      traceId: `interview-voice-${interviewId}-${question.messageId}-${Date.now()}`
+    })
+    voicePreview.setTranscribing(submission)
+    const transcribed = await transcribeInterviewVoiceSubmissionApi(interviewId, submission.voiceSubmissionId)
+    voicePreview.applySubmission(transcribed)
+    if (transcribed.transcript?.draftText) {
+      voicePreview.applyTranscriptDraft(transcribed.transcript)
+      return
+    }
+    voicePreview.applyTranscriptionFallback(
+      transcribed.transcript?.fallbackReason || transcribed.fallbackReason || 'ASR is unavailable. Please edit a manual transcript.',
+      transcribed
+    )
+  } catch (error) {
+    voicePreview.setError('upload_failed', getErrorMessage(error, 'Voice upload or transcription failed. Please answer with text.'))
+  }
+}
+
+const handleVoiceStart = async () => {
+  await voicePreview.startRecording()
+}
+
+const handleVoiceStop = () => {
+  voicePreview.stopRecording()
+}
+
+const handleVoiceFallback = () => {
+  voicePreview.useTextFallback()
+}
+
+const handleVoiceDraftInput = (value: string) => {
+  voicePreview.updateDraft(value)
+}
+
+const handleVoiceConfirm = async () => {
+  if (!interviewId || voiceConfirming.value) return
+  const text = voicePreview.draftText.value.trim()
+  if (!text) return
+
+  const currentTranscript = voicePreview.transcript.value
+  let meta: InterviewVoiceConfirmedMeta | undefined
+  try {
+    voiceConfirming.value = true
+    if (currentTranscript?.transcriptId) {
+      const confirmed = await confirmInterviewVoiceTranscriptApi(interviewId, currentTranscript.transcriptId, {
+        confirmedText: text,
+        lowConfidenceAcknowledged: Boolean(currentTranscript.lowConfidence)
+      })
+      voicePreview.applyTranscriptDraft(confirmed)
+      meta = {
+        voiceSubmissionId: confirmed.voiceSubmissionId,
+        transcriptId: confirmed.transcriptId,
+        transcriptConfidence: confirmed.confidence,
+        answerSource: confirmed.fallback ? 'MANUAL_TRANSCRIPT' : 'VOICE_TRANSCRIPT',
+        lowConfidence: confirmed.lowConfidence,
+        fallback: confirmed.fallback,
+        traceId: confirmed.traceId
+      }
+    } else {
+      meta = {
+        answerSource: 'MANUAL_TRANSCRIPT',
+        fallback: true
+      }
+    }
+    if (voicePreview.confirmDraft(meta)) {
+      ElMessage.success('Voice transcript confirmed. Please review the answer before submitting.')
+    }
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, 'Voice transcript confirmation failed.'))
+  } finally {
+    voiceConfirming.value = false
+  }
+}
+
 const fetchCurrent = async () => {
   if (!interviewId) return
   loading.value = true
   roomError.value = ''
   try {
+    const previousMessageId = current.value?.currentQuestion?.messageId
     current.value = await getCurrentInterviewQuestionApi(interviewId)
+    if (current.value?.currentQuestion?.messageId && current.value.currentQuestion.messageId !== previousMessageId) {
+      voicePreview.reset()
+      resetConfirmedVoiceAnswer()
+    }
     answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
@@ -849,6 +1090,8 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   lastResult.value = result
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
+  voicePreview.markSubmitted()
+  resetConfirmedVoiceAnswer()
 
   if (result.nextAction === NEXT_ACTION.FINISH) {
     await handleFinish(false)
@@ -977,12 +1220,43 @@ const handleSubmit = async () => {
     return
   }
 
+  if (voicePreview.isBusy.value || voiceConfirming.value) {
+    ElMessage.warning('Voice upload or transcription is still running. Please wait before submitting.')
+    return
+  }
+
+  if (voicePreview.hasPendingUnconfirmedTranscript.value) {
+    ElMessage.warning('Please confirm or clear the voice transcript draft before submitting.')
+    return
+  }
+
+  if (
+    confirmedVoiceMeta.value?.transcriptId
+    && confirmedVoiceText.value
+    && answerContent.value.trim() !== confirmedVoiceText.value.trim()
+  ) {
+    ElMessage.warning('The confirmed voice transcript was edited. Please confirm the transcript again before submitting.')
+    return
+  }
+
+  const voicePayload =
+    confirmedVoiceMeta.value?.transcriptId
+      ? {
+          voiceSubmissionId: confirmedVoiceMeta.value.voiceSubmissionId,
+          transcriptId: confirmedVoiceMeta.value.transcriptId,
+          transcriptConfidence: confirmedVoiceMeta.value.transcriptConfidence,
+          answerSource: confirmedVoiceMeta.value.answerSource
+        }
+      : {}
+
   const id = interviewId
   const payload: InterviewAnswerDTO = {
     messageId: current.value.currentQuestion.messageId,
+    questionId: current.value.currentQuestion.questionId,
     answerContent: answerContent.value,
     answerDurationSeconds: Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000)),
-    clientSubmitTime: new Date().toISOString()
+    clientSubmitTime: new Date().toISOString(),
+    ...voicePayload
   }
 
   submitting.value = true
@@ -1099,6 +1373,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
   stopElapsedTimer()
+  voicePreview.reset()
 })
 </script>
 
@@ -1929,6 +2204,70 @@ onBeforeUnmount(() => {
 .answer-actions {
   justify-content: flex-end;
   margin-top: 14px;
+}
+
+.voice-preview {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 12px;
+  background: rgba(8, 47, 73, 0.22);
+}
+
+.voice-preview__head,
+.voice-preview__confirm {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-preview__head {
+  strong {
+    display: block;
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.voice-preview__state {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 999px;
+  color: #a5f3fc;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.voice-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.voice-preview__confirm {
+  align-items: center;
+
+  span {
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.voice-preview__alert {
+  margin: 0;
 }
 
 :deep(.answer-console .el-textarea__inner) {

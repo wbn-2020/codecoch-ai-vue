@@ -171,6 +171,8 @@
           </el-tag>
         </div>
 
+        <InterviewVoiceTraceSection :voice-traces="report.voiceTraces" />
+
         <div class="report-feedback-row">
           <AiResultFeedback
             scene="INTERVIEW_REPORT"
@@ -237,6 +239,8 @@
                 <strong>{{ action.title }}</strong>
                 <p>{{ action.description || action.evidence || '继续完成下一步训练。' }}</p>
                 <small v-if="action.evidence">{{ action.evidence }}</small>
+                <small v-if="action.confidenceBoundary">{{ action.confidenceBoundary }}</small>
+                <small v-if="action.fallbackReason">{{ action.fallbackReason }}</small>
               </div>
               <el-button
                 type="primary"
@@ -252,6 +256,24 @@
         <div v-else-if="nextActionUnavailableReason" class="next-action-empty">
           <strong>暂未生成结构化闭环行动</strong>
           <p>{{ nextActionUnavailableReason }}</p>
+        </div>
+
+        <div v-if="knowledgeCandidates.length" class="knowledge-candidate-section">
+          <div class="section-head">
+            <h2>知识候选入口</h2>
+            <p>这些内容只作为候选资产，需要你确认后再整理；不会自动入库，也不会进入长期记忆。</p>
+          </div>
+          <div class="knowledge-candidate-grid">
+            <article v-for="candidate in knowledgeCandidates" :key="candidate.id" class="knowledge-candidate-card">
+              <div>
+                <span>{{ knowledgeCandidateSourceLabel(candidate.sourceField) }}</span>
+                <strong>{{ candidate.title }}</strong>
+                <p>{{ candidate.evidence || candidate.content || candidate.boundary }}</p>
+                <small>{{ candidate.boundary }}</small>
+              </div>
+              <el-button plain @click="openKnowledgeCandidate(candidate)">确认候选</el-button>
+            </article>
+          </div>
         </div>
 
         <div class="coach-next">
@@ -552,9 +574,12 @@ import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
+import InterviewVoiceTraceSection from '@/components/report/InterviewVoiceTraceSection.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
 import { difficultyOptions } from '@/constants/enums'
+import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import type {
+  InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
   InterviewReportNextActionVO,
   InterviewReportVO,
@@ -651,6 +676,9 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
     .filter((action) => action && action.actionType && action.title)
     .sort((left, right) => (left.priority || 0) - (right.priority || 0))
 })
+const knowledgeCandidates = computed<InterviewKnowledgeCandidateVO[]>(() =>
+  isGenerated.value ? buildInterviewReportKnowledgeCandidates(report.value) : []
+)
 const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
   String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
 const backendNextActions = computed(() => nextActions.value.filter((action) => !isStaticFallbackNextAction(action)))
@@ -1069,7 +1097,11 @@ const nextActionTypeLabel = (type?: string) => {
     QUESTION_PRACTICE: '题库练习',
     STUDY_PLAN: '学习计划',
     INTERVIEW: '模拟面试',
-    RESUME_OPTIMIZE: '简历优化'
+    RESUME_OPTIMIZE: '简历优化',
+    PROJECT_EVIDENCE: '项目证据',
+    KNOWLEDGE_CANDIDATE: '知识候选',
+    JOB_FOLLOW_UP: '投递跟进',
+    REVIEW_EXPERIMENT: '复盘实验'
   }
   return labels[String(type || '').toUpperCase()] || '下一步'
 }
@@ -1079,9 +1111,35 @@ const nextActionButtonLabel = (type?: string) => {
     QUESTION_PRACTICE: '去练习',
     STUDY_PLAN: '生成计划',
     INTERVIEW: '再面一轮',
-    RESUME_OPTIMIZE: '去优化'
+    RESUME_OPTIMIZE: '去优化',
+    PROJECT_EVIDENCE: '补证据',
+    KNOWLEDGE_CANDIDATE: '确认候选',
+    JOB_FOLLOW_UP: '去跟进',
+    REVIEW_EXPERIMENT: '去复盘'
   }
   return labels[String(type || '').toUpperCase()] || '开始'
+}
+
+const knowledgeCandidateSourceLabel = (sourceField?: string) => {
+  const labels: Record<string, string> = {
+    weakPoints: '薄弱知识点',
+    rubricScores: '评分维度',
+    adviceEvidence: '建议证据',
+    abilityProfileUpdates: '能力画像候选'
+  }
+  return labels[sourceField || ''] || '报告候选'
+}
+
+const openKnowledgeCandidate = async (candidate: InterviewKnowledgeCandidateVO) => {
+  await router.push(candidate.actionUrl || {
+    path: '/knowledge',
+    query: compactRouterQuery({
+      source: 'interviewReport',
+      candidate: candidate.sourceField,
+      interviewId,
+      reportId: report.value?.reportId || report.value?.id
+    })
+  })
 }
 
 const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') => {
@@ -1168,6 +1226,22 @@ const handleNextAction = async (action: InterviewReportNextActionVO) => {
   }
   if (actionType === 'RESUME_OPTIMIZE') {
     await pushNextActionUrl(action.actionUrl, '/resumes')
+    return
+  }
+  if (actionType === 'PROJECT_EVIDENCE') {
+    await pushNextActionUrl(action.actionUrl, '/project-evidence')
+    return
+  }
+  if (actionType === 'KNOWLEDGE_CANDIDATE') {
+    await pushNextActionUrl(action.actionUrl, '/knowledge')
+    return
+  }
+  if (actionType === 'JOB_FOLLOW_UP') {
+    await pushNextActionUrl(action.actionUrl, '/applications')
+    return
+  }
+  if (actionType === 'REVIEW_EXPERIMENT') {
+    await pushNextActionUrl(action.actionUrl, '/job-experiments')
     return
   }
   await pushNextActionUrl(action.actionUrl)
@@ -1459,6 +1533,10 @@ onBeforeUnmount(() => {
   margin-top: 20px;
 }
 
+.knowledge-candidate-section {
+  margin-top: 20px;
+}
+
 .next-action-empty {
   margin-top: 20px;
   padding: 14px 16px;
@@ -1485,6 +1563,12 @@ onBeforeUnmount(() => {
 }
 
 .next-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.knowledge-candidate-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -1534,6 +1618,53 @@ onBeforeUnmount(() => {
 
   small {
     font-size: 12px;
+  }
+}
+
+.knowledge-candidate-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px dashed #93c5fd;
+  border-radius: 8px;
+  background: #eff6ff;
+
+  div {
+    min-width: 0;
+  }
+
+  span {
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: #0f172a;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p,
+  small {
+    display: block;
+    margin-top: 6px;
+    color: #475569;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    font-size: 12px;
+  }
+
+  .el-button {
+    flex: 0 0 auto;
   }
 }
 
@@ -2287,6 +2418,7 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .knowledge-candidate-grid,
   .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
@@ -2322,6 +2454,7 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .knowledge-candidate-grid,
   .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
@@ -2330,6 +2463,14 @@ onBeforeUnmount(() => {
   }
 
   .next-action-card {
+    flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
+  }
+
+  .knowledge-candidate-card {
     flex-direction: column;
 
     .el-button {

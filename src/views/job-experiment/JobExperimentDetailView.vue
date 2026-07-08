@@ -58,6 +58,27 @@
             <span>完成面试</span>
           </div>
         </div>
+        <div class="feedback-strip">
+          <div>
+            <strong>{{ feedbackSummary.rejectedCount }}</strong>
+            <span>拒信</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.noFeedbackCount }}</strong>
+            <span>无反馈</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewRoundCount }}</strong>
+            <span>面试轮次</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewReportSummaryCount }}</strong>
+            <span>报告摘要</span>
+          </div>
+        </div>
+        <ul v-if="lowSampleRules.length" class="rule-list">
+          <li v-for="rule in lowSampleRules" :key="rule">{{ rule }}</li>
+        </ul>
       </article>
 
       <article class="content-card unsupported-card">
@@ -295,6 +316,8 @@ const reviewStrategy = computed(() => ({
 }))
 const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latestReview.value, reviewStrategy.value))
 const sampleBoundary = computed(() => reviewDisplay.value.sampleBoundary)
+const feedbackSummary = computed(() => reviewDisplay.value.applicationFeedbackSummary)
+const lowSampleRules = computed(() => reviewDisplay.value.lowSampleRules)
 const weakConclusion = computed(() =>
   shouldKeepConclusionWeak(detail.value?.metrics) ||
   !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
@@ -308,10 +331,14 @@ const unsupportedConclusion = computed(() =>
   reviewDisplay.value.unsupportedConclusions.map((item) => item.blockedReason).join('；') ||
   '暂无明确不支持结论；建议继续保留证据链，避免把单次成功或失败归因到单一因素。'
 )
-const strategyTitle = computed(() => reviewStrategy.value.title || '下一轮实验假设')
+const strategyTitle = computed(() =>
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY' ? '事实记录模式' : reviewStrategy.value.title || '下一轮实验假设'
+)
 const strategyContent = computed(() =>
-  reviewStrategy.value.content ||
-  '先补齐目标岗位、匹配报告、投递与项目证据，再生成复盘。样本不足时只提出可验证行动，不输出强结论。'
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY'
+    ? '投递样本少于 5 条，当前只展示投递、反馈、拒信、无反馈和面试记录事实，不输出策略优劣或趋势判断。'
+    : reviewStrategy.value.content ||
+      '先补齐目标岗位、匹配报告、投递与项目证据，再生成复盘。样本不足时只提出可验证行动，不输出强结论。'
 )
 const strategyEvidenceSources = computed(() => reviewDisplay.value.evidenceSources)
 const strategyTagType = computed(() => (reviewDisplay.value.qualityGate.gateStatus === 'PASS' && !weakConclusion.value ? 'success' : 'warning'))
@@ -487,6 +514,13 @@ h2 {
   margin-top: 16px;
 }
 
+.feedback-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .fact-list {
   display: grid;
   gap: 6px;
@@ -496,7 +530,17 @@ h2 {
   line-height: 1.6;
 }
 
+.rule-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #fbbf24;
+  line-height: 1.6;
+}
+
 .sample-strip > div,
+.feedback-strip > div,
 .coverage-item,
 .review-item,
 .action-card {
@@ -509,7 +553,12 @@ h2 {
   padding: 12px;
 }
 
+.feedback-strip > div {
+  padding: 10px;
+}
+
 .sample-strip strong,
+.feedback-strip strong,
 .metric strong {
   display: block;
   font-size: 26px;
@@ -517,6 +566,7 @@ h2 {
 
 .metric span,
 .sample-strip span,
+.feedback-strip span,
 .page-hero p,
 .muted,
 .coverage-item span,
@@ -628,6 +678,10 @@ h2 {
 
   .sample-strip {
     grid-template-columns: 1fr;
+  }
+
+  .feedback-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

@@ -98,6 +98,9 @@
                   {{ tag.label }}
                 </el-tag>
               </div>
+              <p class="follow-up-note" :class="`follow-up-note--${followUpState(item).key}`">
+                {{ followUpDescription(item) }}
+              </p>
               <p class="muted">{{ item.note || '--' }}</p>
             </div>
             <div class="v4-actions">
@@ -105,6 +108,8 @@
               <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
                 <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
               </template>
+              <el-button link type="primary" @click="openDraftAssistant(item, 'follow-up')">跟进助手</el-button>
+              <el-button link type="primary" @click="goInterviewCreate(item)">文本面试</el-button>
               <el-button link type="primary" @click="openEvents(item)">事件</el-button>
               <el-button link type="primary" @click="openEdit(item)">编辑</el-button>
             </div>
@@ -158,11 +163,23 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="eventsVisible" title="求职事件" size="560px">
+    <el-drawer v-model="eventsVisible" :title="eventsDrawerTitle" size="560px">
       <div class="drawer-actions">
-        <el-button type="primary" @click="openEventCreate">新增事件</el-button>
+        <el-button type="primary" @click="openEventCreate()">新增事件</el-button>
+        <el-button @click="openSelectedDraft('follow-up')">跟进信草稿</el-button>
+        <el-button @click="openSelectedDraft('thank-you')">感谢信草稿</el-button>
+        <el-button @click="openSelectedDraft('rejection-review')">拒信复盘</el-button>
+        <el-button @click="openSelectedDraft('no-response-review')">无反馈复盘</el-button>
+        <el-button @click="openSelectedDraft('interview-feedback-review')">面试后复盘</el-button>
         <el-button :loading="eventsLoading" @click="loadEvents">刷新</el-button>
       </div>
+      <el-alert
+        class="outbound-boundary-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="跟进助手只生成草稿和事件记录，不会自动发送；请你确认内容后自行发送。"
+      />
       <div class="event-list" v-loading="eventsLoading">
         <article v-for="item in events" :key="item.id" class="event-row">
           <div class="event-row__head">
@@ -191,7 +208,7 @@
           description="可以记录一次跟进、面试安排、复盘或录用通知/拒信，后续回看会更清楚。"
         >
           <div class="empty-actions">
-            <el-button type="primary" @click="openEventCreate">新增事件</el-button>
+            <el-button type="primary" @click="openEventCreate()">新增事件</el-button>
           </div>
         </AppState>
       </div>
@@ -232,6 +249,34 @@
         <el-button type="primary" :loading="saving" @click="createEvent">保存事件</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="draftDialogVisible" :title="selectedDraft?.title || '跟进助手'" width="680px">
+      <template v-if="selectedDraft">
+        <el-alert
+          class="outbound-boundary-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="selectedDraft.boundaryNotice"
+        />
+        <el-form label-position="top">
+          <el-form-item label="草稿内容">
+            <el-input :model-value="selectedDraft.draftBody" type="textarea" :rows="8" readonly />
+          </el-form-item>
+          <el-form-item label="将保存到事件的摘要">
+            <el-input :model-value="selectedDraft.summary" type="textarea" :rows="2" readonly />
+          </el-form-item>
+          <el-form-item label="复盘字段与实验输入">
+            <el-input :model-value="selectedDraftReviewText" type="textarea" :rows="6" readonly />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="draftDialogVisible = false">关闭</el-button>
+        <el-button :disabled="!selectedDraft" @click="copySelectedDraft">复制草稿</el-button>
+        <el-button type="primary" :disabled="!selectedDraft" @click="saveSelectedDraftAsEvent">保存为事件记录</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -255,6 +300,7 @@ import AppState from '@/components/common/AppState.vue'
 import {
   applicationFollowUpFilterOptions,
   applicationStatusOptions,
+  buildApplicationOutboundDraft,
   buildApplicationFunnelStages,
   buildBackendLatestApplicationEvent,
   canApplyApplicationEventStatusChange,
@@ -270,7 +316,9 @@ import {
   shouldShowApplicationForFunnelStage,
   type ApplicationDataQualityTag,
   type ApplicationDeepLinkFollowUpFilter,
-  type ApplicationFunnelStage
+  type ApplicationDraftKind,
+  type ApplicationFunnelStage,
+  type ApplicationOutboundDraft
 } from '@/features/applications'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
@@ -293,10 +341,16 @@ const sourceOptions = [
 const eventTypeOptions = [
   { label: '已投递', value: 'APPLIED' },
   { label: '跟进事项', value: 'FOLLOW_UP' },
+  { label: '跟进信草稿', value: 'OUTBOUND_FOLLOW_UP_DRAFT' },
+  { label: '感谢信草稿', value: 'THANK_YOU_DRAFT' },
   { label: '面试安排', value: 'INTERVIEW' },
   { label: '录用通知', value: 'OFFER' },
   { label: '普通记录', value: 'NOTE' },
+  { label: '复盘记录', value: 'REVIEW' },
   { label: '拒信记录', value: 'REJECTION' },
+  { label: '拒信复盘', value: 'REJECTION_REVIEW' },
+  { label: '无反馈复盘', value: 'NO_RESPONSE_REVIEW' },
+  { label: '面试反馈复盘', value: 'INTERVIEW_FEEDBACK_REVIEW' },
   { label: '关闭记录', value: 'CLOSED' }
 ]
 
@@ -310,6 +364,7 @@ const followUpFilter = ref<ApplicationDeepLinkFollowUpFilter | ''>('')
 const funnelStageFilter = ref<ApplicationFunnelStage['key'] | ''>('')
 const highlightedApplicationId = ref<number>()
 const pendingOpenEvents = ref(false)
+const pendingEventDraft = ref<Partial<JobApplicationEventVO>>()
 const deepLinkMissing = ref(false)
 const suppressNextRouteQuery = ref(false)
 const dialogVisible = ref(false)
@@ -319,7 +374,9 @@ const applicationStats = ref<JobApplicationStatsVO>()
 const eventsVisible = ref(false)
 const eventsLoading = ref(false)
 const eventDialogVisible = ref(false)
+const draftDialogVisible = ref(false)
 const selectedApplication = ref<JobApplicationVO>()
+const selectedDraft = ref<ApplicationOutboundDraft>()
 const events = ref<JobApplicationEventVO[]>([])
 const eventsError = ref('')
 
@@ -424,6 +481,19 @@ const listContextNotice = computed(() => {
   if (highlightedApplicationId.value) parts.push(`定位投递 #${highlightedApplicationId.value}`)
   return parts.length ? `当前列表筛选：${parts.join(' / ')}` : ''
 })
+const eventsDrawerTitle = computed(() => {
+  const item = selectedApplication.value
+  if (!item) return '求职事件'
+  return `求职事件：${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'}`
+})
+const selectedDraftReviewText = computed(() => {
+  if (!selectedDraft.value) return ''
+  return [
+    selectedDraft.value.reviewJson,
+    '',
+    `实验输入：${selectedDraft.value.experimentInput.join('；')}`
+  ].join('\n')
+})
 
 type FollowUpTag = {
   label: string
@@ -436,12 +506,36 @@ const tagType = (tone?: ApplicationDataQualityTag['tone'] | 'primary'): 'danger'
 const followUpTag = (item: JobApplicationVO): FollowUpTag | null => {
   if (!isApplicationActiveStatus(item.status)) return null
   const followUp = getApplicationFollowUpState(item.nextFollowUpAt)
-  if (followUp.key === 'missing') return null
   return { label: followUp.label, type: tagType(followUp.tone) }
 }
 
 const dataQualityTags = (item: JobApplicationVO) => getApplicationDataQualityTags(item)
+const followUpState = (item: JobApplicationVO) => getApplicationFollowUpState(item.nextFollowUpAt)
+const followUpDescription = (item: JobApplicationVO) => {
+  if (!isApplicationActiveStatus(item.status)) return '该记录已结束，不进入今日跟进候选。'
+  const state = followUpState(item)
+  if (state.key === 'overdue' && state.overdueByDays) {
+    return `${state.description}，已超过 ${state.overdueByDays} 天。`
+  }
+  if (state.key === 'upcoming' && state.dueInDays) {
+    return `${state.description}，距离跟进约 ${state.dueInDays} 天。`
+  }
+  return state.description
+}
 const resumeVersionLabel = (item: JobApplicationVO) => formatApplicationResumeVersionLabel(item)
+const goInterviewCreate = (item: JobApplicationVO) => {
+  router.push({
+    path: '/interviews/create',
+    query: {
+      source: 'application',
+      applicationId: item.id,
+      targetJobId: item.targetJobId,
+      resumeId: item.resumeId,
+      resumeVersionId: item.resumeVersionId,
+      matchReportId: item.matchReportId
+    }
+  })
+}
 const latestEventText = (item: JobApplicationVO) => {
   const latestEvent = buildBackendLatestApplicationEvent(item)
   if (!latestEvent) return '最新事件：暂无事件记录'
@@ -463,7 +557,18 @@ const eventStatusImpactTip = computed(() =>
 )
 
 const reviewFieldLabels: Record<string, string> = {
+  source: '来源',
+  draftOnly: '仅草稿',
+  generatedAt: '生成时间',
+  companyName: '公司',
+  jobTitle: '岗位',
+  latestEvent: '最新事件',
+  scenario: '场景',
   score: '评分',
+  facts: '事实',
+  assumptions: '假设',
+  followUpState: '跟进状态',
+  nextExperimentInputs: '下一轮实验输入',
   nextStep: '下一步',
   nextSteps: '下一步',
   action: '行动',
@@ -560,12 +665,13 @@ const previewApplicationEventSave = () =>
     action: '新增一条求职事件',
     target: `${selectedApplicationText()}；事件：${eventTypeLabel(eventForm.eventType)}；时间：${eventForm.eventTime || '未填写'}`,
     impact:
-      '会写入当前求职进度的事件时间线，并可能被后续面试复盘、跟进提醒、今日行动和求职状态判断引用。',
+      '会写入当前求职进度的事件时间线，并可能被后续面试复盘、跟进提醒、今日行动和求职状态判断引用；草稿类事件不会触发任何自动外发。',
     rollback: '当前页面不会自动撤回已保存事件；如记录不准确，需要新增修正事件或在后续治理入口处理。',
     audit: '可按求职进度、事件时间和事件类型追踪本次记录。',
     tips: [
       '确认事件类型与真实进展一致，例如面试、跟进、录用通知或拒信。',
       eventStatusImpactTip.value,
+      '如保存的是跟进信或感谢信草稿，请先确认内容，再由你自行复制到外部渠道发送。',
       eventForm.summary?.trim() ? '摘要会作为后续复盘参考，请避免填写敏感联系方式或无关私密内容。' : '建议补充一句摘要，方便后续回看。',
       eventForm.reviewJson?.trim() ? '复盘要点会影响后续行动建议，请确认内容准确。' : '未填写复盘要点时，后续建议主要依赖事件类型和摘要。'
     ],
@@ -627,6 +733,7 @@ const applyStatusFilter = (value?: string) => {
   funnelStageFilter.value = ''
   highlightedApplicationId.value = undefined
   pendingOpenEvents.value = false
+  pendingEventDraft.value = undefined
   deepLinkMissing.value = false
   replaceListQuery()
 }
@@ -636,6 +743,7 @@ const applyFollowUpFilter = (value?: ApplicationDeepLinkFollowUpFilter | '') => 
   funnelStageFilter.value = ''
   highlightedApplicationId.value = undefined
   pendingOpenEvents.value = false
+  pendingEventDraft.value = undefined
   deepLinkMissing.value = false
   replaceListQuery()
 }
@@ -644,6 +752,7 @@ const applyFunnelStage = (item: ApplicationFunnelStage) => {
   followUpFilter.value = ''
   highlightedApplicationId.value = undefined
   pendingOpenEvents.value = false
+  pendingEventDraft.value = undefined
   deepLinkMissing.value = false
   if (item.sourceStatuses.length === 1 && item.key !== 'RESULT') {
     status.value = item.sourceStatuses[0]
@@ -666,6 +775,7 @@ const clearStatusFilter = () => {
   funnelStageFilter.value = ''
   highlightedApplicationId.value = undefined
   pendingOpenEvents.value = false
+  pendingEventDraft.value = undefined
   deepLinkMissing.value = false
   replaceListQuery()
 }
@@ -677,6 +787,12 @@ const applyRouteQuery = () => {
   funnelStageFilter.value = ''
   highlightedApplicationId.value = queryState.applicationId
   pendingOpenEvents.value = Boolean(queryState.applicationId && queryState.openEvents)
+  pendingEventDraft.value = queryState.action === 'create-event'
+    ? {
+        eventType: queryState.eventType || 'FOLLOW_UP',
+        eventTime: queryState.eventTime || ''
+      }
+    : undefined
   deepLinkMissing.value = false
 }
 
@@ -689,9 +805,14 @@ const resolveDeepLink = async () => {
   const target = rawApplications.value.find((item) => item.id === applicationId)
   deepLinkMissing.value = !target && !loading.value
   if (target && pendingOpenEvents.value) {
+    const draft = pendingEventDraft.value
     pendingOpenEvents.value = false
+    pendingEventDraft.value = undefined
     await nextTick()
     await openEvents(target)
+    if (draft) {
+      openEventCreate(draft)
+    }
   }
 }
 
@@ -758,14 +879,52 @@ const loadEvents = async () => {
   }
 }
 
-const openEventCreate = () => {
+const openEventCreate = (draft?: Partial<JobApplicationEventVO>) => {
   Object.assign(eventForm, {
-    eventType: 'NOTE',
-    eventTime: formatLocalDateTime(),
-    summary: '',
-    reviewJson: ''
+    eventType: draft?.eventType || 'NOTE',
+    eventTime: draft?.eventTime || formatLocalDateTime(),
+    summary: draft?.summary || '',
+    reviewJson: draft?.reviewJson || ''
   })
   eventDialogVisible.value = true
+}
+
+const openDraftAssistant = async (item: JobApplicationVO, kind: ApplicationDraftKind) => {
+  if (selectedApplication.value?.id !== item.id || !eventsVisible.value) {
+    await openEvents(item)
+  }
+  selectedDraft.value = buildApplicationOutboundDraft(item, kind)
+  draftDialogVisible.value = true
+}
+
+const openSelectedDraft = (kind: ApplicationDraftKind) => {
+  if (!selectedApplication.value) {
+    ElMessage.warning('请先选择一条投递进度。')
+    return
+  }
+  selectedDraft.value = buildApplicationOutboundDraft(selectedApplication.value, kind)
+  draftDialogVisible.value = true
+}
+
+const copySelectedDraft = async () => {
+  if (!selectedDraft.value) return
+  try {
+    await navigator.clipboard.writeText(selectedDraft.value.draftBody)
+    ElMessage.success('草稿已复制，请确认和修改后自行发送。')
+  } catch {
+    ElMessage.warning('复制失败，请手动选中草稿内容复制。')
+  }
+}
+
+const saveSelectedDraftAsEvent = () => {
+  if (!selectedDraft.value) return
+  openEventCreate({
+    eventType: selectedDraft.value.eventType,
+    eventTime: formatLocalDateTime(),
+    summary: selectedDraft.value.summary,
+    reviewJson: selectedDraft.value.reviewJson
+  })
+  draftDialogVisible.value = false
 }
 
 const createEvent = async () => {
@@ -1006,12 +1165,36 @@ onMounted(async () => {
   margin: 8px 0;
 }
 
+.follow-up-note {
+  margin: 8px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.follow-up-note--overdue {
+  color: #fecaca;
+}
+
+.follow-up-note--due-today {
+  color: #fde68a;
+}
+
+.follow-up-note--upcoming {
+  color: #bbf7d0;
+}
+
 .drawer-actions {
   margin-bottom: 16px;
 }
 
 .event-impact-alert {
   margin: -4px 0 16px;
+}
+
+.outbound-boundary-alert {
+  margin-bottom: 14px;
+  border-radius: 8px;
 }
 
 .event-row p {

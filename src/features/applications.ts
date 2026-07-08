@@ -9,6 +9,7 @@ export interface ApplicationRouteLocation {
 }
 
 export type ApplicationQuickActionKey = 'interview' | 'resume-version' | 'follow-up'
+export type ApplicationDraftKind = 'follow-up' | 'thank-you' | 'rejection-review' | 'no-response-review' | 'interview-feedback-review'
 
 export interface ApplicationWorkbenchContext {
   applicationId: number
@@ -23,6 +24,7 @@ export interface ApplicationWorkbenchContext {
 
 export type ApplicationFollowUpStateKey = 'missing' | 'overdue' | 'due-today' | 'upcoming'
 export type ApplicationDeepLinkFollowUpFilter = Extract<ApplicationFollowUpStateKey, 'missing' | 'overdue' | 'due-today'>
+export type ApplicationDeepLinkAction = 'create-event'
 
 export interface ApplicationFollowUpState {
   key: ApplicationFollowUpStateKey
@@ -114,6 +116,9 @@ export interface ApplicationListQueryState {
   followUp?: ApplicationDeepLinkFollowUpFilter
   applicationId?: number
   openEvents: boolean
+  action?: ApplicationDeepLinkAction
+  eventType?: string
+  eventTime?: string
 }
 
 export interface ApplicationResumeVersionLabelInput {
@@ -137,6 +142,18 @@ export interface ApplicationEventMeta {
   label: string
   tone: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   description: string
+}
+
+export interface ApplicationOutboundDraft {
+  kind: ApplicationDraftKind
+  title: string
+  eventType: string
+  summary: string
+  draftBody: string
+  review: Record<string, unknown>
+  reviewJson: string
+  boundaryNotice: string
+  experimentInput: string[]
 }
 
 export interface ApplicationTimelineEvent extends JobApplicationEventVO {
@@ -207,7 +224,7 @@ const funnelStageMeta: Record<ApplicationFunnelStageKey, Omit<ApplicationFunnelS
     key: 'FEEDBACK',
     label: '有反馈',
     sourceStatuses: [],
-    sourceEventTypes: ['FOLLOW_UP', 'FOLLOW_UP_DONE', 'INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'CLOSED', 'NOTE'],
+    sourceEventTypes: ['FOLLOW_UP', 'FOLLOW_UP_DONE', 'OUTBOUND_FOLLOW_UP_DRAFT', 'THANK_YOU_DRAFT', 'INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'INTERVIEW_FEEDBACK_REVIEW', 'OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'NO_RESPONSE_REVIEW', 'CLOSED', 'NOTE'],
     description: '出现跟进、回复、拒信、面试或其他沟通记录。',
     actionHint: '补充事件摘要，保留事实证据。'
   },
@@ -231,7 +248,7 @@ const funnelStageMeta: Record<ApplicationFunnelStageKey, Omit<ApplicationFunnelS
     key: 'REVIEWED',
     label: '已复盘',
     sourceStatuses: [],
-    sourceEventTypes: ['REVIEW', 'REVIEWED', 'RETROSPECTIVE'],
+    sourceEventTypes: ['REVIEW', 'REVIEWED', 'RETROSPECTIVE', 'REJECTION_REVIEW', 'NO_RESPONSE_REVIEW', 'INTERVIEW_FEEDBACK_REVIEW'],
     description: '投递事件或求职实验中已有复盘线索。',
     actionHint: '沉淀下一轮实验或归档。'
   }
@@ -254,6 +271,8 @@ const applicationEventMeta: Record<string, ApplicationEventMeta> = {
   NOTE: { label: '备注', tone: 'info', description: '补充投递背景或沟通细节。' },
   FOLLOW_UP: { label: '跟进', tone: 'primary', description: '记录一次主动跟进，并安排下一步。' },
   FOLLOW_UP_DONE: { label: '跟进', tone: 'primary', description: '记录一次主动跟进，并安排下一步。' },
+  OUTBOUND_FOLLOW_UP_DRAFT: { label: '跟进草稿', tone: 'primary', description: '仅生成跟进信草稿，用户确认后自行发送。' },
+  THANK_YOU_DRAFT: { label: '感谢信草稿', tone: 'success', description: '仅生成面试感谢信草稿，用户确认后自行发送。' },
   INTERVIEW: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_SCHEDULED: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_COMPLETED: { label: '面试完成', tone: 'success', description: '面试已完成，报告或复盘结果已回流投递记录。' },
@@ -261,6 +280,9 @@ const applicationEventMeta: Record<string, ApplicationEventMeta> = {
   OFFER_RECEIVED: { label: '录用通知', tone: 'success', description: '该投递收到录用通知结果。' },
   REJECTED: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
   REJECTION: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
+  REJECTION_REVIEW: { label: '拒信复盘', tone: 'danger', description: '记录拒信后的事实、假设和下一轮实验输入。' },
+  NO_RESPONSE_REVIEW: { label: '无反馈复盘', tone: 'warning', description: '记录长时间无反馈后的复盘和下一步实验输入。' },
+  INTERVIEW_FEEDBACK_REVIEW: { label: '面试反馈复盘', tone: 'success', description: '记录面试后反馈、证据和下一轮改进输入。' },
   CLOSED: { label: '关闭', tone: 'info', description: '该投递已关闭，不再推进。' },
   APPLIED: { label: '投递', tone: 'primary', description: '已完成投递动作。' },
   SUBMITTED: { label: '投递', tone: 'primary', description: '已完成投递动作。' },
@@ -600,6 +622,169 @@ export const getApplicationFollowUpState = (
   }
 }
 
+const applicationTargetLabel = (application: Partial<JobApplicationVO>) => {
+  const company = application.companyName?.trim() || '对方团队'
+  const job = application.jobTitle?.trim() || '目标岗位'
+  return { company, job, label: `${company} · ${job}` }
+}
+
+const compactLines = (lines: string[]) => lines.join('\n').trim()
+
+const buildReviewJson = (review: Record<string, unknown>) => JSON.stringify(review, null, 2)
+
+export const buildApplicationOutboundDraft = (
+  application: Partial<JobApplicationVO>,
+  kind: ApplicationDraftKind,
+  now: string | Date | number = new Date()
+): ApplicationOutboundDraft => {
+  const target = applicationTargetLabel(application)
+  const generatedAt = formatLocalDateTime(ensureLocalDate(now) || new Date())
+  const latestEvent = buildBackendLatestApplicationEvent(application)
+  const latestEventSummary = latestEvent ? `${latestEvent.meta.label}：${latestEvent.summaryText}` : '暂无事件记录'
+  const followUp = getApplicationFollowUpState(application.nextFollowUpAt, now)
+  const boundaryNotice = '系统只生成草稿和复盘记录，不会自动发送邮件、站内信或其他外部联系；请用户自行确认、修改并发送。'
+  const baseReview = {
+    source: 'APPLICATION_POST_SUBMISSION_ASSISTANT',
+    draftOnly: true,
+    generatedAt,
+    companyName: target.company,
+    jobTitle: target.job,
+    latestEvent: latestEventSummary
+  }
+
+  if (kind === 'thank-you') {
+    const review = {
+      ...baseReview,
+      scenario: 'INTERVIEW_THANK_YOU_DRAFT',
+      nextStep: '用户确认措辞、面试官称呼和事实后自行发送感谢信。'
+    }
+    return {
+      kind,
+      title: '感谢信草稿',
+      eventType: 'THANK_YOU_DRAFT',
+      summary: `生成 ${target.label} 面试后感谢信草稿，等待用户确认后自行发送。`,
+      draftBody: compactLines([
+        `您好，感谢您今天/近期安排 ${target.job} 的面试交流。`,
+        '',
+        '这次沟通让我对团队业务、岗位职责和后续协作方式有了更清晰的理解。我也很高兴进一步说明了自己的项目经验和对该方向的兴趣。',
+        '',
+        '如果后续还需要补充材料或更多信息，我会及时配合。再次感谢您的时间，期待下一步反馈。',
+        '',
+        '此草稿由系统生成，请你确认称呼、面试日期、事实细节和语气后自行发送。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: ['面试后 24 小时内是否发送感谢信', '感谢信中补充的项目证据是否提升后续反馈率']
+    }
+  }
+
+  if (kind === 'rejection-review') {
+    const review = {
+      ...baseReview,
+      scenario: 'REJECTION_REVIEW',
+      result: '收到拒信或被淘汰',
+      facts: ['拒信渠道/时间待补充', latestEventSummary],
+      assumptions: ['匹配度、时机、竞争强度或表达证据可能影响结果'],
+      nextExperimentInputs: ['调整 JD 关键词匹配', '补强一个可量化项目证据', '复查投递渠道质量']
+    }
+    return {
+      kind,
+      title: '拒信复盘',
+      eventType: 'REJECTION_REVIEW',
+      summary: `记录 ${target.label} 拒信复盘，沉淀下一轮投递实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        '结果：收到拒信或被淘汰。',
+        '先记录事实，不把单次结果归因到个人能力结论。',
+        '下一轮实验：复查岗位关键词、简历证据和投递渠道，选择一个变量调整后再观察。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: ['拒信原因分类', '简历/JD 匹配变量', '渠道变量', '下一轮只调整一个实验变量']
+    }
+  }
+
+  if (kind === 'no-response-review') {
+    const review = {
+      ...baseReview,
+      scenario: 'NO_RESPONSE_REVIEW',
+      result: '超过计划跟进时间仍无反馈',
+      followUpState: followUp.key,
+      nextExperimentInputs: ['更换跟进文案', '调整跟进间隔', '验证投递渠道是否有效', '补充内推或联系人线索']
+    }
+    return {
+      kind,
+      title: '无反馈复盘',
+      eventType: 'NO_RESPONSE_REVIEW',
+      summary: `记录 ${target.label} 无反馈复盘，保留跟进与渠道实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        `当前状态：${followUp.description}`,
+        '事实：暂未收到明确反馈。',
+        '下一轮实验：保留一次轻量跟进，同时检查渠道、岗位发布时间和简历关键词匹配。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: ['逾期天数', '跟进文案变量', '投递渠道变量', '岗位发布时间/活跃度']
+    }
+  }
+
+  if (kind === 'interview-feedback-review') {
+    const review = {
+      ...baseReview,
+      scenario: 'INTERVIEW_FEEDBACK_REVIEW',
+      result: '面试后反馈待沉淀',
+      facts: [latestEventSummary],
+      nextExperimentInputs: ['补强薄弱题型', '更新项目复盘话术', '安排针对性复练']
+    }
+    return {
+      kind,
+      title: '面试反馈复盘',
+      eventType: 'INTERVIEW_FEEDBACK_REVIEW',
+      summary: `记录 ${target.label} 面试后反馈复盘，沉淀复练和下一轮实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        `已有线索：${latestEventSummary}`,
+        '事实：面试后反馈需要拆成可行动项。',
+        '下一轮实验：选择一个薄弱点做复练，并把项目案例补成 STAR/指标化表达。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: ['反馈主题', '薄弱知识点', '项目证据缺口', '复练任务']
+    }
+  }
+
+  const review = {
+    ...baseReview,
+    scenario: 'FOLLOW_UP_DRAFT',
+    followUpState: followUp.key,
+    nextStep: '用户确认事实、语气和收件人后自行发送跟进信。'
+  }
+  return {
+    kind: 'follow-up',
+    title: '跟进信草稿',
+    eventType: 'OUTBOUND_FOLLOW_UP_DRAFT',
+    summary: `生成 ${target.label} 跟进信草稿，等待用户确认后自行发送。`,
+    draftBody: compactLines([
+      `您好，想跟进一下我此前投递的 ${target.job} 岗位进展。`,
+      '',
+      '我对这个方向仍然很感兴趣，也愿意补充更多项目材料或完成后续流程。若目前流程已有更新，烦请方便时告知我下一步安排。',
+      '',
+      '感谢您的时间。',
+      '',
+      '此草稿由系统生成，请你确认收件人、投递时间、事实细节和语气后自行发送。'
+    ]),
+    review,
+    reviewJson: buildReviewJson(review),
+    boundaryNotice,
+    experimentInput: ['跟进时间点', '跟进文案语气', '是否补充项目证据', '跟进后反馈状态']
+  }
+}
+
 export const getApplicationStatusFromEventType = (eventType?: string | null) => {
   const normalized = normalizeEventType(eventType)
   if (['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'].includes(normalized)) return 'APPLIED'
@@ -768,6 +953,7 @@ export const buildApplicationFollowUpRoute = (context: ApplicationWorkbenchConte
   path: '/applications',
   query: {
     applicationId: context.applicationId,
+    openEvents: 1,
     action: 'create-event',
     eventType: 'FOLLOW_UP',
     eventTime: context.nextFollowUpAt || context.eventTime || undefined
@@ -882,11 +1068,18 @@ export const parseApplicationListQuery = (
   const followUp = applicationFollowUpFilterOptions.some((item) => item.value === rawFollowUp)
     ? (rawFollowUp as ApplicationDeepLinkFollowUpFilter)
     : undefined
+  const rawAction = normalizeQueryValue(query.action)
+  const action = rawAction === 'create-event' ? rawAction : undefined
+  const eventType = normalizeQueryValue(query.eventType).toUpperCase() || undefined
+  const eventTime = normalizeQueryValue(query.eventTime) || undefined
 
   return {
     status,
     followUp,
     applicationId: parseQueryNumber(query.applicationId),
-    openEvents: isTruthyQueryValue(query.openEvents)
+    openEvents: isTruthyQueryValue(query.openEvents) || Boolean(action),
+    action,
+    eventType,
+    eventTime
   }
 }

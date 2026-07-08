@@ -268,7 +268,7 @@
               <el-table-column label="更新时间" width="180">
                 <template #default="{ row }">{{ row.updatedAt || '--' }}</template>
               </el-table-column>
-              <el-table-column label="操作" width="100" fixed="right">
+              <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }">
                   <el-button
                     link
@@ -278,6 +278,14 @@
                     @click="openChunksDrawer(row)"
                   >
                     片段
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    :icon="Search"
+                    @click="openDocumentInfluencePreview(row)"
+                  >
+                    影响
                   </el-button>
                   <el-button
                     link
@@ -677,6 +685,9 @@
                   >
                     查看片段
                   </el-button>
+                  <el-button link size="small" type="primary" @click="openSearchResultInfluencePreview(item)">
+                    影响预览
+                  </el-button>
                 </div>
               </article>
               <AppState
@@ -794,6 +805,9 @@
                   @click="openChunkDetail(item)"
                 >
                   查看片段
+                </el-button>
+                <el-button link size="small" type="primary" @click="openSearchResultInfluencePreview(item)">
+                  影响预览
                 </el-button>
               </article>
               <AppState
@@ -1070,6 +1084,9 @@
               >
                 相似
               </el-button>
+              <el-button link size="small" type="primary" @click="openChunkInfluencePreview(chunk)">
+                影响
+              </el-button>
               <el-button
                 link
                 size="small"
@@ -1165,6 +1182,9 @@
             <el-tag size="small" effect="plain">{{ documentTypeLabel(selectedChunkSource?.documentType) }}</el-tag>
             <el-tag size="small" :type="statusType(selectedChunkDetail.indexStatus)" effect="light">{{ statusLabel(selectedChunkDetail.indexStatus) }}</el-tag>
             <span>{{ selectedChunkDetail.sourceRef || '--' }}</span>
+            <el-button link size="small" type="primary" @click="openChunkInfluencePreview(selectedChunkDetail)">
+              影响预览
+            </el-button>
           </div>
           <p>{{ selectedChunkDetail.content || '--' }}</p>
           <small>{{ indexMetaLabel(selectedChunkDetail) }}</small>
@@ -1186,6 +1206,93 @@
         </AppState>
       </div>
     </el-drawer>
+
+    <el-drawer v-model="influencePreviewVisible" size="720px" :title="selectedInfluencePreview?.title || '知识影响预览'">
+      <div v-if="selectedInfluencePreview" class="influence-preview-drawer">
+        <section class="influence-preview-summary">
+          <div>
+            <span>{{ selectedInfluencePreview.targetKind === 'CHUNK' ? '知识片段' : '知识资料' }}</span>
+            <strong>{{ selectedInfluencePreview.evidenceSummary }}</strong>
+          </div>
+          <el-tag :type="influenceStatusType(selectedInfluencePreview.confidence)" effect="light">
+            {{ influenceStatusLabel(selectedInfluencePreview.confidence) }}
+          </el-tag>
+          <el-tag type="info" effect="plain">
+            {{ selectedInfluencePreview.previewSource === 'BACKEND_REFERENCES' ? 'Backend precise' : 'Estimated fallback' }}
+          </el-tag>
+        </section>
+
+        <el-alert
+          v-if="selectedInfluencePreview.warnings.length"
+          class="influence-preview-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="证据不足或存在风险，以下影响仅作为降级预览。"
+        />
+
+        <section class="influence-preview-section">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">直接影响</p>
+              <h2>建议、行动、投递包、面试训练与报告</h2>
+            </div>
+          </div>
+          <article v-for="item in selectedInfluencePreview.directImpacts" :key="item.key" class="influence-preview-row">
+            <div>
+              <strong>{{ item.label }}</strong>
+              <p>{{ item.summary }}</p>
+              <small v-if="item.evidence">{{ item.evidence }}</small>
+            </div>
+            <el-tag :type="influenceStatusType(item.status)" effect="plain">{{ influenceStatusLabel(item.status) }}</el-tag>
+          </article>
+        </section>
+
+        <section class="influence-preview-section">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">间接影响</p>
+              <h2>Agent 计划与训练队列</h2>
+            </div>
+          </div>
+          <article v-for="item in selectedInfluencePreview.indirectImpacts" :key="item.key" class="influence-preview-row">
+            <div>
+              <strong>{{ item.label }}</strong>
+              <p>{{ item.summary }}</p>
+            </div>
+            <el-tag :type="influenceStatusType(item.status)" effect="plain">{{ influenceStatusLabel(item.status) }}</el-tag>
+          </article>
+        </section>
+
+        <section class="influence-preview-section">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">治理行动</p>
+              <h2>低置信、过期、失败和重复的处理建议</h2>
+            </div>
+          </div>
+          <article
+            v-for="action in selectedInfluencePreview.governanceActions"
+            :key="`${action.code}-${action.reason}`"
+            class="influence-governance-row"
+          >
+            <div>
+              <strong>{{ governanceActionCodeLabel(action.code) }}</strong>
+              <p>{{ action.title }}：{{ action.reason }}</p>
+            </div>
+            <el-tag :type="action.priority === 'HIGH' ? 'danger' : action.priority === 'MEDIUM' ? 'warning' : 'info'" effect="light">
+              {{ action.priority }}
+            </el-tag>
+          </article>
+          <AppState
+            v-if="!selectedInfluencePreview.governanceActions.length"
+            type="empty"
+            title="暂无明确治理行动"
+            description="当前证据没有触发低置信、过期、评测失败或重复片段规则；仍建议在删除、重建索引等操作前查看影响范围。"
+          />
+        </section>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -1194,10 +1301,16 @@ import { ChatDotRound, Delete, Files, Plus, Refresh, Search } from '@element-plu
 import { ElMessage, type UploadFile } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { isAuthOrForbiddenError } from '@/utils/apiError'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import {
+  buildKnowledgeInfluencePreview,
+  type KnowledgeInfluenceItem,
+  type KnowledgeInfluencePreview
+} from '@/features/knowledge-impact'
 
 import {
   askKnowledgeApi,
@@ -1216,12 +1329,14 @@ import {
   getKnowledgeDuplicateReviewApi,
   getKnowledgeDocumentChunksApi,
   getKnowledgeDocumentDetailApi,
+  getKnowledgeDocumentImpactPreviewApi,
   getKnowledgeDocumentOptionsApi,
   getKnowledgeDocumentTypesApi,
   getKnowledgeDocumentVersionsApi,
   getKnowledgeDocumentsApi,
   getKnowledgeExactDuplicatesApi,
   getAgentMemoriesApi,
+  getKnowledgeChunkImpactPreviewApi,
   getKnowledgeSimilarChunksApi,
   getKnowledgeStatsApi,
   rebuildKnowledgeVectorsApi,
@@ -1256,6 +1371,7 @@ import {
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import type { StreamSseHandle } from '@/utils/sse'
+import type { AgentContextImpactPreviewVO } from '@/types/agent'
 
 const loading = ref(false)
 const route = useRoute()
@@ -1356,6 +1472,8 @@ const duplicateReviewVisible = ref(false)
 const versionsDrawerVisible = ref(false)
 const chunkDetailVisible = ref(false)
 const exactDuplicateVisible = ref(false)
+const influencePreviewVisible = ref(false)
+const selectedInfluencePreview = ref<KnowledgeInfluencePreview | null>(null)
 const editingDocumentId = ref<number | null>(null)
 const rebuildResult = ref<KnowledgeVectorRebuildVO | null>(null)
 const rebuildTargetLabel = ref('全部资料')
@@ -1389,6 +1507,205 @@ const documentTypeLabel = (type?: string) => documentTypeLabelMap[String(type ||
 
 const documentTypeOrRefLabel = (sourceRef?: string | null, documentType?: string | null) =>
   sourceRef || documentTypeLabel(documentType || undefined)
+
+const influenceStatusLabel = (status?: KnowledgeInfluenceItem['status']) => {
+  if (status === 'SUPPORTED') return '有证据'
+  if (status === 'PARTIAL') return '部分证据'
+  if (status === 'DEGRADED') return '降级'
+  return '待复核'
+}
+
+const influenceStatusType = (status?: KnowledgeInfluenceItem['status']) => {
+  if (status === 'SUPPORTED') return 'success'
+  if (status === 'PARTIAL') return 'warning'
+  if (status === 'DEGRADED') return 'danger'
+  return 'info'
+}
+
+const governanceActionCodeLabel = (code: string) => {
+  if (code === 'ADD_KNOWLEDGE_DOCUMENT') return 'ADD_KNOWLEDGE_DOCUMENT'
+  if (code === 'REINDEX_KNOWLEDGE') return 'REINDEX_KNOWLEDGE'
+  if (code === 'REVIEW_KNOWLEDGE_CITATION') return 'REVIEW_KNOWLEDGE_CITATION'
+  if (code === 'MERGE_DUPLICATE_KNOWLEDGE') return 'MERGE_DUPLICATE_KNOWLEDGE'
+  return code
+}
+
+const latestEvalImpactSource = () =>
+  knowledgeEvalLatestRun.value
+    ? {
+        evaluatedCount: knowledgeEvalLatestRun.value.evaluatedCount,
+        failedCount: knowledgeEvalLatestRun.value.failedCount,
+        passRate: knowledgeEvalLatestRun.value.passRate,
+        results: knowledgeEvalLatestRun.value.results || []
+      }
+    : null
+
+const findKnowledgeDocument = (documentId?: number | null) =>
+  documentId ? allDocuments.value.find((item) => item.id === documentId) || documentOptions.value.find((item) => item.id === documentId) || null : null
+
+const buildDocumentInfluencePreview = (row: KnowledgeDocumentVO) =>
+  buildKnowledgeInfluencePreview({
+    targetKind: 'DOCUMENT',
+    document: row,
+    chunks: selectedDocument.value?.id === row.id ? documentChunks.value : [],
+    searchResults: searchResults.value,
+    askReferences: askReferences.value,
+    searchTrace: searchTrace.value,
+    knowledgeEvaluation: knowledgeEvaluation.value,
+    latestEvalRun: latestEvalImpactSource(),
+    duplicateReview: duplicateReview.value,
+    stats: knowledgeStats.value,
+    memories: agentMemories.value,
+    minScore: normalizedSearchMinScore.value ?? knowledgeConfig.value?.askMinScore
+  })
+
+const buildChunkInfluencePreview = (chunk: KnowledgeChunkVO) =>
+  buildKnowledgeInfluencePreview({
+    targetKind: 'CHUNK',
+    document: findKnowledgeDocument(chunk.documentId) || selectedDocument.value,
+    chunk,
+    chunks: [chunk],
+    searchResults: searchResults.value,
+    askReferences: askReferences.value,
+    searchTrace: searchTrace.value,
+    knowledgeEvaluation: knowledgeEvaluation.value,
+    latestEvalRun: latestEvalImpactSource(),
+    duplicateReview: duplicateReview.value,
+    stats: knowledgeStats.value,
+    memories: agentMemories.value,
+    minScore: normalizedSearchMinScore.value ?? knowledgeConfig.value?.askMinScore
+  })
+
+const impactStatusFromStrength = (strength?: string | null): KnowledgeInfluenceItem['status'] => {
+  const token = String(strength || '').toUpperCase()
+  if (token === 'STRONG') return 'SUPPORTED'
+  if (token === 'WEAK') return 'REVIEW_REQUIRED'
+  return 'PARTIAL'
+}
+
+const withBackendImpactPreview = (
+  localPreview: KnowledgeInfluencePreview,
+  backend?: AgentContextImpactPreviewVO | null,
+  fallbackReason?: string
+): KnowledgeInfluencePreview => {
+  if (!backend) {
+    return {
+      ...localPreview,
+      previewSource: 'ESTIMATED',
+      resultSource: 'ESTIMATED',
+      fallbackReason
+    }
+  }
+  const consumers = Array.isArray(backend.affectedConsumers) ? backend.affectedConsumers : []
+  const backendImpacts = consumers.map((item, index) => ({
+    key: `${item.consumerType || 'CONSUMER'}-${item.consumerId || index}-${item.usageScene || 'USAGE'}`,
+    label: item.consumerType || 'CONSUMER',
+    status: impactStatusFromStrength(item.usageStrength),
+    summary: item.summary || `${item.consumerType || 'Consumer'} #${item.consumerId || '-'} ${item.usageScene || 'used this context'}`,
+    evidence: [item.traceId ? `traceId=${item.traceId}` : '', item.snapshotHash ? `hash=${item.snapshotHash}` : '']
+      .filter(Boolean)
+      .join(' / ')
+  }))
+  const moduleImpacts = (backend.affectedModules || []).map((module, index) => ({
+    key: `module-${module}-${index}`,
+    label: module,
+    status: 'SUPPORTED' as KnowledgeInfluenceItem['status'],
+    summary: `Historical usage exists in ${module}.`
+  }))
+  return {
+    ...localPreview,
+    referenceCount: backend.referenceCount ?? 0,
+    recentReferenceCount: backend.recentReferenceCount ?? 0,
+    futureContextImpact: Boolean(backend.futureContextImpact),
+    historicalOnly: Boolean(backend.historicalOnly),
+    safeToDisable: Boolean(backend.safeToDisable),
+    previewSource: backend.previewSource || backend.resultSource || 'BACKEND_REFERENCES',
+    resultSource: backend.resultSource || backend.previewSource || 'BACKEND_REFERENCES',
+    evidenceSummary: `Backend references: total ${backend.referenceCount ?? 0}, recent ${backend.recentReferenceCount ?? 0}, futureContext=${backend.futureContextImpact ? 'yes' : 'no'}.`,
+    directImpacts: backendImpacts.length ? backendImpacts : localPreview.directImpacts,
+    indirectImpacts: moduleImpacts.length ? moduleImpacts : localPreview.indirectImpacts,
+    warnings: Array.from(new Set([...(backend.warnings || []), ...localPreview.warnings])),
+    governanceActions: localPreview.governanceActions
+  }
+}
+
+const loadDocumentInfluencePreview = async (row: KnowledgeDocumentVO) => {
+  const localPreview = buildDocumentInfluencePreview(row)
+  try {
+    return withBackendImpactPreview(localPreview, await getKnowledgeDocumentImpactPreviewApi(row.id))
+  } catch (error) {
+    if (isAuthOrForbiddenError(error)) throw error
+    return withBackendImpactPreview(localPreview, null, toFriendlyMessage(error))
+  }
+}
+
+const loadChunkInfluencePreview = async (chunk: KnowledgeChunkVO) => {
+  const localPreview = buildChunkInfluencePreview(chunk)
+  try {
+    return chunk.id
+      ? withBackendImpactPreview(localPreview, await getKnowledgeChunkImpactPreviewApi(chunk.id))
+      : withBackendImpactPreview(localPreview, null, 'missing chunk id')
+  } catch (error) {
+    if (isAuthOrForbiddenError(error)) throw error
+    return withBackendImpactPreview(localPreview, null, toFriendlyMessage(error))
+  }
+}
+
+const openDocumentInfluencePreview = async (row: KnowledgeDocumentVO) => {
+  selectedInfluencePreview.value = buildDocumentInfluencePreview(row)
+  influencePreviewVisible.value = true
+  selectedInfluencePreview.value = await loadDocumentInfluencePreview(row)
+}
+
+const openChunkInfluencePreview = async (chunk: KnowledgeChunkVO) => {
+  selectedInfluencePreview.value = buildChunkInfluencePreview(chunk)
+  influencePreviewVisible.value = true
+  selectedInfluencePreview.value = await loadChunkInfluencePreview(chunk)
+}
+
+const openSearchResultInfluencePreview = async (item: KnowledgeSearchResultVO) => {
+  let chunk: KnowledgeChunkVO | null = null
+  if (item.chunkId) {
+    try {
+      chunk = await getKnowledgeChunkApi(item.chunkId)
+    } catch {
+      chunk = null
+    }
+  }
+  const localPreview = buildKnowledgeInfluencePreview({
+    targetKind: chunk ? 'CHUNK' : 'DOCUMENT',
+    document: findKnowledgeDocument(item.documentId),
+    chunk: chunk || undefined,
+    chunks: chunk ? [chunk] : [],
+    searchResults: [item, ...searchResults.value],
+    askReferences: askReferences.value,
+    searchTrace: searchTrace.value,
+    knowledgeEvaluation: knowledgeEvaluation.value,
+    latestEvalRun: latestEvalImpactSource(),
+    duplicateReview: duplicateReview.value,
+    stats: knowledgeStats.value,
+    memories: agentMemories.value,
+    minScore: normalizedSearchMinScore.value ?? knowledgeConfig.value?.askMinScore
+  })
+  selectedInfluencePreview.value = localPreview
+  influencePreviewVisible.value = true
+  if (chunk) {
+    selectedInfluencePreview.value = await loadChunkInfluencePreview(chunk)
+    return
+  }
+  const document = findKnowledgeDocument(item.documentId)
+  if (document) {
+    selectedInfluencePreview.value = await loadDocumentInfluencePreview(document)
+  }
+}
+
+const influencePreviewDangerText = (preview: KnowledgeInfluencePreview) => {
+  const actions = preview.governanceActions.map((item) => item.code).join(' / ') || 'none'
+  const source = preview.previewSource === 'BACKEND_REFERENCES'
+    ? `Backend precise references: total=${preview.referenceCount ?? 0}, recent=${preview.recentReferenceCount ?? 0}, futureContext=${preview.futureContextImpact ? 'yes' : 'no'}.`
+    : `Estimated fallback only${preview.fallbackReason ? `: ${preview.fallbackReason}` : ''}. Historical reference details are unavailable.`
+  return `${source} ${preview.evidenceSummary} Direct impacts: ${preview.directImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('; ')}. Indirect impacts: ${preview.indirectImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('; ')}. Governance actions: ${actions}.`
+}
 
 const formDocumentTypeOptions = computed(() =>
   Array.from(new Set(['NOTE', 'PROJECT', 'INTERVIEW_REVIEW', 'RESUME', ...documentTypeOptions.value]))
@@ -1737,7 +2054,7 @@ const memoryGovernanceDetail = computed(() => {
   if (candidateMemoryCount.value) return '候选记忆需要用户确认后，才适合影响强推荐。'
   if (lowConfidenceMemoryCount.value) return '低置信记忆仅作为复核提示，不应包装成强依据。'
   if (disabledMemoryCount.value) return `${disabledMemoryCount.value} 条已停用或待确认记忆不会主动影响推荐。`
-  return '已启用记忆可作为证据来源，但仍需保留来源和置信度。'
+  return '已启用记忆仅作为偏好或约束输入，不替代项目、投递、面试或题目证据。'
 })
 
 const knowledgeGovernanceIndexLabel = computed(() => {
@@ -2918,11 +3235,37 @@ const loadDuplicateReview = async () => {
 
 const handleDeleteDuplicateReviewChunk = async (item: KnowledgeDuplicateReviewItemVO) => {
   if (!item.chunkId) return
+  const previewChunk: KnowledgeChunkVO = {
+    id: item.chunkId,
+    documentId: item.documentId,
+    chunkIndex: item.chunkIndex,
+    sourceRef: item.sourceRef,
+    content: item.snippet,
+    duplicateInDocument: true
+  }
+  const localPreview = buildKnowledgeInfluencePreview({
+    targetKind: 'CHUNK',
+    document: findKnowledgeDocument(item.documentId),
+    chunk: previewChunk,
+    searchResults: item.matches || [],
+    duplicateReview: duplicateReview.value,
+    stats: knowledgeStats.value,
+    memories: agentMemories.value,
+    minScore: normalizedSearchMinScore.value ?? knowledgeConfig.value?.askMinScore
+  })
+  let preview = localPreview
+  try {
+    preview = withBackendImpactPreview(localPreview, await getKnowledgeChunkImpactPreviewApi(item.chunkId))
+  } catch (error) {
+    if (isAuthOrForbiddenError(error)) throw error
+    preview = withBackendImpactPreview(localPreview, null, toFriendlyMessage(error))
+  }
+  const previewText = influencePreviewDangerText(preview)
   const confirmed = await confirmDangerActionPreview({
     title: '删除近重复候选',
     action: '删除近重复候选片段并同步清理索引',
     target: `第 ${(item.chunkIndex ?? 0) + 1} 段`,
-    impact: '该片段会从资料片段中删除，并同步清理对应检索索引，后续语义检索不再返回该片段。',
+    impact: `该片段会从资料片段中删除，并同步清理对应检索索引，后续语义检索不再返回该片段。${previewText}`,
     rollback: '系统不会自动恢复已删除片段；如误删，需要重新导入或重新保存资料生成片段。',
     audit: '删除操作会记录对应片段和当前账号。',
     tips: ['确认它确实是重复或低价值片段。', '确认删除后不会丢失唯一有效资料。'],
@@ -2979,7 +3322,7 @@ const handleCleanupExactDuplicates = async () => {
       title: '清理完全重复片段',
       action: '按预览结果删除完全重复片段并同步清理索引',
       target: `${preview.duplicateGroupCount || 0} 组重复，${preview.deleteCandidateCount || 0} 个待删除片段`,
-      impact: '会删除完全重复片段并同步清理对应检索索引，后续检索会减少重复命中。',
+      impact: '会删除完全重复片段并同步清理对应检索索引，后续检索会减少重复命中。基础影响范围：重复片段将转为 MERGE_DUPLICATE_KNOWLEDGE 治理行动；清理后投递包、面试训练、报告和 Agent 计划引用应以刷新后的检索结果为准。',
       rollback: '系统不会自动恢复清理结果；如误删，需要重新导入或重新保存资料生成片段。',
       audit: '清理操作会按当前筛选范围、删除数量和当前账号记录。',
       tips: ['已完成 dry-run 预览并确认待删除数量。', '确认当前筛选范围就是要清理的资料范围。'],
@@ -3004,11 +3347,12 @@ const handleCleanupExactDuplicates = async () => {
 
 const handleDeleteChunk = async (chunk: KnowledgeChunkVO) => {
   if (!chunk.id) return
+  const previewText = influencePreviewDangerText(await loadChunkInfluencePreview(chunk))
   const confirmed = await confirmDangerActionPreview({
     title: '删除知识片段',
     action: '删除该知识片段并同步清理索引',
     target: `第 ${(chunk.chunkIndex ?? 0) + 1} 段`,
-    impact: '该片段会从资料中移除，并同步清理对应检索索引，后续检索和问答不再引用这段内容。',
+    impact: `该片段会从资料中移除，并同步清理对应检索索引，后续检索和问答不再引用这段内容。${previewText}`,
     rollback: '系统不会自动恢复已删除片段；如误删，需要重新导入或重新保存资料生成片段。',
     audit: '删除操作会记录对应片段和当前账号。',
     tips: ['确认这段内容不再需要被检索或引用。', '确认删除后资料仍保留完整上下文。'],
@@ -3220,11 +3564,15 @@ const handleRebuildVectors = async (documentId?: number, documentTitle?: string)
     return
   }
   const scopeLabel = documentTitle ? `资料「${documentTitle}」` : '全部资料'
+  const targetDocument = documentId ? allDocuments.value.find((item) => item.id === documentId) || null : null
+  const previewText = targetDocument
+    ? influencePreviewDangerText(await loadDocumentInfluencePreview(targetDocument))
+    : `基础影响范围：约 ${documentTotal.value} 篇资料、${chunkTotal.value} 个片段；重建期间建议将检索、问答、投递包、面试训练和报告结论降级为待复核。`
   const confirmed = await confirmDangerActionPreview({
     title: '重建知识库检索索引',
     action: '重建知识库语义检索索引',
     target: scopeLabel,
-    impact: '会重新切分并写入检索索引，可能消耗语义检索服务调用资源；请求完成前请不要重复点击。',
+    impact: `会重新切分并写入检索索引，可能消耗语义检索服务调用资源；请求完成前请不要重复点击。${previewText}`,
     rollback: '重建结果不会自动回到旧索引；如结果异常，需要再次重建或检查资料内容。',
     audit: '重建任务会生成处理记录或统计结果，便于后续追踪。',
     tips: ['确认语义检索能力已启用。', '确认当前资料内容已经保存完成。'],
@@ -3260,11 +3608,12 @@ const handleRetryFailedVectors = async () => {
     ElMessage.warning(semanticDisabledReason.value)
     return
   }
+  const previewText = `基础影响范围：失败 ${failedChunkCount.value} 个、待索引 ${pendingChunkCount.value} 个片段；重试前相关检索、问答、训练队列和 Agent 计划应按降级证据处理。`
   const confirmed = await confirmDangerActionPreview({
     title: '重试知识库检索索引',
     action: '重试失败或超时的知识库检索索引任务',
     target: '当前用户最多 500 个失败或超时待索引片段所属文档',
-    impact: '会再次提交检索索引任务，期间可能消耗语义检索服务调用资源；成功后相关资料的语义检索可用性会更新。',
+    impact: `会再次提交检索索引任务，期间可能消耗语义检索服务调用资源；成功后相关资料的语义检索可用性会更新。${previewText}`,
     rollback: '重试结果不会自动回到重试前状态；如仍失败，需要查看任务错误并修正资料或配置。',
     audit: '重试任务会保留处理记录、成功数量和失败数量。',
     tips: ['确认当前不是重复点击造成的短时间重试。', '确认语义检索服务和索引配置可用。'],
@@ -3296,11 +3645,12 @@ const handleRetryFailedVectors = async () => {
 }
 
 const handleDelete = async (row: KnowledgeDocumentVO) => {
+  const previewText = influencePreviewDangerText(await loadDocumentInfluencePreview(row))
   const confirmed = await confirmDangerActionPreview({
     title: '删除知识资料',
     action: '删除该知识资料并同步清理索引',
     target: row.title || '知识资料',
-    impact: '资料、片段和对应检索索引都会被清理，后续检索、问答和评估不会再引用该资料。',
+    impact: `资料、片段和对应检索索引都会被清理，后续检索、问答和评估不会再引用该资料。${previewText}`,
     rollback: '系统不会自动恢复已删除资料；如误删，需要重新上传或重新创建资料。',
     audit: '删除操作会记录对应资料和当前账号。',
     tips: ['确认这份资料不再作为训练或问答依据。', '确认删除后不会影响仍在使用的评估样本和问答引用。'],
@@ -4304,6 +4654,55 @@ watch(
 
 .knowledge-evaluation-alert {
   margin-top: 2px;
+}
+
+.influence-preview-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.influence-preview-summary,
+.influence-preview-row,
+.influence-governance-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.influence-preview-summary span,
+.influence-preview-row p,
+.influence-governance-row p {
+  margin: 0;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.influence-preview-summary strong,
+.influence-preview-row strong,
+.influence-governance-row strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  line-height: 1.5;
+}
+
+.influence-preview-row small {
+  display: block;
+  margin-top: 6px;
+  color: var(--app-text-muted);
+  line-height: 1.5;
+}
+
+.influence-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .knowledge-trust-strip {

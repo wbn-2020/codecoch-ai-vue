@@ -56,6 +56,26 @@
             </div>
           </article>
         </div>
+        <div v-if="isApplicationContextFlow || applicationPackageContext" class="application-context-card">
+          <div class="application-context-card__head">
+            <div>
+              <span>{{ applicationContextTitle }}</span>
+              <strong>{{ jdContextText }}</strong>
+            </div>
+            <el-tag effect="plain" :type="applicationPackageContext?.readinessLevel === 'READY' ? 'success' : 'warning'">
+              {{ applicationPackageReadinessText }}
+            </el-tag>
+          </div>
+          <p>
+            文本模拟面试是本次主链路；语音只作为后续可降级预览，不会阻塞当前创建。
+          </p>
+          <div class="application-context-grid">
+            <article v-for="item in applicationContextItems" :key="item.label" :class="{ 'is-missing': item.missing }">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+        </div>
         <ul class="quick-reason-list">
           <li v-for="item in quickRecommendation.reasons" :key="item">{{ item }}</li>
         </ul>
@@ -428,6 +448,7 @@ import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play,
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getApplicationPackageApi, previewApplicationPackageApi } from '@/api/applicationPackage'
 import { createInterviewApi, createInterviewByJobTargetApi, getIndustryTemplatesApi } from '@/api/interview'
 import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
 import { getLatestResumeJobMatchReportApi, getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
@@ -442,6 +463,7 @@ import {
   targetPositionOptions
 } from '@/constants/enums'
 import { buildInterviewCreatePayload } from '@/features/interview-create'
+import type { JobApplicationPackageVO } from '@/types/applicationPackage'
 import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { ResumeVO } from '@/types/resume'
@@ -459,6 +481,9 @@ const resumeLoadError = ref('')
 const matchReportVerifyLoading = ref(false)
 const matchReportVerifyMessage = ref('')
 const routeContextWarning = ref('')
+const applicationPackageLoading = ref(false)
+const applicationPackageWarning = ref('')
+const applicationPackageContext = ref<JobApplicationPackageVO | null>(null)
 const industryTemplateLoading = ref(false)
 const industryTemplateError = ref('')
 const useResume = ref(true)
@@ -493,6 +518,13 @@ const form = reactive<InterviewCreateDTO>({
   interviewerStyle: 'NORMAL',
   practiceMode: 'FORMAL',
   resumeId: undefined,
+  applicationId: undefined,
+  applicationPackageId: undefined,
+  targetJobId: undefined,
+  jdAnalysisId: undefined,
+  resumeVersionId: undefined,
+  matchReportId: undefined,
+  projectEvidenceIds: undefined,
   questionCount: 8
 })
 
@@ -761,6 +793,7 @@ const quickRecommendation = computed(() => {
   const resumeId = quickResumeId.value
   const targetJobId = quickTargetJobId.value
   const matchReport = matchReportEvidence.value
+  const applicationContext = applicationContextSnapshot.value
   const hasJobContext = Boolean(targetJobId)
   const hasMatchContext = matchReport.verified
   const mode = resumeId ? INTERVIEW_MODE.PROJECT_DEEP_DIVE : INTERVIEW_MODE.TECHNICAL_BASIC
@@ -782,6 +815,7 @@ const quickRecommendation = computed(() => {
   const reasons = [
     resumeId ? `来自简历：${quickResumeName.value}` : '资料不足：未绑定简历，本轮使用通用练习配置',
     hasJobContext ? `来自目标岗位：${form.targetPosition || '当前目标岗位'}` : '目标岗位不足：按 Java 后端通用方向开练',
+    isApplicationContextFlow.value ? `${applicationContextTitle.value}：文本模拟面试是本次主链路，语音仅作为后续可降级预览` : '文本模拟面试为主链路',
     matchReport.reason,
     `推荐强度：${optionLabel(difficultyOptions, difficulty)} · ${questionCount} 题 · ${optionLabel(interviewerStyleOptions, interviewerStyle)}`
   ]
@@ -800,6 +834,13 @@ const quickRecommendation = computed(() => {
       practiceMode: 'PRACTICE',
       questionCount,
       resumeId,
+      applicationId: applicationContext.applicationId,
+      applicationPackageId: applicationContext.applicationPackageId,
+      targetJobId: applicationContext.targetJobId,
+      jdAnalysisId: applicationContext.jdAnalysisId,
+      resumeVersionId: applicationContext.resumeVersionId,
+      matchReportId: applicationContext.matchReportId,
+      projectEvidenceIds: applicationContext.projectEvidenceIds,
       basedOnResume: Boolean(resumeId),
       recommendationSource: hasMatchContext ? 'MATCH_REPORT' : resumeId ? 'DEFAULT_RESUME' : 'LIGHTWEIGHT',
       recommendationReason: reasons.join('；')
@@ -850,6 +891,7 @@ const quickContextTrustItems = computed(() => {
 const quickStartItems = computed(() => [
   { label: '简历上下文', value: quickResumeName.value, icon: Files },
   { label: '目标岗位', value: form.targetPosition || 'Java 后端开发', icon: Target },
+  { label: '进入来源', value: isApplicationContextFlow.value ? applicationContextTitle.value : '面试中心', icon: BriefcaseBusiness },
   { label: '面试强度', value: `${selectedModeTitleForPayload(quickRecommendation.value.payload)} · ${quickRecommendation.value.payload.questionCount} 题`, icon: Zap }
 ])
 const quickPlanItems = computed(() => {
@@ -880,7 +922,7 @@ const quickStartNotice = computed(() => {
   return ''
 })
 const routeContextNotice = computed(() =>
-  routeContextWarning.value || (!matchReportVerifyLoading.value ? matchReportVerifyMessage.value : '')
+  routeContextWarning.value || applicationPackageWarning.value || (!matchReportVerifyLoading.value ? matchReportVerifyMessage.value : '')
 )
 const buildQuickPayload = (): InterviewCreateDTO => ({ ...quickRecommendation.value.payload })
 const selectedModeTip = computed(() => {
@@ -916,6 +958,119 @@ const getQueryNumber = (name: string) => {
   const value = Number(getQueryString(name))
   return Number.isFinite(value) && value > 0 ? value : undefined
 }
+
+const getQueryNumberList = (name: string) => {
+  const value = getQueryString(name)
+  if (!value) return []
+  return value
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0)
+}
+
+const isPersistedApplicationPackageId = (value?: string | number | null) => {
+  const id = String(value || '').trim()
+  return Boolean(id && !id.startsWith('preview:') && id !== 'preview-degraded')
+}
+
+const applicationSource = computed(() => getQueryString('source')?.toLowerCase() || '')
+const isApplicationContextFlow = computed(() =>
+  ['application-package', 'application'].includes(applicationSource.value)
+)
+const routeProjectEvidenceIds = computed(() => getQueryNumberList('projectEvidenceIds'))
+const contextProjectEvidenceIds = computed(() => {
+  const pack = applicationPackageContext.value
+  const ids =
+    pack?.interviewContext?.projectEvidenceIds ||
+    pack?.interviewPreparation?.projectEvidenceIds ||
+    pack?.projectEvidenceIds ||
+    routeProjectEvidenceIds.value
+  return Array.from(new Set((ids || []).filter((item) => Number.isFinite(Number(item)) && Number(item) > 0).map(Number)))
+})
+const applicationContextSnapshot = computed(() => {
+  const pack = applicationPackageContext.value
+  const rawQueryApplicationPackageId = getQueryString('applicationPackageId')
+  const queryApplicationPackageId = rawQueryApplicationPackageId == null ? undefined : String(rawQueryApplicationPackageId)
+  const packApplicationPackageId = pack?.id == null ? undefined : String(pack.id)
+  return {
+    source: applicationSource.value,
+    applicationId: getQueryNumber('applicationId') || pack?.jobApplicationId,
+    applicationPackageId: isPersistedApplicationPackageId(queryApplicationPackageId)
+      ? queryApplicationPackageId
+      : isPersistedApplicationPackageId(packApplicationPackageId)
+        ? packApplicationPackageId
+        : undefined,
+    targetJobId: pack?.interviewContext?.targetJobId || pack?.interviewPreparation?.targetJobId || getQueryNumber('targetJobId') || pack?.targetJobId,
+    jdAnalysisId: getQueryNumber('jdAnalysisId') || pack?.jdAnalysisId || pack?.job?.jdAnalysisId,
+    resumeVersionId:
+      pack?.interviewContext?.resumeVersionId ||
+      pack?.interviewPreparation?.resumeVersionId ||
+      getQueryNumber('resumeVersionId') ||
+      pack?.recommendedResumeVersionId ||
+      pack?.recommendedResume?.resumeVersionId,
+    matchReportId:
+      pack?.interviewContext?.matchReportId ||
+      pack?.interviewPreparation?.matchReportId ||
+      getQueryNumber('matchReportId') ||
+      pack?.matchReportId ||
+      pack?.matchResult?.matchReportId ||
+      pack?.matchSummary?.matchReportId,
+    projectEvidenceIds: contextProjectEvidenceIds.value
+  }
+})
+const applicationContextTitle = computed(() => {
+  const source = applicationContextSnapshot.value.source
+  if (source === 'application-package') return '投递包上下文'
+  if (source === 'application') return '投递记录上下文'
+  return '岗位上下文'
+})
+const readinessLabelMap: Record<string, string> = {
+  READY: '已准备好',
+  NEEDS_RESUME: '待补简历',
+  NEEDS_EVIDENCE: '待补项目证据',
+  NEEDS_TRAINING: '建议先练面试',
+  BLOCKED: '暂不可投递'
+}
+const applicationPackageReadinessText = computed(() => {
+  if (applicationPackageLoading.value) return '正在读取投递包准备度'
+  const level = String(applicationPackageContext.value?.readinessLevel || '').toUpperCase()
+  if (!level) return '未取得准备度，按已知岗位字段创建'
+  return readinessLabelMap[level] || level
+})
+const recommendedResumeContextText = computed(() => {
+  const resume = applicationPackageContext.value?.recommendedResume
+  if (resume?.resumeTitle || resume?.resumeVersionName || resume?.versionName) {
+    return [resume.resumeTitle, resume.resumeVersionName || resume.versionName].filter(Boolean).join(' · ')
+  }
+  const resumeVersionId = applicationContextSnapshot.value.resumeVersionId
+  return resumeVersionId ? `推荐简历版本 #${resumeVersionId}` : '缺少推荐简历，创建时使用默认简历或降级轻量技术面'
+})
+const projectEvidenceGapText = computed(() => {
+  const coverage = applicationPackageContext.value?.projectEvidenceCoverage
+  const insufficientCount = coverage?.insufficientRequirements?.length || 0
+  const suggestedCount = coverage?.suggestedFields?.length || 0
+  if (insufficientCount) return `${insufficientCount} 个 JD 要求项目证据不足`
+  if (suggestedCount) return `${suggestedCount} 个证据字段建议补充`
+  if (contextProjectEvidenceIds.value.length) return `已带入 ${contextProjectEvidenceIds.value.length} 项项目证据`
+  return '未带入项目证据，面试会先按岗位/JD 和简历追问'
+})
+const jdContextText = computed(() => {
+  const pack = applicationPackageContext.value
+  const jobTitle = pack?.job?.jobTitle || pack?.jobTitle || form.targetPosition
+  const companyName = pack?.job?.companyName || pack?.companyName
+  const jdAnalysisId = applicationContextSnapshot.value.jdAnalysisId
+  const title = [companyName, jobTitle].filter(Boolean).join(' · ')
+  return title || (jdAnalysisId ? `JD 分析 #${jdAnalysisId}` : '未取得 JD 详情，按目标岗位名称降级')
+})
+const applicationContextItems = computed(() => {
+  const context = applicationContextSnapshot.value
+  return [
+    { label: '岗位/JD', value: jdContextText.value, missing: !context.targetJobId && !context.jdAnalysisId },
+    { label: '投递包 readiness', value: applicationPackageReadinessText.value, missing: !applicationPackageContext.value?.readinessLevel },
+    { label: '推荐简历', value: recommendedResumeContextText.value, missing: !context.resumeVersionId },
+    { label: '项目证据缺口', value: projectEvidenceGapText.value, missing: !context.projectEvidenceIds.length }
+  ]
+})
 
 const loadCurrentTargetForInterview = async (failureMessage: string) => {
   try {
@@ -1113,13 +1268,58 @@ const fetchIndustryTemplates = (force = false) => {
   return industryTemplatesPromise
 }
 
+const loadApplicationPackageContext = async () => {
+  const applicationPackageId = getQueryString('applicationPackageId')
+  const params = {
+    targetJobId: getQueryNumber('targetJobId'),
+    jdAnalysisId: getQueryNumber('jdAnalysisId'),
+    resumeVersionId: getQueryNumber('resumeVersionId'),
+    matchReportId: getQueryNumber('matchReportId'),
+    projectEvidenceIds: routeProjectEvidenceIds.value
+  }
+  const shouldPreview =
+    isPersistedApplicationPackageId(applicationPackageId) ||
+    isApplicationContextFlow.value ||
+    Boolean(
+      params.targetJobId ||
+      params.jdAnalysisId ||
+      params.resumeVersionId ||
+      params.matchReportId ||
+      params.projectEvidenceIds.length
+    )
+  if (!shouldPreview) return
+
+  applicationPackageLoading.value = true
+  applicationPackageWarning.value = ''
+  try {
+    applicationPackageContext.value = isPersistedApplicationPackageId(applicationPackageId)
+      ? await getApplicationPackageApi(applicationPackageId as string)
+      : await previewApplicationPackageApi(params)
+  } catch (error) {
+    applicationPackageContext.value = null
+    applicationPackageWarning.value = getErrorMessage(error, '投递包上下文暂时无法读取，本轮会用路由中可确认的岗位/JD、简历和匹配报告字段降级创建文本面试。')
+  } finally {
+    applicationPackageLoading.value = false
+  }
+}
+
 const applyRouteContext = async () => {
   const source = getQueryString('source')?.toLowerCase()
   const isV3Source = source === 'job-target' || source === 'v3'
-  let targetJobId = getQueryNumber('targetJobId')
+  const hasApplicationSource = source === 'application-package' || source === 'application'
+  const context = applicationContextSnapshot.value
+  let targetJobId = context.targetJobId
   const resumeId = getQueryNumber('resumeId')
   const skillProfileId = getQueryNumber('skillProfileId')
-  const matchReportId = getQueryNumber('matchReportId')
+  const matchReportId = context.matchReportId
+
+  form.applicationId = context.applicationId
+  form.applicationPackageId = context.applicationPackageId
+  form.targetJobId = context.targetJobId
+  form.jdAnalysisId = context.jdAnalysisId
+  form.resumeVersionId = context.resumeVersionId
+  form.matchReportId = context.matchReportId
+  form.projectEvidenceIds = context.projectEvidenceIds
 
   if (resumeId) {
     useResume.value = true
@@ -1133,7 +1333,7 @@ const applyRouteContext = async () => {
   }
   if (!targetJobId) return
 
-  if (isV3Source || source === 'job-target') {
+  if (isV3Source || hasApplicationSource || source === 'job-target') {
     const resumeMode = modeCards.find((item) => item.key === 'resume')
     if (resumeMode) {
       selectMode(resumeMode)
@@ -1142,65 +1342,85 @@ const applyRouteContext = async () => {
       form.interviewMode = INTERVIEW_MODE.PROJECT_DEEP_DIVE
     }
   }
-  if (isV3Source || getQueryNumber('targetJobId')) {
+  if (isV3Source || hasApplicationSource || context.targetJobId) {
     sourceTargetJobId.value = targetJobId
   }
 
   if (targetJobId) {
     try {
       const targetJob = await getJobTargetDetailApi(targetJobId)
-      form.targetPosition = targetJob.jobTitle || form.targetPosition
+      form.targetPosition = applicationPackageContext.value?.job?.jobTitle || applicationPackageContext.value?.jobTitle || targetJob.jobTitle || form.targetPosition
       form.interviewName =
-        form.interviewName || `${targetJob.jobTitle || '目标岗位'}模拟面试`
+        form.interviewName || `${form.targetPosition || targetJob.jobTitle || '目标岗位'}文本模拟面试`
     } catch (error) {
       ElMessage.warning(getErrorMessage(error, '目标岗位信息加载失败，将使用当前面试配置创建。'))
     }
   }
 
-  if (skillProfileId || matchReportId) {
-    form.interviewName = form.interviewName || '目标岗位模拟面试'
+  if (!targetJobId && (applicationPackageContext.value?.job?.jobTitle || applicationPackageContext.value?.jobTitle)) {
+    form.targetPosition = applicationPackageContext.value?.job?.jobTitle || applicationPackageContext.value?.jobTitle || form.targetPosition
+  }
+
+  if (skillProfileId || matchReportId || hasApplicationSource) {
+    form.interviewName = form.interviewName || '目标岗位文本模拟面试'
   }
 }
 
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
-  const targetJobId = sourceTargetJobId.value || getQueryNumber('targetJobId') || fallbackTargetJobId.value
+  const context = applicationContextSnapshot.value
+  const targetJobId = sourceTargetJobId.value || context.targetJobId || getQueryNumber('targetJobId') || fallbackTargetJobId.value
   const source = getQueryString('source')?.toLowerCase()
-  const hasJobTargetIntent = source === 'job-target' || source === 'v3' || Boolean(sourceTargetJobId.value || getQueryNumber('targetJobId'))
+  const hasJobTargetIntent =
+    source === 'job-target' ||
+    source === 'v3' ||
+    source === 'application-package' ||
+    source === 'application' ||
+    Boolean(sourceTargetJobId.value || context.targetJobId || getQueryNumber('targetJobId'))
+  const contextualPayload: InterviewCreateDTO = {
+    ...payload,
+    applicationId: context.applicationId ?? payload.applicationId,
+    applicationPackageId: context.applicationPackageId ?? payload.applicationPackageId,
+    targetJobId: targetJobId ?? payload.targetJobId,
+    jdAnalysisId: context.jdAnalysisId ?? payload.jdAnalysisId,
+    resumeVersionId: context.resumeVersionId ?? payload.resumeVersionId,
+    matchReportId: context.matchReportId ?? payload.matchReportId,
+    projectEvidenceIds: context.projectEvidenceIds.length ? context.projectEvidenceIds : payload.projectEvidenceIds
+  }
 
-  if (!payload.resumeId) {
+  if (!contextualPayload.resumeId) {
     if (hasJobTargetIntent) {
       routeContextWarning.value = '当前没有可用简历，已改用轻量技术面创建；可先创建简历后再使用岗位推荐面试。'
     }
-    return createInterviewApi(payload)
+    return createInterviewApi(contextualPayload)
   }
 
   if (!targetJobId) {
     if (hasJobTargetIntent) {
       routeContextWarning.value = '目标岗位信息暂时不可用，已改用普通面试创建；可稍后到岗位目标页补全后再重试。'
     }
-    return createInterviewApi(payload)
+    return createInterviewApi(contextualPayload)
   }
 
-  let resumeId = payload.resumeId
+  let resumeId = contextualPayload.resumeId
   if (!resumeId) {
     resumeId = resumes.value.find((item) => item.isDefault === 1)?.id || resumes.value[0]?.id
   }
 
   let matchReportId = matchReportEvidence.value.verified ? matchReportEvidence.value.reportId : undefined
   if (!matchReportId && resumeId && targetJobId) {
-    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId, getQueryNumber('resumeVersionId'))
+    matchReportId = await loadLatestVerifiedMatchReportId(resumeId, targetJobId, contextualPayload.resumeVersionId)
   }
 
   if (!resumeId || !targetJobId) {
     return createInterviewApi({
-      ...payload,
+      ...contextualPayload,
       resumeId: undefined,
       basedOnResume: false
     })
   }
 
   return createInterviewByJobTargetApi({
-    ...payload,
+    ...contextualPayload,
     resumeId,
     targetJobId,
     skillProfileId: getQueryNumber('skillProfileId'),
@@ -1302,6 +1522,7 @@ const handleQuickCreate = async () => {
 
 onMounted(async () => {
   await fetchResumes()
+  await loadApplicationPackageContext()
   await applyRouteContext()
   await verifyRouteMatchReport()
 })
@@ -1558,6 +1779,85 @@ onMounted(async () => {
     color: #475569;
     font-size: 13px;
     line-height: 1.6;
+  }
+}
+
+.application-context-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f8fbff;
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.application-context-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    margin-top: 5px;
+    color: #0f172a;
+    line-height: 1.35;
+  }
+}
+
+.application-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  article {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+
+    &.is-missing {
+      border-color: #fed7aa;
+      background: #fff7ed;
+    }
+  }
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  strong {
+    overflow: hidden;
+    margin-top: 4px;
+    color: #0f172a;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2200,6 +2500,7 @@ onMounted(async () => {
   .create-grid,
   .mode-grid,
   .recommended-plan-grid,
+  .application-context-grid,
   .config-collapsed__grid,
   .form-grid,
   .quick-start-panel {

@@ -2,10 +2,10 @@
   <div class="page-shell admin-console-page trace-cockpit-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow">V4 Phase 6 / MVP-A</div>
+        <div class="admin-eyebrow">V5 Phase 2 / Backend aggregation</div>
         <h1 class="admin-hero__title">TraceCockpit</h1>
         <p class="admin-hero__desc">
-          Lightweight trace aggregation for AI logs, Agent Runs, and async tasks. It provides safe summaries, weak-association labels, and links back to source admin pages.
+          Backend-first trace aggregation for AI calls, Agent runs/tasks, async tasks, application packages, interviews, and reports. Sensitive source material stays behind raw-access endpoints.
         </p>
       </div>
     </section>
@@ -27,6 +27,16 @@
     />
 
     <TraceSensitiveAccessNotice />
+
+    <el-alert
+      v-if="result?.dataSource"
+      :type="result.dataSource === 'BACKEND_AGGREGATED' ? 'success' : 'warning'"
+      show-icon
+      :closable="false"
+      class="trace-cockpit-page__alert"
+      :title="result.dataSource === 'BACKEND_AGGREGATED' ? 'Source: backend aggregated' : 'Source: frontend fallback'"
+      :description="result.fallbackReason"
+    />
 
     <TraceOverviewCards
       :overview="result?.overview"

@@ -22,6 +22,10 @@
           <Files :size="16" />
           进入简历匹配
         </el-button>
+        <el-button v-if="targetId" type="primary" plain @click="goApplicationPackage">
+          <PackageCheck :size="16" />
+          生成投递包
+        </el-button>
       </div>
     </section>
 
@@ -192,7 +196,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Files, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, Files, PackageCheck, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -662,6 +666,20 @@ const goResumeMatch = () => {
     query: {
       targetJobId: String(targetId.value)
     }
+  })
+}
+
+const goApplicationPackage = () => {
+  if (!targetId.value) return
+  router.push({
+    path: '/application-packages/preview',
+    query: compactRouteQuery({
+      targetJobId: String(targetId.value),
+      jdAnalysisId: analysis.value?.id ? String(analysis.value.id) : undefined,
+      jobTitle: target.value?.jobTitle || undefined,
+      companyName: target.value?.companyName || undefined,
+      jdSource: target.value?.jdSource || undefined
+    })
   })
 }
 

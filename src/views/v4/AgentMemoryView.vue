@@ -4,7 +4,7 @@
       <div>
         <div class="v4-eyebrow">长期记忆</div>
         <h1>长期记忆治理</h1>
-        <p>管理会影响智能教练后续计划、复盘和推荐的长期记忆；候选、低置信和停用记忆不会被展示为强依据。</p>
+        <p>长期记忆只表达偏好、约束和复盘结论，不是能力证据；候选、低置信、停用或删除记忆不会进入 Agent 强推荐上下文。</p>
       </div>
       <div class="v4-actions">
         <el-button :icon="Plus" type="primary" @click="openCreate()">新增记忆</el-button>
@@ -39,7 +39,18 @@
         <el-radio-button label="GOVERNANCE">需治理</el-radio-button>
         <el-radio-button label="DISABLED">已停用</el-radio-button>
       </el-radio-group>
-      <p class="v4-memory-controls__hint">缺少来源、确认时间或置信度时，页面会降级为待复核状态，不强造可信结论。</p>
+      <p class="v4-memory-controls__hint">从复盘、投递、实验或 AI 总结抽取的内容只能先作为候选，必须显式确认后才可能影响 Agent 行动。</p>
+    </section>
+
+    <section class="v4-boundary-panel" aria-label="长期记忆边界">
+      <div>
+        <strong>候选状态</strong>
+        <p>candidate / pending confirmation 表示待确认；active 仅表示可作为偏好输入；disabled、deleted、stale 和 low-confidence 会被降级或隔离。</p>
+      </div>
+      <div>
+        <strong>上下文边界</strong>
+        <p>只有已启用、已确认、非低置信、非过期且未删除的记忆可进入 Agent 上下文；记忆永远不能替代项目、投递、面试或题目证据。</p>
+      </div>
     </section>
 
     <section class="content-card">
@@ -93,13 +104,22 @@
 
             <div class="v4-row-actions">
               <el-button
-                v-if="!isStrictlyEnabled(view.item)"
+                v-if="view.isCandidate && !view.isDeleted"
                 :icon="Check"
                 link
                 type="primary"
                 @click="toggle(view)"
               >
-                {{ view.isCandidate ? '确认/启用' : '启用' }}
+                确认
+              </el-button>
+              <el-button
+                v-else-if="!isStrictlyEnabled(view.item)"
+                :icon="Check"
+                link
+                type="primary"
+                @click="toggle(view)"
+              >
+                启用
               </el-button>
               <el-button v-else :icon="TurnOff" link type="warning" @click="toggle(view)">停用</el-button>
               <el-button :icon="Delete" link type="danger" @click="remove(view)">删除</el-button>
@@ -187,14 +207,16 @@ import {
   disableAgentMemoryApi,
   enableAgentMemoryApi,
   getAgentMemoriesApi,
-  type AgentMemoryVO
-} from '@/api/v4'
+  getAgentMemoryImpactPreviewApi
+} from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
+import type { AgentContextImpactPreviewVO, AgentMemoryLifecycle, AgentMemoryVO } from '@/types/agent'
+import { isAuthOrForbiddenError } from '@/utils/apiError'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 
 type MemoryFilter = 'ALL' | 'TRUSTED' | 'CANDIDATE' | 'GOVERNANCE' | 'DISABLED'
-type MemoryLifecycle = 'trusted' | 'candidate' | 'partial' | 'low-confidence' | 'stale' | 'disabled' | 'deleted'
+type MemoryLifecycle = AgentMemoryLifecycle | 'trusted'
 
 interface MemoryViewState {
   item: AgentMemoryVO
@@ -243,6 +265,7 @@ const sourceTypeLabels: Record<string, string> = {
 
 const manualSourceTypes = new Set(['MANUAL', 'USER_MANUAL', 'USER_NOTE'])
 const candidateStatusValues = new Set(['CANDIDATE', 'PENDING_CONFIRMATION', 'UNCONFIRMED'])
+const lowConfidenceStatusValues = new Set(['LOW_CONFIDENCE', 'PARTIAL'])
 const staleStatusValues = new Set(['STALE', 'EXPIRED'])
 const deletedStatusValues = new Set(['DELETED', 'REMOVED'])
 
@@ -256,7 +279,7 @@ const sourceTypeLabel = (value?: string) => sourceTypeLabels[normalizeSourceType
 
 const isStrictlyEnabled = (item: AgentMemoryVO) => {
   if (item.enabled === 0) return false
-  return item.enabled === 1 || normalizeStatus(item.memoryStatus) === 'ENABLED'
+  return item.enabled === 1 || ['ENABLED', 'ACTIVE', 'CONFIRMED'].includes(normalizeStatus(item.memoryStatus))
 }
 
 const hasExplicitDisabledState = (item: AgentMemoryVO) =>
@@ -298,19 +321,19 @@ const deriveMemoryViewState = (item: AgentMemoryVO): MemoryViewState => {
   const status = normalizeStatus(item.memoryStatus)
   const isManual = manualSourceTypes.has(normalizeSourceType(item.sourceType))
   const isConfirmed = Boolean(item.confirmedAt) || isManual
-  const isCandidate = candidateStatusValues.has(status) || !isConfirmed
+  const isCandidate = Boolean(item.pendingConfirmation) || candidateStatusValues.has(status) || !isConfirmed
   const confidence = normalizedConfidence(item.confidence)
-  const isLowConfidence = confidence === null || confidence < 0.5
+  const isLowConfidence = Boolean(item.lowConfidence) || lowConfidenceStatusValues.has(status) || confidence === null || confidence < 0.6
   const isDeleted = Boolean(item.deletedAt) || deletedStatusValues.has(status)
   const isStale = Boolean(item.stale) || staleStatusValues.has(status) || isExpired(item.expiresAt)
   const enabled = isStrictlyEnabled(item)
-  const canEnterTrustedContext = enabled && isConfirmed && !isCandidate && !isLowConfidence && !isStale && !isDeleted
+  const canEnterTrustedContext = Boolean(item.canEnterAgentContext) && enabled && isConfirmed && !isCandidate && !isLowConfidence && !isStale && !isDeleted
   const reasons: string[] = []
 
   if (isDeleted) reasons.push('已删除或后端标记为移除，不能作为当前有效依据。')
-  if (!enabled) reasons.push(item.enabled === 0 ? 'enabled=0，不会进入强推荐上下文。' : '未确认启用状态，按保守策略降级。')
+  if (!enabled) reasons.push(item.enabled === 0 ? 'enabled=0，不会进入 Agent 上下文。' : '未确认启用状态，按保守策略降级。')
   if (isCandidate) reasons.push(isManual ? '等待明确状态返回前按候选处理。' : '非手动来源且没有确认时间，必须确认后才能成为可信输入。')
-  if (isLowConfidence) reasons.push(confidence === null ? '缺少置信度字段，只能作为复核线索。' : '置信度偏低，只能作为弱观察。')
+  if (isLowConfidence) reasons.push(confidence === null ? '缺少置信度字段，只能作为复核线索。' : '置信度低于强输入阈值，只能作为弱观察。')
   if (isStale) reasons.push('记忆可能过期，需要复核是否继续有效。')
 
   if (isDeleted) {
@@ -392,16 +415,17 @@ const confirmationLabel = (view: MemoryViewState) => {
 }
 
 const impactScopeLabel = (view: MemoryViewState) => {
-  if (view.canEnterTrustedContext) return '可影响今日计划、复盘、题目训练和面试建议，但仍需保留来源与置信度。'
+  if (view.item.impactPreview?.contextEffect) return view.item.impactPreview.contextEffect
+  if (view.canEnterTrustedContext) return '可影响今日计划、投递包取舍、面试训练和实验复盘，但只作为偏好/约束，不替代证据。'
   if (view.isDeleted) return '已隔离，后续推荐不应主动引用；历史快照仅作为历史记录。'
   if (!isStrictlyEnabled(view.item)) return '未启用或已停用，后续推荐不应主动引用。'
-  if (view.isCandidate) return '候选待确认，只能生成确认/治理动作，不进入强推荐。'
+  if (view.isCandidate) return '候选待确认，只能生成确认/治理动作，不进入 Agent 强推荐上下文。'
   if (view.isLowConfidence) return '只作为弱观察或复核线索，不作为最高优先级依据。'
   if (view.isStale) return '需要复核时效性，确认前不作为强依据。'
   return '字段不足，按保守策略只作为观察信号。'
 }
 
-const buildActionPreview = (view: MemoryViewState, actionLabel: '启用' | '停用' | '删除') => {
+const buildActionPreview = (view: MemoryViewState, actionLabel: '确认' | '启用' | '停用' | '删除') => {
   const target = `${memoryTypeLabel(view.item.memoryType)}：${view.item.content || '长期记忆'}`
   if (actionLabel === '停用') {
     return {
@@ -421,15 +445,68 @@ const buildActionPreview = (view: MemoryViewState, actionLabel: '启用' | '停�
       tips: ['确认这条记忆已经不准确、不应长期保存或不希望继续影响推荐。', '删除前请确认不需要保留为复核线索。']
     }
   }
+  if (actionLabel === '确认') {
+    return {
+      action: '确认这条候选长期记忆',
+      target,
+      impact: '确认后，这条记忆仍需满足已启用、非低置信、非过期且未删除，才可能作为偏好或约束影响 Agent 今日计划、投递包取舍、面试训练和实验复盘。',
+      rollback: '如果确认后发现不准确，可以立即停用或删除；停用/删除后 Agent 上下文会回退到任务、投递、实验和面试等证据源。',
+      tips: ['确认它是稳定偏好、长期约束或可复用复盘结论。', '不要把候选记忆当作能力证据，能力仍需由项目、题目、投递和面试记录证明。']
+    }
+  }
   return {
-    action: view.isCandidate ? '确认并启用这条候选记忆' : '启用这条长期记忆',
+    action: '启用这条长期记忆',
     target,
-    impact: view.isCandidate
-      ? '启用请求提交后，只有后端返回用户确认状态或确认时间，且记忆仍处于启用、非低置信、非过期状态时，页面才会把它归入可信输入。'
-      : '启用后，这条记忆可能影响后续计划、复盘和推荐；如果缺少确认状态、置信度或来源字段，页面仍会保守降级展示。',
+    impact: '启用后，这条记忆仍需通过确认状态、置信度和时效性检查，才可能影响后续计划、复盘和推荐；字段不足时页面会保守降级。',
     rollback: '如果启用后发现内容不准确，可以再次停用或删除。',
     tips: ['确认内容是稳定偏好、长期弱项或复盘结论。', '避免把临时情绪、敏感原文或未经确认的能力标签长期保存。']
   }
+}
+
+const fallbackMemoryImpactPreview = (
+  view: MemoryViewState,
+  fallbackReason?: string
+): AgentContextImpactPreviewVO => ({
+  sourceType: 'MEMORY',
+  sourceId: view.item.id,
+  sourceTitle: memoryTypeLabel(view.item.memoryType),
+  referenceCount: 0,
+  recentReferenceCount: 0,
+  affectedModules: view.item.impactScopes || [],
+  affectedConsumers: [],
+  futureContextImpact: view.canEnterTrustedContext,
+  historicalOnly: false,
+  safeToDisable: !view.canEnterTrustedContext,
+  warnings: [
+    'Backend usage reference preview is unavailable; this is an estimated local fallback.',
+    ...(fallbackReason ? [fallbackReason] : [])
+  ],
+  previewSource: 'ESTIMATED',
+  resultSource: 'ESTIMATED',
+  fallbackReason
+})
+
+const loadMemoryImpactPreview = async (view: MemoryViewState) => {
+  try {
+    return await getAgentMemoryImpactPreviewApi(view.item.id)
+  } catch (error) {
+    if (isAuthOrForbiddenError(error)) throw error
+    return fallbackMemoryImpactPreview(view, getErrorMessage(error, 'memory impact-preview unavailable'))
+  }
+}
+
+const memoryImpactPreviewText = (preview: AgentContextImpactPreviewVO) => {
+  const backend = preview.previewSource === 'BACKEND_REFERENCES' || preview.resultSource === 'BACKEND_REFERENCES'
+  const source = backend
+    ? 'Backend precise references'
+    : `Estimated fallback${preview.fallbackReason ? `: ${preview.fallbackReason}` : ''}`
+  const modules = (preview.affectedModules || []).filter(Boolean).join(', ') || 'none'
+  const consumers = (preview.affectedConsumers || [])
+    .slice(0, 3)
+    .map((item) => `${item.consumerType || 'CONSUMER'}#${item.consumerId || '-'}:${item.usageScene || 'usage'}`)
+    .join('; ')
+  const warnings = (preview.warnings || []).filter(Boolean).join('; ')
+  return `${source}. Historical references total=${preview.referenceCount ?? 0}, recent=${preview.recentReferenceCount ?? 0}; modules=${modules}; futureContext=${preview.futureContextImpact ? 'yes' : 'no'}; historicalOnly=${preview.historicalOnly ? 'yes' : 'no'}; safeToDisable=${preview.safeToDisable ? 'yes' : 'no'}${consumers ? `; recent consumers=${consumers}` : ''}${warnings ? `; warnings=${warnings}` : ''}.`
 }
 
 const load = async () => {
@@ -471,7 +548,7 @@ const create = async () => {
   if (!confirmed) return
   saving.value = true
   try {
-    await createAgentMemoryApi({ memoryType: form.memoryType, content, sourceType: 'MANUAL', enabled: 1 })
+    await createAgentMemoryApi({ memoryType: form.memoryType, content, sourceType: 'MANUAL' })
     dialogVisible.value = false
     form.content = ''
     ElMessage.success('记忆已保存')
@@ -485,13 +562,20 @@ const create = async () => {
 
 const toggle = async (view: MemoryViewState) => {
   const enabled = isStrictlyEnabled(view.item)
-  const actionLabel = enabled ? '停用' : '启用'
+  const actionLabel = view.isCandidate ? '确认' : enabled ? '停用' : '启用'
+  let impactPreview: AgentContextImpactPreviewVO
+  try {
+    impactPreview = await loadMemoryImpactPreview(view)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '无法读取记忆影响范围，已中止操作。'))
+    return
+  }
   const preview = buildActionPreview(view, actionLabel)
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}长期记忆`,
     action: preview.action,
     target: preview.target,
-    impact: preview.impact,
+    impact: `${preview.impact} ${memoryImpactPreviewText(impactPreview)}`,
     rollback: preview.rollback,
     audit: `${actionLabel}操作会记录当前账号和这条记忆。`,
     tips: preview.tips,
@@ -499,14 +583,14 @@ const toggle = async (view: MemoryViewState) => {
   })
   if (!confirmed) return
   try {
-    if (enabled) {
-      await disableAgentMemoryApi(view.item.id)
-    } else if (view.isCandidate) {
+    if (view.isCandidate) {
       await confirmAgentMemoryApi(view.item.id)
+    } else if (enabled) {
+      await disableAgentMemoryApi(view.item.id)
     } else {
       await enableAgentMemoryApi(view.item.id)
     }
-    ElMessage.success(enabled ? '记忆已停用' : (view.isCandidate ? '候选记忆确认请求已提交' : '启用请求已提交'))
+    ElMessage.success(actionLabel === '确认' ? '候选记忆确认请求已提交' : (enabled ? '记忆已停用' : '启用请求已提交'))
     await load()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆状态更新失败，请稍后重试。'))
@@ -514,12 +598,19 @@ const toggle = async (view: MemoryViewState) => {
 }
 
 const remove = async (view: MemoryViewState) => {
+  let impactPreview: AgentContextImpactPreviewVO
+  try {
+    impactPreview = await loadMemoryImpactPreview(view)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '无法读取记忆影响范围，已中止删除。'))
+    return
+  }
   const preview = buildActionPreview(view, '删除')
   const confirmed = await confirmDangerActionPreview({
     title: '删除长期记忆',
     action: preview.action,
     target: preview.target,
-    impact: preview.impact,
+    impact: `${preview.impact} ${memoryImpactPreviewText(impactPreview)}`,
     rollback: preview.rollback,
     audit: '删除操作会记录当前账号和这条记忆。',
     tips: preview.tips,
@@ -640,6 +731,28 @@ onMounted(load)
   max-width: 520px;
   margin: 0;
   font-size: 13px;
+}
+
+.v4-boundary-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.v4-boundary-panel strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.v4-boundary-panel p {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .v4-list {
@@ -783,7 +896,8 @@ onMounted(load)
   .v4-page-header,
   .v4-row-head,
   .v4-memory-controls,
-  .v4-governance-panel {
+  .v4-governance-panel,
+  .v4-boundary-panel {
     align-items: flex-start;
     grid-template-columns: 1fr;
     flex-direction: column;

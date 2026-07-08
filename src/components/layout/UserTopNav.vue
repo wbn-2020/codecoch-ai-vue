@@ -228,7 +228,7 @@ const navItems: NavItem[] = [
     desc: '简历、岗位目标、匹配分析和项目证据',
     path: '/resumes',
     icon: FileText,
-    matches: ['/resumes', '/job-targets', '/resume-match', '/project-evidence', '/projects']
+    matches: ['/resumes', '/applications', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/projects']
   },
   {
     key: 'ability',
@@ -249,7 +249,8 @@ const baseSecondaryLinks: SecondaryLink[] = [
   { label: 'AI 任务中心', path: '/agent/tasks' },
   { label: '记录与工具', path: '/tools' },
   { label: '求职实验台', path: '/job-experiments' },
-  { label: '投递管理', path: '/applications', previewOnly: true },
+  { label: '投递管理', path: '/applications' },
+  { label: '投递包', path: '/application-packages' },
   { label: '个人知识库', path: '/knowledge', featureFlag: 'v4Knowledge' },
   { label: '长期记忆', path: '/agent/memory', featureFlag: 'v4Growth' },
   { label: '新手引导', path: '/onboarding' },

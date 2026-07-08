@@ -143,6 +143,12 @@
         <el-select v-model="query.priority" clearable placeholder="优先级" @change="handleSearch">
           <el-option v-for="item in priorityOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
+        <el-select v-model="sourceFilter" clearable placeholder="来源" @change="handleExperienceFilterChange">
+          <el-option v-for="item in sourceFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="trustFilter" clearable placeholder="可信度" @change="handleExperienceFilterChange">
+          <el-option v-for="item in trustFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
         <el-button :loading="loading" @click="fetchTasks">
           <Search :size="16" />
           查询
@@ -156,16 +162,20 @@
 
       <div v-else v-loading="loading" class="task-stream">
         <AppState
-          v-if="!tasks.length && !loading"
+          v-if="!visibleTasks.length && !loading"
           type="empty"
-          title="暂无训练任务"
-          description="当前筛选条件下没有处理记录。可以回到今日计划生成新的准备任务，或放宽筛选条件后再试。"
+          :title="taskEmptyTitle"
+          :description="taskEmptyDescription"
         >
           <el-button type="primary" @click="router.push('/agent/today')">去生成今日计划</el-button>
           <el-button @click="handleReset">清空筛选</el-button>
+          <el-button @click="router.push('/applications')">补投递</el-button>
+          <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
+          <el-button @click="router.push('/knowledge')">补知识资料</el-button>
+          <el-button @click="router.push('/agent/memory')">确认记忆</el-button>
         </AppState>
 
-        <article v-for="task in tasks" :key="task.id" class="task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
+        <article v-for="task in visibleTasks" :key="task.id" class="task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
           <div class="task-card__main">
             <div class="task-card__head">
               <div>
@@ -220,7 +230,9 @@
               <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
             </div>
             <p v-if="taskFailureText(task)" class="task-failure">{{ taskFailureText(task) }}</p>
-            <p v-if="task.skipReason && normalizeStatus(task.status) === 'SKIPPED'" class="task-skip-reason">跳过原因：{{ task.skipReason }}</p>
+            <p v-if="(task.skipReason && normalizeStatus(task.status) === 'SKIPPED') || isDeferredAgentTask(task)" class="task-skip-reason">{{ taskSkipReasonText(task) }}</p>
+            <p v-if="taskFeedbackSummaryText(task)" class="task-feedback-summary">{{ taskFeedbackSummaryText(task) }}</p>
+            <p v-if="taskNextPlanImpactText(task)" class="task-plan-impact">{{ taskNextPlanImpactText(task) }}</p>
           </div>
 
           <aside class="task-card__side">
@@ -256,7 +268,7 @@
                 去处理
               </el-button>
               <el-button
-                v-else-if="normalizeStatus(task.status) === 'SKIPPED'"
+                v-else-if="['SKIPPED', 'DEFERRED'].includes(normalizeStatus(task.status))"
                 type="warning"
                 :loading="isTaskActionPending(task, 'restore')"
                 :disabled="isTaskPending(task)"
@@ -324,7 +336,14 @@
                     >
                       跳过任务
                     </el-dropdown-item>
-                    <el-dropdown-item v-if="normalizeStatus(task.status) === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">
+                    <el-dropdown-item
+                      v-if="canDeferTask(task)"
+                      :disabled="isTaskPending(task)"
+                      @click="openDeferDialog(task)"
+                    >
+                      推迟到下一轮
+                    </el-dropdown-item>
+                    <el-dropdown-item v-if="['SKIPPED', 'DEFERRED'].includes(normalizeStatus(task.status))" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">
                       恢复待办
                     </el-dropdown-item>
                     <el-dropdown-item v-if="task.reason" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'EXPLAIN_RECOMMENDATION')">AI 解释推荐理由</el-dropdown-item>
@@ -351,15 +370,18 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'complete' ? '完成任务' : '跳过任务'" width="460px">
+    <el-dialog v-model="dialogVisible" :title="actionDialogTitle" width="460px">
       <el-input
         v-model="note"
         type="textarea"
         :rows="4"
-        :placeholder="dialogMode === 'complete' ? '可填写完成备注' : '请填写跳过原因'"
+        :placeholder="actionDialogPlaceholder"
         maxlength="200"
         show-word-limit
       />
+      <p v-if="dialogMode === 'defer'" class="dialog-helper-text">
+        当前会使用独立推迟接口并保留推迟时间和原因；下一轮计划解释会把它作为暂缓但可恢复的影响因素。
+      </p>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="selectedTask ? isTaskActionPending(selectedTask, dialogMode) : false" @click="submitAction">确认</el-button>
@@ -374,9 +396,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="feedbackForm.comment" type="textarea" :rows="4" maxlength="300" show-word-limit />
+          <el-input
+            v-model="feedbackForm.comment"
+            type="textarea"
+            :rows="4"
+            maxlength="300"
+            show-word-limit
+            placeholder="可填写为什么有用、无用，或需要修正哪一段推荐原因。"
+          />
         </el-form-item>
       </el-form>
+      <p class="dialog-helper-text">{{ feedbackDialogImpactText }}</p>
       <template #footer>
         <el-button @click="feedbackDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="feedbackTask ? isTaskActionPending(feedbackTask, 'feedback') : false" @click="submitFeedback">提交</el-button>
@@ -499,6 +529,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import {
   completeAgentTaskApi,
+  deferAgentTaskApi,
   getAgentTasksApi,
   recordAgentMetricEventApi,
   restoreAgentTaskApi,
@@ -515,10 +546,16 @@ import { buildAgentLoopActions } from '@/features/agent-loop/agentLoopRules'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
 import {
+  agentTaskFeedbackSummary,
+  agentTaskDeferReason,
+  agentTaskNextPlanImpactText,
   buildAgentTaskActionPath,
+  buildAgentTaskFeedbackSummary,
+  formatAgentTaskDeferReason,
   hasAgentTaskActionEntry,
   isAgentJobApplicationTask,
-  isEvidenceBoundAgentTask
+  isEvidenceBoundAgentTask,
+  isDeferredAgentTask
 } from '@/utils/agentTaskAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
@@ -544,7 +581,7 @@ const asyncDetailErrorMessage = ref('')
 const asyncDetailTask = ref<AsyncTaskVO>()
 const dateRange = ref<[string, string] | ''>('')
 const dialogVisible = ref(false)
-const dialogMode = ref<'complete' | 'skip'>('complete')
+const dialogMode = ref<'complete' | 'skip' | 'defer'>('complete')
 const selectedTask = ref<AgentTaskVO>()
 const note = ref('')
 const feedbackDialogVisible = ref(false)
@@ -598,6 +635,8 @@ const asyncQuery = reactive<AsyncTaskQueryDTO>({
   keyword: ''
 })
 const asyncDiagnosticKeyword = ref('')
+const sourceFilter = ref('')
+const trustFilter = ref('')
 
 const taskTypeOptions: SelectOption[] = [
   { label: '今日计划', value: 'DAILY_PLAN' },
@@ -624,6 +663,7 @@ const statusOptions: SelectOption[] = [
   { label: '生成成功', value: 'SUCCESS' },
   { label: '生成失败', value: 'FAILED' },
   { label: '已完成', value: 'DONE' },
+  { label: '已推迟', value: 'DEFERRED' },
   { label: '已跳过', value: 'SKIPPED' },
   { label: '已过期', value: 'EXPIRED' },
   { label: '已取消', value: 'CANCELED' }
@@ -655,6 +695,23 @@ const priorityOptions: SelectOption[] = [
   { label: '低优先级', value: 'LOW' }
 ]
 
+const sourceFilterOptions: SelectOption[] = [
+  { label: '投递/求职进度', value: 'APPLICATION' },
+  { label: '面试反馈', value: 'INTERVIEW' },
+  { label: '题库/错题', value: 'QUESTION' },
+  { label: '简历/匹配', value: 'RESUME' },
+  { label: '知识资料', value: 'KNOWLEDGE' },
+  { label: '长期记忆', value: 'MEMORY' },
+  { label: '智能教练', value: 'AGENT' }
+]
+
+const trustFilterOptions: SelectOption[] = [
+  { label: '高可信/已记录', value: 'TRUSTED' },
+  { label: '部分待确认', value: 'PARTIAL' },
+  { label: '保守建议', value: 'FALLBACK' },
+  { label: '待确认', value: 'UNKNOWN' }
+]
+
 const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item.label]))
 const asyncStatusMap = Object.fromEntries(asyncStatusOptions.map((item) => [item.value, item.label]))
 const asyncBizTypeMap = Object.fromEntries(asyncBizTypeOptions.map((item) => [item.value, item.label]))
@@ -662,6 +719,7 @@ const priorityMap: Record<string, string> = { HIGH: '高优先级', MEDIUM: '中
 const feedbackTypeOptions: SelectOption[] = [
   { label: '有帮助', value: 'HELPFUL' },
   { label: '没有帮助', value: 'NOT_HELPFUL' },
+  { label: '原因需修正', value: 'REASON_CORRECTION' },
   { label: '内容不准确', value: 'INACCURATE' },
   { label: '不是我的经历', value: 'NOT_MY_EXPERIENCE' },
   { label: '内容不符合实际', value: 'HALLUCINATION' },
@@ -670,7 +728,7 @@ const feedbackTypeOptions: SelectOption[] = [
   { label: '不相关', value: 'IRRELEVANT' }
 ]
 
-type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+type TaskAction = 'start' | 'complete' | 'skip' | 'defer' | 'restore' | 'feedback'
 type FocusMetricCode = 'focus_session_started' | 'focus_session_finished' | 'focus_session_canceled'
 interface FocusSessionState {
   taskId: number
@@ -725,6 +783,37 @@ const highPriorityTasks = computed(() => tasks.value.filter((task) => normalizeS
 const recoverableTasks = computed(() => tasks.value.filter((task) => task.actionUrl || getTaskRunId(task) || task.relatedBizId))
 const activeAsyncTasks = computed(() => asyncTasks.value.filter((task) => ['PENDING', 'RUNNING'].includes(normalizeStatus(task.status))))
 const recoverableAsyncTasks = computed(() => asyncTasks.value.filter((task) => getAsyncTaskEntry(task) || task.traceId || task.messageId))
+const hasTaskExperienceFilter = computed(() => Boolean(sourceFilter.value || trustFilter.value))
+const taskSourceBucket = (task: AgentTaskVO) => {
+  const value = [task.sourceType, task.relatedBizType, task.taskType, task.actionUrl].filter(Boolean).join(' ').toUpperCase()
+  if (value.includes('APPLICATION') || value.includes('JOB_APPLICATION')) return 'APPLICATION'
+  if (value.includes('INTERVIEW') || value.includes('REPORT')) return 'INTERVIEW'
+  if (value.includes('QUESTION') || value.includes('WRONG')) return 'QUESTION'
+  if (value.includes('RESUME') || value.includes('MATCH')) return 'RESUME'
+  if (value.includes('KNOWLEDGE')) return 'KNOWLEDGE'
+  if (value.includes('MEMORY')) return 'MEMORY'
+  return 'AGENT'
+}
+const taskTrustBucket = (task: AgentTaskVO) => {
+  const status = String(task.trustStatus || '').toUpperCase()
+  const confidence = String(task.confidence || '').toUpperCase()
+  if (task.fallback || status === 'FALLBACK') return 'FALLBACK'
+  if (status === 'VERIFIED' || confidence === 'HIGH') return 'TRUSTED'
+  if (status === 'PARTIAL' || confidence === 'MEDIUM') return 'PARTIAL'
+  return 'UNKNOWN'
+}
+const visibleTasks = computed(() =>
+  tasks.value.filter((task) =>
+    (!sourceFilter.value || taskSourceBucket(task) === sourceFilter.value) &&
+    (!trustFilter.value || taskTrustBucket(task) === trustFilter.value)
+  )
+)
+const taskEmptyTitle = computed(() => hasTaskExperienceFilter.value ? '当前来源/可信度下暂无任务' : '暂无训练任务')
+const taskEmptyDescription = computed(() =>
+  hasTaskExperienceFilter.value
+    ? '当前页没有符合来源或可信度筛选的任务。可以清空筛选，或先补投递、面试复盘、知识资料和长期记忆，让下一轮计划有更多依据。'
+    : '当前筛选条件下没有处理记录。可以回到今日计划生成新的准备任务，或先补投递、面试复盘、知识资料和长期记忆。'
+)
 const agentLoopActionsByTaskId = computed(() => {
   const map = new Map<number, ReturnType<typeof buildAgentLoopActions>[number]>()
   buildAgentLoopActions(tasks.value, { historyTasks: tasks.value }).forEach((action) => {
@@ -744,7 +833,11 @@ const asyncActiveFilterItems = computed(() => {
 })
 
 const metrics = computed(() => [
-  { label: '当前结果', value: (total.value || tasks.value.length) + (asyncTotal.value || asyncTasks.value.length), desc: '训练任务和处理进度合计' },
+  {
+    label: '当前结果',
+    value: (hasTaskExperienceFilter.value ? visibleTasks.value.length : (total.value || tasks.value.length)) + (asyncTotal.value || asyncTasks.value.length),
+    desc: hasTaskExperienceFilter.value ? '已按来源/可信度筛选当前页任务' : '训练任务和处理进度合计'
+  },
   { label: '待推进', value: activeTasks.value.length + activeAsyncTasks.value.length, desc: '排队中、生成中或待执行的任务' },
   { label: '可恢复', value: recoverableTasks.value.length + recoverableAsyncTasks.value.length, desc: '带入口或反馈码的任务' },
   { label: '预计耗时', value: `${estimatedMinutes.value}m`, desc: highPriorityTasks.value.length ? `${highPriorityTasks.value.length} 个高优先级任务` : '本页任务耗时合计' }
@@ -935,6 +1028,10 @@ const sourceTypeLabel = (value?: string | null) => {
     INTERVIEW_REPORT: '面试报告',
     RESUME_OPTIMIZE: '项目经历',
     TRAINING_MATERIAL: '训练素材',
+    KNOWLEDGE_REVIEW: '知识资料',
+    KNOWLEDGE_GAP: '知识缺口',
+    MEMORY_PREFERENCE: '长期记忆',
+    AGENT_MEMORY: '长期记忆',
     APPLICATION_FOLLOW_UP: '投递跟进',
     JOB_APPLICATION: '投递进度',
     JOB_COACH_AGENT_TASK: '智能教练'
@@ -947,7 +1044,21 @@ const trustStatusLabel = (value?: string | null, fallback?: boolean | null) => {
   if (fallback || status === 'FALLBACK') return '推荐依据不足'
   if (status === 'VERIFIED') return '来源已记录'
   if (status === 'PARTIAL') return '部分来源待确认'
+  if (status === 'CANDIDATE') return '候选记忆待确认'
+  if (status === 'STALE') return '来源可能过期'
+  if (status === 'DISABLED') return '来源已停用'
   return '来源待确认'
+}
+
+const confidenceLabel = (value?: string | number | null) => {
+  const confidence = String(value ?? '').toUpperCase()
+  if (!confidence) return ''
+  if (confidence === 'HIGH') return '可信度：高'
+  if (confidence === 'MEDIUM') return '可信度：中'
+  if (confidence === 'LOW') return '可信度：低'
+  if (confidence === 'UNKNOWN') return '可信度待确认'
+  if (typeof value === 'number') return `可信度：${Math.round(value * 100)}%`
+  return `可信度：${value}`
 }
 
 const taskTraceText = (task: AgentTaskVO) => {
@@ -959,6 +1070,10 @@ const taskDiagnosticItems = (task: AgentTaskVO) => {
   const items = ['训练记录已保存']
   items.push(`来源：${sourceTypeLabel(task.sourceType || task.relatedBizType || task.taskType)}`)
   items.push(trustStatusLabel(task.trustStatus, task.fallback))
+  const confidence = confidenceLabel(task.confidence)
+  if (confidence) {
+    items.push(confidence)
+  }
   if (task.evidenceSummary) {
     items.push(task.evidenceSummary)
   }
@@ -986,15 +1101,20 @@ const taskDiagnosticItems = (task: AgentTaskVO) => {
 const agentLoopDiagnosticItems = (task: AgentTaskVO) => {
   const action = agentLoopActionsByTaskId.value.get(task.id)
   if (!action) return []
-  const items: string[] = [`Loop: ${action.planStrength}`]
+  const strengthLabel: Record<string, string> = {
+    strong: '强动作',
+    medium: '中动作',
+    weak: '弱动作'
+  }
+  const items: string[] = [`闭环强度：${strengthLabel[String(action.planStrength)] || action.planStrength}`]
   if (!action.canPromoteToKeyAction) {
-    items.push('Weak action signal')
+    items.push('暂不进入关键动作')
   }
   if (action.repeatedSkipCount >= 2) {
-    items.push('Repeated skip: split or downgrade next')
+    items.push('多次暂缓：下一轮建议拆小或降级')
   }
   if (action.degradationReasons.length) {
-    items.push(`Degraded: ${action.degradationReasons.slice(0, 2).join(', ')}`)
+    items.push(`降级原因：${action.degradationReasons.slice(0, 2).join('、')}`)
   }
   return items
 }
@@ -1004,6 +1124,19 @@ const taskFailureText = (task: AgentTaskVO) => {
   if (status !== 'FAILED' && !task.errorMessage && !task.errorCode) return ''
   const reason = task.errorMessage || '任务失败原因尚未透出'
   return task.errorCode ? `失败原因：${reason}（${task.errorCode}）` : `失败原因：${reason}`
+}
+
+const taskSkipReasonText = (task: AgentTaskVO) => {
+  if (isDeferredAgentTask(task)) return `推迟原因：${agentTaskDeferReason(task)}`
+  if (!task.skipReason) return ''
+  return `跳过原因：${task.skipReason}`
+}
+
+const taskFeedbackSummaryText = (task: AgentTaskVO) => agentTaskFeedbackSummary(task)
+const taskNextPlanImpactText = (task: AgentTaskVO) => agentTaskNextPlanImpactText(task)
+
+const patchLocalTask = (taskId: number, patch: Partial<AgentTaskVO> & Record<string, unknown>) => {
+  tasks.value = tasks.value.map((task) => task.id === taskId ? ({ ...task, ...patch } as AgentTaskVO) : task)
 }
 
 const formatTaskDate = (value?: string | null) => {
@@ -1031,6 +1164,7 @@ const statusActionHint = (task: AgentTaskVO) => {
     EXPIRED: '需要确认',
     CANCELED: '已取消'
   }
+  if (isDeferredAgentTask(task)) return '已推迟'
   return map[normalizeStatus(task.status)] || '任务状态'
 }
 
@@ -1043,7 +1177,8 @@ const statusMainText = (task: AgentTaskVO) => {
   if (status === 'SUCCESS') return '可查看结果'
   if (status === 'FAILED') return '查看失败原因'
   if (status === 'DONE') return task.completedAt ? '已完成' : '已收尾'
-  if (status === 'SKIPPED') return '可恢复'
+  if (status === 'DEFERRED') return '下一轮可恢复'
+  if (status === 'SKIPPED') return isDeferredAgentTask(task) ? '下一轮可恢复' : '可恢复'
   if (status === 'EXPIRED') return '已过期'
   if (status === 'CANCELED') return '已取消'
   return statusMap[status] || '待处理'
@@ -1057,9 +1192,31 @@ const hasRecoverableEntry = (task: AgentTaskVO) => Boolean(hasAgentTaskActionEnt
 const canManuallyCloseTask = (task: AgentTaskVO) =>
   ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status)) && !isEvidenceBoundAgentTask(task)
 const canManuallySkipTask = (task: AgentTaskVO) => ['TODO', 'DOING', 'EXPIRED'].includes(normalizeStatus(task.status))
+const canDeferTask = (task: AgentTaskVO) => canManuallySkipTask(task)
 const canStartFocusSession = (task: AgentTaskVO) => ['TODO', 'DOING'].includes(normalizeStatus(task.status))
 const isFocusActive = (task: AgentTaskVO) => focusSession.value?.taskId === task.id
 const isFocusStartDisabled = (task: AgentTaskVO) => Boolean(focusSession.value && !isFocusActive(task)) || isTaskPending(task)
+
+const actionDialogTitle = computed(() => {
+  if (dialogMode.value === 'complete') return '完成任务'
+  if (dialogMode.value === 'defer') return '推迟任务'
+  return '跳过任务'
+})
+
+const actionDialogPlaceholder = computed(() => {
+  if (dialogMode.value === 'complete') return '可填写完成备注'
+  if (dialogMode.value === 'defer') return '请填写推迟原因，例如：今天先处理面试复盘，明天再做这项'
+  return '请填写跳过原因'
+})
+
+const feedbackDialogImpactText = computed(() => {
+  const summary = buildAgentTaskFeedbackSummary({
+    outcome: 'feedback',
+    feedbackType: feedbackForm.feedbackType,
+    reason: feedbackForm.comment
+  })
+  return `下一轮计划参考：${summary}。`
+})
 
 const startFocusSession = (task: AgentTaskVO) => {
   if (focusSession.value) {
@@ -1459,8 +1616,14 @@ const handleSearch = () => {
   fetchTasks()
 }
 
+const handleExperienceFilterChange = () => {
+  query.pageNum = 1
+}
+
 const handleReset = () => {
   dateRange.value = ''
+  sourceFilter.value = ''
+  trustFilter.value = ''
   Object.assign(query, {
     pageNum: 1,
     pageSize: 6,
@@ -1551,11 +1714,18 @@ const openSkipDialog = (task: AgentTaskVO) => {
   dialogVisible.value = true
 }
 
+const openDeferDialog = (task: AgentTaskVO) => {
+  selectedTask.value = task
+  dialogMode.value = 'defer'
+  note.value = ''
+  dialogVisible.value = true
+}
+
 const submitAction = async () => {
   const task = selectedTask.value
   if (!task) return
-  if (dialogMode.value === 'skip' && !note.value.trim()) {
-    ElMessage.warning('请填写跳过原因')
+  if ((dialogMode.value === 'skip' || dialogMode.value === 'defer') && !note.value.trim()) {
+    ElMessage.warning(dialogMode.value === 'defer' ? '请填写推迟原因' : '请填写跳过原因')
     return
   }
   await withTaskPending(task, dialogMode.value, async () => {
@@ -1565,6 +1735,17 @@ const submitAction = async () => {
       completionReviewTask.value = completedTask || task
       completionReviewNote.value = completedTask?.reviewNote || note.value.trim()
       completionReviewVisible.value = true
+    } else if (dialogMode.value === 'defer') {
+      const deferReason = formatAgentTaskDeferReason(note.value)
+      await deferAgentTaskApi(task.id, {
+        deferAt: new Date().toISOString(),
+        deferReason,
+        feedbackSummary: buildAgentTaskFeedbackSummary({
+          outcome: 'defer',
+          reason: note.value
+        })
+      })
+      ElMessage.success('任务已推迟，将作为下一轮计划参考')
     } else {
       await skipAgentTaskApi(task.id, { skipReason: note.value.trim() })
       ElMessage.success('任务已跳过')
@@ -1604,11 +1785,22 @@ const submitFeedback = async () => {
   const task = feedbackTask.value
   if (!task) return
   await withTaskPending(task, 'feedback', async () => {
+    const comment = feedbackForm.comment.trim()
+    const feedbackSummary = buildAgentTaskFeedbackSummary({
+      outcome: 'feedback',
+      feedbackType: feedbackForm.feedbackType,
+      reason: comment
+    })
     await submitAgentFeedbackApi({
       agentTaskId: task.id,
       agentRunId: getTaskRunId(task) ?? undefined,
       feedbackType: feedbackForm.feedbackType,
-      comment: feedbackForm.comment || undefined
+      comment: comment || undefined
+    })
+    patchLocalTask(task.id, {
+      feedbackSummary,
+      lastFeedbackType: feedbackForm.feedbackType,
+      feedbackComment: comment || null
     })
     feedbackDialogVisible.value = false
     ElMessage.success('反馈已提交')
@@ -2009,7 +2201,7 @@ onMounted(() => {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1.25fr) repeat(3, minmax(150px, 0.6fr)) auto auto;
+  grid-template-columns: minmax(230px, 1.1fr) repeat(5, minmax(128px, 0.6fr)) auto auto;
   gap: 10px;
   align-items: center;
   padding: 18px;
@@ -2158,6 +2350,8 @@ onMounted(() => {
 
 .task-reason,
 .task-skip-reason,
+.task-feedback-summary,
+.task-plan-impact,
 .task-failure {
   margin: 14px 0 0;
   padding: 10px 12px;
@@ -2173,10 +2367,29 @@ onMounted(() => {
   background: #fffbeb;
 }
 
+.task-feedback-summary {
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.task-plan-impact {
+  border: 1px solid rgba(20, 184, 166, 0.2);
+  background: #f0fdfa;
+  color: #115e59;
+}
+
 .task-failure {
   border: 1px solid rgba(239, 68, 68, 0.22);
   background: #fef2f2;
   color: #991b1b;
+}
+
+.dialog-helper-text {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .task-card__side {

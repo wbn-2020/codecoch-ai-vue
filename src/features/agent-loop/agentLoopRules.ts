@@ -22,7 +22,7 @@ const STRENGTH_RANK: Record<AgentLoopPlanStrength, number> = {
 
 const WEAK_STRENGTHS = new Set(['WEAK', 'LOW_SAMPLE', 'FALLBACK', 'MOCK', 'BLOCKED'])
 
-const CLOSED_STATUSES = new Set(['DONE', 'SKIPPED', 'CANCELED', 'CANCELLED'])
+const CLOSED_STATUSES = new Set(['DONE', 'DEFERRED', 'SKIPPED', 'CANCELED', 'CANCELLED'])
 
 const traceAvailable = (task: AgentTaskVO): boolean =>
   Boolean(task.traceId || task.aiCallLogId || task.agentRunId || task.runId)

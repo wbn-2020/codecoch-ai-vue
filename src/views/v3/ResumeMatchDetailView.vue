@@ -205,6 +205,10 @@
           >
             记录为投递进度
           </el-button>
+          <el-button :disabled="!report.targetJobId" @click="goApplicationPackage">
+            <PackageCheck :size="16" />
+            查看岗位投递包
+          </el-button>
           <el-button :disabled="!isTrustedSuccessReport" @click="router.push({ path: '/study-plans/from-gap', query: { matchReportId: report.reportId, targetJobId: report.targetJobId, resumeId: report.resumeId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })">
             <RouteIcon :size="16" /> 差距学习计划
           </el-button>
@@ -267,7 +271,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FileChartColumn, FileText, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
+import { ArrowLeft, FileChartColumn, FileText, PackageCheck, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -1003,6 +1007,22 @@ const goGapQuestionGroup = () => {
       targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
       resumeId: report.value.resumeId ? String(report.value.resumeId) : undefined,
       resumeVersionId: report.value.resumeVersionId ? String(report.value.resumeVersionId) : undefined
+    })
+  })
+}
+
+const goApplicationPackage = () => {
+  if (!report.value?.targetJobId) return
+  router.push({
+    path: '/application-packages/preview',
+    query: compactQuery({
+      targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
+      jdAnalysisId: report.value.jdAnalysisId ? String(report.value.jdAnalysisId) : undefined,
+      resumeVersionId: report.value.resumeVersionId ? String(report.value.resumeVersionId) : undefined,
+      matchReportId: report.value.reportId ? String(report.value.reportId) : undefined,
+      jobTitle: report.value.jobTitle || undefined,
+      companyName: report.value.companyName || undefined,
+      jdSource: 'JD 匹配报告'
     })
   })
 }

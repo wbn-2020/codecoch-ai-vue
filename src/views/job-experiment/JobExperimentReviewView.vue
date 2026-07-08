@@ -43,20 +43,36 @@
         </ul>
         <div class="metric-strip">
           <div>
-            <strong>{{ detail.metrics?.applicationCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.applicationCount }}</strong>
             <span>投递数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.feedbackCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.feedbackCount }}</strong>
             <span>反馈数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.interviewCompletedCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.interviewCompletedCount }}</strong>
             <span>完成面试</span>
           </div>
           <div>
             <strong>{{ detail.metrics?.sampleCount ?? detail.metrics?.applicationCount ?? 0 }}</strong>
             <span>样本数</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.rejectedCount }}</strong>
+            <span>拒信</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.noFeedbackCount }}</strong>
+            <span>无反馈</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewRoundCount }}</strong>
+            <span>面试轮次</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewReportSummaryCount }}</strong>
+            <span>报告摘要</span>
           </div>
         </div>
       </section>
@@ -81,8 +97,11 @@
         <p v-if="sampleWarning" class="sample-warning-text">{{ sampleWarning }}</p>
         <p v-else class="summary-text">当前没有后端样本不足提醒，但复盘仍应结合证据链验证后再行动。</p>
         <p class="limit-note">
-          {{ weakConclusion ? '当前复盘只能作为下一轮实验假设，不能输出强结论或显著优劣判断。' : '样本未触发强提醒，仍建议保留人工复核。' }}
+          {{ reviewModeText }}
         </p>
+        <ul v-if="lowSampleRules.length" class="rule-list">
+          <li v-for="rule in lowSampleRules" :key="rule">{{ rule }}</li>
+        </ul>
       </section>
 
       <section class="review-section unsupported-section">
@@ -229,6 +248,13 @@ const reviewStrategy = computed<JobSearchExperimentStrategyVO>(() => ({
   ...(detail.value?.strategy || {})
 }))
 const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latest.value, reviewStrategy.value))
+const feedbackSummary = computed(() => reviewDisplay.value.applicationFeedbackSummary)
+const lowSampleRules = computed(() => reviewDisplay.value.lowSampleRules)
+const reviewModeText = computed(() => {
+  if (reviewDisplay.value.reviewMode === 'FACTS_ONLY') return '投递数少于 5，本次复盘只展示事实，不输出策略优劣、趋势判断或版本比较。'
+  if (reviewDisplay.value.reviewMode === 'WEAK_OBSERVATION') return '当前只能输出弱观察；样本不足时请继续补充投递、拒信、无反馈和面试记录。'
+  return '样本达到候选复盘门槛，但仍需保留证据链和人工复核。'
+})
 const weakConclusion = computed(() =>
   shouldKeepConclusionWeak(detail.value?.metrics) ||
   !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
@@ -257,8 +283,10 @@ const reviewNextActions = computed(() => reviewDisplay.value.nextActions)
 const qualityGateLabel = computed(() => reviewDisplay.value.qualityGate.suggestionStrength || 'WEAK')
 const strategyTitle = computed(() => textFromStrategy('title') || '下一轮实验假设')
 const strategyContent = computed(() =>
-  textFromStrategy('content') ||
-  '先补齐目标岗位、简历、项目证据和投递反馈，再生成下一轮复盘。样本不足时只提出可验证行动。'
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY'
+    ? '投递样本少于 5 条，暂不生成策略优劣判断；请继续记录投递状态、拒信、无反馈、面试轮次和面试报告摘要。'
+    : textFromStrategy('content') ||
+      '先补齐目标岗位、简历、项目证据和投递反馈，再生成下一轮复盘。样本不足时只提出可验证行动。'
 )
 const strategySummary = computed(() =>
   weakConclusion.value ? strategyContent.value : detail.value?.strategy ? factSummary.value : latest.value?.insightSummary || factSummary.value || '暂无洞察摘要。'
@@ -442,6 +470,15 @@ onMounted(load)
   gap: 8px;
   padding-left: 20px;
   margin: 12px 0 0;
+}
+
+.rule-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: #fbbf24;
+  line-height: 1.6;
 }
 
 .stack-list {

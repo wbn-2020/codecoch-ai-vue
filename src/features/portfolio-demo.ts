@@ -28,11 +28,15 @@ export const requiredUserDemoSteps: PortfolioDemoRequiredStep[] = [
   { key: 'target-job', title: '目标岗位' },
   { key: 'jd-match', title: 'JD 匹配报告' },
   { key: 'project-evidence', title: '项目证据' },
+  { key: 'application-funnel', title: '投递漏斗' },
+  { key: 'application-package', title: '岗位投递包' },
   { key: 'interview-training', title: '面试训练室' },
   { key: 'interview-report', title: '面试报告' },
   { key: 'ability-map', title: '能力图谱' },
   { key: 'job-experiment-review', title: '求职实验复盘' },
-  { key: 'agent-today', title: 'Agent 今日任务' }
+  { key: 'agent-today', title: 'Agent 今日与本周计划' },
+  { key: 'knowledge-impact', title: '知识影响预览' },
+  { key: 'agent-memory', title: '长期记忆治理' }
 ]
 
 export const requiredOpsDemoSteps: PortfolioDemoRequiredStep[] = [
@@ -41,6 +45,7 @@ export const requiredOpsDemoSteps: PortfolioDemoRequiredStep[] = [
   { key: 'prompt-regression', title: 'Prompt 回归' },
   { key: 'ai-call-logs', title: 'AI 服务记录' },
   { key: 'async-tasks', title: '异步任务中心' },
+  { key: 'trace-cockpit', title: 'Trace Cockpit' },
   { key: 'metrics-dictionary', title: '指标字典' },
   { key: 'ai-ops-dashboard', title: 'AI 运营看板' }
 ]
@@ -50,17 +55,22 @@ export const portfolioDemoKnownPaths = [
   '/job-targets',
   '/resume-match',
   '/project-evidence',
+  '/applications',
+  '/application-packages/preview',
   '/interviews',
   '/interviews/create',
   '/interviews/history',
   '/ability-map',
   '/job-experiments',
   '/agent/today',
+  '/knowledge',
+  '/agent/memory',
   '/admin/agent/runs',
   '/admin/ai/prompts',
   '/admin/ai/prompt-regression',
   '/admin/ai/logs',
   '/admin/async-tasks',
+  '/admin/trace-cockpit',
   '/admin/analytics/metrics',
   '/admin/analytics/ai'
 ]

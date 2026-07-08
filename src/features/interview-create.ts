@@ -3,6 +3,13 @@ import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
 
 export interface InterviewCreateRouteContext {
   applicationId?: number
+  applicationPackageId?: string | number
+  targetJobId?: number
+  jdAnalysisId?: number
+  resumeVersionId?: number
+  matchReportId?: number
+  projectEvidenceIds?: number[]
+  source?: 'application-package' | 'application' | string
 }
 
 export interface BuildInterviewCreatePayloadOptions {
@@ -24,13 +31,18 @@ export const buildInterviewCreatePayload = ({
 }: BuildInterviewCreatePayloadOptions): InterviewCreateDTO => ({
   ...form,
   applicationId: context?.applicationId ?? form.applicationId,
+  applicationPackageId: context?.applicationPackageId ?? form.applicationPackageId,
+  targetJobId: context?.targetJobId ?? form.targetJobId,
+  jdAnalysisId: context?.jdAnalysisId ?? form.jdAnalysisId,
+  resumeVersionId: context?.resumeVersionId ?? form.resumeVersionId,
+  matchReportId: context?.matchReportId ?? form.matchReportId,
   interviewMode: isIndustryMode ? INTERVIEW_MODE.COMPREHENSIVE : form.interviewMode,
   practiceMode: form.practiceMode,
   trainingScene: form.trainingScene,
   targetSkillDomain: form.targetSkillDomain,
   targetSkillCodes: form.targetSkillCodes,
   targetLevel: form.targetLevel,
-  projectEvidenceIds: form.projectEvidenceIds,
+  projectEvidenceIds: context?.projectEvidenceIds?.length ? context.projectEvidenceIds : form.projectEvidenceIds,
   followUpIntensity: form.followUpIntensity,
   industryTemplateId: isIndustryMode ? form.industryTemplateId : undefined,
   industryDirection: isIndustryMode

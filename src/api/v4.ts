@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import type { AgentContextImpactPreviewVO } from '@/types/agent'
 import type { EvidenceSourceVO, SuggestionQualityGateVO, SuggestionTraceVO } from '@/types/suggestion'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
@@ -729,6 +730,9 @@ export const getKnowledgeConfigApi = () =>
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
 
+export const getKnowledgeDocumentImpactPreviewApi = (id: number) =>
+  request.get<AgentContextImpactPreviewVO, AgentContextImpactPreviewVO>(`/agent/knowledge/documents/${id}/impact-preview`)
+
 export const getKnowledgeDocumentVersionsApi = (id: number) =>
   request
     .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
@@ -744,6 +748,9 @@ export const getKnowledgeDocumentChunksApi = (id: number) =>
 
 export const getKnowledgeChunkApi = (chunkId: number) =>
   request.get<KnowledgeChunkVO, KnowledgeChunkVO>(`/agent/knowledge/chunks/${chunkId}`)
+
+export const getKnowledgeChunkImpactPreviewApi = (chunkId: number) =>
+  request.get<AgentContextImpactPreviewVO, AgentContextImpactPreviewVO>(`/agent/knowledge/chunks/${chunkId}/impact-preview`)
 
 export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
   request

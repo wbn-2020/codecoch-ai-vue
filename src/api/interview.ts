@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import { buildInterviewReportNextActions } from '@/features/interview-report'
 import type {
   FinishInterviewVO,
   IndustryTemplateVO,
@@ -21,6 +22,11 @@ import type {
   InterviewReportNextActionVO,
   InterviewReportVO,
   InterviewSessionVO,
+  InterviewTranscriptConfirmDTO,
+  InterviewTranscriptVO,
+  InterviewVoiceSubmissionCreateDTO,
+  InterviewVoiceSubmissionVO,
+  InterviewVoiceUploadVO,
   RetryReportVO
 } from '@/types/interview'
 import { normalizePageResult } from '@/utils/page'
@@ -263,69 +269,13 @@ const normalizeNextActions = (
 
   if (normalized.length) return normalized
 
-  const recommendedQuestions = normalizeRecommendedQuestions(source?.recommendedQuestions)
-  const hasQuestions = recommendedQuestions.length > 0
-  const hasProblems = Boolean(source?.mainProblems || source?.weaknesses || source?.projectProblems || source?.projectExpressionProblems)
-  const canStudyPlan = Boolean(reportId)
-  const canInterview = Boolean(interviewId)
-  const fallback: InterviewReportNextActionVO[] = []
-  if (hasQuestions) {
-    fallback.push({
-      actionType: 'QUESTION_PRACTICE',
-      title: '练推荐题',
-      description: '把报告里的推荐题转成下一轮练习。',
-      priority: 1,
-      actionUrl: reportId
-        ? `/questions/practice?mode=recommended&source=interviewReport&reportId=${reportId}`
-        : '/questions/practice?mode=recommended&source=interviewReport',
-      actionSource: 'STATIC_FALLBACK',
-      relatedBizType: 'INTERVIEW_REPORT',
-      relatedBizId: reportId,
-      evidence: '推荐题可用'
-    })
-  }
-  if (canStudyPlan) {
-    fallback.push({
-      actionType: 'STUDY_PLAN',
-      title: '生成学习计划',
-      description: '把复盘建议转成可执行计划。',
-      priority: fallback.length + 1,
-      actionUrl: `/study-plans?source=interviewReport&reportId=${reportId}`,
-      actionSource: 'STATIC_FALLBACK',
-      relatedBizType: 'INTERVIEW_REPORT',
-      relatedBizId: reportId,
-      evidence: source?.summary || source?.reportContent || ''
-    })
-  }
-  if (canInterview) {
-    fallback.push({
-      actionType: 'INTERVIEW',
-      title: '开启下一轮模拟面试',
-      description: '基于这次复盘继续练下一轮。',
-      priority: fallback.length + 1,
-      actionUrl: reportId
-        ? `/interviews/create?source=interviewReport&reportId=${reportId}&interviewId=${interviewId}`
-        : '/interviews/create',
-      actionSource: 'STATIC_FALLBACK',
-      relatedBizType: 'INTERVIEW_SESSION',
-      relatedBizId: interviewId,
-      evidence: source?.evidenceSummary || ''
-    })
-  }
-  if (hasProblems) {
-    fallback.push({
-      actionType: 'RESUME_OPTIMIZE',
-      title: '优化简历与项目表达',
-      description: '把主要问题补回简历和项目经历。',
-      priority: fallback.length + 1,
-      actionUrl: reportId ? `/resumes?source=interviewReport&reportId=${reportId}` : '/resumes',
-      actionSource: 'STATIC_FALLBACK',
-      relatedBizType: 'INTERVIEW_REPORT',
-      relatedBizId: reportId,
-      evidence: source?.mainProblems || source?.projectProblems || source?.projectExpressionProblems || source?.weaknesses || ''
-    })
-  }
-  return fallback
+  return buildInterviewReportNextActions({
+    ...source,
+    id: source.id || reportId,
+    reportId: source.reportId || reportId,
+    interviewId: source.interviewId || source.sessionId || interviewId,
+    reportStatus
+  })
 }
 
 const normalizeFinish = (result: any, interviewId: number): FinishInterviewVO => ({
@@ -455,6 +405,11 @@ const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDT
   recommendationSource: data.recommendationSource,
   recommendationReason: data.recommendationReason,
   applicationId: data.applicationId,
+  applicationPackageId: data.applicationPackageId,
+  targetJobId: data.targetJobId,
+  jdAnalysisId: data.jdAnalysisId,
+  resumeVersionId: data.resumeVersionId,
+  matchReportId: data.matchReportId,
   basedOnResume: data.basedOnResume ?? Boolean(data.resumeId),
   trainingScene: data.trainingScene,
   targetSkillDomain: data.targetSkillDomain,
@@ -462,10 +417,8 @@ const toCreatePayload = (data: InterviewCreateDTO | InterviewCreateByJobTargetDT
   targetLevel: data.targetLevel,
   projectEvidenceIds: data.projectEvidenceIds,
   followUpIntensity: data.followUpIntensity,
-  ...('targetJobId' in data ? {
-    targetJobId: data.targetJobId,
-    skillProfileId: data.skillProfileId,
-    matchReportId: data.matchReportId
+  ...('skillProfileId' in data ? {
+    skillProfileId: data.skillProfileId
   } : {})
 })
 
@@ -477,9 +430,14 @@ const toInterviewReportSseQuery = (params: InterviewReportSseParams) => ({
 
 const toAnswerPayload = (data: InterviewAnswerDTO) => ({
   messageId: data.messageId,
+  questionId: data.questionId,
   answerContent: data.answerContent,
   answerDurationSeconds: data.answerDurationSeconds,
-  clientSubmitTime: data.clientSubmitTime
+  clientSubmitTime: data.clientSubmitTime,
+  voiceSubmissionId: data.voiceSubmissionId,
+  transcriptId: data.transcriptId,
+  transcriptConfidence: data.transcriptConfidence,
+  answerSource: data.answerSource
 })
 
 export const streamInterviewReportApi = (
@@ -567,6 +525,58 @@ export const submitInterviewAnswerApi = (id: number, data: InterviewAnswerDTO) =
   return request.post<InterviewAnswerResultVO, InterviewAnswerResultVO>(
     `/interviews/${id}/answer`,
     toAnswerPayload(data)
+  ).then((result) => normalizeAnswerResult(result, id))
+}
+
+export const uploadInterviewVoiceAudioApi = (file: Blob | File) => {
+  const formData = new FormData()
+  const filename = file instanceof File ? file.name : `interview-voice-${Date.now()}.webm`
+  formData.append('file', file, filename)
+  return request.post<InterviewVoiceUploadVO, InterviewVoiceUploadVO>('/files/upload', formData, {
+    params: { bizType: 'INTERVIEW_VOICE' }
+  })
+}
+
+export const createInterviewVoiceSubmissionApi = (
+  id: number,
+  data: InterviewVoiceSubmissionCreateDTO
+) => {
+  return request.post<InterviewVoiceSubmissionVO, InterviewVoiceSubmissionVO>(
+    `/interviews/${id}/voice/submissions`,
+    data
+  )
+}
+
+export const transcribeInterviewVoiceSubmissionApi = (id: number, submissionId: number) => {
+  return request.post<InterviewVoiceSubmissionVO, InterviewVoiceSubmissionVO>(
+    `/interviews/${id}/voice/submissions/${submissionId}/transcribe`
+  )
+}
+
+export const getInterviewVoiceSubmissionApi = (id: number, submissionId: number) => {
+  return request.get<InterviewVoiceSubmissionVO, InterviewVoiceSubmissionVO>(
+    `/interviews/${id}/voice/submissions/${submissionId}`
+  )
+}
+
+export const confirmInterviewVoiceTranscriptApi = (
+  id: number,
+  transcriptId: number,
+  data: InterviewTranscriptConfirmDTO
+) => {
+  return request.post<InterviewTranscriptVO, InterviewTranscriptVO>(
+    `/interviews/${id}/voice/transcripts/${transcriptId}/confirm`,
+    data
+  )
+}
+
+export const discardInterviewVoiceSubmissionApi = (id: number, submissionId: number) => {
+  return request.post<void, void>(`/interviews/${id}/voice/submissions/${submissionId}/discard`)
+}
+
+export const submitInterviewVoiceTranscriptAnswerApi = (id: number, transcriptId: number) => {
+  return request.post<InterviewAnswerResultVO, InterviewAnswerResultVO>(
+    `/interviews/${id}/voice/transcripts/${transcriptId}/submit-answer`
   ).then((result) => normalizeAnswerResult(result, id))
 }
 

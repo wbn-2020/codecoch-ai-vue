@@ -35,8 +35,14 @@ export interface TodayActionAgentTask {
 }
 
 export interface TodayActionApplicationStats {
+  total?: number | null
+  activeCount?: number | null
   overdueFollowUpCount?: number | null
   dueTodayFollowUpCount?: number | null
+  noFollowUpCount?: number | null
+  staleActiveCount?: number | null
+  interviewCount?: number | null
+  offerCount?: number | null
 }
 
 export interface TodayActionNotification {
@@ -311,6 +317,40 @@ const toApplicationFollowUpActions = (stats: TodayActionApplicationStats | null 
     })
   }
 
+  const missingCount = coerceCount(stats?.noFollowUpCount)
+  if (missingCount) {
+    actions.push({
+      key: 'application-follow-up-missing',
+      source: 'application-follow-up',
+      priority: overdueCount || dueTodayCount ? 'normal' : 'high',
+      title: `${missingCount} 条投递还没有下一次跟进`,
+      description: '这些记录缺少明确的下一次跟进时间，适合今天补齐提醒。',
+      reason: '补齐跟进日期能让投递漏斗持续进入每日行动。',
+      actionLabel: '补齐跟进日期',
+      actionPath: '/applications?followUp=missing',
+      dueText: '待设置',
+      rank: 32,
+      dedupeKeys: ['application-follow-up:missing']
+    })
+  }
+
+  const staleCount = coerceCount(stats?.staleActiveCount)
+  if (staleCount) {
+    actions.push({
+      key: 'application-follow-up-stale',
+      source: 'application-follow-up',
+      priority: overdueCount || dueTodayCount || missingCount ? 'normal' : 'high',
+      title: `${staleCount} 条活跃投递较久未更新`,
+      description: '这些机会已经一段时间没有事件记录，建议今天复核状态。',
+      reason: '停滞投递需要复核状态，避免漏掉面试、拒信或归档动作。',
+      actionLabel: '查看投递漏斗',
+      actionPath: '/applications',
+      dueText: '待复核',
+      rank: 38,
+      dedupeKeys: ['application-follow-up:stale']
+    })
+  }
+
   return actions
 }
 
@@ -379,3 +419,15 @@ export const buildTodayActions = (
     .slice(0, clampDashboardLimit(options.maxItems))
     .map(({ rank: _rank, dedupeKeys: _dedupeKeys, ...item }) => item)
 }
+
+export const buildApplicationTodayActions = (
+  applicationStats?: TodayActionApplicationStats | null,
+  options: BuildTodayActionsOptions = {}
+): TodayActionItem[] =>
+  buildTodayActions(
+    { applicationStats },
+    {
+      ...options,
+      maxItems: Math.min(3, options.maxItems ?? 3)
+    }
+  )
