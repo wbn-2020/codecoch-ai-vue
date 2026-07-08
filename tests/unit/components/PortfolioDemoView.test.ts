@@ -56,9 +56,9 @@ describe('PortfolioDemoView', () => {
     expect(wrapper.text()).toContain('Route script')
     expect(wrapper.text()).toContain('Demo health')
     expect(wrapper.text()).toContain('Speaker cards')
-    expect(wrapper.text()).toContain('Final acceptance')
-    expect(wrapper.text()).toContain('0/5')
-    expect(wrapper.findAll('.node-card')).toHaveLength(5)
+    expect(wrapper.text()).toContain('Phase 5.5 handoff')
+    expect(wrapper.text()).toContain('0/8')
+    expect(wrapper.findAll('.node-card')).toHaveLength(8)
   })
 
   it('switches rehearsal routes and resets the visible route progress', async () => {
@@ -80,13 +80,13 @@ describe('PortfolioDemoView', () => {
     await findActionButton(wrapper, '标记当前节点').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('1/5')
+    expect(wrapper.text()).toContain('1/8')
     expect(wrapper.findAll('.node-card.done')).toHaveLength(1)
 
     await findActionButton(wrapper, '下一个节点').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('1/5')
+    expect(wrapper.text()).toContain('1/8')
     expect(wrapper.findAll('.node-card.done')).toHaveLength(1)
     expect(wrapper.findAll('.node-card')[1].classes()).toContain('current')
   })
