@@ -1060,7 +1060,7 @@ const jdContextText = computed(() => {
   const companyName = pack?.job?.companyName || pack?.companyName
   const jdAnalysisId = applicationContextSnapshot.value.jdAnalysisId
   const title = [companyName, jobTitle].filter(Boolean).join(' · ')
-  return title || (jdAnalysisId ? `JD 分析 #${jdAnalysisId}` : '未取得 JD 详情，按目标岗位名称降级')
+  return title || (jdAnalysisId ? `岗位描述分析 #${jdAnalysisId}` : '未取得岗位描述详情，按目标岗位名称降级')
 })
 const applicationContextItems = computed(() => {
   const context = applicationContextSnapshot.value

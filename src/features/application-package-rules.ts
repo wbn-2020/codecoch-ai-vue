@@ -239,7 +239,7 @@ const buildEvidenceSources = (input: ApplicationPackageRuleInput): EvidenceSourc
           input.targetJob?.jobTitle || input.jdAnalysis?.jobTitle || '目标岗位',
           isParsed(input.targetJob?.parseStatus) || isParsed(input.jdAnalysis?.parseStatus)
             ? 'JD 已解析'
-            : '目标岗位存在，但 JD 解析状态待确认',
+            : '目标岗位存在，但岗位描述处理状态待确认',
           isParsed(input.targetJob?.parseStatus) || isParsed(input.jdAnalysis?.parseStatus) ? 'VERIFIED' : 'PARTIAL',
           `/job-targets/${targetJobId}/analysis`
         )
@@ -386,7 +386,7 @@ export const buildApplicationPackageChecklist = (input: ApplicationPackageRuleIn
     ),
     checklistItem(
       'MATCH_SCORE_THRESHOLD',
-      '简历/JD 匹配分达到阈值',
+      '简历与岗位描述匹配分达到阈值',
       matchTrusted && matchScore !== undefined && matchScore >= thresholds.minMatchScore
         ? 'PASS'
         : matchTrusted && matchScore !== undefined
@@ -471,7 +471,7 @@ export const buildApplicationPackageRiskSignals = (checklist: ApplicationPackage
       'application-package:risk:missing-jd-analysis',
       'MISSING_JD_ANALYSIS',
       'HIGH',
-      'JD 分析缺失',
+      '岗位描述分析缺失',
       '缺少可引用的岗位分析时，系统不能判断投递准备度。',
       'application-package:action:review-low-confidence-source'
     ))
@@ -668,7 +668,7 @@ const deriveReadiness = (
   if (byKey.get('JD_PARSED')?.status === 'BLOCKED') {
     return {
       readinessLevel: 'BLOCKED',
-      readinessReason: '缺少可用 JD 分析，先复核岗位来源。'
+      readinessReason: '缺少可用岗位描述分析，先复核岗位来源。'
     }
   }
   if (risks.some((item) => item.riskType === 'NEEDS_RESUME' || item.riskType === 'LOW_MATCH_SCORE')) {

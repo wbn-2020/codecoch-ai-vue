@@ -702,7 +702,7 @@ export const buildApplicationOutboundDraft = (
       review,
       reviewJson: buildReviewJson(review),
       boundaryNotice,
-      experimentInput: ['拒信原因分类', '简历/JD 匹配变量', '渠道变量', '下一轮只调整一个实验变量']
+      experimentInput: ['拒信原因分类', '简历与岗位描述匹配变量', '渠道变量', '下一轮只调整一个实验变量']
     }
   }
 

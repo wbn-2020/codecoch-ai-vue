@@ -97,7 +97,7 @@
               <dd>{{ currentPackage.targetJobId || currentPackage.job?.targetJobId || '--' }}</dd>
             </div>
             <div>
-              <dt>JD 分析 ID</dt>
+              <dt>岗位描述分析 ID</dt>
               <dd>{{ currentPackage.jdAnalysisId || currentPackage.job?.jdAnalysisId || '--' }}</dd>
             </div>
           </dl>
@@ -290,7 +290,7 @@
           v-else
           type="empty"
           title="暂无明确建议"
-          description="当前没有足够证据生成明确建议。请先补齐 JD 分析、简历匹配或项目证据。"
+          description="当前没有足够证据生成明确建议。请先补齐岗位描述分析、简历匹配或项目证据。"
         />
       </section>
     </template>
@@ -400,7 +400,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
       companyName,
       jobTitle,
       jdSource: queryText('jdSource') || '路由上下文',
-      jdSummary: '请确认 JD 分析、简历版本、项目证据和匹配报告后再创建投递记录。'
+      jdSummary: '请确认岗位描述分析、简历版本、项目证据和匹配报告后再创建投递记录。'
     },
     recommendedResume: {
       resumeVersionId,
@@ -411,14 +411,14 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
       trustStatus: 'FALLBACK',
       fallback: true,
       degraded: true,
-      summary: matchReportId ? '路由已携带匹配报告，详情需要进入报告页确认。' : '缺少匹配报告，无法判断简历/JD 匹配度。'
+      summary: matchReportId ? '路由已携带匹配报告，详情需要进入报告页确认。' : '缺少匹配报告，无法判断简历与岗位描述匹配度。'
     },
     checklist: [
       {
         key: 'jd-analysis',
         title: 'JD 已解析',
         status: jdAnalysisId || targetJobId ? 'WARN' : 'BLOCKED',
-        description: jdAnalysisId ? '已携带 JD 分析 ID，仍需接口确认结构化结果。' : '请先完成岗位/JD 分析。',
+        description: jdAnalysisId ? '已携带岗位描述分析 ID，仍需接口确认结构化结果。' : '请先完成岗位描述分析。',
         actionLabel: '查看岗位分析',
         actionPath: targetJobId ? `/job-targets/${targetJobId}/analysis` : '/job-targets'
       },
@@ -432,7 +432,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
       },
       {
         key: 'match-report',
-        title: '简历/JD 匹配报告可用',
+        title: '简历与岗位描述匹配报告可用',
         status: matchReportId ? 'WARN' : 'BLOCKED',
         description: matchReportId ? '已携带匹配报告，请进入报告页确认可信状态。' : '建议先生成匹配报告。',
         actionLabel: matchReportId ? '查看报告' : '去匹配实验台',
@@ -467,7 +467,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
         id: 'review-context',
         actionType: 'UPDATE_RESUME_VERSION',
         title: '先补齐投递包上下文',
-        description: '确认 JD 分析、推荐简历、匹配报告和项目证据后，再创建投递记录。',
+        description: '确认岗位描述分析、推荐简历、匹配报告和项目证据后，再创建投递记录。',
         priority: 'HIGH',
         actionUrl: targetJobId ? `/job-targets/${targetJobId}/analysis` : '/job-targets'
       }
