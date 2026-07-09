@@ -58,7 +58,7 @@ const signal = (
   status?: PortfolioRehearsalHealthStatus
 ): PortfolioRehearsalHealthSignal => ({
   label,
-  value: value === undefined ? 'n/a' : String(value),
+  value: value === undefined ? '未提供' : String(value),
   status
 })
 
@@ -69,56 +69,56 @@ const routeCheck = (path: string, title: string): PortfolioRehearsalHealthCheck 
     title,
     category: 'ROUTE',
     status: pass(connected),
-    summary: connected ? 'Route is present in the frontend route table.' : 'Route is missing from the frontend route table.',
+    summary: connected ? '前端路由表中存在该路由。' : '前端路由表中缺少该路由。',
     path,
     required: true,
     signals: [
       signal('path', path),
-      signal('routeTable', connected ? 'connected' : 'missing', pass(connected))
+      signal('routeTable', connected ? '已连接' : '缺失', pass(connected))
     ]
   }
 }
 
 const requiredDemoRouteChecks = () =>
   [
-    routeCheck('/portfolio-demo', 'Portfolio demo console route'),
+    routeCheck('/portfolio-demo', '作品集演示控制台路由'),
     ...portfolioDemoKnownPaths
       .filter((path) => path !== '/portfolio-demo')
-      .map((path) => routeCheck(path, `Demo target route ${path}`))
+      .map((path) => routeCheck(path, `演示目标路由 ${path}`))
   ]
 
 const menuChecks = (): PortfolioRehearsalHealthCheck[] => [
   {
     key: 'menu:user-portfolio-demo',
-    title: 'User menu entry for portfolio demo',
+    title: '用户菜单作品集演示入口',
     category: 'MENU',
     status: pass(hasRoute('/portfolio-demo')),
     summary: hasRoute('/portfolio-demo')
-      ? 'Expected user menu target is routable.'
-      : 'Expected user menu target is not routable.',
+      ? '用户菜单目标路由可访问。'
+      : '用户菜单目标路由不可访问。',
     path: '/portfolio-demo',
     required: true,
     signals: [
       signal('source', 'src/components/layout/UserSidebar.vue'),
       signal('path', '/portfolio-demo'),
-      signal('routeTable', hasRoute('/portfolio-demo') ? 'connected' : 'missing', pass(hasRoute('/portfolio-demo')))
+      signal('routeTable', hasRoute('/portfolio-demo') ? '已连接' : '缺失', pass(hasRoute('/portfolio-demo')))
     ]
   },
   {
     key: 'menu:admin-trace-cockpit',
-    title: 'Admin menu entry for TraceCockpit',
+    title: '管理菜单 TraceCockpit 入口',
     category: 'MENU',
     status: appConfig.enableAdminTraceCockpit ? pass(hasRoute('/admin/trace-cockpit')) : 'NOT_CONNECTED',
     summary: appConfig.enableAdminTraceCockpit
-      ? 'Expected admin menu target is enabled by frontend config.'
-      : 'TraceCockpit menu is feature-flagged off in this frontend build.',
+      ? '管理菜单目标已由前端配置启用。'
+      : '当前前端构建中 TraceCockpit 菜单被功能开关关闭。',
     path: '/admin/trace-cockpit',
     required: true,
     signals: [
       signal('source', 'src/components/layout/AdminSidebar.vue'),
       signal('featureFlag', 'adminTraceCockpit', appConfig.enableAdminTraceCockpit ? 'PASS' : 'NOT_CONNECTED'),
       signal('permission', 'admin:trace:cockpit:view'),
-      signal('routeTable', hasRoute('/admin/trace-cockpit') ? 'connected' : 'missing', pass(hasRoute('/admin/trace-cockpit')))
+      signal('routeTable', hasRoute('/admin/trace-cockpit') ? '已连接' : '缺失', pass(hasRoute('/admin/trace-cockpit')))
     ]
   }
 ]
@@ -143,25 +143,25 @@ const adapterChecks = (): PortfolioRehearsalHealthCheck[] => {
   return [
     {
       key: 'api-adapter:portfolio-demo',
-      title: 'Portfolio demo API adapter contract',
+      title: '作品集演示 API adapter 静态契约',
       category: 'API_ADAPTER',
       status: pass(portfolioReady),
       summary: portfolioReady
-        ? 'Portfolio demo adapters are importable. This check does not call them.'
-        : 'One or more portfolio demo adapters are not importable.',
+        ? '作品集演示 adapter 可导入；此检查不会调用接口。'
+        : '一个或多个作品集演示 adapter 无法导入。',
       required: true,
-      signals: portfolioAdapters.map(([name, adapter]) => signal(name, isFunction(adapter) ? 'importable' : 'missing', pass(isFunction(adapter))))
+      signals: portfolioAdapters.map(([name, adapter]) => signal(name, isFunction(adapter) ? '可导入' : '缺失', pass(isFunction(adapter))))
     },
     {
       key: 'api-adapter:trace-cockpit',
-      title: 'TraceCockpit API adapter contract',
+      title: 'TraceCockpit API adapter 静态契约',
       category: 'API_ADAPTER',
       status: pass(traceReady),
       summary: traceReady
-        ? 'TraceCockpit adapters are importable. This check does not call them.'
-        : 'One or more TraceCockpit adapters are not importable.',
+        ? 'TraceCockpit adapter 可导入；此检查不会调用接口。'
+        : '一个或多个 TraceCockpit adapter 无法导入。',
       required: true,
-      signals: traceAdapters.map(([name, adapter]) => signal(name, isFunction(adapter) ? 'importable' : 'missing', pass(isFunction(adapter))))
+      signals: traceAdapters.map(([name, adapter]) => signal(name, isFunction(adapter) ? '可导入' : '缺失', pass(isFunction(adapter))))
     }
   ]
 }
@@ -170,15 +170,15 @@ const demoDataCheck = (story?: PortfolioDemoStorylineVO): PortfolioRehearsalHeal
   if (!story) {
     return {
       key: 'demo-data:storyline',
-      title: 'Portfolio demo storyline data',
+      title: '作品集演示 storyline 数据',
       category: 'DEMO_DATA',
       status: 'UNKNOWN',
-      summary: 'Storyline data was not supplied to the static checker. This is not treated as a service failure.',
+      summary: '静态检查未提供 storyline 数据；这不代表后端服务失败。',
       required: true,
       signals: [
         signal('source', 'getPortfolioDemoStorylineApi'),
-        signal('networkRequest', 'not executed', 'PASS'),
-        signal('runtimeData', 'not supplied', 'UNKNOWN')
+        signal('networkRequest', '未执行', 'PASS'),
+        signal('runtimeData', '未提供', 'UNKNOWN')
       ]
     }
   }
@@ -186,18 +186,18 @@ const demoDataCheck = (story?: PortfolioDemoStorylineVO): PortfolioRehearsalHeal
   const coverage = buildPortfolioDemoCoverage(story)
   return {
     key: 'demo-data:storyline',
-    title: 'Portfolio demo storyline data',
+    title: '作品集演示 storyline 数据',
     category: 'DEMO_DATA',
     status: coverage.ready ? 'PASS' : 'ATTENTION',
     summary: coverage.ready
-      ? 'Storyline covers all required demo steps with safe route markers.'
-      : 'Storyline is present but has missing or unsafe demo signals.',
+      ? 'Storyline 覆盖所有必需演示步骤，并带有安全路由标记。'
+      : 'Storyline 已提供，但存在缺失或不安全的演示信号。',
     required: true,
     signals: [
       signal('totalSteps', coverage.total),
       signal('coveredSteps', coverage.covered, coverage.ready ? 'PASS' : 'ATTENTION'),
-      signal('missingKeys', coverage.missingKeys.join(', ') || 'none', coverage.missingKeys.length ? 'ATTENTION' : 'PASS'),
-      signal('missingDemoMarkers', coverage.missingDemoMarkerKeys.join(', ') || 'none', coverage.missingDemoMarkerKeys.length ? 'ATTENTION' : 'PASS'),
+      signal('missingKeys', coverage.missingKeys.join(', ') || '无', coverage.missingKeys.length ? 'ATTENTION' : 'PASS'),
+      signal('missingDemoMarkers', coverage.missingDemoMarkerKeys.join(', ') || '无', coverage.missingDemoMarkerKeys.length ? 'ATTENTION' : 'PASS'),
       signal('invalidRoutes', String(coverage.invalidRoutes.length), coverage.invalidRoutes.length ? 'ATTENTION' : 'PASS')
     ]
   }
@@ -215,33 +215,33 @@ const traceCockpitChecks = (): PortfolioRehearsalHealthCheck[] => {
   return [
     {
       key: 'trace-cockpit:entry',
-      title: 'TraceCockpit route entry',
+      title: 'TraceCockpit 路由入口',
       category: 'TRACE_COCKPIT',
       status: traceRouteConnected && traceFeatureFlag && tracePermission ? 'PASS' : 'ATTENTION',
       summary: traceRouteConnected
-        ? 'TraceCockpit route is present with frontend guard signals.'
-        : 'TraceCockpit route is missing from the frontend route table.',
+        ? 'TraceCockpit 路由存在，并带有前端守卫信号。'
+        : '前端路由表中缺少 TraceCockpit 路由。',
       path: '/admin/trace-cockpit',
       required: true,
       signals: [
-        signal('routeTable', traceRouteConnected ? 'connected' : 'missing', pass(traceRouteConnected)),
-        signal('featureFlag', traceFeatureFlag ? 'adminTraceCockpit' : 'missing', traceFeatureFlag ? 'PASS' : 'ATTENTION'),
-        signal('permission', tracePermission ? 'admin:trace:cockpit:view' : 'missing', tracePermission ? 'PASS' : 'ATTENTION')
+        signal('routeTable', traceRouteConnected ? '已连接' : '缺失', pass(traceRouteConnected)),
+        signal('featureFlag', traceFeatureFlag ? 'adminTraceCockpit' : '缺失', traceFeatureFlag ? 'PASS' : 'ATTENTION'),
+        signal('permission', tracePermission ? 'admin:trace:cockpit:view' : '缺失', tracePermission ? 'PASS' : 'ATTENTION')
       ]
     },
     {
       key: 'trace-cockpit:safe-summary',
-      title: 'TraceCockpit desensitized summary signal',
+      title: 'TraceCockpit 脱敏摘要信号',
       category: 'PRIVACY',
       status: safeSummaryConnected ? 'PASS' : 'ATTENTION',
       summary: safeSummaryConnected
-        ? 'Raw stripping helper is importable; health output only exposes metadata signals.'
-        : 'Raw stripping helper is not importable.',
+        ? '原文字段剥离 helper 可导入；健康输出只暴露元数据信号。'
+        : '原文字段剥离 helper 无法导入。',
       required: true,
       signals: [
-        signal('stripTraceRawFields', safeSummaryConnected ? 'importable' : 'missing', pass(safeSummaryConnected)),
-        signal('rawSensitiveContent', 'not stored by health checker', 'PASS'),
-        signal('networkRequest', 'not executed', 'PASS')
+        signal('stripTraceRawFields', safeSummaryConnected ? '可导入' : '缺失', pass(safeSummaryConnected)),
+        signal('rawSensitiveContent', '健康检查不保存原文', 'PASS'),
+        signal('networkRequest', '未执行', 'PASS')
       ]
     }
   ]
@@ -250,26 +250,26 @@ const traceCockpitChecks = (): PortfolioRehearsalHealthCheck[] => {
 const requiredStepChecks = (): PortfolioRehearsalHealthCheck[] => [
   {
     key: 'demo-data:required-user-steps',
-    title: 'Required user demo steps contract',
+    title: '用户侧必需演示步骤契约',
     category: 'DEMO_DATA',
     status: requiredUserDemoSteps.length > 0 ? 'PASS' : 'ATTENTION',
-    summary: 'Static contract for user-facing rehearsal steps.',
+    summary: '面向用户演示步骤的静态契约。',
     required: true,
     signals: [
       signal('count', requiredUserDemoSteps.length, requiredUserDemoSteps.length > 0 ? 'PASS' : 'ATTENTION'),
-      signal('keys', requiredUserDemoSteps.map((step) => step.key).join(', ') || 'none')
+      signal('keys', requiredUserDemoSteps.map((step) => step.key).join(', ') || '无')
     ]
   },
   {
     key: 'demo-data:required-ops-steps',
-    title: 'Required ops demo steps contract',
+    title: '运营侧必需演示步骤契约',
     category: 'DEMO_DATA',
     status: requiredOpsDemoSteps.length > 0 ? 'PASS' : 'ATTENTION',
-    summary: 'Static contract for ops-facing rehearsal steps.',
+    summary: '面向运营演示步骤的静态契约。',
     required: true,
     signals: [
       signal('count', requiredOpsDemoSteps.length, requiredOpsDemoSteps.length > 0 ? 'PASS' : 'ATTENTION'),
-      signal('keys', requiredOpsDemoSteps.map((step) => step.key).join(', ') || 'none')
+      signal('keys', requiredOpsDemoSteps.map((step) => step.key).join(', ') || '无')
     ]
   }
 ]

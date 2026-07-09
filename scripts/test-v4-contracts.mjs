@@ -544,13 +544,24 @@ for (const [routePath, component] of routeChecks) {
   record('route', routePath, contains(routes, `path: '${routePath}'`) && contains(routes, component), component)
 }
 
-const previewRoutePaths = ['resume-versions', 'applications', 'resumes/:id/versions']
+const previewRoutePaths = ['resume-versions', 'resumes/:id/versions']
 for (const routePath of previewRoutePaths) {
   const line = routes.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
   record(
     'route-preview',
     routePath,
     Boolean(line) && line.includes('previewOnly: true'),
+    line.trim()
+  )
+}
+
+const releasedRoutePaths = ['applications']
+for (const routePath of releasedRoutePaths) {
+  const line = routes.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
+  record(
+    'route-released',
+    routePath,
+    Boolean(line) && !line.includes('previewOnly: true'),
     line.trim()
   )
 }
@@ -569,13 +580,24 @@ recordContainsAll(
   'Resume match detail gates resume-version and application CTAs behind the V4 preview flag instead of exposing dead-end links'
 )
 
-const previewSidebarPaths = ['/agent/reviews', '/growth/profile', '/agent/memory', '/knowledge', '/resume-versions', '/applications']
+const previewSidebarPaths = ['/agent/reviews', '/growth/profile', '/agent/memory', '/knowledge', '/resume-versions']
 for (const routePath of previewSidebarPaths) {
   const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
   record(
     'sidebar-preview',
     routePath,
     Boolean(line) && (line.includes('previewOnly: true') || line.includes("featureFlag: 'v4Preview'")),
+    line.trim()
+  )
+}
+
+const releasedSidebarPaths = ['/applications']
+for (const routePath of releasedSidebarPaths) {
+  const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
+  record(
+    'sidebar-released',
+    routePath,
+    Boolean(line) && !line.includes('previewOnly: true') && !line.includes("featureFlag: 'v4Preview'"),
     line.trim()
   )
 }

@@ -1,6 +1,6 @@
 import type { PageQuery } from './api'
 
-export type ResumeJobMatchStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | string
+export type ResumeJobMatchStatus = 'PENDING' | 'PROCESSING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | string
 export type ResumeJobMatchTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | string
 
 export interface ResumeJobMatchSchemaWarning {

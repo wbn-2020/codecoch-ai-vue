@@ -761,6 +761,7 @@ const parseStatusType = (status?: string) => {
 const matchStatusLabel = (status?: string) => {
   if (status === 'SUCCESS') return '已完成'
   if (status === 'FAILED') return '生成失败'
+  if (status === 'RUNNING') return '生成中'
   if (status === 'PROCESSING') return '生成中'
   if (status === 'PENDING') return '排队中'
   return ''

@@ -478,7 +478,7 @@ const fallbackMemoryImpactPreview = (
   historicalOnly: false,
   safeToDisable: !view.canEnterTrustedContext,
   warnings: [
-    'Backend usage reference preview is unavailable; this is an estimated local fallback.',
+    '后端引用预览不可用，当前仅展示本地估算降级。',
     ...(fallbackReason ? [fallbackReason] : [])
   ],
   previewSource: 'ESTIMATED',
@@ -491,22 +491,22 @@ const loadMemoryImpactPreview = async (view: MemoryViewState) => {
     return await getAgentMemoryImpactPreviewApi(view.item.id)
   } catch (error) {
     if (isAuthOrForbiddenError(error)) throw error
-    return fallbackMemoryImpactPreview(view, getErrorMessage(error, 'memory impact-preview unavailable'))
+    return fallbackMemoryImpactPreview(view, getErrorMessage(error, '记忆影响预览不可用'))
   }
 }
 
 const memoryImpactPreviewText = (preview: AgentContextImpactPreviewVO) => {
   const backend = preview.previewSource === 'BACKEND_REFERENCES' || preview.resultSource === 'BACKEND_REFERENCES'
   const source = backend
-    ? 'Backend precise references'
-    : `Estimated fallback${preview.fallbackReason ? `: ${preview.fallbackReason}` : ''}`
-  const modules = (preview.affectedModules || []).filter(Boolean).join(', ') || 'none'
+    ? '后端引用明细'
+    : `本地估算降级${preview.fallbackReason ? `：${preview.fallbackReason}` : ''}`
+  const modules = (preview.affectedModules || []).filter(Boolean).join(', ') || '无'
   const consumers = (preview.affectedConsumers || [])
     .slice(0, 3)
-    .map((item) => `${item.consumerType || 'CONSUMER'}#${item.consumerId || '-'}:${item.usageScene || 'usage'}`)
+    .map((item) => `${item.consumerType || '消费者'}#${item.consumerId || '-'}:${item.usageScene || '使用场景'}`)
     .join('; ')
   const warnings = (preview.warnings || []).filter(Boolean).join('; ')
-  return `${source}. Historical references total=${preview.referenceCount ?? 0}, recent=${preview.recentReferenceCount ?? 0}; modules=${modules}; futureContext=${preview.futureContextImpact ? 'yes' : 'no'}; historicalOnly=${preview.historicalOnly ? 'yes' : 'no'}; safeToDisable=${preview.safeToDisable ? 'yes' : 'no'}${consumers ? `; recent consumers=${consumers}` : ''}${warnings ? `; warnings=${warnings}` : ''}.`
+  return `${source}：历史引用总计 ${preview.referenceCount ?? 0} 条，近期 ${preview.recentReferenceCount ?? 0} 条；影响模块：${modules}；未来上下文影响：${preview.futureContextImpact ? '有' : '无'}；仅历史影响：${preview.historicalOnly ? '是' : '否'}；可安全停用：${preview.safeToDisable ? '是' : '否'}${consumers ? `；近期消费者：${consumers}` : ''}${warnings ? `；提醒：${warnings}` : ''}。`
 }
 
 const load = async () => {
@@ -586,7 +586,10 @@ const toggle = async (view: MemoryViewState) => {
     if (view.isCandidate) {
       await confirmAgentMemoryApi(view.item.id)
     } else if (enabled) {
-      await disableAgentMemoryApi(view.item.id)
+      await disableAgentMemoryApi(view.item.id, {
+        confirmed: true,
+        reason: `confirmed impact-preview before disabling memory ${view.item.id}`
+      })
     } else {
       await enableAgentMemoryApi(view.item.id)
     }
@@ -618,7 +621,10 @@ const remove = async (view: MemoryViewState) => {
   })
   if (!confirmed) return
   try {
-    await deleteAgentMemoryApi(view.item.id)
+    await deleteAgentMemoryApi(view.item.id, {
+      confirmed: true,
+      reason: `confirmed impact-preview before deleting memory ${view.item.id}`
+    })
     ElMessage.success('记忆已删除')
     await load()
   } catch (error) {

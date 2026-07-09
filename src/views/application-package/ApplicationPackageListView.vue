@@ -73,8 +73,20 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="快照" width="110">
-          <template #default="{ row }">v{{ row.snapshotVersion || 1 }}</template>
+        <el-table-column label="版本" width="150">
+          <template #default="{ row }">
+            <div class="version-cell">
+              <span>{{ packageContextVersionLabel(row) }}</span>
+              <el-tag
+                v-if="(row.contextPackageCount || 0) > 1"
+                :type="row.latestContextPackage ? 'success' : 'info'"
+                effect="plain"
+                size="small"
+              >
+                {{ row.latestContextPackage ? '最新' : '历史' }}
+              </el-tag>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="刷新时间" width="190">
           <template #default="{ row }">{{ formatDateTime(row.refreshedAt || row.updatedAt || row.createdAt) }}</template>
@@ -173,6 +185,12 @@ const packageStatusLabel = (status?: string) => {
   if (value === 'ARCHIVED') return '已归档'
   if (value === 'DRAFT') return '草稿'
   return '未标记'
+}
+
+const packageContextVersionLabel = (row: JobApplicationPackageListItemVO) => {
+  const versionNo = row.contextVersionNo || row.snapshotVersion || 1
+  const count = row.contextPackageCount || 1
+  return count > 1 ? `第 ${versionNo}/${count} 版` : `v${row.snapshotVersion || 1}`
 }
 
 const load = async () => {
@@ -280,6 +298,13 @@ onMounted(load)
   margin-left: 8px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.version-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .package-pagination {

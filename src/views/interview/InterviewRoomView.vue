@@ -983,11 +983,11 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
       return
     }
     voicePreview.applyTranscriptionFallback(
-      transcribed.transcript?.fallbackReason || transcribed.fallbackReason || 'ASR is unavailable. Please edit a manual transcript.',
+      transcribed.transcript?.fallbackReason || transcribed.fallbackReason || '当前 ASR 不可用，请手动编辑转写草稿。',
       transcribed
     )
   } catch (error) {
-    voicePreview.setError('upload_failed', getErrorMessage(error, 'Voice upload or transcription failed. Please answer with text.'))
+    voicePreview.setError('upload_failed', getErrorMessage(error, '语音上传或转写失败，请使用文本回答。'))
   }
 }
 
@@ -1221,7 +1221,7 @@ const handleSubmit = async () => {
   }
 
   if (voicePreview.isBusy.value || voiceConfirming.value) {
-    ElMessage.warning('Voice upload or transcription is still running. Please wait before submitting.')
+    ElMessage.warning('语音上传或转写仍在进行，请等待完成后再提交。')
     return
   }
 

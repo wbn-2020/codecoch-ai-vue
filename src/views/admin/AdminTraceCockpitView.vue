@@ -2,10 +2,10 @@
   <div class="page-shell admin-console-page trace-cockpit-page">
     <section class="admin-hero">
       <div class="admin-hero__content">
-        <div class="admin-eyebrow">V5 Phase 2 / Backend aggregation</div>
+        <div class="admin-eyebrow">V5 Phase 2 / 后端聚合</div>
         <h1 class="admin-hero__title">TraceCockpit</h1>
         <p class="admin-hero__desc">
-          Backend-first trace aggregation for AI calls, Agent runs/tasks, async tasks, application packages, interviews, and reports. Sensitive source material stays behind raw-access endpoints.
+          优先展示后端聚合的 AI 调用、Agent 运行/任务、异步任务、投递包、面试和报告链路；敏感原文仍保留在受权限与审计保护的原始访问流程中。
         </p>
       </div>
     </section>
@@ -34,7 +34,7 @@
       show-icon
       :closable="false"
       class="trace-cockpit-page__alert"
-      :title="result.dataSource === 'BACKEND_AGGREGATED' ? 'Source: backend aggregated' : 'Source: frontend fallback'"
+      :title="result.dataSource === 'BACKEND_AGGREGATED' ? '来源：后端聚合结果' : '来源：前端降级汇总'"
       :description="result.fallbackReason"
     />
 
@@ -63,8 +63,8 @@
     <section v-if="result?.risks.length" class="admin-panel trace-cockpit-page__risks">
       <div class="admin-panel__header">
         <div>
-          <h2>Risk notes</h2>
-          <p>Observed risks are clues from the current sample. They are not automatic remediation decisions.</p>
+          <h2>风险提示</h2>
+          <p>这些风险只来自当前样本，用于辅助排查，不代表系统已经做出自动修复决策。</p>
         </div>
       </div>
       <div class="trace-risk-list">
@@ -74,7 +74,7 @@
             <small>{{ risk.type }} / {{ risk.level }}</small>
           </div>
           <p>{{ risk.description }}</p>
-          <el-button v-if="risk.link" link type="primary" @click="openLink(risk.link)">Open source</el-button>
+          <el-button v-if="risk.link" link type="primary" @click="openLink(risk.link)">打开来源</el-button>
         </article>
       </div>
     </section>
@@ -194,7 +194,7 @@ const runSearch = async (nextQuery: TraceCockpitQuery, replaceUrl = true) => {
     result.value = await getTraceCockpitResultApi(normalized)
   } catch (error) {
     result.value = null
-    errorMessage.value = String((error as Error)?.message || error || 'Trace query failed')
+    errorMessage.value = String((error as Error)?.message || error || '链路查询失败，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -224,7 +224,7 @@ const openLink = (to: RouteLocationRaw) => {
 
 const previewSuggestion = (suggestion: TraceGovernanceSuggestion) => {
   void ElMessageBox.alert(suggestion.reason, suggestion.title, {
-    confirmButtonText: 'OK',
+    confirmButtonText: '知道了',
     type: suggestion.riskLevel === 'HIGH' || suggestion.riskLevel === 'MEDIUM' ? 'warning' : 'info'
   })
 }

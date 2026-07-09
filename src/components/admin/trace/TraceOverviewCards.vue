@@ -11,11 +11,11 @@
     <div class="trace-overview__modules admin-panel">
       <div class="admin-panel__header">
         <div>
-          <h2>Module status</h2>
-          <p>Failed modules are shown as partial result. Their counts stay unavailable instead of being treated as zero.</p>
+          <h2>模块状态</h2>
+          <p>失败模块会显示为部分结果，计数保持不可用，不会被当作 0 误导判断。</p>
         </div>
         <el-tag :type="overview?.partialResult ? 'warning' : 'success'" effect="plain">
-          {{ overview?.partialResult ? 'partial result' : 'complete' }}
+          {{ overview?.partialResult ? '部分结果' : '完整结果' }}
         </el-tag>
       </div>
       <div class="trace-overview__module-grid">
@@ -50,19 +50,19 @@ const displayNumber = (value: number | string | null | undefined, unit = '') => 
 }
 
 const cards = computed(() => [
-  { key: 'sample', label: 'Samples', value: displayNumber(props.overview?.sampleCount), hint: 'Aggregated safe nodes' },
-  { key: 'trace', label: 'Traces', value: displayNumber(props.overview?.traceIds?.length), hint: 'Multiple traces are not forced into one' },
-  { key: 'ai', label: 'AI calls', value: displayNumber(props.overview?.aiCallCount), hint: 'From existing AI logs' },
-  { key: 'agent', label: 'Agent runs', value: displayNumber(props.overview?.agentRunCount), hint: 'From existing Agent Run API' },
-  { key: 'weekPlan', label: 'Week plans', value: displayNumber(props.overview?.agentWeekPlanCount), hint: 'Persisted coach plans' },
-  { key: 'weekPlanItem', label: 'Plan items', value: displayNumber(props.overview?.agentWeekPlanItemCount), hint: 'Traceable plan actions' },
-  { key: 'task', label: 'Async tasks', value: displayNumber(props.overview?.asyncTaskCount), hint: 'By trace, message, or biz pair' },
-  { key: 'voice', label: 'Voice inputs', value: displayNumber(props.overview?.interviewVoiceCount), hint: 'Interview voice submissions' },
-  { key: 'failed', label: 'Failures', value: displayNumber(props.overview?.failedCount), hint: props.overview?.partialResult ? 'Partial result; not full sample' : 'Failed node count' },
-  { key: 'fallback', label: 'Fallback', value: displayNumber(props.overview?.fallbackCount), hint: 'Observed fallback samples' },
-  { key: 'latency', label: 'Max latency', value: displayNumber(props.overview?.maxElapsedMs, props.overview?.maxElapsedMs == null ? '' : ' ms'), hint: 'Only from available modules' },
-  { key: 'tokens', label: 'Tokens', value: displayNumber(props.overview?.totalTokens), hint: 'Summed from visible metadata' },
-  { key: 'sensitive', label: 'Sensitive source', value: props.overview?.rawFieldsAvailable ? 'available' : props.loading ? '--' : 'not recorded', hint: 'Availability and permission only' }
+  { key: 'sample', label: '样本节点', value: displayNumber(props.overview?.sampleCount), hint: '后端聚合后的安全节点' },
+  { key: 'trace', label: 'Trace 数', value: displayNumber(props.overview?.traceIds?.length), hint: '不会强行合并多个 trace' },
+  { key: 'ai', label: 'AI 调用', value: displayNumber(props.overview?.aiCallCount), hint: '来自已有 AI 日志' },
+  { key: 'agent', label: 'Agent 运行', value: displayNumber(props.overview?.agentRunCount), hint: '来自现有 Agent Run 接口' },
+  { key: 'weekPlan', label: '周计划', value: displayNumber(props.overview?.agentWeekPlanCount), hint: '已持久化的教练计划' },
+  { key: 'weekPlanItem', label: '计划项', value: displayNumber(props.overview?.agentWeekPlanItemCount), hint: '可追踪的计划动作' },
+  { key: 'task', label: '异步任务', value: displayNumber(props.overview?.asyncTaskCount), hint: '按 trace、message 或业务键关联' },
+  { key: 'voice', label: '语音输入', value: displayNumber(props.overview?.interviewVoiceCount), hint: '面试语音提交记录' },
+  { key: 'failed', label: '失败节点', value: displayNumber(props.overview?.failedCount), hint: props.overview?.partialResult ? '当前是部分结果，不代表完整样本' : '失败节点计数' },
+  { key: 'fallback', label: '降级样本', value: displayNumber(props.overview?.fallbackCount), hint: '观察到的 fallback 样本' },
+  { key: 'latency', label: '最大耗时', value: displayNumber(props.overview?.maxElapsedMs, props.overview?.maxElapsedMs == null ? '' : ' ms'), hint: '仅来自可用模块' },
+  { key: 'tokens', label: 'Token 数', value: displayNumber(props.overview?.totalTokens), hint: '由可见元数据汇总' },
+  { key: 'sensitive', label: '敏感原文', value: props.overview?.rawFieldsAvailable ? '可申请查看' : props.loading ? '--' : '未记录', hint: '这里只显示可用性和权限提示' }
 ])
 
 const displayedModuleStatuses = computed(() => props.moduleStatuses || props.overview?.moduleStatuses || [])
@@ -77,7 +77,7 @@ const moduleTagType = (status?: string) => {
 const displayModuleCount = (item: TraceModuleStatus) => {
   if (item.status === 'FAILED') return '--'
   if (item.count === undefined || item.count === null) return '--'
-  return `${item.count} records`
+  return `${item.count} 条记录`
 }
 </script>
 

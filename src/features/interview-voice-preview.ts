@@ -29,10 +29,10 @@ interface UseInterviewVoicePreviewOptions {
   onFallbackText?: () => void
 }
 
-const unsupportedMessage = 'Current browser cannot record audio. Please answer with text.'
-const emptyAudioMessage = 'No usable audio was captured. Please record again or answer with text.'
-const unavailableTranscriptMessage = 'ASR is unavailable. Please edit a manual transcript before confirming.'
-const manualFallbackMessage = 'Manual text fallback is active. Draft text must be confirmed before submission.'
+const unsupportedMessage = '当前浏览器无法录音，请使用文本回答。'
+const emptyAudioMessage = '没有捕获到可用音频，请重新录音或使用文本回答。'
+const unavailableTranscriptMessage = '当前 ASR 不可用，请先手动编辑转写草稿再确认。'
+const manualFallbackMessage = '已切换到文本降级，草稿确认后才会进入正式回答。'
 
 const preferredMimeTypes = [
   'audio/webm;codecs=opus',
@@ -184,7 +184,7 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
         handleRecordedAudio(blob, capturedMimeType, durationMs)
       }
       mediaRecorder.onerror = () => {
-        enterFallback('recording_failed', 'Recording failed. Please answer with text.')
+        enterFallback('recording_failed', '录音失败，请使用文本回答。')
       }
       recordingStartedAt.value = Date.now()
       mediaRecorder.start()
@@ -194,7 +194,7 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
       const isPermissionDenied = name === 'NotAllowedError' || name === 'PermissionDeniedError'
       enterFallback(
         isPermissionDenied ? 'permission_denied' : 'recording_failed',
-        isPermissionDenied ? 'Microphone permission was denied. Please answer with text.' : unsupportedMessage
+        isPermissionDenied ? '麦克风权限被拒绝，请使用文本回答。' : unsupportedMessage
       )
     }
   }
@@ -237,7 +237,7 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
     state.value = 'draft'
     if (isLowConfidenceTranscript(value)) {
       fallbackReason.value = 'low_confidence'
-      errorMessage.value = 'Low-confidence transcript. Please review and confirm manually.'
+      errorMessage.value = '转写置信度较低，请人工复核后再确认。'
     } else {
       fallbackReason.value = undefined
       errorMessage.value = ''

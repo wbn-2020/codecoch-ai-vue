@@ -130,14 +130,14 @@
     </section>
 
     <el-dialog v-model="dialogVisible" title="求职进度" width="620px">
-      <el-form label-position="top">
-        <el-form-item label="公司">
+      <el-form ref="applicationFormRef" :model="form" :rules="applicationFormRules" label-position="top">
+        <el-form-item label="公司" prop="companyName">
           <el-input v-model.trim="form.companyName" />
         </el-form-item>
-        <el-form-item label="岗位名称">
+        <el-form-item label="岗位名称" prop="jobTitle">
           <el-input v-model.trim="form.jobTitle" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="状态" prop="status">
           <el-select v-model="form.status" style="width: 100%">
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
@@ -215,8 +215,8 @@
     </el-drawer>
 
     <el-dialog v-model="eventDialogVisible" title="新增求职事件" width="560px">
-      <el-form label-position="top">
-        <el-form-item label="事件类型">
+      <el-form ref="eventFormRef" :model="eventForm" :rules="eventFormRules" label-position="top">
+        <el-form-item label="事件类型" prop="eventType">
           <el-select v-model="eventForm.eventType" allow-create filterable placeholder="选择或输入事件类型" style="width: 100%">
             <el-option v-for="item in eventTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
@@ -229,11 +229,11 @@
           :closable="false"
           :title="eventStatusImpactText"
         />
-        <el-form-item label="事件时间">
+        <el-form-item label="事件时间" prop="eventTime">
           <el-date-picker v-model="eventForm.eventTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" />
         </el-form-item>
-        <el-form-item label="摘要">
-          <el-input v-model="eventForm.summary" type="textarea" :rows="3" maxlength="500" show-word-limit />
+        <el-form-item label="关键摘要" prop="summary">
+          <el-input v-model.trim="eventForm.summary" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
         <el-form-item label="复盘要点">
           <el-input
@@ -281,7 +281,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -379,6 +379,8 @@ const selectedApplication = ref<JobApplicationVO>()
 const selectedDraft = ref<ApplicationOutboundDraft>()
 const events = ref<JobApplicationEventVO[]>([])
 const eventsError = ref('')
+const applicationFormRef = ref<FormInstance>()
+const eventFormRef = ref<FormInstance>()
 
 const form = reactive<Partial<JobApplicationVO>>({
   status: 'SAVED',
@@ -394,6 +396,28 @@ const eventForm = reactive<Partial<JobApplicationEventVO>>({
   summary: '',
   reviewJson: ''
 })
+
+const applicationFormRules: FormRules<Partial<JobApplicationVO>> = {
+  companyName: [{ required: true, whitespace: true, message: '请填写公司名称。', trigger: 'blur' }],
+  jobTitle: [{ required: true, whitespace: true, message: '请填写岗位名称。', trigger: 'blur' }],
+  status: [{ required: true, message: '请选择投递状态。', trigger: 'change' }]
+}
+
+const eventFormRules: FormRules<Partial<JobApplicationEventVO>> = {
+  eventType: [{ required: true, whitespace: true, message: '请选择或填写事件类型。', trigger: 'change' }],
+  eventTime: [{ required: true, message: '请选择事件时间。', trigger: 'change' }],
+  summary: [{ required: true, whitespace: true, message: '请填写关键摘要。', trigger: 'blur' }]
+}
+
+const validateForm = async (formRef: FormInstance | undefined, fallbackMessage: string) => {
+  if (!formRef) return true
+  try {
+    return await formRef.validate()
+  } catch {
+    ElMessage.warning(fallbackMessage)
+    return false
+  }
+}
 
 const hasListFilter = computed(() => Boolean(status.value || followUpFilter.value || funnelStageFilter.value))
 const applicationEmptyTitle = computed(() => hasListFilter.value ? '当前筛选没有进度' : '还没有求职进度')
@@ -828,16 +852,20 @@ const openCreate = () => {
     nextFollowUpAt: ''
   })
   dialogVisible.value = true
+  void nextTick(() => applicationFormRef.value?.clearValidate())
 }
 
 const openEdit = (item: JobApplicationVO) => {
   editingId.value = item.id
   Object.assign(form, item)
   dialogVisible.value = true
+  void nextTick(() => applicationFormRef.value?.clearValidate())
 }
 
 const save = async () => {
   if (saving.value) return
+  const valid = await validateForm(applicationFormRef.value, '请先补齐公司、岗位和状态。')
+  if (!valid) return
   const confirmed = await previewApplicationSave()
   if (!confirmed) return
   saving.value = true
@@ -887,6 +915,7 @@ const openEventCreate = (draft?: Partial<JobApplicationEventVO>) => {
     reviewJson: draft?.reviewJson || ''
   })
   eventDialogVisible.value = true
+  void nextTick(() => eventFormRef.value?.clearValidate())
 }
 
 const openDraftAssistant = async (item: JobApplicationVO, kind: ApplicationDraftKind) => {
@@ -930,6 +959,8 @@ const saveSelectedDraftAsEvent = () => {
 const createEvent = async () => {
   if (!selectedApplication.value) return
   if (saving.value) return
+  const valid = await validateForm(eventFormRef.value, '请先补齐事件类型、事件时间和关键摘要。')
+  if (!valid) return
   const confirmed = await previewApplicationEventSave()
   if (!confirmed) return
   const applicationId = selectedApplication.value.id

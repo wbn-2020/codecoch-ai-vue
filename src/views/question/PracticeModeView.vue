@@ -1,4 +1,5 @@
 <template>
+  <!-- @deprecated Legacy unreachable practice setup view; current routes use QuestionPracticeSessionView and QuestionTrainingHubView. -->
   <div class="practice-page page-shell">
     <section class="hero-band">
       <div class="hero-copy">

@@ -151,9 +151,9 @@
     <section class="content-card health-board">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Demo health</p>
+          <p class="eyebrow">静态健康检查</p>
           <h2>演示健康检查</h2>
-          <p>静态核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号，不连接业务服务。</p>
+          <p>仅静态核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号；不连接后端业务服务，不能代表运行时健康。</p>
         </div>
         <div class="status-summary">
           <strong>{{ statusLabel(healthReport.summary.status) }}</strong>

@@ -61,6 +61,7 @@ export interface ApplicationPackageMatchResultVO {
   interviewTopics?: string[]
   fallback?: boolean
   degraded?: boolean
+  schemaWarningCount?: number
 }
 
 export interface ApplicationPackageProjectEvidenceSummaryVO {
@@ -197,6 +198,11 @@ export interface JobApplicationPackageVO {
   fallback?: boolean
   degraded?: boolean
   degradedReason?: string
+  contextPackageCount?: number
+  contextVersionNo?: number
+  latestContextPackageId?: number | string
+  latestContextPackageNo?: string
+  latestContextPackage?: boolean
   generatedAt?: string
   job?: ApplicationPackageJobContextVO
   recommendedResume?: ApplicationPackageRecommendedResumeVO
@@ -235,6 +241,11 @@ export interface JobApplicationPackageListItemVO {
   fallback?: boolean
   traceId?: string
   snapshotVersion?: number
+  contextPackageCount?: number
+  contextVersionNo?: number
+  latestContextPackageId?: number | string
+  latestContextPackageNo?: string
+  latestContextPackage?: boolean
   refreshedAt?: string
   createdAt?: string
   updatedAt?: string

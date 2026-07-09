@@ -63,6 +63,24 @@
         <p>降级预览只展示已知上下文和补齐动作，不会给出直接投递建议，也不会自动创建投递记录。</p>
       </section>
 
+      <section v-if="versionNoticeVisible" class="content-panel version-panel">
+        <el-alert
+          :type="currentPackage.latestContextPackage ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          :title="versionNoticeTitle"
+          :description="versionNoticeDescription"
+        />
+        <el-button
+          v-if="!currentPackage.latestContextPackage && currentPackage.latestContextPackageId"
+          type="primary"
+          plain
+          @click="router.push(`/application-packages/${encodeURIComponent(String(currentPackage?.latestContextPackageId))}`)"
+        >
+          查看最新版本
+        </el-button>
+      </section>
+
       <section class="overview-grid">
         <article class="content-panel readiness-card" :class="`readiness-card--${readinessTone}`">
           <span>Readiness</span>
@@ -536,6 +554,23 @@ const packageSubtitle = computed(() => {
     currentPackage.value?.matchReportId ? `匹配报告 #${currentPackage.value.matchReportId}` : ''
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : '围绕一个 JD 汇总简历、证据、风险、检查清单和下一步行动。'
+})
+
+const versionNoticeVisible = computed(() => (currentPackage.value?.contextPackageCount || 0) > 1)
+const versionNoticeTitle = computed(() => {
+  const pack = currentPackage.value
+  const versionNo = pack?.contextVersionNo || pack?.snapshotVersion || 1
+  const count = pack?.contextPackageCount || 1
+  return pack?.latestContextPackage ? `当前为最新投递包版本（第 ${versionNo}/${count} 版）` : `当前为历史投递包版本（第 ${versionNo}/${count} 版）`
+})
+const versionNoticeDescription = computed(() => {
+  const pack = currentPackage.value
+  if (!pack) return ''
+  if (pack.latestContextPackage) {
+    return '同一岗位、简历版本和匹配报告下允许保留多份快照，便于回看不同准备阶段。'
+  }
+  const latest = pack.latestContextPackageNo || (pack.latestContextPackageId ? `#${pack.latestContextPackageId}` : '最新版本')
+  return `同一上下文下还有更新的投递包 ${latest}，本页保留历史快照和事件轨迹。`
 })
 
 const backTarget = computed(() => {
@@ -1064,6 +1099,16 @@ onMounted(loadPackage)
   dd {
     margin: 5px 0 0;
     overflow-wrap: anywhere;
+  }
+}
+
+.version-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .el-alert {
+    flex: 1;
   }
 }
 

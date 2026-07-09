@@ -344,13 +344,19 @@ export const enableAgentMemoryApi = (id: number) => {
     .then(normalizeAgentMemory)
 }
 
-export const disableAgentMemoryApi = (id: number) => {
+export interface AgentMemoryImpactConfirmParams {
+  confirmed: boolean
+  reason: string
+}
+
+export const disableAgentMemoryApi = (id: number, params?: AgentMemoryImpactConfirmParams) => {
   return request
-    .post<AgentMemoryWireVO, AgentMemoryWireVO>(`/agent/memories/${id}/disable`)
+    .post<AgentMemoryWireVO, AgentMemoryWireVO>(`/agent/memories/${id}/disable`, null, { params })
     .then(normalizeAgentMemory)
 }
 
-export const deleteAgentMemoryApi = (id: number) => request.delete<void, void>(`/agent/memories/${id}`)
+export const deleteAgentMemoryApi = (id: number, params?: AgentMemoryImpactConfirmParams) =>
+  request.delete<void, void>(`/agent/memories/${id}`, { params })
 
 export const completeAgentTaskApi = (id: number, data?: AgentTaskCompleteDTO) => {
   return request

@@ -24,6 +24,10 @@ export const v4PreviewPaths = [
   '/growth/readiness'
 ]
 
+export const v4ReleasedPaths = [
+  '/applications'
+]
+
 export const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
 
 export const defaultUserKnownPaths = [
@@ -42,7 +46,7 @@ export const defaultUserKnownPaths = [
   '/resumes',
   '/resume-match',
   '/resume-job-match',
-  '/applications',
+  ...v4ReleasedPaths,
   '/application-packages',
   '/application-packages/preview',
   '/interviews',

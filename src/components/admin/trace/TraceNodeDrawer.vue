@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    title="Trace node details"
+    title="链路节点详情"
     size="760px"
     class="trace-node-drawer"
     @update:model-value="$emit('update:modelValue', $event)"
@@ -10,17 +10,17 @@
     <AppState
       v-if="!node"
       type="empty"
-      title="No node selected"
-      description="Select a timeline node to inspect safe metadata, previews, and source links."
+      title="未选择节点"
+      description="请选择一个时间线节点，查看安全元数据、预览和来源链接。"
     />
     <div v-else class="trace-node-drawer__body">
       <TraceSensitiveAccessNotice :permission="node.rawAccess.requiredPermission || node.rawAccess.rawAccessPermission" />
 
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="Node">{{ node.title }}</el-descriptions-item>
-        <el-descriptions-item label="Type">{{ node.nodeType }}</el-descriptions-item>
-        <el-descriptions-item label="Status">{{ node.status }}</el-descriptions-item>
-        <el-descriptions-item label="Source">{{ node.sourceModule }}:{{ node.sourceId || '--' }}</el-descriptions-item>
+        <el-descriptions-item label="节点">{{ node.title }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ node.nodeType }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ node.status }}</el-descriptions-item>
+        <el-descriptions-item label="来源">{{ node.sourceModule }}:{{ node.sourceId || '--' }}</el-descriptions-item>
         <el-descriptions-item label="traceId">{{ node.traceId || '--' }}</el-descriptions-item>
         <el-descriptions-item label="requestId">{{ node.requestId || '--' }}</el-descriptions-item>
         <el-descriptions-item label="messageId">{{ node.messageId || '--' }}</el-descriptions-item>
@@ -28,36 +28,36 @@
         <el-descriptions-item label="associationType">{{ node.associationType }}</el-descriptions-item>
         <el-descriptions-item label="associationConfidence">{{ node.associationConfidence }}</el-descriptions-item>
         <el-descriptions-item label="associationReason">{{ node.associationReason }}</el-descriptions-item>
-        <el-descriptions-item label="raw availability">{{ rawAvailableLabel }}</el-descriptions-item>
-        <el-descriptions-item label="raw state">{{ node.rawAccess.state }}</el-descriptions-item>
-        <el-descriptions-item label="required permission">{{ node.rawAccess.requiredPermission || node.rawAccess.rawAccessPermission || '--' }}</el-descriptions-item>
+        <el-descriptions-item label="原文可用性">{{ rawAvailableLabel }}</el-descriptions-item>
+        <el-descriptions-item label="原文状态">{{ node.rawAccess.state }}</el-descriptions-item>
+        <el-descriptions-item label="所需权限">{{ node.rawAccess.requiredPermission || node.rawAccess.rawAccessPermission || '--' }}</el-descriptions-item>
       </el-descriptions>
 
       <section class="trace-node-drawer__section">
-        <h3>Safe preview / hash / length</h3>
+        <h3>安全预览 / 哈希 / 长度</h3>
         <el-table :data="previewRows" size="small">
-          <el-table-column prop="label" label="Field" width="170" />
-          <el-table-column prop="value" label="Preview" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="hash" label="Hash" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="length" label="Length" width="100" />
+          <el-table-column prop="label" label="字段" width="170" />
+          <el-table-column prop="value" label="预览" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="hash" label="哈希" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="length" label="长度" width="100" />
         </el-table>
       </section>
 
       <section class="trace-node-drawer__section">
-        <h3>Metadata</h3>
+        <h3>元数据</h3>
         <el-table :data="metaRows" size="small">
-          <el-table-column prop="key" label="Key" width="190" />
-          <el-table-column prop="value" label="Value" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="key" label="键" width="190" />
+          <el-table-column prop="value" label="值" min-width="220" show-overflow-tooltip />
         </el-table>
       </section>
 
       <section class="trace-node-drawer__section">
-        <h3>Source links</h3>
+        <h3>来源链接</h3>
         <div class="trace-node-drawer__links">
           <el-button v-for="link in node.links" :key="link.label" plain @click="$emit('open-link', link.to)">
             {{ link.label }}
           </el-button>
-          <span v-if="!node.links.length">No source link</span>
+          <span v-if="!node.links.length">暂无来源链接</span>
         </div>
       </section>
     </div>
@@ -84,9 +84,9 @@ defineEmits<{
 
 const rawAvailableLabel = computed(() => {
   if (!props.node) return '--'
-  if (props.node.rawAccess.rawFieldsIncluded) return 'short-lived visible in source flow'
-  if (props.node.rawAccess.rawFieldsAvailable) return 'recorded; request through existing source flow'
-  return 'not recorded or unavailable'
+  if (props.node.rawAccess.rawFieldsIncluded) return '仅在来源流程中短时可见'
+  if (props.node.rawAccess.rawFieldsAvailable) return '已记录；需通过现有来源流程申请查看'
+  return '未记录或不可用'
 })
 
 const previewRows = computed(() => {

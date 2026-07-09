@@ -281,22 +281,22 @@ const inferNotificationTarget = (item?: NotificationVO): Omit<NotificationTarget
   }
   if (relatedType === 'QUESTION_GENERATE') {
     return {
-      label: 'Question generation task',
+      label: '题目生成任务',
       path: withQuery('/agent/tasks', {
         bizType: 'question.generate',
         bizId: batchId,
         batchId
       }),
-      fallbackLabel: 'Task center',
+      fallbackLabel: '任务中心',
       fallbackPath: '/agent/tasks',
       trustedInferredPath: true
     }
   }
   if (relatedType === 'QUESTION_RECOMMENDATION_GENERATE') {
     return {
-      label: 'Question recommendations',
+      label: '今日训练题组',
       path: withQuery('/questions/recommendations', { batchId }),
-      fallbackLabel: 'Question recommendations',
+      fallbackLabel: '今日训练题组',
       fallbackPath: '/questions/recommendations',
       trustedInferredPath: true
     }

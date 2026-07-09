@@ -1218,7 +1218,7 @@
             {{ influenceStatusLabel(selectedInfluencePreview.confidence) }}
           </el-tag>
           <el-tag type="info" effect="plain">
-            {{ selectedInfluencePreview.previewSource === 'BACKEND_REFERENCES' ? 'Backend precise' : 'Estimated fallback' }}
+            {{ selectedInfluencePreview.previewSource === 'BACKEND_REFERENCES' ? '后端引用明细' : '本地估算降级' }}
           </el-tag>
         </section>
 
@@ -1601,7 +1601,7 @@ const withBackendImpactPreview = (
     key: `${item.consumerType || 'CONSUMER'}-${item.consumerId || index}-${item.usageScene || 'USAGE'}`,
     label: item.consumerType || 'CONSUMER',
     status: impactStatusFromStrength(item.usageStrength),
-    summary: item.summary || `${item.consumerType || 'Consumer'} #${item.consumerId || '-'} ${item.usageScene || 'used this context'}`,
+    summary: item.summary || `${item.consumerType || '使用方'} #${item.consumerId || '-'} 在 ${item.usageScene || '未知场景'} 使用过该上下文`,
     evidence: [item.traceId ? `traceId=${item.traceId}` : '', item.snapshotHash ? `hash=${item.snapshotHash}` : '']
       .filter(Boolean)
       .join(' / ')
@@ -1610,7 +1610,7 @@ const withBackendImpactPreview = (
     key: `module-${module}-${index}`,
     label: module,
     status: 'SUPPORTED' as KnowledgeInfluenceItem['status'],
-    summary: `Historical usage exists in ${module}.`
+    summary: `${module} 存在历史引用记录。`
   }))
   return {
     ...localPreview,
@@ -1621,7 +1621,7 @@ const withBackendImpactPreview = (
     safeToDisable: Boolean(backend.safeToDisable),
     previewSource: backend.previewSource || backend.resultSource || 'BACKEND_REFERENCES',
     resultSource: backend.resultSource || backend.previewSource || 'BACKEND_REFERENCES',
-    evidenceSummary: `Backend references: total ${backend.referenceCount ?? 0}, recent ${backend.recentReferenceCount ?? 0}, futureContext=${backend.futureContextImpact ? 'yes' : 'no'}.`,
+    evidenceSummary: `后端引用明细：总计 ${backend.referenceCount ?? 0} 条，近期 ${backend.recentReferenceCount ?? 0} 条，未来上下文影响：${backend.futureContextImpact ? '有' : '无'}。`,
     directImpacts: backendImpacts.length ? backendImpacts : localPreview.directImpacts,
     indirectImpacts: moduleImpacts.length ? moduleImpacts : localPreview.indirectImpacts,
     warnings: Array.from(new Set([...(backend.warnings || []), ...localPreview.warnings])),
@@ -1644,7 +1644,7 @@ const loadChunkInfluencePreview = async (chunk: KnowledgeChunkVO) => {
   try {
     return chunk.id
       ? withBackendImpactPreview(localPreview, await getKnowledgeChunkImpactPreviewApi(chunk.id))
-      : withBackendImpactPreview(localPreview, null, 'missing chunk id')
+      : withBackendImpactPreview(localPreview, null, '缺少知识片段 ID')
   } catch (error) {
     if (isAuthOrForbiddenError(error)) throw error
     return withBackendImpactPreview(localPreview, null, toFriendlyMessage(error))
@@ -1700,11 +1700,11 @@ const openSearchResultInfluencePreview = async (item: KnowledgeSearchResultVO) =
 }
 
 const influencePreviewDangerText = (preview: KnowledgeInfluencePreview) => {
-  const actions = preview.governanceActions.map((item) => item.code).join(' / ') || 'none'
+  const actions = preview.governanceActions.map((item) => item.code).join(' / ') || '无'
   const source = preview.previewSource === 'BACKEND_REFERENCES'
-    ? `Backend precise references: total=${preview.referenceCount ?? 0}, recent=${preview.recentReferenceCount ?? 0}, futureContext=${preview.futureContextImpact ? 'yes' : 'no'}.`
-    : `Estimated fallback only${preview.fallbackReason ? `: ${preview.fallbackReason}` : ''}. Historical reference details are unavailable.`
-  return `${source} ${preview.evidenceSummary} Direct impacts: ${preview.directImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('; ')}. Indirect impacts: ${preview.indirectImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('; ')}. Governance actions: ${actions}.`
+    ? `后端引用明细：总计 ${preview.referenceCount ?? 0} 条，近期 ${preview.recentReferenceCount ?? 0} 条，未来上下文影响：${preview.futureContextImpact ? '有' : '无'}。`
+    : `当前仅为本地估算降级${preview.fallbackReason ? `：${preview.fallbackReason}` : ''}，历史引用明细不可用。`
+  return `${source} ${preview.evidenceSummary} 直接影响：${preview.directImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('；')}。间接影响：${preview.indirectImpacts.map((item) => `${item.label}:${influenceStatusLabel(item.status)}`).join('；')}。治理动作：${actions}。`
 }
 
 const formDocumentTypeOptions = computed(() =>
