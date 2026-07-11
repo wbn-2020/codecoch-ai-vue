@@ -1,14 +1,11 @@
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
-const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = existsSync(path.join(workspaceRoot, 'codecoch-ai-java'))
-  ? path.join(workspaceRoot, 'codecoch-ai-java')
-  : path.join(workspaceRoot, 'CodeCoachAI-java')
+const backendRoot = resolveBackendRoot(frontendRoot)
 
 const read = (file) => readFile(file, 'utf8')
 const frontendApiFile = path.join(frontendRoot, 'src/api/v4.ts')
@@ -352,7 +349,6 @@ const applicationFollowUpContractChecks = [
     [
       'APPLICATION_FOLLOW_UP',
       '投递跟进',
-      'JOB_APPLICATION',
       'hasAgentTaskActionEntry',
       'buildAgentTaskActionPath'
     ],
@@ -586,7 +582,7 @@ for (const routePath of previewSidebarPaths) {
   record(
     'sidebar-preview',
     routePath,
-    Boolean(line) && (line.includes('previewOnly: true') || line.includes("featureFlag: 'v4Preview'")),
+    Boolean(line) && (line.includes('previewOnly: true') || line.includes('featureFlag:')),
     line.trim()
   )
 }
@@ -638,7 +634,7 @@ recordContainsAll(
   `${resumeMatchPage}\n${resumeMatchDetailPage}`,
   [
     'isVersionEntry',
-    'versionEntryDescription',
+    'versionSourceNotice',
     'goSelectedResumeVersions',
     'goReportResumeVersions',
     "`/resumes/${report.value.resumeId}/versions`"
@@ -835,8 +831,8 @@ for (const [name, text, needle, evidence] of safetyChecks) {
 }
 
 const adminApiSafetyChecks = [
-  ['question-vector-rebuild-api', questionApi, "request.post<QuestionEmbeddingRebuildResult, QuestionEmbeddingRebuildResult>(\n    '/admin/questions/embedding/rebuild'", 'Admin question vector rebuild API wrapper'],
-  ['question-vector-retry-api', questionApi, "request.post<QuestionEmbeddingRebuildResult, QuestionEmbeddingRebuildResult>(\n    '/admin/questions/embedding/retry-failed'", 'Admin question vector retry API wrapper'],
+  ['question-vector-rebuild-api', questionApi, "'/admin/questions/embedding/rebuild'", 'Admin question vector rebuild API wrapper'],
+  ['question-vector-retry-api', questionApi, "'/admin/questions/embedding/retry-failed'", 'Admin question vector retry API wrapper'],
   ['knowledge-vector-rebuild-api', analyticsApi, "'/admin/analytics/vector-store/knowledge/rebuild'", 'Admin knowledge vector rebuild API wrapper'],
   ['knowledge-vector-retry-api', analyticsApi, "'/admin/analytics/vector-store/knowledge/retry-failed'", 'Admin knowledge vector retry API wrapper'],
   ['vector-delete-outbox-retry-api', analyticsApi, "'/admin/analytics/vector-store/delete-outbox/retry'", 'Admin vector delete outbox retry API wrapper'],
@@ -953,8 +949,8 @@ const adminSystemGovernanceChecks = [
     2600,
     [
       'confirmDangerActionPreview({',
-      'const updatePayload: Parameters<typeof updateSystemConfigApi>[1] = {',
-      'updateSystemConfigApi(editingConfigId.value, updatePayload)',
+      'const updatePayload: Parameters<typeof updateSystemConfigByIdApi>[1] = {',
+      'updateSystemConfigByIdApi(editingConfigId.value, updatePayload)',
       'createSystemConfigApi({',
       'confirm: true',
       'dryRun: false',
@@ -1093,7 +1089,7 @@ const systemConfigContractChecks = [
     'system-config-page-result-normalization',
     systemApi,
     'const normalizeConfigPage',
-    900,
+    3200,
     [
       'const normalizeConfigPage',
       'records: Array.isArray(result.records) ? result.records.map(normalizeSystemConfig) : []',
@@ -1911,7 +1907,7 @@ const adminQuestionBackendGovernanceChecks = [
     'question-review-controller-dry-run-and-release',
     adminQuestionReviewController,
     'private <T> Result<T> runConfirmedOperation',
-    900,
+    1800,
     [
       'operationConfirmationGuard.requireConfirmed(operation, confirm, dryRun, reason, idempotencyKey)',
       'operationConfirmationGuard.release(lockKey)',

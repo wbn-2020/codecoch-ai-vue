@@ -10,6 +10,21 @@
         <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
       </div>
       <div class="report-actions">
+        <el-dropdown
+          :disabled="!interviewId || !isGenerated || exporting"
+          @command="handleExportReport"
+        >
+          <el-button :loading="exporting" :disabled="!interviewId || !isGenerated">
+            <Download :size="16" />
+            导出
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="markdown">Markdown</el-dropdown-item>
+              <el-dropdown-item command="json">JSON</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button @click="handleStaticTodayAction()">
           <LayoutDashboard :size="16" />
           今日计划
@@ -557,7 +572,7 @@
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
+import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
@@ -566,8 +581,10 @@ import {
   recordAgentMetricEventApi
 } from '@/api/agent'
 import {
+  exportInterviewReportApi,
   getInterviewReportApi,
-  retryInterviewReportApi
+  retryInterviewReportApi,
+  type InterviewReportExportFormat
 } from '@/api/interview'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
@@ -595,6 +612,7 @@ const interviewId = getRouteNumberParam(route.params.id as string)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
 const retrying = ref(false)
+const exporting = ref(false)
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -611,6 +629,31 @@ const asyncReceipt = ref({
   sendStatus: typeof route.query.asyncSendStatus === 'string' ? route.query.asyncSendStatus : ''
 })
 let pollTimer: number | undefined
+
+const handleExportReport = async (command: string | number | object) => {
+  if (!interviewId || !isGenerated.value || exporting.value) return
+  const format: InterviewReportExportFormat = command === 'json' ? 'json' : 'markdown'
+  exporting.value = true
+  try {
+    const response = await exportInterviewReportApi(interviewId, format)
+    const mimeType = format === 'json' ? 'application/json;charset=UTF-8' : 'text/markdown;charset=UTF-8'
+    const blob = response instanceof Blob ? response : new Blob([response as BlobPart], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    try {
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `面试报告_${interviewId}.${format === 'json' ? 'json' : 'md'}`
+      link.click()
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+    ElMessage.success('报告已导出')
+  } catch (error) {
+    ElMessage.error(toFriendlyMessage(error, '报告导出失败，请稍后重试。'))
+  } finally {
+    exporting.value = false
+  }
+}
 
 const asyncSendStatusLabel = (value?: string | null) => {
   const status = String(value || '').toUpperCase()

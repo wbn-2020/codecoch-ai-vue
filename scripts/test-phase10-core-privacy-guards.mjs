@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const frontendRoot = process.cwd()
-const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = path.join(workspaceRoot, 'CodeCoachAI-java')
+const backendRoot = resolveBackendRoot(frontendRoot)
 
 const files = {
   aiConvert: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/convert/AiConvert.java'),
@@ -279,7 +279,7 @@ expect(hasAll(content.frontendRouterGuards, [
   'const safeRedirectTarget = (to: RouteLocationNormalized) => buildSafeRedirectTarget(to.path, to.query)',
   'const safeRedirectPath = (value: unknown) => sanitizeLocalRedirectPath(value)',
   'redirect: safeRedirectTarget(to)',
-  'return safeRedirectPath(to.query.redirect) || defaultAuthenticatedPath(authStore)'
+  'return safeRedirectPath(to.query.redirect) || resolveAuthenticatedEntryPath(authStore)'
 ]), 'frontend-route', 'Router guards must use sanitized redirects for login, auth-unavailable, and feature-unavailable flows')
 
 expect(hasAll(content.agentTodayView, [

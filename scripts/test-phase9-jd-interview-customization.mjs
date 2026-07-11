@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const frontendRoot = process.cwd()
-const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = path.join(workspaceRoot, 'CodeCoachAI-java')
+const backendRoot = resolveBackendRoot(frontendRoot)
 
 const files = {
   interviewTypes: path.join(frontendRoot, 'src/types/interview.ts'),

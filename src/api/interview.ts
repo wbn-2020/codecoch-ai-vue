@@ -25,6 +25,7 @@ import type {
   InterviewTranscriptConfirmDTO,
   InterviewTranscriptVO,
   InterviewVoiceSubmissionCreateDTO,
+  InterviewVoiceDiscardReason,
   InterviewVoiceSubmissionVO,
   InterviewVoiceUploadVO,
   RetryReportVO
@@ -528,28 +529,52 @@ export const submitInterviewAnswerApi = (id: number, data: InterviewAnswerDTO) =
   ).then((result) => normalizeAnswerResult(result, id))
 }
 
-export const uploadInterviewVoiceAudioApi = (file: Blob | File) => {
+export interface InterviewVoiceRequestOptions {
+  signal?: AbortSignal
+  silentError?: boolean
+}
+
+export const uploadInterviewVoiceAudioApi = (
+  file: Blob | File,
+  options?: InterviewVoiceRequestOptions
+) => {
   const formData = new FormData()
   const filename = file instanceof File ? file.name : `interview-voice-${Date.now()}.webm`
   formData.append('file', file, filename)
   return request.post<InterviewVoiceUploadVO, InterviewVoiceUploadVO>('/files/upload', formData, {
-    params: { bizType: 'INTERVIEW_VOICE' }
+    params: { bizType: 'INTERVIEW_VOICE' },
+    signal: options?.signal,
+    silentError: options?.silentError
   })
 }
 
 export const createInterviewVoiceSubmissionApi = (
   id: number,
-  data: InterviewVoiceSubmissionCreateDTO
+  data: InterviewVoiceSubmissionCreateDTO,
+  options?: InterviewVoiceRequestOptions
 ) => {
   return request.post<InterviewVoiceSubmissionVO, InterviewVoiceSubmissionVO>(
     `/interviews/${id}/voice/submissions`,
-    data
+    data,
+    {
+      signal: options?.signal,
+      silentError: options?.silentError
+    }
   )
 }
 
-export const transcribeInterviewVoiceSubmissionApi = (id: number, submissionId: number) => {
+export const transcribeInterviewVoiceSubmissionApi = (
+  id: number,
+  submissionId: number,
+  options?: InterviewVoiceRequestOptions
+) => {
   return request.post<InterviewVoiceSubmissionVO, InterviewVoiceSubmissionVO>(
-    `/interviews/${id}/voice/submissions/${submissionId}/transcribe`
+    `/interviews/${id}/voice/submissions/${submissionId}/transcribe`,
+    undefined,
+    {
+      signal: options?.signal,
+      silentError: options?.silentError
+    }
   )
 }
 
@@ -562,16 +587,41 @@ export const getInterviewVoiceSubmissionApi = (id: number, submissionId: number)
 export const confirmInterviewVoiceTranscriptApi = (
   id: number,
   transcriptId: number,
-  data: InterviewTranscriptConfirmDTO
+  data: InterviewTranscriptConfirmDTO,
+  options?: InterviewVoiceRequestOptions
 ) => {
   return request.post<InterviewTranscriptVO, InterviewTranscriptVO>(
     `/interviews/${id}/voice/transcripts/${transcriptId}/confirm`,
-    data
+    data,
+    {
+      signal: options?.signal,
+      silentError: options?.silentError
+    }
   )
 }
 
-export const discardInterviewVoiceSubmissionApi = (id: number, submissionId: number) => {
-  return request.post<void, void>(`/interviews/${id}/voice/submissions/${submissionId}/discard`)
+export const discardInterviewVoiceSubmissionApi = (
+  id: number,
+  submissionId: number,
+  reason: InterviewVoiceDiscardReason,
+  options?: InterviewVoiceRequestOptions
+) => {
+  return request.post<void, void>(
+    `/interviews/${id}/voice/submissions/${submissionId}/discard`,
+    { reason },
+    { silentError: options?.silentError }
+  )
+}
+
+export const deleteInterviewVoiceAudioApi = (
+  fileId: number,
+  options?: InterviewVoiceRequestOptions
+) => {
+  return request.delete<void, void>(`/files/${fileId}`, {
+    params: { bizType: 'INTERVIEW_VOICE' },
+    signal: options?.signal,
+    silentError: options?.silentError
+  })
 }
 
 export const submitInterviewVoiceTranscriptAnswerApi = (id: number, transcriptId: number) => {
@@ -606,4 +656,13 @@ export const getInterviewDetailApi = (id: number) => {
 
 export const getInterviewReportApi = (id: number) => {
   return request.get<InterviewReportVO, InterviewReportVO>(`/interviews/${id}/report`).then((result) => normalizeReport(result, id))
+}
+
+export type InterviewReportExportFormat = 'markdown' | 'json'
+
+export const exportInterviewReportApi = (id: number, format: InterviewReportExportFormat) => {
+  const suffix = format === 'json' ? '/json' : ''
+  return request.get<Blob, Blob>(`/interviews/${id}/report/export${suffix}`, {
+    responseType: 'blob'
+  })
 }

@@ -21,6 +21,7 @@ vi.mock('@/api/agent', () => ({
 }))
 
 vi.mock('@/api/interview', () => ({
+  exportInterviewReportApi: vi.fn(),
   getInterviewReportApi: vi.fn(),
   retryInterviewReportApi: vi.fn()
 }))
@@ -51,6 +52,15 @@ const componentStubs = {
   },
   'el-button': {
     template: '<button class="el-button-stub" v-bind="$attrs"><slot /></button>'
+  },
+  'el-dropdown': {
+    template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>'
+  },
+  'el-dropdown-item': {
+    template: '<button class="el-dropdown-item-stub"><slot /></button>'
+  },
+  'el-dropdown-menu': {
+    template: '<div class="el-dropdown-menu-stub"><slot /></div>'
   },
   'el-icon': {
     template: '<i class="el-icon-stub"><slot /></i>'
@@ -90,7 +100,11 @@ describe('InterviewReportView metrics', () => {
     })
 
     const wrapper = await mountReport()
-    await wrapper.find('.report-actions .el-button-stub').trigger('click')
+    const todayPlanButton = wrapper
+      .findAll('.report-actions .el-button-stub')
+      .find((button) => button.text().includes('今日计划'))
+    expect(todayPlanButton).toBeDefined()
+    await todayPlanButton!.trigger('click')
 
     expect(routerPush).toHaveBeenCalledWith('/dashboard')
     expect(recordAgentMetricEventApi).not.toHaveBeenCalled()

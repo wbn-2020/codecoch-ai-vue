@@ -160,7 +160,13 @@ export interface InterviewAnswerDTO {
   voiceSubmissionId?: number
   transcriptId?: number
   transcriptConfidence?: number
-  answerSource?: 'TEXT' | 'VOICE_TRANSCRIPT' | 'MANUAL_TRANSCRIPT' | string
+  answerSource?:
+    | 'TEXT'
+    | 'VOICE_TRANSCRIPT'
+    | 'VOICE_TRANSCRIPT_WITH_TEXT'
+    | 'MANUAL_TRANSCRIPT'
+    | 'MANUAL_TRANSCRIPT_WITH_TEXT'
+    | string
 }
 
 export type InterviewVoicePreviewState =
@@ -189,6 +195,7 @@ export type InterviewVoiceSubmissionStatus =
   | 'TRANSCRIBE_FAILED'
   | 'CONFIRMED'
   | 'DISCARDED'
+  | 'STALE'
   | string
 
 export type InterviewTranscriptStatus =
@@ -225,6 +232,14 @@ export interface InterviewTranscriptConfirmDTO {
   lowConfidenceAcknowledged?: boolean
 }
 
+export type InterviewVoiceDiscardReason =
+  | 'USER_CANCELLED'
+  | 'MODE_SWITCH'
+  | 'QUESTION_CHANGED'
+  | 'PAGE_UNLOAD'
+  | 'REPLACED'
+  | 'STALE'
+
 export interface InterviewTranscriptVO {
   transcriptId: number
   voiceSubmissionId: number
@@ -241,6 +256,7 @@ export interface InterviewTranscriptVO {
   fallback?: boolean
   fallbackReason?: string
   traceId?: string
+  answerSource?: string
   confirmedAt?: string
   submittedAnswerMessageId?: number
   submittedAt?: string
@@ -258,6 +274,10 @@ export interface InterviewVoiceSubmissionVO {
   traceId?: string
   fallback?: boolean
   fallbackReason?: string
+  fileDeleteStatus?: 'RETAINED' | 'DELETE_PENDING' | 'DELETED' | 'DELETE_FAILED' | string
+  fileDeleteReason?: InterviewVoiceDiscardReason | string
+  fileDeleteRequestedAt?: string
+  fileDeletedAt?: string
   transcript?: InterviewTranscriptVO
   createdAt?: string
   updatedAt?: string

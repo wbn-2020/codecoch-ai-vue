@@ -54,7 +54,7 @@ describe('PortfolioDemoView', () => {
 
     expect(wrapper.text()).toContain('Portfolio rehearsal')
     expect(wrapper.text()).toContain('Route script')
-    expect(wrapper.text()).toContain('Demo health')
+    expect(wrapper.text()).toContain('静态健康检查')
     expect(wrapper.text()).toContain('Speaker cards')
     expect(wrapper.text()).toContain('Phase 5.5 handoff')
     expect(wrapper.text()).toContain('0/8')

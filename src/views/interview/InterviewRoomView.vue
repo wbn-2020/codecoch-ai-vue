@@ -280,7 +280,7 @@
                   停止
                 </el-button>
                 <el-button
-                  :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+                  :disabled="answerDisabled || voiceConfirming"
                   @click="handleVoiceFallback"
                 >
                   <Keyboard :size="16" />
@@ -500,6 +500,8 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   confirmInterviewVoiceTranscriptApi,
   createInterviewVoiceSubmissionApi,
+  deleteInterviewVoiceAudioApi,
+  discardInterviewVoiceSubmissionApi,
   finishInterviewApi,
   getCurrentInterviewQuestionApi,
   startInterviewApi,
@@ -515,6 +517,9 @@ import { NEXT_ACTION } from '@/constants/enums'
 import {
   type InterviewVoiceConfirmedMeta,
   type InterviewVoiceRecordedAudio,
+  answerContainsConfirmedVoiceText,
+  mergeConfirmedVoiceText,
+  resolveConfirmedVoiceAnswerSource,
   useInterviewVoicePreview
 } from '@/features/interview-voice-preview'
 import type {
@@ -522,6 +527,7 @@ import type {
   InterviewAnswerResultVO,
   InterviewAnswerReviewSseEvent,
   InterviewCurrentVO,
+  InterviewVoiceDiscardReason,
   InterviewVoicePreviewState
 } from '@/types/interview'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
@@ -556,14 +562,16 @@ const elapsedSeconds = ref(0)
 const confirmedVoiceMeta = ref<InterviewVoiceConfirmedMeta | null>(null)
 const confirmedVoiceText = ref('')
 const voiceConfirming = ref(false)
+const uploadedVoiceFileId = ref<number | null>(null)
+let voiceRequestController: AbortController | null = null
+let voiceOperationVersion = 0
 
 const voicePreview = useInterviewVoicePreview({
   onConfirmedText: (text, meta) => {
+    const previousConfirmedText = confirmedVoiceText.value
     confirmedVoiceMeta.value = meta || null
     confirmedVoiceText.value = text
-    answerContent.value = answerContent.value.trim()
-      ? `${answerContent.value.trim()}\n\n${text}`
-      : text
+    answerContent.value = mergeConfirmedVoiceText(answerContent.value, previousConfirmedText, text)
     focusAnswerInput()
   },
   onRecordedAudio: (audio) => handleVoiceRecordedAudio(audio)
@@ -737,7 +745,7 @@ const voicePreviewHint = computed(() => {
   if (voicePreview.state.value === 'transcribing') return 'ASR 不可用时会明确降级，不会伪造转写成功。'
   if (voicePreview.state.value === 'recorded') return '录音已捕获，正在准备上传或等待手动降级。'
   if (voicePreview.state.value === 'draft') return '确认前草稿不会进入评分、知识库、长期记忆或 Agent。'
-  if (voicePreview.state.value === 'confirmed') return '确认后的文本会和普通文本回答一样提交。'
+  if (voicePreview.state.value === 'confirmed') return '已确认语音片段必须完整保留，可在它前后继续补充文字。'
   if (voicePreview.state.value === 'submitted') return '本轮语音预览已结束，后续问题可重新录音。'
   if (voicePreview.state.value === 'fallback_text') return '可以直接粘贴或编辑转写草稿，再确认到正式回答。'
   return '仅做录音状态和手动转写草稿预览，不做语音评分、情绪识别、回放或表达诊断。'
@@ -941,6 +949,45 @@ const resetConfirmedVoiceAnswer = () => {
   confirmedVoiceText.value = ''
 }
 
+const isVoiceRequestCanceled = (error: unknown) => {
+  const candidate = error as { code?: string; name?: string }
+  return candidate?.code === 'ERR_CANCELED'
+    || candidate?.name === 'CanceledError'
+    || candidate?.name === 'AbortError'
+}
+
+const isCurrentVoiceOperation = (version: number, controller: AbortController) => {
+  return version === voiceOperationVersion
+    && voiceRequestController === controller
+    && !controller.signal.aborted
+}
+
+const cancelVoiceLifecycle = async (reason: InterviewVoiceDiscardReason) => {
+  voiceOperationVersion += 1
+  const controller = voiceRequestController
+  voiceRequestController = null
+  controller?.abort()
+
+  const submissionId = voicePreview.submission.value?.voiceSubmissionId
+  const fileId = uploadedVoiceFileId.value
+  voiceConfirming.value = false
+  uploadedVoiceFileId.value = null
+  voicePreview.cancel()
+  resetConfirmedVoiceAnswer()
+
+  try {
+    if (interviewId && submissionId) {
+      await discardInterviewVoiceSubmissionApi(interviewId, submissionId, reason, { silentError: true })
+      return
+    }
+    if (fileId) {
+      await deleteInterviewVoiceAudioApi(fileId, { silentError: true })
+    }
+  } catch {
+    // Backend lifecycle records deletion failures once a submission exists.
+  }
+}
+
 const getVoiceAudioExtension = (mimeType: string) => {
   const value = mimeType.toLowerCase()
   if (value.includes('ogg')) return 'ogg'
@@ -963,9 +1010,18 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
   }
 
   const question = current.value.currentQuestion
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
   try {
     voicePreview.setUploading()
-    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio))
+    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio), {
+      signal: controller.signal,
+      silentError: true
+    })
+    uploadedVoiceFileId.value = uploaded.fileId
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
     voicePreview.setTranscribing()
     const submission = await createInterviewVoiceSubmissionApi(interviewId, {
       fileId: uploaded.fileId,
@@ -974,9 +1030,21 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
       audioDurationMs: audio.durationMs,
       mimeType: audio.mimeType || audio.blob.type,
       traceId: `interview-voice-${interviewId}-${question.messageId}-${Date.now()}`
+    }, {
+      signal: controller.signal,
+      silentError: true
     })
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
     voicePreview.setTranscribing(submission)
-    const transcribed = await transcribeInterviewVoiceSubmissionApi(interviewId, submission.voiceSubmissionId)
+    const transcribed = await transcribeInterviewVoiceSubmissionApi(
+      interviewId,
+      submission.voiceSubmissionId,
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
     voicePreview.applySubmission(transcribed)
     if (transcribed.transcript?.draftText) {
       voicePreview.applyTranscriptDraft(transcribed.transcript)
@@ -987,11 +1055,17 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
       transcribed
     )
   } catch (error) {
+    if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
     voicePreview.setError('upload_failed', getErrorMessage(error, '语音上传或转写失败，请使用文本回答。'))
+  } finally {
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+    }
   }
 }
 
 const handleVoiceStart = async () => {
+  await cancelVoiceLifecycle('REPLACED')
   await voicePreview.startRecording()
 }
 
@@ -999,7 +1073,8 @@ const handleVoiceStop = () => {
   voicePreview.stopRecording()
 }
 
-const handleVoiceFallback = () => {
+const handleVoiceFallback = async () => {
+  await cancelVoiceLifecycle('MODE_SWITCH')
   voicePreview.useTextFallback()
 }
 
@@ -1014,13 +1089,21 @@ const handleVoiceConfirm = async () => {
 
   const currentTranscript = voicePreview.transcript.value
   let meta: InterviewVoiceConfirmedMeta | undefined
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
   try {
     voiceConfirming.value = true
     if (currentTranscript?.transcriptId) {
       const confirmed = await confirmInterviewVoiceTranscriptApi(interviewId, currentTranscript.transcriptId, {
         confirmedText: text,
         lowConfidenceAcknowledged: Boolean(currentTranscript.lowConfidence)
+      }, {
+        signal: controller.signal,
+        silentError: true
       })
+      if (!isCurrentVoiceOperation(operationVersion, controller)) return
       voicePreview.applyTranscriptDraft(confirmed)
       meta = {
         voiceSubmissionId: confirmed.voiceSubmissionId,
@@ -1041,9 +1124,13 @@ const handleVoiceConfirm = async () => {
       ElMessage.success('Voice transcript confirmed. Please review the answer before submitting.')
     }
   } catch (error) {
+    if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
     ElMessage.error(getErrorMessage(error, 'Voice transcript confirmation failed.'))
   } finally {
-    voiceConfirming.value = false
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+      voiceConfirming.value = false
+    }
   }
 }
 
@@ -1053,11 +1140,12 @@ const fetchCurrent = async () => {
   roomError.value = ''
   try {
     const previousMessageId = current.value?.currentQuestion?.messageId
-    current.value = await getCurrentInterviewQuestionApi(interviewId)
-    if (current.value?.currentQuestion?.messageId && current.value.currentQuestion.messageId !== previousMessageId) {
-      voicePreview.reset()
-      resetConfirmedVoiceAnswer()
+    const nextCurrent = await getCurrentInterviewQuestionApi(interviewId)
+    const nextMessageId = nextCurrent?.currentQuestion?.messageId
+    if (previousMessageId && nextMessageId !== previousMessageId) {
+      await cancelVoiceLifecycle('QUESTION_CHANGED')
     }
+    current.value = nextCurrent
     answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
@@ -1091,6 +1179,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
   voicePreview.markSubmitted()
+  uploadedVoiceFileId.value = null
   resetConfirmedVoiceAnswer()
 
   if (result.nextAction === NEXT_ACTION.FINISH) {
@@ -1233,9 +1322,9 @@ const handleSubmit = async () => {
   if (
     confirmedVoiceMeta.value?.transcriptId
     && confirmedVoiceText.value
-    && answerContent.value.trim() !== confirmedVoiceText.value.trim()
+    && !answerContainsConfirmedVoiceText(answerContent.value, confirmedVoiceText.value)
   ) {
-    ElMessage.warning('The confirmed voice transcript was edited. Please confirm the transcript again before submitting.')
+    ElMessage.warning('请保留完整的已确认语音片段；可以在它前后继续补充文字。')
     return
   }
 
@@ -1245,7 +1334,11 @@ const handleSubmit = async () => {
           voiceSubmissionId: confirmedVoiceMeta.value.voiceSubmissionId,
           transcriptId: confirmedVoiceMeta.value.transcriptId,
           transcriptConfidence: confirmedVoiceMeta.value.transcriptConfidence,
-          answerSource: confirmedVoiceMeta.value.answerSource
+          answerSource: resolveConfirmedVoiceAnswerSource(
+            confirmedVoiceMeta.value,
+            answerContent.value,
+            confirmedVoiceText.value
+          )
         }
       : {}
 
@@ -1373,7 +1466,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
   stopElapsedTimer()
-  voicePreview.reset()
+  void cancelVoiceLifecycle('PAGE_UNLOAD')
 })
 </script>
 
