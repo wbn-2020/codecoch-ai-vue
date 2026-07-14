@@ -56,6 +56,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'interviews/create', name: 'InterviewCreate', component: () => import('@/views/interview/InterviewCreateView.vue'), meta: { title: '推荐开练' } },
       { path: 'interviews/room/:id', name: 'InterviewRoom', component: () => import('@/views/interview/InterviewRoomView.vue'), meta: { title: 'AI 面试训练室', immersive: true } },
       { path: 'interviews/history', name: 'InterviewHistory', component: () => import('@/views/interview/InterviewHistoryView.vue'), meta: { title: '面试复盘记录' } },
+      { path: 'interviews/comparisons/:id', name: 'InterviewComparison', component: () => import('@/views/interview/InterviewComparisonView.vue'), meta: { title: '面试表现比较' } },
       { path: 'interviews/:id', name: 'InterviewDetail', component: () => import('@/views/interview/InterviewDetailView.vue'), meta: { title: '面试详情' } },
       { path: 'interviews/:id/report', name: 'InterviewReport', component: () => import('@/views/interview/InterviewReportView.vue'), meta: { title: '面试报告' } },
       { path: 'study-plans/from-gap', name: 'StudyPlansFromGap', component: () => import('@/views/v3/StudyPlanFromGapView.vue'), meta: { title: '短板学习计划' } },

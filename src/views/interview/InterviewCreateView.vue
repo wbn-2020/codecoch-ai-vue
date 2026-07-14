@@ -12,6 +12,9 @@
           <el-tag effect="plain">创建后直接开始</el-tag>
           <el-tag effect="plain" type="info">支持简历上下文</el-tag>
           <el-tag effect="plain" type="warning">行业场景可用</el-tag>
+          <el-tag :type="voicePreflightReady ? 'success' : 'info'" effect="plain">
+            {{ voicePreflightReady ? '语音设备已预检' : '语音可选' }}
+          </el-tag>
         </div>
       </div>
       <div class="hero-actions">
@@ -110,6 +113,10 @@
         <el-button size="large" @click="scrollToConfig">
           <Settings2 :size="17" />
           查看可选微调
+        </el-button>
+        <el-button size="large" @click="voiceDeviceCheckVisible = true">
+          <Mic :size="17" />
+          语音设备预检
         </el-button>
       </div>
     </section>
@@ -341,6 +348,13 @@
             </div>
           </el-form>
         </template>
+
+        <div class="form-section scenario-selector-shell">
+          <InterviewScenarioSelector
+            v-model="selectedScenario"
+            :mode-key="selectedModeKey"
+          />
+        </div>
       </section>
 
       <aside class="preview-panel">
@@ -438,18 +452,29 @@
         </div>
       </aside>
     </div>
+
+    <InterviewVoiceDeviceCheck
+      v-model="voiceDeviceCheckVisible"
+      @ready="handleVoicePreflightReady"
+      @fallback="handleVoiceTextFallback"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Play, Settings2, Sparkles, Target, Zap } from 'lucide-vue-next'
+import { BrainCircuit, BriefcaseBusiness, Files, History, LayoutDashboard, Mic, Play, Settings2, Sparkles, Target, Zap } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getApplicationPackageApi, previewApplicationPackageApi } from '@/api/applicationPackage'
 import { createInterviewApi, createInterviewByJobTargetApi, getIndustryTemplatesApi } from '@/api/interview'
+import {
+  bindInterviewScenarioApi,
+  createInterviewByJobTargetWithScenarioApi,
+  createInterviewWithScenarioApi
+} from '@/api/interviewVoiceProduct'
 import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
 import { getLatestResumeJobMatchReportApi, getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { getResumesApi } from '@/api/resume'
@@ -463,8 +488,19 @@ import {
   targetPositionOptions
 } from '@/constants/enums'
 import { buildInterviewCreatePayload } from '@/features/interview-create'
+import { saveInterviewVoiceProductContext } from '@/features/interview-voice-product'
+import type {
+  InterviewScenarioBindingVO,
+  InterviewScenarioSummary
+} from '@/types/interviewVoiceProduct'
+import InterviewScenarioSelector from '@/views/interview/components/InterviewScenarioSelector.vue'
+import InterviewVoiceDeviceCheck from '@/views/interview/components/InterviewVoiceDeviceCheck.vue'
 import type { JobApplicationPackageVO } from '@/types/applicationPackage'
-import type { IndustryTemplateVO, InterviewCreateDTO } from '@/types/interview'
+import type {
+  IndustryTemplateVO,
+  InterviewCreateByJobTargetDTO,
+  InterviewCreateDTO
+} from '@/types/interview'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { ResumeVO } from '@/types/resume'
 import type { SelectOption } from '@/types/common'
@@ -475,6 +511,9 @@ const route = useRoute()
 const formRef = ref<FormInstance>()
 const configPanelRef = ref<HTMLElement>()
 const configExpanded = ref(false)
+const voiceDeviceCheckVisible = ref(false)
+const voicePreflightReady = ref(false)
+const selectedScenario = ref<InterviewScenarioSummary | null>(null)
 const creating = ref(false)
 const resumeLoading = ref(false)
 const resumeLoadError = ref('')
@@ -1366,6 +1405,22 @@ const applyRouteContext = async () => {
   }
 }
 
+const createStandardInterview = (payload: InterviewCreateDTO) => {
+  const scenarioVersionId = selectedScenario.value?.scenarioVersionId
+  return scenarioVersionId
+    ? createInterviewWithScenarioApi({ ...payload, scenarioVersionId })
+    : createInterviewApi(payload)
+}
+
+const createJobTargetInterview = (
+  payload: InterviewCreateByJobTargetDTO
+) => {
+  const scenarioVersionId = selectedScenario.value?.scenarioVersionId
+  return scenarioVersionId
+    ? createInterviewByJobTargetWithScenarioApi({ ...payload, scenarioVersionId })
+    : createInterviewByJobTargetApi(payload)
+}
+
 const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
   const context = applicationContextSnapshot.value
   const targetJobId = sourceTargetJobId.value || context.targetJobId || getQueryNumber('targetJobId') || fallbackTargetJobId.value
@@ -1391,14 +1446,14 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
     if (hasJobTargetIntent) {
       routeContextWarning.value = '当前没有可用简历，已改用轻量技术面创建；可先创建简历后再使用岗位推荐面试。'
     }
-    return createInterviewApi(contextualPayload)
+    return createStandardInterview(contextualPayload)
   }
 
   if (!targetJobId) {
     if (hasJobTargetIntent) {
       routeContextWarning.value = '目标岗位信息暂时不可用，已改用普通面试创建；可稍后到岗位目标页补全后再重试。'
     }
-    return createInterviewApi(contextualPayload)
+    return createStandardInterview(contextualPayload)
   }
 
   let resumeId = contextualPayload.resumeId
@@ -1412,14 +1467,14 @@ const createInterviewWithRouteContext = async (payload: InterviewCreateDTO) => {
   }
 
   if (!resumeId || !targetJobId) {
-    return createInterviewApi({
+    return createStandardInterview({
       ...contextualPayload,
       resumeId: undefined,
       basedOnResume: false
     })
   }
 
-  return createInterviewByJobTargetApi({
+  return createJobTargetInterview({
     ...contextualPayload,
     resumeId,
     targetJobId,
@@ -1434,12 +1489,85 @@ const resolveCreatedInterviewId = (result: unknown) => {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
+const bindSelectedScenario = async (sessionId: number, result: unknown) => {
+  const scenario = selectedScenario.value
+  let binding: InterviewScenarioBindingVO | undefined
+  let bindingStatus: 'BOUND' | 'PENDING' | 'NONE' = scenario ? 'PENDING' : 'NONE'
+  let bindingMessage = scenario
+    ? '已保存所选剧本上下文，等待服务端绑定确认。'
+    : '本轮未选择版本化剧本。'
+  const created = result as {
+    scenarioVersionId?: number | string
+    rubricVersionId?: number | string
+    scenarioCode?: string
+  }
+  const createdScenarioVersionId = Number(created.scenarioVersionId || 0)
+  const createdRubricVersionId = Number(created.rubricVersionId || scenario?.rubricVersionId || 0)
+
+  if (createdScenarioVersionId > 0) {
+    binding = {
+      bindingId: 0,
+      sessionId,
+      scenarioVersionId: createdScenarioVersionId,
+      rubricVersionId: createdRubricVersionId,
+      bindingSource: 'CREATE_TRANSACTION'
+    }
+    bindingStatus = 'BOUND'
+    bindingMessage = `主创建事务已锁定剧本 ${created.scenarioCode || `#${createdScenarioVersionId}`} 与量表版本 #${createdRubricVersionId}。`
+  } else if (scenario) {
+    try {
+      binding = await bindInterviewScenarioApi(sessionId, {
+        scenarioVersionId: scenario.scenarioVersionId,
+        bindingSource: 'USER_SELECTED'
+      }, {
+        silentError: true
+      })
+      bindingStatus = 'BOUND'
+      bindingMessage = `已绑定剧本 v${scenario.versionNo} 与量表版本 #${binding.rubricVersionId}。`
+    } catch (error) {
+      bindingMessage = getErrorMessage(
+        error,
+        '面试已创建，但剧本绑定接口暂时不可用。房间会保留“待绑定”状态，不会把本地选择显示为已绑定。'
+      )
+      ElMessage.warning(bindingMessage)
+    }
+  }
+
+  saveInterviewVoiceProductContext({
+    sessionId,
+    voicePreflightReady: voicePreflightReady.value,
+    scenario: scenario || undefined,
+    scenarioBindingStatus: bindingStatus,
+    scenarioBinding: binding,
+    bindingMessage,
+    savedAt: new Date().toISOString()
+  })
+
+  return {
+    bindingStatus,
+    binding
+  }
+}
+
 const enterCreatedInterviewRoom = async (result: unknown) => {
   const createdInterviewId = resolveCreatedInterviewId(result)
   if (!createdInterviewId) {
     throw new Error('面试已创建，但没有返回可进入的面试房间编号。请从面试历史进入最近一次面试。')
   }
-  await router.push(`/interviews/room/${createdInterviewId}`)
+  const scenarioResult = await bindSelectedScenario(createdInterviewId, result)
+  const query: Record<string, string> = {}
+  if (selectedScenario.value) {
+    query.scenarioVersionId = String(selectedScenario.value.scenarioVersionId)
+    query.scenarioBinding = scenarioResult.bindingStatus.toLowerCase()
+  }
+  if (voicePreflightReady.value) {
+    query.voicePreflight = 'ready'
+  }
+  await router.push({
+    path: `/interviews/room/${createdInterviewId}`,
+    query
+  })
+  return scenarioResult.bindingStatus
 }
 
 const handleCreate = async () => {
@@ -1473,8 +1601,14 @@ const handleCreate = async () => {
       selectedIndustryTemplate: selectedIndustryTemplate.value
     })
     const result = await createInterviewWithRouteContext(payload)
-    await enterCreatedInterviewRoom(result)
-    ElMessage.success('面试已创建，正在进入 AI 面试训练室')
+    const scenarioBindingStatus = await enterCreatedInterviewRoom(result)
+    ElMessage.success(
+      scenarioBindingStatus === 'BOUND'
+        ? '面试与版本化剧本已绑定，正在进入 AI 面试训练室'
+        : scenarioBindingStatus === 'PENDING'
+          ? '面试已创建，剧本绑定状态待确认'
+          : '面试已创建，正在进入 AI 面试训练室'
+    )
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '面试创建失败。请重试，或关闭简历上下文后先创建轻量技术面。'))
   } finally {
@@ -1511,13 +1645,29 @@ const handleQuickCreate = async () => {
     const payload = buildQuickPayload()
 
     const result = await createInterviewWithRouteContext(payload)
-    await enterCreatedInterviewRoom(result)
-    ElMessage.success(payload.resumeId ? '已创建推荐面试，正在进入训练室' : '已创建轻量技术面，正在进入训练室')
+    const scenarioBindingStatus = await enterCreatedInterviewRoom(result)
+    ElMessage.success(
+      scenarioBindingStatus === 'BOUND'
+        ? '已创建推荐面试并锁定剧本版本，正在进入训练室'
+        : payload.resumeId
+          ? '已创建推荐面试，正在进入训练室'
+          : '已创建轻量技术面，正在进入训练室'
+    )
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '推荐面试创建失败。请重试、先创建简历，或展开微调后改用轻量技术面。'))
   } finally {
     creating.value = false
   }
+}
+
+const handleVoicePreflightReady = () => {
+  voicePreflightReady.value = true
+  ElMessage.success('语音设备预检通过，进入房间后仍可随时切换文本回答。')
+}
+
+const handleVoiceTextFallback = () => {
+  voicePreflightReady.value = false
+  ElMessage.info('已保留文本回答模式，语音能力不会阻塞本轮面试。')
 }
 
 onMounted(async () => {
@@ -1530,36 +1680,34 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .interview-create {
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .create-hero,
 .config-panel,
 .preview-panel {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 38%),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .create-hero {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
-  padding: 26px;
+  gap: 16px;
+  padding: 18px 20px;
 
   h1 {
     margin: 10px 0 10px;
-    font-size: 30px;
+    font-size: 26px;
     line-height: 1.2;
   }
 
   p {
     max-width: 720px;
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -1575,7 +1723,7 @@ onMounted(async () => {
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1591,17 +1739,15 @@ onMounted(async () => {
 
 .quick-start-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
   width: 100%;
-  margin: 18px auto 0;
-  padding: 24px;
-  border: 1px solid rgba(37, 99, 235, 0.22);
+  margin: 14px auto 0;
+  padding: 18px;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 42%),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface-tint);
+  box-shadow: none;
 }
 
 .quick-start-panel__copy {
@@ -1609,7 +1755,7 @@ onMounted(async () => {
 
   h2 {
     margin: 6px 0 8px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 24px;
     line-height: 1.28;
   }
@@ -1617,7 +1763,7 @@ onMounted(async () => {
   p {
     max-width: 720px;
     margin: 0;
-    color: #475569;
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -1639,7 +1785,7 @@ onMounted(async () => {
 }
 
 .quick-label {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1648,14 +1794,14 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 14px;
 
   article {
     min-width: 0;
     padding: 14px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: #f8fbff;
+    background: var(--user-surface-muted);
   }
 
   span,
@@ -1665,20 +1811,20 @@ onMounted(async () => {
   }
 
   span {
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     margin-top: 6px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 15px;
     line-height: 1.35;
   }
 
   p {
     margin: 7px 0 0;
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -1695,14 +1841,14 @@ onMounted(async () => {
     min-width: 0;
     gap: 10px;
     padding: 12px;
-    border: 1px solid rgba(37, 99, 235, 0.14);
+    border: 1px solid var(--user-primary-soft);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--user-surface-raised);
   }
 
   svg {
     flex: 0 0 auto;
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   span,
@@ -1711,14 +1857,14 @@ onMounted(async () => {
   }
 
   span {
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     overflow: hidden;
     margin-top: 4px;
-    color: #0f172a;
+    color: var(--user-text);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1735,7 +1881,7 @@ onMounted(async () => {
   li {
     position: relative;
     padding-left: 14px;
-    color: #334155;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.55;
 
@@ -1746,7 +1892,7 @@ onMounted(async () => {
       width: 5px;
       height: 5px;
       border-radius: 999px;
-      background: #2563eb;
+      background: var(--user-primary);
       content: '';
     }
   }
@@ -1756,19 +1902,19 @@ onMounted(async () => {
   margin-top: 8px;
 
   li {
-    color: #475569;
+    color: var(--user-text-muted);
   }
 }
 
 .quick-trust-card {
   margin-top: 16px;
   padding: 12px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
+  border: 1px solid var(--user-primary-soft);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--user-surface-raised);
 
   summary {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
@@ -1776,7 +1922,7 @@ onMounted(async () => {
 
   p {
     margin: 10px 0;
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1787,13 +1933,13 @@ onMounted(async () => {
   gap: 12px;
   margin-top: 16px;
   padding: 14px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--user-surface-muted);
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1811,14 +1957,14 @@ onMounted(async () => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 5px;
-    color: #0f172a;
+    color: var(--user-text);
     line-height: 1.35;
   }
 }
@@ -1831,13 +1977,13 @@ onMounted(async () => {
   article {
     min-width: 0;
     padding: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
 
     &.is-missing {
-      border-color: #fed7aa;
-      background: #fff7ed;
+      border-color: var(--user-warning);
+      background: var(--user-warning-soft);
     }
   }
 
@@ -1847,14 +1993,14 @@ onMounted(async () => {
   }
 
   span {
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     overflow: hidden;
     margin-top: 4px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1865,17 +2011,17 @@ onMounted(async () => {
   display: grid;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--user-surface-muted);
 
   &[open] {
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1896,7 +2042,7 @@ onMounted(async () => {
 
   &::after {
     flex: 0 0 auto;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
     content: '展开';
   }
@@ -1906,7 +2052,7 @@ onMounted(async () => {
   }
 
   > span {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1926,30 +2072,30 @@ onMounted(async () => {
     display: grid;
     gap: 3px;
     padding: 9px 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
 
     span {
-      color: #64748b;
+      color: var(--user-text-muted);
       font-size: 12px;
     }
 
     strong {
       min-width: 0;
       overflow: hidden;
-      color: #0f172a;
+      color: var(--user-text);
       font-size: 13px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     &.is-missing {
-      border-color: #fed7aa;
-      background: #fff7ed;
+      border-color: var(--user-warning);
+      background: var(--user-warning-soft);
 
       strong {
-        color: #9a3412;
+        color: var(--user-warning);
       }
     }
   }
@@ -1958,12 +2104,13 @@ onMounted(async () => {
 .quick-start-panel__actions {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  justify-content: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 10px;
 
   :deep(.el-button) {
-    width: 100%;
+    width: auto;
     margin-left: 0;
   }
 }
@@ -1975,15 +2122,15 @@ onMounted(async () => {
 
 .create-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 18px;
-  margin-top: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  gap: 14px;
+  margin-top: 14px;
 }
 
 .config-panel,
 .preview-panel {
-  padding: 22px;
-  background: #ffffff;
+  padding: 16px;
+  background: var(--user-surface);
 }
 
 .config-panel,
@@ -1993,13 +2140,13 @@ onMounted(async () => {
   :deep(.el-select__wrapper),
   :deep(.el-input-number .el-input__wrapper),
   :deep(.el-textarea__inner) {
-    background-color: #ffffff;
-    box-shadow: 0 0 0 1px #dbe3ef inset;
+    background-color: var(--user-control-bg);
+    box-shadow: 0 0 0 1px var(--user-border) inset;
   }
 
   :deep(.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger)) {
-    background-color: #ffffff;
-    color: #334155;
+    background-color: var(--user-control-bg);
+    color: var(--user-text-secondary);
   }
 }
 
@@ -2033,7 +2180,7 @@ onMounted(async () => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -2048,16 +2195,14 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   padding: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(22, 163, 74, 0.08), transparent 42%),
-    #f8fafc;
+  background: var(--user-success-soft);
 }
 
 .config-collapsed__head {
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -2065,13 +2210,13 @@ onMounted(async () => {
   strong {
     display: block;
     margin-top: 6px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 18px;
   }
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.7;
   }
@@ -2088,13 +2233,13 @@ onMounted(async () => {
   gap: 10px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   svg {
     flex: 0 0 auto;
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   div {
@@ -2110,13 +2255,13 @@ onMounted(async () => {
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     margin-top: 4px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 13px;
   }
 }
@@ -2136,15 +2281,15 @@ onMounted(async () => {
 
 .mode-card {
   display: flex;
-  min-height: 150px;
+  min-height: 112px;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: var(--app-text);
+  background: var(--user-surface);
+  color: var(--user-text);
   text-align: left;
   cursor: pointer;
   transition:
@@ -2154,13 +2299,13 @@ onMounted(async () => {
 
   span {
     flex: 1;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.55;
   }
 
   em {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-style: normal;
     font-weight: 700;
@@ -2168,8 +2313,8 @@ onMounted(async () => {
 
   &:hover:not(.disabled),
   &.active {
-    border-color: rgba(37, 99, 235, 0.42);
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-soft);
     transform: translateY(-2px);
   }
 
@@ -2182,14 +2327,18 @@ onMounted(async () => {
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .form-section {
-  padding: 18px;
-  border: 1px solid var(--app-border);
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
+}
+
+.scenario-selector-shell {
+  margin-top: 18px;
 }
 
 .section-title {
@@ -2206,8 +2355,8 @@ onMounted(async () => {
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--user-primary-border);
+    color: var(--user-primary);
     font-size: 12px;
   }
 }
@@ -2227,14 +2376,14 @@ onMounted(async () => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 }
 
 .field-empty {
   margin-top: 8px;
-  color: var(--cc-warning);
+  color: var(--user-warning);
   font-size: 12px;
 }
 
@@ -2243,15 +2392,15 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  color: #dc2626;
+  color: var(--user-danger);
   font-size: 12px;
 }
 
 .template-preview {
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .template-preview__head {
@@ -2262,13 +2411,13 @@ onMounted(async () => {
 
   strong {
     display: block;
-    color: var(--app-text);
+    color: var(--user-text);
   }
 
   span {
     display: block;
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -2282,10 +2431,10 @@ onMounted(async () => {
 
   span {
     padding: 5px 8px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
   }
 }
@@ -2299,9 +2448,9 @@ onMounted(async () => {
 .summary-list,
 .pending-box,
 .wizard-flow {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .summary-card {
@@ -2309,7 +2458,7 @@ onMounted(async () => {
 
   span,
   p {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 
   strong {
@@ -2324,7 +2473,7 @@ onMounted(async () => {
   }
 
   &.primary {
-    background: #eff6ff;
+    background: var(--user-primary-soft);
   }
 }
 
@@ -2332,17 +2481,17 @@ onMounted(async () => {
   display: grid;
   gap: 8px;
   margin-top: 14px;
-  padding: 16px;
-  border-color: rgba(37, 99, 235, 0.2);
-  background: #f8fbff;
+  padding: 14px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-muted);
 
   span,
   p {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 
   strong {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 18px;
   }
 
@@ -2370,7 +2519,7 @@ onMounted(async () => {
     border-radius: 8px;
 
     &.active {
-      background: #ffffff;
+      background: var(--user-surface);
     }
   }
 
@@ -2382,8 +2531,8 @@ onMounted(async () => {
     width: 26px;
     height: 26px;
     border-radius: 8px;
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--user-primary-border);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -2396,7 +2545,7 @@ onMounted(async () => {
 
   p {
     margin-top: 4px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -2411,7 +2560,7 @@ onMounted(async () => {
     justify-content: space-between;
     gap: 14px;
     padding: 14px 16px;
-    border-bottom: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--user-border);
 
     &:last-child {
       border-bottom: 0;
@@ -2419,7 +2568,7 @@ onMounted(async () => {
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 
@@ -2435,15 +2584,15 @@ onMounted(async () => {
   gap: 12px;
   margin-top: 14px;
   padding: 14px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 
   svg {
     flex: 0 0 auto;
-    color: #f59e0b;
+    color: var(--user-warning);
   }
 
   strong {
-    color: var(--app-text);
+    color: var(--user-text);
   }
 
   p {
@@ -2563,6 +2712,314 @@ onMounted(async () => {
   .filter-bar,
   .notification-toolbar {
     justify-content: flex-start;
+  }
+}
+
+/* Compact interview workspace */
+.interview-create {
+  min-width: 0;
+  color: var(--user-text);
+}
+
+.create-hero {
+  align-items: flex-start;
+  padding: 16px 18px;
+
+  h1 {
+    margin: 6px 0;
+    font-size: 24px;
+  }
+
+  p {
+    max-width: 68ch;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.hero-tags {
+  margin-top: 10px;
+}
+
+.hero-actions {
+  max-width: 460px;
+  justify-content: flex-end;
+}
+
+.quick-start-panel {
+  gap: 12px;
+  margin-top: 0;
+  padding: 16px 18px;
+  background: var(--user-surface);
+}
+
+.quick-start-panel__copy {
+  h2 {
+    margin: 4px 0;
+    font-size: 20px;
+  }
+
+  p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.recommended-plan-grid,
+.quick-context-grid {
+  gap: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.recommended-plan-grid article,
+.quick-context-grid article {
+  min-height: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.recommended-plan-grid article:last-child,
+.quick-context-grid article:last-child {
+  border-right: 0;
+}
+
+.recommended-plan-grid strong,
+.quick-context-grid strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.quick-reason-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin-top: 10px;
+}
+
+.quick-trust-card,
+.application-context-card,
+.context-trust-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.quick-start-panel__actions {
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--user-border);
+
+  :deep(.el-alert) {
+    flex: 1 1 100%;
+  }
+
+  :deep(.el-button) {
+    flex: 0 0 auto;
+  }
+}
+
+.quick-primary-cta {
+  order: -1;
+}
+
+.create-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  margin-top: 0;
+}
+
+.config-panel,
+.preview-panel {
+  min-width: 0;
+  padding: 14px;
+}
+
+.panel-head {
+  margin-bottom: 12px;
+
+  p {
+    margin-top: 4px;
+    color: var(--user-text-muted);
+    line-height: 1.5;
+  }
+}
+
+.config-collapsed,
+.form-section,
+.template-preview,
+.summary-card,
+.quick-create-card,
+.summary-list,
+.pending-box,
+.wizard-flow {
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.config-collapsed {
+  gap: 12px;
+  padding: 14px;
+}
+
+.config-collapsed__grid {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.config-collapsed__item {
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.config-collapsed__item:last-child {
+  border-right: 0;
+}
+
+.mode-grid {
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mode-card {
+  min-height: 0;
+  gap: 6px;
+  padding: 12px;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+
+  &:hover:not(.disabled),
+  &.active {
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-soft);
+    transform: none;
+  }
+}
+
+.config-form {
+  gap: 10px;
+}
+
+.form-section {
+  padding: 12px;
+}
+
+.scenario-selector-shell {
+  margin-top: 12px;
+}
+
+.section-title {
+  margin-bottom: 10px;
+}
+
+.resume-switch {
+  margin-bottom: 10px;
+}
+
+.preview-panel {
+  top: 72px;
+  max-height: calc(100dvh - 88px);
+}
+
+.summary-card,
+.quick-create-card,
+.wizard-flow,
+.summary-list,
+.pending-box {
+  margin-top: 10px;
+}
+
+.summary-card {
+  padding: 12px;
+
+  strong {
+    margin: 4px 0;
+    font-size: 18px;
+  }
+}
+
+.quick-create-card {
+  padding: 12px;
+}
+
+.wizard-flow {
+  gap: 2px;
+  padding: 6px;
+}
+
+.summary-list div {
+  padding: 9px 10px;
+}
+
+.pending-box {
+  padding: 10px;
+}
+
+.preview-actions {
+  margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .create-hero,
+  .quick-start-panel {
+    padding: 14px;
+  }
+
+  .hero-actions {
+    max-width: none;
+  }
+
+  .recommended-plan-grid,
+  .quick-context-grid,
+  .config-collapsed__grid {
+    border: 1px solid var(--user-border);
+  }
+
+  .recommended-plan-grid article,
+  .quick-context-grid article,
+  .config-collapsed__item {
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .recommended-plan-grid article:last-child,
+  .quick-context-grid article:last-child,
+  .config-collapsed__item:last-child {
+    border-bottom: 0;
+  }
+
+  .quick-reason-list {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-start-panel__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .quick-start-panel__actions :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

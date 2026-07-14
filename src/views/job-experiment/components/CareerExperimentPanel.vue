@@ -435,8 +435,8 @@ onMounted(load)
 <style scoped lang="scss">
 .career-experiment-panel {
   display: grid;
-  gap: 18px;
-  padding: 22px;
+  gap: 14px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   background: var(--app-surface);
 }

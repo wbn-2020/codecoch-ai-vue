@@ -7,12 +7,21 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   status?: string | number | boolean | null
-  map?: Record<string, string>
+  map?: Record<string, string | { label: string; type?: TagType }>
+  toneMap?: Record<string, TagType>
 }>()
 
+type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary'
+
+const statusValue = computed(() =>
+  props.status === undefined || props.status === null ? '' : String(props.status)
+)
+
 const label = computed(() => {
-  const value = props.status === undefined || props.status === null ? '' : String(props.status)
-  if (props.map && value && props.map[value]) return props.map[value]
+  const value = statusValue.value
+  const mapped = props.map?.[value]
+  if (typeof mapped === 'string') return mapped
+  if (mapped?.label) return mapped.label
   if (props.status === 1 || props.status === true) return '启用'
   if (props.status === 0 || props.status === false) return '禁用'
   const builtinMap: Record<string, string> = {
@@ -33,21 +42,35 @@ const label = computed(() => {
     WRONG: '错误',
     MASTERED: '已掌握',
     VAGUE: '模糊',
-    UNKNOWN: '未掌握'
+    UNKNOWN: '状态待确认',
+    TODO: '待处理',
+    DOING: '处理中',
+    DONE: '已完成',
+    SKIPPED: '已跳过',
+    EXPIRED: '已过期',
+    PENDING: '排队中',
+    PROCESSING: '处理中',
+    RUNNING: '运行中',
+    READY: '已就绪',
+    DISABLED: '已禁用',
+    ENABLED: '已启用'
   }
   if (value && builtinMap[value]) return builtinMap[value]
   return value ? '状态待确认' : '-'
 })
 
 const type = computed(() => {
-  const value = String(props.status)
-  if (['1', 'true', 'COMPLETED', 'GENERATED', 'CORRECT', 'MASTERED', 'SUCCESS'].includes(value)) {
+  const value = statusValue.value
+  const mapped = props.map?.[value]
+  if (typeof mapped === 'object' && mapped?.type) return mapped.type
+  if (props.toneMap?.[value]) return props.toneMap[value]
+  if (['1', 'true', 'COMPLETED', 'GENERATED', 'CORRECT', 'MASTERED', 'SUCCESS', 'DONE', 'READY', 'ENABLED'].includes(value)) {
     return 'success'
   }
-  if (['FAILED', 'WRONG', 'CANCELED', '0', 'false'].includes(value)) {
+  if (['FAILED', 'WRONG', 'CANCELED', 'EXPIRED', '0', 'false', 'DISABLED'].includes(value)) {
     return 'danger'
   }
-  if (['IN_PROGRESS', 'WAITING_ANSWER', 'AI_EVALUATING', 'REPORT_GENERATING', 'GENERATING', 'PARTIAL_CORRECT', 'VAGUE'].includes(value)) {
+  if (['IN_PROGRESS', 'WAITING_ANSWER', 'AI_EVALUATING', 'REPORT_GENERATING', 'GENERATING', 'PARTIAL_CORRECT', 'VAGUE', 'DOING', 'PROCESSING', 'RUNNING'].includes(value)) {
     return 'warning'
   }
   return 'info'

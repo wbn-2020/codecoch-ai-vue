@@ -770,7 +770,7 @@ onMounted(() => {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
   padding: 14px;
-  background: rgba(248, 250, 252, 0.68);
+  background: var(--app-surface-soft);
 }
 
 .raw-detail-panel__head {

@@ -147,8 +147,8 @@ const weightItems = computed(() => {
 .analysis-summary,
 .analysis-block {
   border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .analysis-summary {
@@ -182,7 +182,7 @@ const weightItems = computed(() => {
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .analysis-grid.compact {
@@ -191,7 +191,7 @@ const weightItems = computed(() => {
 
 .analysis-block {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
 
   h3 {
     margin: 0 0 12px;

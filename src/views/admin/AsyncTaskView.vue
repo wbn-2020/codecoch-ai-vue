@@ -614,7 +614,7 @@ onMounted(() => {
   padding: 14px 16px;
   border: 1px solid var(--app-border, #e5e7eb);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--app-surface-soft);
 }
 
 .diagnostic-strip {

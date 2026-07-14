@@ -171,7 +171,9 @@ export interface InterviewAnswerDTO {
 
 export type InterviewVoicePreviewState =
   | 'idle'
+  | 'opening'
   | 'recording'
+  | 'stopping'
   | 'recorded'
   | 'uploading'
   | 'transcribing'
@@ -450,6 +452,7 @@ export interface InterviewListVO {
   startedAt?: string
   finishedAt?: string
   createdAt?: string
+  voiceDeliverySummary?: import('./interviewVoiceProduct').InterviewVoiceDeliverySummaryVO
 }
 
 export interface ResumeSnapshotVO {
@@ -671,6 +674,7 @@ export interface InterviewReportVO {
   adviceEvidence?: InterviewAdviceEvidenceVO[]
   abilityProfileUpdates?: InterviewAbilityProfileUpdateVO[]
   voiceTraces?: InterviewVoiceTraceVO[]
+  voiceDeliverySummary?: import('./interviewVoiceProduct').InterviewVoiceDeliverySummaryVO
   questionReviews?: InterviewMessageVO[]
   qaReview?: InterviewMessageVO[]
   messages?: InterviewMessageVO[]

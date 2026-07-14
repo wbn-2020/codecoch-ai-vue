@@ -179,6 +179,55 @@
           </div>
         </section>
 
+        <aside v-if="abilityMap.hasTrainingData" class="insight-panel">
+          <section class="insight-card">
+            <div class="section-title">
+              <span>优先薄弱项</span>
+              <em>{{ `${weakSkills.length} 项` }}</em>
+            </div>
+            <div v-if="weakSkills.length" class="priority-list">
+              <button
+                v-for="skill in weakSkills.slice(0, 3)"
+                :key="skill.code"
+                type="button"
+                class="priority-item"
+                @click="startSkillTraining(skill)"
+              >
+                <span>{{ safeSkillName(skill) }}</span>
+                <small>{{ skill.evidenceCount || 0 }} 条证据 · {{ confidenceText(skill) }}</small>
+              </button>
+            </div>
+            <p v-else class="insight-muted">{{ weakPanelEmptyText }}</p>
+          </section>
+
+          <section class="insight-card">
+            <div class="section-title">
+              <span>已可用能力</span>
+              <em>{{ `${usableSkills.length} 项` }}</em>
+            </div>
+            <div v-if="usableSkills.length" class="chip-list">
+              <span v-for="skill in usableSkills.slice(0, 8)" :key="skill.code">{{ safeSkillName(skill) }}</span>
+            </div>
+            <p v-else class="insight-muted">{{ usablePanelEmptyText }}</p>
+          </section>
+
+          <section class="insight-card">
+            <div class="section-title">
+              <span>训练路径</span>
+              <em>下一步</em>
+            </div>
+            <ol class="training-path">
+              <li v-for="item in trainingPath" :key="item.title">
+                <CheckCircle2 :size="15" />
+                <div>
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.desc }}</span>
+                </div>
+              </li>
+            </ol>
+          </section>
+        </aside>
+
         <aside class="next-training-card next-training-card--mobile" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
           <div class="next-training-card__label">
             <Target :size="16" />
@@ -244,55 +293,6 @@
         </div>
         <el-empty v-else description="当前能力域还没有能力点" />
       </main>
-
-      <aside class="insight-panel">
-        <section class="insight-card">
-          <div class="section-title">
-            <span>优先薄弱项</span>
-            <em>{{ abilityMap.hasTrainingData ? `${weakSkills.length} 项` : '未评估' }}</em>
-          </div>
-          <div v-if="abilityMap.hasTrainingData && weakSkills.length" class="priority-list">
-            <button
-              v-for="skill in weakSkills.slice(0, 3)"
-              :key="skill.code"
-              type="button"
-              class="priority-item"
-              @click="startSkillTraining(skill)"
-            >
-              <span>{{ safeSkillName(skill) }}</span>
-              <small>{{ skill.evidenceCount || 0 }} 条证据 · {{ confidenceText(skill) }}</small>
-            </button>
-          </div>
-          <p v-else class="insight-muted">{{ weakPanelEmptyText }}</p>
-        </section>
-
-        <section class="insight-card">
-          <div class="section-title">
-            <span>已可用能力</span>
-            <em>{{ abilityMap.hasTrainingData ? `${usableSkills.length} 项` : '未评估' }}</em>
-          </div>
-          <div v-if="abilityMap.hasTrainingData && usableSkills.length" class="chip-list">
-            <span v-for="skill in usableSkills.slice(0, 8)" :key="skill.code">{{ safeSkillName(skill) }}</span>
-          </div>
-          <p v-else class="insight-muted">{{ usablePanelEmptyText }}</p>
-        </section>
-
-        <section class="insight-card">
-          <div class="section-title">
-            <span>训练路径</span>
-            <em>下一步</em>
-          </div>
-          <ol class="training-path">
-            <li v-for="item in trainingPath" :key="item.title">
-              <CheckCircle2 :size="15" />
-              <div>
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
-              </div>
-            </li>
-          </ol>
-        </section>
-      </aside>
     </section>
   </div>
 </template>
@@ -874,23 +874,20 @@ onMounted(fetchAbilityMap)
 .signal-card,
 .domain-rail,
 .domain-panel,
-.insight-card,
 .load-error-card,
 .empty-map-card {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .growth-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
-  gap: 18px;
-  padding: 24px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(22, 163, 74, 0.08)),
-    #ffffff;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  padding: 18px;
+  background: var(--user-surface);
 }
 
 .growth-hero__main {
@@ -925,7 +922,7 @@ onMounted(fetchAbilityMap)
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -943,7 +940,7 @@ onMounted(fetchAbilityMap)
   padding: 20px;
   border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 8px;
-  background: #fff7ed;
+  background: var(--user-warning-soft);
 
   h2,
   p {
@@ -957,18 +954,18 @@ onMounted(fetchAbilityMap)
   }
 
   p {
-    color: #475569;
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 
   &.is-muted {
     border-color: rgba(37, 99, 235, 0.22);
-    background: #eff6ff;
+    background: var(--user-primary-soft);
   }
 }
 
 .next-training-card__label {
-  color: #c2410c;
+  color: var(--user-warning);
   font-size: 13px;
   font-weight: 800;
 }
@@ -980,7 +977,7 @@ onMounted(fetchAbilityMap)
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -992,11 +989,11 @@ onMounted(fetchAbilityMap)
 .signal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 8px;
 }
 
 .signal-card {
-  padding: 18px;
+  padding: 12px 14px;
 
   span,
   em,
@@ -1018,7 +1015,7 @@ onMounted(fetchAbilityMap)
 
   em {
     margin-top: 8px;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-style: normal;
     font-size: 12px;
   }
@@ -1026,12 +1023,12 @@ onMounted(fetchAbilityMap)
 
 .signal-card--weak {
   border-color: rgba(239, 68, 68, 0.2);
-  background: #fff7f7;
+  background: var(--user-danger-soft);
 }
 
 .signal-card--usable {
   border-color: rgba(22, 163, 74, 0.2);
-  background: #f0fdf4;
+  background: var(--user-success-soft);
 }
 
 .honesty-alert {
@@ -1048,19 +1045,19 @@ onMounted(fetchAbilityMap)
 }
 
 .load-error-card {
-  color: #991b1b;
-  background: #fef2f2;
+  color: var(--user-danger);
+  background: var(--user-danger-soft);
 
   p {
     margin: 4px 0 0;
-    color: #7f1d1d;
+    color: var(--user-danger);
   }
 }
 
 .empty-map-card {
   flex-direction: column;
   justify-content: center;
-  min-height: 280px;
+  min-height: 220px;
   text-align: center;
 
   h2,
@@ -1075,8 +1072,8 @@ onMounted(fetchAbilityMap)
 
 .map-workspace {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 300px;
-  gap: 16px;
+  grid-template-columns: clamp(220px, 18vw, 240px) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
 }
 
@@ -1087,9 +1084,14 @@ onMounted(fetchAbilityMap)
 }
 
 .domain-rail {
+  position: sticky;
+  top: 80px;
   display: grid;
   gap: 8px;
+  max-height: calc(100vh - 96px);
   padding: 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .section-title {
@@ -1129,7 +1131,7 @@ onMounted(fetchAbilityMap)
   }
 
   strong {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 13px;
   }
 
@@ -1142,7 +1144,7 @@ onMounted(fetchAbilityMap)
   &.active,
   &:hover {
     border-color: rgba(37, 99, 235, 0.36);
-    background: #eff6ff;
+    background: var(--user-primary-soft);
   }
 }
 
@@ -1158,7 +1160,7 @@ onMounted(fetchAbilityMap)
   margin-bottom: 16px;
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1187,7 +1189,7 @@ onMounted(fetchAbilityMap)
   padding: 14px;
   border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--user-surface-muted);
 }
 
 .growth-stage-track {
@@ -1203,7 +1205,7 @@ onMounted(fetchAbilityMap)
     left: 16%;
     height: 2px;
     border-radius: 999px;
-    background: linear-gradient(90deg, rgba(37, 99, 235, 0.32), rgba(22, 163, 74, 0.32));
+    background: var(--user-primary-border);
     content: '';
   }
 }
@@ -1217,9 +1219,9 @@ onMounted(fetchAbilityMap)
   align-items: start;
   min-width: 0;
   padding: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   strong,
   em {
@@ -1242,7 +1244,7 @@ onMounted(fetchAbilityMap)
 
   &.active {
     border-color: rgba(37, 99, 235, 0.34);
-    background: #eff6ff;
+    background: var(--user-primary-soft);
   }
 }
 
@@ -1251,10 +1253,10 @@ onMounted(fetchAbilityMap)
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--user-bg-panel);
   border-radius: 999px;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--user-primary);
+  color: var(--user-primary-contrast);
   font-size: 13px;
   font-weight: 800;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.26);
@@ -1279,7 +1281,7 @@ onMounted(fetchAbilityMap)
   padding: 14px;
   border: 1px solid rgba(37, 99, 235, 0.2);
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--user-surface-muted);
 
   > strong {
     color: var(--app-text);
@@ -1301,7 +1303,7 @@ onMounted(fetchAbilityMap)
 
   &.is-muted {
     border-color: rgba(148, 163, 184, 0.24);
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 }
 
@@ -1314,8 +1316,8 @@ onMounted(fetchAbilityMap)
     min-width: 0;
     padding: 5px 8px;
     border-radius: 8px;
-    background: #e0f2fe;
-    color: #075985;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
     overflow-wrap: anywhere;
   }
@@ -1330,9 +1332,9 @@ onMounted(fetchAbilityMap)
 .milestone {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   span,
   strong,
@@ -1360,12 +1362,12 @@ onMounted(fetchAbilityMap)
 
 .tone-danger {
   border-color: rgba(239, 68, 68, 0.2);
-  background: #fff7f7;
+  background: var(--user-danger-soft);
 }
 
 .tone-success {
   border-color: rgba(22, 163, 74, 0.2);
-  background: #f0fdf4;
+  background: var(--user-success-soft);
 }
 
 .skill-grid {
@@ -1382,7 +1384,7 @@ onMounted(fetchAbilityMap)
     left: 5px;
     width: 2px;
     border-radius: 999px;
-    background: linear-gradient(180deg, #2563eb, #16a34a);
+    background: var(--user-primary);
     content: '';
   }
 }
@@ -1394,9 +1396,9 @@ onMounted(fetchAbilityMap)
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   &::before {
     position: absolute;
@@ -1404,9 +1406,9 @@ onMounted(fetchAbilityMap)
     left: -18px;
     width: 12px;
     height: 12px;
-    border: 3px solid #ffffff;
+    border: 3px solid var(--user-bg-panel);
     border-radius: 999px;
-    background: #2563eb;
+    background: var(--user-primary);
     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
     content: '';
   }
@@ -1421,7 +1423,7 @@ onMounted(fetchAbilityMap)
 
 .skill-card.is-weak {
   border-color: rgba(239, 68, 68, 0.24);
-  background: #fff7f7;
+  background: var(--user-danger-soft);
 
   &::before {
     background: #ef4444;
@@ -1432,7 +1434,7 @@ onMounted(fetchAbilityMap)
 .skill-card.is-strong,
 .skill-card.is-competent {
   border-color: rgba(22, 163, 74, 0.22);
-  background: #f8fffb;
+  background: var(--user-success-soft);
 
   &::before {
     background: #16a34a;
@@ -1441,7 +1443,7 @@ onMounted(fetchAbilityMap)
 }
 
 .skill-card.is-unassessed {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   &::before {
     background: #94a3b8;
@@ -1485,7 +1487,7 @@ onMounted(fetchAbilityMap)
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -1496,13 +1498,25 @@ onMounted(fetchAbilityMap)
 
 .insight-panel {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
 }
 
 .insight-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.insight-card + .insight-card {
+  border-left: 1px solid var(--user-border);
 }
 
 .priority-list {
@@ -1517,7 +1531,7 @@ onMounted(fetchAbilityMap)
   padding: 10px;
   border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: 8px;
-  background: #fff7f7;
+  background: var(--user-danger-soft);
   color: var(--app-text);
   cursor: pointer;
   text-align: left;
@@ -1546,8 +1560,8 @@ onMounted(fetchAbilityMap)
     max-width: 100%;
     padding: 6px 9px;
     border-radius: 8px;
-    background: #dcfce7;
-    color: #166534;
+    background: var(--user-success-soft);
+    color: var(--user-success);
     font-size: 12px;
     overflow-wrap: anywhere;
   }
@@ -1601,7 +1615,10 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
+    position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
   }
 
   .domain-rail .section-title {
@@ -1672,6 +1689,15 @@ onMounted(fetchAbilityMap)
     grid-template-columns: 1fr;
   }
 
+  .insight-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-card + .insight-card {
+    border-top: 1px solid var(--user-border);
+    border-left: 0;
+  }
+
   .growth-stage-track {
     grid-template-columns: 1fr;
 
@@ -1681,7 +1707,7 @@ onMounted(fetchAbilityMap)
       left: 26px;
       width: 2px;
       height: auto;
-      background: linear-gradient(180deg, rgba(37, 99, 235, 0.32), rgba(22, 163, 74, 0.32));
+      background: var(--user-primary-border);
     }
   }
 
@@ -1736,23 +1762,17 @@ onMounted(fetchAbilityMap)
 }
 
 .domain-panel {
-  background:
-    radial-gradient(circle at 22% 20%, rgba(0, 242, 254, 0.12), transparent 28%),
-    radial-gradient(circle at 78% 10%, rgba(139, 92, 246, 0.12), transparent 28%),
-    var(--cc-grid),
-    rgba(15, 27, 49, 0.72) !important;
-  background-size: auto, auto, var(--cc-grid-size), auto !important;
+  background: var(--user-surface);
 }
 
 .domain-item {
   transition:
     border-color 0.18s ease,
     background 0.18s ease,
-    box-shadow 0.18s ease,
     transform 0.18s ease;
 
   &.active {
-    box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.2), 0 0 16px rgba(0, 242, 254, 0.16);
+    box-shadow: inset 3px 0 0 var(--user-primary);
   }
 
   &:hover {
@@ -1761,29 +1781,29 @@ onMounted(fetchAbilityMap)
 }
 
 .skill-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: none;
 
   &.is-weak::before {
-    background: var(--cc-danger) !important;
-    box-shadow: 0 0 16px rgba(251, 113, 133, 0.5) !important;
+    background: var(--cc-danger);
+    box-shadow: none;
   }
 
   &.is-strong::before,
   &.is-competent::before {
-    background: var(--cc-success) !important;
-    box-shadow: 0 0 16px rgba(52, 211, 153, 0.48) !important;
+    background: var(--cc-success);
+    box-shadow: none;
   }
 
   &.is-unassessed::before {
-    background: #8ea6c2 !important;
-    box-shadow: 0 0 14px rgba(142, 166, 194, 0.34) !important;
+    background: var(--user-text-muted);
+    box-shadow: none;
   }
 }
 
 @media (max-width: 860px) {
   .domain-rail {
     border-radius: var(--user-radius-sm);
-    background: rgba(7, 17, 31, 0.48) !important;
+    background: var(--user-surface-muted);
   }
 }
 </style>

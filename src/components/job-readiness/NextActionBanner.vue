@@ -65,28 +65,22 @@ const toneIcon = computed(() => {
   padding: 18px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(34, 197, 94, 0.08)),
-    var(--app-surface);
-  box-shadow: var(--app-shadow);
+  background: var(--user-primary-soft);
+  box-shadow: none;
 }
 
 .next-action-banner.is-success {
-  background:
-    linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(14, 165, 233, 0.08)),
-    var(--app-surface);
+  border-color: var(--user-success-border);
+  background: var(--user-success-soft);
 }
 
 .next-action-banner.is-warning {
-  background:
-    linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(59, 130, 246, 0.08)),
-    var(--app-surface);
+  border-color: rgba(230, 173, 85, 0.34);
+  background: var(--user-warning-soft);
 }
 
 .next-action-banner.is-info {
-  background:
-    linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(148, 163, 184, 0.08)),
-    var(--app-surface);
+  background: var(--user-surface-muted);
 }
 
 .next-action-banner__icon {

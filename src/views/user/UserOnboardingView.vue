@@ -534,39 +534,40 @@ onMounted(() => {
 <style scoped lang="scss">
 .onboarding-page {
   display: grid;
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .onboarding-hero,
 .real-progress-panel,
 .guide-rail,
 .setup-panel {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .onboarding-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 28px;
+  gap: 16px;
+  padding: 18px;
 
   h1 {
     margin: 12px 0 10px;
-    color: var(--app-text);
-    font-size: 40px;
-    line-height: 1.1;
+    color: var(--user-text);
+    font-size: 26px;
+    line-height: 1.3;
   }
 
   p {
     max-width: 760px;
     margin: 0;
-    color: var(--app-text-muted);
-    font-size: 16px;
-    line-height: 1.75;
+    color: var(--user-text-muted);
+    font-size: 14px;
+    line-height: 1.6;
   }
 }
 
@@ -580,7 +581,7 @@ onMounted(() => {
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -592,8 +593,8 @@ onMounted(() => {
 
 .real-progress-panel {
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .real-progress-head,
@@ -606,7 +607,7 @@ onMounted(() => {
 
 .real-progress-head {
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -618,7 +619,7 @@ onMounted(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.65;
   }
 }
@@ -635,28 +636,31 @@ onMounted(() => {
 }
 
 .real-journey-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .real-journey-card {
   position: relative;
   display: grid;
-  gap: 9px;
-  min-height: 160px;
-  padding: 16px;
+  min-width: 0;
+  flex: 1 1 220px;
+  gap: 7px;
+  min-height: 0;
+  padding: 12px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
-  color: var(--app-text);
+  background: var(--user-surface-muted);
+  color: var(--user-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 
   svg {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   strong,
@@ -671,13 +675,12 @@ onMounted(() => {
   }
 
   small {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
   }
 
   em {
-    align-self: end;
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 12px;
     font-style: normal;
     font-weight: 800;
@@ -685,37 +688,35 @@ onMounted(() => {
 
   &:hover,
   &.ready {
-    border-color: #bfdbfe;
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
   }
 
   &.ready {
     em {
-      color: #15803d;
+      color: var(--user-success);
     }
   }
 }
 
 .real-journey-card__index {
-  position: absolute;
-  right: 12px;
-  top: 10px;
-  color: rgba(37, 99, 235, 0.12);
-  font-size: 46px;
-  font-weight: 900;
+  position: static;
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
   line-height: 1;
 }
 
 .real-next-action {
   align-items: center;
-  padding: 16px;
-  border: 1px solid #bfdbfe;
+  padding: 12px 14px;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   span {
     display: block;
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -728,15 +729,15 @@ onMounted(() => {
 
   p {
     margin: 6px 0 0;
-    color: #475569;
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 }
 
 .onboarding-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(240px, 270px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .guide-rail {
@@ -754,7 +755,7 @@ onMounted(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -768,7 +769,7 @@ onMounted(() => {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--app-text);
+  color: var(--user-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -785,8 +786,8 @@ onMounted(() => {
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    background: #f1f5f9;
-    color: #64748b;
+    background: var(--user-control-bg-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 800;
   }
@@ -802,30 +803,30 @@ onMounted(() => {
 
   small {
     margin-top: 4px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.45;
   }
 
   &.active,
   &:hover {
-    border-color: #bfdbfe;
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
 
     > span {
-      background: #2563eb;
-      color: #ffffff;
+      background: var(--user-primary);
+      color: var(--user-primary-contrast);
     }
   }
 
   &.done > span {
-    background: #dcfce7;
-    color: #15803d;
+    background: var(--user-success-soft);
+    color: var(--user-success);
   }
 }
 
 .setup-panel {
-  min-height: 520px;
-  padding: 22px;
+  min-height: 0;
+  padding: 16px;
 }
 
 .panel-head {
@@ -836,7 +837,7 @@ onMounted(() => {
   margin-bottom: 20px;
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -848,7 +849,7 @@ onMounted(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -861,18 +862,18 @@ onMounted(() => {
 .choice-card {
   display: grid;
   gap: 10px;
-  min-height: 154px;
-  padding: 18px;
-  border: 1px solid var(--app-border);
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
-  color: var(--app-text);
+  background: var(--user-surface-muted);
+  color: var(--user-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 
   svg {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   strong {
@@ -880,18 +881,18 @@ onMounted(() => {
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 
   &.compact {
-    min-height: 136px;
+    min-height: 0;
   }
 
   &.selected,
   &:hover {
-    border-color: #93c5fd;
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
   }
 }
 
@@ -906,7 +907,7 @@ onMounted(() => {
   gap: 8px;
 
   span {
-    color: var(--app-text);
+    color: var(--user-text);
     font-weight: 700;
   }
 }
@@ -916,10 +917,10 @@ onMounted(() => {
   grid-column: 1 / -1;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #fed7aa;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--user-warning-soft);
+  color: var(--user-warning);
 
   p {
     margin: 0;
@@ -936,19 +937,19 @@ onMounted(() => {
 .tech-chip {
   min-height: 42px;
   padding: 0 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
+  background: var(--user-surface);
+  color: var(--user-text-secondary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
 
   &.selected,
   &:hover {
-    border-color: #93c5fd;
-    background: #eff6ff;
-    color: #1d4ed8;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
+    color: var(--user-primary);
   }
 }
 
@@ -956,13 +957,13 @@ onMounted(() => {
 .finish-panel {
   display: grid;
   gap: 18px;
-  padding: 22px;
-  border: 1px solid var(--app-border);
+  padding: 16px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   svg {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   h3 {
@@ -972,7 +973,7 @@ onMounted(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -989,18 +990,18 @@ onMounted(() => {
 
   article {
     padding: 14px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
 
     &.done {
-      border-color: #bbf7d0;
-      background: #f0fdf4;
+      border-color: var(--user-success-border);
+      background: var(--user-success-soft);
     }
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1017,7 +1018,7 @@ onMounted(() => {
 
   p {
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -1029,7 +1030,7 @@ onMounted(() => {
 
 @media (max-width: 980px) {
   .real-journey-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
   }
 
   .onboarding-layout,
@@ -1065,15 +1066,15 @@ onMounted(() => {
   }
 
   .real-journey-grid {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   .real-journey-card {
-    min-height: 132px;
+    min-height: 0;
   }
 
   .onboarding-hero h1 {
-    font-size: 30px;
+    font-size: 22px;
   }
 
   .hero-actions,

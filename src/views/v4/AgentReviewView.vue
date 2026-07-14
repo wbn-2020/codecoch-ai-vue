@@ -167,7 +167,7 @@ onMounted(load)
 <style scoped lang="scss">
 .agent-review-page {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .review-header {
@@ -175,16 +175,15 @@ onMounted(load)
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow);
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .review-header h1 {
   margin: 8px 0 0;
-  font-size: 28px;
+  font-size: 26px;
   letter-spacing: 0;
 }
 
@@ -213,14 +212,20 @@ onMounted(load)
 .review-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .review-metrics article {
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-surface);
+  padding: 12px 14px;
+  border-right: 1px solid var(--app-border);
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .review-metrics span {
@@ -232,7 +237,7 @@ onMounted(load)
   display: block;
   margin-top: 8px;
   color: var(--app-text);
-  font-size: 26px;
+  font-size: 24px;
 }
 
 .review-list {
@@ -241,10 +246,10 @@ onMounted(load)
 }
 
 .review-row {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--app-surface);
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .review-row__head {
@@ -277,14 +282,14 @@ onMounted(load)
 .review-sections section {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: rgba(2, 6, 23, 0.28);
 }
 
 .review-sections h3 {
   margin: 0 0 8px;
-  color: #0f172a;
+  color: var(--app-text);
   font-size: 13px;
 }
 
@@ -296,7 +301,7 @@ onMounted(load)
 }
 
 .review-sections li {
-  color: #475569;
+  color: var(--app-text-muted);
   font-size: 12px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -318,6 +323,15 @@ onMounted(load)
   .review-metrics,
   .review-sections {
     grid-template-columns: 1fr;
+  }
+
+  .review-metrics article {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .review-metrics article:last-child {
+    border-bottom: 0;
   }
 }
 </style>

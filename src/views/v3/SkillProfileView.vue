@@ -494,29 +494,30 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 18px; }
-.page-hero, .content-panel, .metric-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
-.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.v3-page { display: flex; flex-direction: column; gap: 16px; }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1, h2, p { margin: 0; }
-h1 { margin-top: 10px; font-size: 30px; }
+h1 { margin-top: 8px; font-size: 26px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.content-panel { padding: 20px; min-width: 0; }
+.content-panel { padding: 16px; min-width: 0; }
 .evidence-panel { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .evidence-panel span { color: var(--app-text-muted); font-size: 12px; }
 .evidence-panel strong { display: block; margin-top: 6px; font-size: 18px; }
 .evidence-panel p { overflow-wrap: anywhere; }
 .evidence-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 220px; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 14px; }
-.metric-card { padding: 16px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.metric-card { padding: 12px 14px; border-right: 1px solid var(--app-border); background: transparent; box-shadow: none; }
+.metric-card:last-child { border-right: 0; }
 .metric-card span { color: var(--app-text-muted); }
-.metric-card strong { display: block; margin-top: 8px; font-size: 28px; }
+.metric-card strong { display: block; margin-top: 6px; font-size: 24px; }
 .metric-card .status { font-size: 20px; }
-.profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
-.section-head { justify-content: space-between; margin-bottom: 16px; }
+.profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 280px); gap: 16px; }
+.section-head { justify-content: space-between; margin-bottom: 12px; }
 .radar-visual-grid { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.05fr); gap: 16px; align-items: stretch; }
-.radar-chart { width: 100%; min-height: 360px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.radar-chart { width: 100%; min-height: 320px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .radar-list { display: grid; gap: 12px; }
 .radar-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .radar-row small, .bars span { display: block; color: var(--app-text-muted); font-size: 12px; }
@@ -524,5 +525,5 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
 :deep(.action-list) { margin: 0; padding-left: 18px; color: var(--app-text); line-height: 1.8; }
 @media (max-width: 1100px) { .radar-visual-grid { grid-template-columns: 1fr; } }
-@media (max-width: 900px) { .page-hero, .profile-grid, .metric-grid, .evidence-panel { grid-template-columns: 1fr; flex-direction: column; } .radar-row { grid-template-columns: 1fr; } .hero-actions, .evidence-tags { flex-wrap: wrap; justify-content: flex-start; } }
+@media (max-width: 900px) { .page-hero, .profile-grid, .metric-grid, .evidence-panel { grid-template-columns: 1fr; flex-direction: column; } .metric-card { border-right: 0; border-bottom: 1px solid var(--app-border); } .metric-card:last-child { border-bottom: 0; } .radar-row { grid-template-columns: 1fr; } .hero-actions, .evidence-tags { flex-wrap: wrap; justify-content: flex-start; } }
 </style>

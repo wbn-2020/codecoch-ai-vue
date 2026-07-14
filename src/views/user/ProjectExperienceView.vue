@@ -453,20 +453,19 @@ watch(routeResumeId, async (resumeId) => {
 
 <style scoped lang="scss">
 .project-page {
-  gap: 18px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .page-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--app-border);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.05)),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .hero-kicker,
@@ -486,9 +485,9 @@ watch(routeResumeId, async (resumeId) => {
 }
 
 .hero-copy h1 {
-  color: var(--app-text);
-  font-size: 32px;
-  line-height: 1.18;
+  color: var(--user-text);
+  font-size: 24px;
+  line-height: 1.3;
 }
 
 .hero-copy p,
@@ -498,26 +497,26 @@ watch(routeResumeId, async (resumeId) => {
 .resume-item span,
 .resume-item small,
 .hero-panel p {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 }
 
 .hero-kicker,
 .section-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
 .hero-copy p {
   max-width: 720px;
-  margin: 12px 0 0;
-  line-height: 1.8;
+  margin: 8px 0 0;
+  line-height: 1.6;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
 .hero-panel {
@@ -526,21 +525,21 @@ watch(routeResumeId, async (resumeId) => {
   align-content: start;
   gap: 10px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .hero-panel span,
 .overview-card span,
 .evidence-grid span,
 .resume-item small {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 .hero-panel strong {
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.4;
 }
@@ -559,29 +558,32 @@ watch(routeResumeId, async (resumeId) => {
 
 .hero-panel dd {
   margin: 0;
-  color: var(--app-text);
+  color: var(--user-text);
   font-weight: 700;
   text-align: right;
 }
 
 .overview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .overview-card {
-  padding: 16px;
-  border: 1px solid var(--app-border);
+  min-width: 0;
+  flex: 1 1 180px;
+  padding: 12px 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .overview-card strong {
   display: block;
   margin-top: 6px;
-  color: var(--app-text);
-  font-size: 26px;
+  color: var(--user-text);
+  font-size: 20px;
 }
 
 .overview-date {
@@ -596,8 +598,8 @@ watch(routeResumeId, async (resumeId) => {
 
 .project-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
-  gap: 18px;
+  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .resume-list,
@@ -609,23 +611,23 @@ watch(routeResumeId, async (resumeId) => {
 .resume-item,
 .project-card {
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .resume-item {
   display: grid;
   gap: 4px;
   width: 100%;
-  color: var(--app-text);
+  color: var(--user-text);
   text-align: left;
   cursor: pointer;
 }
 
 .resume-item.active {
   border-color: rgba(37, 99, 235, 0.35);
-  background: var(--app-primary-soft);
+  background: var(--user-primary-soft);
 }
 
 .project-card__head {
@@ -634,7 +636,7 @@ watch(routeResumeId, async (resumeId) => {
 }
 
 .project-card h3 {
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.35;
 }
@@ -643,7 +645,7 @@ watch(routeResumeId, async (resumeId) => {
   margin: 14px 0 0;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   line-height: 1.7;
 }
 
@@ -656,15 +658,15 @@ watch(routeResumeId, async (resumeId) => {
 
 .evidence-grid article {
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .evidence-grid strong {
   display: block;
   margin-top: 6px;
-  color: var(--app-text);
+  color: var(--user-text);
   line-height: 1.6;
 }
 
@@ -689,19 +691,18 @@ watch(routeResumeId, async (resumeId) => {
 
 @media (max-width: 1080px) {
   .page-hero,
-  .project-layout,
-  .overview-grid {
+  .project-layout {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
   .page-hero {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .form-grid,

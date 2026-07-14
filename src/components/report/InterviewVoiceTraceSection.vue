@@ -82,7 +82,7 @@ const shortTraceId = (value?: string) => {
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .section-head {
@@ -118,7 +118,7 @@ const shortTraceId = (value?: string) => {
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   header {
     display: flex;
@@ -145,8 +145,8 @@ const shortTraceId = (value?: string) => {
   span {
     padding: 4px 8px;
     border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }

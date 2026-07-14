@@ -15,6 +15,10 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/unit/**/*.test.ts'],
     clearMocks: true,
-    restoreMocks: true
+    restoreMocks: true,
+    // Some request-contract tests intentionally replace Axios' process-wide
+    // default adapter. Keep files serialized so those tests cannot leak
+    // adapter state into component tests running in another file.
+    fileParallelism: false
   }
 })

@@ -337,7 +337,8 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .profile-page {
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .profile-hero {
@@ -359,7 +360,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -393,7 +394,7 @@ onMounted(() => {
 
   h2 {
     margin: 4px 0 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 22px;
     line-height: 1.3;
   }
@@ -401,7 +402,7 @@ onMounted(() => {
   span {
     display: block;
     margin-top: 5px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 }
@@ -417,13 +418,13 @@ onMounted(() => {
   }
 
   dt {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   dd {
     margin: 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 14px;
     font-weight: 600;
     line-height: 1.5;
@@ -454,7 +455,7 @@ onMounted(() => {
 
 .section-head h2 {
   margin: 5px 0 0;
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.3;
 }
@@ -469,9 +470,9 @@ onMounted(() => {
   gap: 14px;
   align-items: center;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface-soft);
+  background: var(--user-surface-muted);
 }
 
 .avatar-editor__field {
@@ -479,7 +480,7 @@ onMounted(() => {
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.6;
   }

@@ -74,7 +74,15 @@
               </div>
               <h3>{{ entry.title }}</h3>
               <p>{{ entry.desc }}</p>
-              <el-button link type="primary" @click="router.push(entry.path)">查看详情</el-button>
+              <el-button
+                class="timeline-detail-button"
+                link
+                type="primary"
+                @click="router.push(entry.path)"
+              >
+                查看详情
+                <ChevronRight :size="14" />
+              </el-button>
             </div>
           </article>
         </div>
@@ -432,7 +440,8 @@ onMounted(() => {
 <style scoped lang="scss">
 .records-tools-page {
   display: grid;
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .tools-hero,
@@ -441,32 +450,32 @@ onMounted(() => {
 .precheck-panel,
 .toolbox-section,
 .template-preview {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .tools-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 28px;
+  gap: 16px;
+  padding: 18px;
 
   h1 {
     margin: 12px 0 10px;
-    color: var(--app-text);
-    font-size: 40px;
-    line-height: 1.1;
+    color: var(--user-text);
+    font-size: 24px;
+    line-height: 1.3;
   }
 
   p {
     max-width: 780px;
     margin: 0;
-    color: var(--app-text-muted);
-    font-size: 16px;
-    line-height: 1.75;
+    color: var(--user-text-muted);
+    font-size: 14px;
+    line-height: 1.6;
   }
 }
 
@@ -481,7 +490,7 @@ onMounted(() => {
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -492,23 +501,25 @@ onMounted(() => {
 }
 
 .quick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .quick-card,
 .tool-card {
   display: grid;
+  min-width: 0;
   gap: 10px;
-  padding: 16px;
-  color: var(--app-text);
+  padding: 14px;
+  color: var(--user-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 
   svg {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   strong {
@@ -516,31 +527,35 @@ onMounted(() => {
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
   }
 
   &:hover {
-    border-color: #93c5fd;
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
   }
+}
+
+.quick-card {
+  flex: 1 1 240px;
 }
 
 .quick-card,
 .tool-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
 }
 
 .records-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 310px);
+  gap: 16px;
 }
 
 .timeline-panel,
 .precheck-panel,
 .toolbox-section {
-  padding: 20px;
+  padding: 16px;
 }
 
 .section-head {
@@ -554,7 +569,7 @@ onMounted(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 
@@ -568,7 +583,7 @@ onMounted(() => {
 }
 
 .timeline-body {
-  min-height: 240px;
+  min-height: 0;
 }
 
 .timeline-item {
@@ -577,19 +592,24 @@ onMounted(() => {
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 12px;
   padding: 14px 0;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 
   h3 {
     margin: 8px 0 6px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 17px;
   }
 
   p {
     margin: 0 0 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
+}
+
+.timeline-detail-button {
+  min-height: 28px;
+  padding-block: 4px;
 }
 
 .timeline-dot {
@@ -597,10 +617,10 @@ onMounted(() => {
   height: 10px;
   margin-top: 7px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--user-primary);
 
   &.green {
-    background: #16a34a;
+    background: var(--user-success);
   }
 }
 
@@ -608,13 +628,13 @@ onMounted(() => {
   flex-wrap: wrap;
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   small {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -636,22 +656,22 @@ onMounted(() => {
     gap: 10px;
     align-items: flex-start;
     padding: 10px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
-    color: var(--app-text);
+    background: var(--user-surface-muted);
+    color: var(--user-text);
     line-height: 1.55;
 
     &.checked {
-      border-color: rgba(22, 163, 74, 0.26);
-      background: #f0fdf4;
-      color: #166534;
+      border-color: var(--user-success-border);
+      background: var(--user-success-soft);
+      color: var(--user-success);
     }
   }
 
   input {
     margin-top: 4px;
-    accent-color: #2563eb;
+    accent-color: var(--user-primary);
   }
 }
 
@@ -663,7 +683,7 @@ onMounted(() => {
 
 .toolbox-layout {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -674,11 +694,11 @@ onMounted(() => {
 
 .tool-card {
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   &.active {
-    border-color: #93c5fd;
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
   }
 }
 
@@ -687,7 +707,7 @@ onMounted(() => {
   box-shadow: none;
 
   > span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -702,7 +722,7 @@ onMounted(() => {
     gap: 10px;
     margin: 0;
     padding-left: 20px;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.7;
   }
 }
@@ -714,7 +734,7 @@ onMounted(() => {
 
 @media (max-width: 1060px) {
   .quick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
   }
 
   .records-layout,
@@ -734,11 +754,11 @@ onMounted(() => {
   }
 
   .tools-hero h1 {
-    font-size: 30px;
+    font-size: 22px;
   }
 
   .quick-grid {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   .hero-actions,

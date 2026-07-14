@@ -601,7 +601,7 @@ onBeforeUnmount(stopTimer)
 
 <style scoped lang="scss">
 .portfolio-demo {
-  gap: 18px;
+  gap: 14px;
 }
 
 .workbench,
@@ -616,11 +616,9 @@ onBeforeUnmount(stopTimer)
 
 .workbench {
   display: grid;
-  gap: 18px;
-  border-color: rgba(45, 212, 191, 0.32);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(19, 36, 45, 0.78)),
-    var(--app-surface);
+  gap: 14px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
 }
 
 .workbench-main,

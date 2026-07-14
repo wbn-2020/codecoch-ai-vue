@@ -62,6 +62,15 @@
       </article>
     </section>
 
+    <details class="knowledge-operations">
+      <summary>
+        <div>
+          <span>索引与治理</span>
+          <strong>{{ governanceActionSummary }}</strong>
+        </div>
+        <small>{{ knowledgeGovernanceHealthBadge }} · {{ failedChunkCount }} 个失败片段</small>
+      </summary>
+      <div class="knowledge-operations__body">
     <section class="config-strip">
       <article>
         <span>语义检索</span>
@@ -183,11 +192,13 @@
         <small>阈值 {{ duplicateReviewThresholdLabel }} · 已扫描 {{ duplicateReview?.scannedChunkCount || 0 }}</small>
       </div>
       <div class="dedup-actions">
-        <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" />
+        <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" aria-label="近重复阈值百分比" />
         <el-button :icon="Search" :loading="duplicateReviewLoading" :disabled="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
         <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates()">完全重复</el-button>
       </div>
     </section>
+      </div>
+    </details>
 
     <el-alert
       v-if="partialLoadWarning && !errorMessage"
@@ -500,6 +511,11 @@
                 :title="knowledgeEvaluationTop.failureReason || knowledgeEvaluationTop.citationWarning"
               />
             </div>
+            <details class="knowledge-eval-details">
+              <summary>
+                <span>检索质量评估</span>
+                <small>{{ knowledgeEvalCaseTotal || 0 }} 个样本 · {{ knowledgeEvalLatestRunSummary }}</small>
+              </summary>
             <div class="knowledge-eval-dataset" v-loading="knowledgeEvalCaseLoading || knowledgeEvalRunLoading">
               <div class="knowledge-eval-dataset__head">
                 <div>
@@ -660,6 +676,7 @@
                 </AppState>
               </div>
             </div>
+            </details>
             <div class="result-list" v-loading="searching">
               <article v-for="item in searchResults" :key="resultKey(item)" class="result-row">
                 <div>
@@ -3838,11 +3855,10 @@ watch(
 .knowledge-hero {
   align-items: flex-end;
   justify-content: space-between;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(34, 197, 94, 0.08)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .knowledge-hero h1,
@@ -3852,7 +3868,7 @@ watch(
 
 .knowledge-hero h1 {
   margin-top: 8px;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .knowledge-hero p,
@@ -3861,6 +3877,78 @@ watch(
 .answer-box p {
   color: var(--app-text-muted);
   line-height: 1.7;
+}
+
+.knowledge-operations,
+.knowledge-eval-details {
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.knowledge-operations > summary,
+.knowledge-eval-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  color: var(--app-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.knowledge-operations > summary::-webkit-details-marker,
+.knowledge-eval-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.knowledge-operations > summary::after,
+.knowledge-eval-details > summary::after {
+  content: "展开";
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.knowledge-operations[open] > summary::after,
+.knowledge-eval-details[open] > summary::after {
+  content: "收起";
+}
+
+.knowledge-operations > summary:focus-visible,
+.knowledge-eval-details > summary:focus-visible,
+.knowledge-eval-run-item:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: -2px;
+}
+
+.knowledge-operations > summary div,
+.knowledge-operations > summary span,
+.knowledge-operations > summary strong,
+.knowledge-eval-details > summary span,
+.knowledge-eval-details > summary small {
+  display: block;
+}
+
+.knowledge-operations > summary strong {
+  margin-top: 3px;
+}
+
+.knowledge-operations > summary small,
+.knowledge-eval-details > summary small {
+  color: var(--app-text-muted);
+}
+
+.knowledge-operations__body {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.knowledge-operations[open] > summary,
+.knowledge-eval-details[open] > summary {
+  border-bottom: 1px solid var(--app-border);
 }
 
 .eyebrow,
@@ -4053,6 +4141,10 @@ watch(
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .config-strip,
@@ -4405,10 +4497,13 @@ watch(
 }
 
 .summary-item {
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  padding: 12px 14px;
+  border-right: 1px solid var(--app-border);
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .summary-item span,
@@ -4430,12 +4525,12 @@ watch(
   display: block;
   margin-top: 8px;
   color: var(--app-text);
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
   align-items: flex-start;
 }
 
@@ -4737,6 +4832,13 @@ watch(
   background: rgba(20, 83, 45, 0.1);
 }
 
+.knowledge-eval-details .knowledge-eval-dataset {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .knowledge-eval-dataset__head,
 .knowledge-eval-dataset__actions,
 .knowledge-eval-dataset__filters,
@@ -4956,6 +5058,10 @@ watch(
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .summary-item:nth-child(2n) {
+    border-right: 0;
+  }
+
   .rebuild-grid {
     grid-template-columns: 1fr;
   }
@@ -4983,11 +5089,26 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .summary-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .summary-item:last-child {
+    border-bottom: 0;
+  }
+
   .governance-action-list article {
     grid-template-columns: 1fr;
   }
 
   .knowledge-eval-dataset__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .knowledge-operations > summary,
+  .knowledge-eval-details > summary {
     align-items: flex-start;
     flex-direction: column;
   }

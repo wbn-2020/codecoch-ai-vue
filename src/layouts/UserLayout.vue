@@ -136,21 +136,16 @@ onBeforeUnmount(() => {
 .jobcoach-layout {
   min-height: 100vh;
   overflow-x: clip;
-  background:
-    radial-gradient(circle at 10% 0, rgba(0, 242, 254, 0.16), transparent 28rem),
-    radial-gradient(circle at 86% 12%, rgba(139, 92, 246, 0.15), transparent 30rem),
-    var(--cc-grid),
-    var(--user-bg);
-  background-size: auto, auto, var(--cc-grid-size), auto;
+  background: var(--user-bg);
   color: var(--user-text);
 }
 
 .jobcoach-main {
-  width: min(100%, 1280px);
+  width: min(100%, 1440px);
   min-width: 0;
-  min-height: calc(100vh - 68px);
+  min-height: calc(100vh - 64px);
   margin: 0 auto;
-  padding: 22px 28px 42px;
+  padding: 14px 24px 28px;
   overflow-x: clip;
 
   &.is-immersive {
@@ -165,25 +160,23 @@ onBeforeUnmount(() => {
   padding: 10px 14px;
   border: 1px solid rgba(245, 158, 11, 0.34);
   border-radius: var(--user-radius-sm);
-  background:
-    linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(0, 242, 254, 0.04)),
-    var(--user-warning-soft);
+  background: var(--user-warning-soft);
   color: #fde68a;
   font-size: 13px;
   line-height: 1.6;
-  box-shadow: var(--user-shadow-xs);
+  box-shadow: none;
 }
 
 @media (max-width: 720px) {
   .jobcoach-layout {
-    --user-mobile-top-height: 62px;
-    --user-mobile-nav-height: 72px;
-    --user-mobile-nav-gap: 12px;
+    --user-mobile-top-height: 58px;
+    --user-mobile-nav-height: 60px;
+    --user-mobile-nav-gap: 8px;
   }
 
   .jobcoach-main {
-    min-height: calc(100vh - 62px);
-    padding: 16px 14px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 20px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(100vh - 58px);
+    padding: 12px 12px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 78px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

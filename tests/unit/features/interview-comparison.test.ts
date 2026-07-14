@@ -1,0 +1,211 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import {
+  extractRemediationRequirementIds,
+  normalizeInterviewComparison,
+  normalizeInterviewRemediation,
+  normalizeInterviewRemediationOptions,
+  normalizeInterviewReportAdvanced,
+  storeInterviewComparison,
+  validateInterviewComparisonSelection
+} from '@/features/interview-comparison'
+
+describe('interview advanced normalization', () => {
+  it('keeps missing trust and availability fields conservative', () => {
+    const report = normalizeInterviewReportAdvanced({
+      id: 12,
+      interviewId: 30,
+      trustStatus: 'FALLBACK',
+      fallback: true
+    })
+
+    expect(report).toMatchObject({
+      reportId: 12,
+      interviewId: 30,
+      fallback: true,
+      remediationAvailable: false,
+      strongRemediationAvailable: false,
+      sourceRequirementIds: []
+    })
+    expect(report.comparisonAvailable).toBeUndefined()
+  })
+
+  it('resolves remediation target session from nested interview data', () => {
+    const remediation = normalizeInterviewRemediation({
+      id: 9,
+      sourceReportId: 12,
+      sourceRequirementIds: [4, 4, 7],
+      idempotentReplay: true,
+      interview: {
+        id: 88,
+        title: '复练：Java 后端'
+      }
+    })
+
+    expect(remediation.targetSessionId).toBe(88)
+    expect(remediation.sourceRequirementIds).toEqual([4, 7])
+    expect(remediation.idempotentReplay).toBe(true)
+  })
+
+  it('normalizes backend remediation options conservatively', () => {
+    const result = normalizeInterviewRemediationOptions({
+      interviewId: 42,
+      sourceReportId: 88,
+      trustStatus: 'VERIFIED',
+      options: [
+        {
+          optionKey: 'FAILED_QUESTION-1',
+          reasonType: 'FAILED_QUESTION',
+          title: '缓存更新失败如何补偿',
+          practicePurpose: '补充失败补偿和监控闭环',
+          sourceRequirementIds: [7, 7],
+          strongRemediation: true
+        },
+        {
+          title: '缺少必要字段'
+        }
+      ]
+    })
+
+    expect(result.options).toHaveLength(1)
+    expect(result.options[0]).toMatchObject({
+      optionKey: 'FAILED_QUESTION-1',
+      sourceRequirementIds: [7],
+      strongRemediation: true
+    })
+  })
+})
+
+describe('interview comparison normalization', () => {
+  it('preserves backend reasons and refuses to promote incomplete data to comparable', () => {
+    const comparison = normalizeInterviewComparison({
+      comparable: true,
+      reportIds: [11, 12],
+      unavailableReasons: [
+        { code: 'RUBRIC_VERSION_MISMATCH', message: '量表版本不同' }
+      ],
+      rounds: [
+        { reportId: 11, rubricScores: { TECHNICAL_DEPTH: 3 } },
+        { reportId: 12, rubricScores: { TECHNICAL_DEPTH: 4 } }
+      ]
+    })
+
+    expect(comparison.comparable).toBe(false)
+    expect(comparison.unavailableReasons[0]).toEqual({
+      code: 'RUBRIC_VERSION_MISMATCH',
+      message: '量表版本不同'
+    })
+  })
+
+  it('normalizes rounds, dimensions, sample warnings and optional requirement improvements', () => {
+    const comparison = normalizeInterviewComparison({
+      comparable: true,
+      reportIds: ['11', 12],
+      firstTotalScore: 70,
+      latestTotalScore: 82,
+      totalScoreDelta: 12,
+      warnings: [
+        { code: 'SAMPLE_INSUFFICIENT_REPORT', message: '部分报告样本不足' }
+      ],
+      rounds: [
+        {
+          reportId: 11,
+          totalScore: 70,
+          sampleInsufficient: true,
+          rubricScores: { TECHNICAL_DEPTH: 3 }
+        },
+        {
+          reportId: 12,
+          totalScore: 82,
+          rubricScores: { TECHNICAL_DEPTH: 4 }
+        }
+      ],
+      dimensions: [
+        {
+          dimension: 'TECHNICAL_DEPTH',
+          firstScore: 3,
+          latestScore: 4,
+          delta: 1,
+          points: [
+            { reportId: 11, score: 3 },
+            { reportId: 12, score: 4, deltaFromPrevious: 1 }
+          ]
+        }
+      ],
+      requirementImprovements: [
+        {
+          requirementId: 6,
+          requirementName: '并发编程',
+          firstStatus: 'WEAK',
+          latestStatus: 'COVERED',
+          evidence: '第二轮回答给出了锁竞争处理方案'
+        }
+      ]
+    })
+
+    expect(comparison.comparable).toBe(true)
+    expect(comparison.rounds[0]?.sampleInsufficient).toBe(true)
+    expect(comparison.dimensions[0]?.points[1]?.deltaFromPrevious).toBe(1)
+    expect(comparison.requirementImprovements[0]?.latestStatus).toBe('COVERED')
+  })
+
+  it('uses the persisted comparison id without browser session storage', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+
+    const key = storeInterviewComparison(normalizeInterviewComparison({
+      id: 900,
+      comparable: false,
+      reportIds: [11, 12],
+      unavailableReasons: [{ code: 'RUBRIC_DATA_MISSING', message: '缺少评分维度' }]
+    }))
+
+    expect(key).toBe('900')
+    expect(setItem).not.toHaveBeenCalled()
+  })
+})
+
+describe('interview comparison selection', () => {
+  const base = {
+    reportStatus: 'GENERATED',
+    title: 'Java 面试',
+    targetJobId: 100
+  }
+
+  it('only accepts two to ten generated reports from the same target job', () => {
+    expect(validateInterviewComparisonSelection([
+      { ...base, interviewId: 1 },
+      { ...base, interviewId: 2 }
+    ])).toEqual({
+      valid: true,
+      reason: '',
+      targetJobId: 100
+    })
+
+    expect(validateInterviewComparisonSelection([
+      { ...base, interviewId: 1 },
+      { ...base, interviewId: 2, targetJobId: 101 }
+    ])).toMatchObject({
+      valid: false,
+      reason: '请选择同一目标岗位下的面试记录。'
+    })
+  })
+
+  it('extracts only weak, missing or conflicting job requirements for remediation', () => {
+    expect(extractRemediationRequirementIds({
+      requirements: [
+        { requirementId: 1, coverageLevel: 'COVERED' },
+        { requirementId: 2, coverageLevel: 'WEAK' },
+        { requirementId: 3, coverageLevel: 'MISSING' },
+        { requirementId: 4, coverageLevel: 'CONFLICT' }
+      ],
+      groups: [
+        {
+          items: [
+            { requirementId: 3, status: 'MISSING' },
+            { requirementId: 5, status: 'UNVERIFIED' }
+          ]
+        }
+      ]
+    })).toEqual([3, 4, 2])
+  })
+})

@@ -126,7 +126,7 @@ onMounted(fetchList)
 
 <style scoped lang="scss">
 .job-experiment {
-  gap: 18px;
+  gap: 14px;
 }
 
 .page-hero,
@@ -142,10 +142,10 @@ onMounted(fetchList)
 
 .page-hero {
   justify-content: space-between;
-  padding: 26px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.72);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .hero-kicker {
@@ -158,7 +158,7 @@ onMounted(fetchList)
 
 h1 {
   margin: 6px 0;
-  font-size: 30px;
+  font-size: 26px;
 }
 
 .page-hero p:last-child,
@@ -182,19 +182,19 @@ h1 {
 
 .experiment-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-  padding: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+  padding: 16px;
 }
 
 .experiment-card {
   display: flex;
   flex-direction: column;
-  min-height: 270px;
+  min-height: 0;
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.28);
+  background: var(--user-surface-muted);
 }
 
 .card-head {
@@ -208,7 +208,6 @@ h1 {
 }
 
 .goal {
-  min-height: 54px;
   line-height: 1.6;
 }
 
@@ -231,7 +230,7 @@ h1 {
   padding: 7px 8px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.2);
+  background: var(--user-surface);
 }
 
 .card-actions {

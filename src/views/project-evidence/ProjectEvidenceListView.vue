@@ -266,7 +266,9 @@ onMounted(fetchList)
 
 <style scoped lang="scss">
 .project-evidence-list {
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .evidence-hero,
@@ -286,21 +288,19 @@ onMounted(fetchList)
 
 .evidence-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 18px;
-  padding: 28px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  padding: 18px 20px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: var(--cc-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.76)),
-    radial-gradient(circle at top right, rgba(34, 211, 238, 0.16), transparent 34%);
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .hero-kicker {
   gap: 8px;
   margin: 0;
-  color: var(--cc-ai-cyan);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -312,52 +312,58 @@ onMounted(fetchList)
   h1 {
     max-width: 760px;
     margin: 12px 0 0;
-    color: #f8fafc;
-    font-size: 34px;
+    color: var(--user-text);
+    font-size: 28px;
     line-height: 1.2;
   }
 
   p:not(.hero-kicker) {
     max-width: 760px;
     margin: 12px 0 0;
-    color: #cbd5e1;
-    line-height: 1.8;
+    color: var(--user-text-muted);
+    line-height: 1.65;
   }
 }
 
 .hero-actions {
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 .hero-panel {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
 
   div {
     min-width: 0;
-    padding: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 12px;
-    background: rgba(2, 6, 23, 0.28);
+    padding: 12px;
+
+    & + div {
+      border-left: 1px solid var(--user-border);
+    }
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    color: #f8fafc;
+    color: var(--user-text);
     font-size: 24px;
   }
 
   p {
     margin: 4px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -376,7 +382,7 @@ onMounted(fetchList)
 
 .section-kicker {
   margin: 0;
-  color: var(--cc-ai-cyan);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -398,14 +404,13 @@ onMounted(fetchList)
 }
 
 .evidence-section {
-  min-height: 360px;
-  padding: 18px;
+  padding: 16px;
 }
 
 .evidence-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .evidence-card {
@@ -413,20 +418,18 @@ onMounted(fetchList)
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-  min-height: 430px;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.66);
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
   transition:
     border-color 0.2s ease,
-    transform 0.2s ease,
     background 0.2s ease;
 
   &:hover {
-    border-color: rgba(34, 211, 238, 0.36);
-    background: rgba(15, 23, 42, 0.82);
-    transform: translateY(-2px);
+    border-color: var(--user-primary-border);
+    background: var(--user-surface-raised);
   }
 }
 
@@ -443,7 +446,7 @@ onMounted(fetchList)
   h2 {
     margin: 0;
     overflow: hidden;
-    color: #f8fafc;
+    color: var(--user-text);
     font-size: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -451,7 +454,7 @@ onMounted(fetchList)
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 }
@@ -463,33 +466,30 @@ onMounted(fetchList)
   justify-content: center;
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(34, 211, 238, 0.24);
-  border-radius: 12px;
-  background: rgba(8, 47, 73, 0.28);
-  color: #67e8f9;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
 }
 
 .proof-panel,
-.gap-panel,
-.evidence-signal-grid > div {
+.gap-panel {
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 12px;
-  background: rgba(2, 6, 23, 0.28);
 }
 
 .proof-panel {
-  padding: 14px;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--user-border);
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 6px;
-    color: #dbeafe;
+    color: var(--user-text);
     font-size: 15px;
     line-height: 1.6;
   }
@@ -498,7 +498,7 @@ onMounted(fetchList)
     display: -webkit-box;
     margin: 8px 0 0;
     overflow: hidden;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     font-size: 13px;
     line-height: 1.7;
     -webkit-box-orient: vertical;
@@ -509,14 +509,22 @@ onMounted(fetchList)
 .evidence-signal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
 
   > div {
     padding: 12px;
-    color: #cbd5e1;
+    background: var(--user-control-bg);
+    color: var(--user-text-secondary);
+
+    & + div {
+      border-left: 1px solid var(--user-border);
+    }
 
     svg {
-      color: #67e8f9;
+      color: var(--user-primary);
     }
   }
 
@@ -527,14 +535,14 @@ onMounted(fetchList)
 
   span {
     margin-top: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     margin-top: 4px;
     overflow: hidden;
-    color: #f8fafc;
+    color: var(--user-text);
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -543,15 +551,18 @@ onMounted(fetchList)
 
 .gap-panel {
   padding: 12px;
+  border: 1px solid var(--user-warning);
+  border-radius: 8px;
+  background: var(--user-warning-soft);
 
   &.clear {
-    border-color: rgba(34, 197, 94, 0.24);
-    background: rgba(20, 83, 45, 0.16);
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
   }
 
   p {
     margin: 8px 0 0;
-    color: #bbf7d0;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -559,7 +570,7 @@ onMounted(fetchList)
 
 .gap-panel__head {
   gap: 8px;
-  color: #fde68a;
+  color: var(--user-warning);
   font-size: 13px;
   font-weight: 700;
 }
@@ -579,10 +590,10 @@ onMounted(fetchList)
   span {
     gap: 6px;
     padding: 6px 9px;
-    border: 1px solid rgba(129, 140, 248, 0.18);
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: rgba(30, 41, 59, 0.46);
-    color: #cbd5e1;
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
     font-size: 12px;
   }
 }
@@ -628,16 +639,22 @@ onMounted(fetchList)
 
 @media (max-width: 760px) {
   .evidence-hero {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .hero-panel,
   .evidence-signal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-panel div + div,
+  .evidence-signal-grid > div + div {
+    border-top: 1px solid var(--user-border);
+    border-left: 0;
   }
 
   .toolbar-controls {

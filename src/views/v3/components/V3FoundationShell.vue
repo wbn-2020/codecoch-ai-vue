@@ -86,31 +86,30 @@ const go = (to: RouteLocationRaw) => {
 <style scoped lang="scss">
 .v3-foundation-page {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 
 .v3-hero,
 .v3-section {
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.76);
-  box-shadow: var(--app-shadow);
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .v3-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 22px;
-  padding: 26px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 16px;
+  padding: 16px;
 }
 
 .v3-hero__copy {
   min-width: 0;
 
   h1 {
-    margin: 10px 0;
+    margin: 8px 0;
     color: var(--app-text);
-    font-size: 30px;
+    font-size: 26px;
     line-height: 1.2;
   }
 
@@ -118,7 +117,7 @@ const go = (to: RouteLocationRaw) => {
     max-width: 760px;
     margin: 0;
     color: var(--app-text-muted);
-    line-height: 1.8;
+    line-height: 1.65;
   }
 }
 
@@ -137,7 +136,7 @@ const go = (to: RouteLocationRaw) => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 .v3-hero__panel {
@@ -146,7 +145,7 @@ const go = (to: RouteLocationRaw) => {
   justify-content: center;
   gap: 12px;
   min-width: 0;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.42);
@@ -176,11 +175,11 @@ const go = (to: RouteLocationRaw) => {
 .v3-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
 }
 
 .v3-section {
-  padding: 20px;
+  padding: 16px;
 }
 
 .v3-section__head {

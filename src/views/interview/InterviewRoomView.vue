@@ -53,6 +53,17 @@
           </div>
         </div>
 
+        <div v-if="voiceProductContext?.scenario || scenarioBinding" class="scenario-binding-card">
+          <div>
+            <span>版本化剧本</span>
+            <strong>{{ scenarioBindingTitle }}</strong>
+          </div>
+          <el-tag :type="scenarioBindingTagType" effect="plain">
+            {{ scenarioBindingStatusText }}
+          </el-tag>
+          <p>{{ scenarioBindingMessage }}</p>
+        </div>
+
         <div class="progress-list">
           <article
             v-for="item in progressItems"
@@ -255,10 +266,24 @@
               <span>{{ answerDurationText }}</span>
               <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
             </div>
+            <InterviewVoiceLiveConsole
+              v-if="interviewId"
+              ref="liveVoiceConsoleRef"
+              :key="current.currentQuestion?.messageId || 'no-question'"
+              :session-id="interviewId"
+              :question-key="current.currentQuestion?.messageId || 'no-question'"
+              :question-text="current.currentQuestion?.questionContent || ''"
+              :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
+              :preflight-ready="voicePreflightReady"
+              :persist-recording="persistLiveVoiceRecording"
+              @transcript-confirmed="handleLiveTranscriptConfirmed"
+              @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
+              @runtime-active-changed="handleLiveAsrRuntimeChanged"
+            />
             <section class="voice-preview">
               <div class="voice-preview__head">
                 <div>
-                  <span class="console-kicker">语音预览 P1</span>
+                  <span class="console-kicker">录音文件转写（兼容模式）</span>
                   <strong>{{ voicePreviewTitle }}</strong>
                   <p>{{ voicePreviewHint }}</p>
                 </div>
@@ -266,7 +291,7 @@
               </div>
               <div class="voice-preview__actions">
                 <el-button
-                  :disabled="answerDisabled || !voicePreview.canRecord.value"
+                  :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
                   @click="handleVoiceStart"
                 >
                   <Mic :size="16" />
@@ -292,7 +317,7 @@
                 v-model="voicePreview.draftText.value"
                 type="textarea"
                 :rows="3"
-                :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+                :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
                 placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
                 @input="handleVoiceDraftInput"
               />
@@ -386,6 +411,8 @@
           <strong>{{ latestScoreText }}</strong>
           <p>{{ latestEvaluationLevelText }}</p>
         </div>
+
+        <InterviewVoiceDeliveryMetrics :analysis="voiceDeliveryAnalysis" />
 
         <div class="answer-rubric">
           <div class="panel-title compact">
@@ -495,7 +522,7 @@
 import { ElMessage } from 'element-plus'
 import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
   confirmInterviewVoiceTranscriptApi,
@@ -510,6 +537,10 @@ import {
   transcribeInterviewVoiceSubmissionApi,
   uploadInterviewVoiceAudioApi
 } from '@/api/interview'
+import {
+  bindInterviewScenarioApi,
+  getInterviewScenarioBindingApi
+} from '@/api/interviewVoiceProduct'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
@@ -522,6 +553,11 @@ import {
   resolveConfirmedVoiceAnswerSource,
   useInterviewVoicePreview
 } from '@/features/interview-voice-preview'
+import {
+  appendConfirmedVoiceTranscript,
+  loadInterviewVoiceProductContext,
+  saveInterviewVoiceProductContext
+} from '@/features/interview-voice-product'
 import type {
   InterviewAnswerDTO,
   InterviewAnswerResultVO,
@@ -530,9 +566,18 @@ import type {
   InterviewVoiceDiscardReason,
   InterviewVoicePreviewState
 } from '@/types/interview'
+import type {
+  InterviewRealtimeVoicePersistenceRequest,
+  InterviewRealtimeVoicePersistenceResult,
+  InterviewScenarioBindingVO,
+  InterviewVoiceDeliveryAnalysisVO,
+  InterviewVoiceProductContext
+} from '@/types/interviewVoiceProduct'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
+import InterviewVoiceDeliveryMetrics from '@/views/interview/components/InterviewVoiceDeliveryMetrics.vue'
+import InterviewVoiceLiveConsole from '@/views/interview/components/InterviewVoiceLiveConsole.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -546,6 +591,11 @@ const roomError = ref('')
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerInputRef = ref<{ focus?: () => void } | null>(null)
+const liveVoiceConsoleRef = ref<{
+  cancelActiveAsr: () => Promise<void>
+  resetRealtimeVoice: () => Promise<void>
+} | null>(null)
+const liveAsrRuntimeActive = ref(false)
 const lastSubmittedAnswer = ref('')
 const lastAnswerDuration = ref(0)
 const answerStartTime = ref(Date.now())
@@ -563,8 +613,16 @@ const confirmedVoiceMeta = ref<InterviewVoiceConfirmedMeta | null>(null)
 const confirmedVoiceText = ref('')
 const voiceConfirming = ref(false)
 const uploadedVoiceFileId = ref<number | null>(null)
+const voiceProductContext = ref<InterviewVoiceProductContext | null>(
+  interviewId ? loadInterviewVoiceProductContext(interviewId) : null
+)
+const scenarioBinding = ref<InterviewScenarioBindingVO | null>(
+  voiceProductContext.value?.scenarioBinding || null
+)
+const voiceDeliveryAnalysis = ref<InterviewVoiceDeliveryAnalysisVO | null>(null)
 let voiceRequestController: AbortController | null = null
 let voiceOperationVersion = 0
+let activeVoiceSubmissionId: number | null = null
 
 const voicePreview = useInterviewVoicePreview({
   onConfirmedText: (text, meta) => {
@@ -576,6 +634,8 @@ const voicePreview = useInterviewVoicePreview({
   },
   onRecordedAudio: (audio) => handleVoiceRecordedAudio(audio)
 })
+
+const compatibilityVoiceRuntimeActive = computed(() => voicePreview.isBusy.value)
 
 const answerReviewStageLabels: Record<string, string> = {
   VALIDATE_REQUEST: '检查回答',
@@ -714,7 +774,46 @@ const outlineStages = computed(() => current.value?.outline || [])
 
 const answerWordCount = computed(() => answerContent.value.trim().length)
 
+const voicePreflightReady = computed(() =>
+  route.query.voicePreflight === 'ready'
+  || Boolean(voiceProductContext.value?.voicePreflightReady)
+)
+
+const scenarioBindingStatus = computed<'BOUND' | 'PENDING' | 'NONE'>(() => {
+  if (scenarioBinding.value) return 'BOUND'
+  return voiceProductContext.value?.scenarioBindingStatus || 'PENDING'
+})
+
+const scenarioBindingTitle = computed(() => {
+  const scenario = voiceProductContext.value?.scenario
+  if (scenario) return `${scenario.scenarioName} v${scenario.versionNo}`
+  if (scenarioBinding.value) return `剧本版本 #${scenarioBinding.value.scenarioVersionId}`
+  return '剧本绑定待确认'
+})
+
+const scenarioBindingStatusText = computed(() => ({
+  BOUND: '已锁定',
+  PENDING: '待绑定',
+  NONE: '未选择'
+})[scenarioBindingStatus.value])
+
+const scenarioBindingTagType = computed<'success' | 'warning' | 'info'>(() => {
+  if (scenarioBindingStatus.value === 'BOUND') return 'success'
+  if (scenarioBindingStatus.value === 'PENDING') return 'warning'
+  return 'info'
+})
+
+const scenarioBindingMessage = computed(() => {
+  if (scenarioBinding.value) {
+    return `服务端已锁定剧本版本 #${scenarioBinding.value.scenarioVersionId} 与量表版本 #${scenarioBinding.value.rubricVersionId}。`
+  }
+  return voiceProductContext.value?.bindingMessage
+    || '当前只保留了本地选择上下文，尚未得到服务端绑定确认。'
+})
+
 const voicePreviewStateLabels: Record<InterviewVoicePreviewState, string> = {
+  opening: '正在打开麦克风',
+  stopping: '正在结束录音',
   idle: '待录音',
   recording: '录音中',
   recorded: '已录音',
@@ -729,6 +828,8 @@ const voicePreviewStateLabels: Record<InterviewVoicePreviewState, string> = {
 const voicePreviewStateLabel = computed(() => voicePreviewStateLabels[voicePreview.state.value])
 
 const voicePreviewTitle = computed(() => {
+  if (voicePreview.state.value === 'opening') return '正在请求麦克风权限'
+  if (voicePreview.state.value === 'stopping') return '正在完成本次录音'
   if (voicePreview.state.value === 'recording') return '正在本地录音'
   if (voicePreview.state.value === 'uploading') return '正在上传录音'
   if (voicePreview.state.value === 'transcribing') return '正在请求 ASR 转写'
@@ -944,6 +1045,108 @@ const focusAnswerInput = () => {
   document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+const handleLiveTranscriptConfirmed = (
+  text: string,
+  evidence?: InterviewRealtimeVoicePersistenceResult
+) => {
+  if (evidence?.voiceSubmissionId && evidence.transcriptId) {
+    const previousConfirmedText = confirmedVoiceText.value
+    confirmedVoiceMeta.value = evidence
+    confirmedVoiceText.value = text
+    answerContent.value = mergeConfirmedVoiceText(
+      answerContent.value,
+      previousConfirmedText,
+      text
+    )
+  } else {
+    answerContent.value = appendConfirmedVoiceTranscript(answerContent.value, text)
+  }
+  focusAnswerInput()
+  ElMessage.success('实时字幕草稿已写入文本回答，请提交前再次检查。')
+}
+
+const handleLiveAsrRuntimeChanged = (active: boolean) => {
+  liveAsrRuntimeActive.value = active
+}
+
+const handleVoiceDeliveryAnalysisUpdated = (analysis: InterviewVoiceDeliveryAnalysisVO) => {
+  voiceDeliveryAnalysis.value = analysis
+}
+
+const persistVoiceProductContext = (
+  bindingStatus: 'BOUND' | 'PENDING' | 'NONE',
+  binding?: InterviewScenarioBindingVO,
+  bindingMessage?: string
+) => {
+  if (!interviewId) return
+  const previous = voiceProductContext.value
+  const next: InterviewVoiceProductContext = {
+    sessionId: interviewId,
+    voicePreflightReady: voicePreflightReady.value,
+    scenario: previous?.scenario,
+    scenarioBindingStatus: bindingStatus,
+    scenarioBinding: binding,
+    bindingMessage: bindingMessage || previous?.bindingMessage,
+    savedAt: new Date().toISOString()
+  }
+  voiceProductContext.value = next
+  saveInterviewVoiceProductContext(next)
+}
+
+const loadScenarioBinding = async () => {
+  if (!interviewId) return
+  try {
+    const binding = await getInterviewScenarioBindingApi(interviewId, { silentError: true })
+    scenarioBinding.value = binding
+    persistVoiceProductContext(
+      'BOUND',
+      binding,
+      `服务端已锁定剧本版本 #${binding.scenarioVersionId} 与量表版本 #${binding.rubricVersionId}。`
+    )
+    return
+  } catch {
+    // A missing binding is expected for ordinary interviews.
+  }
+
+  const routeScenarioVersionId = Number(route.query.scenarioVersionId || 0)
+  const pendingScenarioVersionId =
+    voiceProductContext.value?.scenario?.scenarioVersionId
+    || (Number.isFinite(routeScenarioVersionId) ? routeScenarioVersionId : 0)
+  const shouldRetryBinding =
+    pendingScenarioVersionId > 0
+    && (
+      voiceProductContext.value?.scenarioBindingStatus === 'PENDING'
+      || route.query.scenarioBinding === 'pending'
+    )
+
+  if (!shouldRetryBinding) return
+
+  try {
+    const binding = await bindInterviewScenarioApi(interviewId, {
+      scenarioVersionId: pendingScenarioVersionId,
+      bindingSource: 'USER_SELECTED'
+    }, {
+      silentError: true
+    })
+    scenarioBinding.value = binding
+    persistVoiceProductContext(
+      'BOUND',
+      binding,
+      `服务端已锁定剧本版本 #${binding.scenarioVersionId} 与量表版本 #${binding.rubricVersionId}。`
+    )
+    ElMessage.success('剧本与评分量表已在面试房间完成绑定。')
+  } catch (error) {
+    persistVoiceProductContext(
+      'PENDING',
+      undefined,
+      getErrorMessage(
+        error,
+        '剧本仍未得到服务端绑定确认；本轮不会把本地选择显示为已绑定。'
+      )
+    )
+  }
+}
+
 const resetConfirmedVoiceAnswer = () => {
   confirmedVoiceMeta.value = null
   confirmedVoiceText.value = ''
@@ -968,11 +1171,15 @@ const cancelVoiceLifecycle = async (reason: InterviewVoiceDiscardReason) => {
   voiceRequestController = null
   controller?.abort()
 
-  const submissionId = voicePreview.submission.value?.voiceSubmissionId
+  const submissionId =
+    voicePreview.submission.value?.voiceSubmissionId
+    || activeVoiceSubmissionId
+    || confirmedVoiceMeta.value?.voiceSubmissionId
   const fileId = uploadedVoiceFileId.value
   voiceConfirming.value = false
+  activeVoiceSubmissionId = null
   uploadedVoiceFileId.value = null
-  voicePreview.cancel()
+  await voicePreview.cancel()
   resetConfirmedVoiceAnswer()
 
   try {
@@ -986,6 +1193,18 @@ const cancelVoiceLifecycle = async (reason: InterviewVoiceDiscardReason) => {
   } catch {
     // Backend lifecycle records deletion failures once a submission exists.
   }
+}
+
+const resetRealtimeVoice = async () => {
+  await liveVoiceConsoleRef.value?.resetRealtimeVoice()
+  liveAsrRuntimeActive.value = false
+}
+
+const cleanupVoiceResources = async (reason: InterviewVoiceDiscardReason) => {
+  await Promise.all([
+    resetRealtimeVoice(),
+    cancelVoiceLifecycle(reason)
+  ])
 }
 
 const getVoiceAudioExtension = (mimeType: string) => {
@@ -1035,6 +1254,8 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
       silentError: true
     })
     if (!isCurrentVoiceOperation(operationVersion, controller)) return
+    activeVoiceSubmissionId = submission.voiceSubmissionId
+    uploadedVoiceFileId.value = null
     voicePreview.setTranscribing(submission)
     const transcribed = await transcribeInterviewVoiceSubmissionApi(
       interviewId,
@@ -1064,7 +1285,102 @@ const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
   }
 }
 
+const persistLiveVoiceRecording = async (
+  request: InterviewRealtimeVoicePersistenceRequest
+): Promise<InterviewRealtimeVoicePersistenceResult> => {
+  if (!interviewId || !current.value?.currentQuestion) {
+    throw new Error('No active interview question. Please refresh and retry.')
+  }
+
+  await cancelVoiceLifecycle('REPLACED')
+  const question = current.value.currentQuestion
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
+  try {
+    const audio: InterviewVoiceRecordedAudio = {
+      blob: request.blob,
+      mimeType: request.mimeType,
+      durationMs: request.durationMs
+    }
+    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio), {
+      signal: controller.signal,
+      silentError: true
+    })
+    uploadedVoiceFileId.value = uploaded.fileId
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
+    const submission = await createInterviewVoiceSubmissionApi(interviewId, {
+      fileId: uploaded.fileId,
+      questionMessageId: question.messageId,
+      questionId: question.questionId,
+      audioDurationMs: request.durationMs,
+      mimeType: request.mimeType || request.blob.type,
+      traceId: `interview-live-voice-${interviewId}-${question.messageId}-${Date.now()}`
+    }, {
+      signal: controller.signal,
+      silentError: true
+    })
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    activeVoiceSubmissionId = submission.voiceSubmissionId
+    uploadedVoiceFileId.value = null
+
+    const transcribed = await transcribeInterviewVoiceSubmissionApi(
+      interviewId,
+      submission.voiceSubmissionId,
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    const transcript = transcribed.transcript
+    if (!transcript?.transcriptId) {
+      throw new Error('Voice transcription did not persist a transcript row for confirmation.')
+    }
+
+    const confirmed = await confirmInterviewVoiceTranscriptApi(
+      interviewId,
+      transcript.transcriptId,
+      {
+        confirmedText: request.confirmedText,
+        lowConfidenceAcknowledged: Boolean(transcript.lowConfidence)
+      },
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    const evidence: InterviewRealtimeVoicePersistenceResult = {
+      voiceSubmissionId: confirmed.voiceSubmissionId,
+      transcriptId: confirmed.transcriptId,
+      transcriptConfidence: confirmed.confidence,
+      answerSource: confirmed.fallback ? 'MANUAL_TRANSCRIPT' : 'VOICE_TRANSCRIPT',
+      lowConfidence: confirmed.lowConfidence,
+      fallback: confirmed.fallback,
+      traceId: confirmed.traceId
+    }
+    confirmedVoiceMeta.value = evidence
+    return evidence
+  } finally {
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+    }
+  }
+}
+
 const handleVoiceStart = async () => {
+  await resetRealtimeVoice()
   await cancelVoiceLifecycle('REPLACED')
   await voicePreview.startRecording()
 }
@@ -1143,7 +1459,7 @@ const fetchCurrent = async () => {
     const nextCurrent = await getCurrentInterviewQuestionApi(interviewId)
     const nextMessageId = nextCurrent?.currentQuestion?.messageId
     if (previousMessageId && nextMessageId !== previousMessageId) {
-      await cancelVoiceLifecycle('QUESTION_CHANGED')
+      await cleanupVoiceResources('QUESTION_CHANGED')
     }
     current.value = nextCurrent
     answerStartTime.value = Date.now()
@@ -1179,6 +1495,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
   voicePreview.markSubmitted()
+  activeVoiceSubmissionId = null
   uploadedVoiceFileId.value = null
   resetConfirmedVoiceAnswer()
 
@@ -1188,6 +1505,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   }
 
   if (result.nextAction === NEXT_ACTION.FOLLOW_UP && result.nextQuestion) {
+    await cleanupVoiceResources('QUESTION_CHANGED')
     current.value = {
       interviewId: result.interviewId,
       status: result.interviewStatus,
@@ -1328,6 +1646,8 @@ const handleSubmit = async () => {
     return
   }
 
+  await resetRealtimeVoice()
+
   const voicePayload =
     confirmedVoiceMeta.value?.transcriptId
       ? {
@@ -1421,6 +1741,7 @@ const handleSubmit = async () => {
 
 const handleFinish = async (_manual: boolean) => {
   if (!interviewId) return
+  await cleanupVoiceResources('USER_CANCELLED')
   finishing.value = true
   try {
     const result = await finishInterviewApi(interviewId)
@@ -1461,12 +1782,18 @@ const handleManualFinish = async () => {
   await handleFinish(true)
 }
 
-onMounted(fetchCurrent)
+onMounted(() => {
+  void fetchCurrent()
+  void loadScenarioBinding()
+})
+onBeforeRouteLeave(async () => {
+  await cleanupVoiceResources('PAGE_UNLOAD')
+})
 onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
   stopElapsedTimer()
-  void cancelVoiceLifecycle('PAGE_UNLOAD')
+  void cleanupVoiceResources('PAGE_UNLOAD')
 })
 </script>
 
@@ -1480,13 +1807,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 10px;
   border-radius: 0;
-  background:
-    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-    radial-gradient(circle at 18% 0%, rgba(20, 184, 166, 0.16), transparent 32%),
-    radial-gradient(circle at 92% 8%, rgba(59, 130, 246, 0.16), transparent 28%),
-    linear-gradient(180deg, #07111f 0%, #0b1220 42%, #070b14 100%);
-  background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  background: var(--user-bg);
   color: #e5edf8;
 }
 
@@ -1641,11 +1962,9 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(208px, 248px) minmax(0, 1fr) minmax(260px, 308px);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 50% 12%, rgba(34, 211, 238, 0.12), transparent 36%),
-    rgba(2, 6, 23, 0.54);
+  background: var(--user-bg-panel);
   overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 .progress-panel,
@@ -1673,8 +1992,8 @@ onBeforeUnmount(() => {
 }
 
 .conversation-scroll {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 42%;
+  min-height: 160px;
   overflow-y: auto;
   padding-right: 4px;
   scroll-padding-bottom: 260px;
@@ -1703,6 +2022,7 @@ onBeforeUnmount(() => {
 
 .training-boundary,
 .session-card,
+.scenario-binding-card,
 .score-card,
 .message-card,
 .question-card,
@@ -1736,11 +2056,9 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   padding: 14px;
   border: 1px solid rgba(34, 211, 238, 0.22);
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(8, 47, 73, 0.72), rgba(15, 23, 42, 0.84)),
-    rgba(2, 6, 23, 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: var(--user-surface-tint);
+  box-shadow: none;
 
   p,
   h2,
@@ -1821,7 +2139,7 @@ onBeforeUnmount(() => {
     min-width: 2px;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(180deg, #67e8f9, #14b8a6);
+    background: var(--user-primary);
     opacity: 0.45;
     transform-origin: bottom;
   }
@@ -1957,6 +2275,42 @@ onBeforeUnmount(() => {
     background: rgba(20, 184, 166, 0.12);
     color: #99f6e4;
     font-size: 12px;
+  }
+}
+
+.scenario-binding-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border-color: rgba(34, 211, 238, 0.22);
+  background: rgba(8, 47, 73, 0.28);
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #67e8f9;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  strong {
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 
@@ -2148,10 +2502,8 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   margin-bottom: 10px;
   padding: 16px;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.16), transparent 42%),
-    rgba(15, 23, 42, 0.82);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--user-surface-tint);
+  box-shadow: none;
 
   h2 {
     margin: 6px 0 12px;
@@ -2189,7 +2541,7 @@ onBeforeUnmount(() => {
   padding: 16px;
 
   &.ai {
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(2, 6, 23, 0.34));
+    background: var(--user-primary-soft);
   }
 
   &.user {
@@ -2254,12 +2606,13 @@ onBeforeUnmount(() => {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  flex: 1 1 58%;
+  min-height: 0;
+  overflow-y: auto;
   padding: 14px;
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.86), rgba(15, 23, 42, 0.94)),
-    rgba(15, 23, 42, 0.9);
-  box-shadow: 0 -18px 40px rgba(2, 6, 23, 0.36);
+  background: var(--user-surface-raised);
+  box-shadow: none;
 }
 
 .console-head {
@@ -2435,9 +2788,7 @@ onBeforeUnmount(() => {
 
 .score-card {
   padding: 18px;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(59, 130, 246, 0.12)),
-    rgba(15, 23, 42, 0.72);
+  background: var(--user-success-soft);
 
   span,
   p {
@@ -2572,7 +2923,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 960px) {
   .war-room {
     grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
@@ -2633,6 +2984,7 @@ onBeforeUnmount(() => {
 
   .answer-console {
     position: static;
+    overflow: visible;
     box-shadow: none;
   }
 

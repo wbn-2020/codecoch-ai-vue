@@ -16,8 +16,26 @@
       <el-alert v-for="error in errors" :key="error" type="warning" show-icon :closable="false" :title="error" />
     </section>
 
+    <section class="priority-panel" aria-labelledby="priority-task-title">
+      <div>
+        <span>今天优先</span>
+        <h2 id="priority-task-title">{{ primaryTask.title }}</h2>
+        <p>{{ primaryTask.desc }}</p>
+      </div>
+      <el-button type="primary" size="large" @click="router.push(primaryTask.path)">
+        {{ primaryTask.cta }}
+      </el-button>
+    </section>
+
     <section class="metric-grid" v-loading="overviewLoading">
-      <button v-for="item in metrics" :key="item.label" class="metric-card" type="button" @click="router.push(item.path)">
+      <button
+        v-for="item in metrics"
+        :key="item.label"
+        class="metric-card"
+        type="button"
+        :aria-label="`${item.label}：${item.value}，${item.hint}`"
+        @click="router.push(item.path)"
+      >
         <component :is="item.icon" :size="20" />
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
@@ -25,41 +43,42 @@
       </button>
     </section>
 
-    <section class="content-panel onboarding-panel" v-loading="loading">
-      <div class="section-head">
+    <details class="content-panel onboarding-panel" v-loading="loading">
+      <summary class="onboarding-summary">
         <div>
           <h2>求职闭环清单</h2>
           <p>按“岗位描述 -> 简历 -> 匹配画像 -> 今日任务”的 4 步完成首轮准备。</p>
         </div>
         <el-tag effect="plain">{{ onboardingProgress.done }}/{{ onboardingProgress.total }} 已完成</el-tag>
+      </summary>
+      <div class="onboarding-body">
+        <div class="onboarding-track">
+          <button
+            v-for="step in onboardingSteps"
+            :key="step.key"
+            class="onboarding-step"
+            :class="{ 'is-done': step.done, 'is-current': step.key === nextOnboardingStep?.key }"
+            type="button"
+            @click="router.push(step.path)"
+          >
+            <span class="onboarding-step__marker">
+              <CheckCircle2 v-if="step.done" :size="16" />
+              <span v-else>{{ step.order }}</span>
+            </span>
+            <strong>{{ step.title }}</strong>
+            <span>{{ step.desc }}</span>
+          </button>
+        </div>
       </div>
-      <div class="onboarding-track">
-        <button
-          v-for="step in onboardingSteps"
-          :key="step.key"
-          class="onboarding-step"
-          :class="{ 'is-done': step.done, 'is-current': step.key === nextOnboardingStep?.key }"
-          type="button"
-          @click="router.push(step.path)"
-        >
-          <span class="onboarding-step__marker">
-            <CheckCircle2 v-if="step.done" :size="16" />
-            <span v-else>{{ step.order }}</span>
-          </span>
-          <strong>{{ step.title }}</strong>
-          <span>{{ step.desc }}</span>
-        </button>
-      </div>
-      <div v-if="nextOnboardingStep" class="onboarding-next">
-        <span>下一步：{{ nextOnboardingStep.title }}，{{ nextOnboardingStep.desc }}</span>
-        <el-button type="primary" @click="router.push(nextOnboardingStep.path)">{{ nextOnboardingStep.cta }}</el-button>
-      </div>
-    </section>
+    </details>
 
     <section class="dashboard-grid">
       <div class="content-panel loop-card">
         <div class="section-head"><div><h2>当前岗位目标</h2><p>优先展示你正在推进的岗位方向。</p></div><el-button text @click="router.push('/job-targets')">管理</el-button></div>
-        <AppState v-if="!overview?.currentTargetJob" type="empty" title="暂无当前岗位目标" description="请先创建或设置当前目标岗位。" />
+        <div v-if="!overview?.currentTargetJob" class="compact-missing">
+          <span>还没有当前岗位目标，先确定本轮投递方向。</span>
+          <el-button type="primary" plain @click="router.push('/job-targets')">去维护岗位</el-button>
+        </div>
         <div v-else class="loop-summary">
           <strong>{{ overview.currentTargetJob.jobTitle || '岗位目标' }}</strong>
           <span>{{ overview.currentTargetJob.companyName || '未填写公司' }} · {{ overview.currentTargetJob.jobLevel || '未填写级别' }}</span>
@@ -70,7 +89,10 @@
 
       <div class="content-panel loop-card">
         <div class="section-head"><div><h2>最近匹配报告</h2><p>只展示已保存的最近一次简历与岗位匹配结果。</p></div><el-button text @click="router.push('/resume-match')">查看</el-button></div>
-        <AppState v-if="!overview?.latestMatch" type="empty" title="暂无匹配报告" description="完成简历与岗位匹配后会展示最近结果。" />
+        <div v-if="!overview?.latestMatch" class="compact-missing">
+          <span>还没有匹配报告，完成一次简历与岗位匹配即可继续生成画像。</span>
+          <el-button type="primary" plain @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">去匹配</el-button>
+        </div>
         <div v-else class="loop-summary">
           <strong>{{ overview.latestMatch.overallScore ?? '--' }} 分</strong>
           <span>{{ latestMatchSummary }}</span>
@@ -85,11 +107,10 @@
     </section>
 
     <section class="dashboard-grid">
-      <div class="content-panel">
+      <div v-if="skillLoading || (skillOverview && !skillOverview.empty)" class="content-panel">
         <div class="section-head"><div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
         <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
-        <AppState v-else-if="!skillOverview || skillOverview.empty" type="empty" title="暂无能力画像" description="完成匹配报告后可生成能力画像。" />
-        <div v-else class="skill-summary">
+        <div v-else-if="skillOverview" class="skill-summary">
           <strong>{{ skillOverview.overallScore ?? '--' }}</strong>
           <span>{{ skillOverview.profileName || '当前能力画像' }}</span>
           <p>{{ skillOverview.summary || '暂无画像摘要。' }}</p>
@@ -97,45 +118,37 @@
         </div>
       </div>
 
-      <div class="content-panel">
+      <div v-if="activeStudyProgress" class="content-panel">
         <div class="section-head"><div><h2>学习计划</h2><p>展示正在推进的训练路线和完成进度。</p></div><el-button text @click="router.push('/study-plans')">查看</el-button></div>
-        <div v-if="activeStudyProgress" class="active-plan" @click="router.push(activeStudyPlanRoute)">
+        <button
+          v-if="activeStudyProgress"
+          class="active-plan"
+          type="button"
+          @click="router.push(activeStudyPlanRoute)"
+        >
           <strong>{{ activeStudyPlanTitle }}</strong>
           <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
           <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
-        </div>
-        <AppState v-else type="empty" title="暂无进行中的学习计划" description="可从能力短板生成学习计划。" />
+        </button>
       </div>
     </section>
 
-    <section class="dashboard-grid">
+    <section v-if="overview?.recommendedQuestions" class="dashboard-grid dashboard-grid--single">
       <div class="content-panel loop-card">
         <div class="section-head"><div><h2>推荐题批次</h2><p>根据岗位目标、能力短板和最近练习结果生成。</p></div><el-button text @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">查看</el-button></div>
-        <AppState v-if="!overview?.recommendedQuestions" type="empty" title="暂无推荐题批次" description="可从能力短板或学习计划生成推荐题。" />
-        <div v-else class="loop-summary">
+        <div class="loop-summary">
           <strong>{{ overview.recommendedQuestions.questionCount ?? '--' }} 题</strong>
           <span>{{ formatSourceType(overview.recommendedQuestions.sourceType) }} · {{ formatStatus(overview.recommendedQuestions.status) }}</span>
           <el-button type="primary" @click="router.push({ path: '/questions/recommendations', query: recommendationQuery })">继续刷题</el-button>
         </div>
       </div>
 
-      <div class="content-panel loop-card">
-        <div class="section-head"><div><h2>下一步动作</h2><p>优先给出今天最值得推进的一件事。</p></div></div>
-        <div v-if="nextActionItems.length" class="next-action-list">
-          <button v-for="action in nextActionItems" :key="action.title" type="button" @click="router.push(action.path)">
-            <strong>{{ action.title }}</strong>
-            <span>{{ action.desc }}</span>
-          </button>
-        </div>
-        <AppState v-else type="empty" title="暂无下一步动作" description="完成更多求职准备后会展示建议动作。" />
-      </div>
     </section>
 
     <section class="dashboard-grid">
-      <div class="content-panel loop-card">
+      <div v-if="overview?.recentReport || overview?.recentInterview" class="content-panel loop-card">
         <div class="section-head"><div><h2>最近面试报告</h2><p>面试结果回流到学习计划、推荐题和再次面试。</p></div><el-button text @click="router.push('/interviews/history')">面试记录</el-button></div>
-        <AppState v-if="!overview?.recentReport && !overview?.recentInterview" type="empty" title="暂无面试报告" description="完成目标岗位面试并生成报告后会展示回流建议。" />
-        <div v-else class="loop-summary">
+        <div class="loop-summary">
           <strong>{{ overview?.recentReport?.totalScore ?? '--' }} 分</strong>
           <span>{{ overview?.recentInterview?.title || '最近一次面试' }} · {{ formatStatus(overview?.recentReport?.status || overview?.recentInterview?.reportStatus) }}</span>
           <small v-if="reportInsightText">{{ reportInsightText }}</small>
@@ -147,7 +160,7 @@
         </div>
       </div>
 
-      <div class="content-panel">
+      <div v-if="notificationLoading || notifications.length" class="content-panel">
         <div class="section-head"><div><h2>最近通知</h2><p>同步与你的训练和求职进度相关的提醒。</p></div><el-button text @click="router.push('/notifications')">通知中心</el-button></div>
         <AppState v-if="notificationLoading" type="loading" title="正在读取通知" />
         <div v-else-if="notifications.length" class="notification-list">
@@ -156,19 +169,23 @@
             <span>{{ notificationText(item) }} · {{ item.createdAt }}</span>
           </article>
         </div>
-        <AppState v-else type="empty" title="暂无通知" description="当前没有新的通知。" />
       </div>
 
-      <div class="content-panel">
-        <div class="section-head"><div><h2>闭环入口</h2><p>根据当前准备进度推荐下一步。</p></div></div>
+      <details class="content-panel utilities-panel">
+        <summary>
+          <div>
+            <h2>更多入口</h2>
+            <p>岗位、匹配、训练与模拟面试。</p>
+          </div>
+        </summary>
         <div class="entry-grid">
-          <button v-for="entry in entries" :key="entry.title" type="button" @click="router.push(entry.path)">
+          <button v-for="entry in entries" :key="entry.title" type="button" :aria-label="`${entry.title}：${entry.desc}`" @click="router.push(entry.path)">
             <component :is="entry.icon" :size="18" />
             <strong>{{ entry.title }}</strong>
             <span>{{ entry.desc }}</span>
           </button>
         </div>
-      </div>
+      </details>
     </section>
   </div>
 </template>
@@ -427,6 +444,32 @@ const onboardingProgress = computed(() => ({
 }))
 const nextOnboardingStep = computed(() => onboardingSteps.value.find((item) => !item.done))
 const nextActionItems = computed(() => normalizeNextActions(overview.value?.nextActions))
+const primaryTask = computed(() => {
+  const action = nextActionItems.value[0]
+  if (action) {
+    return {
+      title: action.title,
+      desc: action.desc,
+      cta: '继续处理',
+      path: action.path
+    }
+  }
+  const step = nextOnboardingStep.value
+  if (step) {
+    return {
+      title: step.title,
+      desc: step.desc,
+      cta: step.cta,
+      path: step.path
+    }
+  }
+  return {
+    title: '推进今日任务',
+    desc: '基础资料已就绪，继续完成今天最值得推进的一项准备。',
+    cta: '去今日任务',
+    path: '/agent/today'
+  }
+})
 const reportInsightText = computed(() => {
   const weakPoints = overview.value?.recentReport?.weakPoints || []
   const suggestions = overview.value?.recentReport?.suggestions || []
@@ -486,51 +529,76 @@ onMounted(loadDashboard)
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 18px; }
-.page-hero, .content-panel, .metric-card { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
-.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.v3-page { display: flex; flex-direction: column; gap: 16px; }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1, h2, p { margin: 0; }
-h1 { margin-top: 10px; font-size: 30px; }
+h1 { margin-top: 8px; font-size: 26px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.content-panel { padding: 20px; min-width: 0; }
+.content-panel { padding: 16px; min-width: 0; }
 .error-strip { display: grid; gap: 10px; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 14px; }
-.metric-card { padding: 16px; color: var(--app-text); text-align: left; cursor: pointer; }
-.metric-card span, .metric-card small { display: block; margin-top: 8px; color: var(--app-text-muted); }
-.metric-card strong { display: block; margin-top: 8px; font-size: 28px; }
-.onboarding-panel { display: grid; gap: 16px; }
-.onboarding-track { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-.onboarding-step { display: grid; gap: 8px; align-content: start; min-height: 132px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); color: var(--app-text); text-align: left; cursor: pointer; }
+.priority-panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid rgba(59, 130, 246, 0.42); border-radius: 8px; background: rgba(59, 130, 246, 0.1); }
+.priority-panel span { color: #93c5fd; font-size: 12px; font-weight: 700; }
+.priority-panel h2 { margin-top: 4px; font-size: 20px; }
+.priority-panel p { max-width: 68ch; margin-top: 6px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.metric-card { min-width: 0; padding: 12px 14px; border: 0; border-right: 1px solid var(--app-border); border-radius: 0; background: transparent; box-shadow: none; color: var(--app-text); text-align: left; cursor: pointer; }
+.metric-card:last-child { border-right: 0; }
+.metric-card span, .metric-card small { display: block; margin-top: 6px; color: var(--app-text-muted); }
+.metric-card strong { display: block; margin-top: 6px; font-size: 24px; }
+.onboarding-panel { padding: 0; }
+.onboarding-summary, .utilities-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.onboarding-summary::-webkit-details-marker, .utilities-panel > summary::-webkit-details-marker { display: none; }
+.onboarding-summary::after, .utilities-panel > summary::after { content: "展开"; color: var(--app-text-muted); font-size: 12px; }
+.onboarding-panel[open] .onboarding-summary::after, .utilities-panel[open] > summary::after { content: "收起"; }
+.onboarding-summary h2, .onboarding-summary p, .utilities-panel h2, .utilities-panel p { margin: 0; }
+.onboarding-summary p, .utilities-panel p { margin-top: 4px; }
+.onboarding-body { padding: 0 16px 16px; }
+.onboarding-track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.onboarding-step { display: grid; gap: 7px; align-content: start; min-height: 108px; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); color: var(--app-text); text-align: left; cursor: pointer; }
 .onboarding-step:hover, .onboarding-step.is-current { border-color: rgba(59, 130, 246, 0.42); background: rgba(59, 130, 246, 0.1); }
 .onboarding-step.is-done { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
 .onboarding-step__marker { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(148, 163, 184, 0.16); color: var(--app-text); font-size: 12px; font-weight: 800; }
 .onboarding-step.is-done .onboarding-step__marker { background: rgba(34, 197, 94, 0.18); color: #22c55e; }
 .onboarding-step strong { font-size: 14px; }
 .onboarding-step > span:last-child { color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
-.onboarding-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 8px; background: rgba(59, 130, 246, 0.1); color: var(--app-text); }
-.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.section-head { justify-content: space-between; margin-bottom: 16px; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dashboard-grid--single { grid-template-columns: 1fr; }
+.section-head { justify-content: space-between; margin-bottom: 12px; }
 .skill-summary strong { font-size: 42px; }
 .skill-summary span, .active-plan span { display: block; margin: 8px 0; color: var(--app-text-muted); }
-.active-plan { cursor: pointer; }
-.notification-list, .next-action-list, .loop-summary { display: grid; gap: 12px; }
+.active-plan {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.active-plan:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: 3px;
+}
+.compact-missing { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--app-text-muted); line-height: 1.6; }
+.notification-list, .loop-summary { display: grid; gap: 12px; }
 .loop-summary strong { font-size: 24px; }
 .loop-summary span, .loop-summary small { color: var(--app-text-muted); line-height: 1.5; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.notification-list article, .entry-grid button, .next-action-list button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
 .notification-list article { display: block; }
-.next-action-list button { color: var(--app-text); text-align: left; cursor: pointer; }
-.next-action-list strong, .next-action-list span { display: block; }
-.next-action-list span { margin-top: 6px; color: var(--app-text-muted); }
 .notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
 .entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.utilities-panel { padding: 0; }
+.utilities-panel .entry-grid { padding: 0 16px 16px; }
 .entry-grid button { color: var(--app-text); text-align: left; cursor: pointer; }
 .entry-grid strong, .entry-grid span { display: block; margin-top: 8px; }
 .entry-grid span { color: var(--app-text-muted); line-height: 1.5; }
+.metric-card:focus-visible, .onboarding-step:focus-visible, .active-plan:focus-visible, .entry-grid button:focus-visible, .onboarding-summary:focus-visible, .utilities-panel > summary:focus-visible { outline: 2px solid var(--user-primary); outline-offset: 2px; }
 @media (max-width: 1200px) { .onboarding-track { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .page-hero { flex-direction: column; } .dashboard-grid, .metric-grid, .onboarding-track { grid-template-columns: 1fr; } .hero-actions, .section-head { flex-wrap: wrap; } }
+@media (max-width: 900px) { .page-hero, .priority-panel { align-items: stretch; flex-direction: column; } .dashboard-grid, .onboarding-track { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metric-card:nth-child(2) { border-right: 0; } .metric-card:nth-child(-n + 2) { border-bottom: 1px solid var(--app-border); } .hero-actions, .section-head { flex-wrap: wrap; } }
 
 
 @media (max-width: 720px) {
@@ -552,6 +620,31 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .filter-bar,
   .notification-toolbar {
     justify-content: flex-start;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card,
+  .metric-card:nth-child(2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .metric-card:last-child {
+    border-bottom: 0;
+  }
+
+  .onboarding-summary,
+  .utilities-panel > summary,
+  .compact-missing {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .entry-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

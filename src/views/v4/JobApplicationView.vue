@@ -72,6 +72,11 @@
       </div>
     </section>
 
+    <CareerCalendarPanel
+      v-if="!errorMessage"
+      :applications="rawApplications"
+    />
+
     <section v-if="!errorMessage" class="content-card">
       <div class="content-card__body v4-list" v-loading="loading">
         <article v-for="item in applications" :key="item.id" class="v4-row" :class="{ 'is-highlighted': item.id === highlightedApplicationId }">
@@ -297,6 +302,7 @@ import {
   type JobApplicationVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
 import {
   applicationFollowUpFilterOptions,
   applicationStatusOptions,
@@ -1031,16 +1037,15 @@ onMounted(async () => {
 .v4-page-header {
   align-items: flex-end;
   justify-content: space-between;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(34, 197, 94, 0.08)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .v4-page-header h1 {
   margin: 8px 0 0;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .v4-page-header p,
@@ -1093,7 +1098,10 @@ onMounted(async () => {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .metric-card,
@@ -1108,10 +1116,15 @@ onMounted(async () => {
 .metric-card {
   display: grid;
   gap: 6px;
-  min-height: 96px;
-  padding: 14px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.58);
+  min-height: 80px;
+  padding: 12px;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .metric-card span,
@@ -1121,7 +1134,7 @@ onMounted(async () => {
 }
 
 .metric-card strong {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
 }
 
@@ -1134,7 +1147,7 @@ onMounted(async () => {
   grid-template-columns: repeat(7, minmax(126px, 1fr));
   overflow-x: auto;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.38);
 }
 
@@ -1168,10 +1181,10 @@ onMounted(async () => {
 
 .v4-row,
 .event-row {
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .v4-row.is-highlighted {
@@ -1247,6 +1260,32 @@ onMounted(async () => {
   .event-row__head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-card:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metric-card {
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .metric-card:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    border-right: 0;
   }
 }
 </style>

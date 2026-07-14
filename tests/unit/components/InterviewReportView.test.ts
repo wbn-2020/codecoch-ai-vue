@@ -173,4 +173,29 @@ describe('InterviewReportView metrics', () => {
       { silentError: true }
     )
   })
+
+  it('shows persisted delivery metrics and explains unavailable pause measurements', async () => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      id: 102,
+      reportId: 102,
+      interviewId: 42,
+      reportStatus: 'GENERATED',
+      totalScore: 82,
+      voiceDeliverySummary: {
+        sessionId: 42,
+        analysisId: 900,
+        available: true,
+        status: 'SUCCEEDED',
+        speakingRatePerMinute: 158,
+        fillerCount: 2,
+        pauseMetricsAvailable: false,
+        warningCodes: ['WORD_TIMESTAMPS_UNAVAILABLE']
+      }
+    })
+
+    const wrapper = await mountReport()
+
+    expect(wrapper.find('.voice-delivery-report').text()).toContain('158')
+    expect(wrapper.find('.voice-delivery-report').text()).toContain('停顿指标不可用')
+  })
 })

@@ -1,6 +1,6 @@
 <template>
   <RouterView v-slot="{ Component }">
-    <Suspense>
+    <Suspense v-if="Component">
       <component :is="Component" />
       <template #fallback>
         <main class="app-route-loading">

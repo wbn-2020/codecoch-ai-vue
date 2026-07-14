@@ -211,6 +211,11 @@
         </div>
         <p v-else class="summary-text">暂无可展示证据来源，请先在实验详情中绑定关联证据。</p>
       </section>
+
+      <CareerExperimentPanel
+        :legacy-experiment-id="detail.id"
+        mode="review"
+      />
     </template>
   </div>
 </template>
@@ -224,6 +229,7 @@ import { ArrowLeft, Bot, BriefcaseBusiness, FileText, FolderKanban, Mic, Refresh
 import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
 import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
+import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import { buildJobExperimentReviewDisplayModel, confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import type { JobSearchExperimentDetailVO, JobSearchExperimentStrategyVO } from '@/types/jobExperiment'
@@ -408,10 +414,10 @@ onMounted(load)
 
 .review-hero {
   justify-content: space-between;
-  padding: 24px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--user-surface);
 }
 
 .hero-copy {
@@ -454,10 +460,10 @@ onMounted(load)
 }
 
 .review-section {
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.56);
+  background: var(--user-surface);
 }
 
 .section-head {
@@ -490,7 +496,7 @@ onMounted(load)
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .stack-list strong {
@@ -530,7 +536,7 @@ onMounted(load)
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .metric-strip strong {

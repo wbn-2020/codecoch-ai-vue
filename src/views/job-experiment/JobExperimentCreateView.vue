@@ -487,12 +487,12 @@ onMounted(load)
 <style scoped lang="scss">
 .job-experiment-create {
   display: grid;
-  gap: 18px;
-  max-width: 1080px;
+  gap: 14px;
+  max-width: none;
 }
 
 .form-section {
-  padding: 22px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   background: var(--app-surface);
 }

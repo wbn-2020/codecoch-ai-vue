@@ -923,20 +923,19 @@ onBeforeUnmount(stopTimer)
 
 <style scoped lang="scss">
 .practice-session-page {
-  gap: 18px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .session-hero {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(245, 158, 11, 0.08)),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 
   h1,
   p {
@@ -945,14 +944,14 @@ onBeforeUnmount(stopTimer)
 
   h1 {
     margin-top: 12px;
-    font-size: 30px;
+    font-size: 24px;
     line-height: 1.22;
   }
 
   p {
     max-width: 680px;
     margin-top: 10px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -975,7 +974,7 @@ onBeforeUnmount(stopTimer)
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1009,23 +1008,25 @@ onBeforeUnmount(stopTimer)
 
   p {
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 }
 
 .room-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 16px;
 
   article {
     min-width: 0;
-    padding: 14px;
-    border: 1px solid #e2e8f0;
+    flex: 1 1 220px;
+    padding: 12px;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   strong,
@@ -1037,23 +1038,23 @@ onBeforeUnmount(stopTimer)
   strong {
     width: 28px;
     height: 28px;
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-faint);
+    color: var(--user-primary);
     line-height: 28px;
     text-align: center;
   }
 
   span {
     margin-top: 10px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-weight: 800;
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1068,15 +1069,15 @@ onBeforeUnmount(stopTimer)
 .mode-card {
   min-height: 128px;
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: var(--app-text);
+  background: var(--user-surface);
+  color: var(--user-text);
   cursor: pointer;
   text-align: left;
 
   svg {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   strong,
@@ -1091,14 +1092,14 @@ onBeforeUnmount(stopTimer)
 
   span {
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.5;
   }
 
   &.is-active {
-    border-color: rgba(37, 99, 235, 0.48);
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
   }
 }
 
@@ -1120,10 +1121,10 @@ onBeforeUnmount(stopTimer)
 .route-context {
   margin-top: 4px;
   padding: 10px;
-  border: 1px solid rgba(22, 163, 74, 0.2);
+  border: 1px solid var(--user-success-border);
   border-radius: 8px;
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--user-success-soft);
+  color: var(--user-success);
   font-size: 13px;
 }
 
@@ -1131,8 +1132,8 @@ onBeforeUnmount(stopTimer)
   margin-top: 10px;
   padding: 10px;
   border-radius: 8px;
-  background: #f8fafc;
-  color: var(--app-text-muted);
+  background: var(--user-surface-muted);
+  color: var(--user-text-muted);
   line-height: 1.6;
 }
 
@@ -1141,9 +1142,9 @@ onBeforeUnmount(stopTimer)
   gap: 8px;
   margin-top: 10px;
   padding: 10px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   > div {
     display: flex;
@@ -1153,7 +1154,7 @@ onBeforeUnmount(stopTimer)
   }
 
   span {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1161,7 +1162,7 @@ onBeforeUnmount(stopTimer)
   p,
   small {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.6;
     overflow-wrap: anywhere;
   }
@@ -1203,12 +1204,12 @@ onBeforeUnmount(stopTimer)
   min-width: 116px;
 
   strong {
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 14px;
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1216,7 +1217,7 @@ onBeforeUnmount(stopTimer)
 
 .progress-info {
   flex-wrap: wrap;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -1226,7 +1227,7 @@ onBeforeUnmount(stopTimer)
 
   h2 {
     margin: 16px 0 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 22px;
     line-height: 1.45;
   }
@@ -1236,18 +1237,18 @@ onBeforeUnmount(stopTimer)
   justify-content: space-between;
   flex-wrap: wrap;
   padding: 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 13px;
   }
 }
@@ -1260,9 +1261,9 @@ onBeforeUnmount(stopTimer)
 .question-content {
   margin-top: 14px;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .answer-area {
@@ -1270,19 +1271,19 @@ onBeforeUnmount(stopTimer)
 }
 
 .answer-area :deep(.el-textarea__inner) {
-  border-color: #cbd5e1;
-  background: #ffffff;
-  box-shadow: 0 0 0 1px #cbd5e1 inset;
-  color: var(--app-text);
+  border-color: var(--user-border-strong);
+  background: var(--user-surface);
+  box-shadow: 0 0 0 1px var(--user-border-strong) inset;
+  color: var(--user-text);
 }
 
 .answer-area :deep(.el-textarea__inner::placeholder) {
-  color: #94a3b8;
+  color: var(--user-text-muted);
 }
 
 .answer-area :deep(.el-input__count) {
   background: transparent;
-  color: #64748b;
+  color: var(--user-text-muted);
 }
 
 .answer-frame {
@@ -1290,12 +1291,12 @@ onBeforeUnmount(stopTimer)
   gap: 10px;
   margin-bottom: 12px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1309,8 +1310,8 @@ onBeforeUnmount(stopTimer)
   em {
     padding: 5px 10px;
     border-radius: 8px;
-    background: #ffffff;
-    color: #2563eb;
+    background: var(--user-surface);
+    color: var(--user-primary);
     font-style: normal;
     font-weight: 700;
   }
@@ -1330,9 +1331,9 @@ onBeforeUnmount(stopTimer)
 
 .review-stage-head {
   padding: 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   span,
   strong {
@@ -1340,34 +1341,36 @@ onBeforeUnmount(stopTimer)
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 5px;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.5;
   }
 }
 
 .coverage-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 
   article {
     min-width: 0;
+    flex: 1 1 180px;
     padding: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #fff7ed;
+    background: var(--user-warning-soft);
   }
 
   article.done {
-    border-color: #bbf7d0;
-    background: #f0fdf4;
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
   }
 
   strong,
@@ -1376,13 +1379,13 @@ onBeforeUnmount(stopTimer)
   }
 
   strong {
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 13px;
   }
 
   span {
     margin-top: 5px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -1396,14 +1399,14 @@ onBeforeUnmount(stopTimer)
   section {
     min-width: 0;
     padding: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   h3 {
     margin: 0 0 10px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 15px;
   }
 }
@@ -1427,39 +1430,42 @@ onBeforeUnmount(stopTimer)
   gap: 8px;
   margin: 0;
   padding-left: 18px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
 .side-muted {
   margin: 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
 .result-stats {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .stat-card {
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  min-width: 0;
+  flex: 1 1 130px;
+  padding: 10px 12px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   text-align: center;
 
   span {
     display: block;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 8px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 24px;
   }
 }
@@ -1470,22 +1476,24 @@ onBeforeUnmount(stopTimer)
 }
 
 .result-next-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 18px;
 
   article {
     min-width: 0;
+    flex: 1 1 220px;
     padding: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   span {
     display: block;
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1493,7 +1501,7 @@ onBeforeUnmount(stopTimer)
   p {
     min-height: 44px;
     margin: 8px 0 12px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 
@@ -1507,12 +1515,12 @@ onBeforeUnmount(stopTimer)
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 6px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 :deep(.app-state) {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 @media (max-width: 1080px) {
@@ -1520,10 +1528,6 @@ onBeforeUnmount(stopTimer)
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .room-flow,
-  .result-next-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 880px) {
@@ -1549,15 +1553,11 @@ onBeforeUnmount(stopTimer)
   }
 
   .session-hero {
-    padding: 20px;
+    padding: 16px;
   }
 
   .mode-grid,
-  .room-flow,
-  .review-grid,
-  .coverage-list,
-  .result-stats,
-  .result-next-grid {
+  .review-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1601,11 +1601,10 @@ onBeforeUnmount(stopTimer)
     justify-content: space-between;
     gap: 12px;
     padding: 12px;
-    border: 1px solid rgba(37, 99, 235, 0.22);
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
-    backdrop-filter: blur(12px);
+    background: var(--user-surface-raised);
+    box-shadow: var(--user-shadow-sm);
   }
 
   .mobile-practice-rail__main {
@@ -1618,7 +1617,7 @@ onBeforeUnmount(stopTimer)
     }
 
     span {
-      color: #2563eb;
+      color: var(--user-primary);
       font-size: 12px;
       font-weight: 800;
     }
@@ -1626,7 +1625,7 @@ onBeforeUnmount(stopTimer)
     strong {
       overflow: hidden;
       margin-top: 2px;
-      color: var(--app-text);
+      color: var(--user-text);
       font-size: 14px;
       line-height: 1.35;
       text-overflow: ellipsis;
@@ -1636,7 +1635,7 @@ onBeforeUnmount(stopTimer)
     small {
       overflow: hidden;
       margin-top: 2px;
-      color: var(--app-text-muted);
+      color: var(--user-text-muted);
       font-size: 12px;
       text-overflow: ellipsis;
       white-space: nowrap;

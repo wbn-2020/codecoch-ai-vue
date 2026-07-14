@@ -175,7 +175,8 @@ onMounted(loadData)
 
 <style scoped lang="scss">
 .weakness-page {
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .weakness-hero {
@@ -195,7 +196,7 @@ onMounted(loadData)
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -208,23 +209,30 @@ onMounted(loadData)
 }
 
 .metric-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .metric-card,
 .category-card {
-  padding: 16px;
-  border: 1px solid var(--app-border);
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
+}
+
+.metric-card {
+  flex: 1 1 180px;
+  background: var(--user-surface-muted);
 }
 
 .metric-card span,
 .category-card span {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -237,7 +245,7 @@ onMounted(loadData)
 .metric-card p,
 .category-card p {
   margin: 8px 0 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.6;
 }
 
@@ -251,7 +259,7 @@ onMounted(loadData)
 
 .section-head h2 {
   margin: 5px 0 0;
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.3;
 }
@@ -291,10 +299,10 @@ onMounted(loadData)
     align-items: center;
     min-height: 32px;
     padding: 0 10px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: var(--app-surface-soft);
-    color: var(--app-text);
+    background: var(--user-surface-muted);
+    color: var(--user-text);
     font-size: 13px;
   }
 }
@@ -306,7 +314,7 @@ onMounted(loadData)
   }
 
   .metric-grid {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   .section-head {

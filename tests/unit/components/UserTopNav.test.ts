@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick, ref } from 'vue'
 
 import UserTopNav from '@/components/layout/UserTopNav.vue'
 
@@ -53,7 +53,105 @@ const mountNav = () => mount(UserTopNav, {
   }
 })
 
-describe('UserTopNav mobile navigation', () => {
+const legacySecondaryLabels = [
+  '今日任务',
+  'AI 任务中心',
+  '记录与工具',
+  '求职实验台',
+  '投递管理',
+  '投递包',
+  '新手引导',
+  '专项训练房间',
+  '面试复盘记录'
+]
+
+describe('UserTopNav navigation discovery', () => {
+  beforeEach(() => {
+    routePath.value = '/interviews/create'
+    push.mockReset()
+  })
+
+  it('keeps the two highest-frequency destinations directly available on desktop', () => {
+    const wrapper = mountNav()
+    const shortcuts = wrapper.findAll('.priority-link')
+
+    expect(shortcuts.map((item) => item.text())).toEqual(['今日任务', '投递管理'])
+    expect(shortcuts.map((item) => item.attributes('aria-label'))).toEqual(['今日任务', '投递管理'])
+  })
+
+  it('opens a grouped feature navigator and preserves every former secondary destination', async () => {
+    const wrapper = mountNav()
+
+    await wrapper.get('.more-button').trigger('click')
+
+    const panel = wrapper.get('.feature-nav-panel')
+    expect(panel.attributes('aria-label')).toBe('全部功能导航')
+    expect(panel.findAll('.feature-nav-group__title').map((item) => item.text())).toEqual([
+      '今日推进',
+      '求职资产',
+      '训练复盘',
+      '成长与支持'
+    ])
+
+    const labels = panel.findAll('.feature-nav-item__title').map((item) => item.text())
+    legacySecondaryLabels.forEach((label) => expect(labels).toContain(label))
+  })
+
+  it('gives feature destinations icons, descriptions and current-page state', async () => {
+    routePath.value = '/applications'
+    const wrapper = mountNav()
+
+    await wrapper.get('.more-button').trigger('click')
+
+    const items = wrapper.findAll('.feature-nav-panel .feature-nav-item')
+    expect(items.length).toBeGreaterThan(legacySecondaryLabels.length)
+    items.forEach((item) => {
+      expect(item.find('svg').exists()).toBe(true)
+      expect(item.get('.feature-nav-item__desc').text().length).toBeGreaterThan(0)
+    })
+
+    const activeItem = wrapper.get('.feature-nav-panel [data-nav-path="/applications"]')
+    expect(activeItem.classes()).toContain('is-active')
+    expect(activeItem.attributes('aria-current')).toBe('page')
+  })
+
+  it('shows the same grouped destinations in the responsive navigation panel', async () => {
+    const wrapper = mountNav()
+
+    await wrapper.get('.mobile-toggle').trigger('click')
+
+    const panel = wrapper.get('#user-mobile-panel')
+    expect(panel.findAll('.mobile-feature-group__title').map((item) => item.text())).toEqual([
+      '今日推进',
+      '求职资产',
+      '训练复盘',
+      '成长与支持'
+    ])
+
+    const labels = panel.findAll('.feature-nav-item__title').map((item) => item.text())
+    legacySecondaryLabels.forEach((label) => expect(labels).toContain(label))
+
+    const activePrimary = panel.get('.mobile-nav-item.is-active')
+    expect(activePrimary.attributes('aria-current')).toBe('page')
+  })
+
+  it('closes the feature navigator with Escape and restores trigger focus', async () => {
+    const wrapper = mountNav()
+    document.body.appendChild(wrapper.element)
+    const trigger = wrapper.get('.more-button')
+    trigger.element.focus()
+
+    await trigger.trigger('click')
+    expect(wrapper.find('.feature-nav-panel').exists()).toBe(true)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
   it('uses concise bottom labels while keeping full accessible names', () => {
     const wrapper = mountNav()
     const items = wrapper.findAll('.mobile-bottom-nav__item')

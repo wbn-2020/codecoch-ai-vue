@@ -333,8 +333,8 @@ watch(
   padding: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.72));
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .agent-task-feedback.is-submitted {

@@ -161,14 +161,11 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  padding: 26px;
+  gap: 16px;
+  padding: 16px;
   border: 1px solid rgba(129, 140, 248, 0.28);
-  border-radius: var(--cc-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.07)),
-    rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .hero-kicker,
@@ -186,12 +183,12 @@ onMounted(() => {
 }
 
 .edit-hero h1 {
-  margin: 14px 0 0;
-  font-size: 32px;
+  margin: 8px 0 0;
+  font-size: 26px;
 }
 
 .edit-hero p {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--app-text-muted);
   line-height: 1.7;
 }
@@ -208,12 +205,12 @@ onMounted(() => {
 
 .edit-workspace {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .form-side {
-  padding-right: 24px;
+  padding-right: 16px;
   border-right: 1px solid rgba(148, 163, 184, 0.14);
 
   h2 {

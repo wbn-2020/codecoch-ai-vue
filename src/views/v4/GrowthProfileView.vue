@@ -33,24 +33,27 @@
         <el-tag v-for="label in dataSourceLabels" :key="label" effect="plain" type="info">{{ label }}</el-tag>
       </section>
 
-      <AppState
+      <section
         v-if="isColdStart && !loading"
-        class="growth-cold-state"
-        type="empty"
-        title="资料还不够，暂不展示强评分"
-        :description="overview?.coldStartReason || '最近训练证据不足，暂不展示 readiness 分数、百分位或差距类结论。先补齐任务、题库或面试证据后再查看趋势。'"
+        class="growth-next-action"
+        aria-labelledby="growth-next-action-title"
       >
-        <div class="empty-actions">
-          <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
-          <el-button @click="goQuestionTraining">去题库练习</el-button>
-          <el-button @click="goInterviewCreate">创建模拟面试</el-button>
+        <div>
+          <span class="growth-next-action__label">下一步</span>
+          <h2 id="growth-next-action-title">先补一条可信训练记录</h2>
+          <p>{{ overview?.coldStartReason || '当前证据不足，完成一次今日任务、题库练习或模拟面试后再查看趋势。' }}</p>
         </div>
-        <ul v-if="nextEvidenceActions.length" class="evidence-action-list">
+        <div class="growth-next-action__actions">
+          <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
+          <el-button @click="goQuestionTraining">练一组题</el-button>
+          <el-button @click="goInterviewCreate">模拟面试</el-button>
+        </div>
+        <ul v-if="nextEvidenceActions.length" class="evidence-action-list" aria-label="建议补充的证据">
           <li v-for="action in nextEvidenceActions" :key="action">{{ action }}</li>
         </ul>
-      </AppState>
+      </section>
 
-      <section class="v4-grid" v-loading="loading">
+      <section class="v4-grid" :class="{ 'is-cold': isColdStart }" v-loading="loading" aria-label="成长概览">
         <article class="v4-card">
           <span>准备度</span>
           <strong>{{ showStrongScore ? overview?.readinessScore : '待补证据' }}</strong>
@@ -73,7 +76,7 @@
         </article>
       </section>
 
-      <section class="content-card">
+      <section v-if="!isColdStart" class="content-card">
         <div class="content-card__body">
           <div class="section-head">
             <div>
@@ -81,48 +84,35 @@
               <h2>重点技能与趋势</h2>
             </div>
           </div>
-          <div class="skill-strip">
-            <el-tag v-for="item in visibleTopSkills" :key="item.name" effect="plain">
-              {{ item.name }} · {{ item.value }}
-            </el-tag>
-            <AppState
-              v-if="!visibleTopSkills.length && !loading"
-              type="empty"
-              :title="topSkillEmptyTitle"
-              :description="topSkillEmptyDescription"
-            >
-              <div class="empty-actions">
-                <el-button type="primary" @click="goQuestionTraining">进入题库训练</el-button>
-                <el-button @click="goInterviewCreate">创建模拟面试</el-button>
-              </div>
-            </AppState>
-          </div>
-          <div class="trend-list">
-            <article v-for="item in visibleSkillTrend" :key="`${item.snapshotDate}-${item.skillCode || item.id}`" class="trend-row">
-              <div>
-                <strong>{{ item.skillName || item.skillCode || '未知技能' }}</strong>
-                <span>{{ item.snapshotDate || '--' }} · {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? item.taskCount ?? 0 }}</span>
-                <small class="trend-meta">可信度：{{ confidenceText(item.confidenceLevel) }} · 来源：{{ trendSourceText(item) }}</small>
-                <small v-if="item.coldStartReason" class="trend-cold">{{ item.coldStartReason }}</small>
-              </div>
-              <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
-            </article>
-            <AppState
-              v-if="!visibleSkillTrend.length && !loading"
-              type="empty"
-              title="还没有可信技能趋势"
-              description="技能趋势需要足够任务证据和时间窗。当前只展示补资料入口，不把零散记录包装成结论。"
-            >
-              <div class="empty-actions">
-                <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
-                <el-button @click="goQuestionTraining">练一组题</el-button>
-              </div>
-            </AppState>
+          <template v-if="hasSkillEvidence">
+            <div v-if="visibleTopSkills.length" class="skill-strip">
+              <el-tag v-for="item in visibleTopSkills" :key="item.name" effect="plain">
+                {{ item.name }} · {{ item.value }}
+              </el-tag>
+            </div>
+            <div class="trend-list">
+              <article v-for="item in visibleSkillTrend" :key="`${item.snapshotDate}-${item.skillCode || item.id}`" class="trend-row">
+                <div>
+                  <strong>{{ item.skillName || item.skillCode || '未知技能' }}</strong>
+                  <span>{{ item.snapshotDate || '--' }} · {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? item.taskCount ?? 0 }}</span>
+                  <small class="trend-meta">可信度：{{ confidenceText(item.confidenceLevel) }} · 来源：{{ trendSourceText(item) }}</small>
+                  <small v-if="item.coldStartReason" class="trend-cold">{{ item.coldStartReason }}</small>
+                </div>
+                <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
+              </article>
+            </div>
+          </template>
+          <div v-else-if="!loading" class="compact-empty">
+            <div>
+              <strong>{{ topSkillEmptyTitle }}</strong>
+              <p>{{ topSkillEmptyDescription }}</p>
+            </div>
+            <el-button type="primary" @click="goQuestionTraining">练一组题</el-button>
           </div>
         </div>
       </section>
 
-      <section class="content-card">
+      <section v-if="!isColdStart" class="content-card">
         <div class="content-card__body">
           <div class="section-head">
             <div>
@@ -142,17 +132,13 @@
               </div>
               <el-progress :percentage="boundedPercent(item.score)" :stroke-width="8" />
             </article>
-            <AppState
-              v-if="!visibleReadinessTrend.length && !loading"
-              type="empty"
-              title="还没有可信准备度趋势"
-              description="准备度趋势只在数据门槛满足后展示。当前不会展示 readiness 分数、百分位或差距类结论。"
-            >
-              <div class="empty-actions">
-                <el-button type="primary" @click="goTodayPlan">生成今日计划</el-button>
-                <el-button @click="load">刷新画像</el-button>
+            <div v-if="!visibleReadinessTrend.length && !loading" class="compact-empty">
+              <div>
+                <strong>还没有可比较的准备度记录</strong>
+                <p>继续完成今日任务，积累下一个可信时间点后再比较变化。</p>
               </div>
-            </AppState>
+              <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
+            </div>
           </div>
         </div>
       </section>
@@ -201,6 +187,7 @@ const hasDisplayableTrendConfidence = (level?: string) => {
 }
 const visibleSkillTrend = computed(() => showTopSkillTrend.value ? skillTrend.value.filter((item) => hasDisplayableTrendConfidence(item.confidenceLevel)) : [])
 const visibleReadinessTrend = computed(() => showReadinessTrend.value ? readinessTrend.value.filter((item) => hasDisplayableTrendConfidence(item.confidenceLevel)) : [])
+const hasSkillEvidence = computed(() => visibleTopSkills.value.length > 0 || visibleSkillTrend.value.length > 0)
 const isColdStart = computed(() => Boolean(overview.value) && !showStrongScore.value)
 const dataSourceLabels = computed(() => overview.value?.dataSourceLabels || [])
 const nextEvidenceActions = computed(() => overview.value?.nextEvidenceActions || [])
@@ -303,11 +290,10 @@ onMounted(load)
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(34, 197, 94, 0.08)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .v4-page-header h1,
@@ -317,7 +303,7 @@ onMounted(load)
 
 .v4-page-header h1 {
   margin-top: 8px;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .v4-page-header p,
@@ -346,7 +332,10 @@ onMounted(load)
 .v4-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .partial-alert {
@@ -354,19 +343,71 @@ onMounted(load)
 }
 
 .growth-explain-strip,
-.growth-cold-state {
+.growth-next-action {
   margin-bottom: 16px;
+}
+
+.growth-next-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.growth-next-action h2,
+.growth-next-action p {
+  margin: 0;
+}
+
+.growth-next-action h2 {
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.growth-next-action p {
+  margin-top: 6px;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.growth-next-action__label {
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.growth-next-action__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.growth-next-action .evidence-action-list {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .v4-card,
 .trend-row {
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.58);
 }
 
 .v4-card {
-  padding: 16px;
+  padding: 12px 14px;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .v4-card span {
@@ -377,7 +418,7 @@ onMounted(load)
 .v4-card strong {
   display: block;
   margin-top: 8px;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.25;
 }
 
@@ -408,8 +449,8 @@ onMounted(load)
 
 .trend-list {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .empty-actions {
@@ -417,6 +458,27 @@ onMounted(load)
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
+}
+
+.compact-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--app-border);
+}
+
+.compact-empty strong,
+.compact-empty p {
+  display: block;
+  margin: 0;
+}
+
+.compact-empty p {
+  margin-top: 4px;
+  color: var(--app-text-muted);
+  line-height: 1.6;
 }
 
 .trend-row {
@@ -454,9 +516,31 @@ onMounted(load)
     flex-direction: column;
   }
 
+  .growth-next-action {
+    grid-template-columns: 1fr;
+  }
+
+  .growth-next-action__actions {
+    justify-content: flex-start;
+  }
+
+  .compact-empty {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .v4-grid,
   .trend-row {
     grid-template-columns: 1fr;
+  }
+
+  .v4-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .v4-card:last-child {
+    border-bottom: 0;
   }
 }
 </style>

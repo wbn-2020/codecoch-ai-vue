@@ -359,4 +359,40 @@ describe('job requirement matrix normalization', () => {
     expect(trend.change?.reasons).toContain('减少 2 项缺失要求')
     expect(trend.change?.reasons).toContain('简历准备提升 15 分')
   })
+
+  it('treats fallback snapshots and dimensions as unavailable for direct score comparison', () => {
+    const trend = buildJobReadinessTrend([
+      {
+        id: 1,
+        targetJobId: 9,
+        overallScore: 55,
+        strongCount: 2,
+        missingCount: 4,
+        sampleInsufficient: false,
+        fallback: false,
+        generatedAt: '2026-07-01T10:00:00Z',
+        dimensions: [{ dimension: 'RESUME', score: 50, fallback: false }],
+        warnings: []
+      },
+      {
+        id: 2,
+        targetJobId: 9,
+        overallScore: 88,
+        strongCount: 4,
+        missingCount: 2,
+        sampleInsufficient: false,
+        fallback: true,
+        generatedAt: '2026-07-02T10:00:00Z',
+        dimensions: [{ dimension: 'RESUME', score: 90, fallback: true }],
+        warnings: []
+      }
+    ])
+
+    expect(trend.points[1]).toMatchObject({
+      score: undefined,
+      sampleInsufficient: true
+    })
+    expect(trend.change?.scoreDelta).toBeUndefined()
+    expect(trend.change?.reasons).not.toContain('简历准备提升 40 分')
+  })
 })

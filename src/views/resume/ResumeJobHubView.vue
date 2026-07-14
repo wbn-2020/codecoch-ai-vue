@@ -38,10 +38,20 @@
               {{ defaultResume ? '实时工作台' : '待创建' }}
             </el-tag>
           </div>
-          <div class="snapshot-paper">
-            <strong>{{ defaultResumeTitle }}</strong>
-            <small>{{ currentTarget?.jobTitle || defaultResume?.targetPosition || '目标岗位待确认' }}</small>
-            <i v-for="line in resumeSnapshotLines" :key="line">{{ line }}</i>
+          <div v-if="defaultResume" class="snapshot-paper">
+            <div class="snapshot-paper__canvas">
+              <ResumeDocumentPreview
+                :draft="resumeSnapshotDraft"
+                template-code="ATS_SINGLE_COLUMN"
+                accent="ocean"
+                density="compact"
+              />
+            </div>
+          </div>
+          <div v-else class="snapshot-paper is-empty">
+            <FileText :size="26" />
+            <strong>第一份专业简历从这里开始</strong>
+            <small>补齐姓名、岗位、技能与经历后，这里会显示真实成品缩略图。</small>
           </div>
           <button type="button" @click="goResumeAction">
             {{ defaultResume ? '边改边看预览' : '创建后生成预览' }}
@@ -295,6 +305,7 @@ import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
+import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -403,17 +414,25 @@ const defaultResumeTitle = computed(() =>
   defaultResume.value?.resumeName || defaultResume.value?.title || '还没有可用简历'
 )
 
-const resumeSnapshotLines = computed(() => {
-  if (!defaultResume.value) {
-    return ['补姓名与目标岗位', '沉淀技术栈关键词', '添加可追问项目经历']
-  }
-  const lines = [
-    resumeDetail.value?.summary || defaultResume.value.summary || '',
-    resumeDetail.value?.skills || defaultResume.value.skills || '',
-    projectCards.value[0]?.summary || ''
-  ]
-  return lines.filter(Boolean).slice(0, 3)
-})
+const resumeSnapshotDraft = computed(() => ({
+  resumeName: defaultResume.value?.resumeName,
+  realName: resumeDetail.value?.realName || defaultResume.value?.realName,
+  targetPosition: currentTarget.value?.jobTitle
+    || resumeDetail.value?.targetPosition
+    || defaultResume.value?.targetPosition,
+  phone: resumeDetail.value?.phone,
+  email: resumeDetail.value?.email,
+  summary: resumeDetail.value?.summary || defaultResume.value?.summary,
+  skillStack: resumeDetail.value?.skillStack
+    || resumeDetail.value?.skills
+    || defaultResume.value?.skillStack
+    || defaultResume.value?.skills,
+  workExperience: resumeDetail.value?.workExperience || defaultResume.value?.workExperience,
+  educationExperience: resumeDetail.value?.educationExperience
+    || resumeDetail.value?.education
+    || defaultResume.value?.educationExperience,
+  projects: resumeDetail.value?.projects || []
+}))
 
 const resumeSummary = computed(() => {
   if (!defaultResume.value) return '先创建或上传一份简历，后续匹配和今日计划才有真实依据。'
@@ -613,10 +632,10 @@ const keywordCoverage = computed<KeywordCoverageItem[]>(() => {
   const details = hasSuccessfulMatch.value ? latestMatch.value?.details || [] : []
   if (details.length) return details.slice(0, 8).map(toKeywordCoverage)
 
-  const analysis = currentTarget.value as TargetJobVO & Partial<JobDescriptionAnalysisVO>
+  const analysis = currentTarget.value as (TargetJobVO & Partial<JobDescriptionAnalysisVO>) | null
   const fallbackKeywords = [
-    ...firstItems(analysis.requiredSkills, 4),
-    ...firstItems(analysis.interviewFocusPoints, 4)
+    ...firstItems(analysis?.requiredSkills, 4),
+    ...firstItems(analysis?.interviewFocusPoints, 4)
   ]
   return [...new Set(fallbackKeywords)].slice(0, 6).map((name) => ({
     name,
@@ -959,31 +978,32 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .resume-job-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   min-height: 100%;
-  padding: 24px;
-  color: #101828;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.12), transparent 28%),
-    radial-gradient(circle at 92% 6%, rgba(6, 182, 212, 0.12), transparent 26%),
-    linear-gradient(180deg, #f6f8fc 0%, #eef4ff 48%, #f7f9fc 100%);
+  padding: 0;
+  color: var(--user-text);
+  background: transparent;
 }
 
-.hub-hero,
 .hub-panel,
 .hub-path,
 .lab-overview {
-  border: 1px solid rgba(207, 214, 228, 0.9);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .hub-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.9fr) minmax(280px, 0.72fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 14px;
   align-items: stretch;
-  padding: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .hero-card,
@@ -998,27 +1018,26 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 22px;
-  color: #ffffff;
-  background:
-    linear-gradient(135deg, rgba(16, 24, 40, 0.96), rgba(30, 64, 175, 0.92)),
-    #101828;
+  padding: 18px;
+  border: 1px solid var(--user-primary-border);
+  color: var(--user-text);
+  background: var(--user-surface-tint);
 }
 
 .hero-copy h1 {
   max-width: 680px;
   margin: 14px 0 12px;
-  font-size: 34px;
-  line-height: 1.18;
+  font-size: 26px;
+  line-height: 1.25;
   letter-spacing: 0;
 }
 
 .hero-copy p {
   max-width: 720px;
   margin: 0;
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 15px;
-  line-height: 1.8;
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .hero-kicker,
@@ -1032,18 +1051,18 @@ onBeforeUnmount(() => {
 }
 
 .hero-kicker {
-  color: #bfdbfe;
+  color: var(--user-primary);
 }
 
 .section-kicker {
-  color: #2563eb;
+  color: var(--user-primary);
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 28px;
+  margin-top: 18px;
 }
 
 .hero-actions :deep(.el-button),
@@ -1060,25 +1079,31 @@ onBeforeUnmount(() => {
 }
 
 .hero-actions :deep(.el-button:not(.primary-action)) {
-  border-color: rgba(255, 255, 255, 0.38);
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--user-border-strong);
+  color: var(--user-text-secondary);
+  background: var(--user-control-bg);
 }
 
 .experiment-stack {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
-  gap: 12px;
+  gap: 0;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .resume-snapshot-card {
+  grid-column: 1 / -1;
   display: grid;
   gap: 12px;
-  padding: 16px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(255, 255, 255, 0.98)),
-    #ffffff;
+  padding: 4px 4px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  background: transparent;
 }
 
 .snapshot-head {
@@ -1088,57 +1113,71 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 
   span {
-    color: #344054;
+    color: var(--user-text-secondary);
     font-size: 13px;
     font-weight: 700;
   }
 }
 
 .snapshot-paper {
-  min-height: 184px;
-  padding: 18px;
-  border: 1px solid #d0d5dd;
+  position: relative;
+  min-height: 224px;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
   border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+  background: #cfd7e2;
+}
 
-  strong,
-  small,
-  i {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.snapshot-paper__canvas {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 720px;
+  transform: translateX(-50%) scale(0.285);
+  transform-origin: top center;
+  pointer-events: none;
+
+  :deep(.resume-document) {
+    box-shadow: none;
   }
+}
+
+.snapshot-paper.is-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  border-color: var(--user-border);
+  background: var(--user-control-bg);
+  color: var(--user-text-muted);
+  box-shadow: none;
+  text-align: center;
 
   strong {
-    color: #101828;
-    font-size: 18px;
+    color: var(--user-text);
+    font-size: 15px;
   }
 
   small {
-    margin-top: 4px;
-    color: #2563eb;
+    max-width: 280px;
+    color: var(--user-text-muted);
     font-size: 12px;
-  }
-
-  i {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid #eef2f7;
-    color: #475467;
-    font-size: 12px;
-    font-style: normal;
+    line-height: 1.6;
   }
 }
 
 .experiment-card {
   display: flex;
   flex-direction: column;
-  min-height: 176px;
-  padding: 18px;
-  border: 1px solid #e4e7ec;
-  background: #ffffff;
+  padding: 14px 4px 4px;
+  border: 0;
+  background: transparent;
+}
+
+.experiment-card + .experiment-card {
+  padding-left: 14px;
+  border-left: 1px solid var(--user-border);
 }
 
 .card-topline,
@@ -1154,7 +1193,7 @@ onBeforeUnmount(() => {
 .next-action-head span,
 .readiness-meter span,
 .risk-card span {
-  color: #667085;
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -1163,7 +1202,7 @@ onBeforeUnmount(() => {
 .report-card h2,
 .issue-card h2 {
   margin: 12px 0 8px;
-  color: #101828;
+  color: var(--user-text);
   font-size: 20px;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1177,7 +1216,7 @@ onBeforeUnmount(() => {
 .project-card p,
 .risk-card p {
   margin: 0;
-  color: #667085;
+  color: var(--user-text-muted);
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -1192,7 +1231,7 @@ onBeforeUnmount(() => {
   margin-top: auto;
   padding: 0;
   border: 0;
-  color: #2563eb;
+  color: var(--user-primary);
   font-weight: 700;
   line-height: 1.5;
   text-align: left;
@@ -1201,27 +1240,42 @@ onBeforeUnmount(() => {
 }
 
 .next-action-card {
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  border: 1px solid rgba(37, 99, 235, 0.18);
-  background: linear-gradient(180deg, #eff6ff, #ffffff 58%);
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 220px;
+  grid-template-rows: auto auto auto;
+  gap: 4px 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--user-primary-border);
+  background: var(--user-primary-soft);
 }
 
 .next-action-card :deep(.el-button) {
-  width: 100%;
+  grid-column: 2;
+  grid-row: 1 / 4;
+  width: auto;
   justify-content: center;
-  margin-top: 18px;
+  margin-top: 0;
+}
+
+.next-action-card .next-action-head,
+.next-action-card h2,
+.next-action-card > p {
+  grid-column: 1;
 }
 
 .readiness-meter {
-  margin-top: auto;
-  padding-top: 18px;
-  border-top: 1px solid #dbe7ff;
+  grid-column: 3;
+  grid-row: 1 / 4;
+  margin-top: 0;
+  padding: 0 0 0 16px;
+  border-top: 0;
+  border-left: 1px solid var(--user-primary-border);
 }
 
 .readiness-meter strong {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 32px;
   line-height: 1;
 }
@@ -1234,8 +1288,8 @@ onBeforeUnmount(() => {
 .hub-path,
 .hub-panel,
 .lab-overview {
-  margin-top: 18px;
-  padding: 22px;
+  margin-top: 0;
+  padding: 16px;
 }
 
 .lab-overview {
@@ -1248,14 +1302,14 @@ onBeforeUnmount(() => {
 .issue-card {
   min-width: 0;
   padding: 18px;
-  border: 1px solid #e4e7ec;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .issue-card {
-  border-color: #fed7aa;
-  background: #fff7ed;
+  border-color: var(--user-warning);
+  background: var(--user-warning-soft);
 }
 
 .report-score {
@@ -1267,13 +1321,13 @@ onBeforeUnmount(() => {
 }
 
 .report-score strong {
-  color: #101828;
+  color: var(--user-text);
   font-size: 42px;
   line-height: 1;
 }
 
 .report-score span {
-  color: #667085;
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -1288,9 +1342,9 @@ onBeforeUnmount(() => {
 .project-meta span {
   padding: 4px 8px;
   border-radius: 999px;
-  color: #344054;
+  color: var(--user-text-secondary);
   font-size: 12px;
-  background: #eef2f7;
+  background: var(--user-border);
 }
 
 .summary-actions {
@@ -1312,29 +1366,44 @@ onBeforeUnmount(() => {
 
 .section-head h2 {
   margin: 4px 0 0;
-  color: #101828;
+  color: var(--user-text);
   font-size: 22px;
   line-height: 1.35;
 }
 
 .path-steps {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
 }
 
 .path-step {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 10px;
-  min-height: 96px;
-  padding: 14px;
-  border: 1px solid #e4e7ec;
+  padding: 10px 12px;
+  border: 0;
   border-radius: 8px;
   color: inherit;
   text-align: left;
-  background: #fbfcff;
+  background: transparent;
   cursor: pointer;
+}
+
+.path-step::after {
+  position: absolute;
+  top: 23px;
+  right: -12px;
+  left: 38px;
+  height: 1px;
+  background: var(--user-border);
+  content: "";
+}
+
+.path-step:last-child::after {
+  display: none;
 }
 
 .path-step strong {
@@ -1344,12 +1413,14 @@ onBeforeUnmount(() => {
 
 .path-step small {
   grid-column: 2;
-  color: #667085;
+  color: var(--user-text-muted);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .step-status {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   width: 26px;
   height: 26px;
@@ -1357,13 +1428,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #b45309;
-  background: #fffbeb;
+  color: var(--user-warning);
+  background: var(--user-warning-soft);
 }
 
 .step-status.is-done {
-  color: #15803d;
-  background: #dcfce7;
+  color: var(--user-success);
+  background: var(--user-success-soft);
 }
 
 .content-grid {
@@ -1383,9 +1454,9 @@ onBeforeUnmount(() => {
 .project-card,
 .risk-card {
   min-width: 0;
-  border: 1px solid #e4e7ec;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #fbfcff;
+  background: var(--user-surface-muted);
 }
 
 .keyword-item {
@@ -1412,7 +1483,7 @@ onBeforeUnmount(() => {
 .project-card strong,
 .risk-card strong {
   display: block;
-  color: #101828;
+  color: var(--user-text);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -1444,10 +1515,6 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.risk-card {
-  min-height: 182px;
-}
-
 .risk-card :deep(.el-button) {
   margin-top: 10px;
 }
@@ -1472,7 +1539,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 900px) {
   .resume-job-hub {
-    padding: 16px;
+    padding: 0;
   }
 
   .hub-hero,
@@ -1485,6 +1552,20 @@ onBeforeUnmount(() => {
 
   .next-action-card {
     grid-column: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .next-action-card :deep(.el-button),
+  .readiness-meter {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .readiness-meter {
+    padding: 14px 0 0;
+    border-top: 1px solid var(--user-primary-border);
+    border-left: 0;
   }
 
   .section-head,
@@ -1492,11 +1573,34 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
+
+  .experiment-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .experiment-card + .experiment-card {
+    padding-left: 4px;
+    border-top: 1px solid var(--user-border);
+    border-left: 0;
+  }
+
+  .path-step {
+    padding: 10px 0;
+  }
+
+  .path-step::after {
+    top: 38px;
+    right: auto;
+    bottom: -10px;
+    left: 13px;
+    width: 1px;
+    height: auto;
+  }
 }
 
 @media (max-width: 560px) {
   .resume-job-hub {
-    padding: 12px;
+    padding: 0;
   }
 
   .hub-hero,

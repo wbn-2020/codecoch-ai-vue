@@ -57,9 +57,10 @@
           <p>暂无通知</p>
         </div>
 
-        <article
+        <button
           v-for="item in notifications"
           :key="item.id"
+          type="button"
           class="notification-item"
           :class="{ unread: item.isRead === 0 }"
           @click="handleClickNotification(item)"
@@ -73,7 +74,7 @@
             <p v-if="item.content">{{ item.content }}</p>
             <span class="notification-time">{{ formatDateTime(item.createdAt) }}</span>
           </div>
-        </article>
+        </button>
       </div>
 
       <div v-if="total > 0" class="pagination-wrap">
@@ -496,16 +497,17 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .notification-page {
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .notification-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
-  padding: 28px;
-  border-radius: var(--cc-radius-xl);
+  gap: 16px;
+  padding: 18px;
+  border-radius: 8px;
 }
 
 .eyebrow {
@@ -521,12 +523,12 @@ onMounted(() => {
 .hero-copy {
   h1 {
     margin: 14px 0 0;
-    font-size: 30px;
+    font-size: 24px;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -552,15 +554,15 @@ onMounted(() => {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--el-color-danger);
-  color: #fff;
+  color: var(--user-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .notification-list {
-  min-height: 200px;
+  min-height: 0;
   padding: 0 20px 20px;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 }
 
 .notification-error {
@@ -573,16 +575,22 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 200px;
-  color: var(--app-text-muted);
+  min-height: 140px;
+  color: var(--user-text-muted);
 }
 
 .notification-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  width: 100%;
   padding: 16px 0;
+  border: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background 0.15s;
 
@@ -590,9 +598,14 @@ onMounted(() => {
     background: rgba(99, 102, 241, 0.04);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 3px;
+  }
+
   &.unread {
     .notification-body strong {
-      color: #f8fafc;
+      color: var(--user-text);
     }
   }
 }
@@ -603,7 +616,7 @@ onMounted(() => {
   height: 8px;
   margin-top: 8px;
   border-radius: 50%;
-  background: var(--cc-primary);
+  background: var(--user-primary);
 }
 
 .notification-body {
@@ -617,14 +630,14 @@ onMounted(() => {
   gap: 10px;
 
   strong {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 14px;
   }
 }
 
 .notification-body p {
   margin: 6px 0 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -632,7 +645,7 @@ onMounted(() => {
 .notification-time {
   display: block;
   margin-top: 6px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
   opacity: 0.7;
 }
@@ -653,13 +666,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .detail-content {
   margin: 0;
-  color: var(--app-text);
+  color: var(--user-text);
   line-height: 1.8;
   white-space: pre-wrap;
 }

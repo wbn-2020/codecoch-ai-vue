@@ -128,6 +128,12 @@
       :description="sampleWarning"
     />
 
+    <CareerExperimentPanel
+      v-if="detail"
+      :legacy-experiment-id="detail.id"
+      mode="detail"
+    />
+
     <section class="content-card section strategy-section" v-if="detail">
       <div class="section-head">
         <div>
@@ -274,6 +280,7 @@ import {
   getJobExperimentDetailApi
 } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
+import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import {
   buildJobExperimentEvidenceCoverage,
   buildJobExperimentReviewDisplayModel,
@@ -427,10 +434,10 @@ onMounted(load)
 
 .page-hero {
   justify-content: space-between;
-  padding: 26px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--user-surface);
 }
 
 .hero-copy {
@@ -499,7 +506,7 @@ h2 {
 .reliability-card,
 .unsupported-card,
 .metric {
-  padding: 18px;
+  padding: 16px;
 }
 
 .section-head {
@@ -546,7 +553,7 @@ h2 {
 .action-card {
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .sample-strip > div {

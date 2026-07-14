@@ -50,9 +50,11 @@
       >
         <el-button type="primary" plain :loading="loading" @click="fetchOverview">重新加载</el-button>
       </AppState>
-      <article
+      <component
+        :is="item.path ? 'button' : 'article'"
         v-for="item in metrics"
         :key="item.key"
+        :type="item.path ? 'button' : undefined"
         class="admin-metric-card dashboard-metric-card"
         :class="{ 'is-clickable': Boolean(item.path) }"
         @click="goMetric(item)"
@@ -65,7 +67,7 @@
           <strong class="admin-metric-card__value">{{ item.displayValue }}</strong>
           <span class="admin-metric-card__hint">{{ item.hint }}</span>
         </div>
-      </article>
+      </component>
     </div>
 
     <section class="admin-panel dashboard-mobile-watch-panel">
@@ -130,7 +132,13 @@
               <p>面试、简历上传和学习计划生成数量</p>
             </div>
           </div>
-          <div ref="businessTrendRef" class="dashboard-chart"></div>
+          <div
+            ref="businessTrendRef"
+            class="dashboard-chart"
+            role="img"
+            tabindex="0"
+            :aria-label="businessTrendAriaLabel"
+          ></div>
         </article>
         <article class="dashboard-chart-card dashboard-chart-card--wide">
           <div class="dashboard-card-title">
@@ -139,7 +147,13 @@
               <p>AI 运行、失败运行和题目审核生成数量</p>
             </div>
           </div>
-          <div ref="aiTrendRef" class="dashboard-chart"></div>
+          <div
+            ref="aiTrendRef"
+            class="dashboard-chart"
+            role="img"
+            tabindex="0"
+            :aria-label="aiTrendAriaLabel"
+          ></div>
         </article>
       </div>
     </section>
@@ -321,6 +335,18 @@ const quickLinks = [
 
 const summaryCards = computed(() => dashboard.value?.summaryCards || [])
 const trendStats = computed(() => dashboard.value?.trendStats || [])
+const businessTrendAriaLabel = computed(() => {
+  const points = trendStats.value.map((item) =>
+    `${item.date}：面试 ${Number(item.interviewCount || 0)}，简历上传 ${Number(item.resumeUploadCount || 0)}，学习计划 ${Number(item.studyPlanGeneratedCount || 0)}`
+  )
+  return `近 7 日面试、简历上传和学习计划生成趋势。${points.join('；')}。`
+})
+const aiTrendAriaLabel = computed(() => {
+  const points = trendStats.value.map((item) =>
+    `${item.date}：AI 运行 ${Number(item.aiCallCount || 0)}，失败 ${Number(item.aiCallFailedCount || 0)}，题目审核生成 ${Number(item.questionReviewGeneratedCount || 0)}`
+  )
+  return `近 7 日 AI 运行、失败运行和题目审核生成趋势。${points.join('；')}。`
+})
 const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
 const services = computed(() =>
@@ -930,9 +956,7 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-screen-panel {
-    background:
-      linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.72)),
-      var(--app-surface);
+    background: var(--app-surface);
   }
 
   .dashboard-panel-header {

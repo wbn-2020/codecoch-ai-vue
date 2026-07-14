@@ -148,7 +148,9 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .project-evidence-edit {
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .edit-hero,
@@ -160,25 +162,26 @@ onMounted(() => {
 
 .edit-hero {
   justify-content: space-between;
-  padding: 26px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.72);
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 
   h1 {
     margin: 6px 0 0;
-    font-size: 30px;
+    color: var(--user-text);
+    font-size: 26px;
   }
 
   p:last-child {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .hero-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -186,13 +189,13 @@ onMounted(() => {
 
 .edit-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: 14px;
   align-items: start;
 }
 
 .edit-main {
-  padding: 20px;
+  padding: 16px;
 }
 
 .source-alert {
@@ -220,8 +223,8 @@ onMounted(() => {
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
-    line-height: 1.7;
+    color: var(--user-text-muted);
+    line-height: 1.65;
   }
 }
 

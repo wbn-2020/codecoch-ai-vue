@@ -33,9 +33,20 @@
           <History :size="16" />
           返回历史
         </el-button>
-        <el-button v-if="interviewId" type="primary" @click="handleStaticInterviewAction()">
+        <el-button
+          v-if="interviewId && isGenerated"
+          type="primary"
+          :loading="remediationLoading"
+          :disabled="!advancedReportMeta.remediationAvailable"
+          :title="remediationButtonTitle"
+          @click="handleCreateRemediation"
+        >
           <RotateCcw :size="16" />
-          重新面试
+          {{ advancedReportMeta.strongRemediationAvailable ? '强化复练' : '一键复练' }}
+        </el-button>
+        <el-button v-else-if="interviewId" @click="handleStaticInterviewAction()">
+          <RotateCcw :size="16" />
+          新建面试
         </el-button>
       </div>
     </section>
@@ -186,7 +197,45 @@
           </el-tag>
         </div>
 
+        <el-alert
+          v-if="remediationGuidance"
+          class="remediation-guidance"
+          :type="advancedReportMeta.strongRemediationAvailable ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          title="复练强度说明"
+          :description="remediationGuidance"
+        />
+
         <InterviewVoiceTraceSection :voice-traces="report.voiceTraces" />
+
+        <section class="voice-delivery-report">
+          <div class="section-head">
+            <div>
+              <h2>语音表达指标</h2>
+              <p>仅展示可观测的语速、填充词和停顿，不推断情绪、性格或心理状态。</p>
+            </div>
+            <el-tag :type="voiceDeliverySummary?.available ? 'success' : 'info'" effect="plain">
+              {{ voiceDeliveryStatusLabel }}
+            </el-tag>
+          </div>
+
+          <div v-if="voiceDeliveryFacts.length" class="voice-delivery-facts">
+            <article v-for="fact in voiceDeliveryFacts" :key="fact.key">
+              <span>{{ fact.label }}</span>
+              <strong>{{ fact.value }}</strong>
+              <p v-if="fact.hint">{{ fact.hint }}</p>
+            </article>
+          </div>
+          <el-alert
+            v-if="!voiceDeliveryFacts.length || !voiceDeliverySummary?.pauseMetricsAvailable"
+            type="info"
+            show-icon
+            :closable="false"
+            :title="voiceDeliveryMissingTitle"
+            :description="voiceDeliveryMissingDescription"
+          />
+        </section>
 
         <div class="report-feedback-row">
           <AiResultFeedback
@@ -586,6 +635,8 @@ import {
   retryInterviewReportApi,
   type InterviewReportExportFormat
 } from '@/api/interview'
+import { createInterviewRemediationApi } from '@/api/interviewAdvanced'
+import { getJobRequirementMatrixApi } from '@/api/jobRequirement'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
@@ -594,7 +645,12 @@ import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import InterviewVoiceTraceSection from '@/components/report/InterviewVoiceTraceSection.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
 import { difficultyOptions } from '@/constants/enums'
+import {
+  extractRemediationRequirementIds,
+  normalizeInterviewReportAdvanced
+} from '@/features/interview-comparison'
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
+import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -604,6 +660,7 @@ import type {
   StageReportVO
 } from '@/types/interview'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
@@ -613,6 +670,8 @@ type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
 const retrying = ref(false)
 const exporting = ref(false)
+const remediationLoading = ref(false)
+const remediationIdempotencyKey = ref('')
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -682,6 +741,22 @@ const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
+const advancedReportMeta = computed(() => normalizeInterviewReportAdvanced(report.value, interviewId || undefined))
+const remediationButtonTitle = computed(() => {
+  if (advancedReportMeta.value.remediationAvailable) return '根据本轮报告创建同岗位复练场次'
+  return '当前报告尚不支持创建复练'
+})
+const remediationGuidance = computed(() => {
+  if (!isGenerated.value || !advancedReportMeta.value.remediationAvailable) return ''
+  if (advancedReportMeta.value.strongRemediationAvailable) {
+    return '本轮报告证据和样本满足强化复练条件，将沿用同一评分量表并提高追问强度。'
+  }
+  const reason = String(advancedReportMeta.value.strongRemediationUnavailableReason || '').toUpperCase()
+  if (reason === 'SAMPLE_INSUFFICIENT') {
+    return '本轮样本不足，只创建普通复练，不把弱信号包装成强化训练结论。'
+  }
+  return '本轮报告可信度不足以支持强化复练，将保守创建普通复练。'
+})
 
 type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
 
@@ -722,6 +797,37 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
 const knowledgeCandidates = computed<InterviewKnowledgeCandidateVO[]>(() =>
   isGenerated.value ? buildInterviewReportKnowledgeCandidates(report.value) : []
 )
+const voiceDeliverySummary = computed(() => report.value?.voiceDeliverySummary)
+const voiceDeliveryFacts = computed(() => buildVoiceDeliveryFacts(voiceDeliverySummary.value))
+const voiceDeliveryStatusLabel = computed(() => {
+  const status = String(voiceDeliverySummary.value?.status || 'NOT_ANALYZED').toUpperCase()
+  if (voiceDeliverySummary.value?.available) return '分析完成'
+  if (['QUEUED', 'RUNNING'].includes(status)) return '分析处理中'
+  if (status === 'FAILED') return '分析失败'
+  if (status === 'TIMED_OUT') return '分析超时'
+  if (status === 'CANCELLED') return '分析已取消'
+  return '暂无分析'
+})
+const voiceDeliveryMissingTitle = computed(() => {
+  if (voiceDeliverySummary.value?.available && !voiceDeliverySummary.value.pauseMetricsAvailable) {
+    return '停顿指标不可用'
+  }
+  return voiceDeliveryStatusLabel.value
+})
+const voiceDeliveryMissingDescription = computed(() => {
+  if (voiceDeliverySummary.value?.available && !voiceDeliverySummary.value.pauseMetricsAvailable) {
+    return '本场没有保存真实逐词时间戳，因此不会估算停顿次数或停顿时长。'
+  }
+  const reason = String(voiceDeliverySummary.value?.missingReason || '').toUpperCase()
+  const descriptions: Record<string, string> = {
+    VOICE_DELIVERY_NOT_ANALYZED: '本场没有已保存的语音表达分析，文本回答不会被推测为语音指标。',
+    VOICE_DELIVERY_ANALYSIS_PENDING: '语音表达分析仍在处理中，稍后刷新报告可查看结果。',
+    VOICE_DELIVERY_ANALYSIS_CANCELLED: '本场语音表达分析已取消，没有可展示的可靠指标。',
+    VOICE_DELIVERY_ANALYSIS_TIMED_OUT: '本场语音表达分析超时，没有生成可靠指标。',
+    VOICE_DELIVERY_ANALYSIS_FAILED: '本场语音表达分析失败，原始面试报告不受影响。'
+  }
+  return descriptions[reason] || '当前没有可展示的可靠语音表达指标。'
+})
 const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
   String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
 const backendNextActions = computed(() => nextActions.value.filter((action) => !isStaticFallbackNextAction(action)))
@@ -1229,6 +1335,62 @@ const handleStaticTodayAction = async (trackMetric = false) => {
   await router.push('/dashboard')
 }
 
+const resolveRemediationRequirementIds = async () => {
+  if (advancedReportMeta.value.sourceRequirementIds.length) {
+    return advancedReportMeta.value.sourceRequirementIds
+  }
+  const targetJobId = advancedReportMeta.value.targetJobId || report.value?.targetJobId
+  if (!targetJobId) return []
+  const matrix = await getJobRequirementMatrixApi(targetJobId)
+  return extractRemediationRequirementIds(matrix)
+}
+
+const handleCreateRemediation = async () => {
+  if (remediationLoading.value || !advancedReportMeta.value.remediationAvailable) return
+  const sourceReportId = advancedReportMeta.value.reportId || report.value?.reportId || report.value?.id
+  if (!sourceReportId) {
+    ElMessage.warning('当前报告缺少可追溯的报告记录，暂时无法创建复练。')
+    return
+  }
+
+  remediationLoading.value = true
+  try {
+    const sourceRequirementIds = await resolveRemediationRequirementIds()
+    if (!sourceRequirementIds.length) {
+      ElMessage.warning('当前岗位还没有可用于复练的薄弱或缺失要求，请先完善岗位证据矩阵。')
+      return
+    }
+    if (!remediationIdempotencyKey.value) {
+      remediationIdempotencyKey.value = createOperationIdempotencyKey('interview-remedy')
+    }
+    const purpose = [
+      mainWeaknessPreview.value.title,
+      mainWeaknessPreview.value.description
+    ].filter(Boolean).join('：').slice(0, 500) || '针对本轮面试报告暴露的岗位要求短板进行复练。'
+    const result = await createInterviewRemediationApi({
+      sourceReportId,
+      sourceRequirementIds,
+      practicePurpose: purpose,
+      strongRemediation: advancedReportMeta.value.strongRemediationAvailable,
+      idempotencyKey: remediationIdempotencyKey.value
+    })
+    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的复练场次。' : '复练场次已创建。')
+      remediationIdempotencyKey.value = ''
+      await router.push(`/interviews/room/${targetSessionId}`)
+      return
+    }
+    ElMessage.info('复练请求已保存，请到面试历史中查看新场次。')
+    remediationIdempotencyKey.value = ''
+    await router.push('/interviews/history')
+  } catch (error) {
+    ElMessage.error(toFriendlyMessage(error, '复练创建失败，请稍后重试。'))
+  } finally {
+    remediationLoading.value = false
+  }
+}
+
 const handleStaticInterviewAction = async (trackMetric = false) => {
   if (trackMetric) {
     trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('INTERVIEW', '重新面试', '/interviews/create', 91))
@@ -1482,15 +1644,15 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .interview-report {
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .report-top,
 .analysis-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .report-top {
@@ -1507,7 +1669,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.65;
   }
 }
@@ -1534,9 +1696,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   margin-bottom: 12px;
   padding: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 
   div {
     min-width: 0;
@@ -1550,20 +1712,20 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 5px;
-    color: #0f172a;
+    color: var(--user-text);
     line-height: 1.4;
   }
 
   p {
     margin-top: 5px;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.55;
   }
 
@@ -1583,10 +1745,10 @@ onBeforeUnmount(() => {
 .next-action-empty {
   margin-top: 20px;
   padding: 14px 16px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
 
   strong,
   p {
@@ -1595,7 +1757,7 @@ onBeforeUnmount(() => {
 
   strong {
     display: block;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 15px;
   }
 
@@ -1624,9 +1786,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   .el-button {
     flex: 0 0 auto;
@@ -1637,7 +1799,7 @@ onBeforeUnmount(() => {
   min-width: 0;
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1654,7 +1816,7 @@ onBeforeUnmount(() => {
   small {
     display: block;
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
@@ -1671,16 +1833,16 @@ onBeforeUnmount(() => {
   gap: 14px;
   min-width: 0;
   padding: 16px;
-  border: 1px dashed #93c5fd;
+  border: 1px dashed var(--user-primary);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 
   div {
     min-width: 0;
   }
 
   span {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1688,7 +1850,7 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin-top: 6px;
-    color: #0f172a;
+    color: var(--user-text);
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
@@ -1697,7 +1859,7 @@ onBeforeUnmount(() => {
   small {
     display: block;
     margin-top: 6px;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
@@ -1718,17 +1880,17 @@ onBeforeUnmount(() => {
   gap: 12px;
   width: 100%;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: var(--app-text);
+  background: var(--user-surface);
+  color: var(--user-text);
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 
   &:hover {
-    border-color: rgba(37, 99, 235, 0.36);
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-soft);
   }
 
   strong {
@@ -1739,7 +1901,7 @@ onBeforeUnmount(() => {
   span {
     display: block;
     margin-top: 4px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -1757,9 +1919,9 @@ onBeforeUnmount(() => {
 
 .stage-report-card {
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   header {
     display: flex;
@@ -1767,12 +1929,12 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 16px;
     padding-bottom: 14px;
-    border-bottom: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--user-border);
   }
 
   span,
   label {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 700;
   }
@@ -1785,7 +1947,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -1794,11 +1956,11 @@ onBeforeUnmount(() => {
   min-width: 88px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
   text-align: center;
 
   strong {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 24px;
   }
 }
@@ -1814,11 +1976,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1844,7 +2006,7 @@ onBeforeUnmount(() => {
 .failed-panel__lead {
   max-width: 620px;
   margin: 0 auto 18px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
@@ -1856,12 +2018,12 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0 auto 18px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .generating-icon {
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 36px;
   animation: spin 1.1s linear infinite;
 }
@@ -1875,12 +2037,12 @@ onBeforeUnmount(() => {
 
 .task-stage-item {
   padding: 12px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -1889,18 +2051,18 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin-top: 6px;
-    color: var(--app-text);
+    color: var(--user-text);
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .task-meta {
   margin-top: 12px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -1914,10 +2076,10 @@ onBeforeUnmount(() => {
   span {
     max-width: 100%;
     padding: 5px 8px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: var(--app-text-muted);
+    background: var(--user-surface);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.4;
     overflow-wrap: anywhere;
@@ -1956,21 +2118,22 @@ onBeforeUnmount(() => {
 .report-action-panel {
   min-width: 0;
   padding: 20px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .report-score-panel {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: #0f172a;
-  color: #ffffff;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
+  color: var(--user-text);
 
   p {
     margin: 0;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--user-text-secondary);
     line-height: 1.65;
   }
 }
@@ -1980,8 +2143,8 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 5px 10px;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1992,27 +2155,28 @@ onBeforeUnmount(() => {
 
   span {
     padding: 7px 10px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: #1e40af;
+    background: var(--user-surface);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 }
 
 .report-score-panel--muted {
-  background: #334155;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
 }
 
 .panel-kicker {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
 .report-score-panel .panel-kicker {
-  color: #93c5fd;
+  color: var(--user-primary);
 }
 
 .score-value {
@@ -2028,17 +2192,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-top: 18px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--user-surface-raised);
   font-size: 12px;
 }
 
 .report-summary-panel,
 .report-action-panel {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   h2 {
     margin: 10px 0 8px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 22px;
     line-height: 1.35;
     overflow-wrap: anywhere;
@@ -2046,7 +2210,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.7;
     overflow-wrap: anywhere;
   }
@@ -2055,9 +2219,9 @@ onBeforeUnmount(() => {
 .evidence-strip {
   margin-top: 18px;
   padding: 14px;
-  border: 1px dashed #bfdbfe;
+  border: 1px dashed var(--user-primary-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   strong,
   span {
@@ -2065,13 +2229,13 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 13px;
   }
 
   span {
     margin-top: 6px;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.65;
     overflow-wrap: anywhere;
   }
@@ -2082,24 +2246,24 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-top: 18px;
   padding: 14px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--user-success-border);
   border-radius: 8px;
-  background: #f0fdf4;
+  background: var(--user-success-soft);
 
   span {
-    color: #15803d;
+    color: var(--user-success);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
-    color: #14532d;
+    color: var(--user-success);
     font-size: 18px;
     line-height: 1.35;
   }
 
   small {
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.55;
   }
 
@@ -2121,10 +2285,10 @@ onBeforeUnmount(() => {
 
   span {
     padding: 6px 10px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: #64748b;
+    background: var(--user-surface);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -2138,9 +2302,9 @@ onBeforeUnmount(() => {
   article {
     min-width: 0;
     padding: 14px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span,
@@ -2150,21 +2314,21 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 7px;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
 
   small {
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
@@ -2172,13 +2336,13 @@ onBeforeUnmount(() => {
 
 .score-hero,
 .overview-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   padding: 18px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 
@@ -2191,7 +2355,7 @@ onBeforeUnmount(() => {
 }
 
 .score-hero {
-  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+  background: var(--user-surface-tint);
 
   strong {
     margin: 8px 0 12px;
@@ -2212,6 +2376,49 @@ onBeforeUnmount(() => {
   margin: 10px 0 0;
 }
 
+.remediation-guidance {
+  margin-top: 14px;
+}
+
+.voice-delivery-report {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.voice-delivery-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--user-border);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+  }
+
+  span,
+  p {
+    color: var(--user-text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    line-height: 1.5;
+  }
+}
+
 .report-feedback-row {
   display: flex;
   justify-content: flex-end;
@@ -2221,9 +2428,9 @@ onBeforeUnmount(() => {
 .target-job-alignment {
   margin-top: 18px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .alignment-card-grid {
@@ -2235,9 +2442,9 @@ onBeforeUnmount(() => {
 .alignment-card {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   span,
   strong {
@@ -2245,14 +2452,14 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin: 8px 0 10px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 15px;
     line-height: 1.4;
     word-break: break-word;
@@ -2269,9 +2476,9 @@ onBeforeUnmount(() => {
 .missing-skill-item {
   min-width: 0;
   padding: 14px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   header {
     display: flex;
@@ -2282,21 +2489,21 @@ onBeforeUnmount(() => {
 
   strong {
     min-width: 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 14px;
     word-break: break-word;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 
   ul {
     margin: 10px 0 0;
     padding-left: 18px;
-    color: #334155;
+    color: var(--user-text-secondary);
     line-height: 1.7;
   }
 }
@@ -2315,9 +2522,9 @@ onBeforeUnmount(() => {
 .coach-next {
   margin-top: 18px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .next-grid {
@@ -2327,13 +2534,13 @@ onBeforeUnmount(() => {
 
   article {
     padding: 14px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -2346,13 +2553,13 @@ onBeforeUnmount(() => {
 
   strong {
     margin-top: 8px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 15px;
   }
 
   p {
     margin-top: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 }
@@ -2367,7 +2574,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -2395,9 +2602,9 @@ onBeforeUnmount(() => {
 
 .qa-item {
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .qa-head {
@@ -2414,25 +2621,25 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-weight: 700;
   }
 }
 
 .qa-block {
   padding: 12px 0;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 
   label {
     display: block;
     margin-bottom: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   p {
     margin: 0;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.7;
     white-space: pre-wrap;
   }
@@ -2451,7 +2658,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -2466,6 +2673,10 @@ onBeforeUnmount(() => {
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .voice-delivery-facts {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -2559,6 +2770,485 @@ onBeforeUnmount(() => {
   .filter-bar,
   .notification-toolbar {
     justify-content: flex-start;
+  }
+}
+
+/* Compact report workspace */
+.interview-report {
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
+}
+
+.report-top {
+  gap: 16px;
+  padding: 16px 18px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+
+  h1 {
+    margin: 6px 0;
+    font-size: 24px;
+  }
+
+  p {
+    max-width: 68ch;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.eyebrow,
+.panel-kicker,
+.state-eyebrow {
+  color: var(--user-primary);
+}
+
+.report-actions {
+  max-width: 620px;
+  justify-content: flex-end;
+}
+
+.content-card,
+.analysis-card {
+  min-width: 0;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+  box-shadow: none;
+}
+
+.content-card__body {
+  padding: 14px 16px;
+}
+
+.report-hero-grid {
+  grid-template-columns: minmax(160px, 0.55fr) minmax(0, 1fr) minmax(240px, 0.85fr);
+  gap: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  overflow: hidden;
+}
+
+.report-score-panel,
+.report-summary-panel,
+.report-action-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.report-action-panel {
+  border-right: 0;
+}
+
+.score-value {
+  margin-top: 4px;
+  font-size: 42px;
+}
+
+.report-summary-panel h2,
+.report-action-panel h2 {
+  margin: 5px 0;
+  font-size: 18px;
+}
+
+.report-summary-panel p,
+.report-action-panel p {
+  line-height: 1.5;
+}
+
+.evidence-strip,
+.primary-next-action {
+  margin-top: 10px;
+  padding: 10px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+}
+
+.report-support-strip,
+.report-professional-strip,
+.overview-grid {
+  gap: 0;
+  margin-top: 12px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  overflow: hidden;
+}
+
+.report-support-strip span,
+.report-professional-strip article,
+.overview-card {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.report-support-strip span:last-child,
+.report-professional-strip article:last-child,
+.overview-card:last-child {
+  border-right: 0;
+}
+
+.report-professional-strip article strong,
+.overview-card strong {
+  margin-top: 3px;
+  font-size: 15px;
+}
+
+.score-source,
+.remediation-guidance {
+  margin: 12px 0 0;
+}
+
+.report-trust-strip {
+  margin-top: 10px;
+}
+
+.voice-delivery-report {
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 0;
+  border-color: var(--user-border);
+}
+
+.voice-delivery-facts {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+
+  article {
+    padding: 9px 11px;
+    border: 0;
+    border-right: 1px solid var(--user-border);
+    border-radius: 0;
+    background: transparent;
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span,
+  p {
+    color: var(--user-text-muted);
+  }
+
+  strong {
+    margin-top: 3px;
+    color: var(--user-text);
+    font-size: 16px;
+  }
+}
+
+.target-job-alignment,
+.next-action-section,
+.knowledge-candidate-section,
+.coach-next,
+.dimension-section {
+  margin-top: 14px;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.alignment-card-grid,
+.next-grid {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.alignment-card,
+.next-grid article {
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.missing-skill-list,
+.next-action-grid,
+.knowledge-candidate-grid,
+.recommended-list,
+.stage-report-list,
+.qa-list {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+}
+
+.missing-skill-item,
+.next-action-card,
+.knowledge-candidate-card,
+.recommended-item,
+.stage-report-card,
+.qa-item {
+  min-width: 0;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.next-action-card,
+.knowledge-candidate-card {
+  align-items: center;
+}
+
+.recommended-training-callout {
+  padding: 12px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
+}
+
+.next-action-empty {
+  padding: 12px;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.section-head {
+  margin-bottom: 10px;
+
+  h2 {
+    font-size: 17px;
+  }
+
+  p {
+    margin-top: 3px;
+    color: var(--user-text-muted);
+    line-height: 1.5;
+  }
+}
+
+.analysis-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+  overflow: hidden;
+}
+
+.analysis-card {
+  padding: 14px 16px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:nth-child(2n) {
+    border-right: 0;
+  }
+
+  &.wide {
+    grid-column: 1 / -1;
+    border-right: 0;
+  }
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.stage-report-card header {
+  align-items: center;
+}
+
+.stage-score-pill {
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.stage-report-content {
+  gap: 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.stage-copy {
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.qa-head {
+  margin-bottom: 8px;
+}
+
+.qa-block {
+  padding: 9px 0;
+  border-top-color: var(--user-border);
+}
+
+.generating-panel,
+.failed-panel {
+  padding: 18px;
+}
+
+.task-stage-list {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.task-stage-item {
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.action-zone {
+  gap: 14px;
+}
+
+@media (max-width: 1080px) {
+  .report-hero-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-action-panel {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--user-border);
+  }
+
+  .report-summary-panel {
+    border-right: 0;
+  }
+
+  .voice-delivery-facts,
+  .report-professional-strip,
+  .overview-grid,
+  .alignment-card-grid,
+  .next-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .voice-delivery-facts article,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article {
+    border-right: 1px solid var(--user-border);
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .voice-delivery-facts article:nth-child(2n),
+  .report-professional-strip article:nth-child(2n),
+  .overview-card:nth-child(2n),
+  .alignment-card:nth-child(2n),
+  .next-grid article:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .report-top {
+    padding: 14px;
+  }
+
+  .report-actions {
+    max-width: none;
+  }
+
+  .report-actions :deep(.el-button),
+  .report-actions :deep(.el-dropdown) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .report-hero-grid,
+  .analysis-grid,
+  .voice-delivery-facts,
+  .report-support-strip,
+  .report-professional-strip,
+  .overview-grid,
+  .alignment-card-grid,
+  .next-grid,
+  .stage-report-content,
+  .task-stage-list {
+    grid-template-columns: 1fr;
+  }
+
+  .report-score-panel,
+  .report-summary-panel,
+  .report-action-panel,
+  .voice-delivery-facts article,
+  .report-support-strip span,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article,
+  .stage-copy,
+  .task-stage-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .report-action-panel,
+  .voice-delivery-facts article:last-child,
+  .report-support-strip span:last-child,
+  .report-professional-strip article:last-child,
+  .overview-card:last-child,
+  .alignment-card:last-child,
+  .next-grid article:last-child,
+  .stage-copy:last-child,
+  .task-stage-item:last-child {
+    border-bottom: 0;
+  }
+
+  .analysis-card,
+  .analysis-card:nth-child(2n) {
+    grid-column: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .analysis-card:last-child {
+    border-bottom: 0;
+  }
+
+  .next-action-card,
+  .knowledge-candidate-card,
+  .action-zone {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

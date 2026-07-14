@@ -495,20 +495,19 @@ onBeforeUnmount(stopTimer)
 <style scoped lang="scss">
 .practice-page {
   display: grid;
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .hero-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--app-border);
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 270px);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(20, 184, 166, 0.05)),
-    var(--app-surface, #ffffff);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .hero-kicker,
@@ -526,7 +525,7 @@ onBeforeUnmount(stopTimer)
 .hero-kicker,
 .section-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -536,12 +535,12 @@ onBeforeUnmount(stopTimer)
 .question-title,
 .setup-head h2 {
   margin: 0;
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .hero-copy h1 {
-  font-size: 32px;
-  line-height: 1.18;
+  font-size: 24px;
+  line-height: 1.3;
 }
 
 .hero-copy p,
@@ -551,27 +550,27 @@ onBeforeUnmount(stopTimer)
 .question-content,
 .answer-actions .hint,
 .side-card p {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 }
 
 .hero-copy p {
   max-width: 680px;
-  margin: 12px 0 0;
-  line-height: 1.8;
+  margin: 8px 0 0;
+  line-height: 1.6;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
 .hero-panel {
   display: grid;
   gap: 12px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.88);
+  background: var(--user-surface-muted);
   align-content: start;
 }
 
@@ -583,12 +582,12 @@ onBeforeUnmount(stopTimer)
 }
 
 .hero-panel__stat span {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 .hero-panel__stat strong {
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
 }
 
@@ -632,9 +631,9 @@ onBeforeUnmount(stopTimer)
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
+  background: var(--user-surface);
 }
 
 .progress-info {
@@ -652,10 +651,11 @@ onBeforeUnmount(stopTimer)
 }
 
 .practice-main {
-  padding: 24px;
-  border: 1px solid var(--app-border);
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
+  background: var(--user-surface);
 }
 
 .question-header {
@@ -664,7 +664,7 @@ onBeforeUnmount(stopTimer)
 
 .question-index {
   margin-left: auto;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -677,9 +677,9 @@ onBeforeUnmount(stopTimer)
 .question-content {
   margin-top: 14px;
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 12px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .answer-area {
@@ -705,14 +705,14 @@ onBeforeUnmount(stopTimer)
 .reference-block,
 .ai-comment-block {
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 12px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   h3 {
     margin: 0 0 10px;
     font-size: 15px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -728,39 +728,42 @@ onBeforeUnmount(stopTimer)
 
 .side-card {
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
+  background: var(--user-surface);
 }
 
 .side-card span,
 .side-card p {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 }
 
 .side-card strong {
   display: block;
   margin: 8px 0;
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .result-stats {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 16px;
 }
 
 .stat-card {
-  padding: 16px;
-  border: 1px solid var(--app-border);
+  min-width: 0;
+  flex: 1 1 130px;
+  padding: 10px 12px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   text-align: center;
 
   span {
     display: block;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
@@ -796,11 +799,11 @@ onBeforeUnmount(stopTimer)
 
 @media (max-width: 720px) {
   .hero-band {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .setup-head,
@@ -810,7 +813,7 @@ onBeforeUnmount(stopTimer)
   }
 
   .result-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
   }
 
   .answer-actions .hint {

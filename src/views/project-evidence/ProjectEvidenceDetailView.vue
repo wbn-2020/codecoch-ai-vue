@@ -126,7 +126,9 @@ onMounted(fetchDetail)
 
 <style scoped lang="scss">
 .project-evidence-detail {
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .detail-hero,
@@ -140,25 +142,26 @@ onMounted(fetchDetail)
 
 .detail-hero {
   justify-content: space-between;
-  padding: 26px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.72);
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 
   h1 {
     margin: 6px 0 0;
-    font-size: 30px;
+    color: var(--user-text);
+    font-size: 26px;
   }
 
   p:last-child {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .hero-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -171,8 +174,8 @@ onMounted(fetchDetail)
 
 .detail-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: 14px;
   align-items: start;
 }
 
@@ -205,25 +208,36 @@ onMounted(fetchDetail)
 
 .fact-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
 
   div {
-    padding: 13px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    border-radius: 8px;
-    background: rgba(2, 6, 23, 0.24);
+    min-width: 0;
+    padding: 12px;
+    background: var(--user-control-bg);
+
+    &:nth-child(even) {
+      border-left: 1px solid var(--user-border);
+    }
+
+    &:nth-child(n + 3) {
+      border-top: 1px solid var(--user-border);
+    }
   }
 
   dt {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   dd {
     margin: 7px 0 0;
-    color: #dbeafe;
-    line-height: 1.7;
+    color: var(--user-text-secondary);
+    line-height: 1.65;
     white-space: pre-wrap;
   }
 }
@@ -235,8 +249,8 @@ onMounted(fetchDetail)
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
-    line-height: 1.7;
+    color: var(--user-text-muted);
+    line-height: 1.65;
   }
 }
 
@@ -264,6 +278,18 @@ onMounted(fetchDetail)
   .detail-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .fact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fact-grid div:nth-child(even) {
+    border-left: 0;
+  }
+
+  .fact-grid div + div {
+    border-top: 1px solid var(--user-border);
   }
 }
 </style>

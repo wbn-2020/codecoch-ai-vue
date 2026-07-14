@@ -266,9 +266,7 @@ export interface ApplicationPackagePreviewParams {
   projectEvidenceIds?: number[]
 }
 
-export interface ApplicationPackageCreateDTO extends ApplicationPackagePreviewParams {
-  source?: string
-}
+export interface ApplicationPackageCreateDTO extends ApplicationPackagePreviewParams {}
 
 export interface ApplicationPackageCreateApplicationDTO {
   targetJobId?: number

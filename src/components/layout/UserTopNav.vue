@@ -27,25 +27,93 @@
         </button>
       </nav>
 
+      <nav class="priority-nav" aria-label="高频快捷入口">
+        <button
+          v-for="link in priorityLinks"
+          :key="link.path"
+          class="priority-link"
+          :class="{ 'is-active': isLinkActive(link) }"
+          type="button"
+          :aria-label="link.label"
+          :aria-current="isLinkActive(link) ? 'page' : undefined"
+          :title="link.label"
+          @click="go(link.path)"
+        >
+          <component :is="link.icon" :size="16" />
+          <span>{{ link.label }}</span>
+        </button>
+      </nav>
+
       <div class="topnav-actions">
         <button class="command-button" type="button" aria-label="打开命令面板" @click="$emit('open-command')">
           <Search :size="15" />
           <span>搜索</span>
         </button>
 
-        <el-dropdown class="desktop-more" trigger="click" @command="handleMoreCommand">
-          <button class="more-button" type="button" aria-label="打开更多入口">
-            <MoreHorizontal :size="17" />
-            <span>更多</span>
+        <div ref="moreRoot" class="desktop-more">
+          <button
+            ref="moreTrigger"
+            class="more-button"
+            :class="{ 'is-active': moreOpen }"
+            type="button"
+            aria-label="打开全部功能导航"
+            aria-haspopup="true"
+            :aria-expanded="moreOpen"
+            aria-controls="user-feature-nav-panel"
+            @click="toggleMore"
+          >
+            <LayoutGrid :size="17" />
+            <span>全部功能</span>
           </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="link in secondaryLinks" :key="link.path" :command="link.path">
-                {{ link.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+
+          <Transition name="feature-nav">
+            <section
+              v-if="moreOpen"
+              id="user-feature-nav-panel"
+              class="feature-nav-panel"
+              role="navigation"
+              aria-label="全部功能导航"
+            >
+              <div class="feature-nav-panel__head">
+                <strong>全部功能</strong>
+                <button class="feature-nav-close" type="button" aria-label="关闭全部功能导航" @click="closeMore(true)">
+                  <X :size="17" />
+                </button>
+              </div>
+
+              <div class="feature-nav-grid">
+                <section
+                  v-for="group in navigationGroups"
+                  :key="group.key"
+                  class="feature-nav-group"
+                  :aria-labelledby="`feature-nav-${group.key}`"
+                >
+                  <h2 :id="`feature-nav-${group.key}`" class="feature-nav-group__title">{{ group.label }}</h2>
+                  <div class="feature-nav-group__items">
+                    <button
+                      v-for="link in group.links"
+                      :key="link.path"
+                      class="feature-nav-item"
+                      :class="{ 'is-active': isLinkActive(link) }"
+                      type="button"
+                      :data-nav-path="link.path"
+                      :aria-current="isLinkActive(link) ? 'page' : undefined"
+                      @click="go(link.path)"
+                    >
+                      <span class="feature-nav-item__icon">
+                        <component :is="link.icon" :size="17" />
+                      </span>
+                      <span class="feature-nav-item__copy">
+                        <strong class="feature-nav-item__title">{{ link.label }}</strong>
+                        <small class="feature-nav-item__desc">{{ link.desc }}</small>
+                      </span>
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </Transition>
+        </div>
 
         <el-tooltip :content="notificationTooltip" placement="bottom">
           <button class="icon-button" type="button" aria-label="通知中心" @click="go('/notifications')">
@@ -56,13 +124,20 @@
           </button>
         </el-tooltip>
 
-        <button v-if="canAccessAdmin" class="admin-button" type="button" @click="$emit('go-admin')">
+        <button
+          v-if="canAccessAdmin"
+          class="admin-button"
+          type="button"
+          aria-label="进入管理端"
+          title="进入管理端"
+          @click="$emit('go-admin')"
+        >
           <Shield :size="15" />
           <span>管理端</span>
         </button>
 
         <el-dropdown trigger="click" @command="handleUserCommand">
-          <button class="user-trigger" type="button">
+          <button class="user-trigger" type="button" aria-label="打开账户菜单">
             <el-avatar :size="30" :src="avatarUrl || ''">
               {{ avatarText }}
             </el-avatar>
@@ -78,12 +153,13 @@
         </el-dropdown>
 
         <button
+          ref="mobileTrigger"
           class="mobile-toggle"
           type="button"
           :aria-label="mobileOpen ? '关闭导航' : '打开导航'"
           :aria-expanded="mobileOpen"
           aria-controls="user-mobile-panel"
-          @click="mobileOpen = !mobileOpen"
+          @click="toggleMobile"
         >
           <X v-if="mobileOpen" :size="19" />
           <Menu v-else :size="19" />
@@ -92,13 +168,22 @@
     </div>
 
     <Transition name="mobile-nav">
-      <div v-if="mobileOpen" id="user-mobile-panel" class="mobile-panel">
+      <div
+        v-if="mobileOpen"
+        id="user-mobile-panel"
+        ref="mobilePanel"
+        class="mobile-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="用户端全部功能导航"
+      >
         <button
           v-for="item in navItems"
           :key="item.key"
           class="mobile-nav-item"
           :class="{ 'is-active': isActive(item) }"
           type="button"
+          :aria-current="isActive(item) ? 'page' : undefined"
           @click="go(item.path)"
         >
           <span class="mobile-nav-item__main">
@@ -108,15 +193,40 @@
           <small>{{ item.desc }}</small>
         </button>
 
-        <div class="mobile-secondary">
-          <button v-for="link in secondaryLinks" :key="link.path" type="button" @click="go(link.path)">
-            {{ link.label }}
-          </button>
+        <div class="mobile-feature-groups" aria-label="全部功能">
+          <section v-for="group in navigationGroups" :key="group.key" class="mobile-feature-group">
+            <h2 class="mobile-feature-group__title">{{ group.label }}</h2>
+            <div class="mobile-feature-group__items">
+              <button
+                v-for="link in group.links"
+                :key="link.path"
+                class="feature-nav-item"
+                :class="{ 'is-active': isLinkActive(link) }"
+                type="button"
+                :data-nav-path="link.path"
+                :aria-current="isLinkActive(link) ? 'page' : undefined"
+                @click="go(link.path)"
+              >
+                <span class="feature-nav-item__icon">
+                  <component :is="link.icon" :size="17" />
+                </span>
+                <span class="feature-nav-item__copy">
+                  <strong class="feature-nav-item__title">{{ link.label }}</strong>
+                  <small class="feature-nav-item__desc">{{ link.desc }}</small>
+                </span>
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </Transition>
 
-    <nav class="mobile-bottom-nav" aria-label="手机主导航">
+    <nav
+      class="mobile-bottom-nav"
+      aria-label="手机主导航"
+      :aria-hidden="mobileOpen || undefined"
+      :inert="mobileOpen"
+    >
       <button
         v-for="item in mobilePrimaryItems"
         :key="item.key"
@@ -137,20 +247,38 @@
 
 <script setup lang="ts">
 import {
+  Activity,
   Bell,
   BookOpenCheck,
+  Brain,
+  BriefcaseBusiness,
+  CalendarCheck2,
+  ChartNoAxesCombined,
+  ClipboardCheck,
+  Compass,
   FileText,
+  Files,
+  FlaskConical,
+  FolderKanban,
+  GraduationCap,
+  History,
+  Library,
+  LayoutGrid,
   Menu,
   MessageSquare,
-  MoreHorizontal,
+  PackageCheck,
+  RotateCcw,
   Search,
   Shield,
   Sparkles,
+  Star,
   Target,
+  TrendingUp,
+  Wrench,
   X
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { appConfig } from '@/config'
@@ -182,16 +310,30 @@ interface NavItem {
   matches: string[]
 }
 
-interface SecondaryLink {
+interface FeatureLink {
   label: string
+  desc: string
   path: string
+  icon: Component
+  matches?: string[]
   previewOnly?: boolean
   featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge'
+}
+
+interface FeatureGroup {
+  key: string
+  label: string
+  links: FeatureLink[]
 }
 
 const router = useRouter()
 const route = useRoute()
 const mobileOpen = ref(false)
+const mobileTrigger = ref<HTMLButtonElement>()
+const mobilePanel = ref<HTMLElement>()
+const moreOpen = ref(false)
+const moreRoot = ref<HTMLElement | null>(null)
+const moreTrigger = ref<HTMLButtonElement | null>(null)
 
 const navItems: NavItem[] = [
   {
@@ -242,23 +384,178 @@ const navItems: NavItem[] = [
 ]
 
 const mobilePrimaryItems = navItems
-const currentMobileNavLabel = computed(() => navItems.find((item) => isActive(item))?.label || '工作台')
 
-const baseSecondaryLinks: SecondaryLink[] = [
-  { label: '今日任务', path: '/agent/today' },
-  { label: 'AI 任务中心', path: '/agent/tasks' },
-  { label: '记录与工具', path: '/tools' },
-  { label: '求职实验台', path: '/job-experiments' },
-  { label: '投递管理', path: '/applications' },
-  { label: '投递包', path: '/application-packages' },
-  { label: '个人知识库', path: '/knowledge', featureFlag: 'v4Knowledge' },
-  { label: '长期记忆', path: '/agent/memory', featureFlag: 'v4Growth' },
-  { label: '新手引导', path: '/onboarding' },
-  { label: '专项训练房间', path: '/questions/practice' },
-  { label: '面试复盘记录', path: '/interviews/history' }
+const baseNavigationGroups: FeatureGroup[] = [
+  {
+    key: 'today',
+    label: '今日推进',
+    links: [
+      {
+        label: '今日任务',
+        desc: '查看优先级、提醒和下一步行动',
+        path: '/agent/today',
+        icon: CalendarCheck2,
+        matches: ['/agent/today', '/agent/runs']
+      },
+      {
+        label: 'AI 任务中心',
+        desc: '跟踪待办、执行状态和反馈',
+        path: '/agent/tasks',
+        icon: ClipboardCheck
+      },
+      {
+        label: '投递管理',
+        desc: '维护投递阶段、跟进时间和归因',
+        path: '/applications',
+        icon: BriefcaseBusiness
+      },
+      {
+        label: '求职实验台',
+        desc: '管理实验分组、策略和复盘结果',
+        path: '/job-experiments',
+        icon: FlaskConical
+      }
+    ]
+  },
+  {
+    key: 'assets',
+    label: '求职资产',
+    links: [
+      {
+        label: '岗位目标',
+        desc: '维护目标岗位和 JD 要求',
+        path: '/job-targets',
+        icon: Target
+      },
+      {
+        label: '简历管理',
+        desc: '创建、编辑和管理简历版本',
+        path: '/resumes/manage',
+        icon: Files
+      },
+      {
+        label: '项目证据',
+        desc: '沉淀项目素材和能力证据',
+        path: '/project-evidence',
+        icon: FolderKanban
+      },
+      {
+        label: 'JD 匹配',
+        desc: '比较岗位要求与简历证据',
+        path: '/resume-match',
+        icon: Search
+      },
+      {
+        label: '投递包',
+        desc: '组合简历、材料和导出文件',
+        path: '/application-packages',
+        icon: PackageCheck
+      },
+      {
+        label: '个人知识库',
+        desc: '管理可供 AI 使用的个人资料',
+        path: '/knowledge',
+        icon: Library,
+        featureFlag: 'v4Knowledge'
+      }
+    ]
+  },
+  {
+    key: 'training',
+    label: '训练复盘',
+    links: [
+      {
+        label: '专项训练房间',
+        desc: '按主题连续练习并即时复盘',
+        path: '/questions/practice',
+        icon: BookOpenCheck
+      },
+      {
+        label: '错题复盘',
+        desc: '集中回顾薄弱题目和错误原因',
+        path: '/questions/wrong-records',
+        icon: RotateCcw
+      },
+      {
+        label: '收藏复习',
+        desc: '快速返回已收藏的重点题目',
+        path: '/questions/favorites',
+        icon: Star
+      },
+      {
+        label: '面试复盘记录',
+        desc: '查看面试报告、复练和多轮比较',
+        path: '/interviews/history',
+        icon: History
+      },
+      {
+        label: '训练分析',
+        desc: '查看训练效果和个人趋势',
+        path: '/analytics/personal',
+        icon: ChartNoAxesCombined
+      },
+      {
+        label: '学习计划',
+        desc: '安排短板学习与阶段性任务',
+        path: '/study-plans',
+        icon: GraduationCap
+      }
+    ]
+  },
+  {
+    key: 'growth',
+    label: '成长与支持',
+    links: [
+      {
+        label: '成长档案',
+        desc: '查看能力、就绪度和长期趋势',
+        path: '/growth/profile',
+        icon: TrendingUp,
+        featureFlag: 'v4Growth'
+      },
+      {
+        label: '每日复盘',
+        desc: '回顾行动完成情况和关键反馈',
+        path: '/agent/reviews',
+        icon: ClipboardCheck,
+        featureFlag: 'v4Growth'
+      },
+      {
+        label: '长期记忆',
+        desc: '管理 Agent 使用的长期上下文',
+        path: '/agent/memory',
+        icon: Brain,
+        featureFlag: 'v4Growth'
+      },
+      {
+        label: '薄弱点分析',
+        desc: '定位知识和训练中的能力缺口',
+        path: '/weakness-analysis',
+        icon: Activity
+      },
+      {
+        label: '记录与工具',
+        desc: '集中查看记录和常用求职工具',
+        path: '/tools',
+        icon: Wrench
+      },
+      {
+        label: '作品集演示',
+        desc: '整理可展示的项目与成果',
+        path: '/portfolio-demo',
+        icon: Sparkles
+      },
+      {
+        label: '新手引导',
+        desc: '补充基础资料并完成首次设置',
+        path: '/onboarding',
+        icon: Compass
+      }
+    ]
+  }
 ]
 
-const isSecondaryLinkVisible = (link: SecondaryLink) => {
+const isFeatureLinkVisible = (link: FeatureLink) => {
   if (link.previewOnly && !isV4PreviewAccessEnabled()) return false
   if (link.featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
   if (link.featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
@@ -266,14 +563,41 @@ const isSecondaryLinkVisible = (link: SecondaryLink) => {
   return true
 }
 
-const secondaryLinks = computed<SecondaryLink[]>(() => baseSecondaryLinks.filter(isSecondaryLinkVisible))
+const navigationGroups = computed<FeatureGroup[]>(() =>
+  baseNavigationGroups
+    .map((group) => ({
+      ...group,
+      links: group.links.filter(isFeatureLinkVisible)
+    }))
+    .filter((group) => group.links.length > 0)
+)
+
+const currentMobileNavLabel = computed(() => {
+  const activeFeature = navigationGroups.value
+    .flatMap((group) => group.links)
+    .find((link) => isLinkActive(link))
+  return activeFeature?.label || navItems.find((item) => isActive(item))?.label || '工作台'
+})
+
+const priorityLinks = computed<FeatureLink[]>(() => {
+  const links = navigationGroups.value.flatMap((group) => group.links)
+  return ['/agent/today', '/applications']
+    .map((path) => links.find((link) => link.path === path))
+    .filter((link): link is FeatureLink => Boolean(link))
+})
 
 const isActive = (item: NavItem) => {
   return item.matches.some((prefix) => route.path.startsWith(prefix))
 }
 
+const isLinkActive = (link: FeatureLink) => {
+  const prefixes = link.matches || [link.path]
+  return prefixes.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
+}
+
 const go = async (path: string) => {
   mobileOpen.value = false
+  moreOpen.value = false
   await router.push(path)
 }
 
@@ -281,16 +605,89 @@ const handleUserCommand = (command: string) => {
   emit('user-command', command)
 }
 
-const handleMoreCommand = async (path: string) => {
-  await go(path)
+const toggleMore = () => {
+  mobileOpen.value = false
+  moreOpen.value = !moreOpen.value
 }
+
+const closeMore = (restoreFocus = false) => {
+  if (!moreOpen.value) return
+  moreOpen.value = false
+  if (restoreFocus) {
+    void nextTick(() => moreTrigger.value?.focus())
+  }
+}
+
+const toggleMobile = () => {
+  moreOpen.value = false
+  mobileOpen.value = !mobileOpen.value
+  if (mobileOpen.value) {
+    void nextTick(() => {
+      mobilePanel.value?.querySelector<HTMLButtonElement>('button')?.focus()
+    })
+  }
+}
+
+const handleDocumentPointerDown = (event: PointerEvent) => {
+  const target = event.target
+  if (moreOpen.value && target instanceof Node && !moreRoot.value?.contains(target)) {
+    moreOpen.value = false
+  }
+}
+
+const handleDocumentKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Tab' && mobileOpen.value && mobilePanel.value) {
+    const focusable = Array.from(
+      mobilePanel.value.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+      )
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (first && last && event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (first && last && !event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+    return
+  }
+  if (event.key !== 'Escape') return
+  if (moreOpen.value) {
+    event.preventDefault()
+    closeMore(true)
+    return
+  }
+  if (mobileOpen.value) {
+    event.preventDefault()
+    mobileOpen.value = false
+    void nextTick(() => mobileTrigger.value?.focus())
+  }
+}
+
+watch(mobileOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
 
 watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false
+    moreOpen.value = false
   }
 )
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+})
 </script>
 
 <style scoped lang="scss">
@@ -298,37 +695,36 @@ watch(
   position: sticky;
   top: 0;
   z-index: 40;
-  min-height: var(--user-mobile-top-height, 68px);
-  overflow-x: clip;
-  border-bottom: 1px solid rgba(0, 242, 254, 0.14);
-  background:
-    linear-gradient(180deg, rgba(7, 17, 31, 0.94), rgba(7, 17, 31, 0.8)),
-    rgba(7, 17, 31, 0.86);
+  min-height: var(--user-mobile-top-height, 64px);
+  overflow: visible;
+  border-bottom: 1px solid var(--user-border);
+  background: var(--user-bg-panel);
   color: var(--user-text);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
 }
 
 .topnav-inner {
   display: flex;
   align-items: center;
-  gap: 16px;
-  width: min(100%, 1240px);
-  min-height: 68px;
+  gap: 12px;
+  width: min(100%, 1440px);
+  min-height: 64px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
 .brand,
 .nav-item,
+.priority-link,
 .command-button,
 .more-button,
+.feature-nav-close,
+.feature-nav-item,
 .icon-button,
 .admin-button,
 .user-trigger,
 .mobile-toggle,
-.mobile-nav-item,
-.mobile-secondary button {
+.mobile-nav-item {
   border: 0;
   background: transparent;
   color: inherit;
@@ -336,12 +732,31 @@ watch(
   cursor: pointer;
 }
 
+.brand,
+.nav-item,
+.priority-link,
+.command-button,
+.more-button,
+.feature-nav-close,
+.feature-nav-item,
+.icon-button,
+.admin-button,
+.user-trigger,
+.mobile-toggle,
+.mobile-nav-item,
+.mobile-bottom-nav__item {
+  &:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 2px;
+  }
+}
+
 .brand {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 10px;
-  min-width: 178px;
+  min-width: 168px;
   padding: 0;
   text-align: left;
 }
@@ -353,10 +768,10 @@ watch(
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--cc-cyan), var(--cc-blue));
-  color: #04111f;
+  background: var(--user-primary);
+  color: var(--user-primary-contrast);
   font-weight: 800;
-  box-shadow: 0 0 18px rgba(0, 242, 254, 0.28);
+  box-shadow: none;
 }
 
 .brand-copy {
@@ -381,8 +796,7 @@ watch(
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  overflow: hidden;
+  gap: 2px;
 }
 
 .mobile-current-section {
@@ -396,31 +810,65 @@ watch(
   gap: 6px;
   min-width: 0;
   min-height: 38px;
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 8px;
   color: var(--user-text-secondary);
   font-size: 14px;
-  white-space: nowrap;
   transition:
     background 0.16s ease,
     color 0.16s ease,
     box-shadow 0.16s ease;
 
   span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   &:hover {
-    background: rgba(0, 242, 254, 0.09);
+    background: rgba(110, 168, 254, 0.09);
     color: var(--user-primary);
   }
 
   &.is-active {
-    background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.16));
+    background: var(--user-primary-soft);
     color: var(--user-text);
     font-weight: 700;
-    box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.28), 0 0 18px rgba(0, 242, 254, 0.14);
+    box-shadow: inset 0 0 0 1px var(--user-primary-border);
+  }
+}
+
+.priority-nav {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--user-border);
+}
+
+.priority-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--user-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+
+  &:hover,
+  &.is-active {
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
+  }
+
+  &.is-active {
+    box-shadow: inset 0 0 0 1px var(--user-primary-border);
+    font-weight: 700;
   }
 }
 
@@ -445,17 +893,168 @@ watch(
   background: rgba(7, 17, 31, 0.54);
   color: var(--user-text-secondary);
   font-size: 13px;
-  backdrop-filter: blur(10px);
 
   &:hover {
     border-color: var(--user-primary-border);
-    background: rgba(0, 242, 254, 0.09);
+    background: rgba(110, 168, 254, 0.09);
     color: var(--user-primary);
   }
 }
 
+.more-button.is-active {
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+}
+
 .desktop-more {
+  position: relative;
   display: inline-flex;
+}
+
+.feature-nav-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 70;
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(100vh - 86px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-bg-panel);
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.32);
+}
+
+.feature-nav-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--user-border);
+
+  strong {
+    color: var(--user-text);
+    font-size: 14px;
+  }
+}
+
+.feature-nav-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--user-text-muted);
+
+  &:hover {
+    background: var(--user-primary-faint);
+    color: var(--user-primary);
+  }
+}
+
+.feature-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 14px 10px 16px;
+}
+
+.feature-nav-group {
+  min-width: 0;
+  padding: 0 8px;
+
+  & + & {
+    border-left: 1px solid var(--user-border);
+  }
+}
+
+.feature-nav-group__title,
+.mobile-feature-group__title {
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.feature-nav-group__title {
+  padding: 2px 8px 8px;
+}
+
+.feature-nav-group__items {
+  display: grid;
+  gap: 2px;
+}
+
+.feature-nav-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  text-align: left;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+
+  &:hover {
+    background: var(--user-primary-faint);
+  }
+
+  &.is-active {
+    background: var(--user-primary-soft);
+
+    .feature-nav-item__icon,
+    .feature-nav-item__title {
+      color: var(--user-primary);
+    }
+  }
+}
+
+.feature-nav-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--user-surface-raised);
+  color: var(--user-text-muted);
+}
+
+.feature-nav-item__copy {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.feature-nav-item__title,
+.feature-nav-item__desc {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.feature-nav-item__title {
+  color: var(--user-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.feature-nav-item__desc {
+  color: var(--user-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .icon-button,
@@ -470,11 +1069,10 @@ watch(
   border-radius: 8px;
   background: rgba(7, 17, 31, 0.54);
   color: var(--user-text-secondary);
-  backdrop-filter: blur(10px);
 
   &:hover {
     border-color: var(--user-primary-border);
-    background: rgba(0, 242, 254, 0.09);
+    background: rgba(110, 168, 254, 0.09);
     color: var(--user-primary);
   }
 }
@@ -505,25 +1103,21 @@ watch(
   min-height: 36px;
   max-width: 154px;
   padding: 2px 8px 2px 2px;
-  overflow: hidden;
   border: 1px solid rgba(148, 203, 255, 0.16);
   border-radius: 999px;
   background: rgba(7, 17, 31, 0.54);
   color: var(--user-text-secondary);
-  backdrop-filter: blur(10px);
 
   span {
     min-width: 0;
-    overflow: hidden;
     color: var(--user-text-secondary);
     font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   &:hover {
     border-color: var(--user-primary-border);
-    background: rgba(0, 242, 254, 0.09);
+    background: rgba(110, 168, 254, 0.09);
     color: var(--user-primary);
   }
 }
@@ -534,11 +1128,19 @@ watch(
   display: none;
 }
 
+.feature-nav-enter-active,
+.feature-nav-leave-active,
 .mobile-nav-enter-active,
 .mobile-nav-leave-active {
   transition:
     opacity 0.16s ease,
     transform 0.16s ease;
+}
+
+.feature-nav-enter-from,
+.feature-nav-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .mobile-nav-enter-from,
@@ -547,8 +1149,39 @@ watch(
   transform: translateY(-6px);
 }
 
+@media (max-width: 1360px) and (min-width: 1181px) {
+  .priority-link,
+  .command-button,
+  .admin-button {
+    width: 36px;
+    padding: 0;
+
+    span {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 1260px) and (min-width: 1181px) {
+  .brand {
+    min-width: 40px;
+  }
+
+  .brand-copy,
+  .user-trigger span {
+    display: none;
+  }
+
+  .user-trigger {
+    width: 36px;
+    padding: 2px;
+  }
+}
+
 @media (max-width: 1180px) {
-  .desktop-nav {
+  .desktop-nav,
+  .priority-nav,
+  .desktop-more {
     display: none;
   }
 
@@ -562,16 +1195,16 @@ watch(
 
   .mobile-panel {
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    width: min(100%, 1240px);
-    max-height: calc(100vh - var(--user-mobile-top-height, 68px));
+    width: min(100%, 1440px);
+    max-height: calc(100vh - var(--user-mobile-top-height, 64px));
     margin: 0 auto;
     padding: 0 24px 18px;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: rgba(7, 17, 31, 0.84);
-    backdrop-filter: blur(16px);
+    background: var(--user-bg-panel);
   }
 
   .mobile-nav-item {
@@ -587,7 +1220,7 @@ watch(
 
     &.is-active {
       border-color: var(--user-primary-border);
-      background: rgba(0, 242, 254, 0.1);
+      background: rgba(110, 168, 254, 0.1);
     }
 
     small {
@@ -606,35 +1239,47 @@ watch(
     gap: 8px;
   }
 
-  .mobile-secondary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .mobile-feature-groups {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
     min-width: 0;
-    padding-top: 4px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--user-border);
+  }
 
-    button {
-      min-height: 32px;
-      padding: 0 10px;
-      border: 1px solid rgba(148, 203, 255, 0.16);
-      border-radius: 8px;
-      background: rgba(7, 17, 31, 0.62);
-      color: var(--user-text-secondary);
-      font-size: 13px;
+  .mobile-feature-group {
+    min-width: 0;
+    padding: 12px 10px;
+
+    &:nth-child(even) {
+      border-left: 1px solid var(--user-border);
     }
+  }
+
+  .mobile-feature-group__title {
+    padding: 0 8px 8px;
+  }
+
+  .mobile-feature-group__items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
   }
 }
 
 @media (max-width: 720px) {
   .jobcoach-top-nav {
-    min-height: 62px;
+    min-height: 58px;
   }
 
   .topnav-inner {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 8px;
-    min-height: 62px;
+    min-height: 58px;
     padding: 0 14px;
   }
 
@@ -659,9 +1304,9 @@ watch(
   .icon-button,
   .mobile-toggle,
   .user-trigger {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .user-trigger {
@@ -681,40 +1326,62 @@ watch(
     max-width: 100%;
     min-height: 28px;
     padding: 0 9px;
-    overflow: hidden;
     border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: rgba(0, 242, 254, 0.1);
+    background: rgba(110, 168, 254, 0.1);
     color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
   }
 
   .mobile-panel {
-    max-height: calc(100vh - 62px - var(--user-mobile-nav-height, 72px) - var(--user-mobile-nav-gap, 12px) - env(safe-area-inset-bottom, 0px));
+    grid-template-columns: minmax(0, 1fr);
+    max-height: calc(100vh - 58px - var(--user-mobile-nav-height, 60px) - var(--user-mobile-nav-gap, 8px) - env(safe-area-inset-bottom, 0px));
     padding: 0 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-feature-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-feature-group {
+    padding: 12px 0;
+
+    & + &,
+    &:nth-child(even) {
+      border-top: 1px solid var(--user-border);
+      border-left: 0;
+    }
+  }
+
+  .mobile-feature-group__items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .feature-nav-item {
+    min-height: 52px;
+    padding: 7px 8px;
   }
 
   .mobile-bottom-nav {
     position: fixed;
     box-sizing: border-box;
     right: 10px;
-    bottom: calc(var(--user-mobile-nav-gap, 10px) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--user-mobile-nav-gap, 8px) + env(safe-area-inset-bottom, 0px));
     left: 10px;
     z-index: 55;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    height: var(--user-mobile-nav-height, 72px);
-    padding: 6px;
+    height: var(--user-mobile-nav-height, 60px);
+    padding: 5px;
     overflow: hidden;
-    border: 1px solid rgba(0, 242, 254, 0.18);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: rgba(7, 17, 31, 0.92);
-    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.42), 0 0 22px rgba(0, 242, 254, 0.1);
-    backdrop-filter: blur(18px);
+    background: var(--user-bg-panel);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   }
 
   .mobile-bottom-nav__item {
@@ -736,18 +1403,15 @@ watch(
     }
 
     span {
-      display: -webkit-box;
+      display: block;
       max-width: 100%;
-      overflow: hidden;
       overflow-wrap: anywhere;
+      line-height: 1.15;
       text-align: center;
-      text-overflow: ellipsis;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
     }
 
     &.is-active {
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.18), rgba(79, 172, 254, 0.14));
+      background: var(--user-primary-soft);
       color: var(--user-primary);
     }
   }
@@ -757,6 +1421,22 @@ watch(
   .mobile-current-section {
     padding: 0 6px;
     font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-nav-enter-active,
+  .feature-nav-leave-active,
+  .mobile-nav-enter-active,
+  .mobile-nav-leave-active {
+    transition: opacity 0.01ms linear;
+  }
+
+  .feature-nav-enter-from,
+  .feature-nav-leave-to,
+  .mobile-nav-enter-from,
+  .mobile-nav-leave-to {
+    transform: none;
   }
 }
 </style>

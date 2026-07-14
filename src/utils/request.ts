@@ -1,9 +1,14 @@
-import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosError,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig
+} from 'axios'
 import { appConfig } from '@/config'
 import { clearAllRequestCache } from '@/composables/useRequestCache'
 import { HTTP_STATUS_CODE } from '@/constants/http'
 import { STORAGE_KEYS } from '@/constants/storage'
-import type { ApiResult, RequestErrorPayload } from '@/types/api'
+import type { ApiResponseEnvelope, ApiResult, RequestErrorPayload } from '@/types/api'
 import type { LoginVO } from '@/types/auth'
 import {
   ADMIN_MOBILE_READONLY_BLOCK_MESSAGE,
@@ -20,10 +25,12 @@ import { storage } from '@/utils/storage'
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
+    preserveEnvelope?: boolean
     silentError?: boolean
   }
 
   export interface InternalAxiosRequestConfig {
+    preserveEnvelope?: boolean
     silentError?: boolean
   }
 }
@@ -57,6 +64,31 @@ const request = axios.create({
   baseURL: appConfig.apiBaseUrl,
   timeout: appConfig.requestTimeout
 })
+
+const normalizeTraceId = (value: unknown) => {
+  if (typeof value !== 'string') return undefined
+  const traceId = value.trim()
+  return traceId || undefined
+}
+
+const responseHeaderTraceId = (response: AxiosResponse | undefined) => {
+  const headers = response?.headers
+  if (!headers) return undefined
+
+  if (typeof headers.get === 'function') {
+    const traceId = normalizeTraceId(headers.get('X-Trace-Id'))
+    if (traceId) return traceId
+  }
+
+  const entry = Object.entries(headers).find(([name]) =>
+    name.toLowerCase() === 'x-trace-id')
+  return normalizeTraceId(entry?.[1])
+}
+
+const responseTraceId = (
+  bodyTraceId: unknown,
+  response: AxiosResponse | undefined
+) => normalizeTraceId(bodyTraceId) ?? responseHeaderTraceId(response)
 
 const handleTokenExpired = () => {
   clearLocalAuth()
@@ -281,14 +313,26 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 })
 
 const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
-    const result = response.data as ApiResult
-    const silentError = (response.config as RetryableRequestConfig).silentError
+    const result = response.data
+    const config = response.config as RetryableRequestConfig
+    const silentError = config.silentError
 
     if (!result || typeof result.code !== 'number') {
+      if (config.preserveEnvelope) {
+        return Promise.reject(new Error(
+          'preserveEnvelope requires a Result response envelope'
+        ))
+      }
       return response.data
     }
 
     if (result.code === HTTP_STATUS_CODE.SUCCESS) {
+      if (config.preserveEnvelope) {
+        return {
+          ...result,
+          traceId: responseTraceId(result.traceId, response)
+        }
+      }
       return result.data
     }
 
@@ -304,7 +348,7 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
         emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
           code: result.code,
           message: result.message,
-          traceId: result.traceId
+          traceId: responseTraceId(result.traceId, response)
         })
       }
       if (!silentError) {
@@ -317,16 +361,14 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
       emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
         code: result.code,
         message: result.message,
-        traceId: result.traceId
+        traceId: responseTraceId(result.traceId, response)
       })
       showUserMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
     }
     return Promise.reject(result)
 }
 
-request.interceptors.response.use(
-  unwrapResponse as never,
-  (error: AxiosError<RequestErrorPayload>) => {
+const handleResponseError = (error: AxiosError<RequestErrorPayload>) => {
     if ((error as ApiCodeError).localBlocked) {
       return Promise.reject(error)
     }
@@ -349,7 +391,7 @@ request.interceptors.response.use(
           status: error.response.status,
           code: payload?.code || HTTP_STATUS_CODE.FORBIDDEN,
           message,
-          traceId: payload?.traceId
+          traceId: responseTraceId(payload?.traceId, error.response)
         })
         showUserMessage.error(message)
       }
@@ -365,12 +407,30 @@ request.interceptors.response.use(
         status: error.response?.status,
         code: error.response?.data?.code,
         message,
-        traceId: error.response?.data?.traceId
+        traceId: responseTraceId(error.response?.data?.traceId, error.response)
       })
       showUserMessage.error(message)
     }
     return Promise.reject(error)
-  }
-)
+}
+
+interface UnwrappedResponseInterceptor {
+  use(
+    onFulfilled: (response: AxiosResponse<ApiResult>) => unknown,
+    onRejected: (error: AxiosError<RequestErrorPayload>) => unknown
+  ): number
+}
+
+const responseInterceptor = request.interceptors.response as unknown as
+  UnwrappedResponseInterceptor
+responseInterceptor.use(unwrapResponse, handleResponseError)
+
+export const requestWithMeta = <TResponse, TRequest = unknown>(
+  config: AxiosRequestConfig<TRequest>
+): Promise<ApiResponseEnvelope<TResponse>> =>
+  request.request<ApiResult<TResponse>, ApiResponseEnvelope<TResponse>, TRequest>({
+    ...config,
+    preserveEnvelope: true
+  })
 
 export default request

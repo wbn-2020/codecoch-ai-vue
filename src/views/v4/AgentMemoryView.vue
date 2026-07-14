@@ -641,17 +641,16 @@ onMounted(load)
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.16), rgba(59, 130, 246, 0.1)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .v4-page-header h1,
 .v4-governance-panel h2 {
   margin: 8px 0 0;
-  font-size: 28px;
+  font-size: 26px;
   letter-spacing: 0;
 }
 
@@ -687,15 +686,21 @@ onMounted(load)
 .v4-memory-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .v4-summary-item {
-  min-height: 86px;
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.5);
+  min-height: 76px;
+  padding: 12px 14px;
+  border-right: 1px solid var(--app-border);
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .v4-summary-item__value,
@@ -704,7 +709,7 @@ onMounted(load)
 }
 
 .v4-summary-item__value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -763,14 +768,14 @@ onMounted(load)
 
 .v4-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .v4-row {
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.52);
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .v4-row--trusted {
@@ -859,7 +864,7 @@ onMounted(load)
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
   gap: 16px;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
   background: rgba(15, 23, 42, 0.42);
@@ -912,6 +917,15 @@ onMounted(load)
   .v4-memory-summary,
   .v4-memory-meta {
     grid-template-columns: 1fr;
+  }
+
+  .v4-summary-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .v4-summary-item:last-child {
+    border-bottom: 0;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 
+import { chooseInterviewVoiceRecorderProfile } from '@/features/interview-voice-product'
 import type {
   InterviewTranscriptVO,
   InterviewVoicePreviewFallbackReason,
@@ -38,23 +39,8 @@ const unavailableTranscriptMessage = '当前 ASR 不可用，请先手动编辑�
 const manualFallbackMessage = '已切换到文本降级，草稿确认后才会进入正式回答。'
 const sizeLimitMessage = '录音文件超过 10 MB，请缩短回答后重试。'
 
-const preferredMimeTypes = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'video/webm;codecs=opus',
-  'video/webm',
-  'audio/ogg;codecs=opus'
-]
-
 const stopTracks = (stream: MediaStream | null) => {
   stream?.getTracks().forEach((track) => track.stop())
-}
-
-const chooseMimeType = () => {
-  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
-    return ''
-  }
-  return preferredMimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || ''
 }
 
 const isLowConfidenceTranscript = (item?: InterviewTranscriptVO | null) => {
@@ -115,8 +101,12 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
   let recordedBytes = 0
   let recordingLimitError = ''
   let recordingStopTimer: number | undefined
+  let recordingOperationVersion = 0
+  let recorderFinalized = true
 
-  const isBusy = computed(() => state.value === 'uploading' || state.value === 'transcribing')
+  const isBusy = computed(() =>
+    ['opening', 'recording', 'stopping', 'uploading', 'transcribing'].includes(state.value)
+  )
   const canRecord = computed(() => ['idle', 'submitted', 'fallback_text'].includes(state.value) && !isBusy.value)
   const canStopRecording = computed(() => state.value === 'recording')
   const canEditDraft = computed(() => ['recorded', 'draft', 'fallback_text'].includes(state.value) && !isBusy.value)
@@ -188,12 +178,14 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
   }
 
   const startRecording = async () => {
-    if (!canRecord.value || state.value === 'recording') return
+    if (!canRecord.value) return
+    const operationVersion = ++recordingOperationVersion
     errorMessage.value = ''
     fallbackReason.value = undefined
     draftText.value = ''
     clearCapturedAudio()
     clearBackendState()
+    state.value = 'opening'
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       enterFallback('recording_failed', unsupportedMessage)
@@ -201,10 +193,21 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
     }
 
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = chooseMimeType()
-      mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream)
+      const openedStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (operationVersion !== recordingOperationVersion) {
+        stopTracks(openedStream)
+        return
+      }
+      mediaStream = openedStream
+      const recorderProfile = chooseInterviewVoiceRecorderProfile()
+      if (!recorderProfile) {
+        enterFallback('recording_failed', unsupportedMessage)
+        return
+      }
+      const mimeType = recorderProfile.mimeType
+      mediaRecorder = new MediaRecorder(mediaStream, { mimeType })
       const activeRecorder = mediaRecorder
+      recorderFinalized = false
       audioChunks = []
       recordedBytes = 0
       recordingLimitError = ''
@@ -219,6 +222,8 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
         audioChunks.push(event.data)
       }
       activeRecorder.onstop = () => {
+        if (recorderFinalized) return
+        recorderFinalized = true
         const capturedChunks = audioChunks
         const limitError = recordingLimitError
         const stoppedAt = Date.now()
@@ -247,17 +252,25 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
         handleRecordedAudio(blob, capturedMimeType, durationMs)
       }
       activeRecorder.onerror = () => {
+        if (recorderFinalized) return
+        recorderFinalized = true
+        activeRecorder.ondataavailable = null
+        activeRecorder.onstop = null
+        activeRecorder.onerror = null
+        if (activeRecorder.state !== 'inactive') activeRecorder.stop()
         enterFallback('recording_failed', '录音失败，请使用文本回答。')
       }
       recordingStartedAt.value = Date.now()
       activeRecorder.start(1000)
       recordingStopTimer = window.setTimeout(() => {
         if (state.value === 'recording' && activeRecorder.state !== 'inactive') {
+          state.value = 'stopping'
           activeRecorder.stop()
         }
       }, INTERVIEW_VOICE_MAX_DURATION_MS)
       state.value = 'recording'
     } catch (error) {
+      if (operationVersion !== recordingOperationVersion) return
       const name = error instanceof DOMException ? error.name : ''
       const isPermissionDenied = name === 'NotAllowedError' || name === 'PermissionDeniedError'
       enterFallback(
@@ -269,7 +282,8 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
 
   const stopRecording = () => {
     if (state.value !== 'recording' || !mediaRecorder) return
-    mediaRecorder.stop()
+    state.value = 'stopping'
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
   }
 
   const updateDraft = (value: string) => {
@@ -345,8 +359,10 @@ export const useInterviewVoicePreview = (options: UseInterviewVoicePreviewOption
     enterFallback('manual_text', manualFallbackMessage)
   }
 
-  const cancel = () => {
+  const cancel = async () => {
+    recordingOperationVersion += 1
     const recorder = mediaRecorder
+    recorderFinalized = true
     if (recorder) {
       recorder.ondataavailable = null
       recorder.onstop = null

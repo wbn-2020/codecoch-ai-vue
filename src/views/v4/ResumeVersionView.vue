@@ -583,11 +583,10 @@ onMounted(async () => {
 .v4-page-header {
   align-items: flex-end;
   justify-content: space-between;
-  padding: 24px;
+  padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(34, 197, 94, 0.08)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .v4-page-header h1,
@@ -597,7 +596,7 @@ onMounted(async () => {
 
 .v4-page-header h1 {
   margin-top: 8px;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .v4-page-header p,
@@ -643,14 +642,14 @@ onMounted(async () => {
 
 .v4-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .v4-row {
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .v4-row-head {

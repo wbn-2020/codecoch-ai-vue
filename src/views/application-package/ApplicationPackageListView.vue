@@ -228,7 +228,9 @@ onMounted(load)
 .application-package-list {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .list-header,
@@ -246,17 +248,19 @@ onMounted(load)
 
 .list-header h1 {
   margin: 4px 0 8px;
-  font-size: 28px;
+  color: var(--user-text);
+  font-size: 26px;
 }
 
 .list-header p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--user-text-muted);
 }
 
 .eyebrow {
   margin: 0;
-  color: var(--el-color-primary);
+  color: var(--user-primary);
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -268,6 +272,13 @@ onMounted(load)
   flex-wrap: wrap;
 }
 
+.list-toolbar {
+  padding: 12px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+}
+
 .keyword-input {
   max-width: 320px;
 }
@@ -277,11 +288,22 @@ onMounted(load)
 }
 
 .list-surface {
-  min-height: 280px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
 }
 
 .package-table {
   width: 100%;
+  --el-table-bg-color: var(--user-surface);
+  --el-table-border-color: var(--user-border);
+  --el-table-header-bg-color: var(--user-surface-muted);
+  --el-table-header-text-color: var(--user-text-secondary);
+  --el-table-row-hover-bg-color: var(--user-surface-raised);
+  --el-table-text-color: var(--user-text);
+  --el-table-tr-bg-color: var(--user-surface);
 }
 
 .package-title {
@@ -291,12 +313,12 @@ onMounted(load)
 
 .package-title span,
 .package-title small {
-  color: var(--text-secondary);
+  color: var(--user-text-muted);
 }
 
 .score {
   margin-left: 8px;
-  color: var(--text-secondary);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -308,7 +330,8 @@ onMounted(load)
 }
 
 .package-pagination {
-  margin-top: 16px;
+  margin-top: 0;
+  padding: 12px;
   justify-content: flex-end;
 }
 
@@ -318,9 +341,15 @@ onMounted(load)
   }
 
   .list-actions,
+  .list-toolbar,
   .keyword-input,
   .status-select {
     width: 100%;
+  }
+
+  .list-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

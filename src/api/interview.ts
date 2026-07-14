@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import { buildInterviewReportNextActions } from '@/features/interview-report'
+import { normalizeVoiceDeliverySummary } from '@/features/interview-voice-product'
 import type {
   FinishInterviewVO,
   IndustryTemplateVO,
@@ -313,7 +314,11 @@ const normalizeListItem = (item: any): InterviewListVO => ({
   questionCount: item.questionCount || item.answeredQuestionCount,
   startedAt: item.startedAt || item.startTime,
   finishedAt: item.finishedAt || item.endTime,
-  createdAt: item.createdAt || item.updatedAt
+  createdAt: item.createdAt || item.updatedAt,
+  voiceDeliverySummary: normalizeVoiceDeliverySummary(
+    item.voiceDeliverySummary || item.voice_delivery_summary,
+    item.interviewId || item.id
+  )
 })
 
 const normalizeDetail = (detail: any): InterviewDetailVO => ({
@@ -388,6 +393,11 @@ const normalizeReport = (report: any, interviewId: number): InterviewReportVO =>
     trustStatus: source.trustStatus,
     evidenceSummary: source.evidenceSummary,
     fallback: source.fallback
+    ,
+    voiceDeliverySummary: normalizeVoiceDeliverySummary(
+      source.voiceDeliverySummary || source.voice_delivery_summary,
+      sourceInterviewId
+    )
   }
 }
 

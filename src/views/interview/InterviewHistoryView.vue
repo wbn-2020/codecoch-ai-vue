@@ -29,6 +29,25 @@
       </article>
     </section>
 
+    <section v-if="voiceDeliveryTimeline.length" class="voice-trend-band">
+      <div class="voice-trend-head">
+        <div>
+          <span class="quick-label">语音表达趋势</span>
+          <h2>当前列表中的可比语音样本</h2>
+        </div>
+        <p>按分析完成时间正序，仅统计已成功持久化的真实指标。</p>
+      </div>
+      <div class="voice-trend-list">
+        <article v-for="point in voiceDeliveryTimeline" :key="point.analysisId || point.interviewId">
+          <time>{{ formatDateTime(point.occurredAt) }}</time>
+          <strong>{{ Math.round(point.speakingRatePerMinute || 0) }} 字/分钟</strong>
+          <span>填充词 {{ point.fillerCount ?? '-' }} 次</span>
+          <span v-if="point.pauseMetricsAvailable">最长停顿 {{ point.longestPauseMs ?? 0 }} ms</span>
+          <span v-else>停顿指标不可用</span>
+        </article>
+      </div>
+    </section>
+
     <section v-if="focusInterview" class="next-step-panel">
       <div>
         <span class="quick-label">建议先处理</span>
@@ -81,6 +100,42 @@
         :title="loadError"
       />
 
+      <section v-if="generatedReports.length" class="comparison-toolbar">
+        <div>
+          <span class="quick-label">跨场比较</span>
+          <strong>已选择 {{ selectedComparisonCandidates.length }} / 10 轮</strong>
+          <p>{{ comparisonSelectionHint }}</p>
+        </div>
+        <div class="comparison-toolbar__actions">
+          <el-button
+            v-if="selectedComparisonCandidates.length"
+            :disabled="comparisonLoading"
+            @click="clearComparisonSelection"
+          >
+            清空
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="comparisonLoading"
+            :disabled="!comparisonSelection.valid"
+            @click="createComparison"
+          >
+            <GitCompareArrows :size="16" />
+            比较所选记录
+          </el-button>
+        </div>
+      </section>
+
+      <el-alert
+        v-if="comparisonError"
+        class="history-alert"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="暂时无法创建比较"
+        :description="comparisonError"
+      />
+
       <div v-loading="loading" class="history-list">
         <AppState
           v-if="loadError && !interviews.length && !loading"
@@ -117,7 +172,12 @@
           </div>
         </section>
 
-        <article v-for="item in interviews" :key="item.interviewId" class="interview-card">
+        <article
+          v-for="item in interviews"
+          :key="item.interviewId"
+          class="interview-card"
+          :class="{ 'interview-card--selected': isComparisonSelected(item) }"
+        >
           <div class="card-main">
             <div class="card-head">
               <div>
@@ -125,6 +185,22 @@
                 <h2>{{ item.interviewName || item.targetPosition || '未命名模拟面试' }}</h2>
               </div>
               <div class="status-group">
+                <el-tooltip
+                  v-if="isReportSuccess(item.reportStatus)"
+                  :content="comparisonSelectionState(item).reason"
+                  :disabled="!comparisonSelectionState(item).reason"
+                  placement="top"
+                >
+                  <span class="comparison-checkbox-wrap">
+                    <el-checkbox
+                      :model-value="isComparisonSelected(item)"
+                      :disabled="comparisonSelectionState(item).disabled"
+                      @change="toggleComparisonSelection(item, Boolean($event))"
+                    >
+                      加入比较
+                    </el-checkbox>
+                  </span>
+                </el-tooltip>
                 <StatusTag :status="item.status" />
                 <StatusTag :status="item.reportStatus" />
               </div>
@@ -139,6 +215,10 @@
             <div class="card-desc">
               <span class="next-action-chip">下一步：{{ primaryActionLabel(item) }}</span>
               <p>{{ nextActionText(item) }}</p>
+              <div class="voice-history-summary">
+                <strong>语音表达</strong>
+                <span>{{ voiceDeliveryCompactText(item) }}</span>
+              </div>
             </div>
           </div>
 
@@ -187,14 +267,26 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, FileText, History, MessageSquare, Plus, RefreshCw, Search, Wrench } from 'lucide-vue-next'
+import { ChevronRight, FileText, GitCompareArrows, History, MessageSquare, Plus, RefreshCw, Search, Wrench } from 'lucide-vue-next'
 
 import { getInterviewsApi } from '@/api/interview'
+import {
+  createInterviewComparisonApi,
+  getInterviewAdvancedReportApi
+} from '@/api/interviewAdvanced'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { interviewModeOptions } from '@/constants/enums'
+import {
+  storeInterviewComparison,
+  toInterviewComparisonCandidate,
+  validateInterviewComparisonSelection
+} from '@/features/interview-comparison'
+import { buildVoiceDeliveryTimeline } from '@/features/interview-voice-product'
 import type { InterviewListVO, InterviewQueryDTO } from '@/types/interview'
+import type { InterviewHistoryComparisonCandidate } from '@/types/interviewAdvanced'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 interface SelectOption {
   label: string
@@ -206,6 +298,10 @@ const loading = ref(false)
 const loadError = ref('')
 const interviews = ref<InterviewListVO[]>([])
 const total = ref(0)
+const selectedComparisonCandidates = ref<InterviewHistoryComparisonCandidate[]>([])
+const comparisonLoading = ref(false)
+const comparisonError = ref('')
+const comparisonIdempotencyKey = ref('')
 
 const query = reactive<InterviewQueryDTO>({
   pageNo: 1,
@@ -245,6 +341,14 @@ const canOpenReportPage = (row: InterviewListVO) =>
   || canSubmitOrViewReport(row.status)
 
 const generatedReports = computed(() => interviews.value.filter((item) => isReportSuccess(item.reportStatus)))
+const comparisonSelection = computed(() =>
+  validateInterviewComparisonSelection(selectedComparisonCandidates.value)
+)
+const comparisonSelectionHint = computed(() => {
+  if (!selectedComparisonCandidates.value.length) return '选择同一目标岗位下至少两轮已生成报告的面试。'
+  if (!comparisonSelection.value.valid) return comparisonSelection.value.reason
+  return '提交后会按报告生成时间比较总分和同版本评分维度。'
+})
 const activeInterviews = computed(() => interviews.value.filter((item) => !isInterviewDone(item.status)))
 const focusInterview = computed(() =>
   activeInterviews.value[0] ||
@@ -262,6 +366,27 @@ const averageScore = computed(() => {
   if (!scores.length) return '-'
   return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
 })
+const voiceDeliveryTimeline = computed(() => buildVoiceDeliveryTimeline(interviews.value))
+
+const voiceDeliveryCompactText = (row: InterviewListVO) => {
+  const summary = row.voiceDeliverySummary
+  if (summary?.available && summary.status === 'SUCCEEDED') {
+    const rate = summary.speakingRatePerMinute === undefined
+      ? '语速暂无'
+      : `语速 ${Math.round(summary.speakingRatePerMinute)} 字/分钟`
+    const fillers = summary.fillerCount === undefined ? '填充词暂无' : `填充词 ${summary.fillerCount} 次`
+    const pauses = summary.pauseMetricsAvailable
+      ? `最长停顿 ${summary.longestPauseMs ?? 0} ms`
+      : '停顿指标不可用'
+    return `${rate} · ${fillers} · ${pauses}`
+  }
+  const status = String(summary?.status || 'NOT_ANALYZED').toUpperCase()
+  if (['QUEUED', 'RUNNING'].includes(status)) return '分析处理中'
+  if (status === 'FAILED') return '分析失败，未生成可靠指标'
+  if (status === 'TIMED_OUT') return '分析超时，未生成可靠指标'
+  if (status === 'CANCELLED') return '分析已取消'
+  return '本场没有已保存的语音表达分析'
+}
 
 const metrics = computed(() => [
   { label: '复盘总数', value: total.value || interviews.value.length, desc: '累计面试路径' },
@@ -336,6 +461,115 @@ const openMissingReportGuidePrimary = async () => {
   await openPrimary(row)
 }
 
+const isComparisonSelected = (row: InterviewListVO) =>
+  selectedComparisonCandidates.value.some((item) => item.interviewId === row.interviewId)
+
+const comparisonSelectionState = (row: InterviewListVO) => {
+  if (comparisonLoading.value) {
+    return { disabled: true, reason: '比较创建中，请稍候。' }
+  }
+  if (isComparisonSelected(row)) return { disabled: false, reason: '' }
+  const candidate = toInterviewComparisonCandidate(row)
+  if (!candidate.targetJobId) {
+    return { disabled: true, reason: '该面试未绑定目标岗位，不能用于同岗位比较。' }
+  }
+  if (selectedComparisonCandidates.value.length >= 10) {
+    return { disabled: true, reason: '单次最多比较 10 轮面试。' }
+  }
+  const selectedTargetJobId = selectedComparisonCandidates.value[0]?.targetJobId
+  if (selectedTargetJobId && selectedTargetJobId !== candidate.targetJobId) {
+    return { disabled: true, reason: '请选择与当前已选记录相同的目标岗位。' }
+  }
+  return { disabled: false, reason: '' }
+}
+
+const toggleComparisonSelection = (row: InterviewListVO, selected: boolean) => {
+  if (comparisonLoading.value) return
+  comparisonError.value = ''
+  const candidate = toInterviewComparisonCandidate(row)
+  if (!selected) {
+    selectedComparisonCandidates.value = selectedComparisonCandidates.value
+      .filter((item) => item.interviewId !== candidate.interviewId)
+    comparisonIdempotencyKey.value = ''
+    return
+  }
+  const state = comparisonSelectionState(row)
+  if (state.disabled || !candidate.interviewId) {
+    comparisonError.value = state.reason || '该记录暂时不能加入比较。'
+    return
+  }
+  selectedComparisonCandidates.value = [...selectedComparisonCandidates.value, candidate]
+  comparisonIdempotencyKey.value = ''
+}
+
+const clearComparisonSelection = () => {
+  if (comparisonLoading.value) return
+  selectedComparisonCandidates.value = []
+  comparisonError.value = ''
+  comparisonIdempotencyKey.value = ''
+}
+
+const createComparison = async () => {
+  if (comparisonLoading.value) return
+  const comparisonCandidatesSnapshot = selectedComparisonCandidates.value
+    .map((candidate) => ({ ...candidate }))
+  const validation = validateInterviewComparisonSelection(comparisonCandidatesSnapshot)
+  if (!validation.valid) {
+    comparisonError.value = validation.reason
+    return
+  }
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  try {
+    const reportMetadata = await Promise.all(
+      comparisonCandidatesSnapshot.map((item) => getInterviewAdvancedReportApi(item.interviewId))
+    )
+    const metadataByInterviewId = new Map(
+      reportMetadata.map((metadata) => [metadata.interviewId, metadata])
+    )
+    const resolvedCandidates = comparisonCandidatesSnapshot.map((candidate) => {
+      const metadata = metadataByInterviewId.get(candidate.interviewId)
+      return {
+        ...candidate,
+        reportId: metadata?.reportId,
+        targetJobId: metadata?.targetJobId || candidate.targetJobId,
+        comparisonAvailable: metadata?.comparisonAvailable,
+        comparisonUnavailableReason: metadata?.comparisonUnavailableReason
+      }
+    })
+    const resolvedValidation = validateInterviewComparisonSelection(resolvedCandidates)
+    if (!resolvedValidation.valid) {
+      comparisonError.value = resolvedValidation.reason
+      return
+    }
+    const reportIds = resolvedCandidates
+      .map((item) => item.reportId)
+      .filter((id): id is number => Boolean(id && id > 0))
+    if (reportIds.length !== resolvedCandidates.length) {
+      comparisonError.value = '部分面试没有可追溯的报告记录，暂时无法比较。'
+      return
+    }
+    if (!comparisonIdempotencyKey.value) {
+      comparisonIdempotencyKey.value = createOperationIdempotencyKey('interview-compare')
+    }
+    const result = await createInterviewComparisonApi({
+      reportIds,
+      idempotencyKey: comparisonIdempotencyKey.value
+    })
+    const cacheKey = storeInterviewComparison(result)
+    comparisonIdempotencyKey.value = ''
+    await router.push({
+      name: 'InterviewComparison',
+      params: { id: result.id || 'preview' },
+      query: { cacheKey }
+    })
+  } catch (error) {
+    comparisonError.value = getErrorMessage(error, '比较请求失败，请稍后重试。')
+  } finally {
+    comparisonLoading.value = false
+  }
+}
+
 const formatDateTime = (value?: string) => {
   if (!value) return '时间未知'
   const date = new Date(value)
@@ -383,10 +617,10 @@ onMounted(fetchInterviews)
 .next-step-panel,
 .history-panel,
 .interview-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .history-hero {
@@ -398,7 +632,7 @@ onMounted(fetchInterviews)
 
   h1 {
     margin: 12px 0 10px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 40px;
     line-height: 1.1;
   }
@@ -406,7 +640,7 @@ onMounted(fetchInterviews)
   p {
     max-width: 760px;
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 16px;
     line-height: 1.75;
   }
@@ -425,7 +659,7 @@ onMounted(fetchInterviews)
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -446,21 +680,66 @@ onMounted(fetchInterviews)
   padding: 16px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 
   strong {
     display: block;
     margin-top: 8px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 28px;
   }
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
+  }
+}
+
+.voice-trend-band {
+  display: grid;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.voice-trend-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  p {
+    color: var(--user-text-muted);
+  }
+}
+
+.voice-trend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+
+  article {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--user-border);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+  }
+
+  time,
+  span {
+    color: var(--user-text-muted);
   }
 }
 
@@ -471,19 +750,19 @@ onMounted(fetchInterviews)
   justify-content: space-between;
   gap: 18px;
   padding: 20px;
-  border-color: rgba(37, 99, 235, 0.22);
-  background: #f8fbff;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-muted);
 
   h2 {
     margin: 6px 0 8px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 22px;
     line-height: 1.25;
   }
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.65;
   }
 
@@ -493,19 +772,19 @@ onMounted(fetchInterviews)
 }
 
 .missing-report-guide {
-  border: 1px dashed #bfdbfe;
-  background: #eff6ff;
+  border: 1px dashed var(--user-primary-border);
+  background: var(--user-primary-soft);
   box-shadow: none;
 
   h2 {
     margin: 6px 0 8px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 20px;
   }
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.65;
   }
 }
@@ -519,7 +798,7 @@ onMounted(fetchInterviews)
 }
 
 .quick-label {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -530,6 +809,37 @@ onMounted(fetchInterviews)
 
 .history-alert {
   margin-bottom: 14px;
+}
+
+.comparison-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-primary-soft);
+
+  strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--user-text);
+    font-size: 18px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: var(--user-text-secondary);
+    line-height: 1.55;
+  }
+}
+
+.comparison-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .filter-bar {
@@ -548,15 +858,15 @@ onMounted(fetchInterviews)
 .filter-drawer {
   margin-bottom: 16px;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   summary {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: #475569;
+    color: var(--user-text-secondary);
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
@@ -582,6 +892,17 @@ onMounted(fetchInterviews)
   box-shadow: none;
 }
 
+.interview-card--selected {
+  border-color: var(--user-primary);
+  box-shadow: 0 0 0 2px var(--user-primary-soft);
+}
+
+.comparison-checkbox-wrap {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+}
+
 .card-main {
   min-width: 0;
 }
@@ -593,14 +914,14 @@ onMounted(fetchInterviews)
 
   h2 {
     margin: 6px 0 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 20px;
     line-height: 1.3;
   }
 }
 
 .card-time {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -617,10 +938,10 @@ onMounted(fetchInterviews)
 
   span {
     padding: 5px 9px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
@@ -631,8 +952,21 @@ onMounted(fetchInterviews)
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
+  }
+}
+
+.voice-history-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 10px;
+  color: var(--user-text-muted);
+
+  strong {
+    color: var(--user-text);
   }
 }
 
@@ -640,10 +974,10 @@ onMounted(fetchInterviews)
   display: inline-flex;
   max-width: 100%;
   padding: 5px 9px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--user-success-border);
   border-radius: 999px;
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--user-success-soft);
+  color: var(--user-success);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
@@ -654,25 +988,25 @@ onMounted(fetchInterviews)
   align-content: center;
   justify-items: center;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   text-align: center;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     margin-top: 6px;
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 32px;
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.45;
   }
@@ -684,7 +1018,7 @@ onMounted(fetchInterviews)
   grid-template-columns: minmax(180px, auto) repeat(2, auto);
   justify-content: end;
   padding-top: 14px;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 
   :deep(.el-button) {
     margin-left: 0;
@@ -729,7 +1063,8 @@ onMounted(fetchInterviews)
   .history-hero,
   .card-head,
   .next-step-panel,
-  .missing-report-guide {
+  .missing-report-guide,
+  .comparison-toolbar {
     flex-direction: column;
   }
 
@@ -757,15 +1092,21 @@ onMounted(fetchInterviews)
   }
 
   .next-step-panel,
-  .missing-report-guide {
+  .missing-report-guide,
+  .comparison-toolbar {
     align-items: stretch;
   }
 
   .next-step-panel :deep(.el-button),
   .missing-report-actions :deep(.el-button),
-  .hero-actions :deep(.el-button) {
+  .hero-actions :deep(.el-button),
+  .comparison-toolbar__actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .comparison-toolbar__actions {
+    flex-direction: column;
   }
 
   .card-actions {
@@ -785,6 +1126,393 @@ onMounted(fetchInterviews)
 
   .pagination-wrap :deep(.el-pagination) {
     min-width: max-content;
+  }
+}
+
+/* Compact history workspace */
+.interview-history-page {
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
+}
+
+.history-hero {
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 18px;
+
+  h1 {
+    margin: 6px 0;
+    font-size: 24px;
+  }
+
+  p {
+    max-width: 68ch;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.eyebrow,
+.quick-label {
+  color: var(--user-primary);
+}
+
+.metric-grid {
+  gap: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+  overflow: hidden;
+}
+
+.metric-grid .metric-card {
+  min-height: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+
+  strong {
+    margin-top: 2px;
+    font-size: 22px;
+  }
+
+  p {
+    margin-top: 2px;
+    font-size: 12px;
+  }
+}
+
+.voice-trend-band {
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+}
+
+.voice-trend-head {
+  align-items: center;
+
+  h2 {
+    margin-top: 3px;
+    font-size: 17px;
+  }
+
+  p {
+    max-width: 54ch;
+    color: var(--user-text-muted);
+    font-size: 12px;
+  }
+}
+
+.voice-trend-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+
+  article {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.9fr) minmax(130px, 0.8fr) repeat(2, minmax(120px, 0.7fr));
+    gap: 12px;
+    align-items: center;
+    padding: 9px 0;
+    border: 0;
+    border-bottom: 1px solid var(--user-border);
+    border-radius: 0;
+    background: transparent;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  time,
+  span {
+    color: var(--user-text-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--user-text);
+  }
+}
+
+.next-step-panel,
+.missing-report-guide,
+.comparison-toolbar {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+}
+
+.next-step-panel h2,
+.missing-report-guide h2 {
+  margin: 3px 0;
+  font-size: 18px;
+}
+
+.next-step-panel p,
+.missing-report-guide p,
+.comparison-toolbar p {
+  margin-top: 3px;
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.history-panel {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+  overflow: hidden;
+}
+
+.filter-drawer {
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: var(--user-surface-muted);
+}
+
+.filter-bar {
+  gap: 8px;
+}
+
+.history-alert,
+.comparison-toolbar,
+.missing-report-guide {
+  margin: 12px 14px 0;
+}
+
+.comparison-toolbar {
+  background: var(--user-surface-tint);
+
+  strong {
+    margin-top: 3px;
+    color: var(--user-text);
+    font-size: 16px;
+  }
+}
+
+.history-list {
+  gap: 0;
+  padding: 0 14px;
+}
+
+.history-list > .app-state,
+.history-list > .missing-report-guide {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.interview-card {
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.24fr) minmax(280px, auto);
+  gap: 14px;
+  align-items: center;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.interview-card--selected {
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-faint);
+  box-shadow: 14px 0 0 var(--user-primary-faint), -14px 0 0 var(--user-primary-faint);
+}
+
+.card-head {
+  gap: 10px;
+}
+
+.card-head h2 {
+  margin-top: 3px;
+  font-size: 17px;
+}
+
+.status-group {
+  gap: 6px;
+}
+
+.tag-row {
+  margin-top: 8px;
+}
+
+.tag-row span {
+  padding: 3px 7px;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+  color: var(--user-text-muted);
+}
+
+.card-desc {
+  margin-top: 8px;
+
+  p {
+    margin-top: 5px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.voice-history-summary {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.score-panel {
+  align-self: stretch;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-left: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  strong {
+    font-size: 26px;
+  }
+}
+
+.card-actions {
+  grid-column: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.card-primary-action {
+  min-width: 0;
+}
+
+.pagination-wrap {
+  padding: 10px 14px;
+  border-top: 1px solid var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+@media (max-width: 1120px) {
+  .interview-card {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+
+  .card-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-top: 10px;
+    border-top: 1px solid var(--user-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .history-hero {
+    padding: 14px;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric-grid .metric-card {
+    border-right: 1px solid var(--user-border);
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .metric-grid .metric-card:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metric-grid .metric-card:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  .voice-trend-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .voice-trend-list article {
+    grid-template-columns: 1fr 1fr;
+    gap: 5px 10px;
+  }
+
+  .history-list {
+    padding: 0 12px;
+  }
+
+  .interview-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .score-panel {
+    align-items: center;
+    justify-items: start;
+    grid-template-columns: auto auto 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-right: 0;
+    border-left: 0;
+    border-top: 1px solid var(--user-border);
+    border-bottom: 1px solid var(--user-border);
+    text-align: left;
+  }
+
+  .score-panel strong {
+    font-size: 20px;
+  }
+
+  .card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-grid .metric-card,
+  .metric-grid .metric-card:nth-child(2n),
+  .metric-grid .metric-card:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .metric-grid .metric-card:last-child {
+    border-bottom: 0;
+  }
+
+  .voice-trend-list article {
+    grid-template-columns: 1fr;
   }
 }
 </style>

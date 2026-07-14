@@ -12,7 +12,7 @@
         </p>
       </div>
       <div class="admin-hero__actions">
-        <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
+        <el-segmented v-model="rangeDays" :options="rangeOptions" aria-label="趋势时间范围" @change="loadPage" />
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
       </div>
     </section>
@@ -36,6 +36,20 @@
         </div>
       </AppState>
 
+      <div
+        v-if="showDataFreshness"
+        class="ops-data-freshness"
+        :class="`ops-data-freshness--${dataFreshnessTone}`"
+        role="status"
+        aria-live="polite"
+      >
+        <Clock3 :size="16" aria-hidden="true" />
+        <div>
+          <strong>{{ dataFreshnessTitle }}</strong>
+          <span>{{ dataFreshnessDescription }}</span>
+        </div>
+      </div>
+
       <section class="ops-card-grid" v-loading="loading">
         <article v-for="group in metricGroups" :key="group.key" class="ops-card">
           <div class="ops-card__head">
@@ -46,6 +60,14 @@
               <h2>{{ group.title }}</h2>
               <p>{{ group.subtitle }}</p>
             </div>
+            <el-tag
+              class="ops-card__status"
+              :type="group.statusType"
+              effect="plain"
+              :title="group.statusHint"
+            >
+              {{ group.statusLabel }}
+            </el-tag>
           </div>
           <div class="ops-mini-grid">
             <div v-for="metric in group.metrics" :key="metric.label" class="ops-mini">
@@ -61,12 +83,19 @@
         <article class="ops-panel ops-panel--wide">
           <div class="ops-panel__head">
             <div>
-              <h2>QPS / RPM / TPM 趋势</h2>
+              <h2>运行 / 成功 / 失败趋势</h2>
               <p>按天聚合 AI 运行、失败和智能教练生成运行数据</p>
             </div>
             <el-tag effect="plain">近 {{ rangeDays }} 天</el-tag>
           </div>
-          <div v-if="trendPoints.length" ref="trendChartRef" class="ops-chart" />
+          <div
+            v-if="trendPoints.length"
+            ref="trendChartRef"
+            class="ops-chart"
+            role="img"
+            tabindex="0"
+            :aria-label="trendChartAriaLabel"
+          />
           <AppState
             v-else-if="!loading"
             class="ops-empty-state"
@@ -207,6 +236,7 @@
                 <span v-for="status in item.statusCounts" :key="`${item.key}-${status.status}`">
                   {{ vectorStatusLabel(status.status) }} {{ status.count || 0 }}
                 </span>
+                <span v-if="item.statusUnknown">状态未知</span>
               </div>
               <em v-if="item.errorMessage">{{ item.errorMessage }}</em>
             </div>
@@ -227,13 +257,13 @@
             <div class="vector-index-card">
               <div class="vector-index-card__head">
                 <span>索引生成指标</span>
-                <strong>{{ compact(vectorHealth?.embeddingMetrics?.callCount) }}</strong>
+                <strong>{{ sourceMetric(dataSourceLabels.vectorHealth, vectorHealth?.embeddingMetrics?.callCount, compact) }}</strong>
               </div>
               <small>{{ embeddingMetricHint }}</small>
               <div class="vector-status-list">
-                <span>失败 {{ vectorHealth?.embeddingMetrics?.failedCount || 0 }}</span>
-                <span>平均 {{ formatMs(vectorHealth?.embeddingMetrics?.averageElapsedMs) }}</span>
-                <span>消耗 {{ compact(vectorHealth?.embeddingMetrics?.totalTokens) }}</span>
+                <span>失败 {{ sourceMetric(dataSourceLabels.vectorHealth, vectorHealth?.embeddingMetrics?.failedCount, compact) }}</span>
+                <span>平均 {{ sourceMetric(dataSourceLabels.vectorHealth, vectorHealth?.embeddingMetrics?.averageElapsedMs, formatMs) }}</span>
+                <span>消耗 {{ sourceMetric(dataSourceLabels.vectorHealth, vectorHealth?.embeddingMetrics?.totalTokens, compact) }}</span>
               </div>
               <em v-if="vectorHealth?.embeddingMetrics?.errorMessage">{{ vectorHealth.embeddingMetrics.errorMessage }}</em>
             </div>
@@ -351,13 +381,22 @@
               <p>展示题目去重、个人知识库索引和删除补偿最近的失败记录。</p>
             </div>
             <div class="vector-failure-tools">
-              <el-segmented v-model="vectorFailureStatus" :options="vectorFailureStatusOptions" @change="loadVectorFailures" />
+              <el-segmented
+                v-model="vectorFailureStatus"
+                :options="vectorFailureStatusOptions"
+                aria-label="索引失败状态"
+                @change="loadVectorFailures"
+              />
               <el-select v-model="vectorFailureLimit" style="width: 108px" @change="loadVectorFailures">
                 <el-option :value="25" label="25 条" />
                 <el-option :value="50" label="50 条" />
                 <el-option :value="100" label="100 条" />
               </el-select>
-              <el-segmented v-model="vectorFailureTableSize" :options="vectorFailureTableSizeOptions" />
+              <el-segmented
+                v-model="vectorFailureTableSize"
+                :options="vectorFailureTableSizeOptions"
+                aria-label="索引失败表格密度"
+              />
               <el-dropdown trigger="click" :hide-on-click="false">
                 <el-button plain>题目列配置</el-button>
                 <template #dropdown>
@@ -422,7 +461,7 @@
             </div>
             <div class="vector-failure-summary__item">
               <span>生成时间</span>
-              <strong>{{ vectorFailures?.generatedAt || '--' }}</strong>
+              <strong>{{ vectorFailureGeneratedAt }}</strong>
             </div>
           </div>
 
@@ -465,10 +504,23 @@
                   <template #default="{ row }">
                     <div class="vector-row-actions">
                       <el-tooltip content="查看题目" placement="top">
-                        <el-button link type="primary" :icon="ExternalLink" @click="openQuestionFailure(row.questionId)" />
+                        <el-button
+                          link
+                          type="primary"
+                          :icon="ExternalLink"
+                          aria-label="查看题目"
+                          @click="openQuestionFailure(row.questionId)"
+                        />
                       </el-tooltip>
                       <el-tooltip content="复制错误" placement="top">
-                        <el-button link type="info" :icon="Copy" :disabled="!row.lastError" @click="copyVectorText(row.lastError, '错误已复制')" />
+                        <el-button
+                          link
+                          type="info"
+                          :icon="Copy"
+                          aria-label="复制题目索引错误"
+                          :disabled="!row.lastError"
+                          @click="copyVectorText(row.lastError, '错误已复制')"
+                        />
                       </el-tooltip>
                     </div>
                   </template>
@@ -527,12 +579,20 @@
                           link
                           type="primary"
                           :icon="ExternalLink"
+                          aria-label="查看知识库片段"
                           :disabled="!row.documentId && !row.chunkId"
                           @click="openKnowledgeFailure(row.documentId, row.chunkId)"
                         />
                       </el-tooltip>
                       <el-tooltip content="复制错误" placement="top">
-                        <el-button link type="info" :icon="Copy" :disabled="!row.lastError" @click="copyVectorText(row.lastError, '错误已复制')" />
+                        <el-button
+                          link
+                          type="info"
+                          :icon="Copy"
+                          aria-label="复制知识库索引错误"
+                          :disabled="!row.lastError"
+                          @click="copyVectorText(row.lastError, '错误已复制')"
+                        />
                       </el-tooltip>
                     </div>
                   </template>
@@ -587,6 +647,7 @@
                           link
                           type="info"
                           :icon="Copy"
+                          aria-label="复制索引点编号"
                           :disabled="!row.pointId && !row.pointIdMasked"
                           @click="copyVectorText(row.pointId || row.pointIdMasked, '索引点编号已复制')"
                         />
@@ -625,7 +686,11 @@
                 <el-option label="成功" value="SUCCESS" />
                 <el-option label="失败" value="FAILED" />
               </el-select>
-              <el-segmented v-model="vectorJobTableSize" :options="vectorJobTableSizeOptions" />
+              <el-segmented
+                v-model="vectorJobTableSize"
+                :options="vectorJobTableSizeOptions"
+                aria-label="索引任务表格密度"
+              />
               <el-dropdown trigger="click" :hide-on-click="false">
                 <el-button plain>列配置</el-button>
                 <template #dropdown>
@@ -728,8 +793,8 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, Copy, ExternalLink, Gauge, Monitor, RefreshCw, Server, ShieldCheck } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Activity, Clock3, Copy, ExternalLink, Gauge, Monitor, RefreshCw, Server, ShieldCheck } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -833,6 +898,18 @@ const dataSourceLabels = {
   duplicateConfig: '题目去重参数'
 } as const
 
+type DataSourceLabel = typeof dataSourceLabels[keyof typeof dataSourceLabels]
+type SourceSnapshot = {
+  receivedAt: number
+  dataAt?: number
+  rangeDays?: number
+}
+type SourceState = 'fresh' | 'stale' | 'unknown'
+
+const OPS_DATA_STALE_AFTER_MS = 5 * 60 * 1000
+const sourceSnapshots = reactive<Record<string, SourceSnapshot>>({})
+const freshnessClock = ref(Date.now())
+
 const sourceFailed = (label: string) => partialErrors.value.includes(label)
 const markSourceFailed = (label: string) => {
   if (!partialErrors.value.includes(label)) {
@@ -843,6 +920,104 @@ const markSourceFailed = (label: string) => {
 const clearSourceFailed = (label: string) => {
   partialErrors.value = partialErrors.value.filter((item) => item !== label)
 }
+
+const parseTimestamp = (value?: string) => {
+  if (!value) return undefined
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? undefined : timestamp
+}
+
+const recordSourceSuccess = (
+  label: DataSourceLabel,
+  options: { dataTimestamp?: string; rangeDays?: number } = {}
+) => {
+  const receivedAt = Date.now()
+  sourceSnapshots[label] = {
+    receivedAt,
+    dataAt: parseTimestamp(options.dataTimestamp),
+    rangeDays: options.rangeDays
+  }
+  freshnessClock.value = receivedAt
+}
+
+const formatSnapshotTime = (timestamp?: number) => {
+  if (!timestamp) return '时间未知'
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    hour12: false,
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+const sourceIsAged = (label: DataSourceLabel) => {
+  const dataAt = sourceSnapshots[label]?.dataAt
+  return Boolean(dataAt && freshnessClock.value - dataAt > OPS_DATA_STALE_AFTER_MS)
+}
+
+const sourceState = (label: DataSourceLabel): SourceState => {
+  const snapshot = sourceSnapshots[label]
+  if (!snapshot) return 'unknown'
+  if (sourceFailed(label) || sourceIsAged(label)) return 'stale'
+  return 'fresh'
+}
+
+const sourceStatusHint = (labels: DataSourceLabel[]) => {
+  const unknown = labels.filter((label) => sourceState(label) === 'unknown')
+  if (unknown.length) return `${unknown.join('、')}本次未返回，相关指标不可判断。`
+
+  const stale = labels.filter((label) => sourceState(label) === 'stale')
+  if (stale.length) {
+    return stale.map((label) => {
+      const snapshot = sourceSnapshots[label]
+      const range = snapshot?.rangeDays ? `，近 ${snapshot.rangeDays} 天口径` : ''
+      if (sourceIsAged(label)) {
+        return `${label}数据时间 ${formatSnapshotTime(snapshot?.dataAt)}，已超过 5 分钟${range}`
+      }
+      return `${label}上次成功获取于 ${formatSnapshotTime(snapshot?.receivedAt)}${range}`
+    }).join('；')
+  }
+
+  const latest = Math.max(...labels.map((label) => sourceSnapshots[label]?.receivedAt || 0))
+  return `成功获取于 ${formatSnapshotTime(latest)}`
+}
+
+const sourcePresentation = (labels: DataSourceLabel[]) => {
+  const states = labels.map(sourceState)
+  const status: SourceState = states.includes('unknown') ? 'unknown' : states.includes('stale') ? 'stale' : 'fresh'
+  return {
+    status,
+    statusLabel: status === 'fresh' ? '最新' : status === 'stale' ? '陈旧' : '未知',
+    statusType: status === 'fresh' ? 'success' as const : status === 'stale' ? 'warning' as const : 'danger' as const,
+    statusHint: sourceStatusHint(labels)
+  }
+}
+
+const allDataSourceLabels = Object.values(dataSourceLabels) as DataSourceLabel[]
+const staleSourceLabels = computed(() => allDataSourceLabels.filter((label) => sourceState(label) === 'stale'))
+const unknownSourceLabels = computed(() => allDataSourceLabels.filter((label) => sourceState(label) === 'unknown'))
+const showDataFreshness = computed(() => Boolean(Object.keys(sourceSnapshots).length || partialErrors.value.length))
+const dataFreshnessTone = computed(() => unknownSourceLabels.value.length ? 'unknown' : staleSourceLabels.value.length ? 'stale' : 'fresh')
+const dataFreshnessTitle = computed(() => {
+  if (unknownSourceLabels.value.length && staleSourceLabels.value.length) return '部分数据未知或陈旧'
+  if (unknownSourceLabels.value.length) return '部分数据未知'
+  if (staleSourceLabels.value.length) return '部分数据陈旧'
+  return '运维数据已更新'
+})
+const dataFreshnessDescription = computed(() => {
+  const details: string[] = []
+  if (unknownSourceLabels.value.length) {
+    details.push(`未知：${unknownSourceLabels.value.join('、')}`)
+  }
+  if (staleSourceLabels.value.length) {
+    details.push(`陈旧：${staleSourceLabels.value.map((label) => sourceStatusHint([label])).join('、')}`)
+  }
+  if (details.length) return `${details.join('；')}。陈旧值仅供排查参考，请刷新成功后再判断当前状态。`
+  const latest = Math.max(...Object.values(sourceSnapshots).map((item) => item.receivedAt))
+  return `全部数据源最近成功获取于 ${formatSnapshotTime(latest)}。`
+})
 
 type QuestionFailureColumnKey = 'questionId' | 'status' | 'model' | 'updatedAt' | 'error'
 type KnowledgeFailureColumnKey = 'chunkId' | 'owner' | 'chunkIndex' | 'status' | 'model' | 'updatedAt' | 'error'
@@ -912,6 +1087,18 @@ const {
   { key: 'error', label: '错误', defaultVisible: true }
 ])
 
+const sourceMetric = (
+  label: DataSourceLabel,
+  value: number | null | undefined,
+  formatter: (metric: number) => string = (metric) => String(metric)
+) => {
+  if (sourceState(label) === 'unknown' || value == null || !Number.isFinite(Number(value))) return '未知'
+  return formatter(Number(value))
+}
+
+const sourceText = (label: DataSourceLabel, value: string) =>
+  sourceState(label) === 'unknown' ? '未知' : value
+
 const services = computed(() => dashboard.value?.systemStatus?.services || [])
 const vectorCollections = computed(() => vectorHealth.value?.collections || [])
 const vectorDeleteOutbox = computed(() => vectorHealth.value?.deleteOutbox)
@@ -921,10 +1108,15 @@ const hasServiceHealthRows = computed(
 const opsMetrics = computed(() => dashboard.value?.systemStatus?.opsMetrics)
 const totalFailures = computed(() => Math.max(...failurePoints.value.map((item) => item.value || 0), 1))
 const vectorFailureCounts = computed(() => ({
-  question: vectorFailures.value?.questionFailures?.length || 0,
-  knowledge: vectorFailures.value?.knowledgeFailures?.length || 0,
-  deleteOutbox: vectorFailures.value?.deleteOutboxFailures?.length || 0
+  question: sourceMetric(dataSourceLabels.vectorFailures, vectorFailures.value?.questionFailures?.length),
+  knowledge: sourceMetric(dataSourceLabels.vectorFailures, vectorFailures.value?.knowledgeFailures?.length),
+  deleteOutbox: sourceMetric(dataSourceLabels.vectorFailures, vectorFailures.value?.deleteOutboxFailures?.length)
 }))
+const vectorFailureGeneratedAt = computed(() =>
+  sourceState(dataSourceLabels.vectorFailures) === 'unknown'
+    ? '未知'
+    : vectorFailures.value?.generatedAt || '时间未返回'
+)
 type VectorFailureScope = 'question' | 'knowledge' | 'deleteOutbox'
 const vectorFailureEmptyType = computed(() =>
   sourceFailed(dataSourceLabels.vectorFailures) || vectorFailures.value?.errors?.length ? 'error' : 'empty'
@@ -1011,7 +1203,7 @@ const vectorStateBanner = computed(() => {
 })
 
 const partialErrorDescription = computed(() =>
-  `以下数据源暂未返回：${partialErrors.value.join('、')}。页面会继续展示已成功返回的数据，失败模块会以错误空态标记，请重新加载或进入对应明细页排查。`
+  `以下数据源暂未返回：${partialErrors.value.join('、')}。有旧快照时会明确标记为陈旧并显示上次成功时间；没有旧快照时显示未知，请重新加载或进入对应明细页排查。`
 )
 
 const trendEmptyType = computed(() => sourceFailed(dataSourceLabels.trend) ? 'error' : 'empty')
@@ -1072,12 +1264,14 @@ const duplicateConfigEmptyDescription = computed(() =>
     : '当前没有可展示的题目去重阈值和候选池配置。请先进入题库治理页确认配置是否已保存。'
 )
 
-const formatPercent = (value?: number) => `${Number(value || 0).toFixed(2)}%`
-const formatMs = (value?: number) => `${Math.round(Number(value || 0))}ms`
-const formatMetric = (value?: number, digits = 2) => Number(value ?? 0).toFixed(digits)
-const formatMb = (value?: number) => `${Math.round(Number(value || 0))} MB`
+const isKnownMetric = (value?: number | null) => value != null && Number.isFinite(Number(value))
+const formatPercent = (value?: number) => isKnownMetric(value) ? `${Number(value).toFixed(2)}%` : '未知'
+const formatMs = (value?: number) => isKnownMetric(value) ? `${Math.round(Number(value))}ms` : '未知'
+const formatMetric = (value?: number, digits = 2) => isKnownMetric(value) ? Number(value).toFixed(digits) : '未知'
+const formatMb = (value?: number) => isKnownMetric(value) ? `${Math.round(Number(value))} MB` : '未知'
 const compact = (value?: number) => {
-  const num = Number(value || 0)
+  if (!isKnownMetric(value)) return '未知'
+  const num = Number(value)
   if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`
   if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`
@@ -1085,23 +1279,29 @@ const compact = (value?: number) => {
 }
 
 const errorRate = computed(() => {
+  if (!aiOverview.value) return undefined
   const total = aiOverview.value?.totalAiCalls || 0
   if (!total) return 0
   return ((aiOverview.value?.failedAiCalls || 0) / total) * 100
 })
 
-const metricGroups = computed(() => [
-  {
+const metricGroups = computed(() => {
+  const aiSource = dataSourceLabels.aiOverview
+  const agentSource = dataSourceLabels.agentOverview
+  const dashboardSource = dataSourceLabels.dashboard
+  return [
+    {
     key: 'usage',
     title: '使用统计',
     subtitle: '请求、消耗与调用',
     icon: Activity,
     tone: 'tone-blue',
+    ...sourcePresentation([aiSource, agentSource]),
     metrics: [
-      { label: 'AI 运行', value: compact(aiOverview.value?.totalAiCalls), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` },
-      { label: '总消耗', value: compact(aiOverview.value?.totalTokens), hint: `输入 ${compact(aiOverview.value?.totalInputTokens)}` },
-      { label: '生成运行', value: compact(agentOverview.value?.totalAgentRuns), hint: `成功 ${agentOverview.value?.successAgentRuns || 0}` },
-      { label: '生成任务', value: compact(agentOverview.value?.totalAgentTasks), hint: `完成 ${agentOverview.value?.doneTaskCount || 0}` }
+      { label: 'AI 运行', value: sourceMetric(aiSource, aiOverview.value?.totalAiCalls, compact), hint: `失败 ${sourceMetric(aiSource, aiOverview.value?.failedAiCalls, compact)}` },
+      { label: '总消耗', value: sourceMetric(aiSource, aiOverview.value?.totalTokens, compact), hint: `输入 ${sourceMetric(aiSource, aiOverview.value?.totalInputTokens, compact)}` },
+      { label: '生成运行', value: sourceMetric(agentSource, agentOverview.value?.totalAgentRuns, compact), hint: `成功 ${sourceMetric(agentSource, agentOverview.value?.successAgentRuns, compact)}` },
+      { label: '生成任务', value: sourceMetric(agentSource, agentOverview.value?.totalAgentTasks, compact), hint: `完成 ${sourceMetric(agentSource, agentOverview.value?.doneTaskCount, compact)}` }
     ]
   },
   {
@@ -1110,11 +1310,12 @@ const metricGroups = computed(() => [
     subtitle: '实时吞吐和限流',
     icon: Gauge,
     tone: 'tone-cyan',
+    ...sourcePresentation([dashboardSource]),
     metrics: [
-      { label: 'QPS', value: formatMetric(opsMetrics.value?.qps), hint: '最近 1 分钟请求均值' },
-      { label: 'TPS', value: formatMetric(opsMetrics.value?.tps), hint: '最近 1 分钟业务写入均值' },
-      { label: 'RPM', value: compact(opsMetrics.value?.rpm || aiOverview.value?.totalAiCalls), hint: '最近 1 分钟请求数' },
-      { label: '每分钟消耗', value: compact(opsMetrics.value?.tpm || aiOverview.value?.totalTokens), hint: '最近 1 分钟调用消耗' }
+      { label: 'QPS', value: sourceMetric(dashboardSource, opsMetrics.value?.qps, formatMetric), hint: '最近 1 分钟请求均值' },
+      { label: 'TPS', value: sourceMetric(dashboardSource, opsMetrics.value?.tps, formatMetric), hint: '最近 1 分钟业务写入均值' },
+      { label: 'RPM', value: sourceMetric(dashboardSource, opsMetrics.value?.rpm, compact), hint: '最近 1 分钟请求数' },
+      { label: '每分钟消耗', value: sourceMetric(dashboardSource, opsMetrics.value?.tpm, compact), hint: '最近 1 分钟调用消耗' }
     ]
   },
   {
@@ -1123,11 +1324,12 @@ const metricGroups = computed(() => [
     subtitle: '进程与主机资源',
     icon: Server,
     tone: 'tone-violet',
+    ...sourcePresentation([dashboardSource]),
     metrics: [
-      { label: 'CPU', value: formatPercent(opsMetrics.value?.processCpuUsage), hint: `系统 ${formatPercent(opsMetrics.value?.systemCpuUsage)}` },
-      { label: '内存', value: formatMb(opsMetrics.value?.heapUsedMb), hint: `JVM ${formatPercent(opsMetrics.value?.heapUsage)} / ${formatMb(opsMetrics.value?.heapMaxMb)}` },
-      { label: '服务数', value: services.value.length, hint: '来自管理驾驶舱' },
-      { label: '数据库', value: statusText(services.value.find((item) => item.serviceName === 'database')?.status), hint: 'SELECT 1' }
+      { label: 'CPU', value: sourceMetric(dashboardSource, opsMetrics.value?.processCpuUsage, formatPercent), hint: `系统 ${sourceMetric(dashboardSource, opsMetrics.value?.systemCpuUsage, formatPercent)}` },
+      { label: '内存', value: sourceMetric(dashboardSource, opsMetrics.value?.heapUsedMb, formatMb), hint: `JVM ${sourceMetric(dashboardSource, opsMetrics.value?.heapUsage, formatPercent)} / ${sourceMetric(dashboardSource, opsMetrics.value?.heapMaxMb, formatMb)}` },
+      { label: '服务数', value: sourceMetric(dashboardSource, dashboard.value?.systemStatus ? services.value.length : undefined), hint: '来自管理驾驶舱' },
+      { label: '数据库', value: sourceText(dashboardSource, statusText(services.value.find((item) => item.serviceName === 'database')?.status)), hint: 'SELECT 1' }
     ]
   },
   {
@@ -1136,18 +1338,29 @@ const metricGroups = computed(() => [
     subtitle: '命中率、延迟和错误率',
     icon: ShieldCheck,
     tone: 'tone-green',
+    ...sourcePresentation([aiSource, agentSource, dashboardSource]),
     metrics: [
-      { label: 'AI 成功率', value: formatPercent(aiOverview.value?.aiSuccessRate), hint: `平均 ${formatMs(aiOverview.value?.avgElapsedMs)}` },
-      { label: '生成成功率', value: formatPercent(agentOverview.value?.agentSuccessRate), hint: `平均 ${formatMs(agentOverview.value?.avgDurationMs)}` },
-      { label: '缓存命中', value: formatPercent(opsMetrics.value?.redisHitRate), hint: `hits ${compact(opsMetrics.value?.redisKeyspaceHits)} / misses ${compact(opsMetrics.value?.redisKeyspaceMisses)}` },
-      { label: '错误率', value: formatPercent(errorRate.value), hint: `失败 ${aiOverview.value?.failedAiCalls || 0}` }
+      { label: 'AI 成功率', value: sourceMetric(aiSource, aiOverview.value?.aiSuccessRate, formatPercent), hint: `平均 ${sourceMetric(aiSource, aiOverview.value?.avgElapsedMs, formatMs)}` },
+      { label: '生成成功率', value: sourceMetric(agentSource, agentOverview.value?.agentSuccessRate, formatPercent), hint: `平均 ${sourceMetric(agentSource, agentOverview.value?.avgDurationMs, formatMs)}` },
+      { label: '缓存命中', value: sourceMetric(dashboardSource, opsMetrics.value?.redisHitRate, formatPercent), hint: `hits ${sourceMetric(dashboardSource, opsMetrics.value?.redisKeyspaceHits, compact)} / misses ${sourceMetric(dashboardSource, opsMetrics.value?.redisKeyspaceMisses, compact)}` },
+      { label: '错误率', value: sourceMetric(aiSource, errorRate.value, formatPercent), hint: `失败 ${sourceMetric(aiSource, aiOverview.value?.failedAiCalls, compact)}` }
     ]
   }
-])
+  ]
+})
+
+const trendChartAriaLabel = computed(() => {
+  const runCount = trendPoints.value.reduce((total, item) => total + Number(item.runCount || 0), 0)
+  const failedCount = trendPoints.value.reduce((total, item) => total + Number(item.failedRunCount || 0), 0)
+  const points = trendPoints.value.map((item) =>
+    `${item.date}：运行 ${Number(item.runCount || 0)}，成功 ${Number(item.successRunCount || 0)}，失败 ${Number(item.failedRunCount || 0)}`
+  )
+  return `近 ${rangeDays.value} 天运行趋势，共 ${trendPoints.value.length} 个数据点，运行 ${runCount} 次，失败 ${failedCount} 次。${points.join('；')}。`
+})
 
 const failurePercent = (value?: number) => Math.min(100, Math.max(4, ((value || 0) / totalFailures.value) * 100))
 
-const formatThreshold = (value?: number) => Number(value ?? 0).toFixed(2)
+const formatThreshold = (value?: number) => isKnownMetric(value) ? Number(value).toFixed(2) : '未知'
 
 const formatDuration = (value?: number) => {
   const ms = Number(value || 0)
@@ -1176,8 +1389,9 @@ const mysqlIndexCards = computed(() => {
     key: item.key,
     title: item.title,
     subtitle: item.data?.lastIndexedAt ? `${item.subtitle} · 最近 ${item.data.lastIndexedAt}` : item.subtitle,
-    total: compact(item.data?.total),
+    total: sourceMetric(dataSourceLabels.vectorHealth, item.data?.total, compact),
     statusCounts: item.data?.statusCounts || [],
+    statusUnknown: sourceState(dataSourceLabels.vectorHealth) === 'unknown' || !item.data,
     errorMessage: item.data?.errorMessage
   }))
 })
@@ -1538,18 +1752,50 @@ const loadPage = async () => {
       return
     }
     partialErrors.value = failed.map((item) => item.label)
-    if (aiResult.status === 'fulfilled') aiOverview.value = aiResult.value
-    if (agentResult.status === 'fulfilled') agentOverview.value = agentResult.value
-    if (trendResult.status === 'fulfilled') trendPoints.value = trendResult.value
-    if (failureResult.status === 'fulfilled') failurePoints.value = failureResult.value
-    if (dashboardResult.status === 'fulfilled') dashboard.value = dashboardResult.value
+    if (aiResult.status === 'fulfilled') {
+      aiOverview.value = aiResult.value
+      recordSourceSuccess(dataSourceLabels.aiOverview, { rangeDays: rangeDays.value })
+    }
+    if (agentResult.status === 'fulfilled') {
+      agentOverview.value = agentResult.value
+      recordSourceSuccess(dataSourceLabels.agentOverview, { rangeDays: rangeDays.value })
+    }
+    if (trendResult.status === 'fulfilled') {
+      trendPoints.value = trendResult.value
+      recordSourceSuccess(dataSourceLabels.trend, { rangeDays: rangeDays.value })
+    }
+    if (failureResult.status === 'fulfilled') {
+      failurePoints.value = failureResult.value
+      recordSourceSuccess(dataSourceLabels.failures, { rangeDays: rangeDays.value })
+    }
+    if (dashboardResult.status === 'fulfilled') {
+      dashboard.value = dashboardResult.value
+      recordSourceSuccess(dataSourceLabels.dashboard, {
+        dataTimestamp: dashboardResult.value.systemStatus?.generatedAt || dashboardResult.value.generatedAt
+      })
+    }
     const jobsPage = getSettledValue(jobsResult, emptyPage<AdminAnalyticsJobLogVO>())
-    jobs.value = jobsResult.status === 'fulfilled' ? jobsPage.records || [] : jobs.value
-    if (vectorHealthResult.status === 'fulfilled') vectorHealth.value = vectorHealthResult.value
-    if (vectorFailureResult.status === 'fulfilled') vectorFailures.value = vectorFailureResult.value
+    if (jobsResult.status === 'fulfilled') {
+      jobs.value = jobsPage.records || []
+      recordSourceSuccess(dataSourceLabels.jobs)
+    }
+    if (vectorHealthResult.status === 'fulfilled') {
+      vectorHealth.value = vectorHealthResult.value
+      recordSourceSuccess(dataSourceLabels.vectorHealth)
+    }
+    if (vectorFailureResult.status === 'fulfilled') {
+      vectorFailures.value = vectorFailureResult.value
+      recordSourceSuccess(dataSourceLabels.vectorFailures, { dataTimestamp: vectorFailureResult.value.generatedAt })
+    }
     const vectorJobsPage = getSettledValue(vectorJobsResult, emptyPage<VectorIndexJobVO>(1, 8))
-    vectorJobs.value = vectorJobsResult.status === 'fulfilled' ? vectorJobsPage.records || [] : vectorJobs.value
-    if (duplicateConfigResult.status === 'fulfilled') duplicateConfig.value = duplicateConfigResult.value
+    if (vectorJobsResult.status === 'fulfilled') {
+      vectorJobs.value = vectorJobsPage.records || []
+      recordSourceSuccess(dataSourceLabels.vectorJobs)
+    }
+    if (duplicateConfigResult.status === 'fulfilled') {
+      duplicateConfig.value = duplicateConfigResult.value
+      recordSourceSuccess(dataSourceLabels.duplicateConfig)
+    }
     await renderChart()
   } catch (error) {
     errorMessage.value = getErrorMessage(error)
@@ -1566,6 +1812,7 @@ const loadVectorFailures = async () => {
       status: vectorFailureStatus.value,
       limit: vectorFailureLimit.value
     })
+    recordSourceSuccess(dataSourceLabels.vectorFailures, { dataTimestamp: vectorFailures.value.generatedAt })
     clearSourceFailed(dataSourceLabels.vectorFailures)
   } catch (error) {
     markSourceFailed(dataSourceLabels.vectorFailures)
@@ -1584,6 +1831,7 @@ const loadVectorJobs = async () => {
       pageSize: 8
     })
     vectorJobs.value = result.records || []
+    recordSourceSuccess(dataSourceLabels.vectorJobs)
     clearSourceFailed(dataSourceLabels.vectorJobs)
   } catch (error) {
     markSourceFailed(dataSourceLabels.vectorJobs)
@@ -1859,9 +2107,7 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .ops-page {
   .ops-hero {
-    background:
-      linear-gradient(135deg, rgba(79, 70, 229, 0.24), rgba(14, 165, 233, 0.16)),
-      rgba(15, 23, 42, 0.76);
+    background: var(--app-surface);
     color: var(--app-text);
   }
 
@@ -1878,7 +2124,7 @@ onBeforeUnmount(() => {
     border: 1px solid rgba(148, 163, 184, 0.18);
   }
 
-  :deep(.el-button) {
+  :deep(.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger)) {
     border-color: rgba(148, 163, 184, 0.22);
     background: rgba(15, 23, 42, 0.72);
     color: var(--app-text);
@@ -1896,12 +2142,12 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.74);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
 }
 
 .ops-card {
   padding: 22px;
-  backdrop-filter: blur(14px);
+  backdrop-filter: none;
 }
 
 .ops-card__head,
@@ -1915,6 +2161,11 @@ onBeforeUnmount(() => {
 .ops-card__head {
   justify-content: flex-start;
   margin-bottom: 18px;
+}
+
+.ops-card__status {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .ops-card__icon {
@@ -1987,6 +2238,46 @@ onBeforeUnmount(() => {
 
 .admin-diagnostic-state {
   margin-bottom: 18px;
+}
+
+.ops-data-freshness {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.24);
+  border-radius: 8px;
+  background: rgba(20, 83, 45, 0.14);
+  color: #86efac;
+}
+
+.ops-data-freshness svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.ops-data-freshness strong,
+.ops-data-freshness span {
+  display: block;
+}
+
+.ops-data-freshness span {
+  margin-top: 3px;
+  color: var(--app-text-muted);
+  line-height: 1.5;
+}
+
+.ops-data-freshness--stale {
+  border-color: rgba(250, 204, 21, 0.26);
+  background: rgba(113, 63, 18, 0.16);
+  color: #fde047;
+}
+
+.ops-data-freshness--unknown {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.16);
+  color: #fca5a5;
 }
 
 .diagnostic-actions {
@@ -2433,6 +2724,14 @@ onBeforeUnmount(() => {
   .vector-failure-tools :deep(.el-button),
   .vector-failure-tools :deep(.el-select) {
     width: 100% !important;
+  }
+
+  .ops-card__head {
+    flex-wrap: wrap;
+  }
+
+  .ops-card__status {
+    margin-left: 0;
   }
 }
 </style>

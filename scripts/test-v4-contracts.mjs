@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { NodeTypes, parse as parseTemplate } from '@vue/compiler-dom'
+import { parse as parseSfc } from '@vue/compiler-sfc'
+import ts from 'typescript'
 import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -598,21 +601,389 @@ for (const routePath of releasedSidebarPaths) {
   )
 }
 
-recordContainsAll(
-  'user-first-day-loop',
-  'jobcoach-home-first-day-actions',
-  jobCoachHomePage,
+const {
+  descriptor: jobCoachSfcDescriptor,
+  errors: jobCoachSfcErrors
+} = parseSfc(jobCoachHomePage, { filename: jobCoachHomePageFile })
+const jobCoachTemplateErrors = []
+const jobCoachTemplateAst = jobCoachSfcDescriptor.template
+  ? parseTemplate(jobCoachSfcDescriptor.template.content, {
+      onError: (error) => jobCoachTemplateErrors.push(error)
+    })
+  : null
+const jobCoachScriptAst = ts.createSourceFile(
+  jobCoachHomePageFile,
+  jobCoachSfcDescriptor.scriptSetup?.content || '',
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS
+)
+const jobCoachScriptErrors = jobCoachScriptAst.parseDiagnostics || []
+
+const collectTemplateElements = (root) => {
+  const elements = []
+  const visit = (node) => {
+    if (!node) return
+    if (node.type === NodeTypes.ELEMENT) elements.push(node)
+    if (Array.isArray(node.children)) node.children.forEach(visit)
+  }
+  visit(root)
+  return elements
+}
+
+const staticAttribute = (element, name) =>
+  element.props.find((prop) => prop.type === NodeTypes.ATTRIBUTE && prop.name === name)
+
+const hasStaticAttribute = (element, name, expectedValue) => {
+  const attribute = staticAttribute(element, name)
+  if (!attribute) return false
+  return expectedValue === undefined || attribute.value?.content === expectedValue
+}
+
+const classTokens = (element) =>
+  (staticAttribute(element, 'class')?.value?.content || '').split(/\s+/).filter(Boolean)
+
+const elementsWithClass = (elements, className) =>
+  elements.filter((element) => classTokens(element).includes(className))
+
+const directives = (elements, directiveName) =>
+  elements.flatMap((element) =>
+    element.props.filter((prop) => prop.type === NodeTypes.DIRECTIVE && prop.name === directiveName)
+  )
+
+const directiveExpressions = (elements, directiveName) =>
+  directives(elements, directiveName).map((directive) => directive.exp?.content?.trim() || '')
+
+const templateElements = collectTemplateElements(jobCoachTemplateAst)
+const dashboardCockpitElements = elementsWithClass(templateElements, 'dashboard-cockpit-grid')
+const signalGridElements = elementsWithClass(templateElements, 'cockpit-signal-grid')
+const signalGridSubtree = signalGridElements.length === 1
+  ? collectTemplateElements(signalGridElements[0])
+  : []
+const signalGridForExpressions = directiveExpressions(signalGridSubtree, 'for')
+const missingDashboardTemplateChecks = [
+  ['one dashboard-cockpit-grid class token', dashboardCockpitElements.length === 1],
+  ['one cockpit-signal-grid class token', signalGridElements.length === 1],
   [
-    'first-day-actions',
-    'firstDayActions',
-    '/resumes',
-    '/job-targets/create',
-    '/agent/today',
-    '/questions/practice',
-    "actionType: hasTodayPlanSignal.value ? undefined : 'generate-plan'",
-    'runFirstDayAction'
+    'dashboardSignals v-for inside cockpit-signal-grid',
+    signalGridForExpressions.filter((expression) => expression === 'signal in dashboardSignals').length === 1
+  ]
+].filter(([, passed]) => !passed).map(([name]) => name)
+
+const primaryActionShellElements = elementsWithClass(templateElements, 'primary-action-shell')
+const primaryActionShellSubtree = primaryActionShellElements.length === 1
+  ? collectTemplateElements(primaryActionShellElements[0])
+  : []
+const primaryShellIfExpressions = primaryActionShellElements.length === 1
+  ? directiveExpressions(primaryActionShellElements, 'if')
+  : []
+const invalidPrimaryActionChecks = [
+  ['one primary-action-shell class token', primaryActionShellElements.length === 1],
+  [
+    'orderedActionList[0] v-if on primary-action-shell',
+    primaryShellIfExpressions.filter((expression) => expression === 'orderedActionList[0]').length === 1
   ],
-  'Dashboard exposes resume, target job, plan generation, and starter training actions'
+  [
+    'data-primary="true" inside primary-action-shell',
+    primaryActionShellSubtree.filter((element) => hasStaticAttribute(element, 'data-primary', 'true')).length === 1
+  ],
+  [
+    'data-primary-title inside primary-action-shell',
+    primaryActionShellSubtree.filter((element) => hasStaticAttribute(element, 'data-primary-title')).length === 1
+  ],
+  [
+    'data-primary-cta inside primary-action-shell',
+    primaryActionShellSubtree.filter((element) => hasStaticAttribute(element, 'data-primary-cta')).length === 1
+  ]
+].filter(([, passed]) => !passed).map(([name]) => name)
+const invalidGlobalPrimaryActionChecks = [
+  [
+    'one data-primary="true" across the root template',
+    templateElements.filter((element) => hasStaticAttribute(element, 'data-primary', 'true')).length === 1
+  ],
+  [
+    'one data-primary-title across the root template',
+    templateElements.filter((element) => hasStaticAttribute(element, 'data-primary-title')).length === 1
+  ],
+  [
+    'one data-primary-cta across the root template',
+    templateElements.filter((element) => hasStaticAttribute(element, 'data-primary-cta')).length === 1
+  ]
+].filter(([, passed]) => !passed).map(([name]) => name)
+
+const actionTimelineElements = elementsWithClass(templateElements, 'action-timeline')
+const actionTimelineSubtree = actionTimelineElements.length === 1
+  ? collectTemplateElements(actionTimelineElements[0])
+  : []
+const timelineRowElements = elementsWithClass(actionTimelineSubtree, 'timeline-row')
+
+const unwrapTsExpression = (expression) => {
+  let current = expression
+  while (current) {
+    if (ts.isParenthesizedExpression(current)
+      || ts.isAsExpression(current)
+      || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current)
+      || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(current))) {
+      current = current.expression
+      continue
+    }
+    break
+  }
+  return current
+}
+
+const findVariableDeclaration = (sourceFile, variableName) => {
+  let result
+  const visit = (node) => {
+    if (result) return
+    if (ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === variableName) {
+      result = node
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return result
+}
+
+const computedReturnExpression = (sourceFile, variableName) => {
+  const declaration = findVariableDeclaration(sourceFile, variableName)
+  const initializer = unwrapTsExpression(declaration?.initializer)
+  if (!initializer
+    || !ts.isCallExpression(initializer)
+    || !ts.isIdentifier(initializer.expression)
+    || initializer.expression.text !== 'computed') {
+    return null
+  }
+
+  const callback = unwrapTsExpression(initializer.arguments[0])
+  if (!callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) return null
+  if (!ts.isBlock(callback.body)) return unwrapTsExpression(callback.body)
+
+  const returns = callback.body.statements.filter(ts.isReturnStatement)
+  return returns.length === 1 ? unwrapTsExpression(returns[0].expression) : null
+}
+
+const numericArgumentIs = (argument, expected) => {
+  const expression = unwrapTsExpression(argument)
+  return Boolean(expression) && ts.isNumericLiteral(expression) && Number(expression.text) === expected
+}
+
+const isSliceCallWithArguments = (expression, expectedArguments) => {
+  const current = unwrapTsExpression(expression)
+  if (!current || !ts.isCallExpression(current)) return false
+
+  const callee = unwrapTsExpression(current.expression)
+  if (!callee || !ts.isPropertyAccessExpression(callee)) return false
+  return callee.name.text === 'slice'
+    && current.arguments.length === expectedArguments.length
+    && current.arguments.every((argument, index) => numericArgumentIs(argument, expectedArguments[index]))
+}
+
+const isIdentifierSliceCallWithArguments = (expression, identifierName, expectedArguments) => {
+  const current = unwrapTsExpression(expression)
+  if (!isSliceCallWithArguments(current, expectedArguments)) return false
+
+  const callee = unwrapTsExpression(current.expression)
+  const source = callee && ts.isPropertyAccessExpression(callee)
+    ? unwrapTsExpression(callee.expression)
+    : null
+  return Boolean(source) && ts.isIdentifier(source) && source.text === identifierName
+}
+
+const parseTsExpression = (expressionText, filename) => {
+  if (!expressionText) return null
+
+  const sourceFile = ts.createSourceFile(
+    filename,
+    `const __contractExpression = (${expressionText})`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  )
+  if ((sourceFile.parseDiagnostics || []).length) return null
+
+  const statement = sourceFile.statements[0]
+  if (!statement || !ts.isVariableStatement(statement)) return null
+  const declaration = statement.declarationList.declarations[0]
+  return unwrapTsExpression(declaration?.initializer)
+}
+
+const vForSourceExpression = (element, filename) => {
+  const forDirectives = directives([element], 'for')
+  if (forDirectives.length !== 1) return null
+  return parseTsExpression(forDirectives[0].forParseResult?.source?.content || '', filename)
+}
+
+const propertyNameText = (name) => {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text
+  return ''
+}
+
+const objectStringProperty = (objectExpression, propertyName) => {
+  const property = objectExpression.properties.find(
+    (item) => ts.isPropertyAssignment(item) && propertyNameText(item.name) === propertyName
+  )
+  if (!property || !ts.isPropertyAssignment(property)) return null
+  const initializer = unwrapTsExpression(property.initializer)
+  return initializer && ts.isStringLiteralLike(initializer) ? initializer.text : null
+}
+
+const expectedDashboardSignalKeys = ['target-job', 'evidence', 'recent-report', 'risk-gap']
+const dashboardSignalsReturn = computedReturnExpression(jobCoachScriptAst, 'dashboardSignals')
+const dashboardSignalArray = dashboardSignalsReturn && ts.isArrayLiteralExpression(dashboardSignalsReturn)
+  ? dashboardSignalsReturn
+  : null
+const dashboardSignalKeys = dashboardSignalArray
+  ? dashboardSignalArray.elements.map((element) => {
+      const expression = unwrapTsExpression(element)
+      return expression && ts.isObjectLiteralExpression(expression)
+        ? objectStringProperty(expression, 'key')
+        : null
+    })
+  : []
+const dashboardSignalKeysMatch = dashboardSignalKeys.length === expectedDashboardSignalKeys.length
+  && dashboardSignalKeys.every(Boolean)
+  && [...dashboardSignalKeys].sort().every(
+    (key, index) => key === [...expectedDashboardSignalKeys].sort()[index]
+  )
+
+const orderedActionReturn = computedReturnExpression(jobCoachScriptAst, 'orderedActionList')
+const orderedActionReturnIsLimited = isSliceCallWithArguments(orderedActionReturn, [0, 3])
+const commentOnlyOrderedActionLimitFixture = `
+const orderedActionList = computed<HomeTask[]>(() => {
+  // }).slice(0, 3)
+  return candidates.filter(Boolean)
+})
+`
+const commentOnlyOrderedActionLimitAst = ts.createSourceFile(
+  'comment-only-ordered-action-limit.ts',
+  commentOnlyOrderedActionLimitFixture,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS
+)
+const commentOnlyOrderedActionLimitIsRejected = !isSliceCallWithArguments(
+  computedReturnExpression(commentOnlyOrderedActionLimitAst, 'orderedActionList'),
+  [0, 3]
+)
+const wrappedOrderedActionLimitFixture = `
+const orderedActionList = computed<HomeTask[]>(() => {
+  return candidates.filter(Boolean).slice(0, 3).concat(extraActions)
+})
+`
+const wrappedOrderedActionLimitAst = ts.createSourceFile(
+  'wrapped-ordered-action-limit.ts',
+  wrappedOrderedActionLimitFixture,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS
+)
+const wrappedOrderedActionLimitIsRejected = !isSliceCallWithArguments(
+  computedReturnExpression(wrappedOrderedActionLimitAst, 'orderedActionList'),
+  [0, 3]
+)
+
+const timelineRowsWithOrderedSlice = timelineRowElements.filter((element, index) =>
+  isIdentifierSliceCallWithArguments(
+    vForSourceExpression(element, `jobcoach-timeline-row-${index}.ts`),
+    'orderedActionList',
+    [1]
+  )
+)
+const invalidTimelineSourceFixtures = [
+  'otherorderedActionList.slice(1)',
+  'orderedActionList.slice(1, 2)',
+  'orderedActionList.slice(1).concat(extraActions)'
+]
+const invalidTimelineSourcesAreRejected = invalidTimelineSourceFixtures.every((source, index) => {
+  const fixtureAst = parseTemplate(
+    `<section class="action-timeline"><article class="timeline-row" v-for="item in ${source}" /></section>`
+  )
+  const fixtureRows = elementsWithClass(collectTemplateElements(fixtureAst), 'timeline-row')
+  return fixtureRows.length === 1
+    && !isIdentifierSliceCallWithArguments(
+      vForSourceExpression(fixtureRows[0], `invalid-timeline-source-${index}.ts`),
+      'orderedActionList',
+      [1]
+    )
+})
+const invalidTimelineChecks = [
+  ['one action-timeline class token', actionTimelineElements.length === 1],
+  ['one timeline-row inside action-timeline', timelineRowElements.length === 1],
+  ['orderedActionList.slice(1) v-for on timeline-row', timelineRowsWithOrderedSlice.length === 1]
+].filter(([, passed]) => !passed).map(([name]) => name)
+
+const legacyFirstDayActionMarkers = [
+  'first-day-actions',
+  'firstDayActions',
+  'runFirstDayAction'
+]
+const unexpectedLegacyFirstDayActionMarkers = legacyFirstDayActionMarkers.filter(
+  (marker) => contains(jobCoachHomePage, marker)
+)
+
+record(
+  'user-dashboard-cockpit',
+  'jobcoach-home-focused-action-cockpit',
+  jobCoachSfcErrors.length === 0
+    && jobCoachTemplateErrors.length === 0
+    && jobCoachScriptErrors.length === 0
+    && missingDashboardTemplateChecks.length === 0
+    && unexpectedLegacyFirstDayActionMarkers.length === 0
+    && dashboardSignalKeysMatch
+    && orderedActionReturnIsLimited
+    && commentOnlyOrderedActionLimitIsRejected
+    && wrappedOrderedActionLimitIsRejected
+    && invalidPrimaryActionChecks.length === 0
+    && invalidGlobalPrimaryActionChecks.length === 0
+    && invalidTimelineSourcesAreRejected
+    && invalidTimelineChecks.length === 0,
+  [
+    'Dashboard exposes one primary action, four key signals, at most three ordered actions, and an action timeline without the legacy first-day action grid',
+    jobCoachSfcErrors.length
+      ? `SFC parse errors ${jobCoachSfcErrors.map(String).join(' | ')}`
+      : '',
+    jobCoachTemplateErrors.length
+      ? `template parse errors ${jobCoachTemplateErrors.map(String).join(' | ')}`
+      : '',
+    jobCoachScriptErrors.length
+      ? `script parse errors ${jobCoachScriptErrors.map((error) => ts.flattenDiagnosticMessageText(error.messageText, '\n')).join(' | ')}`
+      : '',
+    missingDashboardTemplateChecks.length
+      ? `missing template structure ${missingDashboardTemplateChecks.join(' | ')}`
+      : '',
+    !dashboardSignalKeysMatch
+      ? `expected dashboardSignals keys ${expectedDashboardSignalKeys.join(' | ')}, found ${dashboardSignalKeys.filter(Boolean).join(' | ') || 'none'}`
+      : '',
+    !orderedActionReturnIsLimited
+      ? 'orderedActionList computed return expression must be an outermost .slice(0, 3) call'
+      : '',
+    !commentOnlyOrderedActionLimitIsRejected
+      ? 'orderedActionList limit validation must reject comment-only slice text'
+      : '',
+    !wrappedOrderedActionLimitIsRejected
+      ? 'orderedActionList limit validation must reject return chains wrapped after slice(0, 3)'
+      : '',
+    invalidPrimaryActionChecks.length
+      ? `invalid primary-action-shell structure ${invalidPrimaryActionChecks.join(' | ')}`
+      : '',
+    invalidGlobalPrimaryActionChecks.length
+      ? `invalid root-template primary marker counts ${invalidGlobalPrimaryActionChecks.join(' | ')}`
+      : '',
+    !invalidTimelineSourcesAreRejected
+      ? 'timeline v-for validation must reject wrong identifiers, extra arguments, and wrapped slice calls'
+      : '',
+    invalidTimelineChecks.length
+      ? `invalid action-timeline structure ${invalidTimelineChecks.join(' | ')}`
+      : '',
+    unexpectedLegacyFirstDayActionMarkers.length
+      ? `unexpected ${unexpectedLegacyFirstDayActionMarkers.join(' | ')}`
+      : ''
+  ].filter(Boolean).join('; ')
 )
 
 recordContainsAll(

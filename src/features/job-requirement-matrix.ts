@@ -261,6 +261,8 @@ export interface JobReadinessChangeSummary {
 export const buildJobReadinessTrend = (
   snapshots: JobReadinessSnapshotVO[]
 ): { points: JobReadinessTrendPoint[]; change: JobReadinessChangeSummary | null } => {
+  const isUnavailable = (item: Pick<JobReadinessSnapshotVO, 'sampleInsufficient' | 'fallback'>) =>
+    Boolean(item.sampleInsufficient) || Boolean(item.fallback)
   const ordered = [...snapshots]
     .filter((item) => item && (item.id != null || item.generatedAt || item.createdAt))
     .sort((left, right) => {
@@ -271,22 +273,25 @@ export const buildJobReadinessTrend = (
     })
     .slice(-8)
 
-  const points = ordered.map((item) => ({
-    id: item.id,
-    generatedAt: item.generatedAt || item.createdAt,
-    score: item.sampleInsufficient ? undefined : item.overallScore,
-    sampleInsufficient: Boolean(item.sampleInsufficient),
-    strongCount: toNumber(item.strongCount),
-    missingCount: toNumber(item.missingCount)
-  }))
+  const points = ordered.map((item) => {
+    const sampleInsufficient = isUnavailable(item)
+    return {
+      id: item.id,
+      generatedAt: item.generatedAt || item.createdAt,
+      score: sampleInsufficient ? undefined : item.overallScore,
+      sampleInsufficient,
+      strongCount: toNumber(item.strongCount),
+      missingCount: toNumber(item.missingCount)
+    }
+  })
   if (ordered.length < 2) return { points, change: null }
 
   const previous = ordered[ordered.length - 2]
   const latest = ordered[ordered.length - 1]
   const strongDelta = toNumber(latest.strongCount) - toNumber(previous.strongCount)
   const missingDelta = toNumber(latest.missingCount) - toNumber(previous.missingCount)
-  const scoreDelta = latest.sampleInsufficient
-    || previous.sampleInsufficient
+  const scoreDelta = isUnavailable(latest)
+    || isUnavailable(previous)
     || latest.overallScore == null
     || previous.overallScore == null
     ? undefined
@@ -303,7 +308,8 @@ export const buildJobReadinessTrend = (
     .map((item) => {
       const before = previousDimensions.get(item.dimension)
       if (!before || item.score == null || before.score == null
-          || item.sampleInsufficient || before.sampleInsufficient) {
+          || item.sampleInsufficient || item.fallback
+          || before.sampleInsufficient || before.fallback) {
         return null
       }
       return { dimension: item.dimension, delta: item.score - before.score }

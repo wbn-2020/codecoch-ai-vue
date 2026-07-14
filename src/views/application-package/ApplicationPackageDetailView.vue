@@ -122,6 +122,11 @@
         </article>
       </section>
 
+      <ResumeArtifactDeliveryPanel
+        :resume-version-id="interviewContext.resumeVersionId"
+        :application-package-id="isPersistedPackageRoute ? packageId : undefined"
+      />
+
       <section class="detail-grid">
         <article class="content-panel checklist-panel">
           <div class="section-head">
@@ -329,6 +334,7 @@ import {
   previewApplicationPackageApi
 } from '@/api/applicationPackage'
 import AppState from '@/components/common/AppState.vue'
+import ResumeArtifactDeliveryPanel from '@/views/resume/components/ResumeArtifactDeliveryPanel.vue'
 import type {
   ApplicationPackageChecklistItemVO,
   ApplicationPackageEvidenceCoverageItemVO,
@@ -754,8 +760,7 @@ const ensurePersistedPackage = async () => {
     jdAnalysisId: pack.jdAnalysisId || previewParams.value.jdAnalysisId,
     resumeVersionId: pack.recommendedResumeVersionId || previewParams.value.resumeVersionId,
     matchReportId: pack.matchReportId || previewParams.value.matchReportId,
-    projectEvidenceIds: pack.projectEvidenceIds || [],
-    source: 'APPLICATION_PACKAGE_PREVIEW'
+    projectEvidenceIds: pack.projectEvidenceIds || []
   })
   currentPackage.value = persisted
   await router.replace(`/application-packages/${encodeURIComponent(String(persisted.id))}`)
@@ -949,22 +954,24 @@ onMounted(loadPackage)
 .application-package-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .package-hero,
 .content-panel {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-card-bg);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .package-hero {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px 20px;
 }
 
 .hero-kicker,
@@ -979,7 +986,7 @@ onMounted(loadPackage)
 }
 
 .hero-kicker {
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -994,21 +1001,22 @@ onMounted(loadPackage)
 
 .package-hero h1 {
   margin-top: 10px;
-  font-size: 30px;
-  line-height: 1.2;
+  color: var(--user-text);
+  font-size: 26px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
 .package-hero p,
 .content-panel p,
 .content-panel small {
-  color: var(--app-text-muted);
-  line-height: 1.7;
+  color: var(--user-text-muted);
+  line-height: 1.65;
 }
 
 .content-panel {
   min-width: 0;
-  padding: 20px;
+  padding: 16px;
 }
 
 .degraded-panel {
@@ -1020,7 +1028,7 @@ onMounted(loadPackage)
 .detail-grid,
 .resume-match-grid {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .overview-grid {
@@ -1037,7 +1045,7 @@ onMounted(loadPackage)
   align-content: start;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
@@ -1050,18 +1058,18 @@ onMounted(loadPackage)
 }
 
 .readiness-card--success {
-  border-color: rgba(22, 163, 74, 0.34);
-  background: rgba(22, 163, 74, 0.08);
+  border-color: var(--user-success-border);
+  background: var(--user-success-soft);
 }
 
 .readiness-card--warning {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.08);
+  border-color: var(--user-warning);
+  background: var(--user-warning-soft);
 }
 
 .readiness-card--danger {
-  border-color: rgba(239, 68, 68, 0.34);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--user-danger-border);
+  background: var(--user-danger-soft);
 }
 
 .section-head {
@@ -1081,18 +1089,27 @@ onMounted(loadPackage)
 .compact-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
 
   div {
     min-width: 0;
     padding: 10px 12px;
-    border: 1px solid var(--app-border);
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.2);
+    background: var(--user-control-bg);
+
+    &:nth-child(even) {
+      border-left: 1px solid var(--user-border);
+    }
+
+    &:nth-child(n + 3) {
+      border-top: 1px solid var(--user-border);
+    }
   }
 
   dt {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
@@ -1126,10 +1143,9 @@ onMounted(loadPackage)
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.18);
+  padding: 12px 0;
+  border-top: 1px solid var(--user-border);
+  background: transparent;
 
   strong,
   p {
@@ -1146,19 +1162,19 @@ onMounted(loadPackage)
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: #94a3b8;
+  background: var(--user-text-subtle);
 }
 
 .check-dot--success {
-  background: #22c55e;
+  background: var(--user-success);
 }
 
 .check-dot--warning {
-  background: #f59e0b;
+  background: var(--user-warning);
 }
 
 .check-dot--danger {
-  background: #ef4444;
+  background: var(--user-danger);
 }
 
 .action-panel,
@@ -1174,25 +1190,30 @@ onMounted(loadPackage)
 .coverage-list article,
 .risk-card,
 .suggestion-card {
-  padding: 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.2);
+  padding: 12px 0;
+  border-top: 1px solid var(--user-border);
+  background: transparent;
 }
 
 .resume-match-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
 
   div {
     min-width: 0;
     padding: 14px;
-    border: 1px solid var(--app-border);
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.2);
+    background: var(--user-control-bg);
+
+    & + div {
+      border-left: 1px solid var(--user-border);
+    }
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
@@ -1215,20 +1236,20 @@ onMounted(loadPackage)
 
 .coverage-list small,
 .risk-card small {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.6;
 }
 
 .risk-card--low {
-  border-color: rgba(34, 197, 94, 0.28);
+  border-color: var(--user-success-border);
 }
 
 .risk-card--medium {
-  border-color: rgba(245, 158, 11, 0.34);
+  border-color: var(--user-warning);
 }
 
 .risk-card--high {
-  border-color: rgba(239, 68, 68, 0.34);
+  border-color: var(--user-danger-border);
 }
 
 .suggestion-card {
@@ -1260,6 +1281,16 @@ onMounted(loadPackage)
   .checklist-item {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .compact-facts div:nth-child(even),
+  .resume-match-grid div + div {
+    border-left: 0;
+  }
+
+  .compact-facts div + div,
+  .resume-match-grid div + div {
+    border-top: 1px solid var(--user-border);
   }
 
   .hero-actions,
