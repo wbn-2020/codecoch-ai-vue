@@ -211,6 +211,7 @@ export const normalizeJobReadiness = (
     id: source.id == null ? undefined : toNumber(source.id),
     targetJobId: toNumber(source.targetJobId, targetJobId),
     jdAnalysisId: source.jdAnalysisId == null ? undefined : toNumber(source.jdAnalysisId),
+    snapshotHash: source.snapshotHash,
     overallScore: readinessScore == null
       ? undefined
       : Math.max(0, Math.min(100, toNumber(readinessScore))),

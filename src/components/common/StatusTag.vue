@@ -13,6 +13,14 @@ const props = defineProps<{
 
 type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary'
 
+const taskStatusMeta: Record<string, { label: string; type: TagType }> = {
+  TODO: { label: '待处理', type: 'primary' },
+  DOING: { label: '处理中', type: 'warning' },
+  DONE: { label: '已完成', type: 'success' },
+  SKIPPED: { label: '已跳过', type: 'info' },
+  EXPIRED: { label: '已过期', type: 'danger' }
+}
+
 const statusValue = computed(() =>
   props.status === undefined || props.status === null ? '' : String(props.status)
 )
@@ -20,8 +28,10 @@ const statusValue = computed(() =>
 const label = computed(() => {
   const value = statusValue.value
   const mapped = props.map?.[value]
+  const taskStatus = taskStatusMeta[value]
   if (typeof mapped === 'string') return mapped
   if (mapped?.label) return mapped.label
+  if (taskStatus) return taskStatus.label
   if (props.status === 1 || props.status === true) return '启用'
   if (props.status === 0 || props.status === false) return '禁用'
   const builtinMap: Record<string, string> = {
@@ -62,8 +72,10 @@ const label = computed(() => {
 const type = computed(() => {
   const value = statusValue.value
   const mapped = props.map?.[value]
+  const taskStatus = taskStatusMeta[value]
   if (typeof mapped === 'object' && mapped?.type) return mapped.type
   if (props.toneMap?.[value]) return props.toneMap[value]
+  if (taskStatus) return taskStatus.type
   if (['1', 'true', 'COMPLETED', 'GENERATED', 'CORRECT', 'MASTERED', 'SUCCESS', 'DONE', 'READY', 'ENABLED'].includes(value)) {
     return 'success'
   }

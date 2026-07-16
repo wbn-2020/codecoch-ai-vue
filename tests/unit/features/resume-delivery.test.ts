@@ -42,6 +42,24 @@ describe('resume delivery normalization', () => {
     expect(auditEvidenceMeta('UNSUPPORTED').conclusion).toContain('不等于事实为假')
   })
 
+  it('preserves backend quantitative-risk findings instead of downgrading them to unknown', () => {
+    const audit = normalizeResumeAudit({
+      id: 2,
+      resumeVersionId: 7,
+      findings: [{
+        evidenceStatus: 'RISK',
+        claimText: '订单峰值吞吐提升 80%'
+      }]
+    })
+
+    expect(audit.findings[0]?.evidenceStatus).toBe('RISK')
+    expect(auditEvidenceMeta('RISK')).toMatchObject({
+      label: '量化风险',
+      type: 'danger'
+    })
+    expect(auditEvidenceMeta('RISK').conclusion).toContain('不代表经历为假')
+  })
+
   it('preserves the exact edited text that was accepted', () => {
     const suggestion = normalizeResumeSuggestion({
       id: 10,

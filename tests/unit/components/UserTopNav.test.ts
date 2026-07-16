@@ -135,6 +135,49 @@ describe('UserTopNav navigation discovery', () => {
     expect(activePrimary.attributes('aria-current')).toBe('page')
   })
 
+  it('opens all features as a modal, restores focus, and locks background interactions', async () => {
+    const wrapper = mountNav()
+    document.body.appendChild(wrapper.element)
+    document.body.style.overflow = 'auto'
+    const trigger = wrapper.get('.mobile-toggle')
+    trigger.element.focus()
+
+    await trigger.trigger('click')
+    await nextTick()
+
+    const panel = wrapper.get('#user-mobile-panel')
+    expect(trigger.attributes('aria-haspopup')).toBe('dialog')
+    expect(panel.attributes('role')).toBe('dialog')
+    expect(panel.attributes('aria-modal')).toBe('true')
+    expect(panel.attributes('aria-labelledby')).toBe('user-mobile-panel-title')
+    expect(wrapper.get('#user-mobile-panel-title').text()).toBe('全部功能')
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(wrapper.get('.mobile-bottom-nav').classes()).toContain('is-modal-open')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(document.body.style.overflow).toBe('auto')
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+    document.body.style.overflow = ''
+  })
+
+  it('does not route through the bottom navigation while the modal is open', async () => {
+    const wrapper = mountNav()
+    await wrapper.get('.mobile-toggle').trigger('click')
+    await wrapper.get('.mobile-bottom-nav__item').trigger('click')
+
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('gives the account control a descriptive accessible name', () => {
+    const wrapper = mountNav()
+
+    expect(wrapper.get('.user-trigger').attributes('aria-label')).toBe('打开 CodeCoachAI 用户 的账户菜单')
+  })
+
   it('closes the feature navigator with Escape and restores trigger focus', async () => {
     const wrapper = mountNav()
     document.body.appendChild(wrapper.element)

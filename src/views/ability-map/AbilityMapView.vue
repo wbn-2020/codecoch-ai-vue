@@ -95,23 +95,25 @@
     </section>
 
     <section v-else class="map-workspace">
-      <aside class="domain-rail">
-        <div class="section-title">
-          <span>能力域</span>
-          <em>{{ abilityMap.domains.length }} 个方向</em>
-        </div>
-        <button
-          v-for="domain in abilityMap.domains"
-          :key="domain.domainCode"
-          class="domain-item"
-          :class="{ active: domain.domainCode === activeDomainCode }"
-          type="button"
-          @click="activeDomainCode = domain.domainCode"
-        >
-          <span>{{ safeDomainName(domain) }}</span>
-          <strong>{{ domain.assessedCount }}/{{ domain.totalCount }}</strong>
-          <small>{{ domainWeakText(domain) }}</small>
-        </button>
+      <aside class="domain-rail-shell">
+        <nav class="domain-rail" aria-label="能力域目录">
+          <div class="section-title">
+            <span>能力域</span>
+            <em>{{ abilityMap.domains.length }} 个方向</em>
+          </div>
+          <button
+            v-for="domain in abilityMap.domains"
+            :key="domain.domainCode"
+            class="domain-item"
+            :class="{ active: domain.domainCode === activeDomainCode }"
+            type="button"
+            @click="activeDomainCode = domain.domainCode"
+          >
+            <span>{{ safeDomainName(domain) }}</span>
+            <strong>{{ domain.assessedCount }}/{{ domain.totalCount }}</strong>
+            <small>{{ domainWeakText(domain) }}</small>
+          </button>
+        </nav>
       </aside>
 
       <main class="domain-panel">
@@ -1074,13 +1076,20 @@ onMounted(fetchAbilityMap)
   display: grid;
   grid-template-columns: clamp(220px, 18vw, 240px) minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
+.domain-rail-shell,
 .domain-rail,
 .domain-panel,
 .insight-panel {
   min-width: 0;
+}
+
+.domain-rail-shell {
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .domain-rail {
@@ -1092,6 +1101,10 @@ onMounted(fetchAbilityMap)
   padding: 12px;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  border: 0 !important;
+  border-radius: 7px;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .section-title {
@@ -1193,6 +1206,7 @@ onMounted(fetchAbilityMap)
 }
 
 .growth-stage-track {
+  --growth-stage-node-center: 27px;
   display: grid;
   position: relative;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1200,7 +1214,7 @@ onMounted(fetchAbilityMap)
 
   &::before {
     position: absolute;
-    top: 18px;
+    top: var(--growth-stage-node-center);
     right: 16%;
     left: 16%;
     height: 2px;
@@ -1376,17 +1390,6 @@ onMounted(fetchAbilityMap)
   grid-template-columns: 1fr;
   gap: 10px;
   padding-left: 18px;
-
-  &::before {
-    position: absolute;
-    top: 12px;
-    bottom: 12px;
-    left: 5px;
-    width: 2px;
-    border-radius: 999px;
-    background: var(--user-primary);
-    content: '';
-  }
 }
 
 .skill-card {
@@ -1402,6 +1405,7 @@ onMounted(fetchAbilityMap)
 
   &::before {
     position: absolute;
+    z-index: 1;
     top: 20px;
     left: -18px;
     width: 12px;
@@ -1410,6 +1414,18 @@ onMounted(fetchAbilityMap)
     border-radius: 999px;
     background: var(--user-primary);
     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
+    content: '';
+  }
+
+  &:not(:last-child)::after {
+    position: absolute;
+    z-index: 0;
+    top: 26px;
+    left: -13px;
+    width: 2px;
+    height: calc(100% + 10px);
+    border-radius: 999px;
+    background: var(--user-primary);
     content: '';
   }
 
@@ -1702,9 +1718,9 @@ onMounted(fetchAbilityMap)
     grid-template-columns: 1fr;
 
     &::before {
-      top: 16px;
-      bottom: 16px;
-      left: 26px;
+      top: var(--growth-stage-node-center);
+      bottom: var(--growth-stage-node-center);
+      left: var(--growth-stage-node-center);
       width: 2px;
       height: auto;
       background: var(--user-primary-border);
@@ -1758,6 +1774,10 @@ onMounted(fetchAbilityMap)
 
   .skill-card::before {
     left: -15px;
+  }
+
+  .skill-card:not(:last-child)::after {
+    left: -10px;
   }
 }
 

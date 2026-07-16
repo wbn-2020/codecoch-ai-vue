@@ -1,7 +1,7 @@
 export type ResumeSuggestionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNDONE' | 'UNKNOWN'
 export type ResumeSuggestionDecisionType = 'ACCEPT' | 'REJECT' | 'UNDO'
 export type ResumeSuggestionRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN'
-export type ResumeAuditEvidenceStatus = 'VERIFIED' | 'PARTIAL' | 'UNSUPPORTED' | 'UNKNOWN'
+export type ResumeAuditEvidenceStatus = 'VERIFIED' | 'PARTIAL' | 'RISK' | 'UNSUPPORTED' | 'UNKNOWN'
 export type ResumeArtifactStatus = 'GENERATING' | 'READY' | 'FAILED' | 'UNKNOWN'
 export type ResumeExportFormat = 'PDF' | 'DOCX'
 

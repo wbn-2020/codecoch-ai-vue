@@ -394,15 +394,19 @@
   .el-input__inner,
   .el-textarea__inner,
   .el-range-input,
-  .el-select__placeholder,
   .el-select__selected-item,
   .el-input-number .el-input__inner {
     color: var(--user-text);
   }
 
+  .el-select__placeholder {
+    color: var(--user-text-subtle);
+  }
+
   .el-input__inner::placeholder,
   .el-textarea__inner::placeholder {
     color: var(--user-text-subtle);
+    opacity: 1;
   }
 
   .el-input.is-disabled .el-input__wrapper,

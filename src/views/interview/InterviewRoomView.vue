@@ -748,6 +748,7 @@ const interviewStatusLabel = (status?: string | null) => {
     NOT_STARTED: '待开始',
     IN_PROGRESS: '面试中',
     RUNNING: '面试中',
+    WAITING_ANSWER: '等待作答',
     COMPLETED: '已完成',
     REPORT_GENERATING: '报告生成中',
     REPORT_DONE: '报告已生成',

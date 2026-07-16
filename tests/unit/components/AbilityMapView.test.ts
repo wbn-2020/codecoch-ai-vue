@@ -99,8 +99,16 @@ describe('AbilityMapView layout', () => {
     expect(workspaceRule).toMatch(
       /grid-template-columns:\s*clamp\(220px,\s*18vw,\s*240px\)\s+minmax\(0,\s*1fr\)/
     )
+    expect(workspaceRule).toMatch(/align-items:\s*stretch;/)
     expect(workspaceRule).not.toMatch(/\s280px/)
     expect(source).not.toContain('map-workspace--without-insights')
+  })
+
+  it('keeps the directory visual rail aligned with the full map while its contents remain sticky', async () => {
+    const wrapper = await mountAbilityMap(false)
+    const shell = wrapper.get('.map-workspace > .domain-rail-shell')
+
+    expect(shell.find('.domain-rail').attributes('aria-label')).toBe('能力域目录')
   })
 
   it('does not reserve an insight region before training data exists', async () => {
@@ -116,5 +124,29 @@ describe('AbilityMapView layout', () => {
 
     expect(wrapper.find('.map-workspace > .insight-panel').exists()).toBe(false)
     expect(wrapper.find('.domain-panel > .insight-panel').exists()).toBe(true)
+  })
+
+  it('terminates the skill rail at the final node instead of the final card bottom', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/ability-map/AbilityMapView.vue'),
+      'utf8'
+    )
+    const skillGridRule = source.match(/\.skill-grid\s*\{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(skillGridRule).not.toContain('&::before')
+    expect(source).toMatch(/&:not\(:last-child\)::after\s*\{[\s\S]*?top:\s*26px;/)
+    expect(source).toMatch(/&:not\(:last-child\)::after\s*\{[\s\S]*?height:\s*calc\(100%\s*\+\s*10px\);/)
+    expect(source).toMatch(/\.skill-card:not\(:last-child\)::after\s*\{[\s\S]*?left:\s*-10px;/)
+  })
+
+  it('aligns the growth-stage rail with each node center at desktop and mobile widths', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/ability-map/AbilityMapView.vue'),
+      'utf8'
+    )
+
+    expect(source).toMatch(/--growth-stage-node-center:\s*27px;/)
+    expect(source).toMatch(/\.growth-stage-track\s*\{[\s\S]*?top:\s*var\(--growth-stage-node-center\);/)
+    expect(source).toMatch(/&::before\s*\{[\s\S]*?bottom:\s*var\(--growth-stage-node-center\);[\s\S]*?left:\s*var\(--growth-stage-node-center\);/)
   })
 })

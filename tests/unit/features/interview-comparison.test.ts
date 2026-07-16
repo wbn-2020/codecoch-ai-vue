@@ -93,12 +93,14 @@ describe('interview comparison normalization', () => {
     expect(comparison.comparable).toBe(false)
     expect(comparison.unavailableReasons[0]).toEqual({
       code: 'RUBRIC_VERSION_MISMATCH',
-      message: '量表版本不同'
+      message: '所选报告使用了不同的评分量表版本。'
     })
   })
 
   it('normalizes rounds, dimensions, sample warnings and optional requirement improvements', () => {
     const comparison = normalizeInterviewComparison({
+      contractVersion: 'INTERVIEW_COMPARISON_V2',
+      legacySnapshotNormalized: true,
       comparable: true,
       reportIds: ['11', 12],
       firstTotalScore: 70,
@@ -112,6 +114,12 @@ describe('interview comparison normalization', () => {
           reportId: 11,
           totalScore: 70,
           sampleInsufficient: true,
+          rubricVersion: 'LEGACY_STAGE_SCORES_V1:abc',
+          normalizationSource: 'LEGACY_STAGE_SCORES',
+          warnings: [{
+            code: 'RUBRIC_VERSION_NORMALIZED',
+            message: 'The known fallback dimension contract was normalized to the canonical version.'
+          }],
           rubricScores: { TECHNICAL_DEPTH: 3 }
         },
         {
@@ -144,9 +152,41 @@ describe('interview comparison normalization', () => {
     })
 
     expect(comparison.comparable).toBe(true)
+    expect(comparison.contractVersion).toBe('INTERVIEW_COMPARISON_V2')
+    expect(comparison.legacySnapshotNormalized).toBe(true)
     expect(comparison.rounds[0]?.sampleInsufficient).toBe(true)
+    expect(comparison.rounds[0]?.rubricVersion).toBe('LEGACY_STAGE_SCORES_V1:abc')
+    expect(comparison.rounds[0]?.normalizationSource).toBe('LEGACY_STAGE_SCORES')
+    expect(comparison.rounds[0]?.warnings[0]?.message).toBe('已将已知的历史评分维度合同规范化为统一量表版本。')
     expect(comparison.dimensions[0]?.points[1]?.deltaFromPrevious).toBe(1)
     expect(comparison.requirementImprovements[0]?.latestStatus).toBe('COVERED')
+  })
+
+  it('localizes controlled backend comparison reasons without hiding the trust result', () => {
+    const comparison = normalizeInterviewComparison({
+      comparable: false,
+      reportIds: [11, 12],
+      unavailableReasons: [{
+        code: 'REPORT_UNTRUSTED',
+        message: 'Report scoring data is fallback, incomplete, or untrusted'
+      }],
+      warnings: [{
+        code: 'RUBRIC_VERSION_INFERRED',
+        message: 'A compatibility rubric identity was derived from the exact legacy stage dimension contract.'
+      }],
+      rounds: [
+        { reportId: 11, rubricScores: {} },
+        { reportId: 12, rubricScores: {} }
+      ]
+    })
+
+    expect(comparison.comparable).toBe(false)
+    expect(comparison.unavailableReasons[0]?.message).toBe(
+      '报告评分为降级、数据不完整或可信度不足，暂不生成趋势结论。'
+    )
+    expect(comparison.warnings[0]?.message).toBe(
+      '历史报告未保存量表标识，已按原有评分维度生成兼容量表版本。'
+    )
   })
 
   it('uses the persisted comparison id without browser session storage', () => {

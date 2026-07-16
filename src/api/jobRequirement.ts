@@ -1,5 +1,13 @@
 import request from '@/utils/request'
-import type { JobReadinessSnapshotVO, JobRequirementMatrixVO } from '@/types/jobRequirement'
+import type {
+  JobReadinessHistoryPageQuery,
+  JobReadinessHistoryPageResult,
+  JobReadinessSnapshotDetailVO,
+  JobReadinessSnapshotVO,
+  JobRequirementMatrixVO
+} from '@/types/jobRequirement'
+
+const DEFAULT_JOB_READINESS_HISTORY_PAGE_SIZE = 20
 
 export const getJobRequirementMatrixApi = (targetJobId: number) =>
   request.get<JobRequirementMatrixVO, JobRequirementMatrixVO>(
@@ -26,10 +34,22 @@ export const recalculateJobReadinessApi = (targetJobId: number) =>
     `/job-targets/${targetJobId}/readiness-snapshots`
   )
 
-export const getJobReadinessHistoryApi = (targetJobId: number) =>
-  request.get<JobReadinessSnapshotVO[], JobReadinessSnapshotVO[]>(
-    `/job-targets/${targetJobId}/readiness-snapshots`
+export const getJobReadinessHistoryPageApi = (
+  targetJobId: number,
+  query: JobReadinessHistoryPageQuery = {}
+) =>
+  request.get<JobReadinessHistoryPageResult, JobReadinessHistoryPageResult>(
+    `/job-targets/${targetJobId}/readiness-snapshots/page`,
+    {
+      params: {
+        pageNo: query.pageNo ?? 1,
+        pageSize: query.pageSize ?? DEFAULT_JOB_READINESS_HISTORY_PAGE_SIZE
+      }
+    }
   )
+
+export const getJobReadinessHistoryApi = async (targetJobId: number) =>
+  (await getJobReadinessHistoryPageApi(targetJobId)).records
 
 const assertFinitePositiveInteger = (value: number, parameterName: string) => {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -40,10 +60,10 @@ const assertFinitePositiveInteger = (value: number, parameterName: string) => {
 export const getJobReadinessSnapshotApi = async (
   targetJobId: number,
   snapshotId: number
-) => {
+): Promise<JobReadinessSnapshotDetailVO> => {
   assertFinitePositiveInteger(targetJobId, 'targetJobId')
   assertFinitePositiveInteger(snapshotId, 'snapshotId')
-  return request.get<JobReadinessSnapshotVO, JobReadinessSnapshotVO>(
+  return request.get<JobReadinessSnapshotDetailVO, JobReadinessSnapshotDetailVO>(
     `/job-targets/${targetJobId}/readiness-snapshots/${snapshotId}`
   )
 }

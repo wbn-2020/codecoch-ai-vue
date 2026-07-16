@@ -194,11 +194,14 @@
             :matrix="requirementMatrix"
             :readiness="readinessSnapshot"
             :readiness-history="readinessHistory"
+            :selected-snapshot-id="readinessSnapshot?.id"
+            :snapshot-loading-id="readinessSnapshotLoadingId"
             :loading="requirementLoading"
             :refreshing="requirementRefreshing"
             :error="requirementError"
             @refresh="refreshRequirementInsights"
             @action="handleRequirementAction"
+            @select-snapshot="selectReadinessSnapshot"
           />
         </div>
       </main>
@@ -222,6 +225,7 @@ import {
 import {
   getJobRequirementMatrixApi,
   getJobReadinessHistoryApi,
+  getJobReadinessSnapshotApi,
   getLatestJobReadinessApi,
   materializeJobRequirementsApi,
   recalculateJobReadinessApi,
@@ -266,9 +270,11 @@ const analysis = ref<JobDescriptionAnalysisVO | null>(null)
 const requirementMatrix = ref<JobRequirementMatrixVO | null>(null)
 const readinessSnapshot = ref<JobReadinessSnapshotVO | null>(null)
 const readinessHistory = ref<JobReadinessSnapshotVO[]>([])
+const readinessSnapshotLoadingId = ref<number | null>(null)
 const requirementLoading = ref(false)
 const requirementRefreshing = ref(false)
 const requirementError = ref('')
+let readinessSnapshotRequestVersion = 0
 const JOB_TARGET_PARSE_TASK_BIZ_TYPE = 'job-target.parse'
 const {
   status: parseSseStatus,
@@ -492,6 +498,8 @@ const loadAll = async (silent = false) => {
 
 const loadRequirementInsights = async (silent = false) => {
   const id = targetId.value
+  readinessSnapshotRequestVersion += 1
+  readinessSnapshotLoadingId.value = null
   if (!id || !hasStructuredAnalysis(analysis.value)) {
     requirementMatrix.value = null
     readinessSnapshot.value = null
@@ -530,6 +538,30 @@ const loadRequirementInsights = async (silent = false) => {
     readinessHistory.value = readinessSnapshot.value ? [readinessSnapshot.value] : []
   }
   if (!silent) requirementLoading.value = false
+}
+
+const selectReadinessSnapshot = async (snapshotId: number) => {
+  const id = targetId.value
+  if (!id || readinessSnapshotLoadingId.value != null || readinessSnapshot.value?.id === snapshotId) return
+
+  const requestVersion = ++readinessSnapshotRequestVersion
+  readinessSnapshotLoadingId.value = snapshotId
+  try {
+    const detail = await getJobReadinessSnapshotApi(id, snapshotId)
+    if (requestVersion !== readinessSnapshotRequestVersion || targetId.value !== id) return
+
+    const normalized = normalizeJobReadiness(detail, id)
+    if (!normalized) throw new Error('readiness snapshot detail is empty')
+    readinessSnapshot.value = normalized
+  } catch (error) {
+    if (requestVersion === readinessSnapshotRequestVersion && targetId.value === id) {
+      ElMessage.error(getErrorMessage(error, '就绪度快照详情暂时无法加载，请稍后重试。'))
+    }
+  } finally {
+    if (requestVersion === readinessSnapshotRequestVersion) {
+      readinessSnapshotLoadingId.value = null
+    }
+  }
 }
 
 const refreshRequirementInsights = async () => {

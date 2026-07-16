@@ -87,6 +87,14 @@ describe('career growth normalization', () => {
     expect(buildAttributionPresentation(incomparable).cautions).toContain('LOW_SAMPLE')
   })
 
+  it('describes the persisted attribution snapshot empty state accurately', () => {
+    const presentation = buildAttributionPresentation()
+
+    expect(presentation.title).toBe('暂无归因快照')
+    expect(presentation.summary).toContain('最近快照会在刷新后自动恢复')
+    expect(presentation.cautions.join(' ')).not.toContain('未提供归因快照查询接口')
+  })
+
   it('normalizes partial import rows and only marks actionable calendar events overdue', () => {
     const preview = normalizeCareerImportPreview({
       format: 'CSV',

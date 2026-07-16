@@ -151,7 +151,7 @@
       <p v-else class="timeline-empty">当前只有主行动，完成后会继续生成下一步。</p>
     </section>
 
-    <article class="recommendation-summary">
+    <article ref="recommendationSummary" class="recommendation-summary">
       <div class="card-heading">
         <span class="card-kicker">推荐依据摘要</span>
         <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
@@ -159,7 +159,7 @@
       <p class="source-boundary">{{ recommendationBoundaryText }}</p>
       <p v-if="evidenceModuleErrorText" class="module-error">{{ evidenceModuleErrorText }}</p>
 
-      <details class="recommendation-details">
+      <details class="recommendation-details" :open="showRecommendationDetails" @toggle="updateRecommendationDetails">
         <summary tabindex="0">查看完整依据、来源与边界</summary>
         <div class="recommendation-details__content">
           <dl class="recommendation-facts">
@@ -195,6 +195,11 @@
       </details>
     </article>
 
+    <nav class="mobile-discovery-links" aria-label="推荐依据和资料工具">
+      <button type="button" @click="openRecommendationDetails">查看推荐依据</button>
+      <button type="button" @click="openSecondaryMaterials">打开资料与工具</button>
+    </nav>
+
     <section class="secondary-toggle-section">
       <button type="button" class="secondary-toggle" :aria-expanded="showSecondarySections" @click="showSecondarySections = !showSecondarySections">
         <span>
@@ -205,7 +210,7 @@
       </button>
     </section>
 
-    <section v-if="showSecondarySections" class="secondary-material">
+    <section v-if="showSecondarySections" ref="secondaryMaterial" class="secondary-material">
       <div class="path-section path-section--secondary">
         <div class="section-head">
           <div>
@@ -371,7 +376,7 @@ import {
   Target
 } from 'lucide-vue-next'
 import type { Component, Ref } from 'vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 
@@ -482,6 +487,9 @@ const completionReviewVisible = ref(false)
 const completionReviewTask = ref<AgentTaskVO | null>(null)
 const completionReviewNote = ref('')
 const showSecondarySections = ref(false)
+const showRecommendationDetails = ref(false)
+const recommendationSummary = ref<HTMLElement>()
+const secondaryMaterial = ref<HTMLElement>()
 
 const wrongQuestions = ref<WrongQuestionVO[]>([])
 const wrongQuestionsError = ref('')
@@ -1513,6 +1521,20 @@ const runPrimaryTask = (task: HomeTask) => {
   go(task.path)
 }
 
+const updateRecommendationDetails = (event: Event) => {
+  showRecommendationDetails.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+const openRecommendationDetails = () => {
+  showRecommendationDetails.value = true
+  void nextTick(() => recommendationSummary.value?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+}
+
+const openSecondaryMaterials = () => {
+  showSecondarySections.value = true
+  void nextTick(() => secondaryMaterial.value?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+}
+
 const mergeAgentTask = (updatedTask: AgentTaskVO) => {
   const patchTask = (task: AgentTaskVO) => (Number(task.id) === Number(updatedTask.id) ? { ...task, ...updatedTask } : task)
   agentTasks.value = agentTasks.value.map(patchTask)
@@ -1594,6 +1616,9 @@ const goCompletionNextAction = () => {
 
 onMounted(() => {
   secondaryDataCancelled = false
+  if (window.matchMedia?.('(max-width: 720px)').matches) {
+    showRecommendationDetails.value = true
+  }
   fetchOverview(false)
   void fetchApplicationStats(false)
   void fetchV3Overview(false).finally(() => {
@@ -2187,6 +2212,10 @@ onBeforeUnmount(() => {
   display: flex;
 }
 
+.mobile-discovery-links {
+  display: none;
+}
+
 .secondary-toggle {
   display: flex;
   width: 100%;
@@ -2434,6 +2463,27 @@ onBeforeUnmount(() => {
 
   .primary-action-cta {
     width: 100%;
+    min-height: 44px;
+  }
+
+  .mobile-discovery-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+
+    button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--user-primary-border);
+      border-radius: 8px;
+      background: var(--user-primary-faint);
+      color: var(--user-primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
   }
 
   .signal-panel,

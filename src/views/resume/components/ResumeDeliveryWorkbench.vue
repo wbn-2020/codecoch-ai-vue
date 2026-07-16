@@ -996,6 +996,7 @@ onBeforeUnmount(clearArtifactPolling)
 
 <style scoped lang="scss">
 .delivery-workbench {
+  --resume-delivery-bottom-gap: max(16px, env(safe-area-inset-bottom, 0px));
   min-width: 0;
   padding: var(--user-space-4);
   border: 1px solid var(--user-border);
@@ -1406,7 +1407,8 @@ onBeforeUnmount(clearArtifactPolling)
 .paper-stack {
   display: grid;
   justify-items: center;
-  max-height: 760px;
+  max-height: min(760px, max(280px, calc(100dvh - 180px - var(--resume-delivery-bottom-gap))));
+  min-height: 0;
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--user-border);
@@ -1509,6 +1511,7 @@ onBeforeUnmount(clearArtifactPolling)
   }
 
   .paper-stack {
+    max-height: none;
     padding: 8px;
   }
 }

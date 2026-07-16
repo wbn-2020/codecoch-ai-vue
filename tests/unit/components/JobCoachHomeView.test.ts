@@ -659,6 +659,20 @@ describe('JobCoachHomeView ordered action cockpit', () => {
     expect(wrapper.find('.agent-loop-panel').exists()).toBe(true)
   })
 
+  it('keeps recommendation evidence and materials discoverable through mobile entry points', async () => {
+    const wrapper = await mountHome()
+    const discoveryButtons = wrapper.findAll('.mobile-discovery-links button')
+
+    expect(discoveryButtons.map((button) => button.text())).toEqual(['查看推荐依据', '打开资料与工具'])
+
+    await discoveryButtons[0].trigger('click')
+    expect((wrapper.get('details.recommendation-details').element as HTMLDetailsElement).open).toBe(true)
+
+    await discoveryButtons[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.secondary-material').exists()).toBe(true)
+  })
+
   it('keeps summary controls keyboard focusable and expandable', async () => {
     const wrapper = await mountHome()
     const details = wrapper.get('details.recommendation-details')

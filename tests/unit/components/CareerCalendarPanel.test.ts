@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
 import {
@@ -81,6 +81,33 @@ describe('CareerCalendarPanel CSV import', () => {
     vi.mocked(downloadCareerImportErrorsApi).mockResolvedValue(new Blob(['error']))
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('loads the visible month with ISO 8601 Instant query bounds', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 15, 12, 0, 0))
+
+    mount(CareerCalendarPanel, {
+      props: { applications: [] },
+      global: {
+        directives: { loading: {} },
+        stubs
+      }
+    })
+    await flushPromises()
+
+    const range = vi.mocked(getCareerCalendarEventsApi).mock.calls[0]?.[0]
+    expect(range).toBeDefined()
+    expect(range?.from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    expect(range?.to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+    expect(new Date(range!.from!).toISOString()).toBe(range?.from)
+    expect(new Date(range!.to!).toISOString()).toBe(range?.to)
+    expect(new Date(range!.to!).getTime() - new Date(range!.from!).getTime())
+      .toBe(31 * 24 * 60 * 60 * 1000)
   })
 
   it('uses preview suggestions for import and exposes error CSV download', async () => {

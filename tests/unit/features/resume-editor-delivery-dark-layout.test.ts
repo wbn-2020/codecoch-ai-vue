@@ -30,17 +30,23 @@ describe('resume editor and delivery workspace layout', () => {
     expect(preview).toContain('resumeTemplateSectionOrder')
   })
 
-  it('uses a wide two-column editor with a full-width supporting workspace', () => {
+  it('keeps the supporting workspace in the editor column and bounds the sticky preview to the viewport', () => {
     const source = readSource('src/views/resume/ResumeEditView.vue')
 
     expect(source).toMatch(
       /\.editor-workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(520px,\s*1\.05fr\)/
     )
     expect(source).toMatch(
-      /\.editor-aside\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(260px,\s*1fr\)\)/
+      /\.editor-aside\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(260px,\s*1fr\)\)/
     )
     expect(source).toMatch(
-      /\.resume-paper-wrap\s*\{[\s\S]*?max-height:\s*calc\(100dvh\s*-\s*180px\)[\s\S]*?overflow:\s*auto/
+      /\.preview-column\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?height:\s*var\(--resume-preview-viewport-height\);[\s\S]*?max-height:\s*var\(--resume-preview-viewport-height\);[\s\S]*?overflow:\s*visible/
+    )
+    expect(source).toMatch(
+      /\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?max-height:\s*none;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto/
+    )
+    expect(source).toMatch(
+      /@media \(max-width: 1020px\)[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*visible;[\s\S]*?\}[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?min-height:\s*0;/
     )
     expect(source).toContain('ResumeDocumentPreview')
     expect(source).toContain('template-selector')
@@ -56,6 +62,12 @@ describe('resume editor and delivery workspace layout', () => {
     expect(list).toMatch(/@media\s*\(max-width:\s*720px\)/)
     expect(workbench).toMatch(/@media\s*\(max-width:\s*680px\)/)
     expect(workbench).toMatch(/\.delivery-grid\s*\{[\s\S]*?minmax\(0,\s*0\.72fr\)\s+minmax\(520px,\s*1\.28fr\)/)
+    expect(workbench).toMatch(
+      /\.paper-stack\s*\{[\s\S]*?max-height:\s*min\(760px,\s*max\(280px,\s*calc\(100dvh\s*-\s*180px\s*-\s*var\(--resume-delivery-bottom-gap\)\)\)\);[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto/
+    )
+    expect(workbench).toMatch(
+      /@media \(max-width: 680px\)[\s\S]*?\.paper-stack\s*\{[\s\S]*?max-height:\s*none;/
+    )
     expect(workbench).toContain('preferredTemplateCode')
     expect(workbench).toContain('hasUnsavedChanges')
     expect(workbench).toContain('stableDraft')

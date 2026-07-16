@@ -71,9 +71,8 @@ describe('agentLoopAdapter', () => {
     })
 
     expect(sections.facts.join(' ')).toContain('1')
-    expect(sections.limits.join(' ')).toContain('sample')
-    expect(sections.drifts.join(' ')).toContain('Skipped')
-    expect(sections.adjustments.join(' ')).toContain('shorter')
+    expect(sections.limits.join(' ')).toContain('样本')
+    expect(sections.drifts.join(' ')).toContain('暂缓')
     expect(sections.nextActions).toEqual(['Break repeated tasks into shorter steps.'])
   })
 })

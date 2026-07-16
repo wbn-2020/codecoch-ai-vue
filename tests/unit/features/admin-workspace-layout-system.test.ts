@@ -13,6 +13,7 @@ const readOptionalSource = (relativePath: string) => {
 
 const adminLayoutSource = readSource('src/layouts/AdminLayout.vue')
 const adminStyleSource = readOptionalSource('src/views/admin/admin-workspace.scss')
+const adminDashboardSource = readSource('src/views/admin/AdminDashboardView.vue')
 const authStyleSource = readOptionalSource('src/views/auth/auth-workspace.scss')
 
 const readVueSources = (relativeDirectory: string) => {
@@ -57,6 +58,24 @@ describe('admin workspace layout system', () => {
     })
 
     expect(violations).toEqual([])
+  })
+
+  it('keeps mobile filters and diagnostic drawers within the viewport with touch-sized actions', () => {
+    expect(adminStyleSource).toContain('min-width: 0;')
+    expect(adminStyleSource).toContain('max-width: 100%;')
+    expect(adminStyleSource).toContain('.admin-diagnostic-drawer.el-drawer')
+    expect(adminStyleSource).toContain('width: min(100vw, 460px) !important;')
+    expect(adminStyleSource).toContain('overflow-x: hidden;')
+    expect(adminStyleSource).toContain('min-height: 44px;')
+  })
+
+  it('uses native buttons for navigable dashboard metrics and exposes chart data as tables', () => {
+    expect(adminDashboardSource).toContain('v-if="item.path"')
+    expect(adminDashboardSource).toContain('type="button"')
+    expect(adminDashboardSource).toContain('class="dashboard-chart-data"')
+    expect(adminDashboardSource).toContain(':aria-describedby="businessTrendDataId"')
+    expect(adminDashboardSource).toContain(':aria-describedby="aiTrendDataId"')
+    expect(adminDashboardSource).toContain('clip-path: inset(50%);')
   })
 
   it('keeps authentication pages on one responsive shared dark surface', () => {

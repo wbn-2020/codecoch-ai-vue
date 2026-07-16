@@ -137,7 +137,7 @@
         </button>
 
         <el-dropdown trigger="click" @command="handleUserCommand">
-          <button class="user-trigger" type="button" aria-label="打开账户菜单">
+          <button class="user-trigger" type="button" :aria-label="`打开 ${displayName} 的账户菜单`">
             <el-avatar :size="30" :src="avatarUrl || ''">
               {{ avatarText }}
             </el-avatar>
@@ -156,7 +156,8 @@
           ref="mobileTrigger"
           class="mobile-toggle"
           type="button"
-          :aria-label="mobileOpen ? '关闭导航' : '打开导航'"
+          :aria-label="mobileOpen ? '关闭全部功能' : '打开全部功能'"
+          aria-haspopup="dialog"
           :aria-expanded="mobileOpen"
           aria-controls="user-mobile-panel"
           @click="toggleMobile"
@@ -170,30 +171,50 @@
     <Transition name="mobile-nav">
       <div
         v-if="mobileOpen"
-        id="user-mobile-panel"
-        ref="mobilePanel"
-        class="mobile-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="用户端全部功能导航"
+        class="mobile-nav-modal"
+        role="presentation"
+        @click.self="closeMobile(true)"
       >
-        <button
-          v-for="item in navItems"
-          :key="item.key"
-          class="mobile-nav-item"
-          :class="{ 'is-active': isActive(item) }"
-          type="button"
-          :aria-current="isActive(item) ? 'page' : undefined"
-          @click="go(item.path)"
+        <section
+          id="user-mobile-panel"
+          ref="mobilePanel"
+          class="mobile-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="user-mobile-panel-title"
+          @click.stop
         >
-          <span class="mobile-nav-item__main">
-            <component :is="item.icon" :size="17" />
-            <strong>{{ item.label }}</strong>
-          </span>
-          <small>{{ item.desc }}</small>
-        </button>
+          <header class="mobile-panel__header">
+            <strong id="user-mobile-panel-title">全部功能</strong>
+            <button
+              class="mobile-modal-close"
+              type="button"
+              aria-label="关闭全部功能"
+              @click="closeMobile(true)"
+            >
+              <X :size="20" />
+            </button>
+          </header>
 
-        <div class="mobile-feature-groups" aria-label="全部功能">
+          <nav class="mobile-primary-nav" aria-label="全部功能主入口">
+            <button
+              v-for="item in navItems"
+              :key="item.key"
+              class="mobile-nav-item"
+              :class="{ 'is-active': isActive(item) }"
+              type="button"
+              :aria-current="isActive(item) ? 'page' : undefined"
+              @click="go(item.path)"
+            >
+              <span class="mobile-nav-item__main">
+                <component :is="item.icon" :size="17" />
+                <strong>{{ item.label }}</strong>
+              </span>
+              <small>{{ item.desc }}</small>
+            </button>
+          </nav>
+
+          <div class="mobile-feature-groups" aria-label="全部功能">
           <section v-for="group in navigationGroups" :key="group.key" class="mobile-feature-group">
             <h2 class="mobile-feature-group__title">{{ group.label }}</h2>
             <div class="mobile-feature-group__items">
@@ -217,8 +238,9 @@
               </button>
             </div>
           </section>
+          </div>
+        </section>
         </div>
-      </div>
     </Transition>
 
     <nav
@@ -226,6 +248,7 @@
       aria-label="手机主导航"
       :aria-hidden="mobileOpen || undefined"
       :inert="mobileOpen"
+      :class="{ 'is-modal-open': mobileOpen }"
     >
       <button
         v-for="item in mobilePrimaryItems"
@@ -236,7 +259,7 @@
         :aria-label="item.label"
         :aria-current="isActive(item) ? 'page' : undefined"
         :title="item.label"
-        @click="go(item.path)"
+        @click="goFromBottom(item.path)"
       >
         <component :is="item.icon" :size="18" />
         <span>{{ item.mobileLabel }}</span>
@@ -334,6 +357,7 @@ const mobilePanel = ref<HTMLElement>()
 const moreOpen = ref(false)
 const moreRoot = ref<HTMLElement | null>(null)
 const moreTrigger = ref<HTMLButtonElement | null>(null)
+let previousBodyOverflow = ''
 
 const navItems: NavItem[] = [
   {
@@ -601,6 +625,11 @@ const go = async (path: string) => {
   await router.push(path)
 }
 
+const goFromBottom = (path: string) => {
+  if (mobileOpen.value) return
+  void go(path)
+}
+
 const handleUserCommand = (command: string) => {
   emit('user-command', command)
 }
@@ -620,11 +649,21 @@ const closeMore = (restoreFocus = false) => {
 
 const toggleMobile = () => {
   moreOpen.value = false
-  mobileOpen.value = !mobileOpen.value
   if (mobileOpen.value) {
-    void nextTick(() => {
-      mobilePanel.value?.querySelector<HTMLButtonElement>('button')?.focus()
-    })
+    closeMobile(true)
+    return
+  }
+  mobileOpen.value = true
+  void nextTick(() => {
+    mobilePanel.value?.querySelector<HTMLButtonElement>('.mobile-modal-close')?.focus()
+  })
+}
+
+const closeMobile = (restoreFocus = false) => {
+  if (!mobileOpen.value) return
+  mobileOpen.value = false
+  if (restoreFocus) {
+    void nextTick(() => mobileTrigger.value?.focus())
   }
 }
 
@@ -661,13 +700,17 @@ const handleDocumentKeydown = (event: KeyboardEvent) => {
   }
   if (mobileOpen.value) {
     event.preventDefault()
-    mobileOpen.value = false
-    void nextTick(() => mobileTrigger.value?.focus())
+    closeMobile(true)
   }
 }
 
 watch(mobileOpen, (open) => {
-  document.body.style.overflow = open ? 'hidden' : ''
+  if (open) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return
+  }
+  document.body.style.overflow = previousBodyOverflow
 })
 
 watch(
@@ -684,7 +727,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.body.style.overflow = ''
+  document.body.style.overflow = previousBodyOverflow
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('keydown', handleDocumentKeydown)
 })
@@ -719,6 +762,7 @@ onBeforeUnmount(() => {
 .command-button,
 .more-button,
 .feature-nav-close,
+.mobile-modal-close,
 .feature-nav-item,
 .icon-button,
 .admin-button,
@@ -738,6 +782,7 @@ onBeforeUnmount(() => {
 .command-button,
 .more-button,
 .feature-nav-close,
+.mobile-modal-close,
 .feature-nav-item,
 .icon-button,
 .admin-button,
@@ -1124,6 +1169,7 @@ onBeforeUnmount(() => {
 
 .mobile-toggle,
 .mobile-panel,
+.mobile-nav-modal,
 .mobile-bottom-nav {
   display: none;
 }
@@ -1193,18 +1239,69 @@ onBeforeUnmount(() => {
     display: inline-flex;
   }
 
+  .mobile-nav-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: flex-end;
+    background: rgba(4, 8, 14, 0.72);
+  }
+
   .mobile-panel {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    width: min(100%, 1440px);
-    max-height: calc(100vh - var(--user-mobile-top-height, 64px));
-    margin: 0 auto;
-    padding: 0 24px 18px;
+    width: min(720px, 100%);
+    height: 100%;
+    align-content: start;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+    border-left: 1px solid var(--user-border);
     background: var(--user-bg-panel);
+    box-shadow: -8px 0 16px rgba(0, 0, 0, 0.34);
+  }
+
+  .mobile-panel__header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--user-border);
+    background: var(--user-bg-panel);
+
+    strong {
+      color: var(--user-text);
+      font-size: 16px;
+    }
+  }
+
+  .mobile-modal-close {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 203, 255, 0.16);
+    border-radius: 8px;
+    background: rgba(7, 17, 31, 0.54);
+    color: var(--user-text-secondary);
+
+    &:hover {
+      border-color: var(--user-primary-border);
+      background: var(--user-primary-faint);
+      color: var(--user-primary);
+    }
+  }
+
+  .mobile-primary-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 16px 24px 10px;
   }
 
   .mobile-nav-item {
@@ -1241,12 +1338,11 @@ onBeforeUnmount(() => {
 
   .mobile-feature-groups {
     display: grid;
-    grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0;
     min-width: 0;
-    margin-top: 6px;
-    padding-top: 6px;
+    margin: 6px 24px 18px;
+    padding-top: 10px;
     border-top: 1px solid var(--user-border);
   }
 
@@ -1284,8 +1380,9 @@ onBeforeUnmount(() => {
   }
 
   .brand {
-    width: 40px;
+    width: 44px;
     min-width: 0;
+    min-height: 44px;
   }
 
   .brand-copy,
@@ -1337,13 +1434,18 @@ onBeforeUnmount(() => {
   }
 
   .mobile-panel {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .mobile-primary-nav {
     grid-template-columns: minmax(0, 1fr);
-    max-height: calc(100vh - 58px - var(--user-mobile-nav-height, 60px) - var(--user-mobile-nav-gap, 8px) - env(safe-area-inset-bottom, 0px));
-    padding: 0 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    padding: 14px;
   }
 
   .mobile-feature-groups {
     grid-template-columns: minmax(0, 1fr);
+    margin: 6px 14px calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-feature-group {
@@ -1382,6 +1484,11 @@ onBeforeUnmount(() => {
     border-radius: 8px;
     background: var(--user-bg-panel);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+
+    &.is-modal-open {
+      visibility: hidden;
+      pointer-events: none;
+    }
   }
 
   .mobile-bottom-nav__item {
@@ -1389,7 +1496,7 @@ onBeforeUnmount(() => {
     place-items: center;
     gap: 3px;
     min-width: 0;
-    min-height: 0;
+    min-height: 44px;
     height: 100%;
     padding: 4px 2px;
     border-radius: 8px;

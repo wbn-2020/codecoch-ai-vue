@@ -43,6 +43,43 @@ const booleanValue = (value: unknown): boolean | undefined => {
   return undefined
 }
 
+const comparisonReasonMessages: Record<string, string> = {
+  REPORT_COUNT_INSUFFICIENT: '至少需要两份已生成的面试报告才能比较。',
+  DUPLICATE_REPORT_ID: '所选报告中存在重复项，请重新选择。',
+  REPORT_NOT_FOUND: '部分面试报告不存在。',
+  REPORT_UNAVAILABLE: '部分面试报告不存在或当前不可用。',
+  SESSION_NOT_FOUND: '部分报告缺少对应的面试场次。',
+  REPORT_USER_MISMATCH: '部分报告不属于当前账号。',
+  REPORT_SESSION_USER_MISMATCH: '报告与面试场次的归属不一致。',
+  REPORT_NOT_GENERATED: '只有已成功生成的报告才能参与比较。',
+  TARGET_JOB_MISSING: '部分报告没有关联目标岗位。',
+  TARGET_JOB_MISMATCH: '所选报告并非来自同一目标岗位。',
+  RUBRIC_VERSION_MISSING: '部分报告缺少评分量表版本。',
+  RUBRIC_VERSION_MISMATCH: '所选报告使用了不同的评分量表版本。',
+  RUBRIC_DIMENSION_MISMATCH: '所选报告的评分维度不一致。',
+  RUBRIC_DATA_MISSING: '部分报告缺少可比较的评分维度。',
+  RUBRIC_DATA_MALFORMED: '部分报告的评分数据格式不完整。',
+  RUBRIC_DIMENSION_LIMIT_EXCEEDED: '部分报告包含过多评分维度，暂不支持比较。',
+  RUBRIC_DIMENSION_DUPLICATE: '部分报告包含重复的评分维度。',
+  REPORT_UNTRUSTED: '报告评分为降级、数据不完整或可信度不足，暂不生成趋势结论。',
+  LEGACY_REPORT_UNTRUSTED: '历史报告缺少足够的可信评分证据，暂不参与比较。',
+  TOTAL_SCORE_MISSING: '部分报告缺少总分。',
+  TOTAL_SCORE_INVALID: '部分报告的总分不在支持的 1 到 100 分范围内。',
+  TOTAL_SCORE_RECOVERED_FROM_SESSION: '报告总分缺失，已使用同一面试场次中保存的总分。',
+  RUBRIC_RECOVERED_FROM_STAGE_SCORES: '已从历史阶段评分中恢复准确的评分维度。',
+  RUBRIC_RECOVERED_FROM_REPORT_CONTENT: '已从历史报告的结构化内容中恢复评分维度。',
+  RUBRIC_VERSION_INFERRED: '历史报告未保存量表标识，已按原有评分维度生成兼容量表版本。',
+  RUBRIC_VERSION_NORMALIZED: '已将已知的历史评分维度合同规范化为统一量表版本。',
+  SAMPLE_INSUFFICIENT_REPORT: '部分报告样本不足，本次变化仅作为弱观察依据。'
+}
+
+const localizedComparisonReasonMessage = (code: string, message: string) => {
+  const normalizedCode = code.trim().toUpperCase()
+  if (comparisonReasonMessages[normalizedCode]) return comparisonReasonMessages[normalizedCode]
+  if (/[\u3400-\u9fff]/.test(message)) return message
+  return '该项数据未满足当前比较合同要求，页面不会据此生成趋势结论。'
+}
+
 const positiveIds = (value: unknown, max = Number.POSITIVE_INFINITY) =>
   Array.from(new Set(arrayValue(value)
     .map(numberValue)
@@ -54,7 +91,7 @@ const normalizeReason = (value: unknown): InterviewComparisonReasonVO | null => 
   const code = stringValue(source.code) || 'UNKNOWN'
   const message = stringValue(source.message)
   if (!message) return null
-  return { code, message }
+  return { code, message: localizedComparisonReasonMessage(code, message) }
 }
 
 const normalizeReasons = (value: unknown) =>
@@ -80,6 +117,10 @@ const normalizeRound = (value: unknown): InterviewComparisonRoundVO => {
     generatedAt: stringValue(source.generatedAt),
     trustStatus: stringValue(source.trustStatus),
     sampleInsufficient: booleanValue(source.sampleInsufficient) === true,
+    rubricVersion: stringValue(source.rubricVersion),
+    normalizationSource: stringValue(source.normalizationSource),
+    unavailableReasons: normalizeReasons(source.unavailableReasons),
+    warnings: normalizeReasons(source.warnings),
     rubricScores: normalizeRubricScores(source.rubricScores)
   }
 }
@@ -217,6 +258,8 @@ export const normalizeInterviewComparison = (value: unknown): InterviewCompariso
   const requirementSource = source.requirementImprovements || source.requirementChanges
   return {
     id: numberValue(source.id),
+    contractVersion: stringValue(source.contractVersion),
+    legacySnapshotNormalized: booleanValue(source.legacySnapshotNormalized) === true,
     comparable,
     targetJobId: numberValue(source.targetJobId),
     rubricVersion: stringValue(source.rubricVersion),

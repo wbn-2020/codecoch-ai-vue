@@ -1530,6 +1530,9 @@ onMounted(() => {
   --resume-paper-berry: #a23b55;
   --resume-paper-project: #255da8;
   --resume-paper-project-soft: #eef4fb;
+  --resume-preview-top: 84px;
+  --resume-preview-bottom-gap: max(16px, env(safe-area-inset-bottom, 0px));
+  --resume-preview-viewport-height: calc(100dvh - var(--resume-preview-top) - var(--resume-preview-bottom-gap));
   --resume-surface: var(--user-surface);
   --resume-surface-soft: var(--user-surface-muted);
   --resume-border: var(--user-border);
@@ -1752,7 +1755,8 @@ onMounted(() => {
 
 .editor-aside {
   position: static;
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   align-items: start;
@@ -2027,9 +2031,15 @@ onMounted(() => {
 }
 
 .preview-column {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: var(--resume-preview-viewport-height);
+  max-height: var(--resume-preview-viewport-height);
+  overflow: visible;
   position: sticky;
-  top: 84px;
+  top: var(--resume-preview-top);
   padding: 14px;
   border-color: var(--user-border);
   background: var(--user-bg-panel);
@@ -2282,11 +2292,15 @@ onMounted(() => {
 .resume-paper-wrap {
   position: relative;
   display: flex;
+  flex: 1 1 auto;
   justify-content: center;
-  max-height: calc(100dvh - 180px);
+  max-height: none;
   min-height: 0;
   padding: 18px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding: 18px;
+  scrollbar-gutter: stable both-edges;
   border: 1px solid var(--user-border);
   border-radius: 8px;
   background: var(--user-bg);
@@ -2673,15 +2687,47 @@ onMounted(() => {
 }
 
 @media (max-width: 1020px) {
+  .workspace-tabs {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
   .editor-workspace {
-    grid-template-columns: 1fr;
+    display: block;
+  }
+
+  .mobile-pane-edit,
+  .mobile-pane-preview,
+  .mobile-pane-advice {
+    display: none;
+  }
+
+  .is-mobile-edit .mobile-pane-edit,
+  .is-mobile-advice .mobile-pane-advice {
+    display: grid;
+  }
+
+  .is-mobile-preview .mobile-pane-preview {
+    display: flex;
   }
 
   .preview-column {
     position: static;
+    height: min(780px, calc(100dvh - 160px));
+    max-height: min(780px, calc(100dvh - 160px));
+    overflow: visible;
+  }
+
+  .resume-paper-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .editor-aside {
+    grid-column: auto;
+    grid-row: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2702,13 +2748,6 @@ onMounted(() => {
 @media (max-width: 760px) {
   .resume-editor {
     padding: 0;
-  }
-
-  .workspace-tabs {
-    display: flex;
-    position: sticky;
-    top: 0;
-    z-index: 5;
   }
 
   .editor-hero {
@@ -2794,25 +2833,6 @@ onMounted(() => {
     }
   }
 
-  .editor-workspace {
-    display: block;
-  }
-
-  .mobile-pane-edit,
-  .mobile-pane-preview,
-  .mobile-pane-advice {
-    display: none;
-  }
-
-  .is-mobile-edit .mobile-pane-edit,
-  .is-mobile-advice .mobile-pane-advice {
-    display: grid;
-  }
-
-  .is-mobile-preview .mobile-pane-preview {
-    display: block;
-  }
-
   .editor-hero,
   .project-header,
   .project-card,
@@ -2855,8 +2875,6 @@ onMounted(() => {
   }
 
   .resume-paper-wrap {
-    max-height: none;
-    min-height: auto;
     padding: 8px;
   }
 

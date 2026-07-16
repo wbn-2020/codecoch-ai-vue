@@ -93,15 +93,22 @@
           </small>
         </div>
         <div class="trend-points">
-          <div
+          <button
             v-for="(point, index) in readinessTrend.points"
             :key="point.id || `${point.generatedAt}-${index}`"
+            type="button"
             class="trend-point"
+            :class="{ 'is-active': point.id != null && point.id === selectedSnapshotId }"
+            :disabled="point.id == null || snapshotLoadingId === point.id"
+            :aria-pressed="point.id != null && point.id === selectedSnapshotId"
+            :aria-label="point.id == null ? '该快照暂无详情' : `查看 ${shortSnapshotTime(point.generatedAt)} 的就绪度快照`"
+            @click="point.id != null && $emit('selectSnapshot', point.id)"
           >
             <span>{{ shortSnapshotTime(point.generatedAt) }}</span>
             <strong>{{ point.score == null ? '--' : point.score }}</strong>
-            <small>强 {{ point.strongCount }} · 缺 {{ point.missingCount }}</small>
-          </div>
+            <small v-if="snapshotLoadingId === point.id">正在加载详情</small>
+            <small v-else>强 {{ point.strongCount }} · 缺 {{ point.missingCount }}</small>
+          </button>
         </div>
         <ul v-if="readinessTrend.change" class="change-reasons">
           <li v-for="reason in readinessTrend.change.reasons" :key="reason">{{ reason }}</li>
@@ -204,6 +211,8 @@ const props = defineProps<{
   matrix: JobRequirementMatrixVO | null
   readiness: JobReadinessSnapshotVO | null
   readinessHistory?: JobReadinessSnapshotVO[]
+  selectedSnapshotId?: number
+  snapshotLoadingId?: number | null
   loading?: boolean
   refreshing?: boolean
   error?: string
@@ -212,6 +221,7 @@ const props = defineProps<{
 defineEmits<{
   refresh: []
   action: [action: JobRequirementActionVO]
+  selectSnapshot: [snapshotId: number]
 }>()
 
 const warningText = computed(() => {
@@ -341,11 +351,32 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: 8px;
   background: rgba(99, 102, 241, 0.08);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
 
   span,
   small {
     color: var(--app-text-muted);
     font-size: 12px;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible,
+  &.is-active {
+    border-color: rgba(34, 211, 238, 0.58);
+    background: rgba(8, 145, 178, 0.16);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.52);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
   }
 }
 

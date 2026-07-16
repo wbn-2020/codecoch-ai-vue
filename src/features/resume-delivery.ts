@@ -27,7 +27,7 @@ const normalizeSuggestionStatus = (value: unknown): ResumeSuggestionStatus => {
 
 const normalizeEvidenceStatus = (value: unknown): ResumeAuditEvidenceStatus => {
   const status = String(value || '').trim().toUpperCase()
-  return ['VERIFIED', 'PARTIAL', 'UNSUPPORTED'].includes(status)
+  return ['VERIFIED', 'PARTIAL', 'RISK', 'UNSUPPORTED'].includes(status)
     ? status as ResumeAuditEvidenceStatus
     : 'UNKNOWN'
 }
@@ -221,6 +221,7 @@ export const suggestionStatusMeta = (status?: string) => ({
 export const auditEvidenceMeta = (status?: string) => ({
   VERIFIED: { label: '已有证据', type: 'success' as const, conclusion: '当前有证据引用，仍建议核对原始材料。' },
   PARTIAL: { label: '部分证据', type: 'warning' as const, conclusion: '证据覆盖不完整，只能作为待复核提示。' },
+  RISK: { label: '量化风险', type: 'danger' as const, conclusion: '量化表达未找到对应佐证，请核对数字并补充证据；不代表经历为假。' },
   UNSUPPORTED: { label: '未找到证据', type: 'danger' as const, conclusion: '未找到证据不等于事实为假，请人工补证或降级表述。' },
   UNKNOWN: { label: '无法判断', type: 'info' as const, conclusion: '当前信息不足，不输出强结论。' }
 }[normalizeEvidenceStatus(status)])

@@ -4,6 +4,7 @@
     :class="`app-state--${type}`"
     :role="semanticRole"
     :aria-live="ariaLive"
+    aria-atomic="true"
     :aria-busy="type === 'loading'"
   >
     <div class="app-state__icon">
@@ -50,8 +51,16 @@ const stateIcon = computed(() => {
   return iconMap[props.type] || Warning
 })
 
-const semanticRole = computed(() => props.type === 'error' ? 'alert' : 'status')
-const ariaLive = computed(() => props.type === 'error' ? 'assertive' : 'polite')
+const announcement = computed<{ role: 'alert' | 'status'; live: 'assertive' | 'polite' }>(() => {
+  if (props.type === 'error') {
+    return { role: 'alert', live: 'assertive' }
+  }
+
+  return { role: 'status', live: 'polite' }
+})
+
+const semanticRole = computed(() => announcement.value.role)
+const ariaLive = computed(() => announcement.value.live)
 
 const defaultTitle = computed(() => {
   const titleMap: Record<AppStateType, string> = {

@@ -155,10 +155,10 @@ export const buildAttributionPresentation = (
   if (!attribution) {
     return {
       level: 'INCOMPARABLE',
-      title: '尚未计算归因',
-      summary: '选择一个 cohort 后计算，结果只用于观察关联，不作为单因素因果证明。',
+      title: '暂无归因快照',
+      summary: '选择一个 cohort 后可计算归因；已生成的最近快照会在刷新后自动恢复。结果仅用于观察关联，不作为单因素因果证明。',
       facts: [],
-      cautions: ['后端暂未提供归因快照查询接口，离开页面后需要重新计算。']
+      cautions: ['归因结果受样本量、分层一致性和归因窗口影响，请结合投递事实复核。']
     }
   }
 

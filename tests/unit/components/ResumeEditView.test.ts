@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -157,5 +160,39 @@ describe('ResumeEditView', () => {
     expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
       sourceType: 'MANUAL_SAVE'
     })
+  })
+
+  it('keeps the advice grid inside the editor column on desktop so it cannot sit below the sticky preview', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
+      'utf8'
+    )
+    const adviceRule = source.match(/\.editor-aside\s*\{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(adviceRule).toMatch(/grid-column:\s*1;/)
+    expect(adviceRule).toMatch(/grid-row:\s*2;/)
+    expect(adviceRule).not.toMatch(/grid-column:\s*1\s*\/\s*-1;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*auto;/)
+  })
+
+  it('switches to editor, preview, and advice panes at the tablet breakpoint while only the paper canvas scrolls', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
+      'utf8'
+    )
+    const previewRule = source.match(/\.preview-column\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    const paperRule = source.match(/\.resume-paper-wrap\s*\{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(previewRule).toMatch(/height:\s*var\(--resume-preview-viewport-height\);/)
+    expect(previewRule).toMatch(/max-height:\s*var\(--resume-preview-viewport-height\);/)
+    expect(previewRule).toMatch(/overflow:\s*visible;/)
+    expect(previewRule).not.toMatch(/overflow:\s*hidden;/)
+    expect(paperRule).toMatch(/flex:\s*1\s+1\s+auto;/)
+    expect(paperRule).toMatch(/overflow:\s*auto;/)
+    expect(paperRule).toMatch(/scrollbar-gutter:\s*stable both-edges;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,[\s\S]*?display:\s*none;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.preview-column\s*\{[\s\S]*?height:\s*min\(780px, calc\(100dvh - 160px\)\);/)
   })
 })

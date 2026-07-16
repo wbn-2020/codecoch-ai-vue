@@ -95,6 +95,10 @@ export interface InterviewComparisonRoundVO {
   generatedAt?: string
   trustStatus?: InterviewReportTrustStatus
   sampleInsufficient: boolean
+  rubricVersion?: string
+  normalizationSource?: string
+  unavailableReasons?: InterviewComparisonReasonVO[]
+  warnings?: InterviewComparisonReasonVO[]
   rubricScores: Record<string, number>
 }
 
@@ -117,6 +121,8 @@ export interface InterviewRequirementImprovementVO {
 
 export interface InterviewComparisonVO {
   id?: number
+  contractVersion?: string
+  legacySnapshotNormalized?: boolean
   comparable: boolean
   targetJobId?: number
   rubricVersion?: string

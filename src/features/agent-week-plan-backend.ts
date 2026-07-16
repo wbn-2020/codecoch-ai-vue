@@ -16,6 +16,78 @@ const normalizeCode = (value?: string | null) => String(value || '').trim().toUp
 const textValue = (...values: Array<string | number | null | undefined>) =>
   values.map((value) => String(value ?? '').trim()).find(Boolean) || ''
 
+const taskTypeLabels: Record<string, string> = {
+  QUESTION_PRACTICE: '刷题练习',
+  WRONG_QUESTION_REVIEW: '错题复习',
+  INTERVIEW: '模拟面试',
+  RESUME_OPTIMIZE: '简历优化',
+  STUDY_TASK: '学习任务',
+  REPORT_REVIEW: '报告复盘',
+  SKILL_REVIEW: '技能复习',
+  KNOWLEDGE_REVIEW: '知识复盘',
+  APPLICATION_FOLLOW_UP: '投递跟进'
+}
+
+const sourceLabels: Record<string, string> = {
+  TARGET_JOB: '目标岗位',
+  JOB_TARGET: '目标岗位',
+  JD_ANALYSIS: '岗位要求分析',
+  INTERVIEW_REPORT: '面试报告',
+  RESUME_MATCH: '简历匹配',
+  AGENT_TASK: '智能任务',
+  AGENT_RUN: '计划记录'
+}
+
+const technicalTextMap: Record<string, string> = {
+  'Derived from TARGET_JOB status and safe source metadata.': '依据已关联的目标岗位和已记录信息生成。',
+  'Derived from TARGET_JOB signal.': '依据已关联的目标岗位信号生成。',
+  'Low-sample evidence; treat as a weak observation.': '样本较少，仅作为弱观察依据。'
+}
+
+const auditEvidenceKeys = new Set([
+  'TASK',
+  'RUN',
+  'TRACE',
+  'TITLEHASH',
+  'TITLE_HASH',
+  'AGENTTASKID',
+  'AGENT_TASK_ID',
+  'AGENTRUNID',
+  'AGENT_RUN_ID',
+  'RESULTSOURCE',
+  'RESULT_SOURCE'
+])
+
+const userFacingText = (value?: string | null, fallback = '') => {
+  const text = String(value || '').trim()
+  if (!text) return fallback
+  if (technicalTextMap[text]) return technicalTextMap[text]
+  return sourceLabels[normalizeCode(text)] || text
+}
+
+const userFacingEvidence = (value?: string | null) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const match = raw.match(/^([a-z][a-z0-9_]*?)\s*=\s*(.+)$/i)
+  if (match) {
+    const key = normalizeCode(match[1])
+    const data = String(match[2] || '').trim()
+    if (auditEvidenceKeys.has(key)) return ''
+    if (key === 'SOURCE') {
+      return sourceLabels[normalizeCode(data)] || '已关联的业务来源。'
+    }
+  }
+  return userFacingText(raw)
+}
+
+const userFacingTitle = (item: AgentWeekPlanBackendItemVO, index: number) => {
+  const raw = textValue(item.title, item.relatedBizTitle)
+  if (/^agent task #\d+(?:\s+[A-Z_]+)?$/i.test(raw)) {
+    return `${taskTypeLabels[normalizeCode(item.actionType)] || '今日'}任务`
+  }
+  return userFacingText(raw, taskTypeLabels[normalizeCode(item.actionType)] || `周计划项 ${item.id ?? index + 1}`)
+}
+
 const layerMap: Record<string, AgentPlanLayerKey> = {
   TODAY: 'today',
   WEEK: 'week',
@@ -70,14 +142,17 @@ const confidenceFromBackend = (
 
 const safeEvidence = (item: AgentWeekPlanBackendItemVO) => {
   const evidence = Array.isArray(item.evidence)
-    ? item.evidence.map((line) => String(line || '').trim()).filter(Boolean)
+    ? item.evidence.map((line) => userFacingEvidence(String(line || ''))).filter(Boolean)
     : []
   if (item.sampleInsufficient || item.sampleWarning) {
-    evidence.unshift(textValue(item.sampleWarning, 'Low-sample evidence; treat as a weak observation.'))
+    evidence.unshift(userFacingText(item.sampleWarning, '样本较少，仅作为弱观察依据。'))
   }
   return evidence.length
     ? evidence.slice(0, 3)
-    : [textValue(item.fallbackReason, item.reason, item.relatedBizType, item.actionType, '后端仅返回弱摘要')]
+    : [userFacingText(
+      textValue(item.fallbackReason, item.reason, item.relatedBizType, item.actionType),
+      '后端仅返回弱摘要'
+    )]
 }
 
 const toLayerKey = (item: AgentWeekPlanBackendItemVO): AgentPlanLayerKey =>
@@ -92,8 +167,8 @@ const toAction = (item: AgentWeekPlanBackendItemVO, index: number): AgentPlanAct
   return {
     key: `week-plan-item-${item.id ?? item.agentTaskId ?? item.sortOrder ?? index}`,
     id,
-    title: textValue(item.title, item.relatedBizTitle, item.actionType, `周计划项 ${id ?? index + 1}`),
-    description: textValue(item.description, item.fallbackReason),
+    title: userFacingTitle(item, index),
+    description: userFacingText(textValue(item.description, item.fallbackReason)),
     status: item.itemStatus,
     priority: item.priority,
     actionPath: item.actionUrl || (item.agentTaskId ? '/agent/tasks' : '/agent/today'),
@@ -101,8 +176,11 @@ const toAction = (item: AgentWeekPlanBackendItemVO, index: number): AgentPlanAct
     estimatedMinutes: null,
     sourceType,
     sourceId: item.relatedBizId ?? item.agentTaskId ?? item.id ?? null,
-    sourceTitle: textValue(item.relatedBizTitle, item.relatedBizType, item.actionType, '后端周计划'),
-    reason: textValue(item.reason, item.fallbackReason, item.description, evidence[0]),
+    sourceTitle: userFacingText(
+      textValue(item.relatedBizTitle, item.relatedBizType, item.actionType),
+      '后端周计划'
+    ),
+    reason: userFacingText(textValue(item.reason, item.fallbackReason, item.description, evidence[0])),
     evidence,
     confidence: confidenceFromBackend(item.confidence, item.confidenceLevel),
     fallback
@@ -149,8 +227,14 @@ export const hasBackendWeekPlanItems = (plan?: AgentWeekPlanBackendVO | null) =>
 
 export const buildAgentWeekPlanFromBackend = (plan: AgentWeekPlanBackendVO): AgentWeekPlanVO => {
   const layers = emptyLayers()
+  const weekStart = String(plan.weekStartDate || plan.planDate || '').slice(0, 10)
+  const weekEnd = String(plan.weekEndDate || '').slice(0, 10)
   const items = (plan.items || [])
     .filter(Boolean)
+    .filter((item) => {
+      const plannedDate = String(item.plannedDate || item.dueDate || '').slice(0, 10)
+      return !plannedDate || !weekStart || !weekEnd || (plannedDate >= weekStart && plannedDate <= weekEnd)
+    })
     .slice()
     .sort((left, right) =>
       (left.sortOrder ?? 0) - (right.sortOrder ?? 0)

@@ -1,3 +1,5 @@
+import type { PageResult } from '@/types/api'
+
 export type JobRequirementStatus = 'COVERED' | 'WEAK' | 'MISSING' | 'UNVERIFIED' | 'CONFLICT' | string
 
 export interface JobRequirementEvidenceVO {
@@ -137,6 +139,7 @@ export interface JobReadinessSnapshotVO {
   id?: number
   targetJobId: number
   jdAnalysisId?: number
+  snapshotHash?: string
   overallScore?: number
   overallLevel?: string
   readinessScore?: number
@@ -162,3 +165,14 @@ export interface JobReadinessSnapshotVO {
   warnings: string[]
   traceId?: string
 }
+
+export interface JobReadinessSnapshotDetailVO extends JobReadinessSnapshotVO {
+  id: number
+}
+
+export interface JobReadinessHistoryPageQuery {
+  pageNo?: number
+  pageSize?: number
+}
+
+export type JobReadinessHistoryPageResult = PageResult<JobReadinessSnapshotVO>

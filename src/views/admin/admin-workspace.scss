@@ -778,6 +778,7 @@
 
   .admin-layout .filter-form .el-form-item,
   .admin-layout .admin-filter-bar > .el-form .el-form-item {
+    min-width: 0;
     width: 100%;
     margin-right: 0;
   }
@@ -790,12 +791,56 @@
   .admin-layout .admin-filter-bar > .el-form .el-input,
   .admin-layout .admin-filter-bar > .el-form .el-select,
   .admin-layout .admin-filter-bar > .el-form .el-date-editor {
+    min-width: 0;
     width: 100% !important;
+    max-width: 100%;
+  }
+
+  .admin-layout .filter-form .el-input-number,
+  .admin-layout .filter-form .el-cascader,
+  .admin-layout .filter-form .el-tree-select,
+  .admin-layout .admin-filter-bar > .el-form .el-input-number,
+  .admin-layout .admin-filter-bar > .el-form .el-cascader,
+  .admin-layout .admin-filter-bar > .el-form .el-tree-select {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .admin-layout .filter-form .el-form-item:last-child .el-form-item__content,
+  .admin-layout .admin-filter-bar > .el-form .el-form-item:last-child .el-form-item__content,
+  .admin-layout .audit-filter-actions,
+  .admin-layout .admin-filter-actions {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-layout .filter-form .el-form-item:last-child .el-button,
+  .admin-layout .admin-filter-bar > .el-form .el-form-item:last-child .el-button,
+  .admin-layout .audit-filter-actions .el-button,
+  .admin-layout .admin-filter-actions .el-button {
+    flex: 1 1 0;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: 0;
   }
 
   .admin-layout .el-drawer {
     width: min(100vw, var(--el-drawer-width, 100vw)) !important;
     max-width: 100vw;
+  }
+
+  .admin-diagnostic-drawer.el-drawer {
+    width: min(100vw, 460px) !important;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .admin-diagnostic-drawer .el-drawer__body {
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
   }
 
   .admin-layout .el-dialog {
