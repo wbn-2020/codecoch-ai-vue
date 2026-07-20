@@ -8,7 +8,12 @@ import {
 } from '@/api/v4'
 import GrowthProfileView from '@/views/v4/GrowthProfileView.vue'
 
+const appConfig = vi.hoisted(() => ({
+  enableV6WeeklyReport: false
+}))
 const routerPush = vi.hoisted(() => vi.fn())
+
+vi.mock('@/config', () => ({ appConfig }))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush })
@@ -45,6 +50,7 @@ const componentStubs = {
 describe('GrowthProfileView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    appConfig.enableV6WeeklyReport = false
     vi.mocked(getGrowthOverviewApi).mockResolvedValue({
       readinessScore: 82,
       taskCompletionRate: 76,
@@ -62,6 +68,8 @@ describe('GrowthProfileView', () => {
         showTopSkillTrend: true
       }
     })
+    vi.mocked(getGrowthSkillsTrendApi).mockResolvedValue([])
+    vi.mocked(getGrowthReadinessTrendApi).mockResolvedValue([])
   })
 
   it('renders unified evidence-source labels and hides LOW confidence trend rows', async () => {
@@ -149,5 +157,30 @@ describe('GrowthProfileView', () => {
     expect(wrapper.text()).toContain('至少补齐到 3 条任务记录')
     expect(wrapper.text()).toContain('至少完成 2 条任务记录')
     expect(wrapper.text()).toContain('当前未纳入：AI 教练运行记录、复盘记录、成长记忆、反馈信号、提醒信号')
+  })
+
+  it('only exposes the weekly report action when the feature is enabled', async () => {
+    const disabledWrapper = mount(GrowthProfileView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
+
+    expect(disabledWrapper.findAll('button').some((button) => button.text() === '求职周报')).toBe(false)
+    disabledWrapper.unmount()
+
+    appConfig.enableV6WeeklyReport = true
+    const enabledWrapper = mount(GrowthProfileView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
+
+    const weeklyReportButton = enabledWrapper.findAll('button').find((button) => button.text() === '求职周报')
+    expect(weeklyReportButton).toBeTruthy()
+    await weeklyReportButton!.trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/agent/weekly-reports')
   })
 })

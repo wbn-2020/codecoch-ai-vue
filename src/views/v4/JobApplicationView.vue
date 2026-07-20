@@ -192,9 +192,21 @@
             <span>{{ item.eventTime || '--' }}</span>
           </div>
           <p>{{ item.summary || '--' }}</p>
-          <div v-if="formatApplicationReview(item)" class="event-row__review">
-            {{ formatApplicationReview(item) }}
+          <div v-if="isApplicationEventReviewSupported(item.eventType)" class="event-row__actions">
+            <el-button
+              link
+              type="primary"
+              :loading="isReviewGenerating(item)"
+              :disabled="isReviewGenerating(item)"
+              @click="openEventReviewDialog(item, Boolean(structuredReview(item)))"
+            >
+              {{ structuredReview(item) ? '重新生成' : '生成 AI 复盘' }}
+            </el-button>
           </div>
+          <ApplicationEventReviewPanel
+            :review="structuredReview(item)"
+            :legacy-text="structuredReview(item) ? '' : formatApplicationReview(item)"
+          />
         </article>
         <AppState
           v-if="eventsError && !eventsLoading"
@@ -240,7 +252,17 @@
         <el-form-item label="关键摘要" prop="summary">
           <el-input v-model.trim="eventForm.summary" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
-        <el-form-item label="复盘要点">
+        <ApplicationEventReviewFields
+          v-if="eventReviewScenario"
+          :observed-facts-text="eventReviewForm.observedFactsText"
+          :external-feedback="eventReviewForm.externalFeedback"
+          :self-reflection="eventReviewForm.selfReflection"
+          :seed="eventReviewSeed"
+          @update:observed-facts-text="eventReviewForm.observedFactsText = $event"
+          @update:external-feedback="eventReviewForm.externalFeedback = $event"
+          @update:self-reflection="eventReviewForm.selfReflection = $event"
+        />
+        <el-form-item v-else label="复盘要点">
           <el-input
             v-model="eventForm.reviewJson"
             type="textarea"
@@ -251,9 +273,33 @@
       </el-form>
       <template #footer>
         <el-button @click="eventDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="createEvent">保存事件</el-button>
+        <el-button :loading="saving" @click="createEvent(false)">保存事件</el-button>
+        <el-button
+          v-if="eventReviewScenario"
+          type="primary"
+          :loading="saving"
+          data-testid="save-and-generate-application-review"
+          @click="createEvent(true)"
+        >
+          保存并生成 AI 复盘
+        </el-button>
       </template>
     </el-dialog>
+
+    <ApplicationEventReviewDialog
+      :visible="reviewDialogVisible"
+      :force="reviewDialogForce"
+      :saving="reviewSaving"
+      :observed-facts-text="reviewDialogForm.observedFactsText"
+      :external-feedback="reviewDialogForm.externalFeedback"
+      :self-reflection="reviewDialogForm.selfReflection"
+      :seed="reviewDialogSeed"
+      @update:visible="reviewDialogVisible = $event"
+      @update:observed-facts-text="reviewDialogForm.observedFactsText = $event"
+      @update:external-feedback="reviewDialogForm.externalFeedback = $event"
+      @update:self-reflection="reviewDialogForm.selfReflection = $event"
+      @generate="generateEventReview"
+    />
 
     <el-dialog v-model="draftDialogVisible" :title="selectedDraft?.title || '跟进助手'" width="680px">
       <template v-if="selectedDraft">
@@ -301,28 +347,43 @@ import {
   type JobApplicationStatsVO,
   type JobApplicationVO
 } from '@/api/v4'
+import { generateApplicationEventAiReviewApi } from '@/api/careerGrowth'
 import AppState from '@/components/common/AppState.vue'
+import ApplicationEventReviewDialog from '@/views/application/components/ApplicationEventReviewDialog.vue'
+import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
+import ApplicationEventReviewPanel from '@/views/application/components/ApplicationEventReviewPanel.vue'
 import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
 import {
   applicationFollowUpFilterOptions,
   applicationStatusOptions,
+  buildApplicationEventReviewGenerateRequest,
+  buildApplicationEventReviewSeed,
   buildApplicationOutboundDraft,
   buildApplicationFunnelStages,
   buildBackendLatestApplicationEvent,
   canApplyApplicationEventStatusChange,
+  createApplicationEventReviewSingleFlight,
   filterApplicationsByFollowUp,
   formatApplicationResumeVersionLabel,
   getApplicationDataQualityTags,
   getApplicationEventMeta,
+  getApplicationEventLegacyReview,
+  getApplicationEventReviewScenario,
+  getApplicationEventStructuredReview,
   getApplicationFollowUpState,
   getApplicationStageMeta,
   getApplicationStatusFromEventType,
   isApplicationActiveStatus,
+  isApplicationEventReviewGenerating,
+  isApplicationEventReviewSupported,
   parseApplicationListQuery,
+  saveApplicationEventWithOptionalReview,
   shouldShowApplicationForFunnelStage,
   type ApplicationDataQualityTag,
   type ApplicationDeepLinkFollowUpFilter,
   type ApplicationDraftKind,
+  type ApplicationEventReviewSeed,
+  type ApplicationEventStructuredReview,
   type ApplicationFunnelStage,
   type ApplicationOutboundDraft
 } from '@/features/applications'
@@ -380,6 +441,11 @@ const applicationStats = ref<JobApplicationStatsVO>()
 const eventsVisible = ref(false)
 const eventsLoading = ref(false)
 const eventDialogVisible = ref(false)
+const reviewDialogVisible = ref(false)
+const reviewDialogForce = ref(false)
+const reviewSaving = ref(false)
+const reviewDialogEvent = ref<JobApplicationEventVO>()
+const reviewGeneratingEventIds = ref<Set<number>>(new Set())
 const draftDialogVisible = ref(false)
 const selectedApplication = ref<JobApplicationVO>()
 const selectedDraft = ref<ApplicationOutboundDraft>()
@@ -402,6 +468,20 @@ const eventForm = reactive<Partial<JobApplicationEventVO>>({
   summary: '',
   reviewJson: ''
 })
+
+const eventReviewForm = reactive({
+  observedFactsText: '',
+  externalFeedback: '',
+  selfReflection: ''
+})
+
+const reviewDialogForm = reactive({
+  observedFactsText: '',
+  externalFeedback: '',
+  selfReflection: ''
+})
+
+const reviewSingleFlight = createApplicationEventReviewSingleFlight()
 
 const applicationFormRules: FormRules<Partial<JobApplicationVO>> = {
   companyName: [{ required: true, whitespace: true, message: '请填写公司名称。', trigger: 'blur' }],
@@ -524,6 +604,19 @@ const selectedDraftReviewText = computed(() => {
     `实验输入：${selectedDraft.value.experimentInput.join('；')}`
   ].join('\n')
 })
+const eventReviewScenario = computed(() => getApplicationEventReviewScenario(eventForm.eventType))
+const eventReviewSeed = computed<ApplicationEventReviewSeed | undefined>(() => {
+  const scenario = eventReviewScenario.value
+  return scenario && selectedApplication.value
+    ? buildApplicationEventReviewSeed(selectedApplication.value, scenario)
+    : undefined
+})
+const reviewDialogSeed = computed<ApplicationEventReviewSeed | undefined>(() => {
+  const scenario = getApplicationEventReviewScenario(reviewDialogEvent.value?.eventType)
+  return scenario && selectedApplication.value
+    ? buildApplicationEventReviewSeed(selectedApplication.value, scenario)
+    : undefined
+})
 
 type FollowUpTag = {
   label: string
@@ -630,19 +723,7 @@ const stringifyReviewValue = (value: unknown): string => {
 }
 
 const parseReviewValue = (item: JobApplicationEventVO): Record<string, unknown> | string | null => {
-  if (item.review && Object.keys(item.review).length) return item.review
-  const raw = item.reviewJson?.trim()
-  if (!raw) return null
-
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-    return stringifyReviewValue(parsed)
-  } catch {
-    return raw
-  }
+  return getApplicationEventLegacyReview(item)
 }
 
 const formatApplicationReview = (item: JobApplicationEventVO) => {
@@ -658,6 +739,13 @@ const formatApplicationReview = (item: JobApplicationEventVO) => {
     .filter(Boolean)
     .join('；')
 }
+
+const structuredReview = (item: JobApplicationEventVO) =>
+  getApplicationEventStructuredReview(item)
+
+const isReviewGenerating = (item: JobApplicationEventVO) =>
+  reviewGeneratingEventIds.value.has(item.id) ||
+  isApplicationEventReviewGenerating(structuredReview(item))
 
 const applicationTargetText = () => {
   const company = form.companyName?.trim() || '未填写公司'
@@ -703,7 +791,11 @@ const previewApplicationEventSave = () =>
       eventStatusImpactTip.value,
       '如保存的是跟进信或感谢信草稿，请先确认内容，再由你自行复制到外部渠道发送。',
       eventForm.summary?.trim() ? '摘要会作为后续复盘参考，请避免填写敏感联系方式或无关私密内容。' : '建议补充一句摘要，方便后续回看。',
-      eventForm.reviewJson?.trim() ? '复盘要点会影响后续行动建议，请确认内容准确。' : '未填写复盘要点时，后续建议主要依赖事件类型和摘要。'
+      eventReviewScenario.value
+        ? 'AI 复盘会在事件保存成功后单独生成；生成失败不会回滚已经保存的事件。'
+        : eventForm.reviewJson?.trim()
+          ? '复盘要点会影响后续行动建议，请确认内容准确。'
+          : '未填写复盘要点时，后续建议主要依赖事件类型和摘要。'
     ],
     confirmButtonText: '确认保存事件'
   })
@@ -914,11 +1006,22 @@ const loadEvents = async () => {
 }
 
 const openEventCreate = (draft?: Partial<JobApplicationEventVO>) => {
+  const reviewScenario = getApplicationEventReviewScenario(draft?.eventType)
+  const reviewSeed = reviewScenario && selectedApplication.value
+    ? buildApplicationEventReviewSeed(selectedApplication.value, reviewScenario)
+    : undefined
   Object.assign(eventForm, {
     eventType: draft?.eventType || 'NOTE',
     eventTime: draft?.eventTime || formatLocalDateTime(),
     summary: draft?.summary || '',
     reviewJson: draft?.reviewJson || ''
+  })
+  Object.assign(eventReviewForm, {
+    observedFactsText: draft?.reviewJson && reviewSeed
+      ? reviewSeed.observedFacts.join('\n')
+      : '',
+    externalFeedback: '',
+    selfReflection: ''
   })
   eventDialogVisible.value = true
   void nextTick(() => eventFormRef.value?.clearValidate())
@@ -962,7 +1065,95 @@ const saveSelectedDraftAsEvent = () => {
   draftDialogVisible.value = false
 }
 
-const createEvent = async () => {
+const setReviewGenerating = (eventId: number, generating: boolean) => {
+  const next = new Set(reviewGeneratingEventIds.value)
+  if (generating) {
+    next.add(eventId)
+  } else {
+    next.delete(eventId)
+  }
+  reviewGeneratingEventIds.value = next
+}
+
+const requestApplicationEventReview = async (
+  applicationId: number,
+  event: JobApplicationEventVO,
+  input: {
+    observedFactsText: string
+    externalFeedback: string
+    selfReflection: string
+  },
+  force: boolean
+) => {
+  const request = buildApplicationEventReviewGenerateRequest(
+    {
+      observedFacts: input.observedFactsText,
+      externalFeedback: input.externalFeedback,
+      selfReflection: input.selfReflection
+    },
+    { force }
+  )
+  const key = `${applicationId}:${event.id}`
+  setReviewGenerating(event.id, true)
+  try {
+    return await reviewSingleFlight.run(
+      key,
+      () => generateApplicationEventAiReviewApi(applicationId, event.id, request)
+    )
+  } finally {
+    setReviewGenerating(event.id, false)
+  }
+}
+
+const reviewGeneratedMessage = (
+  review?: ApplicationEventStructuredReview,
+  eventSaved = false
+) => {
+  const prefix = eventSaved ? '事件已保存，' : ''
+  return review?.generation.fallback
+    ? `${prefix}规则降级复盘已生成。`
+    : `${prefix}AI 复盘已生成。`
+}
+
+const openEventReviewDialog = (item: JobApplicationEventVO, force: boolean) => {
+  if (isReviewGenerating(item)) return
+  const review = structuredReview(item)
+  const keepPendingInput = !review && reviewDialogEvent.value?.id === item.id
+  reviewDialogEvent.value = item
+  reviewDialogForce.value = force
+  if (!keepPendingInput) {
+    Object.assign(reviewDialogForm, {
+      observedFactsText: review?.userInput.observedFacts.map((fact) => fact.content).join('\n') || '',
+      externalFeedback: review?.userInput.externalFeedback?.content || '',
+      selfReflection: review?.userInput.selfReflection || ''
+    })
+  }
+  reviewDialogVisible.value = true
+}
+
+const generateEventReview = async () => {
+  const applicationId = selectedApplication.value?.id
+  const event = reviewDialogEvent.value
+  if (!applicationId || !event || reviewSaving.value) return
+  reviewSaving.value = true
+  try {
+    const review = await requestApplicationEventReview(
+      applicationId,
+      event,
+      reviewDialogForm,
+      reviewDialogForce.value
+    )
+    reviewDialogVisible.value = false
+    ElMessage.success(reviewGeneratedMessage(review))
+    await loadEvents()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    reviewSaving.value = false
+  }
+}
+
+const createEvent = async (generateReview: boolean) => {
   if (!selectedApplication.value) return
   if (saving.value) return
   const valid = await validateForm(eventFormRef.value, '请先补齐事件类型、事件时间和关键摘要。')
@@ -975,14 +1166,33 @@ const createEvent = async () => {
   const shouldSyncStatus = canApplyApplicationEventStatusChange(previousApplication.status, nextStatus)
   saving.value = true
   try {
-    await createApplicationEventApi(applicationId, {
-      eventType: eventForm.eventType,
-      eventTime: eventForm.eventTime,
-      summary: eventForm.summary,
-      reviewJson: eventForm.reviewJson || undefined
+    const result = await saveApplicationEventWithOptionalReview({
+      saveEvent: () => createApplicationEventApi(applicationId, {
+        eventType: eventForm.eventType,
+        eventTime: eventForm.eventTime,
+        summary: eventForm.summary,
+        reviewJson: eventForm.reviewJson || undefined
+      }),
+      generateReview: generateReview
+        ? (savedEvent) => requestApplicationEventReview(
+            applicationId,
+            savedEvent,
+            eventReviewForm,
+            false
+          )
+        : undefined
     })
     eventDialogVisible.value = false
-    ElMessage.success('事件已保存')
+    if (result.reviewError) {
+      reviewDialogEvent.value = result.event
+      reviewDialogForce.value = false
+      Object.assign(reviewDialogForm, eventReviewForm)
+      ElMessage.warning('事件已保存，AI 复盘暂未生成，可在事件卡片中重试。')
+    } else if (result.review) {
+      ElMessage.success(reviewGeneratedMessage(result.review, true))
+    } else {
+      ElMessage.success('事件已保存')
+    }
     await load()
     const refreshed = rawApplications.value.find((item) => item.id === applicationId)
     if (refreshed) {
@@ -1245,13 +1455,10 @@ onMounted(async () => {
   margin: 8px 0 0;
 }
 
-.event-row__review {
-  margin: 10px 0 0;
-  padding: 10px;
-  border-radius: 8px;
-  background: #020617;
-  color: #dbeafe;
-  line-height: 1.7;
+.event-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 @media (max-width: 900px) {

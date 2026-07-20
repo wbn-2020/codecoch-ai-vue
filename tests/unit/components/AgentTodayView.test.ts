@@ -2,6 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getCurrentAgentWeekPlanApi } from '@/api/agent'
+import { getAgentPlanChangeSetsApi } from '@/api/agentPlanChange'
+import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
+import { getAgentReviewsApi } from '@/api/v4'
 import { fetchCachedLatestDailyPlan, fetchCachedTodayAgentTasks } from '@/composables/useUserHomeDataCache'
 import AgentTodayView from '@/views/agent/AgentTodayView.vue'
 
@@ -30,6 +34,10 @@ vi.mock('@/api/aiFeedback', () => ({
   submitAiResultFeedbackApi: vi.fn()
 }))
 
+vi.mock('@/api/agentPlanChange', () => ({
+  getAgentPlanChangeSetsApi: vi.fn()
+}))
+
 vi.mock('@/api/jobTarget', () => ({
   getCurrentJobTargetApi: vi.fn().mockResolvedValue({
     id: 7,
@@ -43,6 +51,10 @@ vi.mock('@/api/jobTarget', () => ({
     companyName: 'Demo Company',
     currentFlag: 1
   }])
+}))
+
+vi.mock('@/api/v4', () => ({
+  getAgentReviewsApi: vi.fn()
 }))
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
@@ -98,7 +110,8 @@ vi.mock('@/components/job-readiness/AgentTaskEvidence.vue', () => ({
 const stubs = {
   AgentCoachActionDialog: true,
   AppState: {
-    template: '<div class="app-state-stub"><slot /></div>'
+    props: ['title', 'description'],
+    template: '<div class="app-state-stub">{{ title }} {{ description }}<slot /></div>'
   },
   StatusTag: true,
   'el-alert': true,
@@ -168,6 +181,21 @@ describe('AgentTodayView agent task evidence', () => {
         }
       ]
     })
+    vi.mocked(getAgentReviewsApi).mockResolvedValue([])
+    vi.mocked(getAgentPlanChangeSetsApi).mockResolvedValue([])
+    vi.mocked(getCurrentAgentWeekPlanApi).mockResolvedValue(null)
+    vi.mocked(getCurrentJobTargetApi).mockResolvedValue({
+      id: 7,
+      jobTitle: 'Frontend Engineer',
+      companyName: 'Demo Company',
+      currentFlag: 1
+    })
+    vi.mocked(getJobTargetsApi).mockResolvedValue([{
+      id: 7,
+      jobTitle: 'Frontend Engineer',
+      companyName: 'Demo Company',
+      currentFlag: 1
+    }])
   })
 
   it('maps AgentTaskVO to unified evidence and lets the page own safe navigation', async () => {
@@ -193,5 +221,163 @@ describe('AgentTodayView agent task evidence', () => {
 
     expect(routerPush).not.toHaveBeenCalledWith(expect.stringContaining('evil.example'))
     expect(routerPush).toHaveBeenCalledWith(expect.stringContaining('/questions/practice'))
+  })
+
+  it('feeds the latest DAILY review into the loop overview', async () => {
+    vi.mocked(getAgentReviewsApi).mockResolvedValue([{
+      id: 81,
+      reviewDate: '2026-07-18',
+      adjustments: ['下一轮先完成最小可验证动作。'],
+      confidenceLevel: 'HIGH',
+      fallback: true
+    }])
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(getAgentReviewsApi).toHaveBeenCalledWith({ targetJobId: 7 })
+    expect(wrapper.get('.agent-loop-snapshot').text()).toContain('下一轮先完成最小可验证动作')
+    expect(wrapper.get('[data-latest-review]').text()).toContain('2026-07-18')
+    expect(wrapper.get('.agent-loop-snapshot__facts').text()).toContain('高置信度')
+    expect(wrapper.get('.agent-loop-snapshot__facts').text()).toContain('规则兜底')
+  })
+
+  it('waits for the current target before requesting scoped reviews', async () => {
+    let resolveCurrentTarget!: (value: { id: number; jobTitle: string; companyName: string; currentFlag: number }) => void
+    vi.mocked(getCurrentJobTargetApi).mockImplementationOnce(() => new Promise((resolve) => {
+      resolveCurrentTarget = resolve
+    }))
+
+    mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+
+    expect(getAgentReviewsApi).not.toHaveBeenCalled()
+
+    resolveCurrentTarget({
+      id: 7,
+      jobTitle: 'Frontend Engineer',
+      companyName: 'Demo Company',
+      currentFlag: 1
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(getAgentReviewsApi).toHaveBeenCalledWith({ targetJobId: 7 })
+  })
+
+  it('does not request unscoped reviews when target resolution fails', async () => {
+    vi.mocked(getCurrentJobTargetApi).mockRejectedValueOnce(new Error('当前岗位接口失败'))
+    vi.mocked(getJobTargetsApi).mockRejectedValueOnce(new Error('岗位列表接口失败'))
+
+    mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(getAgentReviewsApi).not.toHaveBeenCalled()
+  })
+
+  it('keeps task data and uses rule fallback when DAILY review loading fails', async () => {
+    vi.mocked(getAgentReviewsApi).mockRejectedValue(new Error('复盘接口失败'))
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('.agent-task-evidence-stub').exists()).toBe(true)
+    expect(wrapper.get('.agent-loop-snapshot').text()).toContain('先完成或暂缓至少一项任务')
+    expect(wrapper.find('[data-latest-review]').exists()).toBe(false)
+  })
+
+  it('keeps the full-page error when both core sources and DAILY reviews fail', async () => {
+    vi.mocked(fetchCachedLatestDailyPlan).mockRejectedValue(new Error('计划接口失败'))
+    vi.mocked(fetchCachedTodayAgentTasks).mockRejectedValue(new Error('任务接口失败'))
+    vi.mocked(getAgentReviewsApi).mockRejectedValue(new Error('复盘接口失败'))
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.get('.app-state-stub').text()).toContain('今日计划加载失败')
+    expect(wrapper.find('.agent-diagnostic-state').exists()).toBe(false)
+  })
+
+  it('renders review-confirmed week-plan origin with a safe Chinese fallback for unknown change types', async () => {
+    vi.mocked(getAgentReviewsApi).mockResolvedValue([{
+      id: 81,
+      reviewDate: '2026-07-18',
+      adjustments: []
+    }])
+    vi.mocked(getCurrentAgentWeekPlanApi).mockResolvedValue({
+      id: 3001,
+      planDate: '2026-07-18',
+      weekStartDate: '2026-07-13',
+      weekEndDate: '2026-07-19',
+      snapshotVersion: 4,
+      items: [{
+        id: 901,
+        agentTaskId: 42,
+        layer: 'TODAY',
+        title: '错题复盘',
+        itemStatus: 'TODO',
+        plannedDate: '2026-07-18',
+        confidenceLevel: 'MEDIUM',
+        reviewConfirmed: true,
+        sourceReviewId: 81,
+        reviewChangeType: 'UNKNOWN_FUTURE_TYPE'
+      }]
+    } as never)
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: {
+          loading: {}
+        },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    const origins = wrapper.findAll('.agent-week-plan__review-origin')
+    expect(origins.length).toBeGreaterThan(0)
+    expect(origins.map((item) => item.text()).join(' ')).toContain('来自 2026-07-18 每日复盘')
+    expect(origins.map((item) => item.text()).join(' ')).toContain('用户已确认')
+    expect(origins.map((item) => item.text()).join(' ')).toContain('变更类型：计划变更')
   })
 })

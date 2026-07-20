@@ -34,7 +34,8 @@ export const notificationTypeLabels: Record<string, string> = {
   REVIEW_RESULT: '审核结果',
   SECURITY: '安全提醒',
   AI_REVIEW: 'AI 审核',
-  STUDY_PLAN: '学习计划'
+  STUDY_PLAN: '学习计划',
+  CALENDAR_REMINDER: '求职日历提醒'
 }
 
 export const formatNotificationType = (type?: string | null): string => {

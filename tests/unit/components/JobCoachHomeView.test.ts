@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   dashboardOverview: vi.fn(),
   dailyPlan: vi.fn(),
   applicationStats: vi.fn(),
+  notifications: vi.fn(),
+  reviews: vi.fn(),
   skipTask: vi.fn(),
   todayTasks: vi.fn(),
   v3Overview: vi.fn(),
@@ -26,7 +28,12 @@ vi.mock('@/api/agent', () => ({
 }))
 
 vi.mock('@/api/v4', () => ({
+  getAgentReviewsApi: mocks.reviews,
   getApplicationStatsApi: mocks.applicationStats
+}))
+
+vi.mock('@/api/notification', () => ({
+  getNotificationsApi: mocks.notifications
 }))
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
@@ -210,6 +217,13 @@ beforeEach(() => {
     noFollowUpCount: 0,
     staleActiveCount: 0
   })
+  mocks.notifications.mockResolvedValue({
+    records: [],
+    total: 0,
+    current: 1,
+    size: 20
+  })
+  mocks.reviews.mockResolvedValue([])
   mocks.routerPush.mockResolvedValue(undefined)
   mocks.requestPost.mockResolvedValue(undefined)
   mocks.confirmDanger.mockResolvedValue(true)
@@ -219,6 +233,71 @@ beforeEach(() => {
 })
 
 describe('JobCoachHomeView ordered action cockpit', () => {
+  it('loads actionable notifications and lets the unified aggregator promote a calendar reminder', async () => {
+    mocks.notifications.mockResolvedValue({
+      records: [{
+        id: 71,
+        type: 'CALENDAR_REMINDER',
+        bizType: 'CAREER_CALENDAR_EVENT',
+        bizId: '501',
+        title: '今天 14:00 的后端一面',
+        content: '求职日历事件即将开始',
+        actionUrl: '/career-calendar',
+        fallbackPath: '/career-calendar',
+        fallbackLabel: '打开求职日历',
+        planDate: '2026-07-18',
+        isRead: 0,
+        createdAt: '2026-07-18 09:00:00'
+      }],
+      total: 1,
+      current: 1,
+      size: 20
+    })
+
+    const wrapper = await mountHome()
+
+    expect(mocks.notifications).toHaveBeenCalledWith({
+      pageNo: 1,
+      pageSize: 20,
+      isRead: ''
+    })
+    expect(wrapper.get('[data-primary-title]').text()).toContain('今天 14:00 的后端一面')
+
+    await wrapper.get('[data-primary-cta]').trigger('click')
+
+    expect(mocks.routerPush).toHaveBeenCalledWith('/career-calendar')
+  })
+
+  it('keeps Agent actions available when notification loading fails', async () => {
+    mocks.notifications.mockRejectedValue(new Error('通知接口失败'))
+
+    const wrapper = await mountHome()
+
+    expect(wrapper.get('[data-primary-title]').text()).toContain(defaultTask.title)
+    expect(wrapper.get('.action-timeline .module-error').text()).toContain('通知接口失败')
+  })
+
+  it('loads DAILY reviews for the current target and renders the latest adjustment', async () => {
+    mocks.reviews.mockResolvedValue([{
+      id: 901,
+      targetJobId: 7,
+      reviewDate: '2026-07-18',
+      adjustments: ['明天先完成一项最小可验证的项目表达修改。'],
+      confidenceLevel: 'MEDIUM',
+      fallback: true
+    }])
+
+    const wrapper = await mountHome()
+    await wrapper.get('.secondary-toggle').trigger('click')
+    await flushPromises()
+
+    expect(mocks.reviews).toHaveBeenCalledWith({ targetJobId: 7 })
+    expect(wrapper.get('[data-latest-review]').text()).toContain('2026-07-18')
+    expect(wrapper.get('[data-latest-review]').text()).toContain('中等置信度')
+    expect(wrapper.get('[data-latest-review]').text()).toContain('规则兜底')
+    expect(wrapper.get('[data-agent-loop-adjustment]').text()).toContain('明天先完成一项最小可验证的项目表达修改')
+  })
+
   it('keeps the primary action as the only page-level action title', async () => {
     const wrapper = await mountHome()
 
@@ -282,7 +361,8 @@ describe('JobCoachHomeView ordered action cockpit', () => {
 
     expect(actionItems).toHaveLength(3)
     expect(wrapper.findAll('[data-action-item][data-primary="false"]')).toHaveLength(2)
-    expect(actionItems.map((item) => item.text()).join(' ')).not.toContain(defaultTask.title)
+    expect(actionItems.map((item) => item.text()).join(' ')).toContain(defaultTask.title)
+    expect(actionItems.map((item) => item.text()).join(' ')).not.toContain('还没有下一次跟进')
   })
 
   it('puts the no-task fallback into the ordered timeline as the primary action', async () => {

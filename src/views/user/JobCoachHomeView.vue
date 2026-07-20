@@ -332,7 +332,13 @@
             <div><dt>跳过</dt><dd>{{ agentLoopHomeSummary.skipped }}</dd></div>
             <div><dt>预计分钟</dt><dd>{{ agentLoopHomeSummary.estimatedMinutes }}</dd></div>
           </dl>
-          <p>{{ agentLoopHomeAdjustment }}</p>
+          <div v-if="agentLoopHomeLatestReview" class="agent-loop-review-meta" data-latest-review>
+            <span>最近复盘 {{ agentLoopHomeLatestReview.reviewDate || agentLoopHomeLatestReview.createdAt || '日期待确认' }}</span>
+            <span>{{ agentLoopHomeReviewConfidence }}</span>
+            <span v-if="agentLoopHomeLatestReview.fallback">规则兜底</span>
+          </div>
+          <p data-agent-loop-adjustment>{{ agentLoopHomeAdjustment }}</p>
+          <el-button text @click="go('/agent/reviews')">查看复盘</el-button>
         </article>
       </div>
     </section>
@@ -384,7 +390,13 @@ import {
   completeAgentTaskApi,
   skipAgentTaskApi
 } from '@/api/agent'
-import { getApplicationStatsApi, type JobApplicationStatsVO } from '@/api/v4'
+import { getNotificationsApi, type NotificationVO } from '@/api/notification'
+import {
+  getAgentReviewsApi,
+  getApplicationStatsApi,
+  type AgentReviewVO,
+  type JobApplicationStatsVO
+} from '@/api/v4'
 import {
   fetchCachedDashboardOverview,
   fetchCachedLatestDailyPlan,
@@ -405,7 +417,7 @@ import {
   isCareerActionClosed,
   type CareerActionItemVO
 } from '@/features/career-command-center'
-import { buildApplicationTodayActions, type TodayActionItem } from '@/features/today-actions'
+import { buildTodayActions, type TodayActionItem } from '@/features/today-actions'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
@@ -475,6 +487,10 @@ const applicationStats = ref<JobApplicationStatsVO | null>(null)
 const applicationStatsLoading = ref(false)
 const applicationStatsError = ref('')
 
+const notifications = ref<NotificationVO[]>([])
+const notificationsLoading = ref(false)
+const notificationsError = ref('')
+
 const dailyPlan = ref<DailyPlanVO | null>(null)
 const dailyPlanLoading = ref(false)
 const dailyPlanError = ref('')
@@ -482,6 +498,11 @@ const dailyPlanError = ref('')
 const agentTasks = ref<AgentTaskVO[]>([])
 const agentTasksLoading = ref(false)
 const agentTasksError = ref('')
+
+const agentReviews = ref<AgentReviewVO[]>([])
+const agentReviewsLoading = ref(false)
+const agentReviewsError = ref('')
+
 const taskMutationLocked = ref(false)
 const completionReviewVisible = ref(false)
 const completionReviewTask = ref<AgentTaskVO | null>(null)
@@ -497,8 +518,10 @@ const wrongQuestionsError = ref('')
 const overviewLoadState = ref<ResourceLoadState>('idle')
 const v3OverviewLoadState = ref<ResourceLoadState>('idle')
 const applicationStatsLoadState = ref<ResourceLoadState>('idle')
+const notificationsLoadState = ref<ResourceLoadState>('idle')
 const dailyPlanLoadState = ref<ResourceLoadState>('idle')
 const agentTasksLoadState = ref<ResourceLoadState>('idle')
+const agentReviewsLoadState = ref<ResourceLoadState>('idle')
 
 const createLatestRequestRunner = (
   loading: Ref<boolean>,
@@ -536,8 +559,18 @@ const runLatestApplicationStatsRequest = createLatestRequestRunner(
   applicationStatsLoadState,
   applicationStatsError
 )
+const runLatestNotificationsRequest = createLatestRequestRunner(
+  notificationsLoading,
+  notificationsLoadState,
+  notificationsError
+)
 const runLatestDailyPlanRequest = createLatestRequestRunner(dailyPlanLoading, dailyPlanLoadState, dailyPlanError)
 const runLatestAgentTasksRequest = createLatestRequestRunner(agentTasksLoading, agentTasksLoadState, agentTasksError)
+const runLatestAgentReviewsRequest = createLatestRequestRunner(
+  agentReviewsLoading,
+  agentReviewsLoadState,
+  agentReviewsError
+)
 
 const hasResumeSignal = computed(() => Boolean(overview.value?.resumeCount))
 const currentTargetJob = computed(() => v3Overview.value?.currentTargetJob || null)
@@ -577,14 +610,28 @@ const firstDayReadiness = computed(() => [
   Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview)
 ])
 const firstDayReadyCount = computed(() => firstDayReadiness.value.filter(Boolean).length)
-const careerActions = computed(() => buildCareerActionQueue(agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []))
+const homeAgentTasks = computed<AgentTaskVO[]>(() =>
+  agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+)
+const careerActions = computed(() => buildCareerActionQueue(homeAgentTasks.value))
 const agentLoopHomeOverview = computed(() => buildAgentLoopOverview({
   plan: dailyPlan.value,
-  todayTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || [],
-  historyTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+  todayTasks: homeAgentTasks.value,
+  historyTasks: homeAgentTasks.value,
+  reviews: agentReviews.value
 }))
 const agentLoopHomeSummary = computed(() => agentLoopHomeOverview.value.weekSummary)
 const agentLoopHomeAdjustment = computed(() => agentLoopHomeOverview.value.nextAdjustmentSummary)
+const agentLoopHomeLatestReview = computed(() => agentLoopHomeOverview.value.latestReview)
+const agentLoopHomeReviewConfidence = computed(() => {
+  const confidence = String(agentLoopHomeLatestReview.value?.confidenceLevel || '').toUpperCase()
+  return {
+    HIGH: '高置信度',
+    MEDIUM: '中等置信度',
+    LOW: '低置信度',
+    INSUFFICIENT: '证据不足'
+  }[confidence] || '置信度待确认'
+})
 const primaryCareerAction = computed(() =>
   careerActions.value.find(canPromoteCareerAction)
   || careerActions.value.find((action) => !isCareerActionClosed(action))
@@ -593,8 +640,51 @@ const primaryCareerAction = computed(() =>
 const taskCards = computed<HomeTask[]>(() => {
   return careerActions.value.slice(0, 5).map(toHomeTaskFromCareerAction)
 })
-const applicationTodayActions = computed(() => buildApplicationTodayActions(applicationStats.value, { maxItems: 3 }))
-const applicationActionCards = computed<HomeTask[]>(() => applicationTodayActions.value.map(toHomeTaskFromTodayAction))
+const readinessNextAction = computed(() => {
+  if (!overview.value?.resumeCount) {
+    return {
+      title: '先补一份可用于匹配的简历',
+      description: '没有简历时，AI 只能给通用训练建议。上传或创建简历后，推荐才能围绕项目经历和岗位要求展开。',
+      reason: '缺少简历资料',
+      label: '补充简历',
+      path: '/resumes'
+    }
+  }
+  if (!overview.value?.recentInterview && !overview.value?.recentReport) {
+    return {
+      title: '完成一次目标岗位模拟面试',
+      description: '系统需要真实面试反馈来判断表达、项目深度和知识薄弱点。先做一轮轻量模拟面试，再把报告反哺到今日计划。',
+      reason: '缺少面试反馈',
+      label: '创建模拟面试',
+      path: '/interviews/create'
+    }
+  }
+  if (wrongQuestions.value.length) {
+    return {
+      title: '复盘最近错题，校准今日短板',
+      description: `${wrongQuestions.value.length} 道错题可用于确认知识点是否真正掌握。先从最近出错的题开始。`,
+      reason: '来自错题记录',
+      label: '复盘错题',
+      path: '/questions/wrong-records'
+    }
+  }
+  return {
+    title: '生成今天的智能教练计划',
+    description: '当前还没有安排好的训练动作。生成计划后，你会看到任务、推荐理由、预计耗时和开始入口。',
+    reason: '等待智能教练生成',
+    label: '去生成计划',
+    path: '/agent/today'
+  }
+})
+const todayActions = computed(() => buildTodayActions({
+  agentTasks: homeAgentTasks.value,
+  applicationStats: applicationStats.value,
+  notifications: notifications.value,
+  readinessNextAction: readinessNextAction.value
+}, {
+  maxItems: 5
+}))
+const todayActionCards = computed<HomeTask[]>(() => todayActions.value.map(toHomeTaskFromTodayAction))
 
 const primaryTask = computed<HomeTask>(() => {
   if (primaryDependenciesPending.value) {
@@ -629,7 +719,7 @@ const primaryTask = computed<HomeTask>(() => {
     })
   }
 
-  if (applicationActionCards.value.length) return applicationActionCards.value[0]
+  if (todayActionCards.value.length) return todayActionCards.value[0]
 
   if (primaryCareerAction.value) {
     const task = findTaskByCareerAction(primaryCareerAction.value)
@@ -708,7 +798,7 @@ const primaryTask = computed<HomeTask>(() => {
 const orderedActionList = computed<HomeTask[]>(() => {
   const seenKeys = new Set<string>()
   const seenIntents = new Set<string>()
-  const candidates = [primaryTask.value, ...applicationActionCards.value, ...taskCards.value]
+  const candidates = [primaryTask.value, ...todayActionCards.value, ...taskCards.value]
 
   return candidates.filter((task, index) => {
     if (index > 0 && ['已完成', '已跳过'].includes(task.statusLabel)) return false
@@ -1028,11 +1118,17 @@ const pageErrors = computed(() => [
   applicationStatsError.value
     ? { key: 'application-stats', message: applicationStatsError.value, retry: fetchApplicationStats }
     : null,
+  notificationsError.value
+    ? { key: 'notifications', message: notificationsError.value, retry: fetchNotifications }
+    : null,
   dailyPlanError.value
     ? { key: 'daily-plan', message: dailyPlanError.value, retry: fetchDailyPlan }
     : null,
   agentTasksError.value
     ? { key: 'agent-tasks', message: agentTasksError.value, retry: fetchAgentTasks }
+    : null,
+  agentReviewsError.value
+    ? { key: 'agent-reviews', message: agentReviewsError.value, retry: fetchAgentReviews }
     : null,
   wrongQuestionsError.value
     ? { key: 'wrong-questions', message: wrongQuestionsError.value, retry: fetchWrongQuestions }
@@ -1042,12 +1138,14 @@ const pageErrors = computed(() => [
 const actionModuleErrorText = computed(() => [
   applicationStatsError.value,
   dailyPlanError.value,
-  agentTasksError.value
+  agentTasksError.value,
+  notificationsError.value
 ].filter(Boolean).join('；'))
 
 const evidenceModuleErrorText = computed(() => [
   wrongQuestionsError.value,
-  overviewError.value
+  overviewError.value,
+  agentReviewsError.value
 ].filter(Boolean).join('；'))
 
 const careerRiskSignals = computed(() => buildCareerRiskSignals({
@@ -1180,6 +1278,41 @@ const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes' | 'sourc
 
 const toHomeTaskFromTodayAction = (action: TodayActionItem): HomeTask => {
   const isUrgent = action.priority === 'urgent'
+  const isHigh = action.priority === 'high'
+  const taskId = action.source === 'agent-task'
+    ? Number(action.key.replace(/^agent-task-/, ''))
+    : undefined
+  const sourceTask = Number.isFinite(taskId) ? homeAgentTasks.value.find((task) => task.id === taskId) : undefined
+
+  if (sourceTask) {
+    return {
+      ...toHomeTask(sourceTask),
+      key: action.key,
+      title: action.title,
+      description: action.description,
+      reason: action.reason,
+      cta: action.actionLabel,
+      path: action.actionPath
+    }
+  }
+
+  const isApplicationAction = action.source === 'application-follow-up'
+  const isCalendarAction = action.source === 'notification' && action.actionPath.startsWith('/career-calendar')
+  const sourceLabel = isApplicationAction
+    ? '投递漏斗'
+    : isCalendarAction
+      ? '求职日历提醒'
+      : action.source === 'notification'
+        ? '通知提醒'
+        : '求职准备'
+  const icon = isApplicationAction
+    ? Briefcase
+    : isCalendarAction
+      ? ClipboardCheck
+      : action.source === 'notification'
+        ? Sparkles
+        : FileText
+
   return {
     key: action.key,
     title: action.title,
@@ -1187,19 +1320,27 @@ const toHomeTaskFromTodayAction = (action: TodayActionItem): HomeTask => {
     reason: action.reason,
     reasons: [
       action.reason,
-      action.dueText ? `时间：${action.dueText}` : '来源：投递漏斗统计',
-      '只做提醒和记录，不自动投递或自动发送消息'
+      action.dueText ? `时间：${action.dueText}` : `来源：${sourceLabel}`,
+      isApplicationAction
+        ? '只做提醒和记录，不自动投递或自动发送消息'
+        : '仅提供可执行入口，不会自动完成业务动作'
     ],
-    benefit: '把投递状态、跟进日期和事件记录沉淀回个人投递漏斗',
+    benefit: isApplicationAction
+      ? '把投递状态、跟进日期和事件记录沉淀回个人投递漏斗'
+      : '完成动作后继续把结果回流到今日任务与复盘',
     cta: action.actionLabel,
     path: action.actionPath,
-    statusLabel: isUrgent ? '优先处理' : '待处理',
-    minutes: isUrgent ? 10 : 8,
-    icon: Briefcase,
-    tone: isUrgent ? 'tone-orange' : 'tone-green',
-    sourceLabel: '投递漏斗',
-    trustBoundary: applicationStatsError.value ? '统计接口降级，保留手动入口' : '来自投递统计，只提示下一步行动',
-    promoted: true
+    statusLabel: isUrgent ? '优先处理' : isHigh ? '今日优先' : '待处理',
+    minutes: isUrgent ? 10 : isHigh ? 12 : 8,
+    icon,
+    tone: isUrgent ? 'tone-orange' : isCalendarAction ? 'tone-green' : 'tone-blue',
+    sourceLabel,
+    trustBoundary: isApplicationAction
+      ? applicationStatsError.value ? '统计接口降级，保留手动入口' : '来自投递统计，只提示下一步行动'
+      : action.source === 'notification'
+  ? notificationsError.value ? '提醒来源暂不可用，保留其他行动入口' : '来自可行动提醒，可直接前往对应处理页面'
+        : '资料不足时只提示下一步，不生成强判断',
+    promoted: isUrgent || isHigh
   }
 }
 
@@ -1433,6 +1574,25 @@ const fetchApplicationStats = async (_force: unknown = true, preserveCurrent = f
   })
 }
 
+const fetchNotifications = async (_force: unknown = true, preserveCurrent = false) => {
+  void _force
+  await runLatestNotificationsRequest({
+    request: () => getNotificationsApi({
+      pageNo: 1,
+      pageSize: 20,
+      isRead: ''
+    }),
+    apply: (value) => {
+      notifications.value = value.records || []
+    },
+    clear: () => {
+      notifications.value = []
+    },
+    preserveCurrent,
+    fallbackError: '行动提醒暂时加载失败，Agent 任务和投递行动仍可继续使用。'
+  })
+}
+
 const fetchDailyPlan = async (force: unknown = true, preserveCurrent = false) => {
   await runLatestDailyPlanRequest({
     request: () => fetchCachedLatestDailyPlan(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value),
@@ -1458,6 +1618,21 @@ const fetchAgentTasks = async (force: unknown = true, preserveCurrent = false) =
     },
     preserveCurrent,
     fallbackError: '今日任务暂时加载失败，可以稍后重试或去今日计划页继续。'
+  })
+}
+
+const fetchAgentReviews = async (_force: unknown = true, preserveCurrent = false) => {
+  void _force
+  await runLatestAgentReviewsRequest({
+    request: () => getAgentReviewsApi({ targetJobId: currentTargetJobId.value }),
+    apply: (value) => {
+      agentReviews.value = value || []
+    },
+    clear: () => {
+      agentReviews.value = []
+    },
+    preserveCurrent,
+    fallbackError: '最新每日复盘暂时加载失败，闭环摘要已按任务事实降级生成。'
   })
 }
 
@@ -1497,8 +1672,10 @@ const refreshTrainingSnapshotAfterMutation = async () => {
     fetchOverview(true, true),
     fetchV3Overview(true, true),
     fetchApplicationStats(true, true),
+    fetchNotifications(true, true),
     fetchDailyPlan(true, true),
-    fetchAgentTasks(true, true)
+    fetchAgentTasks(true, true),
+    fetchAgentReviews(true, true)
   ])
 }
 
@@ -1507,8 +1684,10 @@ const retryPrimaryDependencies = async () => {
     fetchOverview(true, true),
     fetchV3Overview(true, true),
     fetchApplicationStats(true, true),
+    fetchNotifications(true, true),
     fetchDailyPlan(true, true),
-    fetchAgentTasks(true, true)
+    fetchAgentTasks(true, true),
+    fetchAgentReviews(true, true)
   ])
 }
 
@@ -1621,8 +1800,10 @@ onMounted(() => {
   }
   fetchOverview(false)
   void fetchApplicationStats(false)
+  void fetchNotifications(false)
   void fetchV3Overview(false).finally(() => {
     void fetchDailyPlan(false)
+    void fetchAgentReviews(false)
     deferSecondaryHomeData(() => fetchAgentTasks(false), 900, 180)
   })
   deferSecondaryHomeData(() => fetchWrongQuestions(false), 1800, 450)
@@ -2336,6 +2517,15 @@ onBeforeUnmount(() => {
 
 .agent-loop-stats {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.agent-loop-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  color: var(--user-text-secondary);
+  font-size: 11px;
 }
 
 .agent-loop-panel > p {

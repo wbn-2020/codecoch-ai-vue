@@ -156,6 +156,99 @@ export interface ApplicationOutboundDraft {
   experimentInput: string[]
 }
 
+export type ApplicationEventReviewScenario = 'INTERVIEW_COMPLETED' | 'REJECTION' | 'NO_RESPONSE'
+export type ApplicationEventReviewScope = 'REAL_JOB' | 'SIMULATION' | 'UNKNOWN' | string
+export type ApplicationEventReviewOwner = 'USER' | 'SYSTEM' | 'AI' | 'RULE' | 'LEGACY'
+export type ApplicationEventReviewConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | string
+export type ApplicationEventReviewGenerationStatus = 'GENERATING' | 'SUCCEEDED' | 'FALLBACK' | 'FAILED' | string
+
+export interface ApplicationEventReviewFact {
+  id?: string
+  content: string
+  owner: ApplicationEventReviewOwner
+  sourceType?: string
+}
+
+export interface ApplicationEventReviewSignal {
+  content: string
+  factRefs: string[]
+  confidenceLevel?: ApplicationEventReviewConfidence
+  owner: ApplicationEventReviewOwner
+}
+
+export interface ApplicationEventReviewUserInput {
+  owner: ApplicationEventReviewOwner
+  observedFacts: ApplicationEventReviewFact[]
+  externalFeedback?: ApplicationEventReviewFact
+  selfReflection?: string
+}
+
+export interface ApplicationEventReviewAnalysis {
+  owner: ApplicationEventReviewOwner
+  summary?: string
+  limits: string[]
+  signals: ApplicationEventReviewSignal[]
+  adjustments: string[]
+  nextActions: string[]
+}
+
+export interface ApplicationEventReviewGeneration {
+  owner: ApplicationEventReviewOwner
+  status?: ApplicationEventReviewGenerationStatus
+  fallback: boolean
+  fallbackReason?: string
+  confidenceLevel?: ApplicationEventReviewConfidence
+  confidenceBasis: string[]
+  aiCallLogId?: number
+  inputFingerprint?: string
+  requestId?: string
+  generatorVersion?: string
+  startedAt?: string
+  generatedAt?: string
+}
+
+export interface ApplicationEventStructuredReview {
+  schemaVersion?: string
+  scenario?: ApplicationEventReviewScenario | string
+  eventScope?: ApplicationEventReviewScope
+  userInput: ApplicationEventReviewUserInput
+  systemFacts: ApplicationEventReviewFact[]
+  analysis: ApplicationEventReviewAnalysis
+  generation: ApplicationEventReviewGeneration
+}
+
+export interface ApplicationEventReviewSeed {
+  scenario: ApplicationEventReviewScenario
+  observedFacts: string[]
+  externalFeedback: string
+  selfReflection: string
+  assumptions: string[]
+  nextExperimentInputs: string[]
+}
+
+export interface ApplicationEventReviewGenerateInput {
+  observedFacts?: string[] | string
+  externalFeedback?: string
+  selfReflection?: string
+}
+
+export interface ApplicationEventReviewGenerateRequest {
+  observedFacts: string[]
+  externalFeedback?: string
+  selfReflection?: string
+  force: boolean
+  requestId: string
+}
+
+export interface ApplicationEventReviewSaveResult<
+  TEvent extends { id: number },
+  TReview = ApplicationEventStructuredReview
+> {
+  event: TEvent
+  review?: TReview
+  reviewError?: unknown
+}
+
 export interface ApplicationTimelineEvent extends JobApplicationEventVO {
   normalizedType: string
   meta: ApplicationEventMeta
@@ -632,6 +725,343 @@ const compactLines = (lines: string[]) => lines.join('\n').trim()
 
 const buildReviewJson = (review: Record<string, unknown>) => JSON.stringify(review, null, 2)
 
+const applicationEventReviewOwners = new Set<ApplicationEventReviewOwner>([
+  'USER',
+  'SYSTEM',
+  'AI',
+  'RULE',
+  'LEGACY'
+])
+
+const asApplicationReviewRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+
+const asApplicationReviewString = (value: unknown) =>
+  value == null ? '' : String(value).trim()
+
+const asApplicationReviewStringArray = (value: unknown, limit = 20) =>
+  (Array.isArray(value) ? value : [])
+    .map(asApplicationReviewString)
+    .filter(Boolean)
+    .slice(0, limit)
+
+const asApplicationReviewNumber = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+const asApplicationReviewOwner = (
+  value: unknown,
+  fallback: ApplicationEventReviewOwner
+): ApplicationEventReviewOwner => {
+  const owner = asApplicationReviewString(value).toUpperCase() as ApplicationEventReviewOwner
+  return applicationEventReviewOwners.has(owner) ? owner : fallback
+}
+
+const asApplicationReviewFact = (
+  value: unknown,
+  fallbackOwner: ApplicationEventReviewOwner
+): ApplicationEventReviewFact | undefined => {
+  if (typeof value === 'string') {
+    const content = value.trim()
+    return content ? { content, owner: fallbackOwner } : undefined
+  }
+
+  const fact = asApplicationReviewRecord(value)
+  const content = asApplicationReviewString(fact.content)
+  if (!content) return undefined
+  return {
+    id: asApplicationReviewString(fact.id) || undefined,
+    content,
+    owner: asApplicationReviewOwner(fact.owner, fallbackOwner),
+    sourceType: asApplicationReviewString(fact.sourceType) || undefined
+  }
+}
+
+const asApplicationReviewFacts = (
+  value: unknown,
+  fallbackOwner: ApplicationEventReviewOwner
+) => (Array.isArray(value) ? value : [])
+  .map((item) => asApplicationReviewFact(item, fallbackOwner))
+  .filter((item): item is ApplicationEventReviewFact => Boolean(item))
+
+const parseApplicationReviewJson = (value?: string | null): unknown => {
+  const raw = value?.trim()
+  if (!raw) return undefined
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    return raw
+  }
+}
+
+const normalizeApplicationEventStructuredReview = (
+  value: unknown
+): ApplicationEventStructuredReview | undefined => {
+  const root = asApplicationReviewRecord(value)
+  if (!Object.keys(root).length) return undefined
+
+  const userInput = asApplicationReviewRecord(root.userInput)
+  const rawSystemFacts = Array.isArray(root.systemFacts)
+    ? root.systemFacts
+    : asApplicationReviewRecord(root.systemFacts).items
+  const analysis = asApplicationReviewRecord(root.analysis)
+  const generation = asApplicationReviewRecord(root.generation)
+  const externalFeedback = asApplicationReviewFact(userInput.externalFeedback, 'USER')
+  const analysisOwner = asApplicationReviewOwner(analysis.owner, 'AI')
+
+  return {
+    schemaVersion: asApplicationReviewString(root.schemaVersion) || undefined,
+    scenario: asApplicationReviewString(root.scenario) || undefined,
+    eventScope: asApplicationReviewString(root.eventScope) || undefined,
+    userInput: {
+      owner: asApplicationReviewOwner(userInput.owner, 'USER'),
+      observedFacts: asApplicationReviewFacts(userInput.observedFacts, 'USER'),
+      externalFeedback,
+      selfReflection: asApplicationReviewString(userInput.selfReflection) || undefined
+    },
+    systemFacts: asApplicationReviewFacts(rawSystemFacts, 'SYSTEM'),
+    analysis: {
+      owner: analysisOwner,
+      summary: asApplicationReviewString(analysis.summary) || undefined,
+      limits: asApplicationReviewStringArray(analysis.limits, 20),
+      signals: (Array.isArray(analysis.signals) ? analysis.signals : [])
+        .map((value): ApplicationEventReviewSignal | undefined => {
+          const signal = asApplicationReviewRecord(value)
+          const content = asApplicationReviewString(signal.content)
+          if (!content) return undefined
+          return {
+            content,
+            factRefs: asApplicationReviewStringArray(signal.factRefs, 20),
+            confidenceLevel: asApplicationReviewString(signal.confidenceLevel) || undefined,
+            owner: asApplicationReviewOwner(signal.owner, analysisOwner)
+          }
+        })
+        .filter((item): item is ApplicationEventReviewSignal => Boolean(item)),
+      adjustments: asApplicationReviewStringArray(analysis.adjustments, 20),
+      nextActions: asApplicationReviewStringArray(analysis.nextActions, 20)
+    },
+    generation: {
+      owner: asApplicationReviewOwner(generation.owner, 'SYSTEM'),
+      status: asApplicationReviewString(generation.status) || undefined,
+      fallback: generation.fallback === true,
+      fallbackReason: asApplicationReviewString(generation.fallbackReason) || undefined,
+      confidenceLevel: asApplicationReviewString(generation.confidenceLevel) || undefined,
+      confidenceBasis: asApplicationReviewStringArray(generation.confidenceBasis, 20),
+      aiCallLogId: asApplicationReviewNumber(generation.aiCallLogId),
+      inputFingerprint: asApplicationReviewString(generation.inputFingerprint) || undefined,
+      requestId: asApplicationReviewString(generation.requestId) || undefined,
+      generatorVersion: asApplicationReviewString(generation.generatorVersion) || undefined,
+      startedAt: asApplicationReviewString(generation.startedAt) || undefined,
+      generatedAt: asApplicationReviewString(generation.generatedAt) || undefined
+    }
+  }
+}
+
+export const getApplicationEventReviewScenario = (
+  eventType?: string | null
+): ApplicationEventReviewScenario | undefined => {
+  const normalized = normalizeEventType(eventType)
+  if (['INTERVIEW_COMPLETED', 'INTERVIEW_FEEDBACK_REVIEW'].includes(normalized)) {
+    return 'INTERVIEW_COMPLETED'
+  }
+  if (['REJECTION', 'REJECTED', 'REJECTION_REVIEW'].includes(normalized)) {
+    return 'REJECTION'
+  }
+  if (normalized === 'NO_RESPONSE_REVIEW') {
+    return 'NO_RESPONSE'
+  }
+  return undefined
+}
+
+export const isApplicationEventReviewSupported = (eventType?: string | null) =>
+  Boolean(getApplicationEventReviewScenario(eventType))
+
+export const buildApplicationEventReviewSeed = (
+  application: Partial<JobApplicationVO>,
+  scenario: ApplicationEventReviewScenario
+): ApplicationEventReviewSeed => {
+  const latestEvent = buildBackendLatestApplicationEvent(application)
+  const latestFact = latestEvent
+    ? `${latestEvent.meta.label}：${latestEvent.summaryText}`
+    : ''
+
+  if (scenario === 'REJECTION') {
+    return {
+      scenario,
+      observedFacts: ['已收到明确拒信或淘汰结果。', latestFact].filter(Boolean),
+      externalFeedback: '',
+      selfReflection: '',
+      assumptions: ['当前记录不足以判断真实淘汰原因。'],
+      nextExperimentInputs: ['复查岗位关键词匹配', '补强一个可量化项目证据', '复核投递渠道质量']
+    }
+  }
+
+  if (scenario === 'NO_RESPONSE') {
+    return {
+      scenario,
+      observedFacts: ['截至当前仍未收到明确反馈。', latestFact].filter(Boolean),
+      externalFeedback: '',
+      selfReflection: '',
+      assumptions: ['无反馈不等于拒绝，也不能据此判断岗位已关闭。'],
+      nextExperimentInputs: ['调整一次跟进文案', '复核跟进间隔', '验证投递渠道是否有效']
+    }
+  }
+
+  return {
+    scenario,
+    observedFacts: ['已完成一次面试或面试后反馈记录。', latestFact].filter(Boolean),
+    externalFeedback: '',
+    selfReflection: '',
+    assumptions: ['用户转述和自我感受不能替代招聘方已验证事实。'],
+    nextExperimentInputs: ['补强一个薄弱题型', '更新一个项目复盘话术', '安排一次针对性复练']
+  }
+}
+
+export const normalizeApplicationEventReviewFactLines = (
+  value?: string[] | string | null
+) => {
+  const rawItems = Array.isArray(value) ? value : String(value || '').split(/\r?\n/)
+  const unique = new Set<string>()
+  rawItems.forEach((item) => {
+    const content = String(item || '').trim().slice(0, 300)
+    if (content) unique.add(content)
+  })
+  return Array.from(unique).slice(0, 10)
+}
+
+export const createApplicationEventReviewRequestId = () => {
+  const randomUuid = globalThis.crypto?.randomUUID
+  if (typeof randomUuid === 'function') {
+    return randomUuid.call(globalThis.crypto)
+  }
+  return `application-review-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+export const buildApplicationEventReviewGenerateRequest = (
+  input: ApplicationEventReviewGenerateInput = {},
+  options: { force?: boolean; requestId?: string } = {}
+): ApplicationEventReviewGenerateRequest => ({
+  observedFacts: normalizeApplicationEventReviewFactLines(input.observedFacts),
+  externalFeedback: input.externalFeedback?.trim().slice(0, 2000) || undefined,
+  selfReflection: input.selfReflection?.trim().slice(0, 2000) || undefined,
+  force: options.force === true,
+  requestId: options.requestId?.trim().slice(0, 64) || createApplicationEventReviewRequestId()
+})
+
+export const getApplicationEventStructuredReview = (
+  event?: Partial<JobApplicationEventVO> | null
+) => {
+  if (!event) return undefined
+  const eventRecord = event as Partial<JobApplicationEventVO> & { structuredReview?: unknown }
+  const parsedReviewJson = parseApplicationReviewJson(event.reviewJson)
+  const parsedRecord = asApplicationReviewRecord(parsedReviewJson)
+  const candidates = [
+    eventRecord.structuredReview,
+    asApplicationReviewRecord(event.review).structuredReview,
+    parsedRecord.structuredReview,
+    parsedRecord.schemaVersion || parsedRecord.analysis || parsedRecord.generation
+      ? parsedRecord
+      : undefined
+  ]
+
+  for (const candidate of candidates) {
+    const normalized = normalizeApplicationEventStructuredReview(candidate)
+    if (normalized) return normalized
+  }
+  return undefined
+}
+
+export const getApplicationEventLegacyReview = (
+  event?: Partial<JobApplicationEventVO> | null
+): Record<string, unknown> | string | null => {
+  if (!event) return null
+  const review = asApplicationReviewRecord(event.review)
+  if (Object.keys(review).length) {
+    const { structuredReview: _structuredReview, ...legacyReview } = review
+    return Object.keys(legacyReview).length ? legacyReview : null
+  }
+
+  const parsed = parseApplicationReviewJson(event.reviewJson)
+  if (typeof parsed === 'string') return parsed
+  const parsedRecord = asApplicationReviewRecord(parsed)
+  if (!Object.keys(parsedRecord).length) return null
+  const { structuredReview: _structuredReview, ...legacyReview } = parsedRecord
+  return Object.keys(legacyReview).length ? legacyReview : null
+}
+
+export const getApplicationReviewOwnerLabel = (owner?: string | null) => {
+  const labels: Record<ApplicationEventReviewOwner, string> = {
+    USER: '用户记录',
+    SYSTEM: '系统事实',
+    AI: 'AI 分析',
+    RULE: '规则降级',
+    LEGACY: '历史数据'
+  }
+  return labels[asApplicationReviewOwner(owner, 'LEGACY')]
+}
+
+export const getApplicationReviewConfidenceLabel = (confidence?: string | null) => {
+  const normalized = asApplicationReviewString(confidence).toUpperCase()
+  if (normalized === 'HIGH') return '高置信度'
+  if (normalized === 'MEDIUM') return '中置信度'
+  if (normalized === 'LOW') return '低置信度'
+  return confidence?.trim() || '置信度待确认'
+}
+
+export const isApplicationEventReviewGenerating = (
+  review?: ApplicationEventStructuredReview | null
+) => review?.generation.status?.toUpperCase() === 'GENERATING'
+
+export const getApplicationEventReviewFactMap = (
+  review?: ApplicationEventStructuredReview | null
+) => new Map(
+  [
+    ...(review?.userInput.observedFacts || []),
+    ...(review?.userInput.externalFeedback ? [review.userInput.externalFeedback] : []),
+    ...(review?.systemFacts || [])
+  ]
+    .filter((fact) => fact.id)
+    .map((fact) => [fact.id as string, fact])
+)
+
+export const saveApplicationEventWithOptionalReview = async <
+  TEvent extends { id: number },
+  TReview = ApplicationEventStructuredReview
+>(options: {
+  saveEvent: () => Promise<TEvent>
+  generateReview?: (event: TEvent) => Promise<TReview>
+}): Promise<ApplicationEventReviewSaveResult<TEvent, TReview>> => {
+  const event = await options.saveEvent()
+  if (!options.generateReview) return { event }
+  try {
+    return { event, review: await options.generateReview(event) }
+  } catch (reviewError) {
+    return { event, reviewError }
+  }
+}
+
+export const createApplicationEventReviewSingleFlight = () => {
+  const inFlight = new Map<string | number, Promise<unknown>>()
+  return {
+    isRunning: (key: string | number) => inFlight.has(key),
+    run<T>(key: string | number, task: () => Promise<T>): Promise<T> {
+      const active = inFlight.get(key) as Promise<T> | undefined
+      if (active) return active
+      const request = task().finally(() => {
+        if (inFlight.get(key) === request) {
+          inFlight.delete(key)
+        }
+      })
+      inFlight.set(key, request)
+      return request
+    }
+  }
+}
+
 export const buildApplicationOutboundDraft = (
   application: Partial<JobApplicationVO>,
   kind: ApplicationDraftKind,
@@ -680,13 +1110,14 @@ export const buildApplicationOutboundDraft = (
   }
 
   if (kind === 'rejection-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'REJECTION')
     const review = {
       ...baseReview,
       scenario: 'REJECTION_REVIEW',
       result: '收到拒信或被淘汰',
-      facts: ['拒信渠道/时间待补充', latestEventSummary],
-      assumptions: ['匹配度、时机、竞争强度或表达证据可能影响结果'],
-      nextExperimentInputs: ['调整 JD 关键词匹配', '补强一个可量化项目证据', '复查投递渠道质量']
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
     }
     return {
       kind,
@@ -702,17 +1133,20 @@ export const buildApplicationOutboundDraft = (
       review,
       reviewJson: buildReviewJson(review),
       boundaryNotice,
-      experimentInput: ['拒信原因分类', '简历与岗位描述匹配变量', '渠道变量', '下一轮只调整一个实验变量']
+      experimentInput: seed.nextExperimentInputs
     }
   }
 
   if (kind === 'no-response-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'NO_RESPONSE')
     const review = {
       ...baseReview,
       scenario: 'NO_RESPONSE_REVIEW',
       result: '超过计划跟进时间仍无反馈',
       followUpState: followUp.key,
-      nextExperimentInputs: ['更换跟进文案', '调整跟进间隔', '验证投递渠道是否有效', '补充内推或联系人线索']
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
     }
     return {
       kind,
@@ -728,17 +1162,19 @@ export const buildApplicationOutboundDraft = (
       review,
       reviewJson: buildReviewJson(review),
       boundaryNotice,
-      experimentInput: ['逾期天数', '跟进文案变量', '投递渠道变量', '岗位发布时间/活跃度']
+      experimentInput: seed.nextExperimentInputs
     }
   }
 
   if (kind === 'interview-feedback-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'INTERVIEW_COMPLETED')
     const review = {
       ...baseReview,
       scenario: 'INTERVIEW_FEEDBACK_REVIEW',
       result: '面试后反馈待沉淀',
-      facts: [latestEventSummary],
-      nextExperimentInputs: ['补强薄弱题型', '更新项目复盘话术', '安排针对性复练']
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
     }
     return {
       kind,
@@ -754,7 +1190,7 @@ export const buildApplicationOutboundDraft = (
       review,
       reviewJson: buildReviewJson(review),
       boundaryNotice,
-      experimentInput: ['反馈主题', '薄弱知识点', '项目证据缺口', '复练任务']
+      experimentInput: seed.nextExperimentInputs
     }
   }
 

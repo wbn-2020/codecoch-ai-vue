@@ -2,6 +2,7 @@ import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
 import type { AgentContextImpactPreviewVO } from '@/types/agent'
 import type { EvidenceSourceVO, SuggestionQualityGateVO, SuggestionTraceVO } from '@/types/suggestion'
+import type { ApplicationEventStructuredReview } from '@/features/applications'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
 import { toFriendlyMessage } from '@/utils/error'
@@ -214,6 +215,7 @@ export interface JobApplicationEventVO {
   eventType?: string
   eventTime?: string
   summary?: string
+  structuredReview?: ApplicationEventStructuredReview | null
   review?: Record<string, unknown>
   reviewJson?: string
   createdAt?: string

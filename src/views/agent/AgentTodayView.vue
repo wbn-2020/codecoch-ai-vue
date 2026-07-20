@@ -34,6 +34,14 @@
         </div>
       </AppState>
 
+      <PlanChangeStatusBanner
+        :change-sets="planChangeSets"
+        :loading="loading"
+        :unavailable="planChangeStatusUnavailable"
+        @refresh="loadPage(true)"
+        @open-review="router.push('/agent/reviews')"
+      />
+
       <section class="mobile-task-rail" aria-label="手机今日任务快捷入口">
         <div class="mobile-task-rail__main">
           <span>当前优先任务</span>
@@ -151,21 +159,29 @@
                   <span>Agent 闭环</span>
                   <strong>{{ agentLoopKeyActionCount }} 个关键动作</strong>
                   <small>{{ agentLoopNextAdjustment }}</small>
+                  <small v-if="agentLoopLatestReview" class="agent-loop-snapshot__review" data-latest-review>
+                    最近复盘 {{ agentLoopLatestReview.reviewDate || agentLoopLatestReview.createdAt || '日期待确认' }}
+                  </small>
                 </div>
                 <div class="agent-loop-snapshot__facts">
                   <span>{{ agentLoopWeekSummary.done }} 已完成</span>
                   <span>{{ agentLoopWeekSummary.skipped }} 已暂缓</span>
                   <span>{{ agentLoopWeekSummary.active }} 推进中</span>
+                  <span v-if="agentLoopLatestReview">{{ agentLoopReviewConfidence }}</span>
+                  <span v-if="agentLoopLatestReview?.fallback">规则兜底</span>
                 </div>
                 <el-button text @click="router.push('/agent/reviews')">查看复盘</el-button>
               </div>
 
-              <div class="agent-week-plan">
-                <div class="agent-week-plan__source-row">
-                  <el-tag size="small" :type="useBackendWeekPlan ? 'success' : 'warning'" effect="plain">
-                    {{ agentWeekPlanDataSourceLabel }}
-                  </el-tag>
-                </div>
+                <div class="agent-week-plan">
+                  <div class="agent-week-plan__source-row">
+                    <el-tag size="small" :type="useBackendWeekPlan ? 'success' : 'warning'" effect="plain">
+                      {{ agentWeekPlanDataSourceLabel }}
+                    </el-tag>
+                    <el-tag v-if="backendWeekPlanUnavailable" size="small" type="warning" effect="plain">
+                      复盘调整状态暂不可用
+                    </el-tag>
+                  </div>
                 <article v-for="layer in agentWeekPlanLayers" :key="layer.key" class="agent-week-plan__layer">
                   <div class="agent-week-plan__head">
                     <div>
@@ -181,6 +197,14 @@
                         <div class="agent-week-plan__action-tags">
                           <el-tag size="small" effect="plain">{{ agentWeekPlanConfidenceLabel(action.confidence) }}</el-tag>
                           <el-tag v-if="action.fallback" size="small" type="warning" effect="plain">保守建议</el-tag>
+                          <el-tag
+                            v-if="weekPlanChangeOriginLabels(action).length"
+                            size="small"
+                            type="success"
+                            effect="plain"
+                          >
+                            复盘确认调整
+                          </el-tag>
                         </div>
                       </div>
                       <p>{{ action.description || action.reason }}</p>
@@ -188,6 +212,13 @@
                         <span>来源：{{ agentWeekPlanSourceLabel(action.sourceType) }}</span>
                         <span v-if="action.sourceTitle">依据：{{ action.sourceTitle }}</span>
                         <span>推荐原因：{{ action.reason }}</span>
+                        <span
+                          v-for="label in weekPlanChangeOriginLabels(action)"
+                          :key="label"
+                          class="agent-week-plan__review-origin"
+                        >
+                          {{ label }}
+                        </span>
                       </div>
                       <small>{{ agentWeekPlanEvidenceText(action) }}</small>
                       <div class="agent-week-plan__next">
@@ -222,6 +253,18 @@
                     </div>
                     <div class="trust-tags">
                       <span v-for="label in taskTrustLabels(task)" :key="label">{{ label }}</span>
+                    </div>
+                    <div
+                      v-if="taskPlanChangeOriginLabels(task).length"
+                      class="task-plan-change-origin"
+                    >
+                      <span>复盘确认调整</span>
+                      <small
+                        v-for="label in taskPlanChangeOriginLabels(task)"
+                        :key="label"
+                      >
+                        {{ label }}
+                      </small>
                     </div>
                     <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
                     <AgentTaskEvidence
@@ -460,9 +503,12 @@ import {
   skipAgentTaskApi,
   startAgentTaskApi
 } from '@/api/agent'
+import { getAgentPlanChangeSetsApi } from '@/api/agentPlanChange'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
+import { getAgentReviewsApi, type AgentReviewVO } from '@/api/v4'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
+import PlanChangeStatusBanner from '@/components/agent-review/PlanChangeStatusBanner.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AgentTaskEvidence from '@/components/job-readiness/AgentTaskEvidence.vue'
@@ -473,9 +519,27 @@ import {
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
 import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
+import {
+  AGENT_TODAY_PLAN_CHANGE_STATUSES,
+  getAgentPlanChangeTypeLabel,
+  resolveAgentTaskPlanChangeOrigin,
+  resolveAgentWeekPlanChangeOrigin
+} from '@/features/agent-plan-change'
 import { buildAgentWeekPlan } from '@/features/agent-week-plan'
 import { buildAgentWeekPlanFromBackend, hasBackendWeekPlanItems } from '@/features/agent-week-plan-backend'
-import type { AgentPlanActionVO, AgentTaskVO, AgentTodayTaskVO, AgentWeekPlanBackendVO, DailyPlanVO } from '@/types/agent'
+import type {
+  AgentPlanActionVO,
+  AgentTaskVO,
+  AgentTodayTaskVO,
+  AgentWeekPlanBackendItemVO,
+  AgentWeekPlanBackendVO,
+  DailyPlanVO
+} from '@/types/agent'
+import type {
+  AgentPlanChangePreviewVO,
+  AgentPlanChangeTaskOriginFields,
+  AgentPlanChangeWeekItemOriginFields
+} from '@/types/agentPlanChange'
 import type { TargetJobVO } from '@/types/jobTarget'
 import type { ExplainableSuggestionVO } from '@/types/suggestion'
 import { getSuggestionSourceTypeLabel } from '@/types/suggestion'
@@ -497,6 +561,10 @@ const router = useRouter()
 const route = useRoute()
 const today = formatLocalDate()
 
+type AgentTaskWithPlanChangeOrigin = AgentTaskVO & AgentPlanChangeTaskOriginFields
+type AgentWeekPlanItemWithReviewOrigin =
+  AgentWeekPlanBackendItemVO & AgentPlanChangeWeekItemOriginFields
+
 const loading = ref(false)
 const generating = ref(false)
 const generateSubmitting = ref(false)
@@ -508,11 +576,17 @@ const loadedPageKey = ref('')
 const plan = ref<DailyPlanVO>()
 const todayTasks = ref<AgentTodayTaskVO>()
 const backendWeekPlan = ref<AgentWeekPlanBackendVO | null>(null)
+const backendWeekPlanUnavailable = ref(false)
+const agentReviews = ref<AgentReviewVO[]>([])
+const planChangeSets = ref<AgentPlanChangePreviewVO[]>([])
+const planChangeStatusUnavailable = ref(false)
 const currentTargetJobId = ref<number | undefined>()
 const targets = ref<TargetJobVO[]>([])
 const currentTarget = ref<TargetJobVO | null>(null)
 const targetLoading = ref(false)
 const targetLoadError = ref('')
+const targetScopeResolved = ref(false)
+const targetScopeUnavailable = ref(false)
 const generateDialogVisible = ref(false)
 const taskDialogVisible = ref(false)
 const taskDialogMode = ref<'complete' | 'skip' | 'defer'>('complete')
@@ -605,7 +679,8 @@ const emptyPlanRecoveryDescription = [
 
 const dataSourceLabels = {
   plan: '今日计划',
-  tasks: '今日任务'
+  tasks: '今日任务',
+  reviews: '每日复盘'
 } as const
 
 const sourceFailed = (label: string) => partialErrors.value.includes(label)
@@ -706,12 +781,23 @@ const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum
 const agentLoopOverview = computed(() => buildAgentLoopOverview({
   plan: plan.value,
   todayTasks: taskList.value,
-  historyTasks: taskList.value
+  historyTasks: taskList.value,
+  reviews: agentReviews.value
 }))
 const agentLoopWeekSummary = computed(() => agentLoopOverview.value.weekSummary)
 const agentLoopKeyActionCount = computed(() => agentLoopOverview.value.keyActions.length)
 const agentLoopNextAdjustment = computed(() => agentLoopOverview.value.nextAdjustmentSummary)
-const agentLoopSnapshotVisible = computed(() => Boolean(taskList.value.length || plan.value))
+const agentLoopLatestReview = computed(() => agentLoopOverview.value.latestReview)
+const agentLoopReviewConfidence = computed(() => {
+  const confidence = String(agentLoopLatestReview.value?.confidenceLevel || '').toUpperCase()
+  return {
+    HIGH: '高置信度',
+    MEDIUM: '中等置信度',
+    LOW: '低置信度',
+    INSUFFICIENT: '证据不足'
+  }[confidence] || '置信度待确认'
+})
+const agentLoopSnapshotVisible = computed(() => Boolean(taskList.value.length || plan.value || agentLoopLatestReview.value))
 const useBackendWeekPlan = computed(() => hasBackendWeekPlanItems(backendWeekPlan.value))
 const agentWeekPlan = computed(() =>
   useBackendWeekPlan.value && backendWeekPlan.value
@@ -760,6 +846,48 @@ const agentWeekPlanConfidenceLabel = (value?: string | number | null) => {
   if (confidence === 'UNKNOWN') return '待确认'
   if (!confidence) return '待确认'
   return `可信度：${value}`
+}
+const planChangeReviewRefs = computed(() =>
+  agentReviews.value.map((review) => ({
+    id: review.id,
+    reviewDate: review.reviewDate
+  }))
+)
+const planChangeOriginLabels = (
+  origin: ReturnType<typeof resolveAgentTaskPlanChangeOrigin>
+) => {
+  if (!origin) return []
+  const labels = [
+    origin.reviewDate ? `来自 ${origin.reviewDate} 每日复盘` : '来自每日复盘',
+    '用户已确认',
+    `变更类型：${getAgentPlanChangeTypeLabel(origin.changeType)}`
+  ]
+  return labels
+}
+const taskPlanChangeOriginLabels = (task: AgentTaskVO) =>
+  planChangeOriginLabels(resolveAgentTaskPlanChangeOrigin(
+    task as AgentTaskWithPlanChangeOrigin,
+    planChangeSets.value,
+    planChangeReviewRefs.value
+  ))
+const backendWeekPlanItemForAction = (action?: AgentPlanActionVO | null) => {
+  if (!action || action.id == null) return null
+  const actionId = Number(action.id)
+  if (!Number.isFinite(actionId)) return null
+  return (backendWeekPlan.value?.items || []).find((item) =>
+    Number(item.agentTaskId) === actionId
+    || (item.agentTaskId == null && Number(item.id) === actionId)
+  ) as AgentWeekPlanItemWithReviewOrigin | undefined
+}
+const weekPlanChangeOriginLabels = (action?: AgentPlanActionVO | null): string[] => {
+  const item = backendWeekPlanItemForAction(action)
+  if (!item) return []
+  const origin = resolveAgentWeekPlanChangeOrigin(
+    item,
+    planChangeSets.value,
+    planChangeReviewRefs.value
+  )
+  return origin ? planChangeOriginLabels(origin) : []
 }
 const agentWeekPlanFallbackPath = (action: AgentPlanActionVO) => {
   const sourceType = String(action.sourceType || '').toLowerCase()
@@ -1148,6 +1276,8 @@ const loadJobTargets = async () => {
   if (targetLoading.value) return
   targetLoading.value = true
   targetLoadError.value = ''
+  targetScopeResolved.value = false
+  targetScopeUnavailable.value = false
   try {
     const [listResult, currentResult] = await Promise.allSettled([
       getJobTargetsApi({ pageNo: 1, pageSize: 50 }),
@@ -1162,19 +1292,29 @@ const loadJobTargets = async () => {
     }
 
     if (currentResult.status === 'fulfilled') {
-      currentTarget.value = currentResult.value || null
+      currentTarget.value = currentResult.value
+        || targets.value.find((item) => item.currentFlag === 1)
+        || null
     } else {
       currentTarget.value = targets.value.find((item) => item.currentFlag === 1) || null
       targetLoadError.value = currentTarget.value
         ? '当前主目标读取失败，已先使用岗位列表中的主目标标记。'
         : (getErrorMessage(currentResult.reason) || '当前主目标暂时无法读取；可以手动选择岗位后生成计划。')
     }
+    const resolvedTargetId = currentTarget.value?.id
+    if (currentTargetJobId.value == null && typeof resolvedTargetId === 'number' && resolvedTargetId > 0) {
+      currentTargetJobId.value = resolvedTargetId
+    }
+    targetScopeUnavailable.value = !currentTarget.value
+      && (listResult.status === 'rejected' || currentResult.status === 'rejected')
   } catch (error) {
     targets.value = []
     currentTarget.value = null
     targetLoadError.value = getErrorMessage(error) || '岗位目标列表暂时加载失败，不选择时仍会按当前主目标生成。'
+    targetScopeUnavailable.value = true
   } finally {
     targetLoading.value = false
+    targetScopeResolved.value = true
   }
 }
 
@@ -1195,13 +1335,27 @@ const loadPage = async (force?: unknown) => {
   partialErrors.value = []
   const pageKey = currentPageKey()
   const samePage = loadedPageKey.value === pageKey
+  const reviewRequest = !targetScopeResolved.value || targetScopeUnavailable.value
+    ? Promise.resolve([] as AgentReviewVO[])
+    : getAgentReviewsApi({ targetJobId: currentTargetJobId.value })
   try {
-    const [planResult, taskResult, weekPlanResult] = await Promise.allSettled([
+    const [
+      planResult,
+      taskResult,
+      weekPlanResult,
+      reviewResult,
+      planChangeResult
+    ] = await Promise.allSettled([
       fetchCachedLatestDailyPlan(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
       fetchCachedTodayAgentTasks(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
       getCurrentAgentWeekPlanApi({
         date: queryDate.value,
         targetJobId: currentTargetJobId.value
+      }, { silentError: true }),
+      reviewRequest,
+      getAgentPlanChangeSetsApi({
+        targetDate: queryDate.value,
+        status: AGENT_TODAY_PLAN_CHANGE_STATUSES
       }, { silentError: true })
     ])
     if (planResult.status === 'fulfilled') {
@@ -1215,11 +1369,24 @@ const loadPage = async (force?: unknown) => {
       todayTasks.value = undefined
     }
     backendWeekPlan.value = weekPlanResult.status === 'fulfilled' ? weekPlanResult.value : null
+    backendWeekPlanUnavailable.value = weekPlanResult.status === 'rejected'
+    if (reviewResult.status === 'fulfilled') {
+      agentReviews.value = reviewResult.value || []
+    } else if (!samePage) {
+      agentReviews.value = []
+    }
+    if (planChangeResult.status === 'fulfilled') {
+      planChangeSets.value = planChangeResult.value || []
+    } else if (!samePage) {
+      planChangeSets.value = []
+    }
+    planChangeStatusUnavailable.value = planChangeResult.status === 'rejected'
     const failed = [
       planResult.status === 'rejected' ? dataSourceLabels.plan : '',
-      taskResult.status === 'rejected' ? dataSourceLabels.tasks : ''
+      taskResult.status === 'rejected' ? dataSourceLabels.tasks : '',
+      reviewResult.status === 'rejected' ? dataSourceLabels.reviews : ''
     ].filter(Boolean)
-    if (failed.length === 2 && !samePage) {
+    if (planResult.status === 'rejected' && taskResult.status === 'rejected' && !samePage) {
       errorMessage.value = getErrorMessage(firstRejectedReason(planResult, taskResult))
       return
     }
@@ -1231,8 +1398,12 @@ const loadPage = async (force?: unknown) => {
     if (!samePage) {
       plan.value = undefined
       todayTasks.value = undefined
+      agentReviews.value = []
+      planChangeSets.value = []
     }
     backendWeekPlan.value = null
+    backendWeekPlanUnavailable.value = true
+    planChangeStatusUnavailable.value = true
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
@@ -1492,8 +1663,7 @@ const goAction = (actionUrl: string) => {
 }
 
 onMounted(() => {
-  void loadJobTargets()
-  void loadPage(false)
+  void loadJobTargets().then(() => loadPage(false))
 })
 </script>
 
@@ -1803,6 +1973,11 @@ onMounted(() => {
   font-size: 16px;
 }
 
+.agent-loop-snapshot__review {
+  display: block;
+  margin-top: 4px;
+}
+
 .agent-loop-snapshot__facts {
   display: flex;
   flex-wrap: wrap;
@@ -1826,7 +2001,9 @@ onMounted(() => {
 .agent-week-plan__source-row {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 6px;
 }
 
 .agent-week-plan__layer {
@@ -1912,6 +2089,12 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.agent-week-plan__source span.agent-week-plan__review-origin {
+  background: var(--user-success-soft);
+  color: var(--user-success);
+  font-weight: 700;
+}
+
 .agent-week-plan__next {
   display: flex;
   flex-wrap: wrap;
@@ -1971,6 +2154,28 @@ onMounted(() => {
     color: var(--user-primary);
     font-size: 12px;
   }
+}
+
+.task-plan-change-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.task-plan-change-origin > span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--user-success-soft);
+  color: var(--user-success);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-plan-change-origin small {
+  color: var(--user-text-muted);
+  font-size: 12px;
 }
 
 .task-reason {

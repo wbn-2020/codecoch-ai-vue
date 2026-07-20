@@ -5,6 +5,7 @@ export interface RouteSafetyOptions {
   enableV4Preview?: boolean
   enableV4Growth?: boolean
   enableV4Knowledge?: boolean
+  enableV6WeeklyReport?: boolean
   knownPaths?: string[]
 }
 
@@ -25,7 +26,12 @@ export const v4PreviewPaths = [
 ]
 
 export const v4ReleasedPaths = [
-  '/applications'
+  '/applications',
+  '/career-calendar'
+]
+
+export const v6WeeklyReportPaths = [
+  '/agent/weekly-reports'
 ]
 
 export const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
@@ -64,6 +70,7 @@ export const defaultUserKnownPaths = [
   '/agent/today',
   '/agent/tasks',
   '/agent/runs',
+  ...v6WeeklyReportPaths,
   '/daily-tasks',
   '/analytics/personal',
   '/job-experiments',
@@ -174,6 +181,9 @@ export const isV4GrowthPath = (path: string) =>
 export const isV4KnowledgePath = (path: string) =>
   path === '/knowledge' || path.startsWith('/knowledge/')
 
+export const isV6WeeklyReportPath = (path: string) =>
+  v6WeeklyReportPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+
 export const isV4PreviewAccessEnabled = (enableV4Preview?: boolean) =>
   enableV4Preview === undefined
     ? appConfig.enableV4PreviewAccess
@@ -215,6 +225,14 @@ export const resolveAppRoutePath = (
     return {
       path: fallbackPath,
       unavailableReason: '目标属于个人知识库预览能力，当前已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV6WeeklyReport = options.enableV6WeeklyReport ?? appConfig.enableV6WeeklyReport
+  if (isV6WeeklyReportPath(routePath) && !enableV6WeeklyReport) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '求职周报当前未开放，已回落到可用入口。',
       blockedPath: path
     }
   }

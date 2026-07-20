@@ -1,90 +1,123 @@
+import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ElMessage } from 'element-plus'
 
-import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
-import {
-  downloadCareerImportErrorsApi,
-  getCareerCalendarEventsApi,
-  importCareerCsvApi,
-  previewCareerCsvImportApi
-} from '@/api/careerGrowth'
-
-vi.mock('@/api/careerGrowth', () => ({
-  createCareerCalendarEventApi: vi.fn(),
-  deleteCareerCalendarEventApi: vi.fn(),
-  downloadCareerImportErrorsApi: vi.fn(),
-  exportCareerCalendarCsvApi: vi.fn(),
-  exportCareerCalendarIcsApi: vi.fn(),
-  getCareerCalendarEventsApi: vi.fn(),
-  importCareerCsvApi: vi.fn(),
-  importCareerIcsApi: vi.fn(),
-  previewCareerCsvImportApi: vi.fn(),
-  previewCareerIcsImportApi: vi.fn(),
-  updateCareerCalendarEventApi: vi.fn()
+const api = vi.hoisted(() => ({
+  createEvent: vi.fn(),
+  deleteEvent: vi.fn(),
+  exportCsv: vi.fn(),
+  exportIcs: vi.fn(),
+  getEvents: vi.fn(),
+  updateEvent: vi.fn()
 }))
 
-const stubs = {
-  'el-alert': true,
-  'el-button': {
-    props: ['disabled', 'loading'],
-    template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>'
+vi.mock('@/api/careerGrowth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/careerGrowth')>()
+  return {
+    ...actual,
+    createCareerCalendarEventApi: api.createEvent,
+    deleteCareerCalendarEventApi: api.deleteEvent,
+    exportCareerCalendarCsvApi: api.exportCsv,
+    exportCareerCalendarIcsApi: api.exportIcs,
+    getCareerCalendarEventsApi: api.getEvents,
+    updateCareerCalendarEventApi: api.updateEvent
+  }
+})
+
+vi.mock('@/composables/useCalendarTimezone', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useCalendarTimezone')>()
+  return {
+    ...actual,
+    useCalendarTimezone: () => ({ timezone: 'Asia/Shanghai' })
+  }
+})
+
+import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
+
+const interviewEvent = {
+  id: 9,
+  title: '技术面试',
+  eventType: 'TECHNICAL_INTERVIEW',
+  startsAt: '2026-07-20T10:00:00',
+  endsAt: '2026-07-20T11:00:00',
+  timezone: 'Asia/Shanghai',
+  allDay: false,
+  preparationStatus: 'READY'
+}
+
+const CareerCalendarGridStub = defineComponent({
+  name: 'CareerCalendarGrid',
+  props: {
+    events: {
+      type: Array,
+      default: () => []
+    },
+    timezone: {
+      type: String,
+      default: ''
+    }
   },
-  'el-dialog': {
-    props: ['modelValue'],
-    template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>'
+  emits: ['prepare', 'export'],
+  template: `
+    <div data-testid="embedded-calendar-grid" :data-timezone="timezone">
+      <button
+        v-if="events.length"
+        data-testid="embedded-prepare-trigger"
+        @click="$emit('prepare', events[0])"
+      >
+        准备
+      </button>
+      <button data-testid="embedded-ics-trigger" @click="$emit('export', 'ics')">
+        导出 ICS
+      </button>
+    </div>
+  `
+})
+
+const CareerInterviewPreparationDialogStub = defineComponent({
+  name: 'CareerInterviewPreparationDialog',
+  props: {
+    visible: Boolean,
+    event: {
+      type: Object,
+      default: undefined
+    }
   },
-  'el-dropdown': true,
-  'el-form': true,
-  'el-form-item': true,
-  'el-input': true,
-  'el-option': true,
-  'el-segmented': true,
-  'el-select': {
-    props: ['modelValue'],
-    template: '<select><slot /></select>'
-  },
-  'el-switch': true,
-  'el-table': {
-    template: '<div><slot /></div>'
-  },
-  'el-table-column': {
-    template: '<div><slot :row="{}" /></div>'
+  emits: ['generated'],
+  template: `
+    <div v-if="visible" data-testid="embedded-preparation-dialog">
+      <span>{{ event && event.id }}</span>
+      <button data-testid="embedded-preparation-generated" @click="$emit('generated', {})">
+        已生成
+      </button>
+    </div>
+  `
+})
+
+const globalOptions = {
+  stubs: {
+    CareerCalendarGrid: CareerCalendarGridStub,
+    CareerEventDialog: true,
+    CareerImportDialog: true,
+    CareerInterviewPreparationDialog: CareerInterviewPreparationDialogStub
   }
 }
 
-describe('CareerCalendarPanel CSV import', () => {
+describe('CareerCalendarPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(getCareerCalendarEventsApi).mockResolvedValue([])
-    vi.mocked(previewCareerCsvImportApi).mockResolvedValue({
-      format: 'CSV',
-      timezone: 'Asia/Shanghai',
-      headers: ['employer', 'role'],
-      suggestedMapping: { company_name: 'employer', job_title: 'role' },
-      supportedFields: ['company_name', 'job_title'],
-      totalCount: 1,
-      validCount: 1,
-      errorCount: 0,
-      duplicateCount: 0,
-      rows: []
-    })
-    vi.mocked(importCareerCsvApi).mockResolvedValue({
-      batchId: 30,
-      format: 'CSV',
-      status: 'PARTIAL',
-      totalCount: 1,
-      successCount: 0,
-      errorCount: 1,
-      duplicateCount: 0,
-      rows: []
-    })
-    vi.mocked(downloadCareerImportErrorsApi).mockResolvedValue(new Blob(['error']))
+    api.getEvents.mockResolvedValue([interviewEvent])
+    api.exportIcs.mockResolvedValue(new Blob(['BEGIN:VCALENDAR']))
+    vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('loads the visible month with ISO 8601 Instant query bounds', async () => {
@@ -93,54 +126,54 @@ describe('CareerCalendarPanel CSV import', () => {
 
     mount(CareerCalendarPanel, {
       props: { applications: [] },
-      global: {
-        directives: { loading: {} },
-        stubs
-      }
+      global: globalOptions
     })
     await flushPromises()
 
-    const range = vi.mocked(getCareerCalendarEventsApi).mock.calls[0]?.[0]
+    const range = api.getEvents.mock.calls[0]?.[0]
     expect(range).toBeDefined()
     expect(range?.from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
     expect(range?.to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-    expect(new Date(range!.from!).toISOString()).toBe(range?.from)
-    expect(new Date(range!.to!).toISOString()).toBe(range?.to)
-    expect(new Date(range!.to!).getTime() - new Date(range!.from!).getTime())
+    expect(new Date(range.from).toISOString()).toBe(range.from)
+    expect(new Date(range.to).toISOString()).toBe(range.to)
+    expect(new Date(range.to).getTime() - new Date(range.from).getTime())
       .toBe(31 * 24 * 60 * 60 * 1000)
   })
 
-  it('uses preview suggestions for import and exposes error CSV download', async () => {
+  it('opens the shared preparation dialog from the embedded grid and refreshes after generation', async () => {
     const wrapper = mount(CareerCalendarPanel, {
       props: { applications: [] },
-      global: {
-        directives: { loading: {} },
-        stubs
-      }
+      global: globalOptions
     })
     await flushPromises()
 
-    await wrapper.get('[data-testid="open-career-import"]').trigger('click')
-    const input = wrapper.get('input[type="file"]')
-    const file = new File(['employer,role\nAcme,Engineer'], 'applications.csv', { type: 'text/csv' })
-    Object.defineProperty(input.element, 'files', { value: [file] })
-    await input.trigger('change')
-    await wrapper.get('[data-testid="preview-career-import"]').trigger('click')
+    expect(wrapper.get('[data-testid="embedded-calendar-grid"]').attributes('data-timezone'))
+      .toBe('Asia/Shanghai')
+    await wrapper.get('[data-testid="embedded-prepare-trigger"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="embedded-preparation-dialog"]').text()).toContain('9')
+    await wrapper.get('[data-testid="embedded-preparation-generated"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="career-csv-mapping"]').exists()).toBe(true)
+    expect(api.getEvents).toHaveBeenCalledTimes(2)
+  })
 
-    await wrapper.get('[data-testid="commit-career-import"]').trigger('click')
+  it('keeps ICS export on the shared browser timezone path', async () => {
+    const wrapper = mount(CareerCalendarPanel, {
+      props: { applications: [] },
+      global: globalOptions
+    })
     await flushPromises()
-    expect(importCareerCsvApi).toHaveBeenCalledWith(
-      file,
-      expect.any(String),
-      'SKIP',
-      { company_name: 'employer', job_title: 'role' }
+
+    await wrapper.get('[data-testid="embedded-ics-trigger"]').trigger('click')
+    await flushPromises()
+
+    expect(api.exportIcs).toHaveBeenCalledWith(
+      'Asia/Shanghai',
+      expect.objectContaining({
+        from: expect.any(String),
+        to: expect.any(String)
+      })
     )
-
-    await wrapper.get('[data-testid="download-career-import-errors"]').trigger('click')
-    await flushPromises()
-    expect(downloadCareerImportErrorsApi).toHaveBeenCalledWith(30)
   })
 })

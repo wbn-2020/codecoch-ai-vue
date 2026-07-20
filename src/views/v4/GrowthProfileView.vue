@@ -8,6 +8,7 @@
       </div>
       <div class="v4-actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="load" />
+        <el-button v-if="appConfig.enableV6WeeklyReport" @click="goWeeklyReport">求职周报</el-button>
         <el-button :loading="loading" @click="load">刷新</el-button>
       </div>
     </section>
@@ -159,6 +160,7 @@ import {
   type SkillGrowthSnapshotVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import { appConfig } from '@/config'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
@@ -224,6 +226,7 @@ const trendSourceText = (item: SkillGrowthSnapshotVO | ReadinessScoreRecordVO) =
 const goTodayPlan = () => router.push('/agent/today')
 const goQuestionTraining = () => router.push('/questions/recommendations')
 const goInterviewCreate = () => router.push('/interviews/create')
+const goWeeklyReport = () => router.push('/agent/weekly-reports')
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {

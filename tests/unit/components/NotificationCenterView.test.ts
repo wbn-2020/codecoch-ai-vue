@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { resolveNotificationAction } from '@/features/notifications'
 import NotificationCenterView from '@/views/user/NotificationCenterView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -262,5 +263,37 @@ describe('NotificationCenterView deep link contract', () => {
 
     expect(routerPush).toHaveBeenCalledWith('/questions/recommendations?batchId=8801')
     expect(routerPush).not.toHaveBeenCalledWith('/questions/8801')
+  })
+
+  it('uses the shared resolver result for calendar reminder navigation', async () => {
+    const reminder = {
+      id: 31,
+      title: '今天的面试日程',
+      content: '14:00 后端一面',
+      type: 'CALENDAR_REMINDER',
+      isRead: 0,
+      createdAt: '2026-07-18 09:00:00',
+      bizType: 'CAREER_CALENDAR_EVENT',
+      bizId: 'calendar-31',
+      relatedType: 'CAREER_CALENDAR_EVENT',
+      relatedId: 'calendar-31'
+    }
+    vi.mocked(getNotificationsApi).mockResolvedValue({
+      records: [reminder],
+      total: 1,
+      current: 1,
+      size: 20
+    })
+    const resolved = resolveNotificationAction(reminder)
+    expect(resolved.kind).toBe('route')
+
+    const wrapper = await mountView()
+    await wrapper.find('.notification-item').trigger('click')
+    await flushPromises()
+    const actionButtons = wrapper.findAll('.el-button-stub')
+    await actionButtons[actionButtons.length - 1].trigger('click')
+    await flushPromises()
+
+    expect(routerPush).toHaveBeenCalledWith(resolved.kind === 'route' ? resolved.actionPath : '')
   })
 })

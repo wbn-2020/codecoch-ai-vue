@@ -1,8 +1,13 @@
 const enableV4Preview = import.meta.env.VITE_ENABLE_V4_PREVIEW === 'true'
 const enableV4ExperimentalRoutes = import.meta.env.VITE_ENABLE_V4_EXPERIMENTS === 'true'
-const enableV4GrowthPreview = import.meta.env.VITE_ENABLE_V4_GROWTH === 'true'
+const enableV4GrowthPreview = import.meta.env.VITE_ENABLE_V4_GROWTH !== 'false'
 const enableV4KnowledgePreview = import.meta.env.VITE_ENABLE_V4_KNOWLEDGE === 'true'
+const enableV4AdaptivePlan = import.meta.env.VITE_ENABLE_V4_ADAPTIVE_PLAN === 'true'
 const enableAdminTraceCockpit = import.meta.env.VITE_ENABLE_ADMIN_TRACE_COCKPIT === 'true'
+const enableV6WeeklyReport = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT === 'true'
+const enableV6WeeklyReportAi = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT_AI === 'true'
+const enableV6WeeklyReportPlanDraft = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT_PLAN_DRAFT === 'true'
+const weeklyReportPlanPreviewCapabilityAvailable = false
 
 export const appConfig = {
   title: import.meta.env.VITE_APP_TITLE || 'CodeCoachAI',
@@ -10,10 +15,15 @@ export const appConfig = {
   requestTimeout: 60000,
   enableV4Preview,
   enableV4ExperimentalRoutes,
-  enableV4PreviewAccess: enableV4Preview || enableV4ExperimentalRoutes,
-  enableV4GrowthPreview: (enableV4Preview && enableV4GrowthPreview) || enableV4ExperimentalRoutes,
+  enableV4PreviewAccess: enableV4Preview || enableV4GrowthPreview || enableV4ExperimentalRoutes,
+  enableV4GrowthPreview: enableV4GrowthPreview || enableV4ExperimentalRoutes,
   enableV4KnowledgePreview: (enableV4Preview && enableV4KnowledgePreview) || enableV4ExperimentalRoutes,
+  enableV4AdaptivePlan,
   enableAdminTraceCockpit: enableAdminTraceCockpit || enableV4ExperimentalRoutes,
+  enableV6WeeklyReport: enableV6WeeklyReport || enableV4ExperimentalRoutes,
+  enableV6WeeklyReportAi: (enableV6WeeklyReport && enableV6WeeklyReportAi) || enableV4ExperimentalRoutes,
+  enableV6WeeklyReportPlanDraft:
+    enableV6WeeklyReport && enableV6WeeklyReportPlanDraft && weeklyReportPlanPreviewCapabilityAvailable,
   demoReadOnly: import.meta.env.VITE_DEMO_READ_ONLY === 'true',
   demoUsername: import.meta.env.VITE_DEMO_USERNAME || '',
   demoPassword: import.meta.env.VITE_DEMO_PASSWORD || ''

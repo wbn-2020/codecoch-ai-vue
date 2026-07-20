@@ -340,7 +340,7 @@ interface FeatureLink {
   icon: Component
   matches?: string[]
   previewOnly?: boolean
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge'
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport'
 }
 
 interface FeatureGroup {
@@ -394,7 +394,7 @@ const navItems: NavItem[] = [
     desc: '简历、岗位目标、匹配分析和项目证据',
     path: '/resumes',
     icon: FileText,
-    matches: ['/resumes', '/applications', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/projects']
+    matches: ['/resumes', '/applications', '/career-calendar', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/projects']
   },
   {
     key: 'ability',
@@ -403,7 +403,7 @@ const navItems: NavItem[] = [
     desc: '能力图谱、成长趋势、能力画像和个人分析',
     path: '/ability-map',
     icon: Sparkles,
-    matches: ['/ability-map', '/growth', '/skill-profile', '/analytics/personal']
+    matches: ['/ability-map', '/growth', '/skill-profile', '/analytics/personal', '/agent/weekly-reports']
   }
 ]
 
@@ -432,6 +432,12 @@ const baseNavigationGroups: FeatureGroup[] = [
         desc: '维护投递阶段、跟进时间和归因',
         path: '/applications',
         icon: BriefcaseBusiness
+      },
+      {
+        label: '求职日历',
+        desc: '查看跨投递的安排、提醒和事件准备',
+        path: '/career-calendar',
+        icon: CalendarCheck2
       },
       {
         label: '求职实验台',
@@ -531,6 +537,13 @@ const baseNavigationGroups: FeatureGroup[] = [
     label: '成长与支持',
     links: [
       {
+        label: '求职周报',
+        desc: '查看本周事实、变化和下一步行动',
+        path: '/agent/weekly-reports',
+        icon: ChartNoAxesCombined,
+        featureFlag: 'v6WeeklyReport'
+      },
+      {
         label: '成长档案',
         desc: '查看能力、就绪度和长期趋势',
         path: '/growth/profile',
@@ -584,6 +597,7 @@ const isFeatureLinkVisible = (link: FeatureLink) => {
   if (link.featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
   if (link.featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (link.featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
+  if (link.featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
   return true
 }
 

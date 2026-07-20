@@ -4,8 +4,17 @@ import { nextTick, ref } from 'vue'
 
 import UserTopNav from '@/components/layout/UserTopNav.vue'
 
+const appConfig = vi.hoisted(() => ({
+  enableV4PreviewAccess: true,
+  enableV4ExperimentalRoutes: false,
+  enableV4GrowthPreview: true,
+  enableV4KnowledgePreview: false,
+  enableV6WeeklyReport: false
+}))
 const routePath = ref('/interviews/create')
 const push = vi.fn()
+
+vi.mock('@/config', () => ({ appConfig }))
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -68,6 +77,7 @@ const legacySecondaryLabels = [
 describe('UserTopNav navigation discovery', () => {
   beforeEach(() => {
     routePath.value = '/interviews/create'
+    appConfig.enableV6WeeklyReport = false
     push.mockReset()
   })
 
@@ -113,6 +123,29 @@ describe('UserTopNav navigation discovery', () => {
     const activeItem = wrapper.get('.feature-nav-panel [data-nav-path="/applications"]')
     expect(activeItem.classes()).toContain('is-active')
     expect(activeItem.attributes('aria-current')).toBe('page')
+  })
+
+  it('gates the weekly report entry and keeps its navigation state aligned when enabled', async () => {
+    const disabledWrapper = mountNav()
+    await disabledWrapper.get('.more-button').trigger('click')
+
+    expect(disabledWrapper.find('[data-nav-path="/agent/weekly-reports"]').exists()).toBe(false)
+    disabledWrapper.unmount()
+
+    appConfig.enableV6WeeklyReport = true
+    routePath.value = '/agent/weekly-reports'
+    const enabledWrapper = mountNav()
+    await enabledWrapper.get('.more-button').trigger('click')
+
+    const weeklyLink = enabledWrapper.get('[data-nav-path="/agent/weekly-reports"]')
+    expect(weeklyLink.text()).toContain('求职周报')
+    expect(weeklyLink.classes()).toContain('is-active')
+    expect(weeklyLink.attributes('aria-current')).toBe('page')
+
+    const activePrimary = enabledWrapper.findAll('.nav-item').find((item) => item.text() === '能力图谱')
+    expect(activePrimary?.classes()).toContain('is-active')
+    expect(activePrimary?.attributes('aria-current')).toBe('page')
+    expect(enabledWrapper.get('.mobile-current-section').text()).toBe('求职周报')
   })
 
   it('shows the same grouped destinations in the responsive navigation panel', async () => {

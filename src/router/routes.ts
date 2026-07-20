@@ -1,5 +1,6 @@
 ﻿import type { RouteRecordRaw } from 'vue-router'
 
+import { appConfig } from '@/config'
 import AuthUnavailableView from '@/views/error/AuthUnavailableView.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -67,6 +68,13 @@ export const routes: RouteRecordRaw[] = [
       { path: 'offer-help', redirect: '/tools', meta: { hidden: true } },
       { path: 'analytics/personal', name: 'PersonalAnalytics', component: () => import('@/views/analytics/PersonalAnalyticsView.vue'), meta: { title: '训练分析' } },
       { path: 'agent/reviews', name: 'AgentReviews', component: () => import('@/views/v4/AgentReviewView.vue'), meta: { title: '每日复盘', previewOnly: true, featureFlag: 'v4Growth' } },
+      {
+        path: 'agent/weekly-reports',
+        name: 'AgentWeeklyReports',
+        component: () => import('@/views/v4/AgentWeeklyReportView.vue'),
+        beforeEnter: () => appConfig.enableV6WeeklyReport ? true : { name: 'FeatureUnavailable' },
+        meta: { title: 'AI 求职周报', hidden: true, commandHidden: true }
+      },
       { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '成长画像', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '技能趋势', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '就绪度趋势', previewOnly: true, featureFlag: 'v4Growth' } },
@@ -74,6 +82,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: '个人知识库', previewOnly: true, featureFlag: 'v4Knowledge' } },
       { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本', previewOnly: true } },
       { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理' } },
+      { path: 'career-calendar', name: 'CareerCalendar', component: () => import('@/views/v4/career-calendar/CareerCalendarView.vue'), meta: { title: '求职日历' } },
       { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },
       { path: 'agent/runs', redirect: '/agent/today', meta: { hidden: true, commandHidden: true } },
