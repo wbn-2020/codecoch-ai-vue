@@ -8,6 +8,13 @@ const enableV6WeeklyReport = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT === 't
 const enableV6WeeklyReportAi = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT_AI === 'true'
 const enableV6WeeklyReportPlanDraft = import.meta.env.VITE_ENABLE_V6_WEEKLY_REPORT_PLAN_DRAFT === 'true'
 const weeklyReportPlanPreviewCapabilityAvailable = false
+const enableV7ExternalPlanSource = import.meta.env.VITE_ENABLE_V7_EXTERNAL_PLAN_SOURCE === 'true'
+const enableV7CampaignWorkspace = import.meta.env.VITE_ENABLE_V7_CAMPAIGN_WORKSPACE === 'true'
+const enableV7RealInterview = import.meta.env.VITE_ENABLE_V7_REAL_INTERVIEW === 'true'
+const enableV7Offer = import.meta.env.VITE_ENABLE_V7_OFFER === 'true'
+const enableV7ContactActivity = import.meta.env.VITE_ENABLE_V7_CONTACT_ACTIVITY === 'true'
+const enableV7Research = import.meta.env.VITE_ENABLE_V7_RESEARCH === 'true'
+const enableV7CampaignReview = import.meta.env.VITE_ENABLE_V7_CAMPAIGN_REVIEW === 'true'
 
 export const appConfig = {
   title: import.meta.env.VITE_APP_TITLE || 'CodeCoachAI',
@@ -24,6 +31,13 @@ export const appConfig = {
   enableV6WeeklyReportAi: (enableV6WeeklyReport && enableV6WeeklyReportAi) || enableV4ExperimentalRoutes,
   enableV6WeeklyReportPlanDraft:
     enableV6WeeklyReport && enableV6WeeklyReportPlanDraft && weeklyReportPlanPreviewCapabilityAvailable,
+  enableV7ExternalPlanSource,
+  enableV7CampaignWorkspace,
+  enableV7RealInterview,
+  enableV7Offer,
+  enableV7ContactActivity,
+  enableV7Research,
+  enableV7CampaignReview,
   demoReadOnly: import.meta.env.VITE_DEMO_READ_ONLY === 'true',
   demoUsername: import.meta.env.VITE_DEMO_USERNAME || '',
   demoPassword: import.meta.env.VITE_DEMO_PASSWORD || ''

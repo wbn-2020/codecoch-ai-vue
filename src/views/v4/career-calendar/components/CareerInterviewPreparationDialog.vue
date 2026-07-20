@@ -185,18 +185,18 @@
     </template>
 
     <template #footer>
-      <el-tooltip content="当前版本暂不支持加入计划" placement="top">
-        <span class="disabled-plan-entry">
-          <el-button
-            :icon="ListPlus"
-            disabled
-            title="当前版本暂不支持加入计划"
-            data-testid="add-interview-preparation-to-plan"
-          >
-            加入计划
-          </el-button>
-        </span>
-      </el-tooltip>
+      <ExternalPlanPreviewEntry
+        v-if="preparation"
+        source-type="INTERVIEW_PREPARATION"
+        :source-id="event?.id"
+        :source-context-hash="preparation.sourceHash"
+        :target-date="event?.startsAt?.slice(0, 10)"
+        :intents="preparationPlanIntents"
+        :capability-available="canAddPreparationToPlan"
+        button-label="加入计划"
+        test-id="add-interview-preparation-to-plan"
+        unavailable-reason="当前版本暂不支持加入计划"
+      />
       <el-button @click="emit('update:visible', false)">关闭</el-button>
     </template>
   </el-dialog>
@@ -205,8 +205,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, ListPlus, RefreshCw, Sparkles } from 'lucide-vue-next'
+import { Check, RefreshCw, Sparkles } from 'lucide-vue-next'
 
+import ExternalPlanPreviewEntry from '@/components/v7/ExternalPlanPreviewEntry.vue'
 import {
   careerInterviewPreparationBudgets,
   generateCareerInterviewPreparationApi,
@@ -250,6 +251,21 @@ const generateButtonText = computed(() => {
   }
   return '重新生成'
 })
+const canAddPreparationToPlan = computed(() =>
+  Boolean(preparation.value?.nextActions.length && !props.event?.preparationStale)
+)
+const preparationPlanIntents = computed(() =>
+  (preparation.value?.nextActions || []).map((title, index) => ({
+    sourceItemKey: `interview-preparation-${props.event?.id || 'event'}-${index}`,
+    title,
+    description: preparation.value?.summary,
+    planDate: props.event?.startsAt,
+    estimatedMinutes: Math.max(15, Math.round((preparation.value?.timeBudgetMinutes || 60) / Math.max(1, preparation.value?.nextActions.length || 1))),
+    priority: preparation.value?.confidenceLevel === 'LOW' ? 'LOW' : 'MEDIUM',
+    confidenceLevel: preparation.value?.confidenceLevel,
+    fallback: preparation.value?.fallback
+  }))
+)
 
 const errorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -535,11 +551,6 @@ watch(
   border-top: 1px solid var(--app-border);
   color: var(--app-text-secondary);
   font-size: 12px;
-}
-
-.disabled-plan-entry {
-  display: inline-flex;
-  margin-right: 12px;
 }
 
 @media (max-width: 680px) {

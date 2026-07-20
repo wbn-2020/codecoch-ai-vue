@@ -41,12 +41,26 @@
       </article>
     </div>
     <p v-else class="weekly-panel__empty">当前快照没有下一周手动行动建议。</p>
+    <footer v-if="draft.items.length" class="plan-actions">
+      <ExternalPlanPreviewEntry
+        source-type="WEEKLY_REPORT"
+        :source-id="sourceId"
+        :source-version="sourceVersion"
+        :source-context-hash="sourceContextHash"
+        :target-job-id="targetJobId"
+        :target-date="draft.targetWeekStart"
+        :intents="planIntents"
+        :capability-available="draft.available"
+        button-label="预览并加入计划"
+      />
+    </footer>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import ExternalPlanPreviewEntry from '@/components/v7/ExternalPlanPreviewEntry.vue'
 import {
   getWeeklyPlanUnavailableReason,
   getWeeklyReportActionTypeLabel,
@@ -57,12 +71,26 @@ import type { WeeklyPlanDraft } from '@/types/agentWeeklyReport'
 
 const props = defineProps<{
   draft: WeeklyPlanDraft
+  sourceId?: number
+  sourceVersion?: number
+  sourceContextHash?: string
+  targetJobId?: number
 }>()
 
 const unavailableReason = computed(() =>
   getWeeklyPlanUnavailableReason(props.draft.unavailableReason)
 )
 const safeText = (value: unknown, fallback: string) => getWeeklyReportUserText(value, fallback)
+const planIntents = computed(() => props.draft.items.map((item, index) => ({
+  sourceItemKey: item.semanticKey || `weekly-plan-${index}`,
+  title: safeText(item.title, '周报行动建议'),
+  description: safeText(item.description || item.reason, '基于本周事实生成的待确认行动。'),
+  planDate: item.targetDate,
+  estimatedMinutes: item.estimatedMinutes,
+  priority: item.priority,
+  confidenceLevel: 'MEDIUM',
+  fallback: false
+})))
 </script>
 
 <style scoped lang="scss">
@@ -193,6 +221,13 @@ dd {
 
 .weekly-panel__empty {
   margin-top: 16px;
+}
+
+.plan-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--app-border);
 }
 
 @media (max-width: 760px) {

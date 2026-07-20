@@ -137,7 +137,13 @@
           :suggestions="report.experimentSuggestions"
           :fact-only="displayPolicy.factOnly"
         />
-        <WeeklyPlanDraftPanel :draft="report.planDraft" />
+        <WeeklyPlanDraftPanel
+          :draft="report.planDraft"
+          :source-id="report.id"
+          :source-version="report.snapshotVersion"
+          :source-context-hash="report.targetScopeKey"
+          :target-job-id="report.targetJobId"
+        />
       </template>
     </div>
 

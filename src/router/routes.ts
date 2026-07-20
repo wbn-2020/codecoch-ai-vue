@@ -82,6 +82,13 @@ export const routes: RouteRecordRaw[] = [
       { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: '个人知识库', previewOnly: true, featureFlag: 'v4Knowledge' } },
       { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本', previewOnly: true } },
       { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理' } },
+      {
+        path: 'applications/:id',
+        name: 'ApplicationWorkspace',
+        component: () => import('@/views/v4/application-workspace/ApplicationWorkspaceView.vue'),
+        beforeEnter: () => appConfig.enableV7CampaignWorkspace ? true : { name: 'FeatureUnavailable' },
+        meta: { title: '机会工作区', hidden: true, commandHidden: true }
+      },
       { path: 'career-calendar', name: 'CareerCalendar', component: () => import('@/views/v4/career-calendar/CareerCalendarView.vue'), meta: { title: '求职日历' } },
       { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },

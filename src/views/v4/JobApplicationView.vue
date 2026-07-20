@@ -77,6 +77,8 @@
       :applications="rawApplications"
     />
 
+    <CareerCampaignPanel v-if="!errorMessage" />
+
     <section v-if="!errorMessage" class="content-card">
       <div class="content-card__body v4-list" v-loading="loading">
         <article v-for="item in applications" :key="item.id" class="v4-row" :class="{ 'is-highlighted': item.id === highlightedApplicationId }">
@@ -113,6 +115,7 @@
               <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
                 <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
               </template>
+              <el-button link type="primary" @click="goWorkspace(item)">工作区</el-button>
               <el-button link type="primary" @click="openDraftAssistant(item, 'follow-up')">跟进助手</el-button>
               <el-button link type="primary" @click="goInterviewCreate(item)">文本面试</el-button>
               <el-button link type="primary" @click="openEvents(item)">事件</el-button>
@@ -353,6 +356,7 @@ import ApplicationEventReviewDialog from '@/views/application/components/Applica
 import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
 import ApplicationEventReviewPanel from '@/views/application/components/ApplicationEventReviewPanel.vue'
 import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
+import CareerCampaignPanel from '@/views/application/components/CareerCampaignPanel.vue'
 import {
   applicationFollowUpFilterOptions,
   applicationStatusOptions,
@@ -658,6 +662,10 @@ const goInterviewCreate = (item: JobApplicationVO) => {
       matchReportId: item.matchReportId
     }
   })
+}
+
+const goWorkspace = (item: JobApplicationVO) => {
+  void router.push(`/applications/${encodeURIComponent(String(item.id))}`)
 }
 const latestEventText = (item: JobApplicationVO) => {
   const latestEvent = buildBackendLatestApplicationEvent(item)
