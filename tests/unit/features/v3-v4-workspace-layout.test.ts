@@ -61,4 +61,15 @@ describe('V3/V4 compact dark workspace', () => {
       )
     }
   })
+
+  it('keeps the V7 opportunity workspace grid shrinkable around its scrollable tabs', () => {
+    const workspace = readSource('src/views/v4/application-workspace/ApplicationWorkspaceView.vue')
+
+    expect(workspace).toMatch(
+      /\.application-workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/
+    )
+    expect(workspace).toMatch(
+      /\.workspace-tabs\s*:deep\(\.el-tabs__nav-wrap\)\s*\{[\s\S]*?overflow-x:\s*auto/
+    )
+  })
 })

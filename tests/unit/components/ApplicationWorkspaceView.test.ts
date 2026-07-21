@@ -191,6 +191,36 @@ describe('ApplicationWorkspaceView', () => {
     expect((wrapper.vm as unknown as {
       $: { setupState: { sectionErrors: Record<string, string> } }
     }).$.setupState.sectionErrors.contacts).toContain('联系人或活动来源部分不可用')
+    expect(wrapper.get('[data-testid="contacts-partial-failure"]').text())
+      .toContain('联系人或活动来源暂时不可用')
+  })
+
+  it('shows research partial failure while preserving successful sources', async () => {
+    api.getResearchSources.mockResolvedValue([{
+      id: 9,
+      title: '公司官网',
+      sourceType: 'OFFICIAL',
+      active: true
+    }])
+    api.getResearchSnapshot.mockRejectedValue(new Error('snapshot unavailable'))
+
+    const wrapper = mount(ApplicationWorkspaceView, {
+      global: {
+        stubs,
+        directives: { loading: () => undefined }
+      }
+    })
+    await flushPromises()
+
+    const setupState = (wrapper.vm as unknown as {
+      $: { setupState: { activeTab: string } }
+    }).$.setupState
+    setupState.activeTab = 'research'
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('公司官网')
+    expect(wrapper.get('[data-testid="research-partial-failure"]').text())
+      .toContain('研究来源或快照暂时不可用')
   })
 
   it('retries the workspace request after an initial load failure', async () => {

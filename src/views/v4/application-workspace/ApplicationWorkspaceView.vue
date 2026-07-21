@@ -200,6 +200,15 @@
               </section>
 
               <section v-else-if="activeTab === 'contacts'" class="workspace-content">
+                <el-alert
+                  v-if="sectionErrors.contacts"
+                  type="warning"
+                  show-icon
+                  :closable="false"
+                  title="联系人或活动来源暂时不可用"
+                  :description="sectionErrors.contacts"
+                  data-testid="contacts-partial-failure"
+                />
                 <div class="workspace-grid">
                   <article class="workspace-section">
                     <header class="section-header"><h2>联系人</h2><el-tag effect="plain">隐私遮罩</el-tag></header>
@@ -233,6 +242,15 @@
               <section v-else-if="activeTab === 'research'" class="workspace-content">
                 <article class="workspace-section">
                   <header class="section-header"><h2>研究证据</h2><el-tag effect="plain">来源可追踪</el-tag></header>
+                  <el-alert
+                    v-if="sectionErrors.research"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                    title="研究来源或快照暂时不可用"
+                    :description="sectionErrors.research"
+                    data-testid="research-partial-failure"
+                  />
                   <div v-if="researchSources.length" class="source-list">
                     <article v-for="source in researchSources" :key="source.id" class="source-row">
                       <div>
@@ -581,8 +599,29 @@ onMounted(() => { void loadWorkspace() })
 <style scoped lang="scss">
 .application-workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+  width: 100%;
   min-width: 0;
+}
+
+.application-workspace > *,
+.workspace-tabs,
+.workspace-header,
+.workspace-header__main,
+.workspace-header__actions,
+.workspace-content,
+.workspace-section {
+  min-width: 0;
+}
+
+.application-workspace :deep(.el-alert__content) {
+  min-width: 0;
+}
+
+.application-workspace :deep(.el-alert__description) {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .workspace-header,
@@ -608,10 +647,6 @@ onMounted(() => { void loadWorkspace() })
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.48);
-}
-
-.workspace-header__main {
-  min-width: 0;
 }
 
 .workspace-header__main > .el-button {
