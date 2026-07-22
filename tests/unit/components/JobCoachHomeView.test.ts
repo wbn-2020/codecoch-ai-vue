@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   dailyPlan: vi.fn(),
   applicationStats: vi.fn(),
   notifications: vi.fn(),
+  markNotificationRead: vi.fn(),
   reviews: vi.fn(),
   skipTask: vi.fn(),
   todayTasks: vi.fn(),
@@ -33,7 +34,8 @@ vi.mock('@/api/v4', () => ({
 }))
 
 vi.mock('@/api/notification', () => ({
-  getNotificationsApi: mocks.notifications
+  getNotificationsApi: mocks.notifications,
+  markNotificationReadApi: mocks.markNotificationRead
 }))
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
@@ -223,6 +225,7 @@ beforeEach(() => {
     current: 1,
     size: 20
   })
+  mocks.markNotificationRead.mockResolvedValue(undefined)
   mocks.reviews.mockResolvedValue([])
   mocks.routerPush.mockResolvedValue(undefined)
   mocks.requestPost.mockResolvedValue(undefined)
@@ -264,7 +267,9 @@ describe('JobCoachHomeView ordered action cockpit', () => {
     expect(wrapper.get('[data-primary-title]').text()).toContain('今天 14:00 的后端一面')
 
     await wrapper.get('[data-primary-cta]').trigger('click')
+    await flushPromises()
 
+    expect(mocks.markNotificationRead).toHaveBeenCalledWith(71)
     expect(mocks.routerPush).toHaveBeenCalledWith('/career-calendar')
   })
 

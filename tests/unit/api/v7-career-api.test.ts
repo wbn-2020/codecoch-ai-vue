@@ -12,6 +12,8 @@ vi.mock('@/utils/request', () => ({
 }))
 
 import {
+  activateCareerCampaignV7Api,
+  attachApplicationToCampaignV7Api,
   confirmExternalPlanPreviewV7Api,
   createCommunicationDraftV7Api,
   createExternalPlanPreviewV7Api,
@@ -23,6 +25,7 @@ import {
   getLatestResearchSnapshotV7Api,
   getOffersV7Api,
   getResearchSourcesV7Api,
+  generateCareerCampaignReviewV7Api,
   transitionApplicationStatusV7Api
 } from '@/api/v7Career'
 
@@ -51,6 +54,39 @@ describe('v7 career api', () => {
       targetStatus: 'INTERVIEWING',
       expectedLockVersion: 3,
       idempotencyKey: 'status-7-3'
+    })
+  })
+
+  it('sends lock version and idempotency metadata for campaign commands', async () => {
+    await activateCareerCampaignV7Api(9, {
+      expectedLockVersion: 3,
+      idempotencyKey: 'campaign:activate:9:3'
+    })
+    await attachApplicationToCampaignV7Api(9, 17, 'campaign:attach:9:17')
+
+    expect(post).toHaveBeenNthCalledWith(1, '/career-campaigns/9/activate', {
+      expectedLockVersion: 3,
+      idempotencyKey: 'campaign:activate:9:3'
+    })
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      '/career-campaigns/9/applications/17',
+      undefined,
+      { headers: { 'Idempotency-Key': 'campaign:attach:9:17' } }
+    )
+  })
+
+  it('submits only server-owned campaign review request fields', async () => {
+    await generateCareerCampaignReviewV7Api({
+      campaignId: 9,
+      idempotencyKey: 'campaign-review:9:2026-07-21',
+      requestId: 'review-request-9'
+    })
+
+    expect(post).toHaveBeenCalledWith('/agent/career-campaign-reviews/generate', {
+      campaignId: 9,
+      idempotencyKey: 'campaign-review:9:2026-07-21',
+      requestId: 'review-request-9'
     })
   })
 

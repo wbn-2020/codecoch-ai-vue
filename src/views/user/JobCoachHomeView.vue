@@ -121,7 +121,7 @@
               <span>{{ task.minutes }} 分钟</span>
             </div>
           </div>
-          <button type="button" class="timeline-enter" @click="go(task.path)">进入</button>
+          <button type="button" class="timeline-enter" @click="runHomeTask(task)">进入</button>
           <details
             v-if="task.taskId && canCompleteTask(task.taskId)"
             class="task-operations"
@@ -390,7 +390,11 @@ import {
   completeAgentTaskApi,
   skipAgentTaskApi
 } from '@/api/agent'
-import { getNotificationsApi, type NotificationVO } from '@/api/notification'
+import {
+  getNotificationsApi,
+  markNotificationReadApi,
+  type NotificationVO
+} from '@/api/notification'
 import {
   getAgentReviewsApi,
   getApplicationStatsApi,
@@ -429,6 +433,7 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
+import { notifyUnreadChanged } from '@/utils/notificationEvents'
 import request from '@/utils/request'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
@@ -451,6 +456,7 @@ interface HomeTask {
   sourceLabel: string
   trustBoundary: string
   promoted: boolean
+  notificationId?: number | string
 }
 
 type ResourceLoadState = 'idle' | 'loading' | 'success' | 'error'
@@ -1340,7 +1346,8 @@ const toHomeTaskFromTodayAction = (action: TodayActionItem): HomeTask => {
       : action.source === 'notification'
   ? notificationsError.value ? '提醒来源暂不可用，保留其他行动入口' : '来自可行动提醒，可直接前往对应处理页面'
         : '资料不足时只提示下一步，不生成强判断',
-    promoted: isUrgent || isHigh
+    promoted: isUrgent || isHigh,
+    notificationId: action.source === 'notification' ? action.notificationId : undefined
   }
 }
 
@@ -1679,6 +1686,32 @@ const refreshTrainingSnapshotAfterMutation = async () => {
   ])
 }
 
+const markNotificationActionRead = async (task: HomeTask) => {
+  const notificationId = Number(task.notificationId)
+  if (!Number.isFinite(notificationId) || notificationId <= 0) return
+
+  const notification = notifications.value.find((item) => Number(item.id) === notificationId)
+  if (!notification || notification.isRead !== 0) return
+
+  try {
+    await markNotificationReadApi(notificationId)
+    notification.isRead = 1
+    notifyUnreadChanged()
+  } catch {
+    // Navigation remains available when the read-state request is temporarily unavailable.
+  }
+}
+
+const runHomeTask = async (task: HomeTask) => {
+  if (task.disabled) return
+  if (task.action === 'retry-home-data') {
+    await retryPrimaryDependencies()
+    return
+  }
+  await markNotificationActionRead(task)
+  go(task.path)
+}
+
 const retryPrimaryDependencies = async () => {
   await Promise.allSettled([
     fetchOverview(true, true),
@@ -1697,7 +1730,7 @@ const runPrimaryTask = (task: HomeTask) => {
     void retryPrimaryDependencies()
     return
   }
-  go(task.path)
+  void runHomeTask(task)
 }
 
 const updateRecommendationDetails = (event: Event) => {

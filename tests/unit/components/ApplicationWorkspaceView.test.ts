@@ -1,5 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+enableAutoUnmount(afterEach)
 
 const api = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
@@ -10,6 +12,14 @@ const api = vi.hoisted(() => ({
   getResearchSources: vi.fn(),
   getResearchSnapshot: vi.fn(),
   transitionStatus: vi.fn()
+}))
+
+const routerState = vi.hoisted(() => ({ route: null as any }))
+const ui = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  warning: vi.fn(),
+  success: vi.fn(),
+  error: vi.fn()
 }))
 
 vi.mock('@/api/v7Career', () => ({
@@ -23,9 +33,24 @@ vi.mock('@/api/v7Career', () => ({
   transitionApplicationStatusV7Api: api.transitionStatus
 }))
 
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '7' } }),
-  useRouter: () => ({ push: vi.fn() })
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  routerState.route = reactive({ params: { id: '7' } })
+  return {
+    useRoute: () => routerState.route,
+    useRouter: () => ({ push: vi.fn() })
+  }
+})
+
+vi.mock('element-plus', () => ({
+  ElMessage: {
+    warning: ui.warning,
+    success: ui.success,
+    error: ui.error
+  },
+  ElMessageBox: {
+    confirm: ui.confirm
+  }
 }))
 
 import { appConfig } from '@/config'
@@ -59,6 +84,8 @@ const stubs = {
 describe('ApplicationWorkspaceView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    routerState.route.params.id = '7'
+    ui.confirm.mockResolvedValue(undefined)
     appConfig.enableV7RealInterview = true
     appConfig.enableV7Offer = true
     appConfig.enableV7ContactActivity = true
@@ -76,6 +103,7 @@ describe('ApplicationWorkspaceView', () => {
         included: ['APPLICATION'],
         unavailable: ['INTERVIEW_REPORT']
       },
+      allowedTransitions: ['INTERVIEWING', 'OFFER'],
       sections: {
         timeline: {
           data: [{ id: 1, eventType: 'APPLIED', eventTime: '2026-07-18', summary: '已投递' }]
@@ -253,5 +281,114 @@ describe('ApplicationWorkspaceView', () => {
 
     expect(api.getWorkspace).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('Reloaded Company')
+  })
+
+  it('does not apply a stale status response after the route switches to another opportunity', async () => {
+    let resolveTransition!: (value: unknown) => void
+    api.getWorkspace.mockImplementation(async (id: number) => ({
+      application: {
+        id,
+        companyName: id === 7 ? '旧公司' : '新公司',
+        jobTitle: '后端工程师',
+        status: 'APPLIED',
+        lockVersion: id === 7 ? 2 : 4
+      },
+      capabilities: ['OFFER'],
+      allowedTransitions: ['INTERVIEWING'],
+      coverage: { included: ['APPLICATION'] },
+      nextSteps: []
+    }))
+    api.transitionStatus.mockReturnValue(new Promise((resolve) => {
+      resolveTransition = resolve
+    }))
+
+    const wrapper = mount(ApplicationWorkspaceView, {
+      global: {
+        stubs,
+        directives: { loading: () => undefined }
+      }
+    })
+    await flushPromises()
+
+    const setupState = (wrapper.vm as unknown as {
+      $: { setupState: Record<string, any> }
+    }).$.setupState
+    setupState.nextStatus = 'INTERVIEWING'
+    const transitionRequest = setupState.confirmStatusTransition()
+    await flushPromises()
+
+    expect(api.transitionStatus).toHaveBeenCalledWith(7, {
+      targetStatus: 'INTERVIEWING',
+      expectedLockVersion: 2,
+      idempotencyKey: 'application-status:7:2:INTERVIEWING',
+      note: undefined
+    })
+
+    routerState.route.params.id = '8'
+    await flushPromises()
+    expect(api.getWorkspace).toHaveBeenLastCalledWith(8)
+
+    resolveTransition({
+      application: { id: 7, status: 'INTERVIEWING', lockVersion: 3 },
+      allowedTransitions: ['OFFER']
+    })
+    await transitionRequest
+    await flushPromises()
+
+    expect(setupState.workspace.application.id).toBe(8)
+    expect(wrapper.text()).toContain('新公司 · 后端工程师')
+    expect(wrapper.text()).not.toContain('机会状态已更新。')
+  })
+
+  it('clears loading and shows an error for an invalid opportunity id', async () => {
+    routerState.route.params.id = 'invalid'
+
+    const wrapper = mount(ApplicationWorkspaceView, {
+      global: {
+        stubs,
+        directives: { loading: () => undefined }
+      }
+    })
+    await flushPromises()
+
+    const setupState = (wrapper.vm as unknown as {
+      $: { setupState: Record<string, any> }
+    }).$.setupState
+    expect(api.getWorkspace).not.toHaveBeenCalled()
+    expect(setupState.loading).toBe(false)
+    expect(wrapper.text()).toContain('机会编号无效')
+  })
+
+  it('blocks status writes when the backend did not return a lock version', async () => {
+    api.getWorkspace.mockResolvedValueOnce({
+      application: {
+        id: 7,
+        companyName: '缺版本公司',
+        jobTitle: '后端工程师',
+        status: 'APPLIED'
+      },
+      capabilities: ['OFFER'],
+      allowedTransitions: ['INTERVIEWING'],
+      coverage: { included: ['APPLICATION'] },
+      nextSteps: []
+    })
+
+    const wrapper = mount(ApplicationWorkspaceView, {
+      global: {
+        stubs,
+        directives: { loading: () => undefined }
+      }
+    })
+    await flushPromises()
+
+    const statusButton = wrapper.findAll('button')
+      .find((button) => button.text().includes('更新状态'))
+    expect(statusButton?.attributes('disabled')).toBeDefined()
+
+    const setupState = (wrapper.vm as unknown as {
+      $: { setupState: Record<string, any> }
+    }).$.setupState
+    setupState.openStatusDialog()
+    expect(ui.warning).toHaveBeenCalledWith('当前机会版本信息缺失，请刷新后重试。')
   })
 })

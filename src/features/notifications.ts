@@ -164,7 +164,6 @@ const resolveSafePath = (
   options: Required<Pick<NotificationActionResolverOptions, 'enableV4Preview' | 'previewFallbackPath'>> & {
     knownPaths: string[]
   },
-  allowUnknownLocalPath = false
 ) => {
   if (!rawPath || !rawPath.startsWith('/') || rawPath.startsWith('//')) {
     return { path: undefined, unavailableReason: 'actionUrl 不是安全的站内路径。', blockedPath: rawPath }
@@ -181,8 +180,7 @@ const resolveSafePath = (
   }
 
   if (!isKnownAppPath(routePath, options.knownPaths)) {
-    if (allowUnknownLocalPath) return { path: rawPath }
-    return { path: undefined, unavailableReason: '通知目标路径不存在或未开放。', blockedPath: rawPath }
+    return { path: undefined, unavailableReason: '通知目标路径不存在或未开放。' }
   }
 
   return resolveAppRoutePath(rawPath, {
@@ -360,7 +358,7 @@ export const resolveNotificationAction = (
 
   for (const candidate of candidates) {
     if (!candidate.path) continue
-    const safePath = resolveSafePath(candidate.path, resolverOptions, candidate.source === 'actionUrl')
+    const safePath = resolveSafePath(candidate.path, resolverOptions)
     if (safePath.path) {
       return {
         kind: 'route',

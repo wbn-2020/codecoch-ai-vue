@@ -31,6 +31,35 @@
       </el-button>
     </div>
 
+    <div class="campaign-application-picker">
+      <el-select
+        v-model="selectedApplicationId"
+        filterable
+        clearable
+        :loading="applicationsLoading"
+        placeholder="选择要关联的机会"
+        style="width: 100%"
+      >
+        <el-option
+          v-for="application in applications"
+          :key="application.id"
+          :label="applicationLabel(application)"
+          :value="application.id"
+        />
+      </el-select>
+      <span v-if="selectedApplication">
+        当前关联：{{ currentCampaignName || '未加入周期' }}
+      </span>
+    </div>
+    <el-alert
+      v-if="applicationErrorMessage"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="机会列表暂时不可用"
+      :description="applicationErrorMessage"
+    />
+
     <div v-loading="loading" class="campaign-list">
       <article v-for="campaign in campaigns" :key="campaign.id" class="campaign-row">
         <div class="campaign-row__main">
@@ -45,25 +74,27 @@
             {{ campaignStatusLabel(campaign.status) }}
           </el-tag>
           <el-button
-            v-if="campaign.status === 'DRAFT'"
+            v-if="isCampaignStatus(campaign, 'DRAFT')"
             link
             type="primary"
             :loading="actionId === campaign.id"
-            @click="activate(campaign.id)"
+            :disabled="!campaignCommandLockVersion(campaign)"
+            @click="activate(campaign)"
           >
             开始周期
           </el-button>
           <el-button
-            v-if="campaign.status === 'ACTIVE'"
+            v-if="isCampaignStatus(campaign, 'ACTIVE')"
             link
             type="warning"
             :loading="actionId === campaign.id"
-            @click="complete(campaign.id)"
+            :disabled="!campaignCommandLockVersion(campaign)"
+            @click="complete(campaign)"
           >
             完成周期
           </el-button>
           <el-button
-            v-if="campaign.status === 'COMPLETED'"
+            v-if="isCampaignStatus(campaign, 'COMPLETED') && reviewEnabled"
             link
             type="primary"
             :loading="reviewLoading && reviewCampaignId === campaign.id"
@@ -72,13 +103,40 @@
             周期复盘
           </el-button>
           <el-button
-            v-if="campaign.status !== 'ARCHIVED'"
+            v-if="cockpitEnabled && ['ACTIVE', 'PAUSED', 'COMPLETED'].includes(String(campaign.status || '').toUpperCase())"
+            link
+            type="primary"
+            @click="goCockpit(campaign.id)"
+          >
+            驾驶舱
+          </el-button>
+          <el-button
+            v-if="canArchiveCareerCampaign(campaign.status, campaign.allowedTransitions)"
             link
             type="info"
             :loading="actionId === campaign.id"
-            @click="archive(campaign.id)"
+            :disabled="!campaignCommandLockVersion(campaign)"
+            @click="archive(campaign)"
           >
             归档
+          </el-button>
+          <el-button
+            v-if="selectedApplication?.campaignId === campaign.id"
+            link
+            type="danger"
+            :loading="applicationActionId === `detach:${campaign.id}`"
+            @click="detachApplication(campaign)"
+          >
+            移出选中机会
+          </el-button>
+          <el-button
+            v-else-if="selectedApplication && !selectedApplication.campaignId && canAttachApplicationsToCareerCampaign(campaign.status)"
+            link
+            type="primary"
+            :loading="applicationActionId === `attach:${campaign.id}`"
+            @click="attachApplication(campaign)"
+          >
+            关联选中机会
           </el-button>
         </div>
       </article>
@@ -91,6 +149,24 @@
     </div>
 
     <el-dialog v-model="reviewVisible" title="周期复盘与记忆候选" width="720px">
+      <el-alert
+        v-if="reviewError"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="周期复盘暂时不可用"
+        :description="reviewError"
+      />
+      <el-button
+        v-if="reviewError && reviewCampaignId"
+        link
+        type="primary"
+        :loading="reviewLoading"
+        data-testid="retry-campaign-review"
+        @click="openReview(reviewCampaignId)"
+      >
+        重试周期复盘
+      </el-button>
       <el-alert
         v-if="review?.fallback"
         type="warning"
@@ -143,34 +219,77 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { appConfig } from '@/config'
 import {
   activateCareerCampaignV7Api,
+  attachApplicationToCampaignV7Api,
   archiveCareerCampaignV7Api,
   completeCareerCampaignV7Api,
   confirmCareerMemoryCandidateV7Api,
   createCareerCampaignV7Api,
+  detachApplicationFromCampaignV7Api,
   generateCareerCampaignReviewV7Api,
+  getCareerCampaignApplicationsV7Api,
   getCareerCampaignReviewV7Api,
   getCareerCampaignsV7Api
 } from '@/api/v7Career'
 import AppState from '@/components/common/AppState.vue'
-import type { CareerCampaignReviewVO, CareerCampaignVO } from '@/types/v7/career'
+import {
+  canArchiveCareerCampaign,
+  canAttachApplicationsToCareerCampaign,
+  classifyV7GetError
+} from '@/features/career-campaign/v7'
+import type {
+  CareerCampaignApplicationVO,
+  CareerCampaignReviewVO,
+  CareerCampaignVO
+} from '@/types/v7/career'
 import { getErrorMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const enabled = computed(() => appConfig.enableV7CampaignWorkspace)
+const cockpitEnabled = computed(() => appConfig.enableV8CampaignCockpit)
+const router = useRouter()
 const campaigns = ref<CareerCampaignVO[]>([])
+const applications = ref<CareerCampaignApplicationVO[]>([])
 const campaignName = ref('')
 const loading = ref(false)
+const applicationsLoading = ref(false)
 const saving = ref(false)
 const actionId = ref<number>()
+const applicationActionId = ref<string>()
 const errorMessage = ref('')
+const applicationErrorMessage = ref('')
+const selectedApplicationId = ref<number>()
 const reviewVisible = ref(false)
 const review = ref<CareerCampaignReviewVO | null>(null)
 const reviewLoading = ref(false)
+const reviewError = ref('')
 const reviewCampaignId = ref<number>()
 const confirmingCandidateId = ref<number>()
+
+const reviewEnabled = computed(() => enabled.value && appConfig.enableV7CampaignReview)
+const selectedApplication = computed(() =>
+  applications.value.find((item) => item.id === selectedApplicationId.value)
+)
+const currentCampaignName = computed(() => {
+  const campaignId = selectedApplication.value?.campaignId
+  return campaigns.value.find((campaign) => campaign.id === campaignId)?.name
+})
+
+const goCockpit = (id: number) => {
+  void router.push({ name: 'CampaignCockpit', params: { id } })
+}
+
+const getGetErrorMessage = (error: unknown, fallback: string) => {
+  const kind = classifyV7GetError(error)
+  if (kind === 'not-found') return '周期或机会不存在，可能已被删除。'
+  if (kind === 'forbidden') return '当前账号无权读取这项周期数据。'
+  if (kind === 'network') return '暂时无法连接周期服务，请检查网络后重试。'
+  return getErrorMessage(error, fallback)
+}
 
 const loadCampaigns = async () => {
   if (!enabled.value) return
@@ -179,10 +298,30 @@ const loadCampaigns = async () => {
   try {
     campaigns.value = await getCareerCampaignsV7Api()
   } catch (error) {
-    errorMessage.value = getErrorMessage(error, '周期列表暂时不可用，请稍后重试。')
+    errorMessage.value = getGetErrorMessage(error, '周期列表暂时不可用，请稍后重试。')
   } finally {
     loading.value = false
   }
+}
+
+const loadApplications = async () => {
+  if (!enabled.value) return
+  applicationsLoading.value = true
+  applicationErrorMessage.value = ''
+  try {
+    applications.value = await getCareerCampaignApplicationsV7Api()
+    if (selectedApplicationId.value && !selectedApplication.value) {
+      selectedApplicationId.value = undefined
+    }
+  } catch (error) {
+    applicationErrorMessage.value = getGetErrorMessage(error, '机会列表暂时不可用，请稍后重试。')
+  } finally {
+    applicationsLoading.value = false
+  }
+}
+
+const refreshPanel = async () => {
+  await Promise.all([loadCampaigns(), loadApplications()])
 }
 
 const createCampaign = async () => {
@@ -206,7 +345,7 @@ const runAction = async (id: number, action: () => Promise<unknown>, success: st
   try {
     await action()
     ElMessage.success(success)
-    await loadCampaigns()
+    await refreshPanel()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '周期操作失败，当前记录未被改变。'))
   } finally {
@@ -214,53 +353,146 @@ const runAction = async (id: number, action: () => Promise<unknown>, success: st
   }
 }
 
-const activate = (id: number) => runAction(id, () => activateCareerCampaignV7Api(id), '周期已开始。')
+const campaignCommandLockVersion = (campaign: CareerCampaignVO) => {
+  const value = campaign.lockVersion
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : undefined
+}
 
-const complete = async (id: number) => {
+const campaignActionKey = (operation: string, id: number, lockVersion: number) =>
+  `campaign:${operation}:${id}:${lockVersion}`
+
+const activate = (campaign: CareerCampaignVO) => {
+  const lockVersion = campaignCommandLockVersion(campaign)
+  if (!lockVersion) {
+    ElMessage.warning('周期版本信息缺失，请刷新后重试。')
+    return
+  }
+  return runAction(
+    campaign.id,
+    () => activateCareerCampaignV7Api(campaign.id, {
+      expectedLockVersion: lockVersion,
+      idempotencyKey: campaignActionKey('activate', campaign.id, lockVersion)
+    }),
+    '周期已开始。'
+  )
+}
+
+const complete = async (campaign: CareerCampaignVO) => {
+  const lockVersion = campaignCommandLockVersion(campaign)
+  if (!lockVersion) {
+    ElMessage.warning('周期版本信息缺失，请刷新后重试。')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       '只有机会关闭约束满足后才能完成周期。确认后系统会冻结本周期事实截点。',
       '完成求职周期',
       { type: 'warning', confirmButtonText: '确认完成', cancelButtonText: '取消' }
     )
-    await runAction(id, () => completeCareerCampaignV7Api(id), '周期已完成。')
+    await runAction(campaign.id, () => completeCareerCampaignV7Api(campaign.id, {
+      expectedLockVersion: lockVersion,
+      idempotencyKey: campaignActionKey('complete', campaign.id, lockVersion)
+    }), '周期已完成。')
   } catch {
     // User cancelled the confirmation.
   }
 }
 
-const archive = async (id: number) => {
+const archive = async (campaign: CareerCampaignVO) => {
+  const lockVersion = campaignCommandLockVersion(campaign)
+  if (!lockVersion) {
+    ElMessage.warning('周期版本信息缺失，请刷新后重试。')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       '归档只会改变周期状态，不会删除投递、面试或复盘历史。',
       '归档求职周期',
       { type: 'warning', confirmButtonText: '确认归档', cancelButtonText: '取消' }
     )
-    await runAction(id, () => archiveCareerCampaignV7Api(id), '周期已归档。')
+    await runAction(campaign.id, () => archiveCareerCampaignV7Api(campaign.id, {
+      expectedLockVersion: lockVersion,
+      idempotencyKey: campaignActionKey('archive', campaign.id, lockVersion)
+    }), '周期已归档。')
   } catch {
     // User cancelled the confirmation.
   }
 }
 
+const attachApplication = async (campaign: CareerCampaignVO) => {
+  const campaignId = campaign.id
+  const applicationId = selectedApplicationId.value
+  if (!applicationId || applicationActionId.value) return
+  if (selectedApplication.value?.campaignId && selectedApplication.value.campaignId !== campaignId) {
+    ElMessage.warning('请先从当前周期移出该机会，再关联到其他周期。')
+    return
+  }
+  applicationActionId.value = `attach:${campaignId}`
+  try {
+    await attachApplicationToCampaignV7Api(
+      campaignId,
+      applicationId,
+      createOperationIdempotencyKey(`campaign:attach:${campaignId}:${applicationId}`)
+    )
+    ElMessage.success('机会已加入周期。')
+    await refreshPanel()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '机会关联失败，当前关联未被改变。'))
+  } finally {
+    applicationActionId.value = undefined
+  }
+}
+
+const detachApplication = async (campaign: CareerCampaignVO) => {
+  const campaignId = campaign.id
+  const applicationId = selectedApplicationId.value
+  if (!applicationId || applicationActionId.value) return
+  try {
+    await ElMessageBox.confirm(
+      '只会解除周期与机会的关联，不会删除机会或历史记录。',
+      '移出周期',
+      { type: 'warning', confirmButtonText: '确认移出', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  applicationActionId.value = `detach:${campaignId}`
+  try {
+    await detachApplicationFromCampaignV7Api(
+      campaignId,
+      applicationId,
+      createOperationIdempotencyKey(`campaign:detach:${campaignId}:${applicationId}`)
+    )
+    ElMessage.success('机会已移出周期。')
+    await refreshPanel()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '机会移出失败，当前关联未被改变。'))
+  } finally {
+    applicationActionId.value = undefined
+  }
+}
+
 const openReview = async (id: number) => {
+  if (!reviewEnabled.value) return
   reviewVisible.value = true
   reviewCampaignId.value = id
   reviewLoading.value = true
   review.value = null
+  reviewError.value = ''
   try {
     review.value = await getCareerCampaignReviewV7Api(id)
-  } catch {
-    try {
-      review.value = await generateCareerCampaignReviewV7Api({
-        campaignId: id,
-        campaignStatus: 'COMPLETED',
-        completed: true,
-        allOpportunitiesClosed: true,
-        dataCutoffAt: new Date().toISOString(),
-        idempotencyKey: `campaign-review:${id}:${new Date().toISOString().slice(0, 10)}`
-      })
-    } catch (error) {
-      ElMessage.error(getErrorMessage(error, '周期复盘暂时不可用，请稍后重试。'))
+  } catch (error) {
+    if (classifyV7GetError(error) !== 'not-found') {
+      reviewError.value = getGetErrorMessage(error, '周期复盘暂时不可用，请稍后重试。')
+    } else {
+      try {
+        review.value = await generateCareerCampaignReviewV7Api({
+          campaignId: id,
+          idempotencyKey: `campaign-review:${id}:${new Date().toISOString().slice(0, 10)}`
+        })
+      } catch (generateError) {
+        reviewError.value = getGetErrorMessage(generateError, '周期复盘暂时不可用，请稍后重试。')
+      }
     }
   } finally {
     reviewLoading.value = false
@@ -290,6 +522,12 @@ const campaignStatusLabel = (status?: string) => ({
   ARCHIVED: '已归档'
 }[String(status || '').toUpperCase()] || '状态待确认')
 
+const isCampaignStatus = (campaign: CareerCampaignVO, status: string) =>
+  String(campaign.status || '').toUpperCase() === status
+
+const applicationLabel = (application: CareerCampaignApplicationVO) =>
+  `${application.companyName || '未命名公司'} · ${application.jobTitle || `机会 #${application.id}`}`
+
 const campaignStatusType = (status?: string) => ({
   ACTIVE: 'success',
   COMPLETED: 'info',
@@ -315,7 +553,7 @@ const formatReviewFact = (value: unknown) => {
 }
 
 onMounted(() => {
-  void loadCampaigns()
+  void refreshPanel()
 })
 </script>
 

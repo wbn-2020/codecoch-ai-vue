@@ -54,6 +54,7 @@ const props = withDefaults(defineProps<{
   targetJobId?: number
   targetDate?: string
   intents: V7ExternalPlanIntent[]
+  createPreview?: (idempotencyKey: string) => Promise<V7ExternalPlanPreviewVO>
   capabilityAvailable?: boolean
   buttonLabel?: string
   testId?: string
@@ -107,7 +108,9 @@ const loadPreview = async (create: boolean) => {
   loading.value = true
   try {
     const result = create
-      ? await createExternalPlanPreviewV7Api(buildPayload())
+      ? props.createPreview
+        ? await props.createPreview(idempotencyKey.value)
+        : await createExternalPlanPreviewV7Api(buildPayload())
       : preview.value?.changeSetId
         ? await getExternalPlanPreviewV7Api(preview.value.changeSetId)
         : await createExternalPlanPreviewV7Api(buildPayload())

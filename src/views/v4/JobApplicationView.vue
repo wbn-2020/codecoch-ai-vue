@@ -949,12 +949,18 @@ const resolveDeepLink = async () => {
 const openCreate = () => {
   editingId.value = undefined
   Object.assign(form, {
+    id: undefined,
+    campaignId: undefined,
+    targetJobId: undefined,
+    matchReportId: undefined,
+    lockVersion: undefined,
     status: 'SAVED',
     jobTitle: '',
     companyName: '',
     source: 'CUSTOM',
     note: '',
     resumeVersionId: undefined,
+    appliedAt: undefined,
     nextFollowUpAt: ''
   })
   dialogVisible.value = true

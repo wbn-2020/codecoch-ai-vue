@@ -23,6 +23,7 @@ export type CareerCampaignStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
 export interface CareerCampaignVO {
   id: number
   name?: string
+  goal?: string
   status?: CareerCampaignStatus
   startedAt?: string
   completedAt?: string
@@ -30,13 +31,40 @@ export interface CareerCampaignVO {
   applicationCount?: number
   activeApplicationCount?: number
   archivedAt?: string
+  lockVersion?: number
+  allowedTransitions?: string[]
   createdAt?: string
   updatedAt?: string
+}
+
+export interface CareerCampaignApplicationVO {
+  id: number
+  companyName?: string
+  jobTitle?: string
+  status?: string
+  campaignId?: number | null
+  note?: string
 }
 
 export interface CareerCampaignCreateDTO {
   name: string
   goal?: string
+}
+
+export interface CareerCampaignUpdateDTO extends CareerCampaignCreateDTO {
+  expectedLockVersion?: number
+  idempotencyKey?: string
+  note?: string
+}
+
+export interface CareerCampaignActionDTO {
+  expectedLockVersion: number
+  idempotencyKey: string
+  note?: string
+}
+
+export interface CareerCampaignCompleteDTO extends CareerCampaignActionDTO {
+  retainOpenApplications?: boolean
 }
 
 export interface CareerCampaignApplicationDTO {
@@ -66,19 +94,8 @@ export interface CareerCampaignReviewVO {
 
 export interface CareerCampaignReviewGenerateDTO {
   campaignId: number
-  campaignStatus: string
   idempotencyKey: string
   requestId?: string
-  completed: boolean
-  allOpportunitiesClosed: boolean
-  dataCutoffAt: string
-  sampleSize?: number
-  campaignTitle?: string
-  facts?: CareerCampaignReviewFactDTO[]
-  memoryCandidateSeeds?: CareerCampaignReviewSeedDTO[]
-  experimentCandidateSeeds?: CareerCampaignReviewSeedDTO[]
-  nextCycleActionSeeds?: CareerCampaignReviewSeedDTO[]
-  sources?: CareerCampaignReviewSourceDTO[]
 }
 
 export interface CareerCampaignReviewFactDTO {
@@ -142,6 +159,7 @@ export interface CareerMemoryCandidateVO {
 export interface ApplicationWorkspaceVO {
   application?: ApplicationWorkspaceApplication
   campaign?: CareerCampaignVO | null
+  allowedTransitions?: string[]
   capabilities?: V7Capability[] | Record<string, boolean | string | null | undefined>
   timeline?: WorkspaceTimelineEvent[]
   calendar?: unknown[]
@@ -156,6 +174,7 @@ export interface ApplicationWorkspaceVO {
 
 export interface ApplicationWorkspaceApplication {
   id: number
+  campaignId?: number | null
   companyName?: string
   jobTitle?: string
   source?: string
@@ -379,8 +398,14 @@ export interface CareerResearchSnapshotVO {
 
 export interface V7StatusTransitionDTO {
   targetStatus: string
-  expectedLockVersion?: number
+  expectedLockVersion: number
   idempotencyKey: string
+  note?: string
+}
+
+export interface V7StatusTransitionVO {
+  application: ApplicationWorkspaceApplication
+  allowedTransitions: string[]
 }
 
 export interface V7ExternalPlanIntent {

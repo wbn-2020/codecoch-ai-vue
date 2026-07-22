@@ -89,6 +89,13 @@ export const routes: RouteRecordRaw[] = [
         beforeEnter: () => appConfig.enableV7CampaignWorkspace ? true : { name: 'FeatureUnavailable' },
         meta: { title: '机会工作区', hidden: true, commandHidden: true }
       },
+      {
+        path: 'career-campaigns/:id/cockpit',
+        name: 'CampaignCockpit',
+        component: () => import('@/views/v8/campaign-cockpit/CampaignCockpitView.vue'),
+        beforeEnter: () => appConfig.enableV8CampaignCockpit ? true : { name: 'FeatureUnavailable' },
+        meta: { title: '周期驾驶舱', hidden: true, commandHidden: true }
+      },
       { path: 'career-calendar', name: 'CareerCalendar', component: () => import('@/views/v4/career-calendar/CareerCalendarView.vue'), meta: { title: '求职日历' } },
       { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },

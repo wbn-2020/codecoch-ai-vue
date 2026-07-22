@@ -15,6 +15,11 @@ const enableV7Offer = import.meta.env.VITE_ENABLE_V7_OFFER === 'true'
 const enableV7ContactActivity = import.meta.env.VITE_ENABLE_V7_CONTACT_ACTIVITY === 'true'
 const enableV7Research = import.meta.env.VITE_ENABLE_V7_RESEARCH === 'true'
 const enableV7CampaignReview = import.meta.env.VITE_ENABLE_V7_CAMPAIGN_REVIEW === 'true'
+const enableV8CampaignCockpit = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_COCKPIT === 'true'
+const enableV8CampaignPulse = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PULSE === 'true'
+const enableV8CampaignPlan = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PLAN === 'true'
+const enableV8CampaignPortfolio = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PORTFOLIO === 'true'
+const enableV8CampaignExport = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_EXPORT === 'true'
 
 export const appConfig = {
   title: import.meta.env.VITE_APP_TITLE || 'CodeCoachAI',
@@ -38,6 +43,11 @@ export const appConfig = {
   enableV7ContactActivity,
   enableV7Research,
   enableV7CampaignReview,
+  enableV8CampaignCockpit,
+  enableV8CampaignPulse,
+  enableV8CampaignPlan,
+  enableV8CampaignPortfolio,
+  enableV8CampaignExport,
   demoReadOnly: import.meta.env.VITE_DEMO_READ_ONLY === 'true',
   demoUsername: import.meta.env.VITE_DEMO_USERNAME || '',
   demoPassword: import.meta.env.VITE_DEMO_PASSWORD || ''

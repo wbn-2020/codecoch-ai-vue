@@ -78,28 +78,63 @@ export const getWorkspacePartialFailures = (workspace?: ApplicationWorkspaceVO |
   return Array.from(failures)
 }
 
-const statusTransitions: Record<string, string[]> = {
-  SAVED: ['PREPARING', 'APPLIED', 'CLOSED'],
-  PREPARING: ['APPLIED', 'CLOSED'],
-  APPLIED: ['INTERVIEWING', 'REJECTED', 'OFFER', 'CLOSED'],
-  INTERVIEWING: ['OFFER', 'REJECTED', 'CLOSED'],
-  OFFER: ['ACCEPTED', 'REJECTED', 'CLOSED'],
-  ACCEPTED: ['CLOSED'],
-  REJECTED: ['CLOSED'],
-  CLOSED: []
+export type V7GetErrorKind = 'not-found' | 'forbidden' | 'network' | 'unknown'
+
+export const classifyV7GetError = (error: unknown): V7GetErrorKind => {
+  const payload = error && typeof error === 'object'
+    ? error as {
+        code?: unknown
+        message?: unknown
+        response?: { status?: unknown; data?: { code?: unknown } }
+      }
+    : {}
+  const status = Number(payload.response?.status)
+  const directCode = typeof payload.code === 'number' ? payload.code : undefined
+  const responseCode = typeof payload.response?.data?.code === 'number'
+    ? payload.response.data.code
+    : undefined
+  const code = directCode ?? responseCode
+  if (status === 404 || code === 40400) return 'not-found'
+  if (status === 403 || code === 41003) return 'forbidden'
+  const message = String(payload.message || '')
+  if (!status && (/network error|failed to fetch|timeout|超时|网络/i.test(message) || payload.code === 'ERR_NETWORK')) {
+    return 'network'
+  }
+  return 'unknown'
 }
 
 export const canTransitionApplicationStatus = (
   currentStatus: string | undefined,
-  nextStatus: string
+  nextStatus: string,
+  allowedTransitions?: string[]
 ) => {
   const current = String(currentStatus || 'SAVED').toUpperCase()
   const next = String(nextStatus || '').toUpperCase()
-  return Boolean(next && next !== current && statusTransitions[current]?.includes(next))
+  const allowed = getAllowedApplicationStatusTransitions(current, allowedTransitions)
+  return Boolean(next && next !== current && allowed.includes(next))
 }
 
-export const getAllowedApplicationStatusTransitions = (currentStatus?: string) =>
-  statusTransitions[String(currentStatus || 'SAVED').toUpperCase()] || []
+export const getAllowedApplicationStatusTransitions = (
+  _currentStatus?: string,
+  backendAllowedTransitions?: string[]
+) => {
+  if (backendAllowedTransitions === undefined) return []
+  return Array.from(new Set(
+    backendAllowedTransitions
+      .map((item) => String(item || '').trim().toUpperCase())
+      .filter(Boolean)
+  ))
+}
+
+export const canArchiveCareerCampaign = (status?: string, backendAllowedTransitions?: string[]) =>
+  String(status || '').toUpperCase() === 'COMPLETED'
+  && Array.isArray(backendAllowedTransitions)
+  && backendAllowedTransitions
+    .map((item) => String(item || '').trim().toUpperCase())
+    .includes('ARCHIVED')
+
+export const canAttachApplicationsToCareerCampaign = (status?: string) =>
+  !['COMPLETED', 'ARCHIVED'].includes(String(status || '').toUpperCase())
 
 export const maskContactHint = (value?: string | null) => {
   const text = String(value || '').trim()

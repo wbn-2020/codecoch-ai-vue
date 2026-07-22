@@ -27,7 +27,8 @@ export const v4PreviewPaths = [
 
 export const v4ReleasedPaths = [
   '/applications',
-  '/career-calendar'
+  '/career-calendar',
+  '/career-campaigns'
 ]
 
 export const v6WeeklyReportPaths = [

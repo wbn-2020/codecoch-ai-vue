@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildOfferComparison,
   canConfirmMemoryCandidate,
+  canArchiveCareerCampaign,
   canTransitionApplicationStatus,
+  classifyV7GetError,
+  getAllowedApplicationStatusTransitions,
   getWorkspacePartialFailures,
   getWorkspaceTabs,
   maskContactHint,
@@ -46,10 +49,30 @@ describe('v7 career workspace rules', () => {
   })
 
   it('enforces lifecycle transitions and explicit memory confirmation', () => {
-    expect(canTransitionApplicationStatus('APPLIED', 'INTERVIEWING')).toBe(true)
-    expect(canTransitionApplicationStatus('APPLIED', 'SAVED')).toBe(false)
+    expect(canTransitionApplicationStatus('APPLIED', 'INTERVIEWING', ['INTERVIEWING', 'OFFER'])).toBe(true)
+    expect(canTransitionApplicationStatus('APPLIED', 'SAVED', ['INTERVIEWING', 'OFFER'])).toBe(false)
+    expect(canTransitionApplicationStatus('APPLIED', 'INTERVIEWING')).toBe(false)
+    expect(getAllowedApplicationStatusTransitions('APPLIED', ['offer', 'OFFER', 'closed']))
+      .toEqual(['OFFER', 'CLOSED'])
     expect(canConfirmMemoryCandidate({ id: 3, status: 'CANDIDATE' })).toBe(true)
     expect(canConfirmMemoryCandidate({ id: 3, status: 'CONFIRMED' })).toBe(false)
+  })
+
+  it('only exposes campaign archive when the backend explicitly allows it', () => {
+    expect(canArchiveCareerCampaign('COMPLETED', ['ARCHIVED'])).toBe(true)
+    expect(canArchiveCareerCampaign('COMPLETED', [])).toBe(false)
+    expect(canArchiveCareerCampaign('ACTIVE', ['ARCHIVED'])).toBe(false)
+  })
+
+  it('classifies Axios business errors without letting string error codes hide the response code', () => {
+    expect(classifyV7GetError({
+      code: 'ERR_BAD_REQUEST',
+      response: { status: 400, data: { code: 40400 } }
+    })).toBe('not-found')
+    expect(classifyV7GetError({ response: { status: 403, data: { code: 41003 } } }))
+      .toBe('forbidden')
+    expect(classifyV7GetError({ code: 'ERR_NETWORK', message: 'Network Error' }))
+      .toBe('network')
   })
 
   it('masks contact hints and blocks cross-currency offer scoring', () => {
@@ -74,4 +97,3 @@ describe('v7 career workspace rules', () => {
     expect(comparison.warnings).toContain('部分 Offer 缺少可比较金额，仅展示条款和截止时间。')
   })
 })
-

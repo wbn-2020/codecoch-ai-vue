@@ -3,7 +3,7 @@
     <AppState
       v-if="pageError && !loading"
       type="error"
-      title="机会工作区加载失败"
+      :title="pageErrorTitle"
       :description="pageError"
     >
       <el-button type="primary" :loading="loading" @click="loadWorkspace">重新加载</el-button>
@@ -27,7 +27,15 @@
           <el-tag effect="plain" :type="statusTagType(application.status)">
             {{ statusLabel(application.status) }}
           </el-tag>
-          <el-button type="primary" :loading="transitioning" @click="openStatusDialog">
+          <el-button
+            type="primary"
+            :loading="transitioning"
+            :disabled="!allowedStatuses.length || !applicationLockVersion"
+            :title="!allowedStatuses.length
+              ? '当前状态没有可用迁移'
+              : applicationLockVersion ? '更新机会状态' : '当前版本信息缺失，请刷新后重试'"
+            @click="openStatusDialog"
+          >
             更新状态
           </el-button>
         </div>
@@ -154,6 +162,16 @@
                 <article class="workspace-section">
                   <header class="section-header"><h2>真实面试流程</h2><el-tag effect="plain">不混淆模拟面试</el-tag></header>
                   <el-alert v-if="sectionErrors.interview" type="warning" show-icon :closable="false" title="面试来源暂时不可用" :description="sectionErrors.interview" />
+                  <el-button
+                    v-if="sectionErrors.interview"
+                    link
+                    type="primary"
+                    :loading="optionalTabLoading.interview"
+                    data-testid="retry-interview-tab"
+                    @click="retryTab('interview')"
+                  >
+                    重试面试来源
+                  </el-button>
                   <div v-if="interviewProcess?.rounds?.length" class="round-list">
                     <article v-for="round in interviewProcess.rounds" :key="round.id" class="round-row">
                       <div>
@@ -172,6 +190,24 @@
               <section v-else-if="activeTab === 'offer'" class="workspace-content">
                 <article class="workspace-section">
                   <header class="section-header"><h2>Offer 决策</h2><el-tag effect="plain">用户确认</el-tag></header>
+                  <el-alert
+                    v-if="sectionErrors.offer"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                    title="Offer 来源暂时不可用"
+                    :description="sectionErrors.offer"
+                  />
+                  <el-button
+                    v-if="sectionErrors.offer"
+                    link
+                    type="primary"
+                    :loading="optionalTabLoading.offer"
+                    data-testid="retry-offer-tab"
+                    @click="retryTab('offer')"
+                  >
+                    重试 Offer 来源
+                  </el-button>
                   <el-alert
                     v-for="warning in offerComparison.warnings"
                     :key="warning"
@@ -194,7 +230,7 @@
                       <el-tag size="small" effect="plain" :type="offerStatusType(offer.status)">{{ offer.status || '状态待确认' }}</el-tag>
                     </article>
                   </div>
-                  <AppState v-else type="empty" title="还没有 Offer" description="收到 Offer 后可记录版本、截止时间和最终决定。" />
+                  <AppState v-else-if="!sectionErrors.offer" type="empty" title="还没有 Offer" description="收到 Offer 后可记录版本、截止时间和最终决定。" />
                   <p class="muted offer-hint">比较只在同币种且金额足够时提供规则提示，不替你接受、拒绝或协商 Offer。</p>
                 </article>
               </section>
@@ -209,6 +245,16 @@
                   :description="sectionErrors.contacts"
                   data-testid="contacts-partial-failure"
                 />
+                <el-button
+                  v-if="sectionErrors.contacts"
+                  link
+                  type="primary"
+                  :loading="optionalTabLoading.contacts"
+                  data-testid="retry-contacts-tab"
+                  @click="retryTab('contacts')"
+                >
+                  重试联系人来源
+                </el-button>
                 <div class="workspace-grid">
                   <article class="workspace-section">
                     <header class="section-header"><h2>联系人</h2><el-tag effect="plain">隐私遮罩</el-tag></header>
@@ -251,6 +297,16 @@
                     :description="sectionErrors.research"
                     data-testid="research-partial-failure"
                   />
+                  <el-button
+                    v-if="sectionErrors.research"
+                    link
+                    type="primary"
+                    :loading="optionalTabLoading.research"
+                    data-testid="retry-research-tab"
+                    @click="retryTab('research')"
+                  >
+                    重试研究来源
+                  </el-button>
                   <div v-if="researchSources.length" class="source-list">
                     <article v-for="source in researchSources" :key="source.id" class="source-row">
                       <div>
@@ -327,6 +383,7 @@ import AppState from '@/components/common/AppState.vue'
 import { appConfig } from '@/config'
 import {
   buildOfferComparison,
+  classifyV7GetError,
   getAllowedApplicationStatusTransitions,
   getWorkspacePartialFailures,
   getWorkspaceTabs,
@@ -354,6 +411,7 @@ const applicationId = computed(() => Number(route.params.id))
 const workspace = ref<ApplicationWorkspaceVO>({})
 const loading = ref(false)
 const pageError = ref('')
+const pageErrorTitle = ref('机会工作区加载失败')
 const activeTab = ref<V7SectionKey>('overview')
 const sectionErrors = reactive<Partial<Record<V7SectionKey, string>>>({})
 const interviewProcess = ref<InterviewProcessVO | null>(null)
@@ -367,8 +425,16 @@ const transitioning = ref(false)
 const nextStatus = ref('')
 const transitionReason = ref('')
 const loadedTabs = new Set<V7SectionKey>()
+const optionalTabLoading = reactive<Partial<Record<V7SectionKey, boolean>>>({})
+const optionalTabRequestTokens = reactive<Partial<Record<V7SectionKey, number>>>({})
+let workspaceLoadToken = 0
+let transitionRequestToken = 0
 
 const application = computed<ApplicationWorkspaceApplication>(() => workspace.value.application || { id: applicationId.value })
+const applicationLockVersion = computed(() => {
+  const value = application.value.lockVersion ?? workspace.value.lockVersion
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : undefined
+})
 const backendTabs = computed(() => getWorkspaceTabs(workspace.value.capabilities))
 const tabs = computed(() => backendTabs.value.filter((tab) => {
   if (tab.key === 'interview') return appConfig.enableV7RealInterview
@@ -399,7 +465,9 @@ const timeline = computed<WorkspaceTimelineEvent[]>(() => listFromSection('timel
 const materials = computed<WorkspaceMaterial[]>(() => listFromSection('materials'))
 const nextSteps = computed<WorkspaceNextStep[]>(() => listFromSection('next-steps'))
 const offerComparison = computed(() => buildOfferComparison(offers.value))
-const allowedStatuses = computed(() => getAllowedApplicationStatusTransitions(application.value.status))
+const allowedStatuses = computed(() =>
+  getAllowedApplicationStatusTransitions(application.value.status, workspace.value.allowedTransitions)
+)
 const researchGroups = computed(() => [
   { label: '已确认事实', items: researchSnapshot.value?.facts || [] },
   { label: '未知项', items: researchSnapshot.value?.unknowns || [] },
@@ -418,63 +486,142 @@ const listFromSection = <T>(key: V7SectionKey): T[] => {
 }
 
 const loadWorkspace = async () => {
-  if (!Number.isSafeInteger(applicationId.value) || applicationId.value <= 0) {
+  const requestedApplicationId = applicationId.value
+  const requestToken = ++workspaceLoadToken
+  if (!Number.isSafeInteger(requestedApplicationId) || requestedApplicationId <= 0) {
+    resetWorkspaceData()
+    loading.value = false
+    pageErrorTitle.value = '机会编号无效'
     pageError.value = '机会编号无效。'
     return
   }
+  resetWorkspaceData()
   loading.value = true
   pageError.value = ''
+  pageErrorTitle.value = '机会工作区加载失败'
   try {
-    workspace.value = await getApplicationWorkspaceV7Api(applicationId.value)
-    loadedTabs.clear()
+    const result = await getApplicationWorkspaceV7Api(requestedApplicationId)
+    if (requestToken !== workspaceLoadToken) return
+    workspace.value = result
     loadedTabs.add('overview')
     if (!activeTabAllowed(activeTab.value)) activeTab.value = 'overview'
     await loadTabData(activeTab.value)
   } catch (error) {
+    if (requestToken !== workspaceLoadToken) return
     workspace.value = {}
-    pageError.value = getErrorMessage(error, '机会工作区暂时不可用，请稍后重试。')
+    const kind = classifyV7GetError(error)
+    if (kind === 'not-found') {
+      pageErrorTitle.value = '机会不存在'
+      pageError.value = '该机会不存在或已被删除，请返回投递管理确认。'
+    } else if (kind === 'forbidden') {
+      pageErrorTitle.value = '无权访问机会'
+      pageError.value = '当前账号无权读取该机会工作区。'
+    } else if (kind === 'network') {
+      pageErrorTitle.value = '网络连接异常'
+      pageError.value = '暂时无法连接机会工作区，请检查网络后重试。'
+    } else {
+      pageError.value = getErrorMessage(error, '机会工作区暂时不可用，请稍后重试。')
+    }
   } finally {
-    loading.value = false
+    if (requestToken === workspaceLoadToken) loading.value = false
   }
 }
 
 const activeTabAllowed = (key: V7SectionKey) => tabs.value.some((tab) => tab.key === key)
 
 const loadTabData = async (key: V7SectionKey) => {
-  if (loadedTabs.has(key) || key === 'overview') return
-  loadedTabs.add(key)
-  if (key === 'interview') {
-    await loadOptional(key, async () => { interviewProcess.value = await getInterviewProcessV7Api(applicationId.value) })
-  } else if (key === 'offer') {
-    await loadOptional(key, async () => { offers.value = await getOffersV7Api(applicationId.value) })
-  } else if (key === 'contacts') {
-    await loadOptional(key, async () => {
-      const result = await Promise.allSettled([getContactsV7Api(applicationId.value), getActivitiesV7Api(applicationId.value)])
-      contacts.value = result[0].status === 'fulfilled' ? result[0].value : []
-      activities.value = result[1].status === 'fulfilled' ? result[1].value : []
-      const failed = result.filter((item) => item.status === 'rejected').length
-      if (failed) throw new Error('联系人或活动来源部分不可用。')
-    })
-  } else if (key === 'research') {
-    await loadOptional(key, async () => {
-      const result = await Promise.allSettled([getResearchSourcesV7Api(applicationId.value), getLatestResearchSnapshotV7Api(applicationId.value)])
-      researchSources.value = result[0].status === 'fulfilled' ? result[0].value : []
-      researchSnapshot.value = result[1].status === 'fulfilled' ? result[1].value : null
-      const failed = result.filter((item) => item.status === 'rejected').length
-      if (failed) throw new Error('研究来源或快照部分不可用。')
-    })
+  if (loadedTabs.has(key) || key === 'overview' || optionalTabLoading[key]) return
+  const requestedApplicationId = applicationId.value
+  const requestToken = (optionalTabRequestTokens[key] || 0) + 1
+  optionalTabRequestTokens[key] = requestToken
+  const isCurrent = () =>
+    optionalTabRequestTokens[key] === requestToken
+    && applicationId.value === requestedApplicationId
+  optionalTabLoading[key] = true
+  try {
+    if (key === 'interview') {
+      await loadOptional(key, isCurrent, async () => {
+        const result = await getInterviewProcessV7Api(requestedApplicationId)
+        if (isCurrent()) interviewProcess.value = result
+      })
+    } else if (key === 'offer') {
+      await loadOptional(key, isCurrent, async () => {
+        const result = await getOffersV7Api(requestedApplicationId)
+        if (isCurrent()) offers.value = result
+      })
+    } else if (key === 'contacts') {
+      await loadOptional(key, isCurrent, async () => {
+        const result = await Promise.allSettled([getContactsV7Api(requestedApplicationId), getActivitiesV7Api(requestedApplicationId)])
+        if (isCurrent()) {
+          contacts.value = result[0].status === 'fulfilled' ? result[0].value : []
+          activities.value = result[1].status === 'fulfilled' ? result[1].value : []
+        }
+        const failed = result.filter((item) => item.status === 'rejected').length
+        if (failed) throw new Error('联系人或活动来源部分不可用。')
+      })
+    } else if (key === 'research') {
+      await loadOptional(key, isCurrent, async () => {
+        const result = await Promise.allSettled([getResearchSourcesV7Api(requestedApplicationId), getLatestResearchSnapshotV7Api(requestedApplicationId)])
+        if (isCurrent()) {
+          researchSources.value = result[0].status === 'fulfilled' ? result[0].value : []
+          researchSnapshot.value = result[1].status === 'fulfilled' ? result[1].value : null
+        }
+        const failed = result.filter((item) => item.status === 'rejected').length
+        if (failed) throw new Error('研究来源或快照部分不可用。')
+      })
+    }
+  } finally {
+    if (isCurrent()) optionalTabLoading[key] = false
   }
 }
 
-const loadOptional = async (key: V7SectionKey, task: () => Promise<void>) => {
+const loadOptional = async (key: V7SectionKey, isCurrent: () => boolean, task: () => Promise<void>) => {
+  delete sectionErrors[key]
   try {
     await task()
+    if (!isCurrent()) return
+    loadedTabs.add(key)
   } catch (error) {
+    if (!isCurrent()) return
+    loadedTabs.delete(key)
     sectionErrors[key] = getErrorMessage(error, `${sectionLabel(key)}暂时不可用，请稍后重试。`)
   }
 }
 
+const retryTab = async (key: V7SectionKey) => {
+  loadedTabs.delete(key)
+  await loadTabData(key)
+}
+
+const resetWorkspaceData = () => {
+  transitionRequestToken += 1
+  transitioning.value = false
+  Object.keys(optionalTabRequestTokens).forEach((key) => {
+    const tab = key as V7SectionKey
+    optionalTabRequestTokens[tab] = (optionalTabRequestTokens[tab] || 0) + 1
+    optionalTabLoading[tab] = false
+  })
+  workspace.value = {}
+  loadedTabs.clear()
+  Object.keys(sectionErrors).forEach((key) => {
+    delete sectionErrors[key as V7SectionKey]
+  })
+  interviewProcess.value = null
+  offers.value = []
+  contacts.value = []
+  activities.value = []
+  researchSources.value = []
+  researchSnapshot.value = null
+  statusDialogVisible.value = false
+  nextStatus.value = ''
+  transitionReason.value = ''
+}
+
 const openStatusDialog = () => {
+  if (!allowedStatuses.value.length || !applicationLockVersion.value) {
+    ElMessage.warning('当前机会版本信息缺失，请刷新后重试。')
+    return
+  }
   nextStatus.value = allowedStatuses.value[0] || ''
   transitionReason.value = ''
   statusDialogVisible.value = true
@@ -491,41 +638,60 @@ const confirmStatusTransition = async () => {
   } catch {
     return
   }
+  const requestedApplicationId = applicationId.value
+  const requestedLockVersion = applicationLockVersion.value
+  if (!requestedLockVersion) {
+    ElMessage.warning('当前机会版本信息缺失，请刷新后重试。')
+    return
+  }
+  const requestToken = ++transitionRequestToken
   transitioning.value = true
   try {
-    const result = await transitionApplicationStatusV7Api(applicationId.value, {
+    const result = await transitionApplicationStatusV7Api(requestedApplicationId, {
       targetStatus: nextStatus.value,
-      expectedLockVersion: application.value.lockVersion || workspace.value.lockVersion,
-      idempotencyKey: `application-status:${applicationId.value}:${application.value.lockVersion || workspace.value.lockVersion || 0}:${nextStatus.value}`
+      expectedLockVersion: requestedLockVersion,
+      idempotencyKey: `application-status:${requestedApplicationId}:${requestedLockVersion}:${nextStatus.value}`,
+      note: transitionReason.value.trim() || undefined
     })
+    if (requestToken !== transitionRequestToken || applicationId.value !== requestedApplicationId) return
     workspace.value = {
       ...workspace.value,
-      application: { ...application.value, ...result }
+      application: { ...application.value, ...result.application },
+      allowedTransitions: result.allowedTransitions
     }
     statusDialogVisible.value = false
     ElMessage.success('机会状态已更新。')
   } catch (error) {
+    if (requestToken !== transitionRequestToken || applicationId.value !== requestedApplicationId) return
     ElMessage.error(getErrorMessage(error, '状态变化失败，原状态未被自动覆盖。'))
   } finally {
-    transitioning.value = false
+    if (requestToken === transitionRequestToken) transitioning.value = false
   }
 }
 
 const statusLabel = (value?: string) => ({
+  DRAFT: '草稿',
   SAVED: '已保存',
   PREPARING: '准备中',
   APPLIED: '已投递',
+  SCREENING: '筛选中',
+  INTERVIEW: '面试中',
   INTERVIEWING: '面试中',
   OFFER: '收到 Offer',
   ACCEPTED: '已接受',
+  DECLINED: '已谢绝',
   REJECTED: '已拒绝',
-  CLOSED: '已关闭'
+  WITHDRAWN: '已撤回',
+  CLOSED: '已关闭',
+  REOPENED: '已重新打开'
 }[String(value || '').toUpperCase()] || '状态待确认')
 
 const statusTagType = (value?: string) => ({
   ACCEPTED: 'success',
   OFFER: 'warning',
   REJECTED: 'danger',
+  DECLINED: 'danger',
+  WITHDRAWN: 'info',
   CLOSED: 'info'
 }[String(value || '').toUpperCase()] || 'primary') as 'success' | 'warning' | 'danger' | 'info' | 'primary'
 
@@ -593,6 +759,9 @@ const WorkspaceList = defineComponent({
 })
 
 watch(activeTab, (value) => { void loadTabData(value) })
+watch(applicationId, (value, previous) => {
+  if (value !== previous) void loadWorkspace()
+})
 onMounted(() => { void loadWorkspace() })
 </script>
 

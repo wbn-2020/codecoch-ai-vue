@@ -172,6 +172,7 @@ export interface ResumeMutationConfirmationParams {
 
 export interface JobApplicationVO {
   id: number
+  campaignId?: number | null
   targetJobId?: number
   resumeId?: number
   resumeVersionId?: number
@@ -187,6 +188,12 @@ export interface JobApplicationVO {
   jobTitle?: string
   source?: string
   status?: string
+  stageChangedAt?: string
+  priorityLevel?: string
+  opportunityOutcome?: string
+  lockVersion?: number
+  expectedLockVersion?: number
+  idempotencyKey?: string
   appliedAt?: string
   nextFollowUpAt?: string
   note?: string
@@ -690,8 +697,18 @@ export const getApplicationStatsApi = () =>
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
 
-export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>) =>
-  request.put<JobApplicationVO, JobApplicationVO>(`/applications/${id}`, data)
+export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>) => {
+  const expectedLockVersion = data.expectedLockVersion ?? data.lockVersion
+  const idempotencyKey = data.idempotencyKey
+    ?? (data.status && expectedLockVersion
+      ? `application-update:${id}:${expectedLockVersion}:${data.status}`
+      : undefined)
+  return request.put<JobApplicationVO, JobApplicationVO>(`/applications/${id}`, {
+    ...data,
+    expectedLockVersion,
+    idempotencyKey
+  })
+}
 
 export const getApplicationEventsApi = (id: number) =>
   request.get<JobApplicationEventVO[], JobApplicationEventVO[]>(`/applications/${id}/events`).then((data) => data || [])

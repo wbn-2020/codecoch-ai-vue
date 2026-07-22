@@ -3,8 +3,12 @@ import type { AgentPlanChangeConfirmVO } from '@/types/agentPlanChange'
 import type {
   ApplicationWorkspaceVO,
   ApplicationWorkspaceApplication,
+  CareerCampaignActionDTO,
+  CareerCampaignApplicationVO,
+  CareerCampaignCompleteDTO,
   CareerActivityVO,
   CareerCampaignCreateDTO,
+  CareerCampaignUpdateDTO,
   CareerCampaignReviewGenerateDTO,
   CareerCampaignReviewVO,
   CareerCampaignVO,
@@ -17,45 +21,73 @@ import type {
   V7ExternalPlanConfirmDTO,
   V7ExternalPlanPreviewDTO,
   V7ExternalPlanPreviewVO,
-  V7StatusTransitionDTO
+  V7StatusTransitionDTO,
+  V7StatusTransitionVO
 } from '@/types/v7/career'
 
 export const getCareerCampaignsV7Api = () =>
   request.get<CareerCampaignVO[], CareerCampaignVO[]>('/career-campaigns').then((items) => items || [])
 
+export const getCareerCampaignApplicationsV7Api = () =>
+  request.get<CareerCampaignApplicationVO[], CareerCampaignApplicationVO[]>('/applications').then((items) =>
+    (items || []).map((item) => ({
+      ...item,
+      campaignId: item.campaignId ?? null
+    }))
+  )
+
 export const createCareerCampaignV7Api = (data: CareerCampaignCreateDTO) =>
   request.post<CareerCampaignVO, CareerCampaignVO>('/career-campaigns', data)
 
-export const updateCareerCampaignV7Api = (id: number, data: Partial<CareerCampaignCreateDTO>) =>
+export const updateCareerCampaignV7Api = (id: number, data: CareerCampaignUpdateDTO) =>
   request.put<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}`, data)
 
-export const activateCareerCampaignV7Api = (id: number) =>
-  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/activate`)
+export const activateCareerCampaignV7Api = (id: number, data: CareerCampaignActionDTO) =>
+  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/activate`, data)
 
-export const completeCareerCampaignV7Api = (id: number) =>
-  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/complete`)
+export const completeCareerCampaignV7Api = (id: number, data: CareerCampaignCompleteDTO) =>
+  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/complete`, data)
 
-export const archiveCareerCampaignV7Api = (id: number) =>
-  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/archive`)
+export const archiveCareerCampaignV7Api = (id: number, data: CareerCampaignActionDTO) =>
+  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${id}/archive`, data)
 
-export const attachApplicationToCampaignV7Api = (campaignId: number, applicationId: number) =>
-  request.post<CareerCampaignVO, CareerCampaignVO>(`/career-campaigns/${campaignId}/applications/${applicationId}`)
+export const attachApplicationToCampaignV7Api = (campaignId: number, applicationId: number, idempotencyKey: string) =>
+  request.post<CareerCampaignVO, CareerCampaignVO>(
+    `/career-campaigns/${campaignId}/applications/${applicationId}`,
+    undefined,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
 
-export const detachApplicationFromCampaignV7Api = (campaignId: number, applicationId: number) =>
-  request.delete<void, void>(`/career-campaigns/${campaignId}/applications/${applicationId}`)
+export const detachApplicationFromCampaignV7Api = (campaignId: number, applicationId: number, idempotencyKey: string) =>
+  request.delete<void, void>(
+    `/career-campaigns/${campaignId}/applications/${applicationId}`,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
 
 export const getApplicationWorkspaceV7Api = (applicationId: number) =>
   request.get<ApplicationWorkspaceVO, ApplicationWorkspaceVO>(`/applications/${applicationId}/workspace`).then((value) => ({
     ...value,
+    allowedTransitions:
+      value?.allowedTransitions ??
+      (value?.application as ApplicationWorkspaceApplication & { allowedTransitions?: string[] } | undefined)?.allowedTransitions,
     sections: value?.sections || undefined,
     nextSteps: normalizeWorkspaceNextSteps(value?.nextSteps)
   }))
 
 export const transitionApplicationStatusV7Api = (applicationId: number, data: V7StatusTransitionDTO) =>
-  request.post<ApplicationWorkspaceApplication, ApplicationWorkspaceApplication>(
+  request.post<V7StatusTransitionVO | ApplicationWorkspaceApplication, V7StatusTransitionVO | ApplicationWorkspaceApplication>(
     `/applications/${applicationId}/status-transitions`,
     data
-  )
+  ).then((value) => {
+    if (value && typeof value === 'object' && 'application' in value) {
+      const result = value as V7StatusTransitionVO
+      return {
+        ...result,
+        allowedTransitions: Array.isArray(result.allowedTransitions) ? result.allowedTransitions : []
+      }
+    }
+    return { application: value as ApplicationWorkspaceApplication, allowedTransitions: [] }
+  })
 
 export const getInterviewProcessV7Api = (applicationId: number) =>
   request.get<InterviewProcessVO, InterviewProcessVO>(`/applications/${applicationId}/interview-process`).then((value) => ({
