@@ -25,6 +25,14 @@
         </div>
         <div class="actions">
           <el-button :icon="ArrowLeft" @click="router.push(demoPath(`/job-experiments/${detail.id}`))">实验详情</el-button>
+          <el-button
+            v-if="appConfig.enableV9EvidenceLearning"
+            data-testid="experiment-evidence-usages"
+            :icon="ClipboardCheck"
+            @click="openEvidenceSamples"
+          >
+            查看证据使用样本
+          </el-button>
           <el-button type="primary" :icon="RefreshCcw" :loading="generating" :disabled="isDemoContext()" @click="generate">生成复盘</el-button>
         </div>
       </section>
@@ -32,7 +40,7 @@
       <section class="review-section fact-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">FACTS</p>
+            <p class="section-kicker">事实</p>
             <h2>事实摘要</h2>
           </div>
           <el-tag effect="plain">metrics.facts</el-tag>
@@ -55,7 +63,7 @@
             <span>完成面试</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.sampleCount ?? detail.metrics?.applicationCount ?? 0 }}</strong>
+            <strong>{{ metricCountLabel(detail.metrics?.sampleCount ?? detail.metrics?.applicationCount) }}</strong>
             <span>样本数</span>
           </div>
           <div>
@@ -80,7 +88,7 @@
       <section class="review-section sample-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">SAMPLE LIMIT</p>
+            <p class="section-kicker">样本边界</p>
             <h2>样本限制</h2>
           </div>
           <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
@@ -107,7 +115,7 @@
       <section class="review-section unsupported-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">UNSUPPORTED</p>
+            <p class="section-kicker">不支持结论</p>
             <h2>不支持结论</h2>
           </div>
           <el-tag type="warning" effect="plain">unsupportedConclusion</el-tag>
@@ -124,7 +132,7 @@
       <section class="review-section weak-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">WEAK OBSERVATIONS</p>
+            <p class="section-kicker">弱观察</p>
             <h2>弱观察</h2>
           </div>
           <el-tag type="warning" effect="plain">{{ qualityGateLabel }}</el-tag>
@@ -133,7 +141,7 @@
           <article v-for="item in weakObservations" :key="`${item.observationType}-${item.text}`">
             <strong>{{ item.observationType || '观察' }}</strong>
             <p>{{ item.text }}</p>
-            <span>{{ item.evidenceCount ?? 0 }} 条证据 · {{ confidenceLabel(item.confidenceLevel) }}</span>
+            <span>{{ metricCountLabel(item.evidenceCount, '条证据') }} · {{ confidenceLabel(item.confidenceLevel) }}</span>
             <span v-if="item.actionHint">{{ item.actionHint }}</span>
           </article>
         </div>
@@ -143,7 +151,7 @@
       <section class="review-section hypothesis-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">HYPOTHESES</p>
+            <p class="section-kicker">实验假设</p>
             <h2>实验假设</h2>
           </div>
           <el-tag effect="plain">hypotheses</el-tag>
@@ -160,7 +168,7 @@
       <section class="review-section next-action">
         <div class="section-head">
           <div>
-            <p class="section-kicker">NEXT</p>
+            <p class="section-kicker">下一步行动</p>
             <h2>下一步行动</h2>
           </div>
           <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
@@ -188,7 +196,7 @@
       <section class="review-section evidence-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">EVIDENCE SOURCES</p>
+            <p class="section-kicker">证据来源</p>
             <h2>证据来源</h2>
           </div>
           <el-tag effect="plain">{{ explainableStrategy.qualityGate?.suggestionStrength || 'WEAK' }}</el-tag>
@@ -224,13 +232,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Bot, BriefcaseBusiness, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
+import { ArrowLeft, Bot, BriefcaseBusiness, ClipboardCheck, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
 
 import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
 import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
 import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import { buildJobExperimentReviewDisplayModel, confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
+import { appConfig } from '@/config'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import type { JobSearchExperimentDetailVO, JobSearchExperimentStrategyVO } from '@/types/jobExperiment'
 import type { ExplainableSuggestionVO } from '@/types/suggestion'
@@ -269,8 +278,10 @@ const strategySampleInsufficient = computed(() =>
   reviewDisplay.value.sampleBoundary.sampleInsufficient ?? detail.value?.metrics?.sampleInsufficient ?? reviewStrategy.value.sampleInsufficient ?? weakConclusion.value
 )
 const displayConfidenceLevel = computed(() =>
-  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latest.value?.confidenceLevel || 'LOW'
+  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latest.value?.confidenceLevel || 'UNKNOWN'
 )
+const metricCountLabel = (value?: number, suffix = '') =>
+  typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '暂无数据'
 const factItems = computed(() => reviewDisplay.value.facts)
 const factSummary = computed(() =>
   factItems.value[0] ||
@@ -314,13 +325,17 @@ const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
     sampleInsufficient: strategySampleInsufficient.value,
     sampleWarning: sampleWarning.value,
     evidenceSources: reviewDisplay.value.evidenceSources.length
-      ? reviewDisplay.value.evidenceSources.map((source) => ({
-          sourceType: source.sourceType || '',
-          sourceId: Number(source.sourceId || 0),
-          sourceSummary: source.evidenceSummary || source.sourceSummary || source.summary,
-          trustStatus: source.trustStatus,
-          metadata: source.metadata
-        }))
+      ? reviewDisplay.value.evidenceSources.flatMap((source) => {
+          const sourceId = Number(source.sourceId)
+          if (!Number.isSafeInteger(sourceId) || sourceId <= 0) return []
+          return [{
+            sourceType: source.sourceType || '',
+            sourceId,
+            sourceSummary: source.evidenceSummary || source.sourceSummary || source.summary,
+            trustStatus: source.trustStatus,
+            metadata: source.metadata
+          }]
+        })
       : reviewStrategy.value.evidenceSources,
     unsupportedConclusions: unsupportedConclusions.value.map((item) => item.blockedReason),
     weakObservations: weakObservations.value.map((item) => item.text),
@@ -355,6 +370,21 @@ const isDemoContext = () => route.query.demoFlag === 'true' || detail.value?.dem
 const demoPath = (path: string) => {
   if (!isDemoContext()) return path
   return path.includes('?') ? `${path}&demoFlag=true` : `${path}?demoFlag=true`
+}
+
+const openEvidenceSamples = () => {
+  const experimentId = detail.value?.id ?? id()
+  if (!Number.isSafeInteger(experimentId) || experimentId <= 0) {
+    ElMessage.warning('实验编号待确认，暂不能打开证据使用样本。')
+    return
+  }
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      experimentId: String(experimentId)
+    }
+  })
 }
 
 const textFromStrategy = (key: string) => {

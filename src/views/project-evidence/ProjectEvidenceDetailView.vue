@@ -11,6 +11,14 @@
           <ArrowLeft :size="16" />
           返回列表
         </el-button>
+        <el-button
+          v-if="appConfig.enableV9EvidenceLearning"
+          data-testid="project-evidence-usages"
+          @click="openEvidenceUsages"
+        >
+          <ClipboardCheck :size="16" />
+          查看使用与结果
+        </el-button>
         <el-button type="primary" @click="router.push(`/project-evidence/${detail.id}/edit`)">
           <Edit3 :size="16" />
           编辑证据
@@ -91,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, Edit3 } from 'lucide-vue-next'
+import { ArrowLeft, ClipboardCheck, Edit3 } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -102,6 +110,7 @@ import ProjectJdCoveragePanel from '@/components/project-evidence/ProjectJdCover
 import ProjectStoryGenerationPanel from '@/components/project-evidence/ProjectStoryGenerationPanel.vue'
 import SkillEvidenceEditor from '@/components/project-evidence/SkillEvidenceEditor.vue'
 import { summarizeSourceState } from '@/features/project-evidence'
+import { appConfig } from '@/config'
 import type { ProjectEvidenceDetailVO } from '@/types/projectEvidence'
 import { getRouteNumberParam } from '@/utils/route'
 
@@ -109,6 +118,18 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
+
+const openEvidenceUsages = () => {
+  if (!detail.value) return
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      assetType: 'PROJECT_EVIDENCE',
+      assetId: String(detail.value.id)
+    }
+  })
+}
 
 const fetchDetail = async () => {
   const id = getRouteNumberParam(route.params.id as string)

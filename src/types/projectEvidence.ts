@@ -4,6 +4,17 @@ export type ProjectCompletenessStatus = 'READY' | 'NEEDS_IMPROVEMENT' | 'INCOMPL
 export type SkillEvidenceStrength = 'STRONG' | 'MEDIUM' | 'WEAK' | string
 export type ProjectStoryGenerationType = 'RESUME_BULLET' | 'STAR_STORY' | 'INTERVIEW_QUESTIONS' | string
 
+export interface ProjectEvidenceVersionSummaryVO {
+  id?: number
+  projectEvidenceId?: number
+  versionNo?: number
+  contentHash?: string
+  sourceType?: string
+  sourceId?: number
+  confirmedAt?: string
+  createdAt?: string
+}
+
 export interface ProjectSkillEvidenceVO {
   id: number
   userId?: number
@@ -34,6 +45,10 @@ export interface ProjectEvidenceListVO {
   sourceAvailable?: boolean
   targetJobId?: number
   skillEvidenceCount?: number
+  currentVersionId?: number
+  currentVersionNo?: number
+  currentVersionHash?: string
+  currentVersionCreatedAt?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -48,6 +63,8 @@ export interface ProjectEvidenceDetailVO extends ProjectEvidenceListVO {
   result?: string
   reflection?: string
   skillEvidences?: ProjectSkillEvidenceVO[]
+  currentVersion?: ProjectEvidenceVersionSummaryVO
+  versions?: ProjectEvidenceVersionSummaryVO[]
 }
 
 export interface ProjectEvidenceDTO {

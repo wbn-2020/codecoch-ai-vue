@@ -6,6 +6,7 @@ export interface RouteSafetyOptions {
   enableV4Growth?: boolean
   enableV4Knowledge?: boolean
   enableV6WeeklyReport?: boolean
+  enableV9EvidenceLearning?: boolean
   knownPaths?: string[]
 }
 
@@ -35,6 +36,10 @@ export const v6WeeklyReportPaths = [
   '/agent/weekly-reports'
 ]
 
+export const v9EvidenceLearningPaths = [
+  '/evidence-assets'
+]
+
 export const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
 
 export const defaultUserKnownPaths = [
@@ -50,6 +55,7 @@ export const defaultUserKnownPaths = [
   '/projects',
   '/job-targets',
   '/project-evidence',
+  ...v9EvidenceLearningPaths,
   '/resumes',
   '/resume-match',
   '/resume-job-match',
@@ -185,6 +191,9 @@ export const isV4KnowledgePath = (path: string) =>
 export const isV6WeeklyReportPath = (path: string) =>
   v6WeeklyReportPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
 
+export const isV9EvidenceLearningPath = (path: string) =>
+  v9EvidenceLearningPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+
 export const isV4PreviewAccessEnabled = (enableV4Preview?: boolean) =>
   enableV4Preview === undefined
     ? appConfig.enableV4PreviewAccess
@@ -234,6 +243,15 @@ export const resolveAppRoutePath = (
     return {
       path: fallbackPath,
       unavailableReason: '求职周报当前未开放，已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV9EvidenceLearning =
+    options.enableV9EvidenceLearning ?? appConfig.enableV9EvidenceLearning
+  if (isV9EvidenceLearningPath(routePath) && !enableV9EvidenceLearning) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '证据资产工作台当前未开放，已回落到可用入口。',
       blockedPath: path
     }
   }

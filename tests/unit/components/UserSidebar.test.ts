@@ -9,7 +9,8 @@ const appConfig = vi.hoisted(() => ({
   enableV4ExperimentalRoutes: false,
   enableV4GrowthPreview: true,
   enableV4KnowledgePreview: false,
-  enableV6WeeklyReport: false
+  enableV6WeeklyReport: false,
+  enableV9EvidenceLearning: false
 }))
 const routePath = ref('/dashboard')
 
@@ -51,6 +52,7 @@ const mountSidebar = () => mount(UserSidebar, {
 describe('UserSidebar weekly report entry', () => {
   beforeEach(() => {
     appConfig.enableV6WeeklyReport = false
+    appConfig.enableV9EvidenceLearning = false
     routePath.value = '/dashboard'
   })
 
@@ -68,5 +70,18 @@ describe('UserSidebar weekly report entry', () => {
 
     expect(wrapper.get('[data-index="/agent/weekly-reports"]').text()).toContain('求职周报')
     expect(wrapper.get('.el-menu-stub').attributes('data-default-active')).toBe('/agent/weekly-reports')
+  })
+
+  it('hides and reveals the V9 aggregate entry using the shared gate', () => {
+    const disabledWrapper = mountSidebar()
+    expect(disabledWrapper.find('[data-index="/evidence-assets"]').exists()).toBe(false)
+    disabledWrapper.unmount()
+
+    appConfig.enableV9EvidenceLearning = true
+    routePath.value = '/evidence-assets'
+    const enabledWrapper = mountSidebar()
+
+    expect(enabledWrapper.get('[data-index="/evidence-assets"]').text()).toContain('证据使用')
+    expect(enabledWrapper.get('.el-menu-stub').attributes('data-default-active')).toBe('/evidence-assets')
   })
 })

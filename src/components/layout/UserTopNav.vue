@@ -340,7 +340,7 @@ interface FeatureLink {
   icon: Component
   matches?: string[]
   previewOnly?: boolean
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport'
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
 }
 
 interface FeatureGroup {
@@ -394,7 +394,7 @@ const navItems: NavItem[] = [
     desc: '简历、岗位目标、匹配分析和项目证据',
     path: '/resumes',
     icon: FileText,
-    matches: ['/resumes', '/applications', '/career-calendar', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/projects']
+    matches: ['/resumes', '/applications', '/career-calendar', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/evidence-assets', '/projects']
   },
   {
     key: 'ability',
@@ -468,6 +468,13 @@ const baseNavigationGroups: FeatureGroup[] = [
         desc: '沉淀项目素材和能力证据',
         path: '/project-evidence',
         icon: FolderKanban
+      },
+      {
+        label: '证据使用',
+        desc: '回看实际使用、结果反馈和待确认观察',
+        path: '/evidence-assets',
+        icon: ClipboardCheck,
+        featureFlag: 'v9EvidenceLearning'
       },
       {
         label: 'JD 匹配',
@@ -598,6 +605,7 @@ const isFeatureLinkVisible = (link: FeatureLink) => {
   if (link.featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (link.featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
   if (link.featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
+  if (link.featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
   return true
 }
 

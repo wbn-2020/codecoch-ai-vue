@@ -182,7 +182,7 @@ describe('JobExperimentReviewView', () => {
     expect(wrapper.text()).toContain('事实摘要')
     expect(wrapper.text()).toContain('样本限制')
     expect(wrapper.text()).toContain('不支持结论')
-    expect(wrapper.text()).toContain('EVIDENCE SOURCES')
+    expect(wrapper.text()).toContain('证据来源')
     expect(wrapper.text()).toContain('下一步行动')
     expect(wrapper.text()).toContain('低置信度')
     expect(wrapper.text()).toContain('FACTS_ONLY')
@@ -443,5 +443,23 @@ describe('JobExperimentReviewView', () => {
 
     expect(routerPush).not.toHaveBeenCalledWith('https://evil.example/phish')
     expect(routerPush).toHaveBeenCalledWith('/agent/today?demoFlag=true')
+  })
+
+  it('keeps missing confidence and direct counts unknown instead of inventing LOW or zero', async () => {
+    vi.mocked(getJobExperimentDetailApi).mockResolvedValue({
+      id: 9,
+      title: '待补数据的实验复盘',
+      status: 'RUNNING',
+      relations: [],
+      reviews: [],
+      metrics: {}
+    } as any)
+
+    const wrapper = await mountReview()
+    const metricValues = wrapper.findAll('.metric-strip strong').map((item) => item.text())
+
+    expect(wrapper.text()).toContain('置信度待确认')
+    expect(metricValues[3]).toBe('暂无数据')
+    expect(wrapper.text()).not.toContain('低置信度')
   })
 })

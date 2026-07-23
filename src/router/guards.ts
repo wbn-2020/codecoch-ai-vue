@@ -36,6 +36,7 @@ const isFeatureEnabled = (featureFlag: string) => {
   if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
   if (featureFlag === 'adminTraceCockpit') return appConfig.enableAdminTraceCockpit
+  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
   return true
 }
 

@@ -190,7 +190,18 @@
           <div v-for="limit in review.limits || []" :key="`limit-${limit}`"><dt>限制</dt><dd>{{ limit }}</dd></div>
         </dl>
         <section class="memory-candidates">
-          <h3>记忆候选</h3>
+          <div class="memory-candidates__head">
+            <h3>记忆候选</h3>
+            <el-button
+              v-if="evidenceLearningEnabled && reviewCampaignId"
+              link
+              type="primary"
+              data-testid="campaign-evidence-candidates"
+              @click="goEvidenceCandidates"
+            >
+              查看证据学习候选
+            </el-button>
+          </div>
           <p class="muted">候选在你确认前不会进入 Agent 上下文。</p>
             <article v-for="candidate in review.memoryCandidates || []" :key="candidate.candidateId || candidate.id" class="memory-row">
             <div>
@@ -199,15 +210,22 @@
               <small>{{ candidate.sourceSummary || '来源待补充' }} · {{ confidenceLabel(candidate.confidenceLevel) }}</small>
             </div>
             <el-button
-              v-if="candidate.status === 'PENDING' || candidate.status === 'PENDING_CONFIRMATION' || candidate.status === 'CANDIDATE' || !candidate.status"
+              v-if="canConfirmCampaignCandidate(candidate.status)"
               type="primary"
               size="small"
               :loading="confirmingCandidateId === (candidate.candidateId || candidate.id)"
               @click="confirmCandidate(candidate.candidateId || candidate.id)"
             >
-              确认记忆
+              确认候选
             </el-button>
-            <el-tag v-else size="small" effect="plain" type="success">已确认</el-tag>
+            <el-tag
+              v-else
+              size="small"
+              effect="plain"
+              :type="campaignCandidateStatusType(candidate.status)"
+            >
+              {{ campaignCandidateStatusLabel(candidate.status) }}
+            </el-tag>
           </article>
           <p v-if="!review.memoryCandidates?.length" class="muted">本次没有可确认的记忆候选。</p>
         </section>
@@ -271,6 +289,7 @@ const reviewCampaignId = ref<number>()
 const confirmingCandidateId = ref<number>()
 
 const reviewEnabled = computed(() => enabled.value && appConfig.enableV7CampaignReview)
+const evidenceLearningEnabled = computed(() => appConfig.enableV9EvidenceLearning)
 const selectedApplication = computed(() =>
   applications.value.find((item) => item.id === selectedApplicationId.value)
 )
@@ -281,6 +300,18 @@ const currentCampaignName = computed(() => {
 
 const goCockpit = (id: number) => {
   void router.push({ name: 'CampaignCockpit', params: { id } })
+}
+
+const goEvidenceCandidates = () => {
+  if (!reviewCampaignId.value) return
+  reviewVisible.value = false
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'candidates',
+      campaignId: String(reviewCampaignId.value)
+    }
+  })
 }
 
 const getGetErrorMessage = (error: unknown, fallback: string) => {
@@ -507,7 +538,7 @@ const confirmCandidate = async (candidateId?: number) => {
     review.value = await confirmCareerMemoryCandidateV7Api(candidateId, {
       idempotencyKey: `campaign-memory:${candidateId}:confirm`
     })
-    ElMessage.success('记忆候选已确认。')
+    ElMessage.success('候选已确认；长期记忆仍需单独预览、确认和启用。')
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆候选确认失败，未进入 Agent 上下文。'))
   } finally {
@@ -539,6 +570,26 @@ const confidenceLabel = (value?: string) => ({
   MEDIUM: '中置信度',
   LOW: '低置信度'
 }[String(value || '').toUpperCase()] || '置信度待确认')
+
+const canConfirmCampaignCandidate = (status?: string) =>
+  ['PENDING', 'PENDING_CONFIRMATION', 'CANDIDATE'].includes(
+    String(status || '').toUpperCase()
+  )
+
+const campaignCandidateStatusLabel = (status?: string) => ({
+  CONFIRMED: '已确认',
+  CONFIRMED_BY_USER: '已确认',
+  REJECTED: '已拒绝',
+  EXPIRED: '已过期',
+  WEAK_OBSERVATION: '弱观察'
+}[String(status || '').toUpperCase()] || '状态待确认')
+
+const campaignCandidateStatusType = (status?: string) => {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'CONFIRMED' || normalized === 'CONFIRMED_BY_USER') return 'success'
+  if (normalized === 'EXPIRED' || normalized === 'WEAK_OBSERVATION') return 'warning'
+  return 'info'
+}
 
 const formatReviewFact = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '暂无记录'
@@ -688,6 +739,13 @@ onMounted(() => {
 .memory-candidates h3 {
   margin: 0;
   font-size: 15px;
+}
+
+.memory-candidates__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .memory-candidates > p {

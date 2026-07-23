@@ -90,6 +90,9 @@ export interface CareerCampaignReviewVO {
   nextCycleActions?: CareerCampaignReviewSeedVO[]
   experimentCandidates?: CareerCampaignReviewSeedVO[]
   memoryCandidates?: CareerMemoryCandidateVO[]
+  evidenceUsageCount?: number
+  outcomeSampleCount?: number
+  usageSourceHash?: string
 }
 
 export interface CareerCampaignReviewGenerateDTO {
@@ -154,6 +157,20 @@ export interface CareerMemoryCandidateVO {
   expiresAt?: string
   status?: 'CANDIDATE' | 'CONFIRMED' | 'DISABLED' | 'EXPIRED' | string
   confirmedAt?: string
+  candidateScopeType?: string
+  candidateScopeKey?: string
+  candidateType?: string
+  usageSourceHash?: string
+  evidenceCount?: number
+  sampleCount?: number
+  limits?: string[]
+  unknowns?: string[]
+  decisionCode?: 'KEEP' | 'EDIT' | 'CONTINUE' | 'REJECT' | string
+  decisionAt?: string
+  promotedMemoryId?: number
+  memoryDraftId?: number
+  fallback?: boolean
+  stale?: boolean
 }
 
 export interface ApplicationWorkspaceVO {
@@ -168,6 +185,9 @@ export interface ApplicationWorkspaceVO {
   nextSteps?: WorkspaceNextStep[] | string[]
   coverage?: WorkspaceCoverage | Record<string, WorkspaceCoverageItem>
   warnings?: string[]
+  evidenceUsageCount?: number
+  outcomeSampleCount?: number
+  evidenceUsageSourceHash?: string
   lockVersion?: number
   generatedAt?: string
 }

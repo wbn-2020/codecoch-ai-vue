@@ -9,7 +9,8 @@ const appConfig = vi.hoisted(() => ({
   enableV4ExperimentalRoutes: false,
   enableV4GrowthPreview: true,
   enableV4KnowledgePreview: false,
-  enableV6WeeklyReport: false
+  enableV6WeeklyReport: false,
+  enableV9EvidenceLearning: false
 }))
 const routePath = ref('/interviews/create')
 const push = vi.fn()
@@ -78,6 +79,7 @@ describe('UserTopNav navigation discovery', () => {
   beforeEach(() => {
     routePath.value = '/interviews/create'
     appConfig.enableV6WeeklyReport = false
+    appConfig.enableV9EvidenceLearning = false
     push.mockReset()
   })
 
@@ -146,6 +148,23 @@ describe('UserTopNav navigation discovery', () => {
     expect(activePrimary?.classes()).toContain('is-active')
     expect(activePrimary?.attributes('aria-current')).toBe('page')
     expect(enabledWrapper.get('.mobile-current-section').text()).toBe('求职周报')
+  })
+
+  it('gates the V9 aggregate entry without changing the primary navigation', async () => {
+    const disabledWrapper = mountNav()
+    await disabledWrapper.get('.more-button').trigger('click')
+    expect(disabledWrapper.find('[data-nav-path="/evidence-assets"]').exists()).toBe(false)
+    disabledWrapper.unmount()
+
+    appConfig.enableV9EvidenceLearning = true
+    routePath.value = '/evidence-assets'
+    const enabledWrapper = mountNav()
+    await enabledWrapper.get('.more-button').trigger('click')
+
+    const evidenceLink = enabledWrapper.get('[data-nav-path="/evidence-assets"]')
+    expect(evidenceLink.text()).toContain('证据使用')
+    expect(evidenceLink.classes()).toContain('is-active')
+    expect(evidenceLink.attributes('aria-current')).toBe('page')
   })
 
   it('shows the same grouped destinations in the responsive navigation panel', async () => {

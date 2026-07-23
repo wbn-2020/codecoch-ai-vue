@@ -24,6 +24,14 @@
           </p>
         </div>
         <div class="workspace-header__actions">
+          <el-button
+            v-if="appConfig.enableV9EvidenceLearning"
+            data-testid="workspace-evidence-results"
+            @click="openEvidenceResults"
+          >
+            <ClipboardCheck :size="16" />
+            记录结果反馈
+          </el-button>
           <el-tag effect="plain" :type="statusTagType(application.status)">
             {{ statusLabel(application.status) }}
           </el-tag>
@@ -367,7 +375,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft, ClipboardCheck } from 'lucide-vue-next'
 
 import {
   getApplicationWorkspaceV7Api,
@@ -431,6 +439,17 @@ let workspaceLoadToken = 0
 let transitionRequestToken = 0
 
 const application = computed<ApplicationWorkspaceApplication>(() => workspace.value.application || { id: applicationId.value })
+const openEvidenceResults = () => {
+  if (!Number.isSafeInteger(applicationId.value) || applicationId.value <= 0) return
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      mode: 'record-result',
+      applicationId: String(applicationId.value)
+    }
+  })
+}
 const applicationLockVersion = computed(() => {
   const value = application.value.lockVersion ?? workspace.value.lockVersion
   return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : undefined

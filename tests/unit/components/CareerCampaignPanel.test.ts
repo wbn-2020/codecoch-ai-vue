@@ -78,6 +78,7 @@ describe('CareerCampaignPanel', () => {
     appConfig.enableV7CampaignWorkspace = true
     appConfig.enableV7CampaignReview = false
     appConfig.enableV8CampaignCockpit = false
+    appConfig.enableV9EvidenceLearning = false
     ui.confirm.mockResolvedValue(undefined)
   })
 
@@ -164,5 +165,48 @@ describe('CareerCampaignPanel', () => {
       name: 'CampaignCockpit',
       params: { id: 9 }
     })
+  })
+
+  it('keeps missing, rejected, expired and unknown candidate statuses non-actionable', async () => {
+    api.getCampaigns.mockResolvedValue([])
+    api.getApplications.mockResolvedValue([])
+
+    const wrapper = mount(CareerCampaignPanel, {
+      global: {
+        stubs,
+        directives: { loading: () => undefined }
+      }
+    })
+    await flushPromises()
+
+    const setupState = (wrapper.vm as unknown as {
+      $: { setupState: Record<string, any> }
+    }).$.setupState
+
+    expect(setupState.canConfirmCampaignCandidate(undefined)).toBe(false)
+    expect(setupState.canConfirmCampaignCandidate('WEAK_OBSERVATION')).toBe(false)
+    expect(setupState.canConfirmCampaignCandidate('REJECTED')).toBe(false)
+    expect(setupState.canConfirmCampaignCandidate('EXPIRED')).toBe(false)
+    expect(setupState.canConfirmCampaignCandidate('FUTURE_STATUS')).toBe(false)
+    expect(setupState.canConfirmCampaignCandidate('PENDING_CONFIRMATION')).toBe(true)
+    expect(setupState.campaignCandidateStatusLabel(undefined)).toBe('状态待确认')
+    expect(setupState.campaignCandidateStatusLabel('REJECTED')).toBe('已拒绝')
+    expect(setupState.campaignCandidateStatusLabel('EXPIRED')).toBe('已过期')
+    expect(setupState.campaignCandidateStatusType(undefined)).toBe('info')
+    expect(setupState.campaignCandidateStatusType('REJECTED')).toBe('info')
+
+    setupState.review = {
+      memoryCandidates: [{
+        id: 19,
+        title: '状态未知候选',
+        content: '不能因为状态缺失而开放确认。',
+        status: undefined
+      }]
+    }
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('状态待确认')
+    expect(wrapper.text()).not.toContain('确认候选')
+    expect(wrapper.text()).not.toContain('已确认')
   })
 })

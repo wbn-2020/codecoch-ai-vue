@@ -66,7 +66,7 @@ interface UserMenuItem {
   label: string
   path: string
   icon: unknown
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport'
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
   previewOnly?: boolean
 }
 
@@ -86,6 +86,7 @@ const isMenuItemVisible = (item: UserMenuItem) => {
   if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
   if (featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
+  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
   return true
 }
 
@@ -127,6 +128,7 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
       { label: '项目素材', path: '/project-evidence', icon: Files },
+      { label: '证据使用', path: '/evidence-assets', icon: DocumentChecked, featureFlag: 'v9EvidenceLearning' },
       { label: '求职进度', path: '/applications', icon: Compass },
       { label: '求职日历', path: '/career-calendar', icon: Calendar },
       { label: '投递包', path: '/application-packages', icon: DocumentChecked },
@@ -230,6 +232,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
   if (route.path.startsWith('/project-evidence')) return '/project-evidence'
+  if (route.path.startsWith('/evidence-assets')) return '/evidence-assets'
   if (route.path.startsWith('/resumes')) return '/resumes'
   if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/study-plans')) return '/study-plans'

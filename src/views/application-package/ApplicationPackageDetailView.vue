@@ -18,6 +18,23 @@
           <RefreshCw :size="16" />
           刷新
         </el-button>
+        <el-button
+          v-if="appConfig.enableV9EvidenceLearning && currentPackage?.currentSnapshotId"
+          data-testid="application-package-usages"
+          @click="openEvidenceUsages"
+        >
+          <ClipboardCheck :size="16" />
+          查看本次使用快照
+        </el-button>
+        <el-button
+          v-if="appConfig.enableV9EvidenceLearning && currentPackage?.currentSnapshotId && currentPackage?.jobApplicationId"
+          data-testid="record-application-package-usage"
+          :loading="recordingEvidenceUsage"
+          @click="recordCurrentPackageUsage"
+        >
+          <ClipboardCheck :size="16" />
+          记录本次使用
+        </el-button>
         <el-button type="primary" :loading="applicationCreating" @click="handleApplicationEntry">
           <Briefcase :size="16" />
           {{ applicationEntryLabel }}
@@ -322,7 +339,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Briefcase, PackageCheck, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, Briefcase, ClipboardCheck, PackageCheck, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -333,7 +350,9 @@ import {
   refreshApplicationPackageApi,
   previewApplicationPackageApi
 } from '@/api/applicationPackage'
+import { createEvidenceUsageApi } from '@/api/evidenceAsset'
 import AppState from '@/components/common/AppState.vue'
+import { appConfig } from '@/config'
 import ResumeArtifactDeliveryPanel from '@/views/resume/components/ResumeArtifactDeliveryPanel.vue'
 import type {
   ApplicationPackageChecklistItemVO,
@@ -347,15 +366,57 @@ import type {
 import type { ExplainableSuggestionVO } from '@/types/suggestion'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import { getErrorMessage } from '@/utils/error'
+import { createStableOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const applicationCreating = ref(false)
+const recordingEvidenceUsage = ref(false)
 const executingActionKey = ref('')
 const loadError = ref('')
 const currentPackage = ref<JobApplicationPackageVO | null>(null)
+
+const openEvidenceUsages = () => {
+  const snapshotId = currentPackage.value?.currentSnapshotId
+  if (!snapshotId) return
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      assetType: 'APPLICATION_PACKAGE_SNAPSHOT',
+      packageSnapshotId: String(snapshotId)
+    }
+  })
+}
+
+const recordCurrentPackageUsage = async () => {
+  const pack = currentPackage.value
+  const applicationId = pack?.jobApplicationId
+  const snapshotId = toPositiveNumber(pack?.currentSnapshotId)
+  const snapshotVersion = toPositiveNumber(pack?.snapshotVersion)
+  if (!applicationId || !snapshotId || !snapshotVersion || recordingEvidenceUsage.value) return
+  recordingEvidenceUsage.value = true
+  try {
+    await createEvidenceUsageApi(applicationId, {
+      assetType: 'APPLICATION_PACKAGE_SNAPSHOT',
+      assetId: snapshotId,
+      assetVersion: String(snapshotVersion),
+      packageSnapshotId: snapshotId,
+      usageScene: 'APPLICATION_SUBMISSION',
+      idempotencyKey: createStableOperationIdempotencyKey(
+        `evidence-usage:package:${applicationId}:${snapshotId}:APPLICATION_SUBMISSION`,
+        snapshotVersion
+      )
+    })
+    ElMessage.success('本次投递包使用已记录；重复点击会返回同一条记录。')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '本次使用暂未记录，请确认投递包快照仍然有效。'))
+  } finally {
+    recordingEvidenceUsage.value = false
+  }
+}
 
 const toPositiveNumber = (value: unknown): number | undefined => {
   const raw = Array.isArray(value) ? value[0] : value

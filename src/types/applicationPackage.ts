@@ -180,6 +180,9 @@ export interface JobApplicationPackageVO {
   id: string
   packageNo?: string
   snapshotVersion?: number
+  currentSnapshotId?: number | string
+  currentSnapshotHash?: string
+  snapshotCapturedAt?: string
   userId?: number
   targetJobId?: number
   jobApplicationId?: number
@@ -241,6 +244,9 @@ export interface JobApplicationPackageListItemVO {
   fallback?: boolean
   traceId?: string
   snapshotVersion?: number
+  currentSnapshotId?: number | string
+  currentSnapshotHash?: string
+  snapshotCapturedAt?: string
   contextPackageCount?: number
   contextVersionNo?: number
   latestContextPackageId?: number | string

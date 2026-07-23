@@ -94,9 +94,11 @@ export const isSupportedJobExperimentRelationType = (type?: string): type is Job
 export const jobExperimentRelationLabel = (type?: string) => relationLabelMap[type || ''] || '未支持证据'
 
 export const confidenceLabel = (confidence?: string) => {
-  if (confidence === 'HIGH') return '高置信度'
-  if (confidence === 'MEDIUM') return '中置信度'
-  return '低置信度'
+  const normalized = String(confidence || '').trim().toUpperCase()
+  if (normalized === 'HIGH') return '高置信度'
+  if (normalized === 'MEDIUM') return '中置信度'
+  if (normalized === 'LOW') return '低置信度'
+  return '置信度待确认'
 }
 
 export const statusLabel = (status?: string) => {
@@ -351,9 +353,7 @@ export const buildExperimentSampleBoundary = (
   const feedbackCount = explicitBoundary?.feedbackCount ?? feedbackSummary?.feedbackCount ?? metrics?.feedbackCount ?? 0
   const interviewCompletedCount =
     explicitBoundary?.interviewCompletedCount ?? feedbackSummary?.interviewCompletedCount ?? metrics?.interviewCompletedCount ?? 0
-  const enforcedInsufficient = applicationCount < 15 || interviewCompletedCount < 3
-  const sampleInsufficient =
-    Boolean(explicitBoundary?.sampleInsufficient ?? metrics?.sampleInsufficient ?? strategy?.sampleInsufficient) || enforcedInsufficient
+  const sampleInsufficient = applicationCount < 5
   const sampleWarning =
     getLowSampleWarning({ ...explicitBoundary, applicationCount, interviewCompletedCount }, feedbackSummary) ||
     explicitBoundary?.sampleWarning ||
@@ -389,7 +389,7 @@ export const buildExperimentQualityGate = (
   const applicationCount = boundary.applicationCount ?? 0
   const interviewCompletedCount = boundary.interviewCompletedCount ?? 0
 
-  if (boundary.sampleInsufficient || applicationCount < 5) {
+  if (applicationCount < 5) {
     return {
       gateStatus: 'BLOCKED',
       suggestionStrength: 'WEAK',

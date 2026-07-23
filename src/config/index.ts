@@ -20,6 +20,7 @@ const enableV8CampaignPulse = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PULSE === 
 const enableV8CampaignPlan = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PLAN === 'true'
 const enableV8CampaignPortfolio = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_PORTFOLIO === 'true'
 const enableV8CampaignExport = import.meta.env.VITE_ENABLE_V8_CAMPAIGN_EXPORT === 'true'
+const enableV9EvidenceLearning = import.meta.env.VITE_ENABLE_V9_EVIDENCE_LEARNING === 'true'
 
 export const appConfig = {
   title: import.meta.env.VITE_APP_TITLE || 'CodeCoachAI',
@@ -48,6 +49,7 @@ export const appConfig = {
   enableV8CampaignPlan,
   enableV8CampaignPortfolio,
   enableV8CampaignExport,
+  enableV9EvidenceLearning,
   demoReadOnly: import.meta.env.VITE_DEMO_READ_ONLY === 'true',
   demoUsername: import.meta.env.VITE_DEMO_USERNAME || '',
   demoPassword: import.meta.env.VITE_DEMO_PASSWORD || ''

@@ -45,6 +45,12 @@ export const routes: RouteRecordRaw[] = [
       { path: 'project-evidence/create', name: 'ProjectEvidenceCreate', component: () => import('@/views/project-evidence/ProjectEvidenceEditView.vue'), meta: { title: '新增项目证据' } },
       { path: 'project-evidence/:id', name: 'ProjectEvidenceDetail', component: () => import('@/views/project-evidence/ProjectEvidenceDetailView.vue'), meta: { title: '项目证据详情' } },
       { path: 'project-evidence/:id/edit', name: 'ProjectEvidenceEdit', component: () => import('@/views/project-evidence/ProjectEvidenceEditView.vue'), meta: { title: '编辑项目证据' } },
+      {
+        path: 'evidence-assets',
+        name: 'EvidenceAssets',
+        component: () => import('@/views/evidence-assets/EvidenceAssetsView.vue'),
+        meta: { title: '证据资产工作台', featureFlag: 'v9EvidenceLearning' }
+      },
       { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: 'JD 匹配实验台' } },
       { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: 'JD 匹配报告' } },
       { path: 'application-packages', name: 'ApplicationPackageList', component: () => import('@/views/application-package/ApplicationPackageListView.vue'), meta: { title: '投递包列表' } },
