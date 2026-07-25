@@ -180,18 +180,17 @@
                   >
                     重试面试来源
                   </el-button>
-                  <div v-if="interviewProcess?.rounds?.length" class="round-list">
-                    <article v-for="round in interviewProcess.rounds" :key="round.id" class="round-row">
-                      <div>
-                        <strong>{{ roundTypeLabel(round.roundType) }}</strong>
-                        <span>{{ round.scheduledAt || '时间待确认' }} · {{ round.timezone || '时区待确认' }}</span>
-                        <p>{{ round.location || '地点待确认' }} · {{ round.status || '状态待确认' }}</p>
-                        <p v-if="round.reviewSummary">{{ round.reviewSummary }}</p>
-                      </div>
-                      <el-tag size="small" effect="plain">{{ round.status || '状态待确认' }}</el-tag>
-                    </article>
-                  </div>
-                  <AppState v-else-if="!sectionErrors.interview" type="empty" title="还没有真实面试轮次" description="创建真实面试安排后，轮次、准备包和复盘会在这里关联。" />
+                  <AppState
+                    v-if="!interviewProcess?.rounds?.length && !interviewProcess?.id && !sectionErrors.interview"
+                    type="empty"
+                    title="还没有真实面试轮次"
+                    description="创建真实面试安排后，轮次、准备包和复盘会在这里关联。"
+                  />
+                  <CareerInterviewPanel
+                    :application-id="applicationId"
+                    :process="interviewProcess"
+                    @refresh="() => loadTabData('interview')"
+                  />
                 </article>
               </section>
 
@@ -239,6 +238,13 @@
                     </article>
                   </div>
                   <AppState v-else-if="!sectionErrors.offer" type="empty" title="还没有 Offer" description="收到 Offer 后可记录版本、截止时间和最终决定。" />
+                  <CareerOfferPanel
+                    :application-id="applicationId"
+                    :campaign-id="application.campaignId"
+                    :offers="offers"
+                    :disabled="optionalTabLoading.offer"
+                    @refresh="retryTab('offer')"
+                  />
                   <p class="muted offer-hint">比较只在同币种且金额足够时提供规则提示，不替你接受、拒绝或协商 Offer。</p>
                 </article>
               </section>
@@ -291,6 +297,12 @@
                     <AppState v-else type="empty" title="还没有活动记录" description="沟通草稿只能复制、编辑和记录，不提供发送接口。" />
                   </article>
                 </div>
+                <CareerContactPanel
+                  :application-id="applicationId"
+                  :contacts="contacts"
+                  :activities="activities"
+                  @refresh="() => loadTabData('contacts')"
+                />
               </section>
 
               <section v-else-if="activeTab === 'research'" class="workspace-content">
@@ -328,6 +340,11 @@
                     </article>
                   </div>
                   <AppState v-else type="empty" title="还没有研究来源" description="可登记用户提供的 JD、官方链接或已有材料，不做无限制网页抓取。" />
+                  <CareerResearchPanel
+                    :application-id="applicationId"
+                    :sources="researchSources"
+                    @refresh="() => loadTabData('research')"
+                  />
                   <div v-if="researchSnapshot" class="research-snapshot">
                     <el-alert v-if="researchSnapshot.fallback" type="warning" show-icon :closable="false" title="本次研究使用规则降级结果" />
                     <div v-for="group in researchGroups" :key="group.label">
@@ -388,6 +405,10 @@ import {
   transitionApplicationStatusV7Api
 } from '@/api/v7Career'
 import AppState from '@/components/common/AppState.vue'
+import CareerOfferPanel from '@/components/v7/career-offer/CareerOfferPanel.vue'
+import CareerInterviewPanel from '@/components/v7/career-interview/CareerInterviewPanel.vue'
+import CareerResearchPanel from '@/components/v7/career-research/CareerResearchPanel.vue'
+import CareerContactPanel from '@/components/v7/career-contact/CareerContactPanel.vue'
 import { appConfig } from '@/config'
 import {
   buildOfferComparison,

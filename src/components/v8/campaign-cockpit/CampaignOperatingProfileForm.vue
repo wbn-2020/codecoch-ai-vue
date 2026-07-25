@@ -120,7 +120,10 @@ const submit = () => {
     focusChannels: splitList(focusChannelsText.value),
     timezone: draft.timezone.trim(),
     expectedLockVersion: draft.lockVersion,
-    idempotencyKey: `campaign-profile:${draft.campaignId}:${draft.lockVersion || 0}:${Date.now()}`
+    // Stable per logical save (campaignId + lockVersion): a timeout retry reuses the same key so the
+    // backend dedupes it instead of failing on the lock version. lockVersion advances after a
+    // successful save, so the next genuine edit gets a fresh key. Mirrors CareerCampaignPanel.
+    idempotencyKey: `campaign-profile:${draft.campaignId}:${draft.lockVersion || 0}`
   })
 }
 </script>

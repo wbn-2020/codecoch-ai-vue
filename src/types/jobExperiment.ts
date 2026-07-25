@@ -279,3 +279,18 @@ export interface PortfolioDemoStorylineVO {
   steps: PortfolioDemoStorylineStepVO[]
   opsSteps: PortfolioDemoStorylineStepVO[]
 }
+
+export interface PortfolioRehearsalSessionVO {
+  activeRouteKey: string | null
+  activeNodeIndex: number
+  elapsedSeconds: number
+  completedNodeIds: string[]
+  updatedAt?: string
+}
+
+export interface PortfolioRehearsalSessionSaveDTO {
+  activeRouteKey: string
+  activeNodeIndex: number
+  elapsedSeconds: number
+  completedNodeIds: string[]
+}

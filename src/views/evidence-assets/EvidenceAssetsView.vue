@@ -98,7 +98,7 @@
         <el-button type="primary" :loading="overviewLoading" @click="loadOverview">重试</el-button>
       </AppState>
       <div v-else-if="readinessItems.length" class="readiness-grid">
-        <article v-for="item in readinessItems" :key="item.assetType" class="readiness-item">
+        <article v-for="(item, index) in readinessItems" :key="item.assetType ?? `readiness-${index}`" class="readiness-item">
           <div class="readiness-item__head">
             <div>
               <strong>{{ assetTypeLabel(item.assetType) }}</strong>
@@ -195,7 +195,7 @@
             </dl>
             <p v-if="usage.staleReason" class="inline-warning">{{ displayBoundaryText(usage.staleReason, '来源状态待复核。') }}</p>
             <div class="source-ref-list">
-              <span v-for="source in usageSources(usage)" :key="sourceKey(source)">
+              <span v-for="(source, index) in usageSources(usage)" :key="`${sourceKey(source)}#${index}`">
                 {{ sourceLabel(source) }}
               </span>
               <span v-if="!usageSources(usage).length">来源引用待补充</span>
@@ -293,7 +293,7 @@
           </div>
           <div class="result-item__foot">
             <div class="source-ref-list">
-              <span v-for="source in resultSources(result)" :key="sourceKey(source)">
+              <span v-for="(source, index) in resultSources(result)" :key="`${sourceKey(source)}#${index}`">
                 {{ sourceLabel(source) }}
               </span>
               <span v-if="!resultSources(result).length">来源引用待补充</span>
@@ -378,7 +378,7 @@
               <li v-for="unknown in candidate.unknowns || []" :key="`candidate-unknown-${unknown}`">未知：{{ unknown }}</li>
             </ul>
             <div class="source-ref-list">
-              <span v-for="source in candidateSources(candidate)" :key="sourceKey(source)">
+              <span v-for="(source, index) in candidateSources(candidate)" :key="`${sourceKey(source)}#${index}`">
                 {{ sourceLabel(source) }}
               </span>
               <span v-if="!candidateSources(candidate).length">来源引用待补充</span>
@@ -455,7 +455,7 @@
         <div>
           <h3>来源引用</h3>
           <div class="source-ref-list source-ref-list--stack">
-            <span v-for="source in sources" :key="sourceKey(source)">{{ sourceLabel(source) }}</span>
+            <span v-for="(source, index) in sources" :key="`${sourceKey(source)}#${index}`">{{ sourceLabel(source) }}</span>
             <span v-if="!sources.length">暂无来源引用。</span>
           </div>
         </div>
@@ -638,6 +638,9 @@ type SectionKey = 'readiness' | 'usages' | 'results' | 'candidates'
 
 const route = useRoute()
 const router = useRouter()
+// Guards against slow in-flight loads overwriting newer ones when the deep-link query changes
+// (onMounted / query watch / retry can all fire load()). Mirrors ApplicationWorkspaceView's token.
+let loadToken = 0
 const pageLoading = ref(false)
 const overviewLoading = ref(false)
 const usagesLoading = ref(false)
@@ -895,83 +898,100 @@ const singleItemEnvelope = <T extends {
   sources: item.sources || item.sourceRefs || []
 })
 
-const loadOverview = async () => {
+const loadOverview = async (token: number = ++loadToken) => {
   overviewLoading.value = true
   overviewError.value = ''
   try {
-    overview.value = await getEvidenceAssetsOverviewApi(overviewQuery())
+    const value = await getEvidenceAssetsOverviewApi(overviewQuery())
+    if (token !== loadToken) return true
+    overview.value = value
     return true
   } catch (error) {
+    if (token !== loadToken) return true
     const unavailable = handleAccessUnavailable(error)
     overviewError.value = workbenchErrorMessage(error, '资产就绪度暂时不可用，请稍后重试。')
     return !unavailable
   } finally {
-    overviewLoading.value = false
+    if (token === loadToken) overviewLoading.value = false
   }
 }
 
-const loadUsages = async () => {
+const loadUsages = async (token: number = ++loadToken) => {
   usagesLoading.value = true
   usagesError.value = ''
   try {
     const usageId = queryNumber('usageId')
-    usagesEnvelope.value = usageId
+    const value = usageId
       ? singleItemEnvelope(await getEvidenceUsageDetailApi(usageId))
       : await getEvidenceAssetUsagesApi(usagesQuery())
+    if (token !== loadToken) return true
+    usagesEnvelope.value = value
     return true
   } catch (error) {
+    if (token !== loadToken) return true
     const unavailable = handleAccessUnavailable(error)
     usagesError.value = workbenchErrorMessage(error, '使用记录暂时不可用，请稍后重试。')
     return !unavailable
   } finally {
-    usagesLoading.value = false
+    if (token === loadToken) usagesLoading.value = false
   }
 }
 
-const loadResults = async () => {
+const loadResults = async (token: number = ++loadToken) => {
   resultsLoading.value = true
   resultsError.value = ''
   try {
-    resultsEnvelope.value = await getEvidenceAssetResultsApi(resultsQuery())
+    const value = await getEvidenceAssetResultsApi(resultsQuery())
+    if (token !== loadToken) return true
+    resultsEnvelope.value = value
     return true
   } catch (error) {
+    if (token !== loadToken) return true
     const unavailable = handleAccessUnavailable(error)
     resultsError.value = workbenchErrorMessage(error, '结果反馈暂时不可用，请稍后重试。')
     return !unavailable
   } finally {
-    resultsLoading.value = false
+    if (token === loadToken) resultsLoading.value = false
   }
 }
 
-const loadCandidates = async () => {
+const loadCandidates = async (token: number = ++loadToken) => {
   candidatesLoading.value = true
   candidatesError.value = ''
   try {
     const candidateId = queryNumber('candidateId')
-    candidatesEnvelope.value = candidateId
+    const value = candidateId
       ? singleItemEnvelope(await getEvidenceLearningCandidateApi(candidateId))
       : await getEvidenceLearningCandidatesApi(candidatesQuery())
+    if (token !== loadToken) return true
+    candidatesEnvelope.value = value
     return true
   } catch (error) {
+    if (token !== loadToken) return true
     const unavailable = handleAccessUnavailable(error)
     candidatesError.value = workbenchErrorMessage(error, '学习候选暂时不可用，请稍后重试。')
     return !unavailable
   } finally {
-    candidatesLoading.value = false
+    if (token === loadToken) candidatesLoading.value = false
   }
 }
 
 const load = async () => {
+  const token = ++loadToken
   pageLoading.value = true
   try {
     accessUnavailable.value = false
-    if (!await loadOverview() || accessUnavailable.value) return
-    if (!await loadUsages() || accessUnavailable.value) return
-    if (!await loadResults() || accessUnavailable.value) return
-    if (!await loadCandidates() || accessUnavailable.value) return
+    if (!await loadOverview(token) || token !== loadToken) return
+    if (accessUnavailable.value) return
+    if (!await loadUsages(token) || token !== loadToken) return
+    if (accessUnavailable.value) return
+    if (!await loadResults(token) || token !== loadToken) return
+    if (accessUnavailable.value) return
+    if (!await loadCandidates(token) || token !== loadToken) return
+    if (accessUnavailable.value) return
     await handleRouteMode()
   } finally {
-    pageLoading.value = false
+    if (token === loadToken) pageLoading.value = false
   }
 }
 
@@ -1162,8 +1182,16 @@ const uniqueSources = (values: EvidenceSourceRefVO[]) => {
   })
 }
 
-const displayBoundaryText = (value: unknown, fallback: string) =>
-  getErrorMessage(value, fallback)
+// Renders recorded business/data text (result feedback, warnings, limits, staleReason) as-is.
+// These are real user/recruiter content, not error codes, so they must NOT pass through the
+// error-code sanitizer (toFriendlyMessage), which would drop any non-Chinese Latin text — e.g.
+// an English recruiter reply — to the fallback and violate this page's "replay only recorded
+// content, never fabricate" contract. We only coerce to string and fall back when truly empty.
+const displayBoundaryText = (value: unknown, fallback: string) => {
+  if (value === null || value === undefined) return fallback
+  const text = typeof value === 'string' ? value : String(value)
+  return text.trim() ? text : fallback
+}
 
 function coverageToLines(value: unknown): string[] {
   const labels: Record<string, string> = {

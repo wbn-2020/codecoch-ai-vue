@@ -12,7 +12,9 @@ import type {
   JobSearchExperimentReviewVO,
   JobSearchExperimentSaveDTO,
   PortfolioDemoStatusVO,
-  PortfolioDemoStorylineVO
+  PortfolioDemoStorylineVO,
+  PortfolioRehearsalSessionSaveDTO,
+  PortfolioRehearsalSessionVO
 } from '@/types/jobExperiment'
 
 const normalizeExperiment = <T extends JobSearchExperimentListVO | JobSearchExperimentDetailVO>(item: T): T => ({
@@ -66,3 +68,12 @@ export const resetPortfolioDemoApi = () =>
 
 export const getPortfolioDemoStorylineApi = () =>
   request.get<PortfolioDemoStorylineVO, PortfolioDemoStorylineVO>('/portfolio-demo/storyline')
+
+export const getPortfolioRehearsalSessionApi = () =>
+  request.get<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session')
+
+export const savePortfolioRehearsalSessionApi = (data: PortfolioRehearsalSessionSaveDTO) =>
+  request.put<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session', data)
+
+export const resetPortfolioRehearsalSessionApi = () =>
+  request.post<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session/reset')

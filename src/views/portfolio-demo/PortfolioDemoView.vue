@@ -49,7 +49,7 @@
             done: completedNodeIds.has(node.id),
             current: index === activeNodeIndex
           }"
-          @click="activeNodeIndex = index"
+          @click="selectNode(index)"
         >
           <span>{{ index + 1 }}</span>
           <small>{{ node.page }}</small>
@@ -236,11 +236,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw } from 'lucide-vue-next'
 
+import {
+  getPortfolioRehearsalSessionApi,
+  savePortfolioRehearsalSessionApi
+} from '@/api/jobExperiment'
 import {
   requiredOpsDemoSteps,
   requiredUserDemoSteps,
@@ -503,6 +507,57 @@ const elapsedSeconds = ref(0)
 const timerRunning = ref(false)
 let timerId: number | undefined
 
+const validRouteKeys = new Set<RouteKey>(rehearsalRoutes.map((route) => route.key))
+const isRouteKey = (value: string | null | undefined): value is RouteKey =>
+  !!value && validRouteKeys.has(value as RouteKey)
+
+// Persistence is best-effort: rehearsal progress is convenience state, so a failed
+// save must never block the presenter. We collapse bursts of saves (e.g. per-second
+// timer ticks) into a single trailing write, and skip while hydrating.
+let hydrating = false
+let persistTimer: number | undefined
+
+const persistNow = () => {
+  if (hydrating) return
+  const nodeCount = activeRoute.value.nodes.length
+  const boundedIndex = Math.min(Math.max(activeNodeIndex.value, 0), Math.max(nodeCount - 1, 0))
+  savePortfolioRehearsalSessionApi({
+    activeRouteKey: activeRouteKey.value,
+    activeNodeIndex: boundedIndex,
+    elapsedSeconds: elapsedSeconds.value,
+    completedNodeIds: [...completedNodeIds.value]
+  }).catch(() => {
+    // Swallow: progress persistence is non-critical and must not disrupt rehearsal.
+  })
+}
+
+const schedulePersist = (delay = 800) => {
+  if (hydrating) return
+  if (persistTimer) window.clearTimeout(persistTimer)
+  persistTimer = window.setTimeout(() => {
+    persistTimer = undefined
+    persistNow()
+  }, delay)
+}
+
+const hydrateSession = async () => {
+  hydrating = true
+  try {
+    const session = await getPortfolioRehearsalSessionApi()
+    if (isRouteKey(session.activeRouteKey)) {
+      activeRouteKey.value = session.activeRouteKey
+    }
+    const nodeCount = activeRoute.value.nodes.length
+    activeNodeIndex.value = Math.min(Math.max(session.activeNodeIndex ?? 0, 0), Math.max(nodeCount - 1, 0))
+    elapsedSeconds.value = Math.max(session.elapsedSeconds ?? 0, 0)
+    completedNodeIds.value = new Set(session.completedNodeIds ?? [])
+  } catch {
+    // No saved session (or a transient error) leaves the default quick-route state in place.
+  } finally {
+    hydrating = false
+  }
+}
+
 const activeRoute = computed(
   () => rehearsalRoutes.find((route) => route.key === activeRouteKey.value) || rehearsalRoutes[0]
 )
@@ -563,6 +618,7 @@ const toggleTimer = () => {
   timerId = window.setInterval(() => {
     elapsedSeconds.value += 1
     if (elapsedSeconds.value >= activeRoute.value.durationSeconds) stopTimer()
+    schedulePersist(2000)
   }, 1000)
 }
 
@@ -571,15 +627,23 @@ const selectRoute = (key: RouteKey) => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
+  schedulePersist(0)
+}
+
+const selectNode = (index: number) => {
+  activeNodeIndex.value = index
+  schedulePersist()
 }
 
 const markCurrentNode = () => {
   completedNodeIds.value = new Set(completedNodeIds.value).add(currentNode.value.id)
+  schedulePersist()
 }
 
 const nextNode = () => {
   markCurrentNode()
   activeNodeIndex.value = Math.min(activeNodeIndex.value + 1, activeRoute.value.nodes.length - 1)
+  schedulePersist()
 }
 
 const resetRoute = () => {
@@ -588,6 +652,7 @@ const resetRoute = () => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
+  schedulePersist(0)
 }
 
 const openCurrentNode = () => {
@@ -596,7 +661,16 @@ const openCurrentNode = () => {
   router.push(resolved.path)
 }
 
-onBeforeUnmount(stopTimer)
+onMounted(hydrateSession)
+
+onBeforeUnmount(() => {
+  stopTimer()
+  if (persistTimer) {
+    window.clearTimeout(persistTimer)
+    persistTimer = undefined
+    persistNow()
+  }
+})
 </script>
 
 <style scoped lang="scss">

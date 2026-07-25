@@ -14,10 +14,32 @@ import type {
   CareerCampaignVO,
   CareerCommunicationDraftVO,
   CareerContactVO,
+  CareerInterviewCalendarLinkDTO,
+  CareerInterviewProcessCreateDTO,
+  CareerInterviewRescheduleDTO,
+  CareerInterviewRoundCreateDTO,
+  CareerInterviewRoundUpdateDTO,
+  CareerInterviewTransitionDTO,
+  CareerOfferCreateDTO,
+  CareerOfferDecisionConfirmDTO,
+  CareerOfferDecisionPreviewDTO,
+  CareerOfferDecisionVO,
+  CareerOfferTransitionDTO,
+  CareerOfferVersionCreateDTO,
   CareerOfferVO,
+  CareerActivityRecordDTO,
+  CareerActivitySaveDTO,
+  CareerContactSaveDTO,
+  CareerInterviewRoundContactSaveDTO,
+  CareerInterviewRoundContactVO,
+  CareerResearchSnapshotGenerateDTO,
   CareerResearchSnapshotVO,
+  CareerResearchSourceCreateDTO,
   CareerResearchSourceVO,
+  CareerResearchSourceVersionCreateDTO,
+  CareerResearchSourceVersionVO,
   InterviewProcessVO,
+  InterviewRoundVO,
   V7ExternalPlanConfirmDTO,
   V7ExternalPlanPreviewDTO,
   V7ExternalPlanPreviewVO,
@@ -89,33 +111,98 @@ export const transitionApplicationStatusV7Api = (applicationId: number, data: V7
     return { application: value as ApplicationWorkspaceApplication, allowedTransitions: [] }
   })
 
+const normalizeRound = (round: InterviewRoundVO): InterviewRoundVO => ({
+  ...round,
+  scheduledAt: round.scheduledAt || round.scheduledStartsAtUtc,
+  reviewSummary: round.reviewSummary || round.resultSummary
+})
+
 export const getInterviewProcessV7Api = (applicationId: number) =>
   request.get<InterviewProcessVO, InterviewProcessVO>(`/applications/${applicationId}/interview-process`).then((value) => ({
     ...value,
-    rounds: (value?.rounds || []).map((round) => ({
-      ...round,
-      scheduledAt: round.scheduledAt || round.scheduledStartsAtUtc,
-      reviewSummary: round.reviewSummary || round.resultSummary
-    }))
+    rounds: (value?.rounds || []).map(normalizeRound)
   }))
+
+// Interview writes — Idempotency-Key travels in the request BODY (DTO field), never in the header.
+export const createInterviewProcessV7Api = (applicationId: number, data: CareerInterviewProcessCreateDTO) =>
+  request.post<InterviewProcessVO, InterviewProcessVO>(`/applications/${applicationId}/interview-process`, data).then((value) => ({
+    ...value,
+    rounds: (value?.rounds || []).map(normalizeRound)
+  }))
+
+export const createInterviewRoundV7Api = (processId: number, data: CareerInterviewRoundCreateDTO) =>
+  request.post<InterviewRoundVO, InterviewRoundVO>(`/interview-processes/${processId}/rounds`, data).then(normalizeRound)
+
+export const updateInterviewRoundV7Api = (roundId: number, data: CareerInterviewRoundUpdateDTO) =>
+  request.put<InterviewRoundVO, InterviewRoundVO>(`/interview-rounds/${roundId}`, data).then(normalizeRound)
+
+export const transitionInterviewRoundV7Api = (roundId: number, data: CareerInterviewTransitionDTO) =>
+  request.post<InterviewRoundVO, InterviewRoundVO>(`/interview-rounds/${roundId}/transitions`, data).then(normalizeRound)
+
+export const rescheduleInterviewRoundV7Api = (roundId: number, data: CareerInterviewRescheduleDTO) =>
+  request.post<InterviewRoundVO, InterviewRoundVO>(`/interview-rounds/${roundId}/reschedule`, data).then(normalizeRound)
+
+export const linkInterviewRoundCalendarV7Api = (roundId: number, data: CareerInterviewCalendarLinkDTO) =>
+  request.post<InterviewRoundVO, InterviewRoundVO>(`/interview-rounds/${roundId}/link-calendar-event`, data).then(normalizeRound)
+
+const normalizeOffer = (offer: CareerOfferVO): CareerOfferVO => ({
+  ...offer,
+  currentVersion: offer.currentVersion
+    ? {
+        ...offer.currentVersion,
+        baseSalary: offer.currentVersion.baseSalary ?? offer.currentVersion.annualBaseSalary,
+        bonus: offer.currentVersion.bonus ?? offer.currentVersion.annualBonus,
+        deadlineAt:
+          offer.currentVersion.deadlineAt ??
+          offer.currentVersion.decisionDeadline ??
+          offer.decisionDeadline,
+        notes: offer.currentVersion.notes ?? offer.currentVersion.note
+      }
+    : offer.currentVersion
+})
 
 export const getOffersV7Api = (applicationId: number) =>
   request.get<CareerOfferVO[], CareerOfferVO[]>(`/applications/${applicationId}/offers`).then((items) =>
-    (items || []).map((offer) => ({
-      ...offer,
-      currentVersion: offer.currentVersion
-        ? {
-          ...offer.currentVersion,
-          baseSalary: offer.currentVersion.baseSalary ?? offer.currentVersion.annualBaseSalary,
-          bonus: offer.currentVersion.bonus ?? offer.currentVersion.annualBonus,
-            deadlineAt:
-              offer.currentVersion.deadlineAt ??
-              offer.currentVersion.decisionDeadline ??
-              offer.decisionDeadline,
-            notes: offer.currentVersion.notes ?? offer.currentVersion.note
-          }
-        : offer.currentVersion
-    }))
+    (items || []).map(normalizeOffer)
+  )
+
+// Offer writes — Idempotency-Key travels in the HTTP header (backend @RequestHeader), never in the body.
+export const createOfferV7Api = (applicationId: number, data: CareerOfferCreateDTO, idempotencyKey: string) =>
+  request.post<CareerOfferVO, CareerOfferVO>(`/applications/${applicationId}/offers`, data, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  }).then(normalizeOffer)
+
+export const createOfferVersionV7Api = (offerId: number, data: CareerOfferVersionCreateDTO, idempotencyKey: string) =>
+  request.post<CareerOfferVO, CareerOfferVO>(`/offers/${offerId}/versions`, data, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  }).then(normalizeOffer)
+
+export const transitionOfferV7Api = (offerId: number, data: CareerOfferTransitionDTO, idempotencyKey: string) =>
+  request.post<CareerOfferVO, CareerOfferVO>(`/offers/${offerId}/transitions`, data, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  }).then(normalizeOffer)
+
+export const previewOfferDecisionV7Api = (
+  campaignId: number,
+  data: CareerOfferDecisionPreviewDTO | undefined,
+  idempotencyKey: string
+) =>
+  request.post<CareerOfferDecisionVO, CareerOfferDecisionVO>(
+    `/career-campaigns/${campaignId}/offer-decisions/preview`,
+    data ?? {},
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+
+export const confirmOfferDecisionV7Api = (
+  campaignId: number,
+  decisionId: number,
+  data: CareerOfferDecisionConfirmDTO,
+  idempotencyKey: string
+) =>
+  request.post<CareerOfferDecisionVO, CareerOfferDecisionVO>(
+    `/career-campaigns/${campaignId}/offer-decisions/${decisionId}/confirm`,
+    data,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
   )
 
 export const getContactsV7Api = (applicationId: number) =>
@@ -131,6 +218,48 @@ export const getActivitiesV7Api = (applicationId: number) =>
       happenedAt: item.happenedAt || item.occurredAt
     }))
   )
+
+// Contact writes — create/update/delete and round-contact carry NO idempotency key (backend has none).
+export const createContactV7Api = (applicationId: number, data: CareerContactSaveDTO) =>
+  request.post<CareerContactVO, CareerContactVO>(`/applications/${applicationId}/contacts`, data).then((item) => ({
+    ...item,
+    role: item.role || item.roleType
+  }))
+
+export const updateContactV7Api = (contactId: number, data: CareerContactSaveDTO) =>
+  request.put<CareerContactVO, CareerContactVO>(`/career-contacts/${contactId}`, data).then((item) => ({
+    ...item,
+    role: item.role || item.roleType
+  }))
+
+export const deleteContactV7Api = (contactId: number) =>
+  request.delete<void, void>(`/career-contacts/${contactId}`)
+
+// Activity writes — Idempotency-Key travels in the request BODY (DTO field).
+export const createActivityV7Api = (applicationId: number, data: CareerActivitySaveDTO) =>
+  request.post<CareerActivityVO, CareerActivityVO>(`/applications/${applicationId}/activities`, data).then((item) => ({
+    ...item,
+    type: item.type || item.activityType,
+    happenedAt: item.happenedAt || item.occurredAt
+  }))
+
+export const recordActivityV7Api = (activityId: number, data: CareerActivityRecordDTO) =>
+  request.post<CareerActivityVO, CareerActivityVO>(`/career-activities/${activityId}/record`, data).then((item) => ({
+    ...item,
+    type: item.type || item.activityType,
+    happenedAt: item.happenedAt || item.occurredAt
+  }))
+
+export const listRoundContactsV7Api = (roundId: number) =>
+  request
+    .get<CareerInterviewRoundContactVO[], CareerInterviewRoundContactVO[]>(`/interview-rounds/${roundId}/contacts`)
+    .then((items) => items || [])
+
+export const addRoundContactV7Api = (roundId: number, data: CareerInterviewRoundContactSaveDTO) =>
+  request.post<CareerInterviewRoundContactVO, CareerInterviewRoundContactVO>(`/interview-rounds/${roundId}/contacts`, data)
+
+export const removeRoundContactV7Api = (roundContactId: number) =>
+  request.delete<void, void>(`/interview-round-contacts/${roundContactId}`)
 
 export const createCommunicationDraftV7Api = (applicationId: number, data: { purpose: string; facts?: string[] }) =>
   request.post<CareerCommunicationDraftVO, CareerCommunicationDraftVO>(`/applications/${applicationId}/communication-drafts`, {
@@ -174,6 +303,23 @@ export const getLatestResearchSnapshotV7Api = (applicationId: number) =>
         }
       : null
   })
+
+// Research writes — source create/version carry no idempotency key; snapshot generate takes an
+// optional body idempotencyKey (backend defaults to a random UUID when omitted).
+export const createResearchSourceV7Api = (applicationId: number, data: CareerResearchSourceCreateDTO) =>
+  request.post<CareerResearchSourceVO, CareerResearchSourceVO>(`/applications/${applicationId}/research-sources`, data)
+
+export const addResearchSourceVersionV7Api = (sourceId: number, data: CareerResearchSourceVersionCreateDTO) =>
+  request.post<CareerResearchSourceVersionVO, CareerResearchSourceVersionVO>(`/research-sources/${sourceId}/versions`, data)
+
+export const deactivateResearchSourceV7Api = (sourceId: number) =>
+  request.post<void, void>(`/research-sources/${sourceId}/deactivate`)
+
+export const generateResearchSnapshotV7Api = (applicationId: number, data?: CareerResearchSnapshotGenerateDTO) =>
+  request.post<CareerResearchSnapshotVO, CareerResearchSnapshotVO>(
+    `/applications/${applicationId}/research-snapshots`,
+    data ?? {}
+  )
 
 export const getCareerCampaignReviewV7Api = (campaignId: number) =>
   request.get<CareerCampaignReviewVO, CareerCampaignReviewVO>(`/agent/career-campaign-reviews/campaigns/${campaignId}`)

@@ -265,10 +265,14 @@ export interface WorkspaceNextStep {
 
 export interface InterviewRoundVO {
   id: number | string
+  processId?: number
+  roundNo?: number
   roundType?: string
+  title?: string
   status?: string
   scheduledAt?: string
   scheduledStartsAtUtc?: string
+  scheduledEndsAtUtc?: string
   timezone?: string
   location?: string
   calendarEventId?: number
@@ -278,13 +282,66 @@ export interface InterviewRoundVO {
   reviewSummary?: string
   nextStep?: string
   nextActions?: string[]
+  lockVersion?: number
+  allowedTransitions?: string[]
 }
 
 export interface InterviewProcessVO {
   id?: number
+  applicationId?: number
+  status?: string
+  currentRoundNo?: number
+  outcome?: string
+  lockVersion?: number
+  interviewIdentity?: string
   rounds?: InterviewRoundVO[]
   timezone?: string
   warnings?: string[]
+}
+
+// Request DTOs — fields mirror the backend careerinterview/dto classes exactly.
+// Idempotency-Key travels in the request BODY (DTO field idempotencyKey), never in the header.
+export interface CareerInterviewProcessCreateDTO {
+  idempotencyKey: string
+}
+
+export interface CareerInterviewRoundCreateDTO {
+  roundType: string
+  title: string
+  timezone?: string
+  scheduledStartsAt?: string
+  scheduledEndsAt?: string
+  idempotencyKey: string
+}
+
+export interface CareerInterviewRoundUpdateDTO {
+  title: string
+  resultSummary?: string
+  nextStep?: string
+  expectedLockVersion: number
+  idempotencyKey: string
+}
+
+export interface CareerInterviewTransitionDTO {
+  targetStatus: string
+  expectedLockVersion: number
+  idempotencyKey: string
+}
+
+export interface CareerInterviewRescheduleDTO {
+  scheduledStartsAt: string
+  scheduledEndsAt: string
+  timezone: string
+  calendarEventId?: number
+  expectedLockVersion: number
+  idempotencyKey: string
+  reason?: string
+}
+
+export interface CareerInterviewCalendarLinkDTO {
+  calendarEventId: number
+  expectedLockVersion: number
+  idempotencyKey: string
 }
 
 export type CareerOfferStatus =
@@ -336,6 +393,85 @@ export interface CareerOfferComparison {
   missingValueOfferIds: Array<number | string>
 }
 
+// Request DTOs — fields mirror the backend careeroffer/dto classes exactly (no invented fields).
+// Idempotency-Key travels in the HTTP header for every Offer write, never in the body.
+export interface CareerOfferCreateDTO {
+  applicationId: number
+  status?: string
+  versionId?: number
+}
+
+export interface CareerOfferVersionCreateDTO {
+  currency?: string
+  annualBaseSalary?: number
+  annualBonus?: number
+  signOnBonus?: number
+  annualEquityValue?: number
+  otherAnnualCompensation?: number
+  paidLeaveDays?: number
+  location?: string
+  workMode?: string
+  startDate?: string
+  decisionDeadline?: string
+  termsJson?: string
+  note?: string
+}
+
+export interface CareerOfferTransitionDTO {
+  targetStatus: string
+  expectedLockVersion?: number
+  applicationLockVersion?: number
+  userConfirmed: boolean
+}
+
+export interface CareerOfferDecisionPreviewDTO {
+  comparisonCurrency?: string
+  exchangeRates?: Record<string, number>
+  exchangeRateSource?: string
+  exchangeRateDate?: string
+  weights?: Record<string, number>
+}
+
+export interface CareerOfferDecisionConfirmDTO {
+  selectedOfferId: number
+  userConfirmed: boolean
+  closeCampaign?: boolean
+  retainOpenApplications?: boolean
+  expectedLockVersion?: number
+  applicationLockVersion?: number
+}
+
+export interface CareerOfferDecisionVO {
+  id?: number | string
+  campaignId?: number
+  status?: string
+  selectedOfferId?: number
+  outcome?: string
+  lockVersion?: number
+  snapshot?: CareerOfferDecisionSnapshotVO | null
+  items?: CareerOfferDecisionItemVO[]
+}
+
+export interface CareerOfferDecisionSnapshotVO {
+  id?: number | string
+  snapshotNo?: number
+  comparisonCurrency?: string
+  comparable?: number
+  fallback?: number
+  fallbackReason?: string
+  [key: string]: unknown
+}
+
+export interface CareerOfferDecisionItemVO {
+  id?: number | string
+  offerId?: number
+  offerVersionId?: number
+  comparableAnnualValue?: number | string | null
+  weightedScore?: number | string | null
+  rankNo?: number | null
+  [key: string]: unknown
+}
+
 export interface CareerContactVO {
   id: number | string
   displayName?: string
@@ -368,6 +504,49 @@ export interface CareerCommunicationDraftVO {
   confidence?: string
 }
 
+// Contact/activity request DTOs — mirror careercontact/dto exactly.
+// Contact create/update/delete and round-contact carry NO idempotency key (backend has none);
+// only activity save/record carry a body idempotencyKey (@NotBlank).
+export interface CareerContactSaveDTO {
+  applicationId?: number
+  displayName: string
+  roleType?: string
+  channelType?: string
+  maskedContactHint?: string
+  relationshipSummary?: string
+  relationshipType?: string
+}
+
+export interface CareerActivitySaveDTO {
+  contactId?: number
+  activityType: string
+  channelType?: string
+  subject: string
+  summary: string
+  occurredAt?: string
+  nextFollowUpAt?: string
+  idempotencyKey: string
+}
+
+export interface CareerActivityRecordDTO {
+  idempotencyKey: string
+}
+
+export interface CareerInterviewRoundContactSaveDTO {
+  contactId: number
+  relationshipType?: string
+}
+
+export interface CareerInterviewRoundContactVO {
+  id?: number | string
+  interviewRoundId?: number
+  contactId?: number
+  displayName?: string
+  roleType?: string
+  relationshipType?: string
+  createdAt?: string
+}
+
 export interface CareerResearchSourceVO {
   id: number | string
   sourceType?: string
@@ -389,6 +568,28 @@ export interface CareerResearchSourceVersionVO {
   contentSummary?: string
   capturedAt?: string
   createdAt?: string
+}
+
+// Research request DTOs — mirror careerresearch/dto exactly. Snapshot idempotencyKey is optional
+// (backend defaults to a random UUID); source create/version carry no idempotency key.
+export interface CareerResearchSourceCreateDTO {
+  sourceType: string
+  title: string
+  officialUrl?: string
+  externalRef?: string
+  content: string
+  contentSummary?: string
+  capturedAt?: string
+}
+
+export interface CareerResearchSourceVersionCreateDTO {
+  content: string
+  contentSummary?: string
+  capturedAt?: string
+}
+
+export interface CareerResearchSnapshotGenerateDTO {
+  idempotencyKey?: string
 }
 
 export interface CareerResearchSnapshotVO {

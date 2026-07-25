@@ -242,6 +242,10 @@ const loadCockpit = async () => {
     pageError.value = '周期编号无效。'
     return
   }
+  // Guard against a slow in-flight load for a previous campaign overwriting the current one after
+  // watch(campaignId) switches周期. The captured id is the request's identity; if campaignId has
+  // moved on by the time the response lands, we discard the stale result.
+  const requestId = campaignId.value
   loading.value = true
   pageError.value = ''
   try {
@@ -249,6 +253,7 @@ const loadCockpit = async () => {
       getCampaignCockpitV8Api(campaignId.value),
       getCampaignOperatingProfileV8Api(campaignId.value)
     ])
+    if (requestId !== campaignId.value) return
     if (cockpitResult.status === 'rejected') {
       throw cockpitResult.reason
     }
@@ -264,15 +269,17 @@ const loadCockpit = async () => {
     )
     actionError.value = ''
   } catch (error) {
+    if (requestId !== campaignId.value) return
     cockpit.value = null
     pageError.value = getErrorMessage(error, '周期驾驶舱暂时不可用，请稍后重试。')
   } finally {
-    loading.value = false
+    if (requestId === campaignId.value) loading.value = false
   }
 }
 
 const loadPulse = async () => {
   if (!appConfig.enableV8CampaignPulse) return
+  const requestId = campaignId.value
   pulseLoading.value = true
   pulseError.value = ''
   try {
@@ -280,6 +287,7 @@ const loadPulse = async () => {
       getCampaignPulseV8Api(campaignId.value),
       getCampaignPulseHistoryV8Api(campaignId.value)
     ])
+    if (requestId !== campaignId.value) return
     if (latest.status === 'rejected' && history.status === 'rejected') {
       throw latest.reason
     }
@@ -289,22 +297,27 @@ const loadPulse = async () => {
       pulseError.value = '部分脉搏来源不可用，已保留可读取的快照。'
     }
   } catch (error) {
+    if (requestId !== campaignId.value) return
     pulseError.value = getErrorMessage(error, '周期脉搏暂时不可用，请稍后重试。')
   } finally {
-    pulseLoading.value = false
+    if (requestId === campaignId.value) pulseLoading.value = false
   }
 }
 
 const loadExports = async () => {
   if (!appConfig.enableV8CampaignExport) return
+  const requestId = campaignId.value
   archiveLoading.value = true
   archiveError.value = ''
   try {
-    archiveExports.value = await getCampaignArchiveExportsV8Api(campaignId.value)
+    const value = await getCampaignArchiveExportsV8Api(campaignId.value)
+    if (requestId !== campaignId.value) return
+    archiveExports.value = value
   } catch (error) {
+    if (requestId !== campaignId.value) return
     archiveError.value = getErrorMessage(error, '档案导出记录暂时不可用，请稍后重试。')
   } finally {
-    archiveLoading.value = false
+    if (requestId === campaignId.value) archiveLoading.value = false
   }
 }
 

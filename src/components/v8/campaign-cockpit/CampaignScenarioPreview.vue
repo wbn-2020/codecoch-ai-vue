@@ -67,7 +67,7 @@
         </div>
       </div>
       <div v-if="preview.tradeoffs?.length || preview.limits?.length" class="scenario-notes">
-        <p v-for="item in [...(preview.tradeoffs || []), ...(preview.limits || [])]" :key="item">{{ item }}</p>
+        <p v-for="(item, index) in [...(preview.tradeoffs || []), ...(preview.limits || [])]" :key="`tradeoff-${index}-${item}`">{{ item }}</p>
       </div>
     </template>
   </section>

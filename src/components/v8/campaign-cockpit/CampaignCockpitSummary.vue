@@ -3,7 +3,7 @@
     <div class="cockpit-summary__intro">
       <div>
         <span class="summary-kicker">周期驾驶舱</span>
-        <h1 id="cockpit-summary-title">{{ campaign?.name || `求职周期 #${campaign?.id || '--'}` }}</h1>
+        <h2 id="cockpit-summary-title">{{ campaign?.name || `求职周期 #${campaign?.id || '--'}` }}</h2>
         <p>{{ campaign?.goal || '还没有填写周期目标。驾驶舱会先按已记录事实汇总。' }}</p>
       </div>
       <el-tag effect="plain" :type="status.type">{{ status.label }}</el-tag>
@@ -51,22 +51,16 @@
 import { computed } from 'vue'
 
 import type { CampaignCockpitCampaign, CampaignCockpitVO } from '@/types/v8/campaign'
+import { getCampaignStatusPresentation } from '@/features/campaign-cockpit'
 
 const props = defineProps<{
   campaign?: CampaignCockpitCampaign | null
   cockpit?: CampaignCockpitVO | null
 }>()
 
-const status = computed(() => {
-  const values: Record<string, { label: string; type: 'success' | 'info' | 'warning' | 'danger' }> = {
-    DRAFT: { label: '草稿', type: 'info' },
-    ACTIVE: { label: '进行中', type: 'success' },
-    PAUSED: { label: '已暂停', type: 'warning' },
-    COMPLETED: { label: '已完成', type: 'info' },
-    ARCHIVED: { label: '已归档', type: 'info' }
-  }
-  return values[String(props.campaign?.status || '').toUpperCase()] || values.DRAFT
-})
+// Reuse the shared status presentation so the page header and this summary never disagree
+// on an unknown/empty status (helper falls back to 状态待确认, not a hardcoded 草稿).
+const status = computed(() => getCampaignStatusPresentation(props.campaign?.status))
 
 const capacity = computed(() => ({
   active: props.cockpit?.capacitySummary?.activeOpportunityCount ?? props.campaign?.activeApplicationCount ?? '--',
@@ -110,7 +104,7 @@ const deadlines = computed(() => ({
   font-weight: 700;
 }
 
-.cockpit-summary h1 {
+.cockpit-summary h2 {
   margin: 5px 0 0;
   color: var(--app-text);
   font-size: 26px;
@@ -152,7 +146,7 @@ const deadlines = computed(() => ({
     flex-direction: column;
   }
 
-  .cockpit-summary h1 {
+  .cockpit-summary h2 {
     font-size: 22px;
   }
 }
