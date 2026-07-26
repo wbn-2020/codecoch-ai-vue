@@ -93,13 +93,7 @@ export const isSupportedJobExperimentRelationType = (type?: string): type is Job
 
 export const jobExperimentRelationLabel = (type?: string) => relationLabelMap[type || ''] || '未支持证据'
 
-export const confidenceLabel = (confidence?: string) => {
-  const normalized = String(confidence || '').trim().toUpperCase()
-  if (normalized === 'HIGH') return '高置信度'
-  if (normalized === 'MEDIUM') return '中置信度'
-  if (normalized === 'LOW') return '低置信度'
-  return '置信度待确认'
-}
+export { confidenceLabel } from '@/features/confidence'
 
 export const statusLabel = (status?: string) => {
   if (status === 'RUNNING') return '进行中'

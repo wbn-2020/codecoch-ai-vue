@@ -43,12 +43,24 @@ describe('job experiment presentation helpers', () => {
   })
 
   it('does not downgrade high confidence experiments just because they include a cautionary sample warning', () => {
+    // Sample thresholds must be satisfied first (>=15 applications, >=3 completed interviews);
+    // once they are, a HIGH-confidence experiment stays strong even with a cautionary warning.
     expect(shouldKeepConclusionWeak({
-      applicationCount: 12,
-      interviewCompletedCount: 3,
+      applicationCount: 18,
+      interviewCompletedCount: 4,
       confidenceLevel: 'HIGH',
       sampleInsufficient: false,
       sampleWarning: '样本可用于高置信复盘，但仍需说明岗位、渠道、时间窗口等影响因素。'
     })).toBe(false)
+  })
+
+  it('keeps the conclusion weak when the application sample is below the strong-conclusion threshold', () => {
+    // Guards the V9 low-sample red line: <15 applications must stay weak even at HIGH confidence.
+    expect(shouldKeepConclusionWeak({
+      applicationCount: 12,
+      interviewCompletedCount: 3,
+      confidenceLevel: 'HIGH',
+      sampleInsufficient: false
+    })).toBe(true)
   })
 })

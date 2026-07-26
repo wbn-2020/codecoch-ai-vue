@@ -23,10 +23,28 @@
           title="本次会从简历项目生成一份独立证据"
           description="生成后仅记录来源 resume_project，不会建立自动双向同步。"
         />
-        <ProjectEvidenceForm ref="formRef" :model-value="formModel" />
+        <div v-if="sourceMode && !isEdit" class="source-import-actions">
+          <el-button
+            type="primary"
+            :loading="importing"
+            :disabled="saving"
+            @click="handleImportFromSource"
+          >
+            确认从简历项目生成
+          </el-button>
+          <span>确认后才会创建独立项目证据。</span>
+        </div>
+        <ProjectEvidenceForm :key="formKey" ref="formRef" :model-value="formModel" />
         <div class="form-actions">
           <el-button @click="goBack">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="handleSave">保存证据</el-button>
+          <el-button
+            type="primary"
+            :loading="saving"
+            :disabled="importing"
+            @click="handleSave"
+          >
+            保存证据
+          </el-button>
         </div>
       </main>
 
@@ -47,10 +65,15 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  onBeforeRouteLeave,
+  onBeforeRouteUpdate,
+  useRoute,
+  useRouter
+} from 'vue-router'
 
 import {
   createProjectEvidenceApi,
@@ -71,41 +94,47 @@ const isEdit = computed(() => Boolean(projectId.value))
 const sourceResumeId = computed(() => Number(route.query.sourceResumeId || 0) || undefined)
 const sourceResumeProjectId = computed(() => Number(route.query.sourceResumeProjectId || 0) || undefined)
 const sourceMode = computed(() => Boolean(sourceResumeId.value && sourceResumeProjectId.value))
+const routeContext = computed(() => ({
+  projectId: projectId.value,
+  sourceResumeId: sourceResumeId.value,
+  sourceResumeProjectId: sourceResumeProjectId.value
+}))
+const formKey = computed(() => [
+  projectId.value || 'create',
+  sourceResumeId.value || 'manual',
+  sourceResumeProjectId.value || 'manual'
+].join(':'))
 
 const formRef = ref<InstanceType<typeof ProjectEvidenceForm>>()
 const loading = ref(false)
 const saving = ref(false)
+const importing = ref(false)
+const importSubmitting = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
+let routeLoadGeneration = 0
+let saveOperationGeneration = 0
+let sourceImportOperationGeneration = 0
 
 const formModel = computed<Partial<ProjectEvidenceDTO>>(() => detail.value || {
   sourceResumeId: sourceResumeId.value,
   sourceResumeProjectId: sourceResumeProjectId.value
 })
 
-const fetchDetail = async () => {
-  if (!projectId.value) return
+const fetchDetail = async (id: number, requestGeneration: number) => {
   loading.value = true
   try {
-    detail.value = await getProjectEvidenceDetailApi(projectId.value)
+    const nextDetail = await getProjectEvidenceDetailApi(id)
+    if (requestGeneration === routeLoadGeneration) {
+      detail.value = nextDetail
+    }
+  } catch {
+    if (requestGeneration === routeLoadGeneration) {
+      detail.value = null
+    }
   } finally {
-    loading.value = false
-  }
-}
-
-const importFromSource = async () => {
-  if (!sourceMode.value || isEdit.value || loading.value) return
-  loading.value = true
-  try {
-    const saved = await importProjectEvidenceFromResumeProjectApi({
-      sourceResumeId: sourceResumeId.value!,
-      sourceResumeProjectId: sourceResumeProjectId.value!
-    })
-    ElMessage.success('已从简历项目生成项目证据。')
-    await router.replace(`/project-evidence/${saved.id}/edit`)
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '从简历项目生成项目证据失败，请稍后重试。'))
-  } finally {
-    loading.value = false
+    if (requestGeneration === routeLoadGeneration) {
+      loading.value = false
+    }
   }
 }
 
@@ -118,31 +147,148 @@ const goBack = () => {
 }
 
 const handleSave = async () => {
-  const payload = (await formRef.value?.validate()) as ProjectEvidenceDTO | false
-  if (!payload) return
+  if (saving.value || importing.value || !formRef.value) return
+  const operationGeneration = ++saveOperationGeneration
+  const requestGeneration = routeLoadGeneration
+  const targetProjectId = projectId.value
+  const isCurrentOperation = () => (
+    operationGeneration === saveOperationGeneration
+    && requestGeneration === routeLoadGeneration
+    && targetProjectId === projectId.value
+  )
+
   saving.value = true
   try {
+    const payload = (await formRef.value.validate()) as ProjectEvidenceDTO | false
+    if (!payload || !isCurrentOperation()) return
+    const payloadSnapshot: ProjectEvidenceDTO = { ...payload }
     let saved: ProjectEvidenceDetailVO
-    if (projectId.value) {
-      saved = await updateProjectEvidenceApi(projectId.value, payload)
+    if (targetProjectId) {
+      saved = await updateProjectEvidenceApi(targetProjectId, payloadSnapshot)
     } else {
-      saved = await createProjectEvidenceApi(payload)
+      saved = await createProjectEvidenceApi(payloadSnapshot)
     }
+    if (!isCurrentOperation()) return
     ElMessage.success('项目证据已保存。')
     await router.replace(`/project-evidence/${saved.id}`)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '项目证据保存失败，请稍后重试'))
+    if (isCurrentOperation()) {
+      ElMessage.error(getErrorMessage(error, '项目证据保存失败，请稍后重试'))
+    }
   } finally {
-    saving.value = false
+    if (operationGeneration === saveOperationGeneration) {
+      saving.value = false
+    }
   }
 }
 
-onMounted(() => {
-  if (sourceMode.value && !isEdit.value) {
-    importFromSource()
-    return
+const isCurrentSourceImport = (
+  operationGeneration: number,
+  requestGeneration: number,
+  resumeId: number,
+  resumeProjectId: number
+) => (
+  operationGeneration === sourceImportOperationGeneration
+  && requestGeneration === routeLoadGeneration
+  && !projectId.value
+  && resumeId === sourceResumeId.value
+  && resumeProjectId === sourceResumeProjectId.value
+)
+
+const handleImportFromSource = async () => {
+  if (importing.value || saving.value) return
+  const resumeId = sourceResumeId.value
+  const resumeProjectId = sourceResumeProjectId.value
+  if (!resumeId || !resumeProjectId || projectId.value) return
+
+  const operationGeneration = ++sourceImportOperationGeneration
+  const requestGeneration = routeLoadGeneration
+  importing.value = true
+  try {
+    try {
+      await ElMessageBox.confirm(
+        '将从当前简历项目创建一份独立项目证据。创建完成后，后续编辑不会同步回原简历。',
+        '确认生成项目证据',
+        {
+          type: 'warning',
+          confirmButtonText: '确认生成',
+          cancelButtonText: '取消'
+        }
+      )
+    } catch {
+      return
+    }
+
+    if (!isCurrentSourceImport(
+      operationGeneration,
+      requestGeneration,
+      resumeId,
+      resumeProjectId
+    )) return
+
+    importSubmitting.value = true
+    const saved = await importProjectEvidenceFromResumeProjectApi({
+      sourceResumeId: resumeId,
+      sourceResumeProjectId: resumeProjectId
+    })
+    if (!isCurrentSourceImport(
+      operationGeneration,
+      requestGeneration,
+      resumeId,
+      resumeProjectId
+    )) return
+
+    importSubmitting.value = false
+    importing.value = false
+    ElMessage.success('已从简历项目生成项目证据。')
+    await router.replace(`/project-evidence/${saved.id}/edit`)
+  } catch (error) {
+    if (isCurrentSourceImport(
+      operationGeneration,
+      requestGeneration,
+      resumeId,
+      resumeProjectId
+    )) {
+      ElMessage.error(getErrorMessage(error, '从简历项目生成项目证据失败，请稍后重试。'))
+    }
+  } finally {
+    if (operationGeneration === sourceImportOperationGeneration) {
+      importSubmitting.value = false
+      importing.value = false
+    }
   }
-  fetchDetail()
+}
+
+const guardSourceImportNavigation = () => {
+  if (!importSubmitting.value) return true
+  ElMessage.warning('项目证据正在创建，请等待当前操作完成后再离开。')
+  return false
+}
+
+onBeforeRouteLeave(guardSourceImportNavigation)
+onBeforeRouteUpdate(guardSourceImportNavigation)
+
+watch(
+  routeContext,
+  ({ projectId: nextProjectId }) => {
+    const requestGeneration = ++routeLoadGeneration
+    sourceImportOperationGeneration += 1
+    importing.value = false
+    importSubmitting.value = false
+    detail.value = null
+    loading.value = false
+
+    if (nextProjectId) {
+      void fetchDetail(nextProjectId, requestGeneration)
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  routeLoadGeneration += 1
+  saveOperationGeneration += 1
+  sourceImportOperationGeneration += 1
 })
 </script>
 
@@ -154,10 +300,16 @@ onMounted(() => {
 }
 
 .edit-hero,
-.form-actions {
+.form-actions,
+.source-import-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.source-import-actions {
+  color: var(--user-text-muted);
+  font-size: 13px;
 }
 
 .edit-hero {

@@ -223,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -258,22 +258,29 @@ interface EditableVariant {
   allocationWeight: number
 }
 
-const route = useRoute()
-const router = useRouter()
-const saving = ref(false)
-const loadingOptions = ref(false)
-const experimentId = computed(() => Number(route.params.id || 0))
-const isEdit = computed(() => experimentId.value > 0)
-const linkedHypothesis = ref<CareerExperimentHypothesisVO>()
-const controlVariablesText = ref('岗位族一致\n渠道一致\n投递时间窗口相近')
-const selectedTargetJobIds = ref<number[]>([])
-const selectedResumeIds = ref<number[]>([])
-const selectedApplicationIds = ref<number[]>([])
-const targetJobs = ref<TargetJobVO[]>([])
-const resumes = ref<ResumeVO[]>([])
-const applications = ref<JobApplicationVO[]>([])
-const controlVariantIndex = ref(0)
-const variants = ref<EditableVariant[]>([
+interface JobExperimentSaveSnapshot {
+  routeGeneration: number
+  experimentId: number | null
+  form: JobSearchExperimentSaveDTO
+  linkedHypothesisId?: number
+  hypothesis: {
+    statement: string
+    primaryMetric: ExperimentPrimaryMetric
+    attributionWindowDays: number
+    minSamplePerVariant: number
+  }
+  controlVariables: string[]
+  variants: EditableVariant[]
+  controlVariantIndex: number
+  selectedTargetJobIds: number[]
+  selectedResumeIds: number[]
+  selectedApplicationIds: number[]
+  applications: Array<Pick<JobApplicationVO, 'id' | 'jobTitle' | 'source'>>
+}
+
+const defaultControlVariables = '岗位族一致\n渠道一致\n投递时间窗口相近'
+
+const createDefaultVariants = (): EditableVariant[] => [
   {
     localKey: 'control',
     variantCode: 'CONTROL',
@@ -288,26 +295,60 @@ const variants = ref<EditableVariant[]>([
     description: '只改变目标证据的表达方式，其他控制变量保持一致。',
     allocationWeight: 1
   }
-])
+]
 
-const form = reactive<JobSearchExperimentSaveDTO>({
+const createDefaultExperimentForm = (): JobSearchExperimentSaveDTO => ({
   title: '',
   goal: '',
   targetDirection: '',
-  status: 'RUNNING'
+  startDate: undefined,
+  endDate: undefined,
+  status: 'RUNNING',
+  demoFlag: undefined
 })
+
+const createDefaultHypothesisForm = () => ({
+  statement: '',
+  primaryMetric: 'INTERVIEW' as ExperimentPrimaryMetric,
+  attributionWindowDays: 14,
+  minSamplePerVariant: 10
+})
+
+const route = useRoute()
+const router = useRouter()
+const saving = ref(false)
+const loadingOptions = ref(false)
+const experimentId = computed(() => {
+  const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+})
+const routeHypothesisId = computed(() => resolveRouteHypothesisId(route.query.hypothesisId))
+const routeContext = computed(() => ({
+  experimentId: experimentId.value,
+  hypothesisId: routeHypothesisId.value
+}))
+const isEdit = computed(() => Boolean(experimentId.value))
+const linkedHypothesis = ref<CareerExperimentHypothesisVO>()
+const controlVariablesText = ref(defaultControlVariables)
+const selectedTargetJobIds = ref<number[]>([])
+const selectedResumeIds = ref<number[]>([])
+const selectedApplicationIds = ref<number[]>([])
+const targetJobs = ref<TargetJobVO[]>([])
+const resumes = ref<ResumeVO[]>([])
+const applications = ref<JobApplicationVO[]>([])
+const controlVariantIndex = ref(0)
+const variants = ref<EditableVariant[]>(createDefaultVariants())
+let routeLoadGeneration = 0
+let saveOperationGeneration = 0
+
+const form = reactive<JobSearchExperimentSaveDTO>(createDefaultExperimentForm())
 
 const hypothesisForm = reactive<{
   statement: string
   primaryMetric: ExperimentPrimaryMetric
   attributionWindowDays: number
   minSamplePerVariant: number
-}>({
-  statement: '',
-  primaryMetric: 'INTERVIEW',
-  attributionWindowDays: 14,
-  minSamplePerVariant: 10
-})
+}>(createDefaultHypothesisForm())
 
 const applicationLabel = (item: JobApplicationVO) =>
   `${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'} · ${item.source || '未知渠道'}`
@@ -329,24 +370,49 @@ const removeVariant = (index: number) => {
   if (controlVariantIndex.value > index) controlVariantIndex.value -= 1
 }
 
-const loadOptions = async () => {
-  loadingOptions.value = true
-  const [targetsResult, resumesResult, applicationsResult] = await Promise.allSettled([
-    getJobTargetsApi({ pageSize: 200 }),
-    getResumesApi({ pageSize: 200 }),
-    getApplicationsApi()
-  ])
-  targetJobs.value = targetsResult.status === 'fulfilled' ? targetsResult.value : []
-  resumes.value = resumesResult.status === 'fulfilled' ? resumesResult.value.records : []
-  applications.value = applicationsResult.status === 'fulfilled' ? applicationsResult.value : []
+const resetRouteState = () => {
+  linkedHypothesis.value = undefined
+  controlVariablesText.value = defaultControlVariables
+  selectedTargetJobIds.value = []
+  selectedResumeIds.value = []
+  selectedApplicationIds.value = []
+  targetJobs.value = []
+  resumes.value = []
+  applications.value = []
+  controlVariantIndex.value = 0
+  variants.value = createDefaultVariants()
+  Object.assign(form, createDefaultExperimentForm())
+  Object.assign(hypothesisForm, createDefaultHypothesisForm())
   loadingOptions.value = false
 }
 
-const load = async () => {
-  await loadOptions()
-  if (!isEdit.value) return
+const loadOptions = async (requestGeneration: number) => {
+  loadingOptions.value = true
   try {
-    const detail = await getJobExperimentDetailApi(experimentId.value)
+    const [targetsResult, resumesResult, applicationsResult] = await Promise.allSettled([
+      getJobTargetsApi({ pageSize: 200 }),
+      getResumesApi({ pageSize: 200 }),
+      getApplicationsApi()
+    ])
+    if (requestGeneration !== routeLoadGeneration) return
+    targetJobs.value = targetsResult.status === 'fulfilled' ? targetsResult.value : []
+    resumes.value = resumesResult.status === 'fulfilled' ? resumesResult.value.records : []
+    applications.value = applicationsResult.status === 'fulfilled' ? applicationsResult.value : []
+  } finally {
+    if (requestGeneration === routeLoadGeneration) {
+      loadingOptions.value = false
+    }
+  }
+}
+
+const loadExperiment = async (
+  id: number,
+  hypothesisId: number | undefined,
+  requestGeneration: number
+) => {
+  try {
+    const detail = await getJobExperimentDetailApi(id)
+    if (requestGeneration !== routeLoadGeneration) return
     Object.assign(form, {
       title: detail.title,
       goal: detail.goal,
@@ -355,63 +421,96 @@ const load = async () => {
       endDate: detail.endDate,
       status: detail.status
     })
-    const routeHypothesisId = resolveRouteHypothesisId(route.query.hypothesisId)
-    const storedHypothesisId = resolveStoredExperimentHypothesisId(experimentId.value)
-    const loadedHypothesis = routeHypothesisId
-      ? await getCareerHypothesisApi(routeHypothesisId)
-      : await getCareerHypothesisByLegacyExperimentApi(experimentId.value)
+    const storedHypothesisId = resolveStoredExperimentHypothesisId(id)
+    const loadedHypothesis = hypothesisId
+      ? await getCareerHypothesisApi(hypothesisId)
+      : await getCareerHypothesisByLegacyExperimentApi(id)
         .catch(async (error) => {
           if (storedHypothesisId) return getCareerHypothesisApi(storedHypothesisId)
           throw error
         })
+    if (requestGeneration !== routeLoadGeneration) return
     if (loadedHypothesis) {
       linkedHypothesis.value = loadedHypothesis
       Object.assign(hypothesisForm, {
-        statement: linkedHypothesis.value.statement,
-        primaryMetric: linkedHypothesis.value.primaryMetric,
-        attributionWindowDays: linkedHypothesis.value.attributionWindowDays,
-        minSamplePerVariant: linkedHypothesis.value.minSamplePerVariant
+        statement: loadedHypothesis.statement,
+        primaryMetric: loadedHypothesis.primaryMetric,
+        attributionWindowDays: loadedHypothesis.attributionWindowDays,
+        minSamplePerVariant: loadedHypothesis.minSamplePerVariant
       })
-      variants.value = linkedHypothesis.value.variants.map((variant) => ({
+      variants.value = loadedHypothesis.variants.map((variant) => ({
         localKey: `persisted-${variant.id}`,
         variantCode: variant.variantCode,
         name: variant.name,
         description: variant.description || '',
         allocationWeight: variant.allocationWeight
       }))
-      controlVariantIndex.value = Math.max(0, linkedHypothesis.value.variants.findIndex((item) => item.control))
+      controlVariantIndex.value = Math.max(0, loadedHypothesis.variants.findIndex((item) => item.control))
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '求职实验加载失败，请返回列表后重试。')
+    if (requestGeneration === routeLoadGeneration) {
+      ElMessage.error(error instanceof Error ? error.message : '求职实验加载失败，请返回列表后重试。')
+    }
   }
 }
 
-const validate = () => {
-  if (!form.title?.trim()) return '请填写实验名称。'
-  if (isEdit.value && linkedHypothesis.value) return ''
-  if (!hypothesisForm.statement.trim()) return '请填写可证伪的假设陈述。'
-  if (variants.value.length < 2) return '至少需要一个对照组和一个实验组。'
-  if (variants.value.some((item) => !item.name.trim() || !item.variantCode.trim())) {
+const createSaveSnapshot = (): JobExperimentSaveSnapshot => ({
+  routeGeneration: routeLoadGeneration,
+  experimentId: experimentId.value,
+  form: { ...form },
+  linkedHypothesisId: linkedHypothesis.value?.id,
+  hypothesis: { ...hypothesisForm },
+  controlVariables: controlVariablesText.value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean),
+  variants: variants.value.map((variant) => ({ ...variant })),
+  controlVariantIndex: controlVariantIndex.value,
+  selectedTargetJobIds: [...selectedTargetJobIds.value],
+  selectedResumeIds: [...selectedResumeIds.value],
+  selectedApplicationIds: [...selectedApplicationIds.value],
+  applications: applications.value.map(({ id, jobTitle, source }) => ({ id, jobTitle, source }))
+})
+
+const isCurrentSaveOperation = (
+  snapshot: JobExperimentSaveSnapshot,
+  operationGeneration: number
+) => (
+  operationGeneration === saveOperationGeneration
+  && snapshot.routeGeneration === routeLoadGeneration
+  && snapshot.experimentId === experimentId.value
+)
+
+const validate = (snapshot: JobExperimentSaveSnapshot) => {
+  if (!snapshot.form.title?.trim()) return '请填写实验名称。'
+  if (snapshot.experimentId && snapshot.linkedHypothesisId) return ''
+  if (!snapshot.hypothesis.statement.trim()) return '请填写可证伪的假设陈述。'
+  if (snapshot.variants.length < 2) return '至少需要一个对照组和一个实验组。'
+  if (snapshot.variants.some((item) => !item.name.trim() || !item.variantCode.trim())) {
     return '请补齐所有变体名称和代码。'
   }
-  const codes = variants.value.map((item) => item.variantCode.trim().toUpperCase())
+  const codes = snapshot.variants.map((item) => item.variantCode.trim().toUpperCase())
   if (new Set(codes).size !== codes.length) return '变体代码不能重复。'
   return ''
 }
 
 const save = async () => {
   if (saving.value) return
-  const validationMessage = validate()
+  const snapshot = createSaveSnapshot()
+  const validationMessage = validate(snapshot)
   if (validationMessage) {
     ElMessage.warning(validationMessage)
     return
   }
+  const operationGeneration = ++saveOperationGeneration
   saving.value = true
   try {
-    const detail = isEdit.value
-      ? await updateJobExperimentApi(experimentId.value, form)
-      : await createJobExperimentApi(form)
-    if (linkedHypothesis.value) {
+    const detail = snapshot.experimentId
+      ? await updateJobExperimentApi(snapshot.experimentId, snapshot.form)
+      : await createJobExperimentApi(snapshot.form)
+    if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
+
+    if (snapshot.linkedHypothesisId) {
       ElMessage.success('基础信息已更新；v2 hypothesis 保持不变。')
       await router.push(`/job-experiments/${detail.id}`)
       return
@@ -419,43 +518,42 @@ const save = async () => {
 
     let hypothesis: CareerExperimentHypothesisVO
     try {
-      const controlVariables = controlVariablesText.value
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .filter(Boolean)
       hypothesis = await createCareerHypothesisApi({
-        name: form.title.trim(),
-        statement: hypothesisForm.statement.trim(),
-        primaryMetric: hypothesisForm.primaryMetric,
+        name: snapshot.form.title.trim(),
+        statement: snapshot.hypothesis.statement.trim(),
+        primaryMetric: snapshot.hypothesis.primaryMetric,
         legacyExperimentId: detail.id,
-        attributionWindowDays: hypothesisForm.attributionWindowDays,
-        minSamplePerVariant: hypothesisForm.minSamplePerVariant,
-        variants: variants.value.map((variant, index) => ({
+        attributionWindowDays: snapshot.hypothesis.attributionWindowDays,
+        minSamplePerVariant: snapshot.hypothesis.minSamplePerVariant,
+        variants: snapshot.variants.map((variant, index) => ({
           variantCode: variant.variantCode.trim().toUpperCase(),
           name: variant.name.trim(),
           description: variant.description.trim() || undefined,
           allocationWeight: variant.allocationWeight,
-          control: index === controlVariantIndex.value,
+          control: index === snapshot.controlVariantIndex,
           treatment: {
-            controlVariables,
-            targetJobIds: selectedTargetJobIds.value,
-            resumeIds: selectedResumeIds.value
+            controlVariables: snapshot.controlVariables,
+            targetJobIds: snapshot.selectedTargetJobIds,
+            resumeIds: snapshot.selectedResumeIds
           }
         }))
       })
     } catch (error) {
+      if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
       ElMessage.warning(
-        `基础实验已${isEdit.value ? '更新' : '创建'}，但 v2 hypothesis 保存失败。`
+        `基础实验已${snapshot.experimentId ? '更新' : '创建'}，但 v2 hypothesis 保存失败。`
         + '请稍后从实验详情重试或联系后端补充关联能力。'
       )
       await router.push(`/job-experiments/${detail.id}`)
       return
     }
 
+    if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
     saveExperimentHypothesisLink(detail.id, hypothesis.id)
+    const applicationsById = new Map(snapshot.applications.map((application) => [application.id, application]))
     const assignmentResults = await Promise.allSettled(
-      selectedApplicationIds.value.map((applicationId) => {
-        const application = applications.value.find((item) => item.id === applicationId)
+      snapshot.selectedApplicationIds.map((applicationId) => {
+        const application = applicationsById.get(applicationId)
         return assignCareerApplicationApi(hypothesis.id, {
           applicationId,
           assignmentKey: `application:${applicationId}`,
@@ -464,6 +562,7 @@ const save = async () => {
         })
       })
     )
+    if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
     const failedAssignments = assignmentResults.filter((item) => item.status === 'rejected').length
     if (failedAssignments) {
       ElMessage.warning(`实验已创建，${failedAssignments} 条首批投递分组失败，可在详情页重试。`)
@@ -475,13 +574,35 @@ const save = async () => {
       query: { hypothesisId: String(hypothesis.id) }
     })
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '求职实验保存失败，请稍后重试。')
+    if (isCurrentSaveOperation(snapshot, operationGeneration)) {
+      ElMessage.error(error instanceof Error ? error.message : '求职实验保存失败，请稍后重试。')
+    }
   } finally {
-    saving.value = false
+    if (operationGeneration === saveOperationGeneration) {
+      saving.value = false
+    }
   }
 }
 
-onMounted(load)
+watch(
+  routeContext,
+  ({ experimentId: nextExperimentId, hypothesisId: nextHypothesisId }) => {
+    const requestGeneration = ++routeLoadGeneration
+    saveOperationGeneration += 1
+    saving.value = false
+    resetRouteState()
+    void loadOptions(requestGeneration)
+    if (nextExperimentId) {
+      void loadExperiment(nextExperimentId, nextHypothesisId, requestGeneration)
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  routeLoadGeneration += 1
+  saveOperationGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">

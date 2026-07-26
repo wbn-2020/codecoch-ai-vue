@@ -254,6 +254,7 @@ import {
   getCareerCampaignsV7Api
 } from '@/api/v7Career'
 import AppState from '@/components/common/AppState.vue'
+import { confidenceLabel } from '@/features/confidence'
 import {
   canArchiveCareerCampaign,
   canAttachApplicationsToCareerCampaign,
@@ -564,12 +565,6 @@ const campaignStatusType = (status?: string) => ({
   COMPLETED: 'info',
   ARCHIVED: 'info'
 }[String(status || '').toUpperCase()] || 'warning') as 'success' | 'info' | 'warning'
-
-const confidenceLabel = (value?: string) => ({
-  HIGH: '高置信度',
-  MEDIUM: '中置信度',
-  LOW: '低置信度'
-}[String(value || '').toUpperCase()] || '置信度待确认')
 
 const canConfirmCampaignCandidate = (status?: string) =>
   ['PENDING', 'PENDING_CONFIRMATION', 'CANDIDATE'].includes(

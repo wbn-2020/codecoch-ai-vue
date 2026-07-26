@@ -268,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Bot, ClipboardCheck, Edit3, Plus, Trash2 } from 'lucide-vue-next'
@@ -310,8 +310,11 @@ const relationForm = reactive<JobSearchExperimentRelationSaveDTO>({
   relationId: 1,
   relationSummary: ''
 })
-
-const id = () => Number(route.params.id)
+const experimentId = computed(() => {
+  const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+})
+let detailRequestGeneration = 0
 
 const latestReview = computed<JobSearchExperimentReviewVO | undefined>(() =>
   detail.value?.latestReview || detail.value?.reviews?.[0]
@@ -368,27 +371,49 @@ const formatDateRange = (start?: string, end?: string) => {
 
 const formatDateTime = (value?: string) => value || '-'
 
-const load = async () => {
+const loadExperiment = async (id: number, requestGeneration: number) => {
   loading.value = true
   errorMessage.value = ''
   try {
-    detail.value = await getJobExperimentDetailApi(id())
+    const nextDetail = await getJobExperimentDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
   } catch (error) {
-    detail.value = undefined
-    errorMessage.value = error instanceof Error ? error.message : '求职实验详情加载失败，请稍后重试。'
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = undefined
+      errorMessage.value = error instanceof Error ? error.message : '求职实验详情加载失败，请稍后重试。'
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
 }
 
+const load = async () => {
+  const id = experimentId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    errorMessage.value = '求职实验编号无效。'
+    return
+  }
+  await loadExperiment(id, requestGeneration)
+}
+
 const addRelation = async () => {
-  await addJobExperimentRelationApi(id(), relationForm)
+  const id = experimentId.value
+  if (!id) return
+  await addJobExperimentRelationApi(id, relationForm)
   relationDialog.value = false
   await load()
 }
 
 const removeRelation = async (relationId: number) => {
-  await deleteJobExperimentRelationApi(id(), relationId)
+  const id = experimentId.value
+  if (!id) return
+  await deleteJobExperimentRelationApi(id, relationId)
   await load()
 }
 
@@ -404,7 +429,9 @@ const removeExperiment = async () => {
   }
   deleting.value = true
   try {
-    await deleteJobExperimentApi(id())
+    const id = experimentId.value
+    if (!id) return
+    await deleteJobExperimentApi(id)
     ElMessage.success('实验已删除')
     router.push(demoPath('/job-experiments'))
   } finally {
@@ -416,7 +443,27 @@ const goSafe = (path: string) => {
   router.push(demoPath(resolveAppRoutePath(path, { knownPaths: defaultUserKnownPaths }).path))
 }
 
-onMounted(load)
+watch(
+  experimentId,
+  () => {
+    detailRequestGeneration += 1
+    detail.value = undefined
+    errorMessage.value = ''
+    loading.value = false
+    relationDialog.value = false
+    Object.assign(relationForm, {
+      relationType: 'JOB_APPLICATION',
+      relationId: 1,
+      relationSummary: ''
+    })
+    void load()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">

@@ -610,6 +610,7 @@ import {
   getEvidenceLearningCandidatesApi
 } from '@/api/evidenceLearning'
 import AppState from '@/components/common/AppState.vue'
+import { confidenceLabel } from '@/features/confidence'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import type {
   CareerEvidenceUsageResultVO,
@@ -1104,12 +1105,6 @@ const decisionLabel = (value?: string) => ({
   CONTINUE: '继续实验',
   REJECT: '拒绝'
 }[String(value || '').toUpperCase()] || '确认')
-
-const confidenceLabel = (value?: string) => ({
-  HIGH: '高置信度',
-  MEDIUM: '中置信度',
-  LOW: '低置信度'
-}[String(value || '').toUpperCase()] || '置信度待确认')
 
 const confidenceTagType = (value?: string) =>
   String(value || '').toUpperCase() === 'HIGH'

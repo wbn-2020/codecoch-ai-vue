@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Bot, BriefcaseBusiness, ClipboardCheck, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
@@ -257,6 +257,12 @@ const loading = ref(false)
 const generating = ref(false)
 const errorMessage = ref('')
 const detail = ref<JobSearchExperimentDetailVO>()
+const experimentId = computed(() => {
+  const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+})
+let detailRequestGeneration = 0
+let generateRequestGeneration = 0
 const latest = computed(() => detail.value?.latestReview || detail.value?.reviews?.[0])
 const reviewStrategy = computed<JobSearchExperimentStrategyVO>(() => ({
   ...(latest.value?.strategy || {}),
@@ -313,7 +319,7 @@ const strategyFeedbackContext = computed(() => {
   return {
     scene: 'JOB_EXPERIMENT_STRATEGY',
     bizType: reviewId ? 'JOB_EXPERIMENT_REVIEW' : 'JOB_EXPERIMENT',
-    bizId: reviewId || detail.value?.id || id()
+    bizId: reviewId || detail.value?.id || experimentId.value || 0
   }
 })
 const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
@@ -344,7 +350,7 @@ const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
     scene: 'JOB_EXPERIMENT_STRATEGY',
     bizType: strategyFeedbackContext.value.bizType,
     bizId: strategyFeedbackContext.value.bizId,
-    experimentId: detail.value?.id || id(),
+    experimentId: detail.value?.id || experimentId.value || 0,
     traceId: latest.value?.traceId || latest.value?.aiTraceId || undefined,
     aiCallLogId: latest.value?.aiCallLogId ?? undefined,
     resultSource: latest.value?.resultSource || 'RULE',
@@ -365,7 +371,6 @@ const nextActionLinks = [
   { label: '模拟面试', path: '/interviews/create', icon: Mic }
 ]
 
-const id = () => Number(route.params.id)
 const isDemoContext = () => route.query.demoFlag === 'true' || detail.value?.demoFlag === 1
 const demoPath = (path: string) => {
   if (!isDemoContext()) return path
@@ -373,8 +378,8 @@ const demoPath = (path: string) => {
 }
 
 const openEvidenceSamples = () => {
-  const experimentId = detail.value?.id ?? id()
-  if (!Number.isSafeInteger(experimentId) || experimentId <= 0) {
+  const currentExperimentId = detail.value?.id ?? experimentId.value
+  if (!currentExperimentId || !Number.isSafeInteger(currentExperimentId)) {
     ElMessage.warning('实验编号待确认，暂不能打开证据使用样本。')
     return
   }
@@ -382,7 +387,7 @@ const openEvidenceSamples = () => {
     path: '/evidence-assets',
     query: {
       tab: 'usages',
-      experimentId: String(experimentId)
+      experimentId: String(currentExperimentId)
     }
   })
 }
@@ -403,33 +408,77 @@ const goStrategyAction = (action?: SuggestionPanelAction | string) => {
   router.push(demoPath(safePath))
 }
 
-const load = async () => {
+const loadExperiment = async (id: number, requestGeneration: number) => {
   loading.value = true
   errorMessage.value = ''
   try {
-    detail.value = await getJobExperimentDetailApi(id())
+    const nextDetail = await getJobExperimentDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
   } catch (error) {
-    detail.value = undefined
-    errorMessage.value = error instanceof Error ? error.message : '求职实验复盘加载失败，请稍后重试。'
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = undefined
+      errorMessage.value = error instanceof Error ? error.message : '求职实验复盘加载失败，请稍后重试。'
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
+}
+
+const load = async () => {
+  const id = experimentId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    errorMessage.value = '求职实验编号无效。'
+    return
+  }
+  await loadExperiment(id, requestGeneration)
 }
 
 const generate = async () => {
+  const id = experimentId.value
+  if (!id) return
+  const requestGeneration = ++generateRequestGeneration
   generating.value = true
   try {
-    await generateJobExperimentReviewApi(id())
+    await generateJobExperimentReviewApi(id)
+    if (requestGeneration !== generateRequestGeneration) return
     await load()
+    if (requestGeneration !== generateRequestGeneration) return
     ElMessage.success('复盘建议已生成')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '复盘建议生成失败，请稍后重试。')
+    if (requestGeneration === generateRequestGeneration) {
+      ElMessage.error(error instanceof Error ? error.message : '复盘建议生成失败，请稍后重试。')
+    }
   } finally {
-    generating.value = false
+    if (requestGeneration === generateRequestGeneration) {
+      generating.value = false
+    }
   }
 }
 
-onMounted(load)
+watch(
+  experimentId,
+  () => {
+    detailRequestGeneration += 1
+    generateRequestGeneration += 1
+    detail.value = undefined
+    errorMessage.value = ''
+    loading.value = false
+    generating.value = false
+    void load()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+  generateRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">

@@ -100,7 +100,7 @@
 
 <script setup lang="ts">
 import { ArrowLeft, ClipboardCheck, Edit3 } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getProjectEvidenceDetailApi } from '@/api/projectEvidence'
@@ -116,8 +116,10 @@ import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
+const projectId = computed(() => getRouteNumberParam(route.params.id as string))
 const loading = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
+let detailRequestGeneration = 0
 
 const openEvidenceUsages = () => {
   if (!detail.value) return
@@ -132,17 +134,41 @@ const openEvidenceUsages = () => {
 }
 
 const fetchDetail = async () => {
-  const id = getRouteNumberParam(route.params.id as string)
-  if (!id) return
+  const id = projectId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    detail.value = await getProjectEvidenceDetailApi(id)
+    const nextDetail = await getProjectEvidenceDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
+  } catch {
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = null
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
 }
 
-onMounted(fetchDetail)
+watch(
+  projectId,
+  () => {
+    detail.value = null
+    void fetchDetail()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">

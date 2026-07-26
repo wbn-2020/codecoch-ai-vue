@@ -125,9 +125,15 @@ describe('resolveSafeActionPath', () => {
   })
 
   it('blocks V4 preview paths when preview is disabled', () => {
-    const result = resolveSafeActionPath('/applications', { enableV4Preview: false })
+    const result = resolveSafeActionPath('/knowledge', { enableV4Preview: false })
     expect(result.path).toBe('/agent/today')
     expect(result.unavailableReason).toContain('预览')
+  })
+
+  it('allows released /applications path even when preview is disabled', () => {
+    const result = resolveSafeActionPath('/applications', { enableV4Preview: false })
+    expect(result.path).toBe('/applications')
+    expect(result.unavailableReason).toBeUndefined()
   })
 
   it('blocks dynamic V4 preview resume version paths when preview is disabled', () => {
@@ -196,7 +202,7 @@ describe('describeAgentTaskEvidence', () => {
         taskType: 'REPORT_REVIEW',
         relatedBizType: 'MATCH_REPORT',
         relatedBizId: 20,
-        actionUrl: '/applications'
+        actionUrl: '/knowledge'
       },
       { enableV4Preview: false }
     )

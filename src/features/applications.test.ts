@@ -72,7 +72,7 @@ describe('application workbench helpers', () => {
     const timeline = buildApplicationEventTimeline(events)
 
     expect(timeline.map((item) => item.id)).toEqual([2, 3, 1])
-    expect(timeline[0].meta.label).toBe('Offer')
+    expect(timeline[0].meta.label).toBe('录用通知')
     expect(timeline[1].timeText).toBe('2026-06-30 10:00:00')
   })
 

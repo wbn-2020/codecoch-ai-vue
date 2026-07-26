@@ -647,7 +647,7 @@
       :preferred-template-code="selectedResumeTemplateCode"
       :refresh-key="deliveryRefreshKey"
       :has-unsaved-changes="hasUnsavedResumeChanges"
-      @resume-version-applied="fetchDetail"
+      @resume-version-applied="reloadCurrentResume"
       @template-change="selectedResumeTemplateCode = $event"
     />
 
@@ -685,7 +685,7 @@ import {
   Sparkles,
   UserRound
 } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -738,7 +738,7 @@ const routeTargetJobId = computed(() => {
   return Number.isFinite(value) && value > 0 ? value : undefined
 })
 
-const loading = ref(isEdit.value)
+const loading = ref(false)
 const detailError = ref('')
 const saving = ref(false)
 const projectSaving = ref(false)
@@ -763,6 +763,9 @@ const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const previewAccent = ref<ResumeAccent>('ocean')
 const previewZoom = ref(0.88)
 const deliveryRefreshKey = ref(0)
+let resumeLoadGeneration = 0
+let resumeSaveOperationGeneration = 0
+let projectWriteOperationGeneration = 0
 const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
   { value: 'ocean', label: '海洋蓝' },
   { value: 'teal', label: '青绿色' },
@@ -827,7 +830,7 @@ const moveAccentSelection = (event: KeyboardEvent) =>
     (value) => { previewAccent.value = value }
   )
 
-const form = reactive<ResumeCreateDTO>({
+const createDefaultResumeForm = (): ResumeCreateDTO => ({
   resumeName: '',
   realName: '',
   email: '',
@@ -840,11 +843,15 @@ const form = reactive<ResumeCreateDTO>({
   isDefault: 0
 })
 
-const optimizeForm = reactive<ResumeOptimizeRequestDTO>({
+const createDefaultOptimizeForm = (): ResumeOptimizeRequestDTO => ({
   targetPosition: '',
   experienceYears: undefined,
   industryDirection: ''
 })
+
+const form = reactive<ResumeCreateDTO>(createDefaultResumeForm())
+
+const optimizeForm = reactive<ResumeOptimizeRequestDTO>(createDefaultOptimizeForm())
 
 const rules: FormRules<ResumeCreateDTO> = {
   resumeName: [{ required: true, message: '请输入简历名称', trigger: 'blur' }],
@@ -1151,22 +1158,23 @@ const toProjectDraft = (payload: ResumeProjectDTO, projectId: number): ResumePro
   sortOrder: payload.sortOrder ?? payload.sort ?? 0
 })
 
-const persistDraftProjects = async (createdResumeId: number) => {
-  const draftProjects = projects.value.filter((project) => project.projectId < 0)
-  if (!draftProjects.length) return
-
+const persistDraftProjects = async (
+  createdResumeId: number,
+  draftProjects: ResumeProjectVO[],
+  isCurrentOperation: () => boolean
+) => {
   let failedCount = 0
   for (const project of draftProjects) {
+    if (!isCurrentOperation()) {
+      return { failedCount, stale: true }
+    }
     try {
       await createResumeProjectApi(createdResumeId, project)
     } catch {
       failedCount++
     }
   }
-
-  if (failedCount) {
-    ElMessage.warning(`简历已创建，${failedCount} 条项目草稿保存失败，请在编辑页补充。`)
-  }
+  return { failedCount, stale: !isCurrentOperation() }
 }
 
 const selectAllOptimizeSuggestions = () => {
@@ -1180,6 +1188,42 @@ const getSelectedOptimizeSuggestions = () =>
       index,
       item: optimizeSuggestions.value[index]
     }))
+
+const isCurrentResumeRoute = (
+  requestGeneration: number,
+  targetResumeId: number | null
+) => (
+  requestGeneration === resumeLoadGeneration
+  && targetResumeId === resumeId.value
+)
+
+const resetRouteState = () => {
+  Object.assign(form, createDefaultResumeForm())
+  Object.assign(optimizeForm, createDefaultOptimizeForm())
+  projectDialogVisible.value = false
+  editingProjectId.value = null
+  editingProject.value = null
+  projects.value = []
+  optimizeRecords.value = []
+  optimizeDetail.value = null
+  selectedOptimizeSuggestionIndexes.value = []
+  optimizeSseEvents.value = []
+  optimizeSseMessage.value = ''
+  optimizeSseStatus.value = '未开始'
+  optimizeTask.value = null
+  optimizeRecordsRefreshing.value = false
+  optimizing.value = false
+  applyingOptimize.value = false
+  mobileWorkspaceTab.value = 'edit'
+  selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
+  previewAccent.value = 'ocean'
+  previewZoom.value = 0.88
+  savedResumeSignature.value = ''
+  detailError.value = ''
+  loading.value = false
+  deliveryRefreshKey.value += 1
+  void nextTick(() => formRef.value?.clearValidate?.())
+}
 
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
@@ -1201,18 +1245,23 @@ const applyDetail = (detail: ResumeDetailVO) => {
   savedResumeSignature.value = resumeDraftSignature.value
 }
 
-const fetchDetail = async () => {
-  if (!resumeId.value) return
+const fetchDetail = async (targetResumeId: number, requestGeneration: number) => {
   loading.value = true
   detailError.value = ''
   try {
-    applyDetail(await getResumeDetailApi(resumeId.value))
-    await fetchOptimizeRecords()
+    const nextDetail = await getResumeDetailApi(targetResumeId)
+    if (requestGeneration !== resumeLoadGeneration) return
+    applyDetail(nextDetail)
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
   } catch (error) {
-    detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历实验室重试。')
-    ElMessage.error(detailError.value)
+    if (requestGeneration === resumeLoadGeneration) {
+      detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历实验室重试。')
+      ElMessage.error(detailError.value)
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      loading.value = false
+    }
   }
 }
 
@@ -1225,36 +1274,60 @@ const optimizeStatusText = (status?: string) => {
   return status ? map[status] || '状态待确认' : '暂无记录'
 }
 
-const fetchOptimizeRecords = async () => {
-  if (!resumeId.value) return
+const fetchOptimizeRecords = async (
+  targetResumeId: number,
+  requestGeneration = resumeLoadGeneration
+) => {
   try {
-    optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
-    if (!optimizeDetail.value && optimizeRecords.value[0]) {
-      optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+    const nextRecords = await getResumeOptimizeRecordsApi(targetResumeId)
+    if (requestGeneration !== resumeLoadGeneration) return
+    optimizeRecords.value = nextRecords
+    if (!optimizeDetail.value && nextRecords[0]) {
+      const nextOptimizeDetail = await getResumeOptimizeResultApi(nextRecords[0].optimizeRecordId)
+      if (requestGeneration !== resumeLoadGeneration) return
+      optimizeDetail.value = nextOptimizeDetail
       selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
     }
   } catch {
-    optimizeRecords.value = []
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeRecords.value = []
+    }
   }
 }
 
 const openOptimizeDetail = async (recordId: number) => {
-  optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
+  const requestGeneration = resumeLoadGeneration
+  const nextOptimizeDetail = await getResumeOptimizeResultApi(recordId)
+  if (requestGeneration !== resumeLoadGeneration) return
+  optimizeDetail.value = nextOptimizeDetail
   selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
 }
 
 const refreshOptimizeRecords = async () => {
+  const targetResumeId = resumeId.value
+  if (!targetResumeId) return
+  const requestGeneration = resumeLoadGeneration
   optimizeRecordsRefreshing.value = true
   try {
-    await fetchOptimizeRecords()
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
+    if (requestGeneration !== resumeLoadGeneration) return
     if (latestOptimizeRecord.value) {
       ElMessage.success('最近记录已刷新')
     } else {
       ElMessage.info('暂未发现新的建议记录')
     }
   } finally {
-    optimizeRecordsRefreshing.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeRecordsRefreshing.value = false
+    }
   }
+}
+
+const reloadCurrentResume = async () => {
+  const targetResumeId = resumeId.value
+  if (!targetResumeId) return
+  const requestGeneration = resumeLoadGeneration
+  await fetchDetail(targetResumeId, requestGeneration)
 }
 
 const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
@@ -1265,11 +1338,15 @@ const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
   selectedProjectIds: projects.value.map((project) => project.projectId).filter(Boolean)
 })
 
-const runSyncOptimizeFallback = async () => {
-  if (!resumeId.value) return
+const runSyncOptimizeFallback = async (
+  targetResumeId: number,
+  requestGeneration: number,
+  payload: ResumeOptimizeRequestDTO
+) => {
   optimizeSseStatus.value = '普通生成'
   optimizeSseMessage.value = '生成进度暂时不可用，系统会继续生成建议，稍后可刷新最近记录查看。'
-  const result = await optimizeResumeApi(resumeId.value, buildOptimizePayload())
+  const result = await optimizeResumeApi(targetResumeId, payload)
+  if (requestGeneration !== resumeLoadGeneration) return
   if (hasOptimizeAsyncReceipt(result)) {
     optimizeTask.value = result
     optimizeSseStatus.value = '已提交'
@@ -1280,7 +1357,7 @@ const runSyncOptimizeFallback = async () => {
       message: '建议已开始生成'
     }]
     ElMessage.success('建议已开始生成')
-    await fetchOptimizeRecords()
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
     return
   }
   if (result.optimizeStatus === 'FAILED') {
@@ -1288,7 +1365,8 @@ const runSyncOptimizeFallback = async () => {
   } else {
     ElMessage.success('建议已生成')
   }
-  await fetchOptimizeRecords()
+  await fetchOptimizeRecords(targetResumeId, requestGeneration)
+  if (requestGeneration !== resumeLoadGeneration) return
   if (result.optimizeRecordId) {
     await openOptimizeDetail(result.optimizeRecordId)
   }
@@ -1308,7 +1386,10 @@ const optimizeSseTypeLabel = (type?: string) => {
 }
 
 const handleOptimizeResume = async () => {
-  if (!resumeId.value || optimizing.value) return
+  const targetResumeId = resumeId.value
+  if (!targetResumeId || optimizing.value) return
+  const requestGeneration = resumeLoadGeneration
+  const payload = buildOptimizePayload()
   optimizing.value = true
   optimizeSseEvents.value = []
   optimizeSseMessage.value = '正在启动建议生成进度。'
@@ -1316,13 +1397,17 @@ const handleOptimizeResume = async () => {
   optimizeTask.value = null
 
   try {
-    await runSyncOptimizeFallback()
+    await runSyncOptimizeFallback(targetResumeId, requestGeneration, payload)
   } catch (error) {
-    optimizeSseStatus.value = '提交失败'
-    optimizeSseMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后重新生成。')
-    ElMessage.error(optimizeSseMessage.value)
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeSseStatus.value = '提交失败'
+      optimizeSseMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后重新生成。')
+      ElMessage.error(optimizeSseMessage.value)
+    }
   } finally {
-    optimizing.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizing.value = false
+    }
   }
 }
 
@@ -1367,7 +1452,7 @@ const handleApplyOptimizeResult = async () => {
     if (result.newResumeId) {
       await router.push(`/resumes/${result.newResumeId}/edit`)
     } else {
-      await fetchDetail()
+      await reloadCurrentResume()
     }
   } finally {
     applyingOptimize.value = false
@@ -1376,57 +1461,96 @@ const handleApplyOptimizeResult = async () => {
 
 const ensureStableVersionAfterSave = async (
   savedResumeId: number,
-  forceCreate: boolean
+  forceCreate: boolean,
+  isCurrentOperation: () => boolean
 ) => {
   try {
+    if (!isCurrentOperation()) return null
     const shouldCreate = forceCreate
       || (await getResumeVersionsApi(savedResumeId)).length === 0
+    if (!isCurrentOperation()) return null
     if (shouldCreate) {
       await createResumeVersionApi(savedResumeId, { sourceType: 'MANUAL_SAVE' })
+      if (!isCurrentOperation()) return null
     }
     return true
   } catch {
+    if (!isCurrentOperation()) return null
     ElMessage.warning('简历已保存，但稳定版本生成失败。请刷新后重试，正式导出仍会使用最近一次稳定版本。')
     return false
   }
 }
 
 const handleSave = async () => {
-  if (!formRef.value) return
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
+  if (saving.value || !formRef.value) return
+  const operationGeneration = ++resumeSaveOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const editingResumeId = resumeId.value
+  const formSnapshot: ResumeCreateDTO = { ...form }
+  const draftProjectsSnapshot = projects.value
+    .filter((project) => project.projectId < 0)
+    .map((project) => ({ ...project }))
+  const shouldCreateVersion = hasUnsavedResumeChanges.value
+  const isCurrentOperation = () => (
+    operationGeneration === resumeSaveOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, editingResumeId)
+  )
+
   saving.value = true
   try {
-    if (resumeId.value) {
-      const shouldCreateVersion = hasUnsavedResumeChanges.value
-      await updateResumeApi(resumeId.value, form)
-      if (form.isDefault === 1) {
-        await setDefaultResumeApi(resumeId.value)
+    try {
+      await formRef.value.validate()
+    } catch {
+      return
+    }
+    if (!isCurrentOperation()) return
+
+    if (editingResumeId) {
+      await updateResumeApi(editingResumeId, formSnapshot)
+      if (!isCurrentOperation()) return
+      if (formSnapshot.isDefault === 1) {
+        await setDefaultResumeApi(editingResumeId)
+        if (!isCurrentOperation()) return
       }
       const stableVersionReady = await ensureStableVersionAfterSave(
-        resumeId.value,
-        shouldCreateVersion
+        editingResumeId,
+        shouldCreateVersion,
+        isCurrentOperation
       )
+      if (stableVersionReady === null || !isCurrentOperation()) return
       ElMessage.success(stableVersionReady ? '简历与稳定版本已保存' : '简历已保存')
-      await fetchDetail()
+      await reloadCurrentResume()
+      if (!isCurrentOperation()) return
       deliveryRefreshKey.value += 1
     } else {
-      const created = await createResumeApi(form)
-      await persistDraftProjects(created.id)
-      if (form.isDefault === 1) {
-        await setDefaultResumeApi(created.id)
+      const created = await createResumeApi(formSnapshot)
+      if (!isCurrentOperation()) return
+      const projectResult = await persistDraftProjects(
+        created.id,
+        draftProjectsSnapshot,
+        isCurrentOperation
+      )
+      if (projectResult.stale || !isCurrentOperation()) return
+      if (projectResult.failedCount) {
+        ElMessage.warning(`简历已创建，${projectResult.failedCount} 条项目草稿保存失败，请在编辑页补充。`)
       }
-      const stableVersionReady = await ensureStableVersionAfterSave(created.id, true)
+      if (formSnapshot.isDefault === 1) {
+        await setDefaultResumeApi(created.id)
+        if (!isCurrentOperation()) return
+      }
+      const stableVersionReady = await ensureStableVersionAfterSave(
+        created.id,
+        true,
+        isCurrentOperation
+      )
+      if (stableVersionReady === null || !isCurrentOperation()) return
       ElMessage.success(stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建')
       await router.replace(`/resumes/${created.id}/edit`)
-      await fetchDetail()
-      deliveryRefreshKey.value += 1
     }
   } finally {
-    saving.value = false
+    if (operationGeneration === resumeSaveOperationGeneration) {
+      saving.value = false
+    }
   }
 }
 
@@ -1448,19 +1572,31 @@ const openProjectEvidenceCreate = (project: ResumeProjectVO) => {
 }
 
 const handleSaveProject = async () => {
-  if (!projectFormRef.value) return
-  const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
-  if (!payload) return
+  if (projectSaving.value || !projectFormRef.value) return
+  const operationGeneration = ++projectWriteOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const targetResumeId = resumeId.value
+  const targetProjectId = editingProjectId.value
+  const projectsSnapshot = projects.value.map((project) => ({ ...project }))
+  const isCurrentOperation = () => (
+    operationGeneration === projectWriteOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, targetResumeId)
+  )
+
   projectSaving.value = true
   try {
+    const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
+    if (!payload || !isCurrentOperation()) return
     const projectPayload = { ...payload }
-    if (!resumeId.value) {
-      const projectId = editingProjectId.value || -Date.now()
+    if (!targetResumeId) {
+      const projectId = targetProjectId || -Date.now()
       const draftProject = toProjectDraft(projectPayload, projectId)
-      if (editingProjectId.value) {
-        projects.value = projects.value.map((project) => project.projectId === editingProjectId.value ? draftProject : project)
+      if (targetProjectId) {
+        projects.value = projectsSnapshot.map((project) => (
+          project.projectId === targetProjectId ? draftProject : project
+        ))
       } else {
-        projects.value = [...projects.value, draftProject]
+        projects.value = [...projectsSnapshot, draftProject]
       }
       ElMessage.success('项目草稿已加入，保存简历后会一起创建')
       projectDialogVisible.value = false
@@ -1468,54 +1604,92 @@ const handleSaveProject = async () => {
       editingProject.value = null
       return
     }
-    if (editingProjectId.value) {
-      await updateResumeProjectApi(resumeId.value, editingProjectId.value, projectPayload)
+    if (targetProjectId) {
+      await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
     } else {
-      await createResumeProjectApi(resumeId.value, projectPayload)
+      await createResumeProjectApi(targetResumeId, projectPayload)
     }
+    if (!isCurrentOperation()) return
     ElMessage.success('项目经历已保存')
     projectDialogVisible.value = false
     editingProjectId.value = null
     editingProject.value = null
-    await fetchDetail()
+    await reloadCurrentResume()
   } catch (err) {
-    ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
+    if (isCurrentOperation()) {
+      ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
+    }
   } finally {
-    projectSaving.value = false
+    if (operationGeneration === projectWriteOperationGeneration) {
+      projectSaving.value = false
+    }
   }
 }
 
 const handleDeleteProject = async (project: ResumeProjectVO) => {
-  if (!resumeId.value) {
-    projects.value = projects.value.filter((item) => item.projectId !== project.projectId)
+  if (projectSaving.value) return
+  const operationGeneration = ++projectWriteOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const targetResumeId = resumeId.value
+  const projectSnapshot = { ...project }
+  const projectsSnapshot = projects.value.map((item) => ({ ...item }))
+  const isCurrentOperation = () => (
+    operationGeneration === projectWriteOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, targetResumeId)
+  )
+
+  if (!targetResumeId) {
+    if (!isCurrentOperation()) return
+    projects.value = projectsSnapshot.filter((item) => item.projectId !== projectSnapshot.projectId)
     ElMessage.success('项目草稿已移除')
     return
   }
-  const confirmed = await confirmDangerActionPreview({
-    title: '删除项目经历',
-    action: '删除该简历中的项目经历',
-    target: project.projectName || '项目经历',
-    impact: '该项目经历会从当前简历中移除，后续简历匹配、面试追问和推荐任务将不再把它作为证据。',
-    rollback: '系统不会自动恢复已删除项目；如误删，需要重新录入项目经历。',
-    audit: '删除操作会记录当前账号、简历和项目经历。',
-    tips: ['确认这段项目经历不再用于证明目标岗位能力。', '确认删除后仍有足够项目证据支撑简历。'],
-    confirmButtonText: '确认删除'
-  })
-  if (!confirmed) return
-  await deleteResumeProjectApi(resumeId.value, project.projectId)
-  ElMessage.success('项目经历已删除')
-  await fetchDetail()
+  projectSaving.value = true
+  try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '删除项目经历',
+      action: '删除该简历中的项目经历',
+      target: projectSnapshot.projectName || '项目经历',
+      impact: '该项目经历会从当前简历中移除，后续简历匹配、面试追问和推荐任务将不再把它作为证据。',
+      rollback: '系统不会自动恢复已删除项目；如误删，需要重新录入项目经历。',
+      audit: '删除操作会记录当前账号、简历和项目经历。',
+      tips: ['确认这段项目经历不再用于证明目标岗位能力。', '确认删除后仍有足够项目证据支撑简历。'],
+      confirmButtonText: '确认删除'
+    })
+    if (!confirmed || !isCurrentOperation()) return
+    await deleteResumeProjectApi(targetResumeId, projectSnapshot.projectId)
+    if (!isCurrentOperation()) return
+    ElMessage.success('项目经历已删除')
+    await reloadCurrentResume()
+  } finally {
+    if (operationGeneration === projectWriteOperationGeneration) {
+      projectSaving.value = false
+    }
+  }
 }
 
-watch(previewPreferenceKey, loadPreviewPreferences)
 watch(
   [selectedResumeTemplateCode, previewAccent, previewZoom],
   persistPreviewPreferences
 )
 
-onMounted(() => {
-  loadPreviewPreferences()
-  void fetchDetail()
+watch(
+  resumeId,
+  (nextResumeId) => {
+    const requestGeneration = ++resumeLoadGeneration
+    resetRouteState()
+    loadPreviewPreferences()
+    if (!nextResumeId) return
+    loading.value = true
+    void fetchDetail(nextResumeId, requestGeneration)
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  resumeLoadGeneration += 1
+  resumeSaveOperationGeneration += 1
+  projectWriteOperationGeneration += 1
 })
 </script>
 

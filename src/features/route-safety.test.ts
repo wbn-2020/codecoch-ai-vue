@@ -23,13 +23,24 @@ describe('resolveAppRoutePath', () => {
   })
 
   it('falls back for V4 preview paths when preview is disabled', () => {
+    const result = resolveAppRoutePath('/knowledge?tab=documents', {
+      fallbackPath: '/agent/today',
+      enableV4Preview: false,
+      enableV4Knowledge: false
+    })
+
+    expect(result.path).toBe('/agent/today')
+    expect(result.blockedPath).toBe('/knowledge?tab=documents')
+  })
+
+  it('allows released application routes regardless of the V4 preview flag', () => {
     const result = resolveAppRoutePath('/applications?followUp=due-today', {
       fallbackPath: '/agent/today',
       enableV4Preview: false
     })
 
-    expect(result.path).toBe('/agent/today')
-    expect(result.blockedPath).toBe('/applications?followUp=due-today')
+    expect(result.path).toBe('/applications?followUp=due-today')
+    expect(result.blockedPath).toBeUndefined()
   })
 
   it('allows ability map routes with training query params', () => {

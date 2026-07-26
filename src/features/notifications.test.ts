@@ -120,8 +120,8 @@ describe('notification domain helpers', () => {
     const application = resolveNotificationAction(
       notice({
         type: 'APPLICATION_FOLLOW_UP_REMINDER',
-        actionUrl: '/applications?followUp=overdue',
-        fallbackPath: '/applications'
+        actionUrl: '/knowledge?tab=docs',
+        fallbackPath: '/knowledge'
       }),
       { enableV4Preview: false }
     )
