@@ -8,6 +8,7 @@ import type {
   InterviewRemediationOptionVO,
   InterviewRemediationOptionsVO,
   InterviewRemediationVO,
+  InterviewReplayVO,
   InterviewReportAdvancedMeta,
   InterviewRequirementImprovementVO
 } from '@/types/interviewAdvanced'
@@ -201,6 +202,31 @@ export const normalizeInterviewRemediation = (value: unknown): InterviewRemediat
     sourceRequirementIds: positiveIds(source.sourceRequirementIds, 20),
     practicePurpose: stringValue(source.practicePurpose),
     remediationStrength: stringValue(source.remediationStrength),
+    rubricVersion: stringValue(source.rubricVersion),
+    status: stringValue(source.status),
+    idempotentReplay: booleanValue(source.idempotentReplay) === true,
+    interview: Object.keys(interview).length
+      ? {
+          id: numberValue(interview.id),
+          interviewId: numberValue(interview.interviewId),
+          title: stringValue(interview.title || interview.interviewName),
+          status: stringValue(interview.status),
+          reportStatus: stringValue(interview.reportStatus)
+        }
+      : undefined
+  }
+}
+
+export const normalizeInterviewReplay = (value: unknown): InterviewReplayVO => {
+  const source = objectValue(value)
+  const interview = objectValue(source.interview)
+  return {
+    id: numberValue(source.id),
+    sourceSessionId: numberValue(source.sourceSessionId),
+    sourceReportId: numberValue(source.sourceReportId),
+    targetSessionId: numberValue(source.targetSessionId || interview.id || interview.interviewId),
+    targetJobId: numberValue(source.targetJobId),
+    scenarioVersionId: numberValue(source.scenarioVersionId),
     rubricVersion: stringValue(source.rubricVersion),
     status: stringValue(source.status),
     idempotentReplay: booleanValue(source.idempotentReplay) === true,

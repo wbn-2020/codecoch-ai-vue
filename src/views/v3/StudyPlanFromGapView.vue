@@ -32,7 +32,10 @@
           <label v-for="gap in gapItems" :key="gap.id" class="gap-card">
             <el-checkbox :value="gap.id" />
             <span>
-              <strong>{{ gapTitle(gap) }}</strong>
+              <strong>
+                {{ gapTitle(gap) }}
+                <el-tag v-if="isEvidenceFeedbackGap(gap)" size="small" type="warning" effect="plain">证据反馈</el-tag>
+              </strong>
               <small>{{ gapMeta(gap) }}</small>
               <em>{{ gapDescription(gap) }}</em>
             </span>
@@ -144,6 +147,9 @@ const gapMeta = (gap: SkillGapItemVO) => {
 
 const gapDescription = (gap: SkillGapItemVO) =>
   gap.gapDescription || '暂无差距说明，可先生成或刷新能力画像补全短板描述。'
+
+const isEvidenceFeedbackGap = (gap: SkillGapItemVO) =>
+  String(gap.sourceType || '').startsWith('EVIDENCE_USAGE')
 
 const loadProfile = async () => {
   loading.value = true

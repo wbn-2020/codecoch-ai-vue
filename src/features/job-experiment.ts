@@ -102,6 +102,13 @@ export const statusLabel = (status?: string) => {
   return '草稿'
 }
 
+/**
+ * V12/D2 口径说明：样本充足判据的权威在后端
+ * `codecoachai.features.v12.experiment-sample-thresholds`（ExperimentQualityGatePolicy），
+ * 通过 metrics.sampleInsufficient / confidenceLevel / sampleBoundary 下发。
+ * 本函数末行的 15/3 字面量只是后端字段缺失时的展示兜底，不是判据本体，
+ * 调阈值请改 Nacos 配置而非此处。
+ */
 export const shouldKeepConclusionWeak = (
   metrics?: Partial<Pick<JobSearchExperimentMetricsVO, 'sampleInsufficient' | 'confidenceLevel' | 'sampleWarning' | 'applicationCount' | 'interviewCompletedCount'>>
 ) => {
@@ -347,7 +354,11 @@ export const buildExperimentSampleBoundary = (
   const feedbackCount = explicitBoundary?.feedbackCount ?? feedbackSummary?.feedbackCount ?? metrics?.feedbackCount ?? 0
   const interviewCompletedCount =
     explicitBoundary?.interviewCompletedCount ?? feedbackSummary?.interviewCompletedCount ?? metrics?.interviewCompletedCount ?? 0
-  const sampleInsufficient = applicationCount < 5
+  // V12/D2：后端 boundary 的 sampleInsufficient 是权威口径，本地 <5 只兜底旧数据。
+  const sampleInsufficient =
+    typeof explicitBoundary?.sampleInsufficient === 'boolean'
+      ? explicitBoundary.sampleInsufficient
+      : applicationCount < 5
   const sampleWarning =
     getLowSampleWarning({ ...explicitBoundary, applicationCount, interviewCompletedCount }, feedbackSummary) ||
     explicitBoundary?.sampleWarning ||

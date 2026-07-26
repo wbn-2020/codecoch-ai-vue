@@ -2,6 +2,7 @@ import {
   normalizeInterviewComparison,
   normalizeInterviewRemediation,
   normalizeInterviewRemediationOptions,
+  normalizeInterviewReplay,
   normalizeInterviewReportAdvanced
 } from '@/features/interview-comparison'
 import type {
@@ -10,6 +11,8 @@ import type {
   InterviewRemediationCreateDTO,
   InterviewRemediationOptionsVO,
   InterviewRemediationVO,
+  InterviewReplayCreateDTO,
+  InterviewReplayVO,
   InterviewReportAdvancedMeta
 } from '@/types/interviewAdvanced'
 import request from '@/utils/request'
@@ -25,6 +28,14 @@ export const createInterviewRemediationApi = (
   request
     .post<unknown, unknown>('/interview-remediations', data)
     .then(normalizeInterviewRemediation)
+
+export const createInterviewReplayApi = (
+  sourceSessionId: number,
+  data: InterviewReplayCreateDTO
+): Promise<InterviewReplayVO> =>
+  request
+    .post<unknown, unknown>(`/interviews/${sourceSessionId}/replays`, data)
+    .then(normalizeInterviewReplay)
 
 export const getInterviewRemediationOptionsApi = (
   interviewId: number

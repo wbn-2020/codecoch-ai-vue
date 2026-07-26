@@ -44,6 +44,16 @@
           <RotateCcw :size="16" />
           {{ advancedReportMeta.strongRemediationAvailable ? '强化复练' : '一键复练' }}
         </el-button>
+        <el-button
+          v-if="interviewId && isGenerated"
+          :loading="replayLoading"
+          :disabled="advancedReportMeta.comparisonAvailable === false"
+          :title="replayButtonTitle"
+          @click="handleCreateReplay"
+        >
+          <Repeat2 :size="16" />
+          同配置再练
+        </el-button>
         <el-button v-else-if="interviewId" @click="handleStaticInterviewAction()">
           <RotateCcw :size="16" />
           新建面试
@@ -620,8 +630,8 @@
 
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
@@ -635,7 +645,7 @@ import {
   retryInterviewReportApi,
   type InterviewReportExportFormat
 } from '@/api/interview'
-import { createInterviewRemediationApi } from '@/api/interviewAdvanced'
+import { createInterviewRemediationApi, createInterviewReplayApi } from '@/api/interviewAdvanced'
 import { getJobRequirementMatrixApi } from '@/api/jobRequirement'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
@@ -672,6 +682,8 @@ const retrying = ref(false)
 const exporting = ref(false)
 const remediationLoading = ref(false)
 const remediationIdempotencyKey = ref('')
+const replayLoading = ref(false)
+const replayIdempotencyKey = ref('')
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -745,6 +757,13 @@ const advancedReportMeta = computed(() => normalizeInterviewReportAdvanced(repor
 const remediationButtonTitle = computed(() => {
   if (advancedReportMeta.value.remediationAvailable) return '根据本轮报告创建同岗位复练场次'
   return '当前报告尚不支持创建复练'
+})
+const replayButtonTitle = computed(() => {
+  if (advancedReportMeta.value.comparisonAvailable === false) {
+    return advancedReportMeta.value.comparisonUnavailableReason
+      || '本轮报告暂不可比，无法用于同配置对比训练'
+  }
+  return '以完全相同的配置再打一轮，完成后可与本轮对比'
 })
 const remediationGuidance = computed(() => {
   if (!isGenerated.value || !advancedReportMeta.value.remediationAvailable) return ''
@@ -1388,6 +1407,44 @@ const handleCreateRemediation = async () => {
     ElMessage.error(toFriendlyMessage(error, '复练创建失败，请稍后重试。'))
   } finally {
     remediationLoading.value = false
+  }
+}
+
+const handleCreateReplay = async () => {
+  if (replayLoading.value || !interviewId) return
+  if (advancedReportMeta.value.comparisonAvailable === false) return
+  try {
+    await ElMessageBox.confirm(
+      '将以完全相同的配置（岗位、难度、题量、场景）开启新一轮面试，完成后可与本轮发起对比。',
+      '同配置再练一轮',
+      { confirmButtonText: '开始再练', cancelButtonText: '取消', type: 'info' }
+    )
+  } catch {
+    return
+  }
+
+  replayLoading.value = true
+  try {
+    if (!replayIdempotencyKey.value) {
+      replayIdempotencyKey.value = createOperationIdempotencyKey('interview-replay')
+    }
+    const result = await createInterviewReplayApi(interviewId, {
+      idempotencyKey: replayIdempotencyKey.value
+    })
+    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的再练场次。' : '再练场次已创建。')
+      replayIdempotencyKey.value = ''
+      await router.push(`/interviews/room/${targetSessionId}`)
+      return
+    }
+    ElMessage.info('再练请求已保存，请到面试历史中查看新场次。')
+    replayIdempotencyKey.value = ''
+    await router.push('/interviews/history')
+  } catch (error) {
+    ElMessage.error(toFriendlyMessage(error, '同配置再练创建失败，请稍后重试。'))
+  } finally {
+    replayLoading.value = false
   }
 }
 

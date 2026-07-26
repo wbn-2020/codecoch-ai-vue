@@ -29,6 +29,23 @@ export interface InterviewRemediationCreateDTO {
   idempotencyKey: string
 }
 
+export interface InterviewReplayCreateDTO {
+  idempotencyKey: string
+}
+
+export interface InterviewReplayVO {
+  id?: number
+  sourceSessionId?: number
+  sourceReportId?: number
+  targetSessionId?: number
+  targetJobId?: number
+  scenarioVersionId?: number
+  rubricVersion?: string
+  status?: string
+  idempotentReplay: boolean
+  interview?: InterviewRemediationInterviewVO
+}
+
 export interface InterviewRemediationInterviewVO {
   id?: number
   interviewId?: number
