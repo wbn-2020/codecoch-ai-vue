@@ -8,7 +8,6 @@ const cwd = process.cwd()
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = resolveBackendRoot(frontendRoot)
 
 const extensions = new Set([
   '.css',
@@ -141,7 +140,7 @@ const exists = async (entry) => {
 }
 
 const resolveBackendTargets = async () => {
-  if (!await exists(backendRoot)) return []
+  const backendRoot = resolveBackendRoot(frontendRoot)
 
   const entries = await readdir(backendRoot, { withFileTypes: true })
   const moduleSrcDirs = []
