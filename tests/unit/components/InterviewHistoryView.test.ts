@@ -9,6 +9,7 @@ import {
   createInterviewComparisonApi,
   getInterviewAdvancedReportApi
 } from '@/api/interviewAdvanced'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import type { InterviewListVO } from '@/types/interview'
 import type {
   InterviewComparisonVO,
@@ -280,5 +281,94 @@ describe('InterviewHistoryView comparison creation', () => {
       reportIds: [101, 102],
       idempotencyKey: 'interview-compare-test-key'
     })
+  })
+
+  it('keeps the comparison idempotency key when navigation fails', async () => {
+    vi.mocked(getInterviewAdvancedReportApi).mockImplementation((interviewId) =>
+      Promise.resolve(reportMetadata(interviewId, interviewId + 100))
+    )
+    routerPush
+      .mockRejectedValueOnce(new Error('navigation failed'))
+      .mockResolvedValueOnce(undefined)
+
+    const wrapper = await mountHistory()
+    await selectFirstTwoCandidates(wrapper)
+
+    await clickCreateComparison(wrapper)
+    await flushPromises()
+    await clickCreateComparison(wrapper)
+    await flushPromises()
+
+    expect(createInterviewComparisonApi).toHaveBeenCalledTimes(2)
+    expect(createInterviewComparisonApi).toHaveBeenNthCalledWith(1, {
+      reportIds: [101, 102],
+      idempotencyKey: 'interview-compare-test-key'
+    })
+    expect(createInterviewComparisonApi).toHaveBeenNthCalledWith(2, {
+      reportIds: [101, 102],
+      idempotencyKey: 'interview-compare-test-key'
+    })
+    expect(createOperationIdempotencyKey).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('InterviewHistoryView comparability badge', () => {
+  const badgeRows: InterviewListVO[] = [
+    {
+      interviewId: 21,
+      interviewName: '可比场',
+      interviewMode: 'TECHNICAL',
+      targetJobId: 9,
+      status: 'COMPLETED',
+      reportStatus: 'GENERATED',
+      comparisonAvailable: true
+    },
+    {
+      interviewId: 22,
+      interviewName: '不可比场',
+      interviewMode: 'TECHNICAL',
+      targetJobId: 9,
+      status: 'COMPLETED',
+      reportStatus: 'GENERATED',
+      comparisonAvailable: false,
+      comparisonUnavailableReason: 'RUBRIC_VERSION_MISMATCH'
+    },
+    {
+      interviewId: 23,
+      interviewName: '旧数据场',
+      interviewMode: 'TECHNICAL',
+      targetJobId: 9,
+      status: 'COMPLETED',
+      reportStatus: 'GENERATED'
+    }
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    routerPush.mockResolvedValue(undefined)
+    vi.mocked(getInterviewsApi).mockResolvedValue({
+      records: badgeRows,
+      total: badgeRows.length,
+      pageNo: 1,
+      pageSize: 6
+    })
+  })
+
+  it('renders comparable and non-comparable badges from list metadata only', async () => {
+    const wrapper = await mountHistory()
+
+    expect(wrapper.findAll('status-tag-stub[status="COMPARABLE"]')).toHaveLength(1)
+    expect(wrapper.findAll('status-tag-stub[status="NOT_COMPARABLE"]')).toHaveLength(1)
+  })
+
+  it('disables the comparison checkbox for non-comparable rows before submit', async () => {
+    const wrapper = await mountHistory()
+
+    const checkboxes = wrapper.findAllComponents(CheckboxStub)
+    expect(checkboxes.map((checkbox) => checkbox.props('disabled'))).toEqual([
+      false,
+      true,
+      false
+    ])
   })
 })

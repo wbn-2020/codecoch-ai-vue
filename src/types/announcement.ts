@@ -6,7 +6,7 @@ export interface AnnouncementQueryDTO extends PageQuery {
 }
 
 export interface AnnouncementVO {
-  id: number
+  id: string
   title: string
   content: string
   type?: string

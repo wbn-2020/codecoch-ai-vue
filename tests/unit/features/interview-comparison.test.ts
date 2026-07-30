@@ -5,6 +5,7 @@ import {
   normalizeInterviewComparison,
   normalizeInterviewRemediation,
   normalizeInterviewRemediationOptions,
+  normalizeInterviewReplayEligibility,
   normalizeInterviewReportAdvanced,
   storeInterviewComparison,
   validateInterviewComparisonSelection
@@ -28,6 +29,68 @@ describe('interview advanced normalization', () => {
       sourceRequirementIds: []
     })
     expect(report.comparisonAvailable).toBeUndefined()
+    expect(report.replayEligibility).toEqual({ state: 'UNKNOWN' })
+  })
+
+  it('normalizes replay eligibility independently from comparison availability', () => {
+    const eligible = normalizeInterviewReportAdvanced({
+      id: 12,
+      interviewId: 30,
+      comparisonAvailable: false,
+      replayEligibility: {
+        state: 'ELIGIBLE',
+        policyVersion: 'REPLAY_V2'
+      }
+    })
+    const ineligible = normalizeInterviewReportAdvanced({
+      id: 13,
+      interviewId: 31,
+      comparisonAvailable: true,
+      replayEligibilityState: 'INELIGIBLE',
+      replayReasonCode: 'SAMPLE_INSUFFICIENT',
+      replayReasonMessage: '样本不足',
+      replayQualityGate: {
+        passed: false,
+        actual: 2,
+        required: 3
+      }
+    })
+
+    expect(eligible.replayEligibility).toEqual({
+      state: 'ELIGIBLE',
+      policyVersion: 'REPLAY_V2'
+    })
+    expect(ineligible.replayEligibility).toEqual({
+      state: 'INELIGIBLE',
+      reasonCode: 'SAMPLE_INSUFFICIENT',
+      reasonMessage: '样本不足',
+      qualityGate: {
+        passed: false,
+        actual: 2,
+        required: 3
+      }
+    })
+  })
+
+  it('normalizes the flat replay-options response contract', () => {
+    expect(normalizeInterviewReplayEligibility({
+      state: 'ELIGIBLE',
+      replayAvailable: true,
+      policyVersion: 'REPLAY_ELIGIBILITY_V2'
+    })).toEqual({
+      state: 'ELIGIBLE',
+      policyVersion: 'REPLAY_ELIGIBILITY_V2'
+    })
+
+    expect(normalizeInterviewReplayEligibility({
+      replayAvailable: false,
+      reasonCode: 'REPORT_NOT_GENERATED',
+      reasonMessage: '源面试报告尚未生成'
+    })).toEqual({
+      state: 'INELIGIBLE',
+      reasonCode: 'REPORT_NOT_GENERATED',
+      reasonMessage: '源面试报告尚未生成'
+    })
   })
 
   it('resolves remediation target session from nested interview data', () => {
@@ -229,6 +292,32 @@ describe('interview comparison selection', () => {
       reason: '请选择同一目标岗位下的面试记录。'
     })
   })
+
+  it.each(['GENERATED', 'COMPLETED', 'SUCCESS'])(
+    'accepts the %s successful report status',
+    (reportStatus) => {
+      expect(validateInterviewComparisonSelection([
+        { ...base, interviewId: 1, reportStatus },
+        { ...base, interviewId: 2, reportStatus }
+      ])).toMatchObject({
+        valid: true,
+        targetJobId: 100
+      })
+    }
+  )
+
+  it.each(['GENERATING', 'FAILED', ''])(
+    'rejects the %s non-successful report status',
+    (reportStatus) => {
+      expect(validateInterviewComparisonSelection([
+        { ...base, interviewId: 1, reportStatus },
+        { ...base, interviewId: 2 }
+      ])).toMatchObject({
+        valid: false,
+        reason: '只能比较报告已成功生成的面试。'
+      })
+    }
+  )
 
   it('extracts only weak, missing or conflicting job requirements for remediation', () => {
     expect(extractRemediationRequirementIds({

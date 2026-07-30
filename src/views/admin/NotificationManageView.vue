@@ -116,7 +116,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="目标" prop="targetType">
-          <el-radio-group v-model="form.targetType"><el-radio-button label="ALL">全员广播</el-radio-button><el-radio-button label="USER">指定用户</el-radio-button></el-radio-group>
+              <el-radio-group v-model="form.targetType"><el-radio-button value="ALL">全员广播</el-radio-button><el-radio-button value="USER">指定用户</el-radio-button></el-radio-group>
         </el-form-item>
         <el-form-item v-if="form.targetType === 'USER'" label="用户编号" prop="targetUserId"><el-input-number v-model="form.targetUserId" :min="1" controls-position="right" /></el-form-item>
         <el-form-item label="内容" prop="content"><el-input v-model="form.content" type="textarea" :rows="5" /></el-form-item>

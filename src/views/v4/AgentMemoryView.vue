@@ -33,11 +33,11 @@
 
     <section class="v4-memory-controls">
       <el-radio-group v-model="activeFilter" size="large">
-        <el-radio-button label="ALL">全部</el-radio-button>
-        <el-radio-button label="TRUSTED">可信输入</el-radio-button>
-        <el-radio-button label="CANDIDATE">候选</el-radio-button>
-        <el-radio-button label="GOVERNANCE">需治理</el-radio-button>
-        <el-radio-button label="DISABLED">已停用</el-radio-button>
+        <el-radio-button value="ALL">全部</el-radio-button>
+        <el-radio-button value="TRUSTED">可信输入</el-radio-button>
+        <el-radio-button value="CANDIDATE">候选</el-radio-button>
+        <el-radio-button value="GOVERNANCE">需治理</el-radio-button>
+        <el-radio-button value="DISABLED">已停用</el-radio-button>
       </el-radio-group>
       <p class="v4-memory-controls__hint">从复盘、投递、实验或 AI 总结抽取的内容只能先作为候选，必须显式确认后才可能影响 Agent 行动。</p>
     </section>

@@ -1,5 +1,21 @@
 import type { InterviewReportTrustStatus, ReportStatus } from './interview'
 
+export type InterviewReplayEligibilityState = 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN'
+
+export interface InterviewReplayQualityGateVO {
+  passed?: boolean
+  actual?: number
+  required?: number
+}
+
+export interface InterviewReplayEligibilityVO {
+  state: InterviewReplayEligibilityState
+  reasonCode?: string
+  reasonMessage?: string
+  policyVersion?: string
+  qualityGate?: InterviewReplayQualityGateVO
+}
+
 export interface InterviewReportAdvancedMeta {
   reportId?: number
   interviewId?: number
@@ -12,6 +28,7 @@ export interface InterviewReportAdvancedMeta {
   strongRemediationUnavailableReason?: string
   comparisonAvailable?: boolean
   comparisonUnavailableReason?: string
+  replayEligibility: InterviewReplayEligibilityVO
   sourceRequirementIds: number[]
   practicePurpose?: string
   remediationStrength?: string

@@ -155,8 +155,41 @@
             <el-option v-for="item in sourceOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="关联简历">
+          <el-select
+            v-model="form.resumeId"
+            clearable
+            filterable
+            :loading="resumeLoading"
+            placeholder="选择简历"
+            style="width: 100%"
+            @change="handleResumeChange"
+          >
+            <el-option
+              v-for="item in resumeOptions"
+              :key="item.id"
+              :label="resumeOptionLabel(item)"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="关联简历版本">
-          <el-input-number v-model="form.resumeVersionId" :min="1" controls-position="right" />
+          <el-select
+            v-model="form.resumeVersionId"
+            clearable
+            filterable
+            :disabled="!form.resumeId"
+            :loading="resumeVersionLoading"
+            placeholder="选择简历版本"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in resumeVersionOptions"
+              :key="item.id"
+              :label="resumeVersionOptionLabel(item)"
+              :value="item.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="下次跟进时间">
           <el-date-picker v-model="form.nextFollowUpAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" />
@@ -345,12 +378,15 @@ import {
   getApplicationEventsApi,
   getApplicationStatsApi,
   getApplicationsApi,
+  getResumeVersionsApi,
   updateApplicationApi,
   type JobApplicationEventVO,
   type JobApplicationStatsVO,
-  type JobApplicationVO
+  type JobApplicationVO,
+  type ResumeVersionVO
 } from '@/api/v4'
 import { generateApplicationEventAiReviewApi } from '@/api/careerGrowth'
+import { getResumesApi } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
 import ApplicationEventReviewDialog from '@/views/application/components/ApplicationEventReviewDialog.vue'
 import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
@@ -394,6 +430,7 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatLocalDateTime } from '@/utils/format'
+import type { ResumeVO } from '@/types/resume'
 
 const route = useRoute()
 const router = useRouter()
@@ -430,6 +467,8 @@ const statsLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
 const statsWarning = ref('')
+const resumeLoading = ref(false)
+const resumeVersionLoading = ref(false)
 const status = ref('')
 const followUpFilter = ref<ApplicationDeepLinkFollowUpFilter | ''>('')
 const funnelStageFilter = ref<ApplicationFunnelStage['key'] | ''>('')
@@ -441,6 +480,8 @@ const suppressNextRouteQuery = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const rawApplications = ref<JobApplicationVO[]>([])
+const resumeOptions = ref<ResumeVO[]>([])
+const resumeVersionOptions = ref<ResumeVersionVO[]>([])
 const applicationStats = ref<JobApplicationStatsVO>()
 const eventsVisible = ref(false)
 const eventsLoading = ref(false)
@@ -519,6 +560,12 @@ const applicationEmptyDescription = computed(() =>
 const statusLabel = (value?: string) => getApplicationStageMeta(value).label || (value ? '状态待确认' : '--')
 const sourceLabel = (value?: string) => sourceOptions.find((item) => item.value === value)?.label || (value ? '自定义来源' : '来源待填写')
 const eventTypeLabel = (value?: string) => getApplicationEventMeta(value).label || (value ? '记录事项' : '--')
+const resumeOptionLabel = (item: ResumeVO) =>
+  item.resumeName || item.title || item.targetPosition || `简历 #${item.id}`
+const resumeVersionOptionLabel = (item: ResumeVersionVO) => {
+  const name = item.versionName || `版本 ${item.versionNo || item.id}`
+  return item.currentFlag === 1 ? `${name}（当前）` : name
+}
 
 const statsNumber = (value?: number) => value ?? 0
 const applications = computed(() => {
@@ -845,6 +892,43 @@ const load = async () => {
   await Promise.allSettled([loadApplications(), loadStats()])
 }
 
+const loadResumeOptions = async () => {
+  if (resumeOptions.value.length || resumeLoading.value) return
+  resumeLoading.value = true
+  try {
+    const page = await getResumesApi({ pageNo: 1, pageSize: 100 })
+    resumeOptions.value = page.records
+  } catch (error) {
+    resumeOptions.value = []
+    ElMessage.warning(getErrorMessage(error))
+  } finally {
+    resumeLoading.value = false
+  }
+}
+
+const loadResumeVersionOptions = async (resumeId?: number) => {
+  resumeVersionOptions.value = []
+  if (!resumeId) return
+  resumeVersionLoading.value = true
+  try {
+    resumeVersionOptions.value = await getResumeVersionsApi(resumeId)
+  } catch (error) {
+    ElMessage.warning(getErrorMessage(error))
+  } finally {
+    resumeVersionLoading.value = false
+  }
+}
+
+const prepareResumeSelection = async (resumeId?: number) => {
+  await loadResumeOptions()
+  await loadResumeVersionOptions(resumeId)
+}
+
+const handleResumeChange = async (resumeId?: number) => {
+  form.resumeVersionId = undefined
+  await loadResumeVersionOptions(resumeId)
+}
+
 const replaceListQuery = (suppressRouteApply = false) => {
   const query: Record<string, string> = {}
   if (status.value) query.status = status.value
@@ -959,11 +1043,13 @@ const openCreate = () => {
     companyName: '',
     source: 'CUSTOM',
     note: '',
+    resumeId: undefined,
     resumeVersionId: undefined,
     appliedAt: undefined,
     nextFollowUpAt: ''
   })
   dialogVisible.value = true
+  void prepareResumeSelection()
   void nextTick(() => applicationFormRef.value?.clearValidate())
 }
 
@@ -971,6 +1057,7 @@ const openEdit = (item: JobApplicationVO) => {
   editingId.value = item.id
   Object.assign(form, item)
   dialogVisible.value = true
+  void prepareResumeSelection(item.resumeId)
   void nextTick(() => applicationFormRef.value?.clearValidate())
 }
 
@@ -1309,6 +1396,7 @@ onMounted(async () => {
 .application-stats {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .stats-warning {
@@ -1369,6 +1457,7 @@ onMounted(async () => {
 .status-funnel {
   display: grid;
   grid-template-columns: repeat(7, minmax(126px, 1fr));
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -1476,6 +1565,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
+  .v4-application-page,
+  .v4-application-page > * {
+    min-width: 0;
+  }
+
   .v4-page-header,
   .v4-row-head,
   .event-row__head {

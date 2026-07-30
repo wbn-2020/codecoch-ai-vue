@@ -452,6 +452,10 @@ export interface InterviewListVO {
   startedAt?: string
   finishedAt?: string
   createdAt?: string
+  targetJobId?: number
+  reportId?: number
+  comparisonAvailable?: boolean
+  comparisonUnavailableReason?: string
   voiceDeliverySummary?: import('./interviewVoiceProduct').InterviewVoiceDeliverySummaryVO
 }
 
@@ -693,4 +697,13 @@ export interface InterviewReportVO {
   trustStatus?: InterviewReportTrustStatus
   evidenceSummary?: string
   fallback?: boolean
+  replayEligibility?: import('./interviewAdvanced').InterviewReplayEligibilityVO
+  replayEligibilityState?: import('./interviewAdvanced').InterviewReplayEligibilityState
+  replayAvailable?: boolean
+  replayEligible?: boolean
+  replayReasonCode?: string
+  replayReasonMessage?: string
+  replayUnavailableReason?: string
+  replayPolicyVersion?: string
+  replayQualityGate?: import('./interviewAdvanced').InterviewReplayQualityGateVO
 }

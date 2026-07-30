@@ -178,7 +178,8 @@ watch(
 
     await nextTick()
     inputRef.value?.focus()
-  }
+  },
+  { immediate: true }
 )
 
 const selectCommand = async (command?: CommandItem) => {

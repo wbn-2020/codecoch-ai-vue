@@ -47,7 +47,7 @@
         <el-button
           v-if="interviewId && isGenerated"
           :loading="replayLoading"
-          :disabled="advancedReportMeta.comparisonAvailable === false"
+          :disabled="replayLoading || !replayAvailable"
           :title="replayButtonTitle"
           @click="handleCreateReplay"
         >
@@ -632,7 +632,7 @@
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -645,7 +645,11 @@ import {
   retryInterviewReportApi,
   type InterviewReportExportFormat
 } from '@/api/interview'
-import { createInterviewRemediationApi, createInterviewReplayApi } from '@/api/interviewAdvanced'
+import {
+  createInterviewRemediationApi,
+  createInterviewReplayApi,
+  getInterviewReplayOptionsApi
+} from '@/api/interviewAdvanced'
 import { getJobRequirementMatrixApi } from '@/api/jobRequirement'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
@@ -669,21 +673,25 @@ import type {
   RecommendedQuestionVO,
   StageReportVO
 } from '@/types/interview'
+import type { InterviewReplayEligibilityVO } from '@/types/interviewAdvanced'
 import { toFriendlyMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
-const interviewId = getRouteNumberParam(route.params.id as string)
+const interviewId = computed(() => getRouteNumberParam(route.params.id as string) || undefined)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
 const retrying = ref(false)
 const exporting = ref(false)
 const remediationLoading = ref(false)
 const remediationIdempotencyKey = ref('')
+const remediationIdempotencyKeys = new Map<number, string>()
 const replayLoading = ref(false)
 const replayIdempotencyKey = ref('')
+const replayIdempotencyKeys = new Map<number, string>()
+const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -692,37 +700,72 @@ const staticActionShownMetricKey = ref('')
 const pollCount = ref(0)
 const pollFailures = ref(0)
 const taskReportId = ref<number | undefined>()
-const asyncReceipt = ref({
+const routeAsyncReceipt = (id?: number) => ({
   messageId: typeof route.query.asyncMessageId === 'string' ? route.query.asyncMessageId : '',
   traceId: typeof route.query.asyncTraceId === 'string' ? route.query.asyncTraceId : '',
   bizType: typeof route.query.asyncBizType === 'string' ? route.query.asyncBizType : 'interview.report',
-  bizId: typeof route.query.asyncBizId === 'string' ? route.query.asyncBizId : (interviewId ? String(interviewId) : ''),
+  bizId: typeof route.query.asyncBizId === 'string' ? route.query.asyncBizId : (id ? String(id) : ''),
   sendStatus: typeof route.query.asyncSendStatus === 'string' ? route.query.asyncSendStatus : ''
 })
+const asyncReceipt = ref(routeAsyncReceipt(interviewId.value))
 let pollTimer: number | undefined
+let reportGeneration = 0
+let replayEligibilityRequest = 0
+let reportViewDisposed = false
+
+const isCurrentReportRequest = (id: number, generation: number) =>
+  !reportViewDisposed
+  && reportGeneration === generation
+  && interviewId.value === id
+
+const clearReplayEligibility = () => {
+  replayEligibilityRequest += 1
+  replayEligibility.value = null
+}
+
+const loadReplayEligibility = async (id: number, generation: number) => {
+  const request = ++replayEligibilityRequest
+  try {
+    const nextEligibility = await getInterviewReplayOptionsApi(id)
+    if (
+      !isCurrentReportRequest(id, generation)
+      || replayEligibilityRequest !== request
+      || !isGenerated.value
+    ) {
+      return
+    }
+    replayEligibility.value = nextEligibility
+  } catch {
+    // Keep the report-embedded contract as a compatibility fallback.
+  }
+}
 
 const handleExportReport = async (command: string | number | object) => {
-  if (!interviewId || !isGenerated.value || exporting.value) return
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (!id || !isGenerated.value || exporting.value) return
   const format: InterviewReportExportFormat = command === 'json' ? 'json' : 'markdown'
   exporting.value = true
   try {
-    const response = await exportInterviewReportApi(interviewId, format)
+    const response = await exportInterviewReportApi(id, format)
+    if (!isCurrentReportRequest(id, generation)) return
     const mimeType = format === 'json' ? 'application/json;charset=UTF-8' : 'text/markdown;charset=UTF-8'
     const blob = response instanceof Blob ? response : new Blob([response as BlobPart], { type: mimeType })
     const url = URL.createObjectURL(blob)
     try {
       const link = document.createElement('a')
       link.href = url
-      link.download = `面试报告_${interviewId}.${format === 'json' ? 'json' : 'md'}`
+      link.download = `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`
       link.click()
     } finally {
       URL.revokeObjectURL(url)
     }
     ElMessage.success('报告已导出')
   } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
     ElMessage.error(toFriendlyMessage(error, '报告导出失败，请稍后重试。'))
   } finally {
-    exporting.value = false
+    if (isCurrentReportRequest(id, generation)) exporting.value = false
   }
 }
 
@@ -753,17 +796,30 @@ const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
-const advancedReportMeta = computed(() => normalizeInterviewReportAdvanced(report.value, interviewId || undefined))
+const advancedReportMeta = computed(() => {
+  const normalized = normalizeInterviewReportAdvanced(report.value, interviewId.value)
+  return replayEligibility.value
+    ? { ...normalized, replayEligibility: replayEligibility.value }
+    : normalized
+})
+const replayAvailable = computed(() => advancedReportMeta.value.replayEligibility.state === 'ELIGIBLE')
 const remediationButtonTitle = computed(() => {
   if (advancedReportMeta.value.remediationAvailable) return '根据本轮报告创建同岗位复练场次'
   return '当前报告尚不支持创建复练'
 })
 const replayButtonTitle = computed(() => {
-  if (advancedReportMeta.value.comparisonAvailable === false) {
-    return advancedReportMeta.value.comparisonUnavailableReason
-      || '本轮报告暂不可比，无法用于同配置对比训练'
+  const eligibility = advancedReportMeta.value.replayEligibility
+  if (eligibility.state === 'ELIGIBLE') {
+    return '以完全相同的配置再打一轮，完成后可与本轮对比'
   }
-  return '以完全相同的配置再打一轮，完成后可与本轮对比'
+  const qualityGate = eligibility.qualityGate
+  const qualityGateMessage = qualityGate?.actual !== undefined && qualityGate.required !== undefined
+    ? `当前 ${qualityGate.actual}，要求 ${qualityGate.required}`
+    : ''
+  const defaultMessage = eligibility.state === 'INELIGIBLE'
+    ? '当前报告不满足同配置再练条件'
+    : '当前无法确认同配置再练资格，暂时无法创建'
+  return [eligibility.reasonMessage || defaultMessage, qualityGateMessage].filter(Boolean).join('；')
 })
 const remediationGuidance = computed(() => {
   if (!isGenerated.value || !advancedReportMeta.value.remediationAvailable) return ''
@@ -1004,14 +1060,14 @@ const goReportTaskCenter = () => {
       messageId: asyncReceipt.value.messageId,
       traceId: asyncReceipt.value.traceId,
       bizType: asyncReceipt.value.bizType || 'interview.report',
-      bizId: asyncReceipt.value.bizId || interviewId
+      bizId: asyncReceipt.value.bizId || interviewId.value
     })
   })
 }
 
 const reportContextQuery = () => compactRouterQuery({
   source: 'interviewReport',
-  interviewId,
+  interviewId: interviewId.value,
   reportId: report.value?.reportId || report.value?.id,
   targetJobId: report.value?.targetJobId,
   profileId: report.value?.skillProfileId,
@@ -1048,7 +1104,7 @@ const goJdGapPractice = async () => {
       query: compactRouterQuery({
         source: 'gap',
         sourceId: report.value.skillProfileId,
-        interviewId,
+        interviewId: interviewId.value,
         reportId: report.value.reportId || report.value.id,
         targetJobId: report.value.targetJobId,
         profileId: report.value.skillProfileId,
@@ -1065,7 +1121,7 @@ const goJdGapPractice = async () => {
       query: compactRouterQuery({
         source: 'matchReport',
         sourceId: report.value.matchReportId,
-        interviewId,
+        interviewId: interviewId.value,
         reportId: report.value.reportId || report.value.id,
         targetJobId: report.value.targetJobId,
         profileId: report.value.skillProfileId,
@@ -1231,7 +1287,7 @@ const openRecommendedQuestion = async (item: DisplayRecommendedQuestion) => {
     return
   }
   const query: Record<string, string> = { source: 'interviewReport' }
-  if (interviewId) query.interviewId = String(interviewId)
+  if (interviewId.value) query.interviewId = String(interviewId.value)
   const reportId = report.value?.reportId || report.value?.id
   if (reportId) query.reportId = String(reportId)
   await router.push({
@@ -1251,7 +1307,7 @@ const goPracticeQuestion = async () => {
     source: 'interviewReport',
     count: String(recommendedQuestionIds.value.length)
   }
-  if (interviewId) query.interviewId = String(interviewId)
+  if (interviewId.value) query.interviewId = String(interviewId.value)
   const reportId = report.value?.reportId || report.value?.id
   if (reportId) query.reportId = String(reportId)
   await router.push({
@@ -1304,7 +1360,7 @@ const openKnowledgeCandidate = async (candidate: InterviewKnowledgeCandidateVO) 
     query: compactRouterQuery({
       source: 'interviewReport',
       candidate: candidate.sourceField,
-      interviewId,
+      interviewId: interviewId.value,
       reportId: report.value?.reportId || report.value?.id
     })
   })
@@ -1327,7 +1383,7 @@ const trackInterviewNextActionMetric = (eventCode: 'interview_report_next_action
     bizType: 'interview_report',
     bizId: String(metricId),
     metadata: {
-      interviewId,
+      interviewId: interviewId.value,
       actionType: action?.actionType,
       actionSource: action?.actionSource || (action ? 'BACKEND' : undefined),
       priority: action?.priority,
@@ -1354,97 +1410,145 @@ const handleStaticTodayAction = async (trackMetric = false) => {
   await router.push('/dashboard')
 }
 
-const resolveRemediationRequirementIds = async () => {
-  if (advancedReportMeta.value.sourceRequirementIds.length) {
-    return advancedReportMeta.value.sourceRequirementIds
+const resolveRemediationRequirementIds = async (
+  sourceRequirementIds: number[],
+  targetJobId?: number
+) => {
+  if (sourceRequirementIds.length) {
+    return sourceRequirementIds
   }
-  const targetJobId = advancedReportMeta.value.targetJobId || report.value?.targetJobId
   if (!targetJobId) return []
   const matrix = await getJobRequirementMatrixApi(targetJobId)
   return extractRemediationRequirementIds(matrix)
 }
 
 const handleCreateRemediation = async () => {
-  if (remediationLoading.value || !advancedReportMeta.value.remediationAvailable) return
-  const sourceReportId = advancedReportMeta.value.reportId || report.value?.reportId || report.value?.id
+  const id = interviewId.value
+  const generation = reportGeneration
+  const meta = advancedReportMeta.value
+  if (remediationLoading.value || !id || !meta.remediationAvailable) return
+  const sourceReportId = meta.reportId || report.value?.reportId || report.value?.id
   if (!sourceReportId) {
     ElMessage.warning('当前报告缺少可追溯的报告记录，暂时无法创建复练。')
     return
   }
+  const snapshot = {
+    sourceReportId,
+    sourceRequirementIds: [...meta.sourceRequirementIds],
+    targetJobId: meta.targetJobId || report.value?.targetJobId,
+    purpose: [
+      mainWeaknessPreview.value.title,
+      mainWeaknessPreview.value.description
+    ].filter(Boolean).join('：').slice(0, 500) || '针对本轮面试报告暴露的岗位要求短板进行复练。',
+    strongRemediation: meta.strongRemediationAvailable
+  }
 
   remediationLoading.value = true
   try {
-    const sourceRequirementIds = await resolveRemediationRequirementIds()
+    const sourceRequirementIds = await resolveRemediationRequirementIds(
+      snapshot.sourceRequirementIds,
+      snapshot.targetJobId
+    )
+    if (!isCurrentReportRequest(id, generation)) return
     if (!sourceRequirementIds.length) {
       ElMessage.warning('当前岗位还没有可用于复练的薄弱或缺失要求，请先完善岗位证据矩阵。')
       return
     }
-    if (!remediationIdempotencyKey.value) {
-      remediationIdempotencyKey.value = createOperationIdempotencyKey('interview-remedy')
+    let idempotencyKey = remediationIdempotencyKeys.get(snapshot.sourceReportId)
+    if (!idempotencyKey) {
+      idempotencyKey = createOperationIdempotencyKey('interview-remedy')
+      remediationIdempotencyKeys.set(snapshot.sourceReportId, idempotencyKey)
     }
-    const purpose = [
-      mainWeaknessPreview.value.title,
-      mainWeaknessPreview.value.description
-    ].filter(Boolean).join('：').slice(0, 500) || '针对本轮面试报告暴露的岗位要求短板进行复练。'
+    remediationIdempotencyKey.value = idempotencyKey
     const result = await createInterviewRemediationApi({
-      sourceReportId,
+      sourceReportId: snapshot.sourceReportId,
       sourceRequirementIds,
-      practicePurpose: purpose,
-      strongRemediation: advancedReportMeta.value.strongRemediationAvailable,
-      idempotencyKey: remediationIdempotencyKey.value
+      practicePurpose: snapshot.purpose,
+      strongRemediation: snapshot.strongRemediation,
+      idempotencyKey
     })
+    if (!isCurrentReportRequest(id, generation)) return
     const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
-    if (targetSessionId) {
-      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的复练场次。' : '复练场次已创建。')
-      remediationIdempotencyKey.value = ''
-      await router.push(`/interviews/room/${targetSessionId}`)
+    const destination = targetSessionId ? `/interviews/room/${targetSessionId}` : '/interviews/history'
+    let navigationFailure: unknown
+    try {
+      navigationFailure = await router.push(destination)
+    } catch {
+      if (isCurrentReportRequest(id, generation)) {
+        ElMessage.warning('复练场次已创建，但页面跳转失败；重试将恢复同一场次。')
+      }
       return
     }
-    ElMessage.info('复练请求已保存，请到面试历史中查看新场次。')
+    if (navigationFailure) {
+      ElMessage.warning('复练场次已创建，但页面跳转未完成；重试将恢复同一场次。')
+      return
+    }
+    remediationIdempotencyKeys.delete(snapshot.sourceReportId)
     remediationIdempotencyKey.value = ''
-    await router.push('/interviews/history')
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的复练场次。' : '复练场次已创建。')
+    } else {
+      ElMessage.info('复练请求已保存，请到面试历史中查看新场次。')
+    }
   } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
     ElMessage.error(toFriendlyMessage(error, '复练创建失败，请稍后重试。'))
   } finally {
-    remediationLoading.value = false
+    if (isCurrentReportRequest(id, generation)) remediationLoading.value = false
   }
 }
 
 const handleCreateReplay = async () => {
-  if (replayLoading.value || !interviewId) return
-  if (advancedReportMeta.value.comparisonAvailable === false) return
-  try {
-    await ElMessageBox.confirm(
-      '将以完全相同的配置（岗位、难度、题量、场景）开启新一轮面试，完成后可与本轮发起对比。',
-      '同配置再练一轮',
-      { confirmButtonText: '开始再练', cancelButtonText: '取消', type: 'info' }
-    )
-  } catch {
-    return
-  }
-
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (replayLoading.value || !id || !replayAvailable.value) return
   replayLoading.value = true
   try {
-    if (!replayIdempotencyKey.value) {
-      replayIdempotencyKey.value = createOperationIdempotencyKey('interview-replay')
-    }
-    const result = await createInterviewReplayApi(interviewId, {
-      idempotencyKey: replayIdempotencyKey.value
-    })
-    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
-    if (targetSessionId) {
-      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的再练场次。' : '再练场次已创建。')
-      replayIdempotencyKey.value = ''
-      await router.push(`/interviews/room/${targetSessionId}`)
+    try {
+      await ElMessageBox.confirm(
+        '将以完全相同的配置（岗位、难度、题量、场景）开启新一轮面试，完成后可与本轮发起对比。',
+        '同配置再练一轮',
+        { confirmButtonText: '开始再练', cancelButtonText: '取消', type: 'info' }
+      )
+    } catch {
       return
     }
-    ElMessage.info('再练请求已保存，请到面试历史中查看新场次。')
+    if (!isCurrentReportRequest(id, generation)) return
+    if (!replayIdempotencyKey.value) {
+      replayIdempotencyKey.value = createOperationIdempotencyKey('interview-replay')
+      replayIdempotencyKeys.set(id, replayIdempotencyKey.value)
+    }
+    const result = await createInterviewReplayApi(id, {
+      idempotencyKey: replayIdempotencyKey.value
+    })
+    if (!isCurrentReportRequest(id, generation)) return
+    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
+    const destination = targetSessionId ? `/interviews/room/${targetSessionId}` : '/interviews/history'
+    let navigationFailure: unknown
+    try {
+      navigationFailure = await router.push(destination)
+    } catch {
+      if (isCurrentReportRequest(id, generation)) {
+        ElMessage.warning('再练场次已创建，但页面跳转失败；重试将恢复同一场次。')
+      }
+      return
+    }
+    if (navigationFailure) {
+      ElMessage.warning('再练场次已创建，但页面跳转未完成；重试将恢复同一场次。')
+      return
+    }
+    replayIdempotencyKeys.delete(id)
     replayIdempotencyKey.value = ''
-    await router.push('/interviews/history')
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的再练场次。' : '再练场次已创建。')
+    } else {
+      ElMessage.info('再练请求已保存，请到面试历史中查看新场次。')
+    }
   } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
     ElMessage.error(toFriendlyMessage(error, '同配置再练创建失败，请稍后重试。'))
   } finally {
-    replayLoading.value = false
+    if (isCurrentReportRequest(id, generation)) replayLoading.value = false
   }
 }
 
@@ -1510,7 +1614,7 @@ const handleNextAction = async (action: InterviewReportNextActionVO) => {
 }
 
 const stopPolling = () => {
-  if (pollTimer) {
+  if (pollTimer !== undefined) {
     window.clearTimeout(pollTimer)
     pollTimer = undefined
   }
@@ -1522,57 +1626,64 @@ const rememberAsyncReceipt = (result?: {
   asyncBizType?: string | null
   asyncBizId?: string | null
   asyncSendStatus?: string | null
-}) => {
+}, id?: number) => {
   if (!result) return
   asyncReceipt.value = {
     messageId: result.asyncMessageId || asyncReceipt.value.messageId,
     traceId: result.asyncTraceId || asyncReceipt.value.traceId,
     bizType: result.asyncBizType || asyncReceipt.value.bizType || 'interview.report',
-    bizId: result.asyncBizId || asyncReceipt.value.bizId || (interviewId ? String(interviewId) : ''),
+    bizId: result.asyncBizId || asyncReceipt.value.bizId || (id ? String(id) : ''),
     sendStatus: result.asyncSendStatus || asyncReceipt.value.sendStatus
   }
 }
 
-const schedulePolling = () => {
+const schedulePolling = (id: number, generation: number) => {
   stopPolling()
+  if (!isCurrentReportRequest(id, generation)) return
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
     ElMessage.warning('报告准备时间较长，可稍后按面试记录继续查看。')
     return
   }
-  pollTimer = window.setTimeout(fetchReport, 2000)
+  pollTimer = window.setTimeout(() => {
+    void fetchReport(id, generation)
+  }, 2000)
 }
 
-const fetchReport = async () => {
-  if (!interviewId) return
+const fetchReport = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   loading.value = true
   try {
-    report.value = await getInterviewReportApi(interviewId)
+    const nextReport = await getInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    report.value = nextReport
     pollFailures.value = 0
+    if (isGenerated.value) void loadReplayEligibility(id, generation)
     if (isGenerating.value) {
       pollCount.value += 1
-      schedulePolling()
+      schedulePolling(id, generation)
     } else {
       stopPolling()
     }
   } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
     pollFailures.value += 1
     if (pollFailures.value >= 3) {
       stopPolling()
       ElMessage.error(toFriendlyMessage(error, '报告状态查询失败，请稍后刷新。'))
     } else {
-      schedulePolling()
+      schedulePolling(id, generation)
     }
   } finally {
-    loading.value = false
+    if (isCurrentReportRequest(id, generation)) loading.value = false
   }
 }
 
-const markReportUnavailable = (message: string) => {
-  if (!interviewId) return
+const markReportUnavailable = (message: string, id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   reportRecoveryNotice.value = message
   report.value = {
-    interviewId,
+    interviewId: id,
     reportStatus: 'FAILED',
     status: 'FAILED',
     failureReason: message,
@@ -1583,12 +1694,14 @@ const markReportUnavailable = (message: string) => {
   stopPolling()
 }
 
-const runSyncFallback = async () => {
-  if (!interviewId) return
-  const id = interviewId
+const runSyncFallback = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
+  clearReplayEligibility()
   retrying.value = true
   try {
-    rememberAsyncReceipt(await retryInterviewReportApi(id))
+    const retryResult = await retryInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    rememberAsyncReceipt(retryResult, id)
     report.value = {
       interviewId: id,
       reportStatus: 'GENERATING',
@@ -1601,49 +1714,70 @@ const runSyncFallback = async () => {
     }
     pollFailures.value = 0
     reportRecoveryNotice.value = ''
-    schedulePolling()
+    schedulePolling(id, generation)
   } finally {
-    retrying.value = false
+    if (isCurrentReportRequest(id, generation)) retrying.value = false
   }
 }
 
-const loadReportOrSubmitTask = async () => {
-  if (!interviewId) return
+const loadReportOrSubmitTask = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   loading.value = true
   reportRecoveryNotice.value = ''
   try {
-    report.value = await getInterviewReportApi(interviewId)
+    const nextReport = await getInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    report.value = nextReport
     pollFailures.value = 0
+    if (isGenerated.value) void loadReplayEligibility(id, generation)
     if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
       return
     }
     if (isGenerating.value) {
-      schedulePolling()
+      schedulePolling(id, generation)
       return
     }
-    markReportUnavailable('当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。')
+    markReportUnavailable(
+      '当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。',
+      id,
+      generation
+    )
   } catch (error) {
-    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'))
+    markReportUnavailable(
+      toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'),
+      id,
+      generation
+    )
   } finally {
-    loading.value = false
+    if (isCurrentReportRequest(id, generation)) loading.value = false
   }
 }
 
 const handleRetry = async () => {
-  if (!interviewId) return
-  await runSyncFallback()
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (!id) return
+  await runSyncFallback(id, generation)
 }
 
 const handleGenerateStudyPlan = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
   const reportId = report.value?.reportId || report.value?.id
-  if (!reportId) {
-    ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+  if (!id || !reportId || studyPlanGenerating.value) {
+    if (id && !reportId) {
+      ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+    }
+    return
+  }
+  if (!isCurrentReportRequest(id, generation)) {
     return
   }
   studyPlanGenerating.value = true
   try {
     const result = await generateStudyPlanApi({ reportId })
+    if (!isCurrentReportRequest(id, generation)) return
     if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
       ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
       if (result.planId) {
@@ -1669,12 +1803,42 @@ const handleGenerateStudyPlan = async () => {
       ElMessage.success('学习计划已生成')
     }
     await router.push(`/study-plans?planId=${result.planId}`)
+  } catch (error) {
+    if (isCurrentReportRequest(id, generation)) {
+      ElMessage.error(toFriendlyMessage(error, '学习计划生成失败，请稍后重试'))
+    }
   } finally {
-    studyPlanGenerating.value = false
+    if (isCurrentReportRequest(id, generation)) studyPlanGenerating.value = false
   }
 }
 
-onMounted(loadReportOrSubmitTask)
+const resetReportRouteState = (id?: number) => {
+  stopPolling()
+  loading.value = false
+  retrying.value = false
+  exporting.value = false
+  remediationLoading.value = false
+  replayLoading.value = false
+  studyPlanGenerating.value = false
+  remediationIdempotencyKey.value = ''
+  replayIdempotencyKey.value = id ? replayIdempotencyKeys.get(id) || '' : ''
+  clearReplayEligibility()
+  report.value = null
+  reportRecoveryNotice.value = ''
+  nextActionShownMetricKey.value = ''
+  staticActionShownMetricKey.value = ''
+  pollCount.value = 0
+  pollFailures.value = 0
+  taskReportId.value = undefined
+  asyncReceipt.value = routeAsyncReceipt(id)
+}
+
+watch(interviewId, (id) => {
+  reportGeneration += 1
+  const generation = reportGeneration
+  resetReportRouteState(id)
+  if (id) void loadReportOrSubmitTask(id, generation)
+}, { immediate: true })
 watch(backendNextActions, (actions) => {
   const metricId = reportMetricId()
   if (!metricId || !canTrackReportNextActionMetric() || !actions.length) return
@@ -1695,6 +1859,8 @@ watch(isGenerated, (generated) => {
   )
 })
 onBeforeUnmount(() => {
+  reportViewDisposed = true
+  reportGeneration += 1
   stopPolling()
 })
 </script>

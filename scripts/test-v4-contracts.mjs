@@ -1187,7 +1187,7 @@ recordContainsAll(
 
 const safetyChecks = [
   ['sse-post-body', frontendApi, "method: 'POST'", 'Knowledge ask SSE uses POST'],
-  ['sse-auth-header', sseUtil, 'Authorization: `Bearer ${token}`', 'SSE forwards bearer token'],
+  ['sse-auth-header', sseUtil, 'Authorization: `Bearer ${session.token}`', 'SSE forwards the captured session bearer token'],
   ['sse-json-body', sseUtil, 'JSON.stringify(body)', 'SSE forwards request body'],
   ['delete-document-confirm', knowledgePage, "reason: 'user knowledge delete document'", 'Document delete sends confirmation context'],
   ['delete-chunk-confirm', knowledgePage, "reason: 'user knowledge delete chunk'", 'Chunk delete sends confirmation context'],
@@ -1493,14 +1493,30 @@ const adminEntryContractChecks = [
   [
     'router-guard-admin-route-session-gate',
     routerGuards,
-    'if (isAdminRoute) {',
+    'const verifiedUser = isAdminRoute',
     900,
     [
-      'await authStore.verifyAdminSession()',
-      "path: '/login'",
-      "path: '/auth-unavailable'"
+      'const verifiedUser = isAdminRoute',
+      '? await authStore.verifyAdminSession()',
+      ': await authStore.verifyToken()',
+      'recheckVerifiedSession(authStore, to, verifiedUser)',
+      'return verificationFailureRoute('
     ],
-    'Admin route guard verifies admin session and falls back to login or auth-unavailable when the session check fails'
+    'Admin route guard verifies admin sessions and routes verification outcomes through the centralized fallback handlers'
+  ],
+  [
+    'router-guard-session-fallback-routes',
+    routerGuards,
+    'const recheckVerifiedSession',
+    1800,
+    [
+      'return loginRoute(to)',
+      'return authUnavailableRoute(to)',
+      'const verificationFailureRoute',
+      'if (isAuthFailure(error))',
+      "return forbiddenRoute(to, 'serverForbidden')"
+    ],
+    'Router verification fallbacks distinguish logged-out, unavailable, and forbidden sessions'
   ],
   [
     'router-guard-auth-entry-uses-current-authenticated-helper',
@@ -1952,9 +1968,9 @@ const adminAnnouncementGovernanceChecks = [
     [
       "import type { AdminOperationConfirmPayload } from '@/types/adminGovernance'",
       'AnnouncementSaveDTO & AdminOperationConfirmPayload',
-      'publishAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload)',
-      'offlineAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload)',
-      'deleteAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload)',
+      'publishAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload)',
+      'offlineAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload)',
+      'deleteAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload)',
       'request.delete<null, null>(`/admin/announcements/${id}`, { data })'
     ],
     'Announcement admin API forwards the shared confirmation payload including dryRun'

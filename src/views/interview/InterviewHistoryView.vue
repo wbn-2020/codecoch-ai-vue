@@ -203,6 +203,20 @@
                 </el-tooltip>
                 <StatusTag :status="item.status" />
                 <StatusTag :status="item.reportStatus" />
+                <StatusTag
+                  v-if="isReportSuccess(item.reportStatus) && item.comparisonAvailable === true"
+                  status="COMPARABLE"
+                  :map="comparableTagMap"
+                />
+                <el-tooltip
+                  v-else-if="isReportSuccess(item.reportStatus) && item.comparisonAvailable === false"
+                  :content="comparisonUnavailableText(item)"
+                  placement="top"
+                >
+                  <span class="comparison-tag-wrap">
+                    <StatusTag status="NOT_COMPARABLE" :map="comparableTagMap" />
+                  </span>
+                </el-tooltip>
               </div>
             </div>
 
@@ -278,6 +292,7 @@ import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { interviewModeOptions } from '@/constants/enums'
 import {
+  comparisonReasonLabel,
   storeInterviewComparison,
   toInterviewComparisonCandidate,
   validateInterviewComparisonSelection
@@ -329,6 +344,14 @@ const reportStatusOptions: SelectOption[] = [
 
 const normalizeStatus = (status?: string) => String(status || '').toUpperCase()
 const isReportSuccess = (status?: string) => ['GENERATED', 'COMPLETED', 'SUCCESS'].includes(String(status || '').toUpperCase())
+
+const comparableTagMap: Record<string, { label: string; type: 'success' | 'info' }> = {
+  COMPARABLE: { label: '可比对', type: 'success' },
+  NOT_COMPARABLE: { label: '不可比', type: 'info' }
+}
+
+const comparisonUnavailableText = (row: InterviewListVO) =>
+  comparisonReasonLabel(row.comparisonUnavailableReason || '')
 const isReportInProgress = (status?: string) => ['GENERATING', 'PROCESSING', 'PENDING', 'REPORT_GENERATING'].includes(normalizeStatus(status))
 const isReportFailed = (status?: string) => ['FAILED', 'ERROR'].includes(normalizeStatus(status))
 const isInterviewDone = (status?: string) => ['COMPLETED', 'CANCELED', 'FAILED'].includes(String(status || '').toUpperCase())
@@ -469,6 +492,9 @@ const comparisonSelectionState = (row: InterviewListVO) => {
     return { disabled: true, reason: '比较创建中，请稍候。' }
   }
   if (isComparisonSelected(row)) return { disabled: false, reason: '' }
+  if (row.comparisonAvailable === false) {
+    return { disabled: true, reason: `该记录不可比（${comparisonUnavailableText(row)}），不能加入比较。` }
+  }
   const candidate = toInterviewComparisonCandidate(row)
   if (!candidate.targetJobId) {
     return { disabled: true, reason: '该面试未绑定目标岗位，不能用于同岗位比较。' }
@@ -557,12 +583,22 @@ const createComparison = async () => {
       idempotencyKey: comparisonIdempotencyKey.value
     })
     const cacheKey = storeInterviewComparison(result)
+    let navigationFailure: unknown
+    try {
+      navigationFailure = await router.push({
+        name: 'InterviewComparison',
+        params: { id: result.id || 'preview' },
+        query: { cacheKey }
+      })
+    } catch {
+      comparisonError.value = '对比记录已创建，但页面跳转失败；重试将恢复同一记录。'
+      return
+    }
+    if (navigationFailure) {
+      comparisonError.value = '对比记录已创建，但页面跳转未完成；重试将恢复同一记录。'
+      return
+    }
     comparisonIdempotencyKey.value = ''
-    await router.push({
-      name: 'InterviewComparison',
-      params: { id: result.id || 'preview' },
-      query: { cacheKey }
-    })
   } catch (error) {
     comparisonError.value = getErrorMessage(error, '比较请求失败，请稍后重试。')
   } finally {

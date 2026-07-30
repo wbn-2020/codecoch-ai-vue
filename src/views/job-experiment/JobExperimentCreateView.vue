@@ -168,7 +168,7 @@
       <div class="variant-list">
         <article v-for="(variant, index) in variants" :key="variant.localKey" class="variant-row">
           <div class="variant-head">
-            <el-radio v-model="controlVariantIndex" :label="index" :disabled="isEdit && Boolean(linkedHypothesis)">
+                  <el-radio v-model="controlVariantIndex" :value="index" :disabled="isEdit && Boolean(linkedHypothesis)">
               设为对照组
             </el-radio>
             <el-button

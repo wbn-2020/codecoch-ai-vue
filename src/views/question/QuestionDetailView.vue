@@ -62,7 +62,7 @@
           <el-divider />
           <div class="side-title">掌握状态</div>
           <el-radio-group v-model="masteryStatus" class="mastery-group">
-            <el-radio-button v-for="item in masteryOptions" :key="item.value" :label="item.value">
+              <el-radio-button v-for="item in masteryOptions" :key="item.value" :value="item.value">
               {{ item.label }}
             </el-radio-button>
           </el-radio-group>

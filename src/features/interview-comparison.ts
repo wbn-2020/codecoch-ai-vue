@@ -8,6 +8,8 @@ import type {
   InterviewRemediationOptionVO,
   InterviewRemediationOptionsVO,
   InterviewRemediationVO,
+  InterviewReplayEligibilityState,
+  InterviewReplayEligibilityVO,
   InterviewReplayVO,
   InterviewReportAdvancedMeta,
   InterviewRequirementImprovementVO
@@ -42,6 +44,59 @@ const booleanValue = (value: unknown): boolean | undefined => {
   if (value === 1) return true
   if (value === 0) return false
   return undefined
+}
+
+const comparisonReadyReportStatuses = new Set(['GENERATED', 'COMPLETED', 'SUCCESS'])
+
+const isComparisonReadyReportStatus = (value: unknown) =>
+  comparisonReadyReportStatuses.has(String(value || '').trim().toUpperCase())
+
+const normalizeReplayEligibility = (source: Record<string, unknown>): InterviewReplayEligibilityVO => {
+  const eligibility = objectValue(source.replayEligibility)
+  const rawState = String(
+    stringValue(eligibility.state || source.state || source.replayEligibilityState) || ''
+  ).toUpperCase()
+  const explicitAvailable = booleanValue(
+    source.replayAvailable
+      ?? source.replayEligible
+      ?? eligibility.available
+      ?? (typeof source.replayEligibility === 'boolean' ? source.replayEligibility : undefined)
+  )
+  let state: InterviewReplayEligibilityState = 'UNKNOWN'
+  if (rawState === 'ELIGIBLE' || rawState === 'INELIGIBLE' || rawState === 'UNKNOWN') {
+    state = rawState
+  } else if (explicitAvailable === true) {
+    state = 'ELIGIBLE'
+  } else if (explicitAvailable === false) {
+    state = 'INELIGIBLE'
+  }
+
+  const qualityGateSource = objectValue(eligibility.qualityGate || source.replayQualityGate)
+  const qualityGate = {
+    passed: booleanValue(qualityGateSource.passed),
+    actual: numberValue(qualityGateSource.actual),
+    required: numberValue(qualityGateSource.required)
+  }
+  const hasQualityGate = Object.values(qualityGate).some((value) => value !== undefined)
+
+  return {
+    state,
+    reasonCode: stringValue(eligibility.reasonCode || source.replayReasonCode),
+    reasonMessage: stringValue(
+      eligibility.reasonMessage
+        || source.replayReasonMessage
+        || source.replayUnavailableReason
+    ),
+    policyVersion: stringValue(eligibility.policyVersion || source.replayPolicyVersion),
+    qualityGate: hasQualityGate ? qualityGate : undefined
+  }
+}
+
+export const normalizeInterviewReplayEligibility = (
+  value: unknown
+): InterviewReplayEligibilityVO => {
+  const source = objectValue(value)
+  return normalizeReplayEligibility({ ...source, replayEligibility: source })
 }
 
 const comparisonReasonMessages: Record<string, string> = {
@@ -180,6 +235,7 @@ export const normalizeInterviewReportAdvanced = (
     strongRemediationUnavailableReason: stringValue(source.strongRemediationUnavailableReason),
     comparisonAvailable: booleanValue(source.comparisonAvailable),
     comparisonUnavailableReason: stringValue(source.comparisonUnavailableReason),
+    replayEligibility: normalizeReplayEligibility(source),
     sourceRequirementIds: positiveIds(source.sourceRequirementIds, 20),
     practicePurpose: stringValue(source.practicePurpose),
     remediationStrength: stringValue(source.remediationStrength),
@@ -330,7 +386,7 @@ export const validateInterviewComparisonSelection = (
   if (new Set(candidates.map((item) => item.interviewId)).size !== candidates.length) {
     return { valid: false, reason: '选择中存在重复面试记录。' }
   }
-  if (candidates.some((item) => String(item.reportStatus || '').toUpperCase() !== 'GENERATED')) {
+  if (candidates.some((item) => !isComparisonReadyReportStatus(item.reportStatus))) {
     return { valid: false, reason: '只能比较报告已成功生成的面试。' }
   }
   if (candidates.some((item) => !item.targetJobId)) {
@@ -391,11 +447,17 @@ export const comparisonReasonLabel = (code: string) => {
     REPORT_USER_MISMATCH: '报告归属不一致',
     REPORT_SESSION_USER_MISMATCH: '报告与场次归属不一致',
     REPORT_NOT_GENERATED: '报告尚未生成',
+    REPORT_UNAVAILABLE: '报告不可用',
+    REPORT_UNTRUSTED: '报告不可信',
+    LEGACY_REPORT_UNTRUSTED: '旧版报告不可信',
     TARGET_JOB_MISSING: '目标岗位缺失',
     TARGET_JOB_MISMATCH: '目标岗位不一致',
+    TOTAL_SCORE_MISSING: '总分缺失',
+    TOTAL_SCORE_INVALID: '总分无效',
     RUBRIC_VERSION_MISSING: '评分量表版本缺失',
     RUBRIC_VERSION_MISMATCH: '评分量表版本不一致',
     RUBRIC_DATA_MISSING: '评分维度数据缺失',
+    RUBRIC_DATA_MALFORMED: '评分维度数据异常',
     SAMPLE_INSUFFICIENT_REPORT: '部分报告样本不足'
   }
   return labels[String(code || '').toUpperCase()] || '暂不可比较'

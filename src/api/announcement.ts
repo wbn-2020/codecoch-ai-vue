@@ -14,30 +14,30 @@ export const getAdminAnnouncementsApi = async (params: AnnouncementQueryDTO) => 
   return normalizePageResult(result, params, { allowArrayFallback: true })
 }
 
-export const getAdminAnnouncementDetailApi = (id: number) => {
+export const getAdminAnnouncementDetailApi = (id: string) => {
   return request.get<AnnouncementVO, AnnouncementVO>(`/admin/announcements/${id}`)
 }
 
 export const createAdminAnnouncementApi = (data: AnnouncementSaveDTO & AdminOperationConfirmPayload) => {
-  return request.post<number, number>('/admin/announcements', data)
+  return request.post<string, string>('/admin/announcements', data)
 }
 
 export const updateAdminAnnouncementApi = (
-  id: number,
+  id: string,
   data: AnnouncementSaveDTO & AdminOperationConfirmPayload
 ) => {
   return request.put<null, null>(`/admin/announcements/${id}`, data)
 }
 
-export const publishAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload) => {
+export const publishAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload) => {
   return request.post<null, null>(`/admin/announcements/${id}/publish`, data)
 }
 
-export const offlineAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload) => {
+export const offlineAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload) => {
   return request.post<null, null>(`/admin/announcements/${id}/offline`, data)
 }
 
-export const deleteAdminAnnouncementApi = (id: number, data: AdminOperationConfirmPayload) => {
+export const deleteAdminAnnouncementApi = (id: string, data: AdminOperationConfirmPayload) => {
   return request.delete<null, null>(`/admin/announcements/${id}`, { data })
 }
 

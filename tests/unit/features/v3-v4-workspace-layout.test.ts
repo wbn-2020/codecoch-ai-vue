@@ -42,6 +42,13 @@ describe('V3/V4 compact dark workspace', () => {
     expect(matchDetail).toMatch(/\.score-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
     expect(growth).toMatch(/\.v4-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
     expect(applications).toMatch(/\.status-funnel\s*\{[\s\S]*?overflow-x:\s*auto/)
+    expect(applications).toMatch(/\.status-funnel\s*\{[\s\S]*?min-width:\s*0/)
+    expect(applications).toMatch(
+      /@media\s*\(max-width:\s*900px\)[\s\S]*?\.v4-application-page[\s\S]*?min-width:\s*0/
+    )
+    expect(applications).toContain('getResumeVersionsApi')
+    expect(applications).toMatch(/<el-select[\s\S]*?v-model="form\.resumeVersionId"/)
+    expect(applications).not.toMatch(/<el-input-number[^>]*v-model="form\.resumeVersionId"/)
   })
 
   it('collapses dense evidence, trend and knowledge workspaces to one column on mobile', () => {

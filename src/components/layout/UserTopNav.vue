@@ -141,7 +141,7 @@
             <el-avatar :size="30" :src="avatarUrl || ''">
               {{ avatarText }}
             </el-avatar>
-            <span>{{ displayName }}</span>
+            <span class="user-trigger__name">{{ displayName }}</span>
           </button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -622,7 +622,9 @@ const currentMobileNavLabel = computed(() => {
   const activeFeature = navigationGroups.value
     .flatMap((group) => group.links)
     .find((link) => isLinkActive(link))
-  return activeFeature?.label || navItems.find((item) => isActive(item))?.label || '工作台'
+  return activeFeature?.label
+    || navItems.find((item) => isActive(item))?.label
+    || String(route.meta?.title || '工作台')
 })
 
 const priorityLinks = computed<FeatureLink[]>(() => {
@@ -1236,7 +1238,7 @@ onBeforeUnmount(() => {
   }
 
   .brand-copy,
-  .user-trigger span {
+  .user-trigger__name {
     display: none;
   }
 
@@ -1411,7 +1413,7 @@ onBeforeUnmount(() => {
   .command-button,
   .desktop-more,
   .admin-button,
-  .user-trigger span {
+  .user-trigger__name {
     display: none;
   }
 

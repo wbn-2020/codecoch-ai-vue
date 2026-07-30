@@ -315,12 +315,12 @@ expect(hasAll(content.agentRunDetailView, [
 expect(hasAll(content.frontendSse, [
   'const controller = new AbortController()',
   'signal.addEventListener(\'abort\', abort, { once: true })',
-  'Authorization: `Bearer ${token}`',
+  'Authorization: `Bearer ${session.token}`',
   'const requestBody = body === undefined ? undefined : JSON.stringify(body)',
   'const event = eventFromData === \'chunk\' ? \'delta\' : eventFromData',
-  'getDedupeKey(parsed.event, parsed.data)',
+  'getDedupeKey(parsed)',
   'await refreshAccessToken()',
-  'if (controller.signal.aborted) return null',
+  'if (controller.signal.aborted || !ensureAuthSessionCurrent()) return null',
   'if (!receivedDone)',
   'handlers?.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)',
   'signal?.removeEventListener(\'abort\', abort)'

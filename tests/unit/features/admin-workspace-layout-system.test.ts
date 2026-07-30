@@ -48,6 +48,15 @@ describe('admin workspace layout system', () => {
     )
   })
 
+  it('loads the dashboard health summary only for users granted its overview permission', () => {
+    expect(adminLayoutSource).toContain(
+      "const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))"
+    )
+    expect(adminLayoutSource).toMatch(
+      /onMounted\(\(\) => \{\s+if \(canLoadDashboardHealth\.value\) \{\s+fetchDashboardHealth\(\)\s+\}/
+    )
+  })
+
   it('uses solid dark operational surfaces without decorative gradients or bright cards', () => {
     expect(adminStyleSource).not.toMatch(/linear-gradient|radial-gradient/i)
 

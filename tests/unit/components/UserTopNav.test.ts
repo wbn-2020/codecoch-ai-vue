@@ -13,6 +13,7 @@ const appConfig = vi.hoisted(() => ({
   enableV9EvidenceLearning: false
 }))
 const routePath = ref('/interviews/create')
+const routeMeta = ref<Record<string, unknown>>({})
 const push = vi.fn()
 
 vi.mock('@/config', () => ({ appConfig }))
@@ -24,6 +25,9 @@ vi.mock('vue-router', () => ({
     },
     get fullPath() {
       return routePath.value
+    },
+    get meta() {
+      return routeMeta.value
     }
   }),
   useRouter: () => ({
@@ -31,7 +35,7 @@ vi.mock('vue-router', () => ({
   })
 }))
 
-const mountNav = () => mount(UserTopNav, {
+const mountNav = (props: Partial<InstanceType<typeof UserTopNav>['$props']> = {}) => mount(UserTopNav, {
   props: {
     displayName: 'CodeCoachAI 用户',
     avatarText: 'C',
@@ -39,12 +43,14 @@ const mountNav = () => mount(UserTopNav, {
     unreadCount: 0,
     unreadAvailable: true,
     notificationTooltip: '通知中心',
-    canAccessAdmin: false
+    canAccessAdmin: false,
+    ...props
   },
   global: {
     stubs: {
       'el-avatar': {
-        template: '<span class="el-avatar-stub"><slot /></span>'
+        props: ['src'],
+        template: '<span class="el-avatar-stub" :data-src="src"><slot /></span>'
       },
       'el-dropdown': {
         template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>'
@@ -78,6 +84,7 @@ const legacySecondaryLabels = [
 describe('UserTopNav navigation discovery', () => {
   beforeEach(() => {
     routePath.value = '/interviews/create'
+    routeMeta.value = {}
     appConfig.enableV6WeeklyReport = false
     appConfig.enableV9EvidenceLearning = false
     push.mockReset()
@@ -165,6 +172,24 @@ describe('UserTopNav navigation discovery', () => {
     expect(evidenceLink.text()).toContain('证据使用')
     expect(evidenceLink.classes()).toContain('is-active')
     expect(evidenceLink.attributes('aria-current')).toBe('page')
+  })
+
+  it('uses the route title for mobile pages that are outside the feature navigation', () => {
+    routePath.value = '/notifications'
+    routeMeta.value = { title: '通知中心' }
+
+    const wrapper = mountNav()
+
+    expect(wrapper.get('.mobile-current-section').text()).toBe('通知中心')
+  })
+
+  it('keeps the avatar visible while only hiding the account name responsively', () => {
+    const avatarUrl = 'https://assets.example.com/avatar.png'
+    const wrapper = mountNav({ avatarUrl })
+
+    expect(wrapper.get('.el-avatar-stub').attributes('data-src')).toBe(avatarUrl)
+    expect(wrapper.get('.el-avatar-stub').classes()).not.toContain('user-trigger__name')
+    expect(wrapper.get('.user-trigger__name').text()).toBe('CodeCoachAI 用户')
   })
 
   it('shows the same grouped destinations in the responsive navigation panel', async () => {

@@ -241,6 +241,7 @@ const roleSummary = computed(() => authStore.roles.length ? authStore.roles.join
 const latestError = computed(() => requestErrors.value[0])
 const adminPermissionDrift = computed(() => authStore.isAdmin && authStore.permissions.length === 0)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
+const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))
 const mobileReadonlyDefinitions = [
   { label: '运营首页', path: '/admin/dashboard', permissions: ['admin:system:overview'] },
   { label: '失败任务', path: '/admin/async-tasks?status=FAILED', permissions: ['admin:task:list'] },
@@ -388,7 +389,9 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
 }
 
 onMounted(() => {
-  fetchDashboardHealth()
+  if (canLoadDashboardHealth.value) {
+    fetchDashboardHealth()
+  }
   window.addEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 

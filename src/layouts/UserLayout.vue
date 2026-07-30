@@ -14,7 +14,7 @@
       @user-command="handleCommand"
     />
 
-    <CommandPalette v-if="commandPaletteOpen" v-model="commandPaletteOpen" scope="user" />
+    <CommandPalette v-model="commandPaletteOpen" scope="user" />
 
     <main class="jobcoach-main" :class="{ 'is-immersive': isImmersivePage }">
       <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
