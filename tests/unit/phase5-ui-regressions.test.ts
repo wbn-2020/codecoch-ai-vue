@@ -6,11 +6,14 @@ import { routes } from '@/router/routes'
 describe('Phase5 user UI regressions', () => {
   const mojibakeText = (...codes: number[]) => String.fromCodePoint(...codes)
 
-  it('wraps the resume lab entry with its local fallback shell', () => {
+  it('serves the arena prepare view on /resumes and keeps the legacy safe shell on /resumes/legacy', () => {
     const userRoot = routes.find((route) => route.path === '/')
     const resumeRoute = userRoot?.children?.find((route) => route.path === 'resumes')
+    const legacyRoute = userRoot?.children?.find((route) => route.path === 'resumes/legacy')
 
-    expect(String(resumeRoute?.component)).toContain('ResumeJobHubSafeView.vue')
+    expect(String(resumeRoute?.component)).toContain('ArenaPrepareView.vue')
+    expect(String(legacyRoute?.component)).toContain('ResumeJobHubSafeView.vue')
+    expect(legacyRoute?.meta?.hidden).toBe(true)
   })
 
   it('replaces mojibake ability names with safe product copy', () => {

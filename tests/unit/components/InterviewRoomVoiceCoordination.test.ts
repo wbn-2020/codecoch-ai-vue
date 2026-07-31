@@ -1,5 +1,6 @@
 import { defineComponent, nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InterviewRoomView from '@/views/interview/InterviewRoomView.vue'
@@ -196,6 +197,8 @@ describe('InterviewRoomView voice recording coordination', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    setActivePinia(createPinia())
     routeHooks.beforeLeave = null
     routerPush.mockResolvedValue(undefined)
     liveConsole.cancelActiveAsr.mockResolvedValue(undefined)

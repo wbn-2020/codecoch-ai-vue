@@ -24,6 +24,8 @@
         <RouterView />
       </RouteErrorBoundary>
     </main>
+
+    <XpGainToast />
   </div>
 </template>
 
@@ -33,6 +35,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
+import XpGainToast from '@/components/game/XpGainToast.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
 import { appConfig } from '@/config'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
@@ -108,6 +111,11 @@ const handleCommand = async (command: string) => {
 
   if (command === 'password') {
     await router.push('/password')
+    return
+  }
+
+  if (command === 'admin') {
+    await goAdmin()
     return
   }
 

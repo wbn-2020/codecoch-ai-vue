@@ -78,6 +78,58 @@
       title="暂无训练评估数据：当前只展示能力点目录，不生成强项、薄弱项或训练结论。"
     />
 
+    <section v-if="abilityMap.domains.length" class="power-radar-card" aria-label="战力雷达">
+      <div class="section-title">
+        <span>战力雷达</span>
+        <em>{{ radarMeta }}</em>
+      </div>
+      <div class="power-radar">
+        <svg :viewBox="`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`" class="power-radar__svg" role="img" aria-label="各能力域评估覆盖雷达图">
+          <polygon
+            v-for="ring in radarRings"
+            :key="ring"
+            :points="radarRingPoints(ring)"
+            class="power-radar__ring"
+          />
+          <line
+            v-for="axis in radarAxes"
+            :key="`axis-${axis.code}`"
+            :x1="RADAR_CENTER"
+            :y1="RADAR_CENTER"
+            :x2="axis.x"
+            :y2="axis.y"
+            class="power-radar__axis"
+          />
+          <polygon v-if="radarValuePolygon" :points="radarValuePolygon" class="power-radar__value" />
+          <text
+            v-for="axis in radarAxes"
+            :key="`label-${axis.code}`"
+            :x="axis.labelX"
+            :y="axis.labelY"
+            class="power-radar__label"
+            :text-anchor="axis.anchor"
+          >
+            {{ axis.label }} {{ axis.ratioText }}
+          </text>
+        </svg>
+        <div class="power-radar__side">
+          <div class="power-radar__stat">
+            <span>已评估覆盖</span>
+            <strong>{{ abilityMap.assessedSkillCount }}/{{ abilityMap.totalSkillCount }}</strong>
+          </div>
+          <div v-if="radarWeakest" class="power-radar__stat is-weak">
+            <span>最弱域</span>
+            <strong>{{ radarWeakest }}</strong>
+          </div>
+          <div v-if="radarStrongest" class="power-radar__stat is-strong">
+            <span>最强域</span>
+            <strong>{{ radarStrongest }}</strong>
+          </div>
+          <p class="power-radar__hint">雷达按各能力域"已评估能力点占比"绘制；暂无训练数据时只展示目录覆盖。</p>
+        </div>
+      </div>
+    </section>
+
     <section v-if="loadError" class="load-error-card">
       <div>
         <AlertTriangle :size="18" />
@@ -253,46 +305,53 @@
           </el-button>
         </aside>
 
-        <div v-if="activeDomain?.skills?.length" class="skill-grid">
-          <article
-            v-for="skill in activeDomain.skills"
-            :key="skill.code"
-            class="skill-card"
-            :class="skillCardClass(skill)"
-          >
-            <div class="skill-card__head">
-              <div>
-                <strong>{{ safeSkillName(skill) }}</strong>
-                <span>{{ safeSkillDomainName(skill) }}</span>
+        <template v-if="activeDomain?.skills?.length">
+          <div class="skill-tree-head">
+            <span>技能树</span>
+            <em>{{ unlockedSkillCount }}/{{ activeDomain.skills.length }} 节点已解锁</em>
+          </div>
+          <div class="skill-grid">
+            <article
+              v-for="skill in activeDomain.skills"
+              :key="skill.code"
+              class="skill-card"
+              :class="skillCardClass(skill)"
+            >
+              <span class="skill-node-icon" :class="`is-${skillNodeState(skill)}`">{{ skillNodeIcon(skill) }}</span>
+              <div class="skill-card__head">
+                <div>
+                  <strong>{{ safeSkillName(skill) }}</strong>
+                  <span>{{ safeSkillDomainName(skill) }}</span>
+                </div>
+                <el-tag effect="plain" :type="statusTagType(skill.status)">
+                  {{ honestStatusLabel(skill) }}
+                </el-tag>
               </div>
-              <el-tag effect="plain" :type="statusTagType(skill.status)">
-                {{ honestStatusLabel(skill) }}
-              </el-tag>
-            </div>
 
-            <p>{{ skillSummary(skill) }}</p>
+              <p>{{ skillSummary(skill) }}</p>
 
-            <div class="skill-evidence-row">
-              <span>
-                <BookOpenCheck :size="14" />
-                证据 {{ skill.evidenceCount || 0 }}
-              </span>
-              <span>
-                <Clock3 :size="14" />
-                {{ formatDate(skill.lastEvaluatedAt) }}
-              </span>
-              <span>
-                <ShieldCheck :size="14" />
-                {{ confidenceText(skill) }}
-              </span>
-            </div>
+              <div class="skill-evidence-row">
+                <span>
+                  <BookOpenCheck :size="14" />
+                  证据 {{ skill.evidenceCount || 0 }}
+                </span>
+                <span>
+                  <Clock3 :size="14" />
+                  {{ formatDate(skill.lastEvaluatedAt) }}
+                </span>
+                <span>
+                  <ShieldCheck :size="14" />
+                  {{ confidenceText(skill) }}
+                </span>
+              </div>
 
-            <el-button class="skill-action" :type="skill.status === 'WEAK' ? 'primary' : 'default'" plain @click="startSkillTraining(skill)">
-              <Play :size="14" />
-              训练这个能力点
-            </el-button>
-          </article>
-        </div>
+              <el-button class="skill-action" :type="skill.status === 'WEAK' ? 'primary' : 'default'" plain @click="startSkillTraining(skill)">
+                <Play :size="14" />
+                训练这个能力点
+              </el-button>
+            </article>
+          </div>
+        </template>
         <el-empty v-else description="当前能力域还没有能力点" />
       </main>
     </section>
@@ -847,6 +906,99 @@ const startRecommendedTraining = () => {
   }
   router.push('/questions/practice')
 }
+
+// ---- 战力雷达（游戏化增量：纯 SVG 计算，无 canvas 依赖） ----
+const RADAR_SIZE = 320
+const RADAR_CENTER = RADAR_SIZE / 2
+const RADAR_RADIUS = 112
+const radarRings = [0.25, 0.5, 0.75, 1]
+
+const radarDomains = computed(() => abilityMap.value.domains.slice(0, 14))
+
+const radarPoint = (ratio: number, index: number, total: number, radius = RADAR_RADIUS) => {
+  const angle = (Math.PI * 2 * index) / total - Math.PI / 2
+  const r = radius * Math.max(0, Math.min(1, ratio))
+  return [RADAR_CENTER + r * Math.cos(angle), RADAR_CENTER + r * Math.sin(angle)] as const
+}
+
+const domainRatio = (domain: AbilityDomainVO) =>
+  domain.totalCount > 0 ? Math.min(1, (domain.assessedCount || 0) / domain.totalCount) : 0
+
+const radarRingPoints = (ring: number) => {
+  const list = radarDomains.value
+  if (list.length < 3) return ''
+  return list
+    .map((_, index) => {
+      const [x, y] = radarPoint(ring, index, list.length)
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+}
+
+const radarAxes = computed(() => {
+  const list = radarDomains.value
+  return list.map((domain, index) => {
+    const [x, y] = radarPoint(1, index, list.length)
+    const [labelX, labelY] = radarPoint(1.22, index, list.length)
+    const angle = (Math.PI * 2 * index) / list.length - Math.PI / 2
+    const cos = Math.cos(angle)
+    return {
+      code: domain.domainCode,
+      x: x.toFixed(1),
+      y: y.toFixed(1),
+      labelX: labelX.toFixed(1),
+      labelY: labelY.toFixed(1),
+      anchor: Math.abs(cos) < 0.35 ? 'middle' : cos > 0 ? 'start' : 'end',
+      label: safeDomainName(domain),
+      ratioText: domain.totalCount > 0 ? `${Math.round(domainRatio(domain) * 100)}%` : '--'
+    }
+  })
+})
+
+const radarValuePolygon = computed(() => {
+  const list = radarDomains.value
+  if (list.length < 3 || !abilityMap.value.hasTrainingData) return ''
+  return list
+    .map((domain, index) => {
+      const [x, y] = radarPoint(domainRatio(domain), index, list.length)
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const radarMeta = computed(() => {
+  if (!abilityMap.value.hasTrainingData) return '目录覆盖，待训练评估'
+  return `${abilityMap.value.assessedSkillCount}/${abilityMap.value.totalSkillCount} 能力点已评估`
+})
+
+const sortedRadarDomains = computed(() =>
+  [...radarDomains.value].filter((domain) => domain.totalCount > 0).sort((a, b) => domainRatio(a) - domainRatio(b))
+)
+const radarWeakest = computed(() => {
+  if (!abilityMap.value.hasTrainingData || !sortedRadarDomains.value.length) return ''
+  return safeDomainName(sortedRadarDomains.value[0])
+})
+const radarStrongest = computed(() => {
+  if (!abilityMap.value.hasTrainingData || !sortedRadarDomains.value.length) return ''
+  return safeDomainName(sortedRadarDomains.value[sortedRadarDomains.value.length - 1])
+})
+
+/** 技能树节点状态：已解锁 / 修炼中 / 未解锁 */
+const skillNodeState = (skill: AbilitySkillNodeVO) => {
+  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'locked'
+  if (skill.status === 'WEAK') return 'training'
+  return 'unlocked'
+}
+const skillNodeIcon = (skill: AbilitySkillNodeVO) => {
+  const state = skillNodeState(skill)
+  if (state === 'unlocked') return '✓'
+  if (state === 'training') return '⚡'
+  return '🔒'
+}
+
+const unlockedSkillCount = computed(() =>
+  (activeDomain.value?.skills || []).filter((skill) => skillNodeState(skill) === 'unlocked').length
+)
 
 onMounted(fetchAbilityMap)
 </script>
@@ -1824,6 +1976,155 @@ onMounted(fetchAbilityMap)
   .domain-rail {
     border-radius: var(--user-radius-sm);
     background: var(--user-surface-muted);
+  }
+}
+
+// ---- 战力雷达与技能树（游戏化增量样式，暗色霓虹） ----
+.power-radar-card {
+  padding: 16px 18px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+}
+
+.power-radar {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 340px) 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.power-radar__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.power-radar__ring {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.18);
+  stroke-width: 1;
+}
+
+.power-radar__axis {
+  stroke: rgba(148, 163, 184, 0.14);
+  stroke-width: 1;
+}
+
+.power-radar__value {
+  fill: rgba(23, 178, 106, 0.22);
+  stroke: #2fd27d;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 6px rgba(47, 210, 125, 0.35));
+}
+
+.power-radar__label {
+  font-size: 10px;
+  font-weight: 700;
+  fill: rgba(203, 213, 225, 0.75);
+}
+
+.power-radar__side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.power-radar__stat {
+  padding: 10px 13px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.08);
+
+  span {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: rgba(203, 213, 225, 0.6);
+  }
+
+  strong {
+    display: block;
+    margin-top: 3px;
+    font-size: 14px;
+    color: #f8fafc;
+  }
+
+  &.is-weak strong {
+    color: #f7b955;
+  }
+
+  &.is-strong strong {
+    color: #2fd27d;
+  }
+}
+
+.power-radar__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(203, 213, 225, 0.55);
+}
+
+.skill-tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0 10px;
+
+  span {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #e5edf8;
+  }
+
+  em {
+    font-size: 11px;
+    font-style: normal;
+    color: rgba(203, 213, 225, 0.6);
+  }
+}
+
+.skill-card {
+  position: relative;
+}
+
+.skill-node-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: rgba(148, 163, 184, 0.12);
+
+  &.is-unlocked {
+    background: rgba(47, 210, 125, 0.16);
+    color: #2fd27d;
+  }
+
+  &.is-training {
+    background: rgba(247, 144, 9, 0.16);
+    color: #f7b955;
+  }
+
+  &.is-locked {
+    color: rgba(203, 213, 225, 0.5);
+  }
+}
+
+.skill-card__head {
+  padding-right: 34px;
+}
+
+@media (max-width: 900px) {
+  .power-radar {
+    grid-template-columns: 1fr;
   }
 }
 </style>

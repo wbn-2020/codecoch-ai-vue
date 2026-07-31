@@ -14,6 +14,8 @@
       </div>
 
       <div class="topbar-status">
+        <span class="dungeon-chip">⚔ 副本战斗</span>
+        <span class="dungeon-chip dungeon-chip--xp">+{{ sessionXp }} XP 本场</span>
         <span class="cc-badge" :class="sseStatusBadgeClass">
           <span class="cc-badge__dot"></span>
           {{ sseStatusLabel }}
@@ -159,6 +161,11 @@
                 <Bot :size="30" />
               </div>
               <div class="ai-presence__copy">
+                <div class="ai-persona">
+                  <span class="ai-persona__dot"></span>
+                  {{ INTERVIEWER_PERSONA }}
+                  <span v-if="submitting || loading || starting" class="ai-persona__typing">正在思考<i></i><i></i><i></i></span>
+                </div>
                 <p>{{ roomPresenceLabel }}</p>
                 <h2>{{ roomPresenceTitle }}</h2>
                 <span>{{ roomPresenceHint }}</span>
@@ -167,6 +174,13 @@
                 </div>
               </div>
             </section>
+
+            <div class="battle-strip">
+              <span class="battle-strip__label">⚔ 战斗进度</span>
+              <div class="battle-strip__bar"><i :style="{ width: `${battleProgressPercent}%` }"></i></div>
+              <span class="battle-strip__text">{{ answeredCount }}/{{ expectedTotalText }} 题</span>
+              <span class="battle-strip__xp">+{{ sessionXp }} XP</span>
+            </div>
 
             <div class="cockpit-state-strip">
               <article v-for="item in cockpitStateItems" :key="item.key" :class="item.state">
@@ -406,10 +420,36 @@
           <Activity :size="16" />
         </div>
 
+        <div class="battle-status-card">
+          <div class="battle-status-card__head">
+            <span>战况</span>
+            <span class="battle-status-card__lv">LV.{{ gameProfile.levelInfo.level }} {{ gameProfile.levelInfo.title }}</span>
+          </div>
+          <div class="battle-status-card__grid">
+            <div>
+              <span>本场已拿</span>
+              <strong>+{{ sessionXp }} XP</strong>
+            </div>
+            <div>
+              <span>题序</span>
+              <strong>{{ answeredCount }}/{{ expectedTotalText }}</strong>
+            </div>
+            <div>
+              <span>连胜</span>
+              <strong>🔥 {{ gameProfile.streakDays }} 天</strong>
+            </div>
+            <div>
+              <span>计时</span>
+              <strong>{{ elapsedText }}</strong>
+            </div>
+          </div>
+        </div>
+
         <div class="score-card">
           <span>当前题表现</span>
           <strong>{{ latestScoreText }}</strong>
           <p>{{ latestEvaluationLevelText }}</p>
+          <span v-if="lastResult" class="score-card__xp">+18 XP 已入账</span>
         </div>
 
         <InterviewVoiceDeliveryMetrics :analysis="voiceDeliveryAnalysis" />
@@ -521,7 +561,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -545,6 +585,8 @@ import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
+import { useGameProfileStore } from '@/features/game-profile'
+import { useAuthStore } from '@/stores/auth'
 import {
   type InterviewVoiceConfirmedMeta,
   type InterviewVoiceRecordedAudio,
@@ -581,7 +623,19 @@ import InterviewVoiceLiveConsole from '@/views/interview/components/InterviewVoi
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const gameProfile = useGameProfileStore()
 const interviewId = getRouteNumberParam(route.params.id as string)
+
+// ---- 副本战斗（游戏化增量，不改变面试逻辑） ----
+/** AI 面试官人格 */
+const INTERVIEWER_PERSONA = '面试官 · 岚'
+/** 本场已拿 XP（会话内累计，仅展示） */
+const sessionXp = ref(0)
+const grantedAnswerIds = new Set<number>()
+let interviewCompleteGranted = false
+
+const answeredCount = ref(0)
 const loading = ref(false)
 const starting = ref(false)
 const submitting = ref(false)
@@ -966,6 +1020,44 @@ const latestEvaluationLevelText = computed(() => {
   const level = lastResult.value.evaluation.level
   if (level) return evaluationLevelLabel(level)
   return latestScoreText.value !== '--' ? '已评分，点评待补' : '等待评分结果'
+})
+
+// ---- 副本战斗：XP 挂钩与战斗进度 ----
+/** 每次 AI 评分返回（按 answerMessageId 去重）→ +18 XP 即时奖励 */
+watch(lastResult, (result) => {
+  const answerMessageId = result?.answerMessageId
+  if (!answerMessageId || grantedAnswerIds.has(answerMessageId)) return
+  grantedAnswerIds.add(answerMessageId)
+  answeredCount.value = grantedAnswerIds.size
+  gameProfile.grantXp('practice_correct')
+  sessionXp.value += 18
+})
+
+/** 面试完成（一次性）→ 通关 +200 XP 并续连胜 */
+watch(
+  () => current.value?.status,
+  (status) => {
+    if (status !== 'COMPLETED' || interviewCompleteGranted) return
+    interviewCompleteGranted = true
+    gameProfile.completeMission()
+    gameProfile.grantXp('interview_complete')
+    sessionXp.value += 200
+  }
+)
+
+/** 预计题量：大纲预期题数合计，退化为当前阶段预期 */
+const expectedTotalText = computed(() => {
+  const fromOutline = outlineStages.value.reduce((sum, stage) => sum + (Number(stage.expectedQuestionCount) || 0), 0)
+  if (fromOutline > 0) return `${fromOutline}`
+  const fromStage = Number(current.value?.currentStage?.expectedQuestionCount)
+  if (fromStage > 0) return `${fromStage}`
+  return '多'
+})
+
+const battleProgressPercent = computed(() => {
+  const total = Number(expectedTotalText.value)
+  if (!Number.isFinite(total) || total <= 0) return Math.min(100, answeredCount.value * 15)
+  return Math.min(100, Math.round((answeredCount.value / total) * 100))
 })
 
 const reviewFallbackVisible = computed(() => {
@@ -1784,6 +1876,7 @@ const handleManualFinish = async () => {
 }
 
 onMounted(() => {
+  gameProfile.hydrate(authStore.userInfo?.id)
   void fetchCurrent()
   void loadScenarioBinding()
 })
@@ -3102,6 +3195,191 @@ onBeforeUnmount(() => {
       padding-right: 0;
       border-right: 0;
     }
+  }
+}
+
+// ---- 副本战斗（游戏化增量样式，暗色霓虹） ----
+.dungeon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(124, 92, 252, 0.16);
+  color: #b3a1ff;
+  border: 1px solid rgba(124, 92, 252, 0.35);
+  white-space: nowrap;
+}
+
+.dungeon-chip--xp {
+  background: rgba(247, 144, 9, 0.14);
+  color: #f7b955;
+  border-color: rgba(247, 144, 9, 0.35);
+}
+
+.ai-persona {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #9be8c0;
+}
+
+.ai-persona__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2fd27d;
+  box-shadow: 0 0 8px rgba(47, 210, 125, 0.9);
+}
+
+.ai-persona__typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  color: rgba(203, 213, 225, 0.75);
+  font-weight: 600;
+
+  i {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: dungeonTyping 1.2s ease-in-out infinite;
+  }
+
+  i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+
+.battle-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.battle-strip__label {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #f7b955;
+}
+
+.battle-strip__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #17b26a, #a3e635);
+    box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
+    transition: width 0.3s ease;
+  }
+}
+
+.battle-strip__text {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+
+.battle-strip__xp {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #f7b955;
+}
+
+.battle-status-card {
+  padding: 13px 15px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 252, 0.3);
+  background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(2, 6, 23, 0.5));
+}
+
+.battle-status-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 800;
+  color: #e5edf8;
+}
+
+.battle-status-card__lv {
+  font-size: 10.5px;
+  color: #b3a1ff;
+}
+
+.battle-status-card__grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+
+  > div {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(148, 163, 184, 0.08);
+
+    span {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      color: rgba(203, 213, 225, 0.6);
+    }
+
+    strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 12.5px;
+      color: #f8fafc;
+    }
+  }
+}
+
+.score-card__xp {
+  display: inline-flex;
+  margin-top: 7px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  background: rgba(247, 144, 9, 0.16);
+  color: #f7b955;
+  border: 1px solid rgba(247, 144, 9, 0.35);
+}
+
+@keyframes dungeonTyping {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
   }
 }
 </style>
