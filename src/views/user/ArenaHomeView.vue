@@ -383,8 +383,8 @@ const completeMission = async (mission: Mission) => {
   completingId.value = mission.id
   try {
     await completeAgentTaskApi(mission.id, { note: '用户在竞技场首页标记完成' })
-    gameProfile.completeMission()
-    gameProfile.grantXp(mission.xpEvent)
+    const grant = gameProfile.grantXpOnce(mission.xpEvent, `agent-task:${mission.id}`)
+    if (grant) gameProfile.completeMission()
     tasks.value = tasks.value.map((task) => (task.id === mission.id ? { ...task, status: 'DONE' } : task))
   } catch (error) {
     loadError.value = getErrorMessage(error, '任务完成失败，请稍后重试。')
@@ -417,8 +417,7 @@ const loadAll = async (force = false) => {
     if (taskRes.status === 'rejected' && overviewRes.status === 'rejected') {
       loadError.value = getErrorMessage(taskRes.reason, '加载失败')
     }
-    const openCount = tasks.value.filter((task) => OPEN_STATUS.has(String(task.status || 'TODO').toUpperCase())).length
-    gameProfile.syncMissionTotal(openCount)
+    gameProfile.syncMissionTotal(tasks.value.length)
   } finally {
     loading.value = false
   }

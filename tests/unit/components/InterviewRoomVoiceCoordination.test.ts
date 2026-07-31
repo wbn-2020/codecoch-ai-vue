@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useGameProfileStore } from '@/features/game-profile'
 import InterviewRoomView from '@/views/interview/InterviewRoomView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -502,5 +503,25 @@ describe('InterviewRoomView voice recording coordination', () => {
 
     expect(leaveCompleted).toBe(true)
     wrapper.unmount()
+  })
+
+  it('records a completed interview reward once when the room is reopened', async () => {
+    interviewApi.getCurrentQuestion.mockResolvedValue({
+      interviewId: 42,
+      status: 'COMPLETED',
+      currentQuestion: null
+    })
+
+    const first = await mountRoom()
+    const gameProfile = useGameProfileStore()
+    expect(gameProfile.xp).toBe(200)
+    expect(gameProfile.streakDays).toBe(1)
+    expect(gameProfile.todayMissionDone).toBe(0)
+    first.unmount()
+
+    const second = await mountRoom()
+    expect(gameProfile.xp).toBe(200)
+    expect(gameProfile.streakDays).toBe(1)
+    second.unmount()
   })
 })

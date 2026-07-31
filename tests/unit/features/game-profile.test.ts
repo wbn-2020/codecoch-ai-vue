@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import {
@@ -16,7 +16,7 @@ describe('game-profile rules', () => {
   it('xp events expose stable xp values', () => {
     expect(xpOf('interview_complete')).toMatchObject({ xp: 200 })
     expect(xpOf('daily_chest')).toMatchObject({ xp: 100 })
-    expect(xpOf('jd_paste').label).toContain('JD')
+    expect(xpOf('jd_paste').label).toContain('岗位')
   })
 
   it('level curve grows 25% per level', () => {
@@ -68,6 +68,10 @@ describe('game-profile store', () => {
     setActivePinia(createPinia())
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('hydrates empty profile for a new user and persists grants', () => {
     const store = useGameProfileStore()
     store.hydrate(42)
@@ -85,16 +89,23 @@ describe('game-profile store', () => {
     expect(JSON.parse(raw as string).xp).toBe(210)
   })
 
-  it('isolates profiles per user id', () => {
+  it('isolates profiles per user id and never carries counters into a partial snapshot', () => {
     const store = useGameProfileStore()
     store.hydrate('alice')
     store.grantXp('warmup_5')
+    store.syncMissionTotal(2)
+    store.completeMission()
 
+    localStorage.setItem('codecoachai_game_profile_bob', JSON.stringify({ xp: 12 }))
     store.hydrate('bob')
-    expect(store.xp).toBe(0)
+    expect(store.xp).toBe(12)
+    expect(store.todayMissionDone).toBe(0)
+    expect(store.todayMissionTotal).toBe(0)
+    expect(store.streakDays).toBe(0)
 
     store.hydrate('alice')
     expect(store.xp).toBe(90)
+    expect(store.todayMissionDone).toBe(1)
   })
 
   it('completeMission advances missions and streak once per day', () => {
@@ -136,5 +147,95 @@ describe('game-profile store', () => {
     store.syncMissionTotal(1)
     expect(store.todayMissionDone).toBe(1)
     expect(store.todayMissionTotal).toBe(1)
+  })
+
+  it('resets prior-day mission progress while preserving XP, streak, and reward history', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-31T10:00:00'))
+    localStorage.setItem('codecoachai_game_profile_daily', JSON.stringify({
+      userId: 'daily',
+      xp: 248,
+      streakDays: 5,
+      streakLastDate: '2026-07-30',
+      missionProgressDate: '2026-07-30',
+      todayMissionDone: 3,
+      todayMissionTotal: 3,
+      chestClaimedDate: '2026-07-30',
+      xpRewards: [
+        {
+          event: 'warmup_5',
+          xp: 90,
+          label: '轻量热身 5 题',
+          rewardKey: 'agent-task:1',
+          grantedAt: '2026-07-30T10:00:00.000Z'
+        }
+      ],
+      updatedAt: '2026-07-30T10:00:00.000Z'
+    }))
+
+    const store = useGameProfileStore()
+    store.hydrate('daily')
+
+    expect(store.xp).toBe(248)
+    expect(store.streakDays).toBe(5)
+    expect(store.todayMissionDone).toBe(0)
+    expect(store.todayMissionTotal).toBe(0)
+    expect(store.missionProgressDate).toBe('2026-07-31')
+    expect(store.chestReady).toBe(false)
+    expect(store.xpRewards).toHaveLength(1)
+  })
+
+  it('records each idempotent reward once and calculates weekly XP from reward history', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-31T12:00:00'))
+    localStorage.setItem('codecoachai_game_profile_rewards', JSON.stringify({
+      userId: 'rewards',
+      xp: 180,
+      streakDays: 0,
+      streakLastDate: null,
+      missionProgressDate: '2026-07-31',
+      todayMissionDone: 0,
+      todayMissionTotal: 0,
+      chestClaimedDate: null,
+      xpRewards: [
+        {
+          event: 'warmup_5',
+          xp: 90,
+          label: '轻量热身 5 题',
+          rewardKey: 'current-week',
+          grantedAt: '2026-07-27T08:00:00.000Z'
+        },
+        {
+          event: 'warmup_5',
+          xp: 90,
+          label: '轻量热身 5 题',
+          rewardKey: 'previous-week',
+          grantedAt: '2026-07-26T08:00:00.000Z'
+        }
+      ],
+      updatedAt: '2026-07-31T10:00:00.000Z'
+    }))
+
+    const store = useGameProfileStore()
+    store.hydrate('rewards')
+    expect(store.weeklyXp).toBe(90)
+
+    expect(store.grantXpOnce('interview_complete', 'interview:7:complete')).toMatchObject({ xp: 200 })
+    expect(store.grantXpOnce('interview_complete', 'interview:7:complete')).toBeNull()
+    expect(store.xp).toBe(380)
+    expect(store.weeklyXp).toBe(290)
+    expect(store.rewardXpForPrefix('interview:7:')).toBe(200)
+  })
+
+  it('records interview activity without advancing the Agent mission chest progress', () => {
+    const store = useGameProfileStore()
+    store.hydrate('activity')
+    store.syncMissionTotal(2)
+
+    store.recordActivity()
+
+    expect(store.streakDays).toBe(1)
+    expect(store.todayMissionDone).toBe(0)
+    expect(store.chestReady).toBe(false)
   })
 })

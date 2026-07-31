@@ -630,10 +630,11 @@ const interviewId = getRouteNumberParam(route.params.id as string)
 // ---- 副本战斗（游戏化增量，不改变面试逻辑） ----
 /** AI 面试官人格 */
 const INTERVIEWER_PERSONA = '面试官 · 岚'
-/** 本场已拿 XP（会话内累计，仅展示） */
-const sessionXp = ref(0)
+/** 本场已入账 XP（从持久化奖励账本汇总，刷新后不丢失也不重复） */
+const sessionXp = computed(() =>
+  interviewId ? gameProfile.rewardXpForPrefix(`interview:${interviewId}:`) : 0
+)
 const grantedAnswerIds = new Set<number>()
-let interviewCompleteGranted = false
 
 const answeredCount = ref(0)
 const loading = ref(false)
@@ -1026,22 +1027,21 @@ const latestEvaluationLevelText = computed(() => {
 /** 每次 AI 评分返回（按 answerMessageId 去重）→ +18 XP 即时奖励 */
 watch(lastResult, (result) => {
   const answerMessageId = result?.answerMessageId
-  if (!answerMessageId || grantedAnswerIds.has(answerMessageId)) return
-  grantedAnswerIds.add(answerMessageId)
-  answeredCount.value = grantedAnswerIds.size
-  gameProfile.grantXp('practice_correct')
-  sessionXp.value += 18
+  if (!answerMessageId) return
+  if (!grantedAnswerIds.has(answerMessageId)) {
+    grantedAnswerIds.add(answerMessageId)
+    answeredCount.value = grantedAnswerIds.size
+  }
+  gameProfile.grantXpOnce('practice_correct', `interview:${interviewId}:answer:${answerMessageId}`)
 })
 
 /** 面试完成（一次性）→ 通关 +200 XP 并续连胜 */
 watch(
   () => current.value?.status,
   (status) => {
-    if (status !== 'COMPLETED' || interviewCompleteGranted) return
-    interviewCompleteGranted = true
-    gameProfile.completeMission()
-    gameProfile.grantXp('interview_complete')
-    sessionXp.value += 200
+    if (!['COMPLETED', 'REPORT_GENERATING', 'REPORT_DONE', 'GENERATED', 'FINISHED'].includes(String(status || '').toUpperCase())) return
+    const grant = gameProfile.grantXpOnce('interview_complete', `interview:${interviewId}:complete`)
+    if (grant) gameProfile.recordActivity()
   }
 )
 

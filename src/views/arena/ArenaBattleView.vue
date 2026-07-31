@@ -205,6 +205,7 @@ const showAnalysis = ref(false)
 const lastResult = ref<BattleResult | null>(null)
 const lastOutcome = ref<'win' | 'lose' | 'draw'>('draw')
 const matchingTip = ref('正在寻找段位相近的对手')
+const settling = ref(false)
 
 const tier = computed(() => tierOf(profile.value.rankPoints))
 const nextTier = computed(() => nextTierOf(profile.value.rankPoints))
@@ -223,6 +224,7 @@ let advanceTimer: ReturnType<typeof window.setTimeout> | null = null
 let matchTimer: ReturnType<typeof window.setTimeout> | null = null
 let opponentWillAnswer = false
 let opponentCorrect = false
+let activeBattleId = ''
 
 const clearTimers = () => {
   if (tickTimer != null) {
@@ -271,6 +273,8 @@ const refreshProfile = () => {
 
 const startMatch = async () => {
   clearTimers()
+  settling.value = false
+  activeBattleId = ''
   phase.value = 'matching'
   matchingTip.value = '正在寻找段位相近的对手'
   const matched = await matchOpponent(authStore.userInfo?.id)
@@ -288,6 +292,7 @@ const cancelMatch = () => {
 }
 
 const beginFight = () => {
+  activeBattleId = `battle_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   questions.value = shuffle(BATTLE_QUESTIONS).slice(0, QUESTION_COUNT)
   questionIndex.value = 0
   myScore.value = 0
@@ -379,27 +384,36 @@ const maybeAdvance = () => {
 }
 
 const settleBattle = async () => {
+  if (settling.value || phase.value === 'settled' || !activeBattleId) return
+  settling.value = true
   clearTimers()
   const outcome: 'win' | 'lose' | 'draw' =
     myScore.value > opponentScore.value ? 'win' : myScore.value < opponentScore.value ? 'lose' : 'draw'
   lastOutcome.value = outcome
   const opp = opponent.value
-  const nextProfile = await saveBattleResult(authStore.userInfo?.id, {
-    id: `battle_${Date.now()}`,
-    opponentName: opp?.name || '神秘对手',
-    opponentAvatar: opp?.avatar || '🎭',
-    myScore: myScore.value,
-    opponentScore: opponentScore.value,
-    outcome
-  })
-  profile.value = nextProfile
-  lastResult.value = nextProfile.records[0] || null
-  gameProfile.grantXp('warmup_5')
-  phase.value = 'settled'
+  const battleId = activeBattleId
+  try {
+    const nextProfile = await saveBattleResult(authStore.userInfo?.id, {
+      id: battleId,
+      opponentName: opp?.name || '神秘对手',
+      opponentAvatar: opp?.avatar || '🎭',
+      myScore: myScore.value,
+      opponentScore: opponentScore.value,
+      outcome
+    })
+    if (battleId !== activeBattleId) return
+    profile.value = nextProfile
+    lastResult.value = nextProfile.records[0] || null
+    gameProfile.grantXpOnce('warmup_5', `arena-battle:${battleId}:complete`)
+    phase.value = 'settled'
+  } finally {
+    settling.value = false
+  }
 }
 
 const backToLobby = () => {
   clearTimers()
+  activeBattleId = ''
   refreshProfile()
   phase.value = 'lobby'
 }

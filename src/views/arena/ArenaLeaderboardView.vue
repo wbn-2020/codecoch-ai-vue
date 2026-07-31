@@ -164,6 +164,7 @@ const loadBoard = async () => {
       name: authStore.userInfo?.nickname || authStore.userInfo?.username || '我',
       avatar: '😎',
       xp: gameProfile.xp,
+      weekXp: gameProfile.weeklyXp,
       streakDays: gameProfile.streakDays
     }
     const result = await fetchLeaderboard(me, scope.value, dimension.value)

@@ -3,13 +3,13 @@
  * 规则基线：文档相关/ui重构/2026-07-30-D方向霓虹竞技场落地方案.md 第 3 节
  */
 
-import type { LevelInfo, PowerInput, XpGrant } from './types'
+import type { LevelInfo, PowerInput, XpGrant, XpRewardRecord } from './types'
 
 /** XP 事件表：key 稳定，后端补机制时直接对齐 */
 export const XP_EVENTS = {
   resume_create: { xp: 150, label: '做出能匹配的简历' },
   resume_section: { xp: 40, label: '完善简历模块' },
-  jd_paste: { xp: 60, label: '贴目标 JD' },
+  jd_paste: { xp: 60, label: '录入目标岗位信息' },
   jd_cover_boost: { xp: 120, label: '补齐 JD 缺失词' },
   warmup_5: { xp: 90, label: '轻量热身 5 题' },
   practice_correct: { xp: 18, label: '答对题目' },
@@ -113,4 +113,23 @@ export function nextStreak(
 /** 每日宝箱：今日关数全部完成且未领取时可开 */
 export function chestAvailable(done: number, total: number, chestClaimedDate: string | null, today: string): boolean {
   return total > 0 && done >= total && chestClaimedDate !== today
+}
+
+/** 当前本地周的周一 00:00 时间戳。 */
+export function weekStartTimestamp(now = new Date()): number {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
+  return start.getTime()
+}
+
+/** 只汇总当前本地周内有可靠入账时间的经验记录。 */
+export function weeklyXpOf(rewards: XpRewardRecord[], now = new Date()): number {
+  const weekStart = weekStartTimestamp(now)
+  const nowTime = now.getTime()
+  return rewards.reduce((total, reward) => {
+    const grantedAt = new Date(reward.grantedAt).getTime()
+    if (!Number.isFinite(grantedAt) || grantedAt < weekStart || grantedAt > nowTime) return total
+    return total + Math.max(0, Math.floor(Number(reward.xp) || 0))
+  }, 0)
 }

@@ -758,12 +758,21 @@ watch(
   }
 )
 
+watch(
+  () => authStore.userInfo?.id,
+  (userId) => {
+    if (userId == null) {
+      gameProfile.resetSession()
+      return
+    }
+    gameProfile.hydrate(userId)
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleDocumentKeydown)
-  if (!gameProfile.hydrated) {
-    gameProfile.hydrate(authStore.userInfo?.id)
-  }
 })
 
 onBeforeUnmount(() => {

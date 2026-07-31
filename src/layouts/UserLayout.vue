@@ -38,6 +38,7 @@ import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import XpGainToast from '@/components/game/XpGainToast.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
 import { appConfig } from '@/config'
+import { useGameProfileStore } from '@/features/game-profile'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -46,6 +47,7 @@ import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const gameProfile = useGameProfileStore()
 const tagsStore = useTagsViewStore()
 const CommandPalette = defineAsyncComponent(() => import('@/components/layout/CommandPalette.vue'))
 
@@ -121,6 +123,7 @@ const handleCommand = async (command: string) => {
 
   if (command === 'logout') {
     tagsStore.clearVisitedViews()
+    gameProfile.resetSession()
     await authStore.logout()
     await router.push('/login')
   }

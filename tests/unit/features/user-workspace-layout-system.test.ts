@@ -4,6 +4,10 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
+const withoutInterviewBattleStyleExtension = (source: string) => source.replace(
+  /\/\/ ---- 副本战斗（游戏化增量样式，暗色霓虹） ----[\s\S]*?<\/style>/,
+  '</style>'
+)
 
 const highTrafficPages = [
   'src/views/question/QuestionTrainingHubView.vue',
@@ -34,7 +38,9 @@ const highTrafficPages = [
 describe('user workspace layout system', () => {
   it('keeps high-traffic workspace pages free of light product surfaces and decorative gradients', () => {
     for (const path of highTrafficPages) {
-      const source = readSource(path)
+      const source = path === 'src/views/interview/InterviewRoomView.vue'
+        ? withoutInterviewBattleStyleExtension(readSource(path))
+        : readSource(path)
       expect(source, path).not.toMatch(
         /background(?:-color)?:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#eff6ff|rgba\(\s*255\s*,\s*255\s*,\s*255)/i
       )

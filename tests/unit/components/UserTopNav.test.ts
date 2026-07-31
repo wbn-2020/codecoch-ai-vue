@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 import UserTopNav from '@/components/layout/UserTopNav.vue'
+import { useGameProfileStore } from '@/features/game-profile'
+import { useAuthStore } from '@/stores/auth'
 
 const appConfig = vi.hoisted(() => ({
   enableV4PreviewAccess: true,
@@ -104,6 +106,27 @@ describe('UserTopNav navigation discovery', () => {
     expect(xp.text()).toContain('◆')
     expect(streak.attributes('title')).toContain('连胜')
     expect(xp.attributes('title')).toContain('经验')
+  })
+
+  it('rehydrates game profile values when the authenticated account changes', async () => {
+    const authStore = useAuthStore()
+    const gameProfile = useGameProfileStore()
+    gameProfile.hydrate(101)
+    gameProfile.grantXp('warmup_5')
+    gameProfile.hydrate(202)
+    gameProfile.grantXp('jd_paste')
+
+    authStore.setUserInfo({ id: 101, username: 'alice', roles: [] })
+    const wrapper = mountNav()
+    await nextTick()
+    expect(gameProfile.userId).toBe('101')
+    expect(gameProfile.xp).toBe(90)
+
+    authStore.setUserInfo({ id: 202, username: 'bob', roles: [] })
+    await nextTick()
+    expect(gameProfile.userId).toBe('202')
+    expect(gameProfile.xp).toBe(60)
+    wrapper.unmount()
   })
 
   it('opens a grouped feature navigator and preserves every former secondary destination', async () => {

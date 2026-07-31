@@ -36,17 +36,30 @@ export interface XpGrant {
   label: string
 }
 
+/**
+ * 已入账经验记录。
+ * rewardKey 用于业务事件幂等；为空表示该奖励不需要跨会话去重。
+ */
+export interface XpRewardRecord extends XpGrant {
+  rewardKey: string | null
+  grantedAt: string
+}
+
 export interface GameProfileSnapshot {
   userId: string
   xp: number
   streakDays: number
   /** 最近一次记连胜的日期 YYYY-MM-DD */
   streakLastDate: string | null
+  /** 今日任务进度所属日期 YYYY-MM-DD */
+  missionProgressDate: string | null
   /** 今日已完成关数 */
   todayMissionDone: number
   /** 今日总关数 */
   todayMissionTotal: number
   /** 宝箱领取日期 YYYY-MM-DD，null = 今日未领 */
   chestClaimedDate: string | null
+  /** 前端 mock 奖励账本，用于幂等和周经验统计 */
+  xpRewards: XpRewardRecord[]
   updatedAt: string
 }

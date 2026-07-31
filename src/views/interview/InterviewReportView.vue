@@ -116,16 +116,16 @@
           </div>
           <div class="settle-banner__xp">
             <div class="settle-banner__xp-row">
-              <span>通关奖励</span>
-              <b>+200 XP</b>
+              <span>通关奖励（已入账）</span>
+              <b>+{{ completionRewardXp }} XP</b>
             </div>
             <div class="settle-banner__xp-row">
-              <span>答题奖励（{{ qaMessages.length }} 题 × 18）</span>
-              <b>+{{ qaMessages.length * 18 }} XP</b>
+              <span>答题奖励（已入账 {{ answerRewardCount }} 题）</span>
+              <b>+{{ answerRewardXp }} XP</b>
             </div>
             <div class="settle-banner__xp-row is-total">
               <span>本场合计</span>
-              <b>+{{ 200 + qaMessages.length * 18 }} XP</b>
+              <b>+{{ sessionRewardXp }} XP</b>
             </div>
           </div>
           <div v-if="improveTop3.length" class="settle-banner__improve">
@@ -662,6 +662,7 @@
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
+import { getActivePinia } from 'pinia'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
@@ -695,6 +696,7 @@ import {
 } from '@/features/interview-comparison'
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
+import { useGameProfileStore } from '@/features/game-profile'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -710,6 +712,7 @@ import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
+const gameProfile = getActivePinia() ? useGameProfileStore() : null
 const interviewId = computed(() => getRouteNumberParam(route.params.id as string) || undefined)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
@@ -992,6 +995,20 @@ const primaryNextActionMeta = computed(() => {
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
+const interviewRewardPrefix = computed(() => interviewId.value ? `interview:${interviewId.value}:` : '')
+const answerRewardXp = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardXpForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
+  : 0
+)
+const answerRewardCount = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardCountForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
+  : 0
+)
+const completionRewardXp = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardXpForKey(`${interviewRewardPrefix.value}complete`) || 0
+  : 0
+)
+const sessionRewardXp = computed(() => answerRewardXp.value + completionRewardXp.value)
 const recommendedQuestionIds = computed(() =>
   recommendedQuestions.value
     .map((item) => Number(item.questionId || item.id))

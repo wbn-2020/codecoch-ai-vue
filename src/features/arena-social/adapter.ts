@@ -74,6 +74,7 @@ export interface MyArenaInfo {
   name: string
   avatar: string
   xp: number
+  weekXp: number
   streakDays: number
 }
 
@@ -88,7 +89,7 @@ function toMeEntry(me: MyArenaInfo): ArenaPlayer {
     level: level.level,
     title: level.title,
     xp: me.xp,
-    weekXp: Math.min(me.xp, 200),
+    weekXp: Math.max(0, Math.floor(Number(me.weekXp) || 0)),
     streakDays: me.streakDays,
     rankPoints: profile.rankPoints,
     isMe: true
@@ -131,6 +132,9 @@ export async function saveBattleResult(
   result: Omit<BattleResult, 'pointsDelta' | 'playedAt'>
 ): Promise<ArenaSocialProfile> {
   const profile = loadSocialProfile(userId)
+  if (profile.records.some((record) => record.id === result.id)) {
+    return Promise.resolve(profile)
+  }
   const pointsDelta = result.outcome === 'win' ? WIN_POINTS : result.outcome === 'lose' ? LOSE_POINTS : DRAW_POINTS
   const record: BattleResult = {
     ...result,
