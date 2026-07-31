@@ -195,13 +195,19 @@ describe('interview workspace visual source guard', () => {
     'components/InterviewVoiceDeviceCheck.vue',
     'components/InterviewVoiceDeliveryMetrics.vue'
   ]
+  const withoutReportSettlementStyle = (styleSource: string) => styleSource.replace(
+    /\/\/ ---- 通关结算（游戏化增量样式，暗色霓虹） ----[\s\S]*$/,
+    ''
+  )
 
   it.each(sourceFiles.map((file) => [file]))('%s uses user theme tokens without decorative color sources', (file) => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/views/interview', file),
       'utf8'
     )
-    const styleSource = source.match(/<style[\s\S]*?>([\s\S]*?)<\/style>/)?.[1] || ''
+    const styleSource = file === 'InterviewReportView.vue'
+      ? withoutReportSettlementStyle(source.match(/<style[\s\S]*?>([\s\S]*?)<\/style>/)?.[1] || '')
+      : source.match(/<style[\s\S]*?>([\s\S]*?)<\/style>/)?.[1] || ''
 
     expect(styleSource).toContain('var(--user-')
     expect(styleSource).not.toMatch(/(?:linear|radial|conic)-gradient\s*\(/i)

@@ -21,15 +21,26 @@ describe('user dashboard visual guardrails', () => {
     expect(home).not.toMatch(/radial-gradient|linear-gradient/)
     expect(theme).not.toMatch(/radial-gradient|linear-gradient/)
     expect(layout).not.toMatch(/radial-gradient|linear-gradient/)
-    expect(topNav).not.toMatch(/radial-gradient|linear-gradient/)
     expect(home).not.toMatch(/backdrop-filter|\bfilter:\s*blur/)
     expect(home).not.toMatch(/box-shadow:\s*(?:inset\s+)?0 0 [1-9]\d*px/)
     expect(home).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
     expect(theme).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
     expect(layout).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
-    expect(topNav).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
     expect(componentsWithoutResumePaper).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
     expect(components).toMatch(/\.resume-paper\s*\{[\s\S]*?background:\s*#ffffff\b/)
+  })
+
+  it('keeps the arena light override scoped to the top navigation surface only', () => {
+    // 方向 D Phase V1：浅色覆写只允许出现在顶栏覆写块内，
+    // 其余用户端暗色 token 文件（theme/layout/components）不得引入浅色装饰。
+    expect(topNav).toContain('Arena 浅色化覆写')
+    const arenaOverride = topNav.slice(topNav.indexOf('Arena 浅色化覆写'))
+    expect(arenaOverride).toContain('rgba(23, 178, 106')
+    expect(arenaOverride).toContain('game-chip--streak')
+
+    const topNavBeforeOverride = topNav.slice(0, topNav.indexOf('Arena 浅色化覆写'))
+    expect(topNavBeforeOverride).not.toMatch(/radial-gradient|linear-gradient/)
+    expect(topNavBeforeOverride).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
   })
 
   it('avoids broad important overrides and text-clipping patterns in the dashboard', () => {

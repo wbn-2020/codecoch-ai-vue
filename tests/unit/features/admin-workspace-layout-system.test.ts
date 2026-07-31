@@ -92,7 +92,13 @@ describe('admin workspace layout system', () => {
     expect(authStyleSource).toContain('min-height: 100dvh')
     expect(authStyleSource).toContain('@media (max-width: 640px)')
 
-    authPageSources.forEach(({ source }) => {
+    // 方向 D Phase V1：LoginView 已切换为 arena 浅色门面（豁免本契约），
+    // 其余认证页沿用 auth-workspace 暗色，待 Phase V2 统一收口。
+    authPageSources.forEach(({ fileName, source }) => {
+      if (fileName === 'LoginView.vue') {
+        expect(source).toContain('class="arena login-page"')
+        return
+      }
       expect(source).toContain("@use './auth-workspace';")
       expect(source).not.toMatch(/(?:linear|radial)-gradient\s*\(/i)
     })

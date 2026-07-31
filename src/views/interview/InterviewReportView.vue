@@ -106,6 +106,36 @@
 
     <section v-else class="content-card" v-loading="loading">
       <div v-if="report && isGenerated" class="content-card__body">
+        <div class="settle-banner">
+          <div class="settle-banner__left">
+            <span class="settle-banner__emoji">🏆</span>
+            <div>
+              <div class="settle-banner__kicker">副本通关 · 结算</div>
+              <b class="settle-banner__score">{{ displayTotalScore }}<small> 分</small></b>
+            </div>
+          </div>
+          <div class="settle-banner__xp">
+            <div class="settle-banner__xp-row">
+              <span>通关奖励（已入账）</span>
+              <b>+{{ completionRewardXp }} XP</b>
+            </div>
+            <div class="settle-banner__xp-row">
+              <span>答题奖励（已入账 {{ answerRewardCount }} 题）</span>
+              <b>+{{ answerRewardXp }} XP</b>
+            </div>
+            <div class="settle-banner__xp-row is-total">
+              <span>本场合计</span>
+              <b>+{{ sessionRewardXp }} XP</b>
+            </div>
+          </div>
+          <div v-if="improveTop3.length" class="settle-banner__improve">
+            <span>三点改进</span>
+            <ol>
+              <li v-for="item in improveTop3" :key="item">{{ item }}</li>
+            </ol>
+          </div>
+        </div>
+
         <div class="report-hero-grid">
           <section class="report-score-panel" :class="{ 'report-score-panel--muted': isScoreUnavailable }">
             <span class="panel-kicker">综合得分</span>
@@ -632,6 +662,7 @@
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
+import { getActivePinia } from 'pinia'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
@@ -665,6 +696,7 @@ import {
 } from '@/features/interview-comparison'
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
+import { useGameProfileStore } from '@/features/game-profile'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -680,6 +712,7 @@ import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
+const gameProfile = getActivePinia() ? useGameProfileStore() : null
 const interviewId = computed(() => getRouteNumberParam(route.params.id as string) || undefined)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
@@ -869,6 +902,21 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
     .filter((action) => action && action.actionType && action.title)
     .sort((left, right) => (left.priority || 0) - (right.priority || 0))
 })
+
+/** 结算画面"三点改进"：优先取下一步行动前三条，退化为短板文本拆分 */
+const improveTop3 = computed(() => {
+  const fromActions = nextActions.value
+    .slice(0, 3)
+    .map((action) => action.title || action.description || '')
+    .filter((text) => text.trim().length > 0)
+  if (fromActions.length) return fromActions
+  const text = String(report.value?.mainProblems || report.value?.weaknesses || '')
+  return text
+    .split(/\r?\n|；|。/)
+    .map((line) => line.trim().replace(/^[-*·\d.、\s]+/, ''))
+    .filter((line) => line.length > 3)
+    .slice(0, 3)
+})
 const knowledgeCandidates = computed<InterviewKnowledgeCandidateVO[]>(() =>
   isGenerated.value ? buildInterviewReportKnowledgeCandidates(report.value) : []
 )
@@ -947,6 +995,20 @@ const primaryNextActionMeta = computed(() => {
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
+const interviewRewardPrefix = computed(() => interviewId.value ? `interview:${interviewId.value}:` : '')
+const answerRewardXp = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardXpForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
+  : 0
+)
+const answerRewardCount = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardCountForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
+  : 0
+)
+const completionRewardXp = computed(() => interviewRewardPrefix.value
+  ? gameProfile?.rewardXpForKey(`${interviewRewardPrefix.value}complete`) || 0
+  : 0
+)
+const sessionRewardXp = computed(() => answerRewardXp.value + completionRewardXp.value)
 const recommendedQuestionIds = computed(() =>
   recommendedQuestions.value
     .map((item) => Number(item.questionId || item.id))
@@ -3472,6 +3534,111 @@ onBeforeUnmount(() => {
   .action-zone {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+// ---- 通关结算（游戏化增量样式，暗色霓虹） ----
+.settle-banner {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 22px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(247, 144, 9, 0.35);
+  background:
+    radial-gradient(420px 160px at 8% 0%, rgba(247, 144, 9, 0.14), transparent 65%),
+    rgba(2, 6, 23, 0.55);
+}
+
+.settle-banner__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settle-banner__emoji {
+  font-size: 40px;
+}
+
+.settle-banner__kicker {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f7b955;
+}
+
+.settle-banner__score {
+  display: block;
+  margin-top: 2px;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #f8fafc;
+
+  small {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(203, 213, 225, 0.7);
+  }
+}
+
+.settle-banner__xp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settle-banner__xp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(203, 213, 225, 0.75);
+
+  b {
+    color: #f7b955;
+    font-size: 12.5px;
+  }
+
+  &.is-total {
+    padding-top: 6px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.25);
+    font-weight: 800;
+    color: #e5edf8;
+
+    b {
+      font-size: 14px;
+      color: #a3e635;
+    }
+  }
+}
+
+.settle-banner__improve {
+  padding: 12px 15px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.08);
+
+  > span {
+    font-size: 11px;
+    font-weight: 800;
+    color: #b3a1ff;
+  }
+
+  ol {
+    margin: 7px 0 0;
+    padding-left: 17px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: #e5edf8;
+  }
+}
+
+@media (max-width: 900px) {
+  .settle-banner {
+    grid-template-columns: 1fr;
+    gap: 14px;
   }
 }
 </style>

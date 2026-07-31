@@ -1,8 +1,11 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 import UserTopNav from '@/components/layout/UserTopNav.vue'
+import { useGameProfileStore } from '@/features/game-profile'
+import { useAuthStore } from '@/stores/auth'
 
 const appConfig = vi.hoisted(() => ({
   enableV4PreviewAccess: true,
@@ -83,6 +86,7 @@ const legacySecondaryLabels = [
 
 describe('UserTopNav navigation discovery', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     routePath.value = '/interviews/create'
     routeMeta.value = {}
     appConfig.enableV6WeeklyReport = false
@@ -90,12 +94,39 @@ describe('UserTopNav navigation discovery', () => {
     push.mockReset()
   })
 
-  it('keeps the two highest-frequency destinations directly available on desktop', () => {
+  it('drops legacy priority shortcuts and exposes arena game chips instead', () => {
     const wrapper = mountNav()
-    const shortcuts = wrapper.findAll('.priority-link')
 
-    expect(shortcuts.map((item) => item.text())).toEqual(['今日任务', '投递管理'])
-    expect(shortcuts.map((item) => item.attributes('aria-label'))).toEqual(['今日任务', '投递管理'])
+    expect(wrapper.find('.priority-link').exists()).toBe(false)
+    expect(wrapper.find('.priority-nav').exists()).toBe(false)
+
+    const streak = wrapper.get('.game-chip--streak')
+    const xp = wrapper.get('.game-chip--xp')
+    expect(streak.text()).toContain('🔥')
+    expect(xp.text()).toContain('◆')
+    expect(streak.attributes('title')).toContain('连胜')
+    expect(xp.attributes('title')).toContain('经验')
+  })
+
+  it('rehydrates game profile values when the authenticated account changes', async () => {
+    const authStore = useAuthStore()
+    const gameProfile = useGameProfileStore()
+    gameProfile.hydrate(101)
+    gameProfile.grantXp('warmup_5')
+    gameProfile.hydrate(202)
+    gameProfile.grantXp('jd_paste')
+
+    authStore.setUserInfo({ id: 101, username: 'alice', roles: [] })
+    const wrapper = mountNav()
+    await nextTick()
+    expect(gameProfile.userId).toBe('101')
+    expect(gameProfile.xp).toBe(90)
+
+    authStore.setUserInfo({ id: 202, username: 'bob', roles: [] })
+    await nextTick()
+    expect(gameProfile.userId).toBe('202')
+    expect(gameProfile.xp).toBe(60)
+    wrapper.unmount()
   })
 
   it('opens a grouped feature navigator and preserves every former secondary destination', async () => {
@@ -104,11 +135,12 @@ describe('UserTopNav navigation discovery', () => {
     await wrapper.get('.more-button').trigger('click')
 
     const panel = wrapper.get('.feature-nav-panel')
-    expect(panel.attributes('aria-label')).toBe('全部功能导航')
+    expect(panel.attributes('aria-label')).toBe('工具导航')
     expect(panel.findAll('.feature-nav-group__title').map((item) => item.text())).toEqual([
       '今日推进',
       '求职资产',
       '训练复盘',
+      '竞技场',
       '成长与支持'
     ])
 
@@ -151,7 +183,8 @@ describe('UserTopNav navigation discovery', () => {
     expect(weeklyLink.classes()).toContain('is-active')
     expect(weeklyLink.attributes('aria-current')).toBe('page')
 
-    const activePrimary = enabledWrapper.findAll('.nav-item').find((item) => item.text() === '能力图谱')
+    // 方向 D IA：能力图谱不再是主导航；/agent/** 归入「今天」
+    const activePrimary = enabledWrapper.findAll('.nav-item').find((item) => item.text() === '今天')
     expect(activePrimary?.classes()).toContain('is-active')
     expect(activePrimary?.attributes('aria-current')).toBe('page')
     expect(enabledWrapper.get('.mobile-current-section').text()).toBe('求职周报')
@@ -202,6 +235,7 @@ describe('UserTopNav navigation discovery', () => {
       '今日推进',
       '求职资产',
       '训练复盘',
+      '竞技场',
       '成长与支持'
     ])
 
@@ -227,7 +261,7 @@ describe('UserTopNav navigation discovery', () => {
     expect(panel.attributes('role')).toBe('dialog')
     expect(panel.attributes('aria-modal')).toBe('true')
     expect(panel.attributes('aria-labelledby')).toBe('user-mobile-panel-title')
-    expect(wrapper.get('#user-mobile-panel-title').text()).toBe('全部功能')
+    expect(wrapper.get('#user-mobile-panel-title').text()).toBe('工具')
     expect(document.body.style.overflow).toBe('hidden')
     expect(wrapper.get('.mobile-bottom-nav').classes()).toContain('is-modal-open')
 
@@ -277,13 +311,13 @@ describe('UserTopNav navigation discovery', () => {
     const items = wrapper.findAll('.mobile-bottom-nav__item')
 
     expect(items).toHaveLength(5)
-    expect(items.map((item) => item.text())).toEqual(['工作台', '题库', '面试', '简历', '能力'])
+    expect(items.map((item) => item.text())).toEqual(['今天', '准备', '训练', '面试', '工具'])
     expect(items.map((item) => item.attributes('aria-label'))).toEqual([
-      '工作台',
-      '题库',
-      '模拟面试',
-      '简历实验',
-      '能力图谱'
+      '今天',
+      '准备',
+      '训练',
+      '面试',
+      '打开工具面板'
     ])
   })
 })

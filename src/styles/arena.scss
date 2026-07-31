@@ -1,0 +1,391 @@
+// ============================================================
+// Arena · 方向 D「霓虹竞技场」用户端视觉 token 与组件基元
+// 基线：文档相关/ui重构/2026-07-30-D方向霓虹竞技场落地方案.md
+// 原则：
+//   1. 全部变量与组件类挂在 .arena 作用域下，不影响存量暗色页面
+//   2. 管理端禁止引入本文件变量
+//   3. 与原型 方向D原型/index.html 视觉保持一致
+// ============================================================
+
+.arena {
+  // ---- Element Plus 浅色化（:root 的 --el-* 为暗色 cockpit，arena 内恢复浅色）----
+  // 注意：el-select 等弹出层默认 teleport 到 body，需配合 :teleported="false" 才能命中本作用域
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: var(--arena-bg);
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color: #f2f4f2;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f5f7f4;
+  --el-fill-color-lighter: #f8faf8;
+  --el-fill-color-extra-light: #fafcfa;
+  --el-fill-color-dark: #e9eee9;
+  --el-fill-color-darker: #dfe6e0;
+  --el-mask-color: rgba(21, 33, 27, 0.5);
+  --el-mask-color-extra-light: rgba(21, 33, 27, 0.3);
+  --el-border-color: var(--arena-line);
+  --el-border-color-light: var(--arena-line);
+  --el-border-color-lighter: var(--arena-line2);
+  --el-border-color-extra-light: var(--arena-line2);
+  --el-border-color-dark: #d5ddd6;
+  --el-border-color-darker: #c8d2ca;
+  --el-border-radius-base: 10px;
+  --el-text-color-primary: var(--arena-ink);
+  --el-text-color-regular: var(--arena-sub);
+  --el-text-color-secondary: var(--arena-sub);
+  --el-text-color-placeholder: var(--arena-mut);
+  --el-text-color-disabled: var(--arena-mut);
+  --el-disabled-bg-color: #f2f4f2;
+  --el-disabled-text-color: var(--arena-mut);
+  --el-disabled-border-color: var(--arena-line);
+  --el-color-primary: var(--arena-grn);
+  --el-color-primary-dark-2: var(--arena-grn-d);
+  --el-color-primary-light-3: #54c78d;
+  --el-color-primary-light-5: #8bdab2;
+  --el-color-primary-light-7: #bfe9d3;
+  --el-color-primary-light-8: #d9f2e4;
+  --el-color-primary-light-9: var(--arena-grn-soft);
+
+  // ---- 色彩 ----
+  --arena-bg: #f5f7f4;
+  --arena-card: #ffffff;
+  --arena-ink: #15211b;
+  --arena-sub: #5f6e66;
+  --arena-mut: #9aa79f;
+  --arena-line: #e4eae5;
+  --arena-line2: #eef2ee;
+  --arena-grn: #17b26a;
+  --arena-grn-d: #0e9f5d;
+  --arena-grn-soft: rgba(23, 178, 106, 0.13);
+  --arena-lime: #a3e635;
+  --arena-amber: #f79009;
+  --arena-amber-soft: rgba(247, 144, 9, 0.13);
+  --arena-vio: #7c5cfc;
+  --arena-vio-soft: rgba(124, 92, 252, 0.12);
+  --arena-red: #e5484d;
+  --arena-red-soft: rgba(229, 72, 77, 0.1);
+
+  // ---- 尺寸 ----
+  --arena-radius-btn: 14px;
+  --arena-radius-card: 20px;
+  --arena-radius-inp: 13px;
+
+  color: var(--arena-ink);
+  background:
+    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
+    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
+    var(--arena-bg);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  min-height: 100%;
+
+  // ---- 文字工具 ----
+  .arena-h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    line-height: 1.25;
+  }
+  .arena-h2 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 900;
+    line-height: 1.3;
+  }
+  .arena-h3 {
+    font-size: 14.5px;
+    font-weight: 800;
+  }
+  .arena-p {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--arena-sub);
+  }
+  .arena-tiny {
+    font-size: 11.5px;
+    color: var(--arena-mut);
+  }
+  .arena-grad-text {
+    background: linear-gradient(100deg, var(--arena-grn), var(--arena-lime));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  // ---- 卡片 ----
+  .arena-card {
+    background: var(--arena-card);
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+  .arena-card--hero {
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 70%);
+    border-color: #b9e7cd;
+    position: relative;
+    overflow: hidden;
+  }
+  .arena-card--hero::after {
+    content: '';
+    position: absolute;
+    top: -24px;
+    right: -24px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(163, 230, 53, 0.3), transparent 70%);
+    pointer-events: none;
+  }
+  .arena-card--treasure {
+    background: linear-gradient(90deg, #fff7ec, #ffffff);
+    border-color: #f3ddc0;
+  }
+
+  // ---- 按钮（Duolingo 式 3D 按压） ----
+  .arena-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    cursor: pointer;
+    font-weight: 800;
+    font-family: inherit;
+    font-size: 14px;
+    border-radius: var(--arena-radius-btn);
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s,
+      border-color 0.15s;
+  }
+  .arena-btn--pri {
+    background: var(--arena-grn);
+    color: #fff;
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+  }
+  .arena-btn--pri:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 0 var(--arena-grn-d);
+  }
+  .arena-btn--pri:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--arena-grn-d);
+  }
+  .arena-btn--pri:disabled {
+    opacity: 0.6;
+    transform: none;
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    cursor: not-allowed;
+  }
+  .arena-btn--sec {
+    background: #fff;
+    color: var(--arena-grn-d);
+    border: 2px solid var(--arena-line);
+    box-shadow: 0 3px 0 var(--arena-line);
+  }
+  .arena-btn--sec:hover {
+    border-color: var(--arena-grn);
+  }
+  .arena-btn--txt {
+    background: none;
+    color: var(--arena-grn-d);
+    font-size: 13px;
+    padding: 6px 4px;
+  }
+
+  // ---- 徽章 ----
+  .arena-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 11px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .arena-chip--grn {
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+  }
+  .arena-chip--grn-solid {
+    background: var(--arena-grn);
+    color: #fff;
+  }
+  .arena-chip--amber {
+    background: var(--arena-amber-soft);
+    color: var(--arena-amber);
+  }
+  .arena-chip--vio {
+    background: var(--arena-vio-soft);
+    color: var(--arena-vio);
+  }
+  .arena-chip--red {
+    background: var(--arena-red-soft);
+    color: var(--arena-red);
+  }
+  .arena-chip--line {
+    background: #fff;
+    border: 1.5px solid var(--arena-line);
+    color: var(--arena-amber);
+  }
+  .arena-chip--mut {
+    background: #f2f4f2;
+    color: var(--arena-sub);
+  }
+  .arena-xp-tag {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--arena-amber);
+  }
+
+  // ---- 战力环 ----
+  .arena-ring {
+    position: relative;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .arena-ring__hole {
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // ---- XP 进度条 ----
+  .arena-xpbar {
+    height: 7px;
+    border-radius: 99px;
+    background: var(--arena-line);
+    overflow: hidden;
+  }
+  .arena-xpbar > i {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+    transition: width 0.3s ease;
+  }
+
+  // ---- 输入 ----
+  .arena-inp {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--arena-line);
+    border-radius: var(--arena-radius-inp);
+    background: #fff;
+    font-size: 14px;
+    color: var(--arena-ink);
+    outline: none;
+    font-weight: 600;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .arena-inp:focus {
+    border-color: var(--arena-grn);
+  }
+  .arena-lbl {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--arena-sub);
+    margin-bottom: 6px;
+  }
+
+  // ---- 状态图标 ----
+  .arena-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+    flex: none;
+  }
+  .arena-lock {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: var(--arena-line);
+    color: var(--arena-mut);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex: none;
+  }
+  .arena-lock--xp {
+    background: var(--arena-amber-soft);
+    color: var(--arena-amber);
+  }
+
+  // ---- AI 徽章 ----
+  .arena-ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: var(--arena-vio);
+    background: var(--arena-vio-soft);
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+
+  // ---- 连胜日历 ----
+  .arena-streak {
+    display: flex;
+    justify-content: space-between;
+  }
+  .arena-streak__day {
+    text-align: center;
+  }
+  .arena-streak__box {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    margin: 0 auto;
+  }
+  .arena-streak__box--done {
+    background: var(--arena-grn);
+    color: #fff;
+  }
+  .arena-streak__box--today {
+    background: var(--arena-amber);
+    color: #fff;
+    box-shadow: 0 0 0 3px var(--arena-amber-soft);
+  }
+  .arena-streak__box--todo {
+    background: var(--arena-line);
+    color: var(--arena-mut);
+  }
+
+  // ---- 布局工具 ----
+  .arena-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .arena-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .arena-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+}

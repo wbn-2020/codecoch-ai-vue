@@ -27,24 +27,25 @@
         </button>
       </nav>
 
-      <nav class="priority-nav" aria-label="高频快捷入口">
-        <button
-          v-for="link in priorityLinks"
-          :key="link.path"
-          class="priority-link"
-          :class="{ 'is-active': isLinkActive(link) }"
-          type="button"
-          :aria-label="link.label"
-          :aria-current="isLinkActive(link) ? 'page' : undefined"
-          :title="link.label"
-          @click="go(link.path)"
-        >
-          <component :is="link.icon" :size="16" />
-          <span>{{ link.label }}</span>
-        </button>
-      </nav>
-
       <div class="topnav-actions">
+        <button
+          class="game-chip game-chip--streak"
+          type="button"
+          :title="`连胜 ${gameProfile.streakDays} 天，今天也要完成一关`"
+          aria-label="查看连胜"
+          @click="go('/dashboard')"
+        >
+          🔥 <span>{{ gameProfile.streakDays }}</span>
+        </button>
+        <button
+          class="game-chip game-chip--xp"
+          type="button"
+          :title="`LV.${gameProfile.levelInfo.level} ${gameProfile.levelInfo.title} · ${formattedXp} 经验`"
+          aria-label="查看我的经验"
+          @click="go('/dashboard')"
+        >
+          ◆ <span>{{ formattedXp }}</span>
+        </button>
         <button class="command-button" type="button" aria-label="打开命令面板" @click="$emit('open-command')">
           <Search :size="15" />
           <span>搜索</span>
@@ -62,8 +63,8 @@
             aria-controls="user-feature-nav-panel"
             @click="toggleMore"
           >
-            <LayoutGrid :size="17" />
-            <span>全部功能</span>
+            <Wrench :size="17" />
+            <span>工具</span>
           </button>
 
           <Transition name="feature-nav">
@@ -72,10 +73,10 @@
               id="user-feature-nav-panel"
               class="feature-nav-panel"
               role="navigation"
-              aria-label="全部功能导航"
+              aria-label="工具导航"
             >
               <div class="feature-nav-panel__head">
-                <strong>全部功能</strong>
+                <strong>工具</strong>
                 <button class="feature-nav-close" type="button" aria-label="关闭全部功能导航" @click="closeMore(true)">
                   <X :size="17" />
                 </button>
@@ -124,18 +125,6 @@
           </button>
         </el-tooltip>
 
-        <button
-          v-if="canAccessAdmin"
-          class="admin-button"
-          type="button"
-          aria-label="进入管理端"
-          title="进入管理端"
-          @click="$emit('go-admin')"
-        >
-          <Shield :size="15" />
-          <span>管理端</span>
-        </button>
-
         <el-dropdown trigger="click" @command="handleUserCommand">
           <button class="user-trigger" type="button" :aria-label="`打开 ${displayName} 的账户菜单`">
             <el-avatar :size="30" :src="avatarUrl || ''">
@@ -147,6 +136,7 @@
             <el-dropdown-menu>
               <el-dropdown-item command="profile">个人资料</el-dropdown-item>
               <el-dropdown-item command="password">修改密码</el-dropdown-item>
+              <el-dropdown-item v-if="canAccessAdmin" command="admin">管理端</el-dropdown-item>
               <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -185,7 +175,7 @@
           @click.stop
         >
           <header class="mobile-panel__header">
-            <strong id="user-mobile-panel-title">全部功能</strong>
+            <strong id="user-mobile-panel-title">工具</strong>
             <button
               class="mobile-modal-close"
               type="button"
@@ -264,6 +254,19 @@
         <component :is="item.icon" :size="18" />
         <span>{{ item.mobileLabel }}</span>
       </button>
+      <button
+        class="mobile-bottom-nav__item"
+        :class="{ 'is-active': mobileOpen }"
+        type="button"
+        aria-label="打开工具面板"
+        :aria-expanded="mobileOpen"
+        aria-controls="user-mobile-panel"
+        title="工具"
+        @click="toggleMobile"
+      >
+        <Wrench :size="18" />
+        <span>工具</span>
+      </button>
     </nav>
   </header>
 </template>
@@ -286,17 +289,17 @@ import {
   GraduationCap,
   History,
   Library,
-  LayoutGrid,
   Menu,
   MessageSquare,
   PackageCheck,
   RotateCcw,
   Search,
-  Shield,
   Sparkles,
   Star,
+  Swords,
   Target,
   TrendingUp,
+  Trophy,
   Wrench,
   X
 } from 'lucide-vue-next'
@@ -305,7 +308,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { appConfig } from '@/config'
+import { useGameProfileStore } from '@/features/game-profile'
 import { isV4PreviewAccessEnabled } from '@/features/route-safety'
+import { useAuthStore } from '@/stores/auth'
 
 defineProps<{
   displayName: string
@@ -351,6 +356,8 @@ interface FeatureGroup {
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
+const gameProfile = useGameProfileStore()
 const mobileOpen = ref(false)
 const mobileTrigger = ref<HTMLButtonElement>()
 const mobilePanel = ref<HTMLElement>()
@@ -361,49 +368,40 @@ let previousBodyOverflow = ''
 
 const navItems: NavItem[] = [
   {
-    key: 'dashboard',
-    label: '工作台',
-    mobileLabel: '工作台',
-    desc: 'Offer 冲刺驾驶舱、今日行动和 AI 推荐依据',
+    key: 'today',
+    label: '今天',
+    mobileLabel: '今天',
+    desc: '今日闯关、连胜和战力进度',
     path: '/dashboard',
     icon: Target,
-    matches: ['/dashboard', '/dashboard/v3', '/onboarding', '/agent/today', '/agent/tasks']
+    matches: ['/dashboard', '/onboarding', '/agent']
   },
   {
-    key: 'questions',
-    label: '题库',
-    mobileLabel: '题库',
-    desc: '推荐题、专项练习、错题和收藏',
+    key: 'prepare',
+    label: '准备',
+    mobileLabel: '准备',
+    desc: '简历、目标岗位、JD 匹配和项目证据',
+    path: '/resumes',
+    icon: FileText,
+    matches: ['/resumes', '/job-targets', '/resume-match', '/project-evidence', '/evidence-assets', '/projects', '/application-packages']
+  },
+  {
+    key: 'train',
+    label: '训练',
+    mobileLabel: '训练',
+    desc: '推荐题组、专项练习、错题和收藏',
     path: '/questions/recommendations',
     icon: BookOpenCheck,
-    matches: ['/questions']
+    matches: ['/questions', '/study-plans']
   },
   {
-    key: 'interviews',
-    label: '模拟面试',
+    key: 'interview',
+    label: '面试',
     mobileLabel: '面试',
-    desc: '推荐开练、训练房间、复盘记录和报告',
+    desc: '推荐开练、面试房间、复盘记录和报告',
     path: '/interviews/create',
     icon: MessageSquare,
     matches: ['/interviews']
-  },
-  {
-    key: 'resume',
-    label: '简历实验',
-    mobileLabel: '简历',
-    desc: '简历、岗位目标、匹配分析和项目证据',
-    path: '/resumes',
-    icon: FileText,
-    matches: ['/resumes', '/applications', '/career-calendar', '/application-packages', '/job-targets', '/resume-match', '/project-evidence', '/evidence-assets', '/projects']
-  },
-  {
-    key: 'ability',
-    label: '能力图谱',
-    mobileLabel: '能力',
-    desc: '能力图谱、成长趋势、能力画像和个人分析',
-    path: '/ability-map',
-    icon: Sparkles,
-    matches: ['/ability-map', '/growth', '/skill-profile', '/analytics/personal', '/agent/weekly-reports']
   }
 ]
 
@@ -540,6 +538,26 @@ const baseNavigationGroups: FeatureGroup[] = [
     ]
   },
   {
+    key: 'arena',
+    label: '竞技场',
+    links: [
+      {
+        label: '排行榜',
+        desc: '经验与连胜排名，看看谁最能打',
+        path: '/arena/leaderboard',
+        icon: Trophy,
+        matches: ['/arena/leaderboard']
+      },
+      {
+        label: '多人竞技',
+        desc: '1v1 答题对战，冲击段位',
+        path: '/arena/battle',
+        icon: Swords,
+        matches: ['/arena/battle']
+      }
+    ]
+  },
+  {
     key: 'growth',
     label: '成长与支持',
     links: [
@@ -624,19 +642,14 @@ const currentMobileNavLabel = computed(() => {
     .find((link) => isLinkActive(link))
   return activeFeature?.label
     || navItems.find((item) => isActive(item))?.label
-    || String(route.meta?.title || '工作台')
-})
-
-const priorityLinks = computed<FeatureLink[]>(() => {
-  const links = navigationGroups.value.flatMap((group) => group.links)
-  return ['/agent/today', '/applications']
-    .map((path) => links.find((link) => link.path === path))
-    .filter((link): link is FeatureLink => Boolean(link))
+    || String(route.meta?.title || '今天')
 })
 
 const isActive = (item: NavItem) => {
   return item.matches.some((prefix) => route.path.startsWith(prefix))
 }
+
+const formattedXp = computed(() => gameProfile.xp.toLocaleString('zh-CN'))
 
 const isLinkActive = (link: FeatureLink) => {
   const prefixes = link.matches || [link.path]
@@ -743,6 +756,18 @@ watch(
     mobileOpen.value = false
     moreOpen.value = false
   }
+)
+
+watch(
+  () => authStore.userInfo?.id,
+  (userId) => {
+    if (userId == null) {
+      gameProfile.resetSession()
+      return
+    }
+    gameProfile.hydrate(userId)
+  },
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -1568,6 +1593,175 @@ onBeforeUnmount(() => {
   .mobile-nav-enter-from,
   .mobile-nav-leave-to {
     transform: none;
+  }
+}
+
+/* ============================================================
+   Arena 浅色化覆写 · 方向 D 霓虹竞技场 Phase V1
+   仅覆写顶栏/面板/底栏外观色，不改变布局与交互。
+   存量暗色变量规则保留在前，同特异性下本块后定义胜出。
+   ============================================================ */
+.jobcoach-top-nav {
+  border-bottom: 1.5px solid #e4eae5;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(8px);
+  color: #15211b;
+  box-shadow: 0 1px 3px rgba(21, 33, 27, 0.05);
+}
+
+.brand-mark {
+  border-radius: 10px;
+  background: linear-gradient(135deg, #17b26a, #a3e635);
+  color: #fff;
+  box-shadow: 0 3px 0 #0e9f5d;
+}
+
+.brand-copy strong {
+  color: #15211b;
+}
+.brand-copy span {
+  color: #9aa79f;
+}
+
+.nav-item {
+  border-radius: 11px;
+  color: #5f6e66;
+  font-weight: 700;
+
+  &:hover {
+    background: rgba(23, 178, 106, 0.08);
+    color: #0e9f5d;
+  }
+
+  &.is-active {
+    background: rgba(23, 178, 106, 0.13);
+    color: #0e9f5d;
+    font-weight: 800;
+    box-shadow: none;
+  }
+}
+
+.game-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
+.game-chip--streak {
+  background: rgba(247, 144, 9, 0.13);
+  color: #f79009;
+}
+.game-chip--xp {
+  background: rgba(23, 178, 106, 0.13);
+  color: #0e9f5d;
+}
+
+.command-button,
+.more-button,
+.icon-button,
+.mobile-toggle,
+.user-trigger {
+  border: 1px solid #e4eae5;
+  background: #fff;
+  color: #5f6e66;
+
+  &:hover {
+    border-color: #17b26a;
+    background: rgba(23, 178, 106, 0.06);
+    color: #0e9f5d;
+  }
+}
+
+.user-trigger span {
+  color: #15211b;
+}
+
+.feature-nav-panel {
+  border: 1.5px solid #e4eae5;
+  border-radius: 16px;
+  background: #fff;
+  color: #15211b;
+  box-shadow: 0 16px 40px rgba(21, 33, 27, 0.12);
+}
+
+.feature-nav-group__title {
+  color: #9aa79f;
+}
+
+.feature-nav-item {
+  border-radius: 12px;
+
+  &:hover {
+    background: rgba(23, 178, 106, 0.07);
+  }
+
+  &.is-active {
+    background: rgba(23, 178, 106, 0.13);
+  }
+}
+
+.feature-nav-item__title {
+  color: #15211b;
+}
+.feature-nav-item__desc {
+  color: #9aa79f;
+}
+
+.mobile-panel {
+  background: #f5f7f4;
+  color: #15211b;
+}
+
+.mobile-nav-modal {
+  background: rgba(21, 33, 27, 0.42);
+}
+
+.mobile-current-section {
+  border-color: rgba(23, 178, 106, 0.35);
+  background: rgba(23, 178, 106, 0.13);
+  color: #0e9f5d;
+}
+
+@media (max-width: 1180px) {
+  .mobile-panel {
+    border-left: 1px solid #e4eae5;
+    background: #f5f7f4;
+    box-shadow: -8px 0 16px rgba(21, 33, 27, 0.12);
+  }
+}
+
+@media (max-width: 720px) {
+  .mobile-bottom-nav {
+    border-top: 1.5px solid #e4eae5;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+  }
+
+  .mobile-bottom-nav__item {
+    color: #9aa79f;
+
+    &.is-active {
+      color: #0e9f5d;
+    }
+  }
+
+  .mobile-current-section {
+    border-color: rgba(23, 178, 106, 0.35);
+    background: rgba(23, 178, 106, 0.13);
+    color: #0e9f5d;
   }
 }
 </style>
