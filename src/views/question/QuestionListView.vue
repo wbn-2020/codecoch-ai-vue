@@ -362,20 +362,19 @@ onMounted(fetchQuestions)
 <style scoped lang="scss">
 .question-page {
   display: grid;
-  gap: 18px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .hero-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--app-border);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(20, 184, 166, 0.05)),
-    var(--app-surface, #ffffff);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .hero-kicker,
@@ -393,7 +392,7 @@ onMounted(fetchQuestions)
 .hero-kicker,
 .section-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -403,12 +402,12 @@ onMounted(fetchQuestions)
 .question-card h3,
 .workbench-head h2 {
   margin: 0;
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .hero-copy h1 {
-  font-size: 32px;
-  line-height: 1.18;
+  font-size: 24px;
+  line-height: 1.3;
 }
 
 .hero-copy p,
@@ -417,18 +416,18 @@ onMounted(fetchQuestions)
 .question-card__insights p,
 .question-card__footer p,
 .section-desc {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 }
 
 .hero-copy p {
   max-width: 720px;
-  margin: 12px 0 0;
-  line-height: 1.8;
+  margin: 8px 0 0;
+  line-height: 1.6;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
 .hero-panel {
@@ -436,14 +435,14 @@ onMounted(fetchQuestions)
   gap: 14px;
   align-content: start;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.88);
+  background: var(--user-surface-muted);
 }
 
 .hero-panel__label {
   margin: 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
   font-weight: 800;
 }
@@ -455,13 +454,13 @@ onMounted(fetchQuestions)
 }
 
 .hero-panel__focus strong {
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 34px;
   line-height: 1;
 }
 
 .hero-panel__focus span {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -477,34 +476,37 @@ onMounted(fetchQuestions)
 .hero-panel__steps span {
   padding: 6px 10px;
   border-radius: 999px;
-  background: #e0f2fe;
-  color: #075985;
+  background: var(--user-cyan-soft);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .training-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .training-note {
-  padding: 16px;
-  border: 1px solid var(--app-border);
+  min-width: 0;
+  flex: 1 1 240px;
+  padding: 12px 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .training-note.is-muted {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .training-note span,
 .question-card__eyebrow,
 .question-card__insights span,
 .pagination-wrap span {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
   font-weight: 800;
 }
@@ -512,7 +514,7 @@ onMounted(fetchQuestions)
 .training-note strong {
   display: block;
   margin-top: 6px;
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 20px;
 }
 
@@ -545,9 +547,9 @@ onMounted(fetchQuestions)
 
 .filter-drawer {
   margin: 0 20px 18px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .filter-drawer summary {
@@ -565,12 +567,12 @@ onMounted(fetchQuestions)
 }
 
 .filter-drawer summary span {
-  color: var(--app-text);
+  color: var(--user-text);
   font-weight: 800;
 }
 
 .filter-drawer summary small {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.5;
 }
 
@@ -586,12 +588,13 @@ onMounted(fetchQuestions)
 
 .question-card {
   display: grid;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid #e2e8f0;
+  min-width: 0;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  background: var(--user-surface);
+  box-shadow: none;
   cursor: pointer;
   transition:
     border-color 0.18s ease,
@@ -600,8 +603,8 @@ onMounted(fetchQuestions)
 }
 
 .question-card:hover {
-  border-color: rgba(37, 99, 235, 0.35);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  border-color: var(--user-primary-border);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
@@ -628,9 +631,9 @@ onMounted(fetchQuestions)
 .question-card__insights div {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .question-card__insights p {
@@ -672,7 +675,6 @@ onMounted(fetchQuestions)
 
 @media (max-width: 1080px) {
   .hero-band,
-  .training-strip,
   .question-card__insights,
   .question-card__footer {
     grid-template-columns: 1fr;
@@ -681,11 +683,11 @@ onMounted(fetchQuestions)
 
 @media (max-width: 720px) {
   .hero-band {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .workbench-head,

@@ -147,7 +147,7 @@ describe('JobExperimentDetailView', () => {
       relations: [],
       reviews: [],
       metrics: {
-        applicationCount: 12,
+        applicationCount: 15,
         feedbackCount: 4,
         interviewInviteCount: 3,
         interviewCompletedCount: 3,
@@ -157,7 +157,7 @@ describe('JobExperimentDetailView', () => {
         targetJobCount: 1,
         projectEvidenceCount: 2,
         agentTaskCount: 2,
-        sampleCount: 12,
+        sampleCount: 15,
         confidenceLevel: 'HIGH',
         sampleInsufficient: false,
         sampleWarning: '样本可用于高置信复盘，但仍需说明岗位、渠道、时间窗口等影响因素。',

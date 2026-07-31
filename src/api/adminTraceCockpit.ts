@@ -24,6 +24,8 @@ import type {
   TraceRawAccessStatus
 } from '@/types/adminTraceCockpit'
 import { compactQueryParams } from '@/utils/page'
+import { getHttpStatus, isBackendUnavailableForFallback } from '@/utils/apiError'
+import request from '@/utils/request'
 
 type ModuleResult<T> = {
   module: TraceModuleKey
@@ -612,7 +614,63 @@ const buildOverview = (params: TraceCockpitQuery, nodes: TraceNode[], moduleStat
   }
 }
 
-export const getTraceCockpitResultApi = async (params: TraceCockpitQuery): Promise<TraceCockpitResult> => {
+const normalizeBackendTraceResult = (input: TraceCockpitResult, params: TraceCockpitQuery): TraceCockpitResult => {
+  const moduleStatuses = input.moduleStatuses || input.overview?.moduleStatuses || []
+  const nodes = sortNodes((input.nodes || input.timeline?.nodes || []).map((node) => {
+    const safeNode = stripTraceRawFields(node as unknown as RawFieldBag) as unknown as TraceNode
+    return {
+      ...safeNode,
+      previews: safeNode.previews || [],
+      links: safeNode.links || [],
+      meta: safeNode.meta || {},
+      rawAccess: {
+        state: safeNode.rawAccess?.state || 'UNKNOWN',
+        rawFieldsAvailable: safeNode.rawAccess?.rawFieldsAvailable === true,
+        rawFieldsIncluded: false,
+        rawAccessPermission: safeNode.rawAccess?.rawAccessPermission,
+        requiredPermission: safeNode.rawAccess?.requiredPermission || safeNode.rawAccess?.rawAccessPermission
+      }
+    }
+  }))
+  const overview = {
+    ...buildOverview(params, nodes, moduleStatuses),
+    ...input.overview,
+    rawFieldsIncluded: false as const,
+    moduleStatuses
+  }
+  return {
+    ...input,
+    source: 'BACKEND_AGGREGATED',
+    dataSource: 'BACKEND_AGGREGATED',
+    overview,
+    moduleStatuses,
+    timeline: {
+      nodes,
+      unplacedNodes: input.timeline?.unplacedNodes || []
+    },
+    nodes,
+    edges: input.edges || [],
+    risks: input.risks || [],
+    suggestions: input.suggestions || []
+  }
+}
+
+const getBackendTraceCockpitResultApi = async (params: TraceCockpitQuery): Promise<TraceCockpitResult> => {
+  const normalizedParams = normalizeTraceQuery(params)
+  const result = await request.get<TraceCockpitResult, TraceCockpitResult>('/admin/trace-cockpit', {
+    params: compactQueryParams(normalizedParams),
+    silentError: true
+  })
+  return normalizeBackendTraceResult(result, normalizedParams)
+}
+
+const fallbackReason = (error: unknown) => {
+  const status = getHttpStatus(error)
+  const message = String((error as Error)?.message || (error as { message?: string })?.message || '')
+  return status ? `Backend aggregation unavailable (${status}). ${message}`.trim() : `Backend aggregation unavailable. ${message}`.trim()
+}
+
+const getFrontendTraceCockpitResultApi = async (params: TraceCockpitQuery): Promise<TraceCockpitResult> => {
   const normalizedParams = normalizeTraceQuery(params)
   const settled = await Promise.allSettled([
     loadModule('AI_CALL', 'AI logs', () => loadAiLogs(normalizedParams)),
@@ -643,6 +701,8 @@ export const getTraceCockpitResultApi = async (params: TraceCockpitQuery): Promi
   const risks = buildRisks(nodes, moduleStatuses)
 
   return {
+    source: 'FRONTEND_FALLBACK',
+    dataSource: 'FRONTEND_FALLBACK',
     overview: buildOverview(normalizedParams, nodes, moduleStatuses),
     moduleStatuses,
     timeline: {
@@ -650,8 +710,34 @@ export const getTraceCockpitResultApi = async (params: TraceCockpitQuery): Promi
       unplacedNodes: []
     },
     nodes,
+    edges: [],
     risks,
     suggestions
+  }
+}
+
+export const getTraceCockpitResultApi = async (params: TraceCockpitQuery): Promise<TraceCockpitResult> => {
+  try {
+    return await getBackendTraceCockpitResultApi(params)
+  } catch (error) {
+    if (!isBackendUnavailableForFallback(error)) {
+      throw error
+    }
+    const fallback = await getFrontendTraceCockpitResultApi(params)
+    fallback.dataSource = 'FRONTEND_FALLBACK'
+    fallback.source = 'FRONTEND_FALLBACK'
+    fallback.fallbackReason = fallbackReason(error)
+    fallback.risks = [
+      {
+        id: 'backend-aggregation-fallback',
+        type: 'PARTIAL_RESULT',
+        level: 'LOW',
+        title: 'Frontend fallback',
+        description: fallback.fallbackReason || 'Backend aggregation unavailable.'
+      },
+      ...fallback.risks
+    ]
+    return fallback
   }
 }
 

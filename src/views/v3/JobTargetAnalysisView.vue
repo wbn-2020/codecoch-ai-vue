@@ -22,6 +22,10 @@
           <Files :size="16" />
           进入简历匹配
         </el-button>
+        <el-button v-if="targetId" type="primary" plain @click="goApplicationPackage">
+          <PackageCheck :size="16" />
+          生成投递包
+        </el-button>
       </div>
     </section>
 
@@ -184,6 +188,21 @@
 
             <JobTargetAnalysisPanel v-else :analysis="analysis" />
           </section>
+
+          <JobRequirementEvidenceMatrix
+            :target-job-id="target.id"
+            :matrix="requirementMatrix"
+            :readiness="readinessSnapshot"
+            :readiness-history="readinessHistory"
+            :selected-snapshot-id="readinessSnapshot?.id"
+            :snapshot-loading-id="readinessSnapshotLoadingId"
+            :loading="requirementLoading"
+            :refreshing="requirementRefreshing"
+            :error="requirementError"
+            @refresh="refreshRequirementInsights"
+            @action="handleRequirementAction"
+            @select-snapshot="selectReadinessSnapshot"
+          />
         </div>
       </main>
     </section>
@@ -192,7 +211,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Files, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, Files, PackageCheck, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -203,8 +222,27 @@ import {
   submitJobDescriptionParseTaskApi,
   streamJobDescriptionParseApi
 } from '@/api/jobTarget'
+import {
+  getJobRequirementMatrixApi,
+  getJobReadinessHistoryApi,
+  getJobReadinessSnapshotApi,
+  getLatestJobReadinessApi,
+  materializeJobRequirementsApi,
+  recalculateJobReadinessApi,
+  refreshJobRequirementMatrixApi
+} from '@/api/jobRequirement'
 import AppState from '@/components/common/AppState.vue'
 import { useSseState } from '@/composables/useSseState'
+import {
+  normalizeJobReadiness,
+  normalizeJobRequirementMatrix
+} from '@/features/job-requirement-matrix'
+import { resolveSafeActionPath } from '@/features/job-readiness/readiness'
+import type {
+  JobReadinessSnapshotVO,
+  JobRequirementActionVO,
+  JobRequirementMatrixVO
+} from '@/types/jobRequirement'
 import type {
   JobDescriptionAnalysisVO,
   JobDescriptionParseDTO,
@@ -218,6 +256,7 @@ import { formatDateTime } from '@/utils/format'
 import type { StreamSseHandle } from '@/utils/sse'
 
 import JobTargetAnalysisPanel from './components/JobTargetAnalysisPanel.vue'
+import JobRequirementEvidenceMatrix from './components/JobRequirementEvidenceMatrix.vue'
 import JobTargetStatusTag from './components/JobTargetStatusTag.vue'
 
 const route = useRoute()
@@ -228,6 +267,14 @@ const loadError = ref('')
 const partialLoadWarning = ref('')
 const target = ref<TargetJobVO | null>(null)
 const analysis = ref<JobDescriptionAnalysisVO | null>(null)
+const requirementMatrix = ref<JobRequirementMatrixVO | null>(null)
+const readinessSnapshot = ref<JobReadinessSnapshotVO | null>(null)
+const readinessHistory = ref<JobReadinessSnapshotVO[]>([])
+const readinessSnapshotLoadingId = ref<number | null>(null)
+const requirementLoading = ref(false)
+const requirementRefreshing = ref(false)
+const requirementError = ref('')
+let readinessSnapshotRequestVersion = 0
 const JOB_TARGET_PARSE_TASK_BIZ_TYPE = 'job-target.parse'
 const {
   status: parseSseStatus,
@@ -449,9 +496,113 @@ const loadAll = async (silent = false) => {
   }
 }
 
+const loadRequirementInsights = async (silent = false) => {
+  const id = targetId.value
+  readinessSnapshotRequestVersion += 1
+  readinessSnapshotLoadingId.value = null
+  if (!id || !hasStructuredAnalysis(analysis.value)) {
+    requirementMatrix.value = null
+    readinessSnapshot.value = null
+    readinessHistory.value = []
+    requirementError.value = ''
+    return
+  }
+  if (!silent) {
+    requirementLoading.value = true
+    requirementError.value = ''
+  }
+  const [matrixResult, readinessResult, historyResult] = await Promise.allSettled([
+    getJobRequirementMatrixApi(id),
+    getLatestJobReadinessApi(id),
+    getJobReadinessHistoryApi(id)
+  ])
+  if (isFulfilled(matrixResult)) {
+    requirementMatrix.value = normalizeJobRequirementMatrix(matrixResult.value, id)
+  } else if (!silent) {
+    requirementMatrix.value = null
+    requirementError.value = getErrorMessage(
+      matrixResult.reason,
+      '岗位证据矩阵暂时无法加载；原岗位分析不受影响。'
+    )
+  }
+  if (isFulfilled(readinessResult)) {
+    readinessSnapshot.value = normalizeJobReadiness(readinessResult.value, id)
+  } else {
+    readinessSnapshot.value = null
+  }
+  if (isFulfilled(historyResult)) {
+    readinessHistory.value = (historyResult.value || [])
+      .map((item) => normalizeJobReadiness(item, id))
+      .filter((item): item is JobReadinessSnapshotVO => Boolean(item))
+  } else if (!silent) {
+    readinessHistory.value = readinessSnapshot.value ? [readinessSnapshot.value] : []
+  }
+  if (!silent) requirementLoading.value = false
+}
+
+const selectReadinessSnapshot = async (snapshotId: number) => {
+  const id = targetId.value
+  if (!id || readinessSnapshotLoadingId.value != null || readinessSnapshot.value?.id === snapshotId) return
+
+  const requestVersion = ++readinessSnapshotRequestVersion
+  readinessSnapshotLoadingId.value = snapshotId
+  try {
+    const detail = await getJobReadinessSnapshotApi(id, snapshotId)
+    if (requestVersion !== readinessSnapshotRequestVersion || targetId.value !== id) return
+
+    const normalized = normalizeJobReadiness(detail, id)
+    if (!normalized) throw new Error('readiness snapshot detail is empty')
+    readinessSnapshot.value = normalized
+  } catch (error) {
+    if (requestVersion === readinessSnapshotRequestVersion && targetId.value === id) {
+      ElMessage.error(getErrorMessage(error, '就绪度快照详情暂时无法加载，请稍后重试。'))
+    }
+  } finally {
+    if (requestVersion === readinessSnapshotRequestVersion) {
+      readinessSnapshotLoadingId.value = null
+    }
+  }
+}
+
+const refreshRequirementInsights = async () => {
+  const id = targetId.value
+  if (!id) return
+  requirementRefreshing.value = true
+  requirementError.value = ''
+  try {
+    await materializeJobRequirementsApi(id)
+    await refreshJobRequirementMatrixApi(id)
+    try {
+      await recalculateJobReadinessApi(id)
+    } catch {
+      // Evidence matrix remains useful while readiness is unavailable or still collecting samples.
+    }
+    await loadRequirementInsights()
+    if (!requirementError.value) ElMessage.success('岗位要求和证据已刷新')
+  } catch (error) {
+    requirementError.value = getErrorMessage(error, '岗位证据刷新失败，请稍后重试。')
+    ElMessage.error(requirementError.value)
+  } finally {
+    requirementRefreshing.value = false
+  }
+}
+
+const handleRequirementAction = (action: JobRequirementActionVO) => {
+  if (!action.actionUrl) {
+    ElMessage.info(action.description || '该行动暂时没有可用入口。')
+    return
+  }
+  const resolved = resolveSafeActionPath(action.actionUrl)
+  if (resolved.unavailableReason) {
+    ElMessage.warning(resolved.unavailableReason)
+  }
+  router.push(resolved.path)
+}
+
 const refreshAnalysisAfterInterrupt = async () => {
   const hadStructuredAnalysis = hasStructuredAnalysis(analysis.value)
   await loadAll()
+  await loadRequirementInsights(true)
   if (loadError.value) {
     ElMessage.error(loadError.value)
     return
@@ -541,6 +692,7 @@ const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => 
     setParseSseDone()
     ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     await loadAll()
+    await loadRequirementInsights(true)
   } catch (error) {
     const message = getErrorMessage(error, '岗位分析失败，请稍后重试。')
     setParseSseError(message)
@@ -589,7 +741,9 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
         parsing.value = false
         if (parseSseStatus.value === 'error') return
         setParseSseDone()
-        void loadAll().then(() => ElMessage.success('岗位分析已完成'))
+        void loadAll()
+          .then(() => loadRequirementInsights(true))
+          .then(() => ElMessage.success('岗位分析已完成'))
       }
     }
   )
@@ -611,6 +765,7 @@ const submitParseTask = async (id: number, payload: JobDescriptionParseDTO) => {
       ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     }
     await loadAll()
+    await loadRequirementInsights(true)
   } catch (error) {
     addParseSseEvent('fallback', '任务提交暂时失败，已尝试继续分析')
     ElMessage.warning(getErrorMessage(error, '岗位分析提交暂时失败，已尝试继续处理。'))
@@ -665,15 +820,32 @@ const goResumeMatch = () => {
   })
 }
 
+const goApplicationPackage = () => {
+  if (!targetId.value) return
+  router.push({
+    path: '/application-packages/preview',
+    query: compactRouteQuery({
+      targetJobId: String(targetId.value),
+      jdAnalysisId: analysis.value?.id ? String(analysis.value.id) : undefined,
+      jobTitle: target.value?.jobTitle || undefined,
+      companyName: target.value?.companyName || undefined,
+      jdSource: target.value?.jdSource || undefined
+    })
+  })
+}
+
 watch(
   () => route.params.id,
   () => {
     stopParsePolling()
-    loadAll()
+    void loadAll().then(() => loadRequirementInsights())
   }
 )
 
-onMounted(loadAll)
+onMounted(async () => {
+  await loadAll()
+  await loadRequirementInsights()
+})
 onBeforeUnmount(() => {
   stopParseSse()
   stopParsePolling()
@@ -682,21 +854,18 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .job-analysis-page {
-  gap: 20px;
+  gap: 16px;
 }
 
 .analysis-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  padding: 26px;
+  gap: 16px;
+  padding: 16px;
   border: 1px solid rgba(129, 140, 248, 0.28);
-  border-radius: var(--cc-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.07)),
-    rgba(15, 23, 42, 0.78);
-  box-shadow: var(--app-shadow);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .hero-kicker,
@@ -716,12 +885,12 @@ onBeforeUnmount(() => {
 }
 
 .analysis-hero h1 {
-  margin: 14px 0 0;
-  font-size: 32px;
+  margin: 8px 0 0;
+  font-size: 26px;
 }
 
 .analysis-hero p {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--app-text-muted);
   line-height: 1.7;
 }
@@ -734,8 +903,8 @@ onBeforeUnmount(() => {
 
 .analysis-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .side-panel,
@@ -887,7 +1056,7 @@ onBeforeUnmount(() => {
 .analysis-workspace {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
 }
 
 .section-head {

@@ -42,7 +42,7 @@ describe('translateFailureReason', () => {
 
     expect(decryptFailure).toContain('invalid ciphertext')
     expect(decryptFailure).not.toContain('Provider api-key decrypt failed:')
-    expect(configFailure).toContain('api-key')
+    expect(configFailure).toContain('AI 服务地址、密钥或模型未配置')
     expect(configFailure).not.toContain('model is not configured')
   })
 })

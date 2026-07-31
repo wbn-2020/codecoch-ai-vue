@@ -11,6 +11,14 @@
           <ArrowLeft :size="16" />
           返回列表
         </el-button>
+        <el-button
+          v-if="appConfig.enableV9EvidenceLearning"
+          data-testid="project-evidence-usages"
+          @click="openEvidenceUsages"
+        >
+          <ClipboardCheck :size="16" />
+          查看使用与结果
+        </el-button>
         <el-button type="primary" @click="router.push(`/project-evidence/${detail.id}/edit`)">
           <Edit3 :size="16" />
           编辑证据
@@ -91,8 +99,8 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, Edit3 } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { ArrowLeft, ClipboardCheck, Edit3 } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getProjectEvidenceDetailApi } from '@/api/projectEvidence'
@@ -102,31 +110,72 @@ import ProjectJdCoveragePanel from '@/components/project-evidence/ProjectJdCover
 import ProjectStoryGenerationPanel from '@/components/project-evidence/ProjectStoryGenerationPanel.vue'
 import SkillEvidenceEditor from '@/components/project-evidence/SkillEvidenceEditor.vue'
 import { summarizeSourceState } from '@/features/project-evidence'
+import { appConfig } from '@/config'
 import type { ProjectEvidenceDetailVO } from '@/types/projectEvidence'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
+const projectId = computed(() => getRouteNumberParam(route.params.id as string))
 const loading = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
+let detailRequestGeneration = 0
+
+const openEvidenceUsages = () => {
+  if (!detail.value) return
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      assetType: 'PROJECT_EVIDENCE',
+      assetId: String(detail.value.id)
+    }
+  })
+}
 
 const fetchDetail = async () => {
-  const id = getRouteNumberParam(route.params.id as string)
-  if (!id) return
+  const id = projectId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    detail.value = await getProjectEvidenceDetailApi(id)
+    const nextDetail = await getProjectEvidenceDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
+  } catch {
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = null
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
 }
 
-onMounted(fetchDetail)
+watch(
+  projectId,
+  () => {
+    detail.value = null
+    void fetchDetail()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">
 .project-evidence-detail {
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
 }
 
 .detail-hero,
@@ -140,25 +189,26 @@ onMounted(fetchDetail)
 
 .detail-hero {
   justify-content: space-between;
-  padding: 26px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--cc-radius-xl);
-  background: rgba(15, 23, 42, 0.72);
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 
   h1 {
     margin: 6px 0 0;
-    font-size: 30px;
+    color: var(--user-text);
+    font-size: 26px;
   }
 
   p:last-child {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .hero-kicker {
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -171,8 +221,8 @@ onMounted(fetchDetail)
 
 .detail-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: 14px;
   align-items: start;
 }
 
@@ -205,25 +255,36 @@ onMounted(fetchDetail)
 
 .fact-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
 
   div {
-    padding: 13px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    border-radius: 8px;
-    background: rgba(2, 6, 23, 0.24);
+    min-width: 0;
+    padding: 12px;
+    background: var(--user-control-bg);
+
+    &:nth-child(even) {
+      border-left: 1px solid var(--user-border);
+    }
+
+    &:nth-child(n + 3) {
+      border-top: 1px solid var(--user-border);
+    }
   }
 
   dt {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   dd {
     margin: 7px 0 0;
-    color: #dbeafe;
-    line-height: 1.7;
+    color: var(--user-text-secondary);
+    line-height: 1.65;
     white-space: pre-wrap;
   }
 }
@@ -235,8 +296,8 @@ onMounted(fetchDetail)
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
-    line-height: 1.7;
+    color: var(--user-text-muted);
+    line-height: 1.65;
   }
 }
 
@@ -264,6 +325,18 @@ onMounted(fetchDetail)
   .detail-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .fact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fact-grid div:nth-child(even) {
+    border-left: 0;
+  }
+
+  .fact-grid div + div {
+    border-top: 1px solid var(--user-border);
   }
 }
 </style>

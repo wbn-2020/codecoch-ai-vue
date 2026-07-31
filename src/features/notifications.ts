@@ -11,6 +11,7 @@ import {
 export type NotificationCategory =
   | 'agent'
   | 'application-follow-up'
+  | 'calendar'
   | 'interview-report'
   | 'interview'
   | 'resume-match'
@@ -58,7 +59,11 @@ export type NotificationActionResolution =
   | {
       kind: 'route'
       path: string
+      actionPath: string
       label: string
+      actionLabel: string
+      fallbackPath: string
+      fallbackLabel: string
       source: Exclude<NotificationActionSource, 'detail'>
       actionable: true
       priority: NotificationPriority
@@ -69,6 +74,9 @@ export type NotificationActionResolution =
   | {
       kind: 'detail'
       label: string
+      actionLabel: string
+      fallbackPath: string
+      fallbackLabel: string
       source: 'detail'
       actionable: false
       priority: NotificationPriority
@@ -82,6 +90,7 @@ const defaultPreviewFallbackPath = '/agent/today'
 const labelByCategory: Record<NotificationCategory, string> = {
   agent: 'Agent',
   'application-follow-up': '投递跟进',
+  calendar: '求职日历',
   'interview-report': '面试报告',
   interview: '面试',
   'resume-match': '简历匹配',
@@ -93,6 +102,7 @@ const labelByCategory: Record<NotificationCategory, string> = {
 const actionLabelByCategory: Record<NotificationCategory, string> = {
   agent: '进入今日任务',
   'application-follow-up': '处理投递跟进',
+  calendar: '打开求职日历',
   'interview-report': '查看面试报告',
   interview: '查看面试',
   'resume-match': '查看匹配报告',
@@ -104,6 +114,7 @@ const actionLabelByCategory: Record<NotificationCategory, string> = {
 const priorityByCategory: Record<NotificationCategory, NotificationPriority> = {
   agent: 'high',
   'application-follow-up': 'urgent',
+  calendar: 'high',
   'interview-report': 'high',
   interview: 'high',
   'resume-match': 'normal',
@@ -133,6 +144,12 @@ const getPrimaryId = (item: NotificationVO) => {
   return Number.isFinite(id) && id > 0 ? String(value) : undefined
 }
 
+const getPrimaryKey = (item: NotificationVO) => {
+  const value = item.bizId ?? item.relatedId
+  const key = String(value ?? '').trim()
+  return key || undefined
+}
+
 const buildQueryPath = (path: string, query: Record<string, string | undefined>) => {
   const search = new URLSearchParams()
   Object.entries(query).forEach(([key, value]) => {
@@ -146,7 +163,7 @@ const resolveSafePath = (
   rawPath: string | undefined,
   options: Required<Pick<NotificationActionResolverOptions, 'enableV4Preview' | 'previewFallbackPath'>> & {
     knownPaths: string[]
-  }
+  },
 ) => {
   if (!rawPath || !rawPath.startsWith('/') || rawPath.startsWith('//')) {
     return { path: undefined, unavailableReason: 'actionUrl 不是安全的站内路径。', blockedPath: rawPath }
@@ -163,7 +180,7 @@ const resolveSafePath = (
   }
 
   if (!isKnownAppPath(routePath, options.knownPaths)) {
-    return { path: undefined, unavailableReason: '通知目标路径不存在或未开放。', blockedPath: rawPath }
+    return { path: undefined, unavailableReason: '通知目标路径不存在或未开放。' }
   }
 
   return resolveAppRoutePath(rawPath, {
@@ -180,7 +197,9 @@ export const normalizeNotificationType = (item: NotificationVO): NotificationTyp
   const combined = [type, bizType, relatedType].filter(Boolean).join(' ')
   let category: NotificationCategory = 'system'
 
-  if (combined.includes('APPLICATION_FOLLOW_UP') || combined.includes('JOB_APPLICATION')) {
+  if (combined.includes('CALENDAR_REMINDER') || combined.includes('CAREER_CALENDAR_EVENT')) {
+    category = 'calendar'
+  } else if (combined.includes('APPLICATION_FOLLOW_UP') || combined.includes('JOB_APPLICATION')) {
     category = 'application-follow-up'
   } else if (combined.includes('AGENT')) {
     category = 'agent'
@@ -211,6 +230,12 @@ export const getNotificationPriority = (item: NotificationVO): NotificationPrior
 
 export const getNotificationActionLabel = (item: NotificationVO) => {
   const meta = normalizeNotificationType(item)
+  const combined = [meta.type, meta.bizType, normalizeToken(item.relatedType)].filter(Boolean).join(' ')
+  if (combined.includes('QUESTION_RECOMMENDATION_GENERATE')) return item.fallbackLabel || '查看今日训练题组'
+  if (combined.includes('QUESTION_GENERATE')) return item.fallbackLabel || '查看题目生成任务'
+  if (combined.includes('AGENT_TASK')) return item.fallbackLabel || '去任务中心继续训练'
+  if (combined.includes('AGENT_RUN')) return item.fallbackLabel || '查看训练详情'
+  if (combined.includes('AGENT_DASHBOARD')) return item.fallbackLabel || '查看训练入口'
   return item.fallbackLabel || actionLabelByCategory[meta.category]
 }
 
@@ -221,14 +246,38 @@ const mapNotificationBizPath = (item: NotificationVO) => {
   const relatedType = normalizeToken(item.relatedType)
   const combined = [type, bizType, relatedType].filter(Boolean).join(' ')
   const id = getPrimaryId(item)
+  const key = getPrimaryKey(item)
+
+  if (combined.includes('QUESTION_RECOMMENDATION_GENERATE')) {
+    return buildQueryPath('/questions/recommendations', { batchId: key })
+  }
+
+  if (combined.includes('QUESTION_GENERATE')) {
+    return buildQueryPath('/agent/tasks', {
+      bizType: 'question.generate',
+      bizId: key,
+      batchId: key
+    })
+  }
 
   if (meta.category === 'agent') {
+    if (combined.includes('AGENT_DASHBOARD')) return '/dashboard'
+    if (combined.includes('AGENT_TASK')) {
+      return buildQueryPath('/agent/tasks', {
+        bizType: 'agent.daily-plan.generate',
+        bizId: key
+      })
+    }
     if (combined.includes('AGENT_RUN') && id) return `/agent/runs/${id}`
     return '/agent/today'
   }
 
   if (meta.category === 'application-follow-up') {
     return id ? buildQueryPath('/applications', { applicationId: id }) : '/applications?followUp=due-today'
+  }
+
+  if (meta.category === 'calendar') {
+    return '/career-calendar'
   }
 
   if (meta.category === 'interview-report') {
@@ -252,10 +301,34 @@ const mapNotificationBizPath = (item: NotificationVO) => {
   }
 
   if (combined.includes('STUDY') || combined.includes('PLAN')) {
-    return '/study-plans'
+    return id ? buildQueryPath('/study-plans', { planId: id }) : '/study-plans'
+  }
+
+  if (combined.includes('TASK')) {
+    const taskText = `${item.title || ''} ${item.content || ''}`
+    return taskText.includes('训练') ? '/agent/today' : '/daily-tasks'
   }
 
   return undefined
+}
+
+const mapNotificationFallbackPath = (item: NotificationVO) => {
+  const meta = normalizeNotificationType(item)
+  const combined = [meta.type, meta.bizType, normalizeToken(item.relatedType)].filter(Boolean).join(' ')
+
+  if (combined.includes('QUESTION_RECOMMENDATION_GENERATE')) return '/questions/recommendations'
+  if (combined.includes('QUESTION_GENERATE')) return '/agent/tasks'
+  if (combined.includes('AGENT_DASHBOARD')) return '/dashboard'
+  if (meta.category === 'agent') return '/agent/today'
+  if (meta.category === 'application-follow-up') return '/applications'
+  if (meta.category === 'calendar') return '/career-calendar'
+  if (meta.category === 'interview-report' || meta.category === 'interview') return '/interviews/history'
+  if (meta.category === 'resume-match') return '/resume-match'
+  if (meta.category === 'resume') return '/resumes'
+  if (combined.includes('QUESTION')) return '/questions'
+  if (combined.includes('STUDY') || combined.includes('PLAN')) return '/study-plans'
+  if (combined.includes('TASK')) return '/dashboard'
+  return '/dashboard'
 }
 
 export const resolveNotificationAction = (
@@ -270,6 +343,11 @@ export const resolveNotificationAction = (
     knownPaths: options.knownPaths || defaultUserKnownPaths,
     previewFallbackPath: options.previewFallbackPath || defaultPreviewFallbackPath
   }
+  const fallbackLabel = item.fallbackLabel || labelByCategory[meta.category]
+  const fallbackCandidates = [item.fallbackPath, mapNotificationFallbackPath(item), '/dashboard']
+  const fallbackPath = fallbackCandidates
+    .map((path) => resolveSafePath(path, resolverOptions).path)
+    .find(Boolean) || '/dashboard'
   let lastFailure: Pick<NotificationActionResolution, 'unavailableReason' | 'blockedPath'> = {}
 
   const candidates: Array<{ source: Exclude<NotificationActionSource, 'detail'>; path?: string }> = [
@@ -285,7 +363,11 @@ export const resolveNotificationAction = (
       return {
         kind: 'route',
         path: safePath.path,
+        actionPath: safePath.path,
         label,
+        actionLabel: label,
+        fallbackPath,
+        fallbackLabel,
         source: candidate.source,
         actionable: true,
         priority,
@@ -304,6 +386,9 @@ export const resolveNotificationAction = (
   return {
     kind: 'detail',
     label: '查看详情',
+    actionLabel: '查看详情',
+    fallbackPath,
+    fallbackLabel,
     source: 'detail',
     actionable: false,
     priority,
@@ -327,7 +412,7 @@ export const getNotificationDisplay = (
 
   return {
     ...meta,
-    actionLabel: resolved.label,
+    actionLabel: resolved.actionLabel,
     priority: resolved.priority,
     actionable: !isResolvedNotification(item) && resolved.actionable,
     unavailableReason: resolved.unavailableReason
@@ -350,8 +435,8 @@ export const toNotificationTodayAction = (
     title: item.title,
     description: item.content || meta.label,
     reason: meta.label,
-    actionLabel: resolved.label,
-    actionPath: resolved.path,
+    actionLabel: resolved.actionLabel,
+    actionPath: resolved.actionPath,
     dueText: item.planDate,
     unread: item.isRead === 0
   }

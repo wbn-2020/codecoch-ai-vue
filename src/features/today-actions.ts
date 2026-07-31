@@ -3,7 +3,7 @@ import {
   resolveNotificationAction,
   type NotificationActionResolverOptions
 } from './notifications'
-import { defaultUserKnownPaths, resolveAppRoutePath } from './route-safety'
+import { defaultUserKnownPaths, resolveAppRoutePath, routePathOnly } from './route-safety'
 
 export type TodayActionSource = 'notification' | 'agent-task' | 'application-follow-up' | 'readiness'
 export type TodayActionPriority = 'urgent' | 'high' | 'normal' | 'low'
@@ -32,11 +32,22 @@ export interface TodayActionAgentTask {
   actionUrl?: string | null
   dueDate?: string | null
   relatedSkillName?: string | null
+  relatedBizType?: string | null
+  relatedBizId?: number | string | null
+  sourceType?: string | null
+  sourceId?: number | string | null
+  taskType?: string | null
 }
 
 export interface TodayActionApplicationStats {
+  total?: number | null
+  activeCount?: number | null
   overdueFollowUpCount?: number | null
   dueTodayFollowUpCount?: number | null
+  noFollowUpCount?: number | null
+  staleActiveCount?: number | null
+  interviewCount?: number | null
+  offerCount?: number | null
 }
 
 export interface TodayActionNotification {
@@ -135,6 +146,17 @@ const normalizePath = (path?: string | null, fallback = '/notifications') => {
   return text.startsWith('/') ? text : fallback
 }
 
+const normalizeDedupeTitle = (value?: string | null) =>
+  toText(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
+const routeTitleDedupeKey = (path?: string | null, title?: string | null) => {
+  const normalizedTitle = normalizeDedupeTitle(title)
+  if (!normalizedTitle) return undefined
+  return `route-title:${routePathOnly(normalizePath(path, '/notifications'))}:${normalizedTitle}`
+}
+
 const routeToPath = (route?: TodayActionRoute | null, fallback = '/agent/today') => {
   if (!route) return fallback
   if (typeof route === 'string') return normalizePath(route, fallback)
@@ -156,15 +178,6 @@ const getNotificationBizType = (notification: TodayActionNotification) =>
 const getNotificationBizId = (notification: TodayActionNotification) =>
   toText(notification.bizId ?? notification.relatedId)
 
-const resolveNotificationActionPath = (
-  notification: TodayActionNotification,
-  options?: NotificationActionResolverOptions
-) => {
-  const action = resolveNotificationAction(notification as Parameters<typeof resolveNotificationAction>[0], options)
-  if (action.kind === 'route') return action.path
-  return notification.fallbackPath ? normalizePath(notification.fallbackPath, '/notifications') : undefined
-}
-
 const getApplicationFollowUpBucket = (path?: string | null, title?: string | null, content?: string | null) => {
   const text = `${path || ''} ${title || ''} ${content || ''}`.toLowerCase()
   if (text.includes('followup=overdue') || text.includes('overdue') || text.includes('expired')) return 'overdue'
@@ -178,6 +191,7 @@ const notificationPriority = (notification: TodayActionNotification, actionPath:
   if (type === 'APPLICATION_FOLLOW_UP_REMINDER' || bizType === 'JOB_APPLICATION') {
     return getApplicationFollowUpBucket(actionPath, notification.title, notification.content) === 'overdue' ? 'urgent' : 'high'
   }
+  if (type === 'CALENDAR_REMINDER' || bizType === 'CAREER_CALENDAR_EVENT') return 'high'
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return 'high'
   if (type === 'AGENT_REMINDER' || bizType.startsWith('AGENT_')) return 'high'
   if (isUnread(notification)) return 'normal'
@@ -187,6 +201,7 @@ const notificationPriority = (notification: TodayActionNotification, actionPath:
 const notificationRank = (notification: TodayActionNotification, priority: TodayActionPriority) => {
   const type = getNotificationType(notification)
   if (type === 'APPLICATION_FOLLOW_UP_REMINDER') return priority === 'urgent' ? 12 : 22
+  if (type === 'CALENDAR_REMINDER') return 24
   if (type.includes('INTERVIEW') || type.includes('REPORT')) return 35
   if (type === 'AGENT_REMINDER') return 45
   return 80
@@ -208,6 +223,17 @@ const toAgentTaskAction = (
     knownPaths: options?.knownPaths || defaultUserKnownPaths
   })
   const title = toText(task.title) || `Agent 任务 #${id}`
+  const relatedBizType = toToken(task.relatedBizType || task.sourceType || task.taskType)
+  const relatedBizId = toText(task.relatedBizId ?? task.sourceId)
+  const applicationBucket = relatedBizType.includes('JOB_APPLICATION') || resolvedAction.path.startsWith('/applications')
+    ? getApplicationFollowUpBucket(resolvedAction.path, task.title, task.description)
+    : undefined
+  const dedupeKeys = [`agent-task:${id}`]
+
+  if (relatedBizType && relatedBizId) dedupeKeys.push(`${relatedBizType}:${relatedBizId}`)
+  if (applicationBucket) dedupeKeys.push(`application-follow-up:${applicationBucket}`)
+  const routeTitleKey = routeTitleDedupeKey(resolvedAction.path, title)
+  if (routeTitleKey) dedupeKeys.push(routeTitleKey)
 
   return {
     key: `agent-task-${id}`,
@@ -220,7 +246,7 @@ const toAgentTaskAction = (
     actionPath: resolvedAction.path,
     dueText: toText(task.dueDate) || undefined,
     rank: 25 + index,
-    dedupeKeys: [`agent-task:${id}`]
+    dedupeKeys
   }
 }
 
@@ -231,8 +257,12 @@ const toNotificationAction = (
 ): RankedTodayActionItem | undefined => {
   if (isResolvedNotification(notification)) return undefined
   const id = toText(notification.id) || String(index + 1)
-  const actionPath = resolveNotificationActionPath(notification, options)
-  if (!actionPath) return undefined
+  const resolvedAction = resolveNotificationAction(
+    notification as Parameters<typeof resolveNotificationAction>[0],
+    options
+  )
+  if (resolvedAction.kind !== 'route') return undefined
+  const actionPath = resolvedAction.actionPath
   const type = getNotificationType(notification)
   const bizType = getNotificationBizType(notification)
   const bizId = getNotificationBizId(notification)
@@ -256,6 +286,8 @@ const toNotificationAction = (
   if (bizType && bizId) {
     dedupeKeys.push(`${bizType}:${bizId}`)
   }
+  const routeTitleKey = routeTitleDedupeKey(actionPath, title)
+  if (routeTitleKey) dedupeKeys.push(routeTitleKey)
 
   return {
     key: `notification-${id}`,
@@ -265,7 +297,7 @@ const toNotificationAction = (
     title,
     description: toText(notification.content) || '打开这条通知处理下一步动作。',
     reason: isUnread(notification) ? '未读且可行动的通知。' : '可行动通知。',
-    actionLabel: toText(notification.fallbackLabel) || '查看',
+    actionLabel: resolvedAction.actionLabel,
     actionPath,
     dueText: toText(notification.planDate) || undefined,
     unread: isUnread(notification),
@@ -308,6 +340,40 @@ const toApplicationFollowUpActions = (stats: TodayActionApplicationStats | null 
       dueText: '今天',
       rank: 20,
       dedupeKeys: ['application-follow-up:due-today']
+    })
+  }
+
+  const missingCount = coerceCount(stats?.noFollowUpCount)
+  if (missingCount) {
+    actions.push({
+      key: 'application-follow-up-missing',
+      source: 'application-follow-up',
+      priority: overdueCount || dueTodayCount ? 'normal' : 'high',
+      title: `${missingCount} 条投递还没有下一次跟进`,
+      description: '这些记录缺少明确的下一次跟进时间，适合今天补齐提醒。',
+      reason: '补齐跟进日期能让投递漏斗持续进入每日行动。',
+      actionLabel: '补齐跟进日期',
+      actionPath: '/applications?followUp=missing',
+      dueText: '待设置',
+      rank: 32,
+      dedupeKeys: ['application-follow-up:missing']
+    })
+  }
+
+  const staleCount = coerceCount(stats?.staleActiveCount)
+  if (staleCount) {
+    actions.push({
+      key: 'application-follow-up-stale',
+      source: 'application-follow-up',
+      priority: overdueCount || dueTodayCount || missingCount ? 'normal' : 'high',
+      title: `${staleCount} 条活跃投递较久未更新`,
+      description: '这些机会已经一段时间没有事件记录，建议今天复核状态。',
+      reason: '停滞投递需要复核状态，避免漏掉面试、拒信或归档动作。',
+      actionLabel: '查看投递漏斗',
+      actionPath: '/applications',
+      dueText: '待复核',
+      rank: 38,
+      dedupeKeys: ['application-follow-up:stale']
     })
   }
 
@@ -379,3 +445,15 @@ export const buildTodayActions = (
     .slice(0, clampDashboardLimit(options.maxItems))
     .map(({ rank: _rank, dedupeKeys: _dedupeKeys, ...item }) => item)
 }
+
+export const buildApplicationTodayActions = (
+  applicationStats?: TodayActionApplicationStats | null,
+  options: BuildTodayActionsOptions = {}
+): TodayActionItem[] =>
+  buildTodayActions(
+    { applicationStats },
+    {
+      ...options,
+      maxItems: Math.min(3, options.maxItems ?? 3)
+    }
+  )

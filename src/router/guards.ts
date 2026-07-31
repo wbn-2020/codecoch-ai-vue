@@ -6,29 +6,20 @@ import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 import { canAccessAdminPermissions, firstAccessibleAdminPath, resolveAuthenticatedEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { buildSafeRedirectTarget, sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
-import { getToken } from '@/utils/token'
+import { captureAuthSession, type AuthSessionSnapshot } from '@/utils/token'
 
 const isAuthFailure = (error: unknown) => {
   const code = (error as { code?: number })?.code
-  return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return code === HTTP_STATUS_CODE.UNAUTHENTICATED
+    || code === HTTP_STATUS_CODE.TOKEN_INVALID
+    || status === 401
 }
 
-type AuthStore = ReturnType<typeof useAuthStore>
-
-let backgroundAuthRefresh: Promise<unknown> | null = null
-
-const refreshAuthInBackground = (authStore: AuthStore) => {
-  if (backgroundAuthRefresh) return
-
-  backgroundAuthRefresh = authStore.verifyToken()
-    .catch((error) => {
-      if (isAuthFailure(error)) {
-        authStore.clearAuth()
-      }
-    })
-    .finally(() => {
-      backgroundAuthRefresh = null
-    })
+const isForbiddenFailure = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return code === HTTP_STATUS_CODE.FORBIDDEN || status === 403
 }
 
 const isFeatureEnabled = (featureFlag: string) => {
@@ -36,6 +27,7 @@ const isFeatureEnabled = (featureFlag: string) => {
   if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
   if (featureFlag === 'adminTraceCockpit') return appConfig.enableAdminTraceCockpit
+  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
   return true
 }
 
@@ -44,6 +36,57 @@ const isPreviewRoute = (to: RouteLocationNormalized) =>
 
 const safeForbiddenTarget = (to: RouteLocationNormalized) => to.path || '/'
 const safeRedirectTarget = (to: RouteLocationNormalized) => buildSafeRedirectTarget(to.path, to.query)
+type AuthStore = ReturnType<typeof useAuthStore>
+
+const loginRoute = (to: RouteLocationNormalized) => ({
+  path: '/login',
+  query: {
+    redirect: safeRedirectTarget(to)
+  }
+})
+
+const authUnavailableRoute = (to: RouteLocationNormalized) => ({
+  path: '/auth-unavailable',
+  query: {
+    redirect: safeRedirectTarget(to)
+  }
+})
+
+const recheckVerifiedSession = (
+  authStore: AuthStore,
+  to: RouteLocationNormalized,
+  verifiedUser: unknown
+) => {
+  authStore.syncFromStorage()
+  if (!authStore.isLoggedIn) {
+    return loginRoute(to)
+  }
+  if (!verifiedUser || !authStore.tokenVerified) {
+    authStore.markAuthStale()
+    return authUnavailableRoute(to)
+  }
+  return null
+}
+
+const verificationFailureRoute = (
+  authStore: AuthStore,
+  to: RouteLocationNormalized,
+  error: unknown,
+  requestSession: AuthSessionSnapshot
+) => {
+  if (isAuthFailure(error)) {
+    authStore.clearAuth({ expectedSession: requestSession })
+  }
+  authStore.syncFromStorage()
+  if (!authStore.isLoggedIn) {
+    return loginRoute(to)
+  }
+  if (isForbiddenFailure(error)) {
+    return forbiddenRoute(to, 'serverForbidden')
+  }
+  authStore.markAuthStale()
+  return authUnavailableRoute(to)
+}
 
 const forbiddenRoute = (to: RouteLocationNormalized, reason: string) => ({
   path: '/403',
@@ -91,18 +134,7 @@ export const setupRouterGuards = (router: Router) => {
     const isPublic = Boolean(to.meta.public)
     const isAuthPage = to.matched.some((record) => record.meta.authPage)
 
-    const localToken = getToken()
-
-    if (localToken && authStore.token && authStore.token !== localToken) {
-      authStore.setToken(localToken)
-      authStore.markAuthStale()
-    } else if (!authStore.isLoggedIn && localToken) {
-      authStore.setToken(localToken)
-    }
-
-    if (authStore.isLoggedIn && !localToken) {
-      authStore.clearAuth()
-    }
+    authStore.syncFromStorage()
 
     if (isPublic) {
       if (isAuthPage && authStore.isLoggedIn) {
@@ -113,7 +145,15 @@ export const setupRouterGuards = (router: Router) => {
         }
 
         try {
-          await authStore.verifyToken()
+          const verifiedUser = await authStore.verifyToken()
+          authStore.syncFromStorage()
+          if (
+            !verifiedUser
+            || !authStore.isLoggedIn
+            || !authStore.tokenVerified
+          ) {
+            return true
+          }
           if (to.path === '/reset-password' && hasResetPasswordToken(to)) {
             return {
               path: '/login',
@@ -155,63 +195,26 @@ export const setupRouterGuards = (router: Router) => {
     }
 
     if (!authStore.isLoggedIn) {
-      return {
-        path: '/login',
-        query: {
-          redirect: safeRedirectTarget(to)
-        }
-      }
+      return loginRoute(to)
     }
 
     const isAdminRoute = to.matched.some((record) => record.meta.requiresAdmin)
-    const hasCachedUserSnapshot = Boolean(authStore.userInfo && authStore.roles.length > 0)
-
-    if (isAdminRoute) {
-      try {
-        await authStore.verifyAdminSession()
-      } catch (error) {
-        if (isAuthFailure(error)) {
-          authStore.clearAuth()
-          return {
-            path: '/login',
-            query: {
-              redirect: safeRedirectTarget(to)
-            }
-          }
-        }
-        authStore.markAuthStale()
-        return {
-          path: '/auth-unavailable',
-          query: {
-            redirect: safeRedirectTarget(to)
-          }
-        }
+    const verificationSession = captureAuthSession()
+    try {
+      const verifiedUser = isAdminRoute
+        ? await authStore.verifyAdminSession()
+        : await authStore.verifyToken()
+      const sessionRoute = recheckVerifiedSession(authStore, to, verifiedUser)
+      if (sessionRoute) {
+        return sessionRoute
       }
-    } else if (!authStore.tokenVerified || !authStore.userInfo || authStore.roles.length === 0) {
-      if (!isAdminRoute && hasCachedUserSnapshot) {
-        refreshAuthInBackground(authStore)
-      } else {
-        try {
-          await authStore.verifyToken()
-        } catch (error) {
-          if (isAuthFailure(error)) {
-            authStore.clearAuth()
-            return {
-              path: '/login',
-              query: {
-                redirect: safeRedirectTarget(to)
-              }
-            }
-          }
-          authStore.markAuthStale()
-          return {
-            path: '/auth-unavailable',
-            query: {
-              redirect: safeRedirectTarget(to)
-            }
-          }
-        }
-      }
+    } catch (error) {
+      return verificationFailureRoute(
+        authStore,
+        to,
+        error,
+        verificationSession
+      )
     }
 
     if (isAdminRoute && !authStore.canAccessAdmin) {

@@ -14,26 +14,24 @@
       </div>
     </section>
 
-    <section class="audit-metrics">
-      <article class="audit-metric">
-        <span>登录日志总数</span>
-        <strong>{{ summary?.totalLoginLogs ?? total }}</strong>
-        <small>最近登录 {{ summary?.latestLoginAt || '--' }}</small>
+    <section class="audit-metrics" role="status" aria-live="polite" :aria-busy="summaryLoading">
+      <article
+        v-for="item in summaryMetricCards"
+        :key="item.key"
+        class="audit-metric"
+        :class="[
+          { 'audit-metric--danger': item.tone === 'danger' && !summaryError },
+          { 'audit-metric--unknown': Boolean(summaryError) }
+        ]"
+      >
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+        <small>{{ item.hint }}</small>
       </article>
-      <article class="audit-metric">
-        <span>今日登录</span>
-        <strong>{{ summary?.todayLoginLogs ?? 0 }}</strong>
-        <small>按 loginTime 统计</small>
-      </article>
-      <article class="audit-metric audit-metric--danger">
-        <span>失败登录</span>
-        <strong>{{ summary?.failedLoginLogs ?? 0 }}</strong>
-        <small>今日失败 {{ summary?.todayFailedLoginLogs ?? 0 }}</small>
-      </article>
-      <article class="audit-metric">
+      <article class="audit-metric" :class="{ 'audit-metric--unknown': Boolean(logError) }">
         <span>当前筛选结果</span>
-        <strong>{{ total }}</strong>
-        <small>当前筛选记录数</small>
+        <strong>{{ logError ? '未知' : total }}</strong>
+        <small>{{ logError ? '列表接口失败，请重新加载后确认' : '当前筛选记录数' }}</small>
       </article>
     </section>
 
@@ -44,7 +42,7 @@
           <p>支持按登录态排障场景调整密度和列显隐，便于复查刷新、深链和新标签登录恢复问题。</p>
         </div>
         <div class="table-view-tools">
-          <el-segmented v-model="tableSize" :options="tableSizeOptions" />
+          <el-segmented v-model="tableSize" :options="tableSizeOptions" aria-label="登录日志表格密度" />
           <el-dropdown trigger="click" :hide-on-click="false">
             <el-button plain>列配置</el-button>
             <template #dropdown>
@@ -64,7 +62,7 @@
       </div>
 
       <div class="admin-filter-bar">
-        <el-form :model="query" inline>
+        <el-form :model="query" inline @submit.prevent="handleSearch">
           <el-form-item label="关键词">
             <el-input v-model.trim="query.keyword" clearable placeholder="用户名 / IP / 客户端" />
           </el-form-item>
@@ -80,9 +78,9 @@
               <el-option label="失败" value="FAILED" />
             </el-select>
           </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="handleReset">重置</el-button>
+          <el-form-item class="audit-filter-actions">
+            <el-button type="primary" native-type="submit">查询</el-button>
+            <el-button native-type="button" @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -170,6 +168,7 @@ const logs = ref<LoginLogVO[]>([])
 const summary = ref<AdminLogSummaryVO>()
 const total = ref(0)
 const logError = ref('')
+const summaryError = ref('')
 
 type LoginLogColumnKey =
   | 'loginTime'
@@ -211,6 +210,31 @@ const query = reactive<AdminListQuery>({
 })
 
 const isSuccess = (status?: string | number) => status === 1 || status === '1' || String(status).toUpperCase() === 'SUCCESS'
+const summaryMetricCards = computed(() => {
+  const unavailable = Boolean(summaryError.value) || !summary.value
+  const unknownHint = summaryError.value || '汇总数据尚未返回，请点击刷新重试。'
+  return [
+    {
+      key: 'total',
+      label: '登录日志总数',
+      value: unavailable ? '未知' : summary.value?.totalLoginLogs ?? 0,
+      hint: unavailable ? unknownHint : `最近登录 ${summary.value?.latestLoginAt || '暂无记录'}`
+    },
+    {
+      key: 'today',
+      label: '今日登录',
+      value: unavailable ? '未知' : summary.value?.todayLoginLogs ?? 0,
+      hint: unavailable ? unknownHint : '按 loginTime 统计'
+    },
+    {
+      key: 'failed',
+      label: '失败登录',
+      value: unavailable ? '未知' : summary.value?.failedLoginLogs ?? 0,
+      hint: unavailable ? unknownHint : `今日失败 ${summary.value?.todayFailedLoginLogs ?? 0}`,
+      tone: 'danger'
+    }
+  ]
+})
 const hasLogFilters = computed(() => Boolean(query.keyword || query.userId || query.traceId || query.status))
 const logEmptyTitle = computed(() =>
   hasLogFilters.value ? '当前筛选没有登录日志' : '暂无登录日志'
@@ -251,8 +275,12 @@ const displayMaskedLoginPreview = (row: LoginLogVO) => {
 
 const fetchSummary = async () => {
   summaryLoading.value = true
+  summaryError.value = ''
   try {
     summary.value = await getAdminLogSummaryApi()
+  } catch (error) {
+    summary.value = undefined
+    summaryError.value = getErrorMessage(error, '登录日志汇总暂时加载失败，请点击刷新重试。')
   } finally {
     summaryLoading.value = false
   }
@@ -325,6 +353,11 @@ onMounted(loadPage)
   color: #f87171;
 }
 
+.audit-metric--unknown strong,
+.audit-metric--unknown small {
+  color: #fca5a5;
+}
+
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
@@ -366,6 +399,10 @@ onMounted(loadPage)
 
 .login-log-text-preview--empty {
   color: var(--app-text-muted, #64748b);
+}
+
+.admin-table-card :deep(.el-table__empty-text) {
+  width: min(720px, calc(100% - 24px));
 }
 
 .log-preview {
@@ -412,6 +449,17 @@ onMounted(loadPage)
 @media (max-width: 640px) {
   .audit-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .audit-filter-actions :deep(.el-form-item__content) {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .audit-filter-actions :deep(.el-button) {
+    flex: 1 1 0;
+    margin-left: 0;
   }
 }
 </style>

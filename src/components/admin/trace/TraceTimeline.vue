@@ -2,24 +2,24 @@
   <section class="trace-timeline admin-panel">
     <div class="admin-panel__header">
       <div>
-        <h2>Timeline</h2>
-        <p>Weak associations show associationType, associationConfidence, and associationReason explicitly.</p>
+        <h2>时间线</h2>
+        <p>弱关联会明确展示 associationType、associationConfidence 和 associationReason，避免被误认为强证据。</p>
       </div>
-      <el-tag v-if="partialResult" type="warning" effect="plain">partial result</el-tag>
+      <el-tag v-if="partialResult" type="warning" effect="plain">部分结果</el-tag>
     </div>
 
     <el-skeleton v-if="loading" :rows="5" animated />
     <AppState
       v-else-if="!nodes.length"
       type="empty"
-      title="No timeline nodes"
-      description="Search by traceId, requestId, biz pair, messageId, Agent Run id, async task id, or a time window."
+      title="暂无时间线节点"
+      description="可按 traceId、requestId、业务键、messageId、Agent Run id、异步任务 id 或时间窗口查询。"
     />
     <el-timeline v-else>
       <el-timeline-item
         v-for="node in nodes"
         :key="node.id"
-        :timestamp="node.occurredAt || 'no timestamp'"
+        :timestamp="node.occurredAt || '无时间戳'"
         :type="timelineItemType(node)"
         placement="top"
       >
@@ -46,7 +46,7 @@
           </dl>
 
           <div class="trace-node__actions">
-            <el-button link type="primary" @click="$emit('select-node', node)">Details</el-button>
+            <el-button link type="primary" @click="$emit('select-node', node)">详情</el-button>
             <el-button
               v-for="link in node.links"
               :key="link.label"

@@ -32,7 +32,15 @@ describe('agentTaskAction', () => {
 
   it.each([
     '/applications',
-    '/applications/99?status=FOLLOW_UP',
+    '/applications/99?status=FOLLOW_UP'
+  ])('keeps a legal APPLICATION_FOLLOW_UP application actionUrl %s', (actionUrl) => {
+    const task = applicationTask({ actionUrl })
+
+    expect(validAgentTaskActionUrl(task)).toBe(actionUrl)
+    expect(buildAgentTaskActionPath(task)).toContain(actionUrl)
+  })
+
+  it.each([
     'https://evil.example/phish',
     '/admin/tasks'
   ])('rejects unsafe APPLICATION_FOLLOW_UP actionUrl %s and falls back safely', (actionUrl) => {

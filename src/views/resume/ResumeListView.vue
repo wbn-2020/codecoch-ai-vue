@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="resume-center page-shell">
-    <section class="hero-band">
+    <section class="resume-hero">
       <div class="hero-copy">
         <p class="hero-kicker">
           <FileText :size="16" />
@@ -13,9 +13,9 @@
             <Plus :size="17" />
             新建简历
           </el-button>
-          <el-button size="large" :loading="uploading" @click="triggerUpload">
+          <el-button size="large" :loading="uploading" @click="toggleUploadWorkbench">
             <UploadCloud :size="17" />
-            上传简历
+            {{ uploadWorkbenchExpanded ? '收起导入' : '导入简历' }}
           </el-button>
           <el-button size="large" text @click="router.push('/dashboard')">
             <ArrowLeft :size="17" />
@@ -26,44 +26,34 @@
 
       <div class="hero-panel">
         <div class="hero-panel__stat">
-          <span>简历管理</span>
-          <strong>可创建和编辑</strong>
+          <span>简历资产</span>
+          <strong>{{ total }} 份</strong>
         </div>
         <div class="hero-panel__stat">
-          <span>文件导入</span>
-          <strong :class="uploadStatusClass">{{ uploadStatusText }}</strong>
+          <span>最近更新</span>
+          <strong>{{ latestUpdatedAt }}</strong>
         </div>
         <div class="hero-panel__stat">
           <span>AI 建议</span>
-          <strong>最近建议可查看</strong>
+          <strong :class="{ danger: optimizeRecordsLoadError }">{{ latestOptimizeStatus }}</strong>
         </div>
       </div>
     </section>
 
-    <section class="metric-grid resume-metrics">
-      <article class="metric-card">
-        <div class="metric-card__label">简历总数</div>
-        <div class="metric-card__value">{{ total }}</div>
-        <p>当前账号已创建的简历数量</p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-card__label">最近更新时间</div>
-        <div class="metric-card__value is-date">{{ latestUpdatedAt }}</div>
-        <p>最近一次编辑或上传时间</p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-card__label">上传解析状态</div>
-        <div class="metric-card__value is-date">{{ uploadStatusText }}</div>
-          <p>{{ parseStatusMessage || '等待上传文件后更新解析状态' }}</p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-card__label">最近建议记录</div>
-        <div class="metric-card__value is-date">{{ latestOptimizeStatus }}</div>
-        <p>展示最近一次建议状态，失败时可打开记录查看原因</p>
-      </article>
-    </section>
-
-    <section class="content-card cc-glass upload-workbench">
+    <el-collapse-transition>
+    <section
+      v-show="uploadWorkbenchExpanded || uploading || parsePolling || Boolean(parseTask) || Boolean(uploadError)"
+      class="content-card upload-workbench"
+    >
+      <div class="upload-workbench__head">
+        <div>
+          <strong>导入现有简历</strong>
+          <span>上传后会异步解析，完成前可以继续浏览其他简历。</span>
+        </div>
+        <el-button text :disabled="uploading || parsePolling" @click="uploadWorkbenchExpanded = false">
+          收起
+        </el-button>
+      </div>
       <div class="upload-panel">
         <div>
           <div class="section-title">
@@ -149,8 +139,9 @@
         </div>
       </div>
     </section>
+    </el-collapse-transition>
 
-    <section class="content-card cc-glass resume-workspace">
+    <section class="content-card resume-workspace">
       <div class="content-card__body workspace-toolbar">
         <div>
           <p class="section-kicker">我的简历</p>
@@ -224,7 +215,7 @@
           <p>可以手动创建，也可以导入简历文件，等解析完成后再确认生成结构化简历。</p>
           <div class="empty-actions">
             <el-button type="primary" @click="router.push('/resumes/create')">新建简历</el-button>
-            <el-button :loading="uploading" @click="triggerUpload">上传简历</el-button>
+            <el-button :loading="uploading" @click="openUploadWorkbench">导入简历</el-button>
           </div>
         </div>
 
@@ -295,19 +286,11 @@
             <div class="resume-card__actions">
               <el-button type="primary" plain @click="router.push(`/resumes/${item.id}/edit`)">
                 <Eye :size="15" />
-                编辑
-              </el-button>
-              <el-button @click="router.push('/interviews/create')">
-                <MessagesSquare :size="15" />
-                去面试
+                打开工作台
               </el-button>
               <el-button :loading="optimizingId === item.id" @click="handleOptimize(item)">
                 <Sparkles :size="15" />
                 AI 建议
-              </el-button>
-              <el-button :disabled="!latestRecord(item.id)" @click="openOptimizeDetail(latestRecord(item.id)?.optimizeRecordId)">
-                <GitCompareArrows :size="15" />
-                查看对比
               </el-button>
               <el-dropdown trigger="click">
                 <el-button text>
@@ -315,6 +298,12 @@
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item @click="router.push('/interviews/create')">
+                      用于模拟面试
+                    </el-dropdown-item>
+                    <el-dropdown-item :disabled="!latestRecord(item.id)" @click="openOptimizeDetail(latestRecord(item.id)?.optimizeRecordId)">
+                      查看建议对比
+                    </el-dropdown-item>
                     <el-dropdown-item :disabled="item.isDefault === 1" @click="handleSetDefault(item)">
                       设为默认
                     </el-dropdown-item>
@@ -470,10 +459,8 @@ import {
   Eye,
   FilePlus2,
   FileText,
-  GitCompareArrows,
   Layers3,
   ListChecks,
-  MessagesSquare,
   MoreHorizontal,
   Plus,
   Search,
@@ -531,6 +518,7 @@ const uploading = ref(false)
 const uploadError = ref('')
 const parseTask = ref<ResumeParseStatusVO | null>(null)
 const parsePolling = ref(false)
+const uploadWorkbenchExpanded = ref(false)
 const parsePollTimer = ref<ReturnType<typeof window.setTimeout> | null>(null)
 const parseResult = ref<ResumeAnalysisResultVO | null>(null)
 const parseDrawerVisible = ref(false)
@@ -591,19 +579,6 @@ const latestUpdatedAt = computed(() => {
   const latest = sortedDates[sortedDates.length - 1]
   return latest ? formatDateTime(latest) : '--'
 })
-
-const uploadStatusText = computed(() => {
-  if (uploading.value) return '上传中'
-  if (parsePolling.value) return '解析中'
-  if (parseTask.value) return parseStatusText(parseTask.value.parseStatus)
-  return '待上传'
-})
-
-const uploadStatusClass = computed(() => ({
-  'is-muted': !parseTask.value,
-  'is-success': parseTask.value?.parseStatus === 'SUCCESS',
-  'is-danger': parseTask.value?.parseStatus === 'FAILED'
-}))
 
 const parseStatusMessage = computed(() => toFriendlyMessage(parseTask.value?.message || parseTask.value?.errorMessage, ''))
 
@@ -977,6 +952,14 @@ const triggerUpload = () => {
   uploadRef.value?.$el.querySelector('input[type="file"]')?.click()
 }
 
+const openUploadWorkbench = () => {
+  uploadWorkbenchExpanded.value = true
+}
+
+const toggleUploadWorkbench = () => {
+  uploadWorkbenchExpanded.value = !uploadWorkbenchExpanded.value
+}
+
 const beforeResumeUpload = (file: UploadRawFile) => {
   const extension = file.name.split('.').pop()?.toLowerCase() || ''
   const isAllowedType = RESUME_UPLOAD_EXTENSIONS.has(extension) || RESUME_UPLOAD_MIME_TYPES.has(file.type)
@@ -994,6 +977,7 @@ const beforeResumeUpload = (file: UploadRawFile) => {
 }
 
 const handleFileChange = async (uploadFile: UploadFile) => {
+  uploadWorkbenchExpanded.value = true
   const file = uploadFile.raw
   uploadRef.value?.clearFiles()
   if (!file) return
@@ -1254,20 +1238,24 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .resume-center {
-  gap: 20px;
+  gap: var(--user-space-4);
+  min-width: 0;
 }
 
 .resume-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 28px;
-  border-radius: var(--cc-radius-xl);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: var(--user-space-5);
+  align-items: center;
+  padding: var(--user-space-5);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
 }
 
 .hero-kicker,
 .hero-actions,
-.panel-line,
+.hero-panel__stat,
 .section-title,
 .pipeline-step,
 .task-card,
@@ -1284,114 +1272,138 @@ onUnmounted(() => {
 
 .hero-kicker {
   gap: 8px;
-  color: var(--cc-ai-cyan);
+  margin: 0;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .hero-copy {
   h1 {
-    margin: 14px 0 0;
-    font-size: 34px;
-    line-height: 1.2;
+    margin: 8px 0 0;
+    color: var(--user-text);
+    font-size: 26px;
+    line-height: 1.25;
   }
 
   p {
     max-width: 680px;
-    margin: 12px 0 0;
-    color: var(--app-text-muted);
-    line-height: 1.8;
+    margin: 8px 0 0;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.65;
   }
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .hero-panel {
   align-self: stretch;
-  padding: 18px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
-  background: rgba(2, 6, 23, 0.42);
+  padding-left: var(--user-space-5);
+  border-left: 1px solid var(--user-border);
 }
 
-.panel-line {
+.hero-panel__stat {
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  min-height: 44px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--user-border);
 
   &:last-child {
     border-bottom: 0;
   }
 
   span {
-    color: var(--app-text-muted);
-    font-size: 13px;
+    color: var(--user-text-muted);
+    font-size: 12px;
   }
 
   strong {
+    color: var(--user-text-secondary);
     font-size: 14px;
+    text-align: right;
   }
 }
 
 .is-muted {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
 }
 
 .is-success,
 .success {
-  color: #86efac !important;
+  color: var(--user-success) !important;
 }
 
 .is-danger,
 .danger {
-  color: #fca5a5 !important;
+  color: var(--user-danger) !important;
 }
 
-.resume-metrics {
-  .metric-card {
-    p {
-      margin: 10px 0 0;
-      color: var(--app-text-muted);
-      font-size: 12px;
-    }
+.content-card {
+  border-color: var(--user-border);
+  background: var(--user-surface);
+  box-shadow: none;
+}
+
+.upload-workbench {
+  padding: var(--user-space-4);
+}
+
+.upload-workbench__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--user-border);
+
+  strong,
+  span {
+    display: block;
   }
 
-  .metric-card__value.is-date {
-    font-size: 16px;
+  strong {
+    color: var(--user-text);
+    font-size: 15px;
+  }
+
+  span {
+    margin-top: 4px;
+    color: var(--user-text-muted);
+    font-size: 12px;
     line-height: 1.5;
   }
 }
 
-.upload-workbench {
-  padding: 20px;
-}
-
 .upload-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--user-space-4);
   align-items: stretch;
 }
 
 .section-title {
-  gap: 10px;
+  gap: 8px;
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    color: var(--user-text);
+    font-size: 18px;
   }
 }
 
 .upload-panel p {
-  margin: 10px 0 0;
-  color: var(--app-text-muted);
-  line-height: 1.7;
+  max-width: 70ch;
+  margin: 7px 0 0;
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .resume-upload {
@@ -1401,11 +1413,14 @@ onUnmounted(() => {
   }
 
   :deep(.el-upload-dragger) {
-    border-color: rgba(129, 140, 248, 0.32);
-    background: rgba(2, 6, 23, 0.34);
+    min-height: 108px;
+    padding: 16px;
+    border-color: var(--user-primary-border);
+    border-radius: var(--user-radius-sm);
+    background: var(--user-control-bg);
 
     &:hover {
-      border-color: rgba(34, 211, 238, 0.58);
+      border-color: var(--user-primary);
     }
   }
 }
@@ -1414,11 +1429,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: #dbeafe;
+  gap: 6px;
+  color: var(--user-text-secondary);
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -1426,27 +1441,34 @@ onUnmounted(() => {
 .pipeline-status {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
+  gap: 0;
+  margin-top: var(--user-space-4);
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
 }
 
 .pipeline-step {
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.28);
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--user-border);
+
+  &:last-child {
+    border-right: 0;
+  }
 
   > span {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-    background: rgba(99, 102, 241, 0.16);
-    color: #c4b5fd;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--user-radius-sm);
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
@@ -1458,46 +1480,47 @@ onUnmounted(() => {
 
   p {
     margin: 5px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.5;
   }
 
   &.active {
-    border-color: rgba(34, 211, 238, 0.45);
+    background: var(--user-primary-faint);
   }
 
   &.done {
-    border-color: rgba(34, 197, 94, 0.38);
+    background: var(--user-success-soft);
   }
 
   &.error {
-    border-color: rgba(248, 113, 113, 0.48);
+    background: var(--user-danger-soft);
   }
 }
 
 .task-card {
   justify-content: space-between;
   gap: 14px;
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid rgba(129, 140, 248, 0.22);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.62);
+  margin-top: var(--user-space-4);
+  padding: 12px 14px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-tint);
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 4px;
+    color: var(--user-text);
   }
 
   p {
     margin: 5px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -1512,10 +1535,10 @@ onUnmounted(() => {
     max-width: 220px;
     padding: 3px 7px;
     overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.24);
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.42);
-    color: rgba(226, 232, 240, 0.78);
+    background: var(--user-control-bg);
+    color: var(--user-text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1529,33 +1552,50 @@ onUnmounted(() => {
 
 .resume-workspace {
   overflow: hidden;
+  border: 0;
+  background: transparent;
 }
 
 .workspace-toolbar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--user-space-4);
+  padding: var(--user-space-4);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    color: var(--user-text);
+    font-size: 18px;
   }
 
   p {
-    margin: 8px 0 0;
-    color: var(--app-text-muted);
+    margin: 6px 0 0;
+    color: var(--user-text-muted);
     font-size: 13px;
   }
+}
+
+.section-kicker {
+  color: var(--user-primary) !important;
+  font-size: 12px !important;
+  font-weight: 700;
 }
 
 .search-form {
   display: flex;
   justify-content: flex-end;
+
+  :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
 }
 
 .resume-alert {
-  margin: 0 20px 16px;
+  margin: 0 16px 12px;
 }
 
 .resume-alert.compact {
@@ -1563,12 +1603,12 @@ onUnmounted(() => {
 }
 
 .optimize-records-alert {
-  border: 1px solid rgba(245, 158, 11, 0.26);
-  background: rgba(120, 53, 15, 0.24);
+  border: 1px solid var(--user-warning);
+  background: var(--user-warning-soft);
 
   :deep(.el-alert__title),
   :deep(.el-alert__icon) {
-    color: #facc15;
+    color: var(--user-warning);
   }
 }
 
@@ -1578,59 +1618,60 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid rgba(129, 140, 248, 0.22);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-tint);
 
   strong {
     display: block;
-    color: #dbeafe;
+    color: var(--user-text);
     font-size: 13px;
   }
 
   p {
     margin: 4px 0 0;
-    color: #a5b4fc;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.6;
   }
 }
 
 .resume-list {
-  min-height: 280px;
-  padding: 0 20px 20px;
-  border-top: 1px solid var(--app-border);
+  padding: 12px 0 0;
 }
 
 .resume-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  padding-top: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 12px;
 }
 
 .resume-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  grid-template-areas:
+    "header actions"
+    "meta actions"
+    "summary status"
+    "skills status"
+    "optimize optimize";
+  gap: 10px 16px;
   min-width: 0;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: var(--app-radius);
-  background: rgba(15, 23, 42, 0.66);
-  transition:
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    background 0.2s ease;
+  padding: 14px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  transition: border-color 0.18s ease, background 0.18s ease;
 
   &:hover {
-    border-color: rgba(129, 140, 248, 0.42);
-    background: rgba(15, 23, 42, 0.86);
-    transform: translateY(-2px);
+    border-color: var(--user-primary-border);
+    background: var(--user-surface-raised);
   }
 }
 
 .resume-card__header {
+  grid-area: header;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1645,16 +1686,16 @@ onUnmounted(() => {
   h3 {
     margin: 0;
     overflow: hidden;
-    color: #f8fafc;
-    font-size: 18px;
+    color: var(--user-text);
+    font-size: 16px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   p {
-    margin: 6px 0 0;
-    color: var(--app-text-muted);
-    font-size: 13px;
+    margin: 4px 0 0;
+    color: var(--user-text-muted);
+    font-size: 12px;
   }
 }
 
@@ -1664,15 +1705,15 @@ onUnmounted(() => {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(129, 140, 248, 0.28);
-  background: rgba(99, 102, 241, 0.16);
-  color: #c4b5fd;
+  border: 1px solid var(--user-primary-border);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
 }
 
 .resume-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--user-radius-sm);
 }
 
 .resume-tags {
@@ -1684,58 +1725,67 @@ onUnmounted(() => {
 }
 
 .resume-card__meta {
+  grid-area: meta;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px 12px;
 
   span {
     gap: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
 
 .resume-summary {
+  grid-area: summary;
   display: -webkit-box;
-  min-height: 44px;
   margin: 0;
   overflow: hidden;
-  color: #cbd5e1;
+  color: var(--user-text-secondary);
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.55;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
 .skill-stack {
+  grid-area: skills;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 
   span {
-    padding: 5px 9px;
-    border: 1px solid rgba(148, 163, 184, 0.14);
+    padding: 4px 8px;
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: rgba(2, 6, 23, 0.28);
-    color: #cbd5e1;
+    background: var(--user-control-bg);
+    color: var(--user-text-secondary);
     font-size: 12px;
   }
 
   .is-placeholder {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .resume-card__status {
+  grid-area: status;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  align-self: start;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
 
   div {
-    padding: 10px 12px;
-    border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 10px;
-    background: rgba(2, 6, 23, 0.28);
+    padding: 9px 10px;
+    background: var(--user-control-bg);
+
+    & + div {
+      border-left: 1px solid var(--user-border);
+    }
   }
 
   span,
@@ -1744,31 +1794,43 @@ onUnmounted(() => {
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     margin-top: 4px;
-    color: var(--cc-warning);
+    color: var(--user-warning);
     font-size: 13px;
   }
 }
 
 .optimize-summary {
-  padding: 10px 12px;
-  border: 1px solid rgba(34, 211, 238, 0.18);
-  border-radius: 10px;
-  background: rgba(8, 47, 73, 0.22);
-  color: #bae6fd;
+  grid-area: optimize;
+  padding: 8px 10px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-primary-faint);
+  color: var(--user-text-secondary);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .resume-card__actions {
-  flex-wrap: wrap;
+  grid-area: actions;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-self: start;
   gap: 8px;
-  padding-top: 2px;
+
+  :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  :deep(.el-dropdown) {
+    justify-self: end;
+  }
 }
 
 .empty-state {
@@ -1776,8 +1838,10 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 320px;
-  padding: 32px 20px;
+  padding: 40px 20px;
+  border: 1px dashed var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-control-bg);
   text-align: center;
 
   h3 {
@@ -1788,15 +1852,15 @@ onUnmounted(() => {
   p {
     max-width: 520px;
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
 
 .empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--user-radius-sm);
 }
 
 .empty-actions {
@@ -1807,7 +1871,7 @@ onUnmounted(() => {
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  padding: 0 20px 20px;
+  padding: 0 16px 16px;
 }
 
 .drawer-panel {
@@ -1819,7 +1883,7 @@ onUnmounted(() => {
 .drawer-status {
   justify-content: space-between;
   gap: 12px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -1829,9 +1893,9 @@ onUnmounted(() => {
 .diff-card,
 .next-actions {
   padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 14px;
-  background: rgba(2, 6, 23, 0.34);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
 }
 
 .resume-parse-preview {
@@ -1848,21 +1912,21 @@ onUnmounted(() => {
 
 .resume-parse-sections article {
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.26);
+  background: var(--user-control-bg);
 
   strong {
     display: block;
     margin-bottom: 6px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 13px;
   }
 
   ul {
     margin: 0;
     padding-left: 18px;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     font-size: 13px;
     line-height: 1.7;
   }
@@ -1874,7 +1938,7 @@ onUnmounted(() => {
 
 .resume-parse-empty {
   margin: 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
@@ -1886,7 +1950,7 @@ onUnmounted(() => {
 
   p {
     margin: 0;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     line-height: 1.7;
   }
 }
@@ -1897,7 +1961,7 @@ onUnmounted(() => {
   gap: 14px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
@@ -1909,7 +1973,7 @@ onUnmounted(() => {
 
   p {
     margin: 0;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     line-height: 1.7;
   }
 }
@@ -1925,7 +1989,7 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -1935,7 +1999,7 @@ onUnmounted(() => {
 }
 
 .diff-head :deep(.el-checkbox__label) {
-  color: #dbeafe;
+  color: var(--user-text-secondary);
   font-weight: 700;
 }
 
@@ -1948,37 +2012,37 @@ onUnmounted(() => {
   div {
     min-width: 0;
     padding: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
+    border: 1px solid var(--user-border);
     border-radius: 10px;
-    background: rgba(15, 23, 42, 0.52);
+    background: var(--user-control-bg);
   }
 
   .diff-before {
-    border-color: rgba(239, 68, 68, 0.28);
-    background: rgba(127, 29, 29, 0.18);
+    border-color: var(--user-danger-border);
+    background: var(--user-danger-soft);
   }
 
   .diff-after {
-    border-color: rgba(34, 197, 94, 0.32);
-    background: rgba(20, 83, 45, 0.18);
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
   }
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   .diff-before span {
-    color: #fca5a5;
+    color: var(--user-danger);
   }
 
   .diff-after span {
-    color: #86efac;
+    color: var(--user-success);
   }
 
   p {
     margin: 8px 0 0;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     font-size: 13px;
     line-height: 1.7;
   }
@@ -1986,7 +2050,7 @@ onUnmounted(() => {
 
 .diff-reason {
   margin: 10px 0 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -1998,7 +2062,7 @@ onUnmounted(() => {
 
   span {
     display: block;
-    color: #cbd5e1;
+    color: var(--user-text-secondary);
     line-height: 1.7;
   }
 }
@@ -2010,10 +2074,36 @@ onUnmounted(() => {
 
 @media (max-width: 1080px) {
   .resume-hero,
-  .resume-card-grid,
-  .upload-panel,
-  .pipeline-status {
+  .upload-panel {
     grid-template-columns: 1fr;
+  }
+
+  .hero-panel {
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 1px solid var(--user-border);
+    border-left: 0;
+  }
+
+  .resume-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "meta"
+      "summary"
+      "skills"
+      "status"
+      "optimize"
+      "actions";
+  }
+
+  .resume-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+
+    :deep(.el-button) {
+      width: auto;
+    }
   }
 
   .workspace-toolbar {
@@ -2028,15 +2118,16 @@ onUnmounted(() => {
 
 @media (max-width: 720px) {
   .resume-hero {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .resume-card__header,
-  .task-card {
+  .task-card,
+  .optimize-recovery-card {
     flex-direction: column;
   }
 
@@ -2047,8 +2138,38 @@ onUnmounted(() => {
 
   .resume-card__status,
   .diff-grid,
-  .score-strip {
+  .score-strip,
+  .pipeline-status {
     grid-template-columns: 1fr;
+  }
+
+  .pipeline-step {
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .workspace-toolbar,
+  .resume-list,
+  .upload-workbench {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .search-form {
+    display: block;
+  }
+
+  .resume-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    :deep(.el-button) {
+      width: 100%;
+    }
   }
 }
 </style>

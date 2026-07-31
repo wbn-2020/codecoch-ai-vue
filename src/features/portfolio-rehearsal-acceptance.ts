@@ -6,11 +6,11 @@ import type {
 const rawSensitivePolicy = 'NO_RAW_SENSITIVE_CONTENT' as const
 
 export const portfolioRehearsalAcceptanceMatrix = {
-  matrixKey: 'codecoachai-v4-stage-7-final-acceptance',
-  version: 'V4_STAGE_7_ACCEPTANCE_STATIC_V1',
-  title: 'CodeCoachAI V4 阶段七最终验收矩阵',
-  scope: '覆盖 V4 MVP/P1/P2 能力，用于作品集排练与最终演示收口前的静态验收对齐。',
-  acceptanceBoundary: '本矩阵只描述静态可确认项与最终运行验收确认项，不要求本阶段启动服务验收。',
+  matrixKey: 'codecoachai-v5-phase-55-static-closeout',
+  version: 'V5_PHASE_55_STATIC_CLOSEOUT_V1',
+  title: 'CodeCoachAI V5 Phase 5.5 静态收口矩阵',
+  scope: '覆盖 V5 作品集排练、工程可信、演示路线和发布后人工验收准备，用于非人工验收阶段的静态对齐。',
+  acceptanceBoundary: '本矩阵只描述静态可确认项与发布后人工验收确认项，不要求本阶段启动服务验收。',
   exclusions: [
     '不启动前端或后端服务',
     '不新增或运行单元测试',
@@ -597,15 +597,15 @@ export const portfolioRehearsalAcceptanceMatrix = {
           rawSensitivePolicy
         },
         {
-          id: 'stage-7-p2-final-acceptance-matrix',
+          id: 'phase-55-p2-human-acceptance-matrix',
           priority: 'P2',
-          title: '最终总体验收矩阵',
+          title: '发布后人工验收矩阵',
           userValue: '团队能清楚区分当前静态可确认成果与最终必须运行验证的事项，避免把静态验收误判为上线完成。',
           staticConfirmations: [
             {
               id: 'static-matrix-stage-coverage',
-              title: '七阶段覆盖可确认',
-              description: '本静态矩阵覆盖阶段 1 到阶段 7，每阶段包含 MVP、P1、P2 能力项。',
+              title: 'V5 收口覆盖可确认',
+              description: '本静态矩阵覆盖作品集排练、可信边界、演示路线和发布后人工验收准备，并区分 MVP、P1、P2 能力项。',
               mode: 'STATIC_CONFIRMABLE'
             },
             {
@@ -618,8 +618,8 @@ export const portfolioRehearsalAcceptanceMatrix = {
           runtimeConfirmations: [
             {
               id: 'runtime-final-walkthrough',
-              title: '最终总体验收走查',
-              description: '最终运行验收时由人工按矩阵逐项确认页面、数据、权限、降级和演示故事线。',
+              title: '发布后人工验收走查',
+              description: '发布后人工验收时由人工按矩阵逐项确认页面、数据、权限、降级和演示故事线。',
               mode: 'FINAL_RUNTIME_CONFIRMATION'
             }
           ],

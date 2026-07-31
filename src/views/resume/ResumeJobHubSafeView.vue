@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ArrowRight, Briefcase, FileText, GitCompareArrows, Plus, RefreshCw } from 'lucide-vue-next'
-import { defineAsyncComponent, nextTick, onErrorCaptured, ref } from 'vue'
+import { defineAsyncComponent, nextTick, onErrorCaptured, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppState from '@/components/common/AppState.vue'
@@ -65,7 +65,7 @@ const hubError = ref('')
 const hubRetryKey = ref(0)
 const retrying = ref(false)
 
-const ResumeJobHubView = defineAsyncComponent({
+const createResumeJobHubView = () => defineAsyncComponent({
   loader: () => import('./ResumeJobHubView.vue'),
   onError(error, retry, fail, attempts) {
     if (attempts <= 1) {
@@ -76,6 +76,8 @@ const ResumeJobHubView = defineAsyncComponent({
     fail()
   }
 })
+
+const ResumeJobHubView = shallowRef(createResumeJobHubView())
 
 const actionItems = [
   {
@@ -107,6 +109,7 @@ const actionItems = [
 const retryHub = async () => {
   retrying.value = true
   hubError.value = ''
+  ResumeJobHubView.value = createResumeJobHubView()
   hubRetryKey.value += 1
   await nextTick()
   retrying.value = false
@@ -122,19 +125,19 @@ onErrorCaptured((error) => {
 .resume-entry-safe {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .safe-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--app-border);
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
 }
 
 .safe-kicker {
@@ -142,85 +145,93 @@ onErrorCaptured((error) => {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
-  color: var(--app-primary);
-  font-size: 13px;
+  color: var(--user-primary);
+  font-size: 12px;
   font-weight: 700;
 }
 
 .safe-hero h1 {
   margin: 0;
-  color: var(--app-text);
-  font-size: 28px;
+  color: var(--user-text);
+  font-size: 24px;
   line-height: 1.25;
 }
 
 .safe-hero p {
   max-width: 760px;
   margin: 12px 0 0;
-  color: var(--app-text-muted);
-  line-height: 1.7;
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .safe-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .safe-action {
   position: relative;
-  display: flex;
-  min-height: 152px;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid var(--app-border);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon title arrow"
+    "icon description arrow";
+  gap: 3px 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface);
+  background: var(--user-surface-muted);
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .safe-action:hover {
-  border-color: var(--app-primary);
-  box-shadow: var(--app-shadow);
-  transform: translateY(-1px);
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-raised);
 }
 
 .safe-action__icon {
+  grid-area: icon;
   display: inline-flex;
   width: 36px;
   height: 36px;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
 }
 
 .safe-action strong {
-  color: var(--app-text);
-  font-size: 16px;
+  grid-area: title;
+  color: var(--user-text);
+  font-size: 15px;
 }
 
 .safe-action small {
-  flex: 1;
-  color: var(--app-text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  grid-area: description;
+  min-width: 0;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .safe-action > svg:last-child {
-  color: var(--app-text-muted);
+  grid-area: arrow;
+  color: var(--user-text-muted);
 }
 
 .safe-note {
-  border: 1px solid var(--app-border);
+  padding: 16px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface);
-  padding: 18px;
+  background: var(--user-surface);
 }
 
 .safe-note__actions {
@@ -230,16 +241,10 @@ onErrorCaptured((error) => {
   margin-top: 14px;
 }
 
-@media (max-width: 960px) {
-  .safe-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 640px) {
   .safe-hero {
     flex-direction: column;
-    padding: 20px;
+    padding: 16px;
   }
 
   .safe-hero h1 {

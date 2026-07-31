@@ -62,7 +62,7 @@
           <el-divider />
           <div class="side-title">掌握状态</div>
           <el-radio-group v-model="masteryStatus" class="mastery-group">
-            <el-radio-button v-for="item in masteryOptions" :key="item.value" :label="item.value">
+              <el-radio-button v-for="item in masteryOptions" :key="item.value" :value="item.value">
               {{ item.label }}
             </el-radio-button>
           </el-radio-group>
@@ -211,6 +211,10 @@ onMounted(fetchDetail)
 </script>
 
 <style scoped lang="scss">
+.page-shell {
+  min-width: 0;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -242,9 +246,9 @@ onMounted(fetchDetail)
   top: 80px;
   align-self: start;
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface-soft);
+  background: var(--user-surface-muted);
 }
 
 .side-button {
@@ -257,7 +261,7 @@ onMounted(fetchDetail)
 }
 
 .side-muted {
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -280,6 +284,16 @@ onMounted(fetchDetail)
 
   .detail-side {
     position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .detail-layout {
+    gap: 16px;
+  }
+
+  .detail-section {
+    margin-top: 18px;
   }
 }
 </style>

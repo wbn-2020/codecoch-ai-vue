@@ -59,14 +59,6 @@
           <small>{{ healthDetail }}</small>
         </button>
         <div class="admin-health-strip__item">
-          <span>当前账号</span>
-          <strong>{{ displayName }}</strong>
-        </div>
-        <div class="admin-health-strip__item">
-          <span>角色</span>
-          <strong>{{ roleSummary }}</strong>
-        </div>
-        <div class="admin-health-strip__item">
           <span>权限</span>
           <strong>{{ authStore.permissions.length }} 个</strong>
         </div>
@@ -249,6 +241,7 @@ const roleSummary = computed(() => authStore.roles.length ? authStore.roles.join
 const latestError = computed(() => requestErrors.value[0])
 const adminPermissionDrift = computed(() => authStore.isAdmin && authStore.permissions.length === 0)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
+const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))
 const mobileReadonlyDefinitions = [
   { label: '运营首页', path: '/admin/dashboard', permissions: ['admin:system:overview'] },
   { label: '失败任务', path: '/admin/async-tasks?status=FAILED', permissions: ['admin:task:list'] },
@@ -396,7 +389,9 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
 }
 
 onMounted(() => {
-  fetchDashboardHealth()
+  if (canLoadDashboardHealth.value) {
+    fetchDashboardHealth()
+  }
   window.addEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 
@@ -407,10 +402,8 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .app-layout {
-  min-height: 100vh;
-  background:
-    linear-gradient(135deg, rgba(6, 182, 212, 0.08), transparent 26rem),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(2, 6, 23, 0.98));
+  min-height: 100dvh;
+  background: var(--admin-bg, #090d14);
 }
 
 .app-layout__aside {
@@ -467,7 +460,7 @@ onBeforeUnmount(() => {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--cc-ai-cyan), var(--cc-ai-blue));
+  background: var(--admin-primary, #4f8cff);
   color: #fff;
   font-weight: 700;
 }
@@ -482,19 +475,17 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   height: var(--app-header-height);
   border-bottom: 1px solid var(--app-border);
-  background: rgba(2, 6, 23, 0.78);
-  backdrop-filter: blur(18px);
+  background: var(--admin-sidebar, #080c12);
 }
 
 .admin-health-strip {
   display: flex;
   align-items: stretch;
   gap: 10px;
-  min-height: 44px;
-  padding: 8px 14px;
+  min-height: var(--admin-health-height, 32px);
+  padding: 0 12px;
   border-bottom: 1px solid var(--app-border);
-  background: rgba(2, 6, 23, 0.62);
-  backdrop-filter: blur(14px);
+  background: var(--admin-surface-muted, #0d141e);
 }
 
 .admin-health-strip__status,
@@ -640,7 +631,7 @@ onBeforeUnmount(() => {
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--app-border);
-  border-radius: 999px;
+  border-radius: 7px;
   background: rgba(15, 23, 42, 0.62);
   color: var(--app-text-muted);
   cursor: pointer;
@@ -662,7 +653,7 @@ onBeforeUnmount(() => {
 .user-trigger {
   gap: 8px;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 7px;
 
   &:hover {
     background: rgba(6, 182, 212, 0.12);
@@ -671,8 +662,8 @@ onBeforeUnmount(() => {
 
 .app-layout__main {
   min-width: 0;
-  min-height: calc(100vh - var(--app-header-height) - 38px);
-  padding: 24px;
+  min-height: calc(100dvh - var(--admin-header-height, 52px) - var(--admin-health-height, 32px) - var(--admin-tags-height, 30px));
+  padding: 16px;
   overflow: auto;
 }
 
@@ -851,4 +842,8 @@ onBeforeUnmount(() => {
     display: none;
   }
 }
+</style>
+
+<style lang="scss">
+@use '../views/admin/admin-workspace';
 </style>

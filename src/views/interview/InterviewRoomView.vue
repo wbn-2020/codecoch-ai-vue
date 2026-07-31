@@ -53,6 +53,17 @@
           </div>
         </div>
 
+        <div v-if="voiceProductContext?.scenario || scenarioBinding" class="scenario-binding-card">
+          <div>
+            <span>版本化剧本</span>
+            <strong>{{ scenarioBindingTitle }}</strong>
+          </div>
+          <el-tag :type="scenarioBindingTagType" effect="plain">
+            {{ scenarioBindingStatusText }}
+          </el-tag>
+          <p>{{ scenarioBindingMessage }}</p>
+        </div>
+
         <div class="progress-list">
           <article
             v-for="item in progressItems"
@@ -255,6 +266,83 @@
               <span>{{ answerDurationText }}</span>
               <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
             </div>
+            <InterviewVoiceLiveConsole
+              v-if="interviewId"
+              ref="liveVoiceConsoleRef"
+              :key="current.currentQuestion?.messageId || 'no-question'"
+              :session-id="interviewId"
+              :question-key="current.currentQuestion?.messageId || 'no-question'"
+              :question-text="current.currentQuestion?.questionContent || ''"
+              :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
+              :preflight-ready="voicePreflightReady"
+              :persist-recording="persistLiveVoiceRecording"
+              @transcript-confirmed="handleLiveTranscriptConfirmed"
+              @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
+              @runtime-active-changed="handleLiveAsrRuntimeChanged"
+            />
+            <section class="voice-preview">
+              <div class="voice-preview__head">
+                <div>
+                  <span class="console-kicker">录音文件转写（兼容模式）</span>
+                  <strong>{{ voicePreviewTitle }}</strong>
+                  <p>{{ voicePreviewHint }}</p>
+                </div>
+                <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
+              </div>
+              <div class="voice-preview__actions">
+                <el-button
+                  :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
+                  @click="handleVoiceStart"
+                >
+                  <Mic :size="16" />
+                  开始录音
+                </el-button>
+                <el-button
+                  :disabled="!voicePreview.canStopRecording.value"
+                  @click="handleVoiceStop"
+                >
+                  <MicOff :size="16" />
+                  停止
+                </el-button>
+                <el-button
+                  :disabled="answerDisabled || voiceConfirming"
+                  @click="handleVoiceFallback"
+                >
+                  <Keyboard :size="16" />
+                  文本降级
+                </el-button>
+              </div>
+              <el-input
+                v-if="voicePreview.canEditDraft.value"
+                v-model="voicePreview.draftText.value"
+                type="textarea"
+                :rows="3"
+                :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
+                placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
+                @input="handleVoiceDraftInput"
+              />
+              <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
+                <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
+                <el-button
+                  type="primary"
+                  plain
+                  :loading="voiceConfirming"
+                  :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
+                  @click="handleVoiceConfirm"
+                >
+                  <Check :size="16" />
+                  确认到文本回答
+                </el-button>
+              </div>
+              <el-alert
+                v-if="voicePreview.errorMessage.value"
+                class="voice-preview__alert"
+                type="warning"
+                show-icon
+                :closable="false"
+                :title="voicePreview.errorMessage.value"
+              />
+            </section>
             <el-input
               ref="answerInputRef"
               v-model="answerContent"
@@ -266,7 +354,7 @@
             <div class="answer-actions">
               <el-button
                 type="primary"
-                :disabled="answerDisabled"
+                :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
                 :loading="submitting"
                 @click="handleSubmit"
               >
@@ -323,6 +411,8 @@
           <strong>{{ latestScoreText }}</strong>
           <p>{{ latestEvaluationLevelText }}</p>
         </div>
+
+        <InterviewVoiceDeliveryMetrics :analysis="voiceDeliveryAnalysis" />
 
         <div class="answer-rubric">
           <div class="panel-title compact">
@@ -430,30 +520,64 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Activity, ArrowLeft, Bot, FilePenLine, ListChecks, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
+import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
+  confirmInterviewVoiceTranscriptApi,
+  createInterviewVoiceSubmissionApi,
+  deleteInterviewVoiceAudioApi,
+  discardInterviewVoiceSubmissionApi,
   finishInterviewApi,
   getCurrentInterviewQuestionApi,
   startInterviewApi,
   streamInterviewAnswerReviewApi,
-  submitInterviewAnswerApi
+  submitInterviewAnswerApi,
+  transcribeInterviewVoiceSubmissionApi,
+  uploadInterviewVoiceAudioApi
 } from '@/api/interview'
+import {
+  bindInterviewScenarioApi,
+  getInterviewScenarioBindingApi
+} from '@/api/interviewVoiceProduct'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
+import {
+  type InterviewVoiceConfirmedMeta,
+  type InterviewVoiceRecordedAudio,
+  answerContainsConfirmedVoiceText,
+  mergeConfirmedVoiceText,
+  resolveConfirmedVoiceAnswerSource,
+  useInterviewVoicePreview
+} from '@/features/interview-voice-preview'
+import {
+  appendConfirmedVoiceTranscript,
+  loadInterviewVoiceProductContext,
+  saveInterviewVoiceProductContext
+} from '@/features/interview-voice-product'
 import type {
   InterviewAnswerDTO,
   InterviewAnswerResultVO,
   InterviewAnswerReviewSseEvent,
-  InterviewCurrentVO
+  InterviewCurrentVO,
+  InterviewVoiceDiscardReason,
+  InterviewVoicePreviewState
 } from '@/types/interview'
+import type {
+  InterviewRealtimeVoicePersistenceRequest,
+  InterviewRealtimeVoicePersistenceResult,
+  InterviewScenarioBindingVO,
+  InterviewVoiceDeliveryAnalysisVO,
+  InterviewVoiceProductContext
+} from '@/types/interviewVoiceProduct'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
+import InterviewVoiceDeliveryMetrics from '@/views/interview/components/InterviewVoiceDeliveryMetrics.vue'
+import InterviewVoiceLiveConsole from '@/views/interview/components/InterviewVoiceLiveConsole.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -467,6 +591,11 @@ const roomError = ref('')
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerInputRef = ref<{ focus?: () => void } | null>(null)
+const liveVoiceConsoleRef = ref<{
+  cancelActiveAsr: () => Promise<void>
+  resetRealtimeVoice: () => Promise<void>
+} | null>(null)
+const liveAsrRuntimeActive = ref(false)
 const lastSubmittedAnswer = ref('')
 const lastAnswerDuration = ref(0)
 const answerStartTime = ref(Date.now())
@@ -480,6 +609,33 @@ let slowSubmitTimer: number | undefined
 let answerReviewSseHandle: ReturnType<typeof streamInterviewAnswerReviewApi> | null = null
 let elapsedTimer: number | undefined
 const elapsedSeconds = ref(0)
+const confirmedVoiceMeta = ref<InterviewVoiceConfirmedMeta | null>(null)
+const confirmedVoiceText = ref('')
+const voiceConfirming = ref(false)
+const uploadedVoiceFileId = ref<number | null>(null)
+const voiceProductContext = ref<InterviewVoiceProductContext | null>(
+  interviewId ? loadInterviewVoiceProductContext(interviewId) : null
+)
+const scenarioBinding = ref<InterviewScenarioBindingVO | null>(
+  voiceProductContext.value?.scenarioBinding || null
+)
+const voiceDeliveryAnalysis = ref<InterviewVoiceDeliveryAnalysisVO | null>(null)
+let voiceRequestController: AbortController | null = null
+let voiceOperationVersion = 0
+let activeVoiceSubmissionId: number | null = null
+
+const voicePreview = useInterviewVoicePreview({
+  onConfirmedText: (text, meta) => {
+    const previousConfirmedText = confirmedVoiceText.value
+    confirmedVoiceMeta.value = meta || null
+    confirmedVoiceText.value = text
+    answerContent.value = mergeConfirmedVoiceText(answerContent.value, previousConfirmedText, text)
+    focusAnswerInput()
+  },
+  onRecordedAudio: (audio) => handleVoiceRecordedAudio(audio)
+})
+
+const compatibilityVoiceRuntimeActive = computed(() => voicePreview.isBusy.value)
 
 const answerReviewStageLabels: Record<string, string> = {
   VALIDATE_REQUEST: '检查回答',
@@ -592,6 +748,7 @@ const interviewStatusLabel = (status?: string | null) => {
     NOT_STARTED: '待开始',
     IN_PROGRESS: '面试中',
     RUNNING: '面试中',
+    WAITING_ANSWER: '等待作答',
     COMPLETED: '已完成',
     REPORT_GENERATING: '报告生成中',
     REPORT_DONE: '报告已生成',
@@ -617,6 +774,84 @@ const evaluationLevelLabel = (level?: string | null) => {
 const outlineStages = computed(() => current.value?.outline || [])
 
 const answerWordCount = computed(() => answerContent.value.trim().length)
+
+const voicePreflightReady = computed(() =>
+  route.query.voicePreflight === 'ready'
+  || Boolean(voiceProductContext.value?.voicePreflightReady)
+)
+
+const scenarioBindingStatus = computed<'BOUND' | 'PENDING' | 'NONE'>(() => {
+  if (scenarioBinding.value) return 'BOUND'
+  return voiceProductContext.value?.scenarioBindingStatus || 'PENDING'
+})
+
+const scenarioBindingTitle = computed(() => {
+  const scenario = voiceProductContext.value?.scenario
+  if (scenario) return `${scenario.scenarioName} v${scenario.versionNo}`
+  if (scenarioBinding.value) return `剧本版本 #${scenarioBinding.value.scenarioVersionId}`
+  return '剧本绑定待确认'
+})
+
+const scenarioBindingStatusText = computed(() => ({
+  BOUND: '已锁定',
+  PENDING: '待绑定',
+  NONE: '未选择'
+})[scenarioBindingStatus.value])
+
+const scenarioBindingTagType = computed<'success' | 'warning' | 'info'>(() => {
+  if (scenarioBindingStatus.value === 'BOUND') return 'success'
+  if (scenarioBindingStatus.value === 'PENDING') return 'warning'
+  return 'info'
+})
+
+const scenarioBindingMessage = computed(() => {
+  if (scenarioBinding.value) {
+    return `服务端已锁定剧本版本 #${scenarioBinding.value.scenarioVersionId} 与量表版本 #${scenarioBinding.value.rubricVersionId}。`
+  }
+  return voiceProductContext.value?.bindingMessage
+    || '当前只保留了本地选择上下文，尚未得到服务端绑定确认。'
+})
+
+const voicePreviewStateLabels: Record<InterviewVoicePreviewState, string> = {
+  opening: '正在打开麦克风',
+  stopping: '正在结束录音',
+  idle: '待录音',
+  recording: '录音中',
+  recorded: '已录音',
+  uploading: '上传中',
+  transcribing: '转写中',
+  draft: '草稿待确认',
+  confirmed: '已确认',
+  submitted: '已随文本提交',
+  fallback_text: '文本降级'
+}
+
+const voicePreviewStateLabel = computed(() => voicePreviewStateLabels[voicePreview.state.value])
+
+const voicePreviewTitle = computed(() => {
+  if (voicePreview.state.value === 'opening') return '正在请求麦克风权限'
+  if (voicePreview.state.value === 'stopping') return '正在完成本次录音'
+  if (voicePreview.state.value === 'recording') return '正在本地录音'
+  if (voicePreview.state.value === 'uploading') return '正在上传录音'
+  if (voicePreview.state.value === 'transcribing') return '正在请求 ASR 转写'
+  if (voicePreview.state.value === 'confirmed') return '已写入正式回答'
+  if (voicePreview.state.value === 'submitted') return '已复用文本提交流程'
+  if (voicePreview.state.value === 'fallback_text') return '已切换到文本降级'
+  if (voicePreview.state.value === 'draft' || voicePreview.state.value === 'recorded') return '请确认转写草稿'
+  return '可选的本地语音预览'
+})
+
+const voicePreviewHint = computed(() => {
+  if (voicePreview.state.value === 'recording') return '音频只保存在当前页面内存中，不会默认长期保存。'
+  if (voicePreview.state.value === 'uploading') return '录音会以 INTERVIEW_VOICE 文件类型上传，未确认转写不会进入评分。'
+  if (voicePreview.state.value === 'transcribing') return 'ASR 不可用时会明确降级，不会伪造转写成功。'
+  if (voicePreview.state.value === 'recorded') return '录音已捕获，正在准备上传或等待手动降级。'
+  if (voicePreview.state.value === 'draft') return '确认前草稿不会进入评分、知识库、长期记忆或 Agent。'
+  if (voicePreview.state.value === 'confirmed') return '已确认语音片段必须完整保留，可在它前后继续补充文字。'
+  if (voicePreview.state.value === 'submitted') return '本轮语音预览已结束，后续问题可重新录音。'
+  if (voicePreview.state.value === 'fallback_text') return '可以直接粘贴或编辑转写草稿，再确认到正式回答。'
+  return '仅做录音状态和手动转写草稿预览，不做语音评分、情绪识别、回放或表达诊断。'
+})
 
 const currentQuestionMetaText = computed(() => {
   const stageName = current.value?.currentStage?.stageName || '当前阶段'
@@ -811,12 +1046,423 @@ const focusAnswerInput = () => {
   document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+const handleLiveTranscriptConfirmed = (
+  text: string,
+  evidence?: InterviewRealtimeVoicePersistenceResult
+) => {
+  if (evidence?.voiceSubmissionId && evidence.transcriptId) {
+    const previousConfirmedText = confirmedVoiceText.value
+    confirmedVoiceMeta.value = evidence
+    confirmedVoiceText.value = text
+    answerContent.value = mergeConfirmedVoiceText(
+      answerContent.value,
+      previousConfirmedText,
+      text
+    )
+  } else {
+    answerContent.value = appendConfirmedVoiceTranscript(answerContent.value, text)
+  }
+  focusAnswerInput()
+  ElMessage.success('实时字幕草稿已写入文本回答，请提交前再次检查。')
+}
+
+const handleLiveAsrRuntimeChanged = (active: boolean) => {
+  liveAsrRuntimeActive.value = active
+}
+
+const handleVoiceDeliveryAnalysisUpdated = (analysis: InterviewVoiceDeliveryAnalysisVO) => {
+  voiceDeliveryAnalysis.value = analysis
+}
+
+const persistVoiceProductContext = (
+  bindingStatus: 'BOUND' | 'PENDING' | 'NONE',
+  binding?: InterviewScenarioBindingVO,
+  bindingMessage?: string
+) => {
+  if (!interviewId) return
+  const previous = voiceProductContext.value
+  const next: InterviewVoiceProductContext = {
+    sessionId: interviewId,
+    voicePreflightReady: voicePreflightReady.value,
+    scenario: previous?.scenario,
+    scenarioBindingStatus: bindingStatus,
+    scenarioBinding: binding,
+    bindingMessage: bindingMessage || previous?.bindingMessage,
+    savedAt: new Date().toISOString()
+  }
+  voiceProductContext.value = next
+  saveInterviewVoiceProductContext(next)
+}
+
+const loadScenarioBinding = async () => {
+  if (!interviewId) return
+  try {
+    const binding = await getInterviewScenarioBindingApi(interviewId, { silentError: true })
+    scenarioBinding.value = binding
+    persistVoiceProductContext(
+      'BOUND',
+      binding,
+      `服务端已锁定剧本版本 #${binding.scenarioVersionId} 与量表版本 #${binding.rubricVersionId}。`
+    )
+    return
+  } catch {
+    // A missing binding is expected for ordinary interviews.
+  }
+
+  const routeScenarioVersionId = Number(route.query.scenarioVersionId || 0)
+  const pendingScenarioVersionId =
+    voiceProductContext.value?.scenario?.scenarioVersionId
+    || (Number.isFinite(routeScenarioVersionId) ? routeScenarioVersionId : 0)
+  const shouldRetryBinding =
+    pendingScenarioVersionId > 0
+    && (
+      voiceProductContext.value?.scenarioBindingStatus === 'PENDING'
+      || route.query.scenarioBinding === 'pending'
+    )
+
+  if (!shouldRetryBinding) return
+
+  try {
+    const binding = await bindInterviewScenarioApi(interviewId, {
+      scenarioVersionId: pendingScenarioVersionId,
+      bindingSource: 'USER_SELECTED'
+    }, {
+      silentError: true
+    })
+    scenarioBinding.value = binding
+    persistVoiceProductContext(
+      'BOUND',
+      binding,
+      `服务端已锁定剧本版本 #${binding.scenarioVersionId} 与量表版本 #${binding.rubricVersionId}。`
+    )
+    ElMessage.success('剧本与评分量表已在面试房间完成绑定。')
+  } catch (error) {
+    persistVoiceProductContext(
+      'PENDING',
+      undefined,
+      getErrorMessage(
+        error,
+        '剧本仍未得到服务端绑定确认；本轮不会把本地选择显示为已绑定。'
+      )
+    )
+  }
+}
+
+const resetConfirmedVoiceAnswer = () => {
+  confirmedVoiceMeta.value = null
+  confirmedVoiceText.value = ''
+}
+
+const isVoiceRequestCanceled = (error: unknown) => {
+  const candidate = error as { code?: string; name?: string }
+  return candidate?.code === 'ERR_CANCELED'
+    || candidate?.name === 'CanceledError'
+    || candidate?.name === 'AbortError'
+}
+
+const isCurrentVoiceOperation = (version: number, controller: AbortController) => {
+  return version === voiceOperationVersion
+    && voiceRequestController === controller
+    && !controller.signal.aborted
+}
+
+const cancelVoiceLifecycle = async (reason: InterviewVoiceDiscardReason) => {
+  voiceOperationVersion += 1
+  const controller = voiceRequestController
+  voiceRequestController = null
+  controller?.abort()
+
+  const submissionId =
+    voicePreview.submission.value?.voiceSubmissionId
+    || activeVoiceSubmissionId
+    || confirmedVoiceMeta.value?.voiceSubmissionId
+  const fileId = uploadedVoiceFileId.value
+  voiceConfirming.value = false
+  activeVoiceSubmissionId = null
+  uploadedVoiceFileId.value = null
+  await voicePreview.cancel()
+  resetConfirmedVoiceAnswer()
+
+  try {
+    if (interviewId && submissionId) {
+      await discardInterviewVoiceSubmissionApi(interviewId, submissionId, reason, { silentError: true })
+      return
+    }
+    if (fileId) {
+      await deleteInterviewVoiceAudioApi(fileId, { silentError: true })
+    }
+  } catch {
+    // Backend lifecycle records deletion failures once a submission exists.
+  }
+}
+
+const resetRealtimeVoice = async () => {
+  await liveVoiceConsoleRef.value?.resetRealtimeVoice()
+  liveAsrRuntimeActive.value = false
+}
+
+const cleanupVoiceResources = async (reason: InterviewVoiceDiscardReason) => {
+  await Promise.all([
+    resetRealtimeVoice(),
+    cancelVoiceLifecycle(reason)
+  ])
+}
+
+const getVoiceAudioExtension = (mimeType: string) => {
+  const value = mimeType.toLowerCase()
+  if (value.includes('ogg')) return 'ogg'
+  if (value.includes('wav')) return 'wav'
+  if (value.includes('mpeg') || value.includes('mp3')) return 'mp3'
+  if (value.includes('mp4') || value.includes('m4a')) return 'm4a'
+  return 'webm'
+}
+
+const buildVoiceAudioFile = (audio: InterviewVoiceRecordedAudio) => {
+  const mimeType = audio.mimeType || audio.blob.type || 'audio/webm'
+  const extension = getVoiceAudioExtension(mimeType)
+  return new File([audio.blob], `interview-voice-${Date.now()}.${extension}`, { type: mimeType })
+}
+
+const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
+  if (!interviewId || !current.value?.currentQuestion) {
+    voicePreview.setError('upload_failed', 'No active interview question. Please refresh and retry.')
+    return
+  }
+
+  const question = current.value.currentQuestion
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
+  try {
+    voicePreview.setUploading()
+    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio), {
+      signal: controller.signal,
+      silentError: true
+    })
+    uploadedVoiceFileId.value = uploaded.fileId
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
+    voicePreview.setTranscribing()
+    const submission = await createInterviewVoiceSubmissionApi(interviewId, {
+      fileId: uploaded.fileId,
+      questionMessageId: question.messageId,
+      questionId: question.questionId,
+      audioDurationMs: audio.durationMs,
+      mimeType: audio.mimeType || audio.blob.type,
+      traceId: `interview-voice-${interviewId}-${question.messageId}-${Date.now()}`
+    }, {
+      signal: controller.signal,
+      silentError: true
+    })
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
+    activeVoiceSubmissionId = submission.voiceSubmissionId
+    uploadedVoiceFileId.value = null
+    voicePreview.setTranscribing(submission)
+    const transcribed = await transcribeInterviewVoiceSubmissionApi(
+      interviewId,
+      submission.voiceSubmissionId,
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) return
+    voicePreview.applySubmission(transcribed)
+    if (transcribed.transcript?.draftText) {
+      voicePreview.applyTranscriptDraft(transcribed.transcript)
+      return
+    }
+    voicePreview.applyTranscriptionFallback(
+      transcribed.transcript?.fallbackReason || transcribed.fallbackReason || '当前 ASR 不可用，请手动编辑转写草稿。',
+      transcribed
+    )
+  } catch (error) {
+    if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
+    voicePreview.setError('upload_failed', getErrorMessage(error, '语音上传或转写失败，请使用文本回答。'))
+  } finally {
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+    }
+  }
+}
+
+const persistLiveVoiceRecording = async (
+  request: InterviewRealtimeVoicePersistenceRequest
+): Promise<InterviewRealtimeVoicePersistenceResult> => {
+  if (!interviewId || !current.value?.currentQuestion) {
+    throw new Error('No active interview question. Please refresh and retry.')
+  }
+
+  await cancelVoiceLifecycle('REPLACED')
+  const question = current.value.currentQuestion
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
+  try {
+    const audio: InterviewVoiceRecordedAudio = {
+      blob: request.blob,
+      mimeType: request.mimeType,
+      durationMs: request.durationMs
+    }
+    const uploaded = await uploadInterviewVoiceAudioApi(buildVoiceAudioFile(audio), {
+      signal: controller.signal,
+      silentError: true
+    })
+    uploadedVoiceFileId.value = uploaded.fileId
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
+    const submission = await createInterviewVoiceSubmissionApi(interviewId, {
+      fileId: uploaded.fileId,
+      questionMessageId: question.messageId,
+      questionId: question.questionId,
+      audioDurationMs: request.durationMs,
+      mimeType: request.mimeType || request.blob.type,
+      traceId: `interview-live-voice-${interviewId}-${question.messageId}-${Date.now()}`
+    }, {
+      signal: controller.signal,
+      silentError: true
+    })
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    activeVoiceSubmissionId = submission.voiceSubmissionId
+    uploadedVoiceFileId.value = null
+
+    const transcribed = await transcribeInterviewVoiceSubmissionApi(
+      interviewId,
+      submission.voiceSubmissionId,
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    const transcript = transcribed.transcript
+    if (!transcript?.transcriptId) {
+      throw new Error('Voice transcription did not persist a transcript row for confirmation.')
+    }
+
+    const confirmed = await confirmInterviewVoiceTranscriptApi(
+      interviewId,
+      transcript.transcriptId,
+      {
+        confirmedText: request.confirmedText,
+        lowConfidenceAcknowledged: Boolean(transcript.lowConfidence)
+      },
+      {
+        signal: controller.signal,
+        silentError: true
+      }
+    )
+    if (!isCurrentVoiceOperation(operationVersion, controller)) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    const evidence: InterviewRealtimeVoicePersistenceResult = {
+      voiceSubmissionId: confirmed.voiceSubmissionId,
+      transcriptId: confirmed.transcriptId,
+      transcriptConfidence: confirmed.confidence,
+      answerSource: confirmed.fallback ? 'MANUAL_TRANSCRIPT' : 'VOICE_TRANSCRIPT',
+      lowConfidence: confirmed.lowConfidence,
+      fallback: confirmed.fallback,
+      traceId: confirmed.traceId
+    }
+    confirmedVoiceMeta.value = evidence
+    return evidence
+  } finally {
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+    }
+  }
+}
+
+const handleVoiceStart = async () => {
+  await resetRealtimeVoice()
+  await cancelVoiceLifecycle('REPLACED')
+  await voicePreview.startRecording()
+}
+
+const handleVoiceStop = () => {
+  voicePreview.stopRecording()
+}
+
+const handleVoiceFallback = async () => {
+  await cancelVoiceLifecycle('MODE_SWITCH')
+  voicePreview.useTextFallback()
+}
+
+const handleVoiceDraftInput = (value: string) => {
+  voicePreview.updateDraft(value)
+}
+
+const handleVoiceConfirm = async () => {
+  if (!interviewId || voiceConfirming.value) return
+  const text = voicePreview.draftText.value.trim()
+  if (!text) return
+
+  const currentTranscript = voicePreview.transcript.value
+  let meta: InterviewVoiceConfirmedMeta | undefined
+  const controller = new AbortController()
+  const operationVersion = ++voiceOperationVersion
+  voiceRequestController?.abort()
+  voiceRequestController = controller
+  try {
+    voiceConfirming.value = true
+    if (currentTranscript?.transcriptId) {
+      const confirmed = await confirmInterviewVoiceTranscriptApi(interviewId, currentTranscript.transcriptId, {
+        confirmedText: text,
+        lowConfidenceAcknowledged: Boolean(currentTranscript.lowConfidence)
+      }, {
+        signal: controller.signal,
+        silentError: true
+      })
+      if (!isCurrentVoiceOperation(operationVersion, controller)) return
+      voicePreview.applyTranscriptDraft(confirmed)
+      meta = {
+        voiceSubmissionId: confirmed.voiceSubmissionId,
+        transcriptId: confirmed.transcriptId,
+        transcriptConfidence: confirmed.confidence,
+        answerSource: confirmed.fallback ? 'MANUAL_TRANSCRIPT' : 'VOICE_TRANSCRIPT',
+        lowConfidence: confirmed.lowConfidence,
+        fallback: confirmed.fallback,
+        traceId: confirmed.traceId
+      }
+    } else {
+      meta = {
+        answerSource: 'MANUAL_TRANSCRIPT',
+        fallback: true
+      }
+    }
+    if (voicePreview.confirmDraft(meta)) {
+      ElMessage.success('Voice transcript confirmed. Please review the answer before submitting.')
+    }
+  } catch (error) {
+    if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
+    ElMessage.error(getErrorMessage(error, 'Voice transcript confirmation failed.'))
+  } finally {
+    if (voiceRequestController === controller) {
+      voiceRequestController = null
+      voiceConfirming.value = false
+    }
+  }
+}
+
 const fetchCurrent = async () => {
   if (!interviewId) return
   loading.value = true
   roomError.value = ''
   try {
-    current.value = await getCurrentInterviewQuestionApi(interviewId)
+    const previousMessageId = current.value?.currentQuestion?.messageId
+    const nextCurrent = await getCurrentInterviewQuestionApi(interviewId)
+    const nextMessageId = nextCurrent?.currentQuestion?.messageId
+    if (previousMessageId && nextMessageId !== previousMessageId) {
+      await cleanupVoiceResources('QUESTION_CHANGED')
+    }
+    current.value = nextCurrent
     answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
@@ -849,6 +1495,10 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   lastResult.value = result
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
+  voicePreview.markSubmitted()
+  activeVoiceSubmissionId = null
+  uploadedVoiceFileId.value = null
+  resetConfirmedVoiceAnswer()
 
   if (result.nextAction === NEXT_ACTION.FINISH) {
     await handleFinish(false)
@@ -856,6 +1506,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   }
 
   if (result.nextAction === NEXT_ACTION.FOLLOW_UP && result.nextQuestion) {
+    await cleanupVoiceResources('QUESTION_CHANGED')
     current.value = {
       interviewId: result.interviewId,
       status: result.interviewStatus,
@@ -977,12 +1628,49 @@ const handleSubmit = async () => {
     return
   }
 
+  if (voicePreview.isBusy.value || voiceConfirming.value) {
+    ElMessage.warning('语音上传或转写仍在进行，请等待完成后再提交。')
+    return
+  }
+
+  if (voicePreview.hasPendingUnconfirmedTranscript.value) {
+    ElMessage.warning('Please confirm or clear the voice transcript draft before submitting.')
+    return
+  }
+
+  if (
+    confirmedVoiceMeta.value?.transcriptId
+    && confirmedVoiceText.value
+    && !answerContainsConfirmedVoiceText(answerContent.value, confirmedVoiceText.value)
+  ) {
+    ElMessage.warning('请保留完整的已确认语音片段；可以在它前后继续补充文字。')
+    return
+  }
+
+  await resetRealtimeVoice()
+
+  const voicePayload =
+    confirmedVoiceMeta.value?.transcriptId
+      ? {
+          voiceSubmissionId: confirmedVoiceMeta.value.voiceSubmissionId,
+          transcriptId: confirmedVoiceMeta.value.transcriptId,
+          transcriptConfidence: confirmedVoiceMeta.value.transcriptConfidence,
+          answerSource: resolveConfirmedVoiceAnswerSource(
+            confirmedVoiceMeta.value,
+            answerContent.value,
+            confirmedVoiceText.value
+          )
+        }
+      : {}
+
   const id = interviewId
   const payload: InterviewAnswerDTO = {
     messageId: current.value.currentQuestion.messageId,
+    questionId: current.value.currentQuestion.questionId,
     answerContent: answerContent.value,
     answerDurationSeconds: Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000)),
-    clientSubmitTime: new Date().toISOString()
+    clientSubmitTime: new Date().toISOString(),
+    ...voicePayload
   }
 
   submitting.value = true
@@ -1054,6 +1742,7 @@ const handleSubmit = async () => {
 
 const handleFinish = async (_manual: boolean) => {
   if (!interviewId) return
+  await cleanupVoiceResources('USER_CANCELLED')
   finishing.value = true
   try {
     const result = await finishInterviewApi(interviewId)
@@ -1094,11 +1783,18 @@ const handleManualFinish = async () => {
   await handleFinish(true)
 }
 
-onMounted(fetchCurrent)
+onMounted(() => {
+  void fetchCurrent()
+  void loadScenarioBinding()
+})
+onBeforeRouteLeave(async () => {
+  await cleanupVoiceResources('PAGE_UNLOAD')
+})
 onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
   stopAnswerReviewSse()
   stopElapsedTimer()
+  void cleanupVoiceResources('PAGE_UNLOAD')
 })
 </script>
 
@@ -1112,13 +1808,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 10px;
   border-radius: 0;
-  background:
-    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-    radial-gradient(circle at 18% 0%, rgba(20, 184, 166, 0.16), transparent 32%),
-    radial-gradient(circle at 92% 8%, rgba(59, 130, 246, 0.16), transparent 28%),
-    linear-gradient(180deg, #07111f 0%, #0b1220 42%, #070b14 100%);
-  background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  background: var(--user-bg);
   color: #e5edf8;
 }
 
@@ -1273,11 +1963,9 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(208px, 248px) minmax(0, 1fr) minmax(260px, 308px);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 50% 12%, rgba(34, 211, 238, 0.12), transparent 36%),
-    rgba(2, 6, 23, 0.54);
+  background: var(--user-bg-panel);
   overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 .progress-panel,
@@ -1305,8 +1993,8 @@ onBeforeUnmount(() => {
 }
 
 .conversation-scroll {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 42%;
+  min-height: 160px;
   overflow-y: auto;
   padding-right: 4px;
   scroll-padding-bottom: 260px;
@@ -1335,6 +2023,7 @@ onBeforeUnmount(() => {
 
 .training-boundary,
 .session-card,
+.scenario-binding-card,
 .score-card,
 .message-card,
 .question-card,
@@ -1368,11 +2057,9 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   padding: 14px;
   border: 1px solid rgba(34, 211, 238, 0.22);
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(8, 47, 73, 0.72), rgba(15, 23, 42, 0.84)),
-    rgba(2, 6, 23, 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: var(--user-surface-tint);
+  box-shadow: none;
 
   p,
   h2,
@@ -1453,7 +2140,7 @@ onBeforeUnmount(() => {
     min-width: 2px;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(180deg, #67e8f9, #14b8a6);
+    background: var(--user-primary);
     opacity: 0.45;
     transform-origin: bottom;
   }
@@ -1589,6 +2276,42 @@ onBeforeUnmount(() => {
     background: rgba(20, 184, 166, 0.12);
     color: #99f6e4;
     font-size: 12px;
+  }
+}
+
+.scenario-binding-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border-color: rgba(34, 211, 238, 0.22);
+  background: rgba(8, 47, 73, 0.28);
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: #67e8f9;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  strong {
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 
@@ -1780,10 +2503,8 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   margin-bottom: 10px;
   padding: 16px;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.16), transparent 42%),
-    rgba(15, 23, 42, 0.82);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--user-surface-tint);
+  box-shadow: none;
 
   h2 {
     margin: 6px 0 12px;
@@ -1821,7 +2542,7 @@ onBeforeUnmount(() => {
   padding: 16px;
 
   &.ai {
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(2, 6, 23, 0.34));
+    background: var(--user-primary-soft);
   }
 
   &.user {
@@ -1886,12 +2607,13 @@ onBeforeUnmount(() => {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  flex: 1 1 58%;
+  min-height: 0;
+  overflow-y: auto;
   padding: 14px;
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.86), rgba(15, 23, 42, 0.94)),
-    rgba(15, 23, 42, 0.9);
-  box-shadow: 0 -18px 40px rgba(2, 6, 23, 0.36);
+  background: var(--user-surface-raised);
+  box-shadow: none;
 }
 
 .console-head {
@@ -1929,6 +2651,70 @@ onBeforeUnmount(() => {
 .answer-actions {
   justify-content: flex-end;
   margin-top: 14px;
+}
+
+.voice-preview {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 12px;
+  background: rgba(8, 47, 73, 0.22);
+}
+
+.voice-preview__head,
+.voice-preview__confirm {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-preview__head {
+  strong {
+    display: block;
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.voice-preview__state {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 999px;
+  color: #a5f3fc;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.voice-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.voice-preview__confirm {
+  align-items: center;
+
+  span {
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.voice-preview__alert {
+  margin: 0;
 }
 
 :deep(.answer-console .el-textarea__inner) {
@@ -2003,9 +2789,7 @@ onBeforeUnmount(() => {
 
 .score-card {
   padding: 18px;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(59, 130, 246, 0.12)),
-    rgba(15, 23, 42, 0.72);
+  background: var(--user-success-soft);
 
   span,
   p {
@@ -2140,7 +2924,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 960px) {
   .war-room {
     grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
@@ -2201,6 +2985,7 @@ onBeforeUnmount(() => {
 
   .answer-console {
     position: static;
+    overflow: visible;
     box-shadow: none;
   }
 

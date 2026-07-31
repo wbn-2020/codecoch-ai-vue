@@ -25,6 +25,14 @@
         </div>
         <div class="actions">
           <el-button :icon="ArrowLeft" @click="router.push(demoPath(`/job-experiments/${detail.id}`))">实验详情</el-button>
+          <el-button
+            v-if="appConfig.enableV9EvidenceLearning"
+            data-testid="experiment-evidence-usages"
+            :icon="ClipboardCheck"
+            @click="openEvidenceSamples"
+          >
+            查看证据使用样本
+          </el-button>
           <el-button type="primary" :icon="RefreshCcw" :loading="generating" :disabled="isDemoContext()" @click="generate">生成复盘</el-button>
         </div>
       </section>
@@ -32,7 +40,7 @@
       <section class="review-section fact-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">FACTS</p>
+            <p class="section-kicker">事实</p>
             <h2>事实摘要</h2>
           </div>
           <el-tag effect="plain">metrics.facts</el-tag>
@@ -43,20 +51,36 @@
         </ul>
         <div class="metric-strip">
           <div>
-            <strong>{{ detail.metrics?.applicationCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.applicationCount }}</strong>
             <span>投递数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.feedbackCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.feedbackCount }}</strong>
             <span>反馈数</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.interviewCompletedCount ?? 0 }}</strong>
+            <strong>{{ feedbackSummary.interviewCompletedCount }}</strong>
             <span>完成面试</span>
           </div>
           <div>
-            <strong>{{ detail.metrics?.sampleCount ?? detail.metrics?.applicationCount ?? 0 }}</strong>
+            <strong>{{ metricCountLabel(detail.metrics?.sampleCount ?? detail.metrics?.applicationCount) }}</strong>
             <span>样本数</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.rejectedCount }}</strong>
+            <span>拒信</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.noFeedbackCount }}</strong>
+            <span>无反馈</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewRoundCount }}</strong>
+            <span>面试轮次</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewReportSummaryCount }}</strong>
+            <span>报告摘要</span>
           </div>
         </div>
       </section>
@@ -64,7 +88,7 @@
       <section class="review-section sample-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">SAMPLE LIMIT</p>
+            <p class="section-kicker">样本边界</p>
             <h2>样本限制</h2>
           </div>
           <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
@@ -81,14 +105,17 @@
         <p v-if="sampleWarning" class="sample-warning-text">{{ sampleWarning }}</p>
         <p v-else class="summary-text">当前没有后端样本不足提醒，但复盘仍应结合证据链验证后再行动。</p>
         <p class="limit-note">
-          {{ weakConclusion ? '当前复盘只能作为下一轮实验假设，不能输出强结论或显著优劣判断。' : '样本未触发强提醒，仍建议保留人工复核。' }}
+          {{ reviewModeText }}
         </p>
+        <ul v-if="lowSampleRules.length" class="rule-list">
+          <li v-for="rule in lowSampleRules" :key="rule">{{ rule }}</li>
+        </ul>
       </section>
 
       <section class="review-section unsupported-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">UNSUPPORTED</p>
+            <p class="section-kicker">不支持结论</p>
             <h2>不支持结论</h2>
           </div>
           <el-tag type="warning" effect="plain">unsupportedConclusion</el-tag>
@@ -105,7 +132,7 @@
       <section class="review-section weak-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">WEAK OBSERVATIONS</p>
+            <p class="section-kicker">弱观察</p>
             <h2>弱观察</h2>
           </div>
           <el-tag type="warning" effect="plain">{{ qualityGateLabel }}</el-tag>
@@ -114,7 +141,7 @@
           <article v-for="item in weakObservations" :key="`${item.observationType}-${item.text}`">
             <strong>{{ item.observationType || '观察' }}</strong>
             <p>{{ item.text }}</p>
-            <span>{{ item.evidenceCount ?? 0 }} 条证据 · {{ confidenceLabel(item.confidenceLevel) }}</span>
+            <span>{{ metricCountLabel(item.evidenceCount, '条证据') }} · {{ confidenceLabel(item.confidenceLevel) }}</span>
             <span v-if="item.actionHint">{{ item.actionHint }}</span>
           </article>
         </div>
@@ -124,7 +151,7 @@
       <section class="review-section hypothesis-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">HYPOTHESES</p>
+            <p class="section-kicker">实验假设</p>
             <h2>实验假设</h2>
           </div>
           <el-tag effect="plain">hypotheses</el-tag>
@@ -141,7 +168,7 @@
       <section class="review-section next-action">
         <div class="section-head">
           <div>
-            <p class="section-kicker">NEXT</p>
+            <p class="section-kicker">下一步行动</p>
             <h2>下一步行动</h2>
           </div>
           <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
@@ -169,7 +196,7 @@
       <section class="review-section evidence-section">
         <div class="section-head">
           <div>
-            <p class="section-kicker">EVIDENCE SOURCES</p>
+            <p class="section-kicker">证据来源</p>
             <h2>证据来源</h2>
           </div>
           <el-tag effect="plain">{{ explainableStrategy.qualityGate?.suggestionStrength || 'WEAK' }}</el-tag>
@@ -192,20 +219,27 @@
         </div>
         <p v-else class="summary-text">暂无可展示证据来源，请先在实验详情中绑定关联证据。</p>
       </section>
+
+      <CareerExperimentPanel
+        :legacy-experiment-id="detail.id"
+        mode="review"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Bot, BriefcaseBusiness, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
+import { ArrowLeft, Bot, BriefcaseBusiness, ClipboardCheck, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
 
 import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
 import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
+import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import { buildJobExperimentReviewDisplayModel, confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
+import { appConfig } from '@/config'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import type { JobSearchExperimentDetailVO, JobSearchExperimentStrategyVO } from '@/types/jobExperiment'
 import type { ExplainableSuggestionVO } from '@/types/suggestion'
@@ -223,12 +257,25 @@ const loading = ref(false)
 const generating = ref(false)
 const errorMessage = ref('')
 const detail = ref<JobSearchExperimentDetailVO>()
+const experimentId = computed(() => {
+  const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+})
+let detailRequestGeneration = 0
+let generateRequestGeneration = 0
 const latest = computed(() => detail.value?.latestReview || detail.value?.reviews?.[0])
 const reviewStrategy = computed<JobSearchExperimentStrategyVO>(() => ({
   ...(latest.value?.strategy || {}),
   ...(detail.value?.strategy || {})
 }))
 const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latest.value, reviewStrategy.value))
+const feedbackSummary = computed(() => reviewDisplay.value.applicationFeedbackSummary)
+const lowSampleRules = computed(() => reviewDisplay.value.lowSampleRules)
+const reviewModeText = computed(() => {
+  if (reviewDisplay.value.reviewMode === 'FACTS_ONLY') return '投递数少于 5，本次复盘只展示事实，不输出策略优劣、趋势判断或版本比较。'
+  if (reviewDisplay.value.reviewMode === 'WEAK_OBSERVATION') return '当前只能输出弱观察；样本不足时请继续补充投递、拒信、无反馈和面试记录。'
+  return '样本达到候选复盘门槛，但仍需保留证据链和人工复核。'
+})
 const weakConclusion = computed(() =>
   shouldKeepConclusionWeak(detail.value?.metrics) ||
   !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
@@ -237,8 +284,10 @@ const strategySampleInsufficient = computed(() =>
   reviewDisplay.value.sampleBoundary.sampleInsufficient ?? detail.value?.metrics?.sampleInsufficient ?? reviewStrategy.value.sampleInsufficient ?? weakConclusion.value
 )
 const displayConfidenceLevel = computed(() =>
-  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latest.value?.confidenceLevel || 'LOW'
+  detail.value?.metrics?.confidenceLevel || reviewStrategy.value.confidenceLevel || latest.value?.confidenceLevel || 'UNKNOWN'
 )
+const metricCountLabel = (value?: number, suffix = '') =>
+  typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '暂无数据'
 const factItems = computed(() => reviewDisplay.value.facts)
 const factSummary = computed(() =>
   factItems.value[0] ||
@@ -257,8 +306,10 @@ const reviewNextActions = computed(() => reviewDisplay.value.nextActions)
 const qualityGateLabel = computed(() => reviewDisplay.value.qualityGate.suggestionStrength || 'WEAK')
 const strategyTitle = computed(() => textFromStrategy('title') || '下一轮实验假设')
 const strategyContent = computed(() =>
-  textFromStrategy('content') ||
-  '先补齐目标岗位、简历、项目证据和投递反馈，再生成下一轮复盘。样本不足时只提出可验证行动。'
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY'
+    ? '投递样本少于 5 条，暂不生成策略优劣判断；请继续记录投递状态、拒信、无反馈、面试轮次和面试报告摘要。'
+    : textFromStrategy('content') ||
+      '先补齐目标岗位、简历、项目证据和投递反馈，再生成下一轮复盘。样本不足时只提出可验证行动。'
 )
 const strategySummary = computed(() =>
   weakConclusion.value ? strategyContent.value : detail.value?.strategy ? factSummary.value : latest.value?.insightSummary || factSummary.value || '暂无洞察摘要。'
@@ -268,7 +319,7 @@ const strategyFeedbackContext = computed(() => {
   return {
     scene: 'JOB_EXPERIMENT_STRATEGY',
     bizType: reviewId ? 'JOB_EXPERIMENT_REVIEW' : 'JOB_EXPERIMENT',
-    bizId: reviewId || detail.value?.id || id()
+    bizId: reviewId || detail.value?.id || experimentId.value || 0
   }
 })
 const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
@@ -280,13 +331,17 @@ const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
     sampleInsufficient: strategySampleInsufficient.value,
     sampleWarning: sampleWarning.value,
     evidenceSources: reviewDisplay.value.evidenceSources.length
-      ? reviewDisplay.value.evidenceSources.map((source) => ({
-          sourceType: source.sourceType || '',
-          sourceId: Number(source.sourceId || 0),
-          sourceSummary: source.evidenceSummary || source.sourceSummary || source.summary,
-          trustStatus: source.trustStatus,
-          metadata: source.metadata
-        }))
+      ? reviewDisplay.value.evidenceSources.flatMap((source) => {
+          const sourceId = Number(source.sourceId)
+          if (!Number.isSafeInteger(sourceId) || sourceId <= 0) return []
+          return [{
+            sourceType: source.sourceType || '',
+            sourceId,
+            sourceSummary: source.evidenceSummary || source.sourceSummary || source.summary,
+            trustStatus: source.trustStatus,
+            metadata: source.metadata
+          }]
+        })
       : reviewStrategy.value.evidenceSources,
     unsupportedConclusions: unsupportedConclusions.value.map((item) => item.blockedReason),
     weakObservations: weakObservations.value.map((item) => item.text),
@@ -295,7 +350,7 @@ const explainableStrategy = computed<ExplainableSuggestionVO>(() =>
     scene: 'JOB_EXPERIMENT_STRATEGY',
     bizType: strategyFeedbackContext.value.bizType,
     bizId: strategyFeedbackContext.value.bizId,
-    experimentId: detail.value?.id || id(),
+    experimentId: detail.value?.id || experimentId.value || 0,
     traceId: latest.value?.traceId || latest.value?.aiTraceId || undefined,
     aiCallLogId: latest.value?.aiCallLogId ?? undefined,
     resultSource: latest.value?.resultSource || 'RULE',
@@ -316,11 +371,25 @@ const nextActionLinks = [
   { label: '模拟面试', path: '/interviews/create', icon: Mic }
 ]
 
-const id = () => Number(route.params.id)
 const isDemoContext = () => route.query.demoFlag === 'true' || detail.value?.demoFlag === 1
 const demoPath = (path: string) => {
   if (!isDemoContext()) return path
   return path.includes('?') ? `${path}&demoFlag=true` : `${path}?demoFlag=true`
+}
+
+const openEvidenceSamples = () => {
+  const currentExperimentId = detail.value?.id ?? experimentId.value
+  if (!currentExperimentId || !Number.isSafeInteger(currentExperimentId)) {
+    ElMessage.warning('实验编号待确认，暂不能打开证据使用样本。')
+    return
+  }
+  void router.push({
+    path: '/evidence-assets',
+    query: {
+      tab: 'usages',
+      experimentId: String(currentExperimentId)
+    }
+  })
 }
 
 const textFromStrategy = (key: string) => {
@@ -339,33 +408,77 @@ const goStrategyAction = (action?: SuggestionPanelAction | string) => {
   router.push(demoPath(safePath))
 }
 
-const load = async () => {
+const loadExperiment = async (id: number, requestGeneration: number) => {
   loading.value = true
   errorMessage.value = ''
   try {
-    detail.value = await getJobExperimentDetailApi(id())
+    const nextDetail = await getJobExperimentDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
   } catch (error) {
-    detail.value = undefined
-    errorMessage.value = error instanceof Error ? error.message : '求职实验复盘加载失败，请稍后重试。'
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = undefined
+      errorMessage.value = error instanceof Error ? error.message : '求职实验复盘加载失败，请稍后重试。'
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
+}
+
+const load = async () => {
+  const id = experimentId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    errorMessage.value = '求职实验编号无效。'
+    return
+  }
+  await loadExperiment(id, requestGeneration)
 }
 
 const generate = async () => {
+  const id = experimentId.value
+  if (!id) return
+  const requestGeneration = ++generateRequestGeneration
   generating.value = true
   try {
-    await generateJobExperimentReviewApi(id())
+    await generateJobExperimentReviewApi(id)
+    if (requestGeneration !== generateRequestGeneration) return
     await load()
+    if (requestGeneration !== generateRequestGeneration) return
     ElMessage.success('复盘建议已生成')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '复盘建议生成失败，请稍后重试。')
+    if (requestGeneration === generateRequestGeneration) {
+      ElMessage.error(error instanceof Error ? error.message : '复盘建议生成失败，请稍后重试。')
+    }
   } finally {
-    generating.value = false
+    if (requestGeneration === generateRequestGeneration) {
+      generating.value = false
+    }
   }
 }
 
-onMounted(load)
+watch(
+  experimentId,
+  () => {
+    detailRequestGeneration += 1
+    generateRequestGeneration += 1
+    detail.value = undefined
+    errorMessage.value = ''
+    loading.value = false
+    generating.value = false
+    void load()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+  generateRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">
@@ -380,10 +493,10 @@ onMounted(load)
 
 .review-hero {
   justify-content: space-between;
-  padding: 24px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--user-surface);
 }
 
 .hero-copy {
@@ -426,10 +539,10 @@ onMounted(load)
 }
 
 .review-section {
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.56);
+  background: var(--user-surface);
 }
 
 .section-head {
@@ -444,6 +557,15 @@ onMounted(load)
   margin: 12px 0 0;
 }
 
+.rule-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: #fbbf24;
+  line-height: 1.6;
+}
+
 .stack-list {
   display: grid;
   gap: 10px;
@@ -453,7 +575,7 @@ onMounted(load)
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .stack-list strong {
@@ -493,7 +615,7 @@ onMounted(load)
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .metric-strip strong {

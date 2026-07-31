@@ -2,9 +2,112 @@ import type { AgentTaskVO } from '@/types/agent'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 const TASK_CENTER_PATH = '/agent/tasks'
-const PREVIEW_BLOCKED_PATHS = ['/resume-versions', '/applications']
+const PREVIEW_BLOCKED_PATHS = ['/resume-versions']
+const DEFERRED_REASON_PREFIX = '推迟：'
 
 const normalizeType = (value?: string | null) => String(value || '').toUpperCase()
+
+export type AgentTaskActionOutcome = 'complete' | 'skip' | 'defer' | 'feedback'
+
+export const AGENT_TASK_ACTION_FLOW = [
+  'TODO -> DOING：开始行动，进入处理态',
+  'DOING/TODO/EXPIRED -> DONE：完成行动，可补充完成备注',
+  'DOING/TODO/EXPIRED -> SKIPPED：跳过行动，必须保留原因',
+  'DOING/TODO/EXPIRED -> DEFERRED：推迟行动，保留推迟时间和原因',
+  'SKIPPED/DEFERRED -> TODO：恢复待办，重新进入下一轮可执行池',
+  '任意任务 -> feedback：提交有用、无用、难度、不相关或原因修正反馈'
+] as const
+
+const feedbackTypeLabel = (value?: string | null) => {
+  const map: Record<string, string> = {
+    HELPFUL: '有用',
+    NOT_HELPFUL: '无用',
+    TOO_HARD: '太难',
+    TOO_EASY: '太简单',
+    IRRELEVANT: '不相关',
+    REASON_CORRECTION: '原因需修正',
+    INACCURATE: '不准确',
+    NOT_MY_EXPERIENCE: '不是我的经历',
+    HALLUCINATION: '不符合实际'
+  }
+  return map[normalizeType(value)] || (value ? String(value) : '已反馈')
+}
+
+const taskExtraText = (task: AgentTaskVO, key: string) => {
+  const value = (task as AgentTaskVO & Record<string, unknown>)[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
+export const formatAgentTaskDeferReason = (reason: string) => {
+  const trimmed = reason.trim()
+  return trimmed.startsWith(DEFERRED_REASON_PREFIX) ? trimmed.replace(DEFERRED_REASON_PREFIX, '').trim() : trimmed
+}
+
+export const isDeferredAgentTask = (task?: AgentTaskVO | null) => {
+  if (!task) return false
+  const reason = task.skipReason || taskExtraText(task, 'deferReason')
+  const status = normalizeType(task?.status)
+  return status === 'DEFERRED' || (status === 'SKIPPED' && Boolean(reason?.trim().startsWith(DEFERRED_REASON_PREFIX)))
+}
+
+export const agentTaskDeferReason = (task?: AgentTaskVO | null) => {
+  if (!task) return ''
+  const explicit = taskExtraText(task, 'deferReason')
+  if (explicit) return formatAgentTaskDeferReason(explicit)
+  const legacyReason = task.skipReason?.trim()
+  return legacyReason?.startsWith(DEFERRED_REASON_PREFIX)
+    ? legacyReason.replace(DEFERRED_REASON_PREFIX, '').trim()
+    : ''
+}
+
+export const buildAgentTaskFeedbackSummary = (params: {
+  outcome: AgentTaskActionOutcome
+  feedbackType?: string | null
+  reason?: string | null
+}) => {
+  const reason = params.reason?.trim()
+  if (params.outcome === 'complete') return reason ? `完成备注：${reason}` : '用户已完成该行动。'
+  if (params.outcome === 'skip') return reason ? `跳过原因：${reason}` : '用户跳过了该行动。'
+  if (params.outcome === 'defer') return reason ? `推迟原因：${reason}` : '用户将该行动推迟到后续计划。'
+  const label = feedbackTypeLabel(params.feedbackType)
+  return reason ? `反馈：${label}；补充说明：${reason}` : `反馈：${label}`
+}
+
+export const agentTaskFeedbackSummary = (task?: AgentTaskVO | null) => {
+  if (!task) return ''
+  const explicit = taskExtraText(task, 'feedbackSummary') || taskExtraText(task, 'actionFeedbackSummary')
+  if (explicit) return explicit
+  const feedbackType = taskExtraText(task, 'lastFeedbackType') || taskExtraText(task, 'feedbackType')
+  const feedbackComment = taskExtraText(task, 'feedbackComment') || taskExtraText(task, 'comment')
+  if (feedbackType || feedbackComment) {
+    return buildAgentTaskFeedbackSummary({
+      outcome: 'feedback',
+      feedbackType,
+      reason: feedbackComment
+    })
+  }
+  if (isDeferredAgentTask(task)) {
+    return buildAgentTaskFeedbackSummary({
+      outcome: 'defer',
+      reason: agentTaskDeferReason(task)
+    })
+  }
+  return ''
+}
+
+export const agentTaskNextPlanImpactText = (task?: AgentTaskVO | null) => {
+  if (!task) return ''
+  const summary = agentTaskFeedbackSummary(task)
+  if (isDeferredAgentTask(task)) {
+    return summary
+      ? `下一轮计划参考：${summary}；后续解释会把它视为“暂缓但可恢复”的行动信号。`
+      : '下一轮计划参考：该行动已推迟，后续解释会把它视为暂缓但可恢复的行动信号。'
+  }
+  if (summary) {
+    return `下一轮计划参考：${summary}；后续推荐会参考这条反馈调整排序、拆分或降级。`
+  }
+  return ''
+}
 
 const EVIDENCE_BOUND_TASK_TYPES = new Set([
   'QUESTION_PRACTICE',

@@ -21,6 +21,7 @@ vi.mock('@/api/agent', () => ({
 }))
 
 vi.mock('@/api/interview', () => ({
+  exportInterviewReportApi: vi.fn(),
   getInterviewReportApi: vi.fn(),
   retryInterviewReportApi: vi.fn()
 }))
@@ -51,6 +52,15 @@ const componentStubs = {
   },
   'el-button': {
     template: '<button class="el-button-stub" v-bind="$attrs"><slot /></button>'
+  },
+  'el-dropdown': {
+    template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>'
+  },
+  'el-dropdown-item': {
+    template: '<button class="el-dropdown-item-stub"><slot /></button>'
+  },
+  'el-dropdown-menu': {
+    template: '<div class="el-dropdown-menu-stub"><slot /></div>'
   },
   'el-icon': {
     template: '<i class="el-icon-stub"><slot /></i>'
@@ -90,7 +100,11 @@ describe('InterviewReportView metrics', () => {
     })
 
     const wrapper = await mountReport()
-    await wrapper.find('.report-actions .el-button-stub').trigger('click')
+    const todayPlanButton = wrapper
+      .findAll('.report-actions .el-button-stub')
+      .find((button) => button.text().includes('今日计划'))
+    expect(todayPlanButton).toBeDefined()
+    await todayPlanButton!.trigger('click')
 
     expect(routerPush).toHaveBeenCalledWith('/dashboard')
     expect(recordAgentMetricEventApi).not.toHaveBeenCalled()
@@ -158,5 +172,30 @@ describe('InterviewReportView metrics', () => {
       }),
       { silentError: true }
     )
+  })
+
+  it('shows persisted delivery metrics and explains unavailable pause measurements', async () => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      id: 102,
+      reportId: 102,
+      interviewId: 42,
+      reportStatus: 'GENERATED',
+      totalScore: 82,
+      voiceDeliverySummary: {
+        sessionId: 42,
+        analysisId: 900,
+        available: true,
+        status: 'SUCCEEDED',
+        speakingRatePerMinute: 158,
+        fillerCount: 2,
+        pauseMetricsAvailable: false,
+        warningCodes: ['WORD_TIMESTAMPS_UNAVAILABLE']
+      }
+    })
+
+    const wrapper = await mountReport()
+
+    expect(wrapper.find('.voice-delivery-report').text()).toContain('158')
+    expect(wrapper.find('.voice-delivery-report').text()).toContain('停顿指标不可用')
   })
 })

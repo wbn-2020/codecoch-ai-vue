@@ -50,22 +50,33 @@
       >
         <el-button type="primary" plain :loading="loading" @click="fetchOverview">重新加载</el-button>
       </AppState>
-      <article
-        v-for="item in metrics"
-        :key="item.key"
-        class="admin-metric-card dashboard-metric-card"
-        :class="{ 'is-clickable': Boolean(item.path) }"
-        @click="goMetric(item)"
-      >
-        <div class="admin-metric-card__icon" :class="item.tone">
-          <component :is="item.icon" :size="18" />
-        </div>
-        <div>
-          <p class="admin-metric-card__label">{{ item.label }}</p>
-          <strong class="admin-metric-card__value">{{ item.displayValue }}</strong>
-          <span class="admin-metric-card__hint">{{ item.hint }}</span>
-        </div>
-      </article>
+      <template v-for="item in metrics" :key="item.key">
+        <button
+          v-if="item.path"
+          type="button"
+          class="admin-metric-card dashboard-metric-card is-clickable"
+          @click="goMetric(item)"
+        >
+          <div class="admin-metric-card__icon" :class="item.tone">
+            <component :is="item.icon" :size="18" />
+          </div>
+          <div>
+            <p class="admin-metric-card__label">{{ item.label }}</p>
+            <strong class="admin-metric-card__value">{{ item.displayValue }}</strong>
+            <span class="admin-metric-card__hint">{{ item.hint }}</span>
+          </div>
+        </button>
+        <article v-else class="admin-metric-card dashboard-metric-card">
+          <div class="admin-metric-card__icon" :class="item.tone">
+            <component :is="item.icon" :size="18" />
+          </div>
+          <div>
+            <p class="admin-metric-card__label">{{ item.label }}</p>
+            <strong class="admin-metric-card__value">{{ item.displayValue }}</strong>
+            <span class="admin-metric-card__hint">{{ item.hint }}</span>
+          </div>
+        </article>
+      </template>
     </div>
 
     <section class="admin-panel dashboard-mobile-watch-panel">
@@ -130,7 +141,33 @@
               <p>面试、简历上传和学习计划生成数量</p>
             </div>
           </div>
-          <div ref="businessTrendRef" class="dashboard-chart"></div>
+          <div
+            ref="businessTrendRef"
+            class="dashboard-chart"
+            role="img"
+            tabindex="0"
+            :aria-label="businessTrendAriaLabel"
+            :aria-describedby="businessTrendDataId"
+          ></div>
+          <table :id="businessTrendDataId" class="dashboard-chart-data">
+            <caption>最近 7 天面试、简历上传和学习计划生成趋势数据</caption>
+            <thead>
+              <tr>
+                <th scope="col">日期</th>
+                <th scope="col">面试</th>
+                <th scope="col">简历上传</th>
+                <th scope="col">学习计划</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in trendStats" :key="`business-${item.date}`">
+                <th scope="row">{{ item.date }}</th>
+                <td>{{ Number(item.interviewCount || 0) }}</td>
+                <td>{{ Number(item.resumeUploadCount || 0) }}</td>
+                <td>{{ Number(item.studyPlanGeneratedCount || 0) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </article>
         <article class="dashboard-chart-card dashboard-chart-card--wide">
           <div class="dashboard-card-title">
@@ -139,7 +176,33 @@
               <p>AI 运行、失败运行和题目审核生成数量</p>
             </div>
           </div>
-          <div ref="aiTrendRef" class="dashboard-chart"></div>
+          <div
+            ref="aiTrendRef"
+            class="dashboard-chart"
+            role="img"
+            tabindex="0"
+            :aria-label="aiTrendAriaLabel"
+            :aria-describedby="aiTrendDataId"
+          ></div>
+          <table :id="aiTrendDataId" class="dashboard-chart-data">
+            <caption>最近 7 天 AI 运行、失败运行和题目审核生成趋势数据</caption>
+            <thead>
+              <tr>
+                <th scope="col">日期</th>
+                <th scope="col">AI 运行</th>
+                <th scope="col">AI 失败</th>
+                <th scope="col">题目审核生成</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in trendStats" :key="`ai-${item.date}`">
+                <th scope="row">{{ item.date }}</th>
+                <td>{{ Number(item.aiCallCount || 0) }}</td>
+                <td>{{ Number(item.aiCallFailedCount || 0) }}</td>
+                <td>{{ Number(item.questionReviewGeneratedCount || 0) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </article>
       </div>
     </section>
@@ -321,6 +384,20 @@ const quickLinks = [
 
 const summaryCards = computed(() => dashboard.value?.summaryCards || [])
 const trendStats = computed(() => dashboard.value?.trendStats || [])
+const businessTrendDataId = 'dashboard-business-trend-data'
+const aiTrendDataId = 'dashboard-ai-trend-data'
+const businessTrendAriaLabel = computed(() => {
+  const points = trendStats.value.map((item) =>
+    `${item.date}：面试 ${Number(item.interviewCount || 0)}，简历上传 ${Number(item.resumeUploadCount || 0)}，学习计划 ${Number(item.studyPlanGeneratedCount || 0)}`
+  )
+  return `近 7 日面试、简历上传和学习计划生成趋势。${points.join('；')}。`
+})
+const aiTrendAriaLabel = computed(() => {
+  const points = trendStats.value.map((item) =>
+    `${item.date}：AI 运行 ${Number(item.aiCallCount || 0)}，失败 ${Number(item.aiCallFailedCount || 0)}，题目审核生成 ${Number(item.questionReviewGeneratedCount || 0)}`
+  )
+  return `近 7 日 AI 运行、失败运行和题目审核生成趋势。${points.join('；')}。`
+})
 const pendingItems = computed(() => dashboard.value?.pendingItems || [])
 const systemStatus = computed(() => dashboard.value?.systemStatus)
 const services = computed(() =>
@@ -806,12 +883,24 @@ onBeforeUnmount(() => {
     min-height: 132px;
 
     &.is-clickable {
+      width: 100%;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+    }
+
+    &.is-clickable {
       cursor: pointer;
     }
 
     &.is-clickable:hover {
       border-color: rgba(96, 165, 250, 0.45);
       transform: translateY(-1px);
+    }
+
+    &.is-clickable:focus-visible {
+      outline: 2px solid var(--admin-primary, #4f8cff);
+      outline-offset: -2px;
     }
   }
 
@@ -930,9 +1019,7 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-screen-panel {
-    background:
-      linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.72)),
-      var(--app-surface);
+    background: var(--app-surface);
   }
 
   .dashboard-panel-header {
@@ -955,6 +1042,7 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-chart-card {
+    position: relative;
     min-width: 0;
     padding: 16px;
     border: 1px solid rgba(148, 163, 184, 0.14);
@@ -977,6 +1065,17 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 260px;
     margin-top: 10px;
+  }
+
+  .dashboard-chart-data {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .dashboard-lower-grid {

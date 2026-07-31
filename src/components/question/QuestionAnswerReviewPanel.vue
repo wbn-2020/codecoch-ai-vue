@@ -293,7 +293,7 @@ onBeforeUnmount(() => {
   padding: 18px;
   border: 1px solid rgba(37, 99, 235, 0.16);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .answer-review-panel__header,
@@ -331,9 +331,9 @@ onBeforeUnmount(() => {
 .answer-review-panel__reference,
 .answer-review-panel__result {
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .answer-review-panel__guide {
@@ -355,8 +355,8 @@ onBeforeUnmount(() => {
   em {
     padding: 5px 10px;
     border-radius: 8px;
-    background: #ffffff;
-    color: #2563eb;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-style: normal;
     font-weight: 700;
   }
@@ -473,15 +473,15 @@ onBeforeUnmount(() => {
   article {
     min-width: 0;
     padding: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span {
     display: block;
     margin-bottom: 8px;
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -499,9 +499,9 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 
   strong {
     color: var(--app-text);
@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 6px 0 0;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.7;
     white-space: pre-wrap;
   }
@@ -524,14 +524,14 @@ onBeforeUnmount(() => {
 .answer-review-panel__history-item {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
   color: var(--app-text);
-  background: #ffffff;
+  background: var(--user-surface);
   cursor: pointer;
 
   strong {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 
   em {

@@ -56,12 +56,27 @@ const normalizeUserDashboardOverview = (data: Partial<UserDashboardOverviewVO> =
   generatedAt: data.generatedAt
 })
 
+let activeAdminDashboardOverviewRequest: Promise<AdminDashboardOverviewVO> | null = null
+
 export const getAdminDashboardOverviewApi = (options?: { silentError?: boolean }) => {
-  return request
+  if (activeAdminDashboardOverviewRequest) return activeAdminDashboardOverviewRequest
+
+  const requestPromise = request
     .get<AdminDashboardOverviewVO, AdminDashboardOverviewVO>('/admin/dashboard/overview', {
       silentError: options?.silentError
     })
     .then(normalizeAdminDashboardOverview)
+
+  activeAdminDashboardOverviewRequest = requestPromise
+  void requestPromise
+    .finally(() => {
+      if (activeAdminDashboardOverviewRequest === requestPromise) {
+        activeAdminDashboardOverviewRequest = null
+      }
+    })
+    .catch(() => undefined)
+
+  return requestPromise
 }
 
 const isCompatibilityNotFound = (error: unknown) => {

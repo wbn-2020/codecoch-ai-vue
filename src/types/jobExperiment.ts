@@ -50,6 +50,9 @@ export interface JobSearchExperimentMetricsVO {
   interviewCompletedCount: number
   offerCount: number
   rejectedCount: number
+  noFeedbackCount?: number
+  interviewRoundCount?: number
+  interviewReportSummaryCount?: number
   resumeVersionCount: number
   targetJobCount: number
   projectEvidenceCount: number
@@ -71,11 +74,32 @@ export interface ExperimentSampleBoundaryVO {
   applicationCount?: number
   feedbackCount?: number
   interviewCompletedCount?: number
+  rejectedCount?: number
+  noFeedbackCount?: number
+  interviewRoundCount?: number
+  interviewReportSummaryCount?: number
   resumeVersionUsageCounts?: Record<string, number>
   directionSampleCounts?: Record<string, number>
   sampleInsufficient?: boolean
   sampleWarning?: string
   blockedConclusionTypes?: string[]
+}
+
+export interface JobExperimentApplicationFeedbackSummaryVO {
+  applicationCount: number
+  feedbackCount: number
+  rejectedCount: number
+  noFeedbackCount: number
+  interviewRoundCount: number
+  interviewCompletedCount: number
+  interviewReportSummaryCount: number
+  statusCounts: Record<string, number>
+  resumeVersionUsageCounts: Record<string, number>
+  directionSampleCounts: Record<string, number>
+  facts: string[]
+  interviewReportSummaries: string[]
+  degraded: boolean
+  degradedReason?: string
 }
 
 export interface ExperimentHypothesisVO {
@@ -254,4 +278,19 @@ export interface PortfolioDemoStorylineVO {
   status: PortfolioDemoStatusVO
   steps: PortfolioDemoStorylineStepVO[]
   opsSteps: PortfolioDemoStorylineStepVO[]
+}
+
+export interface PortfolioRehearsalSessionVO {
+  activeRouteKey: string | null
+  activeNodeIndex: number
+  elapsedSeconds: number
+  completedNodeIds: string[]
+  updatedAt?: string
+}
+
+export interface PortfolioRehearsalSessionSaveDTO {
+  activeRouteKey: string
+  activeNodeIndex: number
+  elapsedSeconds: number
+  completedNodeIds: string[]
 }

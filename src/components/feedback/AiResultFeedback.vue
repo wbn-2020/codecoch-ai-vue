@@ -9,7 +9,7 @@
       <el-form label-position="top">
         <el-form-item label="问题类型">
           <el-radio-group v-model="feedbackType" class="feedback-type-grid">
-            <el-radio-button v-for="item in feedbackTypes" :key="item.value" :label="item.value">
+      <el-radio-button v-for="item in feedbackTypes" :key="item.value" :value="item.value">
               {{ item.label }}
             </el-radio-button>
           </el-radio-group>

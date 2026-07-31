@@ -10,6 +10,21 @@
         <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
       </div>
       <div class="report-actions">
+        <el-dropdown
+          :disabled="!interviewId || !isGenerated || exporting"
+          @command="handleExportReport"
+        >
+          <el-button :loading="exporting" :disabled="!interviewId || !isGenerated">
+            <Download :size="16" />
+            导出
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="markdown">Markdown</el-dropdown-item>
+              <el-dropdown-item command="json">JSON</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button @click="handleStaticTodayAction()">
           <LayoutDashboard :size="16" />
           今日计划
@@ -18,9 +33,30 @@
           <History :size="16" />
           返回历史
         </el-button>
-        <el-button v-if="interviewId" type="primary" @click="handleStaticInterviewAction()">
+        <el-button
+          v-if="interviewId && isGenerated"
+          type="primary"
+          :loading="remediationLoading"
+          :disabled="!advancedReportMeta.remediationAvailable"
+          :title="remediationButtonTitle"
+          @click="handleCreateRemediation"
+        >
           <RotateCcw :size="16" />
-          重新面试
+          {{ advancedReportMeta.strongRemediationAvailable ? '强化复练' : '一键复练' }}
+        </el-button>
+        <el-button
+          v-if="interviewId && isGenerated"
+          :loading="replayLoading"
+          :disabled="replayLoading || !replayAvailable"
+          :title="replayButtonTitle"
+          @click="handleCreateReplay"
+        >
+          <Repeat2 :size="16" />
+          同配置再练
+        </el-button>
+        <el-button v-else-if="interviewId" @click="handleStaticInterviewAction()">
+          <RotateCcw :size="16" />
+          新建面试
         </el-button>
       </div>
     </section>
@@ -171,6 +207,46 @@
           </el-tag>
         </div>
 
+        <el-alert
+          v-if="remediationGuidance"
+          class="remediation-guidance"
+          :type="advancedReportMeta.strongRemediationAvailable ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          title="复练强度说明"
+          :description="remediationGuidance"
+        />
+
+        <InterviewVoiceTraceSection :voice-traces="report.voiceTraces" />
+
+        <section class="voice-delivery-report">
+          <div class="section-head">
+            <div>
+              <h2>语音表达指标</h2>
+              <p>仅展示可观测的语速、填充词和停顿，不推断情绪、性格或心理状态。</p>
+            </div>
+            <el-tag :type="voiceDeliverySummary?.available ? 'success' : 'info'" effect="plain">
+              {{ voiceDeliveryStatusLabel }}
+            </el-tag>
+          </div>
+
+          <div v-if="voiceDeliveryFacts.length" class="voice-delivery-facts">
+            <article v-for="fact in voiceDeliveryFacts" :key="fact.key">
+              <span>{{ fact.label }}</span>
+              <strong>{{ fact.value }}</strong>
+              <p v-if="fact.hint">{{ fact.hint }}</p>
+            </article>
+          </div>
+          <el-alert
+            v-if="!voiceDeliveryFacts.length || !voiceDeliverySummary?.pauseMetricsAvailable"
+            type="info"
+            show-icon
+            :closable="false"
+            :title="voiceDeliveryMissingTitle"
+            :description="voiceDeliveryMissingDescription"
+          />
+        </section>
+
         <div class="report-feedback-row">
           <AiResultFeedback
             scene="INTERVIEW_REPORT"
@@ -237,6 +313,8 @@
                 <strong>{{ action.title }}</strong>
                 <p>{{ action.description || action.evidence || '继续完成下一步训练。' }}</p>
                 <small v-if="action.evidence">{{ action.evidence }}</small>
+                <small v-if="action.confidenceBoundary">{{ action.confidenceBoundary }}</small>
+                <small v-if="action.fallbackReason">{{ action.fallbackReason }}</small>
               </div>
               <el-button
                 type="primary"
@@ -252,6 +330,24 @@
         <div v-else-if="nextActionUnavailableReason" class="next-action-empty">
           <strong>暂未生成结构化闭环行动</strong>
           <p>{{ nextActionUnavailableReason }}</p>
+        </div>
+
+        <div v-if="knowledgeCandidates.length" class="knowledge-candidate-section">
+          <div class="section-head">
+            <h2>知识候选入口</h2>
+            <p>这些内容只作为候选资产，需要你确认后再整理；不会自动入库，也不会进入长期记忆。</p>
+          </div>
+          <div class="knowledge-candidate-grid">
+            <article v-for="candidate in knowledgeCandidates" :key="candidate.id" class="knowledge-candidate-card">
+              <div>
+                <span>{{ knowledgeCandidateSourceLabel(candidate.sourceField) }}</span>
+                <strong>{{ candidate.title }}</strong>
+                <p>{{ candidate.evidence || candidate.content || candidate.boundary }}</p>
+                <small>{{ candidate.boundary }}</small>
+              </div>
+              <el-button plain @click="openKnowledgeCandidate(candidate)">确认候选</el-button>
+            </article>
+          </div>
         </div>
 
         <div class="coach-next">
@@ -534,9 +630,9 @@
 
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, History, LayoutDashboard, ListChecks, Radar, RotateCcw, Target } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -544,32 +640,58 @@ import {
   recordAgentMetricEventApi
 } from '@/api/agent'
 import {
+  exportInterviewReportApi,
   getInterviewReportApi,
-  retryInterviewReportApi
+  retryInterviewReportApi,
+  type InterviewReportExportFormat
 } from '@/api/interview'
+import {
+  createInterviewRemediationApi,
+  createInterviewReplayApi,
+  getInterviewReplayOptionsApi
+} from '@/api/interviewAdvanced'
+import { getJobRequirementMatrixApi } from '@/api/jobRequirement'
 import { generateStudyPlanApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
+import InterviewVoiceTraceSection from '@/components/report/InterviewVoiceTraceSection.vue'
 import ReportChart from '@/components/report/ReportChart.vue'
 import { difficultyOptions } from '@/constants/enums'
+import {
+  extractRemediationRequirementIds,
+  normalizeInterviewReportAdvanced
+} from '@/features/interview-comparison'
+import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
+import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
 import type {
+  InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
   InterviewReportNextActionVO,
   InterviewReportVO,
   RecommendedQuestionVO,
   StageReportVO
 } from '@/types/interview'
+import type { InterviewReplayEligibilityVO } from '@/types/interviewAdvanced'
 import { toFriendlyMessage } from '@/utils/error'
+import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
-const interviewId = getRouteNumberParam(route.params.id as string)
+const interviewId = computed(() => getRouteNumberParam(route.params.id as string) || undefined)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
 const retrying = ref(false)
+const exporting = ref(false)
+const remediationLoading = ref(false)
+const remediationIdempotencyKey = ref('')
+const remediationIdempotencyKeys = new Map<number, string>()
+const replayLoading = ref(false)
+const replayIdempotencyKey = ref('')
+const replayIdempotencyKeys = new Map<number, string>()
+const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -578,14 +700,74 @@ const staticActionShownMetricKey = ref('')
 const pollCount = ref(0)
 const pollFailures = ref(0)
 const taskReportId = ref<number | undefined>()
-const asyncReceipt = ref({
+const routeAsyncReceipt = (id?: number) => ({
   messageId: typeof route.query.asyncMessageId === 'string' ? route.query.asyncMessageId : '',
   traceId: typeof route.query.asyncTraceId === 'string' ? route.query.asyncTraceId : '',
   bizType: typeof route.query.asyncBizType === 'string' ? route.query.asyncBizType : 'interview.report',
-  bizId: typeof route.query.asyncBizId === 'string' ? route.query.asyncBizId : (interviewId ? String(interviewId) : ''),
+  bizId: typeof route.query.asyncBizId === 'string' ? route.query.asyncBizId : (id ? String(id) : ''),
   sendStatus: typeof route.query.asyncSendStatus === 'string' ? route.query.asyncSendStatus : ''
 })
+const asyncReceipt = ref(routeAsyncReceipt(interviewId.value))
 let pollTimer: number | undefined
+let reportGeneration = 0
+let replayEligibilityRequest = 0
+let reportViewDisposed = false
+
+const isCurrentReportRequest = (id: number, generation: number) =>
+  !reportViewDisposed
+  && reportGeneration === generation
+  && interviewId.value === id
+
+const clearReplayEligibility = () => {
+  replayEligibilityRequest += 1
+  replayEligibility.value = null
+}
+
+const loadReplayEligibility = async (id: number, generation: number) => {
+  const request = ++replayEligibilityRequest
+  try {
+    const nextEligibility = await getInterviewReplayOptionsApi(id)
+    if (
+      !isCurrentReportRequest(id, generation)
+      || replayEligibilityRequest !== request
+      || !isGenerated.value
+    ) {
+      return
+    }
+    replayEligibility.value = nextEligibility
+  } catch {
+    // Keep the report-embedded contract as a compatibility fallback.
+  }
+}
+
+const handleExportReport = async (command: string | number | object) => {
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (!id || !isGenerated.value || exporting.value) return
+  const format: InterviewReportExportFormat = command === 'json' ? 'json' : 'markdown'
+  exporting.value = true
+  try {
+    const response = await exportInterviewReportApi(id, format)
+    if (!isCurrentReportRequest(id, generation)) return
+    const mimeType = format === 'json' ? 'application/json;charset=UTF-8' : 'text/markdown;charset=UTF-8'
+    const blob = response instanceof Blob ? response : new Blob([response as BlobPart], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    try {
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`
+      link.click()
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+    ElMessage.success('报告已导出')
+  } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
+    ElMessage.error(toFriendlyMessage(error, '报告导出失败，请稍后重试。'))
+  } finally {
+    if (isCurrentReportRequest(id, generation)) exporting.value = false
+  }
+}
 
 const asyncSendStatusLabel = (value?: string | null) => {
   const status = String(value || '').toUpperCase()
@@ -614,6 +796,42 @@ const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
+const advancedReportMeta = computed(() => {
+  const normalized = normalizeInterviewReportAdvanced(report.value, interviewId.value)
+  return replayEligibility.value
+    ? { ...normalized, replayEligibility: replayEligibility.value }
+    : normalized
+})
+const replayAvailable = computed(() => advancedReportMeta.value.replayEligibility.state === 'ELIGIBLE')
+const remediationButtonTitle = computed(() => {
+  if (advancedReportMeta.value.remediationAvailable) return '根据本轮报告创建同岗位复练场次'
+  return '当前报告尚不支持创建复练'
+})
+const replayButtonTitle = computed(() => {
+  const eligibility = advancedReportMeta.value.replayEligibility
+  if (eligibility.state === 'ELIGIBLE') {
+    return '以完全相同的配置再打一轮，完成后可与本轮对比'
+  }
+  const qualityGate = eligibility.qualityGate
+  const qualityGateMessage = qualityGate?.actual !== undefined && qualityGate.required !== undefined
+    ? `当前 ${qualityGate.actual}，要求 ${qualityGate.required}`
+    : ''
+  const defaultMessage = eligibility.state === 'INELIGIBLE'
+    ? '当前报告不满足同配置再练条件'
+    : '当前无法确认同配置再练资格，暂时无法创建'
+  return [eligibility.reasonMessage || defaultMessage, qualityGateMessage].filter(Boolean).join('；')
+})
+const remediationGuidance = computed(() => {
+  if (!isGenerated.value || !advancedReportMeta.value.remediationAvailable) return ''
+  if (advancedReportMeta.value.strongRemediationAvailable) {
+    return '本轮报告证据和样本满足强化复练条件，将沿用同一评分量表并提高追问强度。'
+  }
+  const reason = String(advancedReportMeta.value.strongRemediationUnavailableReason || '').toUpperCase()
+  if (reason === 'SAMPLE_INSUFFICIENT') {
+    return '本轮样本不足，只创建普通复练，不把弱信号包装成强化训练结论。'
+  }
+  return '本轮报告可信度不足以支持强化复练，将保守创建普通复练。'
+})
 
 type DisplayRecommendedQuestion = RecommendedQuestionVO & { title?: string }
 
@@ -650,6 +868,40 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
   return [...report.value.nextActions]
     .filter((action) => action && action.actionType && action.title)
     .sort((left, right) => (left.priority || 0) - (right.priority || 0))
+})
+const knowledgeCandidates = computed<InterviewKnowledgeCandidateVO[]>(() =>
+  isGenerated.value ? buildInterviewReportKnowledgeCandidates(report.value) : []
+)
+const voiceDeliverySummary = computed(() => report.value?.voiceDeliverySummary)
+const voiceDeliveryFacts = computed(() => buildVoiceDeliveryFacts(voiceDeliverySummary.value))
+const voiceDeliveryStatusLabel = computed(() => {
+  const status = String(voiceDeliverySummary.value?.status || 'NOT_ANALYZED').toUpperCase()
+  if (voiceDeliverySummary.value?.available) return '分析完成'
+  if (['QUEUED', 'RUNNING'].includes(status)) return '分析处理中'
+  if (status === 'FAILED') return '分析失败'
+  if (status === 'TIMED_OUT') return '分析超时'
+  if (status === 'CANCELLED') return '分析已取消'
+  return '暂无分析'
+})
+const voiceDeliveryMissingTitle = computed(() => {
+  if (voiceDeliverySummary.value?.available && !voiceDeliverySummary.value.pauseMetricsAvailable) {
+    return '停顿指标不可用'
+  }
+  return voiceDeliveryStatusLabel.value
+})
+const voiceDeliveryMissingDescription = computed(() => {
+  if (voiceDeliverySummary.value?.available && !voiceDeliverySummary.value.pauseMetricsAvailable) {
+    return '本场没有保存真实逐词时间戳，因此不会估算停顿次数或停顿时长。'
+  }
+  const reason = String(voiceDeliverySummary.value?.missingReason || '').toUpperCase()
+  const descriptions: Record<string, string> = {
+    VOICE_DELIVERY_NOT_ANALYZED: '本场没有已保存的语音表达分析，文本回答不会被推测为语音指标。',
+    VOICE_DELIVERY_ANALYSIS_PENDING: '语音表达分析仍在处理中，稍后刷新报告可查看结果。',
+    VOICE_DELIVERY_ANALYSIS_CANCELLED: '本场语音表达分析已取消，没有可展示的可靠指标。',
+    VOICE_DELIVERY_ANALYSIS_TIMED_OUT: '本场语音表达分析超时，没有生成可靠指标。',
+    VOICE_DELIVERY_ANALYSIS_FAILED: '本场语音表达分析失败，原始面试报告不受影响。'
+  }
+  return descriptions[reason] || '当前没有可展示的可靠语音表达指标。'
 })
 const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
   String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
@@ -808,14 +1060,14 @@ const goReportTaskCenter = () => {
       messageId: asyncReceipt.value.messageId,
       traceId: asyncReceipt.value.traceId,
       bizType: asyncReceipt.value.bizType || 'interview.report',
-      bizId: asyncReceipt.value.bizId || interviewId
+      bizId: asyncReceipt.value.bizId || interviewId.value
     })
   })
 }
 
 const reportContextQuery = () => compactRouterQuery({
   source: 'interviewReport',
-  interviewId,
+  interviewId: interviewId.value,
   reportId: report.value?.reportId || report.value?.id,
   targetJobId: report.value?.targetJobId,
   profileId: report.value?.skillProfileId,
@@ -852,7 +1104,7 @@ const goJdGapPractice = async () => {
       query: compactRouterQuery({
         source: 'gap',
         sourceId: report.value.skillProfileId,
-        interviewId,
+        interviewId: interviewId.value,
         reportId: report.value.reportId || report.value.id,
         targetJobId: report.value.targetJobId,
         profileId: report.value.skillProfileId,
@@ -869,7 +1121,7 @@ const goJdGapPractice = async () => {
       query: compactRouterQuery({
         source: 'matchReport',
         sourceId: report.value.matchReportId,
-        interviewId,
+        interviewId: interviewId.value,
         reportId: report.value.reportId || report.value.id,
         targetJobId: report.value.targetJobId,
         profileId: report.value.skillProfileId,
@@ -1035,7 +1287,7 @@ const openRecommendedQuestion = async (item: DisplayRecommendedQuestion) => {
     return
   }
   const query: Record<string, string> = { source: 'interviewReport' }
-  if (interviewId) query.interviewId = String(interviewId)
+  if (interviewId.value) query.interviewId = String(interviewId.value)
   const reportId = report.value?.reportId || report.value?.id
   if (reportId) query.reportId = String(reportId)
   await router.push({
@@ -1055,7 +1307,7 @@ const goPracticeQuestion = async () => {
     source: 'interviewReport',
     count: String(recommendedQuestionIds.value.length)
   }
-  if (interviewId) query.interviewId = String(interviewId)
+  if (interviewId.value) query.interviewId = String(interviewId.value)
   const reportId = report.value?.reportId || report.value?.id
   if (reportId) query.reportId = String(reportId)
   await router.push({
@@ -1069,7 +1321,11 @@ const nextActionTypeLabel = (type?: string) => {
     QUESTION_PRACTICE: '题库练习',
     STUDY_PLAN: '学习计划',
     INTERVIEW: '模拟面试',
-    RESUME_OPTIMIZE: '简历优化'
+    RESUME_OPTIMIZE: '简历优化',
+    PROJECT_EVIDENCE: '项目证据',
+    KNOWLEDGE_CANDIDATE: '知识候选',
+    JOB_FOLLOW_UP: '投递跟进',
+    REVIEW_EXPERIMENT: '复盘实验'
   }
   return labels[String(type || '').toUpperCase()] || '下一步'
 }
@@ -1079,9 +1335,35 @@ const nextActionButtonLabel = (type?: string) => {
     QUESTION_PRACTICE: '去练习',
     STUDY_PLAN: '生成计划',
     INTERVIEW: '再面一轮',
-    RESUME_OPTIMIZE: '去优化'
+    RESUME_OPTIMIZE: '去优化',
+    PROJECT_EVIDENCE: '补证据',
+    KNOWLEDGE_CANDIDATE: '确认候选',
+    JOB_FOLLOW_UP: '去跟进',
+    REVIEW_EXPERIMENT: '去复盘'
   }
   return labels[String(type || '').toUpperCase()] || '开始'
+}
+
+const knowledgeCandidateSourceLabel = (sourceField?: string) => {
+  const labels: Record<string, string> = {
+    weakPoints: '薄弱知识点',
+    rubricScores: '评分维度',
+    adviceEvidence: '建议证据',
+    abilityProfileUpdates: '能力画像候选'
+  }
+  return labels[sourceField || ''] || '报告候选'
+}
+
+const openKnowledgeCandidate = async (candidate: InterviewKnowledgeCandidateVO) => {
+  await router.push(candidate.actionUrl || {
+    path: '/knowledge',
+    query: compactRouterQuery({
+      source: 'interviewReport',
+      candidate: candidate.sourceField,
+      interviewId: interviewId.value,
+      reportId: report.value?.reportId || report.value?.id
+    })
+  })
 }
 
 const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') => {
@@ -1101,7 +1383,7 @@ const trackInterviewNextActionMetric = (eventCode: 'interview_report_next_action
     bizType: 'interview_report',
     bizId: String(metricId),
     metadata: {
-      interviewId,
+      interviewId: interviewId.value,
       actionType: action?.actionType,
       actionSource: action?.actionSource || (action ? 'BACKEND' : undefined),
       priority: action?.priority,
@@ -1126,6 +1408,148 @@ const handleStaticTodayAction = async (trackMetric = false) => {
     trackInterviewNextActionMetric('interview_report_next_action_clicked', staticNextAction('TODAY_PLAN', '返回今日计划', '/dashboard', 93))
   }
   await router.push('/dashboard')
+}
+
+const resolveRemediationRequirementIds = async (
+  sourceRequirementIds: number[],
+  targetJobId?: number
+) => {
+  if (sourceRequirementIds.length) {
+    return sourceRequirementIds
+  }
+  if (!targetJobId) return []
+  const matrix = await getJobRequirementMatrixApi(targetJobId)
+  return extractRemediationRequirementIds(matrix)
+}
+
+const handleCreateRemediation = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
+  const meta = advancedReportMeta.value
+  if (remediationLoading.value || !id || !meta.remediationAvailable) return
+  const sourceReportId = meta.reportId || report.value?.reportId || report.value?.id
+  if (!sourceReportId) {
+    ElMessage.warning('当前报告缺少可追溯的报告记录，暂时无法创建复练。')
+    return
+  }
+  const snapshot = {
+    sourceReportId,
+    sourceRequirementIds: [...meta.sourceRequirementIds],
+    targetJobId: meta.targetJobId || report.value?.targetJobId,
+    purpose: [
+      mainWeaknessPreview.value.title,
+      mainWeaknessPreview.value.description
+    ].filter(Boolean).join('：').slice(0, 500) || '针对本轮面试报告暴露的岗位要求短板进行复练。',
+    strongRemediation: meta.strongRemediationAvailable
+  }
+
+  remediationLoading.value = true
+  try {
+    const sourceRequirementIds = await resolveRemediationRequirementIds(
+      snapshot.sourceRequirementIds,
+      snapshot.targetJobId
+    )
+    if (!isCurrentReportRequest(id, generation)) return
+    if (!sourceRequirementIds.length) {
+      ElMessage.warning('当前岗位还没有可用于复练的薄弱或缺失要求，请先完善岗位证据矩阵。')
+      return
+    }
+    let idempotencyKey = remediationIdempotencyKeys.get(snapshot.sourceReportId)
+    if (!idempotencyKey) {
+      idempotencyKey = createOperationIdempotencyKey('interview-remedy')
+      remediationIdempotencyKeys.set(snapshot.sourceReportId, idempotencyKey)
+    }
+    remediationIdempotencyKey.value = idempotencyKey
+    const result = await createInterviewRemediationApi({
+      sourceReportId: snapshot.sourceReportId,
+      sourceRequirementIds,
+      practicePurpose: snapshot.purpose,
+      strongRemediation: snapshot.strongRemediation,
+      idempotencyKey
+    })
+    if (!isCurrentReportRequest(id, generation)) return
+    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
+    const destination = targetSessionId ? `/interviews/room/${targetSessionId}` : '/interviews/history'
+    let navigationFailure: unknown
+    try {
+      navigationFailure = await router.push(destination)
+    } catch {
+      if (isCurrentReportRequest(id, generation)) {
+        ElMessage.warning('复练场次已创建，但页面跳转失败；重试将恢复同一场次。')
+      }
+      return
+    }
+    if (navigationFailure) {
+      ElMessage.warning('复练场次已创建，但页面跳转未完成；重试将恢复同一场次。')
+      return
+    }
+    remediationIdempotencyKeys.delete(snapshot.sourceReportId)
+    remediationIdempotencyKey.value = ''
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的复练场次。' : '复练场次已创建。')
+    } else {
+      ElMessage.info('复练请求已保存，请到面试历史中查看新场次。')
+    }
+  } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
+    ElMessage.error(toFriendlyMessage(error, '复练创建失败，请稍后重试。'))
+  } finally {
+    if (isCurrentReportRequest(id, generation)) remediationLoading.value = false
+  }
+}
+
+const handleCreateReplay = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (replayLoading.value || !id || !replayAvailable.value) return
+  replayLoading.value = true
+  try {
+    try {
+      await ElMessageBox.confirm(
+        '将以完全相同的配置（岗位、难度、题量、场景）开启新一轮面试，完成后可与本轮发起对比。',
+        '同配置再练一轮',
+        { confirmButtonText: '开始再练', cancelButtonText: '取消', type: 'info' }
+      )
+    } catch {
+      return
+    }
+    if (!isCurrentReportRequest(id, generation)) return
+    if (!replayIdempotencyKey.value) {
+      replayIdempotencyKey.value = createOperationIdempotencyKey('interview-replay')
+      replayIdempotencyKeys.set(id, replayIdempotencyKey.value)
+    }
+    const result = await createInterviewReplayApi(id, {
+      idempotencyKey: replayIdempotencyKey.value
+    })
+    if (!isCurrentReportRequest(id, generation)) return
+    const targetSessionId = result.targetSessionId || result.interview?.id || result.interview?.interviewId
+    const destination = targetSessionId ? `/interviews/room/${targetSessionId}` : '/interviews/history'
+    let navigationFailure: unknown
+    try {
+      navigationFailure = await router.push(destination)
+    } catch {
+      if (isCurrentReportRequest(id, generation)) {
+        ElMessage.warning('再练场次已创建，但页面跳转失败；重试将恢复同一场次。')
+      }
+      return
+    }
+    if (navigationFailure) {
+      ElMessage.warning('再练场次已创建，但页面跳转未完成；重试将恢复同一场次。')
+      return
+    }
+    replayIdempotencyKeys.delete(id)
+    replayIdempotencyKey.value = ''
+    if (targetSessionId) {
+      ElMessage.success(result.idempotentReplay ? '已恢复之前创建的再练场次。' : '再练场次已创建。')
+    } else {
+      ElMessage.info('再练请求已保存，请到面试历史中查看新场次。')
+    }
+  } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
+    ElMessage.error(toFriendlyMessage(error, '同配置再练创建失败，请稍后重试。'))
+  } finally {
+    if (isCurrentReportRequest(id, generation)) replayLoading.value = false
+  }
 }
 
 const handleStaticInterviewAction = async (trackMetric = false) => {
@@ -1170,11 +1594,27 @@ const handleNextAction = async (action: InterviewReportNextActionVO) => {
     await pushNextActionUrl(action.actionUrl, '/resumes')
     return
   }
+  if (actionType === 'PROJECT_EVIDENCE') {
+    await pushNextActionUrl(action.actionUrl, '/project-evidence')
+    return
+  }
+  if (actionType === 'KNOWLEDGE_CANDIDATE') {
+    await pushNextActionUrl(action.actionUrl, '/knowledge')
+    return
+  }
+  if (actionType === 'JOB_FOLLOW_UP') {
+    await pushNextActionUrl(action.actionUrl, '/applications')
+    return
+  }
+  if (actionType === 'REVIEW_EXPERIMENT') {
+    await pushNextActionUrl(action.actionUrl, '/job-experiments')
+    return
+  }
   await pushNextActionUrl(action.actionUrl)
 }
 
 const stopPolling = () => {
-  if (pollTimer) {
+  if (pollTimer !== undefined) {
     window.clearTimeout(pollTimer)
     pollTimer = undefined
   }
@@ -1186,57 +1626,64 @@ const rememberAsyncReceipt = (result?: {
   asyncBizType?: string | null
   asyncBizId?: string | null
   asyncSendStatus?: string | null
-}) => {
+}, id?: number) => {
   if (!result) return
   asyncReceipt.value = {
     messageId: result.asyncMessageId || asyncReceipt.value.messageId,
     traceId: result.asyncTraceId || asyncReceipt.value.traceId,
     bizType: result.asyncBizType || asyncReceipt.value.bizType || 'interview.report',
-    bizId: result.asyncBizId || asyncReceipt.value.bizId || (interviewId ? String(interviewId) : ''),
+    bizId: result.asyncBizId || asyncReceipt.value.bizId || (id ? String(id) : ''),
     sendStatus: result.asyncSendStatus || asyncReceipt.value.sendStatus
   }
 }
 
-const schedulePolling = () => {
+const schedulePolling = (id: number, generation: number) => {
   stopPolling()
+  if (!isCurrentReportRequest(id, generation)) return
   if (!isGenerating.value) return
   if (pollCount.value >= 30) {
     ElMessage.warning('报告准备时间较长，可稍后按面试记录继续查看。')
     return
   }
-  pollTimer = window.setTimeout(fetchReport, 2000)
+  pollTimer = window.setTimeout(() => {
+    void fetchReport(id, generation)
+  }, 2000)
 }
 
-const fetchReport = async () => {
-  if (!interviewId) return
+const fetchReport = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   loading.value = true
   try {
-    report.value = await getInterviewReportApi(interviewId)
+    const nextReport = await getInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    report.value = nextReport
     pollFailures.value = 0
+    if (isGenerated.value) void loadReplayEligibility(id, generation)
     if (isGenerating.value) {
       pollCount.value += 1
-      schedulePolling()
+      schedulePolling(id, generation)
     } else {
       stopPolling()
     }
   } catch (error) {
+    if (!isCurrentReportRequest(id, generation)) return
     pollFailures.value += 1
     if (pollFailures.value >= 3) {
       stopPolling()
       ElMessage.error(toFriendlyMessage(error, '报告状态查询失败，请稍后刷新。'))
     } else {
-      schedulePolling()
+      schedulePolling(id, generation)
     }
   } finally {
-    loading.value = false
+    if (isCurrentReportRequest(id, generation)) loading.value = false
   }
 }
 
-const markReportUnavailable = (message: string) => {
-  if (!interviewId) return
+const markReportUnavailable = (message: string, id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   reportRecoveryNotice.value = message
   report.value = {
-    interviewId,
+    interviewId: id,
     reportStatus: 'FAILED',
     status: 'FAILED',
     failureReason: message,
@@ -1247,12 +1694,14 @@ const markReportUnavailable = (message: string) => {
   stopPolling()
 }
 
-const runSyncFallback = async () => {
-  if (!interviewId) return
-  const id = interviewId
+const runSyncFallback = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
+  clearReplayEligibility()
   retrying.value = true
   try {
-    rememberAsyncReceipt(await retryInterviewReportApi(id))
+    const retryResult = await retryInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    rememberAsyncReceipt(retryResult, id)
     report.value = {
       interviewId: id,
       reportStatus: 'GENERATING',
@@ -1265,49 +1714,70 @@ const runSyncFallback = async () => {
     }
     pollFailures.value = 0
     reportRecoveryNotice.value = ''
-    schedulePolling()
+    schedulePolling(id, generation)
   } finally {
-    retrying.value = false
+    if (isCurrentReportRequest(id, generation)) retrying.value = false
   }
 }
 
-const loadReportOrSubmitTask = async () => {
-  if (!interviewId) return
+const loadReportOrSubmitTask = async (id: number, generation: number) => {
+  if (!isCurrentReportRequest(id, generation)) return
   loading.value = true
   reportRecoveryNotice.value = ''
   try {
-    report.value = await getInterviewReportApi(interviewId)
+    const nextReport = await getInterviewReportApi(id)
+    if (!isCurrentReportRequest(id, generation)) return
+    report.value = nextReport
     pollFailures.value = 0
+    if (isGenerated.value) void loadReplayEligibility(id, generation)
     if (isGenerated.value || isFailed.value || isUnscorable.value) {
       stopPolling()
       return
     }
     if (isGenerating.value) {
-      schedulePolling()
+      schedulePolling(id, generation)
       return
     }
-    markReportUnavailable('当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。')
+    markReportUnavailable(
+      '当前报告暂时不可用，页面没有自动重新准备报告。请先查看准备进度，或点击“重新生成报告”手动触发。',
+      id,
+      generation
+    )
   } catch (error) {
-    markReportUnavailable(toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'))
+    markReportUnavailable(
+      toFriendlyMessage(error, '当前报告暂时无法读取，页面没有自动重新准备报告。你可以稍后回来，或按面试记录继续查看。'),
+      id,
+      generation
+    )
   } finally {
-    loading.value = false
+    if (isCurrentReportRequest(id, generation)) loading.value = false
   }
 }
 
 const handleRetry = async () => {
-  if (!interviewId) return
-  await runSyncFallback()
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (!id) return
+  await runSyncFallback(id, generation)
 }
 
 const handleGenerateStudyPlan = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
   const reportId = report.value?.reportId || report.value?.id
-  if (!reportId) {
-    ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+  if (!id || !reportId || studyPlanGenerating.value) {
+    if (id && !reportId) {
+      ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+    }
+    return
+  }
+  if (!isCurrentReportRequest(id, generation)) {
     return
   }
   studyPlanGenerating.value = true
   try {
     const result = await generateStudyPlanApi({ reportId })
+    if (!isCurrentReportRequest(id, generation)) return
     if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
       ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
       if (result.planId) {
@@ -1333,12 +1803,42 @@ const handleGenerateStudyPlan = async () => {
       ElMessage.success('学习计划已生成')
     }
     await router.push(`/study-plans?planId=${result.planId}`)
+  } catch (error) {
+    if (isCurrentReportRequest(id, generation)) {
+      ElMessage.error(toFriendlyMessage(error, '学习计划生成失败，请稍后重试'))
+    }
   } finally {
-    studyPlanGenerating.value = false
+    if (isCurrentReportRequest(id, generation)) studyPlanGenerating.value = false
   }
 }
 
-onMounted(loadReportOrSubmitTask)
+const resetReportRouteState = (id?: number) => {
+  stopPolling()
+  loading.value = false
+  retrying.value = false
+  exporting.value = false
+  remediationLoading.value = false
+  replayLoading.value = false
+  studyPlanGenerating.value = false
+  remediationIdempotencyKey.value = ''
+  replayIdempotencyKey.value = id ? replayIdempotencyKeys.get(id) || '' : ''
+  clearReplayEligibility()
+  report.value = null
+  reportRecoveryNotice.value = ''
+  nextActionShownMetricKey.value = ''
+  staticActionShownMetricKey.value = ''
+  pollCount.value = 0
+  pollFailures.value = 0
+  taskReportId.value = undefined
+  asyncReceipt.value = routeAsyncReceipt(id)
+}
+
+watch(interviewId, (id) => {
+  reportGeneration += 1
+  const generation = reportGeneration
+  resetReportRouteState(id)
+  if (id) void loadReportOrSubmitTask(id, generation)
+}, { immediate: true })
 watch(backendNextActions, (actions) => {
   const metricId = reportMetricId()
   if (!metricId || !canTrackReportNextActionMetric() || !actions.length) return
@@ -1359,21 +1859,23 @@ watch(isGenerated, (generated) => {
   )
 })
 onBeforeUnmount(() => {
+  reportViewDisposed = true
+  reportGeneration += 1
   stopPolling()
 })
 </script>
 
 <style scoped lang="scss">
 .interview-report {
-  color: var(--app-text);
+  color: var(--user-text);
 }
 
 .report-top,
 .analysis-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .report-top {
@@ -1390,7 +1892,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.65;
   }
 }
@@ -1417,9 +1919,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   margin-bottom: 12px;
   padding: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 
   div {
     min-width: 0;
@@ -1433,20 +1935,20 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 5px;
-    color: #0f172a;
+    color: var(--user-text);
     line-height: 1.4;
   }
 
   p {
     margin-top: 5px;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.55;
   }
 
@@ -1459,13 +1961,17 @@ onBeforeUnmount(() => {
   margin-top: 20px;
 }
 
+.knowledge-candidate-section {
+  margin-top: 20px;
+}
+
 .next-action-empty {
   margin-top: 20px;
   padding: 14px 16px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
 
   strong,
   p {
@@ -1474,7 +1980,7 @@ onBeforeUnmount(() => {
 
   strong {
     display: block;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 15px;
   }
 
@@ -1490,6 +1996,12 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.knowledge-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .next-action-card {
   display: flex;
   align-items: flex-start;
@@ -1497,9 +2009,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   .el-button {
     flex: 0 0 auto;
@@ -1510,7 +2022,7 @@ onBeforeUnmount(() => {
   min-width: 0;
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1527,13 +2039,60 @@ onBeforeUnmount(() => {
   small {
     display: block;
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
 
   small {
     font-size: 12px;
+  }
+}
+
+.knowledge-candidate-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px dashed var(--user-primary);
+  border-radius: 8px;
+  background: var(--user-primary-soft);
+
+  div {
+    min-width: 0;
+  }
+
+  span {
+    color: var(--user-primary);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--user-text);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p,
+  small {
+    display: block;
+    margin-top: 6px;
+    color: var(--user-text-secondary);
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    font-size: 12px;
+  }
+
+  .el-button {
+    flex: 0 0 auto;
   }
 }
 
@@ -1544,17 +2103,17 @@ onBeforeUnmount(() => {
   gap: 12px;
   width: 100%;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: var(--app-text);
+  background: var(--user-surface);
+  color: var(--user-text);
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 
   &:hover {
-    border-color: rgba(37, 99, 235, 0.36);
-    background: #eff6ff;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-soft);
   }
 
   strong {
@@ -1565,7 +2124,7 @@ onBeforeUnmount(() => {
   span {
     display: block;
     margin-top: 4px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -1583,9 +2142,9 @@ onBeforeUnmount(() => {
 
 .stage-report-card {
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   header {
     display: flex;
@@ -1593,12 +2152,12 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 16px;
     padding-bottom: 14px;
-    border-bottom: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--user-border);
   }
 
   span,
   label {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 700;
   }
@@ -1611,7 +2170,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -1620,11 +2179,11 @@ onBeforeUnmount(() => {
   min-width: 88px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
   text-align: center;
 
   strong {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 24px;
   }
 }
@@ -1640,11 +2199,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1670,7 +2229,7 @@ onBeforeUnmount(() => {
 .failed-panel__lead {
   max-width: 620px;
   margin: 0 auto 18px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
@@ -1682,12 +2241,12 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0 auto 18px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .generating-icon {
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 36px;
   animation: spin 1.1s linear infinite;
 }
@@ -1701,12 +2260,12 @@ onBeforeUnmount(() => {
 
 .task-stage-item {
   padding: 12px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -1715,18 +2274,18 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin-top: 6px;
-    color: var(--app-text);
+    color: var(--user-text);
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
 .task-meta {
   margin-top: 12px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -1740,10 +2299,10 @@ onBeforeUnmount(() => {
   span {
     max-width: 100%;
     padding: 5px 8px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: var(--app-text-muted);
+    background: var(--user-surface);
+    color: var(--user-text-muted);
     font-size: 12px;
     line-height: 1.4;
     overflow-wrap: anywhere;
@@ -1782,21 +2341,22 @@ onBeforeUnmount(() => {
 .report-action-panel {
   min-width: 0;
   padding: 20px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .report-score-panel {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: #0f172a;
-  color: #ffffff;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
+  color: var(--user-text);
 
   p {
     margin: 0;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--user-text-secondary);
     line-height: 1.65;
   }
 }
@@ -1806,8 +2366,8 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 5px 10px;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1818,27 +2378,28 @@ onBeforeUnmount(() => {
 
   span {
     padding: 7px 10px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: #1e40af;
+    background: var(--user-surface);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 }
 
 .report-score-panel--muted {
-  background: #334155;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
 }
 
 .panel-kicker {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
 .report-score-panel .panel-kicker {
-  color: #93c5fd;
+  color: var(--user-primary);
 }
 
 .score-value {
@@ -1854,17 +2415,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-top: 18px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--user-surface-raised);
   font-size: 12px;
 }
 
 .report-summary-panel,
 .report-action-panel {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   h2 {
     margin: 10px 0 8px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 22px;
     line-height: 1.35;
     overflow-wrap: anywhere;
@@ -1872,7 +2433,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.7;
     overflow-wrap: anywhere;
   }
@@ -1881,9 +2442,9 @@ onBeforeUnmount(() => {
 .evidence-strip {
   margin-top: 18px;
   padding: 14px;
-  border: 1px dashed #bfdbfe;
+  border: 1px dashed var(--user-primary-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   strong,
   span {
@@ -1891,13 +2452,13 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    color: #1d4ed8;
+    color: var(--user-primary);
     font-size: 13px;
   }
 
   span {
     margin-top: 6px;
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.65;
     overflow-wrap: anywhere;
   }
@@ -1908,24 +2469,24 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-top: 18px;
   padding: 14px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--user-success-border);
   border-radius: 8px;
-  background: #f0fdf4;
+  background: var(--user-success-soft);
 
   span {
-    color: #15803d;
+    color: var(--user-success);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
-    color: #14532d;
+    color: var(--user-success);
     font-size: 18px;
     line-height: 1.35;
   }
 
   small {
-    color: #475569;
+    color: var(--user-text-secondary);
     line-height: 1.55;
   }
 
@@ -1947,10 +2508,10 @@ onBeforeUnmount(() => {
 
   span {
     padding: 6px 10px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
-    color: #64748b;
+    background: var(--user-surface);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 }
@@ -1964,9 +2525,9 @@ onBeforeUnmount(() => {
   article {
     min-width: 0;
     padding: 14px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span,
@@ -1976,21 +2537,21 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 7px;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
 
   small {
     margin-top: 6px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
@@ -1998,13 +2559,13 @@ onBeforeUnmount(() => {
 
 .score-hero,
 .overview-card {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   padding: 18px;
 
   span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 
@@ -2017,7 +2578,7 @@ onBeforeUnmount(() => {
 }
 
 .score-hero {
-  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+  background: var(--user-surface-tint);
 
   strong {
     margin: 8px 0 12px;
@@ -2038,6 +2599,49 @@ onBeforeUnmount(() => {
   margin: 10px 0 0;
 }
 
+.remediation-guidance {
+  margin-top: 14px;
+}
+
+.voice-delivery-report {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.voice-delivery-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+
+  article {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--user-border);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+  }
+
+  span,
+  p {
+    color: var(--user-text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    line-height: 1.5;
+  }
+}
+
 .report-feedback-row {
   display: flex;
   justify-content: flex-end;
@@ -2047,9 +2651,9 @@ onBeforeUnmount(() => {
 .target-job-alignment {
   margin-top: 18px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .alignment-card-grid {
@@ -2061,9 +2665,9 @@ onBeforeUnmount(() => {
 .alignment-card {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   span,
   strong {
@@ -2071,14 +2675,14 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin: 8px 0 10px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 15px;
     line-height: 1.4;
     word-break: break-word;
@@ -2095,9 +2699,9 @@ onBeforeUnmount(() => {
 .missing-skill-item {
   min-width: 0;
   padding: 14px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   header {
     display: flex;
@@ -2108,21 +2712,21 @@ onBeforeUnmount(() => {
 
   strong {
     min-width: 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 14px;
     word-break: break-word;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 
   ul {
     margin: 10px 0 0;
     padding-left: 18px;
-    color: #334155;
+    color: var(--user-text-secondary);
     line-height: 1.7;
   }
 }
@@ -2141,9 +2745,9 @@ onBeforeUnmount(() => {
 .coach-next {
   margin-top: 18px;
   padding: 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .next-grid {
@@ -2153,13 +2757,13 @@ onBeforeUnmount(() => {
 
   article {
     padding: 14px;
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -2172,13 +2776,13 @@ onBeforeUnmount(() => {
 
   strong {
     margin-top: 8px;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 15px;
   }
 
   p {
     margin-top: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 }
@@ -2193,7 +2797,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -2221,9 +2825,9 @@ onBeforeUnmount(() => {
 
 .qa-item {
   padding: 16px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .qa-head {
@@ -2240,25 +2844,25 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-weight: 700;
   }
 }
 
 .qa-block {
   padding: 12px 0;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 
   label {
     display: block;
     margin-bottom: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   p {
     margin: 0;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.7;
     white-space: pre-wrap;
   }
@@ -2277,7 +2881,7 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
   }
 }
 
@@ -2287,10 +2891,15 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .knowledge-candidate-grid,
   .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
   .missing-skill-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .voice-delivery-facts {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -2322,6 +2931,7 @@ onBeforeUnmount(() => {
   .analysis-grid,
   .next-grid,
   .next-action-grid,
+  .knowledge-candidate-grid,
   .report-professional-strip,
   .stage-report-content,
   .alignment-card-grid,
@@ -2330,6 +2940,14 @@ onBeforeUnmount(() => {
   }
 
   .next-action-card {
+    flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
+  }
+
+  .knowledge-candidate-card {
     flex-direction: column;
 
     .el-button {
@@ -2375,6 +2993,485 @@ onBeforeUnmount(() => {
   .filter-bar,
   .notification-toolbar {
     justify-content: flex-start;
+  }
+}
+
+/* Compact report workspace */
+.interview-report {
+  gap: 14px;
+  min-width: 0;
+  color: var(--user-text);
+}
+
+.report-top {
+  gap: 16px;
+  padding: 16px 18px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+
+  h1 {
+    margin: 6px 0;
+    font-size: 24px;
+  }
+
+  p {
+    max-width: 68ch;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.eyebrow,
+.panel-kicker,
+.state-eyebrow {
+  color: var(--user-primary);
+}
+
+.report-actions {
+  max-width: 620px;
+  justify-content: flex-end;
+}
+
+.content-card,
+.analysis-card {
+  min-width: 0;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+  box-shadow: none;
+}
+
+.content-card__body {
+  padding: 14px 16px;
+}
+
+.report-hero-grid {
+  grid-template-columns: minmax(160px, 0.55fr) minmax(0, 1fr) minmax(240px, 0.85fr);
+  gap: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  overflow: hidden;
+}
+
+.report-score-panel,
+.report-summary-panel,
+.report-action-panel {
+  min-width: 0;
+  padding: 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.report-action-panel {
+  border-right: 0;
+}
+
+.score-value {
+  margin-top: 4px;
+  font-size: 42px;
+}
+
+.report-summary-panel h2,
+.report-action-panel h2 {
+  margin: 5px 0;
+  font-size: 18px;
+}
+
+.report-summary-panel p,
+.report-action-panel p {
+  line-height: 1.5;
+}
+
+.evidence-strip,
+.primary-next-action {
+  margin-top: 10px;
+  padding: 10px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
+}
+
+.report-support-strip,
+.report-professional-strip,
+.overview-grid {
+  gap: 0;
+  margin-top: 12px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  overflow: hidden;
+}
+
+.report-support-strip span,
+.report-professional-strip article,
+.overview-card {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.report-support-strip span:last-child,
+.report-professional-strip article:last-child,
+.overview-card:last-child {
+  border-right: 0;
+}
+
+.report-professional-strip article strong,
+.overview-card strong {
+  margin-top: 3px;
+  font-size: 15px;
+}
+
+.score-source,
+.remediation-guidance {
+  margin: 12px 0 0;
+}
+
+.report-trust-strip {
+  margin-top: 10px;
+}
+
+.voice-delivery-report {
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 0;
+  border-color: var(--user-border);
+}
+
+.voice-delivery-facts {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+
+  article {
+    padding: 9px 11px;
+    border: 0;
+    border-right: 1px solid var(--user-border);
+    border-radius: 0;
+    background: transparent;
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span,
+  p {
+    color: var(--user-text-muted);
+  }
+
+  strong {
+    margin-top: 3px;
+    color: var(--user-text);
+    font-size: 16px;
+  }
+}
+
+.target-job-alignment,
+.next-action-section,
+.knowledge-candidate-section,
+.coach-next,
+.dimension-section {
+  margin-top: 14px;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.alignment-card-grid,
+.next-grid {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.alignment-card,
+.next-grid article {
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.missing-skill-list,
+.next-action-grid,
+.knowledge-candidate-grid,
+.recommended-list,
+.stage-report-list,
+.qa-list {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+}
+
+.missing-skill-item,
+.next-action-card,
+.knowledge-candidate-card,
+.recommended-item,
+.stage-report-card,
+.qa-item {
+  min-width: 0;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.next-action-card,
+.knowledge-candidate-card {
+  align-items: center;
+}
+
+.recommended-training-callout {
+  padding: 12px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
+}
+
+.next-action-empty {
+  padding: 12px;
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.section-head {
+  margin-bottom: 10px;
+
+  h2 {
+    font-size: 17px;
+  }
+
+  p {
+    margin-top: 3px;
+    color: var(--user-text-muted);
+    line-height: 1.5;
+  }
+}
+
+.analysis-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+  overflow: hidden;
+}
+
+.analysis-card {
+  padding: 14px 16px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:nth-child(2n) {
+    border-right: 0;
+  }
+
+  &.wide {
+    grid-column: 1 / -1;
+    border-right: 0;
+  }
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.stage-report-card header {
+  align-items: center;
+}
+
+.stage-score-pill {
+  border-color: var(--user-border);
+  background: var(--user-surface-muted);
+}
+
+.stage-report-content {
+  gap: 0;
+  margin-top: 10px;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.stage-copy {
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.qa-head {
+  margin-bottom: 8px;
+}
+
+.qa-block {
+  padding: 9px 0;
+  border-top-color: var(--user-border);
+}
+
+.generating-panel,
+.failed-panel {
+  padding: 18px;
+}
+
+.task-stage-list {
+  gap: 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+}
+
+.task-stage-item {
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
+}
+
+.action-zone {
+  gap: 14px;
+}
+
+@media (max-width: 1080px) {
+  .report-hero-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-action-panel {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--user-border);
+  }
+
+  .report-summary-panel {
+    border-right: 0;
+  }
+
+  .voice-delivery-facts,
+  .report-professional-strip,
+  .overview-grid,
+  .alignment-card-grid,
+  .next-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .voice-delivery-facts article,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article {
+    border-right: 1px solid var(--user-border);
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .voice-delivery-facts article:nth-child(2n),
+  .report-professional-strip article:nth-child(2n),
+  .overview-card:nth-child(2n),
+  .alignment-card:nth-child(2n),
+  .next-grid article:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .report-top {
+    padding: 14px;
+  }
+
+  .report-actions {
+    max-width: none;
+  }
+
+  .report-actions :deep(.el-button),
+  .report-actions :deep(.el-dropdown) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .report-hero-grid,
+  .analysis-grid,
+  .voice-delivery-facts,
+  .report-support-strip,
+  .report-professional-strip,
+  .overview-grid,
+  .alignment-card-grid,
+  .next-grid,
+  .stage-report-content,
+  .task-stage-list {
+    grid-template-columns: 1fr;
+  }
+
+  .report-score-panel,
+  .report-summary-panel,
+  .report-action-panel,
+  .voice-delivery-facts article,
+  .report-support-strip span,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article,
+  .stage-copy,
+  .task-stage-item {
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .report-action-panel,
+  .voice-delivery-facts article:last-child,
+  .report-support-strip span:last-child,
+  .report-professional-strip article:last-child,
+  .overview-card:last-child,
+  .alignment-card:last-child,
+  .next-grid article:last-child,
+  .stage-copy:last-child,
+  .task-stage-item:last-child {
+    border-bottom: 0;
+  }
+
+  .analysis-card,
+  .analysis-card:nth-child(2n) {
+    grid-column: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .analysis-card:last-child {
+    border-bottom: 0;
+  }
+
+  .next-action-card,
+  .knowledge-candidate-card,
+  .action-zone {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

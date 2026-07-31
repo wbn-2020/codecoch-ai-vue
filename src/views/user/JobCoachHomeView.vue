@@ -1,366 +1,204 @@
 <template>
   <div class="jobcoach-home">
-    <section class="home-hero">
-      <div class="hero-main">
-        <p class="eyebrow">
-          <Sparkles :size="16" />
-          Offer 冲刺驾驶舱
-        </p>
-        <h1>{{ displayName }}，把今天最该推进的动作放到最前面</h1>
-        <p class="hero-desc">
-          这里会汇总目标岗位、真实训练反馈和 AI 推荐依据。资料不足时不生成能力分，只提示下一步该补哪块证据。
-        </p>
-        <div class="today-brief">
-          <div>
-            <span>今天先做</span>
-            <strong>{{ primaryTask.title }}</strong>
-            <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.reason }}</small>
+    <section class="dashboard-cockpit-grid" :aria-busy="isHomeLoading">
+      <article
+        v-if="orderedActionList[0]"
+        class="primary-action-shell"
+        data-action-item
+        data-primary="true"
+      >
+        <div class="primary-action-panel">
+          <div class="card-heading">
+            <span class="card-kicker">今日主行动</span>
+            <span class="pill" :class="statusClass(orderedActionList[0].statusLabel)">
+              {{ orderedActionList[0].statusLabel }}
+            </span>
           </div>
-          <el-button type="primary" @click="go(primaryTask.path)">
-            <PlayCircle :size="17" />
-            {{ primaryTask.cta }}
-          </el-button>
+          <h2 data-primary-title>{{ orderedActionList[0].title }}</h2>
+          <p>{{ orderedActionList[0].description }}</p>
+          <div class="primary-action-meta">
+            <span>{{ orderedActionList[0].sourceLabel }}</span>
+            <span>{{ orderedActionList[0].minutes }} 分钟</span>
+          </div>
+          <button
+            type="button"
+            class="primary-action-cta"
+            data-primary-cta
+            :disabled="orderedActionList[0].disabled || (!orderedActionList[0].action && (agentTasksLoading || applicationStatsLoading))"
+            @click="runPrimaryTask(orderedActionList[0])"
+          >
+            <PlayCircle :size="18" />
+            {{ orderedActionList[0].cta }}
+          </button>
         </div>
-      </div>
 
-      <aside class="hero-side" :aria-busy="isHomeLoading">
-        <div class="side-header">
-          <span>{{ readinessDisplay.label }}</span>
-          <strong>{{ readinessDisplay.value }}</strong>
+        <details
+          v-if="orderedActionList[0].taskId && canCompleteTask(orderedActionList[0].taskId)"
+          class="task-operations"
+          data-task-operations
+        >
+          <summary tabindex="0">任务操作</summary>
+          <div>
+            <button
+              type="button"
+              :disabled="taskMutationLocked"
+              @click="completeTask(orderedActionList[0].taskId)"
+            >
+              完成
+            </button>
+            <button
+              type="button"
+              :disabled="taskMutationLocked"
+              @click="skipTask(orderedActionList[0].taskId)"
+            >
+              跳过
+            </button>
+          </div>
+        </details>
+      </article>
+
+      <aside class="signal-panel" aria-label="求职关键信号">
+        <div class="signal-heading">
+          <span>关键信号</span>
+          <strong>4 项</strong>
         </div>
-        <div v-if="isHomeLoading" class="inline-loading-strip">
-          <span></span>
-          <p>正在刷新今日冲刺信息</p>
+        <div class="cockpit-signal-grid">
+          <button
+            v-for="signal in dashboardSignals"
+            :key="signal.key"
+            type="button"
+            class="cockpit-signal"
+            :class="{ 'is-ready': signal.ready, 'is-error': Boolean(signal.error) }"
+            :data-signal="signal.key"
+            @click="go(signal.path)"
+          >
+            <component :is="signal.icon" :size="17" />
+            <span>
+              <small>{{ signal.label }}</small>
+              <strong>{{ signal.value }}</strong>
+              <em>{{ signal.error || signal.detail }}</em>
+            </span>
+          </button>
         </div>
-        <div class="confidence-meter" aria-hidden="true">
-          <span :style="{ width: evidenceProgressWidth }"></span>
-        </div>
-        <p class="evidence-progress-note">仅表示资料接入进度，不作为能力评分。</p>
-        <dl>
-          <div>
-            <dt>目标岗位</dt>
-            <dd>{{ targetJobText }}</dd>
-          </div>
-          <div>
-            <dt>当前优先线索</dt>
-            <dd>{{ topWeaknessText }}</dd>
-          </div>
-          <div>
-            <dt>预计训练</dt>
-            <dd>{{ estimatedMinutes }} 分钟</dd>
-          </div>
-          <div>
-            <dt>计划状态</dt>
-            <dd>{{ planStatusText }}</dd>
-          </div>
-        </dl>
       </aside>
     </section>
 
-    <section class="cockpit-grid" :aria-busy="isHomeLoading">
-      <div v-if="isHomeLoading" class="dashboard-loading-note">
-        <span></span>
-        <p>今日行动正在同步，现有入口可继续使用。</p>
-      </div>
-      <article class="cockpit-card target-card">
-        <div class="card-heading">
-          <span class="card-kicker">目标岗位</span>
-          <span class="pill" :class="hasTargetJobSignal ? 'pill--success' : 'pill--warning'">
-            {{ hasTargetJobSignal ? '已选择' : '待选择' }}
-          </span>
-        </div>
-        <h2>{{ targetJobText }}</h2>
-        <p>{{ readinessDisplay.detail }}</p>
-        <div class="target-facts">
-          <span>资料：{{ firstDayReadyCount }}/{{ firstDayActions.length }} 项已接入</span>
-          <span>计划：{{ planStatusText }}</span>
-        </div>
-        <el-button text @click="go(hasTargetJobSignal ? '/job-targets' : '/job-targets/create')">
-          {{ hasTargetJobSignal ? '管理岗位目标' : '设定目标岗位' }}
-        </el-button>
-      </article>
-
-      <article class="cockpit-card primary-action-card">
-        <div class="card-heading">
-          <span class="card-kicker">今日主行动</span>
-          <span class="pill" :class="statusClass(primaryTask.statusLabel)">{{ primaryTask.statusLabel }}</span>
-        </div>
-        <h2>{{ primaryTask.title }}</h2>
-        <p>{{ primaryTask.description }}</p>
-        <ul class="reason-list">
-          <li v-for="reason in primaryTask.reasons" :key="reason">
-            <CheckCircle2 :size="15" />
-            <span>{{ reason }}</span>
-          </li>
-        </ul>
-        <div class="action-facts">
-          <span>依据：{{ primaryTask.reason }}</span>
-          <span>来源：{{ primaryTask.sourceLabel }}</span>
-          <span>边界：{{ primaryTask.trustBoundary }}</span>
-          <span>耗时：{{ primaryTask.minutes }} 分钟</span>
-          <span>收益：{{ primaryTask.benefit }}</span>
-        </div>
-        <div class="focus-actions">
-          <el-button type="primary" :loading="agentTasksLoading" @click="go(primaryTask.path)">
-            <PlayCircle :size="18" />
-            {{ primaryTask.cta }}
-          </el-button>
-          <el-button
-            v-if="primaryTask.taskId && canCompleteTask(primaryTask.taskId)"
-            type="success"
-            :loading="taskMutatingId === primaryTask.taskId"
-            @click="completeTask(primaryTask.taskId)"
-          >
-            完成并复盘
-          </el-button>
-          <el-button
-            v-if="primaryTask.taskId && canSkipTask(primaryTask.taskId)"
-            :loading="taskMutatingId === primaryTask.taskId"
-            @click="skipTask(primaryTask.taskId)"
-          >
-            今天跳过
-          </el-button>
-        </div>
-      </article>
-
-      <article class="cockpit-card training-card">
-        <div class="card-heading">
-          <span class="card-kicker">训练概览</span>
-          <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
-        </div>
-        <div class="training-snapshot">
-          <div v-for="item in trainingSnapshotItems" :key="item.label">
-            <strong>{{ item.value }}</strong>
-            <span>{{ item.label }}</span>
-          </div>
-        </div>
-        <p class="training-note">
-          这里只展示已能支持今天行动的任务、错题和报告反馈，不把缺失数据包装成结论。
-        </p>
-        <el-button text @click="go('/agent/today')">查看今日计划</el-button>
-      </article>
-    </section>
-
-    <section v-if="pageErrors.length" class="error-stack">
-      <article class="state-strip state-strip--warning state-strip--summary">
-        <AlertTriangle :size="18" />
+    <section class="action-timeline">
+      <div class="section-head">
         <div>
-          <strong>部分模块暂时加载失败，已保留可执行入口。</strong>
-          <span>{{ pageErrorSummary }}</span>
-          <small v-if="visiblePageErrorDetails.length">{{ visiblePageErrorDetails.join('；') }}</small>
+          <p class="section-kicker">行动时间线</p>
+          <h2>主行动之后，最多再推进两步</h2>
         </div>
-        <el-button text @click="retryPageErrors">重试全部</el-button>
-      </article>
-    </section>
-
-    <section class="command-center-grid" aria-label="求职作战指挥台摘要">
-      <article class="command-panel">
-        <div class="card-heading">
-          <span class="card-kicker">Agent loop</span>
-          <span class="pill pill--neutral">{{ agentLoopHomeSummary.total }} tasks</span>
+        <div class="section-actions">
+          <el-button text :loading="agentTasksLoading" @click="fetchAgentTasks">刷新</el-button>
+          <el-button @click="go('/agent/tasks')">查看全部</el-button>
         </div>
-        <div class="queue-metrics">
-          <span><strong>{{ agentLoopHomeSummary.done }}</strong>done</span>
-          <span><strong>{{ agentLoopHomeSummary.skipped }}</strong>skipped</span>
-          <span><strong>{{ agentLoopHomeSummary.active }}</strong>active</span>
-          <span><strong>{{ agentLoopHomeSummary.estimatedMinutes }}</strong>min</span>
-        </div>
-        <p>{{ agentLoopHomeAdjustment }}</p>
-        <div class="command-panel__actions">
-          <el-button text @click="go('/agent/reviews')">Review</el-button>
-          <el-button text @click="go('/agent/today')">Today</el-button>
-          <el-button text @click="go('/agent/tasks')">Tasks</el-button>
-        </div>
-      </article>
-
-      <article class="command-panel">
-        <div class="card-heading">
-          <span class="card-kicker">行动队列</span>
-          <span class="pill pill--neutral">今日最多 {{ actionQueueSummary.todayKeyActionLimit }} 项</span>
-        </div>
-        <div class="queue-metrics">
-          <span><strong>{{ actionQueueSummary.todoCount }}</strong>待处理</span>
-          <span><strong>{{ actionQueueSummary.doingCount }}</strong>进行中</span>
-          <span><strong>{{ actionQueueSummary.doneCount + actionQueueSummary.skippedCount }}</strong>已回流</span>
-          <span><strong>{{ actionQueueSummary.estimatedTotalMinutes }}</strong>分钟</span>
-        </div>
-        <p>强推荐只来自有效证据；降级、演示、低样本或未知来源仍可执行，但会保守展示。</p>
-      </article>
-
-      <article class="command-panel">
-        <div class="card-heading">
-          <span class="card-kicker">风险缺口</span>
-          <span class="pill" :class="careerRiskSignals.length ? 'pill--warning' : 'pill--success'">
-            {{ careerRiskSignals.length ? `${careerRiskSignals.length} 项待补` : '暂无阻断' }}
-          </span>
-        </div>
-        <div v-if="careerRiskSignals.length" class="compact-list">
-          <button v-for="risk in careerRiskSignals.slice(0, 3)" :key="risk.id" type="button" @click="go('/agent/today')">
-            <strong>{{ risk.title }}</strong>
-            <span>{{ risk.description }}</span>
-          </button>
-        </div>
-        <p v-else>当前资料可以支撑今日行动，完成后继续把反馈回流到下一轮计划。</p>
-      </article>
-
-      <article class="command-panel">
-        <div class="card-heading">
-          <span class="card-kicker">最近产物</span>
-          <span class="pill pill--neutral">{{ careerRecentArtifacts.length }} 项</span>
-        </div>
-        <div v-if="careerRecentArtifacts.length" class="compact-list">
-          <button v-for="artifact in careerRecentArtifacts" :key="artifact.id" type="button" @click="go(artifact.actionUrl || '/agent/today')">
-            <strong>{{ artifact.title }}</strong>
-            <span>{{ artifact.summary || '回到产物页继续转成行动。' }}</span>
-          </button>
-        </div>
-        <p v-else>完成 JD 匹配、面试报告或今日计划后，这里会出现可转行动入口。</p>
-      </article>
-    </section>
-
-    <section v-if="shouldShowFirstDayActions" class="first-day-section" :aria-busy="isHomeLoading">
-      <div class="section-head first-day-section__head">
-        <div>
-          <p class="section-kicker">3 分钟起步</p>
-          <h2>先补齐驾驶舱需要的 4 个证据</h2>
-        </div>
-        <span class="first-day-progress">{{ firstDayReadyCount }}/{{ firstDayActions.length }} 已就绪</span>
-      </div>
-      <div v-if="isHomeLoading" class="dashboard-loading-note dashboard-loading-note--section">
-        <span></span>
-        <p>正在检查资料接入状态，先保留可执行入口。</p>
       </div>
 
-      <div class="first-day-actions">
+      <p v-if="actionModuleErrorText" class="module-error">
+        {{ actionModuleErrorText }}
+      </p>
+
+      <div v-if="orderedActionList.length > 1" class="timeline-list">
         <article
-          v-for="action in firstDayActions"
-          :key="action.key"
-          class="first-day-action"
-          :class="{ 'is-ready': action.ready, 'is-primary': action.primary }"
+          v-for="(task, index) in orderedActionList.slice(1)"
+          :key="task.key"
+          class="timeline-row"
+          data-action-item
+          data-primary="false"
         >
-          <div class="first-day-action__top">
-            <span class="first-day-action__icon">
-              <component :is="action.icon" :size="18" />
-            </span>
-            <span class="pill" :class="action.statusTone">{{ action.status }}</span>
-          </div>
-          <div>
-            <h3>{{ action.title }}</h3>
-            <p>{{ action.desc }}</p>
-          </div>
-          <el-button
-            :type="action.primary ? 'primary' : 'default'"
-            :plain="!action.primary"
-            :loading="action.loading"
-            @click="runFirstDayAction(action)"
-          >
-            <component :is="action.icon" :size="15" />
-            {{ action.cta }}
-          </el-button>
-        </article>
-      </div>
-    </section>
-
-    <section class="mobile-action-dock" aria-label="手机快速训练入口">
-      <button type="button" class="mobile-action-dock__primary" @click="go(primaryTask.path)">
-        <span>下一步</span>
-        <strong>{{ primaryTask.title }}</strong>
-        <small>{{ primaryTask.minutes }} 分钟 · {{ primaryTask.statusLabel }}</small>
-      </button>
-      <div class="mobile-action-dock__meta">
-        <span><b>状态</b>{{ primaryTask.statusLabel }}</span>
-        <span><b>边界</b>{{ primaryTask.trustBoundary }}</span>
-      </div>
-      <div class="mobile-action-dock__quick">
-        <button v-for="action in mobileQuickActions.slice(0, 2)" :key="action.label" type="button" @click="go(action.path)">
-          <component :is="action.icon" :size="17" />
-          <span>{{ action.label }}</span>
-        </button>
-      </div>
-    </section>
-
-    <section class="workbench-grid">
-      <section class="task-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">近期任务</p>
-            <h2>今天的任务流</h2>
-          </div>
-          <div class="section-actions">
-            <el-button text :loading="agentTasksLoading" @click="fetchAgentTasks">刷新</el-button>
-            <el-button @click="go('/agent/tasks')">查看全部</el-button>
-          </div>
-        </div>
-
-        <div v-if="visibleTaskCards.length" class="task-list">
-          <article v-for="task in visibleTaskCards" :key="task.key" class="task-row">
-            <span class="task-row__type" :class="task.tone">
-              <component :is="task.icon" :size="18" />
-            </span>
-            <div class="task-row__body">
-              <div>
-                <strong>{{ task.title }}</strong>
-                <span class="pill" :class="statusClass(task.statusLabel)">{{ task.statusLabel }}</span>
-              </div>
-              <p>{{ task.description }}</p>
-              <div class="task-row__facts">
-                <span>依据：{{ task.reason }}</span>
-                <span>来源：{{ task.sourceLabel }}</span>
-                <span>边界：{{ task.trustBoundary }}</span>
-                <span>收益：{{ task.benefit }}</span>
-              </div>
+          <span class="timeline-index">{{ index + 2 }}</span>
+          <span class="task-row__type" :class="task.tone">
+            <component :is="task.icon" :size="17" />
+          </span>
+          <div class="task-row__body">
+            <div>
+              <strong>{{ task.title }}</strong>
+              <span class="pill" :class="statusClass(task.statusLabel)">{{ task.statusLabel }}</span>
             </div>
-            <div class="task-row__actions">
+            <div class="timeline-meta">
+              <span>{{ task.sourceLabel }}</span>
               <span>{{ task.minutes }} 分钟</span>
-              <el-button text @click="go(task.path)">开始</el-button>
-              <el-button
-                v-if="task.taskId && canCompleteTask(task.taskId)"
-                text
-                type="success"
-                :loading="taskMutatingId === task.taskId"
+            </div>
+          </div>
+          <button type="button" class="timeline-enter" @click="runHomeTask(task)">进入</button>
+          <details
+            v-if="task.taskId && canCompleteTask(task.taskId)"
+            class="task-operations"
+            data-task-operations
+          >
+            <summary tabindex="0">更多</summary>
+            <div>
+              <button
+                type="button"
+                :disabled="taskMutationLocked"
                 @click="completeTask(task.taskId)"
               >
                 完成
-              </el-button>
+              </button>
+              <button
+                type="button"
+                :disabled="taskMutationLocked"
+                @click="skipTask(task.taskId)"
+              >
+                跳过
+              </button>
             </div>
-          </article>
-        </div>
+          </details>
+        </article>
+      </div>
 
-        <div v-else class="empty-panel">
-          <ClipboardList :size="26" />
-          <strong>今天还没有安排任务</strong>
-          <span>{{ emptyTaskText }}</span>
-          <div class="empty-panel__actions">
-            <el-button type="primary" :loading="dailyPlanGenerating" @click="generatePlan">生成今日计划</el-button>
-            <el-button @click="go('/questions/practice')">先做题库训练</el-button>
-            <el-button @click="go('/interviews/create')">创建模拟面试</el-button>
-          </div>
-        </div>
-      </section>
-
-      <article class="focus-card evidence-card">
-        <div class="card-heading">
-          <span class="card-kicker">AI 推荐依据</span>
-          <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
-        </div>
-        <p class="source-boundary">{{ recommendationBoundaryText }}</p>
-        <div v-if="trustedSuggestionSummaries.length" class="trusted-summary-list">
-          <div v-for="summary in trustedSuggestionSummaries" :key="summary.id">
-            <strong>{{ summary.title }}</strong>
-            <span>{{ summary.sourceLabel }} · {{ summary.boundary }}</span>
-          </div>
-        </div>
-        <div class="source-list">
-          <div v-for="source in recommendationSources" :key="source.key" class="source-item" :class="{ 'is-missing': source.missing }">
-            <component :is="source.icon" :size="17" />
-            <div>
-              <strong>{{ source.title }}</strong>
-              <span>{{ source.desc }}</span>
-            </div>
-          </div>
-        </div>
-      </article>
+      <p v-else class="timeline-empty">当前只有主行动，完成后会继续生成下一步。</p>
     </section>
+
+    <article ref="recommendationSummary" class="recommendation-summary">
+      <div class="card-heading">
+        <span class="card-kicker">推荐依据摘要</span>
+        <span class="pill" :class="confidencePillClass">{{ confidenceLabel }}</span>
+      </div>
+      <p class="source-boundary">{{ recommendationBoundaryText }}</p>
+      <p v-if="evidenceModuleErrorText" class="module-error">{{ evidenceModuleErrorText }}</p>
+
+      <details class="recommendation-details" :open="showRecommendationDetails" @toggle="updateRecommendationDetails">
+        <summary tabindex="0">查看完整依据、来源与边界</summary>
+        <div class="recommendation-details__content">
+          <dl class="recommendation-facts">
+            <div>
+              <dt>主行动依据</dt>
+              <dd>{{ primaryTask.reason }}</dd>
+            </div>
+            <div>
+              <dt>信任边界</dt>
+              <dd>{{ primaryTask.trustBoundary }}</dd>
+            </div>
+            <div>
+              <dt>预期收益</dt>
+              <dd>{{ primaryTask.benefit }}</dd>
+            </div>
+          </dl>
+          <div v-if="trustedSuggestionSummaries.length" class="trusted-summary-list">
+            <div v-for="summary in trustedSuggestionSummaries" :key="summary.id">
+              <strong>{{ summary.title }}</strong>
+              <span>{{ summary.sourceLabel }} · {{ summary.boundary }}</span>
+            </div>
+          </div>
+          <div class="source-list">
+            <div v-for="source in recommendationSources" :key="source.key" class="source-item" :class="{ 'is-missing': source.missing }">
+              <component :is="source.icon" :size="17" />
+              <div>
+                <strong>{{ source.title }}</strong>
+                <span>{{ source.desc }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </article>
+
+    <nav class="mobile-discovery-links" aria-label="推荐依据和资料工具">
+      <button type="button" @click="openRecommendationDetails">查看推荐依据</button>
+      <button type="button" @click="openSecondaryMaterials">打开资料与工具</button>
+    </nav>
 
     <section class="secondary-toggle-section">
       <button type="button" class="secondary-toggle" :aria-expanded="showSecondarySections" @click="showSecondarySections = !showSecondarySections">
@@ -372,91 +210,137 @@
       </button>
     </section>
 
-    <section v-if="showSecondarySections" class="path-section path-section--secondary">
-      <div class="section-head">
-        <div>
-          <p class="section-kicker">资料辅助</p>
-          <h2>需要补资料时，再按这 4 步完善推荐依据</h2>
-        </div>
-        <div class="section-actions">
-          <el-button @click="go('/onboarding')">查看完整引导</el-button>
-        </div>
-      </div>
-
-      <div class="journey">
-        <button v-for="step in journeySteps" :key="step.key" class="journey-step" type="button" @click="go(step.path)">
-          <span class="journey-step__index">{{ step.order }}</span>
-          <component :is="step.icon" :size="19" />
-          <strong>{{ step.title }}</strong>
-          <small>{{ step.desc }}</small>
-          <span class="pill" :class="step.tone">{{ step.status }}</span>
-        </button>
-      </div>
-    </section>
-
-    <section v-if="showSecondarySections" class="insight-grid">
-      <article class="insight-card">
-        <div class="section-head section-head--compact">
+    <section v-if="showSecondarySections" ref="secondaryMaterial" class="secondary-material">
+      <div class="path-section path-section--secondary">
+        <div class="section-head">
           <div>
-            <p class="section-kicker">简历与岗位</p>
-            <h2>资料完整度</h2>
+            <p class="section-kicker">资料辅助</p>
+            <h2>需要补资料时，再按这 6 步完善推荐依据</h2>
           </div>
-          <el-button text @click="go('/resumes')">查看</el-button>
+          <div class="section-actions">
+            <el-button @click="go('/onboarding')">查看完整引导</el-button>
+          </div>
         </div>
-        <div class="readiness-list">
-          <div v-for="item in readinessItems" :key="item.key" class="readiness-item">
-            <span :class="{ 'is-ready': item.ready }"></span>
+
+        <div class="journey">
+          <button v-for="step in journeySteps" :key="step.key" class="journey-step" type="button" @click="go(step.path)">
+            <span class="journey-step__index">{{ step.order }}</span>
+            <component :is="step.icon" :size="19" />
+            <strong>{{ step.title }}</strong>
+            <small>{{ step.desc }}</small>
+            <span class="pill" :class="step.tone">{{ step.status }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="insight-grid">
+        <article class="insight-card">
+          <div class="section-head section-head--compact">
             <div>
-              <strong>{{ item.title }}</strong>
-              <small>{{ item.desc }}</small>
+              <p class="section-kicker">简历与岗位</p>
+              <h2>资料完整度</h2>
+            </div>
+            <el-button text @click="go('/resumes')">查看</el-button>
+          </div>
+          <div class="readiness-list">
+            <div v-for="item in readinessItems" :key="item.key" class="readiness-item">
+              <span :class="{ 'is-ready': item.ready }"></span>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.desc }}</small>
+              </div>
             </div>
           </div>
-        </div>
-      </article>
+        </article>
 
-      <article class="insight-card">
-        <div class="section-head section-head--compact">
-          <div>
-            <p class="section-kicker">最近反馈</p>
-            <h2>报告与错题</h2>
+        <article class="insight-card">
+          <div class="section-head section-head--compact">
+            <div>
+              <p class="section-kicker">最近反馈</p>
+              <h2>报告与错题</h2>
+            </div>
+            <el-button text @click="go('/analytics/personal')">分析</el-button>
           </div>
-          <el-button text @click="go('/analytics/personal')">分析</el-button>
-        </div>
-        <div class="feedback-list">
-          <button v-if="overview?.recentReport" type="button" @click="go(`/interviews/${overview.recentReport.interviewId}/report`)">
-            <BarChart3 :size="18" />
-            <span>
-              <strong>最近面试报告 {{ overview.recentReport.totalScore ?? '--' }} 分</strong>
-              <small>{{ reportInsightText }}</small>
-            </span>
-          </button>
-          <button v-if="wrongQuestions.length" type="button" @click="go('/questions/wrong-records')">
-            <AlertTriangle :size="18" />
-            <span>
-              <strong>{{ wrongQuestions.length }} 道错题待复盘</strong>
-              <small>{{ wrongQuestions[0]?.title || '从最近错题开始校准薄弱点' }}</small>
-            </span>
-          </button>
-          <div v-if="!overview?.recentReport && !wrongQuestions.length" class="empty-small">
-            完成一次模拟面试或刷题后，这里会出现可回流到今日计划的反馈。
+          <div class="feedback-list">
+            <button v-if="overview?.recentReport" type="button" @click="go(`/interviews/${overview.recentReport.interviewId}/report`)">
+              <BarChart3 :size="18" />
+              <span>
+                <strong>最近面试报告 {{ overview.recentReport.totalScore ?? '--' }} 分</strong>
+                <small>{{ reportInsightText }}</small>
+              </span>
+            </button>
+            <button v-if="wrongQuestions.length" type="button" @click="go('/questions/wrong-records')">
+              <AlertTriangle :size="18" />
+              <span>
+                <strong>{{ wrongQuestions.length }} 道错题待复盘</strong>
+                <small>{{ wrongQuestions[0]?.title || '从最近错题开始校准薄弱点' }}</small>
+              </span>
+            </button>
+            <div v-if="!overview?.recentReport && !wrongQuestions.length" class="empty-small">
+              完成一次模拟面试或刷题后，这里会出现可回流到今日计划的反馈。
+            </div>
           </div>
-        </div>
-      </article>
+        </article>
 
-      <article class="insight-card">
-        <div class="section-head section-head--compact">
-          <div>
-            <p class="section-kicker">记录与工具</p>
-            <h2>面试前工具箱</h2>
+        <article class="insight-card">
+          <div class="section-head section-head--compact">
+            <div>
+              <p class="section-kicker">记录与工具</p>
+              <h2>面试前工具箱</h2>
+            </div>
           </div>
-        </div>
-        <div class="tool-list">
-          <button v-for="tool in tools" :key="tool.title" type="button" @click="go(tool.path)">
-            <component :is="tool.icon" :size="17" />
-            <span>{{ tool.title }}</span>
-          </button>
-        </div>
-      </article>
+          <div class="tool-list">
+            <button v-for="tool in tools" :key="tool.title" type="button" @click="go(tool.path)">
+              <component :is="tool.icon" :size="17" />
+              <span>{{ tool.title }}</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="insight-card recent-artifacts-panel">
+          <div class="section-head section-head--compact">
+            <div>
+              <p class="section-kicker">最近产物</p>
+              <h2>可继续转成行动</h2>
+            </div>
+          </div>
+          <div v-if="careerRecentArtifacts.length" class="artifact-list">
+            <button
+              v-for="artifact in careerRecentArtifacts"
+              :key="artifact.id"
+              type="button"
+              @click="go(artifact.actionUrl || '/agent/today')"
+            >
+              <strong>{{ artifact.title }}</strong>
+              <small>{{ artifact.summary || '回到产物页继续推进。' }}</small>
+            </button>
+          </div>
+          <p v-else class="empty-small">完成 JD 匹配、面试报告或今日计划后，这里会出现最近产物。</p>
+        </article>
+
+        <article class="insight-card agent-loop-panel">
+          <div class="section-head section-head--compact">
+            <div>
+              <p class="section-kicker">Agent loop</p>
+              <h2>详细统计</h2>
+            </div>
+          </div>
+          <dl class="agent-loop-stats">
+            <div><dt>全部</dt><dd>{{ agentLoopHomeSummary.total }}</dd></div>
+            <div><dt>进行中</dt><dd>{{ agentLoopHomeSummary.active }}</dd></div>
+            <div><dt>完成</dt><dd>{{ agentLoopHomeSummary.done }}</dd></div>
+            <div><dt>跳过</dt><dd>{{ agentLoopHomeSummary.skipped }}</dd></div>
+            <div><dt>预计分钟</dt><dd>{{ agentLoopHomeSummary.estimatedMinutes }}</dd></div>
+          </dl>
+          <div v-if="agentLoopHomeLatestReview" class="agent-loop-review-meta" data-latest-review>
+            <span>最近复盘 {{ agentLoopHomeLatestReview.reviewDate || agentLoopHomeLatestReview.createdAt || '日期待确认' }}</span>
+            <span>{{ agentLoopHomeReviewConfidence }}</span>
+            <span v-if="agentLoopHomeLatestReview.fallback">规则兜底</span>
+          </div>
+          <p data-agent-loop-adjustment>{{ agentLoopHomeAdjustment }}</p>
+          <el-button text @click="go('/agent/reviews')">查看复盘</el-button>
+        </article>
+      </div>
     </section>
 
     <el-dialog v-model="completionReviewVisible" title="完成后复盘" width="520px">
@@ -488,9 +372,7 @@ import {
   BookOpenCheck,
   Briefcase,
   ChevronDown,
-  CheckCircle2,
   ClipboardCheck,
-  ClipboardList,
   FileText,
   History,
   MessageSquare,
@@ -499,16 +381,26 @@ import {
   Sparkles,
   Target
 } from 'lucide-vue-next'
-import type { Component } from 'vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { Component, Ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 
 import {
   completeAgentTaskApi,
-  generateDailyPlanApi,
   skipAgentTaskApi
 } from '@/api/agent'
+import {
+  getNotificationsApi,
+  markNotificationReadApi,
+  type NotificationVO
+} from '@/api/notification'
+import {
+  getAgentReviewsApi,
+  getApplicationStatsApi,
+  type AgentReviewVO,
+  type JobApplicationStatsVO
+} from '@/api/v4'
 import {
   fetchCachedDashboardOverview,
   fetchCachedLatestDailyPlan,
@@ -519,7 +411,6 @@ import {
 } from '@/composables/useUserHomeDataCache'
 import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
 import {
-  buildActionQueueSummary,
   buildCareerActionQueue,
   buildCareerRecentArtifacts,
   buildCareerRiskSignals,
@@ -530,7 +421,7 @@ import {
   isCareerActionClosed,
   type CareerActionItemVO
 } from '@/features/career-command-center'
-import { useAuthStore } from '@/stores/auth'
+import { buildTodayActions, type TodayActionItem } from '@/features/today-actions'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
@@ -542,13 +433,15 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatLocalDate } from '@/utils/format'
-import { createOperationIdempotencyKey } from '@/utils/idempotency'
+import { notifyUnreadChanged } from '@/utils/notificationEvents'
 import request from '@/utils/request'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface HomeTask {
   key: string
   taskId?: number
+  action?: 'retry-home-data'
+  disabled?: boolean
   title: string
   description: string
   reason: string
@@ -563,25 +456,31 @@ interface HomeTask {
   sourceLabel: string
   trustBoundary: string
   promoted: boolean
+  notificationId?: number | string
 }
 
-interface FirstDayAction {
-  key: string
-  title: string
-  desc: string
+type ResourceLoadState = 'idle' | 'loading' | 'success' | 'error'
+
+interface LatestRequestOptions<T> {
+  request: () => Promise<T>
+  apply: (value: T) => void
+  clear: () => void
+  preserveCurrent: boolean
+  fallbackError: string
+}
+
+interface DashboardSignal {
+  key: 'target-job' | 'evidence' | 'recent-report' | 'risk-gap'
+  label: string
+  value: string
+  detail: string
   path: string
-  cta: string
-  status: string
-  statusTone: string
   ready: boolean
-  primary: boolean
-  loading?: boolean
-  actionType?: 'generate-plan'
+  error?: string
   icon: Component
 }
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 const overview = ref<UserDashboardOverviewVO | null>(null)
 const v3Overview = ref<V3DashboardOverviewVO | null>(null)
@@ -590,25 +489,95 @@ const v3OverviewLoading = ref(false)
 const overviewError = ref('')
 const v3OverviewError = ref('')
 
+const applicationStats = ref<JobApplicationStatsVO | null>(null)
+const applicationStatsLoading = ref(false)
+const applicationStatsError = ref('')
+
+const notifications = ref<NotificationVO[]>([])
+const notificationsLoading = ref(false)
+const notificationsError = ref('')
+
 const dailyPlan = ref<DailyPlanVO | null>(null)
 const dailyPlanLoading = ref(false)
-const dailyPlanGenerating = ref(false)
 const dailyPlanError = ref('')
 
 const agentTasks = ref<AgentTaskVO[]>([])
 const agentTasksLoading = ref(false)
 const agentTasksError = ref('')
-const taskMutatingId = ref<number | null>(null)
+
+const agentReviews = ref<AgentReviewVO[]>([])
+const agentReviewsLoading = ref(false)
+const agentReviewsError = ref('')
+
+const taskMutationLocked = ref(false)
 const completionReviewVisible = ref(false)
 const completionReviewTask = ref<AgentTaskVO | null>(null)
 const completionReviewNote = ref('')
 const showSecondarySections = ref(false)
+const showRecommendationDetails = ref(false)
+const recommendationSummary = ref<HTMLElement>()
+const secondaryMaterial = ref<HTMLElement>()
 
 const wrongQuestions = ref<WrongQuestionVO[]>([])
-const wrongQuestionsLoading = ref(false)
 const wrongQuestionsError = ref('')
 
-const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || '同学')
+const overviewLoadState = ref<ResourceLoadState>('idle')
+const v3OverviewLoadState = ref<ResourceLoadState>('idle')
+const applicationStatsLoadState = ref<ResourceLoadState>('idle')
+const notificationsLoadState = ref<ResourceLoadState>('idle')
+const dailyPlanLoadState = ref<ResourceLoadState>('idle')
+const agentTasksLoadState = ref<ResourceLoadState>('idle')
+const agentReviewsLoadState = ref<ResourceLoadState>('idle')
+
+const createLatestRequestRunner = (
+  loading: Ref<boolean>,
+  state: Ref<ResourceLoadState>,
+  errorText: Ref<string>
+) => {
+  let latestGeneration = 0
+
+  return async <T>(options: LatestRequestOptions<T>) => {
+    const generation = ++latestGeneration
+    loading.value = true
+    if (!options.preserveCurrent || state.value === 'idle') state.value = 'loading'
+    errorText.value = ''
+
+    try {
+      const value = await options.request()
+      if (generation !== latestGeneration) return
+      options.apply(value)
+      state.value = 'success'
+    } catch (error) {
+      if (generation !== latestGeneration) return
+      if (!options.preserveCurrent) options.clear()
+      errorText.value = getErrorMessage(error, options.fallbackError)
+      state.value = 'error'
+    } finally {
+      if (generation === latestGeneration) loading.value = false
+    }
+  }
+}
+
+const runLatestOverviewRequest = createLatestRequestRunner(overviewLoading, overviewLoadState, overviewError)
+const runLatestV3OverviewRequest = createLatestRequestRunner(v3OverviewLoading, v3OverviewLoadState, v3OverviewError)
+const runLatestApplicationStatsRequest = createLatestRequestRunner(
+  applicationStatsLoading,
+  applicationStatsLoadState,
+  applicationStatsError
+)
+const runLatestNotificationsRequest = createLatestRequestRunner(
+  notificationsLoading,
+  notificationsLoadState,
+  notificationsError
+)
+const runLatestDailyPlanRequest = createLatestRequestRunner(dailyPlanLoading, dailyPlanLoadState, dailyPlanError)
+const runLatestAgentTasksRequest = createLatestRequestRunner(agentTasksLoading, agentTasksLoadState, agentTasksError)
+const runLatestAgentReviewsRequest = createLatestRequestRunner(
+  agentReviewsLoading,
+  agentReviewsLoadState,
+  agentReviewsError
+)
+
 const hasResumeSignal = computed(() => Boolean(overview.value?.resumeCount))
 const currentTargetJob = computed(() => v3Overview.value?.currentTargetJob || null)
 const currentTargetJobId = computed(() => {
@@ -617,79 +586,58 @@ const currentTargetJobId = computed(() => {
 })
 const hasTargetJobSignal = computed(() => Boolean(currentTargetJobId.value))
 const hasTodayPlanSignal = computed(() => Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length))
-const hasPracticeFeedbackSignal = computed(() => Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview))
-const isHomeLoading = computed(() => overviewLoading.value || v3OverviewLoading.value || dailyPlanLoading.value || agentTasksLoading.value)
-const firstDayActions = computed<FirstDayAction[]>(() => [
-  {
-    key: 'resume',
-    title: hasResumeSignal.value ? '简历证据已接入' : '补一份可匹配简历',
-    desc: hasResumeSignal.value
-      ? `已有 ${overview.value?.resumeCount || 0} 份简历，后续匹配和追问会围绕项目证据展开。`
-      : '没有简历时只能给通用建议，先上传或新建一份能被岗位匹配的简历。',
-    path: '/resumes',
-    cta: hasResumeSignal.value ? '查看简历' : '补充简历',
-    status: hasResumeSignal.value ? '已接入' : '待补充',
-    statusTone: hasResumeSignal.value ? 'pill--success' : 'pill--warning',
-    ready: hasResumeSignal.value,
-    primary: !hasResumeSignal.value,
-    icon: FileText
-  },
-  {
-    key: 'target-job',
-    title: hasTargetJobSignal.value ? '岗位方向已明确' : '选择目标岗位/JD',
-    desc: hasTargetJobSignal.value
-      ? targetJobText.value
-      : '设定岗位方向后，题目、面试和简历匹配会按同一个目标收束。',
-    path: hasTargetJobSignal.value ? '/job-targets' : '/job-targets/create',
-    cta: hasTargetJobSignal.value ? '查看岗位' : '设定岗位',
-    status: hasTargetJobSignal.value ? '已明确' : '待选择',
-    statusTone: hasTargetJobSignal.value ? 'pill--success' : 'pill--warning',
-    ready: hasTargetJobSignal.value,
-    primary: hasResumeSignal.value && !hasTargetJobSignal.value,
-    icon: Briefcase
-  },
-  {
-    key: 'today-plan',
-    title: hasTodayPlanSignal.value ? '今日任务已生成' : '生成今天的任务',
-    desc: hasTodayPlanSignal.value
-      ? `已有 ${agentTasks.value.length || dailyPlan.value?.tasks?.length || 0} 个动作可推进，先完成最上面的优先任务。`
-      : '用现有简历、岗位和训练反馈生成今天要做的 1-3 个动作。',
-    path: hasTodayPlanSignal.value ? '/agent/tasks' : '/agent/today',
-    cta: hasTodayPlanSignal.value ? '打开任务' : '生成计划',
-    status: hasTodayPlanSignal.value ? '有任务' : '待生成',
-    statusTone: hasTodayPlanSignal.value ? 'pill--success' : 'pill--warning',
-    ready: hasTodayPlanSignal.value,
-    primary: hasResumeSignal.value && hasTargetJobSignal.value && !hasTodayPlanSignal.value,
-    loading: dailyPlanGenerating.value || dailyPlanLoading.value,
-    actionType: hasTodayPlanSignal.value ? undefined : 'generate-plan',
-    icon: Sparkles
-  },
-  {
-    key: 'starter-training',
-    title: wrongQuestions.value.length ? '从错题反馈开始' : '先做一组 Java 训练',
-    desc: wrongQuestions.value.length
-      ? `${wrongQuestions.value.length} 道错题可用于校准今天的短板。`
-      : '资料还不完整时，也可以先刷一组通用 Java 题，马上产生训练反馈。',
-    path: wrongQuestions.value.length ? '/questions/wrong-records' : '/questions/practice',
-    cta: wrongQuestions.value.length ? '复盘错题' : '开始训练',
-    status: hasPracticeFeedbackSignal.value ? '有反馈' : '可开始',
-    statusTone: hasPracticeFeedbackSignal.value ? 'pill--success' : 'pill--neutral',
-    ready: hasPracticeFeedbackSignal.value,
-    primary: !hasTodayPlanSignal.value && !hasResumeSignal.value,
-    icon: BookOpenCheck
-  }
+const isHomeLoading = computed(() =>
+  overviewLoading.value ||
+  v3OverviewLoading.value ||
+  applicationStatsLoading.value ||
+  dailyPlanLoading.value ||
+  agentTasksLoading.value
+)
+const primaryDependenciesPending = computed(() => [
+  overviewLoadState.value,
+  v3OverviewLoadState.value,
+  applicationStatsLoadState.value,
+  dailyPlanLoadState.value,
+  agentTasksLoadState.value
+].some((state) => state === 'idle' || state === 'loading'))
+const primaryDependenciesFailed = computed(() => [
+  overviewLoadState.value,
+  v3OverviewLoadState.value,
+  applicationStatsLoadState.value,
+  dailyPlanLoadState.value,
+  agentTasksLoadState.value
+].some((state) => state === 'error'))
+const overviewPending = computed(() => ['idle', 'loading'].includes(overviewLoadState.value))
+const v3OverviewPending = computed(() => ['idle', 'loading'].includes(v3OverviewLoadState.value))
+const firstDayReadiness = computed(() => [
+  hasResumeSignal.value,
+  hasTargetJobSignal.value,
+  hasTodayPlanSignal.value,
+  Boolean(wrongQuestions.value.length || overview.value?.recentReport || overview.value?.recentInterview)
 ])
-const firstDayReadyCount = computed(() => firstDayActions.value.filter((action) => action.ready).length)
-const activeTasks = computed(() => agentTasks.value.filter((task) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())))
-const careerActions = computed(() => buildCareerActionQueue(agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []))
-const actionQueueSummary = computed(() => buildActionQueueSummary(careerActions.value))
+const firstDayReadyCount = computed(() => firstDayReadiness.value.filter(Boolean).length)
+const homeAgentTasks = computed<AgentTaskVO[]>(() =>
+  agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+)
+const careerActions = computed(() => buildCareerActionQueue(homeAgentTasks.value))
 const agentLoopHomeOverview = computed(() => buildAgentLoopOverview({
   plan: dailyPlan.value,
-  todayTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || [],
-  historyTasks: agentTasks.value.length ? agentTasks.value : dailyPlan.value?.tasks || []
+  todayTasks: homeAgentTasks.value,
+  historyTasks: homeAgentTasks.value,
+  reviews: agentReviews.value
 }))
 const agentLoopHomeSummary = computed(() => agentLoopHomeOverview.value.weekSummary)
 const agentLoopHomeAdjustment = computed(() => agentLoopHomeOverview.value.nextAdjustmentSummary)
+const agentLoopHomeLatestReview = computed(() => agentLoopHomeOverview.value.latestReview)
+const agentLoopHomeReviewConfidence = computed(() => {
+  const confidence = String(agentLoopHomeLatestReview.value?.confidenceLevel || '').toUpperCase()
+  return {
+    HIGH: '高置信度',
+    MEDIUM: '中等置信度',
+    LOW: '低置信度',
+    INSUFFICIENT: '证据不足'
+  }[confidence] || '置信度待确认'
+})
 const primaryCareerAction = computed(() =>
   careerActions.value.find(canPromoteCareerAction)
   || careerActions.value.find((action) => !isCareerActionClosed(action))
@@ -698,10 +646,87 @@ const primaryCareerAction = computed(() =>
 const taskCards = computed<HomeTask[]>(() => {
   return careerActions.value.slice(0, 5).map(toHomeTaskFromCareerAction)
 })
-const visibleTaskCards = computed(() => taskCards.value.slice(0, 3))
-const shouldShowFirstDayActions = computed(() => firstDayReadyCount.value < firstDayActions.value.length)
+const readinessNextAction = computed(() => {
+  if (!overview.value?.resumeCount) {
+    return {
+      title: '先补一份可用于匹配的简历',
+      description: '没有简历时，AI 只能给通用训练建议。上传或创建简历后，推荐才能围绕项目经历和岗位要求展开。',
+      reason: '缺少简历资料',
+      label: '补充简历',
+      path: '/resumes'
+    }
+  }
+  if (!overview.value?.recentInterview && !overview.value?.recentReport) {
+    return {
+      title: '完成一次目标岗位模拟面试',
+      description: '系统需要真实面试反馈来判断表达、项目深度和知识薄弱点。先做一轮轻量模拟面试，再把报告反哺到今日计划。',
+      reason: '缺少面试反馈',
+      label: '创建模拟面试',
+      path: '/interviews/create'
+    }
+  }
+  if (wrongQuestions.value.length) {
+    return {
+      title: '复盘最近错题，校准今日短板',
+      description: `${wrongQuestions.value.length} 道错题可用于确认知识点是否真正掌握。先从最近出错的题开始。`,
+      reason: '来自错题记录',
+      label: '复盘错题',
+      path: '/questions/wrong-records'
+    }
+  }
+  return {
+    title: '生成今天的智能教练计划',
+    description: '当前还没有安排好的训练动作。生成计划后，你会看到任务、推荐理由、预计耗时和开始入口。',
+    reason: '等待智能教练生成',
+    label: '去生成计划',
+    path: '/agent/today'
+  }
+})
+const todayActions = computed(() => buildTodayActions({
+  agentTasks: homeAgentTasks.value,
+  applicationStats: applicationStats.value,
+  notifications: notifications.value,
+  readinessNextAction: readinessNextAction.value
+}, {
+  maxItems: 5
+}))
+const todayActionCards = computed<HomeTask[]>(() => todayActions.value.map(toHomeTaskFromTodayAction))
 
 const primaryTask = computed<HomeTask>(() => {
+  if (primaryDependenciesPending.value) {
+    return fallbackTask({
+      title: '正在整理今天的行动',
+      description: '正在读取简历、目标岗位、今日计划和投递状态，完成后再给出明确的下一步。',
+      reason: '核心资料仍在加载',
+      cta: '正在整理',
+      path: '/dashboard',
+      statusLabel: '加载中',
+      icon: Sparkles,
+      tone: 'tone-blue',
+      benefit: '避免在资料尚未返回时误判为缺失',
+      reasons: ['等待最新资料返回', '旧请求不会覆盖新结果', '加载完成后自动更新'],
+      disabled: true
+    })
+  }
+
+  if (primaryDependenciesFailed.value) {
+    return fallbackTask({
+      title: '重新加载今日行动',
+      description: '部分核心资料暂时没有加载成功。重新加载后再判断今天最该推进什么。',
+      reason: '核心资料加载失败',
+      cta: '重新加载',
+      path: '/dashboard',
+      statusLabel: '待重试',
+      icon: Sparkles,
+      tone: 'tone-blue',
+      benefit: '避免把接口失败误判成资料缺失',
+      reasons: ['保留已成功返回的数据', '重新获取失败模块', '只采用最新一轮响应'],
+      action: 'retry-home-data'
+    })
+  }
+
+  if (todayActionCards.value.length) return todayActionCards.value[0]
+
   if (primaryCareerAction.value) {
     const task = findTaskByCareerAction(primaryCareerAction.value)
     const promoted = canPromoteCareerAction(primaryCareerAction.value)
@@ -776,6 +801,22 @@ const primaryTask = computed<HomeTask>(() => {
   })
 })
 
+const orderedActionList = computed<HomeTask[]>(() => {
+  const seenKeys = new Set<string>()
+  const seenIntents = new Set<string>()
+  const candidates = [primaryTask.value, ...todayActionCards.value, ...taskCards.value]
+
+  return candidates.filter((task, index) => {
+    if (index > 0 && ['已完成', '已跳过'].includes(task.statusLabel)) return false
+    const key = task.key || `${task.path}:${task.title}`
+    const intent = `${task.path.split('?')[0]}:${task.title}`
+    if (seenKeys.has(key) || seenIntents.has(intent)) return false
+    seenKeys.add(key)
+    seenIntents.add(intent)
+    return true
+  }).slice(0, 3)
+})
+
 const completionReviewItems = computed(() => {
   const task = completionReviewTask.value
   const type = String(task?.taskType || '').toUpperCase()
@@ -830,29 +871,6 @@ const targetJobText = computed(() => {
   return [job.companyName, job.jobTitle, job.jobLevel].filter(Boolean).join(' · ') || '已选择目标岗位'
 })
 
-const topWeaknessText = computed(() => {
-  const reportWeak = overview.value?.recentReport?.weakPoints?.[0]
-  if (reportWeak) return reportWeak
-  const taskSkill = activeTasks.value[0]?.relatedSkillName
-  if (taskSkill) return taskSkill
-  if (wrongQuestions.value[0]?.title) return wrongQuestions.value[0].title
-  return '完成训练后自动归因'
-})
-
-const estimatedMinutes = computed(() => {
-  const fromTasks = agentTasks.value.reduce((sum, task) => sum + (Number(task.estimatedMinutes) || 0), 0)
-  if (fromTasks > 0) return fromTasks
-  const fromPlan = dailyPlan.value?.tasks?.reduce((sum, task) => sum + (Number(task.estimatedMinutes) || 0), 0) || 0
-  return fromPlan || 30
-})
-
-const planStatusText = computed(() => {
-  if (dailyPlan.value?.empty) return dailyPlan.value.emptyMessage || '暂无计划'
-  if (dailyPlan.value?.status) return formatStatus(dailyPlan.value.status)
-  if (agentTasks.value.length) return '已有今日任务'
-  return '待生成'
-})
-
 const hasTrustedReport = computed(() => {
   const report = overview.value?.recentReport
   if (!report) return false
@@ -873,7 +891,6 @@ const evidenceProgressItems = computed(() => [
   Boolean(agentTasks.value.length || dailyPlan.value?.tasks?.length)
 ])
 const evidenceProgressCount = computed(() => evidenceProgressItems.value.filter(Boolean).length)
-const evidenceProgressWidth = computed(() => `${Math.max(12, evidenceProgressCount.value * 20)}%`)
 
 const confidenceLabel = computed(() => {
   if (hasUntrustedRecentReport.value) return '待复核'
@@ -899,6 +916,22 @@ const trustedLatestMatch = computed(() => {
 })
 
 const readinessDisplay = computed(() => {
+  if (overviewPending.value || v3OverviewPending.value) {
+    return {
+      label: '资料状态',
+      value: '加载中',
+      detail: '正在读取简历和目标岗位资料，完成后再判断接入情况。'
+    }
+  }
+
+  if (overviewLoadState.value === 'error' || v3OverviewLoadState.value === 'error') {
+    return {
+      label: '资料状态',
+      value: '暂不可用',
+      detail: '部分资料暂时加载失败，重新加载后再判断接入情况。'
+    }
+  }
+
   const match = trustedLatestMatch.value
   if (match) {
     return {
@@ -923,62 +956,72 @@ const readinessDisplay = computed(() => {
   }
 })
 
-const trainingSnapshotItems = computed(() => [
-  {
-    label: '今日任务',
-    value: String(agentTasks.value.length || dailyPlan.value?.tasks?.length || overview.value?.todayTaskCount || 0)
-  },
-  {
-    label: '已完成',
-    value: String(overview.value?.todayCompletedTaskCount || agentTasks.value.filter((task) => String(task.status || '').toUpperCase() === 'DONE').length)
-  },
-  {
-    label: '最近错题',
-    value: String(wrongQuestions.value.length)
-  }
-])
-
 const recommendationBoundaryText = computed(() => {
+  if (overviewPending.value || v3OverviewPending.value) return '正在读取推荐依据，资料返回前不会推断缺失项。'
+  if (overviewLoadState.value === 'error' || v3OverviewLoadState.value === 'error') return '部分推荐依据暂不可用，重新加载后再判断资料缺口。'
   if (!overview.value?.resumeCount) return '当前是通用建议：补充简历后，匹配和训练建议会更贴近你的项目经历。'
   if (hasUntrustedRecentReport.value) return '最近报告失败、降级或待复核，当前计划不会把它作为高可信依据。建议先重新生成报告或继续用简历、岗位和错题训练。'
   if (!hasTrustedReport.value) return '当前推荐先结合已有简历、岗位和错题记录；报告完成后会继续补充训练重点。'
   return '当前推荐已接入简历、训练反馈和报告内容；仍建议在开始训练前确认岗位方向是否最新。'
 })
 
-const recommendationSources = computed(() => [
-  {
-    key: 'resume',
-    title: overview.value?.resumeCount ? '简历资料已接入' : '缺少简历资料',
-    desc: overview.value?.resumeCount ? `已有 ${overview.value.resumeCount} 份简历，可用于判断项目经历。` : '补充简历后才能围绕项目经历推荐训练。',
-    icon: FileText,
-    missing: !overview.value?.resumeCount
-  },
-  {
-    key: 'jd',
-    title: targetJobText.value !== '待选择目标岗位' ? '岗位目标已接入' : '缺少目标岗位',
-    desc: targetJobText.value !== '待选择目标岗位' ? targetJobText.value : '选择岗位方向或粘贴岗位描述后，推荐会更贴近面试要求。',
-    icon: Briefcase,
-    missing: targetJobText.value === '待选择目标岗位'
-  },
-  {
-    key: 'report',
-    title: hasTrustedReport.value ? '面试报告已接入' : overview.value?.recentReport ? '最近报告待复核' : '暂无面试报告',
-    desc: hasTrustedReport.value
-      ? reportInsightText.value
-      : overview.value?.recentReport
-        ? `报告状态：${formatStatus(overview.value.recentReport.status)}，失败或待复核报告不会作为高可信依据。`
-        : '完成一次模拟面试后，薄弱点会回流到计划。',
-    icon: BarChart3,
-    missing: !hasTrustedReport.value
-  },
-  {
-    key: 'wrong',
-    title: wrongQuestions.value.length ? '错题记录已接入' : '暂无错题记录',
-    desc: wrongQuestions.value.length ? `${wrongQuestions.value.length} 道错题可用于校准薄弱点。` : '刷题后产生的错题会影响下一轮推荐。',
-    icon: AlertTriangle,
-    missing: !wrongQuestions.value.length
-  }
-])
+const recommendationSources = computed(() => {
+  const overviewUnavailable = overviewLoadState.value === 'error'
+  const v3OverviewUnavailable = v3OverviewLoadState.value === 'error'
+
+  return [
+    {
+      key: 'resume',
+      title: overviewPending.value
+        ? '简历资料加载中'
+        : overviewUnavailable
+          ? '简历资料暂不可用'
+          : overview.value?.resumeCount ? '简历资料已接入' : '缺少简历资料',
+      desc: overviewPending.value || overviewUnavailable
+        ? '资料状态确定后再展示简历接入结论。'
+        : overview.value?.resumeCount ? `已有 ${overview.value.resumeCount} 份简历，可用于判断项目经历。` : '补充简历后才能围绕项目经历推荐训练。',
+      icon: FileText,
+      missing: overviewLoadState.value === 'success' && !overview.value?.resumeCount
+    },
+    {
+      key: 'jd',
+      title: v3OverviewPending.value
+        ? '岗位目标加载中'
+        : v3OverviewUnavailable
+          ? '岗位目标暂不可用'
+          : hasTargetJobSignal.value ? '岗位目标已接入' : '缺少目标岗位',
+      desc: v3OverviewPending.value || v3OverviewUnavailable
+        ? '岗位状态确定后再展示接入结论。'
+        : hasTargetJobSignal.value ? targetJobText.value : '选择岗位方向或粘贴岗位描述后，推荐会更贴近面试要求。',
+      icon: Briefcase,
+      missing: v3OverviewLoadState.value === 'success' && !hasTargetJobSignal.value
+    },
+    {
+      key: 'report',
+      title: overviewPending.value
+        ? '面试报告加载中'
+        : overviewUnavailable
+          ? '面试报告暂不可用'
+          : hasTrustedReport.value ? '面试报告已接入' : overview.value?.recentReport ? '最近报告待复核' : '暂无面试报告',
+      desc: overviewPending.value || overviewUnavailable
+        ? '概览状态确定后再展示报告结论。'
+        : hasTrustedReport.value
+          ? reportInsightText.value
+          : overview.value?.recentReport
+            ? `报告状态：${formatStatus(overview.value.recentReport.status)}，失败或待复核报告不会作为高可信依据。`
+            : '完成一次模拟面试后，薄弱点会回流到计划。',
+      icon: BarChart3,
+      missing: overviewLoadState.value === 'success' && !hasTrustedReport.value
+    },
+    {
+      key: 'wrong',
+      title: wrongQuestions.value.length ? '错题记录已接入' : '暂无错题记录',
+      desc: wrongQuestions.value.length ? `${wrongQuestions.value.length} 道错题可用于校准薄弱点。` : '刷题后产生的错题会影响下一轮推荐。',
+      icon: AlertTriangle,
+      missing: !wrongQuestions.value.length
+    }
+  ]
+})
 
 const journeySteps = computed(() => [
   {
@@ -1020,6 +1063,26 @@ const journeySteps = computed(() => [
     icon: Sparkles,
     status: agentTasks.value.length ? '有任务' : '待生成',
     tone: agentTasks.value.length ? 'pill--success' : 'pill--warning'
+  },
+  {
+    key: 'knowledge',
+    order: 5,
+    title: '知识资料',
+    desc: '补充可影响推荐的项目、概念和表达素材',
+    path: '/knowledge',
+    icon: BookOpenCheck,
+    status: '可补充',
+    tone: 'pill--neutral'
+  },
+  {
+    key: 'memory',
+    order: 6,
+    title: '长期记忆',
+    desc: '确认偏好、约束和候选记忆是否进入 Agent 上下文',
+    path: '/agent/memory',
+    icon: Sparkles,
+    status: '待确认',
+    tone: 'pill--warning'
   }
 ])
 
@@ -1051,13 +1114,6 @@ const reportInsightText = computed(() => {
   return insights.join(' · ') || `${formatStatus(report.status)} · ${report.totalScore ?? '--'} 分`
 })
 
-const emptyTaskText = computed(() => {
-  if (dailyPlanError.value || agentTasksError.value) return '今日任务暂时加载失败，可以稍后重试，或先去刷题/面试。'
-  if (!overview.value?.resumeCount) return '先补简历后，今日计划会更可信。'
-  if (!hasTargetJobSignal.value) return '先设定目标岗位后，今日计划会更可信。'
-  return '生成计划后，这里会出现今天最该推进的训练动作。'
-})
-
 const pageErrors = computed(() => [
   overviewError.value
     ? { key: 'overview', message: overviewError.value, retry: fetchOverview }
@@ -1065,24 +1121,38 @@ const pageErrors = computed(() => [
   v3OverviewError.value
     ? { key: 'v3-overview', message: v3OverviewError.value, retry: fetchV3Overview }
     : null,
+  applicationStatsError.value
+    ? { key: 'application-stats', message: applicationStatsError.value, retry: fetchApplicationStats }
+    : null,
+  notificationsError.value
+    ? { key: 'notifications', message: notificationsError.value, retry: fetchNotifications }
+    : null,
   dailyPlanError.value
     ? { key: 'daily-plan', message: dailyPlanError.value, retry: fetchDailyPlan }
     : null,
   agentTasksError.value
     ? { key: 'agent-tasks', message: agentTasksError.value, retry: fetchAgentTasks }
     : null,
+  agentReviewsError.value
+    ? { key: 'agent-reviews', message: agentReviewsError.value, retry: fetchAgentReviews }
+    : null,
   wrongQuestionsError.value
     ? { key: 'wrong-questions', message: wrongQuestionsError.value, retry: fetchWrongQuestions }
     : null
 ].filter((item): item is { key: string; message: string; retry: () => Promise<void> } => Boolean(item)))
 
-const pageErrorSummary = computed(() => {
-  const count = pageErrors.value.length
-  if (count <= 1) return '可以先从今日任务、题库或面试入口继续推进。'
-  return `${count} 个模块返回异常，可以先继续训练；系统不会因为局部失败阻断首页使用。`
-})
+const actionModuleErrorText = computed(() => [
+  applicationStatsError.value,
+  dailyPlanError.value,
+  agentTasksError.value,
+  notificationsError.value
+].filter(Boolean).join('；'))
 
-const visiblePageErrorDetails = computed(() => pageErrors.value.slice(0, 2).map((item) => item.message))
+const evidenceModuleErrorText = computed(() => [
+  wrongQuestionsError.value,
+  overviewError.value,
+  agentReviewsError.value
+].filter(Boolean).join('；'))
 
 const careerRiskSignals = computed(() => buildCareerRiskSignals({
   hasResume: hasResumeSignal.value,
@@ -1092,6 +1162,70 @@ const careerRiskSignals = computed(() => buildCareerRiskSignals({
   hasUntrustedRecentReport: hasUntrustedRecentReport.value,
   pageErrorCount: pageErrors.value.length
 }))
+
+const dashboardSignals = computed<DashboardSignal[]>(() => {
+  const recentReport = overview.value?.recentReport
+  const reportScore = recentReport?.totalScore
+  const risk = careerRiskSignals.value[0]
+
+  return [
+    {
+      key: 'target-job',
+      label: '目标岗位',
+      value: v3OverviewPending.value ? '加载中' : v3OverviewError.value ? '暂不可用' : targetJobText.value,
+      detail: v3OverviewPending.value
+        ? '正在读取目标岗位'
+        : hasTargetJobSignal.value ? '训练与推荐按该岗位收束' : '选择岗位后再生成强推荐',
+      path: hasTargetJobSignal.value ? '/job-targets' : '/job-targets/create',
+      ready: hasTargetJobSignal.value,
+      error: v3OverviewError.value,
+      icon: Target
+    },
+    {
+      key: 'evidence',
+      label: '资料接入',
+      value: overviewPending.value ? '加载中' : overviewError.value ? '暂不可用' : `${firstDayReadyCount.value}/${firstDayReadiness.value.length}`,
+      detail: readinessDisplay.value.detail,
+      path: '/resumes',
+      ready: firstDayReadyCount.value >= 3,
+      error: overviewError.value,
+      icon: FileText
+    },
+    {
+      key: 'recent-report',
+      label: '最近报告',
+      value: overviewPending.value
+        ? '加载中'
+        : overviewError.value
+        ? '暂不可用'
+        : recentReport
+          ? reportScore == null ? '已生成' : `${reportScore} 分`
+          : '待生成',
+      detail: recentReport ? reportInsightText.value : '完成模拟面试后生成报告',
+      path: recentReport?.interviewId ? `/interviews/${recentReport.interviewId}/report` : '/interviews/history',
+      ready: hasTrustedReport.value,
+      error: overviewError.value,
+      icon: BarChart3
+    },
+    {
+      key: 'risk-gap',
+      label: '风险缺口',
+      value: primaryDependenciesPending.value
+        ? '整理中'
+        : primaryDependenciesFailed.value
+          ? '待重试'
+          : careerRiskSignals.value.length ? `${careerRiskSignals.value.length} 项` : '暂无',
+      detail: primaryDependenciesPending.value
+        ? '资料返回后再判断风险'
+        : primaryDependenciesFailed.value
+          ? '重新加载后再判断风险'
+          : risk?.title || '当前资料可支持今日行动',
+      path: '/agent/today',
+      ready: !careerRiskSignals.value.length,
+      icon: AlertTriangle
+    }
+  ]
+})
 
 const careerRecentArtifacts = computed(() => buildCareerRecentArtifacts({
   latestMatch: (v3Overview.value?.latestMatch || null) as Record<string, unknown> | null,
@@ -1107,24 +1241,6 @@ const tools = [
   { title: '学习计划', path: '/study-plans', icon: Route },
   { title: '每日任务', path: '/daily-tasks', icon: ClipboardCheck }
 ]
-
-const mobileQuickActions = computed(() => [
-  {
-    label: wrongQuestions.value.length ? '复盘错题' : '刷推荐题',
-    path: wrongQuestions.value.length ? '/questions/wrong-records' : '/questions/recommendations',
-    icon: BookOpenCheck
-  },
-  {
-    label: '模拟面试',
-    path: '/interviews/create',
-    icon: MessageSquare
-  },
-  {
-    label: '今日任务',
-    path: '/agent/today',
-    icon: Sparkles
-  }
-])
 
 const go = (path: string) => {
   router.push(sanitizeLocalActionPath(path, '/dashboard'))
@@ -1165,6 +1281,75 @@ const fallbackTask = (task: Omit<HomeTask, 'key' | 'taskId' | 'minutes' | 'sourc
   trustBoundary: task.trustBoundary || '资料不足时只提示下一步，不生成强判断',
   promoted: task.promoted ?? false
 })
+
+const toHomeTaskFromTodayAction = (action: TodayActionItem): HomeTask => {
+  const isUrgent = action.priority === 'urgent'
+  const isHigh = action.priority === 'high'
+  const taskId = action.source === 'agent-task'
+    ? Number(action.key.replace(/^agent-task-/, ''))
+    : undefined
+  const sourceTask = Number.isFinite(taskId) ? homeAgentTasks.value.find((task) => task.id === taskId) : undefined
+
+  if (sourceTask) {
+    return {
+      ...toHomeTask(sourceTask),
+      key: action.key,
+      title: action.title,
+      description: action.description,
+      reason: action.reason,
+      cta: action.actionLabel,
+      path: action.actionPath
+    }
+  }
+
+  const isApplicationAction = action.source === 'application-follow-up'
+  const isCalendarAction = action.source === 'notification' && action.actionPath.startsWith('/career-calendar')
+  const sourceLabel = isApplicationAction
+    ? '投递漏斗'
+    : isCalendarAction
+      ? '求职日历提醒'
+      : action.source === 'notification'
+        ? '通知提醒'
+        : '求职准备'
+  const icon = isApplicationAction
+    ? Briefcase
+    : isCalendarAction
+      ? ClipboardCheck
+      : action.source === 'notification'
+        ? Sparkles
+        : FileText
+
+  return {
+    key: action.key,
+    title: action.title,
+    description: action.description,
+    reason: action.reason,
+    reasons: [
+      action.reason,
+      action.dueText ? `时间：${action.dueText}` : `来源：${sourceLabel}`,
+      isApplicationAction
+        ? '只做提醒和记录，不自动投递或自动发送消息'
+        : '仅提供可执行入口，不会自动完成业务动作'
+    ],
+    benefit: isApplicationAction
+      ? '把投递状态、跟进日期和事件记录沉淀回个人投递漏斗'
+      : '完成动作后继续把结果回流到今日任务与复盘',
+    cta: action.actionLabel,
+    path: action.actionPath,
+    statusLabel: isUrgent ? '优先处理' : isHigh ? '今日优先' : '待处理',
+    minutes: isUrgent ? 10 : isHigh ? 12 : 8,
+    icon,
+    tone: isUrgent ? 'tone-orange' : isCalendarAction ? 'tone-green' : 'tone-blue',
+    sourceLabel,
+    trustBoundary: isApplicationAction
+      ? applicationStatsError.value ? '统计接口降级，保留手动入口' : '来自投递统计，只提示下一步行动'
+      : action.source === 'notification'
+  ? notificationsError.value ? '提醒来源暂不可用，保留其他行动入口' : '来自可行动提醒，可直接前往对应处理页面'
+        : '资料不足时只提示下一步，不生成强判断',
+    promoted: isUrgent || isHigh,
+    notificationId: action.source === 'notification' ? action.notificationId : undefined
+  }
+}
 
 const toHomeTask = (task: AgentTaskVO): HomeTask => {
   const icon = taskIcon(task)
@@ -1248,8 +1433,6 @@ const canCompleteTask = (taskId?: number) => {
   const task = findAgentTaskById(taskId)
   return Boolean(task && !isTaskClosed(task))
 }
-
-const canSkipTask = (taskId?: number) => canCompleteTask(taskId)
 
 const findTaskById = (taskId: number) =>
   agentTasks.value.find((item) => item.id === taskId) || dailyPlan.value?.tasks?.find((item) => item.id === taskId)
@@ -1356,60 +1539,111 @@ const statusClass = (status: string) => {
 }
 
 const fetchOverview = async (force: unknown = true, preserveCurrent = false) => {
-  overviewLoading.value = true
-  overviewError.value = ''
-  try {
-    overview.value = await fetchCachedDashboardOverview(shouldForceRefresh(force))
-  } catch (error) {
-    if (!preserveCurrent) overview.value = null
-    overviewError.value = getErrorMessage(error, '首页概览暂时加载失败，已保留可执行入口。')
-  } finally {
-    overviewLoading.value = false
-  }
+  await runLatestOverviewRequest({
+    request: () => fetchCachedDashboardOverview(shouldForceRefresh(force)),
+    apply: (value) => {
+      overview.value = value
+    },
+    clear: () => {
+      overview.value = null
+    },
+    preserveCurrent,
+    fallbackError: '首页概览暂时加载失败，已保留可执行入口。'
+  })
 }
 
 const fetchV3Overview = async (force: unknown = true, preserveCurrent = false) => {
-  v3OverviewLoading.value = true
-  v3OverviewError.value = ''
-  try {
-    v3Overview.value = await fetchCachedV3DashboardOverview(shouldForceRefresh(force))
-  } catch (error) {
-    if (!preserveCurrent) v3Overview.value = null
-    v3OverviewError.value = getErrorMessage(error, '目标岗位状态暂时加载失败，可以先补简历或稍后重试。')
-  } finally {
-    v3OverviewLoading.value = false
-  }
+  await runLatestV3OverviewRequest({
+    request: () => fetchCachedV3DashboardOverview(shouldForceRefresh(force)),
+    apply: (value) => {
+      v3Overview.value = value
+    },
+    clear: () => {
+      v3Overview.value = null
+    },
+    preserveCurrent,
+    fallbackError: '目标岗位状态暂时加载失败，可以先补简历或稍后重试。'
+  })
+}
+
+const fetchApplicationStats = async (_force: unknown = true, preserveCurrent = false) => {
+  void _force
+  await runLatestApplicationStatsRequest({
+    request: () => getApplicationStatsApi(),
+    apply: (value) => {
+      applicationStats.value = value
+    },
+    clear: () => {
+      applicationStats.value = null
+    },
+    preserveCurrent,
+    fallbackError: '投递漏斗统计暂时加载失败，首页已保留投递管理入口。'
+  })
+}
+
+const fetchNotifications = async (_force: unknown = true, preserveCurrent = false) => {
+  void _force
+  await runLatestNotificationsRequest({
+    request: () => getNotificationsApi({
+      pageNo: 1,
+      pageSize: 20,
+      isRead: ''
+    }),
+    apply: (value) => {
+      notifications.value = value.records || []
+    },
+    clear: () => {
+      notifications.value = []
+    },
+    preserveCurrent,
+    fallbackError: '行动提醒暂时加载失败，Agent 任务和投递行动仍可继续使用。'
+  })
 }
 
 const fetchDailyPlan = async (force: unknown = true, preserveCurrent = false) => {
-  dailyPlanLoading.value = true
-  dailyPlanError.value = ''
-  try {
-    dailyPlan.value = await fetchCachedLatestDailyPlan(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value)
-  } catch (error) {
-    if (!preserveCurrent) dailyPlan.value = null
-    dailyPlanError.value = getErrorMessage(error, '今日计划暂时不可用，可以手动生成或稍后重试。')
-  } finally {
-    dailyPlanLoading.value = false
-  }
+  await runLatestDailyPlanRequest({
+    request: () => fetchCachedLatestDailyPlan(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value),
+    apply: (value) => {
+      dailyPlan.value = value
+    },
+    clear: () => {
+      dailyPlan.value = null
+    },
+    preserveCurrent,
+    fallbackError: '今日计划暂时不可用，可以手动生成或稍后重试。'
+  })
 }
 
 const fetchAgentTasks = async (force: unknown = true, preserveCurrent = false) => {
-  agentTasksLoading.value = true
-  agentTasksError.value = ''
-  try {
-    const result = await fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value)
-    agentTasks.value = result.tasks || []
-  } catch (error) {
-    if (!preserveCurrent) agentTasks.value = []
-    agentTasksError.value = getErrorMessage(error, '今日任务暂时加载失败，可以稍后重试或去今日计划页继续。')
-  } finally {
-    agentTasksLoading.value = false
-  }
+  await runLatestAgentTasksRequest({
+    request: () => fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force), currentTargetJobId.value),
+    apply: (value) => {
+      agentTasks.value = value.tasks || []
+    },
+    clear: () => {
+      agentTasks.value = []
+    },
+    preserveCurrent,
+    fallbackError: '今日任务暂时加载失败，可以稍后重试或去今日计划页继续。'
+  })
+}
+
+const fetchAgentReviews = async (_force: unknown = true, preserveCurrent = false) => {
+  void _force
+  await runLatestAgentReviewsRequest({
+    request: () => getAgentReviewsApi({ targetJobId: currentTargetJobId.value }),
+    apply: (value) => {
+      agentReviews.value = value || []
+    },
+    clear: () => {
+      agentReviews.value = []
+    },
+    preserveCurrent,
+    fallbackError: '最新每日复盘暂时加载失败，闭环摘要已按任务事实降级生成。'
+  })
 }
 
 const fetchWrongQuestions = async (force: unknown = true) => {
-  wrongQuestionsLoading.value = true
   wrongQuestionsError.value = ''
   try {
     const result = await fetchCachedWrongQuestions(shouldForceRefresh(force))
@@ -1417,8 +1651,6 @@ const fetchWrongQuestions = async (force: unknown = true) => {
   } catch (error) {
     wrongQuestions.value = []
     wrongQuestionsError.value = getErrorMessage(error, '错题记录暂时加载失败。')
-  } finally {
-    wrongQuestionsLoading.value = false
   }
 }
 
@@ -1446,14 +1678,73 @@ const refreshTrainingSnapshotAfterMutation = async () => {
   await Promise.allSettled([
     fetchOverview(true, true),
     fetchV3Overview(true, true),
+    fetchApplicationStats(true, true),
+    fetchNotifications(true, true),
     fetchDailyPlan(true, true),
-    fetchAgentTasks(true, true)
+    fetchAgentTasks(true, true),
+    fetchAgentReviews(true, true)
   ])
 }
 
-const retryPageErrors = async () => {
-  const retries = pageErrors.value.map((item) => item.retry())
-  await Promise.allSettled(retries)
+const markNotificationActionRead = async (task: HomeTask) => {
+  const notificationId = Number(task.notificationId)
+  if (!Number.isFinite(notificationId) || notificationId <= 0) return
+
+  const notification = notifications.value.find((item) => Number(item.id) === notificationId)
+  if (!notification || notification.isRead !== 0) return
+
+  try {
+    await markNotificationReadApi(notificationId)
+    notification.isRead = 1
+    notifyUnreadChanged()
+  } catch {
+    // Navigation remains available when the read-state request is temporarily unavailable.
+  }
+}
+
+const runHomeTask = async (task: HomeTask) => {
+  if (task.disabled) return
+  if (task.action === 'retry-home-data') {
+    await retryPrimaryDependencies()
+    return
+  }
+  await markNotificationActionRead(task)
+  go(task.path)
+}
+
+const retryPrimaryDependencies = async () => {
+  await Promise.allSettled([
+    fetchOverview(true, true),
+    fetchV3Overview(true, true),
+    fetchApplicationStats(true, true),
+    fetchNotifications(true, true),
+    fetchDailyPlan(true, true),
+    fetchAgentTasks(true, true),
+    fetchAgentReviews(true, true)
+  ])
+}
+
+const runPrimaryTask = (task: HomeTask) => {
+  if (task.disabled) return
+  if (task.action === 'retry-home-data') {
+    void retryPrimaryDependencies()
+    return
+  }
+  void runHomeTask(task)
+}
+
+const updateRecommendationDetails = (event: Event) => {
+  showRecommendationDetails.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+const openRecommendationDetails = () => {
+  showRecommendationDetails.value = true
+  void nextTick(() => recommendationSummary.value?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+}
+
+const openSecondaryMaterials = () => {
+  showSecondarySections.value = true
+  void nextTick(() => secondaryMaterial.value?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
 }
 
 const mergeAgentTask = (updatedTask: AgentTaskVO) => {
@@ -1467,90 +1758,65 @@ const mergeAgentTask = (updatedTask: AgentTaskVO) => {
   }
 }
 
-const generatePlan = async () => {
-  dailyPlanGenerating.value = true
-  dailyPlanError.value = ''
+const withTaskMutationLock = async (mutation: () => Promise<void>) => {
+  if (taskMutationLocked.value) return
+  taskMutationLocked.value = true
   try {
-    const planDate = formatLocalDate()
-    const idempotencyKey = createOperationIdempotencyKey(`jobcoach-home-daily-plan-${planDate}-${currentTargetJobId.value || 'default'}`)
-    dailyPlan.value = await generateDailyPlanApi({
-      date: planDate,
-      targetJobId: currentTargetJobId.value || undefined,
-      requestId: idempotencyKey,
-      idempotencyKey,
-      taskCount: 4,
-      maxTotalMinutes: 90,
-      forceRegenerate: true
-    })
-    agentTasks.value = dailyPlan.value.tasks || agentTasks.value
-    invalidateUserHomeTrainingCaches(planDate, currentTargetJobId.value)
-    await refreshTrainingSnapshotAfterMutation()
-  } catch (error) {
-    dailyPlanError.value = getErrorMessage(error, '今日计划生成失败，未新增任务；可以稍后重试，或先去题库/面试训练。')
+    await mutation()
   } finally {
-    dailyPlanGenerating.value = false
+    taskMutationLocked.value = false
   }
-}
-
-const runFirstDayAction = (action: FirstDayAction) => {
-  if (action.actionType === 'generate-plan') {
-    void generatePlan()
-    return
-  }
-  go(action.path)
 }
 
 const skipTask = async (taskId: number) => {
-  const task = findTaskById(taskId)
-  const confirmed = await confirmDangerActionPreview({
-    title: '今天跳过任务',
-    action: '将首页第 1 个训练任务标记为今天跳过',
-    target: task?.title || '训练记录已保存',
-    impact: '该任务会从今日优先动作中移出，今日任务完成率和后续推荐可能跟随变化。',
-    rollback: '可以在今日任务列表把任务恢复为待完成，或重新生成今日计划。',
-    audit: '训练记录、跳过状态和跳过原因会保留，便于稍后复盘。',
-    tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以稍后回到今日计划处理。'],
-    confirmButtonText: '今天跳过'
+  await withTaskMutationLock(async () => {
+    const task = findTaskById(taskId)
+    const confirmed = await confirmDangerActionPreview({
+      title: '今天跳过任务',
+      action: '将首页第 1 个训练任务标记为今天跳过',
+      target: task?.title || '训练记录已保存',
+      impact: '该任务会从今日优先动作中移出，今日任务完成率和后续推荐可能跟随变化。',
+      rollback: '可以在今日任务列表把任务恢复为待完成，或重新生成今日计划。',
+      audit: '训练记录、跳过状态和跳过原因会保留，便于稍后复盘。',
+      tips: ['确认今天确实不准备推进这个任务。', '如果只是暂时没时间，可以稍后回到今日计划处理。'],
+      confirmButtonText: '今天跳过'
+    }).catch(() => false)
+    if (!confirmed) return
+    const promptResult = await ElMessageBox.prompt('请填写本轮跳过原因，方便下一轮计划避开不合适的安排。', '跳过原因', {
+      confirmButtonText: '确认跳过',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '例如：今天时间不够、任务不符合当前岗位、需要先补资料',
+      inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写跳过原因',
+      inputErrorMessage: '请填写跳过原因'
+    }).catch(() => null)
+    const skipReason = String(promptResult?.value || '').trim()
+    if (!skipReason) return
+    try {
+      const skippedTask = await skipAgentTaskApi(taskId, { skipReason })
+      mergeAgentTask(skippedTask)
+      invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
+      await refreshTrainingSnapshotAfterMutation()
+    } catch (error) {
+      agentTasksError.value = getErrorMessage(error, '任务跳过失败，请稍后重试。')
+    }
   })
-  if (!confirmed) return
-  const promptResult = await ElMessageBox.prompt('请填写本轮跳过原因，方便下一轮计划避开不合适的安排。', '跳过原因', {
-    confirmButtonText: '确认跳过',
-    cancelButtonText: '取消',
-    inputType: 'textarea',
-    inputPlaceholder: '例如：今天时间不够、任务不符合当前岗位、需要先补资料',
-    inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写跳过原因',
-    inputErrorMessage: '请填写跳过原因'
-  }).catch(() => null)
-  const skipReason = String(promptResult?.value || '').trim()
-  if (!skipReason) return
-  taskMutatingId.value = taskId
-  try {
-    const skippedTask = await skipAgentTaskApi(taskId, { skipReason })
-    mergeAgentTask(skippedTask)
-    invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
-    await refreshTrainingSnapshotAfterMutation()
-  } catch (error) {
-    agentTasksError.value = getErrorMessage(error, '任务跳过失败，请稍后重试。')
-  } finally {
-    taskMutatingId.value = null
-  }
 }
 
 const completeTask = async (taskId: number) => {
-  taskMutatingId.value = taskId
-  try {
-    const completedTask = await completeAgentTaskApi(taskId, { note: '用户在今日首页标记完成' })
-    mergeAgentTask(completedTask)
-    completionReviewTask.value = completedTask
-    completionReviewNote.value = ''
-    completionReviewVisible.value = true
-    invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
-    await refreshTrainingSnapshotAfterMutation()
-  } catch (error) {
-    agentTasksError.value = getErrorMessage(error, '任务完成状态保存失败，请稍后重试。')
-  } finally {
-    taskMutatingId.value = null
-  }
+  await withTaskMutationLock(async () => {
+    try {
+      const completedTask = await completeAgentTaskApi(taskId, { note: '用户在今日首页标记完成' })
+      mergeAgentTask(completedTask)
+      completionReviewTask.value = completedTask
+      completionReviewNote.value = ''
+      completionReviewVisible.value = true
+      invalidateUserHomeTrainingCaches(formatLocalDate(), currentTargetJobId.value)
+      await refreshTrainingSnapshotAfterMutation()
+    } catch (error) {
+      agentTasksError.value = getErrorMessage(error, '任务完成状态保存失败，请稍后重试。')
+    }
+  })
 }
 
 const goCompletionNextAction = () => {
@@ -1562,9 +1828,15 @@ const goCompletionNextAction = () => {
 
 onMounted(() => {
   secondaryDataCancelled = false
+  if (window.matchMedia?.('(max-width: 720px)').matches) {
+    showRecommendationDetails.value = true
+  }
   fetchOverview(false)
+  void fetchApplicationStats(false)
+  void fetchNotifications(false)
   void fetchV3Overview(false).finally(() => {
     void fetchDailyPlan(false)
+    void fetchAgentReviews(false)
     deferSecondaryHomeData(() => fetchAgentTasks(false), 900, 180)
   })
   deferSecondaryHomeData(() => fetchWrongQuestions(false), 1800, 450)
@@ -1578,97 +1850,26 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .jobcoach-home {
   display: grid;
-  gap: 18px;
-  color: #172033;
-}
-
-.home-hero,
-.first-day-section,
-.command-panel,
-.cockpit-card,
-.focus-card,
-.path-section,
-.task-section,
-.insight-card {
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: var(--user-shadow-md);
-}
-
-.secondary-toggle-section {
-  display: flex;
-  justify-content: center;
-}
-
-.secondary-toggle {
-  width: min(100%, 760px);
-  min-height: 62px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 16px;
-  border: 1px solid #d8e1ec;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #1f2a44;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-}
-
-.secondary-toggle:hover {
-  border-color: #a9bdd6;
-  background: #fff;
-  transform: translateY(-1px);
-}
-
-.secondary-toggle strong,
-.secondary-toggle small {
-  display: block;
-}
-
-.secondary-toggle strong {
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.secondary-toggle small {
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.secondary-toggle svg {
-  flex: 0 0 auto;
-  transition: transform 0.2s ease;
-}
-
-.secondary-toggle svg.is-open {
-  transform: rotate(180deg);
-}
-
-.path-section--secondary {
-  background: rgba(248, 250, 252, 0.9);
-  box-shadow: none;
-}
-
-.path-section--secondary .journey-step {
-  min-height: 112px;
-  background: #fff;
-}
-
-.home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
-  gap: 22px;
-  padding: 30px;
-}
-
-.hero-main {
   min-width: 0;
+  gap: 12px;
+  color: var(--user-text);
+}
+
+.dashboard-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px;
+
+  h1 {
+    margin: 7px 0 0;
+    color: var(--user-text);
+    font-size: 24px;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
 }
 
 .eyebrow,
@@ -1676,983 +1877,701 @@ onBeforeUnmount(() => {
 .card-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.home-hero h1 {
-  max-width: 780px;
-  margin: 12px 0 0;
-  color: #0f172a;
-  font-size: 38px;
-  font-weight: 800;
-  line-height: 1.16;
-  letter-spacing: 0;
-}
-
-.hero-desc {
-  max-width: 760px;
-  margin: 16px 0 0;
-  color: #526071;
-  font-size: 15px;
-  line-height: 1.8;
-}
-
-.today-brief {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 780px;
-  margin-top: 22px;
-  padding: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
-    rgba(15, 23, 42, 0.92);
-  color: #fff;
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(16px);
-
-  div {
-    min-width: 0;
-  }
-
-  span,
-  strong,
-  small {
-    display: block;
-  }
-
-  span {
-    color: #93c5fd;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  strong {
-    margin-top: 5px;
-    font-size: 20px;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-  }
-
-  small {
-    margin-top: 5px;
-    color: rgba(255, 255, 255, 0.72);
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-  }
-
-  :deep(.el-button) {
-    flex: 0 0 auto;
-    gap: 6px;
-    border-color: rgba(255, 255, 255, 0.24);
-    background: #ffffff;
-    color: #0f172a;
-  }
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.hero-actions :deep(.el-button),
-.focus-actions :deep(.el-button),
-.section-actions :deep(.el-button) {
   gap: 6px;
-}
-
-.hero-side {
-  display: grid;
-  align-content: start;
-  gap: 16px;
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 54%),
-    #f8fbff;
-}
-
-.side-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #64748b;
-  font-size: 13px;
-
-  strong {
-    color: #1d4ed8;
-    font-size: 20px;
-  }
-}
-
-.confidence-meter {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e2e8f0;
-
-  span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #2563eb, #15946f);
-  }
-}
-
-.inline-loading-strip,
-.dashboard-loading-note {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
-  background: #f8fbff;
-  color: #475569;
+  margin: 0;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
-  line-height: 1.5;
+}
+
+.dashboard-context {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 
   span {
-    flex: 0 0 auto;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: #2563eb;
-    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.1);
-    animation: dashboard-loading-pulse 1.4s ease-in-out infinite;
-  }
-
-  p {
+    display: inline-flex;
     min-width: 0;
-    margin: 0;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 9px;
+    border: 1px solid var(--user-border);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
+    font-size: 12px;
     overflow-wrap: anywhere;
   }
-}
 
-.dashboard-loading-note {
-  grid-column: 1 / -1;
-}
-
-.dashboard-loading-note--section {
-  margin: 14px 0 0;
-}
-
-@keyframes dashboard-loading-pulse {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: scale(0.92);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1);
+  b {
+    color: var(--user-text-muted);
+    font-weight: 600;
   }
 }
 
-.hero-side dl {
+.dashboard-cockpit-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.58fr);
   gap: 12px;
-  margin: 0;
-}
-
-.hero-side dl div {
-  display: grid;
-  gap: 4px;
-}
-
-.hero-side dt {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.hero-side dd {
   min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: #172033;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.cockpit-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(320px, 1.24fr) minmax(220px, 0.84fr);
-  gap: 18px;
   align-items: stretch;
 }
 
-.cockpit-card {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-width: 0;
-  padding: 20px;
-}
-
-.cockpit-card h2 {
-  margin: 0;
-  color: var(--user-text);
-  font-size: 22px;
-  line-height: 1.28;
-  overflow-wrap: anywhere;
-}
-
-.cockpit-card p {
-  margin: 0;
-  color: var(--user-text-muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.target-card {
-  background:
-    linear-gradient(135deg, rgba(8, 145, 178, 0.08), transparent 62%),
-    var(--user-surface);
-}
-
-.primary-action-card {
-  border-color: #bfdbfe;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 56%),
-    var(--user-surface);
-}
-
-.training-card {
-  background:
-    linear-gradient(135deg, rgba(124, 58, 237, 0.08), transparent 58%),
-    var(--user-surface);
-}
-
-.command-center-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.command-panel {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  padding: 16px;
-
-  p {
-    margin: 0;
-    color: #526071;
-    font-size: 13px;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-  }
-}
-
-.queue-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-
-  span {
-    display: grid;
-    gap: 3px;
-    min-height: 60px;
-    padding: 9px;
-    border: 1px solid #e8edf5;
-    border-radius: 8px;
-    background: #f8fafc;
-    color: #64748b;
-    font-size: 12px;
-    line-height: 1.35;
-    text-align: center;
-  }
-
-  strong {
-    color: #0f172a;
-    font-size: 20px;
-    line-height: 1;
-  }
-}
-
-.command-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.compact-list,
-.trusted-summary-list {
-  display: grid;
-  gap: 8px;
-}
-
-.compact-list button,
-.trusted-summary-list div {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #e5eaf2;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
-.compact-list button {
-  cursor: pointer;
-
-  &:hover {
-    border-color: #bfdbfe;
-    background: #fff;
-  }
-}
-
-.compact-list strong,
-.trusted-summary-list strong {
-  color: #0f172a;
-  font-size: 13px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.compact-list span,
-.trusted-summary-list span {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.trusted-summary-list {
-  margin: 10px 0;
-}
-
-.target-facts,
-.action-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--user-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.target-facts span,
-.action-facts span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: #eef2f7;
-}
-
-.training-snapshot {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.training-snapshot div {
-  display: grid;
-  gap: 4px;
-  min-height: 70px;
-  padding: 10px;
-  border: 1px solid #e8edf5;
-  border-radius: var(--user-radius-sm);
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.training-snapshot strong {
-  color: var(--user-text);
-  font-size: 24px;
-  line-height: 1;
-}
-
-.training-snapshot span,
-.training-note {
-  color: var(--user-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.error-stack {
-  display: grid;
-  gap: 10px;
-}
-
-.state-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.state-strip--warning {
-  border: 1px solid #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
-}
-
-.mobile-action-dock {
-  display: none;
-}
-
-.focus-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 18px;
-}
-
-.workbench-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 18px;
-}
-
-.evidence-card {
-  min-width: 0;
-}
-
-.focus-card,
+.primary-action-shell,
+.signal-panel,
+.action-timeline,
+.recommendation-summary,
 .path-section,
-.task-section,
-.insight-card,
-.first-day-section {
-  padding: 20px;
-}
-
-.first-day-section__head {
-  align-items: center;
-}
-
-.first-day-progress {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.first-day-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.first-day-action {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  min-height: 176px;
-  padding: 14px;
-  border: 1px solid #e5eaf2;
+.insight-card {
+  min-width: 0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #fff;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  background: var(--user-surface);
+}
 
-  &.is-ready {
-    border-color: #bbf7d0;
-    background: #f7fef9;
-  }
+.primary-action-shell {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+}
 
-  &.is-primary {
-    border-color: #bfdbfe;
-    background: #f8fbff;
-    transform: translateY(-1px);
-  }
+.primary-action-panel {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 18px 20px 16px;
 
-  h3 {
+  h2,
+  p {
     margin: 0;
-    color: #0f172a;
-    font-size: 15px;
-    line-height: 1.35;
+  }
+
+  h2 {
+    max-width: 34ch;
+    color: var(--user-text);
+    font-size: 25px;
+    line-height: 1.24;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
   }
 
   p {
-    margin: 6px 0 0;
-    color: #526071;
+    max-width: 70ch;
+    color: var(--user-text-secondary);
     font-size: 13px;
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
-
-  :deep(.el-button) {
-    width: 100%;
-    gap: 6px;
-  }
-}
-
-.first-day-action__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.first-day-action__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.focus-card--primary {
-  border-color: #bfdbfe;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 58%),
-    #fff;
 }
 
 .card-heading,
 .section-head,
-.task-row__body > div {
+.signal-heading {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.focus-card h2,
-.section-head h2,
-.insight-card h2 {
-  margin: 5px 0 0;
-  color: #0f172a;
-  font-size: 20px;
-  line-height: 1.3;
-}
-
-.focus-card h2 {
-  margin-top: 16px;
-  font-size: 24px;
-}
-
-.focus-card p {
-  margin: 10px 0 0;
-  color: #526071;
-  line-height: 1.75;
-}
-
-.source-boundary {
-  padding: 10px 12px;
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
-  background: #eff6ff;
-  overflow-wrap: anywhere;
-}
-
-.reason-list {
-  display: grid;
-  gap: 9px;
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    color: #334155;
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
-  svg {
-    flex: 0 0 auto;
-    margin-top: 3px;
-    color: #15946f;
-  }
-}
-
-.action-facts,
-.task-row__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-
-  span {
-    max-width: 100%;
-    padding: 6px 9px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-  }
-}
-
-.focus-actions {
-  display: flex;
-  flex-wrap: wrap;
   gap: 10px;
-  margin-top: 20px;
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
+.primary-action-meta,
+.timeline-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--user-text-muted);
   font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
-.pill--success {
-  background: #dcfce7;
-  color: #166534;
-}
+.primary-action-cta {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid var(--user-primary);
+  border-radius: 7px;
+  background: var(--user-primary);
+  color: var(--user-primary-contrast);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
 
-.pill--warning {
-  background: #ffedd5;
-  color: #9a3412;
-}
-
-.pill--danger {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.pill--neutral {
-  background: #eef2f7;
-  color: #475569;
-}
-
-.source-list,
-.readiness-list,
-.feedback-list,
-.tool-list {
-  display: grid;
-  gap: 10px;
-}
-
-.source-item,
-.readiness-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #e5eaf2;
-  border-radius: 8px;
-  background: #f8fafc;
-
-  svg {
-    flex: 0 0 auto;
-    margin-top: 2px;
-    color: #2563eb;
+  &:hover {
+    border-color: var(--user-primary-hover);
+    background: var(--user-primary-hover);
   }
+
+  &:disabled {
+    border-color: var(--user-border);
+    background: var(--user-disabled-bg);
+    color: var(--user-disabled);
+    cursor: not-allowed;
+  }
+}
+
+.task-operations {
+  position: relative;
+  justify-self: end;
+  margin: 0 12px 10px;
+  color: var(--user-text-muted);
+  font-size: 12px;
+
+  summary {
+    min-height: 28px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    list-style-position: inside;
+  }
+
+  > div {
+    display: flex;
+    z-index: 3;
+    gap: 5px;
+    margin-top: 5px;
+    padding: 6px;
+    border: 1px solid var(--user-border);
+    border-radius: 7px;
+    background: var(--user-surface-raised);
+  }
+
+  button {
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--user-border);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.signal-panel {
+  padding: 12px;
+}
+
+.signal-heading {
+  padding: 0 2px 9px;
+  color: var(--user-text-muted);
+  font-size: 12px;
 
   strong {
-    display: block;
-    color: #172033;
-    font-size: 14px;
+    color: var(--user-text-secondary);
+    font-size: 12px;
+  }
+}
+
+.cockpit-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.cockpit-signal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 82px;
+  align-items: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--user-border);
+  border-radius: 7px;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+
+  > svg {
+    margin-top: 2px;
+    color: var(--user-primary);
   }
 
   span,
-  small {
+  small,
+  strong,
+  em {
+    min-width: 0;
+  }
+
+  small,
+  strong,
+  em {
     display: block;
-    margin-top: 3px;
     overflow-wrap: anywhere;
-    color: #64748b;
+  }
+
+  small {
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
+
+  strong {
+    margin-top: 3px;
+    color: var(--user-text);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.35;
+  }
+
+  em {
+    margin-top: 4px;
+    color: var(--user-text-muted);
+    font-size: 10px;
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  &:hover {
+    border-color: var(--user-primary-border);
+    background: var(--user-surface-tint);
+  }
+
+  &.is-ready > svg {
+    color: var(--user-success);
+  }
+
+  &.is-error {
+    border-color: var(--user-danger-border);
   }
 }
 
-.source-item.is-missing svg {
-  color: #f47a1f;
+.action-timeline,
+.recommendation-summary {
+  padding: 14px;
 }
 
 .section-head {
-  margin-bottom: 16px;
-}
+  margin-bottom: 10px;
 
-.section-head--compact {
-  margin-bottom: 12px;
+  h2 {
+    margin: 4px 0 0;
+    color: var(--user-text);
+    font-size: 17px;
+    line-height: 1.3;
+  }
 }
 
 .section-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
-.journey {
+.module-error {
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--user-danger-border);
+  border-radius: 6px;
+  background: var(--user-danger-soft);
+  color: var(--user-danger);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.timeline-list {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  min-width: 0;
 }
 
-.journey-step,
-.task-row,
-.feedback-list button,
-.tool-list button {
-  border: 1px solid #e5eaf2;
-  border-radius: 8px;
-  background: #fff;
-  color: inherit;
-  font: inherit;
-}
-
-.journey-step {
+.timeline-row {
   display: grid;
-  min-height: 166px;
-  align-content: start;
-  gap: 8px;
-  padding: 14px;
-  text-align: left;
-  cursor: pointer;
+  grid-template-columns: 22px 32px minmax(0, 1fr) auto auto;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 0;
+  border-top: 1px solid var(--user-border);
 
-  &:hover {
-    border-color: #bfdbfe;
-    background: #f8fbff;
-  }
-
-  svg {
-    color: #2563eb;
-  }
-
-  strong {
-    color: #0f172a;
-  }
-
-  small {
-    color: #64748b;
-    line-height: 1.5;
+  &:first-child {
+    border-top: 0;
   }
 }
 
+.timeline-index,
 .journey-step__index {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+  font-size: 11px;
   font-weight: 800;
-}
-
-.task-list {
-  display: grid;
-  gap: 10px;
-}
-
-.task-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
-  padding: 14px;
 }
 
 .task-row__type {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.tone-green {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.tone-orange {
-  background: #ffedd5;
-  color: #c2410c;
-}
-
-.tone-purple {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-
-.tone-blue {
-  background: #dbeafe;
-  color: #2563eb;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--user-primary-faint);
+  color: var(--user-primary);
 }
 
 .task-row__body {
   min-width: 0;
 
+  > div:first-child {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
   strong {
-    color: #0f172a;
-    line-height: 1.35;
+    min-width: 0;
+    color: var(--user-text);
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
   }
-
-  p {
-    margin: 6px 0 0;
-    color: #526071;
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
 }
 
-.task-row__facts {
+.timeline-meta {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.timeline-enter {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--user-border);
+  border-radius: 6px;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.timeline-empty {
+  margin: 0;
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--user-border);
+  color: var(--user-text-muted);
+  font-size: 12px;
+}
+
+.pill {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid var(--user-border);
+  border-radius: 999px;
+  background: var(--user-surface-raised);
+  color: var(--user-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pill--success {
+  border-color: var(--user-success-border);
+  background: var(--user-success-soft);
+  color: var(--user-success);
+}
+
+.pill--warning {
+  border-color: rgba(230, 173, 85, 0.34);
+  background: var(--user-warning-soft);
+  color: var(--user-warning);
+}
+
+.pill--danger {
+  border-color: var(--user-danger-border);
+  background: var(--user-danger-soft);
+  color: var(--user-danger);
+}
+
+.source-boundary {
+  margin: 8px 0 0;
+  color: var(--user-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.recommendation-details {
   margin-top: 10px;
+  border-top: 1px solid var(--user-border);
+
+  summary {
+    padding: 10px 0 2px;
+    color: var(--user-primary);
+    font-size: 12px;
+    cursor: pointer;
+  }
 }
 
-.task-row__actions {
+.recommendation-details__content {
   display: grid;
-  align-content: center;
-  justify-items: end;
-  gap: 6px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.empty-panel {
-  display: grid;
-  justify-items: center;
   gap: 10px;
-  padding: 32px 20px;
-  border: 1px dashed #cbd5e1;
+  padding-top: 10px;
+}
+
+.recommendation-facts,
+.agent-loop-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+
+  div {
+    min-width: 0;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+  }
+
+  dt {
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
+
+  dd {
+    margin: 4px 0 0;
+    color: var(--user-text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+}
+
+.trusted-summary-list,
+.source-list,
+.readiness-list,
+.feedback-list,
+.tool-list,
+.artifact-list {
+  display: grid;
+  gap: 7px;
+}
+
+.trusted-summary-list div,
+.source-item,
+.readiness-item,
+.feedback-list button,
+.tool-list button,
+.artifact-list button,
+.empty-small {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--user-border);
+  border-radius: 6px;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
+}
+
+.trusted-summary-list strong,
+.trusted-summary-list span,
+.source-item strong,
+.source-item span,
+.feedback-list strong,
+.feedback-list small,
+.artifact-list strong,
+.artifact-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.trusted-summary-list strong,
+.source-item strong,
+.feedback-list strong,
+.artifact-list strong {
+  color: var(--user-text);
+  font-size: 12px;
+}
+
+.trusted-summary-list span,
+.source-item span,
+.feedback-list small,
+.artifact-list small {
+  margin-top: 3px;
+  color: var(--user-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.source-item,
+.readiness-item,
+.feedback-list button,
+.tool-list button {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.secondary-toggle-section {
+  display: flex;
+}
+
+.mobile-discovery-links {
+  display: none;
+}
+
+.secondary-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
-  text-align: center;
+  background: var(--user-surface-muted);
+  color: var(--user-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  strong,
+  small {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    margin-top: 3px;
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
 
   svg {
-    color: #2563eb;
+    transition: transform 0.16s ease;
   }
 
-  strong {
-    color: #0f172a;
-    font-size: 18px;
-  }
-
-  span {
-    max-width: 520px;
-    color: #64748b;
-    line-height: 1.6;
+  svg.is-open {
+    transform: rotate(180deg);
   }
 }
 
-.empty-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+.secondary-material {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.path-section,
+.insight-card {
+  padding: 14px;
+}
+
+.journey {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 4px;
+}
+
+.journey-step {
+  display: grid;
+  min-width: 0;
+  min-height: 120px;
+  align-content: start;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--user-border);
+  border-radius: 7px;
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  strong,
+  small {
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--user-text);
+    font-size: 12px;
+  }
+
+  small {
+    color: var(--user-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
 }
 
 .insight-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.readiness-item > span {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  margin-top: 5px;
-  border-radius: 999px;
-  background: #f59e0b;
-
-  &.is-ready {
-    background: #15946f;
-  }
-}
-
-.feedback-list button,
-.tool-list button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    border-color: #bfdbfe;
-    background: #f8fbff;
-  }
-
-  svg {
-    flex: 0 0 auto;
-    color: #2563eb;
-  }
-}
-
-.feedback-list strong,
-.feedback-list small {
-  display: block;
-}
-
-.feedback-list strong {
-  color: #172033;
-  font-size: 14px;
-}
-
-.feedback-list small {
-  margin-top: 3px;
-  color: #64748b;
-  line-height: 1.5;
+  gap: 12px;
 }
 
 .tool-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.tool-list button {
-  justify-content: flex-start;
-  min-height: 44px;
+.feedback-list button,
+.tool-list button,
+.artifact-list button {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.empty-small {
-  padding: 14px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+.readiness-item > span {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--user-warning);
+
+  &.is-ready {
+    background: var(--user-success);
+  }
+}
+
+.agent-loop-stats {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.agent-loop-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  color: var(--user-text-secondary);
+  font-size: 11px;
+}
+
+.agent-loop-panel > p {
+  margin: 10px 0 0;
+  color: var(--user-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .completion-review {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  color: var(--user-text-secondary);
 
   h3,
   p {
@@ -2660,299 +2579,180 @@ onBeforeUnmount(() => {
   }
 
   h3 {
-    margin-top: 6px;
-    color: #0f172a;
-    font-size: 18px;
-    line-height: 1.45;
-  }
-
-  p,
-  li {
-    color: #526071;
-    line-height: 1.7;
+    color: var(--user-text);
   }
 
   ul {
     display: grid;
-    gap: 8px;
+    gap: 7px;
     margin: 0;
     padding-left: 18px;
   }
 }
 
 .review-kicker {
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.review-hint {
-  font-weight: 600;
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .review-note {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f8fafc;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--user-surface-muted);
 }
 
-@media (max-width: 1080px) {
-  .home-hero,
-  .cockpit-grid,
-  .command-center-grid,
-  .workbench-grid,
-  .focus-grid,
-  .insight-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .first-day-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .journey {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.jobcoach-home button:focus-visible,
+.jobcoach-home summary:focus-visible,
+.jobcoach-home :deep(.el-button:focus-visible) {
+  outline: 2px solid var(--user-primary);
+  outline-offset: 2px;
 }
 
-@media (max-width: 680px) {
+@media (max-height: 800px) and (min-width: 901px) {
   .jobcoach-home {
     gap: 10px;
   }
 
-  .home-hero,
-  .first-day-section,
-  .cockpit-card,
-  .focus-card,
-  .path-section,
-  .task-section,
-  .insight-card {
-    padding: 14px;
-  }
-
-  .home-hero {
-    gap: 10px;
-    padding-bottom: 12px;
-  }
-
-  .home-hero h1 {
-    margin-top: 8px;
-    font-size: 23px;
-    line-height: 1.22;
-  }
-
-  .hero-desc {
-    display: none;
-  }
-
-  .today-brief {
-    display: grid;
-    gap: 10px;
-    margin-top: 12px;
-    padding: 12px;
-
-    strong {
-      font-size: 16px;
-    }
-
-    :deep(.el-button) {
-      width: 100%;
-      justify-content: center;
-    }
-  }
-
-  .hero-side {
-    padding: 14px;
-  }
-
-  .hero-side dl {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .cockpit-grid,
-  .workbench-grid {
-    gap: 10px;
-  }
-
-  .cockpit-card h2 {
-    font-size: 19px;
-  }
-
-  .training-snapshot {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .mobile-action-dock {
-    position: sticky;
-    top: calc(var(--user-mobile-top-height, 62px) + 6px);
-    z-index: 30;
-    display: grid;
+  .primary-action-panel {
     gap: 8px;
-    padding: 10px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    border-radius: 8px;
-    background:
-      linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.88)),
-      rgba(15, 23, 42, 0.9);
-    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
-    backdrop-filter: blur(18px);
-  }
+    padding: 14px 18px 12px;
 
-  .mobile-action-dock__primary,
-  .mobile-action-dock__quick button {
-    border: 0;
-    border-radius: 8px;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-  }
-
-  .mobile-action-dock__primary {
-    display: grid;
-    gap: 3px;
-    padding: 10px;
-    background: rgba(37, 99, 235, 0.92);
-    color: #fff;
-
-    span,
-    small {
-      color: rgba(255, 255, 255, 0.78);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    strong {
-      overflow-wrap: anywhere;
-      line-height: 1.35;
+    h2 {
+      font-size: 22px;
     }
   }
 
-  .mobile-action-dock__meta {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-
-    span {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-      padding: 6px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 11px;
-      line-height: 1.3;
-      overflow-wrap: anywhere;
-      text-align: center;
-    }
-
-    b {
-      color: rgba(255, 255, 255, 0.62);
-      font-size: 11px;
-      font-weight: 700;
-    }
+  .cockpit-signal {
+    min-height: 72px;
+    padding: 8px;
   }
 
-  .mobile-action-dock__quick {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .mobile-action-dock__quick button {
-    display: grid;
-    justify-items: center;
-    gap: 5px;
-    min-height: 52px;
-    padding: 8px 4px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.1);
-    color: #e0f2fe;
-    font-size: 12px;
-    line-height: 1.2;
-    text-align: center;
-
-    svg {
-      color: currentColor;
-    }
-
-    span {
-      max-width: 100%;
-      overflow-wrap: anywhere;
-    }
-  }
-
-  .focus-actions,
-  .section-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
-
-  .focus-actions :deep(.el-button),
-  .section-actions :deep(.el-button),
-  .empty-panel__actions :deep(.el-button) {
-    width: 100%;
-  }
-
-  .hero-actions {
-    display: none;
-  }
-
-  .secondary-toggle {
-    width: 100%;
-    align-items: flex-start;
+  .action-timeline,
+  .recommendation-summary {
     padding: 12px;
+  }
 
-    small {
-      max-width: 100%;
+  .timeline-row {
+    padding: 8px 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-heading {
+    align-items: flex-start;
+  }
+
+  .dashboard-cockpit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .insight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .jobcoach-home {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .dashboard-heading {
+    display: none;
+  }
+
+  .dashboard-cockpit-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .primary-action-panel {
+    gap: 8px;
+    padding: 13px;
+
+    h2 {
+      font-size: 19px;
+    }
+
+    p {
+      display: none;
+    }
+  }
+
+  .primary-action-meta {
+    font-size: 11px;
+  }
+
+  .primary-action-cta {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .mobile-discovery-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+
+    button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--user-primary-border);
+      border-radius: 8px;
+      background: var(--user-primary-faint);
+      color: var(--user-primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
       overflow-wrap: anywhere;
     }
   }
 
-  .hero-side,
-  .task-list .task-row:nth-of-type(n + 4) {
-    display: none;
+  .signal-panel,
+  .action-timeline {
+    padding: 10px;
   }
 
-  .card-heading,
-  .section-head,
-  .task-row__body > div {
-    display: grid;
-    justify-content: stretch;
+  .cockpit-signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .first-day-section__head {
+  .cockpit-signal {
+    min-height: 84px;
+    padding: 8px;
+  }
+
+  .timeline-row {
+    grid-template-columns: 22px 30px minmax(0, 1fr);
     align-items: start;
   }
 
-  .first-day-actions {
-    grid-template-columns: 1fr;
+  .timeline-enter,
+  .timeline-row > .task-operations {
+    grid-column: 3;
+    justify-self: start;
+    margin: 0;
   }
 
-  .first-day-action {
-    min-height: auto;
+  .section-actions {
+    display: none;
   }
+}
 
-  .journey,
-  .tool-list {
-    grid-template-columns: 1fr;
+@media (max-width: 390px) {
+  .cockpit-signal {
+    min-height: 92px;
   }
+}
 
-  .task-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 12px;
-  }
-
-  .task-row__actions {
-    justify-items: start;
-  }
-
-  .empty-panel__actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    width: 100%;
+@media (prefers-reduced-motion: reduce) {
+  .jobcoach-home *,
+  .jobcoach-home *::before,
+  .jobcoach-home *::after {
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
   }
 }
 </style>

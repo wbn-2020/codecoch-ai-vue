@@ -96,9 +96,9 @@ const actionLabel = computed(() =>
   gap: 4px;
   padding: 14px 16px;
   margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #eef6ff 100%);
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-primary-soft);
 }
 
 .coach-task-context span,
@@ -106,12 +106,12 @@ const actionLabel = computed(() =>
 .coach-state p,
 .coach-empty,
 .coach-meta {
-  color: #64748b;
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .coach-task-context strong {
-  color: #0f172a;
+  color: var(--user-text);
   font-size: 16px;
 }
 
@@ -127,7 +127,7 @@ const actionLabel = computed(() =>
 
 .coach-summary {
   margin: 0;
-  color: #0f172a;
+  color: var(--user-text);
   line-height: 1.7;
 }
 
@@ -136,7 +136,7 @@ const actionLabel = computed(() =>
   gap: 8px;
   padding-left: 22px;
   margin: 0;
-  color: #334155;
+  color: var(--user-text-secondary);
   line-height: 1.6;
 }
 

@@ -86,7 +86,7 @@ describe('career insight helpers', () => {
   })
 
   it('keeps recommended actions inside safe routes and falls back V4 application paths', () => {
-    const applicationRoute = resolveCareerActionRoute('/applications?followUp=overdue', {
+    const applicationRoute = resolveCareerActionRoute('/knowledge?tab=docs', {
       enableV4Preview: false
     })
     const unsafeRoute = resolveCareerActionRoute('https://example.com/jobs', {
@@ -95,7 +95,7 @@ describe('career insight helpers', () => {
 
     expect(applicationRoute).toMatchObject({
       path: '/agent/today',
-      blockedPath: '/applications?followUp=overdue'
+      blockedPath: '/knowledge?tab=docs'
     })
     expect(applicationRoute.unavailableReason).toContain('V4')
     expect(unsafeRoute.path).toBe('/agent/today')
@@ -110,7 +110,7 @@ describe('career insight helpers', () => {
           priority: 'HIGH',
           evidence: '逾期 2 条',
           actionLabel: '处理跟进',
-          actionPath: '/applications?followUp=overdue'
+          actionPath: '/knowledge?tab=docs'
         }
       ],
       { enableV4Preview: false }

@@ -145,6 +145,17 @@
               </template>
             </el-table>
           </div>
+          <div v-if="casePage.total > 0" class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="query.pageNo"
+              v-model:page-size="query.pageSize"
+              background
+              layout="total, sizes, prev, pager, next"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="casePage.total"
+              @change="loadPage"
+            />
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="结果" name="results">
@@ -203,6 +214,17 @@
           <div v-if="resultCaseId" class="result-filter-note">
             当前仅展示用例编号 {{ resultCaseId }} 的结果
             <el-button link type="primary" @click="clearResultFilter">显示全部</el-button>
+          </div>
+          <div v-if="resultPage.total > resultPage.pageSize" class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="resultQuery.pageNo"
+              v-model:page-size="resultQuery.pageSize"
+              background
+              layout="total, sizes, prev, pager, next"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="resultPage.total"
+              @change="loadPage"
+            />
           </div>
         </el-tab-pane>
         </el-tabs>
@@ -353,6 +375,20 @@ const activeTab = ref('cases')
 const cases = ref<PromptRegressionCaseVO[]>([])
 const results = ref<PromptRegressionResultVO[]>([])
 const resultCaseId = ref<number>()
+const casePage = reactive({
+  total: 0,
+  pageNo: 1,
+  pageSize: 20
+})
+const resultQuery = reactive({
+  pageNo: 1,
+  pageSize: 20
+})
+const resultPage = reactive({
+  total: 0,
+  pageNo: 1,
+  pageSize: 20
+})
 const runDialogVisible = ref(false)
 const caseDialogVisible = ref(false)
 const savingCase = ref(false)
@@ -506,18 +542,30 @@ const loadPage = async () => {
   try {
     const [caseResult, resultResult] = await Promise.allSettled([
       getPromptRegressionCasesApi(query),
-      getPromptRegressionResultsApi({ pageNo: 1, pageSize: 20, caseId: resultCaseId.value })
+      getPromptRegressionResultsApi({ ...resultQuery, caseId: resultCaseId.value })
     ])
     if (caseResult.status === 'fulfilled') {
       cases.value = caseResult.value.records || []
+      Object.assign(casePage, {
+        total: caseResult.value.total || 0,
+        pageNo: caseResult.value.pageNo || query.pageNo || 1,
+        pageSize: caseResult.value.pageSize || query.pageSize || 20
+      })
     } else {
       cases.value = []
+      Object.assign(casePage, { total: 0, pageNo: query.pageNo || 1, pageSize: query.pageSize || 20 })
       caseErrorMessage.value = getErrorMessage(caseResult.reason)
     }
     if (resultResult.status === 'fulfilled') {
       results.value = resultResult.value.records || []
+      Object.assign(resultPage, {
+        total: resultResult.value.total || 0,
+        pageNo: resultResult.value.pageNo || resultQuery.pageNo || 1,
+        pageSize: resultResult.value.pageSize || resultQuery.pageSize || 20
+      })
     } else {
       results.value = []
+      Object.assign(resultPage, { total: 0, pageNo: resultQuery.pageNo || 1, pageSize: resultQuery.pageSize || 20 })
       resultErrorMessage.value = getErrorMessage(resultResult.reason)
     }
     if (caseErrorMessage.value && resultErrorMessage.value) {
@@ -526,6 +574,8 @@ const loadPage = async () => {
   } catch (error) {
     cases.value = []
     results.value = []
+    Object.assign(casePage, { total: 0, pageNo: query.pageNo || 1, pageSize: query.pageSize || 20 })
+    Object.assign(resultPage, { total: 0, pageNo: resultQuery.pageNo || 1, pageSize: resultQuery.pageSize || 20 })
     caseErrorMessage.value = ''
     resultErrorMessage.value = ''
     errorMessage.value = getErrorMessage(error)
@@ -547,6 +597,7 @@ const handleReset = () => {
     promptType: '',
     enabled: ''
   })
+  Object.assign(resultQuery, { pageNo: 1, pageSize: 20 })
   loadPage()
 }
 
@@ -558,12 +609,14 @@ const openRun = (caseId: number) => {
 
 const viewCaseResults = async (caseId: number) => {
   resultCaseId.value = caseId
+  resultQuery.pageNo = 1
   activeTab.value = 'results'
   await loadPage()
 }
 
 const clearResultFilter = async () => {
   resultCaseId.value = undefined
+  resultQuery.pageNo = 1
   await loadPage()
 }
 
@@ -813,6 +866,12 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px 0;
+}
+
 @media (max-width: 720px) {
   .tab-table-header {
     flex-direction: column;
@@ -825,6 +884,11 @@ onMounted(() => {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pagination-wrap {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

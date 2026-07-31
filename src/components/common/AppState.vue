@@ -1,5 +1,12 @@
 <template>
-  <section class="app-state" :class="`app-state--${type}`">
+  <section
+    class="app-state"
+    :class="`app-state--${type}`"
+    :role="semanticRole"
+    :aria-live="ariaLive"
+    aria-atomic="true"
+    :aria-busy="type === 'loading'"
+  >
     <div class="app-state__icon">
       <el-icon v-if="type === 'loading'" class="is-loading" :size="28">
         <Loading />
@@ -44,6 +51,17 @@ const stateIcon = computed(() => {
   return iconMap[props.type] || Warning
 })
 
+const announcement = computed<{ role: 'alert' | 'status'; live: 'assertive' | 'polite' }>(() => {
+  if (props.type === 'error') {
+    return { role: 'alert', live: 'assertive' }
+  }
+
+  return { role: 'status', live: 'polite' }
+})
+
+const semanticRole = computed(() => announcement.value.role)
+const ariaLive = computed(() => announcement.value.live)
+
 const defaultTitle = computed(() => {
   const titleMap: Record<AppStateType, string> = {
     loading: '加载中',
@@ -75,7 +93,7 @@ const defaultDescription = computed(() => {
   padding: 18px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
+  background: var(--app-surface, #151c27);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 

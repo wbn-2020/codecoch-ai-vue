@@ -310,41 +310,40 @@ onMounted(loadPlans)
 <style scoped lang="scss">
 .daily-task-page {
   display: grid;
-  gap: 18px;
-  color: var(--app-text);
+  min-width: 0;
+  gap: 16px;
+  color: var(--user-text);
 }
 
 .daily-hero,
 .content-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .daily-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-  gap: 18px;
-  padding: 24px;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(240, 253, 250, 0.9)),
-    #ffffff;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 16px;
+  padding: 18px;
+  background: var(--user-surface);
 }
 
 .hero-copy h1 {
   max-width: 720px;
   margin: 8px 0;
-  color: #172033;
-  font-size: 30px;
-  line-height: 1.18;
+  color: var(--user-text);
+  font-size: 24px;
+  line-height: 1.3;
 }
 
 .hero-copy p {
   max-width: 740px;
   margin: 0;
-  color: #64748b;
-  line-height: 1.65;
+  color: var(--user-text-muted);
+  line-height: 1.6;
 }
 
 .eyebrow,
@@ -358,7 +357,7 @@ onMounted(loadPlans)
 
 .eyebrow,
 .section-kicker {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -374,10 +373,10 @@ onMounted(loadPlans)
   display: grid;
   align-content: center;
   gap: 10px;
-  padding: 18px;
-  border: 1px solid #dbeafe;
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--user-surface-muted);
 }
 
 .hero-summary span,
@@ -385,23 +384,23 @@ onMounted(loadPlans)
 .task-card p,
 .plan-item span,
 .section-head span {
-  color: #64748b;
+  color: var(--user-text-muted);
 }
 
 .hero-summary strong {
-  color: #172033;
+  color: var(--user-text);
   font-size: 20px;
   line-height: 1.25;
 }
 
 .daily-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
-  gap: 18px;
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .content-card__body {
-  padding: 20px;
+  padding: 16px;
 }
 
 .section-head {
@@ -410,7 +409,7 @@ onMounted(loadPlans)
 
   h2 {
     margin: 4px 0 0;
-    color: #172033;
+    color: var(--user-text);
     font-size: 18px;
   }
 
@@ -435,10 +434,10 @@ onMounted(loadPlans)
   gap: 8px;
   width: 100%;
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #172033;
+  background: var(--user-surface);
+  color: var(--user-text);
   text-align: left;
   cursor: pointer;
   transition:
@@ -448,8 +447,8 @@ onMounted(loadPlans)
 
 .plan-item:hover,
 .plan-item.active {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-faint);
 }
 
 .plan-title {
@@ -466,45 +465,48 @@ onMounted(loadPlans)
 }
 
 .daily-content {
-  min-height: 360px;
+  min-height: 0;
 }
 
 .metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
 .metric {
-  padding: 14px;
-  border: 1px solid #e2e8f0;
+  min-width: 0;
+  flex: 1 1 150px;
+  padding: 10px 12px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   span {
     display: block;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 6px;
-    color: #172033;
-    font-size: 24px;
+    color: var(--user-text);
+    font-size: 20px;
   }
 
   &.is-success strong {
-    color: #15803d;
+    color: var(--user-success);
   }
 
   &.is-warning strong {
-    color: #b45309;
+    color: var(--user-warning);
   }
 
   &.is-primary strong {
-    color: #2563eb;
+    color: var(--user-primary);
   }
 }
 
@@ -513,26 +515,26 @@ onMounted(loadPlans)
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   margin-bottom: 14px;
-  padding: 16px;
-  border: 1px solid #bfdbfe;
+  padding: 14px;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 
   h3 {
     margin: 6px 0;
-    color: #172033;
+    color: var(--user-text);
     font-size: 18px;
   }
 
   p {
     margin: 0;
-    color: #475569;
+    color: var(--user-text-muted);
     line-height: 1.6;
   }
 }
@@ -546,20 +548,20 @@ onMounted(loadPlans)
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #64748b;
+    color: var(--user-text-muted);
     font-weight: 500;
   }
 }
 
 .task-card {
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   h3 {
     margin: 4px 0 0;
-    color: #172033;
+    color: var(--user-text);
     font-size: 16px;
   }
 }
@@ -570,7 +572,7 @@ onMounted(loadPlans)
 
 .task-card__head span,
 .task-meta span {
-  color: #64748b;
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -585,13 +587,12 @@ onMounted(loadPlans)
 .task-meta span {
   padding: 4px 8px;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: var(--user-control-bg-muted);
 }
 
 @media (max-width: 900px) {
   .daily-hero,
   .daily-layout,
-  .metric-grid,
   .focus-task {
     grid-template-columns: 1fr;
   }
@@ -610,6 +611,17 @@ onMounted(loadPlans)
 
   .focus-task__meta {
     justify-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .daily-hero,
+  .content-card__body {
+    padding: 16px;
+  }
+
+  .metric-grid {
+    display: flex;
   }
 }
 </style>

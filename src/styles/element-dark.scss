@@ -2,16 +2,16 @@ html.dark {
   --el-bg-color: rgba(15, 23, 42, 0.92);
   --el-bg-color-page: #020617;
   --el-bg-color-overlay: #111827;
-  --el-border-color: rgba(148, 163, 184, 0.2);
-  --el-border-color-light: rgba(148, 163, 184, 0.16);
-  --el-border-color-lighter: rgba(148, 163, 184, 0.12);
+  --el-border-color: rgba(166, 179, 196, 0.34);
+  --el-border-color-light: rgba(166, 179, 196, 0.27);
+  --el-border-color-lighter: rgba(166, 179, 196, 0.2);
   --el-color-primary: var(--cc-primary);
-  --el-color-primary-light-3: #818cf8;
-  --el-color-primary-light-5: rgba(99, 102, 241, 0.42);
-  --el-color-primary-light-7: rgba(99, 102, 241, 0.24);
-  --el-color-primary-light-8: rgba(99, 102, 241, 0.18);
-  --el-color-primary-light-9: rgba(99, 102, 241, 0.12);
-  --el-color-primary-dark-2: #4f46e5;
+  --el-color-primary-light-3: #8eb6ff;
+  --el-color-primary-light-5: rgba(91, 141, 239, 0.42);
+  --el-color-primary-light-7: rgba(91, 141, 239, 0.24);
+  --el-color-primary-light-8: rgba(91, 141, 239, 0.18);
+  --el-color-primary-light-9: rgba(91, 141, 239, 0.12);
+  --el-color-primary-dark-2: #4775c6;
   --el-color-success: var(--cc-success);
   --el-color-warning: var(--cc-warning);
   --el-color-danger: var(--cc-danger);
@@ -24,11 +24,11 @@ html.dark {
   --el-text-color-primary: var(--cc-text);
   --el-text-color-regular: #cbd5e1;
   --el-text-color-secondary: var(--cc-text-muted);
-  --el-text-color-placeholder: #64748b;
-  --el-box-shadow-light: 0 18px 48px rgba(2, 6, 23, 0.42);
-  --el-box-shadow: 0 24px 72px rgba(2, 6, 23, 0.5);
+  --el-text-color-placeholder: #a6b3c4;
+  --el-box-shadow-light: none;
+  --el-box-shadow: none;
   --el-disabled-bg-color: rgba(30, 41, 59, 0.5);
-  --el-disabled-text-color: #64748b;
+  --el-disabled-text-color: #8390a2;
   --el-border-radius-base: 8px;
   --el-datepicker-hover-text-color: var(--cc-primary-hover);
   --el-datepicker-active-color: var(--cc-primary);
@@ -36,16 +36,13 @@ html.dark {
 
 .app-layout {
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.28), rgba(2, 6, 23, 0.84)),
-    transparent;
+  background: var(--app-bg);
   color: var(--app-text);
 }
 
 .app-layout .app-layout__aside {
   border-right-color: var(--app-border);
-  background: rgba(2, 6, 23, 0.84);
-  backdrop-filter: blur(18px);
+  background: var(--app-surface-soft);
 }
 
 .app-layout .app-layout__brand {
@@ -54,8 +51,7 @@ html.dark {
 
 .app-layout .app-layout__header {
   border-bottom-color: var(--app-border);
-  background: rgba(2, 6, 23, 0.78);
-  backdrop-filter: blur(18px);
+  background: var(--app-surface-soft);
 }
 
 .app-layout .app-layout__main {
@@ -63,8 +59,8 @@ html.dark {
 }
 
 .brand-mark {
-  background: linear-gradient(135deg, var(--cc-ai-blue), var(--cc-ai));
-  box-shadow: 0 12px 30px rgba(79, 70, 229, 0.28);
+  background: var(--cc-primary);
+  box-shadow: none;
 }
 
 .user-trigger {
@@ -99,13 +95,12 @@ html.dark {
 }
 
 .layout-menu .el-menu-item.is-active {
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.1));
+  background: var(--cc-primary-soft);
   color: #ffffff;
 }
 
 .tags-view {
-  background: rgba(2, 6, 23, 0.66);
-  backdrop-filter: blur(16px);
+  background: var(--app-surface-soft);
 }
 
 .el-table {
@@ -177,7 +172,7 @@ html.dark {
 .el-textarea__inner,
 .el-select__wrapper,
 .el-input-number .el-input__wrapper {
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(166, 179, 196, 0.34);
   background: rgba(15, 23, 42, 0.82);
   box-shadow: none;
 }

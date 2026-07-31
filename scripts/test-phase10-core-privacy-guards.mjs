@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const frontendRoot = process.cwd()
-const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = path.join(workspaceRoot, 'CodeCoachAI-java')
+const backendRoot = resolveBackendRoot(frontendRoot)
 
 const files = {
   aiConvert: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/convert/AiConvert.java'),
@@ -279,7 +279,7 @@ expect(hasAll(content.frontendRouterGuards, [
   'const safeRedirectTarget = (to: RouteLocationNormalized) => buildSafeRedirectTarget(to.path, to.query)',
   'const safeRedirectPath = (value: unknown) => sanitizeLocalRedirectPath(value)',
   'redirect: safeRedirectTarget(to)',
-  'return safeRedirectPath(to.query.redirect) || defaultAuthenticatedPath(authStore)'
+  'return safeRedirectPath(to.query.redirect) || resolveAuthenticatedEntryPath(authStore)'
 ]), 'frontend-route', 'Router guards must use sanitized redirects for login, auth-unavailable, and feature-unavailable flows')
 
 expect(hasAll(content.agentTodayView, [
@@ -315,12 +315,12 @@ expect(hasAll(content.agentRunDetailView, [
 expect(hasAll(content.frontendSse, [
   'const controller = new AbortController()',
   'signal.addEventListener(\'abort\', abort, { once: true })',
-  'Authorization: `Bearer ${token}`',
+  'Authorization: `Bearer ${session.token}`',
   'const requestBody = body === undefined ? undefined : JSON.stringify(body)',
   'const event = eventFromData === \'chunk\' ? \'delta\' : eventFromData',
-  'getDedupeKey(parsed.event, parsed.data)',
+  'getDedupeKey(parsed)',
   'await refreshAccessToken()',
-  'if (controller.signal.aborted) return null',
+  'if (controller.signal.aborted || !ensureAuthSessionCurrent()) return null',
   'if (!receivedDone)',
   'handlers?.onError?.(error instanceof Error ? error : new Error(String(error)), hasStarted)',
   'signal?.removeEventListener(\'abort\', abort)'

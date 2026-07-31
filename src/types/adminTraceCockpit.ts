@@ -18,6 +18,7 @@ export interface TraceCockpitQuery extends PageQuery {
   traceId?: string
   requestId?: string
   businessId?: string
+  businessType?: string
   bizType?: string
   bizId?: string
   userId?: number
@@ -28,10 +29,25 @@ export interface TraceCockpitQuery extends PageQuery {
   startTime?: string
   endTime?: string
   strictTraceOnly?: boolean
+  includeSensitive?: boolean
 }
 
-export type TraceModuleKey = 'AI_CALL' | 'AGENT_RUN' | 'ASYNC_TASK'
-export type TraceModuleStatusCode = 'LOADED' | 'EMPTY' | 'FAILED' | 'SKIPPED'
+export type TraceModuleKey =
+  | 'AI_CALL'
+  | 'AGENT_RUN'
+  | 'AGENT_TASK'
+  | 'AGENT_WEEK_PLAN'
+  | 'AGENT_WEEK_PLAN_ITEM'
+  | 'ASYNC_TASK'
+  | 'APPLICATION_PACKAGE'
+  | 'INTERVIEW_SESSION'
+  | 'INTERVIEW_REPORT'
+  | 'INTERVIEW_VOICE'
+  | 'CONTEXT_USAGE_REFERENCE'
+  | 'KNOWLEDGE_DOCUMENT'
+  | 'KNOWLEDGE_CHUNK'
+  | 'MEMORY'
+export type TraceModuleStatusCode = 'LOADED' | 'EMPTY' | 'FAILED' | 'SKIPPED' | 'NOT_AVAILABLE'
 
 export interface TraceModuleStatus {
   module: TraceModuleKey
@@ -42,7 +58,21 @@ export interface TraceModuleStatus {
   errorMessage?: string
 }
 
-export type TraceNodeType = 'AI_CALL' | 'AGENT_RUN' | 'AGENT_TASK' | 'ASYNC_TASK'
+export type TraceNodeType =
+  | 'AI_CALL'
+  | 'AGENT_RUN'
+  | 'AGENT_TASK'
+  | 'AGENT_WEEK_PLAN'
+  | 'AGENT_WEEK_PLAN_ITEM'
+  | 'ASYNC_TASK'
+  | 'APPLICATION_PACKAGE'
+  | 'INTERVIEW_SESSION'
+  | 'INTERVIEW_REPORT'
+  | 'INTERVIEW_VOICE'
+  | 'CONTEXT_USAGE_REFERENCE'
+  | 'KNOWLEDGE_DOCUMENT'
+  | 'KNOWLEDGE_CHUNK'
+  | 'MEMORY'
 export type TraceNodeStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'FALLBACK' | 'RUNNING' | 'PENDING' | 'SKIPPED' | 'UNKNOWN' | 'SENSITIVE'
 export type TraceAssociationType = 'EXACT_TRACE' | 'EXACT_REQUEST' | 'SAME_AGENT_RUN' | 'SAME_MESSAGE' | 'SAME_BIZ' | 'TIME_WINDOW' | 'MODULE_SEED'
 export type TraceAssociationConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
@@ -68,11 +98,13 @@ export interface TraceNode {
   nodeType: TraceNodeType
   title: string
   status: TraceNodeStatus
-  sourceModule: TraceModuleKey | 'AGENT_TASK'
+  sourceModule: TraceModuleKey
+  sourceType?: string
   sourceId?: string | number
   traceId?: string
   requestId?: string
   businessId?: string
+  businessType?: string
   bizType?: string
   bizId?: string
   messageId?: string
@@ -90,6 +122,28 @@ export interface TraceNode {
   meta: Record<string, string | number | boolean | null | undefined>
 }
 
+export type TraceEdgeType =
+  | 'CALLS'
+  | 'TRIGGERS'
+  | 'GENERATES'
+  | 'RELATES_TO'
+  | 'WEEK_PLAN_ITEM'
+  | 'INTERVIEW_VOICE'
+  | 'REFERENCED_KNOWLEDGE'
+  | 'REFERENCED_MEMORY'
+  | 'REFERENCED_CONTEXT'
+  | string
+
+export interface TraceEdge {
+  id: string
+  fromNodeId: string
+  toNodeId: string
+  edgeType: TraceEdgeType
+  label?: string
+  confidence?: TraceAssociationConfidence
+  reason?: string
+}
+
 export interface TraceTimeline {
   nodes: TraceNode[]
   unplacedNodes: TraceNode[]
@@ -105,7 +159,14 @@ export interface TraceOverview {
   lastSeenAt?: string
   aiCallCount?: number | null
   agentRunCount?: number | null
+  agentTaskCount?: number | null
+  agentWeekPlanCount?: number | null
+  agentWeekPlanItemCount?: number | null
   asyncTaskCount?: number | null
+  applicationPackageCount?: number | null
+  interviewSessionCount?: number | null
+  interviewReportCount?: number | null
+  interviewVoiceCount?: number | null
   failedCount?: number | null
   fallbackCount?: number | null
   totalTokens?: number | null
@@ -131,7 +192,7 @@ export interface TraceRisk {
   link?: RouteLocationRaw
 }
 
-export type TraceGovernanceActionType = 'VIEW_AI_LOG' | 'CREATE_PROMPT_REGRESSION_CANDIDATE' | 'CHECK_MODEL_ROUTE' | 'VIEW_AGENT_RUN' | 'VIEW_ASYNC_TASK' | 'VIEW_RETRY_PREVIEW' | 'REVIEW_RAW_PERMISSION'
+export type TraceGovernanceActionType = 'VIEW_AI_LOG' | 'CREATE_PROMPT_REGRESSION_CANDIDATE' | 'CHECK_MODEL_ROUTE' | 'VIEW_AGENT_RUN' | 'VIEW_ASYNC_TASK' | 'VIEW_RETRY_PREVIEW' | 'REVIEW_RAW_PERMISSION' | 'OPEN_SOURCE_RECORD'
 
 export interface TraceGovernanceSuggestion {
   id: string
@@ -147,11 +208,18 @@ export interface TraceGovernanceSuggestion {
   requiredPermission?: string
 }
 
+export type TraceCockpitDataSource = 'BACKEND_AGGREGATED' | 'FRONTEND_FALLBACK'
+
 export interface TraceCockpitResult {
+  source?: TraceCockpitDataSource
+  dataSource?: TraceCockpitDataSource
+  fallbackReason?: string
+  partialResult?: boolean
   overview: TraceOverview
   moduleStatuses: TraceModuleStatus[]
   timeline: TraceTimeline
   nodes: TraceNode[]
+  edges?: TraceEdge[]
   risks: TraceRisk[]
   suggestions: TraceGovernanceSuggestion[]
 }

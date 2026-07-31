@@ -13,11 +13,11 @@ const reviewTotal = (review?: AgentReviewVO | null): number =>
 export const buildReviewSections = (review?: AgentReviewVO | null): AgentReviewSections => {
   if (!review) {
     return {
-      facts: ['No daily review has been recorded yet.'],
-      limits: ['Current plan adjustments can only use today task state until a review exists.'],
-      drifts: ['No plan drift can be inferred without a review record.'],
-      adjustments: ['Complete or skip at least one task, then generate a daily review.'],
-      nextActions: ['Open today plan and record task outcomes.']
+      facts: ['尚未生成今日复盘记录。'],
+      limits: ['在生成复盘前，计划调整只能依据今天已记录的任务状态。'],
+      drifts: ['缺少复盘记录，暂不判断计划是否发生偏移。'],
+      adjustments: ['先完成或暂缓至少一项任务，再生成今日复盘。'],
+      nextActions: ['打开今日计划并记录任务结果。']
     }
   }
 
@@ -35,24 +35,24 @@ export const buildReviewSections = (review?: AgentReviewVO | null): AgentReviewS
 
   return {
     facts: providedFacts.length ? providedFacts : [
-      `Done ${done}, skipped ${skipped}, remaining ${todo}.`,
-      ...(completionRate == null ? [] : [`Completion rate ${completionRate}%.`]),
+      `已完成 ${done} 项，已暂缓 ${skipped} 项，待处理 ${todo} 项。`,
+      ...(completionRate == null ? [] : [`完成率 ${completionRate}%。`]),
       ...(summary ? [summary] : [])
     ],
     limits: providedLimits.length ? providedLimits : total < 3 || done < 2
-      ? ['Task sample is still small; keep conclusions as weak adjustment signals.']
-      : ['Review is based on recorded task state and does not prove external job-search outcomes.'],
+      ? ['任务样本仍较少，当前结论仅作为弱调整信号。']
+      : ['复盘只基于已记录的任务状态，不能直接证明外部求职结果。'],
     drifts: providedDrifts.length ? providedDrifts : skipped > done
-      ? ['Skipped actions are outpacing completed actions; the next plan should avoid repeating the same broad task.']
+      ? ['暂缓任务多于完成任务，下一轮计划应避免重复安排过于宽泛的任务。']
       : todo > 0
-        ? ['Some planned actions were not closed; the next plan should preserve or split unfinished work.']
-        : ['No obvious drift is visible from the available task counts.'],
+        ? ['部分计划动作尚未闭环，下一轮计划应保留或拆分未完成工作。']
+        : ['从当前任务统计中未发现明显计划偏移。'],
     adjustments: providedAdjustments.length ? providedAdjustments : nextActions.length
       ? nextActions
       : summary
         ? [summary]
-        : ['Use completed and skipped task facts to keep the next plan smaller and evidence-bound.'],
-    nextActions: nextActions.length ? nextActions : ['Review today task outcomes before generating the next plan.']
+        : ['依据已完成和已暂缓的任务事实，保持下一轮计划更小、更可验证。'],
+    nextActions: nextActions.length ? nextActions : ['生成下一轮计划前，先复盘今天的任务结果。']
   }
 }
 
@@ -107,9 +107,9 @@ export const buildAgentLoopOverview = (input: {
     nextAdjustmentSummary,
     weekSummary: weekSummary(tasks),
     fallbackEntries: [
-      { label: 'Today plan', path: '/agent/today', reason: 'Use today task state when review routing is unavailable.' },
-      { label: 'Task history', path: '/agent/tasks', reason: 'Inspect completed, skipped, and restored task facts.' },
-      { label: 'Daily reviews', path: '/agent/reviews', reason: 'Open structured daily review when the V4 growth route is enabled.' }
+      { label: '今日计划', path: '/agent/today', reason: '复盘入口不可用时，先根据今日任务状态继续推进。' },
+      { label: '任务历史', path: '/agent/tasks', reason: '查看已完成、已暂缓和已恢复的任务事实。' },
+      { label: '每日复盘', path: '/agent/reviews', reason: '成长模块开放后，可查看结构化每日复盘。' }
     ]
   }
 }

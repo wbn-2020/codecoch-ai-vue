@@ -1,6 +1,8 @@
 import request from '@/utils/request'
 import type { PageResult } from '@/types/api'
+import type { AgentContextImpactPreviewVO } from '@/types/agent'
 import type { EvidenceSourceVO, SuggestionQualityGateVO, SuggestionTraceVO } from '@/types/suggestion'
+import type { ApplicationEventStructuredReview } from '@/features/applications'
 import { compactQueryParams, normalizePageResult } from '@/utils/page'
 import { buildSseUrl, streamSse, type StreamSseHandle } from '@/utils/sse'
 import { toFriendlyMessage } from '@/utils/error'
@@ -170,6 +172,7 @@ export interface ResumeMutationConfirmationParams {
 
 export interface JobApplicationVO {
   id: number
+  campaignId?: number | null
   targetJobId?: number
   resumeId?: number
   resumeVersionId?: number
@@ -185,6 +188,12 @@ export interface JobApplicationVO {
   jobTitle?: string
   source?: string
   status?: string
+  stageChangedAt?: string
+  priorityLevel?: string
+  opportunityOutcome?: string
+  lockVersion?: number
+  expectedLockVersion?: number
+  idempotencyKey?: string
   appliedAt?: string
   nextFollowUpAt?: string
   note?: string
@@ -213,6 +222,7 @@ export interface JobApplicationEventVO {
   eventType?: string
   eventTime?: string
   summary?: string
+  structuredReview?: ApplicationEventStructuredReview | null
   review?: Record<string, unknown>
   reviewJson?: string
   createdAt?: string
@@ -687,8 +697,18 @@ export const getApplicationStatsApi = () =>
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
   request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
 
-export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>) =>
-  request.put<JobApplicationVO, JobApplicationVO>(`/applications/${id}`, data)
+export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>) => {
+  const expectedLockVersion = data.expectedLockVersion ?? data.lockVersion
+  const idempotencyKey = data.idempotencyKey
+    ?? (data.status && expectedLockVersion
+      ? `application-update:${id}:${expectedLockVersion}:${data.status}`
+      : undefined)
+  return request.put<JobApplicationVO, JobApplicationVO>(`/applications/${id}`, {
+    ...data,
+    expectedLockVersion,
+    idempotencyKey
+  })
+}
 
 export const getApplicationEventsApi = (id: number) =>
   request.get<JobApplicationEventVO[], JobApplicationEventVO[]>(`/applications/${id}/events`).then((data) => data || [])
@@ -729,6 +749,9 @@ export const getKnowledgeConfigApi = () =>
 export const getKnowledgeDocumentDetailApi = (id: number) =>
   request.get<KnowledgeDocumentVO, KnowledgeDocumentVO>(`/agent/knowledge/documents/${id}`)
 
+export const getKnowledgeDocumentImpactPreviewApi = (id: number) =>
+  request.get<AgentContextImpactPreviewVO, AgentContextImpactPreviewVO>(`/agent/knowledge/documents/${id}/impact-preview`)
+
 export const getKnowledgeDocumentVersionsApi = (id: number) =>
   request
     .get<KnowledgeDocumentVersionVO[], KnowledgeDocumentVersionVO[]>(`/agent/knowledge/documents/${id}/versions`)
@@ -744,6 +767,9 @@ export const getKnowledgeDocumentChunksApi = (id: number) =>
 
 export const getKnowledgeChunkApi = (chunkId: number) =>
   request.get<KnowledgeChunkVO, KnowledgeChunkVO>(`/agent/knowledge/chunks/${chunkId}`)
+
+export const getKnowledgeChunkImpactPreviewApi = (chunkId: number) =>
+  request.get<AgentContextImpactPreviewVO, AgentContextImpactPreviewVO>(`/agent/knowledge/chunks/${chunkId}/impact-preview`)
 
 export const getKnowledgeSimilarChunksApi = (chunkId: number, limit?: number) =>
   request

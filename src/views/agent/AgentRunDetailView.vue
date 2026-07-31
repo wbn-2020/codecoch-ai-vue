@@ -390,21 +390,19 @@ onMounted(fetchDetail)
 <style scoped lang="scss">
 .agent-run-page {
   display: grid;
-  gap: 22px;
+  gap: 14px;
 }
 
 .run-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 28px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(20, 184, 166, 0.08)),
-    var(--app-surface, #ffffff);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .run-eyebrow {
@@ -412,15 +410,15 @@ onMounted(fetchDetail)
   align-items: center;
   gap: 6px;
   margin-bottom: 10px;
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 13px;
   font-weight: 700;
 }
 
 .run-hero h1 {
   margin: 0;
-  color: var(--app-text, #111827);
-  font-size: 30px;
+  color: var(--user-text);
+  font-size: 26px;
   line-height: 1.2;
   letter-spacing: 0;
 }
@@ -428,7 +426,7 @@ onMounted(fetchDetail)
 .run-hero p {
   max-width: 760px;
   margin: 12px 0 0;
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
   line-height: 1.75;
 }
 
@@ -441,11 +439,11 @@ onMounted(fetchDetail)
 
 .run-panel {
   min-height: 360px;
-  padding: 22px;
-  border: 1px solid var(--app-border, #e5e7eb);
+  padding: 16px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.06);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .run-overview {
@@ -483,33 +481,43 @@ onMounted(fetchDetail)
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 20px;
+  gap: 0;
+  overflow: hidden;
+  margin-top: 16px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
 }
 
 .metric-card {
-  padding: 18px;
-  border: 1px solid var(--app-border, #e5e7eb);
-  border-radius: 8px;
-  background: #f8fafc;
+  min-height: 88px;
+  padding: 12px 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .metric-card span {
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .metric-card strong {
   display: block;
   margin-top: 8px;
-  color: var(--app-text, #111827);
+  color: var(--user-text);
   font-size: 24px;
   line-height: 1.15;
 }
 
 .metric-card p {
   margin: 8px 0 0;
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -530,10 +538,10 @@ onMounted(fetchDetail)
 .info-card,
 .summary-panel,
 .tasks-panel {
-  padding: 20px;
-  border: 1px solid var(--app-border, #e5e7eb);
+  padding: 16px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface-muted);
 }
 
 .section-head {
@@ -603,10 +611,10 @@ onMounted(fetchDetail)
   gap: 18px;
   align-items: center;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-left: 4px solid #94a3b8;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .task-card + .task-card {
@@ -667,19 +675,19 @@ onMounted(fetchDetail)
 
 .task-meta span {
   padding: 5px 9px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--user-surface-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 .task-review-summary {
   margin-top: 10px;
   padding: 10px 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
   color: #1e3a8a;
 }
 

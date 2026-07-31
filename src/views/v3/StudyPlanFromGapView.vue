@@ -32,7 +32,10 @@
           <label v-for="gap in gapItems" :key="gap.id" class="gap-card">
             <el-checkbox :value="gap.id" />
             <span>
-              <strong>{{ gapTitle(gap) }}</strong>
+              <strong>
+                {{ gapTitle(gap) }}
+                <el-tag v-if="isEvidenceFeedbackGap(gap)" size="small" type="warning" effect="plain">证据反馈</el-tag>
+              </strong>
               <small>{{ gapMeta(gap) }}</small>
               <em>{{ gapDescription(gap) }}</em>
             </span>
@@ -47,7 +50,7 @@
             <el-input v-model.trim="form.planTitle" placeholder="例如：Java 面试短板冲刺计划" />
           </el-form-item>
           <el-form-item label="学习天数">
-            <el-input-number v-model="form.days" :min="3" :max="120" class="full" />
+            <el-input-number v-model="form.days" :min="3" :max="60" class="full" />
           </el-form-item>
           <el-form-item label="每日分钟数">
             <el-input-number v-model="form.dailyMinutes" :min="20" :max="360" :step="10" class="full" />
@@ -68,7 +71,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { BookOpenCheck, Radar, Route as RouteIcon, Sparkles } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -91,10 +94,22 @@ const loadedTargetJobId = ref<number | undefined>()
 const loadedMatchReportId = ref<number | undefined>()
 const gapItems = ref<SkillGapItemVO[]>([])
 const STUDY_PLAN_TASK_BIZ_TYPE = 'study-plan.generate'
+let profileRequestSeq = 0
+let submitSeq = 0
+let viewDisposed = false
 
-const profileId = computed(() => Number(route.query.profileId) || loadedProfileId.value)
-const targetJobId = computed(() => Number(route.query.targetJobId) || loadedTargetJobId.value)
-const matchReportId = computed(() => loadedMatchReportId.value)
+const positiveRouteNumber = (value: unknown) => {
+  const candidate = Array.isArray(value) ? value[0] : value
+  const normalized = Number(candidate)
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : undefined
+}
+
+const routeContext = computed(() => ({
+  profileId: positiveRouteNumber(route.query.profileId),
+  targetJobId: positiveRouteNumber(route.query.targetJobId),
+  resumeId: positiveRouteNumber(route.query.resumeId)
+}))
+const profileId = computed(() => loadedProfileId.value)
 const canGenerate = computed(() => Boolean(profileId.value && form.gapItemIds.length && !generating.value))
 const buildContextQuery = (extra: Record<string, unknown>): LocationQueryRaw => {
   const query: LocationQueryRaw = {}
@@ -145,66 +160,130 @@ const gapMeta = (gap: SkillGapItemVO) => {
 const gapDescription = (gap: SkillGapItemVO) =>
   gap.gapDescription || '暂无差距说明，可先生成或刷新能力画像补全短板描述。'
 
-const loadProfile = async () => {
-  loading.value = true
+const isEvidenceFeedbackGap = (gap: SkillGapItemVO) =>
+  String(gap.sourceType || '').startsWith('EVIDENCE_USAGE')
+
+const isCurrentProfileRequest = (requestSeq: number) =>
+  !viewDisposed && profileRequestSeq === requestSeq
+
+const isCurrentSubmit = (requestSeq: number) =>
+  !viewDisposed && submitSeq === requestSeq
+
+const clearLoadedProfile = () => {
+  loadedProfileId.value = undefined
+  loadedTargetJobId.value = undefined
+  loadedMatchReportId.value = undefined
+  gapItems.value = []
+  form.gapItemIds = []
   loadError.value = ''
   contextWarning.value = ''
+}
+
+const loadProfileForContext = async (context: {
+  profileId?: number
+  targetJobId?: number
+  resumeId?: number
+}, invalidateSubmit = false) => {
+  const requestSeq = ++profileRequestSeq
+  if (invalidateSubmit) {
+    submitSeq += 1
+    generating.value = false
+  }
+  clearLoadedProfile()
+  loading.value = true
   try {
-    if (!targetJobId.value && !profileId.value) {
+    let resolvedTargetJobId = context.targetJobId
+    let nextWarning = ''
+    if (!resolvedTargetJobId && !context.profileId) {
       try {
         const currentTarget = await getCurrentJobTargetApi()
-        loadedTargetJobId.value = currentTarget?.id
+        if (!isCurrentProfileRequest(requestSeq)) return
+        resolvedTargetJobId = currentTarget?.id
       } catch (error) {
-        loadedTargetJobId.value = undefined
-        contextWarning.value = getErrorMessage(error, '当前主目标岗位暂时无法读取；如果没有带入能力画像，请先从能力画像页进入。')
+        if (!isCurrentProfileRequest(requestSeq)) return
+        nextWarning = getErrorMessage(error, '当前主目标岗位暂时无法读取；如果没有带入能力画像，请先从能力画像页进入。')
       }
     }
-    const routeProfileId = Number(route.query.profileId) || undefined
-    if (routeProfileId) {
-      const detail = await getSkillProfileByIdApi(routeProfileId)
-      loadedProfileId.value = detail?.profileId || routeProfileId
-      loadedTargetJobId.value = detail?.targetJobId
-      loadedMatchReportId.value = detail?.matchReportId
-      gapItems.value = detail?.gapItems || []
+
+    let nextProfileId: number | undefined
+    let nextTargetJobId: number | undefined
+    let nextMatchReportId: number | undefined
+    let nextGapItems: SkillGapItemVO[] = []
+    if (context.profileId) {
+      const detail = await getSkillProfileByIdApi(context.profileId)
+      if (!isCurrentProfileRequest(requestSeq)) return
+      nextProfileId = detail?.profileId || context.profileId
+      nextTargetJobId = detail?.targetJobId || resolvedTargetJobId
+      nextMatchReportId = detail?.matchReportId
+      nextGapItems = detail?.gapItems || []
     } else {
-      const overview = await getSkillProfileOverviewApi(targetJobId.value)
-      loadedProfileId.value = overview.profileId
-      loadedTargetJobId.value = targetJobId.value || overview.targetJobId
-      if (targetJobId.value) {
+      const overview = await getSkillProfileOverviewApi(resolvedTargetJobId)
+      if (!isCurrentProfileRequest(requestSeq)) return
+      nextProfileId = overview.profileId
+      nextTargetJobId = resolvedTargetJobId || overview.targetJobId
+      nextGapItems = overview.topGaps || []
+      if (nextTargetJobId) {
         try {
-          const detail = await getSkillProfileByJobTargetApi(targetJobId.value)
-          loadedMatchReportId.value = detail?.matchReportId
-          gapItems.value = detail?.gapItems?.length ? detail.gapItems : overview.topGaps || []
+          const detail = await getSkillProfileByJobTargetApi(nextTargetJobId)
+          if (!isCurrentProfileRequest(requestSeq)) return
+          nextProfileId = detail?.profileId || nextProfileId
+          nextTargetJobId = detail?.targetJobId || nextTargetJobId
+          nextMatchReportId = detail?.matchReportId
+          nextGapItems = detail?.gapItems?.length ? detail.gapItems : nextGapItems
         } catch {
-          loadedMatchReportId.value = undefined
-          gapItems.value = overview.topGaps || []
+          if (!isCurrentProfileRequest(requestSeq)) return
+          nextMatchReportId = undefined
         }
-      } else {
-        loadedMatchReportId.value = undefined
-        gapItems.value = overview.topGaps || []
       }
     }
-    form.gapItemIds = gapItems.value.slice(0, 5).map((item) => item.id)
+
+    if (!isCurrentProfileRequest(requestSeq)) return
+    loadedProfileId.value = nextProfileId
+    loadedTargetJobId.value = nextTargetJobId
+    loadedMatchReportId.value = nextMatchReportId
+    gapItems.value = nextGapItems
+    form.gapItemIds = nextGapItems.slice(0, 5).map((item) => item.id)
+    contextWarning.value = nextWarning
   } catch (error) {
+    if (!isCurrentProfileRequest(requestSeq)) return
     gapItems.value = []
+    form.gapItemIds = []
     loadError.value = getErrorMessage(error, '读取能力画像短板失败。')
   } finally {
-    loading.value = false
+    if (isCurrentProfileRequest(requestSeq)) loading.value = false
   }
 }
 
+const loadProfile = () => {
+  void loadProfileForContext({ ...routeContext.value })
+}
+
 const generatePlan = async () => {
-  if (!profileId.value) return
+  const currentProfileId = loadedProfileId.value
+  if (!currentProfileId || generating.value) return
+  const snapshot = {
+    profileId: currentProfileId,
+    targetJobId: loadedTargetJobId.value,
+    matchReportId: loadedMatchReportId.value,
+    resumeId: routeContext.value.resumeId,
+    gapItemIds: [...form.gapItemIds],
+    days: form.days,
+    dailyMinutes: form.dailyMinutes,
+    startDate: form.startDate || undefined,
+    planTitle: form.planTitle || undefined
+  }
+  const requestSeq = ++submitSeq
   generating.value = true
   try {
     const result = await generateStudyPlanFromGapApi({
-      profileId: profileId.value,
-      gapItemIds: form.gapItemIds,
-      days: form.days,
-      dailyMinutes: form.dailyMinutes,
-      startDate: form.startDate || undefined,
-      planTitle: form.planTitle || undefined
+      profileId: snapshot.profileId,
+      gapItemIds: snapshot.gapItemIds,
+      days: snapshot.days,
+      dailyMinutes: snapshot.dailyMinutes,
+      startDate: snapshot.startDate,
+      planTitle: snapshot.planTitle
     })
+    if (!isCurrentSubmit(requestSeq)) return
     if (result.planStatus === 'FAILED') {
       ElMessage.error(getErrorMessage({ message: result.failureReason }, '学习计划生成失败，请稍后重试。'))
       return
@@ -226,32 +305,44 @@ const generatePlan = async () => {
       path: '/study-plans',
       query: buildContextQuery({
         planId: result.planId,
-        skillProfileId: profileId.value,
-        targetJobId: targetJobId.value,
-        matchReportId: matchReportId.value,
-        resumeId: Number(route.query.resumeId) || undefined
+        skillProfileId: snapshot.profileId,
+        targetJobId: snapshot.targetJobId,
+        matchReportId: snapshot.matchReportId,
+        resumeId: snapshot.resumeId
       })
     })
+  } catch (error) {
+    if (isCurrentSubmit(requestSeq)) {
+      ElMessage.error(getErrorMessage(error, '学习计划生成失败，请稍后重试。'))
+    }
   } finally {
-    generating.value = false
+    if (isCurrentSubmit(requestSeq)) generating.value = false
   }
 }
 
-onMounted(loadProfile)
+watch(routeContext, (context) => {
+  void loadProfileForContext({ ...context }, true)
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  viewDisposed = true
+  profileRequestSeq += 1
+  submitSeq += 1
+})
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 18px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card-bg); box-shadow: var(--app-shadow); }
-.page-hero { display: flex; justify-content: space-between; gap: 18px; padding: 24px; }
+.v3-page { display: flex; flex-direction: column; gap: 16px; }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1, h2, p { margin: 0; }
-h1 { margin-top: 10px; font-size: 30px; }
+h1 { margin-top: 8px; font-size: 26px; }
 p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
-.content-panel { padding: 20px; min-width: 0; }
-.section-head { justify-content: space-between; margin-bottom: 16px; }
+.plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: 16px; }
+.content-panel { padding: 16px; min-width: 0; }
+.section-head { justify-content: space-between; margin-bottom: 12px; }
 .context-alert { margin-bottom: 14px; }
 .gap-list { display: grid; gap: 12px; }
 .gap-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); cursor: pointer; }

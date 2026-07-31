@@ -690,7 +690,7 @@ onMounted(fetchUsers)
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
   padding: 10px 12px;
-  background: rgba(248, 250, 252, 0.82);
+  background: var(--app-surface-soft);
 }
 
 .role-assign-summary span,

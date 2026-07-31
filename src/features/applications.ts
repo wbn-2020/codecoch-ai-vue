@@ -9,6 +9,7 @@ export interface ApplicationRouteLocation {
 }
 
 export type ApplicationQuickActionKey = 'interview' | 'resume-version' | 'follow-up'
+export type ApplicationDraftKind = 'follow-up' | 'thank-you' | 'rejection-review' | 'no-response-review' | 'interview-feedback-review'
 
 export interface ApplicationWorkbenchContext {
   applicationId: number
@@ -23,6 +24,7 @@ export interface ApplicationWorkbenchContext {
 
 export type ApplicationFollowUpStateKey = 'missing' | 'overdue' | 'due-today' | 'upcoming'
 export type ApplicationDeepLinkFollowUpFilter = Extract<ApplicationFollowUpStateKey, 'missing' | 'overdue' | 'due-today'>
+export type ApplicationDeepLinkAction = 'create-event'
 
 export interface ApplicationFollowUpState {
   key: ApplicationFollowUpStateKey
@@ -114,6 +116,9 @@ export interface ApplicationListQueryState {
   followUp?: ApplicationDeepLinkFollowUpFilter
   applicationId?: number
   openEvents: boolean
+  action?: ApplicationDeepLinkAction
+  eventType?: string
+  eventTime?: string
 }
 
 export interface ApplicationResumeVersionLabelInput {
@@ -137,6 +142,111 @@ export interface ApplicationEventMeta {
   label: string
   tone: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   description: string
+}
+
+export interface ApplicationOutboundDraft {
+  kind: ApplicationDraftKind
+  title: string
+  eventType: string
+  summary: string
+  draftBody: string
+  review: Record<string, unknown>
+  reviewJson: string
+  boundaryNotice: string
+  experimentInput: string[]
+}
+
+export type ApplicationEventReviewScenario = 'INTERVIEW_COMPLETED' | 'REJECTION' | 'NO_RESPONSE'
+export type ApplicationEventReviewScope = 'REAL_JOB' | 'SIMULATION' | 'UNKNOWN' | string
+export type ApplicationEventReviewOwner = 'USER' | 'SYSTEM' | 'AI' | 'RULE' | 'LEGACY'
+export type ApplicationEventReviewConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | string
+export type ApplicationEventReviewGenerationStatus = 'GENERATING' | 'SUCCEEDED' | 'FALLBACK' | 'FAILED' | string
+
+export interface ApplicationEventReviewFact {
+  id?: string
+  content: string
+  owner: ApplicationEventReviewOwner
+  sourceType?: string
+}
+
+export interface ApplicationEventReviewSignal {
+  content: string
+  factRefs: string[]
+  confidenceLevel?: ApplicationEventReviewConfidence
+  owner: ApplicationEventReviewOwner
+}
+
+export interface ApplicationEventReviewUserInput {
+  owner: ApplicationEventReviewOwner
+  observedFacts: ApplicationEventReviewFact[]
+  externalFeedback?: ApplicationEventReviewFact
+  selfReflection?: string
+}
+
+export interface ApplicationEventReviewAnalysis {
+  owner: ApplicationEventReviewOwner
+  summary?: string
+  limits: string[]
+  signals: ApplicationEventReviewSignal[]
+  adjustments: string[]
+  nextActions: string[]
+}
+
+export interface ApplicationEventReviewGeneration {
+  owner: ApplicationEventReviewOwner
+  status?: ApplicationEventReviewGenerationStatus
+  fallback: boolean
+  fallbackReason?: string
+  confidenceLevel?: ApplicationEventReviewConfidence
+  confidenceBasis: string[]
+  aiCallLogId?: number
+  inputFingerprint?: string
+  requestId?: string
+  generatorVersion?: string
+  startedAt?: string
+  generatedAt?: string
+}
+
+export interface ApplicationEventStructuredReview {
+  schemaVersion?: string
+  scenario?: ApplicationEventReviewScenario | string
+  eventScope?: ApplicationEventReviewScope
+  userInput: ApplicationEventReviewUserInput
+  systemFacts: ApplicationEventReviewFact[]
+  analysis: ApplicationEventReviewAnalysis
+  generation: ApplicationEventReviewGeneration
+}
+
+export interface ApplicationEventReviewSeed {
+  scenario: ApplicationEventReviewScenario
+  observedFacts: string[]
+  externalFeedback: string
+  selfReflection: string
+  assumptions: string[]
+  nextExperimentInputs: string[]
+}
+
+export interface ApplicationEventReviewGenerateInput {
+  observedFacts?: string[] | string
+  externalFeedback?: string
+  selfReflection?: string
+}
+
+export interface ApplicationEventReviewGenerateRequest {
+  observedFacts: string[]
+  externalFeedback?: string
+  selfReflection?: string
+  force: boolean
+  requestId: string
+}
+
+export interface ApplicationEventReviewSaveResult<
+  TEvent extends { id: number },
+  TReview = ApplicationEventStructuredReview
+> {
+  event: TEvent
+  review?: TReview
+  reviewError?: unknown
 }
 
 export interface ApplicationTimelineEvent extends JobApplicationEventVO {
@@ -207,7 +317,7 @@ const funnelStageMeta: Record<ApplicationFunnelStageKey, Omit<ApplicationFunnelS
     key: 'FEEDBACK',
     label: '有反馈',
     sourceStatuses: [],
-    sourceEventTypes: ['FOLLOW_UP', 'FOLLOW_UP_DONE', 'INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'CLOSED', 'NOTE'],
+    sourceEventTypes: ['FOLLOW_UP', 'FOLLOW_UP_DONE', 'OUTBOUND_FOLLOW_UP_DRAFT', 'THANK_YOU_DRAFT', 'INTERVIEW', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'INTERVIEW_FEEDBACK_REVIEW', 'OFFER', 'OFFER_RECEIVED', 'REJECTED', 'REJECTION', 'NO_RESPONSE_REVIEW', 'CLOSED', 'NOTE'],
     description: '出现跟进、回复、拒信、面试或其他沟通记录。',
     actionHint: '补充事件摘要，保留事实证据。'
   },
@@ -231,7 +341,7 @@ const funnelStageMeta: Record<ApplicationFunnelStageKey, Omit<ApplicationFunnelS
     key: 'REVIEWED',
     label: '已复盘',
     sourceStatuses: [],
-    sourceEventTypes: ['REVIEW', 'REVIEWED', 'RETROSPECTIVE'],
+    sourceEventTypes: ['REVIEW', 'REVIEWED', 'RETROSPECTIVE', 'REJECTION_REVIEW', 'NO_RESPONSE_REVIEW', 'INTERVIEW_FEEDBACK_REVIEW'],
     description: '投递事件或求职实验中已有复盘线索。',
     actionHint: '沉淀下一轮实验或归档。'
   }
@@ -254,6 +364,8 @@ const applicationEventMeta: Record<string, ApplicationEventMeta> = {
   NOTE: { label: '备注', tone: 'info', description: '补充投递背景或沟通细节。' },
   FOLLOW_UP: { label: '跟进', tone: 'primary', description: '记录一次主动跟进，并安排下一步。' },
   FOLLOW_UP_DONE: { label: '跟进', tone: 'primary', description: '记录一次主动跟进，并安排下一步。' },
+  OUTBOUND_FOLLOW_UP_DRAFT: { label: '跟进草稿', tone: 'primary', description: '仅生成跟进信草稿，用户确认后自行发送。' },
+  THANK_YOU_DRAFT: { label: '感谢信草稿', tone: 'success', description: '仅生成面试感谢信草稿，用户确认后自行发送。' },
   INTERVIEW: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_SCHEDULED: { label: '面试', tone: 'success', description: '该投递进入或更新面试流程。' },
   INTERVIEW_COMPLETED: { label: '面试完成', tone: 'success', description: '面试已完成，报告或复盘结果已回流投递记录。' },
@@ -261,6 +373,9 @@ const applicationEventMeta: Record<string, ApplicationEventMeta> = {
   OFFER_RECEIVED: { label: '录用通知', tone: 'success', description: '该投递收到录用通知结果。' },
   REJECTED: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
   REJECTION: { label: '拒绝', tone: 'danger', description: '该投递已被拒绝或淘汰。' },
+  REJECTION_REVIEW: { label: '拒信复盘', tone: 'danger', description: '记录拒信后的事实、假设和下一轮实验输入。' },
+  NO_RESPONSE_REVIEW: { label: '无反馈复盘', tone: 'warning', description: '记录长时间无反馈后的复盘和下一步实验输入。' },
+  INTERVIEW_FEEDBACK_REVIEW: { label: '面试反馈复盘', tone: 'success', description: '记录面试后反馈、证据和下一轮改进输入。' },
   CLOSED: { label: '关闭', tone: 'info', description: '该投递已关闭，不再推进。' },
   APPLIED: { label: '投递', tone: 'primary', description: '已完成投递动作。' },
   SUBMITTED: { label: '投递', tone: 'primary', description: '已完成投递动作。' },
@@ -600,6 +715,512 @@ export const getApplicationFollowUpState = (
   }
 }
 
+const applicationTargetLabel = (application: Partial<JobApplicationVO>) => {
+  const company = application.companyName?.trim() || '对方团队'
+  const job = application.jobTitle?.trim() || '目标岗位'
+  return { company, job, label: `${company} · ${job}` }
+}
+
+const compactLines = (lines: string[]) => lines.join('\n').trim()
+
+const buildReviewJson = (review: Record<string, unknown>) => JSON.stringify(review, null, 2)
+
+const applicationEventReviewOwners = new Set<ApplicationEventReviewOwner>([
+  'USER',
+  'SYSTEM',
+  'AI',
+  'RULE',
+  'LEGACY'
+])
+
+const asApplicationReviewRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+
+const asApplicationReviewString = (value: unknown) =>
+  value == null ? '' : String(value).trim()
+
+const asApplicationReviewStringArray = (value: unknown, limit = 20) =>
+  (Array.isArray(value) ? value : [])
+    .map(asApplicationReviewString)
+    .filter(Boolean)
+    .slice(0, limit)
+
+const asApplicationReviewNumber = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+const asApplicationReviewOwner = (
+  value: unknown,
+  fallback: ApplicationEventReviewOwner
+): ApplicationEventReviewOwner => {
+  const owner = asApplicationReviewString(value).toUpperCase() as ApplicationEventReviewOwner
+  return applicationEventReviewOwners.has(owner) ? owner : fallback
+}
+
+const asApplicationReviewFact = (
+  value: unknown,
+  fallbackOwner: ApplicationEventReviewOwner
+): ApplicationEventReviewFact | undefined => {
+  if (typeof value === 'string') {
+    const content = value.trim()
+    return content ? { content, owner: fallbackOwner } : undefined
+  }
+
+  const fact = asApplicationReviewRecord(value)
+  const content = asApplicationReviewString(fact.content)
+  if (!content) return undefined
+  return {
+    id: asApplicationReviewString(fact.id) || undefined,
+    content,
+    owner: asApplicationReviewOwner(fact.owner, fallbackOwner),
+    sourceType: asApplicationReviewString(fact.sourceType) || undefined
+  }
+}
+
+const asApplicationReviewFacts = (
+  value: unknown,
+  fallbackOwner: ApplicationEventReviewOwner
+) => (Array.isArray(value) ? value : [])
+  .map((item) => asApplicationReviewFact(item, fallbackOwner))
+  .filter((item): item is ApplicationEventReviewFact => Boolean(item))
+
+const parseApplicationReviewJson = (value?: string | null): unknown => {
+  const raw = value?.trim()
+  if (!raw) return undefined
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    return raw
+  }
+}
+
+const normalizeApplicationEventStructuredReview = (
+  value: unknown
+): ApplicationEventStructuredReview | undefined => {
+  const root = asApplicationReviewRecord(value)
+  if (!Object.keys(root).length) return undefined
+
+  const userInput = asApplicationReviewRecord(root.userInput)
+  const rawSystemFacts = Array.isArray(root.systemFacts)
+    ? root.systemFacts
+    : asApplicationReviewRecord(root.systemFacts).items
+  const analysis = asApplicationReviewRecord(root.analysis)
+  const generation = asApplicationReviewRecord(root.generation)
+  const externalFeedback = asApplicationReviewFact(userInput.externalFeedback, 'USER')
+  const analysisOwner = asApplicationReviewOwner(analysis.owner, 'AI')
+
+  return {
+    schemaVersion: asApplicationReviewString(root.schemaVersion) || undefined,
+    scenario: asApplicationReviewString(root.scenario) || undefined,
+    eventScope: asApplicationReviewString(root.eventScope) || undefined,
+    userInput: {
+      owner: asApplicationReviewOwner(userInput.owner, 'USER'),
+      observedFacts: asApplicationReviewFacts(userInput.observedFacts, 'USER'),
+      externalFeedback,
+      selfReflection: asApplicationReviewString(userInput.selfReflection) || undefined
+    },
+    systemFacts: asApplicationReviewFacts(rawSystemFacts, 'SYSTEM'),
+    analysis: {
+      owner: analysisOwner,
+      summary: asApplicationReviewString(analysis.summary) || undefined,
+      limits: asApplicationReviewStringArray(analysis.limits, 20),
+      signals: (Array.isArray(analysis.signals) ? analysis.signals : [])
+        .map((value): ApplicationEventReviewSignal | undefined => {
+          const signal = asApplicationReviewRecord(value)
+          const content = asApplicationReviewString(signal.content)
+          if (!content) return undefined
+          return {
+            content,
+            factRefs: asApplicationReviewStringArray(signal.factRefs, 20),
+            confidenceLevel: asApplicationReviewString(signal.confidenceLevel) || undefined,
+            owner: asApplicationReviewOwner(signal.owner, analysisOwner)
+          }
+        })
+        .filter((item): item is ApplicationEventReviewSignal => Boolean(item)),
+      adjustments: asApplicationReviewStringArray(analysis.adjustments, 20),
+      nextActions: asApplicationReviewStringArray(analysis.nextActions, 20)
+    },
+    generation: {
+      owner: asApplicationReviewOwner(generation.owner, 'SYSTEM'),
+      status: asApplicationReviewString(generation.status) || undefined,
+      fallback: generation.fallback === true,
+      fallbackReason: asApplicationReviewString(generation.fallbackReason) || undefined,
+      confidenceLevel: asApplicationReviewString(generation.confidenceLevel) || undefined,
+      confidenceBasis: asApplicationReviewStringArray(generation.confidenceBasis, 20),
+      aiCallLogId: asApplicationReviewNumber(generation.aiCallLogId),
+      inputFingerprint: asApplicationReviewString(generation.inputFingerprint) || undefined,
+      requestId: asApplicationReviewString(generation.requestId) || undefined,
+      generatorVersion: asApplicationReviewString(generation.generatorVersion) || undefined,
+      startedAt: asApplicationReviewString(generation.startedAt) || undefined,
+      generatedAt: asApplicationReviewString(generation.generatedAt) || undefined
+    }
+  }
+}
+
+export const getApplicationEventReviewScenario = (
+  eventType?: string | null
+): ApplicationEventReviewScenario | undefined => {
+  const normalized = normalizeEventType(eventType)
+  if (['INTERVIEW_COMPLETED', 'INTERVIEW_FEEDBACK_REVIEW'].includes(normalized)) {
+    return 'INTERVIEW_COMPLETED'
+  }
+  if (['REJECTION', 'REJECTED', 'REJECTION_REVIEW'].includes(normalized)) {
+    return 'REJECTION'
+  }
+  if (normalized === 'NO_RESPONSE_REVIEW') {
+    return 'NO_RESPONSE'
+  }
+  return undefined
+}
+
+export const isApplicationEventReviewSupported = (eventType?: string | null) =>
+  Boolean(getApplicationEventReviewScenario(eventType))
+
+export const buildApplicationEventReviewSeed = (
+  application: Partial<JobApplicationVO>,
+  scenario: ApplicationEventReviewScenario
+): ApplicationEventReviewSeed => {
+  const latestEvent = buildBackendLatestApplicationEvent(application)
+  const latestFact = latestEvent
+    ? `${latestEvent.meta.label}：${latestEvent.summaryText}`
+    : ''
+
+  if (scenario === 'REJECTION') {
+    return {
+      scenario,
+      observedFacts: ['已收到明确拒信或淘汰结果。', latestFact].filter(Boolean),
+      externalFeedback: '',
+      selfReflection: '',
+      assumptions: ['当前记录不足以判断真实淘汰原因。'],
+      nextExperimentInputs: ['复查岗位关键词匹配', '补强一个可量化项目证据', '复核投递渠道质量']
+    }
+  }
+
+  if (scenario === 'NO_RESPONSE') {
+    return {
+      scenario,
+      observedFacts: ['截至当前仍未收到明确反馈。', latestFact].filter(Boolean),
+      externalFeedback: '',
+      selfReflection: '',
+      assumptions: ['无反馈不等于拒绝，也不能据此判断岗位已关闭。'],
+      nextExperimentInputs: ['调整一次跟进文案', '复核跟进间隔', '验证投递渠道是否有效']
+    }
+  }
+
+  return {
+    scenario,
+    observedFacts: ['已完成一次面试或面试后反馈记录。', latestFact].filter(Boolean),
+    externalFeedback: '',
+    selfReflection: '',
+    assumptions: ['用户转述和自我感受不能替代招聘方已验证事实。'],
+    nextExperimentInputs: ['补强一个薄弱题型', '更新一个项目复盘话术', '安排一次针对性复练']
+  }
+}
+
+export const normalizeApplicationEventReviewFactLines = (
+  value?: string[] | string | null
+) => {
+  const rawItems = Array.isArray(value) ? value : String(value || '').split(/\r?\n/)
+  const unique = new Set<string>()
+  rawItems.forEach((item) => {
+    const content = String(item || '').trim().slice(0, 300)
+    if (content) unique.add(content)
+  })
+  return Array.from(unique).slice(0, 10)
+}
+
+export const createApplicationEventReviewRequestId = () => {
+  const randomUuid = globalThis.crypto?.randomUUID
+  if (typeof randomUuid === 'function') {
+    return randomUuid.call(globalThis.crypto)
+  }
+  return `application-review-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+export const buildApplicationEventReviewGenerateRequest = (
+  input: ApplicationEventReviewGenerateInput = {},
+  options: { force?: boolean; requestId?: string } = {}
+): ApplicationEventReviewGenerateRequest => ({
+  observedFacts: normalizeApplicationEventReviewFactLines(input.observedFacts),
+  externalFeedback: input.externalFeedback?.trim().slice(0, 2000) || undefined,
+  selfReflection: input.selfReflection?.trim().slice(0, 2000) || undefined,
+  force: options.force === true,
+  requestId: options.requestId?.trim().slice(0, 64) || createApplicationEventReviewRequestId()
+})
+
+export const getApplicationEventStructuredReview = (
+  event?: Partial<JobApplicationEventVO> | null
+) => {
+  if (!event) return undefined
+  const eventRecord = event as Partial<JobApplicationEventVO> & { structuredReview?: unknown }
+  const parsedReviewJson = parseApplicationReviewJson(event.reviewJson)
+  const parsedRecord = asApplicationReviewRecord(parsedReviewJson)
+  const candidates = [
+    eventRecord.structuredReview,
+    asApplicationReviewRecord(event.review).structuredReview,
+    parsedRecord.structuredReview,
+    parsedRecord.schemaVersion || parsedRecord.analysis || parsedRecord.generation
+      ? parsedRecord
+      : undefined
+  ]
+
+  for (const candidate of candidates) {
+    const normalized = normalizeApplicationEventStructuredReview(candidate)
+    if (normalized) return normalized
+  }
+  return undefined
+}
+
+export const getApplicationEventLegacyReview = (
+  event?: Partial<JobApplicationEventVO> | null
+): Record<string, unknown> | string | null => {
+  if (!event) return null
+  const review = asApplicationReviewRecord(event.review)
+  if (Object.keys(review).length) {
+    const { structuredReview: _structuredReview, ...legacyReview } = review
+    return Object.keys(legacyReview).length ? legacyReview : null
+  }
+
+  const parsed = parseApplicationReviewJson(event.reviewJson)
+  if (typeof parsed === 'string') return parsed
+  const parsedRecord = asApplicationReviewRecord(parsed)
+  if (!Object.keys(parsedRecord).length) return null
+  const { structuredReview: _structuredReview, ...legacyReview } = parsedRecord
+  return Object.keys(legacyReview).length ? legacyReview : null
+}
+
+export const getApplicationReviewOwnerLabel = (owner?: string | null) => {
+  const labels: Record<ApplicationEventReviewOwner, string> = {
+    USER: '用户记录',
+    SYSTEM: '系统事实',
+    AI: 'AI 分析',
+    RULE: '规则降级',
+    LEGACY: '历史数据'
+  }
+  return labels[asApplicationReviewOwner(owner, 'LEGACY')]
+}
+
+export const getApplicationReviewConfidenceLabel = (confidence?: string | null) => {
+  const normalized = asApplicationReviewString(confidence).toUpperCase()
+  if (normalized === 'HIGH') return '高置信度'
+  if (normalized === 'MEDIUM') return '中置信度'
+  if (normalized === 'LOW') return '低置信度'
+  return confidence?.trim() || '置信度待确认'
+}
+
+export const isApplicationEventReviewGenerating = (
+  review?: ApplicationEventStructuredReview | null
+) => review?.generation.status?.toUpperCase() === 'GENERATING'
+
+export const getApplicationEventReviewFactMap = (
+  review?: ApplicationEventStructuredReview | null
+) => new Map(
+  [
+    ...(review?.userInput.observedFacts || []),
+    ...(review?.userInput.externalFeedback ? [review.userInput.externalFeedback] : []),
+    ...(review?.systemFacts || [])
+  ]
+    .filter((fact) => fact.id)
+    .map((fact) => [fact.id as string, fact])
+)
+
+export const saveApplicationEventWithOptionalReview = async <
+  TEvent extends { id: number },
+  TReview = ApplicationEventStructuredReview
+>(options: {
+  saveEvent: () => Promise<TEvent>
+  generateReview?: (event: TEvent) => Promise<TReview>
+}): Promise<ApplicationEventReviewSaveResult<TEvent, TReview>> => {
+  const event = await options.saveEvent()
+  if (!options.generateReview) return { event }
+  try {
+    return { event, review: await options.generateReview(event) }
+  } catch (reviewError) {
+    return { event, reviewError }
+  }
+}
+
+export const createApplicationEventReviewSingleFlight = () => {
+  const inFlight = new Map<string | number, Promise<unknown>>()
+  return {
+    isRunning: (key: string | number) => inFlight.has(key),
+    run<T>(key: string | number, task: () => Promise<T>): Promise<T> {
+      const active = inFlight.get(key) as Promise<T> | undefined
+      if (active) return active
+      const request = task().finally(() => {
+        if (inFlight.get(key) === request) {
+          inFlight.delete(key)
+        }
+      })
+      inFlight.set(key, request)
+      return request
+    }
+  }
+}
+
+export const buildApplicationOutboundDraft = (
+  application: Partial<JobApplicationVO>,
+  kind: ApplicationDraftKind,
+  now: string | Date | number = new Date()
+): ApplicationOutboundDraft => {
+  const target = applicationTargetLabel(application)
+  const generatedAt = formatLocalDateTime(ensureLocalDate(now) || new Date())
+  const latestEvent = buildBackendLatestApplicationEvent(application)
+  const latestEventSummary = latestEvent ? `${latestEvent.meta.label}：${latestEvent.summaryText}` : '暂无事件记录'
+  const followUp = getApplicationFollowUpState(application.nextFollowUpAt, now)
+  const boundaryNotice = '系统只生成草稿和复盘记录，不会自动发送邮件、站内信或其他外部联系；请用户自行确认、修改并发送。'
+  const baseReview = {
+    source: 'APPLICATION_POST_SUBMISSION_ASSISTANT',
+    draftOnly: true,
+    generatedAt,
+    companyName: target.company,
+    jobTitle: target.job,
+    latestEvent: latestEventSummary
+  }
+
+  if (kind === 'thank-you') {
+    const review = {
+      ...baseReview,
+      scenario: 'INTERVIEW_THANK_YOU_DRAFT',
+      nextStep: '用户确认措辞、面试官称呼和事实后自行发送感谢信。'
+    }
+    return {
+      kind,
+      title: '感谢信草稿',
+      eventType: 'THANK_YOU_DRAFT',
+      summary: `生成 ${target.label} 面试后感谢信草稿，等待用户确认后自行发送。`,
+      draftBody: compactLines([
+        `您好，感谢您今天/近期安排 ${target.job} 的面试交流。`,
+        '',
+        '这次沟通让我对团队业务、岗位职责和后续协作方式有了更清晰的理解。我也很高兴进一步说明了自己的项目经验和对该方向的兴趣。',
+        '',
+        '如果后续还需要补充材料或更多信息，我会及时配合。再次感谢您的时间，期待下一步反馈。',
+        '',
+        '此草稿由系统生成，请你确认称呼、面试日期、事实细节和语气后自行发送。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: ['面试后 24 小时内是否发送感谢信', '感谢信中补充的项目证据是否提升后续反馈率']
+    }
+  }
+
+  if (kind === 'rejection-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'REJECTION')
+    const review = {
+      ...baseReview,
+      scenario: 'REJECTION_REVIEW',
+      result: '收到拒信或被淘汰',
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
+    }
+    return {
+      kind,
+      title: '拒信复盘',
+      eventType: 'REJECTION_REVIEW',
+      summary: `记录 ${target.label} 拒信复盘，沉淀下一轮投递实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        '结果：收到拒信或被淘汰。',
+        '先记录事实，不把单次结果归因到个人能力结论。',
+        '下一轮实验：复查岗位关键词、简历证据和投递渠道，选择一个变量调整后再观察。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: seed.nextExperimentInputs
+    }
+  }
+
+  if (kind === 'no-response-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'NO_RESPONSE')
+    const review = {
+      ...baseReview,
+      scenario: 'NO_RESPONSE_REVIEW',
+      result: '超过计划跟进时间仍无反馈',
+      followUpState: followUp.key,
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
+    }
+    return {
+      kind,
+      title: '无反馈复盘',
+      eventType: 'NO_RESPONSE_REVIEW',
+      summary: `记录 ${target.label} 无反馈复盘，保留跟进与渠道实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        `当前状态：${followUp.description}`,
+        '事实：暂未收到明确反馈。',
+        '下一轮实验：保留一次轻量跟进，同时检查渠道、岗位发布时间和简历关键词匹配。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: seed.nextExperimentInputs
+    }
+  }
+
+  if (kind === 'interview-feedback-review') {
+    const seed = buildApplicationEventReviewSeed(application, 'INTERVIEW_COMPLETED')
+    const review = {
+      ...baseReview,
+      scenario: 'INTERVIEW_FEEDBACK_REVIEW',
+      result: '面试后反馈待沉淀',
+      facts: seed.observedFacts,
+      assumptions: seed.assumptions,
+      nextExperimentInputs: seed.nextExperimentInputs
+    }
+    return {
+      kind,
+      title: '面试反馈复盘',
+      eventType: 'INTERVIEW_FEEDBACK_REVIEW',
+      summary: `记录 ${target.label} 面试后反馈复盘，沉淀复练和下一轮实验输入。`,
+      draftBody: compactLines([
+        `复盘对象：${target.label}`,
+        `已有线索：${latestEventSummary}`,
+        '事实：面试后反馈需要拆成可行动项。',
+        '下一轮实验：选择一个薄弱点做复练，并把项目案例补成 STAR/指标化表达。'
+      ]),
+      review,
+      reviewJson: buildReviewJson(review),
+      boundaryNotice,
+      experimentInput: seed.nextExperimentInputs
+    }
+  }
+
+  const review = {
+    ...baseReview,
+    scenario: 'FOLLOW_UP_DRAFT',
+    followUpState: followUp.key,
+    nextStep: '用户确认事实、语气和收件人后自行发送跟进信。'
+  }
+  return {
+    kind: 'follow-up',
+    title: '跟进信草稿',
+    eventType: 'OUTBOUND_FOLLOW_UP_DRAFT',
+    summary: `生成 ${target.label} 跟进信草稿，等待用户确认后自行发送。`,
+    draftBody: compactLines([
+      `您好，想跟进一下我此前投递的 ${target.job} 岗位进展。`,
+      '',
+      '我对这个方向仍然很感兴趣，也愿意补充更多项目材料或完成后续流程。若目前流程已有更新，烦请方便时告知我下一步安排。',
+      '',
+      '感谢您的时间。',
+      '',
+      '此草稿由系统生成，请你确认收件人、投递时间、事实细节和语气后自行发送。'
+    ]),
+    review,
+    reviewJson: buildReviewJson(review),
+    boundaryNotice,
+    experimentInput: ['跟进时间点', '跟进文案语气', '是否补充项目证据', '跟进后反馈状态']
+  }
+}
+
 export const getApplicationStatusFromEventType = (eventType?: string | null) => {
   const normalized = normalizeEventType(eventType)
   if (['APPLIED', 'SUBMITTED', 'APPLICATION_SUBMITTED'].includes(normalized)) return 'APPLIED'
@@ -768,6 +1389,7 @@ export const buildApplicationFollowUpRoute = (context: ApplicationWorkbenchConte
   path: '/applications',
   query: {
     applicationId: context.applicationId,
+    openEvents: 1,
     action: 'create-event',
     eventType: 'FOLLOW_UP',
     eventTime: context.nextFollowUpAt || context.eventTime || undefined
@@ -882,11 +1504,18 @@ export const parseApplicationListQuery = (
   const followUp = applicationFollowUpFilterOptions.some((item) => item.value === rawFollowUp)
     ? (rawFollowUp as ApplicationDeepLinkFollowUpFilter)
     : undefined
+  const rawAction = normalizeQueryValue(query.action)
+  const action = rawAction === 'create-event' ? rawAction : undefined
+  const eventType = normalizeQueryValue(query.eventType).toUpperCase() || undefined
+  const eventTime = normalizeQueryValue(query.eventTime) || undefined
 
   return {
     status,
     followUp,
     applicationId: parseQueryNumber(query.applicationId),
-    openEvents: isTruthyQueryValue(query.openEvents)
+    openEvents: isTruthyQueryValue(query.openEvents) || Boolean(action),
+    action,
+    eventType,
+    eventTime
   }
 }

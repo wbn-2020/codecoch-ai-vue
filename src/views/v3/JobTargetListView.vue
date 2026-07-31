@@ -437,20 +437,17 @@ onMounted(fetchAll)
 
 <style scoped lang="scss">
 .job-target-page {
-  gap: 18px;
+  gap: 16px;
 }
 
 .page-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 16px;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.05)),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .hero-kicker,
@@ -479,7 +476,7 @@ onMounted(fetchAll)
 
 .hero-copy h1 {
   color: var(--app-text);
-  font-size: 32px;
+  font-size: 26px;
   line-height: 1.18;
 }
 
@@ -494,13 +491,13 @@ onMounted(fetchAll)
 
 .hero-copy p {
   max-width: 720px;
-  margin: 12px 0 0;
-  line-height: 1.8;
+  margin: 8px 0 0;
+  line-height: 1.65;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 16px;
 }
 
 .hero-panel {
@@ -508,10 +505,10 @@ onMounted(fetchAll)
   display: grid;
   align-content: start;
   gap: 10px;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: rgba(2, 6, 23, 0.32);
 }
 
 .hero-panel span,
@@ -529,21 +526,27 @@ onMounted(fetchAll)
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .metric-card {
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: #ffffff;
+  padding: 12px 14px;
+  border-right: 1px solid var(--app-border);
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .metric-card strong {
   display: block;
   margin-top: 6px;
   color: var(--app-text);
-  font-size: 26px;
+  font-size: 24px;
 }
 
 .metric-date {
@@ -572,8 +575,8 @@ onMounted(fetchAll)
 }
 
 .target-list {
-  min-height: 320px;
-  padding: 0 20px 20px;
+  min-height: 240px;
+  padding: 0 16px 16px;
   border-top: 1px solid var(--app-border);
 }
 
@@ -583,20 +586,20 @@ onMounted(fetchAll)
 
 .target-card-list {
   display: grid;
-  gap: 14px;
-  padding-top: 20px;
+  gap: 10px;
+  padding-top: 16px;
 }
 
 .target-card {
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .target-card.is-current {
   border-color: rgba(34, 197, 94, 0.35);
-  box-shadow: 0 12px 28px rgba(34, 197, 94, 0.08);
+  background: rgba(20, 83, 45, 0.12);
 }
 
 .target-card__head {
@@ -647,7 +650,7 @@ onMounted(fetchAll)
   margin: 14px 0 0;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: rgba(2, 6, 23, 0.28);
   line-height: 1.7;
 }
 
@@ -663,6 +666,15 @@ onMounted(fetchAll)
   .page-hero,
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .metric-card:last-child {
+    border-bottom: 0;
   }
 
   .section-head {
@@ -686,11 +698,11 @@ onMounted(fetchAll)
 
 @media (max-width: 720px) {
   .page-hero {
-    padding: 22px;
+    padding: 14px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .hero-actions {

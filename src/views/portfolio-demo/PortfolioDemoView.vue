@@ -49,7 +49,7 @@
             done: completedNodeIds.has(node.id),
             current: index === activeNodeIndex
           }"
-          @click="activeNodeIndex = index"
+          @click="selectNode(index)"
         >
           <span>{{ index + 1 }}</span>
           <small>{{ node.page }}</small>
@@ -151,9 +151,9 @@
     <section class="content-card health-board">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Demo health</p>
+          <p class="eyebrow">静态健康检查</p>
           <h2>演示健康检查</h2>
-          <p>静态核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号，不连接业务服务。</p>
+          <p>仅静态核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号；不连接后端业务服务，不能代表运行时健康。</p>
         </div>
         <div class="status-summary">
           <strong>{{ statusLabel(healthReport.summary.status) }}</strong>
@@ -187,7 +187,7 @@
         <div>
           <p class="eyebrow">Speaker cards</p>
           <h2>提词卡与讲述材料</h2>
-          <p>只讲脱敏摘要、状态和工程边界；待总体验收项不会被包装成已上线效果。</p>
+          <p>只讲脱敏摘要、状态和工程边界；待发布后人工验收项不会被包装成已上线效果。</p>
         </div>
       </div>
 
@@ -209,13 +209,13 @@
     <section class="content-card acceptance-board">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Final acceptance</p>
-          <h2>V4 总体验收矩阵</h2>
+          <p class="eyebrow">Phase 5.5 handoff</p>
+          <h2>V5 非人工验收收口矩阵</h2>
           <p>{{ portfolioRehearsalAcceptanceMatrix.acceptanceBoundary }}</p>
         </div>
         <div class="status-summary">
           <strong>{{ acceptanceCapabilityCount }} 项能力</strong>
-          <span>覆盖阶段 1-7，静态确认与最终运行验收分离</span>
+          <span>覆盖 V5 五阶段，静态收口与发布后人工验收分离</span>
         </div>
       </div>
 
@@ -236,11 +236,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw } from 'lucide-vue-next'
 
+import {
+  getPortfolioRehearsalSessionApi,
+  savePortfolioRehearsalSessionApi
+} from '@/api/jobExperiment'
 import {
   requiredOpsDemoSteps,
   requiredUserDemoSteps,
@@ -284,14 +288,14 @@ const rehearsalRoutes: RehearsalRoute[] = [
     label: '5 分钟快速演示',
     durationSeconds: 300,
     durationLabel: '5:00',
-    summary: '用最短路径讲清用户如何从岗位目标进入训练、复盘和下一步行动。',
+    summary: '用最短路径讲清用户如何从岗位目标进入投递包、投递漏斗、训练复盘和下一步行动。',
     nodes: [
       {
         id: 'quick-target-job',
         page: userStepTitle('target-job', '目标岗位'),
         title: '用岗位目标建立演示上下文',
         route: '/job-targets?demoFlag=true',
-        timebox: '40 秒',
+        timebox: '30 秒',
         talkingPoints: ['说明岗位目标如何约束后续匹配、训练和复盘。', '强调页面只展示脱敏样例，不展开简历原文。'],
         risks: ['不要承诺岗位匹配结果一定准确。', '不要展示真实候选人身份信息。']
       },
@@ -300,16 +304,34 @@ const rehearsalRoutes: RehearsalRoute[] = [
         page: userStepTitle('jd-match', 'JD 匹配报告'),
         title: '把 JD 差距转成可执行训练线索',
         route: '/resume-match?demoFlag=true',
-        timebox: '45 秒',
+        timebox: '35 秒',
         talkingPoints: ['讲清匹配分、能力差距和证据建议如何驱动下一步。', '只讲结构化摘要，不打开简历全文。'],
         risks: ['避免把分数解释成录用概率。', '样本不足时要提示需要人工复核。']
+      },
+      {
+        id: 'quick-application-package',
+        page: userStepTitle('application-package', '岗位投递包'),
+        title: '把 JD、简历和项目证据聚合成投递准备包',
+        route: '/application-packages/preview?demoFlag=true',
+        timebox: '40 秒',
+        talkingPoints: ['说明投递包只做准备聚合和 readiness 判断。', '强调创建投递记录需要用户确认，不自动投递真实岗位。'],
+        risks: ['不要把投递包讲成自动投递工具。', '缺数据时按补简历、补证据或训练行动降级。']
+      },
+      {
+        id: 'quick-application-funnel',
+        page: userStepTitle('application-funnel', '投递漏斗'),
+        title: '把准备动作落到投递记录和跟进状态',
+        route: '/applications?demoFlag=true',
+        timebox: '35 秒',
+        talkingPoints: ['展示状态、待跟进和逾期提醒如何形成行动。', '强调跟进信只生成草稿或记录，不自动发送。'],
+        risks: ['不要承诺自动联系公司或自动发送邮件。', '真实数据和演示数据要分开讲。']
       },
       {
         id: 'quick-project-evidence',
         page: userStepTitle('project-evidence', '项目证据'),
         title: '用项目证据支撑简历和面试表达',
         route: '/project-evidence?demoFlag=true',
-        timebox: '40 秒',
+        timebox: '30 秒',
         talkingPoints: ['展示项目、技术点、STAR 线索的组织方式。', '强调证据引用来自用户确认后的结构化片段。'],
         risks: ['不要朗读项目原文或内部业务细节。', '对未验证经历只按待确认处理。']
       },
@@ -318,7 +340,7 @@ const rehearsalRoutes: RehearsalRoute[] = [
         page: userStepTitle('interview-training', '面试训练室'),
         title: '从推荐问题进入训练',
         route: '/interviews/create?demoFlag=true',
-        timebox: '45 秒',
+        timebox: '40 秒',
         talkingPoints: ['说明问题来源于岗位差距和项目证据。', '讲训练入口和复盘闭环，不展示回答原文。'],
         risks: ['不要触发真实 AI 面试。', '不要展示用户逐字回答。']
       },
@@ -327,9 +349,18 @@ const rehearsalRoutes: RehearsalRoute[] = [
         page: userStepTitle('job-experiment-review', '求职实验复盘'),
         title: '把一次求职实验复盘成下一步行动',
         route: '/job-experiments?demoFlag=true',
-        timebox: '70 秒',
+        timebox: '50 秒',
         talkingPoints: ['连接面试报告、能力图谱、实验结论和 Agent 今日任务。', '用行动项收束，让观众看到闭环价值。'],
         risks: ['复盘建议是辅助决策，不替代求职判断。', '不要展示长期记忆全文或知识库正文。']
+      },
+      {
+        id: 'quick-agent-today',
+        page: userStepTitle('agent-today', 'Agent 今日与本周计划'),
+        title: '收束到今日、本周和下一轮实验行动',
+        route: '/agent/today?demoFlag=true',
+        timebox: '35 秒',
+        talkingPoints: ['说明每条行动都有来源、可信度和跳转入口。', '强调 Agent 是教练建议，不替用户自动决策。'],
+        risks: ['不要承诺跨天计划已经全自动最优。', '低置信建议只讲成复核行动。']
       }
     ]
   },
@@ -476,6 +507,57 @@ const elapsedSeconds = ref(0)
 const timerRunning = ref(false)
 let timerId: number | undefined
 
+const validRouteKeys = new Set<RouteKey>(rehearsalRoutes.map((route) => route.key))
+const isRouteKey = (value: string | null | undefined): value is RouteKey =>
+  !!value && validRouteKeys.has(value as RouteKey)
+
+// Persistence is best-effort: rehearsal progress is convenience state, so a failed
+// save must never block the presenter. We collapse bursts of saves (e.g. per-second
+// timer ticks) into a single trailing write, and skip while hydrating.
+let hydrating = false
+let persistTimer: number | undefined
+
+const persistNow = () => {
+  if (hydrating) return
+  const nodeCount = activeRoute.value.nodes.length
+  const boundedIndex = Math.min(Math.max(activeNodeIndex.value, 0), Math.max(nodeCount - 1, 0))
+  savePortfolioRehearsalSessionApi({
+    activeRouteKey: activeRouteKey.value,
+    activeNodeIndex: boundedIndex,
+    elapsedSeconds: elapsedSeconds.value,
+    completedNodeIds: [...completedNodeIds.value]
+  }).catch(() => {
+    // Swallow: progress persistence is non-critical and must not disrupt rehearsal.
+  })
+}
+
+const schedulePersist = (delay = 800) => {
+  if (hydrating) return
+  if (persistTimer) window.clearTimeout(persistTimer)
+  persistTimer = window.setTimeout(() => {
+    persistTimer = undefined
+    persistNow()
+  }, delay)
+}
+
+const hydrateSession = async () => {
+  hydrating = true
+  try {
+    const session = await getPortfolioRehearsalSessionApi()
+    if (isRouteKey(session.activeRouteKey)) {
+      activeRouteKey.value = session.activeRouteKey
+    }
+    const nodeCount = activeRoute.value.nodes.length
+    activeNodeIndex.value = Math.min(Math.max(session.activeNodeIndex ?? 0, 0), Math.max(nodeCount - 1, 0))
+    elapsedSeconds.value = Math.max(session.elapsedSeconds ?? 0, 0)
+    completedNodeIds.value = new Set(session.completedNodeIds ?? [])
+  } catch {
+    // No saved session (or a transient error) leaves the default quick-route state in place.
+  } finally {
+    hydrating = false
+  }
+}
+
 const activeRoute = computed(
   () => rehearsalRoutes.find((route) => route.key === activeRouteKey.value) || rehearsalRoutes[0]
 )
@@ -536,6 +618,7 @@ const toggleTimer = () => {
   timerId = window.setInterval(() => {
     elapsedSeconds.value += 1
     if (elapsedSeconds.value >= activeRoute.value.durationSeconds) stopTimer()
+    schedulePersist(2000)
   }, 1000)
 }
 
@@ -544,15 +627,23 @@ const selectRoute = (key: RouteKey) => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
+  schedulePersist(0)
+}
+
+const selectNode = (index: number) => {
+  activeNodeIndex.value = index
+  schedulePersist()
 }
 
 const markCurrentNode = () => {
   completedNodeIds.value = new Set(completedNodeIds.value).add(currentNode.value.id)
+  schedulePersist()
 }
 
 const nextNode = () => {
   markCurrentNode()
   activeNodeIndex.value = Math.min(activeNodeIndex.value + 1, activeRoute.value.nodes.length - 1)
+  schedulePersist()
 }
 
 const resetRoute = () => {
@@ -561,6 +652,7 @@ const resetRoute = () => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
+  schedulePersist(0)
 }
 
 const openCurrentNode = () => {
@@ -569,12 +661,21 @@ const openCurrentNode = () => {
   router.push(resolved.path)
 }
 
-onBeforeUnmount(stopTimer)
+onMounted(hydrateSession)
+
+onBeforeUnmount(() => {
+  stopTimer()
+  if (persistTimer) {
+    window.clearTimeout(persistTimer)
+    persistTimer = undefined
+    persistNow()
+  }
+})
 </script>
 
 <style scoped lang="scss">
 .portfolio-demo {
-  gap: 18px;
+  gap: 14px;
 }
 
 .workbench,
@@ -589,11 +690,9 @@ onBeforeUnmount(stopTimer)
 
 .workbench {
   display: grid;
-  gap: 18px;
-  border-color: rgba(45, 212, 191, 0.32);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(19, 36, 45, 0.78)),
-    var(--app-surface);
+  gap: 14px;
+  border-color: var(--user-border);
+  background: var(--user-surface);
 }
 
 .workbench-main,

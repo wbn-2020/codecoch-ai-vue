@@ -296,20 +296,19 @@ onMounted(fetchFavorites)
 <style scoped lang="scss">
 .favorite-question-page {
   display: grid;
-  gap: 22px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .hero-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--app-border, #e5e7eb);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(20, 184, 166, 0.05)),
-    var(--app-surface, #ffffff);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .hero-kicker,
@@ -327,7 +326,7 @@ onMounted(fetchFavorites)
 .hero-kicker,
 .section-kicker {
   margin: 0;
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -337,12 +336,12 @@ onMounted(fetchFavorites)
 .panel-head h2,
 .question-card h3 {
   margin: 0;
-  color: var(--app-text, #111827);
+  color: var(--user-text);
 }
 
 .hero-copy h1 {
-  font-size: 32px;
-  line-height: 1.18;
+  font-size: 24px;
+  line-height: 1.3;
 }
 
 .hero-copy p,
@@ -352,28 +351,28 @@ onMounted(fetchFavorites)
 .review-block p,
 .side-summary span,
 .side-summary small {
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
 }
 
 .hero-copy p {
   max-width: 740px;
-  margin: 12px 0 0;
-  line-height: 1.8;
+  margin: 8px 0 0;
+  line-height: 1.6;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 14px;
 }
 
 .hero-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   align-content: start;
-  padding: 18px;
-  border: 1px solid var(--app-border, #e5e7eb);
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.88);
+  background: var(--user-surface-muted);
 }
 
 .hero-panel__stat {
@@ -381,46 +380,50 @@ onMounted(fetchFavorites)
 }
 
 .hero-panel__stat span {
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 .hero-panel__stat strong {
-  color: var(--app-text, #111827);
+  color: var(--user-text);
   font-size: 18px;
 }
 
 .insight-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .insight-card,
 .source-panel,
 .question-card {
-  border: 1px solid var(--app-border, #e5e7eb);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: var(--app-surface, #ffffff);
+  background: var(--user-surface);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
 }
 
 .insight-card {
-  padding: 18px;
+  min-width: 0;
+  flex: 1 1 180px;
+  padding: 12px 14px;
+  background: var(--user-surface-muted);
 }
 
 .insight-card span,
 .question-side span,
 .question-time {
-  color: var(--app-text-muted, #64748b);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .insight-card strong {
   display: block;
-  margin-top: 8px;
-  color: var(--app-text, #111827);
-  font-size: 26px;
+  margin-top: 4px;
+  color: var(--user-text);
+  font-size: 20px;
   line-height: 1.1;
 }
 
@@ -462,15 +465,15 @@ onMounted(fetchFavorites)
 }
 
 .question-stream {
-  min-height: 260px;
+  min-height: 0;
   padding: 0 18px 18px;
 }
 
 .question-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  gap: 20px;
-  padding: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 240px);
+  gap: 16px;
+  padding: 16px;
 }
 
 .question-card + .question-card {
@@ -498,21 +501,21 @@ onMounted(fetchFavorites)
 .tag-row span {
   padding: 4px 10px;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: var(--app-text-muted, #64748b);
+  background: var(--user-control-bg-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
 .review-block {
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px dashed #dbe3ee;
+  border-top: 1px dashed var(--user-border);
 }
 
 .review-block strong {
   display: block;
   margin-bottom: 6px;
-  color: var(--app-text, #111827);
+  color: var(--user-text);
 }
 
 .question-side {
@@ -520,15 +523,15 @@ onMounted(fetchFavorites)
   align-content: start;
   gap: 12px;
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .side-summary strong {
   display: block;
   margin: 6px 0 8px;
-  color: var(--app-text, #111827);
+  color: var(--user-text);
   font-size: 16px;
   line-height: 1.4;
 }
@@ -559,7 +562,7 @@ onMounted(fetchFavorites)
   }
 
   .insight-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
   }
 
   .filter-bar {
@@ -573,11 +576,11 @@ onMounted(fetchFavorites)
 
 @media (max-width: 720px) {
   .hero-band {
-    padding: 22px;
+    padding: 16px;
   }
 
   .hero-copy h1 {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .insight-grid {

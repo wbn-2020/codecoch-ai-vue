@@ -58,6 +58,27 @@
             <span>完成面试</span>
           </div>
         </div>
+        <div class="feedback-strip">
+          <div>
+            <strong>{{ feedbackSummary.rejectedCount }}</strong>
+            <span>拒信</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.noFeedbackCount }}</strong>
+            <span>无反馈</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewRoundCount }}</strong>
+            <span>面试轮次</span>
+          </div>
+          <div>
+            <strong>{{ feedbackSummary.interviewReportSummaryCount }}</strong>
+            <span>报告摘要</span>
+          </div>
+        </div>
+        <ul v-if="lowSampleRules.length" class="rule-list">
+          <li v-for="rule in lowSampleRules" :key="rule">{{ rule }}</li>
+        </ul>
       </article>
 
       <article class="content-card unsupported-card">
@@ -105,6 +126,12 @@
       :closable="false"
       title="样本不足提醒"
       :description="sampleWarning"
+    />
+
+    <CareerExperimentPanel
+      v-if="detail"
+      :legacy-experiment-id="detail.id"
+      mode="detail"
     />
 
     <section class="content-card section strategy-section" v-if="detail">
@@ -241,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Bot, ClipboardCheck, Edit3, Plus, Trash2 } from 'lucide-vue-next'
@@ -253,6 +280,7 @@ import {
   getJobExperimentDetailApi
 } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
+import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import {
   buildJobExperimentEvidenceCoverage,
   buildJobExperimentReviewDisplayModel,
@@ -282,8 +310,11 @@ const relationForm = reactive<JobSearchExperimentRelationSaveDTO>({
   relationId: 1,
   relationSummary: ''
 })
-
-const id = () => Number(route.params.id)
+const experimentId = computed(() => {
+  const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+})
+let detailRequestGeneration = 0
 
 const latestReview = computed<JobSearchExperimentReviewVO | undefined>(() =>
   detail.value?.latestReview || detail.value?.reviews?.[0]
@@ -295,6 +326,8 @@ const reviewStrategy = computed(() => ({
 }))
 const reviewDisplay = computed(() => buildJobExperimentReviewDisplayModel(detail.value, latestReview.value, reviewStrategy.value))
 const sampleBoundary = computed(() => reviewDisplay.value.sampleBoundary)
+const feedbackSummary = computed(() => reviewDisplay.value.applicationFeedbackSummary)
+const lowSampleRules = computed(() => reviewDisplay.value.lowSampleRules)
 const weakConclusion = computed(() =>
   shouldKeepConclusionWeak(detail.value?.metrics) ||
   !['NORMAL', 'STRONG'].includes(String(reviewDisplay.value.qualityGate.suggestionStrength))
@@ -308,10 +341,14 @@ const unsupportedConclusion = computed(() =>
   reviewDisplay.value.unsupportedConclusions.map((item) => item.blockedReason).join('；') ||
   '暂无明确不支持结论；建议继续保留证据链，避免把单次成功或失败归因到单一因素。'
 )
-const strategyTitle = computed(() => reviewStrategy.value.title || '下一轮实验假设')
+const strategyTitle = computed(() =>
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY' ? '事实记录模式' : reviewStrategy.value.title || '下一轮实验假设'
+)
 const strategyContent = computed(() =>
-  reviewStrategy.value.content ||
-  '先补齐目标岗位、匹配报告、投递与项目证据，再生成复盘。样本不足时只提出可验证行动，不输出强结论。'
+  reviewDisplay.value.reviewMode === 'FACTS_ONLY'
+    ? '投递样本少于 5 条，当前只展示投递、反馈、拒信、无反馈和面试记录事实，不输出策略优劣或趋势判断。'
+    : reviewStrategy.value.content ||
+      '先补齐目标岗位、匹配报告、投递与项目证据，再生成复盘。样本不足时只提出可验证行动，不输出强结论。'
 )
 const strategyEvidenceSources = computed(() => reviewDisplay.value.evidenceSources)
 const strategyTagType = computed(() => (reviewDisplay.value.qualityGate.gateStatus === 'PASS' && !weakConclusion.value ? 'success' : 'warning'))
@@ -334,27 +371,49 @@ const formatDateRange = (start?: string, end?: string) => {
 
 const formatDateTime = (value?: string) => value || '-'
 
-const load = async () => {
+const loadExperiment = async (id: number, requestGeneration: number) => {
   loading.value = true
   errorMessage.value = ''
   try {
-    detail.value = await getJobExperimentDetailApi(id())
+    const nextDetail = await getJobExperimentDetailApi(id)
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = nextDetail
+    }
   } catch (error) {
-    detail.value = undefined
-    errorMessage.value = error instanceof Error ? error.message : '求职实验详情加载失败，请稍后重试。'
+    if (requestGeneration === detailRequestGeneration) {
+      detail.value = undefined
+      errorMessage.value = error instanceof Error ? error.message : '求职实验详情加载失败，请稍后重试。'
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === detailRequestGeneration) {
+      loading.value = false
+    }
   }
 }
 
+const load = async () => {
+  const id = experimentId.value
+  const requestGeneration = ++detailRequestGeneration
+  if (!id) {
+    loading.value = false
+    errorMessage.value = '求职实验编号无效。'
+    return
+  }
+  await loadExperiment(id, requestGeneration)
+}
+
 const addRelation = async () => {
-  await addJobExperimentRelationApi(id(), relationForm)
+  const id = experimentId.value
+  if (!id) return
+  await addJobExperimentRelationApi(id, relationForm)
   relationDialog.value = false
   await load()
 }
 
 const removeRelation = async (relationId: number) => {
-  await deleteJobExperimentRelationApi(id(), relationId)
+  const id = experimentId.value
+  if (!id) return
+  await deleteJobExperimentRelationApi(id, relationId)
   await load()
 }
 
@@ -370,7 +429,9 @@ const removeExperiment = async () => {
   }
   deleting.value = true
   try {
-    await deleteJobExperimentApi(id())
+    const id = experimentId.value
+    if (!id) return
+    await deleteJobExperimentApi(id)
     ElMessage.success('实验已删除')
     router.push(demoPath('/job-experiments'))
   } finally {
@@ -382,7 +443,27 @@ const goSafe = (path: string) => {
   router.push(demoPath(resolveAppRoutePath(path, { knownPaths: defaultUserKnownPaths }).path))
 }
 
-onMounted(load)
+watch(
+  experimentId,
+  () => {
+    detailRequestGeneration += 1
+    detail.value = undefined
+    errorMessage.value = ''
+    loading.value = false
+    relationDialog.value = false
+    Object.assign(relationForm, {
+      relationType: 'JOB_APPLICATION',
+      relationId: 1,
+      relationSummary: ''
+    })
+    void load()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detailRequestGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">
@@ -400,10 +481,10 @@ onMounted(load)
 
 .page-hero {
   justify-content: space-between;
-  padding: 26px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--user-surface);
 }
 
 .hero-copy {
@@ -472,7 +553,7 @@ h2 {
 .reliability-card,
 .unsupported-card,
 .metric {
-  padding: 18px;
+  padding: 16px;
 }
 
 .section-head {
@@ -487,6 +568,13 @@ h2 {
   margin-top: 16px;
 }
 
+.feedback-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .fact-list {
   display: grid;
   gap: 6px;
@@ -496,20 +584,35 @@ h2 {
   line-height: 1.6;
 }
 
+.rule-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #fbbf24;
+  line-height: 1.6;
+}
+
 .sample-strip > div,
+.feedback-strip > div,
 .coverage-item,
 .review-item,
 .action-card {
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted);
 }
 
 .sample-strip > div {
   padding: 12px;
 }
 
+.feedback-strip > div {
+  padding: 10px;
+}
+
 .sample-strip strong,
+.feedback-strip strong,
 .metric strong {
   display: block;
   font-size: 26px;
@@ -517,6 +620,7 @@ h2 {
 
 .metric span,
 .sample-strip span,
+.feedback-strip span,
 .page-hero p,
 .muted,
 .coverage-item span,
@@ -628,6 +732,10 @@ h2 {
 
   .sample-strip {
     grid-template-columns: 1fr;
+  }
+
+  .feedback-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

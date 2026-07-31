@@ -1,29 +1,6 @@
 <template>
   <div class="question-training-page page-shell">
     <section class="training-hero">
-      <div class="hero-copy">
-        <div class="eyebrow">
-          <BookOpenCheck :size="16" />
-          今日训练题组
-        </div>
-        <h1>{{ todayFocusTitle }}</h1>
-        <p>{{ todayFocusLead }}</p>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" @click="startPrimaryPractice">
-            <Play :size="16" />
-            {{ primaryPracticeLabel }}
-          </el-button>
-          <el-button :loading="generating" :disabled="!canGenerate" size="large" @click="generateRecommendations">
-            <Sparkles :size="16" />
-            生成今日题组
-          </el-button>
-          <el-button :loading="loading" text @click="loadRecommendations">
-            <RefreshCw :size="16" />
-            刷新
-          </el-button>
-        </div>
-      </div>
-
       <div class="today-plan-card">
         <div class="plan-card-head">
           <Play :size="16" />
@@ -35,23 +12,28 @@
           <el-tag :type="todayTrustTag.type" effect="plain">{{ todayTrustTag.label }}</el-tag>
           <el-tag effect="plain">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</el-tag>
         </div>
+        <el-button class="plan-primary-action" type="primary" size="large" @click="startPrimaryPractice">
+          <Play :size="16" />
+          {{ primaryPracticeLabel }}
+        </el-button>
       </div>
 
-      <div class="hero-metrics">
-        <div class="metric-tile">
-          <span>今日题组</span>
-          <strong>{{ todayGroupMetric.value }}</strong>
-          <small>{{ todayGroupMetric.note }}</small>
+      <div class="hero-copy">
+        <div class="eyebrow">
+          <BookOpenCheck :size="16" />
+          今日训练题组
         </div>
-        <div class="metric-tile">
-          <span>可直接练</span>
-          <strong>{{ actionableMetric.value }}</strong>
-          <small>{{ actionableMetric.note }}</small>
-        </div>
-        <div class="metric-tile">
-          <span>优先补强</span>
-          <strong>{{ priorityMetric.value }}</strong>
-          <small>{{ priorityMetric.note }}</small>
+        <h1>{{ todayFocusTitle }}</h1>
+        <p>{{ todayFocusLead }}</p>
+        <div class="hero-actions">
+          <el-button :loading="generating" :disabled="!canGenerate" size="large" @click="generateRecommendations">
+            <Sparkles :size="16" />
+            生成今日题组
+          </el-button>
+          <el-button :loading="loading" text @click="loadRecommendations">
+            <RefreshCw :size="16" />
+            刷新
+          </el-button>
         </div>
       </div>
     </section>
@@ -63,14 +45,14 @@
           <p>{{ sourceDescription }}</p>
         </div>
         <div class="control-fields">
-          <el-segmented v-model="query.source" :options="sourceOptions" @change="handleSourceChange" />
-          <el-input-number v-model="query.questionCount" :min="3" :max="30" />
+          <el-segmented v-model="query.source" :options="sourceOptions" aria-label="推荐依据" @change="handleSourceChange" />
+          <el-input-number v-model="query.questionCount" :min="3" :max="30" aria-label="题目数量" />
         </div>
         <div class="context-state" :class="{ 'is-ready': Boolean(query.sourceId) }">
           <Target :size="16" />
           <span>{{ contextStatusText }}</span>
         </div>
-        <div v-if="showFallbackNotice" class="fallback-notice">
+        <div v-if="showFallbackNotice && items.length" class="fallback-notice">
           <AlertTriangle :size="16" />
           <div>
             <strong>{{ fallbackNoticeTitle }}</strong>
@@ -231,22 +213,6 @@
       </main>
 
       <aside class="side-stack">
-        <section class="content-card fallback-panel">
-          <div class="content-card__body">
-            <div class="side-title">
-              <Play :size="17" />
-              <h2>没有可信来源时</h2>
-            </div>
-            <el-tag class="fallback-tag" type="warning" effect="plain">推荐依据不足</el-tag>
-            <p class="side-muted">
-              如果暂时没有简历、岗位描述或学习计划，不会伪造专项推荐；先完成一组通用训练，练完后再回到题组刷新来源。
-            </p>
-            <el-button type="primary" plain @click="startFallbackPractice">
-              {{ fallbackPanelActionText }}
-            </el-button>
-          </div>
-        </section>
-
         <section class="content-card coach-panel">
           <div class="content-card__body">
             <div class="side-title">
@@ -269,19 +235,19 @@
               <h2>快速入口</h2>
             </div>
             <div class="quick-links">
-              <button type="button" @click="router.push('/questions/practice')">
+              <button type="button" aria-label="进入专项练习" @click="router.push('/questions/practice')">
                 <Dumbbell :size="16" />
                 <span>专项练习</span>
               </button>
-              <button type="button" @click="router.push('/questions/wrong-records')">
+              <button type="button" aria-label="打开错题复盘" @click="router.push('/questions/wrong-records')">
                 <RotateCcw :size="16" />
                 <span>错题复盘</span>
               </button>
-              <button type="button" @click="router.push('/questions/favorites')">
+              <button type="button" aria-label="打开收藏题" @click="router.push('/questions/favorites')">
                 <Bookmark :size="16" />
                 <span>收藏题</span>
               </button>
-              <button type="button" @click="router.push('/interviews/create')">
+              <button type="button" aria-label="创建模拟面试" @click="router.push('/interviews/create')">
                 <MessageSquare :size="16" />
                 <span>模拟面试</span>
               </button>
@@ -484,30 +450,6 @@ const primaryPracticeLabel = computed(() => hasPracticeQuestions.value ? '开始
 const highRiskCount = computed(() =>
   items.value.filter((item) => ['CRITICAL', 'HIGH'].includes(String(item.gapSeverity || ''))).length
 )
-const todayGroupMetric = computed(() => {
-  if (items.value.length) {
-    return { value: String(items.value.length), note: '来自当前推荐结果' }
-  }
-  return {
-    value: '可开始',
-    note: fallbackKeyword.value ? '先按岗位关键词练一组' : '先进入通用训练'
-  }
-})
-const actionableMetric = computed(() => {
-  if (hasPracticeQuestions.value) {
-    return { value: String(actionableItems.value.length), note: '可进入题目详情' }
-  }
-  return { value: '1 组', note: '已提供兜底训练入口' }
-})
-const priorityMetric = computed(() => {
-  if (highRiskCount.value) {
-    return { value: String(highRiskCount.value), note: '高风险题优先' }
-  }
-  return {
-    value: fallbackKeyword.value ? '关键词' : '通用',
-    note: hasPracticeQuestions.value ? '按题组顺序完成' : '先保持训练节奏'
-  }
-})
 const topSkillNames = computed(() => {
   const names = items.value
     .map((item) => item.skillName || item.skillCode)
@@ -591,11 +533,7 @@ const recommendationTrustTags = computed(() => [
     type: trustStatusType(generationDiagnostic.value?.trustStatus, query.sourceId ? 'success' : 'info')
   },
   {
-    label: query.sourceId ? '推荐来源已绑定' : '暂无明确来源，可先练一组',
-    type: generationDiagnostic.value?.fallback ? 'warning' : (query.sourceId ? 'success' : 'warning')
-  },
-  {
-    label: hasPracticeQuestions.value ? `${practiceQuestionIds.value.length} 道可直接练习` : '已准备通用练习',
+    label: hasPracticeQuestions.value ? `${practiceQuestionIds.value.length} 道可直接练习` : '通用练习可直接开始',
     type: hasPracticeQuestions.value ? 'success' : 'warning'
   }
 ] as Array<{ label: string; type: 'success' | 'warning' | 'info' }>)
@@ -785,10 +723,6 @@ const fallbackEvidenceSummary = computed(() =>
     ? `暂时缺少可直接生成专项题的匹配报告，先围绕“${fallbackKeyword.value}”做岗位关键词练习。`
     : '暂时缺少可直接生成专项题的匹配报告，先做一组通用训练保持训练节奏。'
 )
-const fallbackPanelActionText = computed(() =>
-  fallbackKeyword.value ? `按 ${fallbackKeyword.value} 先练 ${query.questionCount} 题` : `先随机练 ${query.questionCount} 题`
-)
-
 const compactRouterQuery = (params: Record<string, RouterQueryValue>) => {
   const result: LocationQueryRaw = {}
   Object.entries(params).forEach(([key, value]) => {
@@ -1113,20 +1047,19 @@ onMounted(loadRecommendations)
 
 <style scoped lang="scss">
 .question-training-page {
-  gap: 18px;
+  gap: 14px;
 }
 
 .training-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: 22px;
-  padding: 28px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  grid-template-areas: "copy plan";
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(16, 185, 129, 0.08)),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .eyebrow,
@@ -1141,12 +1074,14 @@ onMounted(loadRecommendations)
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
 .hero-copy {
+  grid-area: copy;
+
   h1 {
     margin: 12px 0 0;
     color: var(--app-text);
@@ -1169,17 +1104,18 @@ onMounted(loadRecommendations)
 }
 
 .today-plan-card {
+  grid-area: plan;
   display: grid;
   gap: 10px;
   min-width: 0;
-  padding: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   strong {
     color: var(--app-text);
-    font-size: 22px;
+    font-size: 18px;
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
@@ -1192,6 +1128,11 @@ onMounted(loadRecommendations)
   }
 }
 
+.plan-primary-action {
+  width: 100%;
+  margin-top: 2px;
+}
+
 .plan-card-head,
 .plan-card-meta {
   display: flex;
@@ -1201,51 +1142,16 @@ onMounted(loadRecommendations)
 }
 
 .plan-card-head {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 13px;
   font-weight: 800;
 }
 
-.hero-metrics {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.metric-tile {
-  padding: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
-
-  span {
-    display: block;
-    color: var(--app-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 6px;
-    color: var(--app-text);
-    font-size: 26px;
-  }
-
-  small {
-    display: block;
-    margin-top: 4px;
-    color: var(--app-text-muted);
-    font-size: 12px;
-    line-height: 1.4;
-  }
-}
-
 .controls-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(240px, 320px);
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 
   h2,
   p {
@@ -1279,17 +1185,17 @@ onMounted(loadRecommendations)
   min-width: 0;
   min-height: 34px;
   padding: 7px 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
   color: var(--app-text-muted);
   font-size: 13px;
   white-space: nowrap;
 
   &.is-ready {
-    border-color: rgba(22, 163, 74, 0.2);
-    background: #f0fdf4;
-    color: #166534;
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
+    color: var(--user-success);
   }
 }
 
@@ -1315,24 +1221,24 @@ onMounted(loadRecommendations)
   gap: 10px;
   align-items: flex-start;
   padding: 12px;
-  border: 1px solid #fed7aa;
+  border: 1px solid rgba(230, 173, 85, 0.34);
   border-radius: 8px;
-  background: #fff7ed;
+  background: var(--user-warning-soft);
 
   > svg {
     margin-top: 2px;
-    color: #f59e0b;
+    color: var(--user-warning);
   }
 
   strong {
     display: block;
-    color: #9a3412;
+    color: var(--user-warning);
     font-size: 13px;
   }
 
   p {
     margin: 4px 0 0;
-    color: #7c2d12;
+    color: var(--user-text-secondary);
     font-size: 13px;
     line-height: 1.6;
     overflow-wrap: anywhere;
@@ -1355,9 +1261,9 @@ onMounted(loadRecommendations)
   justify-content: space-between;
   gap: 10px 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .generation-diagnostic__main,
@@ -1392,19 +1298,18 @@ onMounted(loadRecommendations)
 
 .training-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(300px, 320px);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: 14px;
   align-items: start;
 }
 
 .recommendation-empty-state {
-  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--user-border-strong);
   border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: var(--user-surface-muted);
 
   :deep(.app-state__content) {
     max-width: 560px;
@@ -1451,10 +1356,10 @@ onMounted(loadRecommendations)
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 14px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  padding: 14px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 }
 
 .question-rank {
@@ -1465,8 +1370,8 @@ onMounted(loadRecommendations)
     width: 34px;
     height: 34px;
     border-radius: 8px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-weight: 800;
   }
 }
@@ -1521,7 +1426,7 @@ onMounted(loadRecommendations)
   margin-top: 14px;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   strong {
     color: var(--app-text);
@@ -1543,19 +1448,19 @@ onMounted(loadRecommendations)
 
 .hint-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-top: 10px;
 
   div {
-    padding: 12px;
-    border: 1px solid #e2e8f0;
+    padding: 10px;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
@@ -1582,20 +1487,7 @@ onMounted(loadRecommendations)
 }
 
 .coach-panel {
-  border-color: rgba(37, 99, 235, 0.18);
-}
-
-.fallback-panel {
-  border-color: rgba(22, 163, 74, 0.2);
-
-  .el-button {
-    margin-top: 12px;
-    width: 100%;
-  }
-}
-
-.fallback-tag {
-  margin-bottom: 10px;
+  border-color: var(--user-primary-border);
 }
 
 .coach-steps {
@@ -1631,9 +1523,9 @@ onMounted(loadRecommendations)
     gap: 8px;
     min-height: 42px;
     padding: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
     color: var(--app-text);
     cursor: pointer;
     text-align: left;
@@ -1643,6 +1535,11 @@ onMounted(loadRecommendations)
       overflow-wrap: anywhere;
     }
   }
+}
+
+.quick-links button:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: 2px;
 }
 
 .skill-chips {
@@ -1658,7 +1555,7 @@ onMounted(loadRecommendations)
 }
 
 :deep(.app-state) {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 @media (max-width: 980px) {
@@ -1666,6 +1563,12 @@ onMounted(loadRecommendations)
   .controls-body,
   .training-grid {
     grid-template-columns: 1fr;
+  }
+
+  .training-hero {
+    grid-template-areas:
+      "plan"
+      "copy";
   }
 
   .hero-actions,
@@ -1730,7 +1633,6 @@ onMounted(loadRecommendations)
     }
   }
 
-  .hero-metrics,
   .hint-grid,
   .quick-links {
     grid-template-columns: 1fr;

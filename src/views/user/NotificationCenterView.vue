@@ -57,9 +57,10 @@
           <p>暂无通知</p>
         </div>
 
-        <article
+        <button
           v-for="item in notifications"
           :key="item.id"
+          type="button"
           class="notification-item"
           :class="{ unread: item.isRead === 0 }"
           @click="handleClickNotification(item)"
@@ -73,7 +74,7 @@
             <p v-if="item.content">{{ item.content }}</p>
             <span class="notification-time">{{ formatDateTime(item.createdAt) }}</span>
           </div>
-        </article>
+        </button>
       </div>
 
       <div v-if="total > 0" class="pagination-wrap">
@@ -146,11 +147,11 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
+import { resolveNotificationAction } from '@/features/notifications'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
 import { notifyUnreadChanged } from '@/utils/notificationEvents'
-import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 import request from '@/utils/request'
 
 const router = useRouter()
@@ -179,28 +180,9 @@ const notificationTypeText = (type?: string | null) => {
   return typeLabel(type)
 }
 
-const pickRelatedId = (item?: NotificationVO) => {
-  const value = item?.relatedId ?? item?.bizId
-  const id = Number(value)
-  return Number.isFinite(id) && id > 0 ? id : undefined
-}
-
-const pickRelatedKey = (item?: NotificationVO) => {
-  const value = item?.relatedId ?? item?.bizId
-  return String(value ?? '').trim()
-}
-
-const withQuery = (path: string, query: Record<string, string | undefined>) => {
-  const params = new URLSearchParams()
-  Object.entries(query).forEach(([key, value]) => {
-    if (value) params.set(key, value)
-  })
-  const queryString = params.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
-
 const normalizeTypeToken = (value?: string) => String(value || '').replace(/[.-]/g, '_').toUpperCase()
-const isReminderNotification = (item?: NotificationVO) => normalizeTypeToken(item?.type) === 'AGENT_REMINDER'
+const isReminderNotification = (item?: NotificationVO) =>
+  ['AGENT_REMINDER', 'CALENDAR_REMINDER'].includes(normalizeTypeToken(item?.type))
 const buildReminderTargetKey = (item?: NotificationVO, targetRef = '', fallbackRef = '') => {
   if (!item?.id) return `notification:unknown:${targetRef || fallbackRef || 'missing'}`
   return `notification:${item.id}:${targetRef || fallbackRef || 'missing'}`
@@ -245,112 +227,28 @@ type NotificationTarget = {
   fallbackLabel?: string
   fallbackPath: string
   targetKey: string
-  trustedInferredPath?: boolean
-}
-
-const inferNotificationTarget = (item?: NotificationVO): Omit<NotificationTarget, 'targetKey'> | null => {
-  if (!item) return null
-  const relatedType = normalizeTypeToken(item.relatedType || item.bizType || item.type || '')
-  const title = String(item.title || '')
-  const content = String(item.content || '')
-  const id = pickRelatedId(item)
-  const batchId = pickRelatedKey(item)
-
-  if ((relatedType.includes('INTERVIEW') && relatedType.includes('REPORT')) || relatedType === 'REPORT_DONE') {
-    return id
-      ? { label: '面试报告', path: `/interviews/${id}/report`, fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
-      : { label: '面试复盘记录', path: '/interviews/history', fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
-  }
-  if (relatedType.includes('INTERVIEW')) {
-    return id
-      ? { label: '面试详情', path: `/interviews/${id}`, fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
-      : { label: '面试复盘记录', path: '/interviews/history', fallbackLabel: '面试复盘记录', fallbackPath: '/interviews/history' }
-  }
-  if (relatedType.includes('RESUME') && relatedType.includes('MATCH')) {
-    return id
-      ? { label: 'JD 匹配报告', path: `/resume-match/${id}`, fallbackLabel: 'JD 匹配实验台', fallbackPath: '/resume-match' }
-      : { label: 'JD 匹配实验台', path: '/resume-match', fallbackLabel: 'JD 匹配实验台', fallbackPath: '/resume-match' }
-  }
-  if (relatedType.includes('RESUME')) {
-    return { label: '简历中心', path: '/resumes', fallbackLabel: '简历中心', fallbackPath: '/resumes' }
-  }
-  if (relatedType.includes('STUDY') || relatedType.includes('PLAN')) {
-    return id
-      ? { label: '学习计划', path: `/study-plans?planId=${id}`, fallbackLabel: '学习计划', fallbackPath: '/study-plans' }
-      : { label: '学习计划', path: '/study-plans', fallbackLabel: '学习计划', fallbackPath: '/study-plans' }
-  }
-  if (relatedType === 'QUESTION_GENERATE') {
-    return {
-      label: 'Question generation task',
-      path: withQuery('/agent/tasks', {
-        bizType: 'question.generate',
-        bizId: batchId,
-        batchId
-      }),
-      fallbackLabel: 'Task center',
-      fallbackPath: '/agent/tasks',
-      trustedInferredPath: true
-    }
-  }
-  if (relatedType === 'QUESTION_RECOMMENDATION_GENERATE') {
-    return {
-      label: 'Question recommendations',
-      path: withQuery('/questions/recommendations', { batchId }),
-      fallbackLabel: 'Question recommendations',
-      fallbackPath: '/questions/recommendations',
-      trustedInferredPath: true
-    }
-  }
-  if (relatedType.includes('QUESTION')) {
-    return id
-      ? { label: '题目详情', path: `/questions/${id}`, fallbackLabel: '题库', fallbackPath: '/questions' }
-      : { label: '题库', path: '/questions', fallbackLabel: '题库', fallbackPath: '/questions' }
-  }
-  if (relatedType === 'AGENT_RUN') {
-    return id
-      ? { label: '查看昨日训练详情', path: `/agent/runs/${id}`, fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
-      : { label: '回到今日计划继续训练', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
-  }
-  if (relatedType === 'AGENT_TASK') {
-    const bizId = item.bizId ?? item.relatedId
-    const taskPath = bizId ? `/agent/tasks?bizType=agent.daily-plan.generate&bizId=${bizId}` : '/agent/tasks'
-    return { label: '去任务中心继续该训练', path: taskPath, fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
-  }
-  if (relatedType === 'AGENT_TODAY') {
-    return { label: '回到今日计划', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
-  }
-  if (relatedType === 'AGENT_DASHBOARD') {
-    return { label: '去训练入口面板', path: '/dashboard', fallbackLabel: '仪表盘', fallbackPath: '/dashboard' }
-  }
-  if (relatedType.includes('TASK') && (title.includes('训练') || content.includes('训练'))) {
-    return { label: '回到今日计划', path: '/agent/today', fallbackLabel: '今日计划', fallbackPath: '/agent/today' }
-  }
-  if (relatedType.includes('TASK')) {
-    return { label: '每日任务', path: '/daily-tasks', fallbackLabel: '仪表盘', fallbackPath: '/dashboard' }
-  }
-  return null
+  rawTargetPath: string
+  blockedBackendPath?: string
 }
 
 const notificationTarget = computed<NotificationTarget | null>(() => {
   const item = selectedNotification.value
   if (!item) return null
-  const inferredTarget = inferNotificationTarget(item)
-  const hasBackendActionUrl = Boolean(String(item.actionUrl || '').trim())
-  const preferredPath = String(item.actionUrl || inferredTarget?.path || '').trim()
-  const fallbackPath = String(item.fallbackPath || inferredTarget?.fallbackPath || '/dashboard').trim()
-  const targetKey = buildReminderTargetKey(item, preferredPath, fallbackPath)
-
-  if (!preferredPath && !fallbackPath) {
-    return null
-  }
+  const resolved = resolveNotificationAction(item)
+  if (resolved.kind !== 'route') return null
+  const rawTargetPath = String(item.actionUrl || resolved.actionPath).trim()
+  const blockedBackendPath = item.actionUrl && resolved.blockedPath === item.actionUrl
+    ? item.actionUrl
+    : undefined
 
   return {
-    label: inferredTarget?.label || item.fallbackLabel || '关联页面',
-    path: preferredPath || fallbackPath,
-    fallbackLabel: item.fallbackLabel || inferredTarget?.fallbackLabel,
-    fallbackPath,
-    targetKey,
-    trustedInferredPath: !hasBackendActionUrl && inferredTarget?.trustedInferredPath === true
+    label: resolved.actionLabel,
+    path: resolved.actionPath,
+    fallbackLabel: resolved.fallbackLabel,
+    fallbackPath: resolved.fallbackPath,
+    targetKey: buildReminderTargetKey(item, rawTargetPath, resolved.fallbackPath),
+    rawTargetPath,
+    blockedBackendPath
   }
 })
 
@@ -419,39 +317,36 @@ const jumpToNotificationTarget = async () => {
     return
   }
   detailVisible.value = false
-  const targetPath = notificationTarget.value.trustedInferredPath
-    ? notificationTarget.value.path
-    : sanitizeLocalActionPath(notificationTarget.value.path, '')
-  const fallbackPath = sanitizeLocalActionPath(notificationTarget.value.fallbackPath, '/dashboard')
-  if (!targetPath) {
+  const target = notificationTarget.value
+  if (target.blockedBackendPath) {
     trackReminderEvent('reminder_target_invalid', item, {
       reason: 'unsafe_target_path',
-      targetKey: notificationTarget.value.targetKey,
-      targetPath: notificationTarget.value.path,
-      fallbackPath
+      targetKey: target.targetKey,
+      targetPath: target.blockedBackendPath,
+      fallbackPath: target.fallbackPath
     })
     ElMessage.warning('提醒目标暂时不可用，已回退到可继续训练的入口页。')
-    await router.push(fallbackPath)
+    await router.push(target.fallbackPath)
     return
   }
   try {
     if (isReminderNotification(item)) {
       trackReminderEvent('reminder_clicked', item, {
-        targetKey: notificationTarget.value.targetKey,
-        targetPath,
-        fallbackPath
+        targetKey: target.targetKey,
+        targetPath: target.path,
+        fallbackPath: target.fallbackPath
       })
     }
-    await router.push(targetPath)
+    await router.push(target.path)
   } catch {
     trackReminderEvent('reminder_target_invalid', item, {
       reason: 'navigation_failed',
-      targetKey: notificationTarget.value.targetKey,
-      targetPath,
-      fallbackPath
+      targetKey: target.targetKey,
+      targetPath: target.path,
+      fallbackPath: target.fallbackPath
     })
     ElMessage.warning('提醒目标暂时不可用，已回退到可继续训练的入口页。')
-    await router.push(fallbackPath)
+    await router.push(target.fallbackPath)
   }
 }
 
@@ -496,16 +391,17 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .notification-page {
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .notification-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
-  padding: 28px;
-  border-radius: var(--cc-radius-xl);
+  gap: 16px;
+  padding: 18px;
+  border-radius: 8px;
 }
 
 .eyebrow {
@@ -521,12 +417,12 @@ onMounted(() => {
 .hero-copy {
   h1 {
     margin: 14px 0 0;
-    font-size: 30px;
+    font-size: 24px;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -552,15 +448,15 @@ onMounted(() => {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--el-color-danger);
-  color: #fff;
+  color: var(--user-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .notification-list {
-  min-height: 200px;
+  min-height: 0;
   padding: 0 20px 20px;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--user-border);
 }
 
 .notification-error {
@@ -573,16 +469,22 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 200px;
-  color: var(--app-text-muted);
+  min-height: 140px;
+  color: var(--user-text-muted);
 }
 
 .notification-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  width: 100%;
   padding: 16px 0;
+  border: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background 0.15s;
 
@@ -590,9 +492,14 @@ onMounted(() => {
     background: rgba(99, 102, 241, 0.04);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 3px;
+  }
+
   &.unread {
     .notification-body strong {
-      color: #f8fafc;
+      color: var(--user-text);
     }
   }
 }
@@ -603,7 +510,7 @@ onMounted(() => {
   height: 8px;
   margin-top: 8px;
   border-radius: 50%;
-  background: var(--cc-primary);
+  background: var(--user-primary);
 }
 
 .notification-body {
@@ -617,14 +524,14 @@ onMounted(() => {
   gap: 10px;
 
   strong {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 14px;
   }
 }
 
 .notification-body p {
   margin: 6px 0 0;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -632,7 +539,7 @@ onMounted(() => {
 .notification-time {
   display: block;
   margin-top: 6px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 12px;
   opacity: 0.7;
 }
@@ -653,13 +560,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .detail-content {
   margin: 0;
-  color: var(--app-text);
+  color: var(--user-text);
   line-height: 1.8;
   white-space: pre-wrap;
 }

@@ -66,7 +66,7 @@ interface UserMenuItem {
   label: string
   path: string
   icon: unknown
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge'
+  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
   previewOnly?: boolean
 }
 
@@ -85,6 +85,8 @@ const isMenuItemVisible = (item: UserMenuItem) => {
   if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
   if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
   if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
+  if (featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
+  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
   return true
 }
 
@@ -108,6 +110,7 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '今日任务', path: '/agent/today', icon: MagicStick },
       { label: '任务中心', path: '/agent/tasks', icon: Calendar },
       { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
+      { label: '求职周报', path: '/agent/weekly-reports', icon: TrendCharts, featureFlag: 'v6WeeklyReport' },
       { label: '求职实验台', path: '/job-experiments', icon: TrendCharts },
       { label: '作品集演示', path: '/portfolio-demo', icon: DocumentChecked },
       { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Growth' },
@@ -125,7 +128,10 @@ const baseMenuSections: UserMenuSection[] = [
       { label: '简历', path: '/resumes', icon: Files },
       { label: '项目经历', path: '/projects', icon: Files },
       { label: '项目素材', path: '/project-evidence', icon: Files },
-      { label: '求职进度', path: '/applications', icon: Compass, previewOnly: true },
+      { label: '证据使用', path: '/evidence-assets', icon: DocumentChecked, featureFlag: 'v9EvidenceLearning' },
+      { label: '求职进度', path: '/applications', icon: Compass },
+      { label: '求职日历', path: '/career-calendar', icon: Calendar },
+      { label: '投递包', path: '/application-packages', icon: DocumentChecked },
       { label: '岗位目标', path: '/job-targets', icon: Compass },
       { label: '简历匹配', path: '/resume-match', icon: Files },
       { label: '能力画像', path: '/skill-profile', icon: Medal },
@@ -205,6 +211,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/onboarding')) return '/onboarding'
   if (route.path.startsWith('/agent/today') || route.path.startsWith('/agent/runs')) return '/agent/today'
   if (route.path.startsWith('/agent/tasks')) return '/agent/tasks'
+  if (route.path.startsWith('/agent/weekly-reports')) return '/agent/weekly-reports'
   if (route.path.startsWith('/analytics/personal')) return '/analytics/personal'
   if (route.path.startsWith('/job-experiments')) return '/job-experiments'
   if (route.path.startsWith('/portfolio-demo')) return '/portfolio-demo'
@@ -225,6 +232,7 @@ const activePath = computed(() => {
   if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
   if (route.path.startsWith('/questions')) return '/questions'
   if (route.path.startsWith('/project-evidence')) return '/project-evidence'
+  if (route.path.startsWith('/evidence-assets')) return '/evidence-assets'
   if (route.path.startsWith('/resumes')) return '/resumes'
   if (route.path.startsWith('/projects')) return '/projects'
   if (route.path.startsWith('/study-plans')) return '/study-plans'

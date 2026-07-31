@@ -237,11 +237,11 @@ export const runAdminAnalyticsDailyPlanApi = (data?: AnalyticsJobRunDTO) =>
 
 export const getPromptRegressionCasesApi = (params?: PromptRegressionQuery) =>
   request
-    .get<PageResult<PromptRegressionCaseVO> | PromptRegressionCaseVO[], PageResult<PromptRegressionCaseVO> | PromptRegressionCaseVO[]>(
-      '/admin/agent/prompt-regression/cases',
+    .get<PageResult<PromptRegressionCaseVO>, PageResult<PromptRegressionCaseVO>>(
+      '/admin/agent/prompt-regression',
       { params: params ? compactQueryParams(params) : undefined }
     )
-    .then((result) => normalizePageResult(result, params, { allowArrayFallback: true }))
+    .then((result) => normalizePageResult(result, params))
 
 export const getPromptRegressionResultsApi = (params?: PromptRegressionQuery) =>
   request

@@ -281,11 +281,11 @@ onBeforeUnmount(() => {
 .analytics-hero {
   align-items: flex-end;
   justify-content: space-between;
-  padding: 24px;
+  padding: 18px 20px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(34, 197, 94, 0.08)), var(--app-surface);
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .analytics-eyebrow,
@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
 }
 
 .analytics-eyebrow {
-  color: #67e8f9;
+  color: var(--user-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -322,7 +322,11 @@ onBeforeUnmount(() => {
 .analytics-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .partial-alert {
@@ -330,10 +334,16 @@ onBeforeUnmount(() => {
 }
 
 .analytics-metric-card {
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.58);
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .metric-icon {
@@ -343,7 +353,7 @@ onBeforeUnmount(() => {
   width: 36px;
   height: 36px;
   margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .tone-blue { color: #93c5fd; background: rgba(59, 130, 246, 0.16); }
@@ -422,7 +432,7 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #22d3ee, #60a5fa);
+  background: var(--user-primary);
 }
 
 @media (max-width: 900px) {
@@ -435,12 +445,32 @@ onBeforeUnmount(() => {
   .analytics-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .analytics-metric-card {
+    border-bottom: 1px solid var(--user-border);
+
+    &:nth-child(2n) {
+      border-right: 0;
+    }
+
+    &:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+  }
 }
 
 @media (max-width: 640px) {
   .analytics-metric-grid,
   .skill-bar-row {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-metric-card {
+    border-right: 0;
+
+    &:nth-last-child(2) {
+      border-bottom: 1px solid var(--user-border);
+    }
   }
 }
 </style>

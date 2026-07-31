@@ -34,6 +34,14 @@
         </div>
       </AppState>
 
+      <PlanChangeStatusBanner
+        :change-sets="planChangeSets"
+        :loading="loading"
+        :unavailable="planChangeStatusUnavailable"
+        @refresh="loadPage(true)"
+        @open-review="router.push('/agent/reviews')"
+      />
+
       <section class="mobile-task-rail" aria-label="手机今日任务快捷入口">
         <div class="mobile-task-rail__main">
           <span>当前优先任务</span>
@@ -123,9 +131,13 @@
               v-else-if="isPlanEmpty"
               type="empty"
               title="今天还没有计划"
-              :description="plan?.emptyMessage || emptyPlanDescription"
+              :description="plan?.emptyMessage || emptyPlanRecoveryDescription"
             >
               <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
+              <el-button @click="router.push('/applications')">补投递</el-button>
+              <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
+              <el-button @click="router.push('/knowledge')">补知识资料</el-button>
+              <el-button @click="router.push('/agent/memory')">确认长期记忆</el-button>
             </AppState>
             <AppState
               v-else-if="isAsyncPlanRunning"
@@ -144,16 +156,85 @@
 
               <div v-if="agentLoopSnapshotVisible" class="agent-loop-snapshot">
                 <div>
-                  <span>Agent loop</span>
-                  <strong>{{ agentLoopKeyActionCount }} key actions</strong>
+                  <span>Agent 闭环</span>
+                  <strong>{{ agentLoopKeyActionCount }} 个关键动作</strong>
                   <small>{{ agentLoopNextAdjustment }}</small>
+                  <small v-if="agentLoopLatestReview" class="agent-loop-snapshot__review" data-latest-review>
+                    最近复盘 {{ agentLoopLatestReview.reviewDate || agentLoopLatestReview.createdAt || '日期待确认' }}
+                  </small>
                 </div>
                 <div class="agent-loop-snapshot__facts">
-                  <span>{{ agentLoopWeekSummary.done }} done</span>
-                  <span>{{ agentLoopWeekSummary.skipped }} skipped</span>
-                  <span>{{ agentLoopWeekSummary.active }} active</span>
+                  <span>{{ agentLoopWeekSummary.done }} 已完成</span>
+                  <span>{{ agentLoopWeekSummary.skipped }} 已暂缓</span>
+                  <span>{{ agentLoopWeekSummary.active }} 推进中</span>
+                  <span v-if="agentLoopLatestReview">{{ agentLoopReviewConfidence }}</span>
+                  <span v-if="agentLoopLatestReview?.fallback">规则兜底</span>
                 </div>
-                <el-button text @click="router.push('/agent/reviews')">Open review</el-button>
+                <el-button text @click="router.push('/agent/reviews')">查看复盘</el-button>
+              </div>
+
+                <div class="agent-week-plan">
+                  <div class="agent-week-plan__source-row">
+                    <el-tag size="small" :type="useBackendWeekPlan ? 'success' : 'warning'" effect="plain">
+                      {{ agentWeekPlanDataSourceLabel }}
+                    </el-tag>
+                    <el-tag v-if="backendWeekPlanUnavailable" size="small" type="warning" effect="plain">
+                      复盘调整状态暂不可用
+                    </el-tag>
+                  </div>
+                <article v-for="layer in agentWeekPlanLayers" :key="layer.key" class="agent-week-plan__layer">
+                  <div class="agent-week-plan__head">
+                    <div>
+                      <span>{{ layer.title }}</span>
+                      <p>{{ layer.description }}</p>
+                    </div>
+                    <el-tag v-if="layer.fallback" size="small" type="warning" effect="plain">降级</el-tag>
+                  </div>
+                  <ul class="agent-week-plan__actions">
+                    <li v-for="action in layer.actions" :key="action.key">
+                      <div class="agent-week-plan__action-title">
+                        <strong>{{ action.title }}</strong>
+                        <div class="agent-week-plan__action-tags">
+                          <el-tag size="small" effect="plain">{{ agentWeekPlanConfidenceLabel(action.confidence) }}</el-tag>
+                          <el-tag v-if="action.fallback" size="small" type="warning" effect="plain">保守建议</el-tag>
+                          <el-tag
+                            v-if="weekPlanChangeOriginLabels(action).length"
+                            size="small"
+                            type="success"
+                            effect="plain"
+                          >
+                            复盘确认调整
+                          </el-tag>
+                        </div>
+                      </div>
+                      <p>{{ action.description || action.reason }}</p>
+                      <div class="agent-week-plan__source">
+                        <span>来源：{{ agentWeekPlanSourceLabel(action.sourceType) }}</span>
+                        <span v-if="action.sourceTitle">依据：{{ action.sourceTitle }}</span>
+                        <span>推荐原因：{{ action.reason }}</span>
+                        <span
+                          v-for="label in weekPlanChangeOriginLabels(action)"
+                          :key="label"
+                          class="agent-week-plan__review-origin"
+                        >
+                          {{ label }}
+                        </span>
+                      </div>
+                      <small>{{ agentWeekPlanEvidenceText(action) }}</small>
+                      <div class="agent-week-plan__next">
+                        <el-button
+                          size="small"
+                          plain
+                          :disabled="!agentWeekPlanActionPath(action)"
+                          @click="goAction(agentWeekPlanActionPath(action) || '/agent/today')"
+                        >
+                          下一步
+                        </el-button>
+                        <el-button size="small" text @click="router.push('/agent/tasks')">去任务中心</el-button>
+                      </div>
+                    </li>
+                  </ul>
+                </article>
               </div>
 
               <div class="task-list">
@@ -172,6 +253,18 @@
                     </div>
                     <div class="trust-tags">
                       <span v-for="label in taskTrustLabels(task)" :key="label">{{ label }}</span>
+                    </div>
+                    <div
+                      v-if="taskPlanChangeOriginLabels(task).length"
+                      class="task-plan-change-origin"
+                    >
+                      <span>复盘确认调整</span>
+                      <small
+                        v-for="label in taskPlanChangeOriginLabels(task)"
+                        :key="label"
+                      >
+                        {{ label }}
+                      </small>
                     </div>
                     <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
                     <AgentTaskEvidence
@@ -221,7 +314,7 @@
                       @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))"
                     >去处理</el-button>
                     <el-button
-                      v-else-if="task.status === 'SKIPPED'"
+                      v-else-if="['SKIPPED', 'DEFERRED'].includes(String(task.status || '').toUpperCase())"
                       size="small"
                       type="warning"
                       :loading="isTaskActionPending(task, 'restore')"
@@ -257,8 +350,9 @@
                         <el-dropdown-menu>
                           <el-dropdown-item v-if="hasAgentTaskActionEntry(task)" @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))">打开任务入口</el-dropdown-item>
                           <el-dropdown-item v-if="canManuallyCompleteTask(task)" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status !== 'DONE' && task.status !== 'SKIPPED'" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status === 'SKIPPED'" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
+                          <el-dropdown-item v-if="canManuallySkipTask(task)" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
+                          <el-dropdown-item v-if="canDeferTask(task)" :disabled="isTaskPending(task)" @click="openDeferDialog(task)">推迟任务</el-dropdown-item>
+                          <el-dropdown-item v-if="['SKIPPED', 'DEFERRED'].includes(String(task.status || '').toUpperCase())" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
                           <el-dropdown-item v-if="task.reason" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'EXPLAIN_RECOMMENDATION')">AI 解释推荐理由</el-dropdown-item>
                           <el-dropdown-item v-if="task.status === 'DONE'" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'REVIEW_COMPLETED_TASK')">AI 复盘本次任务</el-dropdown-item>
                           <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
@@ -273,8 +367,12 @@
                   :title="taskListEmptyTitle"
                   :description="taskListEmptyDescription"
                 >
+                  <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
                   <el-button type="primary" :loading="loading" @click="loadPage(true)">刷新任务</el-button>
                   <el-button @click="goAsyncTaskCenter">查看任务中心</el-button>
+                  <el-button @click="router.push('/applications')">补投递</el-button>
+                  <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
+                  <el-button @click="router.push('/agent/memory')">确认记忆</el-button>
                 </AppState>
               </div>
             </template>
@@ -331,8 +429,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="taskDialogVisible" :title="taskDialogMode === 'complete' ? '完成任务' : '跳过任务'" width="460px">
-      <el-input v-model="taskNote" type="textarea" :rows="4" :placeholder="taskDialogMode === 'complete' ? '可填写完成备注' : '请填写跳过原因'" maxlength="200" show-word-limit />
+    <el-dialog v-model="taskDialogVisible" :title="taskDialogTitle" width="460px">
+      <el-input v-model="taskNote" type="textarea" :rows="4" :placeholder="taskDialogPlaceholder" maxlength="200" show-word-limit />
       <template #footer>
         <el-button @click="taskDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="selectedTask ? isTaskActionPending(selectedTask, taskDialogMode) : false" @click="submitTaskAction">确认</el-button>
@@ -397,15 +495,20 @@ import { useRoute, useRouter } from 'vue-router'
 
 import {
   completeAgentTaskApi,
+  deferAgentTaskApi,
   generateDailyPlanApi,
+  getCurrentAgentWeekPlanApi,
   recordAgentMetricEventApi,
   restoreAgentTaskApi,
   skipAgentTaskApi,
   startAgentTaskApi
 } from '@/api/agent'
+import { getAgentPlanChangeSetsApi } from '@/api/agentPlanChange'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
+import { getAgentReviewsApi, type AgentReviewVO } from '@/api/v4'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
+import PlanChangeStatusBanner from '@/components/agent-review/PlanChangeStatusBanner.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AgentTaskEvidence from '@/components/job-readiness/AgentTaskEvidence.vue'
@@ -416,12 +519,33 @@ import {
   invalidateUserHomeTrainingCaches
 } from '@/composables/useUserHomeDataCache'
 import { buildAgentLoopOverview } from '@/features/agent-loop/agentLoopAdapter'
-import type { AgentTaskVO, AgentTodayTaskVO, DailyPlanVO } from '@/types/agent'
+import {
+  AGENT_TODAY_PLAN_CHANGE_STATUSES,
+  getAgentPlanChangeTypeLabel,
+  resolveAgentTaskPlanChangeOrigin,
+  resolveAgentWeekPlanChangeOrigin
+} from '@/features/agent-plan-change'
+import { buildAgentWeekPlan } from '@/features/agent-week-plan'
+import { buildAgentWeekPlanFromBackend, hasBackendWeekPlanItems } from '@/features/agent-week-plan-backend'
+import type {
+  AgentPlanActionVO,
+  AgentTaskVO,
+  AgentTodayTaskVO,
+  AgentWeekPlanBackendItemVO,
+  AgentWeekPlanBackendVO,
+  DailyPlanVO
+} from '@/types/agent'
+import type {
+  AgentPlanChangePreviewVO,
+  AgentPlanChangeTaskOriginFields,
+  AgentPlanChangeWeekItemOriginFields
+} from '@/types/agentPlanChange'
 import type { TargetJobVO } from '@/types/jobTarget'
 import type { ExplainableSuggestionVO } from '@/types/suggestion'
 import { getSuggestionSourceTypeLabel } from '@/types/suggestion'
 import {
   buildAgentTaskActionPath,
+  formatAgentTaskDeferReason,
   hasAgentTaskActionEntry,
   isAgentJobApplicationTask,
   isEvidenceBoundAgentTask
@@ -437,6 +561,10 @@ const router = useRouter()
 const route = useRoute()
 const today = formatLocalDate()
 
+type AgentTaskWithPlanChangeOrigin = AgentTaskVO & AgentPlanChangeTaskOriginFields
+type AgentWeekPlanItemWithReviewOrigin =
+  AgentWeekPlanBackendItemVO & AgentPlanChangeWeekItemOriginFields
+
 const loading = ref(false)
 const generating = ref(false)
 const generateSubmitting = ref(false)
@@ -447,14 +575,21 @@ const queryDate = ref(today)
 const loadedPageKey = ref('')
 const plan = ref<DailyPlanVO>()
 const todayTasks = ref<AgentTodayTaskVO>()
+const backendWeekPlan = ref<AgentWeekPlanBackendVO | null>(null)
+const backendWeekPlanUnavailable = ref(false)
+const agentReviews = ref<AgentReviewVO[]>([])
+const planChangeSets = ref<AgentPlanChangePreviewVO[]>([])
+const planChangeStatusUnavailable = ref(false)
 const currentTargetJobId = ref<number | undefined>()
 const targets = ref<TargetJobVO[]>([])
 const currentTarget = ref<TargetJobVO | null>(null)
 const targetLoading = ref(false)
 const targetLoadError = ref('')
+const targetScopeResolved = ref(false)
+const targetScopeUnavailable = ref(false)
 const generateDialogVisible = ref(false)
 const taskDialogVisible = ref(false)
-const taskDialogMode = ref<'complete' | 'skip'>('complete')
+const taskDialogMode = ref<'complete' | 'skip' | 'defer'>('complete')
 const selectedTask = ref<AgentTaskVO>()
 const taskNote = ref('')
 const feedbackDialogVisible = ref(false)
@@ -491,6 +626,7 @@ const taskStatusMap = {
   TODO: '待完成',
   DOING: '进行中',
   DONE: '已完成',
+  DEFERRED: '已推迟',
   SKIPPED: '已跳过',
   EXPIRED: '已过期'
 }
@@ -536,16 +672,20 @@ const feedbackTypeOptions = [
   { label: '不相关', value: 'IRRELEVANT' }
 ]
 
-const emptyPlanDescription = '先确认目标岗位和默认简历；如果训练资料还不完整，可以先完成一次题目练习或模拟面试，再生成今日计划。'
+const emptyPlanRecoveryDescription = [
+  '当前还没有可执行动作。',
+  '可以先补一条投递记录、做一次模拟面试复盘、补充知识资料，或确认长期记忆后再生成计划。'
+].join('')
 
 const dataSourceLabels = {
   plan: '今日计划',
-  tasks: '今日任务'
+  tasks: '今日任务',
+  reviews: '每日复盘'
 } as const
 
 const sourceFailed = (label: string) => partialErrors.value.includes(label)
 
-type TaskAction = 'start' | 'complete' | 'skip' | 'restore' | 'feedback'
+type TaskAction = 'start' | 'complete' | 'skip' | 'defer' | 'restore' | 'feedback'
 type FocusMetricCode = 'focus_session_started' | 'focus_session_finished' | 'focus_session_canceled'
 interface FocusSessionState {
   taskId: number
@@ -555,6 +695,18 @@ interface FocusSessionState {
 
 const pendingTaskActions = ref<Set<string>>(new Set())
 const focusSession = ref<FocusSessionState | null>(null)
+
+const taskDialogTitle = computed(() => {
+  if (taskDialogMode.value === 'complete') return '完成任务'
+  if (taskDialogMode.value === 'defer') return '推迟任务'
+  return '跳过任务'
+})
+
+const taskDialogPlaceholder = computed(() => {
+  if (taskDialogMode.value === 'complete') return '可填写完成备注'
+  if (taskDialogMode.value === 'defer') return '请填写推迟原因'
+  return '请填写跳过原因'
+})
 
 const taskActionKey = (task: AgentTaskVO, action: TaskAction) => `${task.id}:${action}`
 const isTaskActionPending = (task: AgentTaskVO, action: TaskAction) => pendingTaskActions.value.has(taskActionKey(task, action))
@@ -620,7 +772,7 @@ const taskListEmptyTitle = computed(() => sourceFailed(dataSourceLabels.tasks) ?
 const taskListEmptyDescription = computed(() =>
   sourceFailed(dataSourceLabels.tasks)
     ? '任务列表暂未返回，本次不能判断是否真的没有待办。请重新加载，或到任务中心继续查看今天的任务。'
-    : '当前日期还没有生成训练任务。可以先生成今日计划，或进入题库和面试入口保持训练节奏。'
+    : emptyPlanRecoveryDescription
 )
 const agentTodayPagePath = computed(() => buildSafeRedirectTarget(route.path, route.query, '/agent/today'))
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
@@ -629,16 +781,133 @@ const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum
 const agentLoopOverview = computed(() => buildAgentLoopOverview({
   plan: plan.value,
   todayTasks: taskList.value,
-  historyTasks: taskList.value
+  historyTasks: taskList.value,
+  reviews: agentReviews.value
 }))
 const agentLoopWeekSummary = computed(() => agentLoopOverview.value.weekSummary)
 const agentLoopKeyActionCount = computed(() => agentLoopOverview.value.keyActions.length)
 const agentLoopNextAdjustment = computed(() => agentLoopOverview.value.nextAdjustmentSummary)
-const agentLoopSnapshotVisible = computed(() => Boolean(taskList.value.length || plan.value))
+const agentLoopLatestReview = computed(() => agentLoopOverview.value.latestReview)
+const agentLoopReviewConfidence = computed(() => {
+  const confidence = String(agentLoopLatestReview.value?.confidenceLevel || '').toUpperCase()
+  return {
+    HIGH: '高置信度',
+    MEDIUM: '中等置信度',
+    LOW: '低置信度',
+    INSUFFICIENT: '证据不足'
+  }[confidence] || '置信度待确认'
+})
+const agentLoopSnapshotVisible = computed(() => Boolean(taskList.value.length || plan.value || agentLoopLatestReview.value))
+const useBackendWeekPlan = computed(() => hasBackendWeekPlanItems(backendWeekPlan.value))
+const agentWeekPlan = computed(() =>
+  useBackendWeekPlan.value && backendWeekPlan.value
+    ? buildAgentWeekPlanFromBackend(backendWeekPlan.value)
+    : buildAgentWeekPlan({
+        plan: plan.value,
+        todayTasks: taskList.value,
+        historyTasks: taskList.value,
+        loopOverview: agentLoopOverview.value
+      })
+)
+const agentWeekPlanDataSourceLabel = computed(() => {
+  if (!useBackendWeekPlan.value) return '前端降级计划'
+  const version = backendWeekPlan.value?.snapshotVersion ? ` v${backendWeekPlan.value.snapshotVersion}` : ''
+  return `后端持久化周计划${version}`
+})
+const agentWeekPlanLayers = computed(() => [
+  agentWeekPlan.value.today,
+  agentWeekPlan.value.week,
+  agentWeekPlan.value.nextExperiment
+])
+
+const agentWeekPlanSourceLabel = (value?: string | null) => {
+  const labels: Record<string, string> = {
+    application: '投递',
+    applicationPackage: '投递包',
+    interviewReport: '面试报告',
+    experimentReview: '实验复盘',
+    knowledgeGap: '知识缺口',
+    memoryPreference: '长期偏好',
+    agentTask: 'Agent 任务',
+    agentRun: 'Agent 运行',
+    dailyPlan: '每日计划',
+    fallback: '降级来源'
+  }
+  return labels[String(value || '')] || sourceTypeLabel(value)
+}
+
+const agentWeekPlanEvidenceText = (action: AgentPlanActionVO) =>
+  action.evidence.length ? `证据：${action.evidence.slice(0, 2).join(' / ')}` : '证据：暂无明确证据摘要'
+const agentWeekPlanConfidenceLabel = (value?: string | number | null) => {
+  const confidence = String(value || '').toUpperCase()
+  if (confidence === 'HIGH') return '高可信'
+  if (confidence === 'MEDIUM') return '中可信'
+  if (confidence === 'LOW') return '低可信'
+  if (confidence === 'UNKNOWN') return '待确认'
+  if (!confidence) return '待确认'
+  return `可信度：${value}`
+}
+const planChangeReviewRefs = computed(() =>
+  agentReviews.value.map((review) => ({
+    id: review.id,
+    reviewDate: review.reviewDate
+  }))
+)
+const planChangeOriginLabels = (
+  origin: ReturnType<typeof resolveAgentTaskPlanChangeOrigin>
+) => {
+  if (!origin) return []
+  const labels = [
+    origin.reviewDate ? `来自 ${origin.reviewDate} 每日复盘` : '来自每日复盘',
+    '用户已确认',
+    `变更类型：${getAgentPlanChangeTypeLabel(origin.changeType)}`
+  ]
+  return labels
+}
+const taskPlanChangeOriginLabels = (task: AgentTaskVO) =>
+  planChangeOriginLabels(resolveAgentTaskPlanChangeOrigin(
+    task as AgentTaskWithPlanChangeOrigin,
+    planChangeSets.value,
+    planChangeReviewRefs.value
+  ))
+const backendWeekPlanItemForAction = (action?: AgentPlanActionVO | null) => {
+  if (!action || action.id == null) return null
+  const actionId = Number(action.id)
+  if (!Number.isFinite(actionId)) return null
+  return (backendWeekPlan.value?.items || []).find((item) =>
+    Number(item.agentTaskId) === actionId
+    || (item.agentTaskId == null && Number(item.id) === actionId)
+  ) as AgentWeekPlanItemWithReviewOrigin | undefined
+}
+const weekPlanChangeOriginLabels = (action?: AgentPlanActionVO | null): string[] => {
+  const item = backendWeekPlanItemForAction(action)
+  if (!item) return []
+  const origin = resolveAgentWeekPlanChangeOrigin(
+    item,
+    planChangeSets.value,
+    planChangeReviewRefs.value
+  )
+  return origin ? planChangeOriginLabels(origin) : []
+}
+const agentWeekPlanFallbackPath = (action: AgentPlanActionVO) => {
+  const sourceType = String(action.sourceType || '').toLowerCase()
+  if (sourceType.includes('application')) return '/applications'
+  if (sourceType.includes('interview')) return '/interviews/history'
+  if (sourceType.includes('knowledge')) return '/knowledge'
+  if (sourceType.includes('memory')) return '/agent/memory'
+  if (sourceType.includes('daily') || sourceType.includes('agent')) return '/agent/tasks'
+  return '/agent/today'
+}
+const agentWeekPlanActionPath = (action: AgentPlanActionVO) =>
+  sanitizeLocalActionPath(action.actionPath || agentWeekPlanFallbackPath(action), '')
+const taskClosedStatuses = ['DONE', 'SKIPPED', 'DEFERRED']
 const canManuallyCompleteTask = (task: AgentTaskVO) =>
-  !isEvidenceBoundAgentTask(task) && !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())
+  !isEvidenceBoundAgentTask(task) && !taskClosedStatuses.includes(String(task.status || '').toUpperCase())
+const canManuallySkipTask = (task: AgentTaskVO) =>
+  ['TODO', 'DOING', 'EXPIRED'].includes(String(task.status || '').toUpperCase())
+const canDeferTask = (task: AgentTaskVO) => canManuallySkipTask(task)
 const isOpenTaskStatus = (task: AgentTaskVO) => ['DOING', 'TODO'].includes(String(task.status || '').toUpperCase())
-const isUnfinishedTask = (task: AgentTaskVO) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())
+const isUnfinishedTask = (task: AgentTaskVO) => !taskClosedStatuses.includes(String(task.status || '').toUpperCase())
 const isTrustedMobilePriorityTask = (task: AgentTaskVO) => {
   const suggestion = fromAgentTask(task)
   const strength = String(suggestion.qualityGate?.suggestionStrength || '').toUpperCase()
@@ -680,7 +949,7 @@ const mobilePrimaryActionLabel = computed(() => {
   if (status === 'TODO') return '开始'
   if (isEvidenceBoundAgentTask(task) && hasAgentTaskActionEntry(task)) return '去处理'
   if (status === 'DOING') return '完成'
-  if (status === 'SKIPPED') return '恢复'
+  if (['SKIPPED', 'DEFERRED'].includes(status)) return '恢复'
   if (status === 'DONE') return '查看'
   return '完成'
 })
@@ -689,7 +958,7 @@ const mobilePrimaryActionLoading = computed(() => {
   if (!task) return taskList.value.length ? loading.value : generating.value
   const status = String(task.status || '').toUpperCase()
   if (status === 'TODO') return isTaskActionPending(task, 'start')
-  if (status === 'SKIPPED') return isTaskActionPending(task, 'restore')
+  if (['SKIPPED', 'DEFERRED'].includes(status)) return isTaskActionPending(task, 'restore')
   if (isEvidenceBoundAgentTask(task)) return false
   return isTaskActionPending(task, 'complete')
 })
@@ -894,7 +1163,7 @@ const trackFocusSessionMetric = (eventCode: FocusMetricCode, task: AgentTaskVO, 
   }, { silentError: true }).catch(() => undefined)
 }
 
-const canStartFocusSession = (task: AgentTaskVO) => !['DONE', 'SKIPPED'].includes(String(task.status || '').toUpperCase())
+const canStartFocusSession = (task: AgentTaskVO) => !taskClosedStatuses.includes(String(task.status || '').toUpperCase())
 const isFocusActive = (task: AgentTaskVO) => focusSession.value?.taskId === task.id
 const isFocusStartDisabled = (task: AgentTaskVO) => Boolean(focusSession.value && !isFocusActive(task)) || isTaskPending(task)
 
@@ -1007,6 +1276,8 @@ const loadJobTargets = async () => {
   if (targetLoading.value) return
   targetLoading.value = true
   targetLoadError.value = ''
+  targetScopeResolved.value = false
+  targetScopeUnavailable.value = false
   try {
     const [listResult, currentResult] = await Promise.allSettled([
       getJobTargetsApi({ pageNo: 1, pageSize: 50 }),
@@ -1021,19 +1292,29 @@ const loadJobTargets = async () => {
     }
 
     if (currentResult.status === 'fulfilled') {
-      currentTarget.value = currentResult.value || null
+      currentTarget.value = currentResult.value
+        || targets.value.find((item) => item.currentFlag === 1)
+        || null
     } else {
       currentTarget.value = targets.value.find((item) => item.currentFlag === 1) || null
       targetLoadError.value = currentTarget.value
         ? '当前主目标读取失败，已先使用岗位列表中的主目标标记。'
         : (getErrorMessage(currentResult.reason) || '当前主目标暂时无法读取；可以手动选择岗位后生成计划。')
     }
+    const resolvedTargetId = currentTarget.value?.id
+    if (currentTargetJobId.value == null && typeof resolvedTargetId === 'number' && resolvedTargetId > 0) {
+      currentTargetJobId.value = resolvedTargetId
+    }
+    targetScopeUnavailable.value = !currentTarget.value
+      && (listResult.status === 'rejected' || currentResult.status === 'rejected')
   } catch (error) {
     targets.value = []
     currentTarget.value = null
     targetLoadError.value = getErrorMessage(error) || '岗位目标列表暂时加载失败，不选择时仍会按当前主目标生成。'
+    targetScopeUnavailable.value = true
   } finally {
     targetLoading.value = false
+    targetScopeResolved.value = true
   }
 }
 
@@ -1054,10 +1335,28 @@ const loadPage = async (force?: unknown) => {
   partialErrors.value = []
   const pageKey = currentPageKey()
   const samePage = loadedPageKey.value === pageKey
+  const reviewRequest = !targetScopeResolved.value || targetScopeUnavailable.value
+    ? Promise.resolve([] as AgentReviewVO[])
+    : getAgentReviewsApi({ targetJobId: currentTargetJobId.value })
   try {
-    const [planResult, taskResult] = await Promise.allSettled([
+    const [
+      planResult,
+      taskResult,
+      weekPlanResult,
+      reviewResult,
+      planChangeResult
+    ] = await Promise.allSettled([
       fetchCachedLatestDailyPlan(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
-      fetchCachedTodayAgentTasks(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value)
+      fetchCachedTodayAgentTasks(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
+      getCurrentAgentWeekPlanApi({
+        date: queryDate.value,
+        targetJobId: currentTargetJobId.value
+      }, { silentError: true }),
+      reviewRequest,
+      getAgentPlanChangeSetsApi({
+        targetDate: queryDate.value,
+        status: AGENT_TODAY_PLAN_CHANGE_STATUSES
+      }, { silentError: true })
     ])
     if (planResult.status === 'fulfilled') {
       plan.value = planResult.value
@@ -1069,11 +1368,25 @@ const loadPage = async (force?: unknown) => {
     } else if (!samePage) {
       todayTasks.value = undefined
     }
+    backendWeekPlan.value = weekPlanResult.status === 'fulfilled' ? weekPlanResult.value : null
+    backendWeekPlanUnavailable.value = weekPlanResult.status === 'rejected'
+    if (reviewResult.status === 'fulfilled') {
+      agentReviews.value = reviewResult.value || []
+    } else if (!samePage) {
+      agentReviews.value = []
+    }
+    if (planChangeResult.status === 'fulfilled') {
+      planChangeSets.value = planChangeResult.value || []
+    } else if (!samePage) {
+      planChangeSets.value = []
+    }
+    planChangeStatusUnavailable.value = planChangeResult.status === 'rejected'
     const failed = [
       planResult.status === 'rejected' ? dataSourceLabels.plan : '',
-      taskResult.status === 'rejected' ? dataSourceLabels.tasks : ''
+      taskResult.status === 'rejected' ? dataSourceLabels.tasks : '',
+      reviewResult.status === 'rejected' ? dataSourceLabels.reviews : ''
     ].filter(Boolean)
-    if (failed.length === 2 && !samePage) {
+    if (planResult.status === 'rejected' && taskResult.status === 'rejected' && !samePage) {
       errorMessage.value = getErrorMessage(firstRejectedReason(planResult, taskResult))
       return
     }
@@ -1085,7 +1398,12 @@ const loadPage = async (force?: unknown) => {
     if (!samePage) {
       plan.value = undefined
       todayTasks.value = undefined
+      agentReviews.value = []
+      planChangeSets.value = []
     }
+    backendWeekPlan.value = null
+    backendWeekPlanUnavailable.value = true
+    planChangeStatusUnavailable.value = true
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
@@ -1196,11 +1514,18 @@ const openSkipDialog = (task: AgentTaskVO) => {
   taskDialogVisible.value = true
 }
 
+const openDeferDialog = (task: AgentTaskVO) => {
+  selectedTask.value = task
+  taskDialogMode.value = 'defer'
+  taskNote.value = ''
+  taskDialogVisible.value = true
+}
+
 const submitTaskAction = async () => {
   const task = selectedTask.value
   if (!task) return
-  if (taskDialogMode.value === 'skip' && !taskNote.value.trim()) {
-    ElMessage.warning('请填写跳过原因')
+  if ((taskDialogMode.value === 'skip' || taskDialogMode.value === 'defer') && !taskNote.value.trim()) {
+    ElMessage.warning(taskDialogMode.value === 'defer' ? '请填写推迟原因' : '请填写跳过原因')
     return
   }
   await withTaskPending(task, taskDialogMode.value, async () => {
@@ -1210,6 +1535,12 @@ const submitTaskAction = async () => {
       completionReviewTask.value = completedTask || task
       completionReviewNote.value = completedTask?.reviewNote || taskNote.value.trim()
       completionReviewVisible.value = true
+    } else if (taskDialogMode.value === 'defer') {
+      await deferAgentTaskApi(task.id, {
+        deferAt: new Date().toISOString(),
+        deferReason: formatAgentTaskDeferReason(taskNote.value)
+      })
+      ElMessage.success('任务已推迟')
     } else {
       await skipAgentTaskApi(task.id, { skipReason: taskNote.value.trim() })
       ElMessage.success('任务已跳过')
@@ -1294,7 +1625,7 @@ const handleMobilePrimaryAction = async () => {
     openCompleteDialog(task)
     return
   }
-  if (status === 'SKIPPED') {
+  if (['SKIPPED', 'DEFERRED'].includes(status)) {
     await handleRestoreTask(task)
     return
   }
@@ -1332,8 +1663,7 @@ const goAction = (actionUrl: string) => {
 }
 
 onMounted(() => {
-  void loadJobTargets()
-  void loadPage(false)
+  void loadJobTargets().then(() => loadPage(false))
 })
 </script>
 
@@ -1341,7 +1671,7 @@ onMounted(() => {
 .agent-page {
   display: grid;
   gap: 18px;
-  color: #172033;
+  color: var(--user-text);
 }
 
 .agent-hero,
@@ -1355,13 +1685,11 @@ onMounted(() => {
 .agent-hero {
   align-items: flex-end;
   justify-content: space-between;
-  padding: 24px;
-  border: 1px solid #dbeafe;
+  padding: 18px 20px;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 58%),
-    #ffffff;
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .agent-eyebrow,
@@ -1377,7 +1705,7 @@ onMounted(() => {
 }
 
 .agent-eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1385,9 +1713,9 @@ onMounted(() => {
 .task-review-summary {
   margin-top: 10px;
   padding: 10px 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
   color: #1e3a8a;
 }
 
@@ -1414,7 +1742,7 @@ onMounted(() => {
   padding: 10px 12px;
   border: 1px solid #bbf7d0;
   border-radius: 8px;
-  background: #f0fdf4;
+  background: var(--user-success-soft);
 }
 
 .focus-session-bar div:first-child {
@@ -1435,7 +1763,7 @@ onMounted(() => {
 }
 
 .focus-session-bar small {
-  color: #64748b;
+  color: var(--user-text-muted);
   line-height: 1.5;
 }
 
@@ -1453,8 +1781,8 @@ onMounted(() => {
 
 .agent-hero h1 {
   margin-top: 10px;
-  color: #0f172a;
-  font-size: 30px;
+  color: var(--user-text);
+  font-size: 26px;
   line-height: 1.18;
   letter-spacing: 0;
 }
@@ -1463,7 +1791,7 @@ onMounted(() => {
 .section-head span,
 .plan-summary,
 .agent-task-card p {
-  color: #526071;
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
@@ -1474,7 +1802,11 @@ onMounted(() => {
 .agent-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
 }
 
 .mobile-task-rail {
@@ -1483,7 +1815,7 @@ onMounted(() => {
 
 .agent-diagnostic-state {
   border-color: #fde68a;
-  background: #fffbeb;
+  background: var(--user-warning-soft);
   box-shadow: none;
 }
 
@@ -1496,48 +1828,55 @@ onMounted(() => {
 
 .agent-metric,
 .agent-task-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .agent-metric {
   display: grid;
   gap: 7px;
-  min-height: 132px;
-  padding: 16px;
+  min-height: 88px;
+  padding: 12px 14px;
+  border: 0;
+  border-right: 1px solid var(--user-border);
+  border-radius: 0;
+
+  &:last-child {
+    border-right: 0;
+  }
 }
 
 .agent-metric span,
 .section-kicker {
-  color: #64748b;
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
 .agent-metric strong {
   display: block;
-  color: #0f172a;
-  font-size: 28px;
+  color: var(--user-text);
+  font-size: 24px;
   line-height: 1.1;
 }
 
 .agent-metric small {
   margin-top: auto;
-  color: #64748b;
+  color: var(--user-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .agent-plan-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .content-card__body {
-  padding: 20px;
+  padding: 16px;
 }
 
 .section-head {
@@ -1547,7 +1886,7 @@ onMounted(() => {
 
 .section-kicker {
   margin: 0 0 6px;
-  color: #2563eb;
+  color: var(--user-primary);
   font-weight: 800;
 }
 
@@ -1567,9 +1906,9 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 14px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 }
 
 .plan-fix-row {
@@ -1590,7 +1929,7 @@ onMounted(() => {
   }
 
   span {
-    color: #475569;
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.5;
     word-break: break-all;
@@ -1602,7 +1941,7 @@ onMounted(() => {
   padding: 14px;
   border: 1px solid #e5eaf2;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .skill-strip {
@@ -1618,7 +1957,7 @@ onMounted(() => {
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 .agent-loop-snapshot span,
@@ -1634,6 +1973,11 @@ onMounted(() => {
   font-size: 16px;
 }
 
+.agent-loop-snapshot__review {
+  display: block;
+  margin-top: 4px;
+}
+
 .agent-loop-snapshot__facts {
   display: flex;
   flex-wrap: wrap;
@@ -1643,8 +1987,119 @@ onMounted(() => {
 .agent-loop-snapshot__facts span {
   padding: 4px 8px;
   border-radius: 999px;
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--user-border);
+  color: var(--user-text-secondary);
+}
+
+.agent-week-plan {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.agent-week-plan__source-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.agent-week-plan__layer {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
+}
+
+.agent-week-plan__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-week-plan__head span {
+  color: var(--user-text);
+  font-weight: 800;
+}
+
+.agent-week-plan__head p,
+.agent-week-plan__actions p,
+.agent-week-plan__actions small {
+  margin: 4px 0 0;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agent-week-plan__actions {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-week-plan__actions li {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--user-border);
+}
+
+.agent-week-plan__action-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-week-plan__action-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.agent-week-plan__action-title strong {
+  color: var(--user-text);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.agent-week-plan__source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.agent-week-plan__source span {
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--user-surface-muted);
+  color: var(--user-text-muted);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.agent-week-plan__source span.agent-week-plan__review-origin {
+  background: var(--user-success-soft);
+  color: var(--user-success);
+  font-weight: 700;
+}
+
+.agent-week-plan__next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .task-list {
@@ -1663,7 +2118,7 @@ onMounted(() => {
     box-shadow 0.16s ease;
 
   &:hover {
-    border-color: #bfdbfe;
+    border-color: var(--user-primary-border);
     box-shadow: 0 14px 30px rgba(37, 99, 235, 0.08);
   }
 }
@@ -1674,7 +2129,7 @@ onMounted(() => {
 }
 
 .agent-task-card h3 {
-  color: #0f172a;
+  color: var(--user-text);
   font-size: 16px;
   line-height: 1.45;
   word-break: break-word;
@@ -1683,8 +2138,8 @@ onMounted(() => {
 .task-meta span {
   padding: 3px 9px;
   border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
+  background: var(--user-border);
+  color: var(--user-text-muted);
   font-size: 12px;
 }
 
@@ -1693,20 +2148,42 @@ onMounted(() => {
 
   span {
     padding: 3px 8px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 999px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
     font-size: 12px;
   }
+}
+
+.task-plan-change-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.task-plan-change-origin > span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--user-success-soft);
+  color: var(--user-success);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-plan-change-origin small {
+  color: var(--user-text-muted);
+  font-size: 12px;
 }
 
 .task-reason {
   margin-bottom: 0;
   padding: 10px 12px;
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--user-primary);
   border-radius: 6px;
-  background: #eff6ff;
+  background: var(--user-primary-soft);
 }
 
 .task-actions {
@@ -1720,7 +2197,7 @@ onMounted(() => {
 
 .form-hint {
   margin: 6px 0 0;
-  color: #64748b;
+  color: var(--user-text-muted);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1736,14 +2213,14 @@ onMounted(() => {
 
   h3 {
     margin-top: 6px;
-    color: #0f172a;
+    color: var(--user-text);
     font-size: 18px;
     line-height: 1.45;
   }
 
   p,
   li {
-    color: #526071;
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 
@@ -1756,7 +2233,7 @@ onMounted(() => {
 }
 
 .review-kicker {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 13px;
   font-weight: 800;
 }
@@ -1768,13 +2245,14 @@ onMounted(() => {
 .review-note {
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 @media (max-width: 900px) {
   .agent-hero,
   .section-head,
   .agent-loop-snapshot,
+  .agent-week-plan,
   .agent-task-card {
     align-items: flex-start;
     grid-template-columns: 1fr;
@@ -1820,9 +2298,9 @@ onMounted(() => {
     display: grid;
     gap: 10px;
     padding: 12px;
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--user-surface-raised);
     box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
   }
 
@@ -1832,14 +2310,14 @@ onMounted(() => {
     min-width: 0;
 
     span {
-      color: #2563eb;
+      color: var(--user-primary);
       font-size: 12px;
       font-weight: 800;
     }
 
     strong {
       overflow: hidden;
-      color: #0f172a;
+      color: var(--user-text);
       font-size: 15px;
       line-height: 1.35;
       text-overflow: ellipsis;
@@ -1848,7 +2326,7 @@ onMounted(() => {
 
     small {
       overflow: hidden;
-      color: #64748b;
+      color: var(--user-text-muted);
       font-size: 12px;
       line-height: 1.4;
       text-overflow: ellipsis;

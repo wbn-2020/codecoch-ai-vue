@@ -17,6 +17,9 @@ describe('AppState', () => {
     })
 
     expect(wrapper.classes()).toContain('app-state--error')
+    expect(wrapper.attributes('role')).toBe('alert')
+    expect(wrapper.attributes('aria-live')).toBe('assertive')
+    expect(wrapper.attributes('aria-atomic')).toBe('true')
     expect(wrapper.text()).toContain('加载失败')
     expect(wrapper.text()).toContain('请稍后重试')
     expect(wrapper.find('.retry-action').exists()).toBe(true)
@@ -30,6 +33,9 @@ describe('AppState', () => {
     })
 
     expect(wrapper.classes()).toContain('app-state--loading')
+    expect(wrapper.attributes('role')).toBe('status')
+    expect(wrapper.attributes('aria-live')).toBe('polite')
+    expect(wrapper.attributes('aria-busy')).toBe('true')
     expect(wrapper.find('.is-loading').exists()).toBe(true)
     expect(wrapper.find('h3').text().trim().length).toBeGreaterThan(0)
     expect(wrapper.find('p').text().trim().length).toBeGreaterThan(0)

@@ -23,7 +23,7 @@ export const portfolioRehearsalDisclosureRules: PortfolioRehearsalDisclosureRule
     id: 'no-overclaim',
     title: '不夸大真实能力',
     description: '只能把已接入页面、降级兜底、可信边界和待验收项分别讲清楚。',
-    protectedContent: ['未完成的端到端效果', '未经总体验收的自动化闭环', '无法在现场复现的 AI 结果']
+    protectedContent: ['待发布后人工验收确认的端到端效果', '未经人工确认的自动化闭环', '无法在现场复现的 AI 结果']
   }
 ]
 
@@ -34,7 +34,7 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
     audience: 'INTERVIEWER',
     status: 'READY_FOR_DEMO',
     statusLabel: '可作为演示口径',
-    openingLine: 'CodeCoachAI V4 解决的是求职准备过程里“资料分散、建议不可信、行动难闭环”的问题。',
+    openingLine: 'CodeCoachAI V5 解决的是求职过程中“岗位准备分散、投递行动难闭环、AI 建议不可信”的问题。',
     keyPoints: [
       '把目标岗位、简历匹配、项目证据、面试训练、能力地图和今日行动串成一条求职准备链路。',
       '每个建议都尽量回到可解释来源，例如岗位、报告、项目证据或 Agent 任务，而不是只给一段泛泛建议。',
@@ -45,15 +45,15 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
       '求职作战指挥台汇总 Agent 今日任务、可信建议和近期产物',
       '能力地图、项目证据、面试报告等页面提供可回看证据'
     ],
-    trustBoundary: '这是一套演示讲述材料，不代表所有链路已通过总体验收；现场以页面实际状态为准。'
+    trustBoundary: '这是一套演示讲述材料，不代表所有链路已通过发布后人工验收；现场以页面实际状态为准。'
   },
   {
-    id: 'v4-core-loop',
-    title: 'V4 的核心闭环是什么',
+    id: 'v5-core-loop',
+    title: 'V5 的核心闭环是什么',
     audience: 'INTERVIEWER',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
-    openingLine: 'V4 的核心闭环是“目标输入 -> 可信分析 -> 行动生成 -> 执行回流 -> 能力更新”。',
+    statusLabel: '待发布后人工验收确认',
+    openingLine: 'V5 的核心闭环是“目标岗位 -> 投递包 -> 投递/面试 -> 复盘 -> Agent 行动 -> 可信追踪”。',
     keyPoints: [
       '目标输入来自岗位、简历和项目证据，系统先建立训练上下文。',
       '可信分析层把建议绑定到来源、质量门禁和追踪信息，避免只输出不可验证结论。',
@@ -65,8 +65,8 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
       'Agent 今日任务和求职实验复盘',
       '能力地图训练状态'
     ],
-    trustBoundary: '多页面闭环需要总体验收确认；当前讲述只描述产品设计和已接入的静态演示证据。',
-    fallbackLine: '如果现场链路未跑通，就切到阶段七兜底演示，按静态路线讲清设计、边界和待验收项。'
+    trustBoundary: '多页面闭环需要发布后人工验收确认；当前讲述只描述产品设计和已接入的静态演示证据。',
+    fallbackLine: '如果现场链路未跑通，就切到 Phase 5.5 兜底演示，按静态路线讲清设计、边界和待验收项。'
   },
   {
     id: 'trusted-ai-layer',
@@ -111,7 +111,7 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
     title: 'Agent 多日闭环怎么体现',
     audience: 'INTERVIEWER',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     openingLine: '多日闭环的设计重点是让 Agent 不只给今天的一次性建议，而是能根据完成、跳过和阻塞持续调整。',
     keyPoints: [
       '今日任务保留状态、优先级、预估时间、来源和完成回流字段。',
@@ -123,14 +123,14 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
       '行动队列会过滤关闭状态并保留可执行任务',
       '求职实验复盘用于承接阶段性结果'
     ],
-    trustBoundary: '跨天自动调整效果必须等待总体验收确认，不能在演示中说成已经稳定上线。'
+    trustBoundary: '跨天自动调整效果必须等待发布后人工验收确认，不能在演示中说成已经稳定上线。'
   },
   {
     id: 'knowledge-memory-governance',
     title: '知识库/长期记忆怎么治理',
     audience: 'REVIEWER',
     status: 'BOUNDARY_ONLY',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     openingLine: '知识库和长期记忆的演示口径是治理边界优先：能引用摘要和标签，但不能泄露正文和全文记忆。',
     keyPoints: [
       '只允许展示知识条目的分类、来源摘要、更新时间、是否可用于建议等治理信息。',
@@ -140,16 +140,16 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
     evidenceAnchors: [
       '演示材料中的敏感信息规则',
       '可信建议来源摘要',
-      '待总体验收确认的知识治理口径'
+      '待发布后人工验收确认的知识治理口径'
     ],
-    trustBoundary: '当前 subagent 未验证知识库/长期记忆端到端页面；相关讲法必须标记为待总体验收确认。'
+    trustBoundary: '当前静态收口未验证知识库/长期记忆端到端页面；相关讲法必须标记为待发布后人工验收确认。'
   },
   {
     id: 'trace-cockpit-engineering',
     title: 'TraceCockpit 怎么证明工程能力',
     audience: 'REVIEWER',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     openingLine: 'TraceCockpit 的价值是把一次 AI 或 Agent 结果拆成可观测、可复盘、可回归的工程证据。',
     keyPoints: [
       '从用户侧结果可以回到来源、质量门禁和追踪标识，便于解释“为什么给这个建议”。',
@@ -157,22 +157,22 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
       '这体现的是工程化治理能力：可追踪、可降级、可复盘，而不是只做一个聊天框。'
     ],
     evidenceAnchors: [
-      'Portfolio Demo 的运营侧步骤包含 AI 日志、Prompt 模板、Prompt 回归和异步任务中心',
+      'Portfolio Demo 的运营侧步骤包含 TraceCockpit、AI 日志、Prompt 模板、Prompt 回归和异步任务中心',
       '可信建议数据结构保留 trace 与 qualityGate',
       '指标字典和 AI 运营看板作为治理入口'
     ],
-    trustBoundary: 'TraceCockpit 名称与端到端可运行情况需要总体验收确认；演示时可讲“追踪治理能力”，不要承诺完整 cockpit 已上线。'
+    trustBoundary: 'TraceCockpit 当前按前端聚合 MVP 讲述；后端统一聚合、回归候选沉淀和端到端可运行情况需要发布后人工验收确认。'
   },
   {
-    id: 'stage-seven-fallback',
-    title: '阶段七如何兜底演示',
+    id: 'phase-55-fallback',
+    title: 'Phase 5.5 如何兜底演示',
     audience: 'SELF_CHECK',
     status: 'DEMO_FALLBACK',
     statusLabel: '演示兜底可用',
-    openingLine: '阶段七兜底演示的目标是即使真实 AI 或跨页链路不稳定，也能完整讲清产品设计、工程边界和验收缺口。',
+    openingLine: 'Phase 5.5 兜底演示的目标是即使真实 AI 或跨页链路不稳定，也能完整讲清产品设计、工程边界和验收缺口。',
     keyPoints: [
       '优先走 Portfolio Demo 静态路线，用 demoFlag 和可用页面串讲核心闭环。',
-      '遇到真实 AI 调用、跨天 Agent 或知识库记忆未验收时，明确说“待总体验收确认”。',
+      '遇到真实 AI 调用、跨天 Agent 或知识库记忆未验收时，明确说“待发布后人工验收确认”。',
       '只展示脱敏摘要、状态和证据入口，把不可复现的环节转成工程边界说明。'
     ],
     evidenceAnchors: [
@@ -188,12 +188,12 @@ export const portfolioRehearsalTalkTracks: PortfolioRehearsalTalkTrack[] = [
 export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
   {
     id: 'card-problem',
-    question: '请用 1 分钟讲清 CodeCoachAI V4 解决了什么问题。',
+    question: '请用 1 分钟讲清 CodeCoachAI V5 解决了什么问题。',
     status: 'READY_FOR_DEMO',
     statusLabel: '可作为演示口径',
     answerFrame: [
       '先说求职准备的三个痛点：资料分散、建议不可解释、行动难持续。',
-      '再说 V4 的解法：把岗位、简历、项目、面试、能力和 Agent 行动串成闭环。',
+      '再说 V5 的解法：把岗位、投递包、简历、项目、面试、复盘和 Agent 行动串成闭环。',
       '最后强调可信边界：弱证据降级，不展示隐私原文。'
     ],
     mustMention: ['闭环', '可信建议', '证据来源', '降级兜底'],
@@ -202,15 +202,15 @@ export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
   },
   {
     id: 'card-core-loop',
-    question: 'V4 的核心闭环是什么？',
+    question: 'V5 的核心闭环是什么？',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     answerFrame: [
       '用“目标输入 -> 可信分析 -> 行动生成 -> 执行回流 -> 能力更新”一句话框住。',
       '举例：岗位匹配发现差距，项目证据补强表达，面试训练验证，再回到能力地图。',
-      '补一句：端到端稳定性以总体验收为准。'
+      '补一句：端到端稳定性以发布后人工验收为准。'
     ],
-    mustMention: ['岗位目标', '项目证据', '面试训练', '能力地图', '总体验收'],
+    mustMention: ['岗位目标', '投递包', '项目证据', '面试训练', '人工验收'],
     avoidMentioning: ['跨天闭环已经稳定全自动', '未验收链路已经生产可用'],
     demoCue: '优先展示能打开的页面入口；不可运行项切换到静态讲述。'
   },
@@ -246,13 +246,13 @@ export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
     id: 'card-agent-loop',
     question: 'Agent 多日闭环怎么体现？',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     answerFrame: [
-      '先讲状态沉淀：TODO、DOING、DONE、SKIPPED、BLOCKED。',
+      '先讲状态沉淀：待办、进行中、已完成、已跳过、已阻塞。',
       '再讲回流：完成、跳过、阻塞原因会影响后续计划。',
-      '最后明确：跨天自动调整效果待总体验收确认。'
+      '最后明确：跨天自动调整效果待发布后人工验收确认。'
     ],
-    mustMention: ['任务状态', '完成回流', '阻塞原因', '待总体验收确认'],
+    mustMention: ['任务状态', '完成回流', '阻塞原因', '待人工验收确认'],
     avoidMentioning: ['多日 Agent 已经完全自治', '无需人工复核'],
     demoCue: '展示 Agent 今日任务字段或静态任务路线。'
   },
@@ -260,13 +260,13 @@ export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
     id: 'card-memory',
     question: '知识库和长期记忆怎么治理？',
     status: 'BOUNDARY_ONLY',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     answerFrame: [
       '把治理原则放在第一位：只展示摘要、标签、来源和更新时间。',
       '长期记忆用于偏好和状态摘要，不展示完整记忆全文。',
       '涉及个人资料的命中结果都要可解释、可撤回、待确认。'
     ],
-    mustMention: ['摘要化', '最小披露', '用户确认', '待总体验收确认'],
+    mustMention: ['摘要化', '最小披露', '用户确认', '待人工验收确认'],
     avoidMentioning: ['知识库正文', '长期记忆全文', '自动读取全部隐私资料'],
     demoCue: '没有验收页面时，只讲治理边界，不讲已上线效果。'
   },
@@ -274,7 +274,7 @@ export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
     id: 'card-trace-cockpit',
     question: 'TraceCockpit 怎么证明工程能力？',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     answerFrame: [
       '把它讲成 AI/Agent 结果的工程治理能力。',
       '用户侧看来源和可信边界，运营侧看日志、模板、回归、任务和指标。',
@@ -285,16 +285,16 @@ export const portfolioRehearsalPromptCards: PortfolioRehearsalPromptCard[] = [
     demoCue: '走运营侧 Portfolio Demo 路线，无法打开时讲静态能力映射。'
   },
   {
-    id: 'card-stage-seven-fallback',
-    question: '如果现场链路不稳定，阶段七怎么兜底演示？',
+    id: 'card-phase-55-fallback',
+    question: '如果现场链路不稳定，Phase 5.5 怎么兜底演示？',
     status: 'DEMO_FALLBACK',
     statusLabel: '演示兜底可用',
     answerFrame: [
       '先切 Portfolio Demo 静态路线，保证故事完整。',
-      '把不可运行项标成待总体验收确认，不现场触发真实 AI。',
+      '把不可运行项标成待发布后人工验收确认，不现场触发真实 AI。',
       '用脱敏摘要、状态、证据入口和能力映射说明工程设计。'
     ],
-    mustMention: ['静态路线', '不执行真实 AI 调用', '脱敏摘要', '待总体验收确认'],
+    mustMention: ['静态路线', '不执行真实 AI 调用', '脱敏摘要', '待人工验收确认'],
     avoidMentioning: ['现场临时伪造结果', '展示用户原文', '把兜底说成真实验收'],
     demoCue: '从本文件提供的提词卡和能力映射收口。'
   }
@@ -305,14 +305,14 @@ export const portfolioRehearsalCapabilityMap: PortfolioRehearsalCapabilityMap[] 
     id: 'cap-product-loop',
     capability: '产品闭环设计',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     mappedFeatures: ['Portfolio Demo 路线', '简历岗位匹配', '项目证据', '面试训练', '能力地图', 'Agent 今日任务'],
     proofSignals: [
       '用户侧路线能从目标岗位一路讲到行动和复盘',
       '每个页面承担闭环中的一个明确职责',
       '兜底路线能解释未验收环节'
     ],
-    limits: ['跨页端到端稳定性需要总体验收', '不承诺真实 AI 现场可用']
+    limits: ['跨页端到端稳定性需要发布后人工验收', '不承诺真实 AI 现场可用']
   },
   {
     id: 'cap-trustworthy-ai',
@@ -344,20 +344,20 @@ export const portfolioRehearsalCapabilityMap: PortfolioRehearsalCapabilityMap[] 
     id: 'cap-agent-ops',
     capability: 'Agent 任务运营',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     mappedFeatures: ['Agent 今日任务', '任务完成回流字段', 'Agent 运行记录', '异步任务中心'],
     proofSignals: [
       '任务状态和完成信息可作为后续计划上下文',
       '运营侧有运行记录和异步任务入口',
       '阶段性复盘可承接结果'
     ],
-    limits: ['多日自动调整效果需要总体验收', '不声称 Agent 已完全自治']
+    limits: ['多日自动调整效果需要发布后人工验收', '不声称 Agent 已完全自治']
   },
   {
     id: 'cap-knowledge-governance',
     capability: '知识库与长期记忆治理',
     status: 'BOUNDARY_ONLY',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     mappedFeatures: ['知识来源摘要', '长期记忆摘要', '可信建议来源说明'],
     proofSignals: [
       '演示口径明确最小披露原则',
@@ -370,24 +370,24 @@ export const portfolioRehearsalCapabilityMap: PortfolioRehearsalCapabilityMap[] 
     id: 'cap-engineering-observability',
     capability: '工程可观测与可回归',
     status: 'ACCEPTANCE_REQUIRED',
-    statusLabel: '待总体验收确认',
+    statusLabel: '待发布后人工验收确认',
     mappedFeatures: ['AI 服务记录', 'Prompt 模板', 'Prompt 回归', '指标字典', 'AI 运营看板'],
     proofSignals: [
       '能说明一次结果从哪里来、为何可信或为何降级',
       '运营侧入口覆盖日志、模板、回归、任务和指标',
       '可用静态路线演示工程治理思路'
     ],
-    limits: ['TraceCockpit 完整命名和可运行状态需总体验收确认', '不展示敏感原文或底层生成全文']
+    limits: ['TraceCockpit 完整命名和可运行状态需发布后人工验收确认', '不展示敏感原文或底层生成全文']
   },
   {
     id: 'cap-demo-resilience',
-    capability: '阶段七演示兜底',
+    capability: 'Phase 5.5 演示兜底',
     status: 'DEMO_FALLBACK',
     statusLabel: '演示兜底可用',
     mappedFeatures: ['静态提词卡', '讲述材料', '能力映射', '敏感信息规则'],
     proofSignals: [
       '每个关键问题都有可讲的一分钟答案结构',
-      '未验收项统一标注待总体验收确认',
+      '待验收项统一标注待发布后人工验收确认',
       '禁止真实 AI 调用和敏感原文展示'
     ],
     limits: ['兜底材料不是端到端验收结果', '需要主页面或总集成方决定展示入口']
@@ -399,7 +399,7 @@ export const portfolioRehearsalSelfCheck = {
   noRawPromptOrModelResponse: true,
   noResumeOrInterviewRawText: true,
   noKnowledgeOrMemoryFullText: true,
-  acceptanceRequiredLabel: '待总体验收确认',
+  acceptanceRequiredLabel: '待发布后人工验收确认',
   writeBoundary: [
     'src/features/portfolio-rehearsal-prompts.ts',
     'src/types/portfolioRehearsal.ts'

@@ -14,11 +14,8 @@
   .el-card {
     border: 1px solid var(--user-border);
     border-radius: var(--user-radius-sm);
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.08), transparent 42%),
-      var(--user-surface);
-    box-shadow: var(--user-shadow-sm);
-    backdrop-filter: blur(14px);
+    background: var(--user-surface);
+    box-shadow: none;
   }
 
   .content-card,
@@ -45,9 +42,7 @@
   }
 
   .metric-card {
-    background:
-      linear-gradient(135deg, rgba(79, 172, 254, 0.11), transparent 50%),
-      var(--user-surface-muted);
+    background: var(--user-surface-muted);
   }
 
   .metric-card__value,
@@ -63,10 +58,8 @@
   .user-action-card,
   .cc-glass--ai {
     border-color: var(--user-primary-border);
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.16), rgba(79, 172, 254, 0.08) 48%, transparent),
-      var(--user-surface);
-    box-shadow: var(--user-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    background: var(--user-surface-tint);
+    box-shadow: none;
   }
 
   .user-section-head {
@@ -142,11 +135,9 @@
   .offline-state,
   .el-empty,
   .el-result {
-    border: 1px dashed rgba(0, 242, 254, 0.2);
+    border: 1px dashed rgba(110, 168, 254, 0.2);
     border-radius: var(--user-radius-sm);
-    background:
-      radial-gradient(circle at 20% 0, rgba(0, 242, 254, 0.12), transparent 30%),
-      rgba(7, 17, 31, 0.7);
+    background: var(--user-state-bg);
     color: var(--user-text-muted);
   }
 
@@ -167,9 +158,7 @@
   .load-error,
   .offline-state {
     border-color: rgba(251, 113, 133, 0.3);
-    background:
-      radial-gradient(circle at 20% 0, rgba(251, 113, 133, 0.14), transparent 32%),
-      var(--user-state-error-bg);
+    background: var(--user-state-error-bg);
   }
 
   .el-empty__description,
@@ -188,7 +177,6 @@
 
   .el-loading-mask {
     background-color: var(--el-mask-color);
-    backdrop-filter: blur(4px);
   }
 
   .el-loading-spinner .el-loading-text,
@@ -201,7 +189,7 @@
     --el-table-bg-color: rgba(7, 17, 31, 0.76);
     --el-table-tr-bg-color: rgba(7, 17, 31, 0.76);
     --el-table-header-bg-color: rgba(15, 27, 49, 0.92);
-    --el-table-row-hover-bg-color: rgba(0, 242, 254, 0.08);
+    --el-table-row-hover-bg-color: rgba(110, 168, 254, 0.08);
     --el-table-border-color: rgba(148, 203, 255, 0.12);
     border-radius: var(--user-radius-sm);
     color: var(--user-text-secondary);
@@ -217,10 +205,10 @@
     --el-button-bg-color: rgba(7, 17, 31, 0.62);
     --el-button-border-color: rgba(148, 203, 255, 0.2);
     --el-button-text-color: var(--user-text-secondary);
-    --el-button-hover-bg-color: rgba(0, 242, 254, 0.1);
+    --el-button-hover-bg-color: rgba(110, 168, 254, 0.1);
     --el-button-hover-border-color: var(--user-primary-border);
     --el-button-hover-text-color: var(--user-primary);
-    --el-button-active-bg-color: rgba(0, 242, 254, 0.14);
+    --el-button-active-bg-color: rgba(110, 168, 254, 0.14);
     --el-button-active-border-color: var(--user-primary);
     --el-button-active-text-color: var(--user-primary);
     --el-button-disabled-bg-color: var(--user-disabled-bg);
@@ -241,23 +229,23 @@
   }
 
   .el-button--primary {
-    --el-button-bg-color: transparent;
-    --el-button-border-color: transparent;
-    --el-button-text-color: #04111f;
-    --el-button-hover-bg-color: transparent;
-    --el-button-hover-border-color: transparent;
-    --el-button-hover-text-color: #04111f;
-    --el-button-active-bg-color: transparent;
-    --el-button-active-border-color: transparent;
-    --el-button-active-text-color: #04111f;
-    background: linear-gradient(135deg, var(--cc-cyan), var(--cc-blue));
-    border-color: rgba(0, 242, 254, 0.44);
-    color: #04111f;
-    box-shadow: 0 0 18px rgba(0, 242, 254, 0.2);
+    --el-button-bg-color: var(--user-primary);
+    --el-button-border-color: var(--user-primary);
+    --el-button-text-color: var(--user-primary-contrast);
+    --el-button-hover-bg-color: var(--user-primary-hover);
+    --el-button-hover-border-color: var(--user-primary-hover);
+    --el-button-hover-text-color: var(--user-primary-contrast);
+    --el-button-active-bg-color: #527fc2;
+    --el-button-active-border-color: #527fc2;
+    --el-button-active-text-color: var(--user-primary-contrast);
+    background: var(--user-primary);
+    border-color: var(--user-primary);
+    color: var(--user-primary-contrast);
+    box-shadow: none;
   }
 
   .el-button--primary:not(.is-disabled):hover {
-    box-shadow: var(--cc-glow-strong);
+    box-shadow: none;
   }
 
   .el-button--success {
@@ -288,13 +276,13 @@
   }
 
   .el-button.is-plain.el-button--primary {
-    --el-button-bg-color: rgba(0, 242, 254, 0.1);
+    --el-button-bg-color: rgba(110, 168, 254, 0.1);
     --el-button-border-color: var(--user-primary-border);
     --el-button-text-color: var(--user-primary);
-    --el-button-hover-bg-color: rgba(0, 242, 254, 0.18);
+    --el-button-hover-bg-color: rgba(110, 168, 254, 0.18);
     --el-button-hover-border-color: var(--user-primary);
     --el-button-hover-text-color: var(--user-text);
-    background: rgba(0, 242, 254, 0.1);
+    background: rgba(110, 168, 254, 0.1);
     color: var(--user-primary);
   }
 
@@ -389,7 +377,7 @@
   .el-textarea__inner:hover,
   .el-input-number .el-input__wrapper:hover,
   .el-upload-dragger:hover {
-    border-color: rgba(0, 242, 254, 0.3);
+    border-color: rgba(110, 168, 254, 0.3);
     box-shadow: none;
   }
 
@@ -400,21 +388,25 @@
   .el-textarea__inner:focus,
   .el-input-number .el-input__wrapper.is-focus {
     border-color: var(--user-primary);
-    box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.12);
+    box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.12);
   }
 
   .el-input__inner,
   .el-textarea__inner,
   .el-range-input,
-  .el-select__placeholder,
   .el-select__selected-item,
   .el-input-number .el-input__inner {
     color: var(--user-text);
   }
 
+  .el-select__placeholder {
+    color: var(--user-text-subtle);
+  }
+
   .el-input__inner::placeholder,
   .el-textarea__inner::placeholder {
     color: var(--user-text-subtle);
+    opacity: 1;
   }
 
   .el-input.is-disabled .el-input__wrapper,
@@ -496,18 +488,18 @@
   .el-radio-button__original-radio:checked + .el-radio-button__inner,
   .el-checkbox-button.is-checked .el-checkbox-button__inner {
     border-color: var(--user-primary);
-    background: rgba(0, 242, 254, 0.18);
+    background: rgba(110, 168, 254, 0.18);
     color: var(--user-primary);
     box-shadow: -1px 0 0 0 var(--user-primary);
   }
 }
 
+/* Element Plus compatibility overrides stay scoped to the active user layout. */
 body.is-user-layout-active {
   overflow-x: clip;
 
   .el-loading-mask {
     background-color: rgba(5, 11, 22, 0.58);
-    backdrop-filter: blur(4px);
   }
 
   .el-loading-spinner .el-loading-text,
@@ -525,7 +517,6 @@ body.is-user-layout-active {
     background: rgba(15, 27, 49, 0.96);
     color: var(--user-text);
     box-shadow: var(--user-shadow-lg);
-    backdrop-filter: blur(14px);
   }
 
   .el-select-dropdown,
@@ -545,7 +536,7 @@ body.is-user-layout-active {
   .el-select-dropdown__item:hover,
   .el-dropdown-menu__item:not(.is-disabled):focus,
   .el-dropdown-menu__item:not(.is-disabled):hover {
-    background: rgba(0, 242, 254, 0.1);
+    background: rgba(110, 168, 254, 0.1);
     color: var(--user-primary);
   }
 
@@ -563,12 +554,9 @@ body.is-user-layout-active {
     max-width: min(520px, calc(100vw - 28px));
     border: 1px solid var(--user-border);
     border-radius: var(--user-radius-sm);
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.08), transparent 52%),
-      rgba(15, 27, 49, 0.96);
+    background: var(--user-surface-raised);
     color: var(--user-text);
-    box-shadow: var(--user-shadow-lg);
-    backdrop-filter: blur(16px);
+    box-shadow: var(--user-shadow-sm);
   }
 
   .el-message__content {
@@ -578,34 +566,26 @@ body.is-user-layout-active {
 
   .el-message--success {
     border-color: var(--user-success-border);
-    background:
-      linear-gradient(135deg, rgba(52, 211, 153, 0.14), transparent 52%),
-      rgba(15, 27, 49, 0.96);
+    background: #14251f;
   }
 
   .el-message--warning {
     border-color: rgba(251, 191, 36, 0.34);
-    background:
-      linear-gradient(135deg, rgba(251, 191, 36, 0.14), transparent 52%),
-      rgba(15, 27, 49, 0.96);
+    background: #261f15;
   }
 
   .el-message--error {
     border-color: var(--user-danger-border);
-    background:
-      linear-gradient(135deg, rgba(251, 113, 133, 0.14), transparent 52%),
-      rgba(15, 27, 49, 0.96);
+    background: #28191e;
   }
 
   .el-alert,
   .el-dialog,
   .el-drawer {
     border: 1px solid var(--user-border);
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.08), transparent 48%),
-      rgba(15, 27, 49, 0.96);
+    background: var(--user-surface-raised);
     color: var(--user-text);
-    box-shadow: var(--user-shadow-lg);
+    box-shadow: var(--user-shadow-md);
   }
 
   .el-alert__title,
@@ -618,6 +598,24 @@ body.is-user-layout-active {
   .el-dialog__body,
   .el-drawer__body {
     color: var(--user-text-secondary);
+  }
+}
+
+@media (max-width: 760px) {
+  body.is-user-layout-active {
+    .el-dialog {
+      max-width: calc(100vw - 24px);
+      margin-inline: 12px;
+    }
+
+    .el-drawer {
+      max-width: 100vw;
+    }
+
+    .el-message-box {
+      width: calc(100vw - 24px);
+      max-width: none;
+    }
   }
 }
 
@@ -651,7 +649,7 @@ body.is-user-layout-active .jobcoach-layout {
     .project-page,
     .job-target-page
   ) {
-    color: var(--user-text) !important;
+    color: var(--user-text);
   }
 
   :is(
@@ -736,13 +734,10 @@ body.is-user-layout-active .jobcoach-layout {
     .target-card,
     .template-preview
   ) {
-    border-color: var(--user-border) !important;
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.08), transparent 46%),
-      rgba(15, 27, 49, 0.72) !important;
+    border-color: var(--user-border);
+    background: var(--user-surface);
     color: var(--user-text);
-    box-shadow: var(--user-shadow-sm);
-    backdrop-filter: blur(14px);
+    box-shadow: none;
   }
 
   :is(
@@ -882,8 +877,8 @@ body.is-user-layout-active .jobcoach-layout {
     .target-actions,
     .pagination-wrap
   ) {
-    border-color: rgba(148, 203, 255, 0.15) !important;
-    background: rgba(7, 17, 31, 0.56) !important;
+    border-color: rgba(148, 203, 255, 0.15);
+    background: rgba(7, 17, 31, 0.56);
     color: var(--user-text);
   }
 
@@ -897,12 +892,10 @@ body.is-user-layout-active .jobcoach-layout {
     .fallback-card,
     .loading-card
   ) {
-    border-color: var(--user-border) !important;
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.08), transparent 46%),
-      rgba(15, 27, 49, 0.72) !important;
-    color: var(--user-text) !important;
-    box-shadow: var(--user-shadow-sm);
+    border-color: var(--user-border);
+    background: var(--user-surface);
+    color: var(--user-text);
+    box-shadow: none;
   }
 
   :is(
@@ -923,11 +916,11 @@ body.is-user-layout-active .jobcoach-layout {
     .agent-eyebrow,
     .review-kicker
   ) {
-    color: var(--user-primary) !important;
+    color: var(--user-primary);
   }
 
   :is(h1, h2, h3, strong, dt, dd) {
-    color: var(--user-text) !important;
+    color: var(--user-text);
   }
 
   :is(p, small, em, span, li) {
@@ -955,7 +948,7 @@ body.is-user-layout-active .jobcoach-layout {
     .target-card__summary,
     .form-hint
   ) {
-    color: var(--user-text-muted) !important;
+    color: var(--user-text-muted);
   }
 
   :is(
@@ -970,8 +963,8 @@ body.is-user-layout-active .jobcoach-layout {
     .status-panel--error,
     .daily-error
   ) {
-    border-color: rgba(251, 113, 133, 0.28) !important;
-    background: rgba(251, 113, 133, 0.11) !important;
+    border-color: rgba(251, 113, 133, 0.28);
+    background: rgba(251, 113, 133, 0.11);
   }
 
   :is(
@@ -987,8 +980,8 @@ body.is-user-layout-active .jobcoach-layout {
     .metric.is-success,
     .daily-metric.is-success
   ) {
-    border-color: rgba(52, 211, 153, 0.26) !important;
-    background: rgba(52, 211, 153, 0.11) !important;
+    border-color: rgba(52, 211, 153, 0.26);
+    background: rgba(52, 211, 153, 0.11);
   }
 
   :is(
@@ -1011,36 +1004,36 @@ body.is-user-layout-active .jobcoach-layout {
     .tool-card.active,
     .target-card.is-current
   ) {
-    border-color: var(--user-primary-border) !important;
-    background: rgba(0, 242, 254, 0.1) !important;
-    color: var(--user-primary) !important;
+    border-color: var(--user-primary-border);
+    background: rgba(110, 168, 254, 0.1);
+    color: var(--user-primary);
   }
 
   :is(.skill-grid)::before {
-    background: linear-gradient(180deg, var(--cc-cyan), var(--cc-blue)) !important;
-    box-shadow: 0 0 14px rgba(0, 242, 254, 0.24);
+    background: var(--user-primary);
+    box-shadow: none;
   }
 
   :is(.skill-card)::before {
-    border-color: rgba(7, 17, 31, 0.92) !important;
-    background: var(--cc-cyan) !important;
-    box-shadow: 0 0 14px rgba(0, 242, 254, 0.42) !important;
+    border-color: rgba(7, 17, 31, 0.92);
+    background: var(--user-primary);
+    box-shadow: none;
   }
 
   :is(.answer-area) .el-textarea__inner,
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-input__wrapper,
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-select__wrapper,
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-textarea__inner {
-    border-color: rgba(148, 203, 255, 0.18) !important;
-    background: rgba(7, 17, 31, 0.72) !important;
-    color: var(--user-text) !important;
-    box-shadow: none !important;
+    border-color: rgba(148, 203, 255, 0.18);
+    background: rgba(7, 17, 31, 0.72);
+    color: var(--user-text);
+    box-shadow: none;
   }
 
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger) {
-    border-color: rgba(148, 203, 255, 0.18) !important;
-    background: rgba(7, 17, 31, 0.62) !important;
-    color: var(--user-text-secondary) !important;
+    border-color: rgba(148, 203, 255, 0.18);
+    background: rgba(7, 17, 31, 0.62);
+    color: var(--user-text-secondary);
   }
 
   :is(
@@ -1084,12 +1077,10 @@ body.is-user-layout-active .jobcoach-layout {
     .stage-node,
     .next-training-card.is-muted
   ) {
-    border-color: rgba(148, 203, 255, 0.15) !important;
-    background:
-      linear-gradient(135deg, rgba(0, 242, 254, 0.07), transparent 48%),
-      rgba(7, 17, 31, 0.58) !important;
-    color: var(--user-text) !important;
-    box-shadow: var(--user-shadow-xs);
+    border-color: rgba(148, 203, 255, 0.15);
+    background: var(--user-surface-muted);
+    color: var(--user-text);
+    box-shadow: none;
   }
 
   :is(
@@ -1099,10 +1090,8 @@ body.is-user-layout-active .jobcoach-layout {
     .warning-card,
     .risk-card
   ) {
-    border-color: rgba(251, 191, 36, 0.28) !important;
-    background:
-      linear-gradient(135deg, rgba(251, 191, 36, 0.1), transparent 48%),
-      rgba(30, 24, 12, 0.54) !important;
+    border-color: rgba(251, 191, 36, 0.28);
+    background: #241f17;
   }
 
   :is(
@@ -1129,7 +1118,7 @@ body.is-user-layout-active .jobcoach-layout {
     .map-node,
     .stage-node
   ) :is(p, span, small, em) {
-    color: var(--user-text-muted) !important;
+    color: var(--user-text-muted);
   }
 
   :is(
@@ -1156,17 +1145,24 @@ body.is-user-layout-active .jobcoach-layout {
     .map-node,
     .stage-node
   ) :is(strong, h2, h3, h4) {
-    color: var(--user-text) !important;
+    color: var(--user-text);
   }
 
   .resume-paper,
   .resume-paper :is(h1, h2, h3, p, li, span, strong, em, small) {
-    color: #111827 !important;
+    color: #111827;
   }
 
   .resume-paper {
-    background: #ffffff !important;
-    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46), 0 0 30px rgba(0, 242, 254, 0.16) !important;
+    background: #ffffff;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.34);
+  }
+
+  button:focus-visible,
+  [role='button']:focus-visible,
+  .el-button:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 2px;
   }
 }
 
@@ -1178,5 +1174,128 @@ body.is-user-layout-active .jobcoach-layout {
   50% {
     opacity: 0.45;
     transform: scale(0.88);
+  }
+}
+
+/* Compact workspace density */
+body.is-user-layout-active .jobcoach-layout {
+  :is(
+    .page-shell,
+    .user-page-shell,
+    .question-training-page,
+    .interview-create,
+    .interview-history-page,
+    .interview-report-page,
+    .resume-job-hub,
+    .ability-map,
+    .agent-page,
+    .agent-task-page,
+    .analytics-page,
+    .job-experiment
+  ) {
+    gap: 14px;
+  }
+
+  :is(
+    .training-hero,
+    .create-hero,
+    .history-hero,
+    .detail-hero,
+    .analysis-hero,
+    .analytics-hero,
+    .agent-hero,
+    .task-hero,
+    .run-hero,
+    .session-hero,
+    .growth-hero,
+    .knowledge-hero,
+    .page-hero,
+    .v4-page-header,
+    .hub-hero
+  ) {
+    min-height: 0;
+    padding: 18px 20px;
+    border-color: var(--user-border);
+    background: var(--user-surface);
+    box-shadow: none;
+  }
+
+  :is(
+    .training-hero,
+    .create-hero,
+    .history-hero,
+    .detail-hero,
+    .analysis-hero,
+    .analytics-hero,
+    .agent-hero,
+    .task-hero,
+    .run-hero,
+    .session-hero,
+    .growth-hero,
+    .knowledge-hero,
+    .page-hero,
+    .v4-page-header,
+    .hub-hero
+  ) h1 {
+    margin-top: 6px;
+    font-size: 26px;
+    line-height: 1.25;
+  }
+
+  .content-card__body,
+  .el-card__body,
+  .hub-panel,
+  .hub-path,
+  .lab-overview {
+    padding: 16px;
+  }
+
+  :is(
+    .metric-card,
+    .metric-tile,
+    .signal-card,
+    .agent-metric,
+    .analytics-metric-card,
+    .stat-card
+  ) {
+    min-height: 0;
+    padding: 12px 14px;
+    box-shadow: none;
+  }
+
+  :is(
+    .metric-card,
+    .metric-tile,
+    .signal-card,
+    .agent-metric,
+    .analytics-metric-card,
+    .stat-card
+  ) strong {
+    font-size: 24px;
+  }
+
+  :is(
+    .question-card,
+    .interview-card,
+    .agent-task-card,
+    .task-card,
+    .v4-row,
+    .event-row,
+    .experiment-card,
+    .project-card,
+    .risk-card
+  ) {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jobcoach-layout *,
+  .jobcoach-layout *::before,
+  .jobcoach-layout *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
   }
 }

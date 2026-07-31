@@ -1,5 +1,6 @@
 ﻿import type { RouteRecordRaw } from 'vue-router'
 
+import { appConfig } from '@/config'
 import AuthUnavailableView from '@/views/error/AuthUnavailableView.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -44,15 +45,26 @@ export const routes: RouteRecordRaw[] = [
       { path: 'project-evidence/create', name: 'ProjectEvidenceCreate', component: () => import('@/views/project-evidence/ProjectEvidenceEditView.vue'), meta: { title: '新增项目证据' } },
       { path: 'project-evidence/:id', name: 'ProjectEvidenceDetail', component: () => import('@/views/project-evidence/ProjectEvidenceDetailView.vue'), meta: { title: '项目证据详情' } },
       { path: 'project-evidence/:id/edit', name: 'ProjectEvidenceEdit', component: () => import('@/views/project-evidence/ProjectEvidenceEditView.vue'), meta: { title: '编辑项目证据' } },
+      {
+        path: 'evidence-assets',
+        name: 'EvidenceAssets',
+        component: () => import('@/views/evidence-assets/EvidenceAssetsView.vue'),
+        meta: { title: '证据资产工作台', featureFlag: 'v9EvidenceLearning' }
+      },
       { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: 'JD 匹配实验台' } },
       { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: 'JD 匹配报告' } },
+      { path: 'application-packages', name: 'ApplicationPackageList', component: () => import('@/views/application-package/ApplicationPackageListView.vue'), meta: { title: '投递包列表' } },
+      { path: 'application-packages/preview', name: 'ApplicationPackagePreview', component: () => import('@/views/application-package/ApplicationPackageDetailView.vue'), meta: { title: '岗位投递包' } },
+      { path: 'application-packages/:id', name: 'ApplicationPackageDetail', component: () => import('@/views/application-package/ApplicationPackageDetailView.vue'), meta: { title: '岗位投递包详情' } },
       { path: 'resume-job-match', redirect: '/resume-match', meta: { hidden: true, commandHidden: true } },
       { path: 'resume-job-match/:id', redirect: (to) => ({ name: 'ResumeMatchDetail', params: to.params }), meta: { hidden: true, commandHidden: true } },
       { path: 'skill-profile', name: 'SkillProfile', component: () => import('@/views/v3/SkillProfileView.vue'), meta: { title: '能力画像' } },
       { path: 'ability-map', name: 'AbilityMap', component: () => import('@/views/ability-map/AbilityMapView.vue'), meta: { title: '能力图谱' } },
+      { path: 'interviews', redirect: '/interviews/history', meta: { hidden: true, commandHidden: true } },
       { path: 'interviews/create', name: 'InterviewCreate', component: () => import('@/views/interview/InterviewCreateView.vue'), meta: { title: '推荐开练' } },
       { path: 'interviews/room/:id', name: 'InterviewRoom', component: () => import('@/views/interview/InterviewRoomView.vue'), meta: { title: 'AI 面试训练室', immersive: true } },
       { path: 'interviews/history', name: 'InterviewHistory', component: () => import('@/views/interview/InterviewHistoryView.vue'), meta: { title: '面试复盘记录' } },
+      { path: 'interviews/comparisons/:id', name: 'InterviewComparison', component: () => import('@/views/interview/InterviewComparisonView.vue'), meta: { title: '面试表现比较' } },
       { path: 'interviews/:id', name: 'InterviewDetail', component: () => import('@/views/interview/InterviewDetailView.vue'), meta: { title: '面试详情' } },
       { path: 'interviews/:id/report', name: 'InterviewReport', component: () => import('@/views/interview/InterviewReportView.vue'), meta: { title: '面试报告' } },
       { path: 'study-plans/from-gap', name: 'StudyPlansFromGap', component: () => import('@/views/v3/StudyPlanFromGapView.vue'), meta: { title: '短板学习计划' } },
@@ -62,15 +74,38 @@ export const routes: RouteRecordRaw[] = [
       { path: 'offer-help', redirect: '/tools', meta: { hidden: true } },
       { path: 'analytics/personal', name: 'PersonalAnalytics', component: () => import('@/views/analytics/PersonalAnalyticsView.vue'), meta: { title: '训练分析' } },
       { path: 'agent/reviews', name: 'AgentReviews', component: () => import('@/views/v4/AgentReviewView.vue'), meta: { title: '每日复盘', previewOnly: true, featureFlag: 'v4Growth' } },
+      {
+        path: 'agent/weekly-reports',
+        name: 'AgentWeeklyReports',
+        component: () => import('@/views/v4/AgentWeeklyReportView.vue'),
+        beforeEnter: () => appConfig.enableV6WeeklyReport ? true : { name: 'FeatureUnavailable' },
+        meta: { title: 'AI 求职周报', hidden: true, commandHidden: true }
+      },
       { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '成长画像', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '技能趋势', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '就绪度趋势', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: { title: '长期记忆', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'knowledge', name: 'PersonalKnowledgeBase', component: () => import('@/views/v4/KnowledgeBaseView.vue'), meta: { title: '个人知识库', previewOnly: true, featureFlag: 'v4Knowledge' } },
       { path: 'resume-versions', name: 'ResumeVersions', component: () => import('@/views/v4/ResumeVersionView.vue'), meta: { title: '简历版本', previewOnly: true } },
-      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理', previewOnly: true } },
+      { path: 'applications', name: 'JobApplications', component: () => import('@/views/v4/JobApplicationView.vue'), meta: { title: '投递管理' } },
+      {
+        path: 'applications/:id',
+        name: 'ApplicationWorkspace',
+        component: () => import('@/views/v4/application-workspace/ApplicationWorkspaceView.vue'),
+        beforeEnter: () => appConfig.enableV7CampaignWorkspace ? true : { name: 'FeatureUnavailable' },
+        meta: { title: '机会工作区', hidden: true, commandHidden: true }
+      },
+      {
+        path: 'career-campaigns/:id/cockpit',
+        name: 'CampaignCockpit',
+        component: () => import('@/views/v8/campaign-cockpit/CampaignCockpitView.vue'),
+        beforeEnter: () => appConfig.enableV8CampaignCockpit ? true : { name: 'FeatureUnavailable' },
+        meta: { title: '周期驾驶舱', hidden: true, commandHidden: true }
+      },
+      { path: 'career-calendar', name: 'CareerCalendar', component: () => import('@/views/v4/career-calendar/CareerCalendarView.vue'), meta: { title: '求职日历' } },
       { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },
+      { path: 'agent/runs', redirect: '/agent/today', meta: { hidden: true, commandHidden: true } },
       { path: 'job-experiments', name: 'JobExperiments', component: () => import('@/views/job-experiment/JobExperimentListView.vue'), meta: { title: '求职实验台' } },
       { path: 'job-experiments/create', name: 'JobExperimentCreate', component: () => import('@/views/job-experiment/JobExperimentCreateView.vue'), meta: { title: '新建求职实验' } },
       { path: 'job-experiments/:id/edit', name: 'JobExperimentEdit', component: () => import('@/views/job-experiment/JobExperimentCreateView.vue'), meta: { title: '编辑求职实验' } },

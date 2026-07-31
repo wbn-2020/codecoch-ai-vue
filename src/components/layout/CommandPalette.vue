@@ -63,6 +63,7 @@ import { useRouter, type RouteRecordRaw } from 'vue-router'
 import { canAccessAdminPermissions } from '@/router/adminAccess'
 import { routes } from '@/router/routes'
 import { useAuthStore } from '@/stores/auth'
+import { appConfig } from '@/config'
 
 type PaletteScope = 'user' | 'admin'
 
@@ -109,8 +110,21 @@ const hasAdminPermission = (route: RouteRecordRaw) => {
   return canAccessAdminPermissions(permissions ? [String(permissions)] : undefined, authStore)
 }
 
+const hasEnabledFeature = (route: RouteRecordRaw) => {
+  const featureFlag = String(route.meta?.featureFlag || '')
+  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
+  return true
+}
+
 const makeCommand = (route: RouteRecordRaw, parentPath: string, group: string): CommandItem | null => {
-  if (route.redirect || route.meta?.hidden || route.meta?.commandHidden || route.meta?.previewOnly || !route.meta?.title) return null
+  if (
+    route.redirect ||
+    route.meta?.hidden ||
+    route.meta?.commandHidden ||
+    route.meta?.previewOnly ||
+    !route.meta?.title ||
+    !hasEnabledFeature(route)
+  ) return null
 
   const path = normalizePath(parentPath, route.path)
   if (hasDynamicSegment(path)) return null
@@ -164,7 +178,8 @@ watch(
 
     await nextTick()
     inputRef.value?.focus()
-  }
+  },
+  { immediate: true }
 )
 
 const selectCommand = async (command?: CommandItem) => {

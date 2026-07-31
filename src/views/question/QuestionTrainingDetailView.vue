@@ -148,7 +148,7 @@
             <div class="side-divider" />
             <div class="side-label">掌握状态</div>
             <el-radio-group v-model="masteryStatus" class="mastery-group">
-              <el-radio-button v-for="item in masteryOptions" :key="item.value" :label="item.value">
+              <el-radio-button v-for="item in masteryOptions" :key="item.value" :value="item.value">
                 {{ item.label }}
               </el-radio-button>
             </el-radio-group>
@@ -474,21 +474,20 @@ onMounted(fetchDetail)
 
 <style scoped lang="scss">
 .question-detail-page {
-  gap: 18px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .detail-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(16, 185, 129, 0.08)),
-    #ffffff;
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 
   h1,
   p {
@@ -497,7 +496,7 @@ onMounted(fetchDetail)
 
   h1 {
     margin-top: 12px;
-    font-size: 30px;
+    font-size: 24px;
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
@@ -505,7 +504,7 @@ onMounted(fetchDetail)
   p {
     max-width: 680px;
     margin-top: 10px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -525,7 +524,7 @@ onMounted(fetchDetail)
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -543,10 +542,10 @@ onMounted(fetchDetail)
 
   span {
     padding: 6px 10px;
-    border: 1px solid #dbeafe;
+    border: 1px solid var(--user-primary-border);
     border-radius: 8px;
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: var(--user-primary-faint);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -554,8 +553,8 @@ onMounted(fetchDetail)
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 16px;
   align-items: start;
 }
 
@@ -589,9 +588,9 @@ onMounted(fetchDetail)
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px 14px;
   padding: 14px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--user-primary-faint);
 
   div {
     min-width: 0;
@@ -603,26 +602,26 @@ onMounted(fetchDetail)
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 
   strong {
     margin-top: 4px;
-    color: var(--app-text);
+    color: var(--user-text);
   }
 
   p {
     grid-column: 1 / -1;
     margin: 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 
   small {
     grid-column: 1 / -1;
-    color: #475569;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.6;
     overflow-wrap: anywhere;
@@ -630,16 +629,18 @@ onMounted(fetchDetail)
 }
 
 .training-purpose-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 
   article {
     min-width: 0;
+    flex: 1 1 220px;
     padding: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-surface);
   }
 
   span,
@@ -648,21 +649,21 @@ onMounted(fetchDetail)
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   strong {
     margin-top: 6px;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
     line-height: 1.6;
     overflow-wrap: anywhere;
@@ -674,14 +675,14 @@ onMounted(fetchDetail)
 
   span {
     display: block;
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
 
   h2 {
     margin: 5px 0 0;
-    color: var(--app-text);
+    color: var(--user-text);
     font-size: 18px;
     line-height: 1.45;
   }
@@ -689,9 +690,9 @@ onMounted(fetchDetail)
 
 .question-content {
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   :deep(.markdown-preview) {
     overflow-wrap: anywhere;
@@ -704,12 +705,12 @@ onMounted(fetchDetail)
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 
   > span {
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     font-size: 13px;
   }
 }
@@ -722,8 +723,8 @@ onMounted(fetchDetail)
   em {
     padding: 5px 10px;
     border-radius: 8px;
-    background: #ffffff;
-    color: #2563eb;
+    background: var(--user-surface);
+    color: var(--user-primary);
     font-style: normal;
     font-weight: 700;
   }
@@ -741,9 +742,9 @@ onMounted(fetchDetail)
 
   section {
     padding: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   h2 {
@@ -763,20 +764,20 @@ onMounted(fetchDetail)
 
   article {
     padding: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   span {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text);
+    color: var(--user-text);
     line-height: 1.7;
   }
 }
@@ -784,9 +785,9 @@ onMounted(fetchDetail)
 .project-template {
   article {
     padding: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--user-surface-muted);
   }
 
   h3,
@@ -800,7 +801,7 @@ onMounted(fetchDetail)
 
   p {
     margin-top: 8px;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -821,12 +822,12 @@ onMounted(fetchDetail)
 .side-divider {
   height: 1px;
   margin: 14px 0;
-  background: #e2e8f0;
+  background: var(--user-border);
 }
 
 .side-label {
   margin-bottom: 10px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   font-size: 13px;
 }
 
@@ -839,26 +840,26 @@ onMounted(fetchDetail)
   :deep(.el-radio-button__inner) {
     width: 100%;
     border-left: 1px solid var(--el-border-color);
-    background: #ffffff;
-    color: var(--app-text);
+    background: var(--user-surface);
+    color: var(--user-text);
     box-shadow: none;
   }
 
   :deep(.el-radio-button__inner:hover) {
-    color: #1d4ed8;
+    color: var(--user-primary);
   }
 
   :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-    color: #1d4ed8;
+    border-color: var(--user-primary-border);
+    background: var(--user-primary-faint);
+    color: var(--user-primary);
     box-shadow: none;
   }
 }
 
 .side-muted {
   margin: 0 0 10px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 
@@ -870,24 +871,24 @@ onMounted(fetchDetail)
     width: 100%;
     min-height: 42px;
     padding: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--user-border);
     border-radius: 8px;
-    background: #f8fafc;
-    color: var(--app-text);
+    background: var(--user-surface-muted);
+    color: var(--user-text);
     cursor: pointer;
     text-align: left;
 
     &:first-child {
-      border-color: rgba(37, 99, 235, 0.28);
-      background: #eff6ff;
-      color: #1d4ed8;
+      border-color: var(--user-primary-border);
+      background: var(--user-primary-faint);
+      color: var(--user-primary);
       font-weight: 800;
     }
   }
 }
 
 :deep(.app-state) {
-  background: #f8fafc;
+  background: var(--user-surface-muted);
 }
 
 @media (max-width: 960px) {
@@ -918,7 +919,7 @@ onMounted(fetchDetail)
 
 @media (max-width: 640px) {
   .detail-hero {
-    padding: 20px;
+    padding: 16px;
   }
 
   .recommendation-callout {
@@ -936,7 +937,7 @@ onMounted(fetchDetail)
   }
 
   .training-purpose-grid {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   .hero-actions :deep(.el-button),

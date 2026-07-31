@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
-const javaRoot = path.resolve(process.cwd(), '..', 'CodeCoachAI-java')
 const frontendRoot = process.cwd()
+const javaRoot = resolveBackendRoot(frontendRoot)
 
 const serviceFile = path.join(
   javaRoot,

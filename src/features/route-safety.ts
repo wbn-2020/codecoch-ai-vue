@@ -5,6 +5,8 @@ export interface RouteSafetyOptions {
   enableV4Preview?: boolean
   enableV4Growth?: boolean
   enableV4Knowledge?: boolean
+  enableV6WeeklyReport?: boolean
+  enableV9EvidenceLearning?: boolean
   knownPaths?: string[]
 }
 
@@ -16,13 +18,26 @@ export interface RouteSafetyResult {
 
 export const v4PreviewPaths = [
   '/knowledge',
-  '/applications',
   '/resume-versions',
   '/agent/memory',
   '/agent/reviews',
   '/growth/profile',
   '/growth/skills',
   '/growth/readiness'
+]
+
+export const v4ReleasedPaths = [
+  '/applications',
+  '/career-calendar',
+  '/career-campaigns'
+]
+
+export const v6WeeklyReportPaths = [
+  '/agent/weekly-reports'
+]
+
+export const v9EvidenceLearningPaths = [
+  '/evidence-assets'
 ]
 
 export const v4PreviewMatchers = [/^\/resumes\/[^/]+\/versions(?:\/.*)?$/]
@@ -40,9 +55,13 @@ export const defaultUserKnownPaths = [
   '/projects',
   '/job-targets',
   '/project-evidence',
+  ...v9EvidenceLearningPaths,
   '/resumes',
   '/resume-match',
   '/resume-job-match',
+  ...v4ReleasedPaths,
+  '/application-packages',
+  '/application-packages/preview',
   '/interviews',
   '/interviews/create',
   '/interviews/history',
@@ -58,6 +77,7 @@ export const defaultUserKnownPaths = [
   '/agent/today',
   '/agent/tasks',
   '/agent/runs',
+  ...v6WeeklyReportPaths,
   '/daily-tasks',
   '/analytics/personal',
   '/job-experiments',
@@ -132,14 +152,26 @@ export const defaultKnownPaths = [...defaultUserKnownPaths, ...defaultAdminKnown
 
 export const routePathOnly = (path: string) => path.split(/[?#]/)[0] || path
 
+export const exactOnlyKnownPaths = [
+  '/application-packages',
+  '/application-packages/preview'
+]
+
+export const knownPathDynamicMatchers = [
+  /^\/application-packages\/[^/?#]+$/
+]
+
 const canMatchChildPath = (knownPath: string) =>
-  knownPath !== '/admin' && !knownPath.startsWith('/admin/')
+  knownPath !== '/admin' &&
+  !knownPath.startsWith('/admin/') &&
+  !exactOnlyKnownPaths.includes(knownPath)
 
 export const isKnownAppPath = (path: string, knownPaths: string[] = defaultKnownPaths) =>
   knownPaths.some((knownPath) => (
     path === knownPath ||
     (canMatchChildPath(knownPath) && path.startsWith(`${knownPath}/`))
-  ))
+  )) ||
+  knownPathDynamicMatchers.some((matcher) => matcher.test(path))
 
 export const isV4PreviewPath = (path: string) =>
   v4PreviewPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ||
@@ -155,6 +187,12 @@ export const isV4GrowthPath = (path: string) =>
 
 export const isV4KnowledgePath = (path: string) =>
   path === '/knowledge' || path.startsWith('/knowledge/')
+
+export const isV6WeeklyReportPath = (path: string) =>
+  v6WeeklyReportPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+
+export const isV9EvidenceLearningPath = (path: string) =>
+  v9EvidenceLearningPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
 
 export const isV4PreviewAccessEnabled = (enableV4Preview?: boolean) =>
   enableV4Preview === undefined
@@ -197,6 +235,23 @@ export const resolveAppRoutePath = (
     return {
       path: fallbackPath,
       unavailableReason: '目标属于个人知识库预览能力，当前已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV6WeeklyReport = options.enableV6WeeklyReport ?? appConfig.enableV6WeeklyReport
+  if (isV6WeeklyReportPath(routePath) && !enableV6WeeklyReport) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '求职周报当前未开放，已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV9EvidenceLearning =
+    options.enableV9EvidenceLearning ?? appConfig.enableV9EvidenceLearning
+  if (isV9EvidenceLearningPath(routePath) && !enableV9EvidenceLearning) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '证据资产工作台当前未开放，已回落到可用入口。',
       blockedPath: path
     }
   }

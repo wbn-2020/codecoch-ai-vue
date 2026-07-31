@@ -157,7 +157,8 @@ const handleSubmit = async () => {
 
 <style scoped lang="scss">
 .security-page {
-  gap: 20px;
+  min-width: 0;
+  gap: 16px;
 }
 
 .security-hero {
@@ -178,7 +179,7 @@ const handleSubmit = async () => {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--app-primary);
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -202,7 +203,7 @@ const handleSubmit = async () => {
 
 .section-head h2 {
   margin: 5px 0 0;
-  color: var(--app-text);
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.3;
 }
@@ -212,7 +213,7 @@ const handleSubmit = async () => {
   gap: 12px;
   margin: 16px 0 0;
   padding-left: 18px;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   line-height: 1.7;
 }
 

@@ -1,5 +1,27 @@
 <template>
   <div class="resume-editor page-shell">
+    <AppState
+      v-if="isEdit && loading"
+      class="resume-editor-state"
+      type="loading"
+      title="正在加载简历"
+      description="正在确认简历归属并加载内容，请稍候。"
+    />
+
+    <AppState
+      v-else-if="isEdit && detailError"
+      class="resume-editor-state"
+      type="error"
+      title="简历不可用"
+      :description="detailError"
+    >
+      <div class="resume-editor-state__actions">
+        <el-button @click="router.push('/resumes')">返回简历实验室</el-button>
+        <el-button type="primary" @click="fetchDetail">重试</el-button>
+      </div>
+    </AppState>
+
+    <template v-else>
     <section class="editor-hero">
       <div>
         <div class="hero-kicker">
@@ -29,22 +51,40 @@
     <div class="workspace-tabs" role="tablist" aria-label="移动端简历工作区">
       <button
         type="button"
+        role="tab"
+        id="resume-tab-edit"
+        aria-controls="resume-panel-edit"
+        :aria-selected="mobileWorkspaceTab === 'edit'"
+        :tabindex="mobileWorkspaceTab === 'edit' ? 0 : -1"
         :class="{ active: mobileWorkspaceTab === 'edit' }"
         @click="mobileWorkspaceTab = 'edit'"
+        @keydown="moveMobileWorkspaceTab($event)"
       >
         编辑
       </button>
       <button
         type="button"
+        role="tab"
+        id="resume-tab-preview"
+        aria-controls="resume-panel-preview"
+        :aria-selected="mobileWorkspaceTab === 'preview'"
+        :tabindex="mobileWorkspaceTab === 'preview' ? 0 : -1"
         :class="{ active: mobileWorkspaceTab === 'preview' }"
         @click="mobileWorkspaceTab = 'preview'"
+        @keydown="moveMobileWorkspaceTab($event)"
       >
         预览
       </button>
       <button
         type="button"
+        role="tab"
+        id="resume-tab-advice"
+        aria-controls="resume-panel-advice"
+        :aria-selected="mobileWorkspaceTab === 'advice'"
+        :tabindex="mobileWorkspaceTab === 'advice' ? 0 : -1"
         :class="{ active: mobileWorkspaceTab === 'advice' }"
         @click="mobileWorkspaceTab = 'advice'"
+        @keydown="moveMobileWorkspaceTab($event)"
       >
         AI 建议
       </button>
@@ -58,8 +98,27 @@
       </article>
     </section>
 
+    <details class="mobile-feedback-details">
+      <summary>
+        <span>实时检查</span>
+        <strong>{{ completion }}% 完整 · {{ projects.length }} 段项目</strong>
+      </summary>
+      <div>
+        <article v-for="item in liveFeedbackItems" :key="`mobile-${item.title}`">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.desc }}</p>
+        </article>
+      </div>
+    </details>
+
     <div :class="['editor-workspace', `is-mobile-${mobileWorkspaceTab}`]">
-      <main class="editor-column editor-main mobile-pane-edit">
+      <main
+        id="resume-panel-edit"
+        class="editor-column editor-main mobile-pane-edit"
+        role="tabpanel"
+        aria-labelledby="resume-tab-edit"
+      >
         <section class="content-card side-panel ai-writing-card">
           <div class="panel-kicker">
             <Sparkles :size="15" />
@@ -265,79 +324,106 @@
         </section>
       </main>
 
-      <section class="preview-column content-card mobile-pane-preview">
+      <section
+        id="resume-panel-preview"
+        class="preview-column content-card mobile-pane-preview"
+        role="tabpanel"
+        aria-labelledby="resume-tab-preview"
+      >
         <div class="preview-toolbar">
           <div>
-            <h2>A4 简历预览</h2>
-            <p>基于当前表单字段实时渲染，不代表最终 PDF 样式。</p>
+            <h2>简历成品预览</h2>
+            <p>模板选择会同步到下方 ATS 导出工作台；未保存内容仍需先保存后才能生成正式文件。</p>
           </div>
-          <el-tag effect="plain">{{ isEdit ? '编辑中' : '草稿' }}</el-tag>
+          <div class="preview-toolbar__status">
+            <el-tag :type="hasUnsavedResumeChanges ? 'warning' : 'success'" effect="plain">
+              {{ !isEdit ? '未保存草稿' : hasUnsavedResumeChanges ? '存在未保存改动' : '已同步保存内容' }}
+            </el-tag>
+          </div>
         </div>
-        <div class="resume-paper-wrap">
-          <article class="resume-paper">
-            <header class="paper-header">
-              <h2>{{ previewName }}</h2>
-              <p v-if="form.targetPosition">{{ form.targetPosition }}</p>
-              <div v-if="contactItems.length" class="paper-contact">
-                <span v-for="item in contactItems" :key="item">{{ item }}</span>
+
+        <div class="preview-customizer">
+          <div class="template-selector" role="radiogroup" aria-label="选择简历模板">
+            <button
+              v-for="template in resumeTemplateOptions"
+              :key="template.code"
+              type="button"
+              role="radio"
+              :aria-checked="selectedResumeTemplateCode === template.code"
+              :tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"
+              :class="{ active: selectedResumeTemplateCode === template.code }"
+              @click="selectedResumeTemplateCode = template.code"
+              @keydown="moveTemplateSelection($event)"
+            >
+              <span class="template-thumb" :class="`is-${template.className}`">
+                <i></i><i></i><i></i>
+              </span>
+              <span>
+                <strong>{{ template.name }}</strong>
+                <small>{{ template.description }}</small>
+              </span>
+              <CheckCircle2 v-if="selectedResumeTemplateCode === template.code" :size="16" />
+            </button>
+          </div>
+
+          <div class="preview-controls">
+            <div class="accent-control">
+              <span>编辑预览色</span>
+              <div class="accent-swatches" role="radiogroup" aria-label="选择编辑预览强调色">
+                <button
+                  v-for="option in resumeAccentOptions"
+                  :key="option.value"
+                  type="button"
+                  role="radio"
+                  :aria-label="option.label"
+                  :aria-checked="previewAccent === option.value"
+                  :tabindex="previewAccent === option.value ? 0 : -1"
+                  :class="[`is-${option.value}`, { active: previewAccent === option.value }]"
+                  @click="previewAccent = option.value"
+                  @keydown="moveAccentSelection($event)"
+                ></button>
               </div>
-            </header>
-
-            <section v-if="form.summary" class="paper-section">
-              <h3>个人摘要</h3>
-              <p>{{ form.summary }}</p>
-            </section>
-
-            <section v-if="form.education" class="paper-section">
-              <h3>教育经历</h3>
-              <p>{{ form.education }}</p>
-            </section>
-
-            <section v-if="form.workSummary" class="paper-section">
-              <h3>工作经历</h3>
-              <p>{{ form.workSummary }}</p>
-            </section>
-
-            <section v-if="skillTags.length" class="paper-section">
-              <h3>技术栈</h3>
-              <div class="paper-tags">
-                <span v-for="tag in skillTags" :key="tag">{{ tag }}</span>
-              </div>
-            </section>
-
-            <section v-if="projects.length" class="paper-section">
-              <h3>项目经历</h3>
-              <article v-for="project in projects" :key="project.projectId" class="paper-project">
-                <div class="paper-project__head">
-                  <strong>{{ project.projectName || '未命名项目' }}</strong>
-                  <span>{{ project.projectTime || project.projectPeriod }}</span>
-                </div>
-                <p v-if="project.role || project.responsibility">{{ project.role || project.responsibility }}</p>
-                <p v-if="project.techStack" class="paper-muted">{{ project.techStack }}</p>
-                <ul>
-                  <li v-if="project.projectBackground || project.description">
-                    {{ project.projectBackground || project.description }}
-                  </li>
-                  <li v-if="project.technicalChallenges || project.technicalDifficulties">
-                    {{ project.technicalChallenges || project.technicalDifficulties }}
-                  </li>
-                  <li v-if="project.optimizationResult || project.optimizationResults">
-                    {{ project.optimizationResult || project.optimizationResults }}
-                  </li>
-                </ul>
-              </article>
-            </section>
-
-            <div v-if="!hasPreviewContent" class="paper-empty">
-              <FolderOpen :size="30" />
-              <strong>白纸已经准备好</strong>
-              <span>先补充姓名、目标岗位、技术栈或项目经历，预览会在这里同步生成。</span>
             </div>
-          </article>
+            <div class="zoom-control" aria-label="预览缩放">
+              <button
+                type="button"
+                aria-label="缩小预览"
+                :disabled="previewZoom <= 0.72"
+                @click="changePreviewZoom(-0.08)"
+              >
+                <Minus :size="15" />
+              </button>
+              <span>{{ Math.round(previewZoom * 100) }}%</span>
+              <button
+                type="button"
+                aria-label="放大预览"
+                :disabled="previewZoom >= 1.12"
+                @click="changePreviewZoom(0.08)"
+              >
+                <Plus :size="15" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="resume-paper-wrap">
+          <div class="resume-paper-stage" :style="{ zoom: previewZoom }">
+            <ResumeDocumentPreview
+              :draft="resumeDocumentDraft"
+              :template-code="selectedResumeTemplateCode"
+              :accent="previewAccent"
+              :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+            />
+          </div>
         </div>
       </section>
 
-      <aside class="editor-column editor-aside mobile-pane-advice">
+      <aside
+        id="resume-panel-advice"
+        class="editor-column editor-aside mobile-pane-advice"
+        role="tabpanel"
+        aria-labelledby="resume-tab-advice"
+      >
         <section class="content-card side-panel readiness-panel">
           <div class="completion-head">
             <span>简历完整度</span>
@@ -555,6 +641,16 @@
       </aside>
     </div>
 
+    <ResumeDeliveryWorkbench
+      v-if="isEdit"
+      :resume-id="resumeId || undefined"
+      :preferred-template-code="selectedResumeTemplateCode"
+      :refresh-key="deliveryRefreshKey"
+      :has-unsaved-changes="hasUnsavedResumeChanges"
+      @resume-version-applied="reloadCurrentResume"
+      @template-change="selectedResumeTemplateCode = $event"
+    />
+
     <el-dialog
       v-model="projectDialogVisible"
       :title="editingProjectId ? '编辑项目经历' : '新增项目经历'"
@@ -567,6 +663,7 @@
         <el-button type="primary" :loading="projectSaving" @click="handleSaveProject">保存项目</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -582,12 +679,13 @@ import {
   GitCompareArrows,
   Layers3,
   MessagesSquare,
+  Minus,
   Plus,
   Save,
   Sparkles,
   UserRound
 } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -603,7 +701,16 @@ import {
   updateResumeApi,
   updateResumeProjectApi
 } from '@/api/resume'
+import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
+import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
+import {
+  resumeTemplateOptions,
+  type ResumeAccent,
+  type ResumeTemplateCode
+} from '@/features/resume-document'
+import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
+import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import type {
   ResumeCreateDTO,
   ResumeDetailVO,
@@ -615,6 +722,7 @@ import type {
   ResumeProjectDTO,
   ResumeProjectVO
 } from '@/types/resume'
+import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
@@ -631,6 +739,7 @@ const routeTargetJobId = computed(() => {
 })
 
 const loading = ref(false)
+const detailError = ref('')
 const saving = ref(false)
 const projectSaving = ref(false)
 const optimizing = ref(false)
@@ -650,8 +759,78 @@ const optimizeSseStatus = ref('未开始')
 const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
 const mobileWorkspaceTab = ref<'edit' | 'preview' | 'advice'>('edit')
+const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
+const previewAccent = ref<ResumeAccent>('ocean')
+const previewZoom = ref(0.88)
+const deliveryRefreshKey = ref(0)
+let resumeLoadGeneration = 0
+let resumeSaveOperationGeneration = 0
+let projectWriteOperationGeneration = 0
+const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
+  { value: 'ocean', label: '海洋蓝' },
+  { value: 'teal', label: '青绿色' },
+  { value: 'graphite', label: '石墨灰' },
+  { value: 'berry', label: '莓红色' }
+]
+const mobileWorkspaceTabs = ['edit', 'preview', 'advice'] as const
 
-const form = reactive<ResumeCreateDTO>({
+const moveRovingSelection = <T>(
+  event: KeyboardEvent,
+  values: readonly T[],
+  currentValue: T,
+  select: (value: T) => void
+) => {
+  const currentIndex = values.indexOf(currentValue)
+  if (currentIndex < 0) return
+
+  let nextIndex = currentIndex
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    nextIndex = (currentIndex + 1) % values.length
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    nextIndex = (currentIndex - 1 + values.length) % values.length
+  } else if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = values.length - 1
+  } else {
+    return
+  }
+
+  event.preventDefault()
+  select(values[nextIndex])
+  void nextTick(() => {
+    const buttons = event.currentTarget instanceof HTMLElement
+      ? Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button') || [])
+      : []
+    buttons[nextIndex]?.focus()
+  })
+}
+
+const moveMobileWorkspaceTab = (event: KeyboardEvent) =>
+  moveRovingSelection(
+    event,
+    mobileWorkspaceTabs,
+    mobileWorkspaceTab.value,
+    (value) => { mobileWorkspaceTab.value = value }
+  )
+
+const moveTemplateSelection = (event: KeyboardEvent) =>
+  moveRovingSelection(
+    event,
+    resumeTemplateOptions.map((item) => item.code),
+    selectedResumeTemplateCode.value,
+    (value) => { selectedResumeTemplateCode.value = value }
+  )
+
+const moveAccentSelection = (event: KeyboardEvent) =>
+  moveRovingSelection(
+    event,
+    resumeAccentOptions.map((item) => item.value),
+    previewAccent.value,
+    (value) => { previewAccent.value = value }
+  )
+
+const createDefaultResumeForm = (): ResumeCreateDTO => ({
   resumeName: '',
   realName: '',
   email: '',
@@ -664,11 +843,15 @@ const form = reactive<ResumeCreateDTO>({
   isDefault: 0
 })
 
-const optimizeForm = reactive<ResumeOptimizeRequestDTO>({
+const createDefaultOptimizeForm = (): ResumeOptimizeRequestDTO => ({
   targetPosition: '',
   experienceYears: undefined,
   industryDirection: ''
 })
+
+const form = reactive<ResumeCreateDTO>(createDefaultResumeForm())
+
+const optimizeForm = reactive<ResumeOptimizeRequestDTO>(createDefaultOptimizeForm())
 
 const rules: FormRules<ResumeCreateDTO> = {
   resumeName: [{ required: true, message: '请输入简历名称', trigger: 'blur' }],
@@ -699,8 +882,6 @@ const sectionNavItems = computed(() => [
   { id: 'resume-projects', label: '项目经历', done: projects.value.length > 0 }
 ])
 
-const previewName = computed(() => form.realName || form.resumeName || '未命名简历')
-
 const splitTextTags = (value?: string) =>
   (value || '')
     .split(/[，,、\n/|]+/)
@@ -709,16 +890,9 @@ const splitTextTags = (value?: string) =>
 
 const skillTags = computed(() => splitTextTags(form.skills).slice(0, 18))
 
-const contactItems = computed(() =>
-  [form.phone, form.email]
-    .map((item) => item?.trim())
-    .filter((item): item is string => Boolean(item))
-)
-
 const hasPreviewContent = computed(() =>
   Boolean(
     form.realName ||
-    form.resumeName ||
     form.targetPosition ||
     form.summary ||
     form.education ||
@@ -727,6 +901,75 @@ const hasPreviewContent = computed(() =>
     projects.value.length
   )
 )
+
+const resumeDeliveryDraft = computed<ResumeDeliveryDraft>(() => ({
+  title: form.resumeName,
+  realName: form.realName,
+  email: form.email,
+  phone: form.phone,
+  targetPosition: form.targetPosition,
+  summary: form.summary,
+  skillStack: form.skills,
+  workExperience: form.workSummary,
+  educationExperience: form.education,
+  projects: projects.value
+}))
+
+const resumeDocumentDraft = computed(() => ({
+  ...resumeDeliveryDraft.value,
+  resumeName: form.resumeName
+}))
+const savedResumeSignature = ref('')
+const resumeDraftSignature = computed(() => JSON.stringify(resumeDeliveryDraft.value))
+const hasUnsavedResumeChanges = computed(() =>
+  isEdit.value
+  && (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
+)
+
+const previewPreferenceKey = computed(() =>
+  `codecoachai:resume-preview:${resumeId.value || 'draft'}`
+)
+
+const loadPreviewPreferences = () => {
+  try {
+    const raw = window.localStorage.getItem(previewPreferenceKey.value)
+    if (!raw) return
+    const preference = JSON.parse(raw) as {
+      templateCode?: ResumeTemplateCode
+      accent?: ResumeAccent
+      zoom?: number
+    }
+    if (resumeTemplateOptions.some((item) => item.code === preference.templateCode)) {
+      selectedResumeTemplateCode.value = preference.templateCode as ResumeTemplateCode
+    }
+    if (resumeAccentOptions.some((item) => item.value === preference.accent)) {
+      previewAccent.value = preference.accent as ResumeAccent
+    }
+    if (typeof preference.zoom === 'number' && Number.isFinite(preference.zoom)) {
+      previewZoom.value = Math.min(1.12, Math.max(0.72, preference.zoom))
+    }
+  } catch {
+    // A corrupt local preference must never block editing.
+  }
+}
+
+const persistPreviewPreferences = () => {
+  try {
+    window.localStorage.setItem(previewPreferenceKey.value, JSON.stringify({
+      templateCode: selectedResumeTemplateCode.value,
+      accent: previewAccent.value,
+      zoom: previewZoom.value
+    }))
+  } catch {
+    // Private browsing or storage limits should not affect the editor.
+  }
+}
+
+const changePreviewZoom = (delta: number) => {
+  previewZoom.value = Math.round(
+    Math.min(1.12, Math.max(0.72, previewZoom.value + delta)) * 100
+  ) / 100
+}
 
 const projectsWithResult = computed(() =>
   projects.value.filter((project) => Boolean(project.optimizationResult || project.optimizationResults)).length
@@ -915,22 +1158,23 @@ const toProjectDraft = (payload: ResumeProjectDTO, projectId: number): ResumePro
   sortOrder: payload.sortOrder ?? payload.sort ?? 0
 })
 
-const persistDraftProjects = async (createdResumeId: number) => {
-  const draftProjects = projects.value.filter((project) => project.projectId < 0)
-  if (!draftProjects.length) return
-
+const persistDraftProjects = async (
+  createdResumeId: number,
+  draftProjects: ResumeProjectVO[],
+  isCurrentOperation: () => boolean
+) => {
   let failedCount = 0
   for (const project of draftProjects) {
+    if (!isCurrentOperation()) {
+      return { failedCount, stale: true }
+    }
     try {
       await createResumeProjectApi(createdResumeId, project)
     } catch {
       failedCount++
     }
   }
-
-  if (failedCount) {
-    ElMessage.warning(`简历已创建，${failedCount} 条项目草稿保存失败，请在编辑页补充。`)
-  }
+  return { failedCount, stale: !isCurrentOperation() }
 }
 
 const selectAllOptimizeSuggestions = () => {
@@ -944,6 +1188,42 @@ const getSelectedOptimizeSuggestions = () =>
       index,
       item: optimizeSuggestions.value[index]
     }))
+
+const isCurrentResumeRoute = (
+  requestGeneration: number,
+  targetResumeId: number | null
+) => (
+  requestGeneration === resumeLoadGeneration
+  && targetResumeId === resumeId.value
+)
+
+const resetRouteState = () => {
+  Object.assign(form, createDefaultResumeForm())
+  Object.assign(optimizeForm, createDefaultOptimizeForm())
+  projectDialogVisible.value = false
+  editingProjectId.value = null
+  editingProject.value = null
+  projects.value = []
+  optimizeRecords.value = []
+  optimizeDetail.value = null
+  selectedOptimizeSuggestionIndexes.value = []
+  optimizeSseEvents.value = []
+  optimizeSseMessage.value = ''
+  optimizeSseStatus.value = '未开始'
+  optimizeTask.value = null
+  optimizeRecordsRefreshing.value = false
+  optimizing.value = false
+  applyingOptimize.value = false
+  mobileWorkspaceTab.value = 'edit'
+  selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
+  previewAccent.value = 'ocean'
+  previewZoom.value = 0.88
+  savedResumeSignature.value = ''
+  detailError.value = ''
+  loading.value = false
+  deliveryRefreshKey.value += 1
+  void nextTick(() => formRef.value?.clearValidate?.())
+}
 
 const applyDetail = (detail: ResumeDetailVO) => {
   Object.assign(form, {
@@ -962,18 +1242,26 @@ const applyDetail = (detail: ResumeDetailVO) => {
     optimizeForm.targetPosition = detail.targetPosition || ''
   }
   projects.value = detail.projects || []
+  savedResumeSignature.value = resumeDraftSignature.value
 }
 
-const fetchDetail = async () => {
-  if (!resumeId.value) return
+const fetchDetail = async (targetResumeId: number, requestGeneration: number) => {
   loading.value = true
+  detailError.value = ''
   try {
-    applyDetail(await getResumeDetailApi(resumeId.value))
-    await fetchOptimizeRecords()
+    const nextDetail = await getResumeDetailApi(targetResumeId)
+    if (requestGeneration !== resumeLoadGeneration) return
+    applyDetail(nextDetail)
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '简历详情加载失败，请返回我的简历重试。'))
+    if (requestGeneration === resumeLoadGeneration) {
+      detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历实验室重试。')
+      ElMessage.error(detailError.value)
+    }
   } finally {
-    loading.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      loading.value = false
+    }
   }
 }
 
@@ -986,36 +1274,60 @@ const optimizeStatusText = (status?: string) => {
   return status ? map[status] || '状态待确认' : '暂无记录'
 }
 
-const fetchOptimizeRecords = async () => {
-  if (!resumeId.value) return
+const fetchOptimizeRecords = async (
+  targetResumeId: number,
+  requestGeneration = resumeLoadGeneration
+) => {
   try {
-    optimizeRecords.value = await getResumeOptimizeRecordsApi(resumeId.value)
-    if (!optimizeDetail.value && optimizeRecords.value[0]) {
-      optimizeDetail.value = await getResumeOptimizeResultApi(optimizeRecords.value[0].optimizeRecordId)
+    const nextRecords = await getResumeOptimizeRecordsApi(targetResumeId)
+    if (requestGeneration !== resumeLoadGeneration) return
+    optimizeRecords.value = nextRecords
+    if (!optimizeDetail.value && nextRecords[0]) {
+      const nextOptimizeDetail = await getResumeOptimizeResultApi(nextRecords[0].optimizeRecordId)
+      if (requestGeneration !== resumeLoadGeneration) return
+      optimizeDetail.value = nextOptimizeDetail
       selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
     }
   } catch {
-    optimizeRecords.value = []
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeRecords.value = []
+    }
   }
 }
 
 const openOptimizeDetail = async (recordId: number) => {
-  optimizeDetail.value = await getResumeOptimizeResultApi(recordId)
+  const requestGeneration = resumeLoadGeneration
+  const nextOptimizeDetail = await getResumeOptimizeResultApi(recordId)
+  if (requestGeneration !== resumeLoadGeneration) return
+  optimizeDetail.value = nextOptimizeDetail
   selectedOptimizeSuggestionIndexes.value = optimizeSuggestions.value.map((_, index) => index)
 }
 
 const refreshOptimizeRecords = async () => {
+  const targetResumeId = resumeId.value
+  if (!targetResumeId) return
+  const requestGeneration = resumeLoadGeneration
   optimizeRecordsRefreshing.value = true
   try {
-    await fetchOptimizeRecords()
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
+    if (requestGeneration !== resumeLoadGeneration) return
     if (latestOptimizeRecord.value) {
       ElMessage.success('最近记录已刷新')
     } else {
       ElMessage.info('暂未发现新的建议记录')
     }
   } finally {
-    optimizeRecordsRefreshing.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeRecordsRefreshing.value = false
+    }
   }
+}
+
+const reloadCurrentResume = async () => {
+  const targetResumeId = resumeId.value
+  if (!targetResumeId) return
+  const requestGeneration = resumeLoadGeneration
+  await fetchDetail(targetResumeId, requestGeneration)
 }
 
 const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
@@ -1026,11 +1338,15 @@ const buildOptimizePayload = (): ResumeOptimizeRequestDTO => ({
   selectedProjectIds: projects.value.map((project) => project.projectId).filter(Boolean)
 })
 
-const runSyncOptimizeFallback = async () => {
-  if (!resumeId.value) return
+const runSyncOptimizeFallback = async (
+  targetResumeId: number,
+  requestGeneration: number,
+  payload: ResumeOptimizeRequestDTO
+) => {
   optimizeSseStatus.value = '普通生成'
   optimizeSseMessage.value = '生成进度暂时不可用，系统会继续生成建议，稍后可刷新最近记录查看。'
-  const result = await optimizeResumeApi(resumeId.value, buildOptimizePayload())
+  const result = await optimizeResumeApi(targetResumeId, payload)
+  if (requestGeneration !== resumeLoadGeneration) return
   if (hasOptimizeAsyncReceipt(result)) {
     optimizeTask.value = result
     optimizeSseStatus.value = '已提交'
@@ -1041,7 +1357,7 @@ const runSyncOptimizeFallback = async () => {
       message: '建议已开始生成'
     }]
     ElMessage.success('建议已开始生成')
-    await fetchOptimizeRecords()
+    await fetchOptimizeRecords(targetResumeId, requestGeneration)
     return
   }
   if (result.optimizeStatus === 'FAILED') {
@@ -1049,7 +1365,8 @@ const runSyncOptimizeFallback = async () => {
   } else {
     ElMessage.success('建议已生成')
   }
-  await fetchOptimizeRecords()
+  await fetchOptimizeRecords(targetResumeId, requestGeneration)
+  if (requestGeneration !== resumeLoadGeneration) return
   if (result.optimizeRecordId) {
     await openOptimizeDetail(result.optimizeRecordId)
   }
@@ -1069,7 +1386,10 @@ const optimizeSseTypeLabel = (type?: string) => {
 }
 
 const handleOptimizeResume = async () => {
-  if (!resumeId.value || optimizing.value) return
+  const targetResumeId = resumeId.value
+  if (!targetResumeId || optimizing.value) return
+  const requestGeneration = resumeLoadGeneration
+  const payload = buildOptimizePayload()
   optimizing.value = true
   optimizeSseEvents.value = []
   optimizeSseMessage.value = '正在启动建议生成进度。'
@@ -1077,13 +1397,17 @@ const handleOptimizeResume = async () => {
   optimizeTask.value = null
 
   try {
-    await runSyncOptimizeFallback()
+    await runSyncOptimizeFallback(targetResumeId, requestGeneration, payload)
   } catch (error) {
-    optimizeSseStatus.value = '提交失败'
-    optimizeSseMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后重新生成。')
-    ElMessage.error(optimizeSseMessage.value)
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizeSseStatus.value = '提交失败'
+      optimizeSseMessage.value = getErrorMessage(error, '建议任务提交失败，可以刷新最近记录，或稍后重新生成。')
+      ElMessage.error(optimizeSseMessage.value)
+    }
   } finally {
-    optimizing.value = false
+    if (requestGeneration === resumeLoadGeneration) {
+      optimizing.value = false
+    }
   }
 }
 
@@ -1128,40 +1452,105 @@ const handleApplyOptimizeResult = async () => {
     if (result.newResumeId) {
       await router.push(`/resumes/${result.newResumeId}/edit`)
     } else {
-      await fetchDetail()
+      await reloadCurrentResume()
     }
   } finally {
     applyingOptimize.value = false
   }
 }
 
-const handleSave = async () => {
-  if (!formRef.value) return
+const ensureStableVersionAfterSave = async (
+  savedResumeId: number,
+  forceCreate: boolean,
+  isCurrentOperation: () => boolean
+) => {
   try {
-    await formRef.value.validate()
+    if (!isCurrentOperation()) return null
+    const shouldCreate = forceCreate
+      || (await getResumeVersionsApi(savedResumeId)).length === 0
+    if (!isCurrentOperation()) return null
+    if (shouldCreate) {
+      await createResumeVersionApi(savedResumeId, { sourceType: 'MANUAL_SAVE' })
+      if (!isCurrentOperation()) return null
+    }
+    return true
   } catch {
-    return
+    if (!isCurrentOperation()) return null
+    ElMessage.warning('简历已保存，但稳定版本生成失败。请刷新后重试，正式导出仍会使用最近一次稳定版本。')
+    return false
   }
+}
+
+const handleSave = async () => {
+  if (saving.value || !formRef.value) return
+  const operationGeneration = ++resumeSaveOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const editingResumeId = resumeId.value
+  const formSnapshot: ResumeCreateDTO = { ...form }
+  const draftProjectsSnapshot = projects.value
+    .filter((project) => project.projectId < 0)
+    .map((project) => ({ ...project }))
+  const shouldCreateVersion = hasUnsavedResumeChanges.value
+  const isCurrentOperation = () => (
+    operationGeneration === resumeSaveOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, editingResumeId)
+  )
+
   saving.value = true
   try {
-    if (resumeId.value) {
-      await updateResumeApi(resumeId.value, form)
-      if (form.isDefault === 1) {
-        await setDefaultResumeApi(resumeId.value)
+    try {
+      await formRef.value.validate()
+    } catch {
+      return
+    }
+    if (!isCurrentOperation()) return
+
+    if (editingResumeId) {
+      await updateResumeApi(editingResumeId, formSnapshot)
+      if (!isCurrentOperation()) return
+      if (formSnapshot.isDefault === 1) {
+        await setDefaultResumeApi(editingResumeId)
+        if (!isCurrentOperation()) return
       }
-      ElMessage.success('简历已保存')
-      await fetchDetail()
+      const stableVersionReady = await ensureStableVersionAfterSave(
+        editingResumeId,
+        shouldCreateVersion,
+        isCurrentOperation
+      )
+      if (stableVersionReady === null || !isCurrentOperation()) return
+      ElMessage.success(stableVersionReady ? '简历与稳定版本已保存' : '简历已保存')
+      await reloadCurrentResume()
+      if (!isCurrentOperation()) return
+      deliveryRefreshKey.value += 1
     } else {
-      const created = await createResumeApi(form)
-      await persistDraftProjects(created.id)
-      if (form.isDefault === 1) {
-        await setDefaultResumeApi(created.id)
+      const created = await createResumeApi(formSnapshot)
+      if (!isCurrentOperation()) return
+      const projectResult = await persistDraftProjects(
+        created.id,
+        draftProjectsSnapshot,
+        isCurrentOperation
+      )
+      if (projectResult.stale || !isCurrentOperation()) return
+      if (projectResult.failedCount) {
+        ElMessage.warning(`简历已创建，${projectResult.failedCount} 条项目草稿保存失败，请在编辑页补充。`)
       }
-      ElMessage.success('简历已创建')
+      if (formSnapshot.isDefault === 1) {
+        await setDefaultResumeApi(created.id)
+        if (!isCurrentOperation()) return
+      }
+      const stableVersionReady = await ensureStableVersionAfterSave(
+        created.id,
+        true,
+        isCurrentOperation
+      )
+      if (stableVersionReady === null || !isCurrentOperation()) return
+      ElMessage.success(stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建')
       await router.replace(`/resumes/${created.id}/edit`)
     }
   } finally {
-    saving.value = false
+    if (operationGeneration === resumeSaveOperationGeneration) {
+      saving.value = false
+    }
   }
 }
 
@@ -1183,19 +1572,31 @@ const openProjectEvidenceCreate = (project: ResumeProjectVO) => {
 }
 
 const handleSaveProject = async () => {
-  if (!projectFormRef.value) return
-  const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
-  if (!payload) return
+  if (projectSaving.value || !projectFormRef.value) return
+  const operationGeneration = ++projectWriteOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const targetResumeId = resumeId.value
+  const targetProjectId = editingProjectId.value
+  const projectsSnapshot = projects.value.map((project) => ({ ...project }))
+  const isCurrentOperation = () => (
+    operationGeneration === projectWriteOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, targetResumeId)
+  )
+
   projectSaving.value = true
   try {
+    const payload = (await projectFormRef.value.validate().catch(() => false)) as ResumeProjectDTO | false
+    if (!payload || !isCurrentOperation()) return
     const projectPayload = { ...payload }
-    if (!resumeId.value) {
-      const projectId = editingProjectId.value || -Date.now()
+    if (!targetResumeId) {
+      const projectId = targetProjectId || -Date.now()
       const draftProject = toProjectDraft(projectPayload, projectId)
-      if (editingProjectId.value) {
-        projects.value = projects.value.map((project) => project.projectId === editingProjectId.value ? draftProject : project)
+      if (targetProjectId) {
+        projects.value = projectsSnapshot.map((project) => (
+          project.projectId === targetProjectId ? draftProject : project
+        ))
       } else {
-        projects.value = [...projects.value, draftProject]
+        projects.value = [...projectsSnapshot, draftProject]
       }
       ElMessage.success('项目草稿已加入，保存简历后会一起创建')
       projectDialogVisible.value = false
@@ -1203,98 +1604,163 @@ const handleSaveProject = async () => {
       editingProject.value = null
       return
     }
-    if (editingProjectId.value) {
-      await updateResumeProjectApi(resumeId.value, editingProjectId.value, projectPayload)
+    if (targetProjectId) {
+      await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
     } else {
-      await createResumeProjectApi(resumeId.value, projectPayload)
+      await createResumeProjectApi(targetResumeId, projectPayload)
     }
+    if (!isCurrentOperation()) return
     ElMessage.success('项目经历已保存')
     projectDialogVisible.value = false
     editingProjectId.value = null
     editingProject.value = null
-    await fetchDetail()
+    await reloadCurrentResume()
   } catch (err) {
-    ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
+    if (isCurrentOperation()) {
+      ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
+    }
   } finally {
-    projectSaving.value = false
+    if (operationGeneration === projectWriteOperationGeneration) {
+      projectSaving.value = false
+    }
   }
 }
 
 const handleDeleteProject = async (project: ResumeProjectVO) => {
-  if (!resumeId.value) {
-    projects.value = projects.value.filter((item) => item.projectId !== project.projectId)
+  if (projectSaving.value) return
+  const operationGeneration = ++projectWriteOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const targetResumeId = resumeId.value
+  const projectSnapshot = { ...project }
+  const projectsSnapshot = projects.value.map((item) => ({ ...item }))
+  const isCurrentOperation = () => (
+    operationGeneration === projectWriteOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, targetResumeId)
+  )
+
+  if (!targetResumeId) {
+    if (!isCurrentOperation()) return
+    projects.value = projectsSnapshot.filter((item) => item.projectId !== projectSnapshot.projectId)
     ElMessage.success('项目草稿已移除')
     return
   }
-  const confirmed = await confirmDangerActionPreview({
-    title: '删除项目经历',
-    action: '删除该简历中的项目经历',
-    target: project.projectName || '项目经历',
-    impact: '该项目经历会从当前简历中移除，后续简历匹配、面试追问和推荐任务将不再把它作为证据。',
-    rollback: '系统不会自动恢复已删除项目；如误删，需要重新录入项目经历。',
-    audit: '删除操作会记录当前账号、简历和项目经历。',
-    tips: ['确认这段项目经历不再用于证明目标岗位能力。', '确认删除后仍有足够项目证据支撑简历。'],
-    confirmButtonText: '确认删除'
-  })
-  if (!confirmed) return
-  await deleteResumeProjectApi(resumeId.value, project.projectId)
-  ElMessage.success('项目经历已删除')
-  await fetchDetail()
+  projectSaving.value = true
+  try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '删除项目经历',
+      action: '删除该简历中的项目经历',
+      target: projectSnapshot.projectName || '项目经历',
+      impact: '该项目经历会从当前简历中移除，后续简历匹配、面试追问和推荐任务将不再把它作为证据。',
+      rollback: '系统不会自动恢复已删除项目；如误删，需要重新录入项目经历。',
+      audit: '删除操作会记录当前账号、简历和项目经历。',
+      tips: ['确认这段项目经历不再用于证明目标岗位能力。', '确认删除后仍有足够项目证据支撑简历。'],
+      confirmButtonText: '确认删除'
+    })
+    if (!confirmed || !isCurrentOperation()) return
+    await deleteResumeProjectApi(targetResumeId, projectSnapshot.projectId)
+    if (!isCurrentOperation()) return
+    ElMessage.success('项目经历已删除')
+    await reloadCurrentResume()
+  } finally {
+    if (operationGeneration === projectWriteOperationGeneration) {
+      projectSaving.value = false
+    }
+  }
 }
 
-onMounted(fetchDetail)
+watch(
+  [selectedResumeTemplateCode, previewAccent, previewZoom],
+  persistPreviewPreferences
+)
+
+watch(
+  resumeId,
+  (nextResumeId) => {
+    const requestGeneration = ++resumeLoadGeneration
+    resetRouteState()
+    loadPreviewPreferences()
+    if (!nextResumeId) return
+    loading.value = true
+    void fetchDetail(nextResumeId, requestGeneration)
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  resumeLoadGeneration += 1
+  resumeSaveOperationGeneration += 1
+  projectWriteOperationGeneration += 1
+})
 </script>
 
 <style scoped lang="scss">
 .resume-editor {
-  --resume-bg: #0f172a;
-  --resume-surface: rgba(255, 255, 255, 0.94);
-  --resume-surface-soft: #f8fafc;
-  --resume-border: rgba(148, 163, 184, 0.24);
-  --resume-border-strong: rgba(37, 99, 235, 0.32);
-  --resume-text: #101828;
-  --resume-muted: #667085;
-  --resume-subtle: #98a2b3;
-  --resume-primary: #2563eb;
-  --resume-ai: #a78bfa;
-  --resume-success: #16a34a;
-  --resume-warning: #d97706;
-  --resume-danger: #dc2626;
-  gap: 20px;
+  --resume-template-paper: #ffffff;
+  --resume-paper-border: #d4dbe4;
+  --resume-paper-line: #9aa7b5;
+  --resume-paper-ocean: #1779a7;
+  --resume-paper-teal: #0b7669;
+  --resume-paper-graphite: #3f4b59;
+  --resume-paper-berry: #a23b55;
+  --resume-paper-project: #255da8;
+  --resume-paper-project-soft: #eef4fb;
+  --resume-preview-top: 84px;
+  --resume-preview-bottom-gap: max(16px, env(safe-area-inset-bottom, 0px));
+  --resume-preview-viewport-height: calc(100dvh - var(--resume-preview-top) - var(--resume-preview-bottom-gap));
+  --resume-surface: var(--user-surface);
+  --resume-surface-soft: var(--user-surface-muted);
+  --resume-border: var(--user-border);
+  --resume-border-strong: var(--user-primary-border);
+  --resume-text: var(--user-text);
+  --resume-muted: var(--user-text-muted);
+  --resume-subtle: var(--user-text-subtle);
+  --resume-primary: var(--user-primary);
+  --resume-ai: var(--user-ai);
+  --resume-success: var(--user-success);
+  --resume-warning: var(--user-warning);
+  --resume-danger: var(--user-danger);
+  gap: var(--user-space-4);
+  min-width: 0;
   min-height: 100%;
-  padding: 24px;
   color: var(--resume-text);
-  background:
-    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.18), transparent 28%),
-    radial-gradient(circle at 96% 10%, rgba(20, 184, 166, 0.14), transparent 26%),
-    linear-gradient(180deg, #f6f8fc 0%, #eef4ff 42%, #f7f9fc 100%);
+  background: transparent;
+}
+
+.resume-editor-state {
+  padding-block: 64px;
+}
+
+.resume-editor-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .editor-hero {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 24px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(16, 24, 40, 0.96), rgba(30, 64, 175, 0.92)),
-    #101828;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+  gap: var(--user-space-4);
+  padding: 18px 20px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
 
   h1 {
-    margin: 12px 0 0;
-    color: #ffffff;
-    font-size: 30px;
+    margin: 7px 0 0;
+    color: var(--user-text);
+    font-size: 26px;
     letter-spacing: 0;
+    line-height: 1.25;
   }
 
   p {
     max-width: 680px;
-    margin: 10px 0 0;
-    color: rgba(255, 255, 255, 0.76);
-    line-height: 1.7;
+    margin: 7px 0 0;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.6;
   }
 }
 
@@ -1324,24 +1790,23 @@ onMounted(fetchDetail)
 
 .hero-kicker {
   gap: 8px;
-  color: #bfdbfe;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .hero-status {
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+  margin-top: 12px;
 
   span {
-    padding: 6px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 4px 8px;
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #e0f2fe;
+    background: var(--user-control-bg);
+    color: var(--user-text-secondary);
     font-size: 12px;
-    font-weight: 700;
   }
 }
 
@@ -1359,7 +1824,7 @@ onMounted(fetchDetail)
   padding: 6px;
   border: 1px solid var(--resume-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface);
 
   button {
     flex: 1 0 auto;
@@ -1375,38 +1840,40 @@ onMounted(fetchDetail)
 
     &.active {
       background: var(--resume-primary);
-      color: #ffffff;
+      color: var(--user-primary-contrast);
       font-weight: 700;
     }
   }
 }
 
+.mobile-feedback-details {
+  display: none;
+}
+
 .live-feedback-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 14px 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface-muted);
 
   article {
     min-width: 0;
-    padding: 14px;
-    border: 1px solid var(--resume-border);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.82);
+    padding: 12px 14px;
+    border-right: 1px solid var(--user-border);
 
-    &.is-good {
-      border-color: rgba(22, 163, 74, 0.18);
-      background: linear-gradient(180deg, #f0fdf4, #ffffff);
+    &:last-child {
+      border-right: 0;
     }
 
-    &.is-warning {
-      border-color: rgba(245, 158, 11, 0.24);
-      background: linear-gradient(180deg, #fffbeb, #ffffff);
+    &.is-good span {
+      color: var(--user-success);
     }
 
-    &.is-waiting {
-      border-color: rgba(37, 99, 235, 0.16);
-      background: linear-gradient(180deg, #eff6ff, #ffffff);
+    &.is-warning span {
+      color: var(--user-warning);
     }
   }
 
@@ -1418,48 +1885,59 @@ onMounted(fetchDetail)
   }
 
   span {
-    color: var(--resume-primary);
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 700;
   }
 
   strong {
-    margin-top: 6px;
+    margin-top: 4px;
     color: var(--resume-text);
     line-height: 1.45;
   }
 
   p {
-    margin: 6px 0 0;
+    margin: 4px 0 0;
     color: var(--resume-muted);
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 
 .editor-workspace {
   display: grid;
-  grid-template-columns: minmax(340px, 430px) minmax(480px, 1fr) minmax(300px, 350px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 1.05fr);
+  gap: var(--user-space-4);
   align-items: start;
-  margin-top: 16px;
-}
-
-.editor-column,
-.editor-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
   min-width: 0;
 }
 
+.editor-column {
+  gap: var(--user-space-3);
+  min-width: 0;
+}
+
+.editor-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editor-main > .edit-card,
+.editor-main > .project-section {
+  grid-column: 1 / -1;
+}
+
 .editor-aside {
-  position: sticky;
-  top: 84px;
+  position: static;
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
 }
 
 .editor-section {
-  padding: 22px;
+  padding: var(--user-space-4);
 }
 
 .content-card,
@@ -1468,7 +1946,7 @@ onMounted(fetchDetail)
   border: 1px solid var(--resume-border);
   border-radius: 8px;
   background: var(--resume-surface);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  box-shadow: none;
 }
 
 .panel-kicker {
@@ -1481,10 +1959,8 @@ onMounted(fetchDetail)
 }
 
 .ai-writing-card {
-  border-color: rgba(124, 58, 237, 0.2);
-  background:
-    linear-gradient(180deg, rgba(124, 58, 237, 0.1), rgba(255, 255, 255, 0) 56%),
-    #ffffff;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
 }
 
 .prompt-list,
@@ -1493,8 +1969,8 @@ onMounted(fetchDetail)
 .evidence-list,
 .gap-list {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .prompt-card,
@@ -1503,18 +1979,24 @@ onMounted(fetchDetail)
   min-width: 0;
   border: 1px solid var(--resume-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-control-bg);
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+
+  &:hover {
+    border-color: var(--user-primary-border);
+    background: var(--user-surface-raised);
+  }
 }
 
 .prompt-card {
   display: grid;
-  gap: 5px;
-  padding: 12px;
+  gap: 4px;
+  padding: 10px;
 
   span {
-    color: #7c3aed;
+    color: var(--user-ai);
     font-size: 12px;
     font-weight: 800;
   }
@@ -1539,26 +2021,26 @@ onMounted(fetchDetail)
   display: inline-flex;
   gap: 7px;
   align-items: center;
-  padding: 10px;
+  padding: 9px;
   color: var(--resume-muted);
   font-size: 12px;
   font-weight: 700;
 
   &.done {
     color: var(--resume-success);
-    background: #f0fdf4;
+    background: var(--user-success-soft);
   }
 }
 
 .section-heading {
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 14px;
 
   h2 {
     margin: 0;
     color: var(--resume-text);
-    font-size: 19px;
+    font-size: 18px;
   }
 
   p {
@@ -1570,7 +2052,7 @@ onMounted(fetchDetail)
 }
 
 .section-heading.compact {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .section-heading__left {
@@ -1581,39 +2063,37 @@ onMounted(fetchDetail)
 .section-icon {
   flex: 0 0 auto;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(37, 99, 235, 0.18);
-  border-radius: 12px;
-  background: #eff6ff;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-primary-soft);
   color: var(--resume-primary);
 }
 
 .resume-form {
   :deep(.el-form-item) {
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 }
 
 .editor-block {
-  padding: 16px;
-  border: 1px solid var(--resume-border);
-  border-radius: 8px;
-  background: var(--resume-surface-soft);
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--resume-border);
   scroll-margin-top: 92px;
 
   & + .editor-block {
-    margin-top: 14px;
+    margin-top: 4px;
   }
 }
 
 .block-head {
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 
   span {
-    color: #344054;
+    color: var(--user-text-secondary);
     font-size: 14px;
     font-weight: 800;
   }
@@ -1622,13 +2102,13 @@ onMounted(fetchDetail)
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .section-divider {
   height: 1px;
   margin: 8px 0 22px;
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--user-border);
 }
 
 .switch-line {
@@ -1651,18 +2131,16 @@ onMounted(fetchDetail)
 .project-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .project-empty {
-  padding: 42px 20px;
+  padding: 28px 18px;
   border: 1px dashed var(--resume-border-strong);
   border-radius: 8px;
   color: var(--resume-muted);
   text-align: center;
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, 0.06), rgba(255, 255, 255, 0.92)),
-    #ffffff;
+  background: var(--user-primary-faint);
 
   h3 {
     margin: 14px 0 0;
@@ -1678,11 +2156,11 @@ onMounted(fetchDetail)
 .project-card {
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
+  gap: 14px;
+  padding: 12px 0;
   border: 1px solid var(--resume-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--user-surface-muted);
 }
 
 .project-card__main {
@@ -1697,7 +2175,7 @@ onMounted(fetchDetail)
 
   h3 {
     margin: 0;
-    color: var(--resume-text);
+    color: var(--user-text);
     font-size: 16px;
   }
 
@@ -1717,7 +2195,7 @@ onMounted(fetchDetail)
 }
 
 .project-desc {
-  color: #344054;
+  color: var(--user-text-secondary);
 }
 
 .project-actions {
@@ -1727,205 +2205,307 @@ onMounted(fetchDetail)
 }
 
 .preview-column {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 16px;
+  min-height: 0;
+  height: var(--resume-preview-viewport-height);
+  max-height: var(--resume-preview-viewport-height);
+  overflow: visible;
   position: sticky;
-  top: 84px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.18), transparent 34%),
-    linear-gradient(180deg, #111827 0%, #0f172a 100%);
-  border-color: rgba(148, 163, 184, 0.22);
+  top: var(--resume-preview-top);
+  padding: 14px;
+  border-color: var(--user-border);
+  background: var(--user-bg-panel);
 }
 
 .preview-toolbar {
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
 
   h2 {
     margin: 0;
-    color: #ffffff;
+    color: var(--user-text);
     font-size: 18px;
   }
 
   p {
     margin: 6px 0 0;
-    color: rgba(226, 232, 240, 0.72);
+    color: var(--user-text-muted);
     font-size: 12px;
+  }
+}
+
+.preview-toolbar__status {
+  flex: 0 0 auto;
+}
+
+.preview-customizer {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.template-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+
+  > button {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--user-border);
+    border-radius: 8px;
+    background: var(--user-control-bg);
+    color: var(--user-text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+
+    &:hover {
+      border-color: var(--user-primary-border);
+      background: var(--user-surface-raised);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--user-primary);
+      outline-offset: 2px;
+    }
+
+    &.active {
+      border-color: var(--user-primary-border);
+      background: var(--user-primary-soft);
+      color: var(--user-text);
+    }
+
+    > span:nth-child(2) {
+      min-width: 0;
+    }
+
+    strong,
+    small {
+      display: block;
+    }
+
+    strong {
+      color: inherit;
+      font-size: 12px;
+    }
+
+    small {
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--user-text-muted);
+      font-size: 10px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > svg {
+      color: var(--user-primary);
+    }
+  }
+}
+
+.template-thumb {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  width: 38px;
+  height: 48px;
+  padding: 6px 5px;
+  border: 1px solid var(--resume-paper-border);
+  border-radius: 3px;
+  background: var(--resume-template-paper);
+
+  &::before,
+  i {
+    display: block;
+    height: 2px;
+    background: var(--resume-paper-line);
+    content: "";
+  }
+
+  &::before {
+    width: 58%;
+    height: 4px;
+    background: var(--resume-paper-ocean);
+  }
+
+  i:nth-child(2) {
+    width: 78%;
+  }
+
+  i:nth-child(3) {
+    width: 62%;
+  }
+
+  &.is-compact {
+    gap: 2px;
+
+    &::before {
+      width: 46%;
+      height: 3px;
+      background: var(--resume-paper-graphite);
+    }
+  }
+
+  &.is-project {
+    padding-top: 9px;
+    background: var(--resume-paper-project-soft);
+
+    &::before {
+      width: 82%;
+      background: var(--resume-paper-project);
+    }
+  }
+}
+
+.preview-controls,
+.accent-control,
+.accent-swatches,
+.zoom-control {
+  display: flex;
+  align-items: center;
+}
+
+.preview-controls {
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+
+.accent-control {
+  gap: 9px;
+
+  > span {
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
+}
+
+.accent-swatches {
+  gap: 6px;
+
+  button {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--user-bg-panel);
+    border-radius: 50%;
+    background: var(--resume-paper-ocean);
+    box-shadow: 0 0 0 1px var(--user-border);
+    cursor: pointer;
+
+    &.is-teal {
+      background: var(--resume-paper-teal);
+    }
+
+    &.is-graphite {
+      background: var(--resume-paper-graphite);
+    }
+
+    &.is-berry {
+      background: var(--resume-paper-berry);
+    }
+
+    &.active {
+      box-shadow: 0 0 0 2px var(--user-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--user-primary);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.zoom-control {
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 7px;
+  background: var(--user-control-bg);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 30px;
+    border: 0;
+    background: transparent;
+    color: var(--user-text-muted);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--user-primary-soft);
+      color: var(--user-primary);
+    }
+
+    &:disabled {
+      color: var(--user-disabled);
+      cursor: not-allowed;
+    }
+  }
+
+  span {
+    min-width: 48px;
+    color: var(--user-text-secondary);
+    font-size: 11px;
+    text-align: center;
   }
 }
 
 .resume-paper-wrap {
   position: relative;
   display: flex;
+  flex: 1 1 auto;
   justify-content: center;
-  min-height: 760px;
-  padding: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  max-height: none;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding: 18px;
+  scrollbar-gutter: stable both-edges;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.09) 1px, transparent 1px),
-    linear-gradient(rgba(148, 163, 184, 0.09) 1px, transparent 1px),
-    #0b1120;
-  background-size: 28px 28px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: var(--user-bg);
 }
 
-.resume-paper {
-  width: min(100%, 680px);
-  min-height: 880px;
-  aspect-ratio: 210 / 297;
-  padding: 46px 52px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.38),
-    0 0 34px rgba(56, 189, 248, 0.2),
-    0 28px 70px rgba(0, 0, 0, 0.46);
-  color: #111827;
-  overflow: hidden;
-}
-
-.resume-paper,
-.resume-paper :deep(*) {
-  color: #111827 !important;
-}
-
-.paper-header {
-  padding-bottom: 18px;
-  border-bottom: 2px solid #111827;
-
-  h2 {
-    margin: 0;
-    color: #111827;
-    font-size: 30px;
-    letter-spacing: 0;
-  }
-
-  p {
-    margin: 8px 0 0;
-    color: #1f2937;
-    font-size: 14px;
-    font-weight: 700;
-  }
-}
-
-.paper-contact {
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-top: 12px;
-  color: #4b5563;
-  font-size: 12px;
-}
-
-.paper-section {
-  margin-top: 20px;
-
-  h3 {
-    margin: 0 0 10px;
-    padding-bottom: 5px;
-    border-bottom: 1px solid #111827;
-    color: #111827;
-    font-size: 15px;
-  }
-
-  p,
-  li {
-    color: #374151;
-    font-size: 12px;
-    line-height: 1.72;
-    white-space: pre-wrap;
-  }
-
-  ul {
-    margin: 8px 0 0;
-    padding-left: 18px;
-  }
-}
-
-.paper-tags {
+.resume-paper-stage {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  span {
-    padding: 4px 8px;
-    border-radius: 6px;
-    background: #ecfdf3;
-    color: #027a48;
-    font-size: 12px;
-    font-weight: 700;
-  }
-}
-
-.paper-project {
-  & + .paper-project {
-    margin-top: 16px;
-  }
-}
-
-.paper-project__head {
-  justify-content: space-between;
-  gap: 12px;
-
-  strong {
-    color: #111827;
-    font-size: 13px;
-  }
-
-  span {
-    flex: 0 0 auto;
-    color: #667085;
-    font-size: 12px;
-  }
-}
-
-.paper-muted {
-  color: #667085 !important;
-}
-
-.paper-empty {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  margin-top: 42px;
-  padding: 28px;
-  border: 1px dashed #cfd6e4;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.7;
-  text-align: center;
-
-  strong {
-    color: #101828;
-    font-size: 16px;
-  }
-
-  span {
-    max-width: 320px;
-  }
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .side-panel {
-  padding: 18px;
+  min-width: 0;
+  padding: 14px;
 
   h3 {
-    margin: 0 0 10px;
+    margin: 0 0 8px;
     color: var(--resume-text);
     font-size: 16px;
   }
 
   p {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     color: var(--resume-muted);
     font-size: 13px;
     line-height: 1.7;
   }
 
   ul {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     padding-left: 18px;
     color: var(--resume-muted);
     font-size: 13px;
@@ -1944,7 +2524,7 @@ onMounted(fetchDetail)
 
   strong {
     color: var(--resume-primary);
-    font-size: 24px;
+    font-size: 20px;
   }
 }
 
@@ -1972,15 +2552,15 @@ onMounted(fetchDetail)
 .diagnostic-list span {
   border: 1px solid var(--resume-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--user-control-bg);
 }
 
 .jd-match-panel {
-  border-color: rgba(37, 99, 235, 0.2);
+  border-color: var(--user-primary-border);
 }
 
 .evidence-panel {
-  border-color: rgba(20, 184, 166, 0.22);
+  border-color: var(--user-success-border);
 }
 
 .evidence-list div {
@@ -2012,28 +2592,26 @@ onMounted(fetchDetail)
 }
 
 .gap-panel {
-  border-color: rgba(217, 119, 6, 0.22);
-  background:
-    linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(255, 255, 255, 0) 56%),
-    #ffffff;
+  border-color: var(--user-warning);
+  background: var(--user-warning-soft);
 }
 
 .gap-list article {
-  padding: 12px;
-  border: 1px solid rgba(245, 158, 11, 0.18);
+  padding: 10px;
+  border: 1px solid var(--user-warning);
   border-radius: 8px;
-  background: #fffbeb;
+  background: var(--user-control-bg);
 
   strong {
     display: block;
-    color: #92400e;
+    color: var(--user-warning);
     font-size: 13px;
     line-height: 1.45;
   }
 
   p {
     margin: 6px 0 0;
-    color: #78350f;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -2044,7 +2622,7 @@ onMounted(fetchDetail)
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid var(--resume-border);
-  color: #344054;
+  color: var(--user-text-secondary);
   font-size: 13px;
 
   &:last-of-type {
@@ -2060,16 +2638,12 @@ onMounted(fetchDetail)
 }
 
 .ai-panel {
-  border-color: rgba(124, 58, 237, 0.2);
-  background:
-    linear-gradient(180deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0)),
-    #ffffff;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
 }
 
 .ai-locked-panel {
-  background:
-    linear-gradient(180deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0) 58%),
-    #ffffff;
+  background: var(--user-surface-muted);
 }
 
 .optimize-form {
@@ -2085,7 +2659,7 @@ onMounted(fetchDetail)
 }
 
 .optimize-records {
-  margin-top: 16px;
+  margin-top: 12px;
   border-top: 1px solid var(--resume-border);
 }
 
@@ -2093,7 +2667,8 @@ onMounted(fetchDetail)
   margin-top: 14px;
   padding: 12px;
   border: 1px dashed var(--resume-border-strong);
-  border-radius: 10px;
+  border-radius: 8px;
+  background: var(--user-control-bg);
   color: var(--resume-muted);
   font-size: 12px;
   line-height: 1.6;
@@ -2102,13 +2677,13 @@ onMounted(fetchDetail)
 .sse-progress {
   margin-top: 14px;
   padding: 12px;
-  border: 1px solid rgba(124, 58, 237, 0.2);
-  border-radius: 12px;
-  background: #f5f3ff;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-ai-soft);
 
   p {
     margin: 8px 0 0;
-    color: #4b5563;
+    color: var(--user-text-secondary);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -2119,13 +2694,13 @@ onMounted(fetchDetail)
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #5b21b6;
+  color: var(--user-ai);
   font-size: 13px;
   font-weight: 700;
 }
 
 .sse-progress__hint {
-  color: #6d28d9;
+  color: var(--user-text-secondary);
 }
 
 .sse-progress__action {
@@ -2163,7 +2738,7 @@ onMounted(fetchDetail)
   }
 
   span {
-    color: #344054;
+    color: var(--user-text-secondary);
     font-size: 13px;
   }
 
@@ -2174,15 +2749,15 @@ onMounted(fetchDetail)
 }
 
 .optimize-result {
-  margin-top: 14px;
-  padding: 14px;
-  border: 1px solid rgba(124, 58, 237, 0.18);
-  border-radius: 14px;
-  background: #ffffff;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-control-bg);
 
   > p {
-    margin: 10px 0 0;
-    color: #344054;
+    margin: 8px 0 0;
+    color: var(--user-text-secondary);
   }
 }
 
@@ -2199,25 +2774,25 @@ onMounted(fetchDetail)
 
   strong {
     color: var(--resume-ai);
-    font-size: 26px;
+    font-size: 22px;
   }
 }
 
 .rewrite-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 
   article {
     padding: 10px;
     border: 1px solid var(--resume-border);
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--resume-surface-soft);
   }
 
   span {
-    color: #344054;
+    color: var(--user-text-secondary);
     font-size: 12px;
     font-weight: 700;
   }
@@ -2235,7 +2810,7 @@ onMounted(fetchDetail)
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 10px;
   color: var(--resume-muted);
   font-size: 12px;
 }
@@ -2247,7 +2822,7 @@ onMounted(fetchDetail)
   gap: 8px;
 
   :deep(.el-checkbox__label) {
-    color: #344054;
+    color: var(--user-text-secondary);
     font-weight: 700;
   }
 }
@@ -2255,58 +2830,37 @@ onMounted(fetchDetail)
 .rewrite-diff {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 
   div {
     min-width: 0;
-    padding: 10px;
+    padding: 9px;
     border: 1px solid var(--resume-border);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--user-bg-panel);
   }
 }
 
 .rewrite-reason {
-  color: #344054 !important;
+  color: var(--user-text-secondary) !important;
 }
 
-@media (max-width: 1320px) {
+@media (max-width: 1260px) {
   .editor-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr);
+    grid-template-columns: minmax(0, 1fr) minmax(440px, 1fr);
   }
 
   .editor-aside {
-    position: static;
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .template-selector {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 1020px) {
-  .editor-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-column {
-    position: static;
-  }
-
-  .editor-aside {
-    display: flex;
-  }
-
-  .live-feedback-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .resume-editor {
-    padding: 12px;
-  }
-
   .workspace-tabs {
     display: flex;
     position: sticky;
@@ -2326,19 +2880,138 @@ onMounted(fetchDetail)
 
   .is-mobile-edit .mobile-pane-edit,
   .is-mobile-advice .mobile-pane-advice {
-    display: flex;
+    display: grid;
   }
 
   .is-mobile-preview .mobile-pane-preview {
+    display: flex;
+  }
+
+  .preview-column {
+    position: static;
+    height: min(780px, calc(100dvh - 160px));
+    max-height: min(780px, calc(100dvh - 160px));
+    overflow: visible;
+  }
+
+  .resume-paper-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .editor-aside {
+    grid-column: auto;
+    grid-row: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-feedback-strip {
+    grid-template-columns: 1fr;
+
+    article {
+      border-right: 0;
+      border-bottom: 1px solid var(--user-border);
+
+      &:last-child {
+        border-bottom: 0;
+      }
+    }
+  }
+}
+
+@media (max-width: 760px) {
+  .resume-editor {
+    padding: 0;
+  }
+
+  .editor-hero {
+    padding: 14px;
+
+    > div:first-child > p,
+    .hero-status {
+      display: none;
+    }
+
+    h1 {
+      font-size: 21px;
+    }
+  }
+
+  .live-feedback-strip {
+    display: none;
+  }
+
+  .mobile-feedback-details {
     display: block;
+    border: 1px solid var(--user-border);
+    border-radius: 8px;
+    background: var(--user-surface);
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 44px;
+      padding: 10px 12px;
+      color: var(--user-text-secondary);
+      cursor: pointer;
+
+      span {
+        font-weight: 700;
+      }
+
+      strong {
+        color: var(--user-primary);
+        font-size: 12px;
+      }
+    }
+
+    > div {
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--user-border);
+    }
+
+    article {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--user-border);
+
+      &:last-child {
+        border-bottom: 0;
+      }
+
+      span,
+      strong,
+      p {
+        display: block;
+      }
+
+      span {
+        color: var(--user-primary);
+        font-size: 11px;
+      }
+
+      strong {
+        margin-top: 3px;
+        color: var(--user-text);
+        font-size: 13px;
+      }
+
+      p {
+        margin: 4px 0 0;
+        color: var(--user-text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    }
   }
 
   .editor-hero,
   .project-header,
   .project-card,
   .project-card__top,
-  .preview-toolbar,
-  .paper-project__head {
+  .preview-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -2347,6 +3020,8 @@ onMounted(fetchDetail)
     justify-content: flex-start;
   }
 
+  .editor-main,
+  .editor-aside,
   .form-grid,
   .completion-list,
   .diagnostic-list,
@@ -2355,24 +3030,31 @@ onMounted(fetchDetail)
     grid-template-columns: 1fr;
   }
 
+  .editor-main > .edit-card {
+    order: -3;
+  }
+
+  .editor-main > .ai-writing-card {
+    order: -2;
+  }
+
+  .editor-main > .section-nav-card {
+    order: -1;
+  }
+
   .editor-section,
   .preview-column,
   .side-panel {
-    padding: 16px;
+    padding: 12px;
   }
 
   .resume-paper-wrap {
-    min-height: auto;
-    padding: 10px;
+    padding: 8px;
   }
 
-  .resume-paper {
-    min-height: 620px;
-    padding: 28px 22px;
-  }
-
-  .paper-header h2 {
-    font-size: 24px;
+  .preview-controls {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .project-actions,

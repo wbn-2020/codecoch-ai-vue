@@ -2,16 +2,16 @@
   <section class="trace-suggestions admin-panel">
     <div class="admin-panel__header">
       <div>
-        <h2>Governance suggestions</h2>
-        <p>Suggestions only navigate, copy clues, or show safe previews. TraceCockpit does not execute rollback, retry, recovery, delete, or strategy changes.</p>
+        <h2>治理建议</h2>
+        <p>建议项只支持跳转、复制线索或展示安全预览；TraceCockpit 不会执行回滚、重试、恢复、删除或策略变更。</p>
       </div>
     </div>
 
     <AppState
       v-if="!suggestions.length"
       type="empty"
-      title="No suggestions"
-      description="No strong conclusion is shown when the sample is empty or insufficient."
+      title="暂无建议"
+      description="样本为空或证据不足时，不展示强结论。"
     />
     <div v-else class="trace-suggestions__list">
       <article v-for="item in suggestions" :key="item.id" class="trace-suggestions__item">
@@ -21,15 +21,15 @@
             <small>{{ item.actionType }}</small>
           </div>
           <el-tag :type="item.executableInCockpit ? 'danger' : 'info'" effect="plain">
-            {{ item.executableInCockpit ? 'must not execute here' : 'not executable here' }}
+            {{ item.executableInCockpit ? '禁止在此执行' : '此处不可执行' }}
           </el-tag>
         </header>
         <p>{{ item.reason }}</p>
-        <p v-if="item.requiredPermission" class="trace-suggestions__evidence">Permission: {{ item.requiredPermission }}</p>
+        <p v-if="item.requiredPermission" class="trace-suggestions__evidence">所需权限：{{ item.requiredPermission }}</p>
         <div class="trace-suggestions__actions">
-          <el-button v-if="item.link" plain @click="$emit('open-link', item.link)">Open source</el-button>
-          <el-button plain @click="copyClue(item)">Copy clue</el-button>
-          <el-button plain @click="$emit('preview', item)">Preview</el-button>
+          <el-button v-if="item.link" plain @click="$emit('open-link', item.link)">打开来源</el-button>
+          <el-button plain @click="copyClue(item)">复制线索</el-button>
+          <el-button plain @click="$emit('preview', item)">预览</el-button>
         </div>
       </article>
     </div>
@@ -54,7 +54,7 @@ defineEmits<{
 const copyClue = async (item: TraceGovernanceSuggestion) => {
   const text = [item.actionType, item.nodeId, item.targetType, item.targetId].filter(Boolean).join(' ')
   await navigator.clipboard.writeText(text || item.title)
-  ElMessage.success('Clue copied')
+  ElMessage.success('线索已复制')
 }
 </script>
 

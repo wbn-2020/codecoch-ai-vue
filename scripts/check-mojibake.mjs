@@ -2,12 +2,12 @@
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveBackendRoot } from './workspace-paths.mjs'
 
 const cwd = process.cwd()
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const workspaceRoot = path.resolve(frontendRoot, '..')
-const backendRoot = path.join(workspaceRoot, 'CodeCoachAI-java')
 
 const extensions = new Set([
   '.css',
@@ -140,7 +140,7 @@ const exists = async (entry) => {
 }
 
 const resolveBackendTargets = async () => {
-  if (!await exists(backendRoot)) return []
+  const backendRoot = resolveBackendRoot(frontendRoot)
 
   const entries = await readdir(backendRoot, { withFileTypes: true })
   const moduleSrcDirs = []

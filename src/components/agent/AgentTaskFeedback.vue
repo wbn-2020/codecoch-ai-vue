@@ -57,9 +57,11 @@
         show-word-limit
         resize="none"
         :disabled="!canInteract"
-        placeholder="可以补充说明这条任务为什么有帮助、太难、太简单，或者为什么不相关。"
+        placeholder="可以补充说明这条任务为什么有用、无用，或者需要修正哪一段推荐原因。"
       />
     </div>
+
+    <p class="agent-task-feedback__impact">{{ impactText }}</p>
 
     <el-alert
       v-if="statusAlert"
@@ -107,6 +109,7 @@ import { computed, reactive, watch } from 'vue'
 
 import { submitAgentFeedbackApi } from '@/api/agent'
 import type { AgentFeedbackType, AgentFeedbackVO } from '@/types/agent'
+import { buildAgentTaskFeedbackSummary } from '@/utils/agentTaskAction'
 import { getErrorMessage } from '@/utils/error'
 
 type FeedbackOption = {
@@ -126,22 +129,25 @@ const props = withDefaults(defineProps<{
   submitted?: boolean
   title?: string
   successTitle?: string
+  impactHint?: string
 }>(), {
   initialFeedbackType: 'HELPFUL',
   initialComment: '',
   disabled: false,
   submitted: false,
   title: '这条 Agent 任务对你有帮助吗？',
-  successTitle: '反馈已记录'
+  successTitle: '反馈已记录',
+  impactHint: ''
 })
 
 const emit = defineEmits<{
-  submitted: [payload: AgentFeedbackVO]
+  submitted: [payload: AgentFeedbackVO & { feedbackSummary?: string }]
   failed: [message: string]
 }>()
 
 const feedbackOptions: FeedbackOption[] = [
   { label: '有帮助', value: 'HELPFUL', icon: Sparkles },
+  { label: '原因需修正', value: 'REASON_CORRECTION', icon: MessageSquareQuote },
   { label: '不相关', value: 'IRRELEVANT', icon: CircleHelp },
   { label: '太难', value: 'TOO_HARD', icon: Zap },
   { label: '太简单', value: 'TOO_EASY', icon: Scale },
@@ -173,6 +179,12 @@ const submitted = computed(() => props.submitted || state.submitState === 'succe
 const submitFailed = computed(() => state.submitState === 'error')
 const canInteract = computed(() => canSubmit.value && !submitting.value && !submitted.value)
 const submitButtonDisabled = computed(() => !canSubmit.value || submitting.value || submitted.value)
+const feedbackSummary = computed(() => buildAgentTaskFeedbackSummary({
+  outcome: 'feedback',
+  feedbackType: form.feedbackType,
+  reason: form.comment
+}))
+const impactText = computed(() => props.impactHint || `下一轮计划参考：${feedbackSummary.value}`)
 
 const missingTargetMessage = '缺少 agentTaskId 或 agentRunId，当前反馈无法提交。'
 
@@ -264,7 +276,7 @@ const submitFeedback = async () => {
     state.response = response
     state.submitState = 'success'
     ElMessage.success('反馈已提交')
-    emit('submitted', response)
+    emit('submitted', { ...response, feedbackSummary: feedbackSummary.value })
   } catch (error) {
     const message = getErrorMessage(error, '反馈提交失败，请稍后重试')
     state.submitState = 'error'
@@ -321,8 +333,8 @@ watch(
   padding: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.72));
-  box-shadow: var(--app-shadow);
+  background: var(--user-surface);
+  box-shadow: none;
 }
 
 .agent-task-feedback.is-submitted {
@@ -387,7 +399,7 @@ watch(
 
 .agent-task-feedback__options {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
   gap: 10px;
 }
 
@@ -437,6 +449,17 @@ watch(
 .agent-task-feedback__comment {
   display: grid;
   gap: 8px;
+}
+
+.agent-task-feedback__impact {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(20, 184, 166, 0.2);
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.08);
+  color: #99f6e4;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .agent-task-feedback__comment-head label {

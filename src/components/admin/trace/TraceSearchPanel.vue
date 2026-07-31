@@ -2,21 +2,21 @@
   <section class="admin-panel trace-search-panel">
     <div class="admin-panel__header">
       <div>
-        <h2>Trace query</h2>
-        <p>Use trace, request, business, Agent Run, async task, message, scene, or time clues. The query is mirrored into the URL.</p>
+        <h2>链路查询</h2>
+        <p>可使用 trace、request、业务键、Agent Run、异步任务、message、场景或时间线索；查询条件会同步到 URL。</p>
       </div>
-      <el-tag v-if="ambiguousKeyword" type="warning" effect="plain">ambiguous clue</el-tag>
+      <el-tag v-if="ambiguousKeyword" type="warning" effect="plain">线索可能歧义</el-tag>
     </div>
 
     <el-form :model="form" label-position="top">
       <div class="trace-search-panel__grid">
-        <el-form-item label="Lookup type">
+        <el-form-item label="查询类型">
           <el-select v-model="form.lookupType">
             <el-option v-for="item in lookupOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Keyword">
-          <el-input v-model.trim="form.keyword" clearable placeholder="traceId / requestId / messageId / business clue" @keyup.enter="search" />
+        <el-form-item label="关键词">
+          <el-input v-model.trim="form.keyword" clearable placeholder="traceId / requestId / messageId / 业务线索" @keyup.enter="search" />
         </el-form-item>
         <el-form-item label="traceId">
           <el-input v-model.trim="form.traceId" clearable />
@@ -28,7 +28,7 @@
           <el-input v-model.trim="form.businessId" clearable />
         </el-form-item>
         <el-form-item label="bizType">
-          <el-input v-model.trim="form.bizType" clearable placeholder="requires bizId for task lookup" />
+          <el-input v-model.trim="form.bizType" clearable placeholder="按业务任务查询时需要同时填写 bizId" />
         </el-form-item>
         <el-form-item label="bizId">
           <el-input v-model.trim="form.bizId" clearable />
@@ -49,10 +49,10 @@
           <el-input v-model.trim="form.scene" clearable />
         </el-form-item>
         <el-form-item label="startTime">
-          <el-date-picker v-model="form.startTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="Start time" />
+          <el-date-picker v-model="form.startTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="开始时间" />
         </el-form-item>
         <el-form-item label="endTime">
-          <el-date-picker v-model="form.endTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="End time" />
+          <el-date-picker v-model="form.endTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="结束时间" />
         </el-form-item>
       </div>
 
@@ -62,12 +62,12 @@
         type="warning"
         show-icon
         :closable="false"
-        title="The keyword is numeric and may match multiple id types. Pick a lookup type when precision matters."
+        title="当前关键词是数字，可能匹配多种 ID；需要精确排查时请指定查询类型。"
       />
 
       <div class="trace-search-panel__actions">
-        <el-button type="primary" :loading="loading" @click="search">Search trace</el-button>
-        <el-button :disabled="loading" @click="reset">Reset</el-button>
+        <el-button type="primary" :loading="loading" @click="search">查询链路</el-button>
+        <el-button :disabled="loading" @click="reset">重置</el-button>
       </div>
     </el-form>
   </section>
@@ -91,12 +91,12 @@ const emit = defineEmits<{
 }>()
 
 const lookupOptions: Array<{ label: string; value: TraceLookupType }> = [
-  { label: 'Auto', value: 'auto' },
+  { label: '自动识别', value: 'auto' },
   { label: 'traceId', value: 'traceId' },
   { label: 'requestId', value: 'requestId' },
   { label: 'businessId', value: 'businessId' },
   { label: 'bizType + bizId', value: 'biz' },
-  { label: 'userId + time', value: 'userTime' },
+  { label: 'userId + 时间', value: 'userTime' },
   { label: 'agentRunId', value: 'agentRunId' },
   { label: 'asyncTaskId', value: 'asyncTaskId' },
   { label: 'messageId', value: 'messageId' }

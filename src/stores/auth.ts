@@ -6,10 +6,23 @@ import { HTTP_STATUS_CODE } from '@/constants/http'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { CurrentUserVO, LoginDTO, LoginVO, RegisterDTO } from '@/types/auth'
 import type { RoleCode } from '@/types/common'
-import { getToken, removeToken, setToken as persistToken } from '@/utils/token'
+import {
+  beginAuthSession,
+  captureAuthSession,
+  clearLocalAuth,
+  clearLocalAuthIfCurrent,
+  getAuthSessionId,
+  getToken,
+  invalidateAuthSession,
+  isAuthSessionCurrent,
+  markAuthSessionChanged,
+  setToken as persistToken,
+  type AuthSessionSnapshot
+} from '@/utils/token'
 import { storage } from '@/utils/storage'
 
 interface AuthState {
+  authSessionId: string
   token: string
   userInfo: CurrentUserVO | null
   roles: RoleCode[]
@@ -17,10 +30,16 @@ interface AuthState {
   tokenVerified: boolean
 }
 
+interface ClearAuthOptions {
+  persist?: boolean
+  expectedSession?: AuthSessionSnapshot
+}
+
 const AUTH_VERIFY_TTL = 15000
-let pendingCurrentUserRequest: Promise<CurrentUserVO> | null = null
-let pendingCurrentUserToken = ''
+let pendingCurrentUserRequest: Promise<CurrentUserVO | null> | null = null
+let pendingCurrentUserSessionKey = ''
 let lastVerifiedToken = ''
+let lastVerifiedSessionId = ''
 let lastVerifiedAt = 0
 
 const normalizeRoleCode = (role: unknown): RoleCode | null => {
@@ -109,7 +128,10 @@ const permissionPayloads = (source: unknown) => pickPayloadValues(source, [
 
 const isAuthFailure = (error: unknown) => {
   const code = (error as { code?: number })?.code
-  return code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return code === HTTP_STATUS_CODE.UNAUTHENTICATED
+    || code === HTTP_STATUS_CODE.TOKEN_INVALID
+    || status === 401
 }
 
 const hasOwnPayload = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
@@ -117,20 +139,27 @@ const hasOwnPayload = (value: object, key: string) => Object.prototype.hasOwnPro
 const hasCompleteAuthSnapshot = (userInfo?: CurrentUserVO | null) =>
   Boolean(userInfo && normalizeRoles(userInfo.roles).length > 0)
 
-const markVerifiedToken = (token: string) => {
+const markVerifiedToken = (token: string, sessionId: string) => {
   lastVerifiedToken = token
+  lastVerifiedSessionId = sessionId
   lastVerifiedAt = Date.now()
 }
 
 const clearVerifySnapshot = () => {
   pendingCurrentUserRequest = null
-  pendingCurrentUserToken = ''
+  pendingCurrentUserSessionKey = ''
   lastVerifiedToken = ''
+  lastVerifiedSessionId = ''
   lastVerifiedAt = 0
 }
 
-const isRecentlyVerified = (token: string) =>
-  Boolean(token && token === lastVerifiedToken && Date.now() - lastVerifiedAt < AUTH_VERIFY_TTL)
+const isRecentlyVerified = (token: string, sessionId: string) =>
+  Boolean(
+    token
+    && token === lastVerifiedToken
+    && sessionId === lastVerifiedSessionId
+    && Date.now() - lastVerifiedAt < AUTH_VERIFY_TTL
+  )
 
 const normalizeUser = (loginResult: LoginVO): CurrentUserVO | null => {
   if (loginResult.userInfo) {
@@ -184,6 +213,7 @@ const readStoredAuthSnapshot = () => {
   const permissions = userInfo?.permissions?.length ? userInfo.permissions : normalizePermissions(storedPermissions)
 
   return {
+    authSessionId: getAuthSessionId(),
     token: getToken(),
     userInfo,
     roles,
@@ -201,7 +231,8 @@ export const useAuthStore = defineStore('auth', {
   },
 
   getters: {
-    isLoggedIn: (state) => Boolean(state.token),
+    isLoggedIn: (state) =>
+      Boolean(state.token && !state.authSessionId.startsWith('invalidated:')),
     isAdmin: (state) => state.roles.includes('ADMIN'),
     canAccessAdmin: (state) => state.roles.includes('ADMIN') || hasAdminPermission(state.permissions),
     hasRole: (state) => {
@@ -245,13 +276,18 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    setToken(token: string) {
+    setToken(token: string, options?: { newSession?: boolean }) {
       if (this.token && this.token !== token) {
         clearVerifySnapshot()
       }
       this.token = token
       this.tokenVerified = false
-      persistToken(token)
+      if (options?.newSession) {
+        this.authSessionId = beginAuthSession(token)
+      } else {
+        persistToken(token)
+        this.authSessionId = getAuthSessionId()
+      }
     },
 
     setUserInfo(userInfo: CurrentUserVO | null) {
@@ -275,11 +311,11 @@ export const useAuthStore = defineStore('auth', {
     async login(data: LoginDTO, options?: { silentError?: boolean }) {
       const result = await loginApi(data, options)
       clearAllRequestCache()
-      this.setToken(result.token)
+      this.setToken(result.token, { newSession: true })
       const userInfo = normalizeUser(result)
       this.setUserInfo(userInfo)
       this.tokenVerified = true
-      markVerifiedToken(this.token)
+      markVerifiedToken(this.token, this.authSessionId)
       return result
     },
 
@@ -291,7 +327,7 @@ export const useAuthStore = defineStore('auth', {
         this.setUserInfo(userInfo)
         this.tokenVerified = hasCompleteAuthSnapshot(userInfo)
         if (this.tokenVerified) {
-          markVerifiedToken(this.token)
+          markVerifiedToken(this.token, this.authSessionId)
         } else {
           clearVerifySnapshot()
         }
@@ -322,58 +358,105 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      const logoutSession = invalidateAuthSession()
+      this.authSessionId = logoutSession.sessionId
+      this.tokenVerified = false
+      clearVerifySnapshot()
+      clearAllRequestCache()
       try {
         if (this.token) {
           await logoutApi({ silentError: true })
         }
       } finally {
-        this.clearAuth()
+        this.clearAuth({ expectedSession: logoutSession })
       }
     },
 
-    async fetchCurrentUser() {
-      const requestToken = this.token
-      if (!requestToken) {
-        this.clearAuth()
-        return null
+    async fetchCurrentUser(retryOnSessionChange = true): Promise<CurrentUserVO | null> {
+      const storedSession = captureAuthSession()
+      if (
+        this.token !== storedSession.token
+        || this.authSessionId !== storedSession.sessionId
+      ) {
+        this.syncFromStorage()
       }
-      if (pendingCurrentUserRequest && pendingCurrentUserToken === requestToken) {
-        return pendingCurrentUserRequest
-      }
-      pendingCurrentUserToken = requestToken
-      pendingCurrentUserRequest = getCurrentUserApi()
-      try {
-        const userInfo = await pendingCurrentUserRequest
-        if (this.token !== requestToken) {
-          return userInfo
-        }
-        this.setUserInfo(userInfo)
-        this.tokenVerified = true
-        markVerifiedToken(requestToken)
-        return userInfo
-      } catch (error) {
-        if (isAuthFailure(error)) {
+
+      const requestSession = captureAuthSession()
+      const requestToken = requestSession.token
+      if (
+        !requestToken
+        || requestSession.sessionId.startsWith('invalidated:')
+      ) {
+        if (!requestToken) {
           this.clearAuth()
         }
-        throw error
-      } finally {
-        if (pendingCurrentUserToken === requestToken) {
-          pendingCurrentUserRequest = null
-          pendingCurrentUserToken = ''
-        }
-      }
-    },
-
-    async verifyToken() {
-      if (!this.token) {
-        this.clearAuth()
         return null
       }
 
-      if (this.tokenVerified && this.userInfo) {
-        if (!isRecentlyVerified(this.token)) {
-          markVerifiedToken(this.token)
+      const requestSessionKey = `${requestSession.sessionId}\u0000${requestToken}`
+      if (
+        pendingCurrentUserRequest
+        && pendingCurrentUserSessionKey === requestSessionKey
+      ) {
+        return pendingCurrentUserRequest
+      }
+
+      let currentRequest: Promise<CurrentUserVO | null> | undefined
+      currentRequest = (async (): Promise<CurrentUserVO | null> => {
+        try {
+          const userInfo = await getCurrentUserApi()
+          if (!isAuthSessionCurrent(requestSession)) {
+            this.syncFromStorage()
+            if (this.tokenVerified && this.userInfo) return this.userInfo
+            if (retryOnSessionChange && this.token) {
+              return this.fetchCurrentUser(false)
+            }
+            return null
+          }
+          this.setUserInfo(userInfo)
+          this.tokenVerified = true
+          markVerifiedToken(requestToken, requestSession.sessionId)
+          return userInfo
+        } catch (error) {
+          if (!isAuthSessionCurrent(requestSession)) {
+            this.syncFromStorage()
+            if (this.tokenVerified && this.userInfo) return this.userInfo
+            if (retryOnSessionChange && this.token) {
+              return this.fetchCurrentUser(false)
+            }
+            return null
+          }
+          if (isAuthFailure(error)) {
+            this.clearAuth()
+          }
+          throw error
+        } finally {
+          if (pendingCurrentUserRequest === currentRequest) {
+            pendingCurrentUserRequest = null
+            pendingCurrentUserSessionKey = ''
+          }
         }
+      })()
+
+      pendingCurrentUserSessionKey = requestSessionKey
+      pendingCurrentUserRequest = currentRequest
+      return currentRequest
+    },
+
+    async verifyToken(options?: { force?: boolean }) {
+      if (!this.isLoggedIn) {
+        if (!this.token) {
+          this.clearAuth()
+        }
+        return null
+      }
+
+      if (
+        !options?.force
+        && this.tokenVerified
+        && this.userInfo
+        && isRecentlyVerified(this.token, this.authSessionId)
+      ) {
         return this.userInfo
       }
 
@@ -381,12 +464,19 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async verifyAdminSession() {
-      if (!this.token) {
-        this.clearAuth()
+      if (!this.isLoggedIn) {
+        if (!this.token) {
+          this.clearAuth()
+        }
         return null
       }
 
-      if (this.tokenVerified && this.userInfo && this.roles.length > 0 && isRecentlyVerified(this.token)) {
+      if (
+        this.tokenVerified
+        && this.userInfo
+        && this.roles.length > 0
+        && isRecentlyVerified(this.token, this.authSessionId)
+      ) {
         return this.userInfo
       }
 
@@ -402,29 +492,52 @@ export const useAuthStore = defineStore('auth', {
     syncFromStorage() {
       const snapshot = readStoredAuthSnapshot()
       const tokenChanged = this.token !== snapshot.token
+      const sessionChanged = this.authSessionId !== snapshot.authSessionId
+      if (tokenChanged || sessionChanged) {
+        markAuthSessionChanged()
+      }
+      this.authSessionId = snapshot.authSessionId
       this.token = snapshot.token
+      if (tokenChanged || sessionChanged) {
+        this.userInfo = null
+        this.roles = []
+        this.permissions = []
+        this.tokenVerified = false
+        clearVerifySnapshot()
+        clearAllRequestCache()
+        return
+      }
       this.userInfo = snapshot.userInfo
       this.roles = snapshot.roles
       this.permissions = snapshot.permissions
-      this.tokenVerified = snapshot.token ? this.tokenVerified && !tokenChanged : false
-      if (tokenChanged) {
-        clearVerifySnapshot()
-        clearAllRequestCache()
-      }
+      this.tokenVerified = snapshot.token ? this.tokenVerified : false
     },
 
-    clearAuth() {
+    clearAuth(options?: ClearAuthOptions) {
+      if (
+        options?.expectedSession
+        && !isAuthSessionCurrent(options.expectedSession)
+      ) {
+        this.syncFromStorage()
+        return false
+      }
+
       clearVerifySnapshot()
+      this.authSessionId = ''
       this.token = ''
       this.userInfo = null
       this.roles = []
       this.permissions = []
       this.tokenVerified = false
-      removeToken()
-      storage.remove(STORAGE_KEYS.userInfo)
-      storage.remove(STORAGE_KEYS.roles)
-      storage.remove(STORAGE_KEYS.permissions)
+      if (options?.persist !== false) {
+        if (options?.expectedSession) {
+          clearLocalAuthIfCurrent(options.expectedSession)
+        } else {
+          clearLocalAuth()
+        }
+      }
       clearAllRequestCache()
+      return true
     }
   }
 })

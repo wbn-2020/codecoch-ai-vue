@@ -71,9 +71,53 @@ describe('agentLoopAdapter', () => {
     })
 
     expect(sections.facts.join(' ')).toContain('1')
-    expect(sections.limits.join(' ')).toContain('sample')
-    expect(sections.drifts.join(' ')).toContain('Skipped')
-    expect(sections.adjustments.join(' ')).toContain('shorter')
+    expect(sections.limits.join(' ')).toContain('样本')
+    expect(sections.drifts.join(' ')).toContain('暂缓')
     expect(sections.nextActions).toEqual(['Break repeated tasks into shorter steps.'])
+  })
+
+  it('prefers backend narrative fields over local review fallbacks', () => {
+    const sections = buildReviewSections({
+      id: 4,
+      summary: '这段摘要不应覆盖后端分区正文。',
+      facts: ['后端事实：已完成简历定向修改。'],
+      limits: ['后端限制：当前只观察到站内任务记录。'],
+      driftReasons: ['后端偏移：高优先级任务开始时间晚于计划。'],
+      adjustments: ['后端调整：下一轮先完成最小可验证动作。'],
+      doneCount: 0,
+      skippedCount: 3,
+      todoCount: 2,
+      completionRate: 0,
+      nextActions: ['后端下一步：提交一版可追踪的修改记录。']
+    })
+
+    expect(sections).toEqual({
+      facts: ['后端事实：已完成简历定向修改。'],
+      limits: ['后端限制：当前只观察到站内任务记录。'],
+      drifts: ['后端偏移：高优先级任务开始时间晚于计划。'],
+      adjustments: ['后端调整：下一轮先完成最小可验证动作。'],
+      nextActions: ['后端下一步：提交一版可追踪的修改记录。']
+    })
+  })
+
+  it('falls back locally for every narrative section when backend fields are missing', () => {
+    const sections = buildReviewSections({
+      id: 5,
+      summary: '今天完成一项任务，下一轮应缩小行动范围。',
+      doneCount: 1,
+      skippedCount: 2,
+      todoCount: 1,
+      completionRate: 25
+    })
+
+    expect(sections.facts).toEqual([
+      '已完成 1 项，已暂缓 2 项，待处理 1 项。',
+      '完成率 25%。',
+      '今天完成一项任务，下一轮应缩小行动范围。'
+    ])
+    expect(sections.limits).toEqual(['任务样本仍较少，当前结论仅作为弱调整信号。'])
+    expect(sections.drifts).toEqual(['暂缓任务多于完成任务，下一轮计划应避免重复安排过于宽泛的任务。'])
+    expect(sections.adjustments).toEqual(['今天完成一项任务，下一轮应缩小行动范围。'])
+    expect(sections.nextActions).toEqual(['生成下一轮计划前，先复盘今天的任务结果。'])
   })
 })
