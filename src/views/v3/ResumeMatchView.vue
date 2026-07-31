@@ -1,5 +1,5 @@
 <template>
-  <div class="v3-page">
+  <div class="arena arena-match v3-page">
     <section class="page-hero match-hero">
       <div class="hero-copy">
         <div class="hero-kicker"><FlaskConical :size="16" /> JD 匹配实验台</div>
@@ -1060,5 +1060,184 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .hero-actions :deep(.el-button), .version-entry-actions :deep(.el-button), .submit-row :deep(.el-button), .jd-preview :deep(.el-button) { width: 100%; margin-left: 0; }
   .report-card { grid-template-columns: minmax(0, 1fr); }
   .report-card b { text-align: left; }
+}
+
+// 方向 D · JD 匹配。真实报告与生成任务保持原样，仅收口为关卡化呈现。
+.arena-match {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .page-hero,
+  .content-panel,
+  .experiment-flow {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .match-hero {
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    border-color: #b9e7cd;
+    padding: 22px;
+  }
+
+  h1,
+  h2,
+  strong {
+    color: var(--arena-ink);
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 900;
+  }
+
+  p,
+  .flow-step small,
+  .readiness-item span,
+  .source-facts dt,
+  .jd-preview span,
+  .jd-preview small,
+  .report-card small {
+    color: var(--arena-sub);
+  }
+
+  .hero-kicker {
+    color: var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .hero-pills span {
+    border-color: transparent;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .experiment-flow {
+    overflow: visible;
+  }
+
+  .flow-step {
+    border-color: var(--arena-line);
+    background: transparent;
+
+    span {
+      border-radius: 12px;
+      background: #f2f4f2;
+      color: var(--arena-sub);
+    }
+
+    &.flow-step--ready span {
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+    }
+
+    &.flow-step--risk span {
+      background: var(--arena-amber-soft);
+      color: var(--arena-amber);
+    }
+  }
+
+  .content-panel {
+    padding: 18px;
+  }
+
+  .readiness-item,
+  .source-facts div,
+  .jd-preview,
+  .launch-panel,
+  .match-stream,
+  .report-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .readiness-item--ready {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .readiness-item--risk {
+    border-color: #f3ddc0;
+    background: #fffaf2;
+  }
+
+  .jd-preview {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 70%);
+  }
+
+  .launch-panel {
+    border-color: #d7ccff;
+    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
+  }
+
+  .match-stream {
+    border-color: #d7ccff;
+    background: #fbfaff;
+
+    p {
+      color: var(--arena-red);
+    }
+  }
+
+  .match-stream__head strong {
+    color: var(--arena-ink);
+  }
+
+  .match-stream__events span {
+    background: #f2f4f2;
+    color: var(--arena-sub);
+  }
+
+  .report-card {
+    transition: border-color 0.15s ease, transform 0.15s ease;
+
+    &:hover {
+      border-color: var(--arena-grn);
+      transform: translateY(-1px);
+    }
+
+    b {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  :deep(.el-input__wrapper),
+  :deep(.el-textarea__inner),
+  :deep(.el-select__wrapper) {
+    border-radius: 13px;
+    box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-match {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .match-hero {
+      padding: 18px;
+    }
+
+    .hero-actions :deep(.el-button),
+    .version-entry-actions :deep(.el-button),
+    .submit-row :deep(.el-button),
+    .jd-preview :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
 }
 </style>

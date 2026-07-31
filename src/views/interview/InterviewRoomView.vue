@@ -1,5 +1,5 @@
 <template>
-  <div class="interview-room">
+  <div class="interview-room arena-room">
     <section class="room-topbar">
       <div class="room-identity">
         <div class="eyebrow">
@@ -1024,7 +1024,31 @@ const latestEvaluationLevelText = computed(() => {
 })
 
 // ---- 副本战斗：XP 挂钩与战斗进度 ----
-/** 每次 AI 评分返回（按 answerMessageId 去重）→ +18 XP 即时奖励 */
+const completedInterviewStatuses = new Set([
+  'COMPLETED',
+  'REPORT_GENERATING',
+  'REPORT_DONE',
+  'GENERATED',
+  'FINISHED'
+])
+
+const isCompletedInterviewStatus = (status?: string | null) =>
+  completedInterviewStatuses.has(String(status || '').toUpperCase())
+
+const isAnswerRewardEligible = (result: InterviewAnswerResultVO) => {
+  const level = String(result.evaluation.level || '').toUpperCase()
+  if (['EXCELLENT', 'GOOD', 'PASS'].includes(level)) return true
+  const score = result.evaluation.score ?? result.score
+  return typeof score === 'number' && Number.isFinite(score) && score >= 60
+}
+
+const grantInterviewCompletionReward = () => {
+  if (!interviewId) return
+  const grant = gameProfile.grantXpOnce('interview_complete', `interview:${interviewId}:complete`)
+  if (grant) gameProfile.recordActivity()
+}
+
+/** 每次 AI 评分返回均计入题序；仅达标评分才发放“答对题目”经验。 */
 watch(lastResult, (result) => {
   const answerMessageId = result?.answerMessageId
   if (!answerMessageId) return
@@ -1032,16 +1056,17 @@ watch(lastResult, (result) => {
     grantedAnswerIds.add(answerMessageId)
     answeredCount.value = grantedAnswerIds.size
   }
-  gameProfile.grantXpOnce('practice_correct', `interview:${interviewId}:answer:${answerMessageId}`)
+  if (isAnswerRewardEligible(result)) {
+    gameProfile.grantXpOnce('practice_correct', `interview:${interviewId}:answer:${answerMessageId}`)
+  }
 })
 
 /** 面试完成（一次性）→ 通关 +200 XP 并续连胜 */
 watch(
   () => current.value?.status,
   (status) => {
-    if (!['COMPLETED', 'REPORT_GENERATING', 'REPORT_DONE', 'GENERATED', 'FINISHED'].includes(String(status || '').toUpperCase())) return
-    const grant = gameProfile.grantXpOnce('interview_complete', `interview:${interviewId}:complete`)
-    if (grant) gameProfile.recordActivity()
+    if (!isCompletedInterviewStatus(status)) return
+    grantInterviewCompletionReward()
   }
 )
 
@@ -1838,6 +1863,9 @@ const handleFinish = async (_manual: boolean) => {
   finishing.value = true
   try {
     const result = await finishInterviewApi(interviewId)
+    if (isCompletedInterviewStatus(result.status)) {
+      grantInterviewCompletionReward()
+    }
     ElMessage.success(result.message || '正在结束面试并提交报告生成任务')
     const query: Record<string, string> = {}
     if (result.asyncMessageId) query.asyncMessageId = result.asyncMessageId
@@ -3380,6 +3408,147 @@ onBeforeUnmount(() => {
   50% {
     opacity: 1;
     transform: translateY(-2px);
+  }
+}
+
+// 方向 D · 深色副本壳。独立于用户端浅色 arena，但统一为绿/青柠/琥珀状态语言。
+.arena-room {
+  --room-bg: #101513;
+  --room-surface: #1a201d;
+  --room-surface-raised: #202723;
+  --room-line: rgba(228, 234, 229, 0.13);
+  --room-text: #edf3ef;
+  --room-sub: #9faba4;
+  --room-green: #17b26a;
+  --room-lime: #a3e635;
+  --room-amber: #ffc966;
+
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(23, 178, 106, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(124, 92, 252, 0.1), transparent 60%),
+    var(--room-bg);
+  color: var(--room-text);
+
+  .room-topbar,
+  .war-room {
+    border-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.78);
+  }
+
+  .progress-panel,
+  .feedback-panel {
+    background: rgba(26, 32, 29, 0.62);
+  }
+
+  .conversation-panel {
+    border-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.32);
+  }
+
+  .room-identity h1,
+  .panel-title,
+  .message-card,
+  .score-card,
+  .battle-status-card__head,
+  .battle-status-card__grid strong,
+  .ai-presence h2 {
+    color: var(--room-text);
+  }
+
+  .eyebrow,
+  .ai-presence p {
+    color: #7fd8a8;
+  }
+
+  .room-back,
+  .topbar-chip,
+  .cc-badge {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.05);
+    color: #b9c4bd;
+  }
+
+  .cc-badge--thinking,
+  .cc-badge--streaming,
+  .topbar-chip--live {
+    border-color: rgba(163, 230, 53, 0.36);
+    background: rgba(163, 230, 53, 0.1);
+    color: var(--room-lime);
+
+    .cc-badge__dot {
+      background: var(--room-lime);
+      box-shadow: 0 0 14px rgba(163, 230, 53, 0.65);
+    }
+  }
+
+  .training-boundary,
+  .session-card,
+  .scenario-binding-card,
+  .score-card,
+  .message-card,
+  .question-card,
+  .answer-console,
+  .start-card,
+  .pending-note,
+  .feedback-stack section,
+  .answer-rubric,
+  .followup-brief,
+  .battle-strip,
+  .battle-status-card {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .ai-presence {
+    border-color: rgba(23, 178, 106, 0.32);
+    border-radius: 18px;
+    background: rgba(23, 178, 106, 0.08);
+  }
+
+  .ai-orbit {
+    color: #d9f2e4;
+    background: rgba(23, 178, 106, 0.22);
+
+    span {
+      border-color: rgba(163, 230, 53, 0.32);
+    }
+  }
+
+  .cockpit-state-strip article {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.04);
+
+    &.active {
+      border-color: rgba(163, 230, 53, 0.35);
+      background: rgba(23, 178, 106, 0.1);
+    }
+  }
+
+  .battle-strip__label,
+  .battle-strip__xp,
+  .dungeon-chip--xp,
+  .score-card__xp {
+    color: var(--room-amber);
+  }
+
+  .battle-strip__bar {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .battle-status-card {
+    border-color: rgba(124, 92, 252, 0.32);
+    background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(16, 21, 19, 0.62));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-room *,
+  .arena-room *::before,
+  .arena-room *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 </style>

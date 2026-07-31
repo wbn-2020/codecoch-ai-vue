@@ -1,5 +1,5 @@
 <template>
-  <div class="ability-map page-shell" v-loading="loading">
+  <div class="arena arena-ability ability-map page-shell" v-loading="loading">
     <section class="growth-hero">
       <div class="growth-hero__main">
         <div class="eyebrow">
@@ -2125,6 +2125,165 @@ onMounted(fetchAbilityMap)
 @media (max-width: 900px) {
   .power-radar {
     grid-template-columns: 1fr;
+  }
+}
+
+// 方向 D · 能力图谱。数据结论保持原有“未评估即未评估”的边界，改为可点亮的技能树视觉。
+.arena-ability {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .growth-hero,
+  .signal-card,
+  .power-radar-card,
+  .domain-rail-shell,
+  .domain-panel,
+  .growth-map-card,
+  .current-shortfall-card,
+  .insight-card,
+  .skill-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .growth-hero {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .eyebrow,
+  .section-title span,
+  .next-training-card__label {
+    color: var(--arena-grn-d);
+  }
+
+  .next-training-card {
+    border: 1.5px solid #b9e7cd;
+    border-radius: var(--arena-radius-card);
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 76%);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .signal-card {
+    border-radius: 14px;
+    background: #ffffff;
+
+    &.signal-card--weak {
+      border-color: #f3ddc0;
+      background: #fffaf2;
+    }
+
+    &.signal-card--usable {
+      border-color: #b9e7cd;
+      background: #f5fcf7;
+    }
+  }
+
+  .power-radar-card {
+    padding: 18px;
+  }
+
+  .power-radar__ring,
+  .power-radar__axis {
+    stroke: #dce4dd;
+  }
+
+  .power-radar__value {
+    fill: rgba(23, 178, 106, 0.18);
+    stroke: var(--arena-grn);
+    filter: none;
+  }
+
+  .power-radar__label {
+    fill: var(--arena-sub);
+  }
+
+  .power-radar__stat {
+    border-radius: 13px;
+    background: #f5f7f4;
+
+    span {
+      color: var(--arena-sub);
+    }
+
+    strong {
+      color: var(--arena-ink);
+    }
+
+    &.is-weak strong {
+      color: #b4560a;
+    }
+
+    &.is-strong strong {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  .power-radar__hint,
+  .skill-tree-head em {
+    color: var(--arena-mut);
+  }
+
+  .skill-tree-head span {
+    color: var(--arena-ink);
+  }
+
+  .domain-rail {
+    background: #f8faf8;
+  }
+
+  .domain-item {
+    border-radius: 13px;
+
+    &.active {
+      background: var(--arena-grn-soft);
+      box-shadow: inset 3px 0 0 var(--arena-grn);
+    }
+  }
+
+  .skill-card {
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .skill-node-icon {
+    background: #f2f4f2;
+
+    &.is-unlocked {
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+    }
+
+    &.is-training {
+      background: var(--arena-amber-soft);
+      color: var(--arena-amber);
+    }
+
+    &.is-locked {
+      color: var(--arena-mut);
+    }
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+}
+
+@media (max-width: 760px) {
+  .arena-ability {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
   }
 }
 </style>

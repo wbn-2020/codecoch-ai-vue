@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const readSource = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf8').replace(/\r\n/g, '\n')
 
@@ -28,6 +30,7 @@ const stripPaperPreviewStyles = (path: string, source: string) => {
       /\.resume-paper\s*\{[\s\S]*?(?=\n\.side-panel\s*\{)/,
       '.resume-paper { background: var(--resume-paper); }\n'
     )
+    result = stripScopedStyleBlock(result, '.template-thumb')
   } else if (path.endsWith('ResumeDeliveryWorkbench.vue')) {
     result = result.replace(
       /\.a4-sheet\s*\{[\s\S]*?(?=\n\.section-empty,)/,
@@ -51,17 +54,31 @@ const stripPaperPreviewStyles = (path: string, source: string) => {
   return result.replace(/min-height:\s*(?:184|540|620|720|760)px/gi, '')
 }
 
+const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: string }> = {
+  'src/views/resume/ResumeEditView.vue': {
+    rootClass: 'class="arena arena-resume-studio resume-editor page-shell"',
+    selector: '.arena-resume-studio'
+  }
+}
+
 describe('resume, application package, and project evidence workspace layout', () => {
   it('uses user workspace tokens outside intentional resume paper previews', () => {
     for (const path of workspaceFiles) {
       const source = stripPaperPreviewStyles(path, readSource(path))
-
-      expect(source, path).toContain('var(--user-')
-      expect(source, path).not.toMatch(/var\(--app-|var\(--text-secondary|var\(--el-color-primary/i)
-      expect(source, path).not.toMatch(
+      const arenaScope = arenaMigrationScopeByPath[path]
+      const validatedSource = arenaScope
+        ? stripScopedStyleBlock(source, arenaScope.selector)
+        : source
+      if (arenaScope) {
+        expect(source, path).toContain(arenaScope.rootClass)
+        expect(source, path).toContain('var(--arena-')
+      }
+      expect(validatedSource, path).toContain('var(--user-')
+      expect(validatedSource, path).not.toMatch(/var\(--app-|var\(--text-secondary|var\(--el-color-primary/i)
+      expect(validatedSource, path).not.toMatch(
         /(?:background|background-color|color|border-color):\s*(?:#[0-9a-f]{3,8}|rgba?\()/i
       )
-      expect(source, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
+      expect(validatedSource, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
     }
   })
 

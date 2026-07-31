@@ -3,6 +3,8 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const projectRoot = path.resolve(__dirname, '../../..')
 const readSource = (relativePath: string) =>
   fs.readFileSync(path.resolve(projectRoot, relativePath), 'utf8')
@@ -88,15 +90,21 @@ describe('admin workspace layout system', () => {
   })
 
   it('keeps authentication pages on one responsive shared dark surface', () => {
-    expect(authStyleSource).not.toMatch(/linear-gradient|radial-gradient/i)
+    const authBaseStyles = stripScopedStyleBlock(authStyleSource, '.arena-auth.auth-page')
+    expect(authBaseStyles).not.toMatch(/linear-gradient|radial-gradient/i)
     expect(authStyleSource).toContain('min-height: 100dvh')
     expect(authStyleSource).toContain('@media (max-width: 640px)')
 
-    // 方向 D Phase V1：LoginView 已切换为 arena 浅色门面（豁免本契约），
-    // 其余认证页沿用 auth-workspace 暗色，待 Phase V2 统一收口。
+    // 方向 D：明确标记为 arena-auth 的认证页允许使用竞技场浅色表面；
+    // 其余认证页仍由本契约守护为共享暗色认证壳。
     authPageSources.forEach(({ fileName, source }) => {
       if (fileName === 'LoginView.vue') {
         expect(source).toContain('class="arena login-page"')
+        return
+      }
+      if (['RegisterView.vue', 'ForgotPasswordView.vue', 'ResetPasswordView.vue'].includes(fileName)) {
+        expect(source).toContain('class="arena arena-auth auth-page"')
+        expect(source).toContain("@use './auth-workspace';")
         return
       }
       expect(source).toContain("@use './auth-workspace';")

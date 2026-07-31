@@ -524,4 +524,53 @@ describe('InterviewRoomView voice recording coordination', () => {
     expect(gameProfile.streakDays).toBe(1)
     second.unmount()
   })
+
+  it('only grants answer XP when the interview evaluation is passing', async () => {
+    interviewApi.streamAnswerReview.mockImplementation((_id, _payload, handlers) => {
+      void handlers.onEvent('done', {
+        result: {
+          answerMessageId: 901,
+          score: 42,
+          evaluation: {
+            score: 42,
+            level: 'NEEDS_IMPROVEMENT',
+            comment: '需要补强'
+          },
+          interviewStatus: 'IN_PROGRESS',
+          nextAction: 'NEXT_QUESTION'
+        }
+      })
+      return {
+        abort: vi.fn(),
+        finished: Promise.resolve()
+      }
+    })
+
+    const wrapper = await mountRoom()
+    const gameProfile = useGameProfileStore()
+    await wrapper.find('textarea').setValue('A concise answer.')
+    await wrapper.findAll('button').find((button) => button.text().includes('提交回答'))!.trigger('click')
+    await flushPromises()
+
+    expect(gameProfile.xp).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('records completion XP immediately when finish returns a terminal status', async () => {
+    interviewApi.finishInterview.mockResolvedValue({
+      interviewId: 42,
+      status: 'REPORT_GENERATING',
+      reportStatus: 'GENERATING',
+      message: 'finishing'
+    })
+
+    const wrapper = await mountRoom()
+    const gameProfile = useGameProfileStore()
+    await wrapper.find('.finish-zone button').trigger('click')
+    await flushPromises()
+
+    expect(gameProfile.xp).toBe(200)
+    expect(gameProfile.streakDays).toBe(1)
+    wrapper.unmount()
+  })
 })

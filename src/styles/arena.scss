@@ -7,6 +7,45 @@
 //   3. 与原型 方向D原型/index.html 视觉保持一致
 // ============================================================
 
+// Element Plus 的下拉、对话框和消息默认 Teleport 到 body。
+// 方向 D 页面切换路由元数据时，UserLayout 会为 body 加上该类，避免弹层回落为暗色 cockpit 主题。
+body.arena-overlay-theme {
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f5f7f4;
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color: #f2f4f2;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f5f7f4;
+  --el-fill-color-lighter: #f8faf8;
+  --el-fill-color-extra-light: #fafcfa;
+  --el-fill-color-dark: #e9eee9;
+  --el-fill-color-darker: #dfe6e0;
+  --el-mask-color: rgba(21, 33, 27, 0.5);
+  --el-mask-color-extra-light: rgba(21, 33, 27, 0.3);
+  --el-border-color: #e4eae5;
+  --el-border-color-light: #e4eae5;
+  --el-border-color-lighter: #eef2ee;
+  --el-border-color-extra-light: #eef2ee;
+  --el-border-color-dark: #d5ddd6;
+  --el-border-color-darker: #c8d2ca;
+  --el-border-radius-base: 10px;
+  --el-text-color-primary: #15211b;
+  --el-text-color-regular: #5f6e66;
+  --el-text-color-secondary: #5f6e66;
+  --el-text-color-placeholder: #9aa79f;
+  --el-text-color-disabled: #9aa79f;
+  --el-disabled-bg-color: #f2f4f2;
+  --el-disabled-text-color: #9aa79f;
+  --el-disabled-border-color: #e4eae5;
+  --el-color-primary: #17b26a;
+  --el-color-primary-dark-2: #0e9f5d;
+  --el-color-primary-light-3: #54c78d;
+  --el-color-primary-light-5: #8bdab2;
+  --el-color-primary-light-7: #bfe9d3;
+  --el-color-primary-light-8: #d9f2e4;
+  --el-color-primary-light-9: rgba(23, 178, 106, 0.13);
+}
+
 .arena {
   // ---- Element Plus 浅色化（:root 的 --el-* 为暗色 cockpit，arena 内恢复浅色）----
   // 注意：el-select 等弹出层默认 teleport 到 body，需配合 :teleported="false" 才能命中本作用域
@@ -68,6 +107,57 @@
   --arena-radius-btn: 14px;
   --arena-radius-card: 20px;
   --arena-radius-inp: 13px;
+
+  // ---- 存量用户端页面的主题兼容层 ----
+  // 旧页面仍引用 --user-* / --app-* 变量。保留组件结构和业务逻辑，
+  // 通过 arena 根作用域切换视觉，避免在重构期间出现深浅主题混搭。
+  --app-bg: var(--arena-bg);
+  --app-surface: var(--arena-card);
+  --app-surface-raised: var(--arena-card);
+  --app-text: var(--arena-ink);
+  --app-text-muted: var(--arena-sub);
+  --app-border: var(--arena-line);
+  --app-radius: var(--arena-radius-card);
+  --app-primary: var(--arena-grn);
+  --app-primary-hover: var(--arena-grn-d);
+
+  --user-bg: var(--arena-bg);
+  --user-bg-panel: var(--arena-bg);
+  --user-bg-soft: #f0fbf4;
+  --user-surface: var(--arena-card);
+  --user-surface-raised: var(--arena-card);
+  --user-surface-muted: #f7faf7;
+  --user-surface-tint: #f0fbf4;
+  --user-text: var(--arena-ink);
+  --user-text-secondary: var(--arena-sub);
+  --user-text-muted: var(--arena-mut);
+  --user-text-subtle: var(--arena-mut);
+  --user-border: var(--arena-line);
+  --user-border-strong: #d5ddd6;
+  --user-control-bg: var(--arena-card);
+  --user-control-bg-muted: #f2f4f2;
+  --user-primary: var(--arena-grn);
+  --user-primary-hover: var(--arena-grn-d);
+  --user-primary-contrast: #ffffff;
+  --user-primary-border: #b9e7cd;
+  --user-primary-faint: var(--arena-grn-soft);
+  --user-primary-soft: var(--arena-grn-soft);
+  --user-success: var(--arena-grn);
+  --user-success-border: #b9e7cd;
+  --user-success-soft: var(--arena-grn-soft);
+  --user-warning: var(--arena-amber);
+  --user-warning-soft: var(--arena-amber-soft);
+  --user-danger: var(--arena-red);
+  --user-danger-border: #f4c3c5;
+  --user-danger-soft: var(--arena-red-soft);
+  --user-ai: var(--arena-vio);
+  --user-ai-soft: var(--arena-vio-soft);
+  --user-cyan-soft: rgba(23, 178, 106, 0.1);
+  --user-disabled: var(--arena-mut);
+  --user-disabled-bg: #f2f4f2;
+  --user-radius-sm: 10px;
+  --user-radius-md: var(--arena-radius-btn);
+  --user-shadow-sm: 0 2px 4px rgba(21, 33, 27, 0.04);
 
   color: var(--arena-ink);
   background:

@@ -1,5 +1,5 @@
 <template>
-  <div class="records-tools-page page-shell">
+  <div class="arena arena-tools records-tools-page page-shell">
     <section class="tools-hero">
       <div>
         <div class="eyebrow">
@@ -21,18 +21,29 @@
       </div>
     </section>
 
-    <section class="quick-grid">
-      <button
-        v-for="link in quickLinks"
-        :key="link.path"
-        class="quick-card"
-        type="button"
-        @click="router.push(link.path)"
-      >
-        <component :is="link.icon" :size="20" />
-        <strong>{{ link.title }}</strong>
-        <span>{{ link.desc }}</span>
-      </button>
+    <section class="tool-groups" aria-label="工具分组">
+      <section v-for="group in quickGroups" :key="group.key" class="tool-group">
+        <div class="tool-group__head">
+          <div>
+            <span>{{ group.kicker }}</span>
+            <h2>{{ group.title }}</h2>
+          </div>
+          <p>{{ group.desc }}</p>
+        </div>
+        <div class="quick-grid">
+          <button
+            v-for="link in group.links"
+            :key="link.path"
+            class="quick-card"
+            type="button"
+            @click="router.push(link.path)"
+          >
+            <component :is="link.icon" :size="20" />
+            <strong>{{ link.title }}</strong>
+            <span>{{ link.desc }}</span>
+          </button>
+        </div>
+      </section>
     </section>
 
     <div class="records-layout">
@@ -182,6 +193,7 @@ import type { StudyPlanListVO } from '@/types/studyPlan'
 import { getErrorMessage } from '@/utils/error'
 
 interface QuickLink {
+  group: 'progress' | 'assets' | 'growth' | 'other'
   title: string
   desc: string
   path: string
@@ -219,13 +231,50 @@ const activeToolKey = ref('precheck')
 const precheckState = reactive<Record<string, boolean>>({})
 
 const quickLinks: QuickLink[] = [
-  { title: '训练分析', desc: '查看训练任务、趋势和技能分布。', path: '/analytics/personal', icon: BarChart3 },
-  { title: '每日任务', desc: '继续今天的学习计划和打卡。', path: '/daily-tasks', icon: CalendarCheck },
-  { title: '学习计划', desc: '从面试报告或能力缺口生成计划。', path: '/study-plans', icon: RouteIcon },
-  { title: '通知中心', desc: '查看系统提醒和任务结果。', path: '/notifications', icon: Bell },
-  { title: '薄弱点分析', desc: '复盘错题、面试和训练短板。', path: '/weakness-analysis', icon: Sparkles },
-  { title: '面试历史', desc: '进入面试详情、房间和报告。', path: '/interviews/history', icon: MessageSquare }
+  { group: 'progress', title: '今日任务', desc: '继续今天的训练计划和打卡。', path: '/agent/today', icon: CalendarCheck },
+  { group: 'progress', title: '训练分析', desc: '查看训练趋势和技能分布。', path: '/analytics/personal', icon: BarChart3 },
+  { group: 'progress', title: '学习计划', desc: '从面试报告或能力缺口继续推进。', path: '/study-plans', icon: RouteIcon },
+  { group: 'assets', title: '简历工坊', desc: '编辑简历、模板和可交付版本。', path: '/resumes', icon: FileClock },
+  { group: 'assets', title: '项目证据库', desc: '沉淀可追问、可验证的项目事实。', path: '/project-evidence', icon: ListChecks },
+  { group: 'assets', title: '投递管理', desc: '跟踪岗位机会和投递材料。', path: '/applications', icon: RouteIcon },
+  { group: 'growth', title: '能力图谱', desc: '查看技能树和下一组高价值训练。', path: '/ability-map', icon: Sparkles },
+  { group: 'growth', title: '错题复盘', desc: '把不稳定的题变成下一轮训练。', path: '/questions/wrong-records', icon: BookOpenCheck },
+  { group: 'growth', title: '面试历史', desc: '进入面试详情、房间和报告。', path: '/interviews/history', icon: MessageSquare },
+  { group: 'other', title: '求职日历', desc: '安排面试、跟进和准备节点。', path: '/career-calendar', icon: CalendarCheck },
+  { group: 'other', title: '通知中心', desc: '查看系统提醒和任务结果。', path: '/notifications', icon: Bell },
+  { group: 'other', title: '薄弱点分析', desc: '汇总错题、面试和训练短板。', path: '/weakness-analysis', icon: History }
 ]
+
+const quickGroups = computed(() => [
+  {
+    key: 'progress',
+    kicker: '进度',
+    title: '继续成长',
+    desc: '今天要推进的训练与计划。',
+    links: quickLinks.filter((item) => item.group === 'progress')
+  },
+  {
+    key: 'assets',
+    kicker: '资产',
+    title: '我的材料',
+    desc: '简历、项目和投递上下文。',
+    links: quickLinks.filter((item) => item.group === 'assets')
+  },
+  {
+    key: 'growth',
+    kicker: '成长',
+    title: '复盘与能力',
+    desc: '把练习结果沉淀成下一步。',
+    links: quickLinks.filter((item) => item.group === 'growth')
+  },
+  {
+    key: 'other',
+    kicker: '其他',
+    title: '辅助工具',
+    desc: '日历、通知和问题诊断。',
+    links: quickLinks.filter((item) => item.group === 'other')
+  }
+])
 
 const preInterviewChecklist = [
   { key: 'resume', label: '确认今天使用的简历版本和项目经历说法' },
@@ -765,6 +814,182 @@ onMounted(() => {
   .template-actions,
   .precheck-actions {
     justify-content: flex-start;
+  }
+}
+
+// 方向 D · 工具背包。历史记录仍保留，但从“运营工作台”收口为轻量工具入口。
+.arena-tools {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .tools-hero,
+  .quick-card,
+  .timeline-panel,
+  .precheck-panel,
+  .toolbox-section,
+  .template-preview {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .tools-hero {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    padding: 22px;
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .eyebrow,
+  .timeline-meta span,
+  .template-preview > span {
+    color: var(--arena-grn-d);
+  }
+
+  .quick-grid {
+    gap: 12px;
+  }
+
+  .tool-groups {
+    display: grid;
+    gap: 14px;
+  }
+
+  .tool-group {
+    padding: 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .tool-group__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+
+    span {
+      color: var(--arena-amber);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    h2 {
+      margin: 4px 0 0;
+      color: var(--arena-ink);
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    p {
+      max-width: 360px;
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: right;
+    }
+  }
+
+  .quick-card,
+  .tool-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+
+    &:hover,
+    &.active {
+      border-color: var(--arena-grn);
+      background: linear-gradient(135deg, var(--arena-grn-soft), #ffffff 80%);
+      transform: translateY(-1px);
+    }
+
+    svg {
+      color: var(--arena-grn);
+    }
+  }
+
+  .timeline-panel,
+  .precheck-panel,
+  .toolbox-section {
+    padding: 18px;
+  }
+
+  .timeline-item {
+    border-color: var(--arena-line);
+  }
+
+  .timeline-dot {
+    background: var(--arena-amber);
+
+    &.green {
+      background: var(--arena-grn);
+    }
+  }
+
+  .checklist label {
+    border: 1.5px solid var(--arena-line);
+    border-radius: 13px;
+    background: #f8faf8;
+
+    &.checked {
+      border-color: #b9e7cd;
+      background: #f5fcf7;
+      color: var(--arena-grn-d);
+    }
+  }
+
+  .template-preview {
+    background: linear-gradient(180deg, #ffffff, #f8faf8);
+  }
+
+  :deep(.el-progress-bar__outer) {
+    background: var(--arena-line);
+  }
+
+  :deep(.el-progress-bar__inner) {
+    background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-tools {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .tools-hero {
+      padding: 18px;
+    }
+
+    .tool-group {
+      padding: 14px;
+    }
+
+    .tool-group__head {
+      align-items: flex-start;
+      flex-direction: column;
+
+      p {
+        max-width: none;
+        text-align: left;
+      }
+    }
   }
 }
 </style>

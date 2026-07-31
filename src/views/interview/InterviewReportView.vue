@@ -1,5 +1,5 @@
 <template>
-  <div class="interview-report page-shell">
+  <div class="arena arena-report interview-report page-shell">
     <section class="report-top report-top--compact">
       <div>
         <div class="eyebrow">
@@ -3639,6 +3639,141 @@ onBeforeUnmount(() => {
   .settle-banner {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+}
+
+// 方向 D · 面试结算。正式评分、证据与导出仍保留；XP 仅作为独立激励层。
+.arena-report {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .report-top,
+  .analysis-card,
+  .content-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .report-top {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .eyebrow {
+    color: var(--arena-grn-d);
+  }
+
+  .settle-banner {
+    border: 1.5px solid #f3ddc0;
+    border-radius: var(--arena-radius-card);
+    background: linear-gradient(135deg, #fff7ec, #ffffff 72%);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .settle-banner__kicker,
+  .settle-banner__xp-row b {
+    color: #b4560a;
+  }
+
+  .settle-banner__score,
+  .settle-banner__xp-row,
+  .settle-banner__xp-row.is-total,
+  .settle-banner__improve ol {
+    color: var(--arena-ink);
+  }
+
+  .settle-banner__score small,
+  .settle-banner__xp-row {
+    color: var(--arena-sub);
+  }
+
+  .settle-banner__xp-row.is-total {
+    border-color: #f3ddc0;
+
+    b {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  .settle-banner__improve {
+    background: var(--arena-vio-soft);
+
+    > span {
+      color: var(--arena-vio);
+    }
+  }
+
+  .report-hero-grid,
+  .report-support-strip,
+  .report-professional-strip,
+  .overview-grid,
+  .voice-delivery-facts,
+  .next-grid,
+  .alignment-card-grid {
+    border-color: var(--arena-line);
+  }
+
+  .report-score-panel,
+  .report-summary-panel,
+  .report-action-panel,
+  .voice-delivery-facts article,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article,
+  .stage-report-card,
+  .stage-copy,
+  .next-action-card,
+  .knowledge-candidate-card,
+  .recommended-item {
+    border-color: var(--arena-line);
+    background: #ffffff;
+  }
+
+  .report-score-panel {
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  .report-action-panel,
+  .recommended-training-callout {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .knowledge-candidate-card {
+    border-color: #d7ccff;
+    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
+  }
+
+  .stage-score-pill {
+    border-radius: 13px;
+    background: var(--arena-grn-soft);
+
+    strong {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+}
+
+@media (max-width: 760px) {
+  .arena-report {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
   }
 }
 </style>

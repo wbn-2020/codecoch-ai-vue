@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getUnreadCountApi } from '@/api/notification'
@@ -57,11 +57,16 @@ const displayName = computed(
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
+const usesArenaOverlayTheme = computed(() => Boolean(route.meta?.arenaTheme))
 
 const unreadCount = ref(0)
 const unreadAvailable = ref(true)
 const commandPaletteOpen = ref(false)
 const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（稍后刷新未读数）')
+
+watch(usesArenaOverlayTheme, (enabled) => {
+  document.body.classList.toggle('arena-overlay-theme', enabled)
+}, { immediate: true })
 
 const goAdmin = async () => {
   try {
@@ -138,6 +143,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.body.classList.remove('is-user-layout-active')
+  document.body.classList.remove('arena-overlay-theme')
   unreadRefreshCancelled = true
   window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })

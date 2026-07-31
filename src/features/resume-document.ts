@@ -3,12 +3,15 @@ import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
 export const RESUME_TEMPLATE_CODES = [
   'ATS_SINGLE_COLUMN',
   'ATS_COMPACT',
-  'ATS_PROJECT_FOCUS'
+  'ATS_PROJECT_FOCUS',
+  'ATS_CLASSIC_SIDEBAR',
+  'ATS_STREAK_SIGNATURE'
 ] as const
 
 export type ResumeTemplateCode = typeof RESUME_TEMPLATE_CODES[number]
 export type ResumeAccent = 'ocean' | 'teal' | 'graphite' | 'berry'
 export type ResumePreviewDensity = 'comfortable' | 'compact'
+export const RESUME_STREAK_TEMPLATE_UNLOCK_DAYS = 7
 
 export interface ResumeDocumentDraft extends ResumeDeliveryDraft {
   resumeName?: string
@@ -47,31 +50,52 @@ export interface ResumeTemplateOption {
   description: string
   shortLabel: string
   className: string
+  unlockStreakDays?: number
 }
 
 export const resumeTemplateOptions: ResumeTemplateOption[] = [
   {
     code: 'ATS_SINGLE_COLUMN',
-    name: '经典专业',
+    name: '极光绿',
     description: '清晰时间线与强调色标题，适合通用投递',
-    shortLabel: '专业',
+    shortLabel: '极光',
     className: 'professional'
   },
   {
     code: 'ATS_COMPACT',
-    name: '紧凑一页',
+    name: '极简线框',
     description: '收紧字号与间距，适合信息较多的简历',
-    shortLabel: '紧凑',
+    shortLabel: '极简',
     className: 'compact'
   },
   {
     code: 'ATS_PROJECT_FOCUS',
-    name: '技术项目',
+    name: '商务靛蓝',
     description: '技能和项目优先，适合研发与工程岗位',
-    shortLabel: '项目',
+    shortLabel: '靛蓝',
     className: 'project'
+  },
+  {
+    code: 'ATS_CLASSIC_SIDEBAR',
+    name: '雅黑侧栏',
+    description: '深色信息侧栏，突出技能与联系方式',
+    shortLabel: '侧栏',
+    className: 'classic'
+  },
+  {
+    code: 'ATS_STREAK_SIGNATURE',
+    name: '连胜典藏',
+    description: `连续 ${RESUME_STREAK_TEMPLATE_UNLOCK_DAYS} 天完成关卡后解锁`,
+    shortLabel: '典藏',
+    className: 'streak',
+    unlockStreakDays: RESUME_STREAK_TEMPLATE_UNLOCK_DAYS
   }
 ]
+
+export const isResumeTemplateUnlocked = (
+  template: ResumeTemplateOption,
+  streakDays: number
+) => !template.unlockStreakDays || Math.max(0, Math.floor(streakDays)) >= template.unlockStreakDays
 
 export const normalizeResumeTemplateCode = (value?: string): ResumeTemplateCode =>
   RESUME_TEMPLATE_CODES.includes(value as ResumeTemplateCode)
@@ -301,6 +325,9 @@ export const resumeTemplateSectionOrder = (
   }
   if (code === 'ATS_PROJECT_FOCUS') {
     return ['summary', 'skills', 'projects', 'experience', 'education']
+  }
+  if (code === 'ATS_CLASSIC_SIDEBAR') {
+    return ['summary', 'experience', 'projects', 'education']
   }
   return ['summary', 'experience', 'projects', 'skills', 'education']
 }

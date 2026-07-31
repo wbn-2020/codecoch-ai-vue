@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
+import { useGameProfileStore } from '@/features/game-profile'
 import ArenaPrepareView from '@/views/resume/ArenaPrepareView.vue'
 
 const resumesResult = vi.hoisted(() => ({ value: { records: [] as unknown[] } }))
@@ -11,6 +12,12 @@ const currentTargetResult = vi.hoisted(() => ({ value: null as unknown }))
 const resumeDetailResult = vi.hoisted(() => ({ value: null as unknown }))
 const matchResult = vi.hoisted(() => ({ value: null as unknown }))
 const skillOverviewResult = vi.hoisted(() => ({ value: null as unknown }))
+const routerResult = vi.hoisted(() => ({ push: vi.fn() }))
+const jobTargetApi = vi.hoisted(() => ({
+  create: vi.fn(),
+  update: vi.fn(),
+  parse: vi.fn()
+}))
 
 vi.mock('@/api/resume', () => ({
   getResumesApi: vi.fn(async () => resumesResult.value),
@@ -18,7 +25,10 @@ vi.mock('@/api/resume', () => ({
 }))
 vi.mock('@/api/jobTarget', () => ({
   getJobTargetsApi: vi.fn(async () => targetsResult.value),
-  getCurrentJobTargetApi: vi.fn(async () => currentTargetResult.value)
+  getCurrentJobTargetApi: vi.fn(async () => currentTargetResult.value),
+  createJobTargetApi: jobTargetApi.create,
+  updateJobTargetApi: jobTargetApi.update,
+  parseJobDescriptionApi: jobTargetApi.parse
 }))
 vi.mock('@/api/resumeJobMatch', () => ({
   getLatestResumeJobMatchReportApi: vi.fn(async () => matchResult.value)
@@ -27,7 +37,7 @@ vi.mock('@/api/skillProfile', () => ({
   getSkillProfileOverviewApi: vi.fn(async () => skillOverviewResult.value)
 }))
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => routerResult,
   useRoute: () => ({ path: '/resumes', fullPath: '/resumes', meta: {} })
 }))
 
@@ -89,6 +99,27 @@ describe('ArenaPrepareView', () => {
     resumeDetailResult.value = null
     matchResult.value = null
     skillOverviewResult.value = null
+    jobTargetApi.create.mockReset()
+    jobTargetApi.update.mockReset()
+    jobTargetApi.parse.mockReset()
+    routerResult.push.mockReset()
+    jobTargetApi.create.mockImplementation(async (payload) => ({
+      id: 12,
+      currentFlag: 1,
+      parseStatus: 'NOT_PARSED',
+      ...payload
+    }))
+    jobTargetApi.update.mockImplementation(async (id, payload) => ({
+      id,
+      currentFlag: 1,
+      parseStatus: 'NOT_PARSED',
+      ...payload
+    }))
+    jobTargetApi.parse.mockImplementation(async (targetJobId) => ({
+      targetJobId,
+      parseStatus: 'PARSED',
+      summary: '已提取岗位关键词'
+    }))
   })
 
   it('renders the three-step quest map with only the first node unlocked when empty', async () => {
@@ -101,7 +132,7 @@ describe('ArenaPrepareView', () => {
     expect(wrapper.text()).toContain('第 3 关 · 生成 JD 匹配报告')
     expect(wrapper.text()).toContain('已完成 0/3')
     // 第 1 关为当前关，其余未解锁
-    expect(wrapper.findAll('.arena-chip--amber').length).toBe(1)
+    expect(wrapper.get('.arena-prepare__map').findAll('.arena-chip--amber')).toHaveLength(1)
     expect(wrapper.text()).toContain('未解锁')
     // 下一步行动
     expect(wrapper.text()).toContain('先补简历')
@@ -187,5 +218,63 @@ describe('ArenaPrepareView', () => {
     expect(wrapper.text()).toContain('JVM 调优')
     expect(wrapper.text()).toContain('高并发设计')
     expect(wrapper.text()).toContain('待匹配')
+  })
+
+  it('saves and parses a JD in the prepare flow before awarding the one-time JD XP', async () => {
+    resumesResult.value = { records: [FULL_RESUME] }
+
+    const wrapper = mountPrepare()
+    await flush()
+
+    const inputs = wrapper.findAll('.arena-prepare__jd-fields input')
+    await inputs[0].setValue('高级 Java 后端工程师')
+    await inputs[1].setValue('华辰数智')
+    await wrapper.get('.arena-prepare__jd-textarea textarea').setValue(
+      '负责高并发交易链路建设，熟悉 Java、Spring Boot、MySQL、Redis 和消息队列。'
+    )
+    await wrapper.get('.arena-prepare__jd-actions .arena-btn--pri').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(jobTargetApi.create).toHaveBeenCalledWith(expect.objectContaining({
+      jobTitle: '高级 Java 后端工程师',
+      companyName: '华辰数智',
+      jdText: expect.stringContaining('高并发交易链路')
+    }))
+    expect(jobTargetApi.parse).toHaveBeenCalledWith(12, { forceRefresh: true })
+    expect(wrapper.text()).toContain('JD 已保存并完成解析')
+    expect(useGameProfileStore().xp).toBe(60)
+  })
+
+  it('invalidates the prior match report after updating an existing JD', async () => {
+    resumesResult.value = { records: [FULL_RESUME] }
+    currentTargetResult.value = { ...FULL_TARGET, jdText: '旧版岗位描述，包含旧技术要求。' }
+    matchResult.value = SUCCESS_MATCH
+
+    const wrapper = mountPrepare()
+    await flush()
+
+    expect(wrapper.text()).toContain('匹配分 72')
+
+    await wrapper.get('.arena-prepare__jd-textarea textarea').setValue(
+      '新版岗位描述：负责高并发交易平台，要求熟悉 Java、Spring Boot、Redis、消息队列和分布式事务。'
+    )
+    await wrapper.get('.arena-prepare__jd-actions .arena-btn--pri').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(jobTargetApi.update).toHaveBeenCalledWith(3, expect.objectContaining({
+      jdText: expect.stringContaining('新版岗位描述')
+    }))
+    expect(wrapper.text()).not.toContain('匹配分 72')
+
+    await wrapper.get('.arena-prepare__jd-actions .arena-btn--sec').trigger('click')
+    expect(routerResult.push).toHaveBeenLastCalledWith({
+      path: '/resume-match',
+      query: {
+        resumeId: 7,
+        targetJobId: 3
+      }
+    })
   })
 })

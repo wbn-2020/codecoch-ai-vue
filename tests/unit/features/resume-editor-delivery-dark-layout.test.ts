@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 const targetFiles = [
@@ -11,17 +13,32 @@ const targetFiles = [
   'src/views/resume/components/ResumeDeliveryWorkbench.vue',
   'src/views/resume/components/ResumeArtifactDeliveryPanel.vue'
 ]
+const arenaResumeEditorScope = {
+  rootClass: 'class="arena arena-resume-studio resume-editor page-shell"',
+  selector: '.arena-resume-studio'
+}
+const stripArenaMigrationAndPaperPreviewStyles = (source: string) =>
+  stripScopedStyleBlock(
+    stripScopedStyleBlock(source, arenaResumeEditorScope.selector),
+    '.template-thumb'
+  )
 
 describe('resume editor and delivery workspace layout', () => {
   it('keeps every product surface dark while allowing real paper previews to stay white', () => {
     for (const path of targetFiles) {
       const source = readSource(path)
-
-      expect(source, path).toContain('var(--user-')
-      expect(source, path).not.toMatch(
+      const validatedSource = path === 'src/views/resume/ResumeEditView.vue'
+        ? stripArenaMigrationAndPaperPreviewStyles(source)
+        : source
+      if (path === 'src/views/resume/ResumeEditView.vue') {
+        expect(source, path).toContain(arenaResumeEditorScope.rootClass)
+        expect(source, path).toContain('var(--arena-')
+      }
+      expect(validatedSource, path).toContain('var(--user-')
+      expect(validatedSource, path).not.toMatch(
         /background(?:-color)?:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#eff6ff|#eef4ff|#ecfdf3|#f0fdf4|#f5f8ff|#f5f3ff|#fffbeb|rgba\(\s*255\s*,\s*255\s*,\s*255)/i
       )
-      expect(source, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
+      expect(validatedSource, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
     }
 
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')

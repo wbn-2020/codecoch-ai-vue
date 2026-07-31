@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CareerCalendarGrid from '@/views/v4/career-calendar/components/CareerCalendarGrid.vue'
 
@@ -24,6 +24,15 @@ const events = [
 ]
 
 describe('CareerCalendarGrid interview preparation entry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-15T09:00:00+08:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('only exposes preparation for supported interview events', async () => {
     const wrapper = mount(CareerCalendarGrid, {
       props: {

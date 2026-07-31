@@ -99,6 +99,81 @@
           </div>
         </div>
 
+        <!-- 当前关：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
+        <section class="arena-card arena-prepare__jd-card" aria-labelledby="prepare-jd-title">
+          <div class="arena-prepare__jd-head">
+            <div>
+              <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+                <span class="arena-chip arena-chip--amber">第 2 关 · 当前补给</span>
+                <span class="arena-xp-tag">+60 XP</span>
+                <span class="arena-tiny">{{ currentTarget ? parseStatusLabel(currentTarget.parseStatus) : '等待岗位描述' }}</span>
+              </div>
+              <h2 id="prepare-jd-title" class="arena-h2" style="margin-top: 10px">贴上你的目标岗位 JD</h2>
+              <p class="arena-p" style="margin-top: 6px">
+                把招聘描述贴进来，系统会提取岗位关键词，再用你的简历生成匹配报告。
+              </p>
+            </div>
+            <div class="arena-prepare__jd-lock" aria-hidden="true">🧭</div>
+          </div>
+
+          <div class="arena-prepare__jd-grid">
+            <div>
+              <div class="arena-prepare__jd-fields">
+                <label>
+                  <span>目标岗位</span>
+                  <input
+                    v-model.trim="jdTitleDraft"
+                    type="text"
+                    maxlength="80"
+                    placeholder="例如：高级 Java 后端工程师"
+                    :disabled="jdSaving"
+                  />
+                </label>
+                <label>
+                  <span>公司（可选）</span>
+                  <input
+                    v-model.trim="jdCompanyDraft"
+                    type="text"
+                    maxlength="80"
+                    placeholder="例如：华辰数智"
+                    :disabled="jdSaving"
+                  />
+                </label>
+              </div>
+              <label class="arena-prepare__jd-textarea">
+                <span>岗位 JD 原文</span>
+                <textarea
+                  v-model="jdDraft"
+                  rows="7"
+                  maxlength="12000"
+                  placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
+                  :disabled="jdSaving"
+                />
+              </label>
+              <div class="arena-prepare__jd-actions">
+                <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
+                  {{ jdSaving ? '正在保存并解析…' : '⚔ 保存并解析 JD' }}
+                </button>
+                <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
+                  去生成匹配 →
+                </button>
+              </div>
+              <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+            </div>
+
+            <aside class="arena-prepare__jd-tip">
+              <span class="arena-chip arena-chip--vio">✦ AI 教练提示</span>
+              <strong>{{ currentTarget ? '岗位描述可以继续更新' : '先把岗位上下文接进来' }}</strong>
+              <p>
+                {{ currentTarget
+                  ? '保存新 JD 后会重新触发岗位解析，旧匹配报告不会被冒充成新结果。'
+                  : '岗位描述、简历和项目证据会共同决定后续推荐题与模拟面试。' }}
+              </p>
+              <span class="arena-tiny">建议至少粘贴完整的职责和任职要求。</span>
+            </aside>
+          </div>
+        </section>
+
         <div class="arena-prepare__grid">
           <div class="arena-col">
             <!-- 关键词覆盖 = 技能解锁 -->
@@ -272,13 +347,19 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
+import {
+  createJobTargetApi,
+  getCurrentJobTargetApi,
+  getJobTargetsApi,
+  parseJobDescriptionApi,
+  updateJobTargetApi
+} from '@/api/jobTarget'
 import { getResumeDetailApi, getResumesApi } from '@/api/resume'
 import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
-import type { JobDescriptionAnalysisVO, TargetJobVO } from '@/types/jobTarget'
+import type { JobDescriptionAnalysisVO, TargetJobSaveDTO, TargetJobVO } from '@/types/jobTarget'
 import type { ResumeDetailVO, ResumeVO } from '@/types/resume'
 import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
@@ -329,6 +410,11 @@ const resumeDetail = ref<ResumeDetailVO | null>(null)
 const currentTarget = ref<TargetJobVO | null>(null)
 const latestMatch = ref<ResumeJobMatchReportDetailVO | null>(null)
 const skillOverview = ref<SkillProfileOverviewVO | null>(null)
+const jdTitleDraft = ref('')
+const jdCompanyDraft = ref('')
+const jdDraft = ref('')
+const jdSaving = ref(false)
+const jdFeedback = ref('')
 
 const parseMaybeJson = (value: unknown): unknown => {
   if (typeof value !== 'string') return value
@@ -400,6 +486,7 @@ const getMatchReportPath = () => {
   return reportId ? `/resume-match/${reportId}` : '/resume-match'
 }
 
+const jdReady = computed(() => jdTitleDraft.value.trim().length >= 2 && jdDraft.value.trim().length >= 20)
 const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
 const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
@@ -580,6 +667,71 @@ const goResumeAction = () => {
 
 const goTargetAction = () => {
   router.push(getTargetAnalysisPath())
+}
+
+const syncJdDraft = () => {
+  jdTitleDraft.value = currentTarget.value?.jobTitle || ''
+  jdCompanyDraft.value = currentTarget.value?.companyName || ''
+  jdDraft.value = currentTarget.value?.jdText || ''
+}
+
+const invalidateTargetDependentEvidence = () => {
+  // 目标岗位的 JD 一旦更新，旧报告与技能画像就不再是当前岗位上下文的证据。
+  // 同时让尚未结束的延迟加载失效，避免它把旧报告重新写回页面。
+  loadRunId += 1
+  clearEvidenceLoadTimer()
+  secondaryLoading.value = false
+  latestMatch.value = null
+  skillOverview.value = null
+}
+
+const saveTargetAndParse = async () => {
+  if (jdSaving.value || !jdReady.value) {
+    jdFeedback.value = '请填写岗位名称，并粘贴至少 20 个字符的岗位描述。'
+    return
+  }
+
+  jdSaving.value = true
+  jdFeedback.value = ''
+  const payload: TargetJobSaveDTO = {
+    jobTitle: jdTitleDraft.value.trim(),
+    companyName: jdCompanyDraft.value.trim() || undefined,
+    jobLevel: currentTarget.value?.jobLevel || undefined,
+    jdText: jdDraft.value.trim(),
+    jdSource: currentTarget.value?.jdSource || 'ARENA_PREPARE'
+  }
+
+  try {
+    const saved = currentTarget.value?.id
+      ? await updateJobTargetApi(currentTarget.value.id, payload)
+      : await createJobTargetApi(payload)
+    currentTarget.value = saved
+    invalidateTargetDependentEvidence()
+    targets.value = [
+      saved,
+      ...targets.value.filter((target) => target.id !== saved.id)
+    ]
+
+    try {
+      const analysis = await parseJobDescriptionApi(saved.id, { forceRefresh: true })
+      currentTarget.value = {
+        ...saved,
+        parseStatus: analysis?.parseStatus || 'PARSED',
+        analysisSummary: analysis?.summary || saved.analysisSummary,
+        requiredSkills: analysis?.requiredSkills || saved.requiredSkills,
+        interviewFocusPoints: analysis?.interviewFocusPoints || saved.interviewFocusPoints
+      }
+      jdFeedback.value = 'JD 已保存并完成解析，可以继续生成匹配报告。'
+    } catch (error) {
+      jdFeedback.value = `JD 已保存，但岗位解析暂未完成：${getErrorMessage(error, '请稍后重试。')}`
+    }
+
+    gameProfile.grantXpOnce('jd_paste', `target:${saved.id}:jd`)
+  } catch (error) {
+    jdFeedback.value = getErrorMessage(error, 'JD 保存失败，请检查网络后重试。')
+  } finally {
+    jdSaving.value = false
+  }
 }
 
 const goMatchAction = () => {
@@ -978,6 +1130,7 @@ const loadAll = async () => {
       targets.value.find((item) => item.currentFlag === 1) ||
       targets.value[0] ||
       null
+    syncJdDraft()
 
     partialLoadWarning.value = warnings.filter(Boolean).join('；')
   } catch (error) {
@@ -1057,6 +1210,133 @@ onBeforeUnmount(() => {
   &__map {
     margin-top: 20px;
     padding: 22px 24px;
+  }
+
+  &__jd-card {
+    margin-top: 16px;
+    padding: 22px 24px;
+    border: 1.5px solid #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  &__jd-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  &__jd-lock {
+    display: inline-flex;
+    flex: none;
+    width: 46px;
+    height: 46px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--arena-amber-soft);
+    font-size: 22px;
+  }
+
+  &__jd-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.8fr);
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  &__jd-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  &__jd-fields label,
+  &__jd-textarea {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    > span {
+      color: var(--arena-sub);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 13px;
+      outline: 0;
+      background: #fff;
+      color: var(--arena-ink);
+      font: inherit;
+      line-height: 1.55;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+      &:focus {
+        border-color: var(--arena-grn);
+        box-shadow: 0 0 0 3px var(--arena-grn-soft);
+      }
+
+      &:disabled {
+        cursor: wait;
+        opacity: 0.7;
+      }
+    }
+
+    input {
+      min-height: 42px;
+      padding: 0 12px;
+    }
+  }
+
+  &__jd-textarea {
+    margin-top: 12px;
+
+    textarea {
+      min-height: 168px;
+      padding: 11px 12px;
+      resize: vertical;
+    }
+  }
+
+  &__jd-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  &__jd-feedback {
+    margin: 10px 0 0;
+    color: var(--arena-sub);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  &__jd-tip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 16px;
+    border: 1.5px solid #d7ccff;
+    border-radius: 16px;
+    background: linear-gradient(150deg, var(--arena-vio-soft), #fff 76%);
+
+    strong {
+      font-size: 14px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.65;
+    }
   }
 
   &__track {
@@ -1410,8 +1690,22 @@ onBeforeUnmount(() => {
 
     &__grid,
     &__side,
-    &__risk-grid {
+    &__risk-grid,
+    &__jd-grid,
+    &__jd-fields {
       grid-template-columns: 1fr;
+    }
+
+    &__jd-card {
+      padding: 18px;
+    }
+
+    &__jd-head {
+      gap: 12px;
+    }
+
+    &__jd-lock {
+      display: none;
     }
   }
 }

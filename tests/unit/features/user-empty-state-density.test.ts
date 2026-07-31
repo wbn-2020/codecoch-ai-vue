@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 const targetPages = [
@@ -12,6 +14,11 @@ const targetPages = [
   'src/views/question/WrongQuestionView.vue',
   'src/views/study/StudyPlanView.vue'
 ]
+const arenaToolsScope = {
+  path: 'src/views/tools/RecordsToolsView.vue',
+  rootClass: 'class="arena arena-tools records-tools-page page-shell"',
+  selector: '.arena-tools'
+}
 
 describe('user empty-state density and theme readability', () => {
   it('uses user-theme tokens for text and state colors', () => {
@@ -20,9 +27,15 @@ describe('user empty-state density and theme readability', () => {
 
     for (const path of targetPages) {
       const source = readSource(path)
-
-      expect(source, path).toContain('var(--user-')
-      expect(source, path).not.toMatch(hardcodedThemeColor)
+      const validatedSource = path === arenaToolsScope.path
+        ? stripScopedStyleBlock(source, arenaToolsScope.selector)
+        : source
+      if (path === arenaToolsScope.path) {
+        expect(source, path).toContain(arenaToolsScope.rootClass)
+        expect(source, path).toContain('var(--arena-')
+      }
+      expect(validatedSource, path).toContain('var(--user-')
+      expect(validatedSource, path).not.toMatch(hardcodedThemeColor)
     }
   })
 

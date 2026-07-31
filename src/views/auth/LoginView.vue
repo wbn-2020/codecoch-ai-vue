@@ -26,7 +26,7 @@
           每天 15 分钟，刷题、练面试、攒战力。看着自己的 Offer 就绪度一路涨上去。
         </p>
 
-        <div class="arena-card login-hero__power" aria-label="成长面板预览">
+        <div class="arena-card login-hero__power" aria-label="示例成长面板预览">
           <div
             class="arena-ring"
             style="width: 64px; height: 64px; background: conic-gradient(var(--arena-grn) 0 68%, var(--arena-line) 68% 100%)"
@@ -38,11 +38,11 @@
           </div>
           <div>
             <div class="arena-row" style="gap: 7px">
-              <b style="font-size: 14px">LV.6 面试新星</b>
-              <span class="arena-chip arena-chip--amber" style="font-size: 10px">🔥 6 连胜</span>
+              <b style="font-size: 14px">示例 · LV.6 面试新星</b>
+              <span class="arena-chip arena-chip--amber" style="font-size: 10px">🔥 示例 6 连胜</span>
             </div>
             <div class="arena-xpbar" style="margin-top: 6px; width: 180px"><i style="width: 70%"></i></div>
-            <div class="arena-tiny" style="margin-top: 5px">你的成长面板 · 登录后可见真实进度</div>
+            <div class="arena-tiny" style="margin-top: 5px">登录后显示你的真实进度</div>
           </div>
         </div>
       </section>

@@ -1,5 +1,5 @@
 <template>
-  <div class="resume-editor page-shell">
+  <div class="arena arena-resume-studio resume-editor page-shell">
     <AppState
       v-if="isEdit && loading"
       class="resume-editor-state"
@@ -350,9 +350,14 @@
               type="button"
               role="radio"
               :aria-checked="selectedResumeTemplateCode === template.code"
+              :aria-disabled="!isTemplateUnlocked(template)"
               :tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"
-              :class="{ active: selectedResumeTemplateCode === template.code }"
-              @click="selectedResumeTemplateCode = template.code"
+              :class="{
+                active: selectedResumeTemplateCode === template.code,
+                locked: !isTemplateUnlocked(template)
+              }"
+              :disabled="!isTemplateUnlocked(template)"
+              @click="selectResumeTemplate(template)"
               @keydown="moveTemplateSelection($event)"
             >
               <span class="template-thumb" :class="`is-${template.className}`">
@@ -685,6 +690,7 @@ import {
   Sparkles,
   UserRound
 } from 'lucide-vue-next'
+import { getActivePinia } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -705,10 +711,13 @@ import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import {
+  isResumeTemplateUnlocked,
   resumeTemplateOptions,
+  type ResumeTemplateOption,
   type ResumeAccent,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import { useGameProfileStore } from '@/features/game-profile'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import type {
@@ -730,6 +739,7 @@ import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
+const gameProfile = getActivePinia() ? useGameProfileStore() : null
 const resumeId = computed(() => getRouteNumberParam(route.params.id as string))
 const isEdit = computed(() => Boolean(resumeId.value))
 const routeTargetJobId = computed(() => {
@@ -773,6 +783,19 @@ const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
   { value: 'berry', label: '莓红色' }
 ]
 const mobileWorkspaceTabs = ['edit', 'preview', 'advice'] as const
+const availableResumeTemplateCodes = computed(() =>
+  resumeTemplateOptions
+    .filter((template) => isTemplateUnlocked(template))
+    .map((template) => template.code)
+)
+
+const isTemplateUnlocked = (template: ResumeTemplateOption) =>
+  isResumeTemplateUnlocked(template, gameProfile?.streakDays || 0)
+
+const selectResumeTemplate = (template: ResumeTemplateOption) => {
+  if (!isTemplateUnlocked(template)) return
+  selectedResumeTemplateCode.value = template.code
+}
 
 const moveRovingSelection = <T>(
   event: KeyboardEvent,
@@ -800,7 +823,7 @@ const moveRovingSelection = <T>(
   select(values[nextIndex])
   void nextTick(() => {
     const buttons = event.currentTarget instanceof HTMLElement
-      ? Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button') || [])
+      ? Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
       : []
     buttons[nextIndex]?.focus()
   })
@@ -817,7 +840,7 @@ const moveMobileWorkspaceTab = (event: KeyboardEvent) =>
 const moveTemplateSelection = (event: KeyboardEvent) =>
   moveRovingSelection(
     event,
-    resumeTemplateOptions.map((item) => item.code),
+    availableResumeTemplateCodes.value,
     selectedResumeTemplateCode.value,
     (value) => { selectedResumeTemplateCode.value = value }
   )
@@ -939,8 +962,9 @@ const loadPreviewPreferences = () => {
       accent?: ResumeAccent
       zoom?: number
     }
-    if (resumeTemplateOptions.some((item) => item.code === preference.templateCode)) {
-      selectedResumeTemplateCode.value = preference.templateCode as ResumeTemplateCode
+    const storedTemplate = resumeTemplateOptions.find((item) => item.code === preference.templateCode)
+    if (storedTemplate && isTemplateUnlocked(storedTemplate)) {
+      selectedResumeTemplateCode.value = storedTemplate.code
     }
     if (resumeAccentOptions.some((item) => item.value === preference.accent)) {
       previewAccent.value = preference.accent as ResumeAccent
@@ -1448,6 +1472,10 @@ const handleApplyOptimizeResult = async () => {
       selectedSuggestionIndexes: selectedSuggestions.map(({ index }) => index),
       selectedFields
     })
+    gameProfile?.grantXpOnce(
+      'resume_section',
+      `resume:optimize-apply:${optimizeDetail.value.optimizeRecordId}`
+    )
     await showApplyResultMessage(result.message, result.warnings, result.newResumeId)
     if (result.newResumeId) {
       await router.push(`/resumes/${result.newResumeId}/edit`)
@@ -2284,6 +2312,16 @@ onBeforeUnmount(() => {
       color: var(--user-text);
     }
 
+    &.locked {
+      cursor: not-allowed;
+      opacity: 0.58;
+
+      &:hover {
+        border-color: var(--user-border);
+        background: var(--user-control-bg);
+      }
+    }
+
     > span:nth-child(2) {
       min-width: 0;
     }
@@ -2364,6 +2402,35 @@ onBeforeUnmount(() => {
     &::before {
       width: 82%;
       background: var(--resume-paper-project);
+    }
+  }
+
+  &.is-classic {
+    padding: 5px;
+    background: linear-gradient(90deg, #2d3748 0 32%, var(--resume-template-paper) 32% 100%);
+
+    &::before,
+    i {
+      margin-left: 14px;
+      background: var(--resume-paper-line);
+    }
+
+    &::before {
+      background: #e2e8f0;
+    }
+  }
+
+  &.is-streak {
+    background: repeating-linear-gradient(
+      135deg,
+      #f4f6f4,
+      #f4f6f4 6px,
+      #edf1ed 6px,
+      #edf1ed 12px
+    );
+
+    &::before {
+      background: var(--user-warning);
     }
   }
 }
@@ -3071,6 +3138,212 @@ onBeforeUnmount(() => {
     :deep(.el-dialog) {
       width: calc(100vw - 24px) !important;
       max-width: none;
+    }
+  }
+}
+
+// 方向 D · 简历工坊适配。保留原有编辑、AI 建议和导出链路，只重塑工作台层级。
+.arena-resume-studio {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .editor-hero {
+    border: 1.5px solid #b9e7cd;
+    border-radius: var(--arena-radius-card);
+    background: linear-gradient(135deg, #effcf4, #ffffff 70%);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .hero-kicker,
+  .panel-kicker,
+  .eyebrow {
+    color: var(--arena-grn-d);
+  }
+
+  .hero-status span,
+  .template-selector button,
+  .section-nav button,
+  .prompt-card,
+  .diagnostic-list span,
+  .evidence-list > div,
+  .gap-list article,
+  .completion-list span {
+    border-color: var(--arena-line);
+    border-radius: 13px;
+  }
+
+  .hero-status span {
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .live-feedback-strip,
+  .content-card,
+  .preview-column,
+  .side-panel {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .live-feedback-strip {
+    background: #ffffff;
+
+    article {
+      padding: 14px 16px;
+    }
+  }
+
+  .editor-workspace {
+    grid-template-columns: 206px minmax(0, 1fr) minmax(300px, 0.84fr);
+    gap: 18px;
+  }
+
+  .editor-main {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: 1fr;
+  }
+
+  .preview-column {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 18px;
+    align-self: start;
+  }
+
+  .editor-aside {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: 1fr;
+    position: sticky;
+    top: 18px;
+
+    > .side-panel {
+      padding: 14px;
+    }
+  }
+
+  .section-heading h2,
+  .preview-toolbar h2 {
+    font-weight: 900;
+  }
+
+  .section-icon {
+    border-radius: 12px;
+  }
+
+  .ai-writing-card {
+    border-color: #d7ccff;
+    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
+  }
+
+  .template-selector {
+    gap: 10px;
+  }
+
+  .template-selector button {
+    min-width: 0;
+    padding: 9px;
+    background: #ffffff;
+
+    &.active {
+      border-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
+      box-shadow: 0 0 0 3px rgba(23, 178, 106, 0.1);
+    }
+  }
+
+  .preview-column {
+    background: linear-gradient(180deg, #ffffff, #f9fcf9);
+  }
+
+  .resume-paper-wrap {
+    background: #f2f5f2;
+    border-radius: 14px;
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  :deep(.el-button--primary:hover) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    transform: translateY(-1px);
+  }
+
+  :deep(.el-input__wrapper),
+  :deep(.el-textarea__inner),
+  :deep(.el-select__wrapper) {
+    border-radius: 13px;
+    box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+  }
+
+  :deep(.el-input__wrapper.is-focus),
+  :deep(.el-textarea__inner:focus),
+  :deep(.el-select__wrapper.is-focused) {
+    box-shadow: 0 0 0 2px var(--arena-grn) inset;
+  }
+}
+
+@media (max-width: 1180px) {
+  .arena-resume-studio {
+    .editor-workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(310px, 0.8fr);
+    }
+
+    .editor-main {
+      grid-column: 1;
+    }
+
+    .preview-column {
+      grid-column: 2;
+    }
+
+    .editor-aside {
+      position: static;
+      grid-column: 1 / -1;
+      grid-row: 2;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+}
+
+@media (max-width: 820px) {
+  .arena-resume-studio {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .editor-workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .editor-main,
+    .preview-column,
+    .editor-aside {
+      position: static;
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .editor-aside {
+      grid-template-columns: 1fr;
+    }
+
+    .preview-column {
+      order: 2;
     }
   }
 }

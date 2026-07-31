@@ -7,75 +7,92 @@
       `is-density-${density}`
     ]"
   >
-    <header class="document-header">
-      <div class="document-header__identity">
-        <span class="document-role-label">{{ model.targetPosition }}</span>
-        <h2>{{ model.name }}</h2>
-        <p>{{ model.targetPosition }}</p>
-      </div>
-      <div v-if="model.contacts.length" class="document-contact">
-        <span v-for="item in model.contacts" :key="item">{{ item }}</span>
-      </div>
-    </header>
+    <aside v-if="isClassicTemplate" class="document-sidebar">
+      <span class="document-sidebar__kicker">CAREER PROFILE</span>
+      <strong class="document-sidebar__role">{{ model.targetPosition }}</strong>
 
-    <div v-if="model.hasContent" class="document-body">
-      <template v-for="section in sectionOrder" :key="section">
-        <section v-if="section === 'summary' && model.summary.length" class="document-section">
-          <div class="document-section__heading">
-            <h3>个人摘要</h3>
-            <i></i>
-          </div>
-          <div class="document-copy">
-            <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
-          </div>
-        </section>
+      <section v-if="model.contacts.length" class="document-sidebar__section">
+        <span>CONTACT</span>
+        <p v-for="item in model.contacts" :key="item">{{ item }}</p>
+      </section>
 
-        <section v-else-if="section === 'skills' && model.skills.length" class="document-section skills-section">
-          <div class="document-section__heading">
-            <h3>专业技能</h3>
-            <i></i>
-          </div>
-          <div v-if="templateCode === 'ATS_PROJECT_FOCUS'" class="skill-groups">
-            <div v-for="group in model.skillGroups" :key="group.label">
-              <strong>{{ group.label }}</strong>
-              <p>{{ group.items.join(' · ') }}</p>
+      <section v-if="model.skills.length" class="document-sidebar__section">
+        <span>SKILLS</span>
+        <p v-for="skill in model.skills" :key="skill">{{ skill }}</p>
+      </section>
+    </aside>
+
+    <div class="document-main">
+      <header class="document-header">
+        <div class="document-header__identity">
+          <span class="document-role-label">{{ model.targetPosition }}</span>
+          <h2>{{ model.name }}</h2>
+          <p>{{ model.targetPosition }}</p>
+        </div>
+        <div v-if="model.contacts.length && !isClassicTemplate" class="document-contact">
+          <span v-for="item in model.contacts" :key="item">{{ item }}</span>
+        </div>
+      </header>
+
+      <div v-if="model.hasContent" class="document-body">
+        <template v-for="section in sectionOrder" :key="section">
+          <section v-if="section === 'summary' && model.summary.length" class="document-section">
+            <div class="document-section__heading">
+              <h3>个人摘要</h3>
+              <i></i>
             </div>
-          </div>
-          <div v-else class="skill-list">
-            <span v-for="skill in model.skills" :key="skill">{{ skill }}</span>
-          </div>
-        </section>
+            <div class="document-copy">
+              <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
+            </div>
+          </section>
 
-        <section v-else-if="section === 'experience' && model.workEntries.length" class="document-section">
-          <div class="document-section__heading">
-            <h3>工作经历</h3>
-            <i></i>
-          </div>
-          <ResumeDocumentEntries :entries="model.workEntries" />
-        </section>
+          <section v-else-if="section === 'skills' && model.skills.length" class="document-section skills-section">
+            <div class="document-section__heading">
+              <h3>专业技能</h3>
+              <i></i>
+            </div>
+            <div v-if="templateCode === 'ATS_PROJECT_FOCUS'" class="skill-groups">
+              <div v-for="group in model.skillGroups" :key="group.label">
+                <strong>{{ group.label }}</strong>
+                <p>{{ group.items.join(' · ') }}</p>
+              </div>
+            </div>
+            <div v-else class="skill-list">
+              <span v-for="skill in model.skills" :key="skill">{{ skill }}</span>
+            </div>
+          </section>
 
-        <section v-else-if="section === 'projects' && model.projectEntries.length" class="document-section">
-          <div class="document-section__heading">
-            <h3>项目经历</h3>
-            <i></i>
-          </div>
-          <ResumeDocumentEntries :entries="model.projectEntries" project />
-        </section>
+          <section v-else-if="section === 'experience' && model.workEntries.length" class="document-section">
+            <div class="document-section__heading">
+              <h3>工作经历</h3>
+              <i></i>
+            </div>
+            <ResumeDocumentEntries :entries="model.workEntries" />
+          </section>
 
-        <section v-else-if="section === 'education' && model.educationEntries.length" class="document-section">
-          <div class="document-section__heading">
-            <h3>教育经历</h3>
-            <i></i>
-          </div>
-          <ResumeDocumentEntries :entries="model.educationEntries" />
-        </section>
-      </template>
-    </div>
+          <section v-else-if="section === 'projects' && model.projectEntries.length" class="document-section">
+            <div class="document-section__heading">
+              <h3>项目经历</h3>
+              <i></i>
+            </div>
+            <ResumeDocumentEntries :entries="model.projectEntries" project />
+          </section>
 
-    <div v-else class="document-empty">
-      <FileText :size="30" />
-      <strong>开始构建你的专业简历</strong>
-      <span>填写姓名、目标岗位或任一经历后，这里会按所选模板实时排版。</span>
+          <section v-else-if="section === 'education' && model.educationEntries.length" class="document-section">
+            <div class="document-section__heading">
+              <h3>教育经历</h3>
+              <i></i>
+            </div>
+            <ResumeDocumentEntries :entries="model.educationEntries" />
+          </section>
+        </template>
+      </div>
+
+      <div v-else class="document-empty">
+        <FileText :size="30" />
+        <strong>开始构建你的专业简历</strong>
+        <span>填写姓名、目标岗位或任一经历后，这里会按所选模板实时排版。</span>
+      </div>
     </div>
   </article>
 </template>
@@ -143,6 +160,7 @@ const templateMeta = computed(() =>
 )
 const model = computed(() => buildResumeDocumentModel(props.draft))
 const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.value))
+const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SIDEBAR')
 </script>
 
 <style scoped lang="scss">
@@ -199,11 +217,32 @@ const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.valu
     --paper-accent-strong: #173f76;
     --paper-accent-soft: #eaf1fb;
   }
+
+  &.is-streak {
+    --paper-accent: #b66e09;
+    --paper-accent-strong: #865002;
+    --paper-accent-soft: #fff5df;
+    border: 2px solid #e9ca92;
+    background:
+      linear-gradient(145deg, rgba(255, 244, 219, 0.86), transparent 30%),
+      #fffdf8;
+  }
+
+  &.is-classic {
+    display: grid;
+    grid-template-columns: 178px minmax(0, 1fr);
+    padding: 0;
+    background: #ffffff;
+  }
 }
 
 .resume-document,
 .resume-document :deep(*) {
   color: inherit;
+}
+
+.document-main {
+  min-width: 0;
 }
 
 .document-header {
@@ -450,6 +489,45 @@ const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.valu
   }
 }
 
+.document-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100%;
+  padding: 40px 20px;
+  background: #263340;
+  color: #e8eef3;
+}
+
+.document-sidebar__kicker,
+.document-sidebar__section > span {
+  color: #9cc8c0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.document-sidebar__role {
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.document-sidebar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(232, 238, 243, 0.22);
+
+  p {
+    margin: 0;
+    color: #d7e1e7;
+    font-size: 10px;
+    line-height: 1.55;
+  }
+}
+
 .resume-document.is-compact {
   min-height: 930px;
 
@@ -593,6 +671,56 @@ const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.valu
   }
 }
 
+.resume-document.is-streak {
+  .document-header {
+    align-items: center;
+    padding: 18px 20px;
+    border: 0;
+    background: linear-gradient(120deg, #fff1cf, #fffdf8 66%);
+  }
+
+  .document-header__identity h2 {
+    color: #6c3f00;
+  }
+
+  .document-header__identity p,
+  .document-contact {
+    color: #865002;
+  }
+
+  .document-role-label {
+    display: block;
+    color: #b66e09;
+    font-size: 9.5px;
+    font-weight: 800;
+  }
+
+  .document-section__heading h3 {
+    color: #865002;
+  }
+}
+
+.resume-document.is-classic {
+  .document-main {
+    padding: 38px 34px;
+  }
+
+  .document-header {
+    align-items: flex-start;
+  }
+
+  .document-role-label {
+    display: block;
+    color: var(--paper-accent-strong);
+    font-size: 9.5px;
+    font-weight: 800;
+  }
+
+  .document-header__identity h2 {
+    margin-top: 4px;
+  }
+}
+
 @media (max-width: 720px) {
   .resume-document {
     --paper-pad-x: 25px;
@@ -619,6 +747,27 @@ const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.valu
 
   .resume-document.is-project .document-entries.is-projects {
     grid-template-columns: 1fr;
+  }
+
+  .resume-document.is-classic {
+    grid-template-columns: 1fr;
+
+    .document-sidebar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      min-height: 0;
+      padding: 22px 24px;
+    }
+
+    .document-sidebar__kicker,
+    .document-sidebar__role {
+      grid-column: 1 / -1;
+    }
+
+    .document-main {
+      padding: 28px 25px;
+    }
   }
 }
 </style>

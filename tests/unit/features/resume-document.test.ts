@@ -3,7 +3,10 @@ import { mount } from '@vue/test-utils'
 
 import {
   buildResumeDocumentModel,
+  isResumeTemplateUnlocked,
   normalizeResumeTemplateCode,
+  resumeTemplateOptions,
+  RESUME_STREAK_TEMPLATE_UNLOCK_DAYS,
   resumeTemplateSectionOrder
 } from '@/features/resume-document'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
@@ -211,7 +214,7 @@ describe('resume document model', () => {
     expect(wrapper.find('.document-entry li').text()).toBe('负责订单服务重构')
   })
 
-  it('keeps preview order aligned with the three server ATS templates', () => {
+  it('keeps preview order aligned with stored ATS templates and degrades unknown values', () => {
     expect(resumeTemplateSectionOrder('ATS_SINGLE_COLUMN')).toEqual([
       'summary',
       'experience',
@@ -221,6 +224,38 @@ describe('resume document model', () => {
     ])
     expect(resumeTemplateSectionOrder('ATS_COMPACT')[1]).toBe('skills')
     expect(resumeTemplateSectionOrder('ATS_PROJECT_FOCUS')[2]).toBe('projects')
+    expect(resumeTemplateSectionOrder('ATS_CLASSIC_SIDEBAR')).not.toContain('skills')
     expect(normalizeResumeTemplateCode('UNKNOWN')).toBe('ATS_SINGLE_COLUMN')
+  })
+
+  it('provides four base templates and unlocks the signature template at seven streak days', () => {
+    const signature = resumeTemplateOptions.find((template) => template.code === 'ATS_STREAK_SIGNATURE')
+
+    expect(resumeTemplateOptions.filter((template) => !template.unlockStreakDays)).toHaveLength(4)
+    expect(signature?.unlockStreakDays).toBe(RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)
+    expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS - 1)).toBe(false)
+    expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)).toBe(true)
+  })
+
+  it('renders the classic sidebar and signature paper variants as distinct documents', () => {
+    const draft = {
+      realName: '李明远',
+      targetPosition: '高级 Java 工程师',
+      phone: '13800000000',
+      email: 'limingyuan@example.com',
+      skillStack: 'Java、Spring Boot、Redis'
+    }
+    const classic = mount(ResumeDocumentPreview, {
+      props: { draft, templateCode: 'ATS_CLASSIC_SIDEBAR' }
+    })
+    const signature = mount(ResumeDocumentPreview, {
+      props: { draft, templateCode: 'ATS_STREAK_SIGNATURE' }
+    })
+
+    expect(classic.classes()).toContain('is-classic')
+    expect(classic.find('.document-sidebar').text()).toContain('高级 Java 工程师')
+    expect(classic.find('.document-sidebar').text()).toContain('Redis')
+    expect(signature.classes()).toContain('is-streak')
+    expect(signature.find('.document-sidebar').exists()).toBe(false)
   })
 })

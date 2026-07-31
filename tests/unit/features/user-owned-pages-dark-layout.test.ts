@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 const ownedPages = [
@@ -33,17 +35,34 @@ const darkQuestionPages = [
 
 const legacyLightPalette =
   /#(?:075985|166534|1d4ed8|2563eb|475569|64748b|94a3b8|bbf7d0|bfdbfe|cbd5e1|dbeafe|e0f2fe|eff6ff|f0fdf4|f8fafc|fff7ed)\b/i
+const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: string }> = {
+  'src/views/question/QuestionPracticeSessionView.vue': {
+    rootClass: 'class="arena arena-practice practice-session-page page-shell"',
+    selector: '.arena-practice'
+  },
+  'src/views/tools/RecordsToolsView.vue': {
+    rootClass: 'class="arena arena-tools records-tools-page page-shell"',
+    selector: '.arena-tools'
+  }
+}
 
 describe('owned user workspace pages', () => {
   it('uses dark user-theme surfaces without decorative gradients', () => {
     for (const path of ownedPages) {
       const source = readSource(path)
-
-      expect(source, path).toContain('var(--user-')
-      expect(source, path).not.toMatch(
+      const arenaScope = arenaMigrationScopeByPath[path]
+      const validatedSource = arenaScope
+        ? stripScopedStyleBlock(source, arenaScope.selector)
+        : source
+      if (arenaScope) {
+        expect(source, path).toContain(arenaScope.rootClass)
+        expect(source, path).toContain('var(--arena-')
+      }
+      expect(validatedSource, path).toContain('var(--user-')
+      expect(validatedSource, path).not.toMatch(
         /background(?:-color)?:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#eff6ff|#fff7ed|rgba\(\s*255\s*,\s*255\s*,\s*255)/i
       )
-      expect(source, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
+      expect(validatedSource, path).not.toMatch(/(?:linear|radial)-gradient\(/i)
     }
   })
 
@@ -62,7 +81,13 @@ describe('owned user workspace pages', () => {
 
   it('keeps dark question pages free of legacy light-palette literals', () => {
     for (const path of darkQuestionPages) {
-      expect(readSource(path), path).not.toMatch(legacyLightPalette)
+      const source = readSource(path)
+      const arenaScope = arenaMigrationScopeByPath[path]
+      const validatedSource = arenaScope
+        ? stripScopedStyleBlock(source, arenaScope.selector)
+        : source
+      if (arenaScope) expect(source, path).toContain(arenaScope.rootClass)
+      expect(validatedSource, path).not.toMatch(legacyLightPalette)
     }
   })
 

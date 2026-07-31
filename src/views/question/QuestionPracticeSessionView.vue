@@ -1,5 +1,5 @@
 <template>
-  <div class="practice-session-page page-shell">
+  <div class="arena arena-practice practice-session-page page-shell">
     <section class="session-hero">
       <div>
         <div class="eyebrow">
@@ -399,6 +399,7 @@ import {
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import { MASTERY_STATUS } from '@/constants/enums'
+import { useGameProfileStore } from '@/features/game-profile'
 import type { FavoriteQuestionVO, MasteryStatus, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
@@ -429,6 +430,7 @@ interface PracticeAnswerResult {
 
 const route = useRoute()
 const router = useRouter()
+const gameProfile = useGameProfileStore()
 
 const queryString = (name: string) => {
   const value = route.query[name]
@@ -831,6 +833,9 @@ const submitAnswer = async () => {
     answeredCount.value++
     if (isCorrect) correctCount.value++
     answered.value = true
+    if (isCorrect && Number.isFinite(result.recordId) && result.recordId > 0) {
+      gameProfile.grantXpOnce('practice_correct', `practice:answer:${result.recordId}`)
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '提交失败'))
   } finally {
@@ -1649,6 +1654,157 @@ onBeforeUnmount(stopTimer)
     justify-content: flex-end;
     gap: 6px;
     max-width: 154px;
+  }
+}
+
+// 方向 D · 答题间。保留题目加载、判分、复盘与来源可信边界，改为连续闯关反馈。
+.arena-practice {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .session-hero,
+  .content-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .session-hero {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    padding: 22px;
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .eyebrow,
+  .room-status span,
+  .current-question-head span,
+  .review-stage-head span {
+    color: var(--arena-grn-d);
+  }
+
+  .room-flow article,
+  .mode-card,
+  .route-context,
+  .reason-note,
+  .source-trust-box,
+  .current-question-head,
+  .question-content,
+  .answer-frame,
+  .review-stage-head,
+  .coverage-list article,
+  .review-grid section,
+  .result-next-grid article {
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .room-flow strong {
+    border: 0;
+    border-radius: 11px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+  }
+
+  .mode-card {
+    min-height: 148px;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      border-color: var(--arena-grn);
+      transform: translateY(-1px);
+    }
+
+    &.is-active {
+      border-color: var(--arena-grn);
+      background: linear-gradient(135deg, var(--arena-grn-soft), #ffffff 78%);
+      box-shadow: 0 0 0 3px rgba(23, 178, 106, 0.1);
+    }
+  }
+
+  .route-context,
+  .current-question-head,
+  .review-stage-head {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .source-trust-box {
+    border-color: #d7ccff;
+    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
+  }
+
+  .reason-note,
+  .question-content,
+  .answer-frame,
+  .review-grid section {
+    background: #f8faf8;
+  }
+
+  .answer-frame em {
+    border-radius: 999px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+  }
+
+  .coverage-list article {
+    background: #fffaf2;
+    border-color: #f3ddc0;
+  }
+
+  .coverage-list article.done {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .progress-body :deep(.el-progress-bar__outer),
+  :deep(.el-progress-bar__outer) {
+    background: var(--arena-line);
+  }
+
+  :deep(.el-progress-bar__inner) {
+    background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  :deep(.el-textarea__inner) {
+    border-radius: 14px;
+    box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+  }
+}
+
+@media (max-width: 640px) {
+  .arena-practice {
+    padding: 16px 14px calc(184px + var(--user-mobile-nav-height, 0px));
+
+    .session-hero {
+      padding: 18px;
+    }
+
+    .mode-card {
+      min-height: 116px;
+    }
+
+    .mobile-practice-rail {
+      border: 1.5px solid #b9e7cd;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 8px 22px rgba(21, 33, 27, 0.12);
+    }
   }
 }
 </style>

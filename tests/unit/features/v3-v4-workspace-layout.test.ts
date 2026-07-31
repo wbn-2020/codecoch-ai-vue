@@ -3,6 +3,8 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { stripScopedStyleBlock } from '../helpers/scoped-style'
+
 const workspaceRoot = process.cwd()
 
 const collectVueFiles = (directory: string): string[] =>
@@ -14,16 +16,35 @@ const collectVueFiles = (directory: string): string[] =>
 const pageFiles = [...collectVueFiles('src/views/v3'), ...collectVueFiles('src/views/v4')]
 
 const readSource = (path: string) => readFileSync(resolve(workspaceRoot, path), 'utf8')
+const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: string }> = {
+  'src/views/v3/ResumeMatchView.vue': {
+    rootClass: 'class="arena arena-match v3-page"',
+    selector: '.arena-match'
+  },
+  'src/views/v3/ResumeMatchDetailView.vue': {
+    rootClass: 'class="arena arena-match-detail v3-page"',
+    selector: '.arena-match-detail'
+  }
+}
 
 describe('V3/V4 compact dark workspace', () => {
   it('keeps every V3/V4 product surface free of light cards, decorative gradients and broad shadows', () => {
     for (const path of pageFiles) {
       const source = readSource(path)
-      expect(source, relative(workspaceRoot, path)).not.toMatch(
+      const normalizedPath = path.replace(/\\/g, '/')
+      const arenaScope = arenaMigrationScopeByPath[normalizedPath]
+      const validatedSource = arenaScope
+        ? stripScopedStyleBlock(source, arenaScope.selector)
+        : source
+      if (arenaScope) {
+        expect(source, relative(workspaceRoot, path)).toContain(arenaScope.rootClass)
+        expect(source, relative(workspaceRoot, path)).toContain('var(--arena-')
+      }
+      expect(validatedSource, relative(workspaceRoot, path)).not.toMatch(
         /background(?:-color)?\s*:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#f1f5f9|#eff6ff|#f0fdf4|rgba\(\s*255\s*,\s*255\s*,\s*255)/i
       )
-      expect(source, relative(workspaceRoot, path)).not.toMatch(/(?:linear|radial)-gradient\(/i)
-      expect(source, relative(workspaceRoot, path)).not.toMatch(
+      expect(validatedSource, relative(workspaceRoot, path)).not.toMatch(/(?:linear|radial)-gradient\(/i)
+      expect(validatedSource, relative(workspaceRoot, path)).not.toMatch(
         /box-shadow\s*:\s*var\(--app-shadow\)/i
       )
     }
@@ -40,6 +61,9 @@ describe('V3/V4 compact dark workspace', () => {
     expect(dashboard).toMatch(/\.metric-card\s*\{[\s\S]*?box-shadow:\s*none/)
     expect(targets).toMatch(/\.metric-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
     expect(matchDetail).toMatch(/\.score-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
+    expect(matchDetail).toContain('arena-match-settlement')
+    expect(matchDetail).toContain('gapDetailCount')
+    expect(matchDetail).toContain('goGapQuestionGroup')
     expect(growth).toMatch(/\.v4-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
     expect(applications).toMatch(/\.status-funnel\s*\{[\s\S]*?overflow-x:\s*auto/)
     expect(applications).toMatch(/\.status-funnel\s*\{[\s\S]*?min-width:\s*0/)

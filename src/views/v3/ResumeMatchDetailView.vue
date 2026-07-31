@@ -1,5 +1,5 @@
 <template>
-  <div class="v3-page">
+  <div class="arena arena-match-detail v3-page">
     <section class="page-hero">
       <div>
         <div class="hero-kicker"><FileChartColumn :size="16" /> 匹配报告</div>
@@ -76,6 +76,79 @@
         <div class="tracker-actions">
           <el-button :loading="loading" @click="loadReport">立即刷新</el-button>
           <el-button type="primary" plain @click="goMatchTaskCenter">查看任务中心</el-button>
+        </div>
+      </section>
+
+      <section v-if="isSuccessReport && report" class="arena-match-settlement">
+        <header class="arena-match-settlement__head">
+          <div>
+            <span class="arena-match-settlement__kicker">第 3 关 · JD 匹配结算</span>
+            <h2>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h2>
+          </div>
+          <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
+        </header>
+
+        <div class="arena-match-settlement__summary">
+          <div
+            class="arena-ring arena-match-settlement__ring"
+            :style="{
+              background: `conic-gradient(var(--arena-grn) 0 ${overallScorePercent}%, var(--arena-line) ${overallScorePercent}% 100%)`
+            }"
+          >
+            <div class="arena-ring__hole">
+              <b>{{ overallScoreText }}</b>
+              <span>JD 覆盖率</span>
+            </div>
+          </div>
+
+          <div class="arena-match-settlement__copy">
+            <h3>{{ report.companyName || '目标岗位' }} · {{ report.jobTitle || '岗位待确认' }}</h3>
+            <p>{{ overviewConclusion.desc }}</p>
+            <small>{{ report.resumeTitle || '已绑定简历' }} · {{ reportResumeVersionLabel || '当前版本' }}</small>
+            <div class="arena-match-settlement__trust">
+              <el-tag v-for="tag in reportTrustTags.slice(0, 3)" :key="tag.label" :type="tag.type" effect="plain">
+                {{ tag.label }}
+              </el-tag>
+            </div>
+          </div>
+
+          <aside class="arena-match-settlement__action">
+            <span>推荐下一步</span>
+            <strong>{{ primaryNextAction.title }}</strong>
+            <p>{{ primaryNextAction.desc }}</p>
+            <el-button
+              type="primary"
+              :disabled="primaryNextAction.disabled"
+              :loading="primaryNextAction.key === 'profile' && profileGenerating"
+              @click="runPrimaryNextAction"
+            >
+              {{ primaryNextAction.action }}
+            </el-button>
+            <el-button plain :disabled="!gapDetailCount || !isTrustedSuccessReport" @click="goGapQuestionGroup">
+              补齐待补题组
+            </el-button>
+          </aside>
+        </div>
+
+        <div v-if="report.details?.length" class="arena-match-settlement__keywords">
+          <section>
+            <span>已形成匹配证据</span>
+            <div>
+              <el-tag v-for="item in coverageDetails.covered" :key="item.id" type="success" effect="plain">
+                {{ detailKeywordLabel(item) }}
+              </el-tag>
+              <small v-if="!coverageDetails.covered.length">暂无可确认的高覆盖维度</small>
+            </div>
+          </section>
+          <section>
+            <span>待补维度</span>
+            <div>
+              <el-tag v-for="item in coverageDetails.gaps" :key="item.id" type="warning" effect="plain">
+                {{ detailKeywordLabel(item) }}
+              </el-tag>
+              <small v-if="!coverageDetails.gaps.length">当前明细未标记待补维度</small>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -281,7 +354,8 @@ import { createApplicationApi, createResumeVersionApi, getApplicationsApi } from
 import AppState from '@/components/common/AppState.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import { appConfig } from '@/config'
-import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
+import { useGameProfileStore } from '@/features/game-profile'
+import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import { redactSensitiveText } from '@/utils/sensitiveText'
@@ -295,6 +369,7 @@ const versionSaving = ref(false)
 const applicationCreating = ref(false)
 const loadError = ref('')
 const report = ref<ResumeJobMatchReportDetailVO | null>(null)
+const gameProfile = useGameProfileStore()
 let reportPollTimer: ReturnType<typeof setTimeout> | undefined
 let reportPollRetryCount = 0
 let reportPollFailureNoticeShown = false
@@ -414,6 +489,26 @@ const overallScoreText = computed(() => {
   const score = report.value?.overallScore
   return hasUsableScore(score) ? `${score}` : '未形成评分'
 })
+const overallScorePercent = computed(() => {
+  const score = Number(report.value?.overallScore)
+  return Number.isFinite(score) && score > 0 ? Math.min(100, Math.max(0, score)) : 0
+})
+const detailKeywordLabel = (item: ResumeJobMatchDetailItemVO) =>
+  item.skillName || item.dimension || '待确认维度'
+const coverageDetails = computed(() => {
+  const details = report.value?.details || []
+  return {
+    covered: details
+      .filter((item) => hasUsableScore(item.score) && Number(item.score) >= 75)
+      .slice(0, 6),
+    gaps: details
+      .filter((item) => Boolean(item.gapDescription?.trim()) || (hasUsableScore(item.score) && Number(item.score) < 75))
+      .slice(0, 6)
+  }
+})
+const gapDetailCount = computed(() => (report.value?.details || []).filter(
+  (item) => Boolean(item.gapDescription?.trim()) || (hasUsableScore(item.score) && Number(item.score) < 75)
+).length)
 const scoreEvidenceText = computed(() => {
   if (isUnscorableReport.value) return '本次报告未形成可信评分，页面不会补造分数。'
   if (!isSuccessReport.value) return '报告生成完成后才会显示评分。'
@@ -826,6 +921,12 @@ const DataBlock = defineComponent({
   }
 })
 
+const grantTrustedReportXp = () => {
+  const current = report.value
+  if (!current?.reportId || !isTrustedSuccessReport.value) return
+  gameProfile.grantXpOnce('jd_cover_boost', `resume-match-report:${current.reportId}:jd-cover-boost`)
+}
+
 const loadReport = async (silent = false) => {
   if (!reportId.value) {
     loadError.value = '报告记录无效。'
@@ -837,6 +938,7 @@ const loadReport = async (silent = false) => {
   }
   try {
     report.value = await getResumeJobMatchReportDetailApi(reportId.value)
+    grantTrustedReportXp()
     reportPollRetryCount = 0
     reportPollFailureNoticeShown = false
     loadError.value = ''
@@ -1267,6 +1369,331 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .trust-tags {
     justify-content: flex-start;
+  }
+}
+
+// 方向 D · JD 匹配结算详情。保留报告证据、重跑和训练动作，只统一视觉层级。
+.arena-match-detail {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .page-hero,
+  .content-panel,
+  .report-tracker,
+  .report-overview > *,
+  .score-card,
+  .dimension-card,
+  .insight-card,
+  .data-block,
+  .action-panel,
+  .failure-panel {
+    border-color: var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .arena-match-settlement {
+    display: grid;
+    gap: 18px;
+    padding: 22px;
+    border: 1.5px solid #b9e7cd;
+    border-radius: var(--arena-radius-card);
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 76%);
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .arena-match-settlement__head,
+  .arena-match-settlement__summary,
+  .arena-match-settlement__keywords,
+  .arena-match-settlement__keywords section,
+  .arena-match-settlement__trust {
+    display: flex;
+  }
+
+  .arena-match-settlement__head {
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--arena-ink);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.3;
+    }
+  }
+
+  .arena-match-settlement__kicker {
+    color: var(--arena-grn-d);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .arena-match-settlement__status {
+    flex: none;
+    max-width: 280px;
+    color: var(--arena-sub);
+    font-size: 12px;
+    line-height: 1.55;
+    text-align: right;
+  }
+
+  .arena-match-settlement__summary {
+    align-items: center;
+    gap: 18px;
+    padding: 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .arena-match-settlement__ring {
+    flex: none;
+    width: 116px;
+    height: 116px;
+
+    .arena-ring__hole {
+      width: 88px;
+      height: 88px;
+
+      b {
+        font-size: 28px;
+      }
+
+      span {
+        color: var(--arena-sub);
+        font-size: 10px;
+        font-weight: 800;
+      }
+    }
+  }
+
+  .arena-match-settlement__copy {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 7px;
+    min-width: 0;
+
+    h3 {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    p,
+    small {
+      margin: 0;
+      color: var(--arena-sub);
+      line-height: 1.55;
+    }
+
+    p {
+      font-size: 13px;
+    }
+
+    small {
+      font-size: 11px;
+    }
+  }
+
+  .arena-match-settlement__trust {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+
+  .arena-match-settlement__action {
+    display: grid;
+    flex: 0 0 230px;
+    gap: 8px;
+    padding: 14px;
+    border: 1.5px solid #b9e7cd;
+    border-radius: 14px;
+    background: #f5fcf7;
+
+    > span {
+      color: var(--arena-grn-d);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 14px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
+
+  .arena-match-settlement__keywords {
+    gap: 12px;
+
+    section {
+      flex: 1 1 0;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+      padding: 13px 14px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 14px;
+      background: #ffffff;
+
+      > span {
+        color: var(--arena-sub);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      small {
+        color: var(--arena-mut);
+        font-size: 11px;
+      }
+    }
+  }
+
+  .page-hero {
+    border: 1.5px solid #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  h1,
+  h2,
+  h3,
+  strong {
+    color: var(--arena-ink);
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 900;
+  }
+
+  p,
+  .hero-kicker,
+  .score-card span,
+  .dimension-card__head span,
+  .report-tracker p,
+  .overview-score span,
+  .overview-score small,
+  .overview-action span,
+  .insight-card span,
+  .schema-warning-list span,
+  .dimension-card dt {
+    color: var(--arena-sub);
+  }
+
+  .hero-kicker {
+    color: var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .overview-main,
+  .overview-score {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  .overview-score strong {
+    color: var(--arena-grn-d);
+  }
+
+  .overview-action,
+  .insight-card--success {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .insight-card--warning,
+  .failure-panel {
+    border-color: #f3ddc0;
+    background: #fffaf2;
+  }
+
+  .insight-card--danger {
+    border-color: #f4c3c5;
+    background: #fff6f6;
+  }
+
+  .insight-card--neutral,
+  .data-block,
+  .dimension-card,
+  .repair-actions article {
+    background: #f8faf8;
+  }
+
+  .score-grid {
+    border-color: var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .score-card {
+    background: transparent;
+
+    strong {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  .dimension-card__evidence {
+    background: var(--arena-grn-soft);
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+}
+
+@media (max-width: 760px) {
+  .arena-match-detail {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .arena-match-settlement__head,
+    .arena-match-settlement__summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .arena-match-settlement__status {
+      max-width: none;
+      text-align: left;
+    }
+
+    .arena-match-settlement__ring {
+      align-self: center;
+    }
+
+    .arena-match-settlement__action {
+      flex-basis: auto;
+    }
+
+    .arena-match-settlement__keywords {
+      flex-direction: column;
+    }
   }
 }
 </style>
