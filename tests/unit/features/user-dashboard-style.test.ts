@@ -10,6 +10,7 @@ const theme = readSource('src/styles/user-theme.scss')
 const components = readSource('src/styles/user-components.scss')
 const layout = readSource('src/layouts/UserLayout.vue')
 const topNav = readSource('src/components/layout/UserTopNav.vue')
+const arenaTopNav = readSource('src/components/layout/ArenaTopNav.vue')
 const componentsWithoutResumePaper = components.replace(/\.resume-paper\s*\{[\s\S]*?\}/g, '')
 
 describe('user dashboard visual guardrails', () => {
@@ -30,17 +31,19 @@ describe('user dashboard visual guardrails', () => {
     expect(components).toMatch(/\.resume-paper\s*\{[\s\S]*?background:\s*#ffffff\b/)
   })
 
-  it('keeps the arena light override scoped to the top navigation surface only', () => {
-    // 方向 D Phase V1：浅色覆写只允许出现在顶栏覆写块内，
-    // 其余用户端暗色 token 文件（theme/layout/components）不得引入浅色装饰。
-    expect(topNav).toContain('Arena 浅色化覆写')
-    const arenaOverride = topNav.slice(topNav.indexOf('Arena 浅色化覆写'))
-    expect(arenaOverride).toContain('rgba(23, 178, 106')
-    expect(arenaOverride).toContain('game-chip--streak')
+  it('uses the dedicated direction D top navigation instead of overriding the legacy dark navigation', () => {
+    expect(layout).toContain('ArenaTopNav')
+    expect(layout).toContain("v-if=\"usesArenaOverlayTheme && !isImmersivePage\"")
+    expect(layout).toContain('background: var(--arena-bg)')
+    expect(layout).not.toMatch(/radial-gradient|linear-gradient/)
 
-    const topNavBeforeOverride = topNav.slice(0, topNav.indexOf('Arena 浅色化覆写'))
-    expect(topNavBeforeOverride).not.toMatch(/radial-gradient|linear-gradient/)
-    expect(topNavBeforeOverride).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
+    expect(arenaTopNav).toContain("label: '今天'")
+    expect(arenaTopNav).toContain("label: '准备'")
+    expect(arenaTopNav).toContain("label: '训练'")
+    expect(arenaTopNav).toContain("label: '面试'")
+    expect(arenaTopNav).toContain('class="arena-bottom-nav"')
+    expect(arenaTopNav).toMatch(/\.arena-top-nav\s*\{[\s\S]*?min-height:\s*62px/)
+    expect(arenaTopNav).toMatch(/\.arena-bottom-nav\s*\{[\s\S]*?position:\s*fixed/)
   })
 
   it('avoids broad important overrides and text-clipping patterns in the dashboard', () => {

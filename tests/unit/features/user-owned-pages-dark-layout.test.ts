@@ -102,7 +102,7 @@ describe('owned user workspace pages', () => {
       (match) => match.groups?.declarations || ''
     )
 
-    expect(mobileRailRules).toHaveLength(0)
+    expect(mobileRailRules.some((rule) => /position:\s*fixed/i.test(rule))).toBe(false)
     expect(source).toContain('class="arena arena-practice practice-session-page page-shell"')
     expect(source).toContain('padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))')
   })

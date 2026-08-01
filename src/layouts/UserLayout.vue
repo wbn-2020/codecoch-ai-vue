@@ -176,10 +176,7 @@ onBeforeUnmount(() => {
 
 .jobcoach-layout.is-arena-page {
   color-scheme: light;
-  background:
-    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
-    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
-    var(--arena-bg);
+  background: var(--arena-bg);
 }
 
 .jobcoach-main {
