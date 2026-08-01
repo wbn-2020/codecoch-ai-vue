@@ -67,10 +67,14 @@ describe('non-resume user UI polish', () => {
     expect(jobCoach).toContain('展开资料和工具')
   })
 
-  it('keeps timeline detail actions large enough for mobile use', () => {
-    expect(recordsTools).toContain('class="timeline-detail-button"')
+  it('keeps the backpack directory scannable and mobile-friendly', () => {
+    expect(recordsTools).toContain('class="arena-tools__group-title"')
+    expect(recordsTools).toContain('class="arena-tools__row"')
     expect(recordsTools).toMatch(
-      /\.timeline-detail-button\s*\{[\s\S]*?min-height:\s*28px/
+      /\.arena-tools__row\s*\{[\s\S]*?min-width:\s*0/
+    )
+    expect(recordsTools).toMatch(
+      /@media \(max-width:\s*720px\)[\s\S]*?\.arena-tools__row\s*\{[\s\S]*?min-height:\s*64px/
     )
   })
 })

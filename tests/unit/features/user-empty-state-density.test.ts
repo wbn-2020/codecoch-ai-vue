@@ -34,7 +34,11 @@ describe('user empty-state density and theme readability', () => {
         expect(source, path).toContain(arenaToolsScope.rootClass)
         expect(source, path).toContain('var(--arena-')
       }
-      expect(validatedSource, path).toContain('var(--user-')
+      if (path === arenaToolsScope.path) {
+        expect(source, path).toContain('var(--arena-')
+      } else {
+        expect(validatedSource, path).toContain('var(--user-')
+      }
       expect(validatedSource, path).not.toMatch(hardcodedThemeColor)
     }
   })

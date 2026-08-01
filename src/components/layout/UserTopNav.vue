@@ -1596,12 +1596,8 @@ onBeforeUnmount(() => {
   }
 }
 
-/* ============================================================
-   Arena 浅色化覆写 · 方向 D 霓虹竞技场 Phase V1
-   仅覆写顶栏/面板/底栏外观色，不改变布局与交互。
-   存量暗色变量规则保留在前，同特异性下本块后定义胜出。
-   ============================================================ */
-.jobcoach-top-nav {
+/* 方向 D 浅色壳只作用于 arena 路由，旧工作台继续保留原暗色主题。 */
+:global(.jobcoach-layout.is-arena-page) .jobcoach-top-nav {
   border-bottom: 1.5px solid #e4eae5;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(8px);
@@ -1609,21 +1605,21 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 3px rgba(21, 33, 27, 0.05);
 }
 
-.brand-mark {
+:global(.jobcoach-layout.is-arena-page) .brand-mark {
   border-radius: 10px;
   background: linear-gradient(135deg, #17b26a, #a3e635);
   color: #fff;
   box-shadow: 0 3px 0 #0e9f5d;
 }
 
-.brand-copy strong {
+:global(.jobcoach-layout.is-arena-page) .brand-copy strong {
   color: #15211b;
 }
-.brand-copy span {
+:global(.jobcoach-layout.is-arena-page) .brand-copy span {
   color: #9aa79f;
 }
 
-.nav-item {
+:global(.jobcoach-layout.is-arena-page) .nav-item {
   border-radius: 11px;
   color: #5f6e66;
   font-weight: 700;
@@ -1641,7 +1637,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.game-chip {
+:global(.jobcoach-layout.is-arena-page) .game-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1660,20 +1656,20 @@ onBeforeUnmount(() => {
     transform: translateY(-1px);
   }
 }
-.game-chip--streak {
+:global(.jobcoach-layout.is-arena-page) .game-chip--streak {
   background: rgba(247, 144, 9, 0.13);
   color: #f79009;
 }
-.game-chip--xp {
+:global(.jobcoach-layout.is-arena-page) .game-chip--xp {
   background: rgba(23, 178, 106, 0.13);
   color: #0e9f5d;
 }
 
-.command-button,
-.more-button,
-.icon-button,
-.mobile-toggle,
-.user-trigger {
+:global(.jobcoach-layout.is-arena-page) .command-button,
+:global(.jobcoach-layout.is-arena-page) .more-button,
+:global(.jobcoach-layout.is-arena-page) .icon-button,
+:global(.jobcoach-layout.is-arena-page) .mobile-toggle,
+:global(.jobcoach-layout.is-arena-page) .user-trigger {
   border: 1px solid #e4eae5;
   background: #fff;
   color: #5f6e66;
@@ -1685,11 +1681,11 @@ onBeforeUnmount(() => {
   }
 }
 
-.user-trigger span {
+:global(.jobcoach-layout.is-arena-page) .user-trigger span {
   color: #15211b;
 }
 
-.feature-nav-panel {
+:global(.jobcoach-layout.is-arena-page) .feature-nav-panel {
   border: 1.5px solid #e4eae5;
   border-radius: 16px;
   background: #fff;
@@ -1697,11 +1693,11 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 40px rgba(21, 33, 27, 0.12);
 }
 
-.feature-nav-group__title {
+:global(.jobcoach-layout.is-arena-page) .feature-nav-group__title {
   color: #9aa79f;
 }
 
-.feature-nav-item {
+:global(.jobcoach-layout.is-arena-page) .feature-nav-item {
   border-radius: 12px;
 
   &:hover {
@@ -1713,30 +1709,30 @@ onBeforeUnmount(() => {
   }
 }
 
-.feature-nav-item__title {
+:global(.jobcoach-layout.is-arena-page) .feature-nav-item__title {
   color: #15211b;
 }
-.feature-nav-item__desc {
+:global(.jobcoach-layout.is-arena-page) .feature-nav-item__desc {
   color: #9aa79f;
 }
 
-.mobile-panel {
+:global(.jobcoach-layout.is-arena-page) .mobile-panel {
   background: #f5f7f4;
   color: #15211b;
 }
 
-.mobile-nav-modal {
+:global(.jobcoach-layout.is-arena-page) .mobile-nav-modal {
   background: rgba(21, 33, 27, 0.42);
 }
 
-.mobile-current-section {
+:global(.jobcoach-layout.is-arena-page) .mobile-current-section {
   border-color: rgba(23, 178, 106, 0.35);
   background: rgba(23, 178, 106, 0.13);
   color: #0e9f5d;
 }
 
 @media (max-width: 1180px) {
-  .mobile-panel {
+  :global(.jobcoach-layout.is-arena-page) .mobile-panel {
     border-left: 1px solid #e4eae5;
     background: #f5f7f4;
     box-shadow: -8px 0 16px rgba(21, 33, 27, 0.12);
@@ -1744,13 +1740,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
-  .mobile-bottom-nav {
+  :global(.jobcoach-layout.is-arena-page) .mobile-bottom-nav {
     border-top: 1.5px solid #e4eae5;
     background: rgba(255, 255, 255, 0.94);
     backdrop-filter: blur(8px);
   }
 
-  .mobile-bottom-nav__item {
+  :global(.jobcoach-layout.is-arena-page) .mobile-bottom-nav__item {
     color: #9aa79f;
 
     &.is-active {
@@ -1758,7 +1754,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .mobile-current-section {
+  :global(.jobcoach-layout.is-arena-page) .mobile-current-section {
     border-color: rgba(23, 178, 106, 0.35);
     background: rgba(23, 178, 106, 0.13);
     color: #0e9f5d;

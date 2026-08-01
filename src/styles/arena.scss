@@ -2,7 +2,7 @@
 // Arena · 方向 D「霓虹竞技场」用户端视觉 token 与组件基元
 // 基线：文档相关/ui重构/2026-07-30-D方向霓虹竞技场落地方案.md
 // 原则：
-//   1. 全部变量与组件类挂在 .arena 作用域下，不影响存量暗色页面
+//   1. 页面变量挂在 .arena 或 UserLayout 的 .is-arena-page 作用域下，不影响存量暗色页面
 //   2. 管理端禁止引入本文件变量
 //   3. 与原型 方向D原型/index.html 视觉保持一致
 // ============================================================
@@ -46,7 +46,8 @@ body.arena-overlay-theme {
   --el-color-primary-light-9: rgba(23, 178, 106, 0.13);
 }
 
-.arena {
+.arena,
+.jobcoach-layout.is-arena-page {
   // ---- Element Plus 浅色化（:root 的 --el-* 为暗色 cockpit，arena 内恢复浅色）----
   // 注意：el-select 等弹出层默认 teleport 到 body，需配合 :teleported="false" 才能命中本作用域
   --el-bg-color: #ffffff;

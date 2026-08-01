@@ -5,16 +5,17 @@
         <div class="eyebrow">
           <el-button class="room-back" text @click="router.push('/interviews/history')">
             <ArrowLeft :size="15" />
-            返回
+            退出
           </el-button>
           <Bot :size="16" />
-          AI 面试训练室
+          <span>AI 面试训练室</span>
         </div>
-        <h1>{{ current?.currentQuestion?.isFollowUp ? '追问训练中' : '模拟面试进行中' }}</h1>
+        <p class="room-session-name">
+          {{ current?.currentStage?.stageName || current?.currentQuestion?.questionTitle || '模拟面试进行中' }}
+        </p>
       </div>
 
       <div class="topbar-status">
-        <span class="dungeon-chip">⚔ 副本战斗</span>
         <span class="dungeon-chip dungeon-chip--xp">+{{ sessionXp }} XP 本场</span>
         <span class="cc-badge" :class="sseStatusBadgeClass">
           <span class="cc-badge__dot"></span>
@@ -23,18 +24,18 @@
         <span v-if="loading" class="topbar-chip topbar-chip--live">Loading</span>
         <span v-if="submitting" class="topbar-chip topbar-chip--live">Scoring</span>
         <span v-if="roomError" class="topbar-chip topbar-chip--danger">Error</span>
-        <span class="topbar-chip">计时 {{ elapsedText }}</span>
+        <span class="topbar-chip room-timer">计时 {{ elapsedText }}</span>
         <span class="topbar-chip">{{ interviewStatusLabel(current?.status) }}</span>
         <el-button class="ghost-action" text @click="fetchCurrent">重新获取当前题</el-button>
         <el-button
           v-if="interviewId"
           class="ghost-action"
           text
-          :disabled="!canViewReport"
-          :title="reportButtonTip"
-          @click="handleViewReport"
+          :disabled="!current || finishing || (current.status === 'COMPLETED' && !canViewReport)"
+          :title="canViewReport ? reportButtonTip : '结束本轮面试并生成结构化报告'"
+          @click="canViewReport ? handleViewReport() : handleManualFinish()"
         >
-          {{ reportButtonText }}
+          {{ canViewReport ? reportButtonText : '结束并出报告' }}
         </el-button>
       </div>
     </section>
@@ -546,6 +547,27 @@
         </el-tabs>
       </aside>
     </section>
+
+    <div class="room-mobile-actions">
+      <el-button plain :disabled="!current || loading || submitting" @click="fetchCurrent">重新获取</el-button>
+      <el-button
+        plain
+        type="warning"
+        :disabled="!current || current.status === 'NOT_STARTED' || current.status === 'COMPLETED'"
+        :loading="finishing"
+        @click="handleManualFinish"
+      >
+        结束本轮
+      </el-button>
+      <el-button
+        type="primary"
+        :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+        :loading="submitting"
+        @click="handleSubmit"
+      >
+        提交回答
+      </el-button>
+    </div>
 
     <footer class="room-statusbar">
       <span>会话：{{ interviewId || '-' }}</span>
@@ -3538,6 +3560,250 @@ onBeforeUnmount(() => {
   .battle-status-card {
     border-color: rgba(124, 92, 252, 0.32);
     background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(16, 21, 19, 0.62));
+  }
+}
+
+// 方向 D · 房间是独立沉浸壳：不继承用户端顶栏/底栏，也不把战斗信息扩展成第二个工作台。
+.interview-room.arena-room {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(23, 178, 106, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(124, 92, 252, 0.12), transparent 60%),
+    #101513;
+
+  .room-topbar {
+    flex: 0 0 auto;
+    min-height: 72px;
+    padding: 14px 22px;
+    border: 0;
+    border-bottom: 1px solid var(--room-line);
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .room-identity {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+
+    .eyebrow {
+      gap: 8px;
+      color: var(--room-sub);
+      font-size: 12px;
+      text-transform: none;
+    }
+
+    h1 {
+      display: none;
+    }
+  }
+
+  .room-session-name {
+    max-width: min(42vw, 520px);
+    margin: 0;
+    overflow: hidden;
+    color: var(--room-text);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-status {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .dungeon-chip {
+    display: none;
+  }
+
+  .dungeon-chip--xp {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .room-timer {
+    color: var(--room-lime);
+    font-family: ui-monospace, Consolas, monospace;
+    font-weight: 800;
+  }
+
+  .ghost-action {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 10px;
+    color: var(--room-sub);
+    white-space: nowrap;
+  }
+
+  .war-room {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .progress-panel {
+    display: none;
+  }
+
+  .conversation-panel {
+    min-width: 0;
+    padding: 22px;
+    border: 0;
+    background: transparent;
+  }
+
+  .feedback-panel {
+    width: 260px;
+    padding: 18px;
+    border-left: 1px solid var(--room-line);
+    background: rgba(26, 32, 29, 0.62);
+  }
+
+  .conversation-scroll {
+    min-height: 0;
+    padding-right: 4px;
+  }
+
+  .answer-console {
+    flex: 0 1 auto;
+    max-height: 44%;
+    overflow-y: auto;
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .room-statusbar {
+    display: none;
+  }
+
+  .room-mobile-actions {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      min-height: 64px;
+      padding: 10px 12px;
+      gap: 8px;
+    }
+
+    .room-session-name {
+      max-width: 52vw;
+      font-size: 12px;
+    }
+
+    .topbar-status {
+      gap: 6px;
+    }
+
+    .topbar-status > .dungeon-chip--xp,
+    .topbar-status > .cc-badge,
+    .topbar-status > .topbar-chip:not(.room-timer),
+    .topbar-status > .ghost-action:first-of-type {
+      display: none;
+    }
+
+    .topbar-status > .ghost-action:last-of-type {
+      min-height: 36px;
+      padding: 0 9px;
+      color: #ffffff;
+      background: var(--room-green);
+      border-radius: 10px;
+      box-shadow: 0 3px 0 rgba(10, 104, 60, 0.9);
+    }
+
+    .room-timer {
+      min-height: 36px;
+      padding: 0 9px;
+      border-radius: 10px;
+    }
+
+    .war-room {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .feedback-panel,
+    .progress-panel {
+      display: none;
+    }
+
+    .conversation-panel {
+      padding: 12px 12px 10px;
+    }
+
+    .conversation-scroll {
+      padding-right: 0;
+      scroll-padding-bottom: 18px;
+    }
+
+    .answer-console {
+      display: block;
+      flex: 0 0 auto;
+      max-height: none;
+      margin-top: 12px;
+      overflow: visible;
+      padding: 12px;
+      border-color: var(--room-line);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .answer-console .console-head,
+    .answer-console :deep(.voice-live-console),
+    .answer-console .voice-preview,
+    .answer-console .answer-actions {
+      display: none;
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      min-height: 128px !important;
+      max-height: none;
+    }
+
+    .room-mobile-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
+      gap: 8px;
+      flex: 0 0 auto;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--room-line);
+      background: rgba(16, 21, 19, 0.96);
+
+      :deep(.el-button) {
+        min-width: 0;
+        min-height: 44px;
+        margin: 0;
+        padding: 0 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
   }
 }
 

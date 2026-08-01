@@ -1,5 +1,5 @@
 <template>
-  <div class="jobcoach-layout">
+  <div class="jobcoach-layout" :class="{ 'is-arena-page': usesArenaOverlayTheme }">
     <UserTopNav
       v-if="!isImmersivePage"
       :display-name="displayName"
@@ -16,7 +16,13 @@
 
     <CommandPalette v-model="commandPaletteOpen" scope="user" />
 
-    <main class="jobcoach-main" :class="{ 'is-immersive': isImmersivePage }">
+    <main
+      class="jobcoach-main"
+      :class="{
+        'is-arena-main': usesArenaOverlayTheme,
+        'is-immersive': isImmersivePage
+      }"
+    >
       <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
         当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
       </div>
@@ -157,6 +163,10 @@ onBeforeUnmount(() => {
   color: var(--user-text);
 }
 
+.jobcoach-layout.is-arena-page {
+  color-scheme: light;
+}
+
 .jobcoach-main {
   width: min(100%, 1440px);
   min-width: 0;
@@ -164,6 +174,11 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 14px 24px 28px;
   overflow-x: clip;
+
+  &.is-arena-main {
+    width: min(100%, 1060px);
+    padding: 28px 34px 42px;
+  }
 
   &.is-immersive {
     width: 100%;
@@ -184,6 +199,10 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+.jobcoach-layout.is-arena-page .demo-readonly-banner {
+  color: #b4560a;
+}
+
 @media (max-width: 720px) {
   .jobcoach-layout {
     --user-mobile-top-height: 58px;
@@ -194,6 +213,10 @@ onBeforeUnmount(() => {
   .jobcoach-main {
     min-height: calc(100vh - 58px);
     padding: 12px 12px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 78px + env(safe-area-inset-bottom, 0px));
+
+    &.is-arena-main {
+      padding: 18px 14px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 26px + env(safe-area-inset-bottom, 0px));
+    }
   }
 }
 </style>

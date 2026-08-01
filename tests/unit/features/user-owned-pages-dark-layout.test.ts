@@ -47,7 +47,7 @@ const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: s
 }
 
 describe('owned user workspace pages', () => {
-  it('uses dark user-theme surfaces without decorative gradients', () => {
+  it('uses the correct scoped theme surfaces without decorative gradients', () => {
     for (const path of ownedPages) {
       const source = readSource(path)
       const arenaScope = arenaMigrationScopeByPath[path]
@@ -58,7 +58,11 @@ describe('owned user workspace pages', () => {
         expect(source, path).toContain(arenaScope.rootClass)
         expect(source, path).toContain('var(--arena-')
       }
-      expect(validatedSource, path).toContain('var(--user-')
+      if (arenaScope) {
+        expect(source, path).toContain('var(--arena-')
+      } else {
+        expect(validatedSource, path).toContain('var(--user-')
+      }
       expect(validatedSource, path).not.toMatch(
         /background(?:-color)?:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#eff6ff|#fff7ed|rgba\(\s*255\s*,\s*255\s*,\s*255)/i
       )

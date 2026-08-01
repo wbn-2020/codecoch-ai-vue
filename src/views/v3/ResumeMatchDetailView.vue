@@ -1,13 +1,13 @@
 <template>
   <div class="arena arena-match-detail v3-page">
-    <section class="page-hero">
+    <section v-if="!isSuccessReport" class="page-hero">
       <div>
         <div class="hero-kicker"><FileChartColumn :size="16" /> 匹配报告</div>
         <h1>{{ report?.jobTitle || '匹配报告详情' }}</h1>
         <p>{{ report ? reportSubtitle : '读取匹配报告、失败原因与短板建议。' }}</p>
       </div>
       <div class="hero-actions">
-        <el-button @click="router.push({ path: '/resume-match', query: returnMatchQuery })"><ArrowLeft :size="16" /> 返回实验台</el-button>
+        <el-button @click="router.push({ path: '/resume-match', query: returnMatchQuery })"><ArrowLeft :size="16" /> 新建匹配</el-button>
         <el-button :loading="loading" @click="loadReport"><RefreshCw :size="16" /> 刷新</el-button>
       </div>
     </section>
@@ -85,7 +85,17 @@
             <span class="arena-match-settlement__kicker">第 3 关 · JD 匹配结算</span>
             <h2>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h2>
           </div>
-          <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
+          <div class="arena-match-settlement__head-actions">
+            <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
+            <div>
+              <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">
+                <ArrowLeft :size="16" /> 新建匹配
+              </el-button>
+              <el-button :loading="loading" @click="loadReport">
+                <RefreshCw :size="16" /> 刷新
+              </el-button>
+            </div>
+          </div>
         </header>
 
         <div class="arena-match-settlement__summary">
@@ -124,13 +134,10 @@
             >
               {{ primaryNextAction.action }}
             </el-button>
-            <el-button plain :disabled="!gapDetailCount || !isTrustedSuccessReport" @click="goGapQuestionGroup">
-              补齐待补题组
-            </el-button>
           </aside>
         </div>
 
-        <div v-if="report.details?.length" class="arena-match-settlement__keywords">
+        <div class="arena-match-settlement__keywords">
           <section>
             <span>已形成匹配证据</span>
             <div>
@@ -454,12 +461,14 @@ const returnMatchQuery = computed(() => {
   const current = report.value
   if (current) {
     return compactQuery({
+      new: '1',
       resumeId: current.resumeId ? String(current.resumeId) : undefined,
       targetJobId: current.targetJobId ? String(current.targetJobId) : undefined,
       resumeVersionId: current.resumeVersionId ? String(current.resumeVersionId) : undefined
     })
   }
   return compactQuery({
+    new: '1',
     resumeId: typeof route.query.resumeId === 'string' ? route.query.resumeId : undefined,
     targetJobId: typeof route.query.targetJobId === 'string' ? route.query.targetJobId : undefined,
     resumeVersionId: typeof route.query.resumeVersionId === 'string' ? route.query.resumeVersionId : undefined
@@ -484,7 +493,7 @@ const trustPanelDescription = computed(() =>
     ? '这份匹配报告已绑定简历版本快照、目标岗位描述和岗位分析结果；如果来源或明细不完整，后续建议会先标记为待复核。'
     : '这份匹配报告基于当前简历、目标岗位描述和岗位分析结果生成；如果来源或明细不完整，后续建议会先标记为待复核。'
 )
-const showReportOverview = computed(() => Boolean(report.value && (isSuccessReport.value || isUnscorableReport.value)))
+const showReportOverview = computed(() => Boolean(report.value && isUnscorableReport.value))
 const overallScoreText = computed(() => {
   const score = report.value?.overallScore
   return hasUsableScore(score) ? `${score}` : '未形成评分'
@@ -1409,7 +1418,9 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .arena-match-settlement__summary,
   .arena-match-settlement__keywords,
   .arena-match-settlement__keywords section,
-  .arena-match-settlement__trust {
+  .arena-match-settlement__trust,
+  .arena-match-settlement__head-actions,
+  .arena-match-settlement__head-actions > div {
     display: flex;
   }
 
@@ -1440,6 +1451,21 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     font-size: 12px;
     line-height: 1.55;
     text-align: right;
+  }
+
+  .arena-match-settlement__head-actions {
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .arena-match-settlement__head-actions > div {
+    gap: 8px;
+
+    :deep(.el-button) {
+      margin-left: 0;
+    }
   }
 
   .arena-match-settlement__summary {
@@ -1681,6 +1707,19 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     .arena-match-settlement__status {
       max-width: none;
       text-align: left;
+    }
+
+    .arena-match-settlement__head-actions {
+      align-items: stretch;
+    }
+
+    .arena-match-settlement__head-actions > div {
+      display: grid;
+      grid-template-columns: 1fr;
+
+      :deep(.el-button) {
+        width: 100%;
+      }
     }
 
     .arena-match-settlement__ring {

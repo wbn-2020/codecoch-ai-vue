@@ -21,102 +21,90 @@
       </div>
     </section>
 
-    <section v-if="!practicing && !finished" class="setup-grid">
-      <main class="content-card">
-        <div class="content-card__body">
-          <div class="section-head">
-            <div>
-              <h2>先决定这一轮补哪块短板</h2>
-              <p>从推荐题、错题、收藏或专项主题进入，答完后再看点评和复盘。</p>
-            </div>
+    <section v-if="!practicing && !finished" class="practice-setup content-card">
+      <div class="content-card__body">
+        <div class="section-head">
+          <div>
+            <span class="section-label">下一场训练</span>
+            <h2>选一个短板，开始答题</h2>
+            <p>推荐题和错题会优先接住你最近的真实训练线索；答完后直接进入点评与复盘。</p>
           </div>
-
-          <div class="room-flow" aria-label="练习流程">
-            <article>
-              <strong>1</strong>
-              <span>锁定来源</span>
-              <p>优先接住报告、错题和收藏里的真实训练线索。</p>
-            </article>
-            <article>
-              <strong>2</strong>
-              <span>连续作答</span>
-              <p>每题先组织回答，再提交点评。</p>
-            </article>
-            <article>
-              <strong>3</strong>
-              <span>完成复盘</span>
-              <p>答完后进入错题、收藏、能力图谱或面试。</p>
-            </article>
-          </div>
-
-          <div class="mode-grid">
-            <button
-              v-for="mode in modeOptions"
-              :key="mode.value"
-              class="mode-card"
-              :class="{ 'is-active': config.mode === mode.value }"
-              type="button"
-              @click="setMode(mode.value)"
-            >
-              <component :is="mode.icon" :size="18" />
-              <strong>{{ mode.label }}</strong>
-              <span>{{ mode.desc }}</span>
-            </button>
-          </div>
-
-          <AppState v-if="loadError" class="setup-error" type="error" title="题目加载失败" :description="loadError" />
-          <el-alert
-            v-if="partialLoadWarning && !loadError"
-            class="setup-warning"
-            type="warning"
-            :title="partialLoadWarning"
-            :closable="false"
-            show-icon
-          />
+          <span class="setup-xp">每题最高 +18 XP</span>
         </div>
-      </main>
 
-      <aside class="content-card">
-        <div class="content-card__body setup-panel">
-          <h2>本轮训练节奏</h2>
-          <el-form label-position="top">
-            <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词">
-              <el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable />
-            </el-form-item>
-            <el-form-item label="题目数量">
-              <el-input-number v-model="config.count" :min="1" :max="30" />
-            </el-form-item>
-            <el-form-item label="难度">
-              <el-select v-model="config.difficulty" clearable placeholder="不限">
-                <el-option label="简单" value="EASY" />
-                <el-option label="中等" value="MEDIUM" />
-                <el-option label="困难" value="HARD" />
-              </el-select>
-            </el-form-item>
-          </el-form>
+        <div class="mode-grid">
+          <button
+            v-for="mode in modeOptions"
+            :key="mode.value"
+            class="mode-card"
+            :class="{ 'is-active': config.mode === mode.value }"
+            type="button"
+            @click="setMode(mode.value)"
+          >
+            <component :is="mode.icon" :size="18" />
+            <strong>{{ mode.label }}</strong>
+            <span>{{ mode.desc }}</span>
+          </button>
+        </div>
 
-          <div v-if="routeQuestionIds.length" class="route-context">
-            <Target :size="16" />
-            <span>已接收 {{ routeQuestionIds.length }} 道推荐题</span>
-          </div>
-          <div v-if="hasRouteSourceContext" class="source-trust-box">
-            <div>
-              <span>{{ routeSourceLabel }}</span>
-              <el-tag :type="routeTrustType" effect="plain">{{ routeTrustLabel }}</el-tag>
+        <details class="setup-details">
+          <summary>
+            <span>训练设置与推荐依据</span>
+            <strong>{{ config.count }} 题 · {{ config.difficulty ? difficultyLabel(config.difficulty) : '不限难度' }}</strong>
+          </summary>
+          <div class="setup-details__body">
+            <el-form label-position="top">
+              <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词">
+                <el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable />
+              </el-form-item>
+              <el-form-item label="题目数量">
+                <el-input-number v-model="config.count" :min="1" :max="30" />
+              </el-form-item>
+              <el-form-item label="难度">
+                <el-select v-model="config.difficulty" clearable placeholder="不限">
+                  <el-option label="简单" value="EASY" />
+                  <el-option label="中等" value="MEDIUM" />
+                  <el-option label="困难" value="HARD" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+
+            <div v-if="routeQuestionIds.length" class="route-context">
+              <Target :size="16" />
+              <span>已接收 {{ routeQuestionIds.length }} 道推荐题</span>
             </div>
-            <p>{{ routeEvidenceSummary || routeRecommendReason || routeTrustBoundary }}</p>
-            <small v-if="routeEvidenceSummary || routeRecommendReason">{{ routeTrustBoundary }}</small>
+            <div v-if="hasRouteSourceContext" class="source-trust-box">
+              <div>
+                <span>{{ routeSourceLabel }}</span>
+                <el-tag :type="routeTrustType" effect="plain">{{ routeTrustLabel }}</el-tag>
+              </div>
+              <p>{{ routeEvidenceSummary || routeRecommendReason || routeTrustBoundary }}</p>
+              <small v-if="routeEvidenceSummary || routeRecommendReason">{{ routeTrustBoundary }}</small>
+            </div>
+            <div v-if="routeRecommendReason" class="reason-note">
+              {{ routeRecommendReason }}
+            </div>
           </div>
-          <div v-if="routeRecommendReason" class="reason-note">
-            {{ routeRecommendReason }}
-          </div>
+        </details>
 
-          <el-button class="start-button" type="primary" size="large" :loading="loadingQuestions" @click="startPractice">
+        <AppState v-if="loadError" class="setup-error" type="error" title="题目加载失败" :description="loadError" />
+        <el-alert
+          v-if="partialLoadWarning && !loadError"
+          class="setup-warning"
+          type="warning"
+          :title="partialLoadWarning"
+          :closable="false"
+          show-icon
+        />
+
+        <div class="setup-footer">
+          <span>训练完成后可继续查看错题、收藏和能力图谱。</span>
+          <el-button type="primary" size="large" :loading="loadingQuestions" @click="startPractice">
             <Play :size="16" />
             开始本轮训练
           </el-button>
         </div>
-      </aside>
+      </div>
     </section>
 
     <section v-if="practicing" class="practice-workspace">
@@ -990,7 +978,6 @@ onBeforeUnmount(stopTimer)
   justify-content: flex-end;
 }
 
-.setup-grid,
 .active-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1016,6 +1003,24 @@ onBeforeUnmount(stopTimer)
     color: var(--user-text-muted);
     line-height: 1.6;
   }
+}
+
+.section-label {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.setup-xp {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--user-warning-soft);
+  color: var(--user-warning);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .room-flow {
@@ -1120,6 +1125,75 @@ onBeforeUnmount(stopTimer)
   h2 {
     margin: 0 0 14px;
     font-size: 20px;
+  }
+}
+
+.setup-details {
+  margin-top: 16px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 14px;
+    color: var(--user-text-secondary);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary span {
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  summary strong {
+    color: var(--user-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  &[open] summary {
+    border-bottom: 1px solid var(--user-border);
+  }
+}
+
+.setup-details__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+
+  :deep(.el-form) {
+    display: contents;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+}
+
+.setup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--user-border);
+  color: var(--user-text-muted);
+  font-size: 13px;
+
+  :deep(.el-button) {
+    min-width: 172px;
   }
 }
 
@@ -1692,6 +1766,7 @@ onBeforeUnmount(stopTimer)
 
   .room-flow article,
   .mode-card,
+  .setup-details,
   .route-context,
   .reason-note,
   .source-trust-box,
@@ -1728,6 +1803,33 @@ onBeforeUnmount(stopTimer)
       background: linear-gradient(135deg, var(--arena-grn-soft), #ffffff 78%);
       box-shadow: 0 0 0 3px rgba(23, 178, 106, 0.1);
     }
+  }
+
+  .practice-setup {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .practice-setup .content-card__body {
+    padding: 24px;
+  }
+
+  .setup-details {
+    border-color: var(--arena-line);
+    background: #f8faf8;
+  }
+
+  .setup-details summary {
+    color: var(--arena-grn-d);
+  }
+
+  .setup-xp {
+    background: #fff7ec;
+    color: #b4560a;
+  }
+
+  .setup-footer {
+    border-color: var(--arena-line);
   }
 
   .route-context,
@@ -1797,6 +1899,20 @@ onBeforeUnmount(stopTimer)
 
     .mode-card {
       min-height: 116px;
+    }
+
+    .section-head,
+    .setup-footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .setup-details__body {
+      grid-template-columns: 1fr;
+    }
+
+    .setup-footer :deep(.el-button) {
+      width: 100%;
     }
 
     .mobile-practice-rail {

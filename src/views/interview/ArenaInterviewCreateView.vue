@@ -114,13 +114,13 @@
             <div class="arena-between">
               <div>
                 <div class="arena-iv__kicker" style="color: var(--arena-vio)">副本选择</div>
-                <div class="arena-h3" style="margin-top: 4px">7 个训练副本，按目标挑一个</div>
+                <div class="arena-h3" style="margin-top: 4px">四个主副本，选一个立即开练</div>
               </div>
               <span class="arena-tiny">全真模拟 = Boss 战</span>
             </div>
             <div class="arena-iv__dungeons">
               <button
-                v-for="item in modeCards"
+                v-for="item in primaryModeCards"
                 :key="item.key"
                 type="button"
                 class="arena-iv__dungeon"
@@ -141,6 +141,36 @@
                 </div>
               </button>
             </div>
+
+            <details class="arena-iv__advanced-modes" :open="showAdvancedModes">
+              <summary>
+                <span>更多训练方式</span>
+                <small>压力追问、HR 行为和行业场景</small>
+              </summary>
+              <div class="arena-iv__dungeons arena-iv__dungeons--advanced">
+                <button
+                  v-for="item in advancedModeCards"
+                  :key="item.key"
+                  type="button"
+                  class="arena-iv__dungeon"
+                  :class="{ 'is-active': selectedModeKey === item.key, 'is-recommended': recommendedModeKey === item.key }"
+                  @click="selectDungeon(item)"
+                >
+                  <div class="arena-between">
+                    <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
+                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
+                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
+                  </div>
+                  <b>{{ item.title }}</b>
+                  <small>{{ item.desc }}</small>
+                  <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
+                    <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
+                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
+                    <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
+                  </div>
+                </button>
+              </div>
+            </details>
           </div>
 
           <!-- 可选微调 -->
@@ -534,6 +564,21 @@ const modeCards: ModeCard[] = [
     }
   },
   {
+    key: 'full',
+    title: '全真模拟',
+    desc: '按正式节奏覆盖技术、项目和岗位场景，完成一场完整面试。',
+    badge: 'Boss 战',
+    value: INTERVIEW_MODE.COMPREHENSIVE,
+    icon: Target,
+    forceResume: true,
+    defaults: {
+      difficulty: 'HARD',
+      interviewerStyle: 'NORMAL',
+      practiceMode: 'FORMAL',
+      questionCount: 8
+    }
+  },
+  {
     key: 'system',
     title: '系统设计',
     desc: '训练限流、缓存、库存、搜索、链路治理等方案设计。',
@@ -590,6 +635,11 @@ const modeCards: ModeCard[] = [
     }
   }
 ]
+
+const primaryModeKeys = new Set(['technical', 'project', 'resume', 'full'])
+const primaryModeCards = computed(() => modeCards.filter((item) => primaryModeKeys.has(item.key)))
+const advancedModeCards = computed(() => modeCards.filter((item) => !primaryModeKeys.has(item.key)))
+const showAdvancedModes = computed(() => !primaryModeKeys.has(selectedModeKey.value))
 
 const isIndustryMode = computed(() => selectedModeKey.value === 'industry')
 
@@ -1873,6 +1923,40 @@ onMounted(async () => {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 11px;
+  }
+
+  &__advanced-modes {
+    margin-top: 14px;
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 2px 0;
+      color: var(--arena-sub);
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      span {
+        color: var(--arena-ink);
+        font-size: 12.5px;
+        font-weight: 800;
+      }
+
+      small {
+        color: var(--arena-mut);
+        font-size: 11px;
+      }
+    }
+  }
+
+  &__dungeons--advanced {
+    padding-top: 2px;
   }
 
   &__dungeon {

@@ -4,10 +4,10 @@
       <div>
         <div class="eyebrow">
           <ChartNoAxesCombined :size="16" />
-          面试复盘
+          面试报告
         </div>
-        <h1>结构化 AI 面试报告</h1>
-        <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
+        <h1>本轮面试结算</h1>
+        <p>先看真实评分和下一步，再进入完整问答复盘。</p>
       </div>
       <div class="report-actions">
         <el-dropdown
@@ -106,48 +106,57 @@
 
     <section v-else class="content-card" v-loading="loading">
       <div v-if="report && isGenerated" class="content-card__body">
-        <div class="settle-banner">
-          <div class="settle-banner__left">
-            <span class="settle-banner__emoji">🏆</span>
-            <div>
-              <div class="settle-banner__kicker">副本通关 · 结算</div>
-              <b class="settle-banner__score">{{ displayTotalScore }}<small> 分</small></b>
+        <div class="settlement-intro">
+          <span>副本通关 · {{ report.targetJobTitle || '模拟面试' }}</span>
+          <h2>结算时刻</h2>
+        </div>
+
+        <section class="settlement-card" :class="{ 'settlement-card--muted': isScoreUnavailable }">
+          <div class="settlement-score">
+            <div class="score-ring" :style="{ '--score-progress': `${scoreRingProgress}%` }">
+              <div class="score-ring__hole">
+                <strong>{{ displayTotalScore }}</strong>
+                <span>真实评分</span>
+              </div>
+            </div>
+            <div class="settlement-score__copy">
+              <p>{{ scoreComparisonText }}</p>
+              <small v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</small>
+              <small v-else>{{ scoreVerdict }}</small>
+              <div class="score-meta">
+                <StatusTag :status="report.reportStatus" />
+                <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
+              </div>
             </div>
           </div>
-          <div class="settle-banner__xp">
-            <div class="settle-banner__xp-row">
-              <span>通关奖励（已入账）</span>
-              <b>+{{ completionRewardXp }} XP</b>
+
+          <div class="settlement-rewards">
+            <div class="settlement-reward-row">
+              <span>⚡ 通关经验</span>
+              <strong>+{{ completionRewardXp }} XP</strong>
+              <small>已入账</small>
             </div>
-            <div class="settle-banner__xp-row">
-              <span>答题奖励（已入账 {{ answerRewardCount }} 题）</span>
-              <b>+{{ answerRewardXp }} XP</b>
+            <div class="settlement-reward-row">
+              <span>✦ 答题奖励（{{ answerRewardCount }} 题）</span>
+              <strong>+{{ answerRewardXp }} XP</strong>
+              <small>已入账</small>
             </div>
-            <div class="settle-banner__xp-row is-total">
-              <span>本场合计</span>
-              <b>+{{ sessionRewardXp }} XP</b>
+            <div class="settlement-reward-row">
+              <span>🔥 连胜进度</span>
+              <strong>本场合计 +{{ sessionRewardXp }} XP</strong>
+              <small>继续训练可延续</small>
             </div>
           </div>
-          <div v-if="improveTop3.length" class="settle-banner__improve">
-            <span>三点改进</span>
+
+          <div v-if="improveTop3.length" class="settlement-improve">
+            <span>本轮优先补强</span>
             <ol>
               <li v-for="item in improveTop3" :key="item">{{ item }}</li>
             </ol>
           </div>
-        </div>
+        </section>
 
         <div class="report-hero-grid">
-          <section class="report-score-panel" :class="{ 'report-score-panel--muted': isScoreUnavailable }">
-            <span class="panel-kicker">综合得分</span>
-            <div class="score-value">{{ displayTotalScore }}</div>
-            <p v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</p>
-            <p v-else>{{ scoreVerdict }}</p>
-            <div class="score-meta">
-              <StatusTag :status="report.reportStatus" />
-              <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
-            </div>
-          </section>
-
           <section class="report-summary-panel">
             <span class="panel-kicker">一句话总评</span>
             <h2>{{ reportSummaryPreview.title }}</h2>
@@ -1020,6 +1029,32 @@ const hasValidTotalScore = computed(() => {
 })
 const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
 const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
+const scoreRingProgress = computed(() => {
+  const score = Number(report.value?.totalScore)
+  return Number.isFinite(score) && score > 0 ? Math.min(100, Math.max(0, score)) : 0
+})
+const scoreComparisonText = computed(() => {
+  const source = report.value as (InterviewReportVO & {
+    totalScoreDelta?: number
+    previousScore?: number
+    previousTotalScore?: number
+    comparison?: { totalScoreDelta?: number }
+  }) | null
+  const score = Number(source?.totalScore)
+  const declaredDelta = Number(source?.totalScoreDelta ?? source?.comparison?.totalScoreDelta)
+  const previousScore = Number(source?.previousTotalScore ?? source?.previousScore)
+  const delta = Number.isFinite(declaredDelta)
+    ? declaredDelta
+    : Number.isFinite(score) && Number.isFinite(previousScore)
+      ? score - previousScore
+      : Number.NaN
+  if (Number.isFinite(delta)) {
+    if (delta === 0) return '与上一场同配置面试持平'
+    return `比上一场 ${delta > 0 ? '+' : ''}${delta} 分`
+  }
+  if (advancedReportMeta.value.comparisonAvailable) return '已具备与历史场次的比较条件'
+  return '本轮真实评分，后续同配置面试可比较变化'
+})
 const textExcerpt = (value?: string | null, fallback = '暂无可展示内容') => {
   const text = String(value || '')
     .replace(/[#>*_`~\[\]()]/g, '')
@@ -3768,6 +3803,258 @@ onBeforeUnmount(() => {
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
     font-weight: 800;
+  }
+}
+
+// 方向 D · 报告首屏先完成“评分结算”，详细报告保持在结算和下一步行动之后。
+.arena-report {
+  .report-top {
+    padding: 18px 20px;
+    border-color: #b9e7cd;
+
+    h1 {
+      margin: 5px 0;
+      font-size: 22px;
+    }
+
+    p {
+      font-size: 13px;
+    }
+  }
+
+  .content-card__body {
+    padding: 28px;
+  }
+
+  .settlement-intro {
+    text-align: center;
+
+    > span {
+      color: var(--arena-grn-d);
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--arena-ink);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+  }
+
+  .settlement-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(250px, 0.9fr);
+    gap: 22px;
+    max-width: 820px;
+    margin: 20px auto 24px;
+    padding: 28px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .settlement-card--muted {
+    .score-ring {
+      --score-progress: 0%;
+      opacity: 0.58;
+    }
+  }
+
+  .settlement-score {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    align-items: center;
+    gap: 22px;
+    min-width: 0;
+  }
+
+  .score-ring {
+    display: grid;
+    width: 170px;
+    aspect-ratio: 1;
+    place-items: center;
+    border-radius: 50%;
+    background: conic-gradient(
+      var(--arena-grn) 0 var(--score-progress),
+      var(--arena-line) var(--score-progress) 100%
+    );
+  }
+
+  .score-ring__hole {
+    display: flex;
+    width: 136px;
+    aspect-ratio: 1;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: 50%;
+    background: #ffffff;
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    span {
+      margin-top: 5px;
+      color: var(--arena-mut);
+      font-size: 11px;
+      font-weight: 800;
+    }
+  }
+
+  .settlement-score__copy {
+    min-width: 0;
+
+    p {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    small {
+      display: block;
+      margin-top: 8px;
+      color: var(--arena-sub);
+      line-height: 1.6;
+    }
+  }
+
+  .score-meta {
+    margin-top: 14px;
+    color: var(--arena-mut);
+  }
+
+  .settlement-rewards {
+    display: grid;
+    gap: 8px;
+    align-content: center;
+  }
+
+  .settlement-reward-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 12px;
+    padding: 11px 14px;
+    border-radius: 13px;
+    background: var(--arena-amber-soft);
+    color: #b4560a;
+
+    span,
+    strong {
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    strong {
+      text-align: right;
+    }
+
+    small {
+      grid-column: 1 / -1;
+      color: #b4560a;
+      font-size: 11px;
+      font-weight: 700;
+      opacity: 0.82;
+    }
+  }
+
+  .settlement-improve {
+    grid-column: 1 / -1;
+    padding: 14px 16px;
+    border-left: 3px solid var(--arena-vio);
+    border-radius: 13px;
+    background: var(--arena-vio-soft);
+
+    > span {
+      color: var(--arena-vio);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    ol {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px 16px;
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--arena-ink);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+  }
+
+  .report-hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 820px;
+    margin: 0 auto 16px;
+  }
+
+  .report-summary-panel,
+  .report-action-panel {
+    min-height: 238px;
+    border-radius: var(--arena-radius-card);
+  }
+
+  .report-action-panel {
+    border-left: 3px solid var(--arena-grn);
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-report {
+    .content-card__body {
+      padding: 20px 14px;
+    }
+
+    .settlement-intro h2 {
+      font-size: 24px;
+    }
+
+    .settlement-card {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 16px;
+      padding: 22px 18px;
+    }
+
+    .settlement-score {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 14px;
+      text-align: center;
+    }
+
+    .settlement-score__copy {
+      max-width: 320px;
+    }
+
+    .score-meta {
+      justify-content: center;
+    }
+
+    .settlement-improve ol {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+
+    .report-hero-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .report-summary-panel,
+    .report-action-panel {
+      min-height: 0;
+    }
   }
 }
 

@@ -41,8 +41,9 @@
           <button class="arena-btn arena-btn--txt" @click="loadAll">刷新</button>
         </div>
 
-        <!-- 闯关地图 -->
-        <div class="arena-card arena-card--hero arena-prepare__map">
+        <div class="arena-prepare__workspace">
+          <!-- 闯关地图 -->
+          <div class="arena-card arena-card--hero arena-prepare__map">
           <div class="arena-between" style="flex-wrap: wrap">
             <div class="arena-row" style="gap: 8px">
               <span class="arena-chip arena-chip--grn-solid">主线 · 三步闯关</span>
@@ -79,28 +80,31 @@
             </template>
           </div>
 
-          <!-- 支线 -->
-          <div class="arena-prepare__side">
-            <button
-              v-for="side in sideNodes"
-              :key="side.key"
-              type="button"
-              class="arena-prepare__side-card"
-              :class="{ 'is-done': side.done }"
-              @click="router.push(side.path)"
-            >
-              <span class="arena-between">
-                <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完成' : '支线' }}</span>
-                <span class="arena-xp-tag">+{{ side.xp }} XP</span>
-              </span>
-              <b>{{ side.title }}</b>
-              <small>{{ side.desc }}</small>
-            </button>
+            <!-- 支线 -->
+            <details class="arena-prepare__side">
+              <summary>支线准备与加成</summary>
+              <div class="arena-prepare__side-grid">
+                <button
+                  v-for="side in sideNodes"
+                  :key="side.key"
+                  type="button"
+                  class="arena-prepare__side-card"
+                  :class="{ 'is-done': side.done }"
+                  @click="router.push(side.path)"
+                >
+                  <span class="arena-between">
+                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完成' : '支线' }}</span>
+                    <span class="arena-xp-tag">+{{ side.xp }} XP</span>
+                  </span>
+                  <b>{{ side.title }}</b>
+                  <small>{{ side.desc }}</small>
+                </button>
+              </div>
+            </details>
           </div>
-        </div>
 
-        <!-- 当前关：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
-        <section class="arena-card arena-prepare__jd-card" aria-labelledby="prepare-jd-title">
+          <!-- 当前关：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
+          <section class="arena-card arena-prepare__jd-card" aria-labelledby="prepare-jd-title">
           <div class="arena-prepare__jd-head">
             <div>
               <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
@@ -172,7 +176,8 @@
               <span class="arena-tiny">建议至少粘贴完整的职责和任职要求。</span>
             </aside>
           </div>
-        </section>
+          </section>
+        </div>
 
         <div class="arena-prepare__grid">
           <div class="arena-col">
@@ -753,7 +758,10 @@ const goMatchAction = () => {
 
   router.push({
     path: '/resume-match',
-    query
+    query: {
+      ...query,
+      new: 1
+    }
   })
 }
 
@@ -1207,13 +1215,19 @@ onBeforeUnmount(() => {
     font-weight: 600;
   }
 
-  &__map {
+  &__workspace {
     margin-top: 20px;
+    display: grid;
+    grid-template-columns: minmax(280px, 405px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  &__map {
     padding: 22px 24px;
   }
 
   &__jd-card {
-    margin-top: 16px;
     padding: 22px 24px;
     border: 1.5px solid #b9e7cd;
     background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
@@ -1342,18 +1356,17 @@ onBeforeUnmount(() => {
   &__track {
     margin-top: 18px;
     display: flex;
-    align-items: stretch;
-    gap: 0;
+    flex-direction: column;
+    gap: 10px;
   }
 
   &__link {
     flex: none;
-    width: 34px;
-    height: 4px;
+    width: 4px;
+    height: 18px;
     border-radius: 99px;
     background: var(--arena-line);
-    align-self: center;
-    margin: 0 6px;
+    margin: 0 0 0 32px;
 
     &.is-done {
       background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
@@ -1361,7 +1374,6 @@ onBeforeUnmount(() => {
   }
 
   &__node {
-    flex: 1;
     min-width: 0;
     display: flex;
     gap: 12px;
@@ -1461,6 +1473,22 @@ onBeforeUnmount(() => {
 
   &__side {
     margin-top: 14px;
+
+    summary {
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+  }
+
+  &__side-grid {
+    margin-top: 10px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -1688,8 +1716,9 @@ onBeforeUnmount(() => {
       margin: 0 0 0 32px;
     }
 
+    &__workspace,
     &__grid,
-    &__side,
+    &__side-grid,
     &__risk-grid,
     &__jd-grid,
     &__jd-fields {

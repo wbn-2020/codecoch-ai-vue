@@ -33,8 +33,15 @@
         </div>
       </div>
 
-      <!-- 来源控制 -->
-      <div class="arena-card arena-train__controls">
+      <!-- 训练设置与推荐依据 -->
+      <details class="arena-card arena-train__controls">
+        <summary class="arena-train__controls-summary">
+          <span>
+            <b>训练设置与推荐依据</b>
+            <small>{{ contextStatusText }}</small>
+          </span>
+          <span class="arena-chip arena-chip--mut">展开</span>
+        </summary>
         <div class="arena-train__controls-row">
           <div class="arena-train__tabs" role="tablist" aria-label="推荐依据">
             <button
@@ -90,7 +97,7 @@
             </button>
           </div>
         </div>
-      </div>
+      </details>
 
       <div class="arena-train__grid">
         <!-- 关卡卡列表 -->
@@ -1052,6 +1059,40 @@ onMounted(() => {
   &__controls {
     margin-top: 14px;
     padding: 15px 18px;
+  }
+
+  &__controls-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    > span:first-child {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    b {
+      color: var(--arena-ink);
+      font-size: 13px;
+    }
+
+    small {
+      color: var(--arena-mut);
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+  }
+
+  &__controls[open] .arena-train__controls-summary {
+    margin-bottom: 14px;
   }
 
   &__controls-row {

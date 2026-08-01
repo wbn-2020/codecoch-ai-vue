@@ -18,6 +18,11 @@
       </div>
     </section>
 
+    <section v-if="redirectingToLatestReport" class="content-panel result-redirect-state">
+      <AppState type="loading" title="正在打开最近的匹配报告" description="已找到可继续使用的报告，正在进入覆盖率和短板结算页。" />
+    </section>
+
+    <template v-else>
     <section v-if="loadError" class="content-panel">
       <AppState type="error" title="基础数据加载失败" :description="loadError">
         <el-button type="primary" @click="loadInitial">重新加载</el-button>
@@ -277,6 +282,7 @@
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>
 
@@ -331,6 +337,7 @@ const resumes = ref<ResumeVO[]>([])
 const targets = ref<TargetJobVO[]>([])
 const currentTarget = ref<TargetJobVO | null>(null)
 const reports = ref<ResumeJobMatchReportListVO[]>([])
+const redirectingToLatestReport = ref(false)
 const {
   status: matchSseStatus,
   error: matchSseError,
@@ -418,6 +425,7 @@ const readinessTagType = computed(() => {
   if (versionResumeMismatch.value || matchQualityIssues.value.length) return 'warning'
   return 'success'
 })
+const isNewMatchEntry = computed(() => route.query.new === '1')
 const readinessTagText = computed(() => {
   if (!form.resumeId || !form.targetJobId) return '等待输入'
   if (versionResumeMismatch.value) return '版本需确认'
@@ -853,6 +861,35 @@ const matchReportRouteQuery = (report: ResumeJobMatchReportListVO) => ({
   targetJobId: report.targetJobId,
   ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {})
 })
+const routeToLatestCompletedReport = async () => {
+  if (isNewMatchEntry.value) return
+  const routeTargetJobId = Number(route.query.targetJobId)
+  const hasScopedEntry = Boolean(
+    routeResumeId.value
+    || (Number.isFinite(routeTargetJobId) && routeTargetJobId > 0)
+    || versionSourceId.value
+  )
+  const latestReport = reports.value.find((item) =>
+    item.status === 'SUCCESS'
+    && item.reportId
+    && (!hasScopedEntry || (
+      (!routeResumeId.value || item.resumeId === routeResumeId.value)
+      && (!(Number.isFinite(routeTargetJobId) && routeTargetJobId > 0) || item.targetJobId === routeTargetJobId)
+      && (!versionSourceId.value || item.resumeVersionId === versionSourceId.value)
+    ))
+  )
+  if (!latestReport) return
+
+  redirectingToLatestReport.value = true
+  try {
+    await router.replace({
+      path: `/resume-match/${latestReport.reportId}`,
+      query: matchReportRouteQuery(latestReport)
+    })
+  } catch {
+    redirectingToLatestReport.value = false
+  }
+}
 
 const goMatchTaskCenter = () => {
   const route = matchTaskRoute.value
@@ -963,6 +1000,7 @@ const startMatchSse = (payload: ResumeJobMatchCreateDTO) => {
 
 onMounted(async () => {
   await Promise.allSettled([loadInitial(), loadReports()])
+  await routeToLatestCompletedReport()
 })
 onBeforeUnmount(stopMatchSse)
 </script>
@@ -1038,6 +1076,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .quality-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 12px; }
 .quality-gate-actions :deep(.el-button) { margin-left: 0; }
 .reports-panel { align-self: stretch; }
+.result-redirect-state { min-height: 260px; display: grid; place-items: center; }
 .report-list { min-height: 220px; display: grid; gap: 12px; }
 .report-card { display: grid; grid-template-columns: minmax(0, 1fr) auto 54px; gap: 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.34); color: var(--app-text); text-align: left; cursor: pointer; }
 .report-card strong, .report-card small { display: block; overflow-wrap: anywhere; }

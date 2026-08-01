@@ -29,7 +29,7 @@
           AI 简历实验室
         </div>
         <h1>{{ isEdit ? '打磨 Offer 简历' : '创建可验证简历' }}</h1>
-        <p>左侧沉淀真实经历，中间同步生成白纸预览，右侧把完整度、JD 匹配、项目证据和缺口建议放在同一个工作台里。</p>
+        <p>左侧定位简历模块，中间实时查看 A4 成品，右侧持续补全真实经历和项目证据。</p>
         <div class="hero-status">
           <span>{{ form.resumeName || '未命名简历' }}</span>
           <span>{{ form.targetPosition || '待补目标岗位' }}</span>
@@ -112,7 +112,94 @@
       </div>
     </details>
 
+    <section class="resume-template-strip content-card">
+      <div class="resume-template-strip__head">
+        <div>
+          <div class="panel-kicker">
+            <FilePenLine :size="15" />
+            模板皮肤
+          </div>
+          <h2>选择模板，实时查看 A4 成品</h2>
+          <p>模板切换不会改动内容结构；正式导出仍以已保存的版本为准。</p>
+        </div>
+        <el-tag :type="hasUnsavedResumeChanges ? 'warning' : 'success'" effect="plain">
+          {{ !isEdit ? '未保存草稿' : hasUnsavedResumeChanges ? '存在未保存改动' : '已同步保存内容' }}
+        </el-tag>
+      </div>
+
+      <div class="preview-customizer">
+        <div class="template-selector" role="radiogroup" aria-label="选择简历模板">
+          <button
+            v-for="template in resumeTemplateOptions"
+            :key="template.code"
+            type="button"
+            role="radio"
+            :aria-checked="selectedResumeTemplateCode === template.code"
+            :aria-disabled="!isTemplateUnlocked(template)"
+            :tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"
+            :class="{
+              active: selectedResumeTemplateCode === template.code,
+              locked: !isTemplateUnlocked(template)
+            }"
+            :disabled="!isTemplateUnlocked(template)"
+            @click="selectResumeTemplate(template)"
+            @keydown="moveTemplateSelection($event)"
+          >
+            <span class="template-thumb" :class="`is-${template.className}`">
+              <i></i><i></i><i></i>
+            </span>
+            <span>
+              <strong>{{ template.name }}</strong>
+              <small>{{ template.description }}</small>
+            </span>
+            <CheckCircle2 v-if="selectedResumeTemplateCode === template.code" :size="16" />
+          </button>
+        </div>
+
+        <div class="preview-controls">
+          <div class="accent-control">
+            <span>编辑预览色</span>
+            <div class="accent-swatches" role="radiogroup" aria-label="选择编辑预览强调色">
+              <button
+                v-for="option in resumeAccentOptions"
+                :key="option.value"
+                type="button"
+                role="radio"
+                :aria-label="option.label"
+                :aria-checked="previewAccent === option.value"
+                :tabindex="previewAccent === option.value ? 0 : -1"
+                :class="[`is-${option.value}`, { active: previewAccent === option.value }]"
+                @click="previewAccent = option.value"
+                @keydown="moveAccentSelection($event)"
+              ></button>
+            </div>
+          </div>
+          <div class="zoom-control" aria-label="预览缩放">
+            <button
+              type="button"
+              aria-label="缩小预览"
+              :disabled="previewZoom <= 0.72"
+              @click="changePreviewZoom(-0.08)"
+            >
+              <Minus :size="15" />
+            </button>
+            <span>{{ Math.round(previewZoom * 100) }}%</span>
+            <button
+              type="button"
+              aria-label="放大预览"
+              :disabled="previewZoom >= 1.12"
+              @click="changePreviewZoom(0.08)"
+            >
+              <Plus :size="15" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div :class="['editor-workspace', `is-mobile-${mobileWorkspaceTab}`]">
+      <div id="resume-panel-advice-mount" class="workspace-teleport-target"></div>
+      <div id="resume-panel-preview-mount" class="workspace-teleport-target"></div>
       <main
         id="resume-panel-edit"
         class="editor-column editor-main mobile-pane-edit"
@@ -141,26 +228,6 @@
           </div>
         </section>
 
-        <section class="content-card side-panel section-nav-card">
-          <div class="panel-kicker">
-            <Layers3 :size="15" />
-            分区导航
-          </div>
-          <div class="section-nav">
-            <button
-              v-for="item in sectionNavItems"
-              :key="item.id"
-              type="button"
-              :class="{ done: item.done }"
-              @click="focusSection(item.id)"
-            >
-              <CheckCircle2 v-if="item.done" :size="15" />
-              <Circle v-else :size="15" />
-              {{ item.label }}
-            </button>
-          </div>
-        </section>
-
         <section class="content-card editor-section edit-card" v-loading="loading">
           <div class="section-heading">
             <div class="section-icon">
@@ -168,7 +235,7 @@
             </div>
             <div>
               <h2>结构化编辑</h2>
-              <p>先把真实信息写扎实，右侧预览会同步展示当前内容。</p>
+              <p>先把真实信息写扎实，中间预览会同步展示当前内容。</p>
             </div>
           </div>
 
@@ -324,111 +391,60 @@
         </section>
       </main>
 
-      <section
-        id="resume-panel-preview"
-        class="preview-column content-card mobile-pane-preview"
-        role="tabpanel"
-        aria-labelledby="resume-tab-preview"
-      >
-        <div class="preview-toolbar">
-          <div>
-            <h2>简历成品预览</h2>
-            <p>模板选择会同步到下方 ATS 导出工作台；未保存内容仍需先保存后才能生成正式文件。</p>
+      <Teleport defer to="#resume-panel-preview-mount">
+        <section
+          id="resume-panel-preview"
+          class="preview-column content-card mobile-pane-preview"
+          role="tabpanel"
+          aria-labelledby="resume-tab-preview"
+        >
+          <div class="preview-toolbar">
+            <div>
+              <h2>简历成品预览</h2>
+              <p>中间 A4 预览会随填写内容即时更新；正式导出仍需使用已保存版本。</p>
+            </div>
           </div>
-          <div class="preview-toolbar__status">
-            <el-tag :type="hasUnsavedResumeChanges ? 'warning' : 'success'" effect="plain">
-              {{ !isEdit ? '未保存草稿' : hasUnsavedResumeChanges ? '存在未保存改动' : '已同步保存内容' }}
-            </el-tag>
-          </div>
-        </div>
 
-        <div class="preview-customizer">
-          <div class="template-selector" role="radiogroup" aria-label="选择简历模板">
+          <div class="resume-paper-wrap">
+            <div class="resume-paper-stage" :style="{ zoom: previewZoom }">
+              <ResumeDocumentPreview
+                :draft="resumeDocumentDraft"
+                :template-code="selectedResumeTemplateCode"
+                :accent="previewAccent"
+                :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+              />
+            </div>
+          </div>
+        </section>
+      </Teleport>
+
+      <Teleport defer to="#resume-panel-advice-mount">
+        <aside
+          id="resume-panel-advice"
+          class="editor-column editor-aside mobile-pane-advice"
+          role="tabpanel"
+          aria-labelledby="resume-tab-advice"
+        >
+        <section class="content-card side-panel section-nav-card">
+          <div class="panel-kicker">
+            <Layers3 :size="15" />
+            模块目录
+          </div>
+          <div class="section-nav">
             <button
-              v-for="template in resumeTemplateOptions"
-              :key="template.code"
+              v-for="item in sectionNavItems"
+              :key="item.id"
               type="button"
-              role="radio"
-              :aria-checked="selectedResumeTemplateCode === template.code"
-              :aria-disabled="!isTemplateUnlocked(template)"
-              :tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"
-              :class="{
-                active: selectedResumeTemplateCode === template.code,
-                locked: !isTemplateUnlocked(template)
-              }"
-              :disabled="!isTemplateUnlocked(template)"
-              @click="selectResumeTemplate(template)"
-              @keydown="moveTemplateSelection($event)"
+              :class="{ done: item.done }"
+              @click="focusSection(item.id)"
             >
-              <span class="template-thumb" :class="`is-${template.className}`">
-                <i></i><i></i><i></i>
-              </span>
-              <span>
-                <strong>{{ template.name }}</strong>
-                <small>{{ template.description }}</small>
-              </span>
-              <CheckCircle2 v-if="selectedResumeTemplateCode === template.code" :size="16" />
+              <CheckCircle2 v-if="item.done" :size="15" />
+              <Circle v-else :size="15" />
+              {{ item.label }}
             </button>
           </div>
+        </section>
 
-          <div class="preview-controls">
-            <div class="accent-control">
-              <span>编辑预览色</span>
-              <div class="accent-swatches" role="radiogroup" aria-label="选择编辑预览强调色">
-                <button
-                  v-for="option in resumeAccentOptions"
-                  :key="option.value"
-                  type="button"
-                  role="radio"
-                  :aria-label="option.label"
-                  :aria-checked="previewAccent === option.value"
-                  :tabindex="previewAccent === option.value ? 0 : -1"
-                  :class="[`is-${option.value}`, { active: previewAccent === option.value }]"
-                  @click="previewAccent = option.value"
-                  @keydown="moveAccentSelection($event)"
-                ></button>
-              </div>
-            </div>
-            <div class="zoom-control" aria-label="预览缩放">
-              <button
-                type="button"
-                aria-label="缩小预览"
-                :disabled="previewZoom <= 0.72"
-                @click="changePreviewZoom(-0.08)"
-              >
-                <Minus :size="15" />
-              </button>
-              <span>{{ Math.round(previewZoom * 100) }}%</span>
-              <button
-                type="button"
-                aria-label="放大预览"
-                :disabled="previewZoom >= 1.12"
-                @click="changePreviewZoom(0.08)"
-              >
-                <Plus :size="15" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="resume-paper-wrap">
-          <div class="resume-paper-stage" :style="{ zoom: previewZoom }">
-            <ResumeDocumentPreview
-              :draft="resumeDocumentDraft"
-              :template-code="selectedResumeTemplateCode"
-              :accent="previewAccent"
-              :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
-            />
-          </div>
-        </div>
-      </section>
-
-      <aside
-        id="resume-panel-advice"
-        class="editor-column editor-aside mobile-pane-advice"
-        role="tabpanel"
-        aria-labelledby="resume-tab-advice"
-      >
         <section class="content-card side-panel readiness-panel">
           <div class="completion-head">
             <span>简历完整度</span>
@@ -643,7 +659,8 @@
             <li>个人摘要保持真实，不写无法在面试中展开的内容。</li>
           </ul>
         </section>
-      </aside>
+        </aside>
+      </Teleport>
     </div>
 
     <ResumeDeliveryWorkbench
@@ -1940,6 +1957,10 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.workspace-teleport-target {
+  display: contents;
+}
+
 .editor-column {
   gap: var(--user-space-3);
   min-width: 0;
@@ -3188,7 +3209,8 @@ onBeforeUnmount(() => {
   .live-feedback-strip,
   .content-card,
   .preview-column,
-  .side-panel {
+  .side-panel,
+  .resume-template-strip {
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
@@ -3203,22 +3225,68 @@ onBeforeUnmount(() => {
   }
 
   .editor-workspace {
-    grid-template-columns: 206px minmax(0, 1fr) minmax(300px, 0.84fr);
+    grid-template-columns: 200px 360px minmax(0, 1fr);
     gap: 18px;
   }
 
+  .resume-template-strip {
+    padding: 14px 16px;
+    background: #ffffff;
+  }
+
+  .resume-template-strip__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+
+    h2 {
+      margin: 4px 0 0;
+      color: var(--resume-text);
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    p {
+      margin: 4px 0 0;
+      color: var(--resume-muted);
+      font-size: 12px;
+    }
+  }
+
+  .resume-template-strip .preview-customizer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    margin-bottom: 0;
+  }
+
+  .resume-template-strip .template-selector {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .resume-template-strip .preview-controls {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
   .editor-main {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1;
     grid-template-columns: 1fr;
   }
 
   .preview-column {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1 / span 2;
     position: sticky;
     top: 18px;
     align-self: start;
+  }
+
+  .preview-column .preview-toolbar__status {
+    display: none;
   }
 
   .editor-aside {
@@ -3302,15 +3370,15 @@ onBeforeUnmount(() => {
 @media (max-width: 1180px) {
   .arena-resume-studio {
     .editor-workspace {
-      grid-template-columns: minmax(0, 1fr) minmax(310px, 0.8fr);
+      grid-template-columns: minmax(310px, 0.8fr) minmax(0, 1fr);
     }
 
     .editor-main {
-      grid-column: 1;
+      grid-column: 2;
     }
 
     .preview-column {
-      grid-column: 2;
+      grid-column: 1;
     }
 
     .editor-aside {
@@ -3318,6 +3386,16 @@ onBeforeUnmount(() => {
       grid-column: 1 / -1;
       grid-row: 2;
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .resume-template-strip .preview-customizer {
+      grid-template-columns: 1fr;
+    }
+
+    .resume-template-strip .preview-controls {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
     }
   }
 }
@@ -3340,6 +3418,20 @@ onBeforeUnmount(() => {
 
     .editor-aside {
       grid-template-columns: 1fr;
+    }
+
+    .resume-template-strip__head {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .resume-template-strip .template-selector {
+      grid-template-columns: 1fr;
+    }
+
+    .resume-template-strip .preview-controls {
+      align-items: flex-start;
+      flex-direction: column;
     }
 
     .preview-column {
