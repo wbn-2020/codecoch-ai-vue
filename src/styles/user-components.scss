@@ -876,7 +876,7 @@ body.is-user-layout-active .jobcoach-layout {
     .target-card__summary,
     .target-actions,
     .pagination-wrap
-  ) {
+  ):not(.arena *) {
     border-color: rgba(148, 203, 255, 0.15);
     background: rgba(7, 17, 31, 0.56);
     color: var(--user-text);
