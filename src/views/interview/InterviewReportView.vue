@@ -9,7 +9,9 @@
         <h1>本轮面试结算</h1>
         <p>先看真实评分和下一步，再进入完整问答复盘。</p>
       </div>
-      <div class="report-actions">
+      <details class="report-actions">
+        <summary>更多操作</summary>
+        <div class="report-actions__menu">
         <el-dropdown
           :disabled="!interviewId || !isGenerated || exporting"
           @command="handleExportReport"
@@ -58,7 +60,8 @@
           <RotateCcw :size="16" />
           新建面试
         </el-button>
-      </div>
+        </div>
+      </details>
     </section>
 
     <section v-if="isGenerating" class="content-card">
@@ -148,22 +151,20 @@
             </div>
           </div>
 
-          <div v-if="improveTop3.length" class="settlement-improve">
-            <span>本轮优先补强</span>
-            <ol>
-              <li v-for="item in improveTop3" :key="item">{{ item }}</li>
-            </ol>
-          </div>
         </section>
 
         <div class="report-hero-grid">
           <section class="report-summary-panel">
-            <span class="panel-kicker">一句话总评</span>
-            <h2>{{ reportSummaryPreview.title }}</h2>
-            <p>{{ reportSummaryPreview.description }}</p>
-            <div class="evidence-strip">
-              <strong>证据摘要</strong>
-              <span>{{ evidenceSummaryPreview }}</span>
+            <span class="panel-kicker">三个失分点</span>
+            <div v-if="improveTop3.length" class="report-loss-list">
+              <article v-for="(item, index) in improveTop3" :key="item">
+                <span>{{ index + 1 }}</span>
+                <strong>{{ item }}</strong>
+              </article>
+            </div>
+            <div v-else class="report-loss-list report-loss-list--empty">
+              <strong>{{ reportSummaryPreview.title }}</strong>
+              <p>{{ reportSummaryPreview.description }}</p>
             </div>
           </section>
 
@@ -188,38 +189,43 @@
           </section>
         </div>
 
-        <div class="report-support-strip">
-          <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
-          <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
-          <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
-        </div>
+        <details class="report-detail-summary">
+          <summary>报告依据与详细指标</summary>
+          <div class="report-detail-summary__body">
+            <div class="report-support-strip">
+              <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
+              <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
+              <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
+            </div>
 
-        <div class="report-professional-strip">
-          <article v-for="item in reportReviewCriteria" :key="item.label">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-            <small>{{ item.desc }}</small>
-          </article>
-        </div>
+            <div class="report-professional-strip">
+              <article v-for="item in reportReviewCriteria" :key="item.label">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.desc }}</small>
+              </article>
+            </div>
 
-        <div class="overview-grid">
-          <div class="overview-card">
-            <span>报告状态</span>
-            <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
+            <div class="overview-grid">
+              <div class="overview-card">
+                <span>报告状态</span>
+                <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>面试记录</span>
+                <strong>{{ report.interviewId || interviewId }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>生成时间</span>
+                <strong>{{ report.generatedAt || report.createdAt || '-' }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>题目明细</span>
+                <strong>{{ qaMessages.length }} 条</strong>
+              </div>
+            </div>
           </div>
-          <div class="overview-card">
-            <span>面试记录</span>
-            <strong>{{ report.interviewId || interviewId }}</strong>
-          </div>
-          <div class="overview-card">
-            <span>生成时间</span>
-            <strong>{{ report.generatedAt || report.createdAt || '-' }}</strong>
-          </div>
-          <div class="overview-card">
-            <span>题目明细</span>
-            <strong>{{ qaMessages.length }} 条</strong>
-          </div>
-        </div>
+        </details>
 
         <el-alert
           v-if="isScoreUnavailable"
@@ -3808,6 +3814,51 @@ onBeforeUnmount(() => {
 
 // 方向 D · 报告首屏先完成“评分结算”，详细报告保持在结算和下一步行动之后。
 .arena-report {
+  .report-actions {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+
+    summary {
+      min-height: 34px;
+      padding: 8px 12px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .report-actions__menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 8px);
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(136px, 1fr));
+    gap: 8px;
+    width: min(360px, calc(100vw - 44px));
+    padding: 10px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 20px rgba(21, 33, 27, 0.12);
+
+    :deep(.el-button),
+    :deep(.el-dropdown) {
+      width: 100%;
+      margin: 0;
+    }
+  }
+
   .report-top {
     padding: 18px 20px;
     border-color: #b9e7cd;
@@ -3971,7 +4022,7 @@ onBeforeUnmount(() => {
   .settlement-improve {
     grid-column: 1 / -1;
     padding: 14px 16px;
-    border-left: 3px solid var(--arena-vio);
+    border: 1.5px solid #d7ccff;
     border-radius: 13px;
     background: var(--arena-vio-soft);
 
@@ -4005,8 +4056,82 @@ onBeforeUnmount(() => {
     border-radius: var(--arena-radius-card);
   }
 
+  .report-summary-panel {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+  }
+
+  .report-loss-list {
+    display: grid;
+    gap: 10px;
+
+    article {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      align-items: start;
+      gap: 9px;
+      color: var(--arena-ink);
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+
+    article > span {
+      display: inline-grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--arena-red-soft);
+      color: var(--arena-red);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    article strong {
+      padding-top: 2px;
+    }
+  }
+
+  .report-loss-list--empty {
+    display: grid;
+    gap: 8px;
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+  }
+
   .report-action-panel {
-    border-left: 3px solid var(--arena-grn);
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .report-detail-summary {
+    max-width: 820px;
+    margin: 0 auto 16px;
+    padding: 0 2px;
+
+    summary {
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .report-detail-summary__body {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
   }
 }
 
@@ -4049,6 +4174,13 @@ onBeforeUnmount(() => {
 
     .report-hero-grid {
       grid-template-columns: 1fr;
+    }
+
+    .report-actions__menu {
+      left: 0;
+      right: auto;
+      grid-template-columns: 1fr;
+      width: min(280px, calc(100vw - 32px));
     }
 
     .report-summary-panel,

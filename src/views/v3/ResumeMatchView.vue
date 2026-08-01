@@ -2,19 +2,13 @@
   <div class="arena arena-match v3-page">
     <section class="page-hero match-hero">
       <div class="hero-copy">
-        <div class="hero-kicker"><FlaskConical :size="16" /> JD 匹配实验台</div>
-        <h1>判断这份简历能不能投这个岗位</h1>
-        <p>先检查简历版本、岗位 JD 和项目证据是否足够，再生成匹配报告。资料不足时先补关键输入，不包装成强结论。</p>
-        <div class="hero-pills">
-          <span>准备度检查</span>
-          <span>版本快照</span>
-          <span>JD 输入</span>
-          <span>报告闭环</span>
-        </div>
+        <div class="hero-kicker">第 3 关 · JD 匹配</div>
+        <h1>为这份岗位做一次对账</h1>
+        <p>选择简历和目标岗位，生成覆盖率、可用证据和待补维度。</p>
       </div>
       <div class="hero-actions">
-        <el-button @click="router.push('/resumes')"><FileText :size="16" /> 简历中心</el-button>
-        <el-button type="primary" @click="router.push('/job-targets')"><Crosshair :size="16" /> 岗位目标</el-button>
+        <el-button @click="router.push('/resumes')"><FileText :size="16" /> 选择简历</el-button>
+        <el-button type="primary" @click="router.push('/job-targets')"><Crosshair :size="16" /> 管理岗位</el-button>
       </div>
     </section>
 
@@ -125,8 +119,8 @@
       <div class="content-panel form-panel" v-loading="loading">
         <div class="section-head">
           <div>
-            <h2>JD 输入与匹配启动</h2>
-            <p>默认带入当前主目标岗位和默认简历；如果岗位还未分析，先补 JD，再生成报告。</p>
+            <h2>选择本次匹配材料</h2>
+            <p>确认简历和岗位后生成报告。结果页会直接给出下一步。</p>
           </div>
           <el-tag v-if="currentTarget" type="success" effect="plain">已读取当前岗位</el-tag>
         </div>

@@ -17,8 +17,9 @@
         </div>
       </div>
 
-      <!-- Boss 副本：推荐计划 -->
-      <div class="arena-card arena-card--hero arena-iv__boss">
+      <!-- 推荐计划保留为辅助入口，首屏先让用户完成副本选择。 -->
+      <details class="arena-card arena-iv__boss">
+        <summary>推荐副本与依据</summary>
         <div class="arena-iv__boss-main">
           <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
             <span class="arena-chip arena-chip--grn-solid">👑 Boss 副本 · 推荐</span>
@@ -105,7 +106,7 @@
             🎙 语音设备预检
           </button>
         </div>
-      </div>
+      </details>
 
       <div class="arena-iv__grid">
         <div class="arena-col">
@@ -113,10 +114,10 @@
           <div class="arena-card arena-iv__panel">
             <div class="arena-between">
               <div>
-                <div class="arena-iv__kicker" style="color: var(--arena-vio)">副本选择</div>
-                <div class="arena-h3" style="margin-top: 4px">四个主副本，选一个立即开练</div>
+                <div class="arena-iv__kicker" style="color: var(--arena-vio)">第 1 步 · 选副本</div>
+                <div class="arena-h3" style="margin-top: 4px">今晚打哪个副本？</div>
               </div>
-              <span class="arena-tiny">全真模拟 = Boss 战</span>
+              <span class="arena-tiny">完成任意一场 +200 XP</span>
             </div>
             <div class="arena-iv__dungeons">
               <button
@@ -140,6 +141,28 @@
                   <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                 </div>
               </button>
+            </div>
+
+            <div class="arena-iv__selection-summary">
+              <div>
+                <span class="arena-chip arena-chip--grn">当前副本</span>
+                <b>{{ selectedModeTitle }}</b>
+                <p>{{ selectedModeDesc }}</p>
+                <p class="arena-tiny">上下文：{{ selectedResumeName }} · {{ form.targetPosition || '通用岗位' }}</p>
+              </div>
+              <div class="arena-iv__selection-actions">
+                <button
+                  class="arena-btn arena-btn--pri"
+                  type="button"
+                  :disabled="creating || resumeLoading || matchReportVerifyLoading"
+                  @click="handleCreate"
+                >
+                  {{ creating ? '创建中…' : '⚔ 开始面试' }}
+                </button>
+                <button class="arena-btn arena-btn--sec" type="button" @click="toggleConfigExpanded">
+                  微调
+                </button>
+              </div>
             </div>
 
             <details class="arena-iv__advanced-modes" :open="showAdvancedModes">
@@ -985,7 +1008,10 @@ const modeStars = (item: ModeCard) => {
 
 const selectDungeon = (item: ModeCard) => {
   selectMode(item)
-  void scrollToConfig()
+  // Industry mode needs an extra template before it can start; other dungeons stay at the start action.
+  if (item.industry) {
+    void scrollToConfig()
+  }
 }
 
 const optionLabel = (options: SelectOption[], value?: string) => {
@@ -1694,11 +1720,18 @@ onMounted(async () => {
     padding: 28px 34px 42px;
     position: relative;
     z-index: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   &__head {
+    order: 1;
     flex-wrap: wrap;
     gap: 12px;
+
+    > .arena-row {
+      display: none;
+    }
   }
 
   &__kicker {
@@ -1712,12 +1745,41 @@ onMounted(async () => {
   }
 
   &__boss {
-    margin-top: 20px;
-    padding: 22px 24px;
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    gap: 22px;
-    align-items: start;
+    order: 3;
+    display: block;
+    margin-top: 14px;
+    padding: 0;
+    overflow: hidden;
+
+    > summary {
+      display: flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 0 16px;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
+      gap: 18px;
+      padding: 16px;
+
+      > summary {
+        grid-column: 1 / -1;
+        min-height: 0;
+        padding: 0;
+        color: var(--arena-grn-d);
+      }
+    }
   }
 
   &__boss-main {
@@ -1907,11 +1969,17 @@ onMounted(async () => {
   }
 
   &__grid {
+    order: 2;
     margin-top: 20px;
     display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: 20px;
+    grid-template-columns: minmax(0, 760px);
+    justify-content: center;
+    gap: 14px;
     align-items: start;
+
+    > .arena-col:last-child {
+      display: none;
+    }
   }
 
   &__panel {
@@ -1995,6 +2063,48 @@ onMounted(async () => {
       font-size: 11.5px;
       color: var(--arena-sub);
       line-height: 1.5;
+    }
+  }
+
+  &__selection-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 15px 16px;
+    border: 1.5px solid #b9e7cd;
+    border-radius: 16px;
+    background: #f0fbf4;
+
+    > div:first-child {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    b {
+      color: var(--arena-ink);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+
+  &__selection-actions {
+    display: flex;
+    flex: none;
+    gap: 10px;
+
+    .arena-btn {
+      min-height: 42px;
+      padding: 0 18px;
     }
   }
 
@@ -2170,6 +2280,20 @@ onMounted(async () => {
     &__trust-grid,
     &__form-grid {
       grid-template-columns: 1fr;
+    }
+
+    &__selection-summary,
+    &__selection-actions {
+      width: 100%;
+    }
+
+    &__selection-summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    &__selection-actions .arena-btn {
+      flex: 1;
     }
   }
 }

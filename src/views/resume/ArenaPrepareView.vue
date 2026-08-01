@@ -4,8 +4,11 @@
       <!-- 页头：标题 + 资料接入环 -->
       <div class="arena-between arena-prepare__head">
         <div>
-          <div class="arena-prepare__kicker">准备 · 补给线</div>
-          <h1 class="arena-h1 arena-prepare__title">闯过三关，解锁精准匹配 🗺️</h1>
+          <div class="arena-prepare__kicker">
+            准备线 · 第 {{ Math.min(mainDoneCount + 1, 3) }} 关进行中 · 已完成 {{ mainDoneCount }}/3
+          </div>
+          <h1 class="arena-h1 arena-prepare__title">装备你的求职背包 🎒</h1>
+          <p class="arena-p" style="margin-top: 8px">三关装备齐，训练题才会贴着你的项目和目标岗位走。</p>
         </div>
         <div class="arena-card arena-prepare__readiness">
           <div
@@ -27,6 +30,13 @@
           </div>
         </div>
       </div>
+      <div class="arena-prepare__progress" aria-label="准备主线进度">
+        <i
+          v-for="node in mainNodes"
+          :key="node.key"
+          :class="{ 'is-done': node.state === 'done', 'is-current': node.state === 'current' || node.state === 'running' }"
+        ></i>
+      </div>
 
       <!-- 加载骨架 -->
       <div v-if="loading" class="arena-col" style="margin-top: 22px">
@@ -43,15 +53,7 @@
 
         <div class="arena-prepare__workspace">
           <!-- 闯关地图 -->
-          <div class="arena-card arena-card--hero arena-prepare__map">
-          <div class="arena-between" style="flex-wrap: wrap">
-            <div class="arena-row" style="gap: 8px">
-              <span class="arena-chip arena-chip--grn-solid">主线 · 三步闯关</span>
-              <span class="arena-tiny">已完成 {{ mainDoneCount }}/3</span>
-            </div>
-            <span class="arena-xp-tag">主线全通约 +330 经验</span>
-          </div>
-
+          <div class="arena-prepare__map">
           <div class="arena-prepare__track">
             <template v-for="(node, idx) in mainNodes" :key="node.key">
               <div v-if="idx > 0" class="arena-prepare__link" :class="{ 'is-done': mainNodes[idx - 1].state === 'done' }"></div>
@@ -80,9 +82,21 @@
             </template>
           </div>
 
+            <aside class="arena-card arena-prepare__coach">
+              <div class="arena-row" style="gap: 8px">
+                <span class="arena-chip arena-chip--vio">✦ AI</span>
+                <b>教练提示</b>
+              </div>
+              <p>
+                {{ currentTarget
+                  ? '岗位已接入。贴上完整 JD 后，我会帮你提取关键词并生成匹配报告。'
+                  : '先把目标岗位接进来，后续训练和模拟面试才会有明确的岗位上下文。' }}
+              </p>
+            </aside>
+
             <!-- 支线 -->
             <details class="arena-prepare__side">
-              <summary>支线准备与加成</summary>
+              <summary>更多准备动作</summary>
               <div class="arena-prepare__side-grid">
                 <button
                   v-for="side in sideNodes"
@@ -1195,11 +1209,33 @@ onBeforeUnmount(() => {
   }
 
   &__readiness {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 14px;
     padding: 12px 18px;
     max-width: 340px;
+  }
+
+  &__progress {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 16px;
+
+    i {
+      display: block;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--arena-line);
+
+      &.is-done {
+        background: var(--arena-grn);
+      }
+
+      &.is-current {
+        background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+      }
+    }
   }
 
   &__warn {
@@ -1224,7 +1260,7 @@ onBeforeUnmount(() => {
   }
 
   &__map {
-    padding: 22px 24px;
+    min-width: 0;
   }
 
   &__jd-card {
@@ -1253,9 +1289,7 @@ onBeforeUnmount(() => {
   }
 
   &__jd-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.8fr);
-    gap: 18px;
+    display: block;
     margin-top: 18px;
   }
 
@@ -1332,7 +1366,7 @@ onBeforeUnmount(() => {
   }
 
   &__jd-tip {
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: flex-start;
     gap: 9px;
@@ -1354,7 +1388,6 @@ onBeforeUnmount(() => {
   }
 
   &__track {
-    margin-top: 18px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1400,7 +1433,7 @@ onBeforeUnmount(() => {
 
     &.is-current {
       border-color: var(--arena-amber);
-      box-shadow: 0 0 0 4px var(--arena-amber-soft);
+      box-shadow: 0 0 0 3px var(--arena-amber-soft);
     }
 
     &.is-locked {
@@ -1484,6 +1517,22 @@ onBeforeUnmount(() => {
       &::-webkit-details-marker {
         display: none;
       }
+    }
+  }
+
+  &__coach {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 15px 16px;
+    border-color: #d7ccff;
+    background: var(--arena-vio-soft);
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 11.5px;
+      line-height: 1.6;
     }
   }
 
@@ -1697,7 +1746,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 720px) {
+  @media (max-width: 720px) {
   .arena-prepare {
     margin: -12px -12px 0;
 

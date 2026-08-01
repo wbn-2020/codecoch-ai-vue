@@ -1,6 +1,6 @@
 <template>
   <div class="arena arena-practice practice-session-page page-shell">
-    <section class="session-hero">
+    <section v-if="!practicing && !finished" class="session-hero">
       <div>
         <div class="eyebrow">
           <Dumbbell :size="16" />
@@ -108,22 +108,16 @@
     </section>
 
     <section v-if="practicing" class="practice-workspace">
-      <div class="practice-progress content-card">
-        <div class="content-card__body progress-body">
-          <div class="room-status">
+      <header class="practice-progress">
+        <div class="practice-progress__head">
+          <div class="practice-progress__identity">
+            <el-button class="practice-progress__exit" plain @click="finishPractice">退出</el-button>
             <strong>{{ currentModeLabel }}</strong>
-            <span>{{ answered ? '复盘当前题' : '等待作答' }}</span>
           </div>
-          <div class="progress-info">
-            <span>{{ currentIndex + 1 }} / {{ questions.length }}</span>
-            <span>已答 {{ answeredCount }}</span>
-            <span>正确 {{ correctCount }}</span>
-            <span>{{ elapsedText }}</span>
-          </div>
-          <el-progress :percentage="progressPercent" :show-text="false" />
-          <el-button type="danger" plain @click="finishPractice">结束</el-button>
+          <span class="practice-progress__count">第 {{ currentIndex + 1 }} / {{ questions.length }} 题</span>
         </div>
-      </div>
+        <el-progress :percentage="progressPercent" :show-text="false" />
+      </header>
 
       <div class="active-grid">
         <main class="content-card question-panel">
@@ -145,15 +139,6 @@
             </div>
 
             <div v-if="!answered" class="answer-area">
-              <div class="answer-frame">
-                <span>建议回答顺序</span>
-                <div>
-                  <em>概念边界</em>
-                  <em>核心方案</em>
-                  <em>风险取舍</em>
-                  <em>项目证据</em>
-                </div>
-              </div>
               <el-input
                 v-model="userAnswer"
                 type="textarea"
@@ -164,11 +149,16 @@
                 :disabled="submitting"
               />
               <div class="answer-actions">
-                <el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer">
-                  <Send :size="16" />
-                  提交回答
+                <el-button class="answer-actions__skip" :disabled="submitting" @click="skipQuestion">
+                  跳过 · 不记分
                 </el-button>
-                <el-button :disabled="submitting" @click="skipQuestion">跳过</el-button>
+                <div class="answer-actions__submit">
+                  <span>答对 +18 XP</span>
+                  <el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer">
+                    <Send :size="16" />
+                    提交答案
+                  </el-button>
+                </div>
               </div>
             </div>
 
@@ -332,28 +322,6 @@
       </div>
     </section>
 
-    <section v-if="practicing || finished" class="mobile-practice-rail" aria-label="手机练习快捷操作">
-      <div class="mobile-practice-rail__main">
-        <span>{{ finished ? '练习完成' : `${currentIndex + 1}/${questions.length || config.count}` }}</span>
-        <strong>{{ mobilePracticeTitle }}</strong>
-        <small>{{ mobilePracticeSubtitle }}</small>
-      </div>
-      <div class="mobile-practice-rail__actions">
-        <el-button
-          v-if="practicing"
-          type="primary"
-          size="small"
-          :loading="submitting"
-          :disabled="mobilePrimaryDisabled"
-          @click="handleMobilePrimaryAction"
-        >
-          {{ mobilePrimaryActionLabel }}
-        </el-button>
-        <el-button v-if="practicing" size="small" plain @click="finishPractice">结束</el-button>
-        <el-button v-else type="primary" size="small" @click="resetPractice">再练</el-button>
-        <el-button size="small" plain @click="router.push('/questions/wrong-records')">错题</el-button>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -1628,7 +1596,7 @@ onBeforeUnmount(stopTimer)
 
 @media (max-width: 640px) {
   .practice-session-page {
-    padding-bottom: calc(210px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
   .session-hero {
@@ -1666,69 +1634,6 @@ onBeforeUnmount(stopTimer)
     }
   }
 
-  .mobile-practice-rail {
-    position: fixed;
-    right: 12px;
-    bottom: calc(
-      var(--user-mobile-nav-height, 0px) + var(--user-mobile-nav-gap, 12px) + 12px +
-        env(safe-area-inset-bottom, 0px)
-    );
-    left: 12px;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--user-primary-border);
-    border-radius: 8px;
-    background: var(--user-surface-raised);
-    box-shadow: var(--user-shadow-sm);
-  }
-
-  .mobile-practice-rail__main {
-    min-width: 0;
-
-    span,
-    small,
-    strong {
-      display: block;
-    }
-
-    span {
-      color: var(--user-primary);
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    strong {
-      overflow: hidden;
-      margin-top: 2px;
-      color: var(--user-text);
-      font-size: 14px;
-      line-height: 1.35;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    small {
-      overflow: hidden;
-      margin-top: 2px;
-      color: var(--user-text-muted);
-      font-size: 12px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .mobile-practice-rail__actions {
-    display: flex;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 6px;
-    max-width: 154px;
-  }
 }
 
 // 方向 D · 答题间。保留题目加载、判分、复盘与来源可信边界，改为连续闯关反馈。
@@ -1808,6 +1713,192 @@ onBeforeUnmount(stopTimer)
   .practice-setup {
     max-width: 900px;
     margin: 0 auto;
+  }
+
+  .practice-workspace {
+    width: min(832px, 100%);
+    margin: 0 auto;
+    gap: 16px;
+  }
+
+  .practice-progress {
+    display: grid;
+    gap: 12px;
+    padding: 0;
+
+    :deep(.el-progress-bar__outer) {
+      height: 9px !important;
+      border-radius: 999px;
+    }
+  }
+
+  .practice-progress__head,
+  .practice-progress__identity,
+  .answer-actions,
+  .answer-actions__submit {
+    display: flex;
+    align-items: center;
+  }
+
+  .practice-progress__head {
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .practice-progress__identity {
+    min-width: 0;
+    gap: 10px;
+
+    strong {
+      overflow: hidden;
+      color: var(--arena-ink);
+      font-size: 13.5px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .practice-progress__exit {
+    min-height: 34px;
+    margin: 0;
+    padding: 0 13px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--arena-grn-d);
+    font-size: 12.5px;
+    font-weight: 800;
+    box-shadow: 0 3px 0 var(--arena-line);
+  }
+
+  .practice-progress__count {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .active-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > section {
+      &:nth-child(3) {
+        display: none;
+      }
+    }
+  }
+
+  .question-panel {
+    .content-card__body {
+      padding: 26px 28px;
+    }
+
+    h2 {
+      margin-top: 14px;
+      font-size: 19px;
+      font-weight: 900;
+      line-height: 1.5;
+    }
+  }
+
+  .current-question-head {
+    display: none;
+  }
+
+  .question-meta {
+    margin-top: 0;
+  }
+
+  .question-content {
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+
+    :deep(p) {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 14px;
+      line-height: 1.75;
+    }
+  }
+
+  .answer-area {
+    margin-top: 18px;
+  }
+
+  .answer-area :deep(.el-textarea__inner) {
+    min-height: 168px !important;
+    padding: 14px;
+    border: 1.5px solid var(--arena-line);
+    background: #ffffff;
+    color: var(--arena-ink);
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  .answer-actions {
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .answer-actions__skip {
+    min-height: 42px;
+    margin: 0;
+    padding: 0 16px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 13px;
+    background: #ffffff;
+    color: var(--arena-grn-d);
+    font-weight: 800;
+    box-shadow: 0 3px 0 var(--arena-line);
+  }
+
+  .answer-actions__submit {
+    gap: 12px;
+
+    > span {
+      color: var(--arena-amber);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    :deep(.el-button) {
+      min-height: 44px;
+      margin: 0;
+      padding: 0 22px;
+    }
+  }
+
+  .side-stack > section {
+    .content-card__body {
+      padding: 16px 18px;
+    }
+  }
+
+  .side-title {
+    margin-bottom: 6px;
+
+    h2 {
+      font-size: 12px;
+      font-weight: 900;
+    }
+  }
+
+  .coach-list,
+  .side-muted {
+    color: var(--arena-sub);
+    font-size: 11.5px;
+    line-height: 1.65;
   }
 
   .practice-setup .content-card__body {
@@ -1915,12 +2006,45 @@ onBeforeUnmount(stopTimer)
       width: 100%;
     }
 
-    .mobile-practice-rail {
-      border: 1.5px solid #b9e7cd;
-      border-radius: 14px;
-      background: #ffffff;
-      box-shadow: 0 8px 22px rgba(21, 33, 27, 0.12);
+    .practice-workspace {
+      width: 100%;
     }
+
+    .practice-progress__head {
+      align-items: flex-start;
+    }
+
+    .practice-progress__count {
+      margin-top: 4px;
+    }
+
+    .question-panel .content-card__body {
+      padding: 20px 18px;
+    }
+
+    .question-panel h2 {
+      font-size: 18px;
+    }
+
+    .side-stack {
+      grid-template-columns: 1fr;
+    }
+
+    .answer-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .answer-actions__skip,
+    .answer-actions__submit,
+    .answer-actions__submit :deep(.el-button) {
+      width: 100%;
+    }
+
+    .answer-actions__submit {
+      justify-content: space-between;
+    }
+
   }
 }
 </style>

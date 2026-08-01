@@ -1,7 +1,17 @@
 <template>
   <div class="jobcoach-layout" :class="{ 'is-arena-page': usesArenaOverlayTheme }">
+    <ArenaTopNav
+      v-if="usesArenaOverlayTheme && !isImmersivePage"
+      :display-name="displayName"
+      :avatar-text="avatarText"
+      :avatar-url="authStore.userInfo?.avatarUrl || ''"
+      :can-access-admin="Boolean(adminEntryPath)"
+      @go-admin="goAdmin"
+      @user-command="handleCommand"
+    />
+
     <UserTopNav
-      v-if="!isImmersivePage"
+      v-else-if="!isImmersivePage"
       :display-name="displayName"
       :avatar-text="avatarText"
       :avatar-url="authStore.userInfo?.avatarUrl || ''"
@@ -14,7 +24,7 @@
       @user-command="handleCommand"
     />
 
-    <CommandPalette v-model="commandPaletteOpen" scope="user" />
+    <CommandPalette v-if="!usesArenaOverlayTheme" v-model="commandPaletteOpen" scope="user" />
 
     <main
       class="jobcoach-main"
@@ -42,6 +52,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getUnreadCountApi } from '@/api/notification'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import XpGainToast from '@/components/game/XpGainToast.vue'
+import ArenaTopNav from '@/components/layout/ArenaTopNav.vue'
 import UserTopNav from '@/components/layout/UserTopNav.vue'
 import { appConfig } from '@/config'
 import { useGameProfileStore } from '@/features/game-profile'
@@ -165,6 +176,10 @@ onBeforeUnmount(() => {
 
 .jobcoach-layout.is-arena-page {
   color-scheme: light;
+  background:
+    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
+    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
+    var(--arena-bg);
 }
 
 .jobcoach-main {
@@ -176,8 +191,19 @@ onBeforeUnmount(() => {
   overflow-x: clip;
 
   &.is-arena-main {
-    width: min(100%, 1060px);
-    padding: 28px 34px 42px;
+    width: 100%;
+    min-height: calc(100vh - 62px);
+    padding: 0;
+
+    :deep(.arena) {
+      margin: 0;
+    }
+
+    @media (max-width: 720px) {
+      :deep(.arena:not(.arena-room)) {
+        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      }
+    }
   }
 
   &.is-immersive {
@@ -215,7 +241,8 @@ onBeforeUnmount(() => {
     padding: 12px 12px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 78px + env(safe-area-inset-bottom, 0px));
 
     &.is-arena-main {
-      padding: 18px 14px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 26px + env(safe-area-inset-bottom, 0px));
+      min-height: calc(100vh - 54px);
+      padding: 0;
     }
   }
 }

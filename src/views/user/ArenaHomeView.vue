@@ -111,14 +111,6 @@
                 <div class="arena-tiny" style="margin-top: 3px">{{ m.reason }} · {{ m.minutes }} 分钟</div>
                 <div class="arena-row" style="margin-top: 10px; gap: 12px">
                   <button class="arena-btn arena-btn--txt" @click="enterMission(m)">去完成 →</button>
-                  <button
-                    class="arena-btn arena-btn--txt"
-                    style="color: var(--arena-mut)"
-                    :disabled="completingId === m.id"
-                    @click="completeMission(m)"
-                  >
-                    直接完成
-                  </button>
                 </div>
               </div>
             </div>

@@ -22,28 +22,25 @@
     </AppState>
 
     <template v-else>
-    <section class="editor-hero">
+    <section class="editor-hero resume-workshop-hero">
       <div>
-        <div class="hero-kicker">
-          <FilePenLine :size="16" />
-          AI 简历实验室
-        </div>
-        <h1>{{ isEdit ? '打磨 Offer 简历' : '创建可验证简历' }}</h1>
-        <p>左侧定位简历模块，中间实时查看 A4 成品，右侧持续补全真实经历和项目证据。</p>
-        <div class="hero-status">
-          <span>{{ form.resumeName || '未命名简历' }}</span>
-          <span>{{ form.targetPosition || '待补目标岗位' }}</span>
-          <span>{{ completion }}% 已填写</span>
-        </div>
+        <h1>简历工坊 <span aria-hidden="true">⚒</span></h1>
+        <p>每完善一个模块都有经验，中间简历实时成型。</p>
       </div>
-      <div class="hero-actions">
-        <el-button @click="router.push('/resumes')">
-          <ArrowLeft :size="16" />
-          返回简历实验室
-        </el-button>
+      <div class="resume-workshop-hero__completion">
+        <div
+          class="resume-workshop-ring"
+          :style="{ background: `conic-gradient(var(--arena-grn) 0 ${completion}%, var(--arena-line) ${completion}% 100%)` }"
+        >
+          <div><strong>{{ completion }}%</strong></div>
+        </div>
+        <div class="resume-workshop-hero__copy">
+          <strong>简历完成度</strong>
+          <span>再补 {{ Math.max(0, 7 - completionItems.filter((item) => item.done).length) }} 块拿满 <b>+120 XP</b></span>
+        </div>
         <el-button type="primary" :loading="saving" @click="handleSave">
           <Save :size="16" />
-          保存简历
+          保存 · 去匹配
         </el-button>
       </div>
     </section>
@@ -75,56 +72,14 @@
       >
         预览
       </button>
-      <button
-        type="button"
-        role="tab"
-        id="resume-tab-advice"
-        aria-controls="resume-panel-advice"
-        :aria-selected="mobileWorkspaceTab === 'advice'"
-        :tabindex="mobileWorkspaceTab === 'advice' ? 0 : -1"
-        :class="{ active: mobileWorkspaceTab === 'advice' }"
-        @click="mobileWorkspaceTab = 'advice'"
-        @keydown="moveMobileWorkspaceTab($event)"
-      >
-        AI 建议
-      </button>
     </div>
-
-    <section class="live-feedback-strip">
-      <article v-for="item in liveFeedbackItems" :key="item.title" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.title }}</strong>
-        <p>{{ item.desc }}</p>
-      </article>
-    </section>
-
-    <details class="mobile-feedback-details">
-      <summary>
-        <span>实时检查</span>
-        <strong>{{ completion }}% 完整 · {{ projects.length }} 段项目</strong>
-      </summary>
-      <div>
-        <article v-for="item in liveFeedbackItems" :key="`mobile-${item.title}`">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.title }}</strong>
-          <p>{{ item.desc }}</p>
-        </article>
-      </div>
-    </details>
 
     <section class="resume-template-strip content-card">
       <div class="resume-template-strip__head">
         <div>
-          <div class="panel-kicker">
-            <FilePenLine :size="15" />
-            模板皮肤
-          </div>
-          <h2>选择模板，实时查看 A4 成品</h2>
-          <p>模板切换不会改动内容结构；正式导出仍以已保存的版本为准。</p>
+          <h2>🎨 选择模板皮肤</h2>
         </div>
-        <el-tag :type="hasUnsavedResumeChanges ? 'warning' : 'success'" effect="plain">
-          {{ !isEdit ? '未保存草稿' : hasUnsavedResumeChanges ? '存在未保存改动' : '已同步保存内容' }}
-        </el-tag>
+        <span class="resume-template-strip__hint">ATS 友好 · 随时换肤不重排</span>
       </div>
 
       <div class="preview-customizer">
@@ -228,19 +183,23 @@
           </div>
         </section>
 
-        <section class="content-card editor-section edit-card" v-loading="loading">
+        <section
+          v-show="activeWorkshopModule !== 'resume-projects'"
+          class="content-card editor-section edit-card"
+          v-loading="loading"
+        >
           <div class="section-heading">
             <div class="section-icon">
               <UserRound :size="18" />
             </div>
             <div>
-              <h2>结构化编辑</h2>
-              <p>先把真实信息写扎实，中间预览会同步展示当前内容。</p>
+              <h2>{{ activeWorkshopModuleMeta.title }}</h2>
+              <p>{{ activeWorkshopModuleMeta.description }}</p>
             </div>
           </div>
 
           <el-form ref="formRef" class="resume-form" :model="form" :rules="rules" label-position="top">
-            <div id="resume-basic" class="editor-block">
+            <div v-show="activeWorkshopModule === 'resume-basic'" id="resume-basic" class="editor-block">
               <div class="block-head">
                 <span>基本信息</span>
                 <el-tag size="small" :type="form.resumeName && form.realName ? 'success' : 'warning'" effect="plain">
@@ -263,7 +222,7 @@
             </div>
             </div>
 
-            <div id="resume-target" class="editor-block">
+            <div v-show="activeWorkshopModule === 'resume-target'" id="resume-target" class="editor-block">
               <div class="block-head">
                 <span>求职目标</span>
                 <el-tag size="small" :type="form.targetPosition ? 'success' : 'warning'" effect="plain">
@@ -283,7 +242,7 @@
             </div>
             </div>
 
-            <div id="resume-summary" class="editor-block">
+            <div v-show="activeWorkshopModule === 'resume-basic'" id="resume-summary" class="editor-block">
               <div class="block-head">
                 <span>个人摘要</span>
                 <el-tag size="small" :type="form.summary ? 'success' : 'info'" effect="plain">
@@ -300,7 +259,7 @@
             </el-form-item>
             </div>
 
-            <div id="resume-skills" class="editor-block">
+            <div v-show="activeWorkshopModule === 'resume-skills'" id="resume-skills" class="editor-block">
               <div class="block-head">
                 <span>技能关键词</span>
                 <el-tag size="small" :type="skillTags.length ? 'success' : 'warning'" effect="plain">
@@ -317,7 +276,7 @@
             </el-form-item>
             </div>
 
-            <div id="resume-experience" class="editor-block">
+            <div v-show="activeWorkshopModule === 'resume-experience'" id="resume-experience" class="editor-block">
               <div class="block-head">
                 <span>经历与教育</span>
                 <el-tag size="small" :type="form.workSummary || form.education ? 'success' : 'info'" effect="plain">
@@ -349,7 +308,11 @@
           </div>
         </section>
 
-        <section id="resume-projects" class="content-card editor-section project-section">
+        <section
+          v-show="activeWorkshopModule === 'resume-projects'"
+          id="resume-projects"
+          class="content-card editor-section project-section"
+        >
           <div class="section-heading project-header">
             <div class="section-heading__left">
               <div class="section-icon">
@@ -365,6 +328,31 @@
               {{ isEdit ? '新增项目' : '添加项目草稿' }}
             </el-button>
           </div>
+
+          <section class="workshop-ai-rewrite">
+            <div>
+              <span>✦ AI 教练 · 改写建议</span>
+              <strong>{{ projects.length ? '给项目补一条量化结果' : '先补一段可被追问的项目经历' }}</strong>
+              <p>
+                {{ latestOptimizeRecord
+                  ? '已生成建议，采纳后会创建新草稿，不会覆盖当前版本。'
+                  : '先保存真实经历，再让 AI 协助压缩表达和补足量化结果。' }}
+              </p>
+            </div>
+            <el-button
+              v-if="isEdit && resumeId"
+              type="primary"
+              :loading="optimizing"
+              @click="handleOptimizeResume"
+            >
+              <Sparkles :size="16" />
+              生成建议
+            </el-button>
+            <el-button v-else type="primary" :loading="saving" @click="handleSave">
+              <Save :size="16" />
+              保存后生成
+            </el-button>
+          </section>
 
           <div class="project-list">
             <div v-if="projects.length === 0" class="project-empty">
@@ -400,9 +388,10 @@
         >
           <div class="preview-toolbar">
             <div>
-              <h2>简历成品预览</h2>
-              <p>中间 A4 预览会随填写内容即时更新；正式导出仍需使用已保存版本。</p>
+              <h2>📄 实时预览 · {{ selectedResumeTemplateLabel }}</h2>
+              <p>当前填写内容会同步到纸张预览。</p>
             </div>
+            <span class="resume-preview-page-chip">A4 · 1 页</span>
           </div>
 
           <div class="resume-paper-wrap">
@@ -421,9 +410,7 @@
       <Teleport defer to="#resume-panel-advice-mount">
         <aside
           id="resume-panel-advice"
-          class="editor-column editor-aside mobile-pane-advice"
-          role="tabpanel"
-          aria-labelledby="resume-tab-advice"
+          class="editor-column editor-aside"
         >
         <section class="content-card side-panel section-nav-card">
           <div class="panel-kicker">
@@ -435,7 +422,7 @@
               v-for="item in sectionNavItems"
               :key="item.id"
               type="button"
-              :class="{ done: item.done }"
+              :class="{ done: item.done, active: activeWorkshopModule === item.id }"
               @click="focusSection(item.id)"
             >
               <CheckCircle2 v-if="item.done" :size="15" />
@@ -663,15 +650,17 @@
       </Teleport>
     </div>
 
-    <ResumeDeliveryWorkbench
-      v-if="isEdit"
-      :resume-id="resumeId || undefined"
-      :preferred-template-code="selectedResumeTemplateCode"
-      :refresh-key="deliveryRefreshKey"
-      :has-unsaved-changes="hasUnsavedResumeChanges"
-      @resume-version-applied="reloadCurrentResume"
-      @template-change="selectedResumeTemplateCode = $event"
-    />
+    <details v-if="isEdit" class="resume-delivery-details">
+      <summary>投递级简历工作台</summary>
+      <ResumeDeliveryWorkbench
+        :resume-id="resumeId || undefined"
+        :preferred-template-code="selectedResumeTemplateCode"
+        :refresh-key="deliveryRefreshKey"
+        :has-unsaved-changes="hasUnsavedResumeChanges"
+        @resume-version-applied="reloadCurrentResume"
+        @template-change="selectedResumeTemplateCode = $event"
+      />
+    </details>
 
     <el-dialog
       v-model="projectDialogVisible"
@@ -785,7 +774,8 @@ const optimizeSseMessage = ref('')
 const optimizeSseStatus = ref('未开始')
 const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
-const mobileWorkspaceTab = ref<'edit' | 'preview' | 'advice'>('edit')
+const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
+const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-projects')
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const previewAccent = ref<ResumeAccent>('ocean')
 const previewZoom = ref(0.88)
@@ -799,7 +789,7 @@ const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
   { value: 'graphite', label: '石墨灰' },
   { value: 'berry', label: '莓红色' }
 ]
-const mobileWorkspaceTabs = ['edit', 'preview', 'advice'] as const
+const mobileWorkspaceTabs = ['edit', 'preview'] as const
 const availableResumeTemplateCodes = computed(() =>
   resumeTemplateOptions
     .filter((template) => isTemplateUnlocked(template))
@@ -915,12 +905,42 @@ const completion = computed(() => {
 
 const sectionNavItems = computed(() => [
   { id: 'resume-basic', label: '基本信息', done: Boolean(form.resumeName?.trim() && form.realName?.trim()) },
-  { id: 'resume-target', label: '求职目标', done: Boolean(form.targetPosition?.trim()) },
-  { id: 'resume-summary', label: '个人摘要', done: Boolean(form.summary?.trim()) },
-  { id: 'resume-skills', label: '技能关键词', done: Boolean(form.skills?.trim()) },
-  { id: 'resume-experience', label: '经历与教育', done: Boolean(form.workSummary?.trim() || form.education?.trim()) },
-  { id: 'resume-projects', label: '项目经历', done: projects.value.length > 0 }
+  { id: 'resume-target', label: '求职意向', done: Boolean(form.targetPosition?.trim()) },
+  { id: 'resume-skills', label: '技能栈', done: Boolean(form.skills?.trim()) },
+  { id: 'resume-projects', label: '项目经历', done: projects.value.length > 0 },
+  { id: 'resume-experience', label: '教育经历', done: Boolean(form.workSummary?.trim() || form.education?.trim()) }
 ])
+
+const activeWorkshopModuleMeta = computed(() => {
+  const modules = {
+    'resume-basic': {
+      title: '基本信息',
+      description: '先把真实身份和能证明的个人摘要写清楚。'
+    },
+    'resume-target': {
+      title: '求职意向',
+      description: '目标岗位会决定摘要、技能和项目的排序重点。'
+    },
+    'resume-skills': {
+      title: '技能栈',
+      description: '按语言、框架、中间件、数据库和工程实践优先级整理。'
+    },
+    'resume-projects': {
+      title: '项目经历',
+      description: '把背景、职责、技术决策和量化结果写成可追问的证据。'
+    },
+    'resume-experience': {
+      title: '教育经历',
+      description: '补齐经历上下文和教育信息，让整份简历可被完整理解。'
+    }
+  } as const
+
+  return modules[activeWorkshopModule.value]
+})
+
+const selectedResumeTemplateLabel = computed(() =>
+  resumeTemplateOptions.find((item) => item.code === selectedResumeTemplateCode.value)?.name || '极光绿'
+)
 
 const splitTextTags = (value?: string) =>
   (value || '')
@@ -1095,7 +1115,24 @@ const gapSuggestionItems = computed(() => {
 })
 
 const focusSection = (sectionId: string) => {
-  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const moduleId = sectionId === 'resume-summary'
+    ? 'resume-basic'
+    : sectionId
+
+  if (
+    moduleId === 'resume-basic'
+    || moduleId === 'resume-target'
+    || moduleId === 'resume-skills'
+    || moduleId === 'resume-projects'
+    || moduleId === 'resume-experience'
+  ) {
+    activeWorkshopModule.value = moduleId
+    mobileWorkspaceTab.value = 'edit'
+  }
+
+  void nextTick(() => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
 }
 
 const liveFeedbackItems = computed(() => [
@@ -1256,6 +1293,7 @@ const resetRouteState = () => {
   optimizing.value = false
   applyingOptimize.value = false
   mobileWorkspaceTab.value = 'edit'
+  activeWorkshopModule.value = 'resume-projects'
   selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
   previewAccent.value = 'ocean'
   previewZoom.value = 0.88
@@ -3436,6 +3474,651 @@ onBeforeUnmount(() => {
 
     .preview-column {
       order: 2;
+    }
+  }
+}
+
+// 方向 D 1:1 简历工坊。旧的工作台样式保留给业务表单与弹窗，
+// 这里以原型的 modules / preview / editor 网格接管页面构图。
+.arena-resume-studio {
+  width: min(1060px, 100%);
+  padding: 28px 34px 42px;
+  gap: 18px;
+
+  .resume-workshop-hero {
+    min-height: 70px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    h1 {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 23px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 6px 0 0;
+      color: var(--arena-sub);
+      font-size: 13.5px;
+    }
+  }
+
+  .resume-workshop-hero__completion {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .resume-workshop-ring {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border-radius: 50%;
+
+    > div {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 12px;
+      font-weight: 900;
+    }
+  }
+
+  .resume-workshop-hero__copy {
+    display: grid;
+    gap: 3px;
+    min-width: 128px;
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    span {
+      color: var(--arena-mut);
+      font-size: 11.5px;
+      white-space: nowrap;
+    }
+
+    b {
+      color: var(--arena-amber);
+      font-weight: 800;
+    }
+  }
+
+  .resume-workshop-hero__completion :deep(.el-button) {
+    min-height: 40px;
+    margin-left: 3px;
+    border-radius: var(--arena-radius-btn);
+    font-size: 13px;
+  }
+
+  .live-feedback-strip,
+  .mobile-feedback-details,
+  .ai-writing-card {
+    display: none;
+  }
+
+  .resume-template-strip {
+    padding: 14px 18px;
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+  }
+
+  .resume-template-strip__head {
+    align-items: center;
+    margin-bottom: 12px;
+
+    h2 {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+  }
+
+  .resume-template-strip__hint {
+    color: var(--arena-mut);
+    font-size: 11.5px;
+  }
+
+  .resume-template-strip .preview-customizer {
+    display: block;
+    margin: 0;
+  }
+
+  .resume-template-strip .preview-controls {
+    display: none;
+  }
+
+  .resume-template-strip .template-selector {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(86px, 1fr));
+    gap: 12px;
+  }
+
+  .resume-template-strip .template-selector > button {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 116px auto;
+    gap: 7px;
+    justify-items: center;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--arena-sub);
+    text-align: center;
+
+    .template-thumb {
+      width: 86px;
+      height: 116px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 10px;
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    }
+
+    > span:nth-child(2) {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    strong {
+      color: var(--arena-sub);
+      font-size: 11.5px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    small {
+      display: none;
+    }
+
+    > svg {
+      position: absolute;
+      top: 9px;
+      right: calc(50% - 34px);
+      padding: 2px;
+      border-radius: 50%;
+      background: #ffffff;
+      color: var(--arena-grn);
+    }
+
+    &:hover .template-thumb,
+    &:focus-visible .template-thumb {
+      border-color: var(--arena-grn);
+      outline: 0;
+    }
+
+    &.active {
+      background: transparent;
+
+      .template-thumb {
+        border-color: var(--arena-grn);
+        box-shadow: 0 0 0 3px var(--arena-grn-soft);
+      }
+
+      strong {
+        color: var(--arena-grn-d);
+      }
+    }
+
+    &.locked .template-thumb {
+      opacity: 0.62;
+      filter: grayscale(0.12);
+    }
+  }
+
+  .editor-workspace {
+    grid-template-columns: 200px 360px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .editor-aside {
+    grid-column: 1;
+    grid-row: 1;
+    align-content: start;
+    gap: 0;
+    padding: 0;
+  }
+
+  .editor-aside > .side-panel:not(.section-nav-card) {
+    display: none;
+  }
+
+  .section-nav-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .section-nav-card .panel-kicker {
+    display: none;
+  }
+
+  .section-nav {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .section-nav button {
+    position: relative;
+    display: flex;
+    min-height: 48px;
+    padding: 10px 12px 14px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--arena-ink);
+    font-size: 12.5px;
+    font-weight: 800;
+    text-align: left;
+
+    svg {
+      color: var(--arena-amber);
+    }
+
+    &::after {
+      position: absolute;
+      right: 12px;
+      bottom: 8px;
+      left: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--arena-line);
+      content: '';
+    }
+
+    &.done {
+      border-color: #b9e7cd;
+      background: #ffffff;
+
+      svg {
+        color: var(--arena-grn);
+      }
+
+      &::after {
+        background: var(--arena-grn);
+      }
+    }
+
+    &.active {
+      border-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
+      box-shadow: none;
+
+      &::after {
+        right: 42px;
+        background: var(--arena-grn);
+      }
+    }
+  }
+
+  .preview-column {
+    grid-column: 2;
+    grid-row: 1;
+    height: auto;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .preview-toolbar {
+    align-items: center;
+    margin: 0 0 8px;
+
+    h2 {
+      color: var(--arena-ink);
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+
+    p {
+      display: none;
+    }
+  }
+
+  .resume-preview-page-chip {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .resume-paper-wrap {
+    padding: 0;
+    border-radius: 14px;
+    background: transparent;
+  }
+
+  .resume-paper-stage {
+    transform-origin: top center;
+  }
+
+  .editor-main {
+    grid-column: 3;
+    grid-row: 1;
+    gap: 14px;
+  }
+
+  .editor-main > .edit-card,
+  .editor-main > .project-section {
+    min-height: 27rem;
+    padding: 20px 22px;
+    border-radius: var(--arena-radius-card);
+  }
+
+  .edit-card .section-heading {
+    margin-bottom: 14px;
+  }
+
+  .edit-card .section-icon {
+    display: none;
+  }
+
+  .edit-card .section-heading h2,
+  .project-section .section-heading h2 {
+    color: var(--arena-ink);
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .edit-card .section-heading p,
+  .project-section .section-heading p {
+    color: var(--arena-sub);
+    font-size: 12px;
+  }
+
+  .editor-block {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .editor-block + .editor-block {
+    margin-top: 0;
+  }
+
+  .project-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .project-section .project-header {
+    align-items: flex-start;
+  }
+
+  .project-section .project-header :deep(.el-button) {
+    min-height: 40px;
+    border-radius: var(--arena-radius-btn);
+  }
+
+  .workshop-ai-rewrite {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 14px 0;
+    padding: 13px 14px;
+    border: 1.5px dashed var(--arena-vio);
+    border-radius: 14px;
+    background: rgba(124, 92, 252, 0.05);
+  }
+
+  .workshop-ai-rewrite > div {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .workshop-ai-rewrite span {
+    color: var(--arena-vio);
+    font-size: 10.5px;
+    font-weight: 800;
+  }
+
+  .workshop-ai-rewrite strong {
+    color: var(--arena-ink);
+    font-size: 13px;
+  }
+
+  .workshop-ai-rewrite p {
+    margin: 0;
+    color: var(--arena-sub);
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+
+  .workshop-ai-rewrite :deep(.el-button) {
+    flex: 0 0 auto;
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .project-list {
+    flex: 1;
+  }
+
+  .project-card {
+    padding: 12px;
+    border-color: var(--arena-line);
+    border-radius: 13px;
+    background: #ffffff;
+  }
+
+  .resume-delivery-details {
+    overflow: hidden;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+  }
+
+  .resume-delivery-details > summary {
+    min-height: 50px;
+    padding: 16px 18px;
+    color: var(--arena-sub);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 1180px) {
+  .arena-resume-studio {
+    width: min(100%, 1060px);
+    padding-inline: 24px;
+
+    .editor-workspace {
+      grid-template-columns: 180px minmax(300px, 0.9fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .resume-template-strip .template-selector {
+      grid-template-columns: repeat(5, minmax(76px, 1fr));
+    }
+  }
+}
+
+@media (max-width: 1020px) {
+  .arena-resume-studio {
+    .editor-workspace {
+      display: block;
+    }
+
+    .editor-aside {
+      display: none;
+    }
+
+    .mobile-pane-edit,
+    .mobile-pane-preview {
+      display: none;
+    }
+
+    .is-mobile-edit .mobile-pane-edit {
+      display: grid;
+    }
+
+    .is-mobile-preview .mobile-pane-preview {
+      display: flex;
+    }
+
+    .resume-template-strip .template-selector {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 3px;
+      scroll-snap-type: x proximity;
+    }
+
+    .resume-template-strip .template-selector > button {
+      flex: 0 0 86px;
+      scroll-snap-align: start;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-resume-studio {
+    width: 100%;
+    padding: 18px 14px calc(26px + var(--user-mobile-nav-height, 60px) + env(safe-area-inset-bottom));
+    gap: 14px;
+
+    .resume-workshop-hero {
+      align-items: flex-start;
+    }
+
+    .resume-workshop-hero h1 {
+      font-size: 22px;
+    }
+
+    .resume-workshop-hero p {
+      display: none;
+    }
+
+    .resume-workshop-hero__completion {
+      gap: 7px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .resume-workshop-ring,
+    .resume-workshop-hero__copy {
+      display: none;
+    }
+
+    .resume-workshop-hero__completion :deep(.el-button) {
+      min-height: 38px;
+      margin: 0;
+      padding-inline: 12px;
+    }
+
+    .workspace-tabs {
+      display: flex;
+      position: sticky;
+      top: 54px;
+      z-index: 10;
+      padding: 4px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(6px);
+    }
+
+    .workspace-tabs button {
+      min-width: 0;
+      min-height: 38px;
+      border-radius: 8px;
+      color: var(--arena-sub);
+      font-size: 12px;
+      font-weight: 800;
+
+      &.active {
+        background: var(--arena-grn-soft);
+        color: var(--arena-grn-d);
+      }
+    }
+
+    .resume-template-strip {
+      padding: 13px 14px;
+    }
+
+    .resume-template-strip__hint {
+      display: none;
+    }
+
+    .resume-template-strip .template-selector {
+      gap: 10px;
+    }
+
+    .preview-column {
+      height: auto;
+      max-height: none;
+    }
+
+    .resume-paper-wrap {
+      overflow: hidden;
+    }
+
+    .resume-paper-stage {
+      transform-origin: top left;
+    }
+
+    .editor-main > .edit-card,
+    .editor-main > .project-section {
+      min-height: 0;
+      padding: 16px;
+    }
+
+    .project-section .project-header {
+      gap: 10px;
+    }
+
+    .project-section .project-header :deep(.el-button) {
+      width: 100%;
+    }
+
+    .workshop-ai-rewrite {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .workshop-ai-rewrite :deep(.el-button) {
+      width: 100%;
     }
   }
 }

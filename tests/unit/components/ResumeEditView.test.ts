@@ -154,8 +154,8 @@ describe('ResumeEditView', () => {
 
     await flushPromises()
     const saveButton = wrapper
-      .findAll('.hero-actions button')
-      .find((button) => button.text().includes('保存简历'))
+      .findAll('.resume-workshop-hero__completion button')
+      .find((button) => button.text().includes('保存 · 去匹配'))
     expect(saveButton, wrapper.html()).toBeDefined()
     await saveButton!.trigger('click')
     await flushPromises()

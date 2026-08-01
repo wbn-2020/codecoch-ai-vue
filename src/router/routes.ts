@@ -109,7 +109,7 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '周期驾驶舱', hidden: true, commandHidden: true }
       },
       { path: 'career-calendar', name: 'CareerCalendar', component: () => import('@/views/v4/career-calendar/CareerCalendarView.vue'), meta: { title: '求职日历' } },
-      { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务' } },
+      { path: 'agent/today', name: 'AgentToday', component: () => import('@/views/agent/AgentTodayView.vue'), meta: { title: '今日任务', arenaTheme: true } },
       { path: 'agent/tasks', name: 'AgentTasks', component: () => import('@/views/agent/AgentTaskListView.vue'), meta: { title: '任务中心' } },
       { path: 'agent/runs', redirect: '/agent/today', meta: { hidden: true, commandHidden: true } },
       { path: 'job-experiments', name: 'JobExperiments', component: () => import('@/views/job-experiment/JobExperimentListView.vue'), meta: { title: '求职实验台' } },

@@ -9,6 +9,8 @@ const interviewRoom = readSource('src/views/interview/InterviewRoomView.vue')
 const resumeMatch = readSource('src/views/v3/ResumeMatchView.vue')
 const resumePrepare = readSource('src/views/resume/ArenaPrepareView.vue')
 const resumeEditor = readSource('src/views/resume/ResumeEditView.vue')
+const abilityMap = readSource('src/views/ability-map/AbilityMapView.vue')
+const arenaInterviewCreate = readSource('src/views/interview/ArenaInterviewCreateView.vue')
 
 describe('direction D critical flows', () => {
   it('keeps a text answer path available in the compact interview room', () => {
@@ -35,5 +37,16 @@ describe('direction D critical flows', () => {
     expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-advice-mount">')
     expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-preview-mount">')
     expect(resumeEditor).toContain('.workspace-teleport-target {\n  display: contents;')
+  })
+
+  it('keeps a visible per-skill training action in the skill tree', () => {
+    expect(abilityMap).toMatch(/\.ability-node__action\s*\{[\s\S]*?display:\s*inline-flex/)
+    expect(abilityMap).not.toMatch(/\.ability-node__action\s*\{\s*display:\s*none/)
+  })
+
+  it('does not move users away from the start action after choosing a normal dungeon', () => {
+    expect(arenaInterviewCreate).toMatch(
+      /const selectDungeon = \(item: ModeCard\) => \{[\s\S]*?selectMode\(item\)[\s\S]*?if \(item\.industry\) \{[\s\S]*?scrollToConfig\(\)[\s\S]*?\}/
+    )
   })
 })

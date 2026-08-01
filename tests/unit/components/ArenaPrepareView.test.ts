@@ -126,7 +126,7 @@ describe('ArenaPrepareView', () => {
     const wrapper = mountPrepare()
     await flush()
 
-    expect(wrapper.text()).toContain('闯过三关，解锁精准匹配')
+    expect(wrapper.text()).toContain('装备你的求职背包')
     expect(wrapper.text()).toContain('第 1 关 · 做出能匹配的简历')
     expect(wrapper.text()).toContain('第 2 关 · 锁定目标岗位')
     expect(wrapper.text()).toContain('第 3 关 · 生成 JD 匹配报告')
@@ -273,7 +273,8 @@ describe('ArenaPrepareView', () => {
       path: '/resume-match',
       query: {
         resumeId: 7,
-        targetJobId: 3
+        targetJobId: 3,
+        new: 1
       }
     })
   })

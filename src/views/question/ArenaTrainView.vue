@@ -140,7 +140,11 @@
 
           <!-- 关卡卡 -->
           <template v-else>
-            <article v-for="(item, index) in items" :key="item.id" class="arena-card arena-train__level">
+            <div class="arena-train__preview-heading">
+              <div class="arena-h3">本组题目预览</div>
+              <span class="arena-tiny">{{ practiceQuestionIds.length || items.length }} 题 · 选择 · 简答</span>
+            </div>
+            <article v-for="(item, index) in items.slice(0, 3)" :key="item.id" class="arena-card arena-train__level">
             <div class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">
               {{ index + 1 }}
             </div>
@@ -199,8 +203,17 @@
                   作为小组训练
                 </button>
               </div>
-            </div>
+              </div>
             </article>
+            <button
+              v-if="items.length > 3"
+              type="button"
+              class="arena-train__remaining"
+              @click="startPrimaryPractice"
+            >
+              <span>还有 {{ items.length - 3 }} 题</span>
+              <b>开始题组查看全部 →</b>
+            </button>
           </template>
         </div>
 
@@ -227,7 +240,7 @@
 
           <!-- 快速入口 -->
           <div class="arena-card arena-train__panel">
-            <div class="arena-h3">快速入口</div>
+            <div class="arena-h3">更多练习方式</div>
             <div class="arena-train__quick">
               <button type="button" aria-label="进入专项练习" @click="router.push('/questions/practice')">🏋️ 专项练习</button>
               <button type="button" aria-label="创建模拟面试" @click="router.push('/interviews/create')">⚔️ 模拟面试</button>
@@ -1193,28 +1206,27 @@ onMounted(() => {
   }
 
   &__grid {
-    margin-top: 18px;
-    display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: 20px;
-    align-items: start;
+    display: contents;
   }
 
   &__level {
     display: flex;
-    gap: 14px;
-    padding: 18px 20px;
+    gap: 11px;
+    padding: 11px 13px;
+    border-color: var(--arena-line2);
+    border-radius: 12px;
+    box-shadow: none;
   }
 
   &__level-rank {
     flex: none;
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 900;
     background: var(--arena-grn-soft);
     color: var(--arena-grn-d);
@@ -1236,6 +1248,41 @@ onMounted(() => {
     border-radius: 11px;
     background: #f8faf8;
     border: 1px solid var(--arena-line2);
+  }
+
+  &__preview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 2px;
+    padding: 2px 0 6px;
+  }
+
+  &__remaining {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--arena-sub);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+
+    b {
+      color: var(--arena-grn-d);
+      font-size: 12px;
+    }
+
+    &:hover b,
+    &:focus-visible b {
+      text-decoration: underline;
+    }
   }
 
   &__hints {
@@ -1319,6 +1366,74 @@ onMounted(() => {
     }
   }
 
+  @media (min-width: 721px) {
+    &__page {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+      column-gap: 20px;
+      row-gap: 14px;
+      align-items: start;
+    }
+
+    &__head {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+
+    &__hero {
+      grid-column: 1;
+      grid-row: 2;
+      margin-top: 4px;
+    }
+
+    &__controls {
+      grid-column: 1;
+      grid-row: 4;
+      margin: 0;
+    }
+
+    &__grid > .arena-col:first-child {
+      grid-column: 1;
+      grid-row: 3;
+      gap: 8px;
+      padding: 16px 20px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: var(--arena-radius-card);
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    }
+
+    &__grid > .arena-col:last-child {
+      grid-column: 2;
+      grid-row: 2 / span 3;
+    }
+
+    &__level {
+      align-items: center;
+    }
+
+    &__level-body {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      > .arena-between {
+        flex: 1;
+      }
+    }
+
+    &__level .arena-train__reason,
+    &__level .arena-train__hints,
+    &__level-body > .arena-row:last-child {
+      display: none;
+    }
+
+    &__grid > .arena-col:last-child > :nth-child(3),
+    &__grid > .arena-col:last-child > :nth-child(4) {
+      display: none;
+    }
+  }
+
   &__state {
     padding: 26px;
     display: flex;
@@ -1359,6 +1474,18 @@ onMounted(() => {
     &__grid,
     &__hints {
       grid-template-columns: 1fr;
+    }
+
+    &__preview-heading {
+      margin-top: 4px;
+    }
+
+    &__grid > .arena-col:first-child {
+      margin-top: 18px;
+    }
+
+    &__grid > .arena-col:last-child {
+      margin-top: 14px;
     }
   }
 }

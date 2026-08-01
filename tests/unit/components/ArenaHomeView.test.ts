@@ -179,4 +179,13 @@ describe('ArenaHomeView', () => {
     expect(score).toBeGreaterThan(0)
     expect(score).toBeLessThanOrEqual(100)
   })
+
+  it('keeps the full seven-day streak visible', async () => {
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.findAll('.arena-streak__day')).toHaveLength(7)
+    expect(wrapper.text()).toContain('六')
+    expect(wrapper.text()).toContain('日')
+  })
 })

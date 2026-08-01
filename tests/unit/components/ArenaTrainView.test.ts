@@ -154,4 +154,34 @@ describe('ArenaTrainView', () => {
     expect(wrapper.text()).toContain('证据已记录')
     expect(wrapper.text()).toContain('部分证据')
   })
+
+  it('keeps the rest of a recommendation batch reachable after the compact three-question preview', async () => {
+    gapItems.value = [
+      ...LEVEL_ITEMS,
+      {
+        id: 103,
+        questionTitle: 'Redis 缓存穿透如何处理',
+        skillName: 'Redis',
+        difficulty: 'MEDIUM',
+        questionType: 'SCENARIO',
+        practiceQuestionId: 503,
+        trustStatus: 'VERIFIED'
+      },
+      {
+        id: 104,
+        questionTitle: '线程池参数如何估算',
+        skillName: '并发编程',
+        difficulty: 'HARD',
+        questionType: 'SHORT_ANSWER',
+        practiceQuestionId: 504,
+        trustStatus: 'VERIFIED'
+      }
+    ]
+    const wrapper = mountTrain()
+    await flush()
+
+    expect(wrapper.findAll('.arena-train__level')).toHaveLength(3)
+    expect(wrapper.find('.arena-train__remaining').text()).toContain('还有 1 题')
+    expect(wrapper.find('.arena-train__remaining').text()).toContain('开始题组查看全部')
+  })
 })

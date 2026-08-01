@@ -95,17 +95,16 @@ describe('owned user workspace pages', () => {
     }
   })
 
-  it('keeps the mobile practice rail opaque with a compact theme shadow', () => {
+  it('does not render a duplicate fixed mobile rail on the direction D practice page', () => {
     const source = readSource('src/views/question/QuestionPracticeSessionView.vue')
     const mobileRailRules = Array.from(
       source.matchAll(/\.mobile-practice-rail\s*\{(?<declarations>[^}]*)\}/gi),
       (match) => match.groups?.declarations || ''
     )
-    const fixedRailRule = mobileRailRules.find((rule) => /position:\s*fixed/i.test(rule))
 
-    expect(fixedRailRule).toBeDefined()
-    expect(fixedRailRule).not.toMatch(/backdrop-filter\s*:/i)
-    expect(fixedRailRule).toMatch(/box-shadow:\s*var\(--user-shadow-sm\)/i)
+    expect(mobileRailRules).toHaveLength(0)
+    expect(source).toContain('class="arena arena-practice practice-session-page page-shell"')
+    expect(source).toContain('padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))')
   })
 
   it('keeps the shared shell free of glass blur and decorative backgrounds', () => {

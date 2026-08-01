@@ -32,7 +32,8 @@
               <strong>{{ item.title }}</strong>
               <small>{{ item.description }}</small>
             </span>
-            <ChevronRight class="arena-tools__arrow" :size="18" aria-hidden="true" />
+            <span v-if="item.path === '/ability-map'" class="arena-tools__enter">进入</span>
+            <ChevronRight v-else class="arena-tools__arrow" :size="18" aria-hidden="true" />
           </button>
         </div>
       </section>
@@ -51,6 +52,7 @@ import {
   GraduationCap,
   Library,
   PackageCheck,
+  Presentation,
   Sparkles,
   TrendingUp,
   Wrench
@@ -85,7 +87,7 @@ const groups: ToolGroup[] = [
     icon: TrendingUp,
     items: [
       { title: '投递管理', description: '推进中的机会、跟进和材料状态。', path: '/applications', icon: BriefcaseBusiness },
-      { title: '求职日历', description: '面试、跟进和准备节点安排。', path: '/career-calendar', icon: CalendarDays }
+      { title: '求职日历', description: '跨投递的安排与提醒。', path: '/career-calendar', icon: CalendarDays }
     ]
   },
   {
@@ -93,11 +95,11 @@ const groups: ToolGroup[] = [
     title: '资产',
     icon: FolderKanban,
     items: [
-      { title: '项目证据库', description: '沉淀可追问的项目事实和证据。', path: '/project-evidence', icon: FolderKanban },
-      { title: '投递包', description: '组合简历、材料与可交付版本。', path: '/application-packages', icon: PackageCheck },
+      { title: '项目证据库', description: '沉淀可追问的项目素材。', path: '/project-evidence', icon: FolderKanban },
+      { title: '投递包', description: '组合简历、材料与导出。', path: '/application-packages', icon: PackageCheck },
       {
         title: '个人知识库',
-        description: '管理可供 AI 引用的个人资料。',
+        description: '私域资料与引用来源。',
         path: '/knowledge',
         icon: Library,
         enabled: appConfig.enableV4KnowledgePreview
@@ -112,12 +114,12 @@ const groups: ToolGroup[] = [
       { title: '能力图谱', description: '技能树、战力和下一项高价值训练。', path: '/ability-map', icon: Sparkles },
       {
         title: '求职周报',
-        description: '本周事实、变化与下一步行动。',
+        description: '本周事实、变化与下一步。',
         path: '/agent/weekly-reports',
         icon: ClipboardList,
         enabled: appConfig.enableV6WeeklyReport
       },
-      { title: '训练分析', description: '正确率、练习趋势与薄弱环节。', path: '/analytics/personal', icon: BarChart3 }
+      { title: '训练分析', description: '正确率与个人趋势。', path: '/analytics/personal', icon: BarChart3 }
     ]
   },
   {
@@ -125,8 +127,9 @@ const groups: ToolGroup[] = [
     title: '其他',
     icon: Wrench,
     items: [
-      { title: '求职实验台', description: '策略分组、对照和复盘结果。', path: '/job-experiments', icon: Wrench },
-      { title: '新手引导', description: '补齐资料并重新走一遍上手路线。', path: '/onboarding', icon: GraduationCap }
+      { title: '求职实验台', description: '策略分组与复盘。', path: '/job-experiments', icon: Wrench },
+      { title: '作品集演示', description: '可展示的项目成果。', path: '/portfolio-demo', icon: Presentation },
+      { title: '新手引导', description: '重走一遍上手路线。', path: '/onboarding', icon: GraduationCap }
     ]
   }
 ]
@@ -256,6 +259,12 @@ const visibleGroups = computed(() =>
 
 .arena-tools__arrow {
   color: var(--arena-mut);
+}
+
+.arena-tools__enter {
+  color: var(--arena-grn-d);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 @media (max-width: 720px) {

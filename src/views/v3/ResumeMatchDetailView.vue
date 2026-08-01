@@ -157,6 +157,31 @@
             </div>
           </section>
         </div>
+
+        <div class="arena-match-settlement__secondary">
+          <button
+            v-if="report.resumeId"
+            class="arena-match-settlement__secondary-action"
+            type="button"
+            @click="router.push(`/resumes/${report.resumeId}/edit`)"
+          >
+            <span>补简历</span>
+            <strong>回到简历工坊补齐项目证据</strong>
+          </button>
+          <button
+            class="arena-match-settlement__secondary-action"
+            type="button"
+            :disabled="!isTrustedSuccessReport"
+            @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })"
+          >
+            <span>直接开练</span>
+            <strong>用当前 JD 发起一场押题面试</strong>
+          </button>
+          <details class="arena-match-settlement__evidence">
+            <summary>AI 匹配依据</summary>
+            <p>{{ trustPanelDescription }}</p>
+          </details>
+        </div>
       </section>
 
       <section v-if="showReportOverview" class="report-overview">
@@ -197,7 +222,7 @@
         </article>
       </section>
 
-      <section v-if="isSuccessReport && hasAnyDimensionScore" class="score-grid">
+      <section v-if="isSuccessReport && hasAnyDimensionScore" class="score-grid arena-match-detail__secondary-content">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
@@ -205,7 +230,7 @@
         </article>
       </section>
 
-      <section v-if="isSuccessReport" class="content-panel trust-panel">
+      <section v-if="isSuccessReport" class="content-panel trust-panel arena-match-detail__secondary-content">
         <div>
           <h2>AI 推荐来源</h2>
           <p>{{ trustPanelDescription }}</p>
@@ -215,7 +240,7 @@
         </div>
       </section>
 
-      <section v-if="schemaWarningItems.length" class="content-panel schema-warning-panel">
+      <section v-if="schemaWarningItems.length" class="content-panel schema-warning-panel arena-match-detail__secondary-content">
         <div class="section-head">
           <div>
             <h2>内容待确认</h2>
@@ -231,7 +256,7 @@
         </ul>
       </section>
 
-      <section v-if="isSuccessReport" class="detail-grid">
+      <section v-if="isSuccessReport" class="detail-grid arena-match-detail__secondary-content">
         <div class="content-panel">
           <div class="section-head">
             <div><h2>报告摘要</h2><p>{{ report.summary || '暂无摘要。' }}</p></div>
@@ -317,7 +342,7 @@
         </aside>
       </section>
 
-      <section v-if="isSuccessReport" class="content-panel">
+      <section v-if="isSuccessReport" class="content-panel arena-match-detail__secondary-content">
         <div class="section-head">
           <div><h2>维度诊断</h2><p>按技能维度看风险、证据和下一步动作。</p></div>
         </div>
@@ -1598,6 +1623,79 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     }
   }
 
+  .arena-match-settlement__secondary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(210px, 0.8fr);
+    gap: 12px;
+  }
+
+  .arena-match-settlement__secondary-action,
+  .arena-match-settlement__evidence {
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+    color: var(--arena-ink);
+    text-align: left;
+  }
+
+  .arena-match-settlement__secondary-action {
+    cursor: pointer;
+
+    &:not(:disabled):hover,
+    &:not(:disabled):focus-visible {
+      border-color: var(--arena-grn);
+      background: #f5fcf7;
+      outline: 0;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    span,
+    strong {
+      display: block;
+    }
+
+    span {
+      color: var(--arena-grn-d);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    strong {
+      margin-top: 5px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+  }
+
+  .arena-match-settlement__evidence {
+    border-color: #d7ccff;
+    background: #fbfaff;
+
+    summary {
+      color: var(--arena-vio);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    p {
+      margin: 8px 0 0;
+      color: var(--arena-sub);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+  }
+
+  .arena-match-detail__secondary-content {
+    margin-top: 0;
+  }
+
   .page-hero {
     border: 1.5px solid #b9e7cd;
     background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
@@ -1732,6 +1830,10 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
     .arena-match-settlement__keywords {
       flex-direction: column;
+    }
+
+    .arena-match-settlement__secondary {
+      grid-template-columns: 1fr;
     }
   }
 }

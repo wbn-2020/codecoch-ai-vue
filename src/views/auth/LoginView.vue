@@ -17,10 +17,10 @@
 
     <div class="login-grid">
       <section class="login-hero">
-        <span class="arena-chip arena-chip--amber">🔥 把备战变成每天想刷的闯关</span>
+        <span class="arena-chip arena-chip--amber">把备战变成每天想刷的闯关</span>
         <h1 class="login-hero__title">
           升级你的<br />
-          <span class="arena-grad-text">面试战斗力</span>
+          <span class="login-hero__accent">面试战斗力</span>
         </h1>
         <p class="arena-p login-hero__sub">
           每天 15 分钟，刷题、练面试、攒战力。看着自己的 Offer 就绪度一路涨上去。
@@ -39,7 +39,7 @@
           <div>
             <div class="arena-row" style="gap: 7px">
               <b style="font-size: 14px">示例 · LV.6 面试新星</b>
-              <span class="arena-chip arena-chip--amber" style="font-size: 10px">🔥 示例 6 连胜</span>
+              <span class="arena-chip arena-chip--amber" style="font-size: 10px">示例 6 连胜</span>
             </div>
             <div class="arena-xpbar" style="margin-top: 6px; width: 180px"><i style="width: 70%"></i></div>
             <div class="arena-tiny" style="margin-top: 5px">登录后显示你的真实进度</div>
@@ -89,7 +89,7 @@
             :disabled="loading"
             @click="handleSubmit"
           >
-            进入竞技场 →
+            进入竞技场
           </el-button>
           <el-button
             v-if="hasDemoAccount"
@@ -275,6 +275,10 @@ watch(
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  background:
+    radial-gradient(920px 520px at 88% -12%, rgba(163, 230, 53, 0.18), transparent 60%),
+    radial-gradient(760px 500px at -8% 105%, rgba(23, 178, 106, 0.13), transparent 58%),
+    #f5f7f4;
 }
 
 .login-page::before {
@@ -365,7 +369,10 @@ watch(
   font-size: 44px;
   line-height: 1.12;
   font-weight: 900;
-  letter-spacing: -1.2px;
+  letter-spacing: -0.6px;
+}
+.login-hero__accent {
+  color: var(--arena-grn);
 }
 .login-hero__sub {
   margin-top: 16px;
@@ -496,6 +503,12 @@ watch(
   width: 1px;
   height: 12px;
   background: var(--arena-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-floaty {
+    animation: none;
+  }
 }
 
 @media (max-width: 860px) {

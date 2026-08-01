@@ -4,9 +4,9 @@
       <div class="growth-hero__main">
         <div class="eyebrow">
           <Map :size="16" />
-          Java 后端成长地图
+          技能树 · 已点亮 {{ abilityMap.assessedSkillCount }} / {{ abilityMap.totalSkillCount }}
         </div>
-        <h1>能力图谱</h1>
+        <h1>你的技能树 <span aria-hidden="true">🌳</span></h1>
         <p>
           把训练记录、能力状态和证据沉淀放到同一张地图里，先看哪些能力已经可用，再决定下一组题练什么。
         </p>
@@ -1890,6 +1890,31 @@ onMounted(fetchAbilityMap)
 
 // 方向 D · 技能树布局。节点分组与状态展示保持页面任务聚焦。
 .arena-ability {
+  .growth-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .growth-hero__main h1 {
+    margin-top: 7px;
+    color: var(--arena-ink);
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+
+  .growth-hero__main > p,
+  .growth-hero__main .hero-actions,
+  .next-training-card--desktop {
+    display: none;
+  }
+
   .growth-hero__main {
     min-width: 0;
   }
@@ -1903,11 +1928,11 @@ onMounted(fetchAbilityMap)
 
   .ability-tree-panel {
     min-width: 0;
-    padding: 20px;
-    border: 1.5px solid var(--arena-line);
-    border-radius: var(--arena-radius-card);
-    background: #ffffff;
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .ability-tree-head {
@@ -1915,7 +1940,7 @@ onMounted(fetchAbilityMap)
     align-items: flex-start;
     justify-content: space-between;
     gap: 18px;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
 
     > div:first-child {
       min-width: 0;
@@ -1933,19 +1958,9 @@ onMounted(fetchAbilityMap)
       margin: 0;
     }
 
-    h2 {
-      margin-top: 5px;
-      color: var(--arena-ink);
-      font-size: 22px;
-      font-weight: 900;
-    }
-
+    h2,
     p {
-      max-width: 600px;
-      margin-top: 7px;
-      color: var(--arena-sub);
-      font-size: 13px;
-      line-height: 1.6;
+      display: none;
     }
   }
 
@@ -1981,17 +1996,10 @@ onMounted(fetchAbilityMap)
 
   .ability-domain-card {
     min-width: 0;
-    padding: 14px;
-    border: 1.5px solid var(--arena-line);
-    border-radius: 14px;
-    background: #fbfdfb;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-
-    &.active,
-    &:hover {
-      border-color: var(--arena-grn);
-      box-shadow: 0 0 0 3px rgba(23, 178, 106, 0.08);
-    }
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .ability-domain-head {
@@ -2000,7 +2008,7 @@ onMounted(fetchAbilityMap)
     justify-content: space-between;
     gap: 12px;
     width: 100%;
-    padding: 0 0 11px;
+    padding: 0 0 9px;
     border: 0;
     border-bottom: 1px solid var(--arena-line);
     background: transparent;
@@ -2048,13 +2056,13 @@ onMounted(fetchAbilityMap)
   .ability-node {
     display: grid;
     position: relative;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
     gap: 8px;
     align-items: center;
     min-width: 0;
-    padding: 10px;
-    border: 1px solid var(--arena-line);
-    border-radius: 11px;
+    padding: 10px 12px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
     background: #ffffff;
 
     &.is-weak {
@@ -2139,10 +2147,20 @@ onMounted(fetchAbilityMap)
   }
 
   .ability-node__action {
-    grid-column: 1 / -1;
-    justify-self: end;
-    margin-top: -2px;
-    padding: 2px 4px;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--arena-line);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--arena-grn-d);
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
+    }
   }
 
   .ability-action-rail {

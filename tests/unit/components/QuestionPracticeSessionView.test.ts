@@ -86,7 +86,7 @@ const startSession = async (wrapper: ReturnType<typeof mountSession>) => {
 
 const submitCurrentAnswer = async (wrapper: ReturnType<typeof mountSession>) => {
   await wrapper.find('textarea').setValue('先说明缓存穿透的边界，再使用布隆过滤器和空值缓存处理。')
-  await wrapper.findAll('button').find((button) => button.text().includes('提交回答'))!.trigger('click')
+  await wrapper.findAll('button').find((button) => button.text().includes('提交答案'))!.trigger('click')
   await flushPromises()
 }
 
