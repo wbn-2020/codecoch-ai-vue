@@ -95,7 +95,14 @@
                   :disabled="completingId === missions[0].id"
                   @click="completeMission(missions[0])"
                 >
-                  {{ completingId === missions[0].id ? '通关中…' : '已完成，收下经验' }}
+                  {{ completingId === missions[0].id ? '正在入账…' : '已完成，收下经验' }}
+                </button>
+                <button
+                  class="arena-btn arena-btn--sec"
+                  style="padding: 12px 18px; font-size: 13.5px"
+                  @click="router.push('/questions/practice?mode=recommended&count=5')"
+                >
+                  先热身 5 题
                 </button>
               </div>
             </div>
@@ -111,6 +118,13 @@
                 <div class="arena-tiny" style="margin-top: 3px">{{ m.reason }} · {{ m.minutes }} 分钟</div>
                 <div class="arena-row" style="margin-top: 10px; gap: 12px">
                   <button class="arena-btn arena-btn--txt" @click="enterMission(m)">去完成 →</button>
+                  <button
+                    class="arena-btn arena-btn--txt"
+                    :disabled="completingId === m.id"
+                    @click="completeMission(m)"
+                  >
+                    {{ completingId === m.id ? '正在入账…' : '完成支线' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -187,12 +201,14 @@
             </div>
           </div>
 
-          <div v-if="evidenceNote" class="arena-card arena-home__ai-note">
+          <div class="arena-card arena-home__ai-note">
             <div class="arena-row" style="gap: 8px">
               <span class="arena-ai-badge">✦ AI</span>
-              <b style="font-size: 12.5px">{{ evidenceNote.title }}</b>
+              <b style="font-size: 12.5px">{{ evidenceNote?.title || '建议依据' }}</b>
             </div>
-            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">{{ evidenceNote.body }}</p>
+            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">
+              {{ evidenceNote?.body || '完成简历、岗位和训练记录后，AI 会把下一关与这些真实资料关联起来。' }}
+            </p>
           </div>
         </div>
       </div>
@@ -424,7 +440,8 @@ onMounted(async () => {
 <style scoped lang="scss">
 .arena-home {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  width: 100%;
+  margin: 0;
 
   &__page {
     max-width: 1060px;
@@ -533,8 +550,6 @@ onMounted(async () => {
 
 @media (max-width: 720px) {
   .arena-home {
-    margin: -12px -12px 0;
-
     &__page {
       padding: 18px 14px 26px;
     }

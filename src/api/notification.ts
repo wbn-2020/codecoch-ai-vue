@@ -93,7 +93,10 @@ export const getNotificationsApi = (params: NotificationQueryDTO) => {
 }
 
 export const getUnreadCountApi = () => {
-  return request.get<UnreadCountVO | number, UnreadCountVO | number>('/notifications/unread-count')
+  return request.get<UnreadCountVO | number, UnreadCountVO | number>('/notifications/unread-count', {
+    // The top-bar count is informational. Its temporary failure must not interrupt the active workspace.
+    silentError: true
+  })
     .then(normalizeUnreadCount)
 }
 

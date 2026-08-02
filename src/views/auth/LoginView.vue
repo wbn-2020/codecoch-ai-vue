@@ -98,7 +98,7 @@
             :disabled="loading"
             @click="fillDemoAccount"
           >
-            先逛逛演示
+            填入演示账号
           </el-button>
         </el-form>
 
@@ -279,16 +279,6 @@ watch(
     radial-gradient(920px 520px at 88% -12%, rgba(163, 230, 53, 0.18), transparent 60%),
     radial-gradient(760px 500px at -8% 105%, rgba(23, 178, 106, 0.13), transparent 58%),
     #f5f7f4;
-}
-
-.login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.55;
-  background-image: radial-gradient(rgba(21, 33, 27, 0.06) 1.2px, transparent 1.2px);
-  background-size: 24px 24px;
 }
 
 .login-floaty {

@@ -127,8 +127,9 @@ describe('InterviewReportView metrics', () => {
       ]
     })
 
-    await mountReport()
-    await flushPromises()
+    const wrapper = await mountReport()
+    expect(wrapper.find('.report-deep-dive').exists()).toBe(true)
+    expect(wrapper.find('.report-deep-dive > summary').text()).toContain('完整报告')
 
     expect(recordAgentMetricEventApi).toHaveBeenCalledTimes(1)
     expect(recordAgentMetricEventApi).toHaveBeenCalledWith(

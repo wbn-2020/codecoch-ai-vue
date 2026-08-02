@@ -87,42 +87,68 @@
           </div>
           <div class="arena-match-settlement__head-actions">
             <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
-            <div>
-              <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">
-                <ArrowLeft :size="16" /> 新建匹配
-              </el-button>
-              <el-button :loading="loading" @click="loadReport">
-                <RefreshCw :size="16" /> 刷新
-              </el-button>
-            </div>
           </div>
         </header>
 
-        <div class="arena-match-settlement__summary">
-          <div
-            class="arena-ring arena-match-settlement__ring"
-            :style="{
-              background: `conic-gradient(var(--arena-grn) 0 ${overallScorePercent}%, var(--arena-line) ${overallScorePercent}% 100%)`
-            }"
-          >
-            <div class="arena-ring__hole">
-              <b>{{ overallScoreText }}</b>
-              <span>JD 覆盖率</span>
+        <div class="arena-match-settlement__result-column">
+          <div class="arena-match-settlement__summary">
+            <div
+              class="arena-ring arena-match-settlement__ring"
+              :style="{
+                background: `conic-gradient(var(--arena-grn) 0 ${overallScorePercent}%, var(--arena-line) ${overallScorePercent}% 100%)`
+              }"
+            >
+              <div class="arena-ring__hole">
+                <b>{{ overallScoreText }}</b>
+                <span>JD 覆盖率</span>
+              </div>
+            </div>
+
+            <div class="arena-match-settlement__copy">
+              <h3>{{ report.companyName || '目标岗位' }} · {{ report.jobTitle || '岗位待确认' }}</h3>
+              <p>{{ overviewConclusion.desc }}</p>
+              <small>{{ report.resumeTitle || '已绑定简历' }} · {{ reportResumeVersionLabel || '当前版本' }}</small>
+              <div class="arena-match-settlement__trust">
+                <el-tag v-for="tag in reportTrustTags.slice(0, 3)" :key="tag.label" :type="tag.type" effect="plain">
+                  {{ tag.label }}
+                </el-tag>
+              </div>
             </div>
           </div>
 
-          <div class="arena-match-settlement__copy">
-            <h3>{{ report.companyName || '目标岗位' }} · {{ report.jobTitle || '岗位待确认' }}</h3>
-            <p>{{ overviewConclusion.desc }}</p>
-            <small>{{ report.resumeTitle || '已绑定简历' }} · {{ reportResumeVersionLabel || '当前版本' }}</small>
-            <div class="arena-match-settlement__trust">
-              <el-tag v-for="tag in reportTrustTags.slice(0, 3)" :key="tag.label" :type="tag.type" effect="plain">
-                {{ tag.label }}
-              </el-tag>
+          <section class="arena-match-settlement__reconciliation">
+            <div class="arena-match-settlement__reconciliation-head">
+              <div>
+                <span>关键词对账</span>
+                <h3>已覆盖与待补维度</h3>
+              </div>
+              <small>{{ gapDetailCount ? `还差 ${gapDetailCount} 项` : '当前无待补维度' }}</small>
             </div>
-          </div>
+            <div class="arena-match-settlement__keywords">
+              <section>
+                <span>已形成匹配证据</span>
+                <div>
+                  <el-tag v-for="item in coverageDetails.covered" :key="item.id" type="success" effect="plain">
+                    {{ detailKeywordLabel(item) }}
+                  </el-tag>
+                  <small v-if="!coverageDetails.covered.length">暂无可确认的高覆盖维度</small>
+                </div>
+              </section>
+              <section>
+                <span>待补维度</span>
+                <div>
+                  <el-tag v-for="item in coverageDetails.gaps" :key="item.id" type="warning" effect="plain">
+                    {{ detailKeywordLabel(item) }}
+                  </el-tag>
+                  <small v-if="!coverageDetails.gaps.length">当前明细未标记待补维度</small>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
 
-          <aside class="arena-match-settlement__action">
+        <aside class="arena-match-settlement__right-rail">
+          <section class="arena-match-settlement__action">
             <span>推荐下一步</span>
             <strong>{{ primaryNextAction.title }}</strong>
             <p>{{ primaryNextAction.desc }}</p>
@@ -134,56 +160,48 @@
             >
               {{ primaryNextAction.action }}
             </el-button>
-          </aside>
-        </div>
-
-        <div class="arena-match-settlement__keywords">
-          <section>
-            <span>已形成匹配证据</span>
-            <div>
-              <el-tag v-for="item in coverageDetails.covered" :key="item.id" type="success" effect="plain">
-                {{ detailKeywordLabel(item) }}
-              </el-tag>
-              <small v-if="!coverageDetails.covered.length">暂无可确认的高覆盖维度</small>
-            </div>
           </section>
-          <section>
-            <span>待补维度</span>
-            <div>
-              <el-tag v-for="item in coverageDetails.gaps" :key="item.id" type="warning" effect="plain">
-                {{ detailKeywordLabel(item) }}
-              </el-tag>
-              <small v-if="!coverageDetails.gaps.length">当前明细未标记待补维度</small>
-            </div>
-          </section>
-        </div>
 
-        <div class="arena-match-settlement__secondary">
-          <button
-            v-if="report.resumeId"
-            class="arena-match-settlement__secondary-action"
-            type="button"
-            @click="router.push(`/resumes/${report.resumeId}/edit`)"
-          >
-            <span>补简历</span>
-            <strong>回到简历工坊补齐项目证据</strong>
-          </button>
-          <button
-            class="arena-match-settlement__secondary-action"
-            type="button"
-            :disabled="!isTrustedSuccessReport"
-            @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })"
-          >
-            <span>直接开练</span>
-            <strong>用当前 JD 发起一场押题面试</strong>
-          </button>
+          <section class="arena-match-settlement__secondary">
+            <span class="arena-match-settlement__secondary-label">还可以</span>
+            <button
+              v-if="report.resumeId"
+              class="arena-match-settlement__secondary-action"
+              type="button"
+              @click="router.push(`/resumes/${report.resumeId}/edit`)"
+            >
+              <span>补简历</span>
+              <strong>回到简历工坊补齐项目证据</strong>
+            </button>
+            <button
+              class="arena-match-settlement__secondary-action"
+              type="button"
+              :disabled="!isTrustedSuccessReport"
+              @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })"
+            >
+              <span>直接开练</span>
+              <strong>用当前 JD 发起一场押题面试</strong>
+            </button>
+          </section>
+
           <details class="arena-match-settlement__evidence">
             <summary>AI 匹配依据</summary>
             <p>{{ trustPanelDescription }}</p>
           </details>
-        </div>
+        </aside>
       </section>
 
+      <details v-if="isSuccessReport" class="arena-match-detail__more">
+        <summary>报告依据与详细指标</summary>
+        <div class="arena-match-detail__more-body">
+          <div class="arena-match-detail__more-actions">
+            <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">
+              <ArrowLeft :size="16" /> 新建匹配
+            </el-button>
+            <el-button :loading="loading" @click="loadReport">
+              <RefreshCw :size="16" /> 刷新报告
+            </el-button>
+          </div>
       <section v-if="showReportOverview" class="report-overview">
         <article class="overview-main content-panel">
           <div class="overview-score">
@@ -370,6 +388,8 @@
         </div>
         <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
       </section>
+        </div>
+      </details>
     </template>
   </div>
 </template>
@@ -731,7 +751,9 @@ const reportTrustTags = computed(() => {
   const hasScore = Number.isFinite(Number(report.value.overallScore)) && Number(report.value.overallScore) > 0
   return [
     {
-      label: report.value.evidenceSummary || '推荐来源待确认',
+      label: report.value.evidenceSummary
+        ? (report.value.fallback ? '匹配依据待复核' : '匹配依据已记录')
+        : '推荐来源待确认',
       type: trustStatusType(report.value.trustStatus, report.value.fallback ? 'warning' : 'info')
     },
     {
@@ -1431,12 +1453,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .arena-match-settlement {
     display: grid;
-    gap: 18px;
-    padding: 22px;
-    border: 1.5px solid #b9e7cd;
-    border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 76%);
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    gap: 18px 20px;
   }
 
   .arena-match-settlement__head,
@@ -1450,6 +1468,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   }
 
   .arena-match-settlement__head {
+    grid-column: 1 / -1;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
@@ -1502,6 +1521,13 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     background: #ffffff;
   }
 
+  .arena-match-settlement__result-column {
+    display: grid;
+    grid-column: 1;
+    gap: 14px;
+    min-width: 0;
+  }
+
   .arena-match-settlement__ring {
     flex: none;
     width: 116px;
@@ -1534,6 +1560,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
       color: var(--arena-ink);
       font-size: 16px;
       font-weight: 900;
+      overflow-wrap: anywhere;
     }
 
     p,
@@ -1541,6 +1568,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
       margin: 0;
       color: var(--arena-sub);
       line-height: 1.55;
+      overflow-wrap: anywhere;
     }
 
     p {
@@ -1558,9 +1586,27 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     margin-top: 2px;
   }
 
+  .arena-match-settlement__trust :deep(.el-tag) {
+    max-width: 100%;
+  }
+
+  .arena-match-settlement__trust :deep(.el-tag__content) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .arena-match-settlement__right-rail {
+    display: grid;
+    grid-column: 2;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
   .arena-match-settlement__action {
     display: grid;
-    flex: 0 0 230px;
     gap: 8px;
     padding: 14px;
     border: 1.5px solid #b9e7cd;
@@ -1591,6 +1637,47 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     }
   }
 
+  .arena-match-settlement__reconciliation {
+    display: grid;
+    gap: 13px;
+    padding: 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .arena-match-settlement__reconciliation-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+
+    > div {
+      min-width: 0;
+    }
+
+    span,
+    small {
+      display: block;
+      color: var(--arena-sub);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    h3 {
+      margin: 4px 0 0;
+      color: var(--arena-ink);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    small {
+      flex: none;
+      color: var(--arena-amber);
+      text-align: right;
+    }
+  }
+
   .arena-match-settlement__keywords {
     gap: 12px;
 
@@ -1599,10 +1686,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
       flex-direction: column;
       gap: 8px;
       min-width: 0;
-      padding: 13px 14px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: 14px;
-      background: #ffffff;
+      padding: 0;
 
       > span {
         color: var(--arena-sub);
@@ -1625,34 +1709,44 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .arena-match-settlement__secondary {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(210px, 0.8fr);
-    gap: 12px;
-  }
-
-  .arena-match-settlement__secondary-action,
-  .arena-match-settlement__evidence {
-    min-width: 0;
-    padding: 13px 14px;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 14px;
     border: 1.5px solid var(--arena-line);
     border-radius: 14px;
     background: #ffffff;
+  }
+
+  .arena-match-settlement__secondary-label {
+    margin-bottom: 5px;
     color: var(--arena-ink);
-    text-align: left;
+    font-size: 13px;
+    font-weight: 900;
   }
 
   .arena-match-settlement__secondary-action {
+    min-width: 0;
+    padding: 9px 0;
+    border: 0;
+    border-bottom: 1px solid var(--arena-line);
+    background: transparent;
+    color: var(--arena-ink);
+    text-align: left;
     cursor: pointer;
 
     &:not(:disabled):hover,
     &:not(:disabled):focus-visible {
-      border-color: var(--arena-grn);
-      background: #f5fcf7;
+      color: var(--arena-grn-d);
       outline: 0;
     }
 
     &:disabled {
       cursor: not-allowed;
       opacity: 0.58;
+    }
+
+    &:last-child {
+      border-bottom: 0;
     }
 
     span,
@@ -1667,13 +1761,17 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     }
 
     strong {
-      margin-top: 5px;
+      margin-top: 3px;
       font-size: 12px;
       line-height: 1.55;
     }
   }
 
   .arena-match-settlement__evidence {
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1.5px solid #d7ccff;
+    border-radius: 14px;
     border-color: #d7ccff;
     background: #fbfaff;
 
@@ -1694,6 +1792,58 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .arena-match-detail__secondary-content {
     margin-top: 0;
+  }
+
+  .arena-match-detail__more {
+    overflow: hidden;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 52px;
+      padding: 0 18px;
+      color: var(--arena-ink);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary::after {
+      content: '+';
+      color: var(--arena-grn-d);
+      font-size: 18px;
+    }
+
+    &[open] > summary::after {
+      content: '-';
+    }
+  }
+
+  .arena-match-detail__more-body {
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+    border-top: 1px solid var(--arena-line);
+  }
+
+  .arena-match-detail__more-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+
+    :deep(.el-button) {
+      margin-left: 0;
+    }
   }
 
   .page-hero {
@@ -1796,6 +1946,10 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .arena-match-detail {
     padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
 
+    .arena-match-settlement {
+      grid-template-columns: 1fr;
+    }
+
     .arena-match-settlement__head,
     .arena-match-settlement__summary {
       align-items: stretch;
@@ -1822,18 +1976,48 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
     .arena-match-settlement__ring {
       align-self: center;
+      justify-self: center;
     }
 
-    .arena-match-settlement__action {
-      flex-basis: auto;
+    .arena-match-settlement__summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: stretch;
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .arena-match-settlement__copy {
+      width: 100%;
+    }
+
+    .arena-match-settlement__trust :deep(.el-tag) {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .arena-match-settlement__result-column,
+    .arena-match-settlement__right-rail {
+      grid-column: 1;
     }
 
     .arena-match-settlement__keywords {
       flex-direction: column;
     }
 
-    .arena-match-settlement__secondary {
+    .arena-match-settlement__reconciliation-head {
+      align-items: flex-start;
+    }
+
+    .arena-match-detail__more-actions {
+      display: grid;
       grid-template-columns: 1fr;
+
+      :deep(.el-button) {
+        width: 100%;
+      }
     }
   }
 }

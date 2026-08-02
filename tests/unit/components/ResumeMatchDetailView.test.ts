@@ -100,6 +100,19 @@ describe('ResumeMatchDetailView XP rewards', () => {
     repeatedWrapper.unmount()
   })
 
+  it('keeps the Direction D reconciliation card and compact right-side action hierarchy for successful reports', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.arena-match-settlement__reconciliation').exists()).toBe(true)
+    expect(wrapper.find('.arena-match-settlement__right-rail').exists()).toBe(true)
+    expect(wrapper.find('.arena-match-settlement__right-rail .arena-match-settlement__action').exists()).toBe(true)
+    expect(wrapper.find('.arena-match-settlement__right-rail .arena-match-settlement__secondary').text()).toContain('还可以')
+    expect(wrapper.find('.arena-match-settlement__right-rail .arena-match-settlement__evidence').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it.each([
     { status: 'FAILED', trustStatus: 'VERIFIED', fallback: false, schemaWarnings: [] },
     { status: 'PENDING', trustStatus: 'VERIFIED', fallback: false, schemaWarnings: [] },

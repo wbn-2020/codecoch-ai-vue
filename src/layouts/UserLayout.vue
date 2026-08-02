@@ -168,13 +168,19 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .jobcoach-layout {
+  // Direction D is a document-flow shell. A legacy global selector can otherwise
+  // turn it into an inline flex container and place the navigation beside content.
+  display: block;
+  width: 100%;
   min-height: 100vh;
+  min-width: 0;
   overflow-x: clip;
   background: var(--user-bg);
   color: var(--user-text);
 }
 
 .jobcoach-layout.is-arena-page {
+  display: block;
   color-scheme: light;
   background: var(--arena-bg);
 }

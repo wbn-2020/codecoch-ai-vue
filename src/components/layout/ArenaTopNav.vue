@@ -77,6 +77,18 @@
               {{ avatarText }}
             </el-avatar>
           </template>
+          <template v-else-if="mobileStatusKind === 'reward'">
+            +18 / 题
+          </template>
+          <template v-else-if="mobileStatusKind === 'ability'">
+            技能树
+          </template>
+          <template v-else-if="mobileStatusKind === 'match'">
+            JD
+          </template>
+          <template v-else-if="mobileStatusKind === 'report'">
+            报告
+          </template>
           <template v-else>
             🔥 {{ gameProfile.streakDays }}
           </template>
@@ -181,24 +193,45 @@ const primaryItems: ArenaNavItem[] = [
 ]
 
 const formattedXp = computed(() => gameProfile.xp.toLocaleString('zh-CN'))
-const isToolsActive = computed(() => route.path === '/tools' || route.path.startsWith('/tools/'))
+const isToolsActive = computed(() =>
+  route.path === '/tools'
+  || route.path.startsWith('/tools/')
+  || route.path.startsWith('/ability-map')
+)
 const activePrimaryItem = computed(() => primaryItems.find((item) => isActive(item)))
 const currentLabel = computed(() => {
+  if (route.path.startsWith('/resume-match')) return 'JD 匹配'
+  if (/^\/interviews\/\d+\/report$/.test(route.path)) return '面试报告'
+  if (route.path.startsWith('/ability-map')) return '能力图谱'
   if (isToolsActive.value) return '工具'
   return activePrimaryItem.value?.label || String(route.meta?.title || '今天')
 })
 
-const mobileStatusKind = computed<'streak' | 'completion' | 'avatar'>(() => {
+const mobileStatusKind = computed<'streak' | 'completion' | 'avatar' | 'reward' | 'ability' | 'match' | 'report'>(() => {
   if (route.path.startsWith('/resumes/') && !route.path.endsWith('/manage')) return 'completion'
-  if (route.path === '/tools' || route.path.startsWith('/ability-map')) return 'avatar'
+  if (route.path.startsWith('/questions/practice')) return 'reward'
+  if (route.path.startsWith('/resume-match')) return 'match'
+  if (/^\/interviews\/\d+\/report$/.test(route.path)) return 'report'
+  if (route.path.startsWith('/ability-map')) return 'ability'
+  if (route.path === '/tools') return 'avatar'
   return 'streak'
 })
 
 const completionLabel = computed(() => route.path.startsWith('/resumes/') ? '简历' : '进行中')
-const mobileStatusPath = computed(() => mobileStatusKind.value === 'avatar' ? '/profile' : '/dashboard')
+const mobileStatusPath = computed(() => {
+  if (mobileStatusKind.value === 'avatar') return '/profile'
+  if (mobileStatusKind.value === 'ability') return '/ability-map'
+  if (mobileStatusKind.value === 'match') return '/resume-match'
+  if (mobileStatusKind.value === 'report') return '/interviews/history'
+  return '/dashboard'
+})
 const mobileStatusAriaLabel = computed(() => {
   if (mobileStatusKind.value === 'completion') return '返回今天查看当前进度'
   if (mobileStatusKind.value === 'avatar') return `打开 ${props.displayName} 的个人资料`
+  if (mobileStatusKind.value === 'reward') return '本题答对可获得 18 经验'
+  if (mobileStatusKind.value === 'ability') return '查看技能树状态'
+  if (mobileStatusKind.value === 'match') return '查看 JD 匹配'
+  if (mobileStatusKind.value === 'report') return '返回面试复盘记录'
   return `返回今天查看连胜 ${gameProfile.streakDays} 天`
 })
 

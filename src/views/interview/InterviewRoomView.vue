@@ -41,7 +41,11 @@
     </section>
 
     <section class="war-room" v-loading="loading">
-      <aside class="progress-panel">
+      <details class="progress-panel room-session-drawer" :open="!current || Boolean(roomError)">
+        <summary>
+          <span>本场信息</span>
+          <strong>{{ answeredCount }}/{{ expectedTotalText }} 题 · {{ elapsedText }}</strong>
+        </summary>
         <div class="panel-title">
           <span>阶段轨道</span>
           <StatusTag :status="current?.status || 'NOT_STARTED'" />
@@ -145,7 +149,7 @@
             结束面试
           </el-button>
         </div>
-      </aside>
+      </details>
 
       <main class="conversation-panel">
         <template v-if="current">
@@ -267,7 +271,11 @@
             </article>
           </div>
 
-          <div class="answer-console">
+          <div
+            id="room-answer-composer"
+            class="answer-console"
+            :class="{ 'is-mobile-open': mobileAnswerComposerOpen }"
+          >
             <div class="console-head">
               <div>
                 <span class="console-kicker">回答工作台</span>
@@ -281,83 +289,86 @@
               <span>{{ answerDurationText }}</span>
               <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
             </div>
-            <InterviewVoiceLiveConsole
-              v-if="interviewId"
-              ref="liveVoiceConsoleRef"
-              :key="current.currentQuestion?.messageId || 'no-question'"
-              :session-id="interviewId"
-              :question-key="current.currentQuestion?.messageId || 'no-question'"
-              :question-text="current.currentQuestion?.questionContent || ''"
-              :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
-              :preflight-ready="voicePreflightReady"
-              :persist-recording="persistLiveVoiceRecording"
-              @transcript-confirmed="handleLiveTranscriptConfirmed"
-              @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
-              @runtime-active-changed="handleLiveAsrRuntimeChanged"
-            />
-            <section class="voice-preview">
-              <div class="voice-preview__head">
-                <div>
-                  <span class="console-kicker">录音文件转写（兼容模式）</span>
-                  <strong>{{ voicePreviewTitle }}</strong>
-                  <p>{{ voicePreviewHint }}</p>
+            <details class="room-voice-drawer">
+              <summary>语音作答与转写</summary>
+              <InterviewVoiceLiveConsole
+                v-if="interviewId"
+                ref="liveVoiceConsoleRef"
+                :key="current.currentQuestion?.messageId || 'no-question'"
+                :session-id="interviewId"
+                :question-key="current.currentQuestion?.messageId || 'no-question'"
+                :question-text="current.currentQuestion?.questionContent || ''"
+                :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
+                :preflight-ready="voicePreflightReady"
+                :persist-recording="persistLiveVoiceRecording"
+                @transcript-confirmed="handleLiveTranscriptConfirmed"
+                @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
+                @runtime-active-changed="handleLiveAsrRuntimeChanged"
+              />
+              <section class="voice-preview">
+                <div class="voice-preview__head">
+                  <div>
+                    <span class="console-kicker">录音文件转写（兼容模式）</span>
+                    <strong>{{ voicePreviewTitle }}</strong>
+                    <p>{{ voicePreviewHint }}</p>
+                  </div>
+                  <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
                 </div>
-                <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
-              </div>
-              <div class="voice-preview__actions">
-                <el-button
-                  :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
-                  @click="handleVoiceStart"
-                >
-                  <Mic :size="16" />
-                  开始录音
-                </el-button>
-                <el-button
-                  :disabled="!voicePreview.canStopRecording.value"
-                  @click="handleVoiceStop"
-                >
-                  <MicOff :size="16" />
-                  停止
-                </el-button>
-                <el-button
-                  :disabled="answerDisabled || voiceConfirming"
-                  @click="handleVoiceFallback"
-                >
-                  <Keyboard :size="16" />
-                  文本降级
-                </el-button>
-              </div>
-              <el-input
-                v-if="voicePreview.canEditDraft.value"
-                v-model="voicePreview.draftText.value"
-                type="textarea"
-                :rows="3"
-                :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
-                placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
-                @input="handleVoiceDraftInput"
-              />
-              <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
-                <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
-                <el-button
-                  type="primary"
-                  plain
-                  :loading="voiceConfirming"
-                  :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
-                  @click="handleVoiceConfirm"
-                >
-                  <Check :size="16" />
-                  确认到文本回答
-                </el-button>
-              </div>
-              <el-alert
-                v-if="voicePreview.errorMessage.value"
-                class="voice-preview__alert"
-                type="warning"
-                show-icon
-                :closable="false"
-                :title="voicePreview.errorMessage.value"
-              />
-            </section>
+                <div class="voice-preview__actions">
+                  <el-button
+                    :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
+                    @click="handleVoiceStart"
+                  >
+                    <Mic :size="16" />
+                    开始录音
+                  </el-button>
+                  <el-button
+                    :disabled="!voicePreview.canStopRecording.value"
+                    @click="handleVoiceStop"
+                  >
+                    <MicOff :size="16" />
+                    停止
+                  </el-button>
+                  <el-button
+                    :disabled="answerDisabled || voiceConfirming"
+                    @click="handleVoiceFallback"
+                  >
+                    <Keyboard :size="16" />
+                    文本降级
+                  </el-button>
+                </div>
+                <el-input
+                  v-if="voicePreview.canEditDraft.value"
+                  v-model="voicePreview.draftText.value"
+                  type="textarea"
+                  :rows="3"
+                  :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
+                  placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
+                  @input="handleVoiceDraftInput"
+                />
+                <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
+                  <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
+                  <el-button
+                    type="primary"
+                    plain
+                    :loading="voiceConfirming"
+                    :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
+                    @click="handleVoiceConfirm"
+                  >
+                    <Check :size="16" />
+                    确认到文本回答
+                  </el-button>
+                </div>
+                <el-alert
+                  v-if="voicePreview.errorMessage.value"
+                  class="voice-preview__alert"
+                  type="warning"
+                  show-icon
+                  :closable="false"
+                  :title="voicePreview.errorMessage.value"
+                />
+              </section>
+            </details>
             <el-input
               ref="answerInputRef"
               v-model="answerContent"
@@ -446,6 +457,26 @@
           </div>
         </div>
 
+        <section class="room-progress-summary" aria-label="本场进度">
+          <div class="room-progress-summary__head">
+            <span>本场题序</span>
+            <strong>{{ answeredCount }}/{{ expectedTotalText }} 题</strong>
+          </div>
+          <article
+            v-for="item in progressItems"
+            :key="item.key"
+            :class="item.state"
+          >
+            <span></span>
+            <div>
+              <strong>{{ item.title }}</strong>
+              <small>{{ item.desc }}</small>
+            </div>
+          </article>
+        </section>
+
+        <details class="room-feedback-drawer">
+          <summary>查看点评、语音与答题结构</summary>
         <div class="score-card">
           <span>当前题表现</span>
           <strong>{{ latestScoreText }}</strong>
@@ -545,27 +576,23 @@
             </div>
           </el-tab-pane>
         </el-tabs>
+        </details>
       </aside>
     </section>
 
     <div class="room-mobile-actions">
-      <el-button plain :disabled="!current || loading || submitting" @click="fetchCurrent">重新获取</el-button>
-      <el-button
-        plain
-        type="warning"
-        :disabled="!current || current.status === 'NOT_STARTED' || current.status === 'COMPLETED'"
-        :loading="finishing"
-        @click="handleManualFinish"
-      >
-        结束本轮
+      <el-button plain :disabled="answerDisabled" @click="focusAnswerInput">
+        {{ mobileAnswerComposerOpen ? '正在作答' : '展开作答' }}
       </el-button>
       <el-button
         type="primary"
         :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
         :loading="submitting"
-        @click="handleSubmit"
+        :aria-expanded="mobileAnswerComposerOpen"
+        aria-controls="room-answer-composer"
+        @click="handleMobileSubmit"
       >
-        提交回答
+        {{ submitting ? '正在提交' : '提交本题' }}
       </el-button>
     </div>
 
@@ -583,7 +610,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -668,6 +695,7 @@ const roomError = ref('')
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerInputRef = ref<{ focus?: () => void } | null>(null)
+const mobileAnswerComposerOpen = ref(false)
 const liveVoiceConsoleRef = ref<{
   cancelActiveAsr: () => Promise<void>
   resetRealtimeVoice: () => Promise<void>
@@ -1181,8 +1209,19 @@ const answerReviewMetaText = computed(() => {
 })
 
 const focusAnswerInput = () => {
-  answerInputRef.value?.focus?.()
-  document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  mobileAnswerComposerOpen.value = true
+  void nextTick(() => {
+    answerInputRef.value?.focus?.()
+    document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+const handleMobileSubmit = () => {
+  if (!mobileAnswerComposerOpen.value) {
+    focusAnswerInput()
+    return
+  }
+  void handleSubmit()
 }
 
 const handleLiveTranscriptConfirmed = (
@@ -1600,6 +1639,7 @@ const fetchCurrent = async () => {
     const nextMessageId = nextCurrent?.currentQuestion?.messageId
     if (previousMessageId && nextMessageId !== previousMessageId) {
       await cleanupVoiceResources('QUESTION_CHANGED')
+      mobileAnswerComposerOpen.value = false
     }
     current.value = nextCurrent
     answerStartTime.value = Date.now()
@@ -1634,6 +1674,7 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   lastResult.value = result
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
+  mobileAnswerComposerOpen.value = false
   voicePreview.markSubmitted()
   activeVoiceSubmissionId = null
   uploadedVoiceFileId.value = null
@@ -3641,6 +3682,12 @@ onBeforeUnmount(() => {
     flex: 0 0 auto;
   }
 
+  .topbar-status > .cc-badge,
+  .topbar-status > .topbar-chip:not(.room-timer),
+  .topbar-status > .ghost-action:first-of-type {
+    display: none;
+  }
+
   .room-timer {
     color: var(--room-lime);
     font-family: ui-monospace, Consolas, monospace;
@@ -3658,7 +3705,11 @@ onBeforeUnmount(() => {
   .war-room {
     flex: 1 1 auto;
     min-height: 0;
+    grid-template-areas:
+      'conversation feedback'
+      'progress progress';
     grid-template-columns: minmax(0, 1fr) 260px;
+    grid-template-rows: minmax(0, 1fr) auto;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -3666,17 +3717,61 @@ onBeforeUnmount(() => {
   }
 
   .progress-panel {
-    display: none;
+    display: block;
+    grid-area: progress;
+    width: min(100%, 860px);
+    margin: 0 22px 16px;
+    padding: 0;
+    border: 1px solid var(--room-line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      color: var(--room-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary strong {
+      color: var(--room-text);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    &[open] {
+      padding: 14px;
+
+      > summary {
+        padding: 0 0 12px;
+      }
+    }
   }
 
   .conversation-panel {
+    grid-area: conversation;
+    display: flex;
+    flex-direction: column;
+    align-content: start;
     min-width: 0;
+    overflow-y: auto;
     padding: 22px;
     border: 0;
     background: transparent;
   }
 
   .feedback-panel {
+    grid-area: feedback;
     width: 260px;
     padding: 18px;
     border-left: 1px solid var(--room-line);
@@ -3684,18 +3779,72 @@ onBeforeUnmount(() => {
   }
 
   .conversation-scroll {
-    min-height: 0;
+    flex: 0 1 auto;
+    min-height: min-content;
+    max-height: min(48dvh, 520px);
+    overflow-y: auto;
     padding-right: 4px;
   }
 
   .training-boundary,
-  .ai-presence,
   .cockpit-state-strip,
   .answer-rubric,
   .followup-brief,
   .feedback-tabs,
   .feedback-panel > :not(.battle-status-card):not(.panel-title) {
     display: none;
+  }
+
+  .ai-presence {
+    display: grid;
+    width: min(100%, 360px);
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+
+    .ai-orbit {
+      width: 44px;
+      height: 44px;
+
+      span {
+        inset: 6px;
+      }
+
+      span:nth-child(2) {
+        inset: 12px;
+      }
+
+      svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .ai-presence__copy {
+      display: grid;
+      gap: 2px;
+    }
+
+    .ai-persona {
+      color: var(--room-text);
+      font-size: 12px;
+    }
+
+    p {
+      color: #7fd8a8;
+      font-size: 11px;
+    }
+
+    h2,
+    > .ai-presence__copy > span,
+    .ai-signal {
+      display: none;
+    }
   }
 
   .conversation-scroll {
@@ -3725,6 +3874,75 @@ onBeforeUnmount(() => {
 
   .battle-strip__bar {
     height: 8px;
+  }
+
+  .room-progress-summary {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--room-line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .room-progress-summary__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--room-sub);
+    font-size: 11px;
+    font-weight: 800;
+
+    strong {
+      color: var(--room-text);
+      font-family: ui-monospace, Consolas, monospace;
+    }
+  }
+
+  .room-progress-summary article {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+
+    > span {
+      width: 8px;
+      height: 8px;
+      margin-top: 4px;
+      border: 1px solid var(--room-line);
+      border-radius: 50%;
+    }
+
+    strong,
+    small {
+      display: block;
+    }
+
+    strong {
+      color: var(--room-text);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    small {
+      margin-top: 2px;
+      color: var(--room-sub);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    &.done > span {
+      border-color: var(--room-green);
+      background: var(--room-green);
+    }
+
+    &.active > span {
+      border-color: var(--room-lime);
+      background: var(--room-lime);
+      box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
+    }
   }
 
   .message-card.ai.question-card {
@@ -3778,8 +3996,11 @@ onBeforeUnmount(() => {
 
   .answer-console {
     flex: 0 0 auto;
-    max-width: min(100%, 860px);
-    margin: 0 auto;
+    position: static;
+    z-index: 2;
+    width: min(100%, 960px);
+    max-width: min(100%, 960px);
+    margin: 14px auto 0;
     padding: 16px 20px;
     max-height: none;
     overflow: visible;
@@ -3813,6 +4034,28 @@ onBeforeUnmount(() => {
         border-color: var(--room-line);
         background: rgba(255, 255, 255, 0.05);
         color: var(--room-sub);
+      }
+    }
+
+    .room-voice-drawer {
+      margin-top: 10px;
+      border-top: 1px solid var(--room-line);
+
+      > summary {
+        padding: 10px 0 0;
+        color: var(--room-sub);
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 800;
+        list-style: none;
+      }
+
+      > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      &[open] > summary {
+        margin-bottom: 10px;
       }
     }
 
@@ -3850,6 +4093,33 @@ onBeforeUnmount(() => {
 
     > .panel-title {
       display: none;
+    }
+  }
+
+  .feedback-panel > :not(.battle-status-card):not(.panel-title):not(.room-feedback-drawer) {
+    display: none;
+  }
+
+  .room-feedback-drawer {
+    display: block;
+    margin-top: 12px;
+    border-top: 1px solid var(--room-line);
+
+    > summary {
+      padding: 12px 0 0;
+      color: var(--room-sub);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] > summary {
+      margin-bottom: 12px;
     }
   }
 
@@ -3945,6 +4215,15 @@ onBeforeUnmount(() => {
       background: rgba(255, 255, 255, 0.06);
     }
 
+    .answer-console:not(.is-mobile-open) {
+      display: none;
+    }
+
+    .room-progress-summary,
+    .ai-presence {
+      display: none;
+    }
+
     .answer-console .console-head,
     .answer-console .answer-actions {
       display: none;
@@ -3957,7 +4236,7 @@ onBeforeUnmount(() => {
 
     .room-mobile-actions {
       display: grid;
-      grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr);
       gap: 8px;
       flex: 0 0 auto;
       padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
@@ -3972,6 +4251,15 @@ onBeforeUnmount(() => {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+    }
+
+    .room-mobile-action {
+      display: flex;
+      min-width: 0;
+
+      :deep(.el-button) {
+        width: 100%;
       }
     }
   }

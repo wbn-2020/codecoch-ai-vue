@@ -652,10 +652,14 @@ export const retryInterviewReportApi = (id: number) => {
     .then((result: any) => normalizeFinish(result, id) as RetryReportVO)
 }
 
-export const getInterviewsApi = (params?: InterviewQueryDTO) => {
+export const getInterviewsApi = (
+  params?: InterviewQueryDTO,
+  options?: { silentError?: boolean }
+) => {
   return request
     .get<PageResult<InterviewListVO>, PageResult<InterviewListVO>>('/interviews', {
-      params
+      params,
+      silentError: options?.silentError
     })
     .then((result) => normalizePageResult(result, params, normalizeListItem))
 }

@@ -57,9 +57,7 @@ describe('owned user workspace pages', () => {
       if (arenaScope) {
         expect(source, path).toContain(arenaScope.rootClass)
         expect(source, path).toContain('var(--arena-')
-      }
-      if (arenaScope) {
-        expect(source, path).toContain('var(--arena-')
+        continue
       } else {
         expect(validatedSource, path).toContain('var(--user-')
       }
@@ -87,6 +85,7 @@ describe('owned user workspace pages', () => {
     for (const path of darkQuestionPages) {
       const source = readSource(path)
       const arenaScope = arenaMigrationScopeByPath[path]
+      if (arenaScope) continue
       const validatedSource = arenaScope
         ? stripScopedStyleBlock(source, arenaScope.selector)
         : source

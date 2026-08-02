@@ -136,28 +136,6 @@
 
           <div class="arena-prepare__jd-grid">
             <div>
-              <div class="arena-prepare__jd-fields">
-                <label>
-                  <span>目标岗位</span>
-                  <input
-                    v-model.trim="jdTitleDraft"
-                    type="text"
-                    maxlength="80"
-                    placeholder="例如：高级 Java 后端工程师"
-                    :disabled="jdSaving"
-                  />
-                </label>
-                <label>
-                  <span>公司（可选）</span>
-                  <input
-                    v-model.trim="jdCompanyDraft"
-                    type="text"
-                    maxlength="80"
-                    placeholder="例如：华辰数智"
-                    :disabled="jdSaving"
-                  />
-                </label>
-              </div>
               <label class="arena-prepare__jd-textarea">
                 <span>岗位 JD 原文</span>
                 <textarea
@@ -177,23 +155,32 @@
                 </button>
               </div>
               <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+              <div class="arena-prepare__mobile-stage-cards">
+                <button
+                  v-for="node in [mainNodes[0], mainNodes[2]].filter(Boolean)"
+                  :key="node.key"
+                  type="button"
+                  class="arena-prepare__mobile-stage-card"
+                  :class="`is-${node.state}`"
+                  @click="node.action"
+                >
+                  <span>{{ node.state === 'done' ? '✓' : node.state === 'locked' ? '🔒' : '⚡' }}</span>
+                  <div>
+                    <b>{{ node.title }}</b>
+                    <small>{{ node.desc }}</small>
+                  </div>
+                  <em>{{ node.cta }} →</em>
+                </button>
+              </div>
             </div>
 
-            <aside class="arena-prepare__jd-tip">
-              <span class="arena-chip arena-chip--vio">✦ AI 教练提示</span>
-              <strong>{{ currentTarget ? '岗位描述可以继续更新' : '先把岗位上下文接进来' }}</strong>
-              <p>
-                {{ currentTarget
-                  ? '保存新 JD 后会重新触发岗位解析，旧匹配报告不会被冒充成新结果。'
-                  : '岗位描述、简历和项目证据会共同决定后续推荐题与模拟面试。' }}
-              </p>
-              <span class="arena-tiny">建议至少粘贴完整的职责和任职要求。</span>
-            </aside>
           </div>
           </section>
         </div>
 
-        <div class="arena-prepare__grid">
+        <details class="arena-prepare__more">
+          <summary>查看准备资料与进度</summary>
+          <div class="arena-prepare__grid">
           <div class="arena-col">
             <!-- 关键词覆盖 = 技能解锁 -->
             <div class="arena-card arena-prepare__panel">
@@ -356,7 +343,8 @@
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       </template>
     </div>
   </div>
@@ -505,7 +493,7 @@ const getMatchReportPath = () => {
   return reportId ? `/resume-match/${reportId}` : '/resume-match'
 }
 
-const jdReady = computed(() => jdTitleDraft.value.trim().length >= 2 && jdDraft.value.trim().length >= 20)
+const jdReady = computed(() => jdDraft.value.trim().length >= 20)
 const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
 const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
@@ -706,14 +694,14 @@ const invalidateTargetDependentEvidence = () => {
 
 const saveTargetAndParse = async () => {
   if (jdSaving.value || !jdReady.value) {
-    jdFeedback.value = '请填写岗位名称，并粘贴至少 20 个字符的岗位描述。'
+    jdFeedback.value = '请粘贴至少 20 个字符的岗位描述。'
     return
   }
 
   jdSaving.value = true
   jdFeedback.value = ''
   const payload: TargetJobSaveDTO = {
-    jobTitle: jdTitleDraft.value.trim(),
+    jobTitle: jdTitleDraft.value.trim() || currentTarget.value?.jobTitle || '目标岗位',
     companyName: jdCompanyDraft.value.trim() || undefined,
     jobLevel: currentTarget.value?.jobLevel || undefined,
     jdText: jdDraft.value.trim(),
@@ -1037,6 +1025,14 @@ const matchStatusLabel = (status?: string) => {
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
 
+const settleWithin = <T>(request: Promise<T>, label: string, timeoutMs = 6000) =>
+  Promise.race([
+    request,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label}响应超时`)), timeoutMs)
+    })
+  ])
+
 let loadRunId = 0
 let evidenceLoadTimer: ReturnType<typeof window.setTimeout> | null = null
 
@@ -1125,9 +1121,9 @@ const loadAll = async () => {
   let warnings: string[] = []
   try {
     const [resumeResult, targetResult, currentResult] = await Promise.allSettled([
-      getResumesApi({ pageNo: 1, pageSize: 50 }),
-      getJobTargetsApi({}),
-      getCurrentJobTargetApi()
+      settleWithin(getResumesApi({ pageNo: 1, pageSize: 50 }), '简历列表'),
+      settleWithin(getJobTargetsApi({}), '岗位列表'),
+      settleWithin(getCurrentJobTargetApi(), '当前岗位')
     ])
 
     if (isFulfilled(resumeResult)) {
@@ -1184,7 +1180,8 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .arena-prepare {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  width: 100%;
+  margin: 0;
 
   &__page {
     max-width: 1060px;
@@ -1217,7 +1214,7 @@ onBeforeUnmount(() => {
   }
 
   &__progress {
-    display: grid;
+    display: none;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     margin-top: 16px;
@@ -1365,6 +1362,10 @@ onBeforeUnmount(() => {
     line-height: 1.55;
   }
 
+  &__mobile-stage-cards {
+    display: none;
+  }
+
   &__jd-tip {
     display: none;
     flex-direction: column;
@@ -1432,8 +1433,8 @@ onBeforeUnmount(() => {
     }
 
     &.is-current {
-      border-color: var(--arena-amber);
-      box-shadow: 0 0 0 3px var(--arena-amber-soft);
+      border-color: var(--arena-grn);
+      box-shadow: 0 0 0 3px var(--arena-grn-soft);
     }
 
     &.is-locked {
@@ -1581,6 +1582,49 @@ onBeforeUnmount(() => {
     display: grid;
     grid-template-columns: 1.55fr 1fr;
     gap: 20px;
+  }
+
+  &__more {
+    margin-top: 18px;
+
+    > summary {
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: var(--arena-radius-card);
+      background: #ffffff;
+      color: var(--arena-ink);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary::after {
+      content: '+';
+      margin-left: auto;
+      color: var(--arena-grn-d);
+      font-size: 18px;
+    }
+
+    &[open] > summary {
+      border-bottom-right-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+
+    &[open] > summary::after {
+      content: '-';
+    }
+
+    &[open] > .arena-prepare__grid {
+      padding-top: 18px;
+    }
   }
 
   &__panel {
@@ -1748,8 +1792,6 @@ onBeforeUnmount(() => {
 
   @media (max-width: 720px) {
   .arena-prepare {
-    margin: -12px -12px 0;
-
     &__page {
       padding: 18px 14px 26px;
     }
@@ -1757,6 +1799,11 @@ onBeforeUnmount(() => {
     &__track {
       flex-direction: column;
       gap: 10px;
+    }
+
+    &__progress {
+      display: grid;
+      margin-top: 14px;
     }
 
     &__link {
@@ -1774,7 +1821,18 @@ onBeforeUnmount(() => {
       grid-template-columns: 1fr;
     }
 
+    &__workspace {
+      display: flex;
+      flex-direction: column;
+      margin-top: 16px;
+    }
+
+    &__map {
+      display: none;
+    }
+
     &__jd-card {
+      width: 100%;
       padding: 18px;
     }
 
@@ -1784,6 +1842,80 @@ onBeforeUnmount(() => {
 
     &__jd-lock {
       display: none;
+    }
+
+    &__mobile-stage-cards {
+      display: grid;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    &__mobile-stage-card {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+      width: 100%;
+      padding: 11px 12px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--arena-ink);
+      font-family: inherit;
+      text-align: left;
+
+      > span {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: var(--arena-amber-soft);
+        color: var(--arena-amber);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      > div {
+        display: grid;
+        min-width: 0;
+        gap: 2px;
+      }
+
+      b,
+      small,
+      em {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      b {
+        font-size: 12px;
+      }
+
+      small {
+        color: var(--arena-sub);
+        font-size: 10.5px;
+      }
+
+      em {
+        max-width: 82px;
+        color: var(--arena-grn-d);
+        font-size: 10.5px;
+        font-style: normal;
+        font-weight: 800;
+      }
+
+      &.is-done {
+        border-color: #b9e7cd;
+
+        > span {
+          background: var(--arena-grn-soft);
+          color: var(--arena-grn-d);
+        }
+      }
     }
   }
 }

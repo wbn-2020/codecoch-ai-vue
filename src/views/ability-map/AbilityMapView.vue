@@ -1,6 +1,6 @@
 <template>
   <div class="arena arena-ability ability-map page-shell" v-loading="loading">
-    <section class="growth-hero">
+    <section class="growth-hero ability-summary">
       <div class="growth-hero__main">
         <div class="eyebrow">
           <Map :size="16" />
@@ -72,23 +72,27 @@
     </section>
 
     <section v-else class="ability-tree-layout">
-      <main class="ability-tree-panel">
-        <header class="ability-tree-head">
-          <div>
-            <span>技能树 · 已点亮 {{ abilityMap.assessedSkillCount }} / {{ abilityMap.totalSkillCount }}</span>
-            <h2>你的技能树</h2>
-            <p>未评估项保持未点亮，不用猜测；优先补齐能同时提升战力和岗位覆盖的能力。</p>
+      <header class="ability-tree-head">
+        <div>
+          <span>技能树 · 已点亮 {{ abilityMap.assessedSkillCount }} / {{ abilityMap.totalSkillCount }}</span>
+          <h2>你的技能树</h2>
+          <p>未评估项保持未点亮，不用猜测；优先补齐能同时提升战力和岗位覆盖的能力。</p>
+        </div>
+        <div class="ability-formula">
+          <div
+            class="ability-formula__ring"
+            :style="{ background: `conic-gradient(var(--arena-grn) 0 ${abilityPower}%, var(--arena-line) ${abilityPower}% 100%)` }"
+          >
+            <span>{{ abilityPower }}</span>
           </div>
-          <div class="ability-formula">
-            <strong>{{ abilityMap.hasTrainingData ? abilityMap.assessedSkillCount : 0 }} / {{ abilityMap.totalSkillCount }}</strong>
-            <span>已形成训练证据</span>
-          </div>
-        </header>
+          <p v-if="abilityMap.hasTrainingData">战力 = 简历 30% + 岗位 20%<br />训练 30% + 面试 20%</p>
+          <p v-else>暂无训练评估<br />尚未生成战力结论</p>
+        </div>
+      </header>
 
-        <div class="ability-domain-grid">
+      <div class="ability-node-board">
+        <template v-for="(domain, index) in abilityMap.domains" :key="domain.domainCode">
           <section
-            v-for="domain in abilityMap.domains"
-            :key="domain.domainCode"
             class="ability-domain-card"
             :class="{ active: domain.domainCode === activeDomainCode }"
           >
@@ -100,71 +104,64 @@
               <em>{{ domain.assessedCount }}/{{ domain.totalCount }}</em>
             </button>
             <div class="ability-node-grid">
-              <article
+              <button
                 v-for="skill in domain.skills"
                 :key="skill.code"
                 class="ability-node"
                 :class="skillCardClass(skill)"
+                type="button"
+                :aria-label="`训练${safeSkillName(skill)}`"
+                @click="startSkillTraining(skill)"
               >
                 <span class="ability-node__icon" :class="`is-${skillNodeState(skill)}`">{{ skillNodeIcon(skill) }}</span>
                 <div class="ability-node__body">
                   <strong>{{ safeSkillName(skill) }}</strong>
-                  <span>{{ honestStatusLabel(skill) }}</span>
                   <div class="ability-node__meter">
                     <i :style="{ width: `${skillScore(skill)}%` }"></i>
                   </div>
                 </div>
                 <b>{{ skillScore(skill) }}</b>
-                <el-button
-                  class="ability-node__action"
-                  text
-                  type="primary"
-                  :aria-label="`训练${safeSkillName(skill)}`"
-                  @click="startSkillTraining(skill)"
-                >
-                  <Play :size="14" />
-                </el-button>
-              </article>
+              </button>
             </div>
           </section>
-        </div>
-      </main>
 
-      <aside class="ability-action-rail">
-        <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
-          <div class="priority-action-card__label">
-            <Target :size="16" />
-            最高性价比行动
-          </div>
-          <h2>{{ nextTrainingTitle }}</h2>
-          <p>{{ nextTrainingDescription }}</p>
-          <div class="priority-action-card__meta">
-            <span><BookOpenCheck :size="14" />{{ nextTrainingMeta }}</span>
-            <span><ShieldCheck :size="14" />{{ trainingTrustText }}</span>
-          </div>
-          <el-button type="primary" @click="startRecommendedTraining">
-            {{ nextTrainingActionLabel }}
-            <ArrowRight :size="16" />
-          </el-button>
-        </section>
+          <aside v-if="index === abilityActionInsertIndex" class="ability-action-rail">
+            <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+              <div class="priority-action-card__label">
+                <Target :size="16" />
+                最高性价比
+              </div>
+              <h2>{{ nextTrainingTitle }}</h2>
+              <p>{{ nextTrainingDescription }}</p>
+              <div class="priority-action-card__meta">
+                <span><BookOpenCheck :size="14" />{{ nextTrainingMeta }}</span>
+                <span><ShieldCheck :size="14" />{{ trainingTrustText }}</span>
+              </div>
+              <el-button type="primary" @click="startRecommendedTraining">
+                {{ nextTrainingActionLabel }}
+                <ArrowRight :size="16" />
+              </el-button>
+            </section>
 
-        <section class="ability-evidence-card">
-          <div class="ability-evidence-card__head">
-            <span>评估依据</span>
-            <ShieldCheck :size="15" />
-          </div>
-          <strong>{{ totalEvidenceCount }} 条训练证据</strong>
-          <p>
-            {{ abilityMap.hasTrainingData
-              ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
-              : '完成一次训练后，这里会展示真实的评估依据。' }}
-          </p>
-          <el-button plain @click="router.push('/questions/practice')">
-            去补一组训练
-            <ArrowRight :size="15" />
-          </el-button>
-        </section>
-      </aside>
+            <section class="ability-evidence-card">
+              <div class="ability-evidence-card__head">
+                <span>评分依据</span>
+                <ShieldCheck :size="15" />
+              </div>
+              <strong>{{ totalEvidenceCount }} 条训练证据</strong>
+              <p>
+                {{ abilityMap.hasTrainingData
+                  ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
+                  : '完成一次训练后，这里会展示真实的评估依据。' }}
+              </p>
+              <el-button plain @click="router.push('/questions/practice')">
+                去补一组训练
+                <ArrowRight :size="15" />
+              </el-button>
+            </section>
+          </aside>
+        </template>
+      </div>
     </section>
 
   </div>
@@ -456,6 +453,7 @@ const activeDomain = computed(() =>
 
 const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
 const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
+const abilityActionInsertIndex = computed(() => Math.min(5, Math.max(0, abilityMap.value.domains.length - 1)))
 const weakSkills = computed(() => abilityMap.value.hasTrainingData ? allSkills.value.filter((skill) => skill.status === 'WEAK') : [])
 const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
 const recommendedSkill = computed(() => {
@@ -547,6 +545,11 @@ const skillScore = (skill: AbilitySkillNodeVO) => {
   }
   return scores[String(skill.status).toUpperCase()] || 0
 }
+
+const abilityPower = computed(() => {
+  if (!allSkills.value.length || !abilityMap.value.hasTrainingData) return 0
+  return Math.round(allSkills.value.reduce((total, skill) => total + skillScore(skill), 0) / allSkills.value.length)
+})
 
 const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
   const keyword = skill ? safeSkillName(skill) : activeDomainName.value
@@ -1890,8 +1893,12 @@ onMounted(fetchAbilityMap)
 
 // 方向 D · 技能树布局。节点分组与状态展示保持页面任务聚焦。
 .arena-ability {
+  .honesty-alert {
+    display: none;
+  }
+
   .growth-hero {
-    display: flex;
+    display: none;
     align-items: flex-start;
     justify-content: space-between;
     gap: 18px;
@@ -1919,9 +1926,14 @@ onMounted(fetchAbilityMap)
     min-width: 0;
   }
 
+  .ability-summary {
+    width: min(100%, 1060px);
+    margin: 0 auto;
+  }
+
   .ability-tree-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
     align-items: start;
   }
@@ -1936,6 +1948,7 @@ onMounted(fetchAbilityMap)
   }
 
   .ability-tree-head {
+    grid-column: 1 / -1;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -1958,33 +1971,67 @@ onMounted(fetchAbilityMap)
       margin: 0;
     }
 
-    h2,
     p {
       display: none;
     }
+
+    h2 {
+      display: block;
+      margin-top: 6px;
+      color: var(--arena-ink);
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+  }
+
+  .ability-node-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+    min-width: 0;
   }
 
   .ability-formula {
-    display: grid;
+    display: flex;
     flex: 0 0 auto;
-    gap: 4px;
-    min-width: 116px;
-    padding: 12px;
+    align-items: center;
+    gap: 10px;
+    min-width: 212px;
+    padding: 9px 12px;
     border: 1px solid var(--arena-line);
     border-radius: 13px;
     background: #f8faf8;
-    text-align: right;
 
-    strong {
-      color: var(--arena-grn-d);
-      font-size: 21px;
-      line-height: 1;
+    &__ring {
+      display: grid;
+      width: 52px;
+      aspect-ratio: 1;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 50%;
+
+      span {
+        display: grid;
+        width: 41px;
+        aspect-ratio: 1;
+        place-items: center;
+        border-radius: 50%;
+        background: #ffffff;
+        color: var(--arena-grn-d);
+        font-size: 14px;
+        font-weight: 900;
+      }
     }
 
-    span {
+    p {
+      display: block;
+      margin: 0;
       color: var(--arena-mut);
       font-size: 11px;
       font-weight: 600;
+      line-height: 1.5;
     }
   }
 
@@ -2048,7 +2095,7 @@ onMounted(fetchAbilityMap)
 
   .ability-node-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
     padding-top: 11px;
   }
@@ -2056,7 +2103,7 @@ onMounted(fetchAbilityMap)
   .ability-node {
     display: grid;
     position: relative;
-    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
     min-width: 0;
@@ -2064,6 +2111,22 @@ onMounted(fetchAbilityMap)
     border: 1.5px solid var(--arena-line);
     border-radius: 14px;
     background: #ffffff;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--arena-grn);
+      transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--arena-grn);
+      outline-offset: 2px;
+    }
 
     &.is-weak {
       border-color: #f3ddc0;
@@ -2111,8 +2174,7 @@ onMounted(fetchAbilityMap)
   .ability-node__body {
     min-width: 0;
 
-    strong,
-    span {
+    strong {
       display: block;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2124,11 +2186,6 @@ onMounted(fetchAbilityMap)
       font-size: 12px;
     }
 
-    span {
-      margin-top: 2px;
-      color: var(--arena-mut);
-      font-size: 10px;
-    }
   }
 
   .ability-node__meter {
@@ -2146,25 +2203,10 @@ onMounted(fetchAbilityMap)
     }
   }
 
-  .ability-node__action {
-    display: inline-flex;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--arena-line);
-    border-radius: 8px;
-    background: #ffffff;
-    color: var(--arena-grn-d);
-
-    &:hover,
-    &:focus-visible {
-      border-color: var(--arena-grn);
-      background: var(--arena-grn-soft);
-    }
-  }
-
   .ability-action-rail {
     display: grid;
+    grid-column: span 2;
+    grid-row: span 2;
     align-content: start;
     gap: 14px;
     min-width: 0;
@@ -2280,22 +2322,19 @@ onMounted(fetchAbilityMap)
       grid-template-columns: 1fr;
     }
 
-    .ability-action-rail {
-      order: 2;
+    .ability-node-board {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .ability-domain-grid {
-      grid-template-columns: 1fr;
+    .ability-action-rail {
+      grid-column: 1 / -1;
+      grid-row: auto;
     }
   }
 }
 
 @media (max-width: 560px) {
   .arena-ability {
-    .ability-tree-panel {
-      padding: 14px;
-    }
-
     .ability-tree-head {
       flex-direction: column;
     }
@@ -2307,6 +2346,14 @@ onMounted(fetchAbilityMap)
 
     .ability-node-grid {
       grid-template-columns: 1fr;
+    }
+
+    .ability-node-board {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ability-action-rail {
+      grid-column: 1 / -1;
     }
   }
 }

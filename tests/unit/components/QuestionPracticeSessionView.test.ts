@@ -157,4 +157,16 @@ describe('QuestionPracticeSessionView XP rewards', () => {
 
     expect(useGameProfileStore().xp).toBe(0)
   })
+
+  it('uses the direction D single-task answer surface after training starts', async () => {
+    const wrapper = mountSession()
+    await startSession(wrapper)
+
+    expect(wrapper.findAll('.practice-question-card')).toHaveLength(1)
+    expect(wrapper.findAll('.practice-support-card')).toHaveLength(2)
+    expect(wrapper.find('.active-grid').exists()).toBe(false)
+    expect(wrapper.find('.side-stack').exists()).toBe(false)
+    expect(wrapper.text()).toContain('评分点提示（可关）')
+    expect(wrapper.text()).toContain('可引用项目证据')
+  })
 })

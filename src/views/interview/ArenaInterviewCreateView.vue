@@ -1,13 +1,13 @@
 <template>
   <div class="arena arena-iv">
     <div class="arena-iv__page">
-      <!-- 页头 -->
+      <!-- 方向 D 首屏只承载副本选择，推荐依据和微调留在后续折叠区。 -->
       <div class="arena-between arena-iv__head">
         <div>
-          <div class="arena-iv__kicker">面试 · 副本大厅</div>
-          <h1 class="arena-h1 arena-iv__title">选一个副本，开练 ⚔️</h1>
+          <div class="arena-iv__kicker">第 1 步 · 选副本</div>
+          <h1 class="arena-h1 arena-iv__title">今晚打哪个副本？ <span aria-hidden="true">🎤</span></h1>
           <p class="arena-p" style="margin-top: 6px; max-width: 620px">
-            系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。
+            完成任意一场 +200 XP，计入「3 场模拟面试」Offer 清单。
           </p>
         </div>
         <div class="arena-row" style="flex-wrap: wrap">
@@ -18,7 +18,7 @@
       </div>
 
       <!-- 推荐计划保留为辅助入口，首屏先让用户完成副本选择。 -->
-      <details class="arena-card arena-iv__boss">
+      <details v-if="configExpanded" class="arena-card arena-iv__boss">
         <summary>推荐副本与依据</summary>
         <div class="arena-iv__boss-main">
           <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
@@ -113,11 +113,7 @@
           <!-- 副本选择 -->
           <div class="arena-card arena-iv__panel">
             <div class="arena-between">
-              <div>
-                <div class="arena-iv__kicker" style="color: var(--arena-vio)">第 1 步 · 选副本</div>
-                <div class="arena-h3" style="margin-top: 4px">今晚打哪个副本？</div>
-              </div>
-              <span class="arena-tiny">完成任意一场 +200 XP</span>
+              <span class="arena-tiny">根据简历、JD 与训练记录给出推荐。</span>
             </div>
             <div class="arena-iv__dungeons">
               <button
@@ -165,65 +161,21 @@
               </div>
             </div>
 
-            <details class="arena-iv__advanced-modes" :open="showAdvancedModes">
-              <summary>
-                <span>更多训练方式</span>
-                <small>压力追问、HR 行为和行业场景</small>
-              </summary>
-              <div class="arena-iv__dungeons arena-iv__dungeons--advanced">
-                <button
-                  v-for="item in advancedModeCards"
-                  :key="item.key"
-                  type="button"
-                  class="arena-iv__dungeon"
-                  :class="{ 'is-active': selectedModeKey === item.key, 'is-recommended': recommendedModeKey === item.key }"
-                  @click="selectDungeon(item)"
-                >
-                  <div class="arena-between">
-                    <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
-                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
-                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
-                  </div>
-                  <b>{{ item.title }}</b>
-                  <small>{{ item.desc }}</small>
-                  <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
-                    <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
-                    <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
-                  </div>
-                </button>
-              </div>
-            </details>
           </div>
 
           <!-- 可选微调 -->
-          <div ref="configPanelRef" class="arena-card arena-iv__panel">
+          <div v-if="configExpanded" ref="configPanelRef" class="arena-card arena-iv__panel">
             <div class="arena-between" style="flex-wrap: wrap">
               <div>
                 <div class="arena-iv__kicker" style="color: var(--arena-amber)">可选微调</div>
                 <div class="arena-h3" style="margin-top: 4px">默认按推荐计划开始，想换配置再展开</div>
               </div>
               <button class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" @click="toggleConfigExpanded">
-                {{ configExpanded ? '收起微调' : '展开微调' }}
+                收起微调
               </button>
             </div>
 
-            <div v-if="!configExpanded" class="arena-iv__collapsed">
-              <b style="font-size: 13.5px">{{ quickInterviewTitle }}</b>
-              <p class="arena-tiny" style="margin-top: 4px">{{ quickInterviewDesc }}</p>
-              <div class="arena-iv__context-grid" style="margin-top: 12px">
-                <article v-for="item in quickStartItems" :key="item.label">
-                  <component :is="item.icon" :size="15" />
-                  <div>
-                    <span>{{ item.label }}</span>
-                    <strong>{{ item.value }}</strong>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <template v-else>
-              <el-form ref="formRef" class="arena-iv__form" :model="form" :rules="rules" label-position="top">
+            <el-form ref="formRef" class="arena-iv__form" :model="form" :rules="rules" label-position="top">
                 <div class="arena-iv__form-section">
                   <div class="arena-iv__form-title"><span>01</span>面试目标</div>
                   <div class="arena-iv__form-grid">
@@ -361,15 +313,44 @@
                     恢复推荐计划
                   </button>
                 </div>
-              </el-form>
+            </el-form>
 
-              <div class="arena-iv__form-section" style="margin-top: 18px">
-                <InterviewScenarioSelector
-                  v-model="selectedScenario"
-                  :mode-key="selectedModeKey"
-                />
+            <details class="arena-iv__advanced-modes" :open="showAdvancedModes">
+              <summary>
+                <span>更多训练方式</span>
+                <small>压力追问、HR 行为和行业场景</small>
+              </summary>
+              <div class="arena-iv__dungeons arena-iv__dungeons--advanced">
+                <button
+                  v-for="item in advancedModeCards"
+                  :key="item.key"
+                  type="button"
+                  class="arena-iv__dungeon"
+                  :class="{ 'is-active': selectedModeKey === item.key, 'is-recommended': recommendedModeKey === item.key }"
+                  @click="selectDungeon(item)"
+                >
+                  <div class="arena-between">
+                    <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
+                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
+                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
+                  </div>
+                  <b>{{ item.title }}</b>
+                  <small>{{ item.desc }}</small>
+                  <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
+                    <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
+                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
+                    <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
+                  </div>
+                </button>
               </div>
-            </template>
+            </details>
+
+            <div class="arena-iv__form-section" style="margin-top: 18px">
+              <InterviewScenarioSelector
+                v-model="selectedScenario"
+                :mode-key="selectedModeKey"
+              />
+            </div>
           </div>
         </div>
 
@@ -1712,7 +1693,7 @@ onMounted(async () => {
 <style scoped lang="scss">
 .arena-iv {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  margin: 0;
 
   &__page {
     max-width: 1060px;
@@ -1972,7 +1953,7 @@ onMounted(async () => {
     order: 2;
     margin-top: 20px;
     display: grid;
-    grid-template-columns: minmax(0, 760px);
+    grid-template-columns: minmax(0, 1060px);
     justify-content: center;
     gap: 14px;
     align-items: start;
@@ -1986,11 +1967,27 @@ onMounted(async () => {
     padding: 20px 22px;
   }
 
+  &__grid > .arena-col > &__panel:first-child {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    > .arena-between {
+      display: none;
+    }
+
+    > .arena-iv__dungeons {
+      margin-top: 0;
+    }
+  }
+
   &__dungeons {
     margin-top: 14px;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 11px;
+    gap: 14px;
   }
 
   &__advanced-modes {
@@ -2030,10 +2027,11 @@ onMounted(async () => {
   &__dungeon {
     display: flex;
     flex-direction: column;
+    min-height: 150px;
     gap: 7px;
-    padding: 14px 15px;
-    border: 2px solid var(--arena-line);
-    border-radius: 15px;
+    padding: 20px 22px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
     background: #fff;
     font-family: inherit;
     text-align: left;
@@ -2041,14 +2039,15 @@ onMounted(async () => {
     transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 
     &:hover {
-      transform: translateY(-2px);
+      transform: translateY(-1px);
       border-color: var(--arena-grn);
-      box-shadow: 0 6px 16px rgba(23, 178, 106, 0.1);
+      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
     }
 
     &.is-active {
       border-color: var(--arena-grn);
-      background: linear-gradient(135deg, #f0fbf4, #ffffff 75%);
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--arena-grn-soft);
     }
 
     &.is-recommended {
@@ -2071,11 +2070,11 @@ onMounted(async () => {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-top: 16px;
-    padding: 15px 16px;
-    border: 1.5px solid #b9e7cd;
-    border-radius: 16px;
-    background: #f0fbf4;
+    margin-top: 18px;
+    padding: 16px 22px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #fff;
 
     > div:first-child {
       display: grid;
@@ -2265,7 +2264,7 @@ onMounted(async () => {
 
 @media (max-width: 720px) {
   .arena-iv {
-    margin: -12px -12px 0;
+    margin: 0;
 
     &__page {
       padding: 18px 14px 26px;

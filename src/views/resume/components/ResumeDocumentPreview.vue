@@ -176,8 +176,11 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   --paper-pad-y: 38px;
   --paper-body-size: 11.5px;
   --paper-line-height: 1.62;
-  width: min(100%, 720px);
-  min-height: 970px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  min-height: 0;
+  aspect-ratio: 210 / 297;
   padding: var(--paper-pad-y) var(--paper-pad-x);
   border: 1px solid #d6dce3;
   background: #fff;

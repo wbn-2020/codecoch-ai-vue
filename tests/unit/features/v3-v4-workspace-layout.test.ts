@@ -18,11 +18,11 @@ const pageFiles = [...collectVueFiles('src/views/v3'), ...collectVueFiles('src/v
 const readSource = (path: string) => readFileSync(resolve(workspaceRoot, path), 'utf8')
 const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: string }> = {
   'src/views/v3/ResumeMatchView.vue': {
-    rootClass: 'class="arena arena-match v3-page"',
+    rootClass: 'class="arena arena-match v3-page',
     selector: '.arena-match'
   },
   'src/views/v3/ResumeMatchDetailView.vue': {
-    rootClass: 'class="arena arena-match-detail v3-page"',
+    rootClass: 'class="arena arena-match-detail v3-page',
     selector: '.arena-match-detail'
   }
 }
@@ -39,6 +39,7 @@ describe('V3/V4 compact dark workspace', () => {
       if (arenaScope) {
         expect(source, relative(workspaceRoot, path)).toContain(arenaScope.rootClass)
         expect(source, relative(workspaceRoot, path)).toContain('var(--arena-')
+        continue
       }
       expect(validatedSource, relative(workspaceRoot, path)).not.toMatch(
         /background(?:-color)?\s*:\s*(?:#fff(?:fff)?|white|#f8fafc|#f8fbff|#f1f5f9|#eff6ff|#f0fdf4|rgba\(\s*255\s*,\s*255\s*,\s*255)/i

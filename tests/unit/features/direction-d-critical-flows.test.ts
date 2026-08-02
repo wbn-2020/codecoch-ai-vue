@@ -31,6 +31,15 @@ describe('direction D critical flows', () => {
     expect(resumeMatch).toContain('item.targetJobId === routeTargetJobId')
   })
 
+  it('resolves the default match landing to the latest successful report before showing the new-match workspace', () => {
+    expect(resumeMatch).toContain('const entryResolved = ref(false)')
+    expect(resumeMatch).toContain('v-if="!entryResolved || redirectingToLatestReport"')
+    expect(resumeMatch).toContain('const waitForLatestReportDecision = async () =>')
+    expect(resumeMatch).toContain('window.setTimeout(() => resolve(false), 5000)')
+    expect(resumeMatch).toContain('const redirected = await waitForLatestReportDecision()')
+    expect(resumeMatch).toContain('if (!redirected) {\n    entryResolved.value = true')
+  })
+
   it('mounts the resume workspace panes in left-to-right keyboard order', () => {
     expect(resumeEditor).toContain('id="resume-panel-advice-mount"')
     expect(resumeEditor).toContain('id="resume-panel-preview-mount"')
@@ -39,9 +48,10 @@ describe('direction D critical flows', () => {
     expect(resumeEditor).toContain('.workspace-teleport-target {\n  display: contents;')
   })
 
-  it('keeps a visible per-skill training action in the skill tree', () => {
-    expect(abilityMap).toMatch(/\.ability-node__action\s*\{[\s\S]*?display:\s*inline-flex/)
-    expect(abilityMap).not.toMatch(/\.ability-node__action\s*\{\s*display:\s*none/)
+  it('keeps every skill node itself tappable for training in the skill tree', () => {
+    expect(abilityMap).toContain('class="ability-node"')
+    expect(abilityMap).toContain('@click="startSkillTraining(skill)"')
+    expect(abilityMap).toMatch(/\.ability-node\s*\{[\s\S]*?cursor:\s*pointer/)
   })
 
   it('does not move users away from the start action after choosing a normal dungeon', () => {

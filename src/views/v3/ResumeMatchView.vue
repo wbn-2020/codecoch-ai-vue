@@ -1,281 +1,231 @@
 <template>
-  <div class="arena arena-match v3-page">
-    <section class="page-hero match-hero">
-      <div class="hero-copy">
-        <div class="hero-kicker">第 3 关 · JD 匹配</div>
-        <h1>为这份岗位做一次对账</h1>
-        <p>选择简历和目标岗位，生成覆盖率、可用证据和待补维度。</p>
-      </div>
-      <div class="hero-actions">
-        <el-button @click="router.push('/resumes')"><FileText :size="16" /> 选择简历</el-button>
-        <el-button type="primary" @click="router.push('/job-targets')"><Crosshair :size="16" /> 管理岗位</el-button>
-      </div>
-    </section>
-
-    <section v-if="redirectingToLatestReport" class="content-panel result-redirect-state">
-      <AppState type="loading" title="正在打开最近的匹配报告" description="已找到可继续使用的报告，正在进入覆盖率和短板结算页。" />
+  <div class="arena arena-match v3-page match-entry-page">
+    <section v-if="!entryResolved || redirectingToLatestReport" class="match-state-card match-route-resolving">
+      <AppState
+        type="loading"
+        :title="redirectingToLatestReport ? '正在打开最近的匹配报告' : '正在确认最近的匹配报告'"
+        :description="redirectingToLatestReport ? '已找到可继续使用的报告，正在进入覆盖率和短板结算页。' : '先确认是否已有可继续使用的报告，避免重复回到新建工作台。'"
+      />
     </section>
 
     <template v-else>
-    <section v-if="loadError" class="content-panel">
-      <AppState type="error" title="基础数据加载失败" :description="loadError">
-        <el-button type="primary" @click="loadInitial">重新加载</el-button>
-      </AppState>
-    </section>
-    <section v-else-if="partialLoadWarning" class="content-panel match-warning">
+      <header class="match-entry-head">
+        <div>
+          <div class="arena-kicker">第 3 关 · 新建 JD 匹配</div>
+          <h1 class="arena-h1">为这份岗位做一次对账 🔍</h1>
+          <p class="arena-p">选择一份简历和目标岗位，生成覆盖率、缺口和下一步训练建议。</p>
+        </div>
+        <div class="match-entry-head__actions">
+          <el-button @click="router.push('/resumes')"><FileText :size="16" /> 选择简历</el-button>
+          <el-button @click="router.push('/job-targets')"><Crosshair :size="16" /> 管理岗位</el-button>
+        </div>
+      </header>
+
       <el-alert
+        v-if="loadError"
+        class="match-state-card"
+        type="error"
+        show-icon
+        :closable="false"
+        title="基础数据加载失败"
+        :description="loadError"
+      >
+        <el-button type="primary" @click="loadInitial">重新加载</el-button>
+      </el-alert>
+      <el-alert
+        v-else-if="partialLoadWarning"
+        class="match-warning"
         type="warning"
         show-icon
         :closable="false"
         title="部分基础数据暂时不可用"
         :description="partialLoadWarning"
       />
-    </section>
 
-    <section v-if="isVersionEntry" class="content-panel match-version-notice">
-      <el-alert
-        type="info"
-        show-icon
-        :closable="false"
-        title="已从简历版本进入匹配"
-        :description="versionSourceNotice"
-      />
-      <div class="version-entry-actions">
-        <el-button :disabled="!form.resumeId" @click="goSelectedResumeVersions">
-          <GitCompareArrows :size="16" />
-          返回版本
-        </el-button>
-        <el-button type="primary" plain :disabled="!form.resumeId" @click="goSelectedResumeEdit">编辑当前简历</el-button>
-      </div>
-    </section>
-
-    <section class="experiment-flow" aria-label="JD 匹配流程">
-      <article v-for="step in experimentSteps" :key="step.title" class="flow-step" :class="`flow-step--${step.tone}`">
-        <span>{{ step.index }}</span>
-        <div>
-          <strong>{{ step.title }}</strong>
-          <small>{{ step.desc }}</small>
-        </div>
-      </article>
-    </section>
-
-    <section class="match-layout">
-      <div class="left-rail">
-        <div class="content-panel readiness-panel" v-loading="loading">
-          <div class="section-head">
-            <div>
-              <h2>投前准备度</h2>
-              <p>{{ readinessSummary }}</p>
-            </div>
-            <el-tag :type="readinessTagType" effect="plain">{{ readinessTagText }}</el-tag>
-          </div>
-          <div class="readiness-list">
-            <article v-for="item in readinessItems" :key="item.key" class="readiness-item" :class="`readiness-item--${item.tone}`">
-              <component :is="item.icon" :size="18" />
+      <section class="match-entry-grid" v-loading="loading">
+        <main class="match-entry-main">
+          <section class="arena-card match-input-card">
+            <div class="arena-between">
               <div>
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
+                <span class="arena-kicker">开始一次匹配</span>
+                <h2 class="arena-h2">选择简历和目标岗位</h2>
               </div>
-            </article>
-          </div>
-          <div v-if="matchQualityIssues.length" class="quality-gate-actions">
-            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeEdit">补简历信息</el-button>
-            <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeProjects">补项目经历</el-button>
-            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">分析岗位</el-button>
-          </div>
-        </div>
-
-        <div class="content-panel version-card">
-          <div class="section-head">
-            <div>
-              <h2>简历版本来源</h2>
-              <p>{{ versionSourceNotice }}</p>
+              <span class="arena-chip" :class="canSubmit ? 'arena-chip--grn' : 'arena-chip--amber'">
+                {{ canSubmit ? '可以开始' : '需要补资料' }}
+              </span>
             </div>
-            <el-tag :type="isVersionEntry ? 'success' : 'info'" effect="plain">
-              {{ isVersionEntry ? '版本已绑定' : '使用当前简历' }}
-            </el-tag>
-          </div>
-          <dl class="source-facts">
-            <div>
-              <dt>简历</dt>
-              <dd>{{ selectedResumeMeta.title }}</dd>
+
+            <el-alert
+              v-if="isVersionEntry"
+              class="match-version-notice"
+              type="info"
+              show-icon
+              :closable="false"
+              title="已从简历版本进入匹配"
+              :description="versionSourceNotice"
+            />
+
+            <el-form label-position="top" class="match-input-form">
+              <div class="match-input-form__grid">
+                <el-form-item label="实验简历">
+                  <el-select
+                    v-model="form.resumeId"
+                    filterable
+                    placeholder="选择简历"
+                    class="full"
+                    :disabled="isVersionResumeLocked"
+                  >
+                    <el-option
+                      v-for="resume in resumes"
+                      :key="resume.id"
+                      :label="`${resume.resumeName || resume.title || '简历'}${resume.isDefault === 1 ? ' · 默认' : ''}`"
+                      :value="resume.id"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="目标岗位">
+                  <el-select v-model="form.targetJobId" filterable placeholder="选择岗位目标" class="full">
+                    <el-option
+                      v-for="target in targets"
+                      :key="target.id"
+                      :label="`${target.jobTitle || '未命名岗位'} · ${target.companyName || '--'}`"
+                      :value="target.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </div>
+
+              <div class="match-jd-preview">
+                <div>
+                  <span>当前 JD</span>
+                  <strong>{{ selectedTargetMeta.title }}</strong>
+                  <small>{{ selectedTargetMeta.company }}</small>
+                </div>
+                <p>{{ selectedTargetMeta.analysis }}</p>
+                <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">查看岗位分析</el-button>
+              </div>
+
+              <el-alert
+                v-if="versionResumeMismatch || matchQualityIssues.length"
+                class="match-quality-alert"
+                type="warning"
+                show-icon
+                :closable="false"
+                :title="versionResumeMismatch ? '请确认简历版本' : '用于 AI 匹配前请先补齐资料'"
+                :description="versionResumeMismatch ? '当前简历与入口版本不一致，请返回版本页重新选择。' : matchQualityDescription"
+              />
+
+              <div class="match-input-card__actions">
+                <el-checkbox v-model="form.forceRefresh">重新生成一份报告</el-checkbox>
+                <div class="arena-row">
+                  <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submitMatch">
+                    <Sparkles :size="16" /> 生成匹配报告
+                  </el-button>
+                  <el-button :loading="loading" @click="loadInitial"><RefreshCw :size="16" /> 刷新</el-button>
+                </div>
+              </div>
+            </el-form>
+
+            <AppState
+              v-if="!loading && (!resumes.length || !targets.length)"
+              class="match-empty-state"
+              type="empty"
+              title="缺少匹配输入"
+              :description="!resumes.length ? '还没有可用简历，请先创建或上传简历。' : '还没有目标岗位，请先创建岗位目标并分析岗位描述。'"
+            />
+          </section>
+
+          <details v-if="matchSseStatus !== 'idle' || matchSseEvents.length" class="arena-card match-stream">
+            <summary>匹配生成进度 <span>{{ sseStatusLabel(matchSseStatus) }}</span></summary>
+            <div class="match-stream__body">
+              <strong>{{ latestMatchSseMessage }}</strong>
+              <p v-if="matchSseError">{{ matchSseError }}</p>
+              <div v-if="recentMatchSseEvents.length" class="match-stream__events">
+                <span v-for="item in recentMatchSseEvents" :key="item.key">{{ matchSseEventText(item) }}</span>
+              </div>
+              <div v-if="matchTaskRoute" class="arena-between">
+                <span>{{ matchTaskHint }}</span>
+                <el-button size="small" text type="primary" @click="goMatchTaskCenter">去任务中心查看</el-button>
+              </div>
+              <div v-if="matchRecoveryVisible" class="arena-between">
+                <span>{{ matchRecoveryHint }}</span>
+                <el-button size="small" text type="primary" :loading="reportsLoading" @click="refreshMatchReportsAfterInterrupt">刷新最近报告</el-button>
+              </div>
             </div>
-            <div>
-              <dt>版本</dt>
-              <dd>{{ selectedResumeMeta.version }}</dd>
+          </details>
+        </main>
+
+        <aside class="match-entry-side">
+          <section class="arena-card match-readiness-card">
+            <div class="arena-between">
+              <div>
+                <span class="arena-kicker">投前准备</span>
+                <h2 class="arena-h3">材料准备度</h2>
+              </div>
+              <span class="arena-chip" :class="`arena-chip--${readinessTagType === 'success' ? 'grn' : 'amber'}`">{{ readinessTagText }}</span>
             </div>
-            <div>
-              <dt>项目证据</dt>
-              <dd>{{ selectedResumeMeta.projects }}</dd>
+            <p class="arena-tiny">{{ readinessSummary }}</p>
+            <div class="match-readiness-list">
+              <div v-for="item in readinessItems" :key="item.key" class="match-readiness-item">
+                <component :is="item.icon" :size="16" />
+                <span><b>{{ item.title }}</b>{{ item.desc }}</span>
+              </div>
             </div>
-          </dl>
-          <div class="version-entry-actions">
-            <el-button :disabled="!form.resumeId" @click="goSelectedResumeEdit">编辑简历</el-button>
-            <el-button :disabled="!form.resumeId" @click="goSelectedResumeVersions">版本记录</el-button>
-          </div>
-        </div>
-      </div>
-
-      <div class="content-panel form-panel" v-loading="loading">
-        <div class="section-head">
-          <div>
-            <h2>选择本次匹配材料</h2>
-            <p>确认简历和岗位后生成报告。结果页会直接给出下一步。</p>
-          </div>
-          <el-tag v-if="currentTarget" type="success" effect="plain">已读取当前岗位</el-tag>
-        </div>
-
-        <el-form label-position="top" class="experiment-form">
-          <div class="input-grid">
-            <el-form-item label="实验简历">
-              <el-select
-                v-model="form.resumeId"
-                filterable
-                placeholder="选择简历"
-                class="full"
-                :disabled="isVersionResumeLocked"
-              >
-                <el-option
-                  v-for="resume in resumes"
-                  :key="resume.id"
-                  :label="`${resume.resumeName || resume.title || '简历'}${resume.isDefault === 1 ? ' · 默认' : ''}`"
-                  :value="resume.id"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="岗位描述 / 目标岗位">
-              <el-select v-model="form.targetJobId" filterable placeholder="选择岗位目标" class="full">
-                <el-option
-                  v-for="target in targets"
-                  :key="target.id"
-                  :label="`${target.jobTitle || '未命名岗位'} · ${target.companyName || '--'}`"
-                  :value="target.id"
-                />
-              </el-select>
-            </el-form-item>
-          </div>
-
-          <div class="jd-preview">
-            <div>
-              <span>当前 JD</span>
-              <strong>{{ selectedTargetMeta.title }}</strong>
-              <small>{{ selectedTargetMeta.company }}</small>
+            <div v-if="matchQualityIssues.length" class="arena-col match-readiness-actions">
+              <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeEdit">补简历信息</el-button>
+              <el-button text type="primary" :disabled="!form.resumeId" @click="goSelectedResumeProjects">补项目经历</el-button>
+              <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">分析岗位</el-button>
             </div>
-            <p>{{ selectedTargetMeta.analysis }}</p>
-            <el-button text type="primary" :disabled="!form.targetJobId" @click="goSelectedTargetAnalysis">查看/补充岗位分析</el-button>
-          </div>
+          </section>
 
-          <el-alert
-            v-if="versionResumeMismatch"
-            class="quality-gate-alert"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="简历版本入口已绑定原简历"
-            description="当前简历与入口版本不一致，已阻止提交。请返回版本页重新选择，或清空版本入口后再切换简历。"
-          />
-          <el-alert
-            v-if="matchQualityIssues.length"
-            class="quality-gate-alert"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="用于 AI 匹配前请先补齐资料"
-            :description="matchQualityDescription"
-          />
+          <section class="arena-card match-next-card">
+            <span class="arena-chip arena-chip--grn-solid">匹配后会得到</span>
+            <h2 class="arena-h3">覆盖率、缺口和押题方向</h2>
+            <p class="arena-tiny">结果页会直接给出缺失技能点和下一组训练入口。</p>
+          </section>
 
-          <div class="launch-panel">
-            <el-checkbox v-model="form.forceRefresh">重新生成一份报告</el-checkbox>
-            <div class="submit-row">
-              <el-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submitMatch">
-                <Sparkles :size="16" /> 生成 JD 匹配报告
-              </el-button>
-              <el-button :loading="loading" @click="loadInitial"><RefreshCw :size="16" /> 刷新数据</el-button>
+          <details class="arena-card match-support-details">
+            <summary>资料与历史报告</summary>
+            <div class="match-support-details__body">
+              <div class="match-version-summary">
+                <div class="arena-between">
+                  <b>简历版本来源</b>
+                  <span class="arena-chip">{{ isVersionEntry ? '版本已绑定' : '使用当前简历' }}</span>
+                </div>
+                <p>{{ versionSourceNotice }}</p>
+                <dl>
+                  <div><dt>简历</dt><dd>{{ selectedResumeMeta.title }}</dd></div>
+                  <div><dt>版本</dt><dd>{{ selectedResumeMeta.version }}</dd></div>
+                  <div><dt>项目证据</dt><dd>{{ selectedResumeMeta.projects }}</dd></div>
+                </dl>
+                <div class="arena-row">
+                  <el-button size="small" :disabled="!form.resumeId" @click="goSelectedResumeEdit">编辑简历</el-button>
+                  <el-button size="small" :disabled="!form.resumeId" @click="goSelectedResumeVersions">版本记录</el-button>
+                </div>
+              </div>
+
+              <div class="match-history">
+                <div class="arena-between">
+                  <b>历史报告</b>
+                  <el-button text size="small" :loading="reportsLoading" @click="loadReports">刷新</el-button>
+                </div>
+                <div v-loading="reportsLoading" class="match-history__list">
+                  <AppState v-if="reportsError" type="error" title="匹配报告加载失败" :description="reportsError">
+                    <el-button type="primary" @click="loadReports">重试</el-button>
+                  </AppState>
+                  <AppState v-else-if="!reports.length" type="empty" title="还没有匹配报告" :description="emptyReportStateDescription">
+                    <el-button type="primary" :disabled="emptyReportPrimaryDisabled" :loading="submitting" @click="handleEmptyReportPrimaryAction">{{ emptyReportPrimaryActionLabel }}</el-button>
+                  </AppState>
+                  <button v-for="report in reports" v-else :key="report.reportId" class="match-history__item" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: matchReportRouteQuery(report) })">
+                    <span><b>{{ report.jobTitle || '未命名岗位' }}</b><small>{{ report.resumeTitle || '未命名简历' }} · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small></span>
+                    <strong>{{ reportScoreText(report) }}</strong>
+                  </button>
+                </div>
+              </div>
             </div>
-            <p>报告会基于真实返回字段展示匹配度、优势、差距和建议；字段不足时只给待补齐提示。</p>
-          </div>
-        </el-form>
-
-        <div v-if="matchSseStatus !== 'idle' || matchSseEvents.length" class="match-stream">
-          <div class="match-stream__head">
-            <span class="cc-badge" :class="sseBadgeClass(matchSseStatus)">
-              <i class="cc-badge__dot" />
-              {{ sseStatusLabel(matchSseStatus) }}
-            </span>
-            <strong>{{ latestMatchSseMessage }}</strong>
-          </div>
-          <p v-if="matchSseError">{{ matchSseError }}</p>
-          <div v-if="recentMatchSseEvents.length" class="match-stream__events">
-            <span v-for="item in recentMatchSseEvents" :key="item.key">
-              {{ matchSseEventText(item) }}
-            </span>
-          </div>
-          <div v-if="matchTaskRoute" class="match-stream__task">
-            <span>{{ matchTaskHint }}</span>
-            <el-button size="small" text type="primary" @click="goMatchTaskCenter">去任务中心查看</el-button>
-          </div>
-          <div v-if="matchRecoveryVisible" class="match-stream__recovery">
-            <span>{{ matchRecoveryHint }}</span>
-            <el-button size="small" text type="primary" :loading="reportsLoading" @click="refreshMatchReportsAfterInterrupt">
-              刷新最近报告
-            </el-button>
-          </div>
-        </div>
-
-        <AppState
-          v-if="!loading && (!resumes.length || !targets.length)"
-          type="empty"
-          title="缺少匹配输入"
-          :description="!resumes.length ? '还没有可用简历，请先创建或上传简历。' : '还没有目标岗位，请先创建岗位目标并分析岗位描述。'"
-        />
-      </div>
-
-      <div class="content-panel reports-panel">
-        <div class="section-head">
-          <div>
-            <h2>历史报告</h2>
-            <p>{{ reportHistoryHint }}</p>
-          </div>
-          <el-button text :loading="reportsLoading" @click="loadReports">刷新</el-button>
-        </div>
-        <div v-loading="reportsLoading" class="report-list">
-          <AppState v-if="reportsError" type="error" title="匹配报告加载失败" :description="reportsError">
-            <el-button type="primary" @click="loadReports">重试</el-button>
-          </AppState>
-          <AppState
-            v-else-if="!reports.length"
-            type="empty"
-            title="还没有可查看的 JD 匹配报告"
-            :description="emptyReportStateDescription"
-          >
-            <el-button type="primary" :disabled="emptyReportPrimaryDisabled" :loading="submitting" @click="handleEmptyReportPrimaryAction">
-              {{ emptyReportPrimaryActionLabel }}
-            </el-button>
-            <el-button @click="router.push('/resumes/create')">创建/上传简历</el-button>
-            <el-button @click="router.push('/job-targets')">选择或补充 JD</el-button>
-          </AppState>
-          <button v-for="report in reports" v-else :key="report.reportId" class="report-card" type="button" @click="router.push({ path: `/resume-match/${report.reportId}`, query: matchReportRouteQuery(report) })">
-            <span>
-              <strong>{{ report.jobTitle || '未命名岗位' }}</strong>
-              <small>{{ report.resumeTitle || '未命名简历' }}<template v-if="report.resumeVersionId"> · {{ resumeVersionLabel(report) }}</template> · {{ formatDateTime(report.updatedAt || report.createdAt) }}</small>
-              <small v-if="report.status === 'FAILED'" class="report-error">
-                {{ toFriendlyMessage(report.errorMessage, '本次报告暂不适合直接继续训练，可进入详情查看处理线索并重新生成。') }}
-              </small>
-              <small class="report-evidence">
-                {{ report.evidenceSummary || '推荐来源待确认' }}
-              </small>
-              <small v-if="report.schemaWarningCount" class="report-warning">
-                {{ report.schemaWarningCount }} 项内容需复核，详情页可查看处理提示
-              </small>
-            </span>
-            <el-tag :type="trustStatusType(report.trustStatus, report.fallback ? 'warning' : statusTag(report.status))" effect="plain">
-              {{ trustStatusLabel(report.trustStatus) }}
-            </el-tag>
-            <b>{{ reportScoreText(report) }}</b>
-          </button>
-        </div>
-      </div>
-    </section>
+          </details>
+        </aside>
+      </section>
     </template>
   </div>
 </template>
@@ -331,6 +281,7 @@ const resumes = ref<ResumeVO[]>([])
 const targets = ref<TargetJobVO[]>([])
 const currentTarget = ref<TargetJobVO | null>(null)
 const reports = ref<ResumeJobMatchReportListVO[]>([])
+const entryResolved = ref(false)
 const redirectingToLatestReport = ref(false)
 const {
   status: matchSseStatus,
@@ -856,7 +807,7 @@ const matchReportRouteQuery = (report: ResumeJobMatchReportListVO) => ({
   ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {})
 })
 const routeToLatestCompletedReport = async () => {
-  if (isNewMatchEntry.value) return
+  if (isNewMatchEntry.value) return false
   const routeTargetJobId = Number(route.query.targetJobId)
   const hasScopedEntry = Boolean(
     routeResumeId.value
@@ -872,17 +823,28 @@ const routeToLatestCompletedReport = async () => {
       && (!versionSourceId.value || item.resumeVersionId === versionSourceId.value)
     ))
   )
-  if (!latestReport) return
+  if (!latestReport) return false
 
   redirectingToLatestReport.value = true
   try {
     await router.replace({
       path: `/resume-match/${latestReport.reportId}`,
-      query: matchReportRouteQuery(latestReport)
-    })
+        query: matchReportRouteQuery(latestReport)
+      })
+    return true
   } catch {
     redirectingToLatestReport.value = false
+    return false
   }
+}
+
+const waitForLatestReportDecision = async () => {
+  const reportLoad = loadReports().then(() => true).catch(() => false)
+  const timedOut = new Promise<false>((resolve) => {
+    window.setTimeout(() => resolve(false), 5000)
+  })
+  const reportsReady = await Promise.race([reportLoad, timedOut])
+  return reportsReady ? routeToLatestCompletedReport() : false
 }
 
 const goMatchTaskCenter = () => {
@@ -993,284 +955,396 @@ const startMatchSse = (payload: ResumeJobMatchCreateDTO) => {
 }
 
 onMounted(async () => {
-  await Promise.allSettled([loadInitial(), loadReports()])
-  await routeToLatestCompletedReport()
+  void loadInitial()
+  const redirected = await waitForLatestReportDecision()
+  if (!redirected) {
+    entryResolved.value = true
+  }
 })
 onBeforeUnmount(stopMatchSse)
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
-.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; overflow: hidden; }
-.match-hero { background: rgba(15, 23, 42, 0.58); }
-.hero-copy { min-width: 0; }
-.hero-kicker, .hero-actions, .submit-row, .section-head, .hero-pills { display: flex; align-items: center; gap: 10px; }
-.hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
-h1, h2, p { margin: 0; }
-h1 { margin-top: 8px; font-size: 26px; }
-p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.hero-pills { flex-wrap: wrap; margin-top: 14px; }
-.hero-pills span { padding: 4px 10px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 999px; background: rgba(148, 163, 184, 0.08); color: var(--app-text-muted); font-size: 12px; }
-.experiment-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; }
-.flow-step { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; padding: 12px; border-right: 1px solid var(--app-border); background: rgba(15, 23, 42, 0.22); }
-.flow-step:last-child { border-right: 0; }
-.flow-step span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: rgba(37, 99, 235, 0.16); color: #bfdbfe; font-weight: 800; font-size: 12px; }
-.flow-step strong, .flow-step small { display: block; min-width: 0; overflow-wrap: anywhere; }
-.flow-step small { margin-top: 5px; color: var(--app-text-muted); line-height: 1.5; }
-.flow-step--ready { border-color: rgba(22, 163, 74, 0.34); }
-.flow-step--ready span { background: rgba(22, 163, 74, 0.16); color: #86efac; }
-.flow-step--risk { border-color: rgba(245, 158, 11, 0.42); }
-.flow-step--risk span { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
-.match-layout { display: grid; grid-template-columns: minmax(240px, 0.58fr) minmax(0, 1.5fr) minmax(280px, 0.72fr); gap: 16px; align-items: start; }
-.left-rail { display: grid; gap: 16px; min-width: 0; }
-.content-panel { padding: 16px; min-width: 0; }
-.section-head { justify-content: space-between; margin-bottom: 14px; }
-.section-head > div { min-width: 0; }
-.section-head h2 { font-size: 18px; }
-.full { width: 100%; }
-.readiness-list { display: grid; gap: 10px; }
-.readiness-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.2); }
-.readiness-item svg { margin-top: 2px; color: var(--app-text-muted); }
-.readiness-item strong, .readiness-item span { display: block; overflow-wrap: anywhere; }
-.readiness-item span { margin-top: 5px; color: var(--app-text-muted); font-size: 12px; line-height: 1.6; }
-.readiness-item--ready { border-color: rgba(22, 163, 74, 0.28); }
-.readiness-item--ready svg { color: #22c55e; }
-.readiness-item--risk { border-color: rgba(245, 158, 11, 0.38); }
-.readiness-item--risk svg { color: #f59e0b; }
-.readiness-item--todo svg { color: #60a5fa; }
-.source-facts { display: grid; gap: 10px; margin: 0; }
-.source-facts div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.2); }
-.source-facts dt { color: var(--app-text-muted); font-size: 12px; }
-.source-facts dd { margin: 5px 0 0; overflow-wrap: anywhere; }
-.experiment-form { display: grid; gap: 14px; }
-.input-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.jd-preview { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid rgba(37, 99, 235, 0.24); border-radius: 8px; background: rgba(37, 99, 235, 0.08); }
-.jd-preview span, .jd-preview small { display: block; color: var(--app-text-muted); font-size: 12px; }
-.jd-preview strong { display: block; margin: 4px 0; overflow-wrap: anywhere; }
-.jd-preview p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
-.launch-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid rgba(6, 182, 212, 0.22); border-radius: 8px; background: rgba(6, 182, 212, 0.07); }
-.launch-panel p { margin: 0; font-size: 12px; }
-.submit-row { flex-wrap: wrap; margin-top: 18px; }
-.launch-panel .submit-row { margin-top: 0; }
-.match-version-notice { display: grid; gap: 12px; }
-.version-entry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.match-stream { display: grid; gap: 10px; margin-top: 18px; padding: 12px; border: 1px solid rgba(99, 102, 241, 0.24); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
-.match-stream p { margin: 0; color: #fca5a5; font-size: 12px; }
-.match-stream__head, .match-stream__events, .match-stream__task, .match-stream__recovery { display: flex; align-items: center; gap: 8px; }
-.match-stream__head { align-items: flex-start; flex-direction: column; }
-.match-stream__head strong { color: #dbeafe; font-size: 13px; line-height: 1.5; }
-.match-stream__events { flex-wrap: wrap; }
-.match-stream__events span { max-width: 100%; padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); color: var(--app-text-muted); font-size: 11px; overflow-wrap: anywhere; }
-.match-stream__task { justify-content: space-between; flex-wrap: wrap; padding-top: 2px; color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
-.match-stream__task span { min-width: 0; overflow-wrap: anywhere; }
-.match-stream__recovery { justify-content: space-between; flex-wrap: wrap; padding-top: 2px; color: #a5b4fc; font-size: 12px; line-height: 1.5; }
-.match-stream__recovery span { min-width: 0; overflow-wrap: anywhere; }
-.quality-gate-alert { margin: 8px 0 10px; }
-.quality-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -2px 0 12px; }
-.quality-gate-actions :deep(.el-button) { margin-left: 0; }
-.reports-panel { align-self: stretch; }
-.result-redirect-state { min-height: 260px; display: grid; place-items: center; }
-.report-list { min-height: 220px; display: grid; gap: 12px; }
-.report-card { display: grid; grid-template-columns: minmax(0, 1fr) auto 54px; gap: 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.34); color: var(--app-text); text-align: left; cursor: pointer; }
-.report-card strong, .report-card small { display: block; overflow-wrap: anywhere; }
-.report-card small { margin-top: 5px; color: var(--app-text-muted); }
-.report-card .report-error { color: #fca5a5; }
-.report-card .report-evidence { font-size: 12px; line-height: 1.5; }
-.report-card .report-warning { color: #fbbf24; font-size: 12px; line-height: 1.5; }
-.report-card b { text-align: right; font-size: 22px; }
-@media (max-width: 1180px) { .match-layout { grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr); } .reports-panel { grid-column: 1 / -1; } .experiment-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flow-step:nth-child(2) { border-right: 0; } .flow-step:nth-child(-n + 2) { border-bottom: 1px solid var(--app-border); } }
-@media (max-width: 960px) { .page-hero, .match-layout { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } .input-grid, .jd-preview { grid-template-columns: 1fr; } .reports-panel { grid-column: auto; } }
-
-
-@media (max-width: 720px) {
-  .page-hero, .match-layout { flex-direction: column; align-items: stretch; }
-  .experiment-flow { grid-template-columns: 1fr; }
-  .flow-step,
-  .flow-step:nth-child(2) { border-right: 0; border-bottom: 1px solid var(--app-border); }
-  .flow-step:last-child { border-bottom: 0; }
-  .hero-actions, .version-entry-actions, .submit-row { flex-wrap: wrap; }
-  .hero-actions :deep(.el-button), .version-entry-actions :deep(.el-button), .submit-row :deep(.el-button), .jd-preview :deep(.el-button) { width: 100%; margin-left: 0; }
-  .report-card { grid-template-columns: minmax(0, 1fr); }
-  .report-card b { text-align: left; }
-}
-
-// 方向 D · JD 匹配。真实报告与生成任务保持原样，仅收口为关卡化呈现。
-.arena-match {
-  width: min(1060px, 100%);
+.match-entry-page {
+  width: min(990px, 100%);
   margin: 0 auto;
-  padding: 28px 24px 46px;
-  gap: 16px;
-
-  .page-hero,
-  .content-panel,
-  .experiment-flow {
-    border: 1.5px solid var(--arena-line);
-    border-radius: var(--arena-radius-card);
-    background: #ffffff;
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
-  }
-
-  .match-hero {
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
-    border-color: #b9e7cd;
-    padding: 22px;
-  }
-
-  h1,
-  h2,
-  strong {
-    color: var(--arena-ink);
-  }
-
-  h1 {
-    font-size: 28px;
-    font-weight: 900;
-  }
-
-  p,
-  .flow-step small,
-  .readiness-item span,
-  .source-facts dt,
-  .jd-preview span,
-  .jd-preview small,
-  .report-card small {
-    color: var(--arena-sub);
-  }
-
-  .hero-kicker {
-    color: var(--arena-grn-d);
-    font-weight: 800;
-  }
-
-  .hero-pills span {
-    border-color: transparent;
-    background: var(--arena-grn-soft);
-    color: var(--arena-grn-d);
-    font-weight: 800;
-  }
-
-  .experiment-flow {
-    overflow: visible;
-  }
-
-  .flow-step {
-    border-color: var(--arena-line);
-    background: transparent;
-
-    span {
-      border-radius: 12px;
-      background: #f2f4f2;
-      color: var(--arena-sub);
-    }
-
-    &.flow-step--ready span {
-      background: var(--arena-grn-soft);
-      color: var(--arena-grn-d);
-    }
-
-    &.flow-step--risk span {
-      background: var(--arena-amber-soft);
-      color: var(--arena-amber);
-    }
-  }
-
-  .content-panel {
-    padding: 18px;
-  }
-
-  .readiness-item,
-  .source-facts div,
-  .jd-preview,
-  .launch-panel,
-  .match-stream,
-  .report-card {
-    border: 1.5px solid var(--arena-line);
-    border-radius: 14px;
-    background: #ffffff;
-  }
-
-  .readiness-item--ready {
-    border-color: #b9e7cd;
-    background: #f5fcf7;
-  }
-
-  .readiness-item--risk {
-    border-color: #f3ddc0;
-    background: #fffaf2;
-  }
-
-  .jd-preview {
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 70%);
-  }
-
-  .launch-panel {
-    border-color: #d7ccff;
-    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
-  }
-
-  .match-stream {
-    border-color: #d7ccff;
-    background: #fbfaff;
-
-    p {
-      color: var(--arena-red);
-    }
-  }
-
-  .match-stream__head strong {
-    color: var(--arena-ink);
-  }
-
-  .match-stream__events span {
-    background: #f2f4f2;
-    color: var(--arena-sub);
-  }
-
-  .report-card {
-    transition: border-color 0.15s ease, transform 0.15s ease;
-
-    &:hover {
-      border-color: var(--arena-grn);
-      transform: translateY(-1px);
-    }
-
-    b {
-      color: var(--arena-grn-d);
-    }
-  }
-
-  :deep(.el-button--primary) {
-    border-color: var(--arena-grn);
-    background: var(--arena-grn);
-    box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
-  }
-
-  :deep(.el-input__wrapper),
-  :deep(.el-textarea__inner),
-  :deep(.el-select__wrapper) {
-    border-radius: 13px;
-    box-shadow: 0 0 0 1.5px var(--arena-line) inset;
-  }
+  padding: 30px 24px 48px;
 }
 
-@media (max-width: 720px) {
-  .arena-match {
-    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+.match-entry-head,
+.match-entry-head__actions,
+.match-entry-grid,
+.match-input-card__actions,
+.match-input-form__grid,
+.match-entry-side,
+.match-readiness-list,
+.match-stream__body,
+.match-support-details__body,
+.match-history__list {
+  display: grid;
+  gap: 16px;
+}
 
-    .match-hero {
-      padding: 18px;
-    }
+.match-entry-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  margin-bottom: 22px;
+}
 
-    .hero-actions :deep(.el-button),
-    .version-entry-actions :deep(.el-button),
-    .submit-row :deep(.el-button),
-    .jd-preview :deep(.el-button) {
-      width: 100%;
-      margin-left: 0;
-    }
+.match-entry-head__actions {
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
+.arena-kicker {
+  color: var(--arena-grn-d);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.arena-h1,
+.arena-h2,
+.arena-h3,
+strong,
+b {
+  color: var(--arena-ink);
+}
+
+.arena-h1 {
+  margin: 5px 0 0;
+}
+
+.arena-p,
+.arena-tiny,
+.match-jd-preview p,
+.match-version-summary p {
+  color: var(--arena-sub);
+}
+
+.match-entry-grid {
+  grid-template-columns: minmax(0, 1.48fr) minmax(280px, 0.92fr);
+  align-items: start;
+}
+
+.match-entry-main,
+.match-entry-side {
+  min-width: 0;
+}
+
+.arena-card,
+.match-state-card {
+  border: 1.5px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+}
+
+.match-route-resolving {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  padding: 22px;
+}
+
+.match-input-card {
+  padding: 24px 26px;
+}
+
+.match-input-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.match-input-form__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.full {
+  width: 100%;
+}
+
+.match-jd-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1.5px solid #b9e7cd;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0fbf4, #fff 70%);
+}
+
+.match-jd-preview span,
+.match-jd-preview small,
+.match-jd-preview strong {
+  display: block;
+}
+
+.match-jd-preview span,
+.match-jd-preview small {
+  color: var(--arena-sub);
+  font-size: 12px;
+}
+
+.match-jd-preview strong {
+  margin: 4px 0;
+}
+
+.match-jd-preview p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.match-input-card__actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.match-quality-alert,
+.match-version-notice {
+  margin: 0;
+}
+
+.match-empty-state {
+  margin-top: 4px;
+}
+
+.match-readiness-card,
+.match-next-card {
+  padding: 18px 20px;
+}
+
+.match-readiness-card .arena-tiny,
+.match-next-card .arena-tiny {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.match-readiness-list {
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.match-readiness-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--arena-line);
+  color: var(--arena-grn-d);
+}
+
+.match-readiness-item:last-child {
+  border-bottom: 0;
+}
+
+.match-readiness-item span {
+  display: grid;
+  gap: 2px;
+  color: var(--arena-sub);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.match-readiness-item b {
+  font-size: 12.5px;
+}
+
+.match-readiness-actions {
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.match-next-card {
+  border-color: #b9e7cd;
+  background: linear-gradient(135deg, #f0fbf4, #fff 74%);
+}
+
+.match-next-card .arena-h3 {
+  margin: 12px 0 0;
+}
+
+.match-support-details,
+.match-stream {
+  overflow: hidden;
+}
+
+.match-support-details summary,
+.match-stream summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 17px;
+  color: var(--arena-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.match-support-details summary::-webkit-details-marker,
+.match-stream summary::-webkit-details-marker {
+  display: none;
+}
+
+.match-support-details summary::after,
+.match-stream summary::after {
+  content: '+';
+  color: var(--arena-grn-d);
+}
+
+.match-support-details[open] summary::after,
+.match-stream[open] summary::after {
+  content: '-';
+}
+
+.match-support-details__body,
+.match-stream__body {
+  gap: 14px;
+  padding: 0 17px 17px;
+  border-top: 1px solid var(--arena-line);
+}
+
+.match-version-summary,
+.match-history {
+  display: grid;
+  gap: 10px;
+}
+
+.match-version-summary p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.match-version-summary dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.match-version-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.match-version-summary dt {
+  color: var(--arena-mut);
+}
+
+.match-version-summary dd {
+  margin: 0;
+  color: var(--arena-sub);
+  text-align: right;
+}
+
+.match-history__list {
+  gap: 8px;
+}
+
+.match-history__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--arena-line);
+  background: transparent;
+  color: var(--arena-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.match-history__item span {
+  min-width: 0;
+}
+
+.match-history__item b,
+.match-history__item small {
+  display: block;
+}
+
+.match-history__item small {
+  margin-top: 3px;
+  color: var(--arena-mut);
+  font-size: 11px;
+}
+
+.match-history__item strong {
+  color: var(--arena-grn-d);
+  font-size: 14px;
+}
+
+.match-stream {
+  margin-top: 14px;
+  border-color: #d7ccff;
+  background: #fbfaff;
+}
+
+.match-stream summary span,
+.match-stream__body p {
+  color: var(--arena-sub);
+  font-size: 12px;
+}
+
+.match-stream__events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.match-stream__events span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #f2f4f2;
+  color: var(--arena-sub);
+  font-size: 11px;
+}
+
+:deep(.el-button--primary) {
+  border-color: var(--arena-grn);
+  background: var(--arena-grn);
+  box-shadow: 0 4px 0 var(--arena-grn-d);
+  font-weight: 800;
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+}
+
+@media (max-width: 800px) {
+  .match-entry-page {
+    padding: 18px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+  }
+
+  .match-entry-head,
+  .match-entry-grid,
+  .match-input-form__grid,
+  .match-jd-preview,
+  .match-input-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .match-entry-head__actions {
+    grid-auto-flow: row;
+  }
+
+  .match-entry-head__actions :deep(.el-button),
+  .match-input-card__actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .match-input-card {
+    padding: 19px 16px;
   }
 }
 </style>

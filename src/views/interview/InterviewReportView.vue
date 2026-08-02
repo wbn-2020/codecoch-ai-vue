@@ -1,14 +1,6 @@
 <template>
   <div class="arena arena-report interview-report page-shell">
     <section class="report-top report-top--compact">
-      <div>
-        <div class="eyebrow">
-          <ChartNoAxesCombined :size="16" />
-          面试报告
-        </div>
-        <h1>本轮面试结算</h1>
-        <p>先看真实评分和下一步，再进入完整问答复盘。</p>
-      </div>
       <details class="report-actions">
         <summary>更多操作</summary>
         <div class="report-actions__menu">
@@ -140,14 +132,14 @@
               <small>已入账</small>
             </div>
             <div class="settlement-reward-row">
-              <span>✦ 答题奖励（{{ answerRewardCount }} 题）</span>
-              <strong>+{{ answerRewardXp }} XP</strong>
-              <small>已入账</small>
+              <span>🔥 连胜延续</span>
+              <strong>{{ completionStreakLabel }}</strong>
+              <small>{{ completionStreakHint }}</small>
             </div>
             <div class="settlement-reward-row">
-              <span>🔥 连胜进度</span>
-              <strong>本场合计 +{{ sessionRewardXp }} XP</strong>
-              <small>继续训练可延续</small>
+              <span>🏆 Offer 清单</span>
+              <strong>{{ completedInterviewProgressLabel }}</strong>
+              <small>{{ completedInterviewProgressHint }}</small>
             </div>
           </div>
 
@@ -458,7 +450,10 @@
       </AppState>
     </section>
 
-    <section v-if="report && isGenerated" class="analysis-grid">
+    <details v-if="report && isGenerated" class="report-deep-dive">
+      <summary>查看完整报告、阶段评分与训练建议</summary>
+      <div class="report-deep-dive__body">
+    <section class="analysis-grid">
       <article class="analysis-card wide">
         <div class="section-head">
           <h2>AI 总结</h2>
@@ -573,7 +568,7 @@
       </article>
     </section>
 
-    <section v-if="stageReports.length && isGenerated" class="content-card">
+    <section v-if="stageReports.length" class="content-card">
       <div class="content-card__body">
         <div class="section-head">
           <h2>阶段得分</h2>
@@ -610,8 +605,13 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
 
-    <section v-if="qaMessages.length && (isGenerated || isFailed || isUnscorable)" class="content-card">
+    <details v-if="qaMessages.length && (isGenerated || isFailed || isUnscorable)" class="report-deep-dive report-qa-drawer">
+      <summary>{{ isGenerated ? '查看题目明细与 AI 点评' : '查看已保留问答明细' }}</summary>
+      <div class="report-deep-dive__body">
+    <section class="content-card">
       <div class="content-card__body">
         <div class="section-head">
           <h2>{{ isGenerated ? '题目明细' : '已保留问答明细' }}</h2>
@@ -646,8 +646,13 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
 
-    <section v-if="isGenerated" class="content-card">
+    <details v-if="isGenerated" class="report-deep-dive report-action-drawer">
+      <summary>更多训练行动</summary>
+      <div class="report-deep-dive__body">
+    <section class="content-card">
       <div class="content-card__body action-zone">
         <div>
           <h2>下一步行动</h2>
@@ -670,13 +675,15 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
+import { ArrowRight, BookOpenCheck, CalendarClock, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
 import { getActivePinia } from 'pinia'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
@@ -687,6 +694,7 @@ import {
 } from '@/api/agent'
 import {
   exportInterviewReportApi,
+  getInterviewsApi,
   getInterviewReportApi,
   retryInterviewReportApi,
   type InterviewReportExportFormat
@@ -742,6 +750,7 @@ const replayIdempotencyKeys = new Map<number, string>()
 const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
 const report = ref<InterviewReportVO | null>(null)
+const completedInterviewCount = ref<number | null>(null)
 const reportRecoveryNotice = ref('')
 const nextActionShownMetricKey = ref('')
 const staticActionShownMetricKey = ref('')
@@ -1011,19 +1020,24 @@ const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
 const interviewRewardPrefix = computed(() => interviewId.value ? `interview:${interviewId.value}:` : '')
-const answerRewardXp = computed(() => interviewRewardPrefix.value
-  ? gameProfile?.rewardXpForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
-  : 0
-)
-const answerRewardCount = computed(() => interviewRewardPrefix.value
-  ? gameProfile?.rewardCountForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
-  : 0
-)
 const completionRewardXp = computed(() => interviewRewardPrefix.value
   ? gameProfile?.rewardXpForKey(`${interviewRewardPrefix.value}complete`) || 0
   : 0
 )
-const sessionRewardXp = computed(() => answerRewardXp.value + completionRewardXp.value)
+const completionStreakLabel = computed(() => {
+  const streakDays = gameProfile?.streakDays || 0
+  return streakDays > 0 ? `第 ${streakDays} 天` : '本次已完成'
+})
+const completionStreakHint = computed(() =>
+  (gameProfile?.streakDays || 0) > 0 ? '明天继续' : '完成下一关可形成连续记录'
+)
+const completedInterviewProgressLabel = computed(() => {
+  if (completedInterviewCount.value == null) return '已完成本场'
+  return `模拟面试 ${Math.min(3, completedInterviewCount.value)}/3`
+})
+const completedInterviewProgressHint = computed(() =>
+  completedInterviewCount.value == null ? '正在同步完成场次' : '基于已完成面试记录'
+)
 const recommendedQuestionIds = computed(() =>
   recommendedQuestions.value
     .map((item) => Number(item.questionId || item.id))
@@ -1761,7 +1775,10 @@ const fetchReport = async (id: number, generation: number) => {
     if (!isCurrentReportRequest(id, generation)) return
     report.value = nextReport
     pollFailures.value = 0
-    if (isGenerated.value) void loadReplayEligibility(id, generation)
+    if (isGenerated.value) {
+      void loadReplayEligibility(id, generation)
+      void loadCompletedInterviewCount(generation)
+    }
     if (isGenerating.value) {
       pollCount.value += 1
       schedulePolling(id, generation)
@@ -1779,6 +1796,23 @@ const fetchReport = async (id: number, generation: number) => {
     }
   } finally {
     if (isCurrentReportRequest(id, generation)) loading.value = false
+  }
+}
+
+const loadCompletedInterviewCount = async (generation: number) => {
+  try {
+    const page = await getInterviewsApi({
+      status: 'COMPLETED',
+      pageNo: 1,
+      pageSize: 1
+    }, {
+      silentError: true
+    })
+    if (generation !== reportGeneration || reportViewDisposed) return
+    completedInterviewCount.value = Math.max(0, Number(page.total) || 0)
+  } catch {
+    if (generation !== reportGeneration || reportViewDisposed) return
+    completedInterviewCount.value = null
   }
 }
 
@@ -1927,6 +1961,7 @@ const resetReportRouteState = (id?: number) => {
   replayIdempotencyKey.value = id ? replayIdempotencyKeys.get(id) || '' : ''
   clearReplayEligibility()
   report.value = null
+  completedInterviewCount.value = null
   reportRecoveryNotice.value = ''
   nextActionShownMetricKey.value = ''
   staticActionShownMetricKey.value = ''
@@ -3685,6 +3720,7 @@ onBeforeUnmount(() => {
 
 // 方向 D · 面试结算。正式评分、证据与导出仍保留；XP 仅作为独立激励层。
 .arena-report {
+  position: relative;
   width: min(1060px, 100%);
   margin: 0 auto;
   padding: 28px 24px 46px;
@@ -3700,8 +3736,10 @@ onBeforeUnmount(() => {
   }
 
   .report-top {
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 
     h1 {
       font-size: 28px;
@@ -3860,8 +3898,13 @@ onBeforeUnmount(() => {
   }
 
   .report-top {
-    padding: 18px 20px;
-    border-color: #b9e7cd;
+    position: absolute;
+    top: 28px;
+    right: 24px;
+    z-index: 3;
+    min-height: 34px;
+    padding: 0;
+    text-align: center;
 
     h1 {
       margin: 5px 0;
@@ -3870,6 +3913,17 @@ onBeforeUnmount(() => {
 
     p {
       font-size: 13px;
+    }
+
+    .eyebrow {
+      justify-content: center;
+    }
+
+    .report-actions {
+      position: relative;
+      top: auto;
+      right: auto;
+      text-align: left;
     }
   }
 
@@ -3897,9 +3951,8 @@ onBeforeUnmount(() => {
 
   .settlement-card {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(250px, 0.9fr);
-    gap: 22px;
-    max-width: 820px;
+    gap: 18px;
+    max-width: 560px;
     margin: 20px auto 24px;
     padding: 28px;
     border: 1.5px solid var(--arena-line);
@@ -3917,10 +3970,10 @@ onBeforeUnmount(() => {
 
   .settlement-score {
     display: grid;
-    grid-template-columns: 170px minmax(0, 1fr);
-    align-items: center;
-    gap: 22px;
+    justify-items: center;
+    gap: 14px;
     min-width: 0;
+    text-align: center;
   }
 
   .score-ring {
@@ -3961,7 +4014,7 @@ onBeforeUnmount(() => {
   }
 
   .settlement-score__copy {
-    min-width: 0;
+    max-width: 420px;
 
     p {
       margin: 0;
@@ -3982,12 +4035,15 @@ onBeforeUnmount(() => {
   .score-meta {
     margin-top: 14px;
     color: var(--arena-mut);
+    justify-content: center;
   }
 
   .settlement-rewards {
     display: grid;
     gap: 8px;
-    align-content: center;
+    max-width: 380px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .settlement-reward-row {
@@ -4133,6 +4189,48 @@ onBeforeUnmount(() => {
     gap: 12px;
     margin-top: 12px;
   }
+
+  .report-deep-dive {
+    width: min(100%, 920px);
+    margin: 0 auto 16px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+
+    > summary {
+      padding: 14px 18px;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] > summary {
+      border-bottom: 1px solid var(--arena-line);
+      color: var(--arena-ink);
+    }
+  }
+
+  .report-deep-dive__body {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .report-deep-dive .analysis-grid,
+  .report-deep-dive .content-card {
+    width: 100%;
+    margin: 0;
+  }
+
+  .report-deep-dive .content-card__body {
+    padding: 20px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -4193,6 +4291,11 @@ onBeforeUnmount(() => {
 @media (max-width: 760px) {
   .arena-report {
     padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .report-top {
+      top: 16px;
+      right: 14px;
+    }
   }
 }
 </style>

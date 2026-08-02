@@ -226,9 +226,6 @@ describe('ArenaPrepareView', () => {
     const wrapper = mountPrepare()
     await flush()
 
-    const inputs = wrapper.findAll('.arena-prepare__jd-fields input')
-    await inputs[0].setValue('高级 Java 后端工程师')
-    await inputs[1].setValue('华辰数智')
     await wrapper.get('.arena-prepare__jd-textarea textarea').setValue(
       '负责高并发交易链路建设，熟悉 Java、Spring Boot、MySQL、Redis 和消息队列。'
     )
@@ -237,8 +234,7 @@ describe('ArenaPrepareView', () => {
     await nextTick()
 
     expect(jobTargetApi.create).toHaveBeenCalledWith(expect.objectContaining({
-      jobTitle: '高级 Java 后端工程师',
-      companyName: '华辰数智',
+      jobTitle: '目标岗位',
       jdText: expect.stringContaining('高并发交易链路')
     }))
     expect(jobTargetApi.parse).toHaveBeenCalledWith(12, { forceRefresh: true })

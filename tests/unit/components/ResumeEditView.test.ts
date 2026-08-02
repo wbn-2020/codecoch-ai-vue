@@ -257,7 +257,7 @@ describe('ResumeEditView', () => {
     expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*auto;/)
   })
 
-  it('switches to editor, preview, and advice panes at the tablet breakpoint while only the paper canvas scrolls', () => {
+  it('keeps editing and the A4 preview visible side by side at the tablet breakpoint while only the paper canvas scrolls', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
@@ -272,9 +272,9 @@ describe('ResumeEditView', () => {
     expect(paperRule).toMatch(/flex:\s*1\s+1\s+auto;/)
     expect(paperRule).toMatch(/overflow:\s*auto;/)
     expect(paperRule).toMatch(/scrollbar-gutter:\s*stable both-edges;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,[\s\S]*?display:\s*none;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.preview-column\s*\{[\s\S]*?height:\s*min\(780px, calc\(100dvh - 160px\)\);/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*none;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1\.2fr\)\s+minmax\(150px,\s*0\.8fr\);/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit\s*\{[\s\S]*?display:\s*grid;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.preview-column,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?display:\s*flex;/)
   })
 })

@@ -30,48 +30,50 @@ const componentStubs = {
   }
 }
 
-const abilityMapFixture = (hasTrainingData: boolean): AbilityMapVO => ({
+const abilityMapFixture = (hasTrainingData: boolean, domainCount = 1): AbilityMapVO => ({
   userId: 1,
-  totalSkillCount: 2,
-  assessedSkillCount: hasTrainingData ? 2 : 0,
+  totalSkillCount: domainCount * 2,
+  assessedSkillCount: hasTrainingData ? domainCount * 2 : 0,
   weakSkillCount: hasTrainingData ? 1 : 0,
   strongSkillCount: hasTrainingData ? 1 : 0,
   hasTrainingData,
-  domains: [
-    {
-      domainCode: 'JAVA_CORE',
-      domainName: 'Java 基础',
+  domains: Array.from({ length: domainCount }, (_, index) => {
+    const domainCode = `JAVA_CORE_${index + 1}`
+    const domainName = `Java 基础 ${index + 1}`
+    return {
+      domainCode,
+      domainName,
       totalCount: 2,
       assessedCount: hasTrainingData ? 2 : 0,
-      weakCount: hasTrainingData ? 1 : 0,
+      weakCount: hasTrainingData && index === 0 ? 1 : 0,
       skills: [
         {
-          code: 'COLLECTIONS',
-          name: '集合与数据结构',
-          domainCode: 'JAVA_CORE',
-          domainName: 'Java 基础',
+          code: `COLLECTIONS_${index + 1}`,
+          name: `集合与数据结构 ${index + 1}`,
+          domainCode,
+          domainName,
           description: '掌握集合选型与常见实现。',
-          status: hasTrainingData ? 'WEAK' : 'UNASSESSED',
+          status: hasTrainingData && index === 0 ? 'WEAK' : 'UNASSESSED',
           evidenceCount: hasTrainingData ? 2 : 0,
           confidence: hasTrainingData ? 'MEDIUM' : 'UNKNOWN'
         },
         {
-          code: 'JAVA_CORE',
-          name: 'Java 基础',
-          domainCode: 'JAVA_CORE',
-          domainName: 'Java 基础',
+          code: `JAVA_CORE_${index + 1}`,
+          name: `Java 基础 ${index + 1}`,
+          domainCode,
+          domainName,
           description: '掌握 Java 核心语言能力。',
-          status: hasTrainingData ? 'STRONG' : 'UNASSESSED',
+          status: hasTrainingData && index === 0 ? 'STRONG' : 'UNASSESSED',
           evidenceCount: hasTrainingData ? 3 : 0,
           confidence: hasTrainingData ? 'HIGH' : 'UNKNOWN'
         }
       ]
     }
-  ]
+  })
 })
 
-const mountAbilityMap = async (hasTrainingData: boolean) => {
-  vi.mocked(getAbilityMapApi).mockResolvedValue(abilityMapFixture(hasTrainingData))
+const mountAbilityMap = async (hasTrainingData: boolean, domainCount = 1) => {
+  vi.mocked(getAbilityMapApi).mockResolvedValue(abilityMapFixture(hasTrainingData, domainCount))
   const wrapper = mount(AbilityMapView, {
     global: {
       stubs: componentStubs
@@ -86,13 +88,22 @@ describe('AbilityMapView layout', () => {
     vi.clearAllMocks()
   })
 
-  it('uses the direction D skill-tree grid with a focused action rail', async () => {
+  it('uses the compact Direction D skill board and places the action rail within the visible grid', async () => {
     const wrapper = await mountAbilityMap(false)
 
+    expect(wrapper.find('.ability-summary').exists()).toBe(true)
     expect(wrapper.find('.ability-tree-layout').exists()).toBe(true)
-    expect(wrapper.find('.ability-tree-panel').exists()).toBe(true)
+    expect(wrapper.find('.ability-node-board').exists()).toBe(true)
     expect(wrapper.find('.ability-action-rail').exists()).toBe(true)
     expect(wrapper.findAll('.ability-node')).toHaveLength(2)
+  })
+
+  it('keeps every domain in the visual node board while retaining action and evidence cards', async () => {
+    const wrapper = await mountAbilityMap(true, 3)
+
+    expect(wrapper.findAll('.ability-node-board .ability-domain-card')).toHaveLength(3)
+    expect(wrapper.find('.ability-action-rail').exists()).toBe(true)
+    expect(wrapper.find('.ability-evidence-card').exists()).toBe(true)
   })
 
   it('keeps unassessed skills visually honest before training data exists', async () => {
@@ -111,9 +122,9 @@ describe('AbilityMapView layout', () => {
     expect(wrapper.find('.ability-evidence-card').exists()).toBe(true)
   })
 
-  it('keeps a tappable action route for each skill node', async () => {
+  it('keeps each skill node itself tappable for training', async () => {
     const wrapper = await mountAbilityMap(true)
-    const buttons = wrapper.findAll('.ability-node__action')
+    const buttons = wrapper.findAll('button.ability-node')
 
     expect(buttons).toHaveLength(2)
     await buttons[0].trigger('click')

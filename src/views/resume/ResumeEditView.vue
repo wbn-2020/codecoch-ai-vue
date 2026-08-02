@@ -319,62 +319,130 @@
                 <Layers3 :size="18" />
               </div>
               <div>
-                <h2>项目经历</h2>
-                <p>{{ isEdit ? '把背景、职责、难点和结果写成可证明的经历，后续可沉淀为项目证据。' : '创建简历时可先补项目草稿，保存后会自动挂到这份简历下。' }}</p>
+                <h2>{{ selectedInlineProject ? `项目经历 · ${selectedInlineProject.projectName}` : '项目经历' }}</h2>
+                <p>{{ isEdit ? '先补真实背景、技术决策和量化结果，右侧修改会实时同步到预览。' : '创建简历时可先补项目草稿，保存后会自动挂到这份简历下。' }}</p>
               </div>
             </div>
-            <el-button type="primary" @click="openProjectDialog()">
-              <Plus :size="16" />
-              {{ isEdit ? '新增项目' : '添加项目草稿' }}
-            </el-button>
+            <div class="project-header__actions">
+              <el-button v-if="selectedInlineProject" @click="openProjectDialog(selectedInlineProject)">
+                <FilePenLine :size="16" />
+                完整编辑
+              </el-button>
+              <el-button type="primary" @click="openProjectDialog()">
+                <Plus :size="16" />
+                {{ isEdit ? '新增项目' : '添加项目草稿' }}
+              </el-button>
+            </div>
           </div>
 
-          <section class="workshop-ai-rewrite">
-            <div>
-              <span>✦ AI 教练 · 改写建议</span>
-              <strong>{{ projects.length ? '给项目补一条量化结果' : '先补一段可被追问的项目经历' }}</strong>
-              <p>
-                {{ latestOptimizeRecord
-                  ? '已生成建议，采纳后会创建新草稿，不会覆盖当前版本。'
-                  : '先保存真实经历，再让 AI 协助压缩表达和补足量化结果。' }}
-              </p>
+          <template v-if="selectedInlineProject">
+            <div class="project-switcher" role="tablist" aria-label="选择项目经历">
+              <button
+                v-for="project in projects"
+                :key="project.projectId"
+                type="button"
+                role="tab"
+                :aria-selected="selectedInlineProject.projectId === project.projectId"
+                :class="{ active: selectedInlineProject.projectId === project.projectId }"
+                @click="selectInlineProject(project.projectId)"
+              >
+                <span>{{ project.projectName }}</span>
+                <small>{{ project.projectTime || project.projectPeriod || '未填写项目时间' }}</small>
+              </button>
             </div>
-            <el-button
-              v-if="isEdit && resumeId"
-              type="primary"
-              :loading="optimizing"
-              @click="handleOptimizeResume"
-            >
-              <Sparkles :size="16" />
-              生成建议
-            </el-button>
-            <el-button v-else type="primary" :loading="saving" @click="handleSave">
-              <Save :size="16" />
-              保存后生成
-            </el-button>
-          </section>
 
-          <div class="project-list">
-            <div v-if="projects.length === 0" class="project-empty">
+            <el-form class="inline-project-editor" label-position="top">
+              <div class="inline-project-editor__meta">
+                <el-form-item label="项目名称">
+                  <el-input v-model.trim="selectedInlineProject.projectName" placeholder="例如：招聘平台简历解析服务" />
+                </el-form-item>
+                <el-form-item label="项目时间">
+                  <el-input v-model.trim="selectedInlineProject.projectTime" placeholder="例如：2024.03 - 2024.08" />
+                </el-form-item>
+              </div>
+
+              <el-form-item label="背景">
+                <el-input
+                  v-model="selectedInlineProject.projectBackground"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="说明业务场景、规模和系统边界"
+                />
+              </el-form-item>
+              <el-form-item label="技术决策">
+                <el-input
+                  v-model="selectedInlineProject.technicalChallenges"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="说明为什么这样设计、关键方案和取舍"
+                />
+              </el-form-item>
+              <el-form-item class="inline-project-editor__result" label="量化结果">
+                <el-input
+                  v-model="selectedInlineProject.optimizationResult"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="用性能、效率、稳定性、成本或业务指标证明结果"
+                />
+              </el-form-item>
+            </el-form>
+
+            <div class="inline-project-skills">
+              <span>技术栈</span>
+              <div>
+                <el-tag
+                  v-for="tag in inlineProjectTechTags"
+                  :key="tag"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ tag }}
+                </el-tag>
+                <el-button text size="small" @click="openProjectDialog(selectedInlineProject)">
+                  {{ inlineProjectTechTags.length ? '编辑技术栈' : '添加技术栈' }}
+                </el-button>
+              </div>
+            </div>
+
+            <section class="workshop-ai-rewrite">
+              <div>
+                <span>✦ AI 教练 · 改写建议</span>
+                <strong>{{ latestOptimizeRecord ? '已生成建议，先核对事实再采纳' : '把结果写成可被验证的证据' }}</strong>
+                <p class="workshop-ai-rewrite__before">「{{ inlineProjectOriginalStatement }}」</p>
+                <p class="workshop-ai-rewrite__after">{{ inlineProjectSuggestedStatement }}</p>
+              </div>
+              <div class="workshop-ai-rewrite__actions">
+                <el-button
+                  v-if="isEdit && resumeId"
+                  type="primary"
+                  :loading="optimizing"
+                  @click="handleOptimizeResume"
+                >
+                  <Sparkles :size="16" />
+                  {{ latestOptimizeRecord ? '查看建议' : '生成建议' }}
+                </el-button>
+                <el-button v-else type="primary" :loading="saving" @click="handleSave">
+                  <Save :size="16" />
+                  保存后生成
+                </el-button>
+                <el-button :loading="projectSaving" @click="handleSaveInlineProject">
+                  <Save :size="16" />
+                  保存项目
+                </el-button>
+              </div>
+            </section>
+          </template>
+
+          <div v-else class="project-list">
+            <div class="project-empty">
               <FolderOpen :size="30" />
               <h3>暂无项目经历</h3>
               <p>{{ isEdit ? '项目经历会帮助面试创建页构建更完整的简历上下文。' : '建议至少补一个能讲清背景、职责、技术难点和结果的项目。' }}</p>
+              <el-button type="primary" @click="openProjectDialog()">
+                <Plus :size="16" />
+                添加项目经历
+              </el-button>
             </div>
-            <article v-for="project in projects" v-else :key="project.projectId" class="project-card">
-              <div class="project-card__main">
-                <div class="project-card__top">
-                  <h3>{{ project.projectName }}</h3>
-                  <span>{{ project.projectTime || project.projectPeriod || '未填写项目时间' }}</span>
-                </div>
-                <p class="project-meta">{{ project.techStack || '未填写技术栈' }}</p>
-                <p class="project-desc">{{ project.projectBackground || project.description || '暂无项目背景' }}</p>
-              </div>
-              <div class="project-actions">
-                <el-button type="primary" plain @click="openProjectEvidenceCreate(project)">补项目证据</el-button>
-                <el-button @click="openProjectDialog(project)">编辑</el-button>
-                <el-button type="danger" plain @click="handleDeleteProject(project)">删除</el-button>
-              </div>
-            </article>
           </div>
         </section>
       </main>
@@ -391,7 +459,7 @@
               <h2>📄 实时预览 · {{ selectedResumeTemplateLabel }}</h2>
               <p>当前填写内容会同步到纸张预览。</p>
             </div>
-            <span class="resume-preview-page-chip">A4 · 1 页</span>
+            <span class="resume-preview-page-chip">A4 · 自动分页</span>
           </div>
 
           <div class="resume-paper-wrap">
@@ -403,6 +471,14 @@
                 :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
               />
             </div>
+          </div>
+          <div class="resume-preview-actions">
+            <el-button @click="openPdfExport">
+              导出 PDF
+            </el-button>
+            <el-button @click="enlargePreview">
+              放大检查
+            </el-button>
           </div>
         </section>
       </Teleport>
@@ -650,9 +726,10 @@
       </Teleport>
     </div>
 
-    <details v-if="isEdit" class="resume-delivery-details">
+    <details v-if="isEdit" ref="deliveryWorkbenchDetails" class="resume-delivery-details">
       <summary>投递级简历工作台</summary>
       <ResumeDeliveryWorkbench
+        ref="deliveryWorkbenchRef"
         :resume-id="resumeId || undefined"
         :preferred-template-code="selectedResumeTemplateCode"
         :refresh-key="deliveryRefreshKey"
@@ -766,6 +843,9 @@ const projectDialogVisible = ref(false)
 const editingProjectId = ref<number | null>(null)
 const editingProject = ref<ResumeProjectVO | null>(null)
 const projects = ref<ResumeProjectVO[]>([])
+const selectedInlineProjectId = ref<number | null>(null)
+const deliveryWorkbenchDetails = ref<HTMLDetailsElement>()
+const deliveryWorkbenchRef = ref<InstanceType<typeof ResumeDeliveryWorkbench>>()
 const optimizeRecords = ref<ResumeOptimizeRecordVO[]>([])
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 const selectedOptimizeSuggestionIndexes = ref<number[]>([])
@@ -949,6 +1029,29 @@ const splitTextTags = (value?: string) =>
     .filter(Boolean)
 
 const skillTags = computed(() => splitTextTags(form.skills).slice(0, 18))
+const selectedInlineProject = computed(() => {
+  const projectId = selectedInlineProjectId.value
+  return projects.value.find((project) => project.projectId === projectId) || projects.value[0] || null
+})
+const inlineProjectTechTags = computed(() =>
+  splitTextTags(selectedInlineProject.value?.techStack).slice(0, 8)
+)
+const inlineProjectOriginalStatement = computed(() => {
+  const project = selectedInlineProject.value
+  return project?.responsibility ||
+    project?.coreFeatures ||
+    project?.technicalChallenges ||
+    project?.technicalDifficulties ||
+    project?.projectBackground ||
+    project?.description ||
+    '先补一条真实的项目职责或技术决策'
+})
+const inlineProjectSuggestedStatement = computed(() => {
+  const project = selectedInlineProject.value
+  return project?.optimizationResult ||
+    project?.optimizationResults ||
+    '保存真实项目内容后，可生成一条需要人工核实的量化表达建议。'
+})
 
 const hasPreviewContent = computed(() =>
   Boolean(
@@ -1138,7 +1241,7 @@ const focusSection = (sectionId: string) => {
 const liveFeedbackItems = computed(() => [
   {
     label: '实时预览',
-    title: hasPreviewContent.value ? '右侧 A4 已同步当前填写内容' : '先写姓名、岗位或项目，右侧会生成纸张预览',
+    title: hasPreviewContent.value ? '中间 A4 已同步当前填写内容' : '先写姓名、岗位或项目，中间会生成纸张预览',
     desc: hasPreviewContent.value ? '预览只来自当前真实字段，不会补造经历。' : '不需要等保存，编辑区改动会直接反映到预览。',
     tone: hasPreviewContent.value ? 'is-good' : 'is-waiting'
   },
@@ -1331,7 +1434,8 @@ const fetchDetail = async (targetResumeId: number, requestGeneration: number) =>
     const nextDetail = await getResumeDetailApi(targetResumeId)
     if (requestGeneration !== resumeLoadGeneration) return
     applyDetail(nextDetail)
-    await fetchOptimizeRecords(targetResumeId, requestGeneration)
+    // AI 优化记录属于增强信息，不能阻塞简历编辑和实时预览进入可用状态。
+    void fetchOptimizeRecords(targetResumeId, requestGeneration)
   } catch (error) {
     if (requestGeneration === resumeLoadGeneration) {
       detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历实验室重试。')
@@ -1641,6 +1745,94 @@ const openProjectDialog = (project?: ResumeProjectVO) => {
   editingProjectId.value = project?.projectId || null
   editingProject.value = project || null
   projectDialogVisible.value = true
+}
+
+const selectInlineProject = (projectId: number) => {
+  selectedInlineProjectId.value = projectId
+}
+
+const toProjectPayload = (project: ResumeProjectVO): ResumeProjectDTO => ({
+  projectName: project.projectName.trim(),
+  projectTime: project.projectTime || project.projectPeriod || '',
+  projectPeriod: project.projectPeriod || project.projectTime || '',
+  projectBackground: project.projectBackground || project.description || '',
+  description: project.description || project.projectBackground || '',
+  techStack: project.techStack || '',
+  responsibility: project.responsibility || project.role || '',
+  role: project.role || project.responsibility || '',
+  coreFeatures: project.coreFeatures || '',
+  highlights: project.highlights || '',
+  technicalChallenges: project.technicalChallenges || project.technicalDifficulties || '',
+  technicalDifficulties: project.technicalDifficulties || project.technicalChallenges || '',
+  optimizationResult: project.optimizationResult || project.optimizationResults || '',
+  optimizationResults: project.optimizationResults || project.optimizationResult || '',
+  extraInfo: project.extraInfo || '',
+  sort: project.sort ?? project.sortOrder ?? 0,
+  sortOrder: project.sortOrder ?? project.sort ?? 0
+})
+
+const handleSaveInlineProject = async () => {
+  const project = selectedInlineProject.value
+  if (!project || projectSaving.value) return
+  if (!project.projectName.trim()) {
+    ElMessage.warning('请先填写项目名称')
+    return
+  }
+
+  const operationGeneration = ++projectWriteOperationGeneration
+  const requestGeneration = resumeLoadGeneration
+  const targetResumeId = resumeId.value
+  const targetProjectId = project.projectId
+  const projectPayload = toProjectPayload(project)
+  const isCurrentOperation = () => (
+    operationGeneration === projectWriteOperationGeneration
+    && isCurrentResumeRoute(requestGeneration, targetResumeId)
+  )
+
+  projectSaving.value = true
+  try {
+    if (!targetResumeId || targetProjectId < 0) {
+      projects.value = projects.value.map((item) => (
+        item.projectId === targetProjectId ? toProjectDraft(projectPayload, targetProjectId) : item
+      ))
+      ElMessage.success('项目草稿已更新，保存简历后会一起创建')
+      return
+    }
+
+    await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
+    if (!isCurrentOperation()) return
+    ElMessage.success('项目经历已保存')
+    await reloadCurrentResume()
+  } catch (err) {
+    if (isCurrentOperation()) {
+      ElMessage.error(getErrorMessage(err, '项目经历保存失败，请检查必填项后重试'))
+    }
+  } finally {
+    if (operationGeneration === projectWriteOperationGeneration) {
+      projectSaving.value = false
+    }
+  }
+}
+
+const openPdfExport = async () => {
+  if (!isEdit.value || !resumeId.value) {
+    ElMessage.warning('请先保存简历，再导出稳定版本的 PDF')
+    return
+  }
+  if (hasUnsavedResumeChanges.value) {
+    ElMessage.warning('当前有未保存改动，请先保存简历再导出 PDF')
+    return
+  }
+  deliveryWorkbenchDetails.value?.setAttribute('open', '')
+  await nextTick()
+  await deliveryWorkbenchRef.value?.createExport('PDF')
+}
+
+const enlargePreview = async () => {
+  previewZoom.value = Math.min(1.12, Math.max(previewZoom.value, 1))
+  mobileWorkspaceTab.value = 'preview'
+  await nextTick()
+  document.getElementById('resume-panel-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const openProjectEvidenceCreate = (project: ResumeProjectVO) => {
@@ -3481,8 +3673,9 @@ onBeforeUnmount(() => {
 // 方向 D 1:1 简历工坊。旧的工作台样式保留给业务表单与弹窗，
 // 这里以原型的 modules / preview / editor 网格接管页面构图。
 .arena-resume-studio {
-  width: min(1060px, 100%);
-  padding: 28px 34px 42px;
+  width: min(1320px, calc(100% - 64px));
+  margin-inline: auto !important;
+  padding: 28px 0 42px;
   gap: 18px;
 
   .resume-workshop-hero {
@@ -3693,8 +3886,8 @@ onBeforeUnmount(() => {
   }
 
   .editor-workspace {
-    grid-template-columns: 200px 360px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: minmax(180px, 0.72fr) minmax(390px, 1.15fr) minmax(440px, 1.28fr);
+    gap: 22px;
     align-items: start;
   }
 
@@ -3885,6 +4078,136 @@ onBeforeUnmount(() => {
     border-radius: var(--arena-radius-btn);
   }
 
+  .project-header__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .project-switcher {
+    display: flex;
+    gap: 8px;
+    margin: 2px 0 14px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .project-switcher button {
+    display: grid;
+    flex: 0 0 min(190px, 48%);
+    gap: 3px;
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--arena-sub);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 160ms ease, background-color 160ms ease;
+
+    span,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span {
+      color: var(--arena-ink);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    small {
+      color: var(--arena-mut);
+      font-size: 10.5px;
+      line-height: 1.35;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--arena-grn);
+      outline: 0;
+    }
+
+    &.active {
+      border-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
+    }
+  }
+
+  .inline-project-editor {
+    display: grid;
+    gap: 12px;
+  }
+
+  .inline-project-editor :deep(.el-form-item) {
+    margin: 0;
+  }
+
+  .inline-project-editor :deep(.el-form-item__label) {
+    padding-bottom: 6px;
+    color: var(--arena-sub);
+    font-size: 11.5px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .inline-project-editor :deep(.el-textarea__inner) {
+    min-height: 0 !important;
+    border-color: var(--arena-line);
+    border-radius: 10px;
+    color: var(--arena-ink);
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  .inline-project-editor__meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(128px, 0.7fr);
+    gap: 12px;
+  }
+
+  .inline-project-editor__result :deep(.el-textarea__inner) {
+    border-color: var(--arena-amber);
+    background: #fffdf7;
+  }
+
+  .inline-project-skills {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    margin: 12px 0 0;
+  }
+
+  .inline-project-skills > span {
+    padding-top: 5px;
+    color: var(--arena-sub);
+    font-size: 11.5px;
+    font-weight: 800;
+  }
+
+  .inline-project-skills > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .inline-project-skills :deep(.el-tag) {
+    max-width: 100%;
+    border-color: #b9e7cd;
+    border-radius: 999px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-weight: 700;
+  }
+
   .workshop-ai-rewrite {
     display: flex;
     align-items: flex-start;
@@ -3921,6 +4244,22 @@ onBeforeUnmount(() => {
     line-height: 1.55;
   }
 
+  .workshop-ai-rewrite__before {
+    color: var(--arena-mut) !important;
+  }
+
+  .workshop-ai-rewrite__after {
+    color: var(--arena-ink) !important;
+    font-weight: 700;
+  }
+
+  .workshop-ai-rewrite > .workshop-ai-rewrite__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .workshop-ai-rewrite :deep(.el-button) {
     flex: 0 0 auto;
     min-height: 38px;
@@ -3930,6 +4269,35 @@ onBeforeUnmount(() => {
 
   .project-list {
     flex: 1;
+  }
+
+  .project-empty :deep(.el-button) {
+    margin-top: 6px;
+    border-radius: var(--arena-radius-btn);
+  }
+
+  .resume-preview-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .resume-preview-actions :deep(.el-button) {
+    min-height: 38px;
+    margin: 0;
+    border-color: var(--arena-line);
+    border-radius: var(--arena-radius-btn);
+    background: #ffffff;
+    color: var(--arena-sub);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .resume-preview-actions :deep(.el-button:hover),
+  .resume-preview-actions :deep(.el-button:focus-visible) {
+    border-color: var(--arena-grn);
+    color: var(--arena-grn-d);
   }
 
   .project-card {
@@ -3975,24 +4343,37 @@ onBeforeUnmount(() => {
 @media (max-width: 1020px) {
   .arena-resume-studio {
     .editor-workspace {
-      display: block;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(150px, 0.8fr);
+      gap: 14px;
+      align-items: start;
     }
 
     .editor-aside {
       display: none;
     }
 
-    .mobile-pane-edit,
-    .mobile-pane-preview {
+    .workspace-tabs {
       display: none;
     }
 
-    .is-mobile-edit .mobile-pane-edit {
+    .editor-main {
+      display: grid;
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .mobile-pane-edit {
       display: grid;
     }
 
-    .is-mobile-preview .mobile-pane-preview {
+    .preview-column,
+    .mobile-pane-preview {
+      grid-column: 2;
+      grid-row: 1;
       display: flex;
+      height: auto;
+      max-height: none;
     }
 
     .resume-template-strip .template-selector {
@@ -4048,29 +4429,7 @@ onBeforeUnmount(() => {
     }
 
     .workspace-tabs {
-      display: flex;
-      position: sticky;
-      top: 54px;
-      z-index: 10;
-      padding: 4px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(6px);
-    }
-
-    .workspace-tabs button {
-      min-width: 0;
-      min-height: 38px;
-      border-radius: 8px;
-      color: var(--arena-sub);
-      font-size: 12px;
-      font-weight: 800;
-
-      &.active {
-        background: var(--arena-grn-soft);
-        color: var(--arena-grn-d);
-      }
+      display: none;
     }
 
     .resume-template-strip {
@@ -4098,6 +4457,51 @@ onBeforeUnmount(() => {
       transform-origin: top left;
     }
 
+    .editor-workspace {
+      grid-template-columns: minmax(0, 1.22fr) minmax(132px, 0.78fr);
+      gap: 10px;
+    }
+
+    .preview-column {
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .preview-toolbar {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 8px;
+
+      h2 {
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
+      p {
+        display: none;
+      }
+    }
+
+    .resume-preview-page-chip {
+      justify-self: start;
+      padding: 3px 6px;
+      font-size: 9px;
+    }
+
+    .resume-preview-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .resume-preview-actions :deep(.el-button) {
+      min-height: 34px;
+      padding-inline: 6px;
+      font-size: 10px;
+      white-space: normal;
+    }
+
     .editor-main > .edit-card,
     .editor-main > .project-section {
       min-height: 0;
@@ -4108,8 +4512,12 @@ onBeforeUnmount(() => {
       gap: 10px;
     }
 
-    .project-section .project-header :deep(.el-button) {
+    .project-header__actions {
       width: 100%;
+    }
+
+    .project-header__actions :deep(.el-button) {
+      flex: 1 1 0;
     }
 
     .workshop-ai-rewrite {
@@ -4117,8 +4525,25 @@ onBeforeUnmount(() => {
       gap: 10px;
     }
 
-    .workshop-ai-rewrite :deep(.el-button) {
+    .workshop-ai-rewrite > .workshop-ai-rewrite__actions {
       width: 100%;
+    }
+
+    .workshop-ai-rewrite__actions :deep(.el-button) {
+      flex: 1 1 0;
+    }
+
+    .inline-project-editor__meta,
+    .inline-project-skills {
+      grid-template-columns: 1fr;
+    }
+
+    .inline-project-skills > span {
+      padding-top: 0;
+    }
+
+    .resume-preview-actions {
+      gap: 8px;
     }
   }
 }

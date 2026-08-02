@@ -1,327 +1,87 @@
 <template>
   <div class="arena arena-practice practice-session-page page-shell">
-    <section v-if="!practicing && !finished" class="session-hero">
-      <div>
-        <div class="eyebrow">
-          <Dumbbell :size="16" />
-          专项训练房间
-        </div>
-        <h1>{{ heroTitle }}</h1>
-        <p>{{ heroSubtitle }}</p>
+    <section v-if="!practicing && !finished" class="practice-ready">
+      <div class="practice-ready__head">
+        <span class="arena-kicker">答题间</span>
+        <span class="arena-xp-tag">+18 / 题</span>
       </div>
-      <div class="hero-actions">
-        <el-button @click="router.push('/questions/recommendations')">
-          <BookOpenCheck :size="16" />
-          推荐题
-        </el-button>
-        <el-button @click="router.push('/questions/wrong-records')">
-          <RotateCcw :size="16" />
-          错题本
-        </el-button>
+      <h1>开始一组训练</h1>
+      <p>{{ heroSubtitle }}</p>
+      <div class="practice-ready__actions">
+        <el-button @click="router.push('/questions/recommendations')">回推荐题组</el-button>
+        <el-button type="primary" size="large" :loading="loadingQuestions" @click="startPractice"><Play :size="16" /> 开始本轮训练</el-button>
       </div>
-    </section>
-
-    <section v-if="!practicing && !finished" class="practice-setup content-card">
-      <div class="content-card__body">
-        <div class="section-head">
-          <div>
-            <span class="section-label">下一场训练</span>
-            <h2>选一个短板，开始答题</h2>
-            <p>推荐题和错题会优先接住你最近的真实训练线索；答完后直接进入点评与复盘。</p>
-          </div>
-          <span class="setup-xp">每题最高 +18 XP</span>
-        </div>
-
-        <div class="mode-grid">
-          <button
-            v-for="mode in modeOptions"
-            :key="mode.value"
-            class="mode-card"
-            :class="{ 'is-active': config.mode === mode.value }"
-            type="button"
-            @click="setMode(mode.value)"
-          >
-            <component :is="mode.icon" :size="18" />
-            <strong>{{ mode.label }}</strong>
-            <span>{{ mode.desc }}</span>
+      <details class="practice-ready__settings">
+        <summary>训练设置与题源</summary>
+        <div class="practice-mode-list">
+          <button v-for="mode in modeOptions" :key="mode.value" type="button" :class="{ 'is-active': config.mode === mode.value }" @click="setMode(mode.value)">
+            <component :is="mode.icon" :size="15" /><span><b>{{ mode.label }}</b>{{ mode.desc }}</span>
           </button>
         </div>
-
-        <details class="setup-details">
-          <summary>
-            <span>训练设置与推荐依据</span>
-            <strong>{{ config.count }} 题 · {{ config.difficulty ? difficultyLabel(config.difficulty) : '不限难度' }}</strong>
-          </summary>
-          <div class="setup-details__body">
-            <el-form label-position="top">
-              <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词">
-                <el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable />
-              </el-form-item>
-              <el-form-item label="题目数量">
-                <el-input-number v-model="config.count" :min="1" :max="30" />
-              </el-form-item>
-              <el-form-item label="难度">
-                <el-select v-model="config.difficulty" clearable placeholder="不限">
-                  <el-option label="简单" value="EASY" />
-                  <el-option label="中等" value="MEDIUM" />
-                  <el-option label="困难" value="HARD" />
-                </el-select>
-              </el-form-item>
-            </el-form>
-
-            <div v-if="routeQuestionIds.length" class="route-context">
-              <Target :size="16" />
-              <span>已接收 {{ routeQuestionIds.length }} 道推荐题</span>
-            </div>
-            <div v-if="hasRouteSourceContext" class="source-trust-box">
-              <div>
-                <span>{{ routeSourceLabel }}</span>
-                <el-tag :type="routeTrustType" effect="plain">{{ routeTrustLabel }}</el-tag>
-              </div>
-              <p>{{ routeEvidenceSummary || routeRecommendReason || routeTrustBoundary }}</p>
-              <small v-if="routeEvidenceSummary || routeRecommendReason">{{ routeTrustBoundary }}</small>
-            </div>
-            <div v-if="routeRecommendReason" class="reason-note">
-              {{ routeRecommendReason }}
-            </div>
-          </div>
-        </details>
-
-        <AppState v-if="loadError" class="setup-error" type="error" title="题目加载失败" :description="loadError" />
-        <el-alert
-          v-if="partialLoadWarning && !loadError"
-          class="setup-warning"
-          type="warning"
-          :title="partialLoadWarning"
-          :closable="false"
-          show-icon
-        />
-
-        <div class="setup-footer">
-          <span>训练完成后可继续查看错题、收藏和能力图谱。</span>
-          <el-button type="primary" size="large" :loading="loadingQuestions" @click="startPractice">
-            <Play :size="16" />
-            开始本轮训练
-          </el-button>
-        </div>
-      </div>
+        <el-form label-position="top">
+          <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词"><el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable /></el-form-item>
+          <el-form-item label="题目数量"><el-input-number v-model="config.count" :min="1" :max="30" /></el-form-item>
+          <el-form-item label="难度"><el-select v-model="config.difficulty" clearable placeholder="不限"><el-option label="简单" value="EASY" /><el-option label="中等" value="MEDIUM" /><el-option label="困难" value="HARD" /></el-select></el-form-item>
+        </el-form>
+        <p v-if="routeQuestionIds.length" class="practice-ready__context">已接收 {{ routeQuestionIds.length }} 道推荐题</p>
+        <p v-if="hasRouteSourceContext" class="practice-ready__context">{{ routeSourceLabel }} · {{ routeTrustLabel }} · {{ routeEvidenceSummary || routeRecommendReason || routeTrustBoundary }}</p>
+      </details>
+      <AppState v-if="loadError" type="error" title="题目加载失败" :description="loadError" />
+      <el-alert v-if="partialLoadWarning && !loadError" type="warning" :title="partialLoadWarning" :closable="false" show-icon />
     </section>
 
-    <section v-if="practicing" class="practice-workspace">
+    <section v-if="practicing" class="practice-stage">
       <header class="practice-progress">
         <div class="practice-progress__head">
-          <div class="practice-progress__identity">
-            <el-button class="practice-progress__exit" plain @click="finishPractice">退出</el-button>
-            <strong>{{ currentModeLabel }}</strong>
-          </div>
+          <div class="practice-progress__identity"><el-button class="practice-progress__exit" plain @click="finishPractice">‹ 退出</el-button><strong>{{ currentModeLabel }}</strong></div>
           <span class="practice-progress__count">第 {{ currentIndex + 1 }} / {{ questions.length }} 题</span>
         </div>
         <el-progress :percentage="progressPercent" :show-text="false" />
       </header>
 
-      <div class="active-grid">
-        <main class="content-card question-panel">
-          <div v-if="currentQuestion" class="content-card__body">
-            <div class="current-question-head">
-              <span>当前题</span>
-              <strong>{{ answered ? '已提交，进入点评复盘' : '先用自己的语言回答' }}</strong>
-            </div>
-            <div class="question-meta">
-              <el-tag effect="plain">{{ difficultyLabel(currentQuestion.difficulty) }}</el-tag>
-              <el-tag v-if="currentQuestion.categoryName" effect="plain" type="info">
-                {{ currentQuestion.categoryName }}
-              </el-tag>
-              <el-tag v-for="tag in currentTags" :key="tag" effect="plain">{{ tag }}</el-tag>
-            </div>
-            <h2>{{ currentQuestion.title }}</h2>
-            <div class="question-content">
-              <MarkdownPreview :content="currentQuestionPrompt" />
-            </div>
+      <main v-if="currentQuestion" class="practice-question-card">
+        <div class="practice-question-card__meta"><span class="arena-chip arena-chip--grn">{{ difficultyLabel(currentQuestion.difficulty) }}</span><span>建议 3 分钟</span></div>
+        <h2>{{ currentQuestion.title }}</h2>
+        <MarkdownPreview
+          v-if="shouldShowCurrentQuestionPrompt"
+          class="practice-question-card__prompt"
+          :content="currentQuestionPrompt"
+        />
 
-            <div v-if="!answered" class="answer-area">
-              <el-input
-                v-model="userAnswer"
-                type="textarea"
-                :rows="7"
-                maxlength="5000"
-                show-word-limit
-                placeholder="按真实面试口径组织回答：场景、方案、权衡、项目指标。"
-                :disabled="submitting"
-              />
-              <div class="answer-actions">
-                <el-button class="answer-actions__skip" :disabled="submitting" @click="skipQuestion">
-                  跳过 · 不记分
-                </el-button>
-                <div class="answer-actions__submit">
-                  <span>答对 +18 XP</span>
-                  <el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer">
-                    <Send :size="16" />
-                    提交答案
-                  </el-button>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="result-area">
-              <div class="review-stage-head">
-                <span>AI 点评与复盘</span>
-                <strong>{{ isLastQuestion ? '复盘完这题即可查看完成结果' : '复盘完这题再进入下一题' }}</strong>
-              </div>
-              <el-alert
-                :type="lastResult?.isCorrect ? 'success' : 'warning'"
-                show-icon
-                :closable="false"
-                :title="lastResult?.isCorrect ? '回答通过' : '需要补强'"
-                :description="resultDescription"
-              />
-              <div class="coverage-list">
-                <article v-for="item in answerCoverageItems" :key="item.title" :class="{ done: item.done }">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.done ? '已覆盖' : item.hint }}</span>
-                </article>
-              </div>
-              <div class="review-grid">
-                <section>
-                  <h3>参考答案</h3>
-                  <MarkdownPreview :content="referenceAnswerText" />
-                </section>
-                <section>
-                  <h3>AI 点评与解析</h3>
-                  <MarkdownPreview :content="analysisText" />
-                </section>
-              </div>
-              <div class="result-actions">
-                <el-button type="primary" @click="nextQuestion">
-                  {{ isLastQuestion ? '查看结果' : '下一题' }}
-                  <ArrowRight :size="16" />
-                </el-button>
-                <el-button-group>
-                  <el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.MASTERED ? 'success' : ''" @click="markMastery(MASTERY_STATUS.MASTERED)">已掌握</el-button>
-                  <el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.VAGUE ? 'warning' : ''" @click="markMastery(MASTERY_STATUS.VAGUE)">模糊</el-button>
-                  <el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.UNKNOWN ? 'danger' : ''" @click="markMastery(MASTERY_STATUS.UNKNOWN)">未掌握</el-button>
-                </el-button-group>
-              </div>
-            </div>
+        <template v-if="!answered">
+          <el-input v-model="userAnswer" class="practice-answer-input" type="textarea" :rows="7" maxlength="5000" show-word-limit placeholder="按你的真实排查思路写，AI 会对照评分点给反馈…" :disabled="submitting" />
+          <div class="practice-answer-actions">
+            <el-button class="practice-answer-actions__skip" :disabled="submitting" @click="skipQuestion">跳过 · 不记分</el-button>
+            <div><span>答对 +18 XP</span><el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer"><Send :size="16" /> 提交答案 ✓</el-button></div>
           </div>
-        </main>
+        </template>
 
-        <aside class="side-stack">
-          <section class="content-card">
-            <div class="content-card__body">
-              <div class="side-title">
-                <Brain :size="17" />
-                <h2>答题结构</h2>
-              </div>
-              <ul class="coach-list">
-                <li>先定义问题边界，不直接背结论。</li>
-                <li>给出方案后说明取舍和失败场景。</li>
-                <li>最后补项目指标、监控或上线效果。</li>
-              </ul>
-            </div>
-          </section>
-          <section class="content-card">
-            <div class="content-card__body">
-              <div class="side-title">
-                <Target :size="17" />
-                <h2>本轮来源</h2>
-              </div>
-              <p class="side-muted">{{ sourceText }}</p>
-            </div>
-          </section>
-          <section class="content-card">
-            <div class="content-card__body">
-              <div class="side-title">
-                <BookOpenCheck :size="17" />
-                <h2>复盘提示</h2>
-              </div>
-              <p class="side-muted">
-                {{ answered ? '先看点评和参考答案，再标记掌握状态。没有数据时只展示可用内容，不生成虚假的训练结论。' : '参考答案会在提交后进入复盘区，先完成自己的回答。' }}
-              </p>
-            </div>
-          </section>
-        </aside>
+        <section v-else class="practice-review">
+          <el-alert :type="lastResult?.isCorrect ? 'success' : 'warning'" show-icon :closable="false" :title="lastResult?.isCorrect ? '回答通过' : '需要补强'" :description="resultDescription" />
+          <div class="practice-review__coverage">
+            <span v-for="item in answerCoverageItems" :key="item.title" :class="{ 'is-done': item.done }">{{ item.title }}：{{ item.done ? '已覆盖' : item.hint }}</span>
+          </div>
+          <details><summary>查看参考答案与 AI 点评</summary><div class="practice-review__detail"><section><h3>参考答案</h3><MarkdownPreview :content="referenceAnswerText" /></section><section><h3>AI 点评与解析</h3><MarkdownPreview :content="analysisText" /></section></div></details>
+          <div class="practice-review__actions">
+            <el-button type="primary" @click="nextQuestion">{{ isLastQuestion ? '查看结果' : '下一题' }} <ArrowRight :size="16" /></el-button>
+            <el-button-group><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.MASTERED ? 'success' : ''" @click="markMastery(MASTERY_STATUS.MASTERED)">已掌握</el-button><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.VAGUE ? 'warning' : ''" @click="markMastery(MASTERY_STATUS.VAGUE)">模糊</el-button><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.UNKNOWN ? 'danger' : ''" @click="markMastery(MASTERY_STATUS.UNKNOWN)">未掌握</el-button></el-button-group>
+          </div>
+        </section>
+      </main>
+      <AppState v-else type="empty" title="当前没有可作答的题目" description="请重新加载，或返回推荐题组。" />
+
+      <div class="practice-support-grid">
+        <section class="practice-support-card practice-support-card--ai"><div><span>✦ AI 骨架</span><b>评分点提示（可关）</b></div><p>{{ answered ? '已生成点评，展开当前题中的复盘即可查看。' : '① 先给结论 ② 说明排查路径 ③ 补充对象来源 ④ 给出修复与验证。' }}</p></section>
+        <section class="practice-support-card"><b>📎 可引用项目证据</b><p>{{ sourceText }}</p></section>
       </div>
     </section>
 
-    <section v-if="finished" class="content-card practice-result">
-      <div class="content-card__body">
-        <div class="section-head">
-          <div>
-            <h2>本轮训练完成</h2>
-            <p>{{ completionInsight }}</p>
-          </div>
-        </div>
-        <div class="result-stats">
-          <div class="stat-card">
-            <span>总题数</span>
-            <strong>{{ questions.length }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>已答</span>
-            <strong>{{ answeredCount }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>正确</span>
-            <strong>{{ correctCount }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>跳过</span>
-            <strong>{{ skippedCount }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>正确率</span>
-            <strong>{{ accuracyText }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>用时</span>
-            <strong>{{ elapsedText }}</strong>
-          </div>
-        </div>
-        <el-alert
-          v-if="lastResult?.agentTaskCompleted"
-          class="agent-sync-alert"
-          type="success"
-          :closable="false"
-          show-icon
-        >
-          <template #title>
-            今日计划已同步记录
-          </template>
-          <p>{{ lastResult.agentTaskTitle || '本轮题库训练已进入今日计划记录。' }}</p>
-        </el-alert>
-        <div class="result-next-grid">
-          <article>
-            <span>错题复盘</span>
-            <p>把没有答稳的题变成下一轮重点。</p>
-            <el-button @click="router.push('/questions/wrong-records')">进入错题复盘</el-button>
-          </article>
-          <article>
-            <span>收藏复习</span>
-            <p>复盘高价值题，沉淀稳定表达。</p>
-            <el-button @click="router.push('/questions/favorites')">查看收藏题</el-button>
-          </article>
-          <article>
-            <span>能力图谱</span>
-            <p>查看已有训练数据是否形成能力证据。</p>
-            <el-button @click="router.push('/ability-map')">查看能力图谱</el-button>
-          </article>
-          <article>
-            <span>模拟面试</span>
-            <p>把刚练过的表达带入下一场面试。</p>
-            <el-button type="primary" @click="router.push('/interviews/create')">进入模拟面试</el-button>
-          </article>
-        </div>
-        <div class="result-final-actions">
-          <el-button type="primary" @click="resetPractice">再练一轮</el-button>
-          <el-button @click="router.push('/questions/wrong-records')">错题复盘</el-button>
-          <el-button @click="router.push('/questions/favorites')">收藏复习</el-button>
-          <el-button @click="router.push('/ability-map')">能力图谱</el-button>
-          <el-button @click="router.push('/interviews/create')">模拟面试</el-button>
-          <el-button @click="router.push('/questions/recommendations')">回推荐题组</el-button>
-        </div>
-      </div>
+    <section v-if="finished" class="practice-finish">
+      <span class="arena-kicker">本轮结算</span><h1>训练完成</h1><p>{{ completionInsight }}</p>
+      <div class="practice-finish__stats"><span>总题数 <b>{{ questions.length }}</b></span><span>已答 <b>{{ answeredCount }}</b></span><span>正确 <b>{{ correctCount }}</b></span><span>跳过 <b>{{ skippedCount }}</b></span><span>正确率 <b>{{ accuracyText }}</b></span><span>用时 <b>{{ elapsedText }}</b></span></div>
+      <el-alert v-if="lastResult?.agentTaskCompleted" type="success" :closable="false" show-icon :title="lastResult.agentTaskTitle || '今日计划已同步记录'" />
+      <div class="practice-finish__actions"><el-button type="primary" @click="resetPractice">再练一轮</el-button><el-button @click="router.push('/questions/wrong-records')">错题复盘</el-button><el-button @click="router.push('/questions/favorites')">收藏复习</el-button><el-button @click="router.push('/ability-map')">能力图谱</el-button><el-button @click="router.push('/interviews/create')">模拟面试</el-button></div>
     </section>
-
   </div>
 </template>
 
@@ -534,6 +294,14 @@ const currentQuestionPrompt = computed(() => {
   const topic = question.title || config.keyword || question.categoryName || '当前知识点'
   const tags = currentTags.value.length ? `，可结合 ${currentTags.value.join('、')} 展开` : ''
   return `请用真实面试口径回答「${topic}」：先说明概念或问题边界，再讲核心方案、关键取舍和项目中的落地证据${tags}。`
+})
+const shouldShowCurrentQuestionPrompt = computed(() => {
+  const question = currentQuestion.value
+  if (!question) return false
+
+  const content = question.content?.trim()
+  if (!content) return true
+  return content !== (question.title || '').trim()
 })
 const referenceAnswerText = computed(() => {
   if (lastResult.value?.referenceAnswer) return lastResult.value.referenceAnswer
@@ -874,7 +642,12 @@ const resetPractice = () => {
 }
 
 onMounted(() => {
-  if (shouldAutoStart.value && routeQuestionIds.value.length && !practicing.value && !finished.value) {
+  const hasDirectPracticeEntry = !routeQuestionIds.value.length && !queryString('mode')
+  if (
+    !practicing.value
+    && !finished.value
+    && ((shouldAutoStart.value && routeQuestionIds.value.length) || hasDirectPracticeEntry)
+  ) {
     void startPractice()
   }
 })
@@ -2045,6 +1818,457 @@ onBeforeUnmount(stopTimer)
       justify-content: space-between;
     }
 
+  }
+}
+
+// Direction D: single-task answer surface. Legacy setup/workspace selectors above
+// are no longer mounted; these rules own every rendered state in the template.
+.practice-session-page {
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 30px 24px 48px;
+}
+
+.practice-ready,
+.practice-stage,
+.practice-finish {
+  display: grid;
+  gap: 16px;
+}
+
+.practice-ready {
+  padding: 26px 28px;
+  border: 1.5px solid #b9e7cd;
+  border-radius: var(--arena-radius-card);
+  background: linear-gradient(135deg, #f0fbf4, #fff 74%);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+}
+
+.practice-ready__head,
+.practice-ready__actions,
+.practice-progress__head,
+.practice-progress__identity,
+.practice-answer-actions,
+.practice-review__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-ready h1,
+.practice-finish h1 {
+  margin: 0;
+  color: var(--arena-ink);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.practice-ready p,
+.practice-finish > p {
+  margin: -6px 0 0;
+  color: var(--arena-sub);
+  line-height: 1.65;
+}
+
+.practice-ready__actions {
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.practice-ready__settings {
+  overflow: hidden;
+  margin-top: 4px;
+  border: 1.5px solid var(--arena-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.practice-ready__settings summary {
+  padding: 12px 14px;
+  color: var(--arena-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.practice-ready__settings summary::-webkit-details-marker {
+  display: none;
+}
+
+.practice-ready__settings summary::after {
+  content: '+';
+  float: right;
+  color: var(--arena-grn-d);
+  font-size: 16px;
+}
+
+.practice-ready__settings[open] summary::after {
+  content: '-';
+}
+
+.practice-ready__settings > :not(summary) {
+  margin: 0 14px 14px;
+}
+
+.practice-mode-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.practice-mode-list button {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-height: 72px;
+  padding: 9px;
+  border: 1.5px solid var(--arena-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--arena-sub);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.practice-mode-list button.is-active {
+  border-color: var(--arena-grn);
+  background: var(--arena-grn-soft);
+  color: var(--arena-grn-d);
+}
+
+.practice-mode-list span,
+.practice-mode-list b {
+  display: block;
+}
+
+.practice-mode-list b {
+  color: var(--arena-ink);
+  font-size: 11px;
+}
+
+.practice-ready__context {
+  color: var(--arena-sub);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.practice-stage {
+  width: min(830px, 100%);
+  margin: 0 auto;
+}
+
+.practice-progress {
+  display: grid;
+  gap: 12px;
+}
+
+.practice-progress__identity {
+  justify-content: flex-start;
+}
+
+.practice-progress__exit {
+  border-color: var(--arena-line);
+  border-radius: 10px;
+  color: var(--arena-grn-d);
+  font-weight: 800;
+}
+
+.practice-progress__count {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--arena-grn-soft);
+  color: var(--arena-grn-d);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.practice-question-card,
+.practice-support-card,
+.practice-finish {
+  border: 1.5px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+}
+
+.practice-question-card {
+  display: grid;
+  gap: 18px;
+  padding: 26px 28px 22px;
+}
+
+.practice-question-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--arena-mut);
+  font-size: 12px;
+}
+
+.practice-question-card h2 {
+  margin: 0;
+  color: var(--arena-ink);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.practice-question-card__prompt {
+  margin: -4px 0 0;
+  color: var(--arena-sub);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.practice-answer-input {
+  margin-top: 1px;
+}
+
+.practice-answer-input :deep(.el-textarea__inner) {
+  min-height: 168px !important;
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+  color: var(--arena-ink);
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.practice-answer-actions {
+  margin-top: 4px;
+}
+
+.practice-answer-actions__skip {
+  border-color: var(--arena-line);
+  border-radius: 11px;
+  color: var(--arena-grn-d);
+  font-weight: 800;
+}
+
+.practice-answer-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.practice-answer-actions > div > span {
+  color: var(--arena-amber);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.practice-review {
+  display: grid;
+  gap: 14px;
+}
+
+.practice-review__coverage {
+  display: grid;
+  gap: 7px;
+}
+
+.practice-review__coverage span {
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f8faf8;
+  color: var(--arena-sub);
+  font-size: 12px;
+}
+
+.practice-review__coverage .is-done {
+  background: var(--arena-grn-soft);
+  color: var(--arena-grn-d);
+}
+
+.practice-review details {
+  overflow: hidden;
+  border: 1px solid var(--arena-line);
+  border-radius: 11px;
+}
+
+.practice-review summary {
+  padding: 11px 12px;
+  color: var(--arena-vio);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.practice-review__detail {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.practice-review__detail h3 {
+  margin: 0 0 7px;
+  color: var(--arena-ink);
+  font-size: 13px;
+}
+
+.practice-review__actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.practice-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.practice-support-card {
+  padding: 15px 18px;
+}
+
+.practice-support-card > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.practice-support-card span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--arena-vio-soft);
+  color: var(--arena-vio);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.practice-support-card b {
+  color: var(--arena-ink);
+  font-size: 12px;
+}
+
+.practice-support-card p {
+  margin: 8px 0 0;
+  color: var(--arena-sub);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.practice-support-card--ai {
+  border-left: 3px solid var(--arena-vio);
+}
+
+.practice-finish {
+  padding: 26px;
+}
+
+.practice-finish__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 2px;
+}
+
+.practice-finish__stats span {
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: #f2f4f2;
+  color: var(--arena-sub);
+  font-size: 12px;
+}
+
+.practice-finish__stats b {
+  color: var(--arena-grn-d);
+}
+
+.practice-finish__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.practice-session-page :deep(.el-progress-bar__outer) {
+  background: var(--arena-line);
+}
+
+.practice-session-page :deep(.el-progress-bar__inner) {
+  background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+}
+
+.practice-session-page :deep(.el-button--primary) {
+  border-color: var(--arena-grn);
+  background: var(--arena-grn);
+  box-shadow: 0 4px 0 var(--arena-grn-d);
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .practice-session-page {
+    padding: 20px 14px calc(26px + var(--user-mobile-nav-height, 0px));
+  }
+
+  .practice-ready,
+  .practice-question-card,
+  .practice-finish {
+    padding: 22px 20px;
+  }
+
+  .practice-ready__actions,
+  .practice-progress__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .practice-ready__actions :deep(.el-button),
+  .practice-review__actions :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .practice-mode-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .practice-question-card h2 {
+    font-size: 19px;
+  }
+
+  .practice-support-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .practice-answer-actions > div {
+    gap: 8px;
+  }
+
+  .practice-answer-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.25fr);
+    align-items: center;
+    gap: 8px;
+  }
+
+  .practice-answer-actions > div {
+    display: contents;
+  }
+
+  .practice-answer-actions__skip {
+    grid-column: 1;
+  }
+
+  .practice-answer-actions > div > span {
+    grid-column: 2;
+    white-space: nowrap;
+  }
+
+  .practice-answer-actions > div :deep(.el-button) {
+    grid-column: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .practice-review__actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

@@ -1,275 +1,100 @@
 <template>
   <div class="arena arena-train">
     <div class="arena-train__page">
-      <!-- 页头 -->
-      <div class="arena-between arena-train__head">
-        <div>
-          <div class="arena-train__kicker">训练 · 练兵场</div>
-          <h1 class="arena-h1 arena-train__title">{{ todayFocusTitle }}</h1>
-          <p class="arena-p" style="margin-top: 6px; max-width: 640px">{{ todayFocusLead }}</p>
-        </div>
-      </div>
+      <header class="arena-train__head">
+        <div class="arena-train__kicker">训练场 · 支线</div>
+        <h1 class="arena-h1 arena-train__title">{{ todayFocusTitle }}</h1>
+      </header>
 
-      <!-- 今日主关 -->
-      <div class="arena-card arena-card--hero arena-train__hero">
-        <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-          <span class="arena-chip arena-chip--grn-solid">今日主关</span>
-          <span class="arena-chip" :class="todayTrustTag.type === 'success' ? 'arena-chip--grn' : 'arena-chip--amber'">{{ todayTrustTag.label }}</span>
-          <span class="arena-chip arena-chip--mut">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</span>
-          <span class="arena-xp-tag">通关约 +90 XP</span>
-        </div>
-        <h2 class="arena-h2" style="margin-top: 13px">{{ todayPlanName }}</h2>
-        <p class="arena-p" style="margin-top: 8px">{{ todayReasonText }}</p>
-        <div class="arena-row" style="margin-top: 18px; flex-wrap: wrap">
-          <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" @click="startPrimaryPractice">
-            ⚔ {{ primaryPracticeLabel }}
-          </button>
-          <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" :disabled="!canGenerate || generating" @click="generateRecommendations">
-            {{ generating ? '生成中…' : '✦ 生成今日题组' }}
-          </button>
-          <button class="arena-btn arena-btn--txt" :disabled="loading" @click="loadRecommendations">
-            {{ loading ? '刷新中…' : '刷新' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 训练设置与推荐依据 -->
-      <details class="arena-card arena-train__controls">
-        <summary class="arena-train__controls-summary">
-          <span>
-            <b>训练设置与推荐依据</b>
-            <small>{{ contextStatusText }}</small>
-          </span>
-          <span class="arena-chip arena-chip--mut">展开</span>
-        </summary>
-        <div class="arena-train__controls-row">
-          <div class="arena-train__tabs" role="tablist" aria-label="推荐依据">
-            <button
-              v-for="opt in sourceOptions"
-              :key="opt.value"
-              type="button"
-              role="tab"
-              :aria-selected="query.source === opt.value"
-              :class="{ 'is-active': query.source === opt.value }"
-              @click="query.source = opt.value as Source; handleSourceChange()"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-          <div class="arena-train__stepper">
-            <span class="arena-lbl" style="margin: 0">题数</span>
-            <button type="button" :disabled="query.questionCount <= 3" @click="query.questionCount = Math.max(3, query.questionCount - 1)">−</button>
-            <b>{{ query.questionCount }}</b>
-            <button type="button" :disabled="query.questionCount >= 30" @click="query.questionCount = Math.min(30, query.questionCount + 1)">＋</button>
-          </div>
-          <div class="arena-train__context" :class="{ 'is-ready': Boolean(query.sourceId) }">
-            {{ query.sourceId ? '🎯' : '·' }} {{ contextStatusText }}
-          </div>
-        </div>
-        <p class="arena-tiny" style="margin-top: 10px">{{ sourceDescription }}</p>
-
-        <div v-if="showFallbackNotice && items.length" class="arena-train__notice">
-          <span>⚠</span>
-          <div style="flex: 1">
-            <b>{{ fallbackNoticeTitle }}</b>
-            <p class="arena-tiny" style="margin-top: 2px">{{ fallbackNoticeDesc }}</p>
-          </div>
-          <button class="arena-btn arena-btn--sec" style="padding: 8px 14px; font-size: 12.5px" @click="startFallbackPractice">先练一组</button>
-          <button class="arena-btn arena-btn--txt" @click="router.push('/resumes')">补简历和岗位</button>
-        </div>
-
-        <div v-if="generationDiagnostic" class="arena-train__diag">
-          <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-            <span class="arena-chip" :class="generationDiagnostic.fallback ? 'arena-chip--amber' : 'arena-chip--vio'">生成进度</span>
-            <b style="font-size: 12.5px">{{ generationStatusText }}</b>
-            <span v-if="generationDiagnostic.questionCount" class="arena-tiny">计划 {{ generationDiagnostic.questionCount }} 题</span>
-            <span v-if="generationDiagnostic.aiCallLogId" class="arena-tiny">依据已保存</span>
-            <span v-if="generationDiagnostic.asyncMessageId" class="arena-tiny">稍后可查看结果</span>
-            <span v-if="generationDiagnostic.sourceId" class="arena-tiny">{{ generationSourceLabel }}已匹配</span>
-            <span v-if="generationDiagnostic.errorMessage" class="arena-tiny" style="color: var(--arena-red)">{{ generationDiagnostic.errorMessage }}</span>
-            <button
-              v-if="generationDiagnostic.asyncMessageId || generationDiagnostic.asyncTraceId"
-              class="arena-btn arena-btn--txt"
-              style="padding: 0"
-              @click="openRecommendationTask"
-            >
-              查看准备进度 →
-            </button>
-          </div>
-        </div>
-      </details>
-
-      <div class="arena-train__grid">
-        <!-- 关卡卡列表 -->
-        <div class="arena-col">
-          <!-- 加载骨架 -->
-          <template v-if="loading">
-            <div v-for="i in 3" :key="i" class="arena-card arena-train__skeleton"></div>
-          </template>
-
-          <!-- 错误态 -->
-          <div v-else-if="loadError" class="arena-card arena-train__state">
-            <b>推荐题加载失败</b>
-            <p class="arena-p">{{ loadError }}</p>
-            <button class="arena-btn arena-btn--pri" style="padding: 11px 20px" @click="loadRecommendations">重试</button>
-          </div>
-
-          <!-- 空态 -->
-          <div v-else-if="!items.length" class="arena-card arena-train__state">
-            <span style="font-size: 26px">🗡️</span>
-            <b>{{ recommendationEmptyState.title }}</b>
-            <p class="arena-p">{{ recommendationEmptyState.description }}</p>
-            <div class="arena-row" style="flex-wrap: wrap">
-              <button v-if="recommendationEmptyState.showFallback" class="arena-btn arena-btn--pri" style="padding: 11px 20px" @click="startFallbackPractice">
-                {{ recommendationEmptyState.fallbackText }}
-              </button>
-              <button
-                v-if="recommendationEmptyState.showGenerate"
-                class="arena-btn arena-btn--sec"
-                style="padding: 10px 18px; font-size: 13px"
-                :disabled="!canGenerate || generating"
-                @click="generateRecommendations"
-              >
-                {{ recommendationEmptyState.generateText }}
-              </button>
-              <button v-if="recommendationEmptyState.showResumeLink" class="arena-btn arena-btn--txt" @click="router.push('/resumes')">
-                补齐简历与岗位 →
-              </button>
+      <section class="arena-train__grid">
+        <main class="arena-col">
+          <section class="arena-card arena-card--hero arena-train__hero">
+            <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+              <span class="arena-chip arena-chip--grn-solid">推荐 · {{ todayTrustTag.label }}</span>
+              <span class="arena-xp-tag">+90 经验</span>
+              <span class="arena-tiny">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</span>
             </div>
-          </div>
+            <h2 class="arena-h2" style="margin-top: 13px">{{ todayPlanName }}</h2>
+            <p class="arena-p" style="margin-top: 8px">{{ todayReasonText }}</p>
+            <div class="arena-row" style="margin-top: 18px; flex-wrap: wrap">
+              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" @click="startPrimaryPractice">⚔ {{ primaryPracticeLabel }}</button>
+              <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" :disabled="!canGenerate || generating" @click="generateRecommendations">{{ generating ? '生成中…' : '换一组' }}</button>
+            </div>
+          </section>
 
-          <!-- 关卡卡 -->
-          <template v-else>
-            <div class="arena-train__preview-heading">
-              <div class="arena-h3">本组题目预览</div>
-              <span class="arena-tiny">{{ practiceQuestionIds.length || items.length }} 题 · 选择 · 简答</span>
+          <section class="arena-card arena-train__preview-card">
+            <template v-if="loading">
+              <div v-for="i in 3" :key="i" class="arena-train__skeleton"></div>
+            </template>
+            <div v-else-if="loadError" class="arena-train__state">
+              <b>推荐题加载失败</b><p class="arena-p">{{ loadError }}</p>
+              <button class="arena-btn arena-btn--pri" style="padding: 11px 20px" @click="loadRecommendations">重试</button>
             </div>
-            <article v-for="(item, index) in items.slice(0, 3)" :key="item.id" class="arena-card arena-train__level">
-            <div class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">
-              {{ index + 1 }}
+            <div v-else-if="!items.length" class="arena-train__state">
+              <b>{{ recommendationEmptyState.title }}</b><p class="arena-p">{{ recommendationEmptyState.description }}</p>
+              <div class="arena-row" style="flex-wrap: wrap">
+                <button v-if="recommendationEmptyState.showFallback" class="arena-btn arena-btn--pri" style="padding: 11px 20px" @click="startFallbackPractice">{{ recommendationEmptyState.fallbackText }}</button>
+                <button v-if="recommendationEmptyState.showGenerate" class="arena-btn arena-btn--sec" style="padding: 10px 18px; font-size: 13px" :disabled="!canGenerate || generating" @click="generateRecommendations">{{ recommendationEmptyState.generateText }}</button>
+                <button v-if="recommendationEmptyState.showResumeLink" class="arena-btn arena-btn--txt" @click="router.push('/resumes')">补齐简历与岗位 →</button>
+              </div>
             </div>
-            <div class="arena-train__level-body">
-              <div class="arena-between" style="align-items: flex-start; flex-wrap: wrap; gap: 8px">
-                <div style="min-width: 0">
-                  <div class="arena-h3">{{ item.questionTitle || `今日训练题 ${index + 1}` }}</div>
-                  <div class="arena-tiny" style="margin-top: 4px">
-                    {{ item.skillName || item.skillCode || '综合能力' }}
-                    · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }}
-                    · {{ questionTypeLabel(item.questionType) }}
-                  </div>
-                </div>
-                <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
-                  <span class="arena-chip" :class="severityChipClass(item.gapSeverity)">{{ severityLabel(item.gapSeverity) }}</span>
-                  <span v-if="itemPracticeQuestionId(item)" class="arena-chip arena-chip--grn">可直接练</span>
-                  <span v-else class="arena-chip arena-chip--amber">需通用训练兜底</span>
+            <template v-else>
+              <div class="arena-train__preview-heading">
+                <b class="arena-h3">本组题目预览</b>
+                <span class="arena-tiny">{{ practiceQuestionIds.length || items.length }} 题 · 选择 · 简答</span>
+              </div>
+              <article v-for="(item, index) in items.slice(0, 3)" :key="item.id" class="arena-train__level">
+                <button type="button" class="arena-train__question-row" :disabled="!itemPracticeQuestionId(item)" @click="openQuestion(item)">
+                  <span class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">{{ index + 1 }}</span>
+                  <span class="arena-train__question-copy">
+                    <b>{{ item.questionTitle || `今日训练题 ${index + 1}` }}</b>
+                    <small>{{ item.skillName || item.skillCode || '综合能力' }} · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
+                  </span>
                   <span class="arena-xp-tag">+18 XP/答对</span>
-                </div>
-              </div>
-
-              <div class="arena-train__reason">
-                <div class="arena-row" style="gap: 8px">
-                  <b style="font-size: 12px">为什么练这题</b>
-                  <span class="arena-chip" :class="trustChipClass(item)">{{ trustTagForItem(item).label }}</span>
-                </div>
-                <p class="arena-tiny" style="margin-top: 5px; line-height: 1.6">
-                  {{ item.recommendReason || item.questionContent || '这道题用于补齐当前岗位方向下的面试风险点。' }}
-                </p>
-              </div>
-
-              <div class="arena-train__hints">
-                <div>
-                  <span>回答提示</span>
-                  <p>{{ item.answerHint || '先讲场景，再讲方案、权衡和项目指标。' }}</p>
-                </div>
-                <div>
-                  <span>考察点</span>
-                  <p>{{ item.evaluatePoints || item.skillName || item.skillCode || '核心概念、落地经验和追问边界。' }}</p>
-                </div>
-                <div>
-                  <span>依据来源</span>
-                  <p>{{ itemSourceText(item) }}</p>
-                </div>
-                <div>
-                  <span>证据状态</span>
-                  <p>{{ itemTrustText(item) }}</p>
-                </div>
-              </div>
-
-              <div class="arena-row" style="margin-top: 13px; flex-wrap: wrap">
-                <button class="arena-btn arena-btn--pri" style="padding: 10px 18px; font-size: 13px" :disabled="!itemPracticeQuestionId(item)" @click="openQuestion(item)">
-                  ⚔ 开始这题
                 </button>
-                <button class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" :disabled="!itemPracticeQuestionId(item)" @click="startSinglePractice(item)">
-                  作为小组训练
-                </button>
-              </div>
-              </div>
-            </article>
-            <button
-              v-if="items.length > 3"
-              type="button"
-              class="arena-train__remaining"
-              @click="startPrimaryPractice"
-            >
-              <span>还有 {{ items.length - 3 }} 题</span>
-              <b>开始题组查看全部 →</b>
-            </button>
-          </template>
-        </div>
+              </article>
+              <button v-if="items.length > 3" type="button" class="arena-train__remaining" @click="startPrimaryPractice"><span>还有 {{ items.length - 3 }} 题</span><b>开始题组查看全部 →</b></button>
+            </template>
+          </section>
+        </main>
 
-        <!-- 右栏 -->
-        <div class="arena-col">
-          <!-- 复活点 -->
-          <div class="arena-card arena-train__panel arena-train__revive">
-            <div class="arena-row" style="gap: 8px">
-              <span style="font-size: 18px">🔁</span>
-              <div class="arena-h3">复活点 · 错题复盘</div>
+        <aside class="arena-col arena-train__side">
+          <section class="arena-card arena-train__panel arena-train__revive">
+            <div class="arena-h3">💀 错题复活点</div>
+            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">错题和收藏是下一轮训练的弹药库，复活后可以重新获得经验。</p>
+            <button class="arena-btn arena-btn--sec" style="margin-top: 12px; padding: 10px 14px; font-size: 12.5px" @click="router.push('/questions/wrong-records')">复活错题</button>
+          </section>
+          <section class="arena-card arena-train__panel">
+            <div class="arena-h3">本周训练</div>
+            <div class="arena-train__week">
+              <span v-for="day in weekTrainingDays" :key="day.label" :class="{ 'is-done': day.completed }"><b>{{ day.completed ? '⚡' : '·' }}</b><small>{{ day.label }}</small></span>
             </div>
-            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">
-              挂掉的题不会白挂。错题和收藏是下一轮训练的弹药库。
-            </p>
-            <div class="arena-col" style="gap: 8px; margin-top: 12px">
-              <button class="arena-btn arena-btn--sec" style="padding: 10px 14px; font-size: 13px; width: 100%" @click="router.push('/questions/wrong-records')">
-                🔁 错题复盘
-              </button>
-              <button class="arena-btn arena-btn--sec" style="padding: 10px 14px; font-size: 13px; width: 100%" @click="router.push('/questions/favorites')">
-                ⭐ 收藏题
-              </button>
-            </div>
-          </div>
-
-          <!-- 快速入口 -->
-          <div class="arena-card arena-train__panel">
+            <p class="arena-tiny arena-train__week-note">{{ weekTrainingSummary }}</p>
+          </section>
+          <section class="arena-card arena-train__panel">
             <div class="arena-h3">更多练习方式</div>
             <div class="arena-train__quick">
-              <button type="button" aria-label="进入专项练习" @click="router.push('/questions/practice')">🏋️ 专项练习</button>
-              <button type="button" aria-label="创建模拟面试" @click="router.push('/interviews/create')">⚔️ 模拟面试</button>
+              <button type="button" @click="router.push('/questions/favorites')">收藏复习</button>
+              <button type="button" @click="router.push('/questions/practice')">按知识点</button>
+              <button type="button" @click="router.push('/study-plans')">学习计划</button>
             </div>
-          </div>
+          </section>
+        </aside>
+      </section>
 
-          <!-- 今日重点 -->
-          <div class="arena-card arena-train__panel">
-            <div class="arena-h3">今日重点</div>
-            <div v-if="topSkillNames.length" class="arena-row" style="gap: 6px; flex-wrap: wrap; margin-top: 11px">
-              <span v-for="skill in topSkillNames" :key="skill" class="arena-chip arena-chip--grn">{{ skill }}</span>
-            </div>
-            <p v-else class="arena-tiny" style="margin-top: 9px; line-height: 1.6">
-              有可信推荐后会汇总本轮最需要补强的知识点；当前先以通用训练保持节奏。
-            </p>
+      <details class="arena-card arena-train__controls">
+        <summary class="arena-train__controls-summary"><span><b>训练设置与推荐依据</b><small>{{ contextStatusText }}</small></span><span class="arena-chip arena-chip--mut">展开</span></summary>
+        <div class="arena-train__controls-row">
+          <div class="arena-train__tabs" role="tablist" aria-label="推荐依据">
+            <button v-for="opt in sourceOptions" :key="opt.value" type="button" role="tab" :aria-selected="query.source === opt.value" :class="{ 'is-active': query.source === opt.value }" @click="query.source = opt.value as Source; handleSourceChange()">{{ opt.label }}</button>
           </div>
-
-          <!-- 练完去哪 -->
-          <div class="arena-card arena-train__panel">
-            <div class="arena-h3">练完去哪</div>
-            <ol class="arena-train__next">
-              <li v-for="step in nextStepCards" :key="step.title">
-                <b>{{ step.title }}</b>
-                <span>{{ step.desc }}</span>
-              </li>
-            </ol>
-          </div>
+          <div class="arena-train__stepper"><span class="arena-lbl" style="margin: 0">题数</span><button type="button" :disabled="query.questionCount <= 3" @click="query.questionCount = Math.max(3, query.questionCount - 1)">−</button><b>{{ query.questionCount }}</b><button type="button" :disabled="query.questionCount >= 30" @click="query.questionCount = Math.min(30, query.questionCount + 1)">＋</button></div>
+          <div class="arena-train__context" :class="{ 'is-ready': Boolean(query.sourceId) }">{{ query.sourceId ? '🎯' : '·' }} {{ contextStatusText }}</div>
         </div>
-      </div>
+        <p class="arena-tiny" style="margin-top: 10px">{{ sourceDescription }}</p>
+        <div v-if="showFallbackNotice && items.length" class="arena-train__notice"><span>⚠</span><div style="flex: 1"><b>{{ fallbackNoticeTitle }}</b><p class="arena-tiny" style="margin-top: 2px">{{ fallbackNoticeDesc }}</p></div><button class="arena-btn arena-btn--sec" style="padding: 8px 14px; font-size: 12.5px" @click="startFallbackPractice">先练一组</button><button class="arena-btn arena-btn--txt" @click="router.push('/resumes')">补简历和岗位</button></div>
+        <div v-if="generationDiagnostic" class="arena-train__diag"><div class="arena-row" style="gap: 8px; flex-wrap: wrap"><span class="arena-chip" :class="generationDiagnostic.fallback ? 'arena-chip--amber' : 'arena-chip--vio'">生成进度</span><b style="font-size: 12.5px">{{ generationStatusText }}</b><span v-if="generationDiagnostic.questionCount" class="arena-tiny">计划 {{ generationDiagnostic.questionCount }} 题</span><span v-if="generationDiagnostic.aiCallLogId" class="arena-tiny">依据已保存</span><span v-if="generationDiagnostic.asyncMessageId" class="arena-tiny">稍后可查看结果</span><span v-if="generationDiagnostic.sourceId" class="arena-tiny">{{ generationSourceLabel }}已匹配</span><span v-if="generationDiagnostic.errorMessage" class="arena-tiny" style="color: var(--arena-red)">{{ generationDiagnostic.errorMessage }}</span><button v-if="generationDiagnostic.asyncMessageId || generationDiagnostic.asyncTraceId" class="arena-btn arena-btn--txt" style="padding: 0" @click="openRecommendationTask">查看准备进度 →</button></div></div>
+      </details>
     </div>
   </div>
 </template>
@@ -430,6 +255,14 @@ const itemPracticeQuestionId = (item: QuestionRecommendationItemVO) => {
   return item.practiceQuestionId || item.questionId
 }
 const actionableItems = computed(() => items.value.filter((item) => Boolean(itemPracticeQuestionId(item))))
+const weekTrainingDays = computed(() =>
+  ['一', '二', '三', '四', '五'].map((label) => ({ label, completed: false }))
+)
+const weekTrainingSummary = computed(() =>
+  gameProfile.streakDays > 0
+    ? `当前连胜 ${gameProfile.streakDays} 天 · 本周完成记录暂未同步`
+    : '本周完成记录暂未同步 · 完成一题后会继续积累连胜'
+)
 const practiceQuestionIds = computed(() =>
   actionableItems.value
     .map(itemPracticeQuestionId)
@@ -1039,34 +872,267 @@ onMounted(() => {
 <style scoped lang="scss">
 .arena-train {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  margin: 0;
 
   &__page {
-    max-width: 1060px;
+    width: min(990px, 100%);
     margin: 0 auto;
-    padding: 28px 34px 42px;
-    position: relative;
-    z-index: 1;
-  }
-
-  &__head {
-    flex-wrap: wrap;
+    padding: 30px 24px 48px;
   }
 
   &__kicker {
+    color: var(--arena-grn-d);
     font-size: 12.5px;
     font-weight: 800;
-    color: var(--arena-grn-d);
   }
 
   &__title {
     margin-top: 5px;
-    font-size: 23px;
+    font-size: 28px;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    gap: 20px;
+    align-items: start;
+    margin-top: 22px;
   }
 
   &__hero {
-    margin-top: 18px;
-    padding: 22px 24px;
+    padding: 24px 26px;
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #fff 72%);
+  }
+
+  &__preview-card,
+  &__panel,
+  &__controls {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  &__preview-card {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 18px 20px;
+  }
+
+  &__preview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 5px;
+  }
+
+  &__level {
+    overflow: hidden;
+    border: 1.5px solid var(--arena-line2);
+    border-radius: 11px;
+  }
+
+  &__question-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 11px;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--arena-ink);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+
+    &:not(:disabled):hover {
+      background: #f8faf8;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+  }
+
+  &__level-rank {
+    display: grid;
+    place-items: center;
+    width: 23px;
+    height: 23px;
+    border-radius: 8px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-size: 11px;
+    font-weight: 900;
+
+    &.is-boss {
+      background: var(--arena-red-soft);
+      color: var(--arena-red);
+    }
+  }
+
+  &__question-copy {
+    min-width: 0;
+
+    b,
+    small {
+      display: block;
+    }
+
+    b {
+      overflow: hidden;
+      color: var(--arena-ink);
+      font-size: 13px;
+      line-height: 1.45;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    small {
+      margin-top: 3px;
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+  }
+
+  &__question-detail {
+    border-top: 1px solid var(--arena-line2);
+
+    summary {
+      padding: 8px 12px;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    summary::after {
+      content: '+';
+      float: right;
+      color: var(--arena-grn-d);
+    }
+
+    &[open] summary::after {
+      content: '-';
+    }
+
+    > div {
+      display: grid;
+      gap: 7px;
+      padding: 0 12px 12px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+  }
+
+  &__remaining {
+    width: 100%;
+    padding: 7px 10px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--arena-mut);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+
+    b {
+      margin-left: 5px;
+      color: var(--arena-grn-d);
+    }
+  }
+
+  &__side {
+    gap: 14px;
+  }
+
+  &__panel {
+    padding: 20px 22px;
+  }
+
+  &__revive {
+    border-color: #f3ddc0;
+    background: linear-gradient(145deg, #fff, #fffaf2);
+  }
+
+  &__week {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+
+    span {
+      display: grid;
+      justify-items: center;
+      gap: 5px;
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    b {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      background: #e8ede9;
+      color: var(--arena-mut);
+      font-size: 14px;
+    }
+
+    .is-done b {
+      background: var(--arena-grn);
+      color: #fff;
+    }
+
+    .is-today b {
+      background: var(--arena-amber);
+      box-shadow: 0 0 0 3px var(--arena-amber-soft);
+      color: #fff;
+    }
+  }
+
+  &__week-note {
+    margin: 12px 0 0;
+    text-align: center;
+  }
+
+  &__quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      background: #f2f4f2;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 10px;
+
+      &:hover {
+        background: var(--arena-grn-soft);
+        color: var(--arena-grn-d);
+      }
+    }
   }
 
   &__controls {
@@ -1089,7 +1155,6 @@ onMounted(() => {
     > span:first-child {
       display: grid;
       gap: 3px;
-      min-width: 0;
     }
 
     b {
@@ -1099,8 +1164,7 @@ onMounted(() => {
 
     small {
       color: var(--arena-mut);
-      font-size: 11.5px;
-      line-height: 1.4;
+      font-size: 11px;
     }
   }
 
@@ -1110,9 +1174,9 @@ onMounted(() => {
 
   &__controls-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 14px;
-    flex-wrap: wrap;
   }
 
   &__tabs {
@@ -1124,15 +1188,14 @@ onMounted(() => {
 
     button {
       border: 0;
-      background: transparent;
-      padding: 7px 15px;
       border-radius: 9px;
-      font-size: 12.5px;
-      font-weight: 800;
+      background: transparent;
       color: var(--arena-sub);
       cursor: pointer;
-      font-family: inherit;
-      transition: background 0.15s, color 0.15s;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 7px 12px;
 
       &.is-active {
         background: #fff;
@@ -1154,300 +1217,52 @@ onMounted(() => {
       border-radius: 8px;
       background: #fff;
       color: var(--arena-grn-d);
-      font-size: 14px;
-      font-weight: 900;
       cursor: pointer;
-      font-family: inherit;
-
-      &:disabled {
-        color: var(--arena-mut);
-        cursor: not-allowed;
-      }
-    }
-
-    b {
-      min-width: 22px;
-      text-align: center;
-      font-size: 13.5px;
+      font: inherit;
+      font-weight: 900;
     }
   }
 
-  &__context {
+  &__context,
+  &__notice,
+  &__diag {
+    color: var(--arena-sub);
     font-size: 12px;
-    color: var(--arena-mut);
-    font-weight: 600;
+  }
 
-    &.is-ready {
-      color: var(--arena-grn-d);
-    }
+  &__context.is-ready {
+    color: var(--arena-grn-d);
+  }
+
+  &__notice,
+  &__diag {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
   }
 
   &__notice {
-    margin-top: 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 14px;
-    border-radius: 12px;
     background: var(--arena-amber-soft);
-    color: var(--arena-amber);
-    font-size: 12.5px;
-
-    b {
-      font-size: 12.5px;
-    }
   }
 
   &__diag {
-    margin-top: 12px;
-    padding: 10px 14px;
-    border-radius: 12px;
     border: 1.5px dashed var(--arena-line);
   }
 
-  &__grid {
-    display: contents;
-  }
-
-  &__level {
-    display: flex;
-    gap: 11px;
-    padding: 11px 13px;
-    border-color: var(--arena-line2);
-    border-radius: 12px;
-    box-shadow: none;
-  }
-
-  &__level-rank {
-    flex: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 900;
-    background: var(--arena-grn-soft);
-    color: var(--arena-grn-d);
-
-    &.is-boss {
-      background: var(--arena-red-soft);
-      color: var(--arena-red);
-    }
-  }
-
-  &__level-body {
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__reason {
-    margin-top: 12px;
-    padding: 10px 13px;
-    border-radius: 11px;
-    background: #f8faf8;
-    border: 1px solid var(--arena-line2);
-  }
-
-  &__preview-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 2px;
-    padding: 2px 0 6px;
-  }
-
-  &__remaining {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 40px;
-    padding: 8px 12px;
-    border: 0;
-    background: transparent;
-    color: var(--arena-sub);
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
-
-    b {
-      color: var(--arena-grn-d);
-      font-size: 12px;
-    }
-
-    &:hover b,
-    &:focus-visible b {
-      text-decoration: underline;
-    }
-  }
-
-  &__hints {
-    margin-top: 11px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 9px;
-
-    > div {
-      padding: 9px 11px;
-      border-radius: 10px;
-      border: 1px dashed var(--arena-line);
-
-      span {
-        font-size: 10.5px;
-        font-weight: 800;
-        color: var(--arena-mut);
-      }
-
-      p {
-        margin: 4px 0 0;
-        font-size: 11.5px;
-        line-height: 1.55;
-        color: var(--arena-sub);
-      }
-    }
-  }
-
-  &__panel {
-    padding: 18px 20px;
-  }
-
-  &__revive {
-    background: linear-gradient(150deg, #fff, #fff7ec);
-    border-color: #f3ddc0;
-  }
-
-  &__quick {
-    margin-top: 12px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-
-    button {
-      padding: 11px 8px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: 11px;
-      background: #fff;
-      font-size: 12.5px;
-      font-weight: 800;
-      color: var(--arena-ink);
-      cursor: pointer;
-      font-family: inherit;
-      transition: border-color 0.15s;
-
-      &:hover {
-        border-color: var(--arena-grn);
-      }
-    }
-  }
-
-  &__next {
-    margin: 11px 0 0;
-    padding-left: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-
-    li {
-      font-size: 12px;
-      line-height: 1.5;
-
-      b {
-        display: block;
-        font-size: 12.5px;
-      }
-
-      span {
-        color: var(--arena-sub);
-      }
-    }
-  }
-
-  @media (min-width: 721px) {
-    &__page {
-      display: grid;
-      grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
-      column-gap: 20px;
-      row-gap: 14px;
-      align-items: start;
-    }
-
-    &__head {
-      grid-column: 1 / -1;
-      grid-row: 1;
-    }
-
-    &__hero {
-      grid-column: 1;
-      grid-row: 2;
-      margin-top: 4px;
-    }
-
-    &__controls {
-      grid-column: 1;
-      grid-row: 4;
-      margin: 0;
-    }
-
-    &__grid > .arena-col:first-child {
-      grid-column: 1;
-      grid-row: 3;
-      gap: 8px;
-      padding: 16px 20px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: var(--arena-radius-card);
-      background: #ffffff;
-      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
-    }
-
-    &__grid > .arena-col:last-child {
-      grid-column: 2;
-      grid-row: 2 / span 3;
-    }
-
-    &__level {
-      align-items: center;
-    }
-
-    &__level-body {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-
-      > .arena-between {
-        flex: 1;
-      }
-    }
-
-    &__level .arena-train__reason,
-    &__level .arena-train__hints,
-    &__level-body > .arena-row:last-child {
-      display: none;
-    }
-
-    &__grid > .arena-col:last-child > :nth-child(3),
-    &__grid > .arena-col:last-child > :nth-child(4) {
-      display: none;
-    }
-  }
-
   &__state {
-    padding: 26px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    justify-items: start;
     gap: 9px;
-
-    b {
-      font-size: 14px;
-    }
+    min-height: 180px;
+    padding: 26px;
   }
 
   &__skeleton {
-    height: 150px;
+    height: 44px;
+    border-radius: 11px;
     background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
@@ -1455,37 +1270,66 @@ onMounted(() => {
 }
 
 @keyframes arenaShimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
+  to {
     background-position: -200% 0;
   }
 }
 
 @media (max-width: 720px) {
   .arena-train {
-    margin: -12px -12px 0;
+    margin: 0;
 
     &__page {
-      padding: 18px 14px 26px;
+      padding: 18px 14px calc(26px + var(--user-mobile-nav-height, 0px));
     }
 
-    &__grid,
-    &__hints {
+    &__title {
+      font-size: 27px;
+    }
+
+    &__grid {
       grid-template-columns: 1fr;
+      gap: 20px;
+      margin-top: 22px;
     }
 
-    &__preview-heading {
-      margin-top: 4px;
+    &__hero {
+      padding: 25px 26px;
     }
 
-    &__grid > .arena-col:first-child {
-      margin-top: 18px;
+    &__preview-card {
+      padding: 18px 20px;
     }
 
-    &__grid > .arena-col:last-child {
-      margin-top: 14px;
+    &__side {
+      gap: 16px;
+    }
+
+    &__panel {
+      padding: 20px 22px;
+    }
+
+    &__question-row {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    &__question-row .arena-xp-tag {
+      display: none;
+    }
+
+    &__question-copy b {
+      overflow: visible;
+      white-space: normal;
+    }
+
+    &__controls-row,
+    &__notice {
+      align-items: flex-start;
+    }
+
+    &__tabs {
+      max-width: 100%;
+      overflow-x: auto;
     }
   }
 }

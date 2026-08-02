@@ -232,6 +232,15 @@ describe('InterviewRoomView voice recording coordination', () => {
     wrapper.unmount()
   })
 
+  it('keeps session and deep feedback content behind compact disclosure controls', async () => {
+    const wrapper = await mountRoom()
+
+    expect(wrapper.find('.room-session-drawer > summary').text()).toContain('本场信息')
+    expect(wrapper.find('.room-feedback-drawer > summary').text()).toContain('查看点评')
+    expect(wrapper.find('.answer-console').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('disables realtime ASR and answer submission throughout compatibility opening and stopping', async () => {
     let resolveStream: ((stream: MediaStream) => void) | undefined
     const stopTrack = vi.fn()

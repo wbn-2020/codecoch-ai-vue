@@ -80,25 +80,22 @@ describe('ArenaTrainView', () => {
     matchReports.value = { records: [] }
   })
 
-  it('renders level cards from real recommendation items with rank, stars and xp tag', async () => {
+  it('renders the compact direction D preview rows from real recommendation items', async () => {
     gapItems.value = LEVEL_ITEMS
     const wrapper = mountTrain()
     await flush()
 
-    expect(wrapper.text()).toContain('今日主关')
+    expect(wrapper.text()).toContain('训练场 · 支线')
     expect(wrapper.text()).toContain('HashMap 扩容机制讲清楚')
     expect(wrapper.text()).toContain('★★☆ 中等')
     expect(wrapper.text()).toContain('★★★ 困难')
-    expect(wrapper.text()).toContain('高风险')
-    expect(wrapper.text()).toContain('关键短板')
-    expect(wrapper.text()).toContain('可直接练')
     expect(wrapper.text()).toContain('+18 XP/答对')
     expect(wrapper.text()).toContain('开始推荐题组')
     // 今日重点汇总技能
     expect(wrapper.text()).toContain('Java 集合')
     expect(wrapper.text()).toContain('消息队列')
     // 复活点入口
-    expect(wrapper.text()).toContain('复活点 · 错题复盘')
+    expect(wrapper.text()).toContain('错题复活点')
   })
 
   it('shows the hero plan name from the first actionable item', async () => {
@@ -144,15 +141,14 @@ describe('ArenaTrainView', () => {
     expect(tabs[0].classes()).toContain('is-active')
   })
 
-  it('renders trust and reason evidence per level card', async () => {
+  it('keeps recommendation evidence in the secondary controls rather than each preview row', async () => {
     gapItems.value = LEVEL_ITEMS
     const wrapper = mountTrain()
     await flush()
 
-    expect(wrapper.text()).toContain('为什么练这题')
-    expect(wrapper.text()).toContain('岗位 JD 明确要求集合源码能力')
-    expect(wrapper.text()).toContain('证据已记录')
-    expect(wrapper.text()).toContain('部分证据')
+    expect(wrapper.findAll('.arena-train__question-detail')).toHaveLength(0)
+    expect(wrapper.find('.arena-train__controls').text()).toContain('能力短板')
+    expect(wrapper.find('.arena-train__controls').text()).toContain('训练设置与推荐依据')
   })
 
   it('keeps the rest of a recommendation batch reachable after the compact three-question preview', async () => {
@@ -183,5 +179,17 @@ describe('ArenaTrainView', () => {
     expect(wrapper.findAll('.arena-train__level')).toHaveLength(3)
     expect(wrapper.find('.arena-train__remaining').text()).toContain('还有 1 题')
     expect(wrapper.find('.arena-train__remaining').text()).toContain('开始题组查看全部')
+  })
+
+  it('keeps one preview card with compact rows instead of a stack of full question workbenches', async () => {
+    gapItems.value = LEVEL_ITEMS
+    const wrapper = mountTrain()
+    await flush()
+
+    expect(wrapper.findAll('.arena-train__preview-card')).toHaveLength(1)
+    expect(wrapper.findAll('.arena-train__question-row')).toHaveLength(2)
+    expect(wrapper.findAll('.arena-train__question-detail')).toHaveLength(0)
+    expect(wrapper.findAll('.arena-train__side > .arena-train__panel')).toHaveLength(3)
+    expect(wrapper.findAll('.arena-train__week .is-done')).toHaveLength(0)
   })
 })
