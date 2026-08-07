@@ -32,41 +32,7 @@
       </div>
     </section>
 
-    <section class="trust-strip" aria-label="数据可信边界">
-      <div class="trust-strip__summary">
-        <span class="section-kicker">数据边界</span>
-        <strong>{{ dataCutoffLabel }}</strong>
-        <span>{{ sourceHashLabel }}</span>
-      </div>
-      <div class="trust-strip__tags">
-        <el-tag :type="confidenceTagType(confidenceLevel)" effect="plain">
-          {{ confidenceLabel(confidenceLevel) }}
-        </el-tag>
-        <el-tag v-if="fallback" type="warning" effect="plain">规则降级</el-tag>
-        <el-tag v-if="unknowns.length" type="warning" effect="plain">有未知项</el-tag>
-        <el-tag v-if="limits.length" type="info" effect="plain">有样本限制</el-tag>
-      </div>
-    </section>
-
-    <el-alert
-      v-if="warnings.length || fallback"
-      class="boundary-alert"
-      type="warning"
-      show-icon
-      :closable="false"
-      title="请结合来源和限制理解以下内容"
-    >
-      <template #default>
-        <ul class="boundary-list">
-          <li v-if="fallback">{{ displayBoundaryText(fallbackReason, '当前结果来自规则降级，请结合来源和限制人工复核。') }}</li>
-          <li v-for="warning in warnings" :key="warning">
-            {{ displayBoundaryText(warning, '部分来源或字段暂不可用。') }}
-          </li>
-        </ul>
-      </template>
-    </el-alert>
-
-    <nav class="section-nav" aria-label="证据资产工作台区块">
+    <nav class="section-nav" aria-label="证据资产工作台视图">
       <button
         v-for="item in sectionItems"
         :key="item.key"
@@ -80,12 +46,12 @@
       </button>
     </nav>
 
-    <section id="readiness" class="evidence-section" data-testid="evidence-readiness">
+    <section v-if="activeSection === 'readiness'" id="readiness" class="evidence-section" data-testid="evidence-readiness">
       <header class="section-heading">
         <div>
           <p class="section-kicker">就绪度</p>
           <h2>资产就绪度</h2>
-          <p>查看现有资产是否有可回读版本和实际使用记录，不在这里复制资产 CRUD。</p>
+          <p>先确认现有资产是否可回读，再处理需要补齐的候选信息。</p>
         </div>
         <el-tag effect="plain">{{ readinessSummary }}</el-tag>
       </header>
@@ -149,7 +115,7 @@
       />
     </section>
 
-    <section id="usages" class="evidence-section" data-testid="evidence-usages">
+    <section v-if="activeSection === 'usages'" id="usages" class="evidence-section" data-testid="evidence-usages">
       <header class="section-heading">
         <div>
           <p class="section-kicker">使用记录</p>
@@ -231,7 +197,7 @@
       </AppState>
     </section>
 
-    <section id="results" class="evidence-section" data-testid="evidence-results">
+    <section v-if="activeSection === 'results'" id="results" class="evidence-section" data-testid="evidence-results">
       <header class="section-heading">
         <div>
           <p class="section-kicker">结果反馈</p>
@@ -323,18 +289,23 @@
         v-else-if="!resultsLoading"
         type="empty"
         title="尚未记录明确结果"
-        description="可从已使用证据记录回复、面试、Offer 或未知结果。没有填写不代表没有发生。"
+        description="可从已使用证据记录回复、面试、录用结果或未知结果。没有填写不代表没有发生。"
       >
         <el-button type="primary" @click="selectSection('usages')">从使用记录开始</el-button>
       </AppState>
     </section>
 
-    <section id="candidates" class="evidence-section" data-testid="evidence-candidates">
+    <section
+      v-if="activeSection === 'readiness' || activeSection === 'candidates'"
+      id="candidates"
+      class="evidence-section"
+      data-testid="evidence-candidates"
+    >
       <header class="section-heading">
         <div>
           <p class="section-kicker">待确认候选</p>
           <h2>待确认候选</h2>
-          <p>候选在确认前不会进入 Agent 上下文；四种决策均需明确提交或取消。</p>
+          <p>候选在确认前不会进入智能助手上下文；四种决策均需明确提交或取消。</p>
         </div>
         <el-tag effect="plain">{{ envelopeCountLabel(candidatesEnvelope, candidateItems.length, '条待处理') }}</el-tag>
       </header>
@@ -431,17 +402,49 @@
     </section>
 
     <section
-      v-if="unknowns.length || limits.length || sources.length || coverageLines.length"
+      v-if="activeSection === 'trace'"
       class="evidence-section evidence-section--compact"
     >
+      <section class="trust-strip" aria-label="数据可信边界">
+        <div class="trust-strip__summary">
+          <span class="section-kicker">数据边界</span>
+          <strong>{{ dataCutoffLabel }}</strong>
+          <span>{{ sourceHashLabel }}</span>
+        </div>
+        <div class="trust-strip__tags">
+          <el-tag :type="confidenceTagType(confidenceLevel)" effect="plain">
+            {{ confidenceLabel(confidenceLevel) }}
+          </el-tag>
+          <el-tag v-if="fallback" type="warning" effect="plain">规则降级</el-tag>
+          <el-tag v-if="unknowns.length" type="warning" effect="plain">有未知项</el-tag>
+          <el-tag v-if="limits.length" type="info" effect="plain">有样本限制</el-tag>
+        </div>
+      </section>
+      <el-alert
+        v-if="warnings.length || fallback"
+        class="boundary-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="请结合来源和限制理解以下内容"
+      >
+        <template #default>
+          <ul class="boundary-list">
+            <li v-if="fallback">{{ displayBoundaryText(fallbackReason, '当前结果来自规则降级，请结合来源和限制人工复核。') }}</li>
+            <li v-for="warning in warnings" :key="warning">
+              {{ displayBoundaryText(warning, '部分来源或字段暂不可用。') }}
+            </li>
+          </ul>
+        </template>
+      </el-alert>
       <header class="section-heading">
         <div>
           <p class="section-kicker">来源追溯</p>
           <h2>来源与限制</h2>
-          <p>以下内容用于回读和人工复核，不代表能力评分。</p>
+          <p>以下内容用于回读和人工复核，不代表能力评分或因果结论。</p>
         </div>
       </header>
-      <div class="trace-grid">
+      <div v-if="unknowns.length || limits.length || sources.length || coverageLines.length" class="trace-grid">
         <div>
           <h3>未知项</h3>
           <ul v-if="unknowns.length"><li v-for="item in unknowns" :key="item">{{ item }}</li></ul>
@@ -466,6 +469,12 @@
           </ul>
         </div>
       </div>
+      <AppState
+        v-else
+        type="empty"
+        title="暂无可追溯补充信息"
+        description="当前返回内容没有额外未知项、限制、来源或覆盖说明。"
+      />
     </section>
 
     <el-dialog
@@ -496,12 +505,12 @@
           </el-select>
         </label>
         <label>
-          <span>来源事件 ID</span>
+          <span>来源事件编号</span>
           <el-input
             v-model="resultForm.eventId"
             inputmode="numeric"
             :disabled="Boolean(correctionTarget)"
-            placeholder="请输入已有投递、面试、Offer 或复盘事件 ID"
+            placeholder="请输入已有投递、面试、录用或复盘事件编号"
           />
         </label>
         <label class="form-grid__wide">
@@ -588,6 +597,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ClipboardCheck,
   FileCheck2,
+  FileSearch,
   FolderKanban,
   RefreshCcw,
   Sparkles
@@ -635,7 +645,7 @@ import { getErrorMessage } from '@/utils/error'
 import { getBusinessCode, isAuthOrForbiddenError } from '@/utils/apiError'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
-type SectionKey = 'readiness' | 'usages' | 'results' | 'candidates'
+type SectionKey = 'readiness' | 'usages' | 'results' | 'candidates' | 'trace'
 
 const route = useRoute()
 const router = useRouter()
@@ -643,6 +653,25 @@ const router = useRouter()
 // (onMounted / query watch / retry can all fire load()). Mirrors ApplicationWorkspaceView's token.
 let loadToken = 0
 const pageLoading = ref(false)
+const EVIDENCE_ASSETS_LOAD_TIMEOUT_MS = 15000
+
+const withEvidenceAssetsTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('证据资产读取超时，请稍后重试。'))
+    }, EVIDENCE_ASSETS_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const overviewLoading = ref(false)
 const usagesLoading = ref(false)
 const resultsLoading = ref(false)
@@ -695,9 +724,9 @@ const outcomeOptions = [
   { label: '收到回复', value: 'REPLIED' },
   { label: '面试推进', value: 'INTERVIEW_ADVANCED' },
   { label: '面试未推进', value: 'INTERVIEW_NOT_ADVANCED' },
-  { label: '收到 Offer', value: 'OFFER_RECEIVED' },
-  { label: '接受 Offer', value: 'OFFER_ACCEPTED' },
-  { label: '拒绝 Offer', value: 'OFFER_DECLINED' },
+  { label: '收到录用意向', value: 'OFFER_RECEIVED' },
+  { label: '接受录用', value: 'OFFER_ACCEPTED' },
+  { label: '拒绝录用', value: 'OFFER_DECLINED' },
   { label: '未知', value: 'UNKNOWN' }
 ] satisfies Array<{ label: string; value: EvidenceUsageOutcomeWriteCode }>
 const outcomeCodes = new Set<EvidenceUsageOutcomeWriteCode>(
@@ -706,7 +735,7 @@ const outcomeCodes = new Set<EvidenceUsageOutcomeWriteCode>(
 const eventOptions = [
   { label: '投递事件', value: 'APPLICATION_EVENT' },
   { label: '面试轮次', value: 'INTERVIEW_ROUND' },
-  { label: 'Offer 决策', value: 'OFFER_DECISION' },
+  { label: '录用决策', value: 'OFFER_DECISION' },
   { label: '联系人活动', value: 'CONTACT_ACTIVITY' },
   { label: '周期复盘快照', value: 'CAMPAIGN_REVIEW_SNAPSHOT' }
 ]
@@ -727,10 +756,11 @@ const envelopeCountLabel = <T>(
 }
 
 const sectionItems = computed(() => [
-  { key: 'readiness' as SectionKey, label: '资产就绪度', count: countLabel(overview.value?.overview.assetCount), icon: FileCheck2 },
-  { key: 'usages' as SectionKey, label: '已使用证据', count: envelopeCountLabel(usagesEnvelope.value, usageItems.value.length, ' 条'), icon: FolderKanban },
+  { key: 'readiness' as SectionKey, label: '资产概览', count: countLabel(overview.value?.overview.assetCount), icon: FileCheck2 },
+  { key: 'candidates' as SectionKey, label: '待确认候选', count: envelopeCountLabel(candidatesEnvelope.value, candidateItems.value.length, ' 条'), icon: Sparkles },
+  { key: 'usages' as SectionKey, label: '使用记录', count: envelopeCountLabel(usagesEnvelope.value, usageItems.value.length, ' 条'), icon: FolderKanban },
   { key: 'results' as SectionKey, label: '结果反馈', count: envelopeCountLabel(resultsEnvelope.value, resultItems.value.length, ' 条'), icon: ClipboardCheck },
-  { key: 'candidates' as SectionKey, label: '待确认候选', count: envelopeCountLabel(candidatesEnvelope.value, candidateItems.value.length, ' 条'), icon: Sparkles }
+  { key: 'trace' as SectionKey, label: '来源追溯', count: sources.value.length, icon: FileSearch }
 ])
 
 const readinessItems = computed(() => overview.value?.overview.readiness || overview.value?.items || [])
@@ -780,7 +810,7 @@ const readinessSummary = computed(() => {
 function sectionFromQuery(): SectionKey {
   const rawValue = route.query?.tab
   const value = String(Array.isArray(rawValue) ? rawValue[0] || '' : rawValue || '').toLowerCase()
-  return ['readiness', 'usages', 'results', 'candidates'].includes(value) ? value as SectionKey : 'readiness'
+  return ['readiness', 'usages', 'results', 'candidates', 'trace'].includes(value) ? value as SectionKey : 'readiness'
 }
 
 const queryNumber = (key: string) => {
@@ -903,7 +933,7 @@ const loadOverview = async (token: number = ++loadToken) => {
   overviewLoading.value = true
   overviewError.value = ''
   try {
-    const value = await getEvidenceAssetsOverviewApi(overviewQuery())
+    const value = await withEvidenceAssetsTimeout(getEvidenceAssetsOverviewApi(overviewQuery()))
     if (token !== loadToken) return true
     overview.value = value
     return true
@@ -923,8 +953,8 @@ const loadUsages = async (token: number = ++loadToken) => {
   try {
     const usageId = queryNumber('usageId')
     const value = usageId
-      ? singleItemEnvelope(await getEvidenceUsageDetailApi(usageId))
-      : await getEvidenceAssetUsagesApi(usagesQuery())
+      ? singleItemEnvelope(await withEvidenceAssetsTimeout(getEvidenceUsageDetailApi(usageId)))
+      : await withEvidenceAssetsTimeout(getEvidenceAssetUsagesApi(usagesQuery()))
     if (token !== loadToken) return true
     usagesEnvelope.value = value
     return true
@@ -942,7 +972,7 @@ const loadResults = async (token: number = ++loadToken) => {
   resultsLoading.value = true
   resultsError.value = ''
   try {
-    const value = await getEvidenceAssetResultsApi(resultsQuery())
+    const value = await withEvidenceAssetsTimeout(getEvidenceAssetResultsApi(resultsQuery()))
     if (token !== loadToken) return true
     resultsEnvelope.value = value
     return true
@@ -962,8 +992,8 @@ const loadCandidates = async (token: number = ++loadToken) => {
   try {
     const candidateId = queryNumber('candidateId')
     const value = candidateId
-      ? singleItemEnvelope(await getEvidenceLearningCandidateApi(candidateId))
-      : await getEvidenceLearningCandidatesApi(candidatesQuery())
+      ? singleItemEnvelope(await withEvidenceAssetsTimeout(getEvidenceLearningCandidateApi(candidateId)))
+      : await withEvidenceAssetsTimeout(getEvidenceLearningCandidatesApi(candidatesQuery()))
     if (token !== loadToken) return true
     candidatesEnvelope.value = value
     return true
@@ -982,13 +1012,26 @@ const load = async () => {
   pageLoading.value = true
   try {
     accessUnavailable.value = false
-    if (!await loadOverview(token) || token !== loadToken) return
-    if (accessUnavailable.value) return
-    if (!await loadUsages(token) || token !== loadToken) return
-    if (accessUnavailable.value) return
-    if (!await loadResults(token) || token !== loadToken) return
-    if (accessUnavailable.value) return
-    if (!await loadCandidates(token) || token !== loadToken) return
+    activeSection.value = queryString('mode') === 'record-result' ? 'usages' : sectionFromQuery()
+    if (activeSection.value === 'readiness') {
+      if (!await loadOverview(token) || token !== loadToken) return
+      if (accessUnavailable.value) return
+      if (!await loadCandidates(token) || token !== loadToken) return
+    } else if (activeSection.value === 'candidates') {
+      if (!await loadCandidates(token) || token !== loadToken) return
+    } else if (activeSection.value === 'usages') {
+      if (!await loadUsages(token) || token !== loadToken) return
+    } else if (activeSection.value === 'results') {
+      if (!await loadResults(token) || token !== loadToken) return
+    } else if (activeSection.value === 'trace') {
+      const results = await Promise.all([
+        loadOverview(token),
+        loadUsages(token),
+        loadResults(token),
+        loadCandidates(token)
+      ])
+      if (token !== loadToken || results.some((result) => !result)) return
+    }
     if (accessUnavailable.value) return
     await handleRouteMode()
   } finally {
@@ -1019,9 +1062,8 @@ const handleRouteMode = async () => {
 
 const selectSection = (section: SectionKey) => {
   activeSection.value = section
-  const query = { ...route.query, tab: section }
+  const query = { ...route.query, tab: section, mode: undefined }
   void router.push({ query })
-  document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
 }
 
 const goSafe = (path?: string) => {
@@ -1063,16 +1105,16 @@ const outcomeLabel = (value?: string) => ({
   REPLIED: '收到回复',
   INTERVIEW_ADVANCED: '面试推进',
   INTERVIEW_NOT_ADVANCED: '面试未推进',
-  OFFER_RECEIVED: '收到 Offer',
-  OFFER_ACCEPTED: '接受 Offer',
-  OFFER_DECLINED: '拒绝 Offer',
+  OFFER_RECEIVED: '收到录用意向',
+  OFFER_ACCEPTED: '接受录用',
+  OFFER_DECLINED: '拒绝录用',
   UNKNOWN: '未知结果'
 }[String(value || '').toUpperCase()] || (value ? '其他结果' : '结果待确认'))
 
 const eventTypeLabel = (value?: string) => ({
   APPLICATION_EVENT: '投递事件',
   INTERVIEW_ROUND: '面试轮次',
-  OFFER_DECISION: 'Offer 决策',
+  OFFER_DECISION: '录用决策',
   CONTACT_ACTIVITY: '联系人活动',
   CAMPAIGN_REVIEW_SNAPSHOT: '周期复盘快照'
 }[String(value || '').toUpperCase()] || (value ? '其他事件' : '事件来源待确认'))
@@ -1281,7 +1323,7 @@ const submitResult = async () => {
     return
   }
   if (!correctionTarget.value && (!Number.isSafeInteger(eventId) || eventId <= 0)) {
-    ElMessage.warning('请输入有效的来源事件 ID。')
+    ElMessage.warning('请输入有效的来源事件编号。')
     return
   }
   const expectedLockVersion = correctionTarget.value?.lockVersion
@@ -1373,7 +1415,7 @@ const confirmResult = async (result: CareerEvidenceUsageResultVO) => {
   }
   try {
     await ElMessageBox.confirm(
-      '确认后仍会保留结果来源和限制；这不会改变投递、面试或 Offer 状态。',
+      '确认后仍会保留结果来源和限制；这不会改变投递、面试或录用状态。',
       '确认结果反馈',
       { type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' }
     )
@@ -1478,9 +1520,8 @@ const submitCandidateDecision = async () => {
 watch(
   () => route.query.tab,
   async () => {
-    activeSection.value = sectionFromQuery()
-    await nextTick()
-    document.getElementById(activeSection.value)?.scrollIntoView?.({ behavior: 'auto', block: 'start' })
+    activeSection.value = queryString('mode') === 'record-result' ? 'usages' : sectionFromQuery()
+    await load()
   }
 )
 
@@ -1500,10 +1541,6 @@ watch(
 
 onMounted(async () => {
   await load()
-  await nextTick()
-  if (activeSection.value !== 'readiness') {
-    document.getElementById(activeSection.value)?.scrollIntoView?.({ behavior: 'auto', block: 'start' })
-  }
 })
 </script>
 
@@ -1620,7 +1657,7 @@ onMounted(async () => {
   z-index: 2;
   top: 8px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   padding: 6px;
   border: 1px solid var(--user-border);

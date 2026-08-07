@@ -11,7 +11,7 @@
         <span>CodeCoachAI</span>
       </div>
       <div class="login-brand__aside">
-        新用户？<a class="login-link" @click="router.push('/register')">免费开始</a>
+        新用户？<button class="login-link" type="button" @click="router.push('/register')">免费开始</button>
       </div>
     </header>
 
@@ -336,7 +336,11 @@ watch(
 }
 
 .login-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--arena-grn-d);
+  font: inherit;
   font-weight: 800;
   cursor: pointer;
 }

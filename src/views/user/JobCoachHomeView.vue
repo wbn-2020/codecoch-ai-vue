@@ -338,7 +338,7 @@
             <span v-if="agentLoopHomeLatestReview.fallback">规则兜底</span>
           </div>
           <p data-agent-loop-adjustment>{{ agentLoopHomeAdjustment }}</p>
-          <el-button text @click="go('/agent/reviews')">查看复盘</el-button>
+          <el-button v-if="appConfig.enableV4GrowthPreview" text @click="go('/agent/reviews')">查看复盘</el-button>
         </article>
       </div>
     </section>
@@ -401,6 +401,7 @@ import {
   type AgentReviewVO,
   type JobApplicationStatsVO
 } from '@/api/v4'
+import { appConfig } from '@/config'
 import {
   fetchCachedDashboardOverview,
   fetchCachedLatestDailyPlan,
@@ -804,10 +805,15 @@ const primaryTask = computed<HomeTask>(() => {
 const orderedActionList = computed<HomeTask[]>(() => {
   const seenKeys = new Set<string>()
   const seenIntents = new Set<string>()
+  const seenTaskIds = new Set<number>()
   const candidates = [primaryTask.value, ...todayActionCards.value, ...taskCards.value]
 
   return candidates.filter((task, index) => {
     if (index > 0 && ['已完成', '已跳过'].includes(task.statusLabel)) return false
+    if (typeof task.taskId === 'number' && task.taskId > 0) {
+      if (seenTaskIds.has(task.taskId)) return false
+      seenTaskIds.add(task.taskId)
+    }
     const key = task.key || `${task.path}:${task.title}`
     const intent = `${task.path.split('?')[0]}:${task.title}`
     if (seenKeys.has(key) || seenIntents.has(intent)) return false

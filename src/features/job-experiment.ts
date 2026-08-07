@@ -297,20 +297,37 @@ export const buildJobExperimentApplicationFeedbackSummary = (
     .filter((relation) => relation.relationType === 'TARGET_JOB')
     .forEach((relation) => increment(directionSampleCounts, relation.relationSummary || relation.relationId))
 
-  const applicationCount = applicationRelations.length || metrics?.applicationCount || 0
-  const derivedFeedbackCount = feedbackCount || metrics?.feedbackCount || 0
-  const derivedRejectedCount = rejectedCount || metrics?.rejectedCount || 0
-  const derivedNoFeedbackCount = noFeedbackCount || metrics?.noFeedbackCount || Math.max(0, applicationCount - derivedFeedbackCount)
-  const derivedInterviewCompletedCount = interviewCompletedCount || metrics?.interviewCompletedCount || 0
+  const hasRelations = applicationRelations.length > 0
+  const applicationCount = hasRelations ? applicationRelations.length : metrics?.applicationCount
+  const derivedFeedbackCount = hasRelations
+    ? feedbackCount || metrics?.feedbackCount || 0
+    : metrics?.feedbackCount
+  const derivedRejectedCount = hasRelations
+    ? rejectedCount || metrics?.rejectedCount || 0
+    : metrics?.rejectedCount
+  const derivedNoFeedbackCount = hasRelations
+    ? noFeedbackCount || metrics?.noFeedbackCount || (typeof applicationCount === 'number' && typeof derivedFeedbackCount === 'number'
+      ? Math.max(0, applicationCount - derivedFeedbackCount)
+      : 0)
+    : metrics?.noFeedbackCount
+  const derivedInterviewCompletedCount = hasRelations
+    ? interviewCompletedCount || metrics?.interviewCompletedCount || 0
+    : metrics?.interviewCompletedCount
+  const derivedInterviewRoundCount = hasRelations
+    ? interviewRoundCount || metrics?.interviewRoundCount || derivedInterviewCompletedCount || 0
+    : metrics?.interviewRoundCount
+  const derivedInterviewReportSummaryCount = hasRelations
+    ? interviewReportSummaries.length || metrics?.interviewReportSummaryCount || 0
+    : metrics?.interviewReportSummaryCount
 
   return {
     applicationCount,
     feedbackCount: derivedFeedbackCount,
     rejectedCount: derivedRejectedCount,
     noFeedbackCount: derivedNoFeedbackCount,
-    interviewRoundCount: interviewRoundCount || metrics?.interviewRoundCount || derivedInterviewCompletedCount,
+    interviewRoundCount: derivedInterviewRoundCount,
     interviewCompletedCount: derivedInterviewCompletedCount,
-    interviewReportSummaryCount: interviewReportSummaries.length || metrics?.interviewReportSummaryCount || 0,
+    interviewReportSummaryCount: derivedInterviewReportSummaryCount,
     statusCounts,
     resumeVersionUsageCounts: Object.keys(resumeVersionUsageCounts).length
       ? resumeVersionUsageCounts
@@ -318,8 +335,8 @@ export const buildJobExperimentApplicationFeedbackSummary = (
     directionSampleCounts,
     facts: uniqueTexts(facts),
     interviewReportSummaries: uniqueTexts(interviewReportSummaries),
-    degraded: !applicationRelations.length,
-    degradedReason: applicationRelations.length ? undefined : '未绑定投递记录，已降级使用 metrics 汇总。'
+    degraded: !hasRelations,
+    degradedReason: hasRelations ? undefined : '未绑定投递记录，已降级使用 metrics 汇总。'
   }
 }
 
@@ -327,17 +344,19 @@ const getLowSampleWarning = (
   boundary: ExperimentSampleBoundaryVO,
   feedbackSummary?: JobExperimentApplicationFeedbackSummaryVO
 ) => {
-  const applicationCount = boundary.applicationCount ?? 0
-  const interviewCompletedCount = boundary.interviewCompletedCount ?? 0
+  const applicationCount = boundary.applicationCount
+  const interviewCompletedCount = boundary.interviewCompletedCount
   const resumeVersionCounts = Object.values(feedbackSummary?.resumeVersionUsageCounts || boundary.resumeVersionUsageCounts || {})
   const directionCounts = Object.values(feedbackSummary?.directionSampleCounts || boundary.directionSampleCounts || {})
   const hasSparseResumeVersion = resumeVersionCounts.some((count) => count > 0 && count < 3)
   const hasSparseDirection = directionCounts.some((count) => count > 0 && count < 5)
 
+  if (typeof applicationCount !== 'number') return boundary.sampleWarning || ''
+  const knownInterviewCompletedCount = interviewCompletedCount ?? 0
   if (applicationCount < 5) return '投递样本少于 5 条，复盘只展示事实，不输出策略优劣、趋势或版本比较。'
   if (applicationCount < 10) return '投递样本 5-9 条，只输出低置信弱观察，并引导继续补充投递、拒信、无反馈和面试记录。'
   if (applicationCount < 15) return '投递样本 10-14 条，仍按弱观察处理；继续观察到 15 条以上再讨论稳定趋势。'
-  if (interviewCompletedCount < 3) return '完成面试少于 3 次，不比较面试能力优劣或趋势。'
+  if (knownInterviewCompletedCount < 3) return '完成面试少于 3 次，不比较面试能力优劣或趋势。'
   if (hasSparseResumeVersion) return '存在简历版本样本少于 3 条，不比较该版本优劣。'
   if (hasSparseDirection) return '存在岗位方向样本少于 5 条，不比较该方向优劣或趋势。'
   return boundary.sampleWarning || ''
@@ -350,22 +369,25 @@ export const buildExperimentSampleBoundary = (
   feedbackSummary?: JobExperimentApplicationFeedbackSummaryVO
 ): ExperimentSampleBoundaryVO => {
   const explicitBoundary = dsl?.limits || dsl?.sampleBoundary || metrics?.sampleBoundary
-  const applicationCount = explicitBoundary?.applicationCount ?? feedbackSummary?.applicationCount ?? metrics?.applicationCount ?? 0
-  const feedbackCount = explicitBoundary?.feedbackCount ?? feedbackSummary?.feedbackCount ?? metrics?.feedbackCount ?? 0
+  const applicationCount = explicitBoundary?.applicationCount ?? feedbackSummary?.applicationCount ?? metrics?.applicationCount
+  const feedbackCount = explicitBoundary?.feedbackCount ?? feedbackSummary?.feedbackCount ?? metrics?.feedbackCount
   const interviewCompletedCount =
-    explicitBoundary?.interviewCompletedCount ?? feedbackSummary?.interviewCompletedCount ?? metrics?.interviewCompletedCount ?? 0
+    explicitBoundary?.interviewCompletedCount ?? feedbackSummary?.interviewCompletedCount ?? metrics?.interviewCompletedCount
   // V12/D2：后端 boundary 的 sampleInsufficient 是权威口径，本地 <5 只兜底旧数据。
   const sampleInsufficient =
     typeof explicitBoundary?.sampleInsufficient === 'boolean'
       ? explicitBoundary.sampleInsufficient
-      : applicationCount < 5
+      : typeof applicationCount === 'number'
+        ? applicationCount < 5
+        : metrics?.sampleInsufficient ?? strategy?.sampleInsufficient
   const sampleWarning =
     getLowSampleWarning({ ...explicitBoundary, applicationCount, interviewCompletedCount }, feedbackSummary) ||
     explicitBoundary?.sampleWarning ||
     metrics?.sampleWarning ||
     strategy?.sampleWarning ||
     (sampleInsufficient ? '当前样本不足，复盘只能展示事实、弱观察和补样本行动。' : '')
-  const sampleLevel = explicitBoundary?.sampleLevel || (applicationCount < 5 ? (applicationCount ? 'LOW' : 'NONE') : applicationCount < 15 ? 'LOW' : 'MEDIUM')
+  const sampleLevel = explicitBoundary?.sampleLevel
+    || (typeof applicationCount !== 'number' ? 'NONE' : applicationCount < 5 ? 'LOW' : applicationCount < 15 ? 'LOW' : 'MEDIUM')
 
   return {
     ...explicitBoundary,
@@ -373,11 +395,11 @@ export const buildExperimentSampleBoundary = (
     applicationCount,
     feedbackCount,
     interviewCompletedCount,
-    rejectedCount: explicitBoundary?.rejectedCount ?? feedbackSummary?.rejectedCount ?? metrics?.rejectedCount ?? 0,
-    noFeedbackCount: explicitBoundary?.noFeedbackCount ?? feedbackSummary?.noFeedbackCount ?? metrics?.noFeedbackCount ?? 0,
-    interviewRoundCount: explicitBoundary?.interviewRoundCount ?? feedbackSummary?.interviewRoundCount ?? metrics?.interviewRoundCount ?? 0,
+    rejectedCount: explicitBoundary?.rejectedCount ?? feedbackSummary?.rejectedCount ?? metrics?.rejectedCount,
+    noFeedbackCount: explicitBoundary?.noFeedbackCount ?? feedbackSummary?.noFeedbackCount ?? metrics?.noFeedbackCount,
+    interviewRoundCount: explicitBoundary?.interviewRoundCount ?? feedbackSummary?.interviewRoundCount ?? metrics?.interviewRoundCount,
     interviewReportSummaryCount:
-      explicitBoundary?.interviewReportSummaryCount ?? feedbackSummary?.interviewReportSummaryCount ?? metrics?.interviewReportSummaryCount ?? 0,
+      explicitBoundary?.interviewReportSummaryCount ?? feedbackSummary?.interviewReportSummaryCount ?? metrics?.interviewReportSummaryCount,
     resumeVersionUsageCounts: explicitBoundary?.resumeVersionUsageCounts || feedbackSummary?.resumeVersionUsageCounts || metrics?.resumeVersionUsageCounts || {},
     directionSampleCounts: explicitBoundary?.directionSampleCounts || feedbackSummary?.directionSampleCounts || {},
     sampleInsufficient,
@@ -391,8 +413,18 @@ export const buildExperimentQualityGate = (
   provided?: SuggestionQualityGateVO | null,
   unsupportedConclusions: string[] = []
 ): SuggestionQualityGateVO => {
-  const applicationCount = boundary.applicationCount ?? 0
-  const interviewCompletedCount = boundary.interviewCompletedCount ?? 0
+  const applicationCount = boundary.applicationCount
+  const interviewCompletedCount = boundary.interviewCompletedCount
+
+  if (typeof applicationCount !== 'number') {
+    return provided || {
+      gateStatus: 'WARN',
+      suggestionStrength: 'WEAK',
+      reasons: uniqueTexts(['投递样本待确认，暂不输出策略判断', boundary.sampleWarning]),
+      blockedConclusions: unsupportedConclusions
+    }
+  }
+  const knownInterviewCompletedCount = interviewCompletedCount ?? 0
 
   if (applicationCount < 5) {
     return {
@@ -405,14 +437,14 @@ export const buildExperimentQualityGate = (
     }
   }
 
-  if (applicationCount < 15 || interviewCompletedCount < 3) {
+  if (applicationCount < 15 || knownInterviewCompletedCount < 3) {
     return {
       gateStatus: 'WARN',
       suggestionStrength: 'WEAK',
       reasons: uniqueTexts([
         applicationCount < 10 ? '投递样本 5-9 条，只允许低置信弱观察' : '',
         applicationCount >= 10 && applicationCount < 15 ? '投递样本未达到 15 条，继续观察后再讨论稳定趋势' : '',
-        interviewCompletedCount < 3 ? '完成面试少于 3 次，不判断面试能力趋势' : '',
+        knownInterviewCompletedCount < 3 ? '完成面试少于 3 次，不判断面试能力趋势' : '',
         boundary.sampleWarning
       ]),
       blockedConclusions: unsupportedConclusions,
@@ -463,6 +495,7 @@ export const buildJobExperimentReviewDisplayModel = (
   const factsOnly = (sampleBoundary.applicationCount ?? 0) < 5
   const weakOnly = !factsOnly && ((sampleBoundary.applicationCount ?? 0) < 15 || (sampleBoundary.interviewCompletedCount ?? 0) < 3)
   const reviewMode = factsOnly ? 'FACTS_ONLY' : weakOnly ? 'WEAK_OBSERVATION' : 'CANDIDATE'
+  const formatFactCount = (value?: number) => typeof value === 'number' ? String(value) : '待确认'
   const lowSampleRules = uniqueTexts([
     sampleBoundary.sampleWarning,
     applicationFeedbackSummary.degraded ? applicationFeedbackSummary.degradedReason : undefined,
@@ -478,9 +511,9 @@ export const buildJobExperimentReviewDisplayModel = (
     ...(dsl?.facts || []),
     ...(detail?.metrics?.facts || []),
     ...applicationFeedbackSummary.facts,
-    `投递 ${applicationFeedbackSummary.applicationCount} 条，反馈 ${applicationFeedbackSummary.feedbackCount} 条，拒信 ${applicationFeedbackSummary.rejectedCount} 条，无反馈 ${applicationFeedbackSummary.noFeedbackCount} 条。`,
+    `投递 ${formatFactCount(applicationFeedbackSummary.applicationCount)} 条，反馈 ${formatFactCount(applicationFeedbackSummary.feedbackCount)} 条，拒信 ${formatFactCount(applicationFeedbackSummary.rejectedCount)} 条，无反馈 ${formatFactCount(applicationFeedbackSummary.noFeedbackCount)} 条。`,
     applicationFeedbackSummary.interviewRoundCount
-      ? `记录面试轮次 ${applicationFeedbackSummary.interviewRoundCount} 次，完成面试 ${applicationFeedbackSummary.interviewCompletedCount} 次。`
+      ? `记录面试轮次 ${formatFactCount(applicationFeedbackSummary.interviewRoundCount)} 次，完成面试 ${formatFactCount(applicationFeedbackSummary.interviewCompletedCount)} 次。`
       : undefined,
     ...applicationFeedbackSummary.interviewReportSummaries.map((summary) => `面试报告摘要：${summary}`),
     hasCurrentStrategy ? undefined : latest?.factSummary
@@ -528,7 +561,7 @@ export const buildJobExperimentReviewDisplayModel = (
   if (!factsOnly && !weakObservations.length) {
     weakObservations.push({
       observationType: 'FUNNEL',
-      text: `当前记录到 ${applicationFeedbackSummary.applicationCount} 条投递、${applicationFeedbackSummary.feedbackCount} 条反馈、${applicationFeedbackSummary.rejectedCount} 条拒信、${applicationFeedbackSummary.noFeedbackCount} 条无反馈，只能作为漏斗弱观察。`,
+      text: `当前记录到 ${formatFactCount(applicationFeedbackSummary.applicationCount)} 条投递、${formatFactCount(applicationFeedbackSummary.feedbackCount)} 条反馈、${formatFactCount(applicationFeedbackSummary.rejectedCount)} 条拒信、${formatFactCount(applicationFeedbackSummary.noFeedbackCount)} 条无反馈，只能作为漏斗弱观察。`,
       evidenceCount: applicationFeedbackSummary.applicationCount,
       confidenceLevel: 'LOW',
       actionHint: sampleBoundary.sampleWarning || '继续观察到更多样本后再比较策略。'

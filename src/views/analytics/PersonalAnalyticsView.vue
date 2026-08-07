@@ -190,12 +190,34 @@ const renderTrendChart = async () => {
   }
   trendChart = echarts.default.init(trendChartRef.value)
   trendChart.setOption({
-    color: ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa'],
-    tooltip: { trigger: 'axis' },
-    legend: { top: 0, right: 8, textStyle: { color: '#94a3b8' } },
-    grid: { left: 12, right: 16, top: 38, bottom: 8, containLabel: true },
-    xAxis: { type: 'category', data: trend.value.map((item) => item.date), axisLabel: { color: '#94a3b8' } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.14)' } }, axisLabel: { color: '#94a3b8' } },
+    color: ['#17b26a', '#a3e635', '#f79009', '#7c5cfc'],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#ffffff',
+      borderColor: '#e4eae5',
+      textStyle: { color: '#15211b' }
+    },
+    legend: { top: 0, right: 8, textStyle: { color: '#5f6e66' } },
+    grid: {
+      left: 12,
+      right: 16,
+      top: 38,
+      bottom: 8,
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel'
+    },
+    xAxis: {
+      type: 'category',
+      data: trend.value.map((item) => item.date),
+      axisLabel: { color: '#68766e' },
+      axisLine: { lineStyle: { color: '#d5ddd6' } }
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: '#eef2ee' } },
+      axisLabel: { color: '#68766e' },
+      axisLine: { lineStyle: { color: '#d5ddd6' } }
+    },
     series: [
       { name: '生成', type: 'line', smooth: true, data: trend.value.map((item) => item.generatedCount || 0) },
       { name: '完成', type: 'line', smooth: true, data: trend.value.map((item) => item.completedCount || 0) },
@@ -322,11 +344,7 @@ onBeforeUnmount(() => {
 .analytics-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
+  gap: 14px;
 }
 
 .partial-alert {
@@ -335,15 +353,11 @@ onBeforeUnmount(() => {
 
 .analytics-metric-card {
   min-height: 92px;
-  padding: 12px 14px;
-  border: 0;
-  border-right: 1px solid var(--user-border);
-  border-radius: 0;
-  background: transparent;
-
-  &:last-child {
-    border-right: 0;
-  }
+  padding: 16px;
+  border: 1.5px solid var(--user-border);
+  border-radius: 16px;
+  background: var(--user-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .metric-icon {
@@ -356,10 +370,10 @@ onBeforeUnmount(() => {
   border-radius: 8px;
 }
 
-.tone-blue { color: #93c5fd; background: rgba(59, 130, 246, 0.16); }
-.tone-cyan { color: #67e8f9; background: rgba(6, 182, 212, 0.16); }
-.tone-green { color: #86efac; background: rgba(34, 197, 94, 0.14); }
-.tone-violet { color: #c4b5fd; background: rgba(139, 92, 246, 0.16); }
+.tone-blue { color: var(--arena-grn-d, var(--user-primary)); background: var(--arena-grn-soft, var(--user-primary-soft)); }
+.tone-cyan { color: var(--arena-amber, var(--user-warning)); background: var(--arena-amber-soft, var(--user-warning-soft)); }
+.tone-green { color: var(--arena-grn-d, var(--user-success-text)); background: var(--arena-grn-soft, var(--user-success-soft)); }
+.tone-violet { color: var(--arena-vio, var(--user-ai)); background: var(--arena-vio-soft, var(--user-ai-soft)); }
 
 .analytics-metric-card span,
 .analytics-metric-card small,
@@ -425,7 +439,7 @@ onBeforeUnmount(() => {
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--user-surface-muted);
 }
 
 .skill-bar-track i {
@@ -445,32 +459,12 @@ onBeforeUnmount(() => {
   .analytics-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .analytics-metric-card {
-    border-bottom: 1px solid var(--user-border);
-
-    &:nth-child(2n) {
-      border-right: 0;
-    }
-
-    &:nth-last-child(-n + 2) {
-      border-bottom: 0;
-    }
-  }
 }
 
 @media (max-width: 640px) {
   .analytics-metric-grid,
   .skill-bar-row {
     grid-template-columns: 1fr;
-  }
-
-  .analytics-metric-card {
-    border-right: 0;
-
-    &:nth-last-child(2) {
-      border-bottom: 1px solid var(--user-border);
-    }
   }
 }
 </style>

@@ -8,7 +8,7 @@
         </p>
         <h1 class="page-title">修改密码</h1>
         <p class="page-subtitle">
-          提交旧密码和新密码。若安全策略要求重新登录，系统会在会话失效时回到登录页。
+          提交旧密码和新密码；会话需要重新验证时，系统会引导你回到登录页。
         </p>
       </div>
 
@@ -35,7 +35,7 @@
           </div>
 
           <ul>
-            <li>建议使用不少于 8 位的密码，并同时包含字母和数字。</li>
+            <li>新密码至少 8 位，建议同时包含字母和数字。</li>
             <li>密码修改后，若当前会话失效，请按登录页提示重新登录。</li>
             <li>不要把密码写成与用户名或昵称过于接近的形式。</li>
           </ul>
@@ -120,7 +120,7 @@ const rules: FormRules<PasswordUpdateDTO> = {
   oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, max: 32, message: '新密码长度为 6-32 位', trigger: 'blur' }
+    { min: 8, max: 32, message: '新密码长度为 8-32 位', trigger: 'blur' }
   ],
   confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
 }
@@ -158,15 +158,19 @@ const handleSubmit = async () => {
 <style scoped lang="scss">
 .security-page {
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
 .security-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  padding: 24px 0 8px;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
+  background: var(--user-surface-tint);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-copy {
@@ -181,8 +185,7 @@ const handleSubmit = async () => {
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
+  font-weight: 800;
 }
 
 .hero-actions {
@@ -193,8 +196,17 @@ const handleSubmit = async () => {
 
 .security-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: 18px;
+  grid-template-columns: minmax(228px, 0.7fr) minmax(0, 1.3fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.security-tips,
+.security-form-card {
+  border: 1px solid var(--user-border);
+  border-radius: 20px;
+  background: var(--user-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .section-head {
@@ -204,16 +216,18 @@ const handleSubmit = async () => {
 .section-head h2 {
   margin: 5px 0 0;
   color: var(--user-text);
-  font-size: 18px;
+  font-size: 19px;
+  font-weight: 900;
   line-height: 1.3;
 }
 
 .security-tips ul {
   display: grid;
-  gap: 12px;
-  margin: 16px 0 0;
+  gap: 10px;
+  margin: 14px 0 0;
   padding-left: 18px;
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
+  font-size: 13px;
   line-height: 1.7;
 }
 
@@ -222,7 +236,7 @@ const handleSubmit = async () => {
 }
 
 .security-alert {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .form-actions {
@@ -242,7 +256,7 @@ const handleSubmit = async () => {
   .security-hero {
     align-items: flex-start;
     flex-direction: column;
-    padding-top: 4px;
+    padding: 20px 18px;
   }
 
   .hero-actions,
@@ -260,6 +274,11 @@ const handleSubmit = async () => {
   .section-head {
     display: grid;
     justify-content: stretch;
+  }
+
+  .security-tips,
+  .security-form-card {
+    border-radius: 16px;
   }
 }
 </style>

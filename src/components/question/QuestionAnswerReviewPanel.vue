@@ -1,6 +1,6 @@
 <template>
   <section class="answer-review-panel">
-    <div class="answer-review-panel__header">
+    <div v-if="showComposer" class="answer-review-panel__header">
       <div>
         <p class="answer-review-panel__eyebrow">先答题，再点评</p>
         <h2>用面试口径回答这道题</h2>
@@ -9,7 +9,7 @@
       <el-tag v-if="currentReview?.reviewStatus" effect="plain">{{ reviewStatusText(currentReview.reviewStatus) }}</el-tag>
     </div>
 
-    <div class="answer-review-panel__guide">
+    <div v-if="showComposer" class="answer-review-panel__guide">
       <span>回答结构</span>
       <div>
         <em>问题边界</em>
@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <div class="answer-review-panel__composer">
+    <div v-if="showComposer" class="answer-review-panel__composer">
       <label for="question-answer-review-input">我的回答</label>
       <el-input
         id="question-answer-review-input"
@@ -32,7 +32,7 @@
       />
     </div>
 
-    <div class="answer-review-panel__actions">
+    <div v-if="showComposer" class="answer-review-panel__actions">
       <span>答题用时：{{ elapsedSeconds }} 秒</span>
       <el-button type="primary" :loading="submitting" :disabled="!answerContent.trim()" @click="handleSubmit">
         提交 AI 点评
@@ -40,7 +40,7 @@
     </div>
 
     <el-alert
-      v-if="submitError"
+      v-if="showComposer && submitError"
       class="answer-review-panel__alert"
       type="error"
       :closable="false"
@@ -105,7 +105,7 @@
       />
     </div>
 
-    <div class="answer-review-panel__reference">
+    <div v-if="showReference" class="answer-review-panel__reference">
       <div class="answer-review-panel__reference-head">
         <div>
           <span>提交后复盘</span>
@@ -130,7 +130,7 @@
       </p>
     </div>
 
-    <div class="answer-review-panel__history">
+    <div v-if="showHistory" class="answer-review-panel__history">
       <div class="answer-review-panel__history-title">
         <h3>最近点评历史</h3>
         <el-button text :loading="historyLoading" @click="fetchHistory">刷新</el-button>
@@ -173,9 +173,12 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import type { PracticeRecordVO, QuestionDetailVO } from '@/types/question'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   question: QuestionDetailVO
-}>()
+  mode?: 'full' | 'practice' | 'history'
+}>(), {
+  mode: 'full'
+})
 
 const answerContent = ref(props.question.lastAnswer || '')
 const startedAt = ref(Date.now())
@@ -192,6 +195,9 @@ const elapsedSeconds = computed(() =>
   Math.max(1, Math.floor((now.value - startedAt.value) / 1000))
 )
 const canShowReference = computed(() => Boolean(currentReview.value || history.value.length))
+const showComposer = computed(() => props.mode !== 'history')
+const showReference = computed(() => props.mode === 'full')
+const showHistory = computed(() => props.mode !== 'practice')
 
 const displayValue = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '--'
@@ -236,6 +242,9 @@ const fetchHistory = async () => {
       pageSize: 5
     })
     history.value = result.records || []
+    if (!currentReview.value && history.value.length) {
+      currentReview.value = history.value[0]
+    }
   } catch (error) {
     historyError.value = getErrorMessage(error, '点评历史加载失败')
   } finally {
@@ -274,10 +283,14 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  timer = window.setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-  fetchHistory()
+  if (showComposer.value) {
+    timer = window.setInterval(() => {
+      now.value = Date.now()
+    }, 1000)
+  }
+  if (showHistory.value) {
+    void fetchHistory()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -291,9 +304,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
   padding: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
-  border-radius: 8px;
+  border: 1.5px solid var(--user-border);
+  border-radius: 16px;
   background: var(--user-surface);
+  box-shadow: var(--user-shadow-sm);
 }
 
 .answer-review-panel__header,
@@ -309,7 +323,7 @@ onBeforeUnmount(() => {
 
 .answer-review-panel__eyebrow {
   margin: 0 0 6px;
-  color: #2563eb;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -430,7 +444,7 @@ onBeforeUnmount(() => {
   }
 
   p {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 12px;
     font-weight: 800;
   }
@@ -453,7 +467,7 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    color: #2563eb;
+    color: var(--user-primary);
     font-size: 30px;
     line-height: 1;
   }

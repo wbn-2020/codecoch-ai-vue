@@ -45,9 +45,9 @@ const factLabel = (value?: string) => getWeeklyReportUserText(value, '未命名�
 .weekly-panel {
   min-width: 0;
   padding: 18px 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
+  background: var(--user-surface, var(--app-surface));
 }
 
 .weekly-panel__header {

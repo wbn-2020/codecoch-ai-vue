@@ -295,8 +295,8 @@ onMounted(load)
   gap: 16px;
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface, var(--app-surface));
 }
 
 .v4-page-header h1,
@@ -317,7 +317,7 @@ onMounted(load)
 
 .v4-eyebrow,
 .section-kicker {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
@@ -337,8 +337,8 @@ onMounted(load)
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .partial-alert {
@@ -356,9 +356,9 @@ onMounted(load)
   gap: 14px 18px;
   align-items: center;
   padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid var(--user-primary-border, var(--app-border));
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-primary-faint, var(--arena-grn-soft));
 }
 
 .growth-next-action h2,
@@ -378,7 +378,7 @@ onMounted(load)
 }
 
 .growth-next-action__label {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
   font-weight: 700;
 }
@@ -398,8 +398,8 @@ onMounted(load)
 .v4-card,
 .trend-row {
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface, var(--app-surface));
 }
 
 .v4-card {
@@ -509,7 +509,7 @@ onMounted(load)
 }
 
 .trend-cold {
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--user-warning));
   overflow-wrap: anywhere;
 }
 

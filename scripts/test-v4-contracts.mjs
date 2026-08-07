@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +12,23 @@ const frontendRoot = path.resolve(scriptDir, '..')
 const backendRoot = resolveBackendRoot(frontendRoot)
 
 const read = (file) => readFile(file, 'utf8')
+const resolveBackendFile = (relativePath) => {
+  const primaryPath = path.join(backendRoot, relativePath)
+  if (existsSync(primaryPath)) return primaryPath
+
+  const [moduleName, ...moduleRelativePath] = relativePath.split('/')
+  if (moduleName.startsWith('codecoachai-')) {
+    const consolidatedPath = path.join(
+      backendRoot,
+      'codecoachai-core',
+      ...moduleRelativePath
+    )
+    if (existsSync(consolidatedPath)) return consolidatedPath
+  }
+
+  return primaryPath
+}
+
 const frontendApiFile = path.join(frontendRoot, 'src/api/v4.ts')
 const routeFile = path.join(frontendRoot, 'src/router/routes.ts')
 const sidebarFile = path.join(frontendRoot, 'src/components/layout/UserSidebar.vue')
@@ -69,28 +87,28 @@ const agentTodayPageFile = path.join(frontendRoot, 'src/views/agent/AgentTodayVi
 const agentTaskListPageFile = path.join(frontendRoot, 'src/views/agent/AgentTaskListView.vue')
 const agentApiFile = path.join(frontendRoot, 'src/api/agent.ts')
 const agentTypesFile = path.join(frontendRoot, 'src/types/agent.ts')
-const resumeInnerApplicationControllerFile = path.join(backendRoot, 'codecoachai-resume/src/main/java/com/codecoachai/resume/controller/InnerJobApplicationController.java')
-const aiResumeAgentContextFeignFile = path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/ResumeAgentContextFeignClient.java')
-const aiAgentTaskTypeEnumFile = path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/domain/enums/AgentTaskTypeEnum.java')
-const aiAgentPromptBuilderFile = path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/service/impl/AgentPromptBuilderImpl.java')
+const resumeInnerApplicationControllerFile = resolveBackendFile('codecoachai-resume/src/main/java/com/codecoachai/resume/controller/InnerJobApplicationController.java')
+const aiResumeAgentContextFeignFile = resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/ResumeAgentContextFeignClient.java')
+const aiAgentTaskTypeEnumFile = resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/domain/enums/AgentTaskTypeEnum.java')
+const aiAgentPromptBuilderFile = resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/service/impl/AgentPromptBuilderImpl.java')
 
 const backendFiles = {
-  growth: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentGrowthController.java'),
-  knowledge: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentKnowledgeController.java'),
-  knowledgeSse: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentKnowledgeSseController.java'),
-  resumeCareer: path.join(backendRoot, 'codecoachai-resume/src/main/java/com/codecoachai/resume/controller/V4ResumeCareerController.java'),
-  adminAnnouncement: path.join(backendRoot, 'codecoachai-system/src/main/java/com/codecoachai/system/controller/AdminAnnouncementController.java'),
-  adminQuestion: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionController.java'),
-  adminQuestionImport: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionImportController.java'),
-  adminQuestionMetadata: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionMetadataController.java'),
-  adminQuestionReview: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionReviewController.java'),
-  adminQuestionDuplicate: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionDuplicateReviewController.java'),
-  adminAi: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/controller/AdminAiController.java'),
-  adminSearch: path.join(backendRoot, 'codecoachai-search/src/main/java/com/codecoachai/search/controller/AdminSearchController.java'),
-  adminFile: path.join(backendRoot, 'codecoachai-file/src/main/java/com/codecoachai/file/controller/AdminFileController.java'),
-  adminFileDownloadDto: path.join(backendRoot, 'codecoachai-file/src/main/java/com/codecoachai/file/domain/dto/AdminFileDownloadAccessDTO.java'),
-  systemConfig: path.join(backendRoot, 'codecoachai-system/src/main/java/com/codecoachai/system/controller/SystemConfigController.java'),
-  adminMenu: path.join(backendRoot, 'codecoachai-system/src/main/java/com/codecoachai/system/controller/AdminMenuController.java')
+  growth: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentGrowthController.java'),
+  knowledge: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentKnowledgeController.java'),
+  knowledgeSse: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AgentKnowledgeSseController.java'),
+  resumeCareer: resolveBackendFile('codecoachai-resume/src/main/java/com/codecoachai/resume/controller/V4ResumeCareerController.java'),
+  adminAnnouncement: resolveBackendFile('codecoachai-system/src/main/java/com/codecoachai/system/controller/AdminAnnouncementController.java'),
+  adminQuestion: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionController.java'),
+  adminQuestionImport: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionImportController.java'),
+  adminQuestionMetadata: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionMetadataController.java'),
+  adminQuestionReview: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionReviewController.java'),
+  adminQuestionDuplicate: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/AdminQuestionDuplicateReviewController.java'),
+  adminAi: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/controller/AdminAiController.java'),
+  adminSearch: resolveBackendFile('codecoachai-search/src/main/java/com/codecoachai/search/controller/AdminSearchController.java'),
+  adminFile: resolveBackendFile('codecoachai-file/src/main/java/com/codecoachai/file/controller/AdminFileController.java'),
+  adminFileDownloadDto: resolveBackendFile('codecoachai-file/src/main/java/com/codecoachai/file/domain/dto/AdminFileDownloadAccessDTO.java'),
+  systemConfig: resolveBackendFile('codecoachai-system/src/main/java/com/codecoachai/system/controller/SystemConfigController.java'),
+  adminMenu: resolveBackendFile('codecoachai-system/src/main/java/com/codecoachai/system/controller/AdminMenuController.java')
 }
 
 const [
@@ -251,32 +269,25 @@ const checks = []
 
 const resumeJobMatchApi = await read(resumeJobMatchApiFile)
 const resumeJobMatchTypes = await read(resumeJobMatchTypesFile)
-const backendResumeJobMatchCreateDto = await read(path.join(
-  backendRoot,
+const backendResumeJobMatchCreateDto = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/domain/dto/ResumeJobMatchCreateDTO.java'
 ))
-const backendResumeJobMatchReportEntity = await read(path.join(
-  backendRoot,
+const backendResumeJobMatchReportEntity = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/domain/entity/ResumeJobMatchReport.java'
 ))
-const backendResumeJobMatchService = await read(path.join(
-  backendRoot,
+const backendResumeJobMatchService = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/service/impl/ResumeJobMatchServiceImpl.java'
 ))
-const backendResumeCareerService = await read(path.join(
-  backendRoot,
+const backendResumeCareerService = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/service/impl/V4ResumeCareerServiceImpl.java'
 ))
-const backendJobApplicationDto = await read(path.join(
-  backendRoot,
+const backendJobApplicationDto = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/domain/dto/JobApplicationSaveDTO.java'
 ))
-const backendJobApplicationEntity = await read(path.join(
-  backendRoot,
+const backendJobApplicationEntity = await read(resolveBackendFile(
   'codecoachai-resume/src/main/java/com/codecoachai/resume/domain/entity/JobApplication.java'
 ))
-const backendResumeCareerTest = await read(path.join(
-  backendRoot,
+const backendResumeCareerTest = await read(resolveBackendFile(
   'codecoachai-resume/src/test/java/com/codecoachai/resume/service/impl/V4ResumeCareerServiceImplTest.java'
 ))
 const agentTaskActionUtil = await read(path.join(frontendRoot, 'src/utils/agentTaskAction.ts'))

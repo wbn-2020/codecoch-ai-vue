@@ -1642,31 +1642,33 @@ onUnmounted(() => {
 
 .resume-card-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 14px;
   padding-top: 12px;
 }
 
 .resume-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "header actions"
-    "meta actions"
-    "summary status"
-    "skills status"
-    "optimize optimize";
-  gap: 10px 16px;
+    "header"
+    "meta"
+    "summary"
+    "skills"
+    "status"
+    "optimize"
+    "actions";
+  gap: 10px;
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--user-border);
   border-radius: var(--user-radius-sm);
-  background: var(--user-surface-muted);
+  background: var(--user-surface);
   transition: border-color 0.18s ease, background 0.18s ease;
 
   &:hover {
     border-color: var(--user-primary-border);
-    background: var(--user-surface-raised);
+    background: var(--user-surface-muted);
   }
 }
 
@@ -1771,8 +1773,8 @@ onUnmounted(() => {
 
 .resume-card__status {
   grid-area: status;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   align-self: start;
   gap: 0;
   overflow: hidden;
@@ -1780,8 +1782,9 @@ onUnmounted(() => {
   border-radius: var(--user-radius-sm);
 
   div {
-    padding: 9px 10px;
-    background: var(--user-control-bg);
+    flex: 1 1 130px;
+    padding: 8px 10px;
+    background: var(--user-surface-muted);
 
     & + div {
       border-left: 1px solid var(--user-border);
@@ -1818,18 +1821,18 @@ onUnmounted(() => {
 
 .resume-card__actions {
   grid-area: actions;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   align-self: start;
   gap: 8px;
 
   :deep(.el-button) {
-    width: 100%;
     margin-left: 0;
   }
 
   :deep(.el-dropdown) {
-    justify-self: end;
+    margin-left: auto;
   }
 }
 
@@ -2085,27 +2088,6 @@ onUnmounted(() => {
     border-left: 0;
   }
 
-  .resume-card {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "header"
-      "meta"
-      "summary"
-      "skills"
-      "status"
-      "optimize"
-      "actions";
-  }
-
-  .resume-card__actions {
-    display: flex;
-    flex-wrap: wrap;
-
-    :deep(.el-button) {
-      width: auto;
-    }
-  }
-
   .workspace-toolbar {
     flex-direction: column;
   }
@@ -2136,7 +2118,6 @@ onUnmounted(() => {
     justify-content: flex-start;
   }
 
-  .resume-card__status,
   .diff-grid,
   .score-strip,
   .pipeline-status {
@@ -2169,6 +2150,11 @@ onUnmounted(() => {
 
     :deep(.el-button) {
       width: 100%;
+    }
+
+    :deep(.el-dropdown) {
+      justify-self: end;
+      margin-left: 0;
     }
   }
 }

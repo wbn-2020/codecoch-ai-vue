@@ -14,14 +14,13 @@ const arenaTopNav = readSource('src/components/layout/ArenaTopNav.vue')
 const componentsWithoutResumePaper = components.replace(/\.resume-paper\s*\{[\s\S]*?\}/g, '')
 
 describe('user dashboard visual guardrails', () => {
-  it('contains no legacy dashboard blocks or light decorative surfaces', () => {
+  it('contains no legacy dashboard blocks or unbounded decorative surfaces', () => {
     expect(home).not.toMatch(/class="(?:home-hero|cockpit-grid|application-stats-strip|command-center-grid|mobile-action-dock)"/)
     expect(home).not.toMatch(/\.(?:home-hero|cockpit-grid|application-stats-strip|command-center-grid|mobile-action-dock)\b/)
     expect(home).not.toContain('Focused cockpit theme')
 
     expect(home).not.toMatch(/radial-gradient|linear-gradient/)
     expect(theme).not.toMatch(/radial-gradient|linear-gradient/)
-    expect(layout).not.toMatch(/radial-gradient|linear-gradient/)
     expect(home).not.toMatch(/backdrop-filter|\bfilter:\s*blur/)
     expect(home).not.toMatch(/box-shadow:\s*(?:inset\s+)?0 0 [1-9]\d*px/)
     expect(home).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
@@ -33,15 +32,18 @@ describe('user dashboard visual guardrails', () => {
 
   it('uses the dedicated direction D top navigation instead of overriding the legacy dark navigation', () => {
     expect(layout).toContain('ArenaTopNav')
-    expect(layout).toContain("v-if=\"usesArenaOverlayTheme && !isImmersivePage\"")
-    expect(layout).toContain('background: var(--arena-bg)')
-    expect(layout).not.toMatch(/radial-gradient|linear-gradient/)
+    expect(layout).toContain('v-if="!isImmersivePage"')
+    expect(layout).toContain("'is-arena-main': usesArenaShell")
+    expect(layout).toContain('radial-gradient(900px 480px at 90% -5%')
+    expect(layout).toContain('var(--arena-bg)')
 
     expect(arenaTopNav).toContain("label: '今天'")
     expect(arenaTopNav).toContain("label: '准备'")
     expect(arenaTopNav).toContain("label: '训练'")
     expect(arenaTopNav).toContain("label: '面试'")
     expect(arenaTopNav).toContain('class="arena-bottom-nav"')
+    expect(arenaTopNav).toContain('isBottomToolsActive')
+    expect(arenaTopNav).toContain("route.path === '/ability-map'")
     expect(arenaTopNav).toMatch(/\.arena-top-nav\s*\{[\s\S]*?min-height:\s*62px/)
     expect(arenaTopNav).toMatch(/\.arena-bottom-nav\s*\{[\s\S]*?position:\s*fixed/)
   })

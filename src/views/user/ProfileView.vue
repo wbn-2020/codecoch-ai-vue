@@ -8,7 +8,7 @@
         </p>
         <h1 class="page-title">个人资料</h1>
         <p class="page-subtitle">
-          维护头像、昵称和邮箱，顶部导航、通知和训练记录会保持一致。
+          维护头像、昵称和邮箱，账户信息会同步到导航和个人中心。
         </p>
       </div>
 
@@ -338,15 +338,19 @@ onMounted(() => {
 <style scoped lang="scss">
 .profile-page {
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
 .profile-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  padding: 24px 0 8px;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
+  background: var(--user-surface-tint);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-copy {
@@ -362,8 +366,7 @@ onMounted(() => {
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
+  font-weight: 800;
 }
 
 .hero-actions {
@@ -374,18 +377,24 @@ onMounted(() => {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
-  gap: 18px;
+  grid-template-columns: minmax(270px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: 22px;
 }
 
 .profile-summary,
 .profile-editor {
   min-width: 0;
+  border: 1px solid var(--user-border);
+  border-radius: 20px;
+  background: var(--user-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .summary-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
 }
 
@@ -409,8 +418,11 @@ onMounted(() => {
 
 .summary-list {
   display: grid;
-  gap: 14px;
-  margin: 20px 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--user-border);
 
   div {
     display: grid;
@@ -456,7 +468,8 @@ onMounted(() => {
 .section-head h2 {
   margin: 5px 0 0;
   color: var(--user-text);
-  font-size: 18px;
+  font-size: 19px;
+  font-weight: 900;
   line-height: 1.3;
 }
 
@@ -469,9 +482,9 @@ onMounted(() => {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
   background: var(--user-surface-muted);
 }
 
@@ -487,7 +500,7 @@ onMounted(() => {
 }
 
 .profile-form {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .form-actions {
@@ -507,12 +520,16 @@ onMounted(() => {
   .profile-hero {
     align-items: flex-start;
     flex-direction: column;
-    padding-top: 4px;
+    padding: 20px 18px;
   }
 
   .avatar-editor {
     grid-template-columns: 1fr;
     justify-items: start;
+  }
+
+  .summary-list {
+    grid-template-columns: 1fr;
   }
 
   .form-actions,
@@ -532,6 +549,11 @@ onMounted(() => {
   .section-head {
     display: grid;
     justify-content: stretch;
+  }
+
+  .profile-summary,
+  .profile-editor {
+    border-radius: 16px;
   }
 }
 </style>

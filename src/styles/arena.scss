@@ -32,18 +32,93 @@ body.arena-overlay-theme {
   --el-text-color-primary: #15211b;
   --el-text-color-regular: #5f6e66;
   --el-text-color-secondary: #5f6e66;
-  --el-text-color-placeholder: #9aa79f;
-  --el-text-color-disabled: #9aa79f;
+  --el-text-color-placeholder: #68766e;
+  --el-text-color-disabled: #5f6e66;
   --el-disabled-bg-color: #f2f4f2;
-  --el-disabled-text-color: #9aa79f;
+  --el-disabled-text-color: #5f6e66;
   --el-disabled-border-color: #e4eae5;
-  --el-color-primary: #17b26a;
-  --el-color-primary-dark-2: #0e9f5d;
-  --el-color-primary-light-3: #54c78d;
-  --el-color-primary-light-5: #8bdab2;
-  --el-color-primary-light-7: #bfe9d3;
-  --el-color-primary-light-8: #d9f2e4;
+  --el-color-primary: #0a8750;
+  --el-color-primary-dark-2: #087542;
+  --el-color-primary-light-3: #55b483;
+  --el-color-primary-light-5: #8acbac;
+  --el-color-primary-light-7: #bce0cd;
+  --el-color-primary-light-8: #d8eee1;
   --el-color-primary-light-9: rgba(23, 178, 106, 0.13);
+
+  .el-loading-mask {
+    background: rgba(245, 247, 244, 0.76);
+  }
+
+  .el-loading-spinner .el-loading-text,
+  .el-loading-spinner .path {
+    color: #17b26a;
+    stroke: #17b26a;
+  }
+
+  .el-popper,
+  .el-select__popper,
+  .el-dropdown__popper,
+  .el-picker__popper,
+  .el-popover.el-popper,
+  .el-message,
+  .el-dialog,
+  .el-drawer {
+    border-color: #e4eae5;
+    background: #ffffff;
+    color: #15211b;
+    box-shadow: 0 14px 34px rgba(21, 33, 27, 0.14);
+  }
+
+  .el-dropdown__popper .el-dropdown-menu {
+    border-color: #e4eae5;
+    background: #ffffff;
+  }
+
+  .el-dropdown__popper .el-dropdown-menu__item {
+    color: #15211b;
+  }
+
+  .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):hover,
+  .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):focus {
+    background: rgba(10, 125, 72, 0.13);
+    color: #0e9f5d;
+  }
+
+  .el-popper__arrow::before {
+    border-color: #e4eae5;
+    background: #ffffff;
+  }
+
+  .el-dialog__title,
+  .el-drawer__title,
+  .el-alert__title {
+    color: #15211b;
+  }
+
+  .el-dialog__body,
+  .el-drawer__body,
+  .el-alert__description,
+  .el-message__content {
+    color: #5f6e66;
+  }
+}
+
+@media (max-width: 760px) {
+  body.arena-overlay-theme {
+    .el-dialog {
+      max-width: calc(100vw - 24px);
+      margin-inline: 12px;
+    }
+
+    .el-drawer {
+      max-width: 100vw;
+    }
+
+    .el-message-box {
+      width: calc(100vw - 24px);
+      max-width: none;
+    }
+  }
 }
 
 .arena,
@@ -73,12 +148,12 @@ body.arena-overlay-theme {
   --el-text-color-regular: var(--arena-sub);
   --el-text-color-secondary: var(--arena-sub);
   --el-text-color-placeholder: var(--arena-mut);
-  --el-text-color-disabled: var(--arena-mut);
+  --el-text-color-disabled: #5f6e66;
   --el-disabled-bg-color: #f2f4f2;
   --el-disabled-text-color: var(--arena-mut);
   --el-disabled-border-color: var(--arena-line);
-  --el-color-primary: var(--arena-grn);
-  --el-color-primary-dark-2: var(--arena-grn-d);
+  --el-color-primary: var(--arena-action);
+  --el-color-primary-dark-2: var(--arena-action-hover);
   --el-color-primary-light-3: #54c78d;
   --el-color-primary-light-5: #8bdab2;
   --el-color-primary-light-7: #bfe9d3;
@@ -90,11 +165,18 @@ body.arena-overlay-theme {
   --arena-card: #ffffff;
   --arena-ink: #15211b;
   --arena-sub: #5f6e66;
-  --arena-mut: #9aa79f;
+  // Ordinary helper text must remain legible on the white Direction D cards.
+  // Disabled controls use their own token below and remain visually distinct.
+  --arena-mut: #68766e;
   --arena-line: #e4eae5;
   --arena-line2: #eef2ee;
   --arena-grn: #17b26a;
   --arena-grn-d: #0e9f5d;
+  // Keep the prototype green for decoration and use a darker scale for
+  // interactive surfaces that carry white text.
+  --arena-action: #0a8750;
+  --arena-action-hover: #087542;
+  --arena-action-shadow: #075f36;
   --arena-grn-soft: rgba(23, 178, 106, 0.13);
   --arena-lime: #a3e635;
   --arena-amber: #f79009;
@@ -108,6 +190,8 @@ body.arena-overlay-theme {
   --arena-radius-btn: 14px;
   --arena-radius-card: 20px;
   --arena-radius-inp: 13px;
+  --arena-shadow-card: 0 2px 4px rgba(21, 33, 27, 0.04);
+  --arena-shadow-hover: 0 4px 10px rgba(21, 33, 27, 0.08);
 
   // ---- 存量用户端页面的主题兼容层 ----
   // 旧页面仍引用 --user-* / --app-* 变量。保留组件结构和业务逻辑，
@@ -131,24 +215,29 @@ body.arena-overlay-theme {
   --user-surface-tint: #f0fbf4;
   --user-text: var(--arena-ink);
   --user-text-secondary: var(--arena-sub);
-  --user-text-muted: var(--arena-mut);
-  --user-text-subtle: var(--arena-mut);
+  // Existing user pages use `--user-text-muted` for real labels and body copy,
+  // not only inactive states. Keep it readable on the Direction D light canvas.
+  --user-text-muted: var(--arena-sub);
+  --user-text-subtle: #7b8880;
   --user-border: var(--arena-line);
   --user-border-strong: #d5ddd6;
   --user-control-bg: var(--arena-card);
   --user-control-bg-muted: #f2f4f2;
-  --user-primary: var(--arena-grn);
-  --user-primary-hover: var(--arena-grn-d);
+  --user-primary: var(--arena-action);
+  --user-primary-hover: var(--arena-action-hover);
   --user-primary-contrast: #ffffff;
   --user-primary-border: #b9e7cd;
   --user-primary-faint: var(--arena-grn-soft);
   --user-primary-soft: var(--arena-grn-soft);
   --user-success: var(--arena-grn);
+  --user-success-text: #0e7a45;
   --user-success-border: #b9e7cd;
   --user-success-soft: var(--arena-grn-soft);
   --user-warning: var(--arena-amber);
+  --user-warning-text: #8a4b00;
   --user-warning-soft: var(--arena-amber-soft);
   --user-danger: var(--arena-red);
+  --user-danger-text: #b4233a;
   --user-danger-border: #f4c3c5;
   --user-danger-soft: var(--arena-red-soft);
   --user-ai: var(--arena-vio);
@@ -249,22 +338,25 @@ body.arena-overlay-theme {
       border-color 0.15s;
   }
   .arena-btn--pri {
-    background: var(--arena-grn);
+    background: var(--arena-action);
     color: #fff;
-    box-shadow: 0 4px 0 var(--arena-grn-d);
+    box-shadow: 0 4px 0 var(--arena-action-shadow);
   }
   .arena-btn--pri:hover {
     transform: translateY(-1px);
-    box-shadow: 0 5px 0 var(--arena-grn-d);
+    background: var(--arena-action-hover);
+    box-shadow: 0 5px 0 var(--arena-action-shadow);
   }
   .arena-btn--pri:active {
     transform: translateY(2px);
-    box-shadow: 0 1px 0 var(--arena-grn-d);
+    box-shadow: 0 1px 0 var(--arena-action-shadow);
   }
   .arena-btn--pri:disabled {
-    opacity: 0.6;
+    background: #dce5de;
+    color: #526158;
+    opacity: 1;
     transform: none;
-    box-shadow: 0 4px 0 var(--arena-grn-d);
+    box-shadow: 0 3px 0 #c8d2ca;
     cursor: not-allowed;
   }
   .arena-btn--sec {
@@ -276,11 +368,96 @@ body.arena-overlay-theme {
   .arena-btn--sec:hover {
     border-color: var(--arena-grn);
   }
+  .arena-btn--sec:disabled,
+  .arena-btn--txt:disabled {
+    border-color: #dfe6e0;
+    background: #f2f4f2;
+    color: #5f6e66;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
   .arena-btn--txt {
     background: none;
     color: var(--arena-grn-d);
     font-size: 13px;
     padding: 6px 4px;
+  }
+
+  .el-button {
+    --el-button-bg-color: #ffffff;
+    --el-button-border-color: #d5ddd6;
+    --el-button-text-color: #476158;
+    --el-button-hover-bg-color: #f0fbf4;
+    --el-button-hover-border-color: var(--arena-grn);
+    --el-button-hover-text-color: var(--arena-grn-d);
+    --el-button-active-bg-color: #e1f5e9;
+    --el-button-active-border-color: var(--arena-grn-d);
+    --el-button-active-text-color: var(--arena-grn-d);
+    --el-button-disabled-bg-color: #f2f4f2;
+    --el-button-disabled-border-color: #dfe6e0;
+    --el-button-disabled-text-color: #5f6e66;
+    border-radius: var(--arena-radius-btn);
+    font-weight: 800;
+  }
+
+  .el-button.is-disabled,
+  .el-button.is-disabled:hover,
+  .el-button.is-disabled:focus,
+  .el-button.is-disabled:active {
+    background: #f2f4f2;
+    border-color: #dfe6e0;
+    color: #5f6e66;
+    opacity: 1;
+  }
+
+  .el-button--primary {
+    --el-button-bg-color: var(--arena-action);
+    --el-button-border-color: var(--arena-action);
+    --el-button-text-color: #ffffff;
+    --el-button-hover-bg-color: var(--arena-action-hover);
+    --el-button-hover-border-color: var(--arena-action-hover);
+    --el-button-hover-text-color: #ffffff;
+    --el-button-active-bg-color: #054f2e;
+    --el-button-active-border-color: #054f2e;
+    --el-button-active-text-color: #ffffff;
+  }
+
+  .el-button--primary.is-disabled,
+  .el-button--primary.is-disabled:hover,
+  .el-button--primary.is-disabled:focus,
+  .el-button--primary.is-disabled:active {
+    background: #dce5de;
+    border-color: #dce5de;
+    color: #526158;
+  }
+
+  // Disabled semantic actions still need to communicate their state. Keep them
+  // quiet, but do not collapse success/warning/danger into the same gray chip.
+  .el-button--success.is-disabled,
+  .el-button--success.is-disabled:hover,
+  .el-button--success.is-disabled:focus,
+  .el-button--success.is-disabled:active {
+    background: var(--user-success-soft);
+    border-color: var(--user-success-border);
+    color: var(--arena-grn-d);
+  }
+
+  .el-button--warning.is-disabled,
+  .el-button--warning.is-disabled:hover,
+  .el-button--warning.is-disabled:focus,
+  .el-button--warning.is-disabled:active {
+    background: var(--user-warning-soft);
+    border-color: rgba(247, 144, 9, 0.34);
+    color: var(--user-warning-text);
+  }
+
+  .el-button--danger.is-disabled,
+  .el-button--danger.is-disabled:hover,
+  .el-button--danger.is-disabled:focus,
+  .el-button--danger.is-disabled:active {
+    background: var(--user-danger-soft);
+    border-color: var(--user-danger-border);
+    color: #b4233a;
   }
 
   // ---- 徽章 ----
@@ -299,7 +476,7 @@ body.arena-overlay-theme {
     color: var(--arena-grn-d);
   }
   .arena-chip--grn-solid {
-    background: var(--arena-grn);
+    background: var(--arena-action);
     color: #fff;
   }
   .arena-chip--amber {
@@ -449,7 +626,7 @@ body.arena-overlay-theme {
     margin: 0 auto;
   }
   .arena-streak__box--done {
-    background: var(--arena-grn);
+    background: var(--arena-action);
     color: #fff;
   }
   .arena-streak__box--today {

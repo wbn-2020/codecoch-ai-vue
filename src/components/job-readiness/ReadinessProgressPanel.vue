@@ -133,7 +133,7 @@ const normalizedPercent = computed(() => {
   padding: 13px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.38);
+  background: var(--user-surface-muted);
   color: var(--app-text);
   text-align: left;
   cursor: pointer;
@@ -141,13 +141,13 @@ const normalizedPercent = computed(() => {
 
 .readiness-step:hover,
 .readiness-step.is-current {
-  border-color: rgba(59, 130, 246, 0.45);
-  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-soft);
 }
 
 .readiness-step.is-done {
-  border-color: rgba(34, 197, 94, 0.3);
-  background: rgba(34, 197, 94, 0.08);
+  border-color: var(--user-success-border);
+  background: var(--user-success-soft);
 }
 
 .readiness-step.is-blocked {
@@ -162,15 +162,15 @@ const normalizedPercent = computed(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: rgba(148, 163, 184, 0.16);
+  background: var(--user-control-bg-muted);
   color: var(--app-text);
   font-size: 12px;
   font-weight: 800;
 }
 
 .readiness-step.is-done .readiness-step__marker {
-  background: rgba(34, 197, 94, 0.16);
-  color: #22c55e;
+  background: var(--user-success-soft);
+  color: var(--user-primary);
 }
 
 .readiness-step.is-current .readiness-step__marker {

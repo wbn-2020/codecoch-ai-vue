@@ -146,9 +146,9 @@ const weightItems = computed(() => {
 
 .analysis-summary,
 .analysis-block {
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--arena-card, var(--app-surface));
 }
 
 .analysis-summary {
@@ -165,17 +165,17 @@ const weightItems = computed(() => {
 
   p {
     margin: 8px 0 0;
-    color: #dbeafe;
+    color: var(--app-text);
     line-height: 1.7;
   }
 }
 
 .analysis-error {
   padding: 12px 14px;
-  border: 1px solid rgba(248, 113, 113, 0.32);
+  border: 1px solid var(--user-danger-border, var(--app-border));
   border-radius: 10px;
-  background: rgba(127, 29, 29, 0.22);
-  color: #fecaca;
+  background: var(--user-danger-soft, var(--arena-red-soft));
+  color: var(--user-danger, var(--arena-red));
   line-height: 1.7;
 }
 
@@ -206,7 +206,7 @@ const weightItems = computed(() => {
 
   p {
     margin: 0;
-    color: #cbd5e1;
+    color: var(--app-text);
     line-height: 1.7;
   }
 }
@@ -220,10 +220,10 @@ const weightItems = computed(() => {
     max-width: 100%;
     padding: 6px 9px;
     overflow-wrap: anywhere;
-    border: 1px solid rgba(34, 211, 238, 0.2);
+    border: 1px solid var(--app-border);
     border-radius: 999px;
-    background: rgba(8, 47, 73, 0.26);
-    color: #bae6fd;
+    background: var(--app-primary-soft, var(--user-surface-muted));
+    color: var(--app-primary);
     font-size: 12px;
   }
 }
@@ -246,9 +246,9 @@ const weightItems = computed(() => {
 
 .weight-item {
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--app-border);
   border-radius: 10px;
-  background: rgba(2, 6, 23, 0.28);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 
   span,
   strong {
@@ -262,7 +262,7 @@ const weightItems = computed(() => {
 
   strong {
     margin-top: 6px;
-    color: #f8fafc;
+    color: var(--app-text);
     font-size: 15px;
   }
 }

@@ -41,7 +41,13 @@
           <span aria-hidden="true">◆</span>
           {{ formattedXp }}
         </button>
-        <button class="arena-top-nav__tools" type="button" @click="go('/tools')">
+        <button
+          class="arena-top-nav__tools"
+          :class="{ 'is-active': isToolsActive }"
+          type="button"
+          aria-label="前往记录与工具"
+          @click="go('/tools')"
+        >
           工具
         </button>
         <el-dropdown trigger="click" @command="handleUserCommand">
@@ -63,64 +69,82 @@
 
       <div class="arena-top-nav__mobile">
         <span class="arena-top-nav__mobile-title">{{ currentLabel }}</span>
-        <button
-          class="arena-top-nav__mobile-status"
-          type="button"
-          :aria-label="mobileStatusAriaLabel"
-          @click="go(mobileStatusPath)"
-        >
-          <template v-if="mobileStatusKind === 'completion'">
-            {{ completionLabel }}
-          </template>
-          <template v-else-if="mobileStatusKind === 'avatar'">
-            <el-avatar :size="30" :src="avatarUrl || ''">
-              {{ avatarText }}
-            </el-avatar>
-          </template>
-          <template v-else-if="mobileStatusKind === 'reward'">
-            +18 / 题
-          </template>
-          <template v-else-if="mobileStatusKind === 'ability'">
-            技能树
-          </template>
-          <template v-else-if="mobileStatusKind === 'match'">
-            JD
-          </template>
-          <template v-else-if="mobileStatusKind === 'report'">
-            报告
-          </template>
-          <template v-else>
-            🔥 {{ gameProfile.streakDays }}
-          </template>
-        </button>
+        <div class="arena-top-nav__mobile-actions">
+          <button
+            v-if="mobileStatusKind !== 'avatar'"
+            class="arena-top-nav__mobile-status"
+            type="button"
+            :aria-label="mobileStatusAriaLabel"
+            @click="go(mobileStatusPath)"
+          >
+            <template v-if="mobileStatusKind === 'completion'">
+              {{ completionLabel }}
+            </template>
+            <template v-else-if="mobileStatusKind === 'reward'">
+              +18 / 题
+            </template>
+            <template v-else-if="mobileStatusKind === 'ability'">
+              技能树
+            </template>
+            <template v-else-if="mobileStatusKind === 'match'">
+              JD
+            </template>
+            <template v-else-if="mobileStatusKind === 'report'">
+              报告
+            </template>
+            <template v-else>
+              🔥 {{ gameProfile.streakDays }}
+            </template>
+          </button>
+          <el-dropdown trigger="click" @command="handleUserCommand">
+            <button
+              class="arena-top-nav__mobile-avatar"
+              type="button"
+              :aria-label="`打开 ${displayName} 的账户菜单`"
+            >
+              <el-avatar :size="30" :src="avatarUrl || ''">
+                {{ avatarText }}
+              </el-avatar>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人资料</el-dropdown-item>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item v-if="canAccessAdmin" command="admin">管理端</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </div>
     </div>
 
-    <nav class="arena-bottom-nav" aria-label="手机主导航">
-      <button
-        v-for="item in primaryItems"
-        :key="item.key"
-        class="arena-bottom-nav__item"
-        :class="{ 'is-active': isActive(item) }"
-        type="button"
-        :aria-current="isActive(item) ? 'page' : undefined"
-        @click="go(item.path)"
-      >
-        <component :is="item.icon" :size="18" aria-hidden="true" />
-        <span>{{ item.label }}</span>
-      </button>
-      <button
-        class="arena-bottom-nav__item"
-        :class="{ 'is-active': isToolsActive }"
-        type="button"
-        :aria-current="isToolsActive ? 'page' : undefined"
-        @click="go('/tools')"
-      >
-        <Wrench :size="18" aria-hidden="true" />
-        <span>工具</span>
-      </button>
-    </nav>
   </header>
+
+  <nav class="arena-bottom-nav" aria-label="手机主导航">
+    <button
+      v-for="item in primaryItems"
+      :key="item.key"
+      class="arena-bottom-nav__item"
+      :class="{ 'is-active': isActive(item) }"
+      type="button"
+      :aria-current="isActive(item) ? 'page' : undefined"
+      @click="go(item.path)"
+    >
+      <component :is="item.icon" :size="18" aria-hidden="true" />
+      <span>{{ item.label }}</span>
+    </button>
+    <button
+      class="arena-bottom-nav__item"
+      :class="{ 'is-active': isBottomToolsActive }"
+      type="button"
+      :aria-current="isBottomToolsActive ? 'page' : undefined"
+      @click="go('/tools')"
+    >
+      <Wrench :size="18" aria-hidden="true" />
+      <span>工具</span>
+    </button>
+  </nav>
 </template>
 
 <script setup lang="ts">
@@ -166,14 +190,22 @@ const primaryItems: ArenaNavItem[] = [
     key: 'today',
     label: '今天',
     path: '/dashboard',
-    matches: ['/dashboard', '/agent/today'],
+    matches: [
+      '/dashboard',
+      '/agent/today',
+      '/agent/tasks'
+    ],
     icon: Target
   },
   {
     key: 'prepare',
     label: '准备',
     path: '/resumes',
-    matches: ['/resumes', '/job-targets', '/resume-match', '/project-evidence', '/application-packages'],
+    matches: [
+      '/resumes',
+      '/job-targets',
+      '/resume-match'
+    ],
     icon: FileText
   },
   {
@@ -193,17 +225,36 @@ const primaryItems: ArenaNavItem[] = [
 ]
 
 const formattedXp = computed(() => gameProfile.xp.toLocaleString('zh-CN'))
-const isToolsActive = computed(() =>
-  route.path === '/tools'
-  || route.path.startsWith('/tools/')
-  || route.path.startsWith('/ability-map')
-)
+const toolRoutePrefixes = [
+  '/tools',
+  '/applications',
+  '/career-calendar',
+  '/project-evidence',
+  '/application-packages',
+  '/knowledge',
+  '/ability-map',
+  '/agent/weekly-reports',
+  '/analytics/personal',
+  '/agent/reviews',
+  '/agent/memory',
+  '/growth/profile',
+  '/growth/skills',
+  '/growth/readiness',
+  '/weakness-analysis',
+  '/job-experiments',
+  '/portfolio-demo',
+  '/onboarding',
+  '/evidence-assets'
+]
+const isToolsActive = computed(() => toolRoutePrefixes.some((prefix) => matchesPath(prefix)))
+const isBottomToolsActive = computed(() => isToolsActive.value)
 const activePrimaryItem = computed(() => primaryItems.find((item) => isActive(item)))
 const currentLabel = computed(() => {
+  if (route.path === '/tools') return '工具'
+  if (route.path === '/ability-map') return '能力图谱'
+  if (isToolsActive.value) return String(route.meta?.title || '工具')
   if (route.path.startsWith('/resume-match')) return 'JD 匹配'
   if (/^\/interviews\/\d+\/report$/.test(route.path)) return '面试报告'
-  if (route.path.startsWith('/ability-map')) return '能力图谱'
-  if (isToolsActive.value) return '工具'
   return activePrimaryItem.value?.label || String(route.meta?.title || '今天')
 })
 
@@ -213,7 +264,7 @@ const mobileStatusKind = computed<'streak' | 'completion' | 'avatar' | 'reward' 
   if (route.path.startsWith('/resume-match')) return 'match'
   if (/^\/interviews\/\d+\/report$/.test(route.path)) return 'report'
   if (route.path.startsWith('/ability-map')) return 'ability'
-  if (route.path === '/tools') return 'avatar'
+  if (isToolsActive.value) return 'avatar'
   return 'streak'
 })
 
@@ -228,7 +279,7 @@ const mobileStatusPath = computed(() => {
 const mobileStatusAriaLabel = computed(() => {
   if (mobileStatusKind.value === 'completion') return '返回今天查看当前进度'
   if (mobileStatusKind.value === 'avatar') return `打开 ${props.displayName} 的个人资料`
-  if (mobileStatusKind.value === 'reward') return '本题答对可获得 18 经验'
+  if (mobileStatusKind.value === 'reward') return '返回今天查看训练进度'
   if (mobileStatusKind.value === 'ability') return '查看技能树状态'
   if (mobileStatusKind.value === 'match') return '查看 JD 匹配'
   if (mobileStatusKind.value === 'report') return '返回面试复盘记录'
@@ -236,7 +287,12 @@ const mobileStatusAriaLabel = computed(() => {
 })
 
 function isActive(item: ArenaNavItem) {
-  return item.matches.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
+  if (isToolsActive.value) return false
+  return item.matches.some((prefix) => matchesPath(prefix))
+}
+
+function matchesPath(prefix: string) {
+  return route.path === prefix || route.path.startsWith(`${prefix}/`)
 }
 
 async function go(path: string) {
@@ -267,7 +323,7 @@ function handleUserCommand(command: string) {
 .arena-top-nav__inner {
   display: flex;
   align-items: center;
-  width: min(100%, 1180px);
+  width: 100%;
   min-height: 62px;
   margin: 0 auto;
   padding: 0 30px;
@@ -360,12 +416,12 @@ function handleUserCommand(command: string) {
 
 .arena-top-nav__chip--streak {
   background: var(--arena-amber-soft);
-  color: var(--arena-amber);
+  color: var(--user-warning-text);
 }
 
 .arena-top-nav__chip--xp {
   background: var(--arena-grn-soft);
-  color: var(--arena-grn-d);
+  color: var(--arena-action);
 }
 
 .arena-top-nav__tools {
@@ -378,6 +434,14 @@ function handleUserCommand(command: string) {
     background: var(--arena-line2);
     color: var(--arena-ink);
     outline: 0;
+  }
+
+  &.is-active {
+    min-height: 36px;
+    border-radius: 10px;
+    padding-inline: 10px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
   }
 }
 
@@ -446,6 +510,13 @@ function handleUserCommand(command: string) {
     margin-left: 9px;
   }
 
+  .arena-top-nav__mobile-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+  }
+
   .arena-top-nav__mobile-title {
     overflow: hidden;
     color: var(--arena-ink);
@@ -461,11 +532,11 @@ function handleUserCommand(command: string) {
     justify-content: center;
     min-width: 34px;
     min-height: 34px;
-    margin-left: 10px;
+    margin-left: 0;
     padding: 0 8px;
     border-radius: 999px;
     background: var(--arena-amber-soft);
-    color: var(--arena-amber);
+    color: var(--user-warning-text);
     font-size: 12px;
     font-weight: 800;
 
@@ -474,6 +545,32 @@ function handleUserCommand(command: string) {
       color: #ffffff;
       font-size: 12px;
       font-weight: 900;
+    }
+  }
+
+  .arena-top-nav__mobile-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+
+    :deep(.el-avatar) {
+      background: linear-gradient(135deg, var(--arena-grn), var(--arena-lime));
+      box-shadow: 0 0 0 2px var(--arena-grn-soft);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--arena-grn);
+      outline-offset: 2px;
     }
   }
 

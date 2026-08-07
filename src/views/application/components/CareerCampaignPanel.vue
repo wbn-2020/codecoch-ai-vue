@@ -609,9 +609,10 @@ onMounted(() => {
   gap: 14px;
   margin: 16px 0;
   padding: 16px 18px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.36);
+  border: 1.5px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .campaign-panel__header,
@@ -625,7 +626,7 @@ onMounted(() => {
 }
 
 .campaign-panel__eyebrow {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
   font-weight: 700;
 }

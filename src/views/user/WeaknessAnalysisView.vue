@@ -17,7 +17,7 @@
           <RefreshCw :size="16" />
           刷新
         </el-button>
-        <el-button type="primary" @click="router.push('/questions/practice')">
+        <el-button type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
           <Dumbbell :size="16" />
           去专项练习
         </el-button>
@@ -65,7 +65,7 @@
             title="暂无足够薄弱点数据"
             description="需要先积累一定答题记录，才能统计分类错误率。可以先做一组通用训练，或回到错题记录补齐样本。"
           >
-            <el-button type="primary" @click="router.push('/questions/practice')">先做一组通用训练</el-button>
+            <el-button type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">先做一组通用训练</el-button>
             <el-button @click="router.push('/questions/wrong-records')">查看错题记录</el-button>
           </AppState>
 
@@ -85,7 +85,7 @@
               </div>
               <p>{{ categoryDisplayName(item) }}累计 {{ item.totalCount }} 题，答错 {{ item.wrongCount }} 题。</p>
               <div class="card-actions">
-                <el-button size="small" type="primary" plain @click="router.push(`/questions/practice?categoryId=${item.categoryId}`)">
+                <el-button size="small" type="primary" plain @click="router.push(`/questions/practice?mode=category&categoryId=${item.categoryId}&sourceType=WEAKNESS_ANALYSIS&count=5`)">
                   专项练习
                 </el-button>
                 <el-button size="small" plain @click="router.push('/questions/wrong-records')">

@@ -15,7 +15,7 @@
             <FolderOpen :size="16" />
             补项目证据
           </el-button>
-          <el-button type="primary" @click="startDomainTraining(activeDomain)">
+          <el-button type="primary" :disabled="!canStartTraining" @click="startDomainTraining(activeDomain)">
             <Play :size="16" />
             开始专项训练
           </el-button>
@@ -39,7 +39,7 @@
             {{ trainingTrustText }}
           </span>
         </div>
-        <el-button type="primary" size="large" @click="startRecommendedTraining">
+        <el-button type="primary" size="large" :disabled="!canStartTraining" @click="startRecommendedTraining">
           {{ nextTrainingActionLabel }}
           <ArrowRight :size="16" />
         </el-button>
@@ -68,7 +68,7 @@
       <CircleHelp :size="28" />
       <h2>还没有能力点目录</h2>
       <p>完成一次题库训练或模拟面试后，这里会逐步形成能力图谱。</p>
-      <el-button type="primary" @click="router.push('/questions/practice')">先做一组训练</el-button>
+      <el-button type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">先做一组训练</el-button>
     </section>
 
     <section v-else class="ability-tree-layout">
@@ -90,9 +90,11 @@
         </div>
       </header>
 
-      <div class="ability-node-board">
-        <template v-for="(domain, index) in abilityMap.domains" :key="domain.domainCode">
+      <div class="ability-tree-content">
+        <div class="ability-node-board">
           <section
+            v-for="domain in abilityMap.domains"
+            :key="domain.domainCode"
             class="ability-domain-card"
             :class="{ active: domain.domainCode === activeDomainCode }"
           >
@@ -124,43 +126,43 @@
               </button>
             </div>
           </section>
+        </div>
 
-          <aside v-if="index === abilityActionInsertIndex" class="ability-action-rail">
-            <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
-              <div class="priority-action-card__label">
-                <Target :size="16" />
-                最高性价比
-              </div>
-              <h2>{{ nextTrainingTitle }}</h2>
-              <p>{{ nextTrainingDescription }}</p>
-              <div class="priority-action-card__meta">
-                <span><BookOpenCheck :size="14" />{{ nextTrainingMeta }}</span>
-                <span><ShieldCheck :size="14" />{{ trainingTrustText }}</span>
-              </div>
-              <el-button type="primary" @click="startRecommendedTraining">
-                {{ nextTrainingActionLabel }}
-                <ArrowRight :size="16" />
-              </el-button>
-            </section>
+        <aside class="ability-action-rail">
+          <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+            <div class="priority-action-card__label">
+              <Target :size="16" />
+              最高性价比
+            </div>
+            <h2>{{ nextTrainingTitle }}</h2>
+            <p>{{ nextTrainingDescription }}</p>
+            <div class="priority-action-card__meta">
+              <span><BookOpenCheck :size="14" />{{ nextTrainingMeta }}</span>
+              <span><ShieldCheck :size="14" />{{ trainingTrustText }}</span>
+            </div>
+            <el-button type="primary" :disabled="!canStartTraining" @click="startRecommendedTraining">
+              {{ nextTrainingActionLabel }}
+              <ArrowRight :size="16" />
+            </el-button>
+          </section>
 
-            <section class="ability-evidence-card">
-              <div class="ability-evidence-card__head">
-                <span>评分依据</span>
-                <ShieldCheck :size="15" />
-              </div>
-              <strong>{{ totalEvidenceCount }} 条训练证据</strong>
-              <p>
-                {{ abilityMap.hasTrainingData
-                  ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
-                  : '完成一次训练后，这里会展示真实的评估依据。' }}
-              </p>
-              <el-button plain @click="router.push('/questions/practice')">
-                去补一组训练
-                <ArrowRight :size="15" />
-              </el-button>
-            </section>
-          </aside>
-        </template>
+          <section class="ability-evidence-card">
+            <div class="ability-evidence-card__head">
+              <span>评分依据</span>
+              <ShieldCheck :size="15" />
+            </div>
+            <strong>{{ totalEvidenceCount }} 条训练证据</strong>
+            <p>
+              {{ abilityMap.hasTrainingData
+                ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
+                : '完成一次训练后，这里会展示真实的评估依据。' }}
+            </p>
+            <el-button plain @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
+              去补一组训练
+              <ArrowRight :size="15" />
+            </el-button>
+          </section>
+        </aside>
       </div>
     </section>
 
@@ -453,7 +455,7 @@ const activeDomain = computed(() =>
 
 const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
 const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
-const abilityActionInsertIndex = computed(() => Math.min(5, Math.max(0, abilityMap.value.domains.length - 1)))
+const canStartTraining = computed(() => !loading.value && !loadError.value && allSkills.value.length > 0)
 const weakSkills = computed(() => abilityMap.value.hasTrainingData ? allSkills.value.filter((skill) => skill.status === 'WEAK') : [])
 const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
 const recommendedSkill = computed(() => {
@@ -563,6 +565,7 @@ const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
 }
 
 const startDomainTraining = (domain?: AbilityDomainVO) => {
+  if (!canStartTraining.value) return
   const keyword = domain ? safeDomainName(domain) : activeDomainName.value
   router.push({
     path: '/questions/practice',
@@ -577,6 +580,7 @@ const startDomainTraining = (domain?: AbilityDomainVO) => {
 }
 
 const startSkillTraining = (skill: AbilitySkillNodeVO) => {
+  if (!canStartTraining.value) return
   router.push({
     path: '/questions/practice',
     query: practiceQueryForSkill(skill)
@@ -588,7 +592,7 @@ const startRecommendedTraining = () => {
     startSkillTraining(recommendedSkill.value)
     return
   }
-  router.push('/questions/practice')
+  router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')
 }
 
 /** 技能树节点状态：已解锁 / 修炼中 / 未解锁 */
@@ -1985,11 +1989,18 @@ onMounted(fetchAbilityMap)
     }
   }
 
+  .ability-tree-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 292px);
+    gap: 22px;
+    align-items: start;
+    min-width: 0;
+  }
+
   .ability-node-board {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 18px;
     min-width: 0;
   }
 
@@ -2205,11 +2216,11 @@ onMounted(fetchAbilityMap)
 
   .ability-action-rail {
     display: grid;
-    grid-column: span 2;
-    grid-row: span 2;
     align-content: start;
     gap: 14px;
     min-width: 0;
+    position: sticky;
+    top: 78px;
   }
 
   .priority-action-card,
@@ -2322,13 +2333,17 @@ onMounted(fetchAbilityMap)
       grid-template-columns: 1fr;
     }
 
+    .ability-tree-content {
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
     .ability-node-board {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
     }
 
     .ability-action-rail {
-      grid-column: 1 / -1;
-      grid-row: auto;
+      position: static;
     }
   }
 }
@@ -2346,14 +2361,6 @@ onMounted(fetchAbilityMap)
 
     .ability-node-grid {
       grid-template-columns: 1fr;
-    }
-
-    .ability-node-board {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .ability-action-rail {
-      grid-column: 1 / -1;
     }
   }
 }

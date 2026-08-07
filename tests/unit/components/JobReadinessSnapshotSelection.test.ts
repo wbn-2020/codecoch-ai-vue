@@ -157,6 +157,8 @@ describe('readiness snapshot selection', () => {
       }
     })
     await flushPromises()
+    ;(wrapper.vm as typeof wrapper.vm & { activeSection: string }).activeSection = 'evidence'
+    await flushPromises()
 
     let matrixWrapper = wrapper.findComponent(MatrixStub)
     expect(matrixWrapper.props('readiness')).toMatchObject({ id: 43 })

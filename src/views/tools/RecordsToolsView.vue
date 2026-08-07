@@ -23,10 +23,15 @@
               v-for="item in group.items"
               :key="item.path"
               class="arena-tools__row"
-              :class="{ 'is-unavailable': item.enabled === false }"
+              :class="{
+                'is-unavailable': item.enabled === false,
+                'has-enter-link': item.path === '/ability-map' && item.enabled !== false
+              }"
+              :data-tool-path="item.path"
               type="button"
-              :aria-disabled="item.enabled === false"
+              :disabled="item.enabled === false"
               :title="item.enabled === false ? `${item.title}暂未开放` : undefined"
+              :aria-label="item.enabled === false ? `${item.title}，暂未开放` : `${item.title}，${item.description}`"
               @click="openTool(item)"
             >
               <span class="arena-tools__icon" :class="`is-${group.key}`">
@@ -36,14 +41,17 @@
                 <strong>{{ item.title }}</strong>
                 <small>{{ item.enabled === false ? '暂未开放' : item.description }}</small>
               </span>
-              <span v-if="item.path === '/ability-map'" class="arena-tools__enter">进入</span>
-              <LockKeyhole
-                v-else-if="item.enabled === false"
+              <span
                 class="arena-tools__arrow"
-                :size="16"
-                aria-label="暂未开放"
-              />
-              <ChevronRight v-else class="arena-tools__arrow" :size="18" aria-hidden="true" />
+                :class="{ 'is-enter': item.path === '/ability-map' && item.enabled !== false }"
+                aria-hidden="true"
+              >
+                <template v-if="item.enabled === false">暂未开放</template>
+                <template v-else-if="item.path === '/ability-map'">
+                  <span class="arena-tools__enter">进入 ›</span>
+                </template>
+                <template v-else>›</template>
+              </span>
             </button>
           </div>
         </section>
@@ -53,8 +61,6 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-import { ChevronRight, LockKeyhole } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -83,8 +89,8 @@ const groups: ToolGroup[] = [
     title: '进度',
     icon: '📈',
     items: [
-      { title: '投递管理', description: '推进中的机会、跟进和材料状态。', path: '/applications', icon: '📮' },
-      { title: '求职日历', description: '跨投递的安排与提醒。', path: '/career-calendar', icon: '📅' }
+      { title: '投递管理', description: '1 条推进中 · 无逾期', path: '/applications', icon: '📮' },
+      { title: '求职日历', description: '跨投递的安排与提醒', path: '/career-calendar', icon: '📅' }
     ]
   },
   {
@@ -92,11 +98,11 @@ const groups: ToolGroup[] = [
     title: '资产',
     icon: '🎒',
     items: [
-      { title: '项目证据库', description: '沉淀可追问的项目素材。', path: '/project-evidence', icon: '🗂' },
-      { title: '投递包', description: '组合简历、材料与导出。', path: '/application-packages', icon: '📦' },
+      { title: '项目证据库', description: '沉淀可追问的项目素材', path: '/project-evidence', icon: '🗂' },
+      { title: '投递包', description: '组合简历、材料与导出', path: '/application-packages', icon: '📦' },
       {
         title: '个人知识库',
-        description: '私域资料与引用来源。',
+        description: appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放',
         path: '/knowledge',
         icon: '📚',
         enabled: appConfig.enableV4KnowledgePreview
@@ -108,15 +114,15 @@ const groups: ToolGroup[] = [
     title: '成长',
     icon: '🌱',
     items: [
-      { title: '能力图谱', description: '技能树、战力和下一项高价值训练。', path: '/ability-map', icon: '🌳' },
+      { title: '能力图谱', description: '技能树 · 已点亮 9/14', path: '/ability-map', icon: '🌳' },
       {
         title: '求职周报',
-        description: '本周事实、变化与下一步。',
+        description: '本周事实、变化与下一步',
         path: '/agent/weekly-reports',
         icon: '📊',
         enabled: appConfig.enableV6WeeklyReport
       },
-      { title: '训练分析', description: '正确率与个人趋势。', path: '/analytics/personal', icon: '📉' }
+      { title: '训练分析', description: '正确率与个人趋势', path: '/analytics/personal', icon: '📉' }
     ]
   },
   {
@@ -124,9 +130,9 @@ const groups: ToolGroup[] = [
     title: '其他',
     icon: '⚙️',
     items: [
-      { title: '求职实验台', description: '策略分组与复盘。', path: '/job-experiments', icon: '🧪' },
-      { title: '作品集演示', description: '可展示的项目成果。', path: '/portfolio-demo', icon: '🖼' },
-      { title: '新手引导', description: '重走一遍上手路线。', path: '/onboarding', icon: '🧭' }
+      { title: '求职实验台', description: '策略分组与复盘', path: '/job-experiments', icon: '🧪' },
+      { title: '作品集演示', description: '可展示的项目成果', path: '/portfolio-demo', icon: '🖼' },
+      { title: '新手引导', description: '重走一遍上手路线', path: '/onboarding', icon: '🧭' }
     ]
   }
 ]
@@ -141,10 +147,8 @@ const visibleGroups = computed(() =>
 )
 
 function openTool(item: ToolItem) {
-  if (item.enabled === false) {
-    ElMessage.info(`${item.title}暂未开放`)
-    return
-  }
+  if (item.enabled === false) return
+
   void router.push(item.path)
 }
 </script>
@@ -155,29 +159,29 @@ function openTool(item: ToolItem) {
 }
 
 .arena-tools__page {
-  width: min(100%, 1060px);
+  width: min(100%, 760px);
   margin: 0 auto;
-  padding: 2px 0 42px;
+  // The prototype's 760px page width includes the 34px desktop page inset.
+  // Keep the content column aligned with the other Direction D screens.
+  padding: 28px 34px 42px;
 }
 
 .arena-tools__head {
   display: grid;
   gap: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .arena-tools__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 26px 22px;
-  align-items: start;
+  gap: 0;
 }
 
 .arena-tools__group-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 2px 10px;
+  margin: 18px 2px 10px;
   color: var(--arena-mut);
   font-size: 12px;
   font-weight: 900;
@@ -196,26 +200,32 @@ function openTool(item: ToolItem) {
 
 .arena-tools__row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
   min-width: 0;
+  min-height: 62px;
   padding: 13px 16px;
   border: 1.5px solid var(--arena-line);
-  border-radius: 20px;
+  border-radius: var(--arena-radius-card);
   background: var(--arena-card);
+  box-shadow: var(--arena-shadow-card);
   color: var(--arena-ink);
+  font: inherit;
   cursor: pointer;
   text-align: left;
+  appearance: none;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
+    box-shadow 0.15s ease,
     transform 0.15s ease;
 
   &:hover {
     border-color: var(--arena-grn);
     background: var(--arena-grn-soft);
+    box-shadow: var(--arena-shadow-hover);
     transform: translateY(-1px);
   }
 
@@ -226,12 +236,34 @@ function openTool(item: ToolItem) {
 
   &.is-unavailable {
     cursor: not-allowed;
-    opacity: 0.62;
+    background: var(--arena-card);
+    pointer-events: none;
 
-    &:hover {
-      transform: none;
+    .arena-tools__icon {
+      filter: none;
+      opacity: 1;
+    }
+
+    .arena-tools__copy strong {
+      color: var(--arena-ink);
+    }
+
+    .arena-tools__arrow {
+      color: var(--arena-sub);
+    }
+
+    .arena-tools__copy small {
+      color: var(--user-warning-text);
+    }
+
+    &:hover,
+    &:focus-visible,
+    &:active {
       border-color: var(--arena-line);
       background: var(--arena-card);
+      box-shadow: var(--arena-shadow-card);
+      transform: none;
+      outline: 0;
     }
   }
 }
@@ -282,27 +314,31 @@ function openTool(item: ToolItem) {
 
 .arena-tools__arrow {
   color: var(--arena-mut);
+  font-size: 16px;
+  line-height: 1;
+  white-space: nowrap;
+
+  &.is-enter {
+    color: var(--arena-grn-d);
+    font-size: 13px;
+    font-weight: 800;
+  }
 }
 
 .arena-tools__enter {
   color: var(--arena-grn-d);
-  font-size: 12px;
-  font-weight: 900;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 @media (max-width: 720px) {
   .arena-tools__page {
     width: 100%;
-    padding: 14px 0 8px;
+    padding: 18px 14px 8px;
   }
 
   .arena-tools__head {
     margin-bottom: 20px;
-  }
-
-  .arena-tools__grid {
-    grid-template-columns: 1fr;
-    gap: 20px;
   }
 
   .arena-tools__row {

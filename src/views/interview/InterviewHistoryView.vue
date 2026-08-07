@@ -1,279 +1,362 @@
 <template>
-  <div class="interview-history-page page-shell">
-    <section class="history-hero">
+  <div class="interview-history-page page-shell page-shell--wide">
+    <header class="history-header">
       <div>
         <div class="eyebrow">
           <History :size="16" />
-          复盘路径中心
+          面试中心
         </div>
-        <h1>下一步从这里继续</h1>
-        <p>优先处理未完成面试、生成中的报告和已出炉复盘，把每一轮面试接到下一次训练。</p>
+        <h1>从当前这一轮继续</h1>
+        <p>先完成正在推进的面试，再回看报告、比较表现和安排下一轮训练。</p>
       </div>
-      <div class="hero-actions">
-        <el-button @click="router.push('/tools')">
-          <Wrench :size="16" />
-          记录与工具
-        </el-button>
+      <div class="header-actions">
         <el-button type="primary" @click="router.push('/interviews/create')">
           <Plus :size="16" />
           创建面试
         </el-button>
       </div>
-    </section>
+    </header>
 
-    <section class="metric-grid">
-      <article v-for="metric in metrics" :key="metric.label" class="metric-card">
+    <div class="view-tabs" role="tablist" aria-label="面试中心视图">
+      <button
+        class="view-tab"
+        :class="{ 'view-tab--active': activeView === 'continue' }"
+        type="button"
+        role="tab"
+        :aria-selected="activeView === 'continue'"
+        @click="setActiveView('continue')"
+      >
+        继续面试
+        <span v-if="activeInterviews.length">{{ activeInterviews.length }}</span>
+      </button>
+      <button
+        class="view-tab"
+        :class="{ 'view-tab--active': activeView === 'history' }"
+        type="button"
+        role="tab"
+        :aria-selected="activeView === 'history'"
+        @click="setActiveView('history')"
+      >
+        历史记录与报告
+      </button>
+    </div>
+
+    <section class="summary-strip" aria-label="面试概览">
+      <div v-for="metric in metrics" :key="metric.label" class="summary-item">
         <span>{{ metric.label }}</span>
         <strong>{{ metric.value }}</strong>
-        <p>{{ metric.desc }}</p>
-      </article>
-    </section>
-
-    <section v-if="voiceDeliveryTimeline.length" class="voice-trend-band">
-      <div class="voice-trend-head">
-        <div>
-          <span class="quick-label">语音表达趋势</span>
-          <h2>当前列表中的可比语音样本</h2>
-        </div>
-        <p>按分析完成时间正序，仅统计已成功持久化的真实指标。</p>
-      </div>
-      <div class="voice-trend-list">
-        <article v-for="point in voiceDeliveryTimeline" :key="point.analysisId || point.interviewId">
-          <time>{{ formatDateTime(point.occurredAt) }}</time>
-          <strong>{{ Math.round(point.speakingRatePerMinute || 0) }} 字/分钟</strong>
-          <span>填充词 {{ point.fillerCount ?? '-' }} 次</span>
-          <span v-if="point.pauseMetricsAvailable">最长停顿 {{ point.longestPauseMs ?? 0 }} ms</span>
-          <span v-else>停顿指标不可用</span>
-        </article>
+        <small>{{ metric.desc }}</small>
       </div>
     </section>
 
-    <section v-if="focusInterview" class="next-step-panel">
-      <div>
-        <span class="quick-label">建议先处理</span>
-        <h2>{{ focusInterview.interviewName || focusInterview.targetPosition || '未命名模拟面试' }}</h2>
-        <p>{{ nextActionText(focusInterview) }}</p>
-      </div>
-      <el-button type="primary" size="large" @click="openPrimary(focusInterview)">
-        {{ primaryActionLabel(focusInterview) }}
-        <ChevronRight :size="16" />
-      </el-button>
-    </section>
-
-    <section class="history-panel">
-      <details class="filter-drawer">
-        <summary>
-          <Search :size="16" />
-          筛一下复盘路径
-        </summary>
-        <div class="filter-bar">
-          <el-input
-            v-model="query.keyword"
-            clearable
-            placeholder="搜索面试名称、岗位或行业"
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <Search :size="16" />
-            </template>
-          </el-input>
-          <el-select v-model="query.status" clearable placeholder="面试状态" @change="handleSearch">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-model="query.reportStatus" clearable placeholder="报告状态" @change="handleSearch">
-            <el-option v-for="item in reportStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-button :loading="loading" @click="fetchInterviews">
-            <RefreshCw :size="16" />
-            刷新
-          </el-button>
-        </div>
-      </details>
-
+    <section v-if="activeView === 'continue'" class="continue-view" role="tabpanel">
       <el-alert
         v-if="loadError"
-        class="history-alert"
+        class="page-alert"
         type="warning"
         :closable="false"
         show-icon
         :title="loadError"
       />
 
-      <section v-if="generatedReports.length" class="comparison-toolbar">
-        <div>
-          <span class="quick-label">跨场比较</span>
-          <strong>已选择 {{ selectedComparisonCandidates.length }} / 10 轮</strong>
-          <p>{{ comparisonSelectionHint }}</p>
-        </div>
-        <div class="comparison-toolbar__actions">
-          <el-button
-            v-if="selectedComparisonCandidates.length"
-            :disabled="comparisonLoading"
-            @click="clearComparisonSelection"
-          >
-            清空
-          </el-button>
-          <el-button
-            type="primary"
-            :loading="comparisonLoading"
-            :disabled="!comparisonSelection.valid"
-            @click="createComparison"
-          >
-            <GitCompareArrows :size="16" />
-            比较所选记录
-          </el-button>
-        </div>
-      </section>
-
-      <el-alert
-        v-if="comparisonError"
-        class="history-alert"
-        type="warning"
-        :closable="false"
-        show-icon
-        title="暂时无法创建比较"
-        :description="comparisonError"
-      />
-
-      <div v-loading="loading" class="history-list">
+      <div v-loading="loading" class="continue-stage">
         <AppState
           v-if="loadError && !interviews.length && !loading"
           type="error"
           title="面试记录暂时不可用"
           :description="loadError"
         >
-          <el-button type="primary" @click="fetchInterviews">重试</el-button>
-          <el-button @click="router.push('/interviews/create')">创建模拟面试</el-button>
+          <el-button type="primary" @click="fetchInterviews">重新加载</el-button>
+          <el-button @click="router.push('/interviews/create')">创建面试</el-button>
         </AppState>
 
         <AppState
           v-else-if="!interviews.length && !loading"
           type="empty"
-          title="还没有模拟面试记录"
-          description="创建一次面试后，可以在这里继续进入房间、查看报告，并把薄弱点转成下一轮训练。"
+          title="还没有面试记录"
+          description="创建一轮模拟面试后，可以在这里持续完成答题，再查看复盘报告。"
         >
-          <el-button type="primary" @click="router.push('/interviews/create')">创建模拟面试</el-button>
-          <el-button @click="router.push('/onboarding')">先建立目标</el-button>
+          <el-button type="primary" @click="router.push('/interviews/create')">创建面试</el-button>
+          <el-button @click="router.push('/onboarding')">先建立求职目标</el-button>
         </AppState>
 
-        <section v-if="showMissingReportGuide" class="missing-report-guide">
-          <div>
-            <span class="quick-label">当前没有可查看的面试报告</span>
-            <h2>先完成一次面试，再到报告页生成复盘</h2>
-            <p>报告不会凭空生成：需要先进入面试房间完成答题，结束面试后点击“生成报告”。报告生成后会展示短板、推荐题和下一轮训练入口。</p>
+        <section v-else-if="focusInterview" class="focus-interview">
+          <div class="focus-content">
+            <div class="focus-heading">
+              <span class="quick-label">当前优先事项</span>
+              <div class="status-group">
+                <StatusTag :status="focusInterview.status" />
+                <StatusTag :status="focusInterview.reportStatus" />
+              </div>
+            </div>
+            <h2>{{ focusInterview.interviewName || focusInterview.targetPosition || '未命名模拟面试' }}</h2>
+            <p>{{ nextActionText(focusInterview) }}</p>
+            <div class="focus-meta">
+              <span>{{ formatDateTime(focusInterview.finishedAt || focusInterview.startedAt || focusInterview.createdAt) }}</span>
+              <span>{{ interviewModeLabel(focusInterview.interviewMode) }}</span>
+              <span>{{ focusInterview.targetPosition || '目标岗位待补充' }}</span>
+            </div>
           </div>
-          <div class="missing-report-actions">
+          <div class="focus-action">
+            <el-button type="primary" size="large" @click="openPrimary(focusInterview)">
+              {{ primaryActionLabel(focusInterview) }}
+              <ChevronRight :size="16" />
+            </el-button>
+            <button class="text-action" type="button" @click="setActiveView('history')">
+              查看全部记录与报告
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section v-else class="history-view" role="tabpanel">
+      <div class="history-view-head">
+        <div>
+          <h2>历史记录与报告</h2>
+          <p>筛选、比较和查看报告都在这里进行，不影响当前的面试推进。</p>
+        </div>
+        <div class="history-view-actions">
+          <el-button @click="router.push('/tools')">
+            <Wrench :size="16" />
+            记录与工具
+          </el-button>
+          <el-button @click="router.push('/questions/recommendations')">练今日题组</el-button>
+        </div>
+      </div>
+
+      <section class="history-panel">
+        <details class="filter-drawer">
+          <summary>
+            <Search :size="16" />
+            筛选历史记录
+          </summary>
+          <div class="filter-bar">
+            <el-input
+              v-model="query.keyword"
+              clearable
+              placeholder="搜索面试名称、岗位或行业"
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            >
+              <template #prefix>
+                <Search :size="16" />
+              </template>
+            </el-input>
+            <el-select v-model="query.status" clearable placeholder="面试状态" @change="handleSearch">
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-select v-model="query.reportStatus" clearable placeholder="报告状态" @change="handleSearch">
+              <el-option v-for="item in reportStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-button :loading="loading" @click="fetchInterviews">
+              <RefreshCw :size="16" />
+              刷新
+            </el-button>
+          </div>
+        </details>
+
+        <el-alert
+          v-if="loadError"
+          class="history-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+          :title="loadError"
+        />
+
+        <details
+          v-if="generatedReports.length"
+          class="comparison-panel"
+          @toggle="handleComparisonToggle"
+        >
+          <summary>
+            <GitCompareArrows :size="16" />
+            跨场比较
+            <span>已选择 {{ selectedComparisonCandidates.length }} / 10 轮</span>
+          </summary>
+          <div class="comparison-panel__content">
+            <p>{{ comparisonSelectionHint }}</p>
+            <div class="comparison-panel__actions">
+              <el-button
+                v-if="selectedComparisonCandidates.length"
+                :disabled="comparisonLoading"
+                @click="clearComparisonSelection"
+              >
+                清空选择
+              </el-button>
+              <el-button
+                type="primary"
+                :loading="comparisonLoading"
+                :disabled="!comparisonSelection.valid"
+                @click="createComparison"
+              >
+                创建比较
+              </el-button>
+            </div>
+          </div>
+          <el-alert
+            v-if="comparisonError"
+            class="comparison-error"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="暂时无法创建比较"
+            :description="comparisonError"
+          />
+        </details>
+
+        <details v-if="voiceDeliveryTimeline.length" class="voice-insights">
+          <summary>
+            <MessageSquare :size="16" />
+            语音表达趋势
+          </summary>
+          <p>按分析完成时间排序，仅展示已保存的真实指标。</p>
+          <div class="voice-trend-list">
+            <article v-for="point in voiceDeliveryTimeline" :key="point.analysisId || point.interviewId">
+              <time>{{ formatDateTime(point.occurredAt) }}</time>
+              <strong>{{ Math.round(point.speakingRatePerMinute || 0) }} 字/分钟</strong>
+              <span>填充词 {{ point.fillerCount ?? '-' }} 次</span>
+              <span v-if="point.pauseMetricsAvailable">最长停顿 {{ point.longestPauseMs ?? 0 }} 毫秒</span>
+              <span v-else>停顿指标不可用</span>
+            </article>
+          </div>
+        </details>
+
+        <div v-loading="loading" class="history-list">
+          <AppState
+            v-if="loadError && !interviews.length && !loading"
+            type="error"
+            title="面试记录暂时不可用"
+            :description="loadError"
+          >
+            <el-button type="primary" @click="fetchInterviews">重新加载</el-button>
+            <el-button @click="router.push('/interviews/create')">创建面试</el-button>
+          </AppState>
+
+          <AppState
+            v-else-if="!interviews.length && !loading"
+            type="empty"
+            title="还没有面试记录"
+            description="创建一次面试后，可以在这里继续进入房间、查看报告，并把薄弱点转成下一轮训练。"
+          >
+            <el-button type="primary" @click="router.push('/interviews/create')">创建面试</el-button>
+            <el-button @click="router.push('/onboarding')">先建立求职目标</el-button>
+          </AppState>
+
+          <section v-if="showMissingReportGuide" class="missing-report-guide">
+            <div>
+              <strong>当前还没有可查看的报告</strong>
+              <p>完成面试并提交报告生成后，才能获得本轮复盘与后续训练建议。</p>
+            </div>
             <el-button type="primary" @click="openMissingReportGuidePrimary">
               {{ focusInterview && !isInterviewDone(focusInterview.status) ? '继续完成面试' : '去生成报告' }}
             </el-button>
-            <el-button @click="router.push('/interviews/create')">新建一轮面试</el-button>
-            <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
-          </div>
-        </section>
+          </section>
 
-        <article
-          v-for="item in interviews"
-          :key="item.interviewId"
-          class="interview-card"
-          :class="{ 'interview-card--selected': isComparisonSelected(item) }"
-        >
-          <div class="card-main">
-            <div class="card-head">
-              <div>
-                <span class="card-time">{{ formatDateTime(item.finishedAt || item.startedAt || item.createdAt) }}</span>
-                <h2>{{ item.interviewName || item.targetPosition || '未命名模拟面试' }}</h2>
+          <article
+            v-for="item in interviews"
+            :key="item.interviewId"
+            class="interview-card"
+            :class="{ 'interview-card--selected': comparisonExpanded && isComparisonSelected(item) }"
+          >
+            <div class="card-main">
+              <div class="card-head">
+                <div>
+                  <span class="card-time">{{ formatDateTime(item.finishedAt || item.startedAt || item.createdAt) }}</span>
+                  <h3>{{ item.interviewName || item.targetPosition || '未命名模拟面试' }}</h3>
+                </div>
+                <div class="status-group">
+                  <el-tooltip
+                    v-if="comparisonExpanded && isReportSuccess(item.reportStatus)"
+                    :content="comparisonSelectionState(item).reason"
+                    :disabled="!comparisonSelectionState(item).reason"
+                    placement="top"
+                  >
+                    <span class="comparison-checkbox-wrap">
+                      <el-checkbox
+                        :model-value="isComparisonSelected(item)"
+                        :disabled="comparisonSelectionState(item).disabled"
+                        @change="toggleComparisonSelection(item, Boolean($event))"
+                      >
+                        加入比较
+                      </el-checkbox>
+                    </span>
+                  </el-tooltip>
+                  <StatusTag :status="item.status" />
+                  <StatusTag :status="item.reportStatus" />
+                  <StatusTag
+                    v-if="comparisonExpanded && isReportSuccess(item.reportStatus) && item.comparisonAvailable === true"
+                    status="COMPARABLE"
+                    :map="comparableTagMap"
+                  />
+                  <el-tooltip
+                    v-else-if="comparisonExpanded && isReportSuccess(item.reportStatus) && item.comparisonAvailable === false"
+                    :content="comparisonUnavailableText(item)"
+                    placement="top"
+                  >
+                    <span class="comparison-tag-wrap">
+                      <StatusTag status="NOT_COMPARABLE" :map="comparableTagMap" />
+                    </span>
+                  </el-tooltip>
+                </div>
               </div>
-              <div class="status-group">
-                <el-tooltip
-                  v-if="isReportSuccess(item.reportStatus)"
-                  :content="comparisonSelectionState(item).reason"
-                  :disabled="!comparisonSelectionState(item).reason"
-                  placement="top"
-                >
-                  <span class="comparison-checkbox-wrap">
-                    <el-checkbox
-                      :model-value="isComparisonSelected(item)"
-                      :disabled="comparisonSelectionState(item).disabled"
-                      @change="toggleComparisonSelection(item, Boolean($event))"
-                    >
-                      加入比较
-                    </el-checkbox>
-                  </span>
-                </el-tooltip>
-                <StatusTag :status="item.status" />
-                <StatusTag :status="item.reportStatus" />
-                <StatusTag
-                  v-if="isReportSuccess(item.reportStatus) && item.comparisonAvailable === true"
-                  status="COMPARABLE"
-                  :map="comparableTagMap"
-                />
-                <el-tooltip
-                  v-else-if="isReportSuccess(item.reportStatus) && item.comparisonAvailable === false"
-                  :content="comparisonUnavailableText(item)"
-                  placement="top"
-                >
-                  <span class="comparison-tag-wrap">
-                    <StatusTag status="NOT_COMPARABLE" :map="comparableTagMap" />
-                  </span>
-                </el-tooltip>
+
+              <div class="tag-row">
+                <span>{{ interviewModeLabel(item.interviewMode) }}</span>
+                <span>{{ item.targetPosition || '目标岗位待补充' }}</span>
+                <span>{{ item.industryDirection || '行业方向待补充' }}</span>
               </div>
+
+              <details class="record-details">
+                <summary>查看本轮摘要</summary>
+                <p>{{ nextActionText(item) }}</p>
+                <div class="voice-history-summary">
+                  <strong>语音表达</strong>
+                  <span>{{ voiceDeliveryCompactText(item) }}</span>
+                </div>
+              </details>
             </div>
 
-            <div class="tag-row">
-              <span>{{ interviewModeLabel(item.interviewMode) }}</span>
-              <span>{{ item.targetPosition || '目标岗位待补充' }}</span>
-              <span>{{ item.industryDirection || '行业方向待补充' }}</span>
+            <aside class="score-panel">
+              <span>报告得分</span>
+              <strong>{{ displayInterviewScore(item) }}</strong>
+              <p>{{ scoreHint(item) }}</p>
+            </aside>
+
+            <div class="card-actions">
+              <el-button class="card-primary-action" type="primary" @click="openPrimary(item)">
+                {{ primaryActionLabel(item) }}
+                <ChevronRight :size="16" />
+              </el-button>
+              <el-button @click="router.push(`/interviews/room/${item.interviewId}`)">
+                <MessageSquare :size="16" />
+                面试房间
+              </el-button>
+              <el-button
+                v-if="showReportSecondaryAction(item)"
+                :disabled="!canOpenReportPage(item)"
+                @click="router.push(`/interviews/${item.interviewId}/report`)"
+              >
+                <FileText :size="16" />
+                {{ reportActionLabel(item) }}
+              </el-button>
             </div>
+          </article>
+        </div>
 
-            <div class="card-desc">
-              <span class="next-action-chip">下一步：{{ primaryActionLabel(item) }}</span>
-              <p>{{ nextActionText(item) }}</p>
-              <div class="voice-history-summary">
-                <strong>语音表达</strong>
-                <span>{{ voiceDeliveryCompactText(item) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <aside class="score-panel">
-            <span>报告得分</span>
-            <strong>{{ displayInterviewScore(item) }}</strong>
-            <p>{{ scoreHint(item) }}</p>
-          </aside>
-
-          <div class="card-actions">
-            <el-button class="card-primary-action" type="primary" @click="openPrimary(item)">
-              {{ primaryActionLabel(item) }}
-              <ChevronRight :size="16" />
-            </el-button>
-            <el-button @click="router.push(`/interviews/room/${item.interviewId}`)">
-              <MessageSquare :size="16" />
-              面试房间
-            </el-button>
-            <el-button
-              v-if="showReportSecondaryAction(item)"
-              :disabled="!canOpenReportPage(item)"
-              @click="router.push(`/interviews/${item.interviewId}/report`)"
-            >
-              <FileText :size="16" />
-              {{ reportActionLabel(item) }}
-            </el-button>
-          </div>
-        </article>
-      </div>
-
-      <div class="pagination-wrap">
-        <el-pagination
-          v-model:current-page="query.pageNo"
-          v-model:page-size="query.pageSize"
-          background
-          layout="total, sizes, prev, pager, next"
-          :total="total"
-          :page-sizes="[6, 10, 20, 50]"
-          @change="fetchInterviews"
-        />
-      </div>
+        <div class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="query.pageNo"
+            v-model:page-size="query.pageSize"
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="total"
+            :page-sizes="[6, 10, 20, 50]"
+            @change="fetchInterviews"
+          />
+        </div>
+      </section>
     </section>
   </div>
 </template>
@@ -313,10 +396,13 @@ const loading = ref(false)
 const loadError = ref('')
 const interviews = ref<InterviewListVO[]>([])
 const total = ref(0)
+let interviewsRequestId = 0
 const selectedComparisonCandidates = ref<InterviewHistoryComparisonCandidate[]>([])
 const comparisonLoading = ref(false)
 const comparisonError = ref('')
 const comparisonIdempotencyKey = ref('')
+const activeView = ref<'continue' | 'history'>('continue')
+const comparisonExpanded = ref(false)
 
 const query = reactive<InterviewQueryDTO>({
   pageNo: 1,
@@ -535,6 +621,16 @@ const clearComparisonSelection = () => {
   comparisonIdempotencyKey.value = ''
 }
 
+const setActiveView = (view: 'continue' | 'history') => {
+  activeView.value = view
+  comparisonExpanded.value = false
+}
+
+const handleComparisonToggle = (event: Event) => {
+  const details = event.target
+  comparisonExpanded.value = details instanceof HTMLDetailsElement && details.open
+}
+
 const createComparison = async () => {
   if (comparisonLoading.value) return
   const comparisonCandidatesSnapshot = selectedComparisonCandidates.value
@@ -624,18 +720,25 @@ const handleSearch = () => {
 }
 
 const fetchInterviews = async () => {
+  const requestId = ++interviewsRequestId
   loading.value = true
   loadError.value = ''
   try {
     const result = await getInterviewsApi(query)
+    if (requestId !== interviewsRequestId) return
+
     interviews.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
+    if (requestId !== interviewsRequestId) return
+
     interviews.value = []
     total.value = 0
     loadError.value = getErrorMessage(error, '面试记录暂时加载失败，请稍后重试。')
   } finally {
-    loading.value = false
+    if (requestId === interviewsRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -644,635 +747,452 @@ onMounted(fetchInterviews)
 
 <style scoped lang="scss">
 .interview-history-page {
-  display: grid;
-  gap: 20px;
+  width: min(100%, 1240px);
+  min-width: 0;
+  margin: 0 auto;
+  gap: 24px;
+  padding-bottom: 40px;
 }
 
-.history-hero,
-.metric-card,
-.next-step-panel,
-.history-panel,
-.interview-card {
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-  box-shadow: none;
-}
-
-.history-hero {
+.history-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  padding: 28px;
-
-  h1 {
-    margin: 12px 0 10px;
-    color: var(--user-text);
-    font-size: 40px;
-    line-height: 1.1;
-  }
-
-  p {
-    max-width: 760px;
-    margin: 0;
-    color: var(--user-text-muted);
-    font-size: 16px;
-    line-height: 1.75;
-  }
-}
-
-.eyebrow,
-.hero-actions,
-.filter-bar,
-.card-head,
-.status-group,
-.tag-row,
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.eyebrow {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.hero-actions,
-.card-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.metric-card {
-  padding: 16px;
-
-  span {
-    color: var(--user-text-muted);
-    font-size: 13px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 8px;
-    color: var(--user-text);
-    font-size: 28px;
-  }
-
-  p {
-    margin: 8px 0 0;
-    color: var(--user-text-muted);
-    line-height: 1.55;
-  }
-}
-
-.voice-trend-band {
-  display: grid;
-  gap: 16px;
-  padding: 20px 0;
-  border-top: 1px solid var(--user-border);
-  border-bottom: 1px solid var(--user-border);
-}
-
-.voice-trend-head {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-
-  h2,
-  p {
-    margin: 0;
-  }
-
-  p {
-    color: var(--user-text-muted);
-  }
-}
-
-.voice-trend-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-
-  article {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid var(--user-border);
-    border-radius: 6px;
-    background: var(--user-surface-muted);
-  }
-
-  time,
-  span {
-    color: var(--user-text-muted);
-  }
-}
-
-.next-step-panel,
-.missing-report-guide {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px;
-  border-color: var(--user-primary-border);
-  background: var(--user-surface-muted);
-
-  h2 {
-    margin: 6px 0 8px;
-    color: var(--user-text);
-    font-size: 22px;
-    line-height: 1.25;
-  }
-
-  p {
-    margin: 0;
-    color: var(--user-text-muted);
-    line-height: 1.65;
-  }
-
-  .el-button {
-    flex: 0 0 auto;
-  }
-}
-
-.missing-report-guide {
-  border: 1px dashed var(--user-primary-border);
-  background: var(--user-primary-soft);
-  box-shadow: none;
-
-  h2 {
-    margin: 6px 0 8px;
-    color: var(--user-text);
-    font-size: 20px;
-  }
-
-  p {
-    margin: 0;
-    color: var(--user-text-secondary);
-    line-height: 1.65;
-  }
-}
-
-.missing-report-actions {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.quick-label {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.history-panel {
-  padding: 18px;
-}
-
-.history-alert {
-  margin-bottom: 14px;
-}
-
-.comparison-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 14px;
-  padding: 16px;
-  border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
-  background: var(--user-primary-soft);
-
-  strong {
-    display: block;
-    margin-top: 5px;
-    color: var(--user-text);
-    font-size: 18px;
-  }
-
-  p {
-    margin: 5px 0 0;
-    color: var(--user-text-secondary);
-    line-height: 1.55;
-  }
-}
-
-.comparison-toolbar__actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-
-.filter-bar {
-  flex-wrap: wrap;
-  margin-top: 12px;
-
-  :deep(.el-input) {
-    width: min(340px, 100%);
-  }
-
-  :deep(.el-select) {
-    width: 170px;
-  }
-}
-
-.filter-drawer {
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-
-  summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--user-text-secondary);
-    font-size: 13px;
-    font-weight: 800;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
-  }
-}
-
-.history-list {
-  display: grid;
-  min-height: 260px;
-  gap: 14px;
-}
-
-.interview-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 16px;
-  padding: 18px;
-  box-shadow: none;
-}
-
-.interview-card--selected {
-  border-color: var(--user-primary);
-  box-shadow: 0 0 0 2px var(--user-primary-soft);
-}
-
-.comparison-checkbox-wrap {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-}
-
-.card-main {
-  min-width: 0;
-}
-
-.card-head {
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-
-  h2 {
-    margin: 6px 0 0;
-    color: var(--user-text);
-    font-size: 20px;
-    line-height: 1.3;
-  }
-}
-
-.card-time {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.status-group {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.tag-row {
-  flex-wrap: wrap;
-  margin-top: 12px;
-
-  span {
-    padding: 5px 9px;
-    border: 1px solid var(--user-primary-border);
-    border-radius: 999px;
-    background: var(--user-primary-soft);
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 700;
-  }
-}
-
-.card-desc {
-  margin-top: 12px;
-
-  p {
-    margin: 8px 0 0;
-    color: var(--user-text-muted);
-    line-height: 1.7;
-  }
-}
-
-.voice-history-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: baseline;
-  margin-top: 10px;
-  color: var(--user-text-muted);
-
-  strong {
-    color: var(--user-text);
-  }
-}
-
-.next-action-chip {
-  display: inline-flex;
-  max-width: 100%;
-  padding: 5px 9px;
-  border: 1px solid var(--user-success-border);
-  border-radius: 999px;
-  background: var(--user-success-soft);
-  color: var(--user-success);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.score-panel {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-  text-align: center;
-
-  span {
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    margin-top: 6px;
-    color: var(--user-primary);
-    font-size: 32px;
-  }
-
-  p {
-    margin: 6px 0 0;
-    color: var(--user-text-muted);
-    font-size: 12px;
-    line-height: 1.45;
-  }
-}
-
-.card-actions {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(180px, auto) repeat(2, auto);
-  justify-content: end;
-  padding-top: 14px;
-  border-top: 1px solid var(--user-border);
-
-  :deep(.el-button) {
-    margin-left: 0;
-  }
-}
-
-.card-primary-action {
-  min-width: 180px;
-}
-
-.pagination-wrap {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 18px;
-}
-
-@media (max-width: 980px) {
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .interview-card {
-    grid-template-columns: 1fr;
-  }
-
-  .score-panel {
-    justify-items: flex-start;
-    text-align: left;
-  }
-}
-
-@media (max-width: 720px) {
-  .interview-history-page,
-  .history-panel {
-    min-width: 0;
-  }
-
-  .history-panel {
-    overflow: hidden;
-  }
-
-  .history-hero,
-  .card-head,
-  .next-step-panel,
-  .missing-report-guide,
-  .comparison-toolbar {
-    flex-direction: column;
-  }
-
-  .history-hero {
-    padding: 18px;
-  }
-
-  .history-hero h1 {
-    font-size: 30px;
-  }
-
-  .metric-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .filter-bar :deep(.el-select),
-  .filter-bar :deep(.el-input) {
-    width: 100%;
-  }
-
-  .hero-actions,
-  .card-actions,
-  .status-group {
-    justify-content: flex-start;
-  }
-
-  .next-step-panel,
-  .missing-report-guide,
-  .comparison-toolbar {
-    align-items: stretch;
-  }
-
-  .next-step-panel :deep(.el-button),
-  .missing-report-actions :deep(.el-button),
-  .hero-actions :deep(.el-button),
-  .comparison-toolbar__actions :deep(.el-button) {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .comparison-toolbar__actions {
-    flex-direction: column;
-  }
-
-  .card-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .card-actions :deep(.el-button) {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .pagination-wrap {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-
-  .pagination-wrap :deep(.el-pagination) {
-    min-width: max-content;
-  }
-}
-
-/* Compact history workspace */
-.interview-history-page {
-  gap: 14px;
-  min-width: 0;
-  color: var(--user-text);
-}
-
-.history-hero {
-  align-items: flex-start;
-  gap: 16px;
-  padding: 16px 18px;
+  padding: 8px 4px 0;
 
   h1 {
     margin: 6px 0;
-    font-size: 24px;
+    color: var(--user-text);
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.25;
+    text-wrap: balance;
   }
 
   p {
-    max-width: 68ch;
-    color: var(--user-text-muted);
-    font-size: 13px;
-    line-height: 1.55;
+    max-width: 62ch;
+    margin: 0;
+    color: var(--user-text-secondary);
+    font-size: 14px;
+    line-height: 1.65;
+    text-wrap: pretty;
   }
+}
+
+.header-actions {
+  flex: 0 0 auto;
+}
+
+.eyebrow,
+.quick-label,
+.status-group,
+.focus-meta,
+.tag-row,
+.history-view-actions,
+.card-actions,
+.comparison-panel__actions,
+.voice-history-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .eyebrow,
 .quick-label {
   color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.metric-grid {
-  gap: 0;
+.view-tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
   border: 1px solid var(--user-border);
   border-radius: var(--user-radius-sm);
   background: var(--user-surface);
-  overflow: hidden;
 }
 
-.metric-grid .metric-card {
-  min-height: 0;
-  padding: 10px 14px;
+.view-tab {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
   border: 0;
-  border-right: 1px solid var(--user-border);
-  border-radius: 0;
+  border-radius: 7px;
   background: transparent;
+  color: var(--user-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background-color 180ms ease, color 180ms ease;
+
+  span {
+    display: inline-grid;
+    min-width: 18px;
+    min-height: 18px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--user-surface-muted);
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
+
+  &:hover {
+    background: var(--user-surface-muted);
+    color: var(--user-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 2px;
+  }
+}
+
+.view-tab--active {
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+
+  span {
+    background: var(--user-primary);
+    color: var(--user-primary-contrast);
+  }
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+}
+
+.summary-item {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 13px 16px;
+  border-right: 1px solid var(--user-border);
 
   &:last-child {
     border-right: 0;
   }
 
-  strong {
-    margin-top: 2px;
-    font-size: 22px;
-  }
-
-  p {
-    margin-top: 2px;
-    font-size: 12px;
-  }
-}
-
-.voice-trend-band {
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: var(--user-surface);
-}
-
-.voice-trend-head {
-  align-items: center;
-
-  h2 {
-    margin-top: 3px;
-    font-size: 17px;
-  }
-
-  p {
-    max-width: 54ch;
+  span,
+  small {
     color: var(--user-text-muted);
     font-size: 12px;
   }
+
+  strong {
+    color: var(--user-text);
+    font-size: 21px;
+    line-height: 1;
+  }
+
+  small {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.continue-view,
+.history-view {
+  min-width: 0;
+}
+
+.continue-stage {
+  display: grid;
+  min-height: 180px;
+  align-items: center;
+}
+
+.page-alert {
+  margin-bottom: 14px;
+}
+
+.focus-interview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(174px, auto);
+  align-items: center;
+  gap: 28px;
+  padding: 24px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+}
+
+.focus-content {
+  min-width: 0;
+}
+
+.focus-heading,
+.card-head,
+.history-view-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.focus-heading .status-group,
+.card-head .status-group {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.focus-interview h2 {
+  max-width: 32ch;
+  margin: 10px 0 8px;
+  color: var(--user-text);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.focus-interview p {
+  max-width: 66ch;
+  margin: 0;
+  color: var(--user-text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.focus-meta {
+  flex-wrap: wrap;
+  margin-top: 16px;
+
+  span {
+    color: var(--user-text-muted);
+    font-size: 12px;
+  }
+
+  span + span::before {
+    margin-right: 8px;
+    color: var(--user-border-strong);
+    content: '·';
+  }
+}
+
+.focus-action {
+  display: grid;
+  justify-items: stretch;
+  gap: 12px;
+}
+
+.focus-action :deep(.el-button) {
+  min-width: 174px;
+  margin-left: 0;
+}
+
+.text-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--user-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+
+  &:hover {
+    color: var(--user-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--user-primary);
+    outline-offset: 3px;
+  }
+}
+
+.history-view {
+  display: grid;
+  gap: 16px;
+}
+
+.history-view-head {
+  align-items: center;
+  padding: 0 4px;
+
+  h2 {
+    margin: 0;
+    color: var(--user-text);
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.3;
+  }
+
+  p {
+    max-width: 62ch;
+    margin: 5px 0 0;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.history-view-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.history-panel {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+  overflow: hidden;
+}
+
+.filter-drawer,
+.comparison-panel,
+.voice-insights {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: var(--user-surface-muted);
+}
+
+.filter-drawer summary,
+.comparison-panel summary,
+.voice-insights summary,
+.record-details summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--user-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.filter-drawer summary::-webkit-details-marker,
+.comparison-panel summary::-webkit-details-marker,
+.voice-insights summary::-webkit-details-marker,
+.record-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-drawer > summary,
+.comparison-panel > summary,
+.voice-insights > summary {
+  min-height: 48px;
+  padding: 0 18px;
+}
+
+.comparison-panel > summary {
+  justify-content: flex-start;
+
+  span {
+    margin-left: auto;
+    color: var(--user-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.filter-drawer[open] > summary,
+.comparison-panel[open] > summary,
+.voice-insights[open] > summary {
+  border-bottom: 1px solid var(--user-border);
+  background: var(--user-surface);
+  color: var(--user-text);
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 18px 16px;
+}
+
+.filter-bar :deep(.el-input) {
+  width: min(340px, 100%);
+}
+
+.filter-bar :deep(.el-select) {
+  width: 168px;
+}
+
+.comparison-panel__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+
+  p {
+    max-width: 66ch;
+    margin: 0;
+    color: var(--user-text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.comparison-panel__actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.comparison-error {
+  margin: 0 18px 16px;
+}
+
+.voice-insights {
+  padding-bottom: 0;
+}
+
+.voice-insights > p {
+  margin: 0;
+  padding: 12px 18px 0;
+  color: var(--user-text-muted);
+  font-size: 12px;
 }
 
 .voice-trend-list {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
-  border-top: 1px solid var(--user-border);
+  padding: 12px 18px 16px;
+}
 
-  article {
-    display: grid;
-    grid-template-columns: minmax(150px, 0.9fr) minmax(130px, 0.8fr) repeat(2, minmax(120px, 0.7fr));
-    gap: 12px;
-    align-items: center;
-    padding: 9px 0;
-    border: 0;
-    border-bottom: 1px solid var(--user-border);
-    border-radius: 0;
-    background: transparent;
+.voice-trend-list article {
+  display: grid;
+  grid-template-columns: minmax(94px, 0.7fr) minmax(92px, 0.7fr) minmax(86px, 0.7fr) minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--user-border);
+  border-radius: 0;
+  background: transparent;
 
-    &:last-child {
-      border-bottom: 0;
-    }
+  &:nth-last-child(-n + 2) {
+    border-bottom: 0;
   }
 
   time,
   span {
+    min-width: 0;
     color: var(--user-text-muted);
     font-size: 12px;
     overflow-wrap: anywhere;
@@ -1280,88 +1200,55 @@ onMounted(fetchInterviews)
 
   strong {
     color: var(--user-text);
+    font-size: 13px;
   }
 }
 
-.next-step-panel,
-.missing-report-guide,
-.comparison-toolbar {
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: var(--user-surface-muted);
-}
-
-.next-step-panel h2,
-.missing-report-guide h2 {
-  margin: 3px 0;
-  font-size: 18px;
-}
-
-.next-step-panel p,
-.missing-report-guide p,
-.comparison-toolbar p {
-  margin-top: 3px;
-  color: var(--user-text-muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.history-panel {
-  min-width: 0;
-  padding: 0;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: var(--user-surface);
-  overflow: hidden;
-}
-
-.filter-drawer {
-  margin: 0;
-  padding: 10px 14px;
-  border: 0;
-  border-bottom: 1px solid var(--user-border);
-  border-radius: 0;
-  background: var(--user-surface-muted);
-}
-
-.filter-bar {
-  gap: 8px;
-}
-
-.history-alert,
-.comparison-toolbar,
-.missing-report-guide {
-  margin: 12px 14px 0;
-}
-
-.comparison-toolbar {
-  background: var(--user-surface-tint);
-
-  strong {
-    margin-top: 3px;
-    color: var(--user-text);
-    font-size: 16px;
-  }
+.history-alert {
+  margin: 14px 18px 0;
 }
 
 .history-list {
+  display: grid;
+  min-height: 280px;
   gap: 0;
-  padding: 0 14px;
+  padding: 0 18px;
 }
 
-.history-list > .app-state,
-.history-list > .missing-report-guide {
-  margin-right: 0;
-  margin-left: 0;
+.history-list > .app-state {
+  align-self: center;
+}
+
+.missing-report-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-primary-soft);
+
+  strong {
+    color: var(--user-text);
+    font-size: 14px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--user-text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+  }
 }
 
 .interview-card {
-  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.24fr) minmax(280px, auto);
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 0.22fr) minmax(250px, auto);
   align-items: center;
-  padding: 14px 0;
+  gap: 16px;
+  padding: 16px 0;
   border: 0;
   border-bottom: 1px solid var(--user-border);
   border-radius: 0;
@@ -1374,181 +1261,303 @@ onMounted(fetchInterviews)
 }
 
 .interview-card--selected {
-  border-color: var(--user-primary-border);
   background: var(--user-primary-faint);
-  box-shadow: 14px 0 0 var(--user-primary-faint), -14px 0 0 var(--user-primary-faint);
+  box-shadow: 18px 0 0 var(--user-primary-faint), -18px 0 0 var(--user-primary-faint);
 }
 
-.card-head {
-  gap: 10px;
+.card-main {
+  min-width: 0;
 }
 
-.card-head h2 {
-  margin-top: 3px;
-  font-size: 17px;
+.card-head h3 {
+  margin: 4px 0 0;
+  color: var(--user-text);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
 }
 
-.status-group {
-  gap: 6px;
+.card-time {
+  color: var(--user-text-muted);
+  font-size: 12px;
 }
 
 .tag-row {
-  margin-top: 8px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+
+  span {
+    padding: 3px 7px;
+    border: 1px solid var(--user-border);
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+  }
 }
 
-.tag-row span {
-  padding: 3px 7px;
-  border-color: var(--user-border);
-  background: var(--user-surface-muted);
-  color: var(--user-text-muted);
-}
+.record-details {
+  margin-top: 10px;
 
-.card-desc {
-  margin-top: 8px;
+  summary {
+    width: fit-content;
+    color: var(--user-text-muted);
+    font-size: 12px;
+  }
 
   p {
-    margin-top: 5px;
+    max-width: 72ch;
+    margin: 8px 0 0;
+    color: var(--user-text-secondary);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 }
 
 .voice-history-summary {
-  margin-top: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: var(--user-text-muted);
   font-size: 12px;
+  line-height: 1.5;
+
+  strong {
+    color: var(--user-text-secondary);
+  }
 }
 
 .score-panel {
-  align-self: stretch;
-  justify-content: center;
-  padding: 8px 12px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 72px;
+  padding: 0 14px;
   border: 0;
   border-right: 1px solid var(--user-border);
   border-left: 1px solid var(--user-border);
   border-radius: 0;
   background: transparent;
+  text-align: center;
+
+  span,
+  p {
+    color: var(--user-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
 
   strong {
-    font-size: 26px;
+    color: var(--user-text);
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  p {
+    margin: 0;
   }
 }
 
 .card-actions {
-  grid-column: auto;
-  display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  padding-top: 0;
-  border-top: 0;
+}
+
+.card-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .card-primary-action {
-  min-width: 0;
+  min-width: 122px;
 }
 
 .pagination-wrap {
-  padding: 10px 14px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
   border-top: 1px solid var(--user-border);
   background: var(--user-surface-muted);
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1040px) {
   .interview-card {
-    grid-template-columns: minmax(0, 1fr) 100px;
+    grid-template-columns: minmax(0, 1fr) 110px;
   }
 
   .card-actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
-    padding-top: 10px;
-    border-top: 1px solid var(--user-border);
+  }
+
+  .voice-trend-list {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-trend-list article:nth-last-child(-n + 2) {
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .voice-trend-list article:last-child {
+    border-bottom: 0;
   }
 }
 
 @media (max-width: 760px) {
-  .history-hero {
-    padding: 14px;
+  .interview-history-page {
+    gap: 18px;
+    padding-bottom: 28px;
   }
 
-  .metric-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .metric-grid .metric-card {
-    border-right: 1px solid var(--user-border);
-    border-bottom: 1px solid var(--user-border);
-  }
-
-  .metric-grid .metric-card:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .metric-grid .metric-card:nth-last-child(-n + 2) {
-    border-bottom: 0;
-  }
-
-  .voice-trend-head {
-    align-items: flex-start;
+  .history-header,
+  .history-view-head,
+  .focus-interview,
+  .comparison-panel__content,
+  .missing-report-guide {
+    align-items: stretch;
     flex-direction: column;
-    gap: 4px;
   }
 
-  .voice-trend-list article {
-    grid-template-columns: 1fr 1fr;
-    gap: 5px 10px;
+  .history-header,
+  .history-view-head {
+    display: flex;
+  }
+
+  .header-actions,
+  .history-view-actions {
+    justify-content: flex-start;
+  }
+
+  .focus-interview {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 18px;
+  }
+
+  .focus-action {
+    justify-items: stretch;
+  }
+
+  .focus-action :deep(.el-button) {
+    width: 100%;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-item {
+    border-bottom: 1px solid var(--user-border);
+
+    &:nth-child(2n) {
+      border-right: 0;
+    }
+
+    &:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+  }
+
+  .filter-bar :deep(.el-input),
+  .filter-bar :deep(.el-select) {
+    width: 100%;
+  }
+
+  .comparison-panel__content {
+    display: flex;
+  }
+
+  .comparison-panel__actions {
+    justify-content: flex-start;
   }
 
   .history-list {
-    padding: 0 12px;
+    padding: 0 14px;
   }
 
   .interview-card {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
   }
 
   .score-panel {
+    grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
-    justify-items: start;
-    grid-template-columns: auto auto 1fr;
+    justify-content: start;
     gap: 8px;
-    padding: 8px 0;
-    border-right: 0;
-    border-left: 0;
+    min-height: 0;
+    padding: 10px 0;
     border-top: 1px solid var(--user-border);
     border-bottom: 1px solid var(--user-border);
+    border-right: 0;
+    border-left: 0;
     text-align: left;
-  }
-
-  .score-panel strong {
-    font-size: 20px;
   }
 
   .card-actions {
     display: grid;
     grid-template-columns: 1fr;
   }
+
+  .card-actions :deep(.el-button) {
+    width: 100%;
+  }
+
+  .pagination-wrap {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 480px) {
-  .metric-grid {
+  .history-header h1 {
+    font-size: 24px;
+  }
+
+  .summary-strip {
     grid-template-columns: 1fr;
   }
 
-  .metric-grid .metric-card,
-  .metric-grid .metric-card:nth-child(2n),
-  .metric-grid .metric-card:nth-last-child(-n + 2) {
+  .summary-item,
+  .summary-item:nth-child(2n),
+  .summary-item:nth-last-child(-n + 2) {
     border-right: 0;
     border-bottom: 1px solid var(--user-border);
   }
 
-  .metric-grid .metric-card:last-child {
+  .summary-item:last-child {
     border-bottom: 0;
+  }
+
+  .view-tabs {
+    width: 100%;
+  }
+
+  .view-tab {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+
+  .focus-heading,
+  .card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .focus-heading .status-group,
+  .card-head .status-group {
+    justify-content: flex-start;
   }
 
   .voice-trend-list article {
     grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-tab {
+    transition: none;
   }
 }
 </style>

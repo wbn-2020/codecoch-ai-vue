@@ -16,14 +16,10 @@
         </div>
       </div>
       <div class="hero-actions">
-        <el-button @click="router.back()">返回</el-button>
+        <el-button @click="goBackToQuestionBank">返回题库</el-button>
         <el-button type="primary" :disabled="!detail" @click="startPractice">
           <Play :size="16" />
           练这一题
-        </el-button>
-        <el-button :disabled="!detail" @click="router.push('/interviews/create')">
-          <MessageSquare :size="16" />
-          模拟面试
         </el-button>
       </div>
     </section>
@@ -53,14 +49,6 @@
             </el-tag>
           </div>
 
-          <div class="training-purpose-grid">
-            <article v-for="item in trainingPurposeCards" :key="item.title">
-              <span>{{ item.kicker }}</span>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.desc }}</p>
-            </article>
-          </div>
-
           <section class="question-content">
             <div class="section-title">
               <span>当前题目</span>
@@ -69,15 +57,6 @@
             <MarkdownPreview :content="detail.content || '暂无题干内容'" />
           </section>
 
-          <div class="answer-frame">
-            <span>面试表达结构</span>
-            <div class="answer-steps">
-              <em>场景边界</em>
-              <em>核心机制</em>
-              <em>取舍风险</em>
-              <em>项目证据</em>
-            </div>
-          </div>
         </div>
         <AppState v-else-if="!loading && loadError" type="error" title="题目加载失败" :description="loadError">
           <el-button type="primary" @click="fetchDetail">重试</el-button>
@@ -86,19 +65,26 @@
       </main>
 
       <aside v-if="detail" class="answer-workspace">
-        <QuestionAnswerReviewPanel :question="detail" />
+        <QuestionAnswerReviewPanel :question="detail" mode="practice" />
       </aside>
     </section>
 
-    <section v-if="detail" class="review-layout">
+    <section v-if="detail" class="review-disclosure">
+      <div>
+        <p class="review-disclosure__eyebrow">完整复盘</p>
+        <h2>需要时再查看参考资料、历史和后续路线</h2>
+        <p>答题时只关注本次表达与 AI 点评，其他材料不会打断当前训练。</p>
+      </div>
+      <el-button text type="primary" @click="reviewMaterialsExpanded = !reviewMaterialsExpanded">
+        {{ reviewMaterialsExpanded ? '收起完整复盘' : '查看完整复盘' }}
+      </el-button>
+    </section>
+
+    <section v-if="detail && reviewMaterialsExpanded" class="review-layout">
       <main class="content-card review-card">
         <div class="content-card__body">
-          <div class="section-title">
-            <span>提交后复盘</span>
-            <h2>把这道题转成下一轮可用表达</h2>
-          </div>
           <el-tabs v-model="activeTab">
-            <el-tab-pane label="参考答案" name="answer">
+            <el-tab-pane label="参考资料" name="answer">
               <div class="tab-section">
                 <section>
                   <h2>参考答案</h2>
@@ -125,6 +111,9 @@
                   <p>{{ item.content }}</p>
                 </article>
               </div>
+            </el-tab-pane>
+            <el-tab-pane label="点评历史" name="history">
+              <QuestionAnswerReviewPanel v-if="activeTab === 'history'" :question="detail" mode="history" />
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -246,6 +235,11 @@ const masteryLoading = ref(false)
 const detail = ref<QuestionDetailVO | null>(null)
 const masteryStatus = ref<MasteryStatus>(MASTERY_STATUS.UNKNOWN)
 const activeTab = ref('answer')
+const reviewMaterialsExpanded = ref(false)
+
+const goBackToQuestionBank = () => {
+  void router.push('/questions')
+}
 
 const queryString = (name: string) => {
   const value = route.query[name]
@@ -323,26 +317,6 @@ const projectTemplates = computed(() => [
   {
     title: '追问准备',
     content: '准备一个失败案例或权衡点，证明你不是只会背标准答案。'
-  }
-])
-
-const trainingPurposeCards = computed(() => [
-  {
-    kicker: '为什么练',
-    title: recommendationContext.value.gapSeverity ? severityLabel(recommendationContext.value.gapSeverity) : mainSkillName.value,
-    desc: recommendationContext.value.hasContext
-      ? '这题用于验证当前训练来源里暴露的风险点，避免只看报告结论却没有落实到表达。'
-      : '这题用于补齐常见面试考点，先形成稳定回答，再结合自己的项目经历校准。'
-  },
-  {
-    kicker: '怎么答',
-    title: '按场景、机制、取舍、证据组织',
-    desc: '先讲问题背景，再讲方案和边界，最后补项目指标或失败复盘，减少空泛背诵。'
-  },
-  {
-    kicker: '练完去哪',
-    title: recommendationContext.value.fallback ? '回到题库继续沉淀反馈' : '回到推荐题组或错题复盘',
-    desc: '提交点评后，把不稳的知识点加入下一轮专项训练，必要时带入模拟面试验证表达。'
   }
 ])
 
@@ -484,10 +458,10 @@ onMounted(fetchDetail)
   align-items: start;
   gap: 16px;
   padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border: 1.5px solid var(--user-border);
+  border-radius: var(--arena-radius-card, 20px);
   background: var(--user-surface);
-  box-shadow: none;
+  box-shadow: var(--user-shadow-sm);
 
   h1,
   p {
@@ -543,7 +517,7 @@ onMounted(fetchDetail)
   span {
     padding: 6px 10px;
     border: 1px solid var(--user-primary-border);
-    border-radius: 8px;
+    border-radius: 999px;
     background: var(--user-primary-faint);
     color: var(--user-primary);
     font-size: 12px;
@@ -628,48 +602,6 @@ onMounted(fetchDetail)
   }
 }
 
-.training-purpose-grid {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  article {
-    min-width: 0;
-    flex: 1 1 220px;
-    padding: 12px;
-    border: 1px solid var(--user-border);
-    border-radius: 8px;
-    background: var(--user-surface);
-  }
-
-  span,
-  strong {
-    display: block;
-  }
-
-  span {
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  strong {
-    margin-top: 6px;
-    color: var(--user-text);
-    line-height: 1.4;
-    overflow-wrap: anywhere;
-  }
-
-  p {
-    margin: 6px 0 0;
-    color: var(--user-text-muted);
-    font-size: 13px;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-  }
-}
-
 .section-title {
   margin-bottom: 12px;
 
@@ -691,42 +623,11 @@ onMounted(fetchDetail)
 .question-content {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--user-surface-muted);
 
   :deep(.markdown-preview) {
     overflow-wrap: anywhere;
-  }
-}
-
-.answer-frame {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-
-  > span {
-    color: var(--user-text-muted);
-    font-size: 13px;
-  }
-}
-
-.answer-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  em {
-    padding: 5px 10px;
-    border-radius: 8px;
-    background: var(--user-surface);
-    color: var(--user-primary);
-    font-style: normal;
-    font-weight: 700;
   }
 }
 
@@ -917,6 +818,41 @@ onMounted(fetchDetail)
   }
 }
 
+.review-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--user-border);
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  h2 {
+    margin-top: 4px;
+    color: var(--user-text);
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  > div > p:last-child {
+    margin-top: 6px;
+    color: var(--user-text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.review-disclosure__eyebrow {
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 @media (max-width: 640px) {
   .detail-hero {
     padding: 16px;
@@ -936,23 +872,16 @@ onMounted(fetchDetail)
     grid-template-columns: 1fr;
   }
 
-  .training-purpose-grid {
-    display: flex;
-  }
-
   .hero-actions :deep(.el-button),
-  .next-actions button {
+  .next-actions button,
+  .review-disclosure :deep(.el-button) {
     width: 100%;
     justify-content: center;
   }
 
-  .answer-steps {
-    width: 100%;
-
-    em {
-      max-width: 100%;
-      overflow-wrap: anywhere;
-    }
+  .review-disclosure {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

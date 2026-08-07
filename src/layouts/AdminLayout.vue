@@ -105,7 +105,7 @@
             </el-button>
           </div>
         </div>
-        <RouteErrorBoundary fallback-path="/admin">
+        <RouteErrorBoundary fallback-path="/admin/dashboard">
           <RouterView />
         </RouteErrorBoundary>
       </el-main>
@@ -389,6 +389,7 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
 }
 
 onMounted(() => {
+  document.body.classList.add('admin-overlay-theme')
   if (canLoadDashboardHealth.value) {
     fetchDashboardHealth()
   }
@@ -396,6 +397,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.body.classList.remove('admin-overlay-theme')
   window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 </script>

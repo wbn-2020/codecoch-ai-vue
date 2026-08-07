@@ -73,7 +73,7 @@ export const getPortfolioRehearsalSessionApi = () =>
   request.get<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session')
 
 export const savePortfolioRehearsalSessionApi = (data: PortfolioRehearsalSessionSaveDTO) =>
-  request.put<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session', data)
+  request.post<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session', data)
 
 export const resetPortfolioRehearsalSessionApi = () =>
   request.post<PortfolioRehearsalSessionVO, PortfolioRehearsalSessionVO>('/portfolio-demo/rehearsal-session/reset')

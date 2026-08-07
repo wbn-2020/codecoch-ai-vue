@@ -6,42 +6,32 @@
           <RotateCcw :size="16" />
           错题复盘
         </p>
-        <h1>把答错的题变成下一轮训练重点</h1>
-        <p>错题不再只是记录集合。这里按薄弱度、最近出错时间和掌握状态组织复盘入口，帮助你快速决定先重练哪一道。</p>
+        <h1>把答错的题练成下一轮的得分点</h1>
+        <p>优先处理重复出错和高难度题，再回到训练页重组答案。</p>
         <div class="hero-actions">
-          <el-button @click="router.push('/questions/recommendations')">
-            <Sparkles :size="16" />
-            今日训练题组
-          </el-button>
           <el-button type="primary" @click="startWrongPractice">
             <PenLine :size="16" />
             进入复盘训练
           </el-button>
+          <el-button @click="router.push('/questions/recommendations')">
+            <Sparkles :size="16" />
+            今日训练题组
+          </el-button>
         </div>
       </div>
       <aside class="hero-panel">
-        <div class="hero-panel__stat"><span>错题总数</span><strong>{{ total || records.length }}</strong></div>
-        <div class="hero-panel__stat"><span>今天应重练</span><strong>{{ todayReviewCount }}</strong></div>
+        <div class="hero-panel__stat"><span>待优先复盘</span><strong>{{ todayReviewCount }}</strong></div>
         <div class="hero-panel__stat"><span>重复出错</span><strong>{{ repeatedWrongCount }}</strong></div>
-        <div class="hero-panel__stat"><span>已掌握</span><strong>{{ masteredWrongCount }}</strong></div>
-        <p>先把重复出错的题挑出来，再去看答案和表达方式。</p>
+        <p>本次已加载 {{ total || records.length }} 道错题。</p>
       </aside>
-    </section>
-
-    <section class="insight-grid">
-      <article v-for="item in insightCards" :key="item.label" class="insight-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.desc }}</p>
-      </article>
     </section>
 
     <section class="source-panel">
       <header class="panel-head">
         <div>
           <p class="section-kicker">复盘路线</p>
-          <h2>先看高频出错，再点进题目详情做一轮完整复盘。</h2>
-          <p>先处理重复出错和困难题，再决定要不要直接重练。</p>
+          <h2>从高频错题开始，逐题重练</h2>
+          <p>筛选后进入详情完成答案复盘；“标记掌握”会降低后续优先级。</p>
         </div>
         <div class="panel-actions">
           <el-button :loading="loading" @click="fetchRecords">
@@ -106,7 +96,6 @@
               <span>{{ record.categoryName || '未分类' }}</span>
               <span>{{ getOptionLabel(difficultyOptions, record.difficulty) }}</span>
               <span>{{ record.wrongCount || 0 }} 次答错</span>
-              <span>{{ masteryMap[normalizeMastery(record.masteryStatus)] || '掌握状态待确认' }}</span>
             </div>
 
             <div class="review-block">
@@ -184,18 +173,10 @@ const masteryMap: Record<string, string> = {
 
 const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
 const repeatedWrongCount = computed(() => records.value.filter((record) => (record.wrongCount || 0) >= 2).length)
-const masteredWrongCount = computed(() => records.value.filter((record) => normalizeMastery(record.masteryStatus) === 'MASTERED').length)
 const todayReviewCount = computed(() => records.value.filter((record) => shouldReviewToday(record)).length)
 const wrongEmptyDescription = computed(() =>
   hasFilters.value ? '没有匹配当前筛选条件的错题。' : '完成刷题练习后，答错的题会自动沉淀到这里。'
 )
-
-const insightCards = computed(() => [
-  { label: '错题总数', value: total.value || records.value.length, desc: '你的累计错题记录' },
-  { label: '今天应重练', value: todayReviewCount.value, desc: '未掌握且更值得今天处理的题' },
-  { label: '重复出错', value: repeatedWrongCount.value, desc: '本页答错 2 次及以上的题' },
-  { label: '已掌握', value: masteredWrongCount.value, desc: '已标记掌握，可降低复盘频率' }
-])
 
 const normalizeMastery = (value?: string) => String(value || 'UNKNOWN').toUpperCase()
 
@@ -284,18 +265,18 @@ onMounted(fetchRecords)
 .wrong-question-page {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
 .hero-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr) minmax(204px, 236px);
+  gap: 22px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
+  background: var(--user-surface-tint);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-kicker,
@@ -316,7 +297,6 @@ onMounted(fetchRecords)
   color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0;
 }
 
 .hero-copy h1,
@@ -327,7 +307,9 @@ onMounted(fetchRecords)
 }
 
 .hero-copy h1 {
-  font-size: 24px;
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 900;
   line-height: 1.3;
 }
 
@@ -338,12 +320,13 @@ onMounted(fetchRecords)
 .review-block p,
 .side-summary span,
 .side-summary small {
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
 }
 
 .hero-copy p {
-  max-width: 740px;
+  max-width: 640px;
   margin: 8px 0 0;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -354,16 +337,16 @@ onMounted(fetchRecords)
 
 .hero-panel {
   display: grid;
-  gap: 8px;
-  align-content: start;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  gap: 11px;
+  align-content: center;
+  padding-left: 24px;
+  border-left: 1.5px solid var(--user-primary-border);
 }
 
 .hero-panel__stat {
-  justify-content: space-between;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .hero-panel__stat span {
@@ -373,68 +356,44 @@ onMounted(fetchRecords)
 
 .hero-panel__stat strong {
   color: var(--user-text);
-  font-size: 18px;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.insight-grid {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.insight-card,
-.source-panel,
 .question-card {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--user-surface);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-}
-
-.insight-card {
-  min-width: 0;
-  flex: 1 1 180px;
-  padding: 12px 14px;
-  background: var(--user-surface-muted);
-}
-
-.insight-card span,
-.question-side span,
-.question-time {
-  color: var(--user-text-muted);
-  font-size: 13px;
-}
-
-.insight-card strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--user-text);
-  font-size: 20px;
-  line-height: 1.1;
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .source-panel {
-  overflow: hidden;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .panel-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 18px 0;
+  gap: 20px;
+  padding: 0;
 }
 
 .panel-head h2 {
   margin: 0;
-  font-size: 18px;
+  margin-top: 5px;
+  font-size: 19px;
+  font-weight: 900;
   line-height: 1.35;
 }
 
 .panel-head p {
   margin: 6px 0 0;
-  font-size: 13px;
+  max-width: 620px;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -448,33 +407,36 @@ onMounted(fetchRecords)
   grid-template-columns: minmax(220px, 1fr) minmax(140px, 180px);
   gap: 10px;
   align-items: center;
-  padding: 18px;
+  padding: 0;
 }
 
 .question-stream {
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 0;
 }
 
 .question-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 240px);
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(184px, 204px);
+  gap: 18px;
+  padding: 16px 18px;
 }
 
 .question-card + .question-card {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .question-time {
   display: block;
   margin-bottom: 6px;
+  color: var(--user-text-subtle);
+  font-size: 12px;
   font-weight: 600;
 }
 
 .question-card h3 {
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 900;
   line-height: 1.35;
 }
 
@@ -489,7 +451,7 @@ onMounted(fetchRecords)
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--user-control-bg-muted);
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
   font-size: 12px;
 }
 
@@ -505,21 +467,28 @@ onMounted(fetchRecords)
   color: var(--user-text);
 }
 
+.review-block p,
+.side-summary small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .question-side {
   display: grid;
   align-content: start;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  padding-left: 20px;
+  border-left: 1px dashed var(--user-border-strong);
 }
 
 .side-summary strong {
   display: block;
   margin: 6px 0 8px;
   color: var(--user-text);
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 800;
   line-height: 1.4;
 }
 
@@ -539,17 +508,13 @@ onMounted(fetchRecords)
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  padding: 0 18px 18px;
+  padding: 0;
 }
 
 @media (max-width: 980px) {
   .hero-band,
   .question-card {
     grid-template-columns: 1fr;
-  }
-
-  .insight-grid {
-    display: flex;
   }
 
   .filter-bar {
@@ -563,19 +528,28 @@ onMounted(fetchRecords)
 
 @media (max-width: 720px) {
   .hero-band {
-    padding: 16px;
+    gap: 18px;
+    padding: 20px 18px;
+  }
+
+  .hero-panel {
+    padding: 16px 0 0;
+    border-top: 1.5px solid var(--user-primary-border);
+    border-left: 0;
   }
 
   .hero-copy h1 {
-    font-size: 22px;
-  }
-
-  .insight-grid {
-    grid-template-columns: 1fr;
+    font-size: 23px;
   }
 
   .card-actions {
     flex-direction: column;
+  }
+
+  .question-side {
+    padding: 14px 0 0;
+    border-top: 1px dashed var(--user-border-strong);
+    border-left: 0;
   }
 
   .card-actions :deep(.el-button),
@@ -583,6 +557,11 @@ onMounted(fetchRecords)
   .hero-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .pagination-wrap {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

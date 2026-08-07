@@ -101,7 +101,7 @@
               <h2>今日训练题组</h2>
               <p>{{ recommendationSummary }}</p>
             </div>
-            <el-button text type="primary" @click="router.push('/questions/practice')">
+            <el-button text type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
               专项练习
               <ChevronRight :size="15" />
             </el-button>
@@ -235,7 +235,7 @@
               <h2>快速入口</h2>
             </div>
             <div class="quick-links">
-              <button type="button" aria-label="进入专项练习" @click="router.push('/questions/practice')">
+              <button type="button" aria-label="进入专项练习" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
                 <Dumbbell :size="16" />
                 <span>专项练习</span>
               </button>

@@ -561,8 +561,8 @@ onMounted(load)
   gap: 16px;
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface, var(--app-surface));
 }
 
 .review-header h1 {
@@ -579,7 +579,7 @@ onMounted(load)
 }
 
 .review-eyebrow {
-  color: #2563eb;
+  color: var(--arena-grn-d, var(--app-primary));
   font-size: 13px;
   font-weight: 800;
 }
@@ -598,8 +598,8 @@ onMounted(load)
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .review-metrics article {
@@ -632,8 +632,8 @@ onMounted(load)
 .review-row {
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .review-row__head {
@@ -667,8 +667,8 @@ onMounted(load)
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.28);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .review-sections h3 {

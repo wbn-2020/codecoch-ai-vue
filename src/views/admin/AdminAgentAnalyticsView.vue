@@ -271,7 +271,14 @@ const renderCharts = async () => {
       color: ['#60a5fa', '#34d399', '#f87171'],
       tooltip: { trigger: 'axis' },
       legend: { top: 0, right: 8, textStyle: { color: '#94a3b8' } },
-      grid: { left: 12, right: 16, top: 38, bottom: 8, containLabel: true },
+      grid: {
+        left: 12,
+        right: 16,
+        top: 38,
+        bottom: 8,
+        outerBoundsMode: 'same',
+        outerBoundsContain: 'axisLabel'
+      },
       xAxis: { type: 'category', data: trend.value.map((item) => item.date), axisLabel: { color: '#94a3b8' } },
       yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.14)' } }, axisLabel: { color: '#94a3b8' } },
       series: [

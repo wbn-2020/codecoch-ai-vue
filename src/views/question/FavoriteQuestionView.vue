@@ -7,7 +7,7 @@
           收藏复习
         </p>
         <h1>把高价值题目沉淀成复习路线</h1>
-        <p>收藏题用于保存值得反复练的面试题。这里按题目卡片组织复习入口，支持继续训练和移出收藏。</p>
+        <p>从收藏里挑一组重点题，集中练习并保留真正有用的内容。</p>
         <div class="hero-actions">
           <el-button type="primary" @click="startFavoritePractice">
             <BookmarkCheck :size="16" />
@@ -17,27 +17,13 @@
             <Sparkles :size="16" />
             今日推荐
           </el-button>
-          <el-button @click="router.push('/questions/recommendations')">
-            <Search :size="16" />
-            去今日题组找题
-          </el-button>
         </div>
       </div>
       <aside class="hero-panel">
-        <div class="hero-panel__stat"><span>收藏总数</span><strong>{{ total || favorites.length }}</strong></div>
         <div class="hero-panel__stat"><span>本页可复习</span><strong>{{ favorites.length }}</strong></div>
         <div class="hero-panel__stat"><span>困难题</span><strong>{{ hardFavoriteCount }}</strong></div>
-        <div class="hero-panel__stat"><span>有标签题</span><strong>{{ taggedCount }}</strong></div>
-        <p>收藏复习只负责帮你挑出值得反复练的题，不会假装已经练完。</p>
+        <p>累计收藏 {{ total || favorites.length }} 道题。</p>
       </aside>
-    </section>
-
-    <section class="insight-grid">
-      <article v-for="item in insightCards" :key="item.label" class="insight-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.desc }}</p>
-      </article>
     </section>
 
     <section class="source-panel">
@@ -45,7 +31,7 @@
         <div>
           <p class="section-kicker">复习路线</p>
           <h2>按收藏路线继续训练</h2>
-          <p>先按难度和标题筛一遍，再进入训练页组织答案；移出收藏放在次要位置。</p>
+          <p>先筛选，再练习；不再需要的题目可随时移出收藏。</p>
         </div>
         <div class="panel-actions">
           <el-button :loading="loading" @click="fetchFavorites">
@@ -109,7 +95,6 @@
             <div class="tag-row">
               <span>{{ item.categoryName || '未分类' }}</span>
               <span>{{ getOptionLabel(difficultyOptions, item.difficulty) }}</span>
-              <span>{{ highValueLabel(item) }}</span>
               <span v-if="normalizeTags(item.tags).length">{{ normalizeTags(item.tags).slice(0, 2).join(' / ') }}</span>
             </div>
 
@@ -172,6 +157,24 @@ const removingId = ref<number | null>(null)
 const favorites = ref<FavoriteQuestionVO[]>([])
 const total = ref(0)
 const loadError = ref('')
+const FAVORITE_LOAD_TIMEOUT_MS = 15000
+
+const withFavoriteLoadTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('收藏题读取超时，请稍后重试。'))
+    }, FAVORITE_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
 
 const query = reactive<QuestionQueryDTO>({
   keyword: '',
@@ -182,22 +185,14 @@ const query = reactive<QuestionQueryDTO>({
 
 const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
 const hardFavoriteCount = computed(() => favorites.value.filter((item) => String(item.difficulty || '').toUpperCase() === 'HARD').length)
-const taggedCount = computed(() => favorites.value.filter((item) => normalizeTags(item.tags).length > 0).length)
 const favoriteEmptyDescription = computed(() =>
   hasFilters.value ? '没有匹配当前筛选条件的收藏题。' : '收藏高价值题目后，这里会形成你的面试复习路线。'
 )
 
-const insightCards = computed(() => [
-  { label: '收藏总数', value: total.value || favorites.value.length, desc: '你的累计收藏题' },
-  { label: '本页可复习', value: favorites.value.length, desc: '当前筛选结果中的可练题' },
-  { label: '困难题', value: hardFavoriteCount.value, desc: '适合安排到专项训练' },
-  { label: '有标签题', value: taggedCount.value, desc: '可按知识点串成复习路线' }
-])
-
 const fetchFavorites = async () => {
   loading.value = true
   try {
-    const result = await getFavoriteQuestionsApi(query)
+    const result = await withFavoriteLoadTimeout(getFavoriteQuestionsApi(query))
     favorites.value = result.records || []
     total.value = result.total || 0
     loadError.value = ''
@@ -248,13 +243,6 @@ const reviewReason = (item: FavoriteQuestionVO) => {
   return '暂未关联分类或标签，可直接进入训练页继续练习。'
 }
 
-const highValueLabel = (item: FavoriteQuestionVO) => {
-  if (String(item.difficulty || '').toUpperCase() === 'HARD') return '高价值难题'
-  if (normalizeTags(item.tags).length) return '已标记知识点'
-  if (item.categoryName) return '分类复习题'
-  return '收藏复习题'
-}
-
 const actionHint = (item: FavoriteQuestionVO) => {
   if (String(item.difficulty || '').toUpperCase() === 'HARD') return '先写答题骨架'
   if (String(item.difficulty || '').toUpperCase() === 'MEDIUM') return '练项目结合表达'
@@ -297,18 +285,18 @@ onMounted(fetchFavorites)
 .favorite-question-page {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
 .hero-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr) minmax(204px, 236px);
+  gap: 22px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
+  background: var(--user-surface-tint);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-kicker,
@@ -329,7 +317,6 @@ onMounted(fetchFavorites)
   color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0;
 }
 
 .hero-copy h1,
@@ -340,7 +327,9 @@ onMounted(fetchFavorites)
 }
 
 .hero-copy h1 {
-  font-size: 24px;
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 900;
   line-height: 1.3;
 }
 
@@ -351,12 +340,13 @@ onMounted(fetchFavorites)
 .review-block p,
 .side-summary span,
 .side-summary small {
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
 }
 
 .hero-copy p {
-  max-width: 740px;
+  max-width: 640px;
   margin: 8px 0 0;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -367,16 +357,16 @@ onMounted(fetchFavorites)
 
 .hero-panel {
   display: grid;
-  gap: 8px;
-  align-content: start;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  gap: 11px;
+  align-content: center;
+  padding-left: 24px;
+  border-left: 1.5px solid var(--user-primary-border);
 }
 
 .hero-panel__stat {
-  justify-content: space-between;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .hero-panel__stat span {
@@ -386,68 +376,44 @@ onMounted(fetchFavorites)
 
 .hero-panel__stat strong {
   color: var(--user-text);
-  font-size: 18px;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.insight-grid {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.insight-card,
-.source-panel,
 .question-card {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--user-surface);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-}
-
-.insight-card {
-  min-width: 0;
-  flex: 1 1 180px;
-  padding: 12px 14px;
-  background: var(--user-surface-muted);
-}
-
-.insight-card span,
-.question-side span,
-.question-time {
-  color: var(--user-text-muted);
-  font-size: 13px;
-}
-
-.insight-card strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--user-text);
-  font-size: 20px;
-  line-height: 1.1;
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .source-panel {
-  overflow: hidden;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .panel-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 18px 0;
+  gap: 20px;
+  padding: 0;
 }
 
 .panel-head h2 {
   margin: 0;
-  font-size: 18px;
+  margin-top: 5px;
+  font-size: 19px;
+  font-weight: 900;
   line-height: 1.35;
 }
 
 .panel-head p {
   margin: 6px 0 0;
-  font-size: 13px;
+  max-width: 620px;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -461,33 +427,36 @@ onMounted(fetchFavorites)
   grid-template-columns: minmax(220px, 1fr) minmax(140px, 180px);
   gap: 10px;
   align-items: center;
-  padding: 18px;
+  padding: 0;
 }
 
 .question-stream {
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 0;
 }
 
 .question-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 240px);
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(184px, 204px);
+  gap: 18px;
+  padding: 16px 18px;
 }
 
 .question-card + .question-card {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .question-time {
   display: block;
   margin-bottom: 6px;
+  color: var(--user-text-subtle);
+  font-size: 12px;
   font-weight: 600;
 }
 
 .question-card h3 {
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 900;
   line-height: 1.35;
 }
 
@@ -502,7 +471,7 @@ onMounted(fetchFavorites)
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--user-control-bg-muted);
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
   font-size: 12px;
 }
 
@@ -518,21 +487,28 @@ onMounted(fetchFavorites)
   color: var(--user-text);
 }
 
+.review-block p,
+.side-summary small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .question-side {
   display: grid;
   align-content: start;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  padding-left: 20px;
+  border-left: 1px dashed var(--user-border-strong);
 }
 
 .side-summary strong {
   display: block;
   margin: 6px 0 8px;
   color: var(--user-text);
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 800;
   line-height: 1.4;
 }
 
@@ -552,17 +528,13 @@ onMounted(fetchFavorites)
 .pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  padding: 0 18px 18px;
+  padding: 0;
 }
 
 @media (max-width: 980px) {
   .hero-band,
   .question-card {
     grid-template-columns: 1fr;
-  }
-
-  .insight-grid {
-    display: flex;
   }
 
   .filter-bar {
@@ -576,19 +548,28 @@ onMounted(fetchFavorites)
 
 @media (max-width: 720px) {
   .hero-band {
-    padding: 16px;
+    gap: 18px;
+    padding: 20px 18px;
+  }
+
+  .hero-panel {
+    padding: 16px 0 0;
+    border-top: 1.5px solid var(--user-primary-border);
+    border-left: 0;
   }
 
   .hero-copy h1 {
-    font-size: 22px;
-  }
-
-  .insight-grid {
-    grid-template-columns: 1fr;
+    font-size: 23px;
   }
 
   .card-actions {
     flex-direction: column;
+  }
+
+  .question-side {
+    padding: 14px 0 0;
+    border-top: 1px dashed var(--user-border-strong);
+    border-left: 0;
   }
 
   .card-actions :deep(.el-button),
@@ -596,6 +577,11 @@ onMounted(fetchFavorites)
   .hero-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .pagination-wrap {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

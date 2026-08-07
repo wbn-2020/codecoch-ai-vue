@@ -14,41 +14,52 @@
 
     <div class="edit-layout">
       <main class="content-card edit-main" v-loading="loading">
-        <el-alert
-          v-if="sourceMode && !isEdit"
-          class="source-alert"
-          type="info"
-          show-icon
-          :closable="false"
-          title="本次会从简历项目生成一份独立证据"
-          description="生成后仅记录来源 resume_project，不会建立自动双向同步。"
-        />
-        <div v-if="sourceMode && !isEdit" class="source-import-actions">
-          <el-button
-            type="primary"
-            :loading="importing"
-            :disabled="saving"
-            @click="handleImportFromSource"
-          >
-            确认从简历项目生成
-          </el-button>
-          <span>确认后才会创建独立项目证据。</span>
-        </div>
-        <ProjectEvidenceForm :key="formKey" ref="formRef" :model-value="formModel" />
-        <div class="form-actions">
-          <el-button @click="goBack">取消</el-button>
-          <el-button
-            type="primary"
-            :loading="saving"
-            :disabled="importing"
-            @click="handleSave"
-          >
-            保存证据
-          </el-button>
-        </div>
+        <AppState
+          v-if="isEdit && loadError"
+          type="error"
+          title="项目证据读取失败"
+          :description="loadError"
+        >
+          <el-button type="primary" :loading="loading" @click="retryLoad">重新加载</el-button>
+          <el-button @click="goBack">返回详情</el-button>
+        </AppState>
+        <template v-else>
+          <el-alert
+            v-if="sourceMode && !isEdit"
+            class="source-alert"
+            type="info"
+            show-icon
+            :closable="false"
+            title="本次会从简历项目生成一份独立证据"
+            description="生成后仅记录来源 resume_project，不会建立自动双向同步。"
+          />
+          <div v-if="sourceMode && !isEdit" class="source-import-actions">
+            <el-button
+              type="primary"
+              :loading="importing"
+              :disabled="saving"
+              @click="handleImportFromSource"
+            >
+              确认从简历项目生成
+            </el-button>
+            <span>确认后才会创建独立项目证据。</span>
+          </div>
+          <ProjectEvidenceForm :key="formKey" ref="formRef" :model-value="formModel" />
+          <div class="form-actions">
+            <el-button @click="goBack">取消</el-button>
+            <el-button
+              type="primary"
+              :loading="saving"
+              :disabled="importing"
+              @click="handleSave"
+            >
+              保存证据
+            </el-button>
+          </div>
+        </template>
       </main>
 
-      <aside class="edit-aside">
+      <aside v-if="!isEdit || !loadError" class="edit-aside">
         <ProjectCompletenessPanel
           v-if="detail"
           :score="detail.completenessScore"
@@ -81,6 +92,7 @@ import {
   importProjectEvidenceFromResumeProjectApi,
   updateProjectEvidenceApi
 } from '@/api/projectEvidence'
+import AppState from '@/components/common/AppState.vue'
 import ProjectCompletenessPanel from '@/components/project-evidence/ProjectCompletenessPanel.vue'
 import ProjectEvidenceForm from '@/components/project-evidence/ProjectEvidenceForm.vue'
 import type { ProjectEvidenceDTO, ProjectEvidenceDetailVO } from '@/types/projectEvidence'
@@ -107,6 +119,7 @@ const formKey = computed(() => [
 
 const formRef = ref<InstanceType<typeof ProjectEvidenceForm>>()
 const loading = ref(false)
+const loadError = ref('')
 const saving = ref(false)
 const importing = ref(false)
 const importSubmitting = ref(false)
@@ -122,20 +135,30 @@ const formModel = computed<Partial<ProjectEvidenceDTO>>(() => detail.value || {
 
 const fetchDetail = async (id: number, requestGeneration: number) => {
   loading.value = true
+  loadError.value = ''
   try {
     const nextDetail = await getProjectEvidenceDetailApi(id)
     if (requestGeneration === routeLoadGeneration) {
       detail.value = nextDetail
     }
-  } catch {
+  } catch (error) {
     if (requestGeneration === routeLoadGeneration) {
       detail.value = null
+      loadError.value = getErrorMessage(error, '项目证据暂时无法读取，请稍后重试。')
     }
   } finally {
     if (requestGeneration === routeLoadGeneration) {
       loading.value = false
     }
   }
+}
+
+const retryLoad = () => {
+  const id = projectId.value
+  if (!id || loading.value) return
+  const requestGeneration = ++routeLoadGeneration
+  detail.value = null
+  void fetchDetail(id, requestGeneration)
 }
 
 const goBack = () => {
@@ -151,6 +174,10 @@ const handleSave = async () => {
   const operationGeneration = ++saveOperationGeneration
   const requestGeneration = routeLoadGeneration
   const targetProjectId = projectId.value
+  if (targetProjectId && (loadError.value || !detail.value)) {
+    ElMessage.warning('项目证据尚未成功读取，不能覆盖保存。请先重新加载。')
+    return
+  }
   const isCurrentOperation = () => (
     operationGeneration === saveOperationGeneration
     && requestGeneration === routeLoadGeneration
@@ -277,6 +304,7 @@ watch(
     importSubmitting.value = false
     detail.value = null
     loading.value = false
+    loadError.value = ''
 
     if (nextProjectId) {
       void fetchDetail(nextProjectId, requestGeneration)
@@ -314,26 +342,27 @@ onBeforeUnmount(() => {
 
 .edit-hero {
   justify-content: space-between;
-  padding: 18px 20px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: var(--arena-radius-card);
+  background: var(--user-surface-tint);
+  box-shadow: var(--arena-shadow-card);
 
   h1 {
     margin: 6px 0 0;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 26px;
   }
 
   p:last-child {
     margin: 8px 0 0;
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
   }
 }
 
 .hero-kicker {
   margin: 0;
-  color: var(--user-primary);
+  color: var(--arena-grn-d);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;

@@ -11,8 +11,8 @@ const questionApi = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {}, params: {} }),
-  useRouter: () => ({ push: vi.fn() })
+  useRoute: () => ({ query: { mode: 'random' }, params: {} }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() })
 }))
 
 vi.mock('@/api/question', () => ({
@@ -80,7 +80,6 @@ const mountSession = () => mount(QuestionPracticeSessionView, {
 })
 
 const startSession = async (wrapper: ReturnType<typeof mountSession>) => {
-  await wrapper.findAll('button').find((button) => button.text().includes('开始本轮训练'))!.trigger('click')
   await flushPromises()
 }
 

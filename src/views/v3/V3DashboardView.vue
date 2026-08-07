@@ -530,7 +530,7 @@ onMounted(loadDashboard)
 
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface, var(--app-surface)); }
 .page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
@@ -540,10 +540,10 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .content-panel { padding: 16px; min-width: 0; }
 .error-strip { display: grid; gap: 10px; }
 .priority-panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid rgba(59, 130, 246, 0.42); border-radius: 8px; background: rgba(59, 130, 246, 0.1); }
-.priority-panel span { color: #93c5fd; font-size: 12px; font-weight: 700; }
+.priority-panel span { color: var(--arena-grn-d, var(--app-primary-hover)); font-size: 12px; font-weight: 700; }
 .priority-panel h2 { margin-top: 4px; font-size: 20px; }
 .priority-panel p { max-width: 68ch; margin-top: 6px; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .metric-card { min-width: 0; padding: 12px 14px; border: 0; border-right: 1px solid var(--app-border); border-radius: 0; background: transparent; box-shadow: none; color: var(--app-text); text-align: left; cursor: pointer; }
 .metric-card:last-child { border-right: 0; }
 .metric-card span, .metric-card small { display: block; margin-top: 6px; color: var(--app-text-muted); }
@@ -557,7 +557,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .onboarding-summary p, .utilities-panel p { margin-top: 4px; }
 .onboarding-body { padding: 0 16px 16px; }
 .onboarding-track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.onboarding-step { display: grid; gap: 7px; align-content: start; min-height: 108px; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); color: var(--app-text); text-align: left; cursor: pointer; }
+.onboarding-step { display: grid; gap: 7px; align-content: start; min-height: 108px; padding: 12px; border: 1px solid var(--app-border); border-radius: 12px; background: var(--user-surface-muted, var(--app-surface-raised)); color: var(--app-text); text-align: left; cursor: pointer; }
 .onboarding-step:hover, .onboarding-step.is-current { border-color: rgba(59, 130, 246, 0.42); background: rgba(59, 130, 246, 0.1); }
 .onboarding-step.is-done { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
 .onboarding-step__marker { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(148, 163, 184, 0.16); color: var(--app-text); font-size: 12px; font-weight: 800; }
@@ -587,7 +587,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .loop-summary strong { font-size: 24px; }
 .loop-summary span, .loop-summary small { color: var(--app-text-muted); line-height: 1.5; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 12px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .notification-list article { display: block; }
 .notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
 .entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

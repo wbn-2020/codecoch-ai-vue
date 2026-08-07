@@ -55,7 +55,16 @@ describe('admin workspace layout system', () => {
       "const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))"
     )
     expect(adminLayoutSource).toMatch(
-      /onMounted\(\(\) => \{\s+if \(canLoadDashboardHealth\.value\) \{\s+fetchDashboardHealth\(\)\s+\}/
+      /onMounted\(\(\) => \{[\s\S]*?if \(canLoadDashboardHealth\.value\) \{\s+fetchDashboardHealth\(\)\s+\}/
+    )
+  })
+
+  it('keeps the admin root and error recovery on a routable content page', () => {
+    const routesSource = readSource('src/router/routes.ts')
+
+    expect(adminLayoutSource).toContain('fallback-path="/admin/dashboard"')
+    expect(routesSource).toContain(
+      "{ path: '', redirect: '/admin/dashboard', meta: { hidden: true, commandHidden: true } }"
     )
   })
 

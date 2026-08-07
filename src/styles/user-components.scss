@@ -1,6 +1,6 @@
 .jobcoach-layout {
-  .user-page-shell,
-  .page-shell {
+  .user-page-shell:not(.arena),
+  .page-shell:not(.arena) {
     display: grid;
     gap: 18px;
     color: var(--user-text);
@@ -76,9 +76,9 @@
     gap: 5px;
     min-height: 24px;
     padding: 0 9px;
-    border: 1px solid rgba(148, 203, 255, 0.18);
+    border: 1px solid var(--user-border);
     border-radius: 999px;
-    background: rgba(15, 27, 49, 0.72);
+    background: var(--user-surface-muted);
     color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 700;
@@ -89,32 +89,32 @@
   .cc-badge--success {
     border-color: var(--user-success-border);
     background: var(--user-success-soft);
-    color: #86efac;
+    color: var(--user-success-text);
   }
 
   .user-pill--warning,
   .cc-badge--warning {
-    border-color: rgba(251, 191, 36, 0.34);
+    border-color: rgba(247, 144, 9, 0.34);
     background: var(--user-warning-soft);
-    color: #fde68a;
+    color: #b4560a;
   }
 
   .user-pill--danger,
   .cc-badge--danger {
     border-color: var(--user-danger-border);
     background: var(--user-danger-soft);
-    color: #fda4af;
+    color: var(--user-danger-text);
   }
 
   .cc-badge--idle {
-    background: rgba(71, 85, 105, 0.3);
+    background: var(--user-surface-muted);
     color: var(--user-text-muted);
   }
 
   .cc-badge--thinking {
-    border-color: rgba(139, 92, 246, 0.32);
-    background: rgba(139, 92, 246, 0.14);
-    color: #c4b5fd;
+    border-color: rgba(124, 92, 252, 0.26);
+    background: var(--user-ai-soft);
+    color: var(--user-ai);
   }
 
   .cc-badge--streaming {
@@ -135,7 +135,7 @@
   .offline-state,
   .el-empty,
   .el-result {
-    border: 1px dashed rgba(110, 168, 254, 0.2);
+    border: 1px dashed var(--user-border-strong);
     border-radius: var(--user-radius-sm);
     background: var(--user-state-bg);
     color: var(--user-text-muted);
@@ -157,7 +157,7 @@
   .route-error,
   .load-error,
   .offline-state {
-    border-color: rgba(251, 113, 133, 0.3);
+    border-color: var(--user-danger-border);
     background: var(--user-state-error-bg);
   }
 
@@ -186,33 +186,33 @@
   }
 
   .el-table {
-    --el-table-bg-color: rgba(7, 17, 31, 0.76);
-    --el-table-tr-bg-color: rgba(7, 17, 31, 0.76);
-    --el-table-header-bg-color: rgba(15, 27, 49, 0.92);
-    --el-table-row-hover-bg-color: rgba(110, 168, 254, 0.08);
-    --el-table-border-color: rgba(148, 203, 255, 0.12);
+    --el-table-bg-color: var(--user-surface);
+    --el-table-tr-bg-color: var(--user-surface);
+    --el-table-header-bg-color: var(--user-surface-muted);
+    --el-table-row-hover-bg-color: var(--user-primary-faint);
+    --el-table-border-color: var(--user-border);
     border-radius: var(--user-radius-sm);
     color: var(--user-text-secondary);
   }
 
   .el-table th.el-table__cell {
-    background: rgba(15, 27, 49, 0.92);
+    background: var(--user-surface-muted);
     color: var(--user-text-secondary);
     font-weight: 700;
   }
 
   .el-button {
-    --el-button-bg-color: rgba(7, 17, 31, 0.62);
-    --el-button-border-color: rgba(148, 203, 255, 0.2);
+    --el-button-bg-color: var(--user-control-bg);
+    --el-button-border-color: var(--user-border);
     --el-button-text-color: var(--user-text-secondary);
-    --el-button-hover-bg-color: rgba(110, 168, 254, 0.1);
+    --el-button-hover-bg-color: var(--user-primary-faint);
     --el-button-hover-border-color: var(--user-primary-border);
     --el-button-hover-text-color: var(--user-primary);
-    --el-button-active-bg-color: rgba(110, 168, 254, 0.14);
+    --el-button-active-bg-color: var(--user-primary-faint);
     --el-button-active-border-color: var(--user-primary);
     --el-button-active-text-color: var(--user-primary);
     --el-button-disabled-bg-color: var(--user-disabled-bg);
-    --el-button-disabled-border-color: rgba(148, 163, 184, 0.12);
+    --el-button-disabled-border-color: var(--user-border);
     --el-button-disabled-text-color: var(--user-disabled);
     border-radius: var(--user-radius-sm);
     font-weight: 700;
@@ -235,8 +235,8 @@
     --el-button-hover-bg-color: var(--user-primary-hover);
     --el-button-hover-border-color: var(--user-primary-hover);
     --el-button-hover-text-color: var(--user-primary-contrast);
-    --el-button-active-bg-color: #527fc2;
-    --el-button-active-border-color: #527fc2;
+    --el-button-active-bg-color: var(--user-primary-hover);
+    --el-button-active-border-color: var(--user-primary-hover);
     --el-button-active-text-color: var(--user-primary-contrast);
     background: var(--user-primary);
     border-color: var(--user-primary);
@@ -249,68 +249,68 @@
   }
 
   .el-button--success {
-    --el-button-bg-color: rgba(52, 211, 153, 0.16);
+    --el-button-bg-color: var(--user-success-soft);
     --el-button-border-color: var(--user-success-border);
-    --el-button-text-color: #bbf7d0;
-    --el-button-hover-bg-color: rgba(52, 211, 153, 0.24);
-    --el-button-hover-border-color: rgba(52, 211, 153, 0.46);
-    --el-button-hover-text-color: #d1fae5;
+    --el-button-text-color: var(--user-success-text);
+    --el-button-hover-bg-color: var(--user-success-soft);
+    --el-button-hover-border-color: var(--user-success);
+    --el-button-hover-text-color: var(--user-success-text);
   }
 
   .el-button--danger {
-    --el-button-bg-color: rgba(251, 113, 133, 0.14);
+    --el-button-bg-color: var(--user-danger-soft);
     --el-button-border-color: var(--user-danger-border);
-    --el-button-text-color: #fecdd3;
-    --el-button-hover-bg-color: rgba(251, 113, 133, 0.22);
-    --el-button-hover-border-color: rgba(251, 113, 133, 0.46);
-    --el-button-hover-text-color: #ffe4e6;
+    --el-button-text-color: var(--user-danger-text);
+    --el-button-hover-bg-color: var(--user-danger-soft);
+    --el-button-hover-border-color: var(--user-danger);
+    --el-button-hover-text-color: var(--user-danger-text);
   }
 
   .el-button--warning {
-    --el-button-bg-color: rgba(251, 191, 36, 0.15);
-    --el-button-border-color: rgba(251, 191, 36, 0.34);
-    --el-button-text-color: #fde68a;
-    --el-button-hover-bg-color: rgba(251, 191, 36, 0.24);
-    --el-button-hover-border-color: rgba(251, 191, 36, 0.48);
-    --el-button-hover-text-color: #fef3c7;
+    --el-button-bg-color: var(--user-warning-soft);
+    --el-button-border-color: rgba(247, 144, 9, 0.34);
+    --el-button-text-color: #b4560a;
+    --el-button-hover-bg-color: var(--user-warning-soft);
+    --el-button-hover-border-color: var(--user-warning);
+    --el-button-hover-text-color: #8c4709;
   }
 
   .el-button.is-plain.el-button--primary {
-    --el-button-bg-color: rgba(110, 168, 254, 0.1);
+    --el-button-bg-color: var(--user-primary-faint);
     --el-button-border-color: var(--user-primary-border);
     --el-button-text-color: var(--user-primary);
-    --el-button-hover-bg-color: rgba(110, 168, 254, 0.18);
+    --el-button-hover-bg-color: var(--user-primary-faint);
     --el-button-hover-border-color: var(--user-primary);
     --el-button-hover-text-color: var(--user-text);
-    background: rgba(110, 168, 254, 0.1);
+    background: var(--user-primary-faint);
     color: var(--user-primary);
   }
 
   .el-button.is-plain.el-button--success {
     --el-button-bg-color: var(--user-success-soft);
     --el-button-border-color: var(--user-success-border);
-    --el-button-text-color: #86efac;
-    --el-button-hover-bg-color: rgba(52, 211, 153, 0.22);
+    --el-button-text-color: var(--user-success-text);
+    --el-button-hover-bg-color: var(--user-success-soft);
     --el-button-hover-border-color: var(--user-success);
-    --el-button-hover-text-color: #d1fae5;
+    --el-button-hover-text-color: var(--user-success-text);
   }
 
   .el-button.is-plain.el-button--danger {
     --el-button-bg-color: var(--user-danger-soft);
     --el-button-border-color: var(--user-danger-border);
-    --el-button-text-color: #fda4af;
-    --el-button-hover-bg-color: rgba(251, 113, 133, 0.22);
+    --el-button-text-color: var(--user-danger-text);
+    --el-button-hover-bg-color: var(--user-danger-soft);
     --el-button-hover-border-color: var(--user-danger);
-    --el-button-hover-text-color: #ffe4e6;
+    --el-button-hover-text-color: var(--user-danger-text);
   }
 
   .el-button.is-plain.el-button--warning {
     --el-button-bg-color: var(--user-warning-soft);
-    --el-button-border-color: rgba(251, 191, 36, 0.34);
-    --el-button-text-color: #fde68a;
-    --el-button-hover-bg-color: rgba(251, 191, 36, 0.22);
+    --el-button-border-color: rgba(247, 144, 9, 0.34);
+    --el-button-text-color: #b4560a;
+    --el-button-hover-bg-color: var(--user-warning-soft);
     --el-button-hover-border-color: var(--user-warning);
-    --el-button-hover-text-color: #fef3c7;
+    --el-button-hover-text-color: #8c4709;
   }
 
   .el-button.is-text:not(.is-disabled),
@@ -327,17 +327,17 @@
 
   .el-button.is-text.el-button--success:not(.is-disabled),
   .el-button.is-link.el-button--success:not(.is-disabled) {
-    color: var(--user-success);
+    color: var(--user-success-text);
   }
 
   .el-button.is-text.el-button--danger:not(.is-disabled),
   .el-button.is-link.el-button--danger:not(.is-disabled) {
-    color: var(--user-danger);
+    color: var(--user-danger-text);
   }
 
   .el-button.is-text:not(.is-disabled):hover,
   .el-button.is-link:not(.is-disabled):hover {
-    background: rgba(148, 203, 255, 0.08);
+    background: var(--user-primary-faint);
     color: var(--user-text);
   }
 
@@ -346,9 +346,38 @@
   .el-button.is-disabled:focus,
   .el-button.is-disabled:active {
     background: var(--user-disabled-bg);
-    border-color: rgba(148, 163, 184, 0.12);
+    border-color: var(--user-border);
     color: var(--user-disabled);
     transform: none;
+  }
+
+  // Do not flatten semantic status actions into the same gray disabled state.
+  // Users still need to distinguish completed, pending and destructive flows.
+  .el-button--success.is-disabled,
+  .el-button--success.is-disabled:hover,
+  .el-button--success.is-disabled:focus,
+  .el-button--success.is-disabled:active {
+    background: var(--user-success-soft);
+    border-color: var(--user-success-border);
+    color: var(--user-success-text);
+  }
+
+  .el-button--warning.is-disabled,
+  .el-button--warning.is-disabled:hover,
+  .el-button--warning.is-disabled:focus,
+  .el-button--warning.is-disabled:active {
+    background: var(--user-warning-soft);
+    border-color: rgba(247, 144, 9, 0.34);
+    color: var(--user-warning-text);
+  }
+
+  .el-button--danger.is-disabled,
+  .el-button--danger.is-disabled:hover,
+  .el-button--danger.is-disabled:focus,
+  .el-button--danger.is-disabled:active {
+    background: var(--user-danger-soft);
+    border-color: var(--user-danger-border);
+    color: var(--user-danger-text);
   }
 
   .el-form-item__label,
@@ -364,7 +393,7 @@
   .el-textarea__inner,
   .el-input-number .el-input__wrapper,
   .el-upload-dragger {
-    border: 1px solid rgba(148, 203, 255, 0.16);
+    border: 1px solid var(--user-border);
     border-radius: var(--user-radius-sm);
     background: var(--user-control-bg);
     box-shadow: none;
@@ -377,7 +406,7 @@
   .el-textarea__inner:hover,
   .el-input-number .el-input__wrapper:hover,
   .el-upload-dragger:hover {
-    border-color: rgba(110, 168, 254, 0.3);
+    border-color: var(--user-primary-border);
     box-shadow: none;
   }
 
@@ -388,7 +417,7 @@
   .el-textarea__inner:focus,
   .el-input-number .el-input__wrapper.is-focus {
     border-color: var(--user-primary);
-    box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.12);
+    box-shadow: 0 0 0 3px var(--user-primary-faint);
   }
 
   .el-input__inner,
@@ -413,7 +442,7 @@
   .el-textarea.is-disabled .el-textarea__inner,
   .el-select .el-select__wrapper.is-disabled,
   .el-input-number.is-disabled .el-input__wrapper {
-    border-color: rgba(148, 163, 184, 0.12);
+    border-color: var(--user-border);
     background: var(--user-disabled-bg);
     box-shadow: none;
   }
@@ -435,7 +464,7 @@
 
   .el-input-number__decrease,
   .el-input-number__increase {
-    border-color: rgba(148, 203, 255, 0.16);
+    border-color: var(--user-border);
     background: var(--user-control-bg-muted);
     color: var(--user-text-muted);
   }
@@ -447,7 +476,7 @@
 
   .el-checkbox__inner,
   .el-radio__inner {
-    border-color: rgba(148, 203, 255, 0.24);
+    border-color: var(--user-border-strong);
     background: var(--user-control-bg);
   }
 
@@ -469,26 +498,26 @@
   }
 
   .el-switch {
-    --el-switch-off-color: rgba(71, 85, 105, 0.68);
+    --el-switch-off-color: #b7c1b9;
     --el-switch-on-color: var(--user-primary);
   }
 
   .el-radio-group .el-radio-button__inner,
   .el-checkbox-button__inner {
-    border-color: rgba(148, 203, 255, 0.16);
+    border-color: var(--user-border);
     background: var(--user-control-bg);
     color: var(--user-text-secondary);
-    box-shadow: -1px 0 0 0 rgba(148, 203, 255, 0.16);
+    box-shadow: -1px 0 0 0 var(--user-border);
   }
 
   .el-radio-button:first-child .el-radio-button__inner {
-    border-left-color: rgba(148, 203, 255, 0.16);
+    border-left-color: var(--user-border);
   }
 
   .el-radio-button__original-radio:checked + .el-radio-button__inner,
   .el-checkbox-button.is-checked .el-checkbox-button__inner {
     border-color: var(--user-primary);
-    background: rgba(110, 168, 254, 0.18);
+    background: var(--user-primary-faint);
     color: var(--user-primary);
     box-shadow: -1px 0 0 0 var(--user-primary);
   }
@@ -499,7 +528,7 @@ body.is-user-layout-active {
   overflow-x: clip;
 
   .el-loading-mask {
-    background-color: rgba(5, 11, 22, 0.58);
+    background-color: rgba(245, 247, 244, 0.76);
   }
 
   .el-loading-spinner .el-loading-text,
@@ -514,7 +543,7 @@ body.is-user-layout-active {
   .el-picker__popper,
   .el-popover.el-popper {
     border-color: var(--user-border);
-    background: rgba(15, 27, 49, 0.96);
+    background: var(--user-surface-raised);
     color: var(--user-text);
     box-shadow: var(--user-shadow-lg);
   }
@@ -547,7 +576,7 @@ body.is-user-layout-active {
 
   .el-popper__arrow::before {
     border-color: var(--user-border);
-    background: rgba(15, 27, 49, 0.96);
+    background: var(--user-surface-raised);
   }
 
   .el-message {
@@ -566,17 +595,17 @@ body.is-user-layout-active {
 
   .el-message--success {
     border-color: var(--user-success-border);
-    background: #14251f;
+    background: var(--user-success-soft);
   }
 
   .el-message--warning {
     border-color: rgba(251, 191, 36, 0.34);
-    background: #261f15;
+    background: var(--user-warning-soft);
   }
 
   .el-message--error {
     border-color: var(--user-danger-border);
-    background: #28191e;
+    background: var(--user-danger-soft);
   }
 
   .el-alert,
@@ -877,8 +906,8 @@ body.is-user-layout-active .jobcoach-layout {
     .target-actions,
     .pagination-wrap
   ):not(.arena *) {
-    border-color: rgba(148, 203, 255, 0.15);
-    background: rgba(7, 17, 31, 0.56);
+    border-color: var(--user-border);
+    background: var(--user-surface-muted);
     color: var(--user-text);
   }
 
@@ -1015,7 +1044,7 @@ body.is-user-layout-active .jobcoach-layout {
   }
 
   :is(.skill-card)::before {
-    border-color: rgba(7, 17, 31, 0.92);
+    border-color: var(--user-surface);
     background: var(--user-primary);
     box-shadow: none;
   }
@@ -1024,15 +1053,15 @@ body.is-user-layout-active .jobcoach-layout {
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-input__wrapper,
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-select__wrapper,
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-textarea__inner {
-    border-color: rgba(148, 203, 255, 0.18);
-    background: rgba(7, 17, 31, 0.72);
+    border-color: var(--user-border);
+    background: var(--user-control-bg);
     color: var(--user-text);
     box-shadow: none;
   }
 
   :is(.config-panel, .preview-panel, .quick-start-panel) .el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger) {
-    border-color: rgba(148, 203, 255, 0.18);
-    background: rgba(7, 17, 31, 0.62);
+    border-color: var(--user-border);
+    background: var(--user-control-bg);
     color: var(--user-text-secondary);
   }
 
@@ -1091,7 +1120,7 @@ body.is-user-layout-active .jobcoach-layout {
     .risk-card
   ) {
     border-color: rgba(251, 191, 36, 0.28);
-    background: #241f17;
+    background: var(--user-warning-soft);
   }
 
   :is(
@@ -1180,8 +1209,8 @@ body.is-user-layout-active .jobcoach-layout {
 /* Compact workspace density */
 body.is-user-layout-active .jobcoach-layout {
   :is(
-    .page-shell,
-    .user-page-shell,
+    .page-shell:not(.arena),
+    .user-page-shell:not(.arena),
     .question-training-page,
     .interview-create,
     .interview-history-page,

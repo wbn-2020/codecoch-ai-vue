@@ -1,41 +1,40 @@
 <template>
-  <div class="jobcoach-layout" :class="{ 'is-arena-page': usesArenaOverlayTheme }">
-    <ArenaTopNav
-      v-if="usesArenaOverlayTheme && !isImmersivePage"
-      :display-name="displayName"
-      :avatar-text="avatarText"
-      :avatar-url="authStore.userInfo?.avatarUrl || ''"
-      :can-access-admin="Boolean(adminEntryPath)"
-      @go-admin="goAdmin"
-      @user-command="handleCommand"
-    />
+  <div class="jobcoach-layout" :class="{ 'is-arena-page': usesArenaShell }">
+    <div v-if="usesArenaShell" class="arena-frame">
+      <ArenaTopNav
+        v-if="!isImmersivePage"
+        :display-name="displayName"
+        :avatar-text="avatarText"
+        :avatar-url="authStore.userInfo?.avatarUrl || ''"
+        :can-access-admin="Boolean(adminEntryPath)"
+        @go-admin="goAdmin"
+        @user-command="handleCommand"
+      />
 
-    <UserTopNav
-      v-else-if="!isImmersivePage"
-      :display-name="displayName"
-      :avatar-text="avatarText"
-      :avatar-url="authStore.userInfo?.avatarUrl || ''"
-      :unread-count="unreadCount"
-      :unread-available="unreadAvailable"
-      :notification-tooltip="notificationTooltip"
-      :can-access-admin="Boolean(adminEntryPath)"
-      @open-command="commandPaletteOpen = true"
-      @go-admin="goAdmin"
-      @user-command="handleCommand"
-    />
-
-    <CommandPalette v-if="!usesArenaOverlayTheme" v-model="commandPaletteOpen" scope="user" />
+      <main
+        class="jobcoach-main"
+        :class="{
+          'is-arena-main': usesArenaShell,
+          'is-immersive': isImmersivePage
+        }"
+      >
+        <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
+          当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
+        </div>
+        <RouteErrorBoundary fallback-path="/dashboard">
+          <RouterView />
+        </RouteErrorBoundary>
+      </main>
+    </div>
 
     <main
+      v-else
       class="jobcoach-main"
       :class="{
-        'is-arena-main': usesArenaOverlayTheme,
+        'is-arena-main': usesArenaShell,
         'is-immersive': isImmersivePage
       }"
     >
-      <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
-        当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
-      </div>
       <RouteErrorBoundary fallback-path="/dashboard">
         <RouterView />
       </RouteErrorBoundary>
@@ -46,27 +45,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getUnreadCountApi } from '@/api/notification'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import XpGainToast from '@/components/game/XpGainToast.vue'
 import ArenaTopNav from '@/components/layout/ArenaTopNav.vue'
-import UserTopNav from '@/components/layout/UserTopNav.vue'
 import { appConfig } from '@/config'
 import { useGameProfileStore } from '@/features/game-profile'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
-import { NOTIFICATION_UNREAD_CHANGED_EVENT } from '@/utils/notificationEvents'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 const tagsStore = useTagsViewStore()
-const CommandPalette = defineAsyncComponent(() => import('@/components/layout/CommandPalette.vue'))
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
@@ -74,14 +69,9 @@ const displayName = computed(
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
-const usesArenaOverlayTheme = computed(() => Boolean(route.meta?.arenaTheme))
+const usesArenaShell = computed(() => !isImmersivePage.value)
 
-const unreadCount = ref(0)
-const unreadAvailable = ref(true)
-const commandPaletteOpen = ref(false)
-const notificationTooltip = computed(() => unreadAvailable.value ? '通知中心' : '通知中心（稍后刷新未读数）')
-
-watch(usesArenaOverlayTheme, (enabled) => {
+watch(usesArenaShell, (enabled) => {
   document.body.classList.toggle('arena-overlay-theme', enabled)
 }, { immediate: true })
 
@@ -95,36 +85,6 @@ const goAdmin = async () => {
 
   const path = resolveAdminEntryPath(authStore)
   await router.push(path || '/403')
-}
-
-const fetchUnreadCount = async () => {
-  try {
-    const result = await getUnreadCountApi()
-    unreadCount.value = result.total || 0
-    unreadAvailable.value = true
-  } catch {
-    unreadAvailable.value = false
-  }
-}
-
-let unreadRefreshCancelled = false
-
-const deferNonCriticalWork = (callback: () => void | Promise<void>) => {
-  const run = () => {
-    if (!unreadRefreshCancelled) {
-      void callback()
-    }
-  }
-  const requestIdleCallback = (window as Window & {
-    requestIdleCallback?: (handler: () => void, options?: { timeout?: number }) => number
-  }).requestIdleCallback
-
-  if (requestIdleCallback) {
-    requestIdleCallback(run, { timeout: 1200 })
-    return
-  }
-
-  window.setTimeout(run, 250)
 }
 
 const handleCommand = async (command: string) => {
@@ -153,16 +113,11 @@ const handleCommand = async (command: string) => {
 
 onMounted(() => {
   document.body.classList.add('is-user-layout-active')
-  unreadRefreshCancelled = false
-  deferNonCriticalWork(fetchUnreadCount)
-  window.addEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
 
 onBeforeUnmount(() => {
   document.body.classList.remove('is-user-layout-active')
   document.body.classList.remove('arena-overlay-theme')
-  unreadRefreshCancelled = true
-  window.removeEventListener(NOTIFICATION_UNREAD_CHANGED_EVENT, fetchUnreadCount)
 })
 </script>
 
@@ -180,9 +135,30 @@ onBeforeUnmount(() => {
 }
 
 .jobcoach-layout.is-arena-page {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   color-scheme: light;
-  background: var(--arena-bg);
+  background:
+    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
+    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
+    var(--arena-bg);
+}
+
+.arena-frame {
+  position: relative;
+  width: min(calc(100% - 28px), 1180px);
+  min-height: 820px;
+  margin: 0 auto;
+  align-self: center;
+  overflow: hidden;
+  border-radius: 22px;
+  background:
+    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
+    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
+    var(--arena-bg);
+  box-shadow: 0 24px 60px rgba(21, 33, 27, 0.18);
 }
 
 .jobcoach-main {
@@ -195,16 +171,47 @@ onBeforeUnmount(() => {
 
   &.is-arena-main {
     width: 100%;
-    min-height: calc(100vh - 62px);
+    min-height: calc(820px - 62px);
     padding: 0;
 
-    :deep(.arena) {
-      margin: 0;
+    // Legacy user styles compact `.page-shell` roots into a dashboard grid.
+    // Direction D pages own their flow and width, so restore the root display;
+    // each page keeps its prototype-specific max-width.
+    > :deep(.arena.page-shell) {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    // Most extended user pages still keep their business-specific roots instead
+    // of the `.arena` root. Give those routes the same Direction D reading
+    // column as the prototype pages so legacy dashboard roots do not touch the
+    // frame edge or expand into the old cockpit canvas.
+    > :deep(.page-shell:not(.arena):not(.interview-room)),
+    > :deep(.user-page-shell:not(.arena):not(.interview-room)) {
+      box-sizing: border-box;
+      width: min(100%, 1060px);
+      min-width: 0;
+      margin: 0 auto;
+      padding: 28px 34px 46px;
+    }
+
+    // A few history and comparison views use a verified wider desktop grid.
+    // Preserve their own content measure instead of compressing them into the
+    // default extension-page column.
+    > :deep(.page-shell.page-shell--wide) {
+      width: min(100%, 1240px);
     }
 
     @media (max-width: 720px) {
       :deep(.arena:not(.arena-room)) {
         padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      }
+
+      > :deep(.page-shell:not(.arena):not(.interview-room)),
+      > :deep(.user-page-shell:not(.arena):not(.interview-room)) {
+        min-width: 0;
+        padding: 18px 14px calc(84px + env(safe-area-inset-bottom, 0px));
       }
     }
   }
@@ -237,6 +244,13 @@ onBeforeUnmount(() => {
     --user-mobile-top-height: 58px;
     --user-mobile-nav-height: 60px;
     --user-mobile-nav-gap: 8px;
+  }
+
+  .arena-frame {
+    width: 100%;
+    min-height: 100vh;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .jobcoach-main {

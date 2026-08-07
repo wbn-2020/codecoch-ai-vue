@@ -1,5 +1,5 @@
 <template>
-  <section class="content-card skill-editor">
+  <section class="arena-card skill-editor">
     <div class="panel-head">
       <div>
         <p class="panel-kicker">Skill Evidence</p>
@@ -13,7 +13,7 @@
         <div class="skill-title">
           <strong>{{ item.skillName }}</strong>
           <div class="skill-tags">
-            <el-tag :type="getStrengthTone(item.strengthLevel)" effect="dark">{{ item.strengthLevel || 'MEDIUM' }}</el-tag>
+            <el-tag :type="getStrengthTone(item.strengthLevel)" effect="light">{{ item.strengthLevel || 'MEDIUM' }}</el-tag>
             <el-tag v-if="item.confirmed === false" type="warning" effect="plain">未确认</el-tag>
           </div>
         </div>
@@ -207,9 +207,9 @@ h3 {
 
 .skill-item {
   padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.45);
+  border: 1.5px solid var(--app-border);
+  border-radius: var(--arena-radius-btn, var(--user-radius-md));
+  background: var(--user-surface-muted);
 }
 
 .skill-item p,
@@ -233,8 +233,9 @@ h3 {
 .risk {
   margin-top: 8px;
   padding: 10px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(247, 144, 9, 0.24);
+  border-radius: 10px;
+  background: var(--arena-amber-soft, rgba(245, 158, 11, 0.08));
 }
 
 .item-actions {

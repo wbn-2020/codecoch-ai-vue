@@ -151,7 +151,7 @@
                   class="arena-btn arena-btn--pri"
                   type="button"
                   :disabled="creating || resumeLoading || matchReportVerifyLoading"
-                  @click="handleCreate"
+                  @click="handleQuickCreate"
                 >
                   {{ creating ? '创建中…' : '⚔ 开始面试' }}
                 </button>
@@ -170,7 +170,7 @@
                 <div class="arena-iv__kicker" style="color: var(--arena-amber)">可选微调</div>
                 <div class="arena-h3" style="margin-top: 4px">默认按推荐计划开始，想换配置再展开</div>
               </div>
-              <button class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" @click="toggleConfigExpanded">
+              <button type="button" class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" @click="toggleConfigExpanded">
                 收起微调
               </button>
             </div>
@@ -291,7 +291,7 @@
                     </el-select>
                     <div v-if="resumeLoadError" class="arena-iv__warn" style="margin-top: 6px">
                       <span>{{ resumeLoadError }}</span>
-                      <button class="arena-btn arena-btn--txt" :disabled="resumeLoading" @click="fetchResumes">重试</button>
+                      <button type="button" class="arena-btn arena-btn--txt" :disabled="resumeLoading" @click="fetchResumes">重试</button>
                     </div>
                     <div v-else-if="!resumeLoading && !resumes.length" class="arena-tiny" style="margin-top: 5px">
                       暂无可选简历，请先进入简历中心创建后再开启简历上下文。
@@ -306,10 +306,10 @@
                 <div v-if="routeContextNotice" class="arena-iv__warn">⚠ {{ routeContextNotice }}</div>
 
                 <div class="arena-row" style="margin-top: 16px; flex-wrap: wrap">
-                  <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
+                  <button type="button" class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
                     {{ creating ? '创建中…' : '⚔ 按当前计划开始' }}
                   </button>
-                  <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13px" :disabled="creating" @click="applyQuickRecommendation">
+                  <button type="button" class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13px" :disabled="creating" @click="applyQuickRecommendation">
                     恢复推荐计划
                   </button>
                 </div>
@@ -641,7 +641,12 @@ const modeCards: ModeCard[] = [
 ]
 
 const primaryModeKeys = new Set(['technical', 'project', 'resume', 'full'])
-const primaryModeCards = computed(() => modeCards.filter((item) => primaryModeKeys.has(item.key)))
+const primaryModeOrder = ['technical', 'project', 'resume', 'full'] as const
+const primaryModeCards = computed(() =>
+  primaryModeOrder
+    .map((key) => modeCards.find((item) => item.key === key))
+    .filter((item): item is ModeCard => Boolean(item))
+)
 const advancedModeCards = computed(() => modeCards.filter((item) => !primaryModeKeys.has(item.key)))
 const showAdvancedModes = computed(() => !primaryModeKeys.has(selectedModeKey.value))
 

@@ -407,7 +407,7 @@ const requestPreview = () => {
   padding: 8px 10px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.24);
+  background: var(--user-surface-muted);
 }
 
 .review-plan-panel__list {
@@ -423,17 +423,17 @@ const requestPreview = () => {
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.24);
+  background: var(--user-surface-muted);
 }
 
 .review-plan-suggestion.is-accepted {
-  border-color: rgba(34, 197, 94, 0.42);
-  background: rgba(22, 101, 52, 0.12);
+  border-color: var(--user-success-border);
+  background: var(--user-success-soft);
 }
 
 .review-plan-suggestion.is-ignored,
 .review-plan-suggestion.is-disabled {
-  background: rgba(15, 23, 42, 0.26);
+  background: var(--user-control-bg-muted);
 }
 
 .review-plan-suggestion__selector {
@@ -501,7 +501,7 @@ const requestPreview = () => {
 }
 
 .review-plan-suggestion__notice.is-accepted {
-  color: #4ade80;
+  color: var(--user-primary);
 }
 
 .review-plan-panel__empty {
@@ -514,9 +514,9 @@ const requestPreview = () => {
 .review-plan-panel__preview {
   align-items: flex-end;
   padding: 12px;
-  border: 1px solid rgba(37, 99, 235, 0.42);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: rgba(30, 64, 175, 0.12);
+  background: var(--user-primary-soft);
 }
 
 .review-plan-panel__preview strong,

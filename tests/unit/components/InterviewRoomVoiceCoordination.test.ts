@@ -235,8 +235,9 @@ describe('InterviewRoomView voice recording coordination', () => {
   it('keeps session and deep feedback content behind compact disclosure controls', async () => {
     const wrapper = await mountRoom()
 
-    expect(wrapper.find('.room-session-drawer > summary').text()).toContain('本场信息')
-    expect(wrapper.find('.room-feedback-drawer > summary').text()).toContain('查看点评')
+    expect(wrapper.find('.rail-overview').exists()).toBe(true)
+    expect(wrapper.find('.rail-overview').text()).toContain('训练进度')
+    expect(wrapper.find('.room-feedback-drawer > summary').text()).toContain('本题反馈')
     expect(wrapper.find('.answer-console').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -277,7 +278,7 @@ describe('InterviewRoomView voice recording coordination', () => {
     await flushPromises()
 
     expect(wrapper.find('.voice-console-stub').attributes('data-disabled')).toBe('true')
-    expect(wrapper.find('.answer-actions button').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.answer-submit-action').attributes('disabled')).toBeDefined()
 
     resolveStream?.({
       getTracks: () => [{ stop: stopTrack }]
@@ -291,7 +292,7 @@ describe('InterviewRoomView voice recording coordination', () => {
 
     expect(recorder!.state).toBe('inactive')
     expect(wrapper.find('.voice-console-stub').attributes('data-disabled')).toBe('true')
-    expect(wrapper.find('.answer-actions button').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.answer-submit-action').attributes('disabled')).toBeDefined()
     wrapper.unmount()
     await flushPromises()
   })
@@ -303,8 +304,7 @@ describe('InterviewRoomView voice recording coordination', () => {
     }))
     const wrapper = await mountRoom()
     await wrapper.find('textarea').setValue('A concise answer.')
-    const submitButton = wrapper.findAll('button')
-      .find((button) => button.text().includes('提交回答'))
+    const submitButton = wrapper.find('.answer-submit-action')
 
     expect(submitButton).toBeDefined()
     const submitPromise = submitButton!.trigger('click')
@@ -422,7 +422,7 @@ describe('InterviewRoomView voice recording coordination', () => {
       })
     const wrapper = await mountRoom()
 
-    const refreshPromise = wrapper.findAll('.ghost-action')[0].trigger('click')
+    const refreshPromise = wrapper.find('.answer-reload-action').trigger('click')
     await nextTick()
 
     expect(liveConsole.resetRealtimeVoice).toHaveBeenCalledOnce()
@@ -446,7 +446,7 @@ describe('InterviewRoomView voice recording coordination', () => {
       message: 'finishing'
     })
     const wrapper = await mountRoom()
-    const finishButton = wrapper.find('.finish-zone button')
+    const finishButton = wrapper.find('.topbar-report-action')
 
     expect(finishButton.exists()).toBe(true)
     const finishPromise = finishButton.trigger('click')
@@ -558,7 +558,7 @@ describe('InterviewRoomView voice recording coordination', () => {
     const wrapper = await mountRoom()
     const gameProfile = useGameProfileStore()
     await wrapper.find('textarea').setValue('A concise answer.')
-    await wrapper.findAll('button').find((button) => button.text().includes('提交回答'))!.trigger('click')
+    await wrapper.find('.answer-submit-action').trigger('click')
     await flushPromises()
 
     expect(gameProfile.xp).toBe(0)
@@ -575,7 +575,7 @@ describe('InterviewRoomView voice recording coordination', () => {
 
     const wrapper = await mountRoom()
     const gameProfile = useGameProfileStore()
-    await wrapper.find('.finish-zone button').trigger('click')
+    await wrapper.find('.topbar-report-action').trigger('click')
     await flushPromises()
 
     expect(gameProfile.xp).toBe(200)

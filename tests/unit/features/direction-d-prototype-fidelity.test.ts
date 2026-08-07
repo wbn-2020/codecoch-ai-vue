@@ -37,15 +37,23 @@ describe('Direction D prototype fidelity contracts', () => {
     const routes = readSource('src/router/routes.ts')
     const arena = readSource('src/styles/arena.scss')
 
-    expect(layout).toContain("v-if=\"usesArenaOverlayTheme && !isImmersivePage\"")
+    expect(layout).toContain('class="arena-frame"')
+    expect(layout).toContain('width: min(calc(100% - 28px), 1180px)')
+    expect(layout).toContain('align-items: center')
+    expect(layout).toContain('border-radius: 22px')
+    expect(layout).toContain('v-if="!isImmersivePage"')
     expect(layout).toContain("class=\"jobcoach-main\"")
-    expect(layout).toContain("'is-arena-main': usesArenaOverlayTheme")
+    expect(layout).toContain("'is-arena-main': usesArenaShell")
+    expect(layout).toContain("document.body.classList.add('is-user-layout-active')")
+    expect(layout).toContain("document.body.classList.remove('is-user-layout-active')")
+    expect(layout).not.toContain('UserTopNav')
 
     for (const label of ['今天', '准备', '训练', '面试', '工具']) {
       expect(topNav, `primary navigation: ${label}`).toContain(label)
     }
     expect(topNav).toContain('arena-bottom-nav')
     expect(topNav).toContain('@media (max-width: 720px)')
+    expect(topNav).toContain("@click=\"go('/tools')\"")
 
     for (const route of [
       "path: 'dashboard'",
@@ -64,19 +72,43 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(routes).toContain("path: 'interviews/room/:id'")
     expect(routes).toContain('immersive: true')
 
-    for (const token of ['--arena-bg: #f5f7f4', '--arena-card: #ffffff', '--arena-ink: #15211b']) {
+    for (const token of [
+      '--arena-bg: #f5f7f4',
+      '--arena-card: #ffffff',
+      '--arena-ink: #15211b',
+      '--arena-grn: #17b26a',
+      '--arena-grn-d: #0e9f5d',
+      '--arena-action: #0a8750',
+      '--arena-action-hover: #087542',
+      '--el-color-primary: #0a8750',
+      '--el-color-primary-dark-2: #087542'
+    ]) {
       expect(arena).toContain(token)
     }
     expect(arena).toContain('radial-gradient(900px 480px at 90% -5%')
   })
 
-  it('preserves the signed-off resume and tools layout exceptions without weakening mobile reflow', () => {
+  it('keeps white text on Direction D primary actions readable', () => {
+    const arena = readSource('src/styles/arena.scss')
+
+    expect(arena).toContain('background: var(--arena-action);')
+    expect(arena).toContain('--el-button-bg-color: var(--arena-action);')
+    expect(arena).toContain('--user-primary: var(--arena-action);')
+    expect(arena).toContain('--user-warning-text: #8a4b00;')
+  })
+
+  it('preserves the signed-off resume workbench and prototype tools layout without weakening mobile reflow', () => {
     const resume = readSource('src/views/resume/ResumeEditView.vue')
     const tools = readSource('src/views/tools/RecordsToolsView.vue')
+    const userComponents = readSource('src/styles/user-components.scss')
+    const layout = readSource('src/layouts/UserLayout.vue')
+    const topNav = readSource('src/components/layout/ArenaTopNav.vue')
+    const acceptanceEnv = readSource('.env.acceptance')
+    const routes = readSource('src/router/routes.ts')
 
     // The user explicitly requested the preview in the middle and editing on the right.
     expect(resume).toContain(
-      'grid-template-columns: minmax(180px, 0.72fr) minmax(390px, 1.15fr) minmax(440px, 1.28fr)'
+      'grid-template-columns: 200px 360px minmax(0, 1fr)'
     )
     expect(resume).toContain('.preview-column {\n    grid-column: 2;')
     expect(resume).toContain('.editor-main {\n    grid-column: 3;')
@@ -87,15 +119,79 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(resume).toContain('handleSaveInlineProject')
     expect(resume).toContain('openPdfExport')
     expect(resume).toContain('@media (max-width: 1020px)')
-    expect(resume).toContain('grid-template-columns: minmax(0, 1.2fr) minmax(150px, 0.8fr)')
+    expect(resume).toContain('grid-template-columns: 180px minmax(300px, 0.9fr) minmax(0, 1fr)')
+    expect(resume).toContain('grid-template-columns: minmax(0, 1fr)')
     expect(resume).toContain('A4 · 自动分页')
 
-    // The user explicitly requested desktop groups in two columns, with mobile retaining one column.
-    expect(tools).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    // Direction D defines the tools page as a focused 760px single-column inventory.
+    expect(tools).toContain('width: min(100%, 760px)')
+    expect(tools).toContain('gap: 14px')
     expect(tools).toContain('@media (max-width: 720px)')
-    expect(tools).toContain('grid-template-columns: 1fr')
     expect(tools).toContain('背包与仓库 <span aria-hidden="true">🧰</span>')
-    expect(tools).toContain('border-radius: 20px')
+    expect(tools).toContain(':data-tool-path="item.path"')
+    expect(tools).toContain(':disabled="item.enabled === false"')
+    expect(tools).toContain("appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放'")
+    expect(tools).not.toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(acceptanceEnv).toContain('VITE_ENABLE_V6_WEEKLY_REPORT=true')
+
+    for (const toolRoute of [
+      "path: 'applications'",
+      "path: 'career-calendar'",
+      "path: 'project-evidence'",
+      "path: 'application-packages'",
+      "path: 'knowledge'",
+      "path: 'ability-map'",
+      "path: 'agent/weekly-reports'",
+      "path: 'analytics/personal'",
+      "path: 'job-experiments'",
+      "path: 'portfolio-demo'",
+      "path: 'onboarding'"
+    ]) {
+      expect(routes, `tools entry route: ${toolRoute}`).toContain(toolRoute)
+    }
+    for (const routePrefix of [
+      "'/applications'",
+      "'/career-calendar'",
+      "'/project-evidence'",
+      "'/application-packages'",
+      "'/knowledge'",
+      "'/ability-map'",
+      "'/agent/weekly-reports'",
+      "'/analytics/personal'",
+      "'/job-experiments'",
+      "'/portfolio-demo'",
+      "'/onboarding'"
+    ]) {
+      expect(topNav, `tools navigation ownership: ${routePrefix}`).toContain(routePrefix)
+    }
+
+    // Legacy workbench rules must not turn an arena page root into a grid.
+    expect(userComponents).toContain('.page-shell:not(.arena)')
+    expect(userComponents).toContain('.user-page-shell:not(.arena)')
+    expect(layout).toContain('> :deep(.arena.page-shell)')
+  })
+
+  it('keeps extended tool destinations inside the Direction D reading column and mobile safe area', () => {
+    const layout = readSource('src/layouts/UserLayout.vue')
+    const agentToday = readSource('src/views/agent/AgentTodayView.vue')
+    const interviewHistory = readSource('src/views/interview/InterviewHistoryView.vue')
+    const evidenceList = readSource('src/views/project-evidence/ProjectEvidenceListView.vue')
+    const evidenceDetail = readSource('src/views/project-evidence/ProjectEvidenceDetailView.vue')
+    const evidenceEdit = readSource('src/views/project-evidence/ProjectEvidenceEditView.vue')
+
+    expect(layout).toContain('width: min(100%, 1060px)')
+    expect(layout).toContain('padding: 28px 34px 46px')
+    expect(layout).toContain('padding: 18px 14px calc(84px + env(safe-area-inset-bottom, 0px))')
+    expect(layout).toContain('> :deep(.page-shell.page-shell--wide)')
+    expect(interviewHistory).toContain('class="interview-history-page page-shell page-shell--wide"')
+    expect(agentToday).toContain('class="agent-page page-shell"')
+
+    for (const source of [evidenceList, evidenceDetail, evidenceEdit]) {
+      expect(source).toContain('border-radius: var(--arena-radius-card)')
+    }
+    expect(evidenceList).toContain('var(--arena-line)')
+    expect(evidenceDetail).toContain('var(--arena-line)')
+    expect(evidenceList).toContain('color: var(--user-warning-text)')
   })
 
   it('keeps interview creation as the prototype four-dungeon launch screen', () => {
@@ -108,6 +204,12 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(interview).toContain('min-height: 150px')
     expect(interview).toContain('border-radius: var(--arena-radius-card)')
     expect(interview).toContain('class="arena-iv__selection-summary"')
+    expect(interview).toContain(
+      '<button type="button" class="arena-btn arena-btn--sec" style="padding: 9px 15px'
+    )
+    expect(interview).toContain(
+      '<button type="button" class="arena-btn arena-btn--pri" style="padding: 13px 24px'
+    )
   })
 
   it('keeps every non-room Direction D page responsive and the interview room independently immersive', () => {
@@ -122,5 +224,19 @@ describe('Direction D prototype fidelity contracts', () => {
 
       expect(source, `${name}: mobile reflow`).toMatch(/@media\s*\(max-width:\s*(?:[5-9]\d{2}|1\d{3})px\)/)
     }
+  })
+
+  it('keeps the interview-room finish path available on mobile and protects drafts when changing questions', () => {
+    const room = readSource('src/views/interview/InterviewRoomView.vue')
+
+    expect(room).toContain('handleReloadCurrentQuestion')
+    expect(room).toContain('丢弃草稿并换题')
+    expect(room).toContain('上一题未提交草稿已清除。')
+    expect(room).toContain(':aria-label="canViewReport ? reportButtonText : \'结束并生成报告\'"')
+    expect(room).toContain('width: 34px')
+    expect(room).toContain("'identity actions'")
+    expect(room).toContain("'progress progress'")
+    expect(room).toContain('grid-area: progress;')
+    expect(room).toContain('font-variant-numeric: tabular-nums;')
   })
 })

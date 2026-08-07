@@ -155,7 +155,7 @@ describe('ResumeEditView', () => {
     await flushPromises()
     const saveButton = wrapper
       .findAll('.resume-workshop-hero__completion button')
-      .find((button) => button.text().includes('保存 · 去匹配'))
+      .find((button) => button.text().includes('保存简历'))
     expect(saveButton, wrapper.html()).toBeDefined()
     await saveButton!.trigger('click')
     await flushPromises()
@@ -257,7 +257,7 @@ describe('ResumeEditView', () => {
     expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*auto;/)
   })
 
-  it('keeps editing and the A4 preview visible side by side at the tablet breakpoint while only the paper canvas scrolls', () => {
+  it('switches the resume workspace to stable mobile panes at the tablet breakpoint', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
@@ -272,9 +272,10 @@ describe('ResumeEditView', () => {
     expect(paperRule).toMatch(/flex:\s*1\s+1\s+auto;/)
     expect(paperRule).toMatch(/overflow:\s*auto;/)
     expect(paperRule).toMatch(/scrollbar-gutter:\s*stable both-edges;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*none;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1\.2fr\)\s+minmax\(150px,\s*0\.8fr\);/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit\s*\{[\s\S]*?display:\s*grid;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.preview-column,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?display:\s*flex;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview,\s*[\s\S]*?display:\s*none;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit\s+\.mobile-pane-edit\s*\{[\s\S]*?display:\s*grid;/)
+    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview\s+\.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
   })
 })

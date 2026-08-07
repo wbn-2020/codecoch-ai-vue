@@ -193,22 +193,26 @@ describe('EvidenceAssetsView', () => {
   })
 
   it('shows Chinese trust boundaries without inventing zero values or fresh source state', async () => {
-    const wrapper = await mountView()
-    const text = wrapper.text()
+    route.query = { tab: 'trace', campaignId: '3' }
+    const traceWrapper = await mountView()
+    const traceText = traceWrapper.text()
 
-    expect(text).not.toContain('READINESS')
-    expect(text).not.toContain('USAGES')
-    expect(text).not.toContain('RESULTS')
-    expect(text).not.toContain('CANDIDATES')
-    expect(text).toContain('低置信度')
-    expect(text).toContain('规则降级')
-    expect(text).toContain('用户未确认')
-    expect(text).toContain('有未知项')
-    expect(text).toContain('有样本限制')
-    expect(text).toContain('来源状态待确认')
-    expect(text).toContain('暂无数据')
-    expect(text).toContain('覆盖范围')
-    expect(text).toContain('结果事件来源')
+    expect(traceText).not.toContain('READINESS')
+    expect(traceText).not.toContain('USAGES')
+    expect(traceText).not.toContain('RESULTS')
+    expect(traceText).not.toContain('CANDIDATES')
+    expect(traceText).toContain('低置信度')
+    expect(traceText).toContain('规则降级')
+    expect(traceText).toContain('有未知项')
+    expect(traceText).toContain('有样本限制')
+    expect(traceText).toContain('暂无数据')
+    expect(traceText).toContain('覆盖范围')
+    expect(traceText).toContain('结果事件来源')
+
+    route.query = { tab: 'candidates', campaignId: '3' }
+    const candidateWrapper = await mountView()
+    expect(candidateWrapper.text()).toContain('用户未确认')
+    expect(candidateWrapper.text()).toContain('来源状态待确认')
   })
 
   it('supports cancel plus all four candidate decisions and follows EDIT deep links safely', async () => {
@@ -472,6 +476,7 @@ describe('EvidenceAssetsView', () => {
   })
 
   it('stops loading dependent APIs when overview returns 403', async () => {
+    route.query = { tab: 'readiness', campaignId: '3' }
     api.getOverview.mockRejectedValueOnce({
       response: {
         status: 403,
@@ -491,6 +496,7 @@ describe('EvidenceAssetsView', () => {
   it.each([403, 41003])(
     'treats business forbidden code %s as unavailable, clears old data and closes dialogs',
     async (businessCode) => {
+    route.query = { tab: 'trace', campaignId: '3' }
     const wrapper = await mountView()
     const setupState = (wrapper.vm as unknown as {
       $: { setupState: Record<string, any> }
@@ -505,7 +511,7 @@ describe('EvidenceAssetsView', () => {
       code: businessCode,
       message: 'feature disabled'
     })
-    await setupState.load()
+    await setupState.loadOverview()
     await flushPromises()
 
     expect(api.getUsages).toHaveBeenCalledTimes(1)
@@ -527,6 +533,7 @@ describe('EvidenceAssetsView', () => {
     route.query = {
       campaignId: '3',
       applicationId: '5',
+      tab: 'trace',
       targetJobId: '7',
       experimentId: '9',
       hypothesisId: '10',
@@ -650,7 +657,7 @@ describe('EvidenceAssetsView', () => {
     setupState.openResultDialog(usage)
     await setupState.submitResult()
     expect(api.createResult).not.toHaveBeenCalled()
-    expect(ui.warning).toHaveBeenCalledWith('请输入有效的来源事件 ID。')
+    expect(ui.warning).toHaveBeenCalledWith('请输入有效的来源事件编号。')
 
     const missingLockVersion = {
       id: 22,

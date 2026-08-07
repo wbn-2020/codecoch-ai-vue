@@ -25,7 +25,15 @@
           <p>这些状态直接来自后端变更集，不代表预览或采纳动作已经修改计划。</p>
         </div>
         <div class="plan-change-status__actions">
-          <el-button size="small" text :icon="History" @click="$emit('openReview')">查看复盘</el-button>
+          <el-button
+            v-if="canOpenReview"
+            size="small"
+            text
+            :icon="History"
+            @click="$emit('openReview')"
+          >
+            查看复盘
+          </el-button>
           <el-button size="small" text :icon="RefreshCw" :loading="loading" @click="$emit('refresh')">刷新</el-button>
         </div>
       </div>
@@ -74,10 +82,12 @@ const props = withDefaults(defineProps<{
   changeSets?: AgentPlanChangePreviewVO[]
   loading?: boolean
   unavailable?: boolean
+  canOpenReview?: boolean
 }>(), {
   changeSets: () => [],
   loading: false,
-  unavailable: false
+  unavailable: false,
+  canOpenReview: true
 })
 
 defineEmits<{

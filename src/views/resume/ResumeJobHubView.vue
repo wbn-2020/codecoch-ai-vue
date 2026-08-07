@@ -846,6 +846,25 @@ const clearEvidenceLoadTimer = () => {
   }
 }
 
+const HUB_LOAD_TIMEOUT_MS = 12000
+
+const withLoadTimeout = <T>(promise: Promise<T>, label: string) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label}请求超时，请稍后重试。`))
+    }, HUB_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const loadEvidenceData = async (runId: number, baseWarnings: string[]) => {
   const warnings = [...baseWarnings]
   const resume = defaultResume.value
@@ -924,9 +943,9 @@ const loadAll = async () => {
   let warnings: string[] = []
   try {
     const [resumeResult, targetResult, currentResult] = await Promise.allSettled([
-      getResumesApi({ pageNo: 1, pageSize: 50 }),
-      getJobTargetsApi({}),
-      getCurrentJobTargetApi()
+      withLoadTimeout(getResumesApi({ pageNo: 1, pageSize: 50 }), '简历列表'),
+      withLoadTimeout(getJobTargetsApi({}), '岗位目标列表'),
+      withLoadTimeout(getCurrentJobTargetApi(), '当前岗位')
     ])
 
     if (isFulfilled(resumeResult)) {

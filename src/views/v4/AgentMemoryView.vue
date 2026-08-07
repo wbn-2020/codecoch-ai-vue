@@ -644,7 +644,7 @@ onMounted(load)
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--user-surface, var(--app-surface));
 }
 
 .v4-page-header h1,
@@ -689,7 +689,7 @@ onMounted(load)
   overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-summary-item {
@@ -751,7 +751,7 @@ onMounted(load)
   padding: 16px;
   border: 1px solid rgba(94, 234, 212, 0.28);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-boundary-panel strong {
@@ -775,7 +775,7 @@ onMounted(load)
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-row--trusted {
@@ -794,7 +794,7 @@ onMounted(load)
 
 .v4-row--disabled {
   border-style: dashed;
-  background: rgba(15, 23, 42, 0.34);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-row-head {
@@ -867,7 +867,7 @@ onMounted(load)
   padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-governance-list {
@@ -883,7 +883,7 @@ onMounted(load)
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.28);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 .v4-governance-item p {
@@ -893,7 +893,7 @@ onMounted(load)
 
 .v4-governance-item > span {
   min-width: 28px;
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--user-warning));
   font-weight: 800;
   text-align: right;
 }

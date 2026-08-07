@@ -1,217 +1,294 @@
 <template>
-  <div class="agent-page">
+  <div class="agent-page page-shell">
     <section class="agent-hero">
       <div>
         <div class="agent-eyebrow">
           <Sparkles :size="16" />
-          <span>AI 教练计划</span>
+          <span>今日准备</span>
         </div>
-        <h1>今天的训练由智能教练编排</h1>
-        <p>根据目标岗位、项目经历、错题和面试反馈生成当天任务。每个任务都保留原因、入口和状态，你可以开始、完成、跳过或反馈。</p>
+        <h1>先推进一件最重要的事</h1>
+        <p>{{ plan?.targetJobTitle ? `围绕「${plan.targetJobTitle}」安排今天的准备节奏。` : '今天只聚焦当前优先任务，其余材料按需查看。' }}</p>
       </div>
       <div class="agent-hero__actions">
         <el-date-picker v-model="queryDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadPage(true)" />
-        <el-button :icon="RefreshCw" :loading="loading" @click="loadPage(true)">刷新</el-button>
-        <el-button type="primary" :icon="WandSparkles" :loading="generating" @click="openGenerateDialog">生成计划</el-button>
+        <el-dropdown trigger="click">
+          <el-button text :icon="MoreHorizontal">更多</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item :disabled="loading" @click="loadPage(true)">
+                <RefreshCw :size="15" />
+                刷新计划
+              </el-dropdown-item>
+              <el-dropdown-item :disabled="generating" @click="openGenerateDialog">
+                <WandSparkles :size="15" />
+                重新生成
+              </el-dropdown-item>
+              <el-dropdown-item @click="router.push('/agent/tasks')">查看全部任务</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </section>
 
     <AppState v-if="errorMessage" type="error" title="今日计划加载失败" :description="errorMessage">
-      <el-button type="primary" @click="loadPage(true)">重试</el-button>
+      <el-button type="primary" @click="loadPage(true)">重新加载</el-button>
     </AppState>
 
-    <template v-else>
+    <section v-else class="today-workspace" v-loading="loading">
       <AppState
-        v-if="partialErrors.length"
-        class="agent-diagnostic-state"
-        type="disabled"
-        title="部分今日计划数据未返回"
-        :description="partialErrorDescription"
+        v-if="showPlanDataError"
+        type="error"
+        :title="planDataErrorTitle"
+        :description="planDataErrorDescription"
       >
-        <div class="diagnostic-actions">
-          <el-button type="primary" :loading="loading" @click="loadPage(true)">重新加载</el-button>
-          <el-button @click="goAsyncTaskCenter">查看任务中心</el-button>
-        </div>
+        <el-button type="primary" :loading="loading" @click="loadPage(true)">重新加载</el-button>
+        <el-button @click="goAsyncTaskCenter">查看任务进度</el-button>
       </AppState>
 
-      <PlanChangeStatusBanner
-        :change-sets="planChangeSets"
-        :loading="loading"
-        :unavailable="planChangeStatusUnavailable"
-        @refresh="loadPage(true)"
-        @open-review="router.push('/agent/reviews')"
-      />
+      <AppState
+        v-else-if="isPlanEmpty"
+        type="empty"
+        title="今天还没有计划"
+        :description="plan?.emptyMessage || emptyPlanRecoveryDescription"
+      >
+        <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
+        <el-button @click="router.push('/applications')">补充投递</el-button>
+      </AppState>
 
-      <section class="mobile-task-rail" aria-label="手机今日任务快捷入口">
-        <div class="mobile-task-rail__main">
-          <span>当前优先任务</span>
-          <strong>{{ mobileNextTaskTitle }}</strong>
-          <small>{{ mobileNextTaskSubtitle }}</small>
+      <AppState
+        v-else-if="isAsyncPlanRunning"
+        type="api-pending"
+        title="今日计划正在生成"
+        description="计划已进入处理队列。可以先离开，稍后在任务中心查看进度。"
+      >
+        <el-button type="primary" @click="goAsyncTaskCenter">查看任务进度</el-button>
+        <el-button :loading="loading" @click="loadPage(true)">刷新</el-button>
+      </AppState>
+
+      <template v-else>
+        <el-alert
+          v-if="planStatusMessage"
+          class="plan-status-alert"
+          :type="planStatusType"
+          show-icon
+          :closable="false"
+          :title="planStatusTitle"
+          :description="planStatusMessage"
+        />
+
+        <div v-if="showAsyncTaskEntry" class="plan-async-row">
+          <div>
+            <strong>生成任务已接收</strong>
+            <span>计划结果会自动回到这里，也可以前往任务中心继续查看。</span>
+          </div>
+          <el-button @click="goAsyncTaskCenter">查看进度</el-button>
         </div>
-        <div class="mobile-task-rail__actions">
-          <el-button
-            type="primary"
-            :loading="mobilePrimaryActionLoading"
-            :disabled="Boolean(mobileNextTask && isTaskPending(mobileNextTask))"
-            @click="handleMobilePrimaryAction"
-          >
-            {{ mobilePrimaryActionLabel }}
-          </el-button>
-          <el-button @click="router.push('/questions/recommendations')">刷题</el-button>
-          <el-button @click="router.push('/interviews/create')">面试</el-button>
+
+        <div v-if="planFixAction" class="plan-fix-row">
+          <el-button type="primary" @click="router.push(planFixAction.path)">{{ planFixAction.label }}</el-button>
+          <el-button :loading="generating" @click="openGenerateDialog">重新生成</el-button>
         </div>
-      </section>
 
-      <section class="agent-summary-grid">
-        <article class="agent-metric">
-          <span>今日任务</span>
-          <strong>{{ todayTasks?.total ?? taskList.length }}</strong>
-          <small>根据你的准备进度生成</small>
-        </article>
-        <article class="agent-metric">
-          <span>已完成</span>
-          <strong>{{ todayTasks?.doneCount ?? doneCount }}</strong>
-          <small>完成后会影响后续计划</small>
-        </article>
-        <article class="agent-metric">
-          <span>待推进</span>
-          <strong>{{ todayTasks?.todoCount ?? todoCount }}</strong>
-          <small>建议按优先级从上到下做</small>
-        </article>
-        <article class="agent-metric">
-          <span>预计耗时</span>
-          <strong>{{ todayTasks?.estimatedTotalMinutes ?? estimatedMinutes }}m</strong>
-          <small>适合拆成短训练块</small>
-        </article>
-      </section>
-
-      <section class="content-card agent-plan-card">
-        <div class="content-card__body">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">计划</p>
-              <h2>{{ plan?.targetJobTitle || '今日计划' }}</h2>
-              <span>{{ plan?.date || queryDate }}</span>
-            </div>
-            <el-button v-if="plan?.runId" text type="primary" @click="router.push(`/agent/runs/${plan.runId}`)">查看生成详情</el-button>
-          </div>
-
-          <el-alert
-            v-if="planStatusMessage"
-            class="plan-status-alert"
-            :type="planStatusType"
-            show-icon
-            :closable="false"
-            :title="planStatusTitle"
-            :description="planStatusMessage"
-          />
-          <div v-if="showAsyncTaskEntry" class="plan-async-row">
-            <div>
-              <strong>生成任务已接收</strong>
-              <span>{{ plan?.asyncMessageId ? '可在任务中心查看进度。' : '可在任务中心继续追踪。' }}</span>
-            </div>
-            <el-button type="primary" plain @click="goAsyncTaskCenter">查看任务进度</el-button>
-          </div>
-          <div v-if="planFixAction" class="plan-fix-row">
-            <el-button type="primary" plain @click="router.push(planFixAction.path)">{{ planFixAction.label }}</el-button>
-            <el-button :loading="generating" @click="openGenerateDialog">重新生成</el-button>
-          </div>
-
-          <div v-loading="loading" class="plan-panel">
-            <AppState
-              v-if="showPlanDataError"
-              type="error"
-              :title="planDataErrorTitle"
-              :description="planDataErrorDescription"
-            >
-              <el-button type="primary" :loading="loading" @click="loadPage(true)">重新加载</el-button>
-              <el-button @click="goAsyncTaskCenter">去任务中心</el-button>
-            </AppState>
-            <AppState
-              v-else-if="isPlanEmpty"
-              type="empty"
-              title="今天还没有计划"
-              :description="plan?.emptyMessage || emptyPlanRecoveryDescription"
-            >
-              <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
-              <el-button @click="router.push('/applications')">补投递</el-button>
-              <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
-              <el-button @click="router.push('/knowledge')">补知识资料</el-button>
-              <el-button @click="router.push('/agent/memory')">确认长期记忆</el-button>
-            </AppState>
-            <AppState
-              v-else-if="isAsyncPlanRunning"
-              type="api-pending"
-              title="今日计划正在生成"
-              description="生成任务已进入队列，可以离开页面；稍后回到任务中心或刷新今日计划查看结果。"
-            >
-              <el-button type="primary" @click="goAsyncTaskCenter">查看任务进度</el-button>
-              <el-button :loading="loading" @click="loadPage(true)">刷新今日计划</el-button>
-            </AppState>
-            <template v-else>
-              <p class="plan-summary">{{ cleanUserText(plan?.summary, '暂无计划摘要，任务列表会优先展示可执行的训练动作。') }}</p>
-              <div v-if="focusSkills.length" class="skill-strip">
-                <el-tag v-for="skill in focusSkills" :key="skill.code || skill.name" effect="plain">{{ skill.name || skill.code }}</el-tag>
+        <el-tabs v-model="todaySection" class="today-tabs">
+          <el-tab-pane label="今天" name="today">
+            <section class="priority-task-panel" aria-labelledby="priority-task-title">
+              <div class="priority-task-panel__head">
+                <div>
+                  <p class="section-kicker">当前优先任务</p>
+                  <h2 id="priority-task-title">{{ priorityTask ? displayTaskTitle(priorityTask) : '今天的任务已完成' }}</h2>
+                  <p>{{ priorityTask ? displayTaskDescription(priorityTask) : '没有待推进的任务，可以查看今天的完成记录或生成下一轮计划。' }}</p>
+                </div>
+                <StatusTag v-if="priorityTask" :status="priorityTask.status" :map="taskStatusMap" />
               </div>
 
+              <template v-if="priorityTask">
+                <div class="priority-task-panel__meta">
+                  <span>{{ taskTypeLabel(priorityTask.taskType) }}</span>
+                  <span>{{ priorityTask.estimatedMinutes ?? 0 }} 分钟</span>
+                  <span v-if="priorityTask.relatedSkillName">{{ priorityTask.relatedSkillName }}</span>
+                </div>
+                <details
+                  v-if="displayTaskReason(priorityTask) || priorityTask.reviewSummary || taskTrustLabels(priorityTask).length"
+                  class="priority-task-panel__details task-detail"
+                >
+                  <summary>查看任务依据</summary>
+                  <p v-if="displayTaskReason(priorityTask)" class="task-reason">{{ displayTaskReason(priorityTask) }}</p>
+                  <div v-if="taskTrustLabels(priorityTask).length" class="trust-tags">
+                    <span v-for="label in taskTrustLabels(priorityTask)" :key="label">{{ label }}</span>
+                  </div>
+                  <AgentTaskEvidence :suggestion="buildAgentTaskSuggestion(priorityTask)" @open="goAction" />
+                  <div v-if="priorityTask.reviewSummary" class="task-review-summary">
+                    <span>{{ priorityTask.reviewSourceLabel || '复盘记录' }}</span>
+                    <p>{{ priorityTask.reviewSummary }}</p>
+                    <small v-if="priorityTask.reviewNextActions?.length">{{ priorityTask.reviewNextActions[0] }}</small>
+                  </div>
+                </details>
+                <div class="priority-task-panel__action">
+                  <el-button
+                    type="primary"
+                    size="large"
+                    :loading="priorityTaskActionLoading"
+                    :disabled="isTaskPending(priorityTask)"
+                    @click="handlePriorityTaskAction"
+                  >
+                    {{ priorityTaskActionLabel }}
+                  </el-button>
+                  <el-dropdown trigger="click">
+                    <el-button text :icon="MoreHorizontal">调整任务</el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item v-if="hasAgentTaskActionEntry(priorityTask)" @click="goAction(buildAgentTaskActionPath(priorityTask, '/agent/today'))">打开任务入口</el-dropdown-item>
+                        <el-dropdown-item v-if="canManuallyCompleteTask(priorityTask)" :disabled="isTaskPending(priorityTask)" @click="openCompleteDialog(priorityTask)">标记完成</el-dropdown-item>
+                        <el-dropdown-item v-if="canManuallySkipTask(priorityTask)" :disabled="isTaskPending(priorityTask)" @click="openSkipDialog(priorityTask)">跳过任务</el-dropdown-item>
+                        <el-dropdown-item v-if="canDeferTask(priorityTask)" :disabled="isTaskPending(priorityTask)" @click="openDeferDialog(priorityTask)">推迟任务</el-dropdown-item>
+                        <el-dropdown-item v-if="['SKIPPED', 'DEFERRED'].includes(String(priorityTask.status || '').toUpperCase())" :disabled="isTaskPending(priorityTask)" @click="handleRestoreTask(priorityTask)">恢复待办</el-dropdown-item>
+                        <el-dropdown-item v-if="priorityTask.reason" :disabled="isTaskPending(priorityTask)" @click="openCoachAction(priorityTask, 'EXPLAIN_RECOMMENDATION')">查看推荐依据</el-dropdown-item>
+                        <el-dropdown-item divided :disabled="isTaskPending(priorityTask)" @click="openFeedbackDialog(priorityTask)">提交反馈</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+              </template>
+              <el-button v-else :loading="generating" @click="openGenerateDialog">生成下一轮计划</el-button>
+            </section>
+
+            <section class="today-remaining">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">今日剩余任务</p>
+                  <h2>{{ remainingTasks.length ? `还有 ${remainingTasks.length} 项` : '今天没有其他任务' }}</h2>
+                </div>
+                <span>{{ todoCount }} 项待推进 · {{ doneCount }} 项已完成</span>
+              </div>
+
+              <el-collapse v-if="remainingTasks.length" v-model="expandedTaskIds" class="remaining-task-list">
+                <el-collapse-item v-for="task in remainingTasks" :key="task.id" :name="String(task.id)">
+                  <template #title>
+                    <div class="remaining-task-list__title">
+                      <span>{{ displayTaskTitle(task) }}</span>
+                      <small>{{ task.estimatedMinutes ?? 0 }} 分钟</small>
+                      <StatusTag :status="task.status" :map="taskStatusMap" />
+                    </div>
+                  </template>
+                  <div class="remaining-task-list__body">
+                    <p>{{ displayTaskDescription(task) }}</p>
+                    <div class="task-meta">
+                      <span>{{ taskTypeLabel(task.taskType) }}</span>
+                      <span>{{ priorityLabel(task.priority) }}</span>
+                      <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
+                    </div>
+                    <details v-if="displayTaskReason(task) || task.reviewSummary || taskTrustLabels(task).length" class="task-detail">
+                      <summary>查看任务说明</summary>
+                      <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+                      <div v-if="taskTrustLabels(task).length" class="trust-tags">
+                        <span v-for="label in taskTrustLabels(task)" :key="label">{{ label }}</span>
+                      </div>
+                      <AgentTaskEvidence :suggestion="buildAgentTaskSuggestion(task)" @open="goAction" />
+                      <div v-if="task.reviewSummary" class="task-review-summary">
+                        <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
+                        <p>{{ task.reviewSummary }}</p>
+                        <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
+                      </div>
+                    </details>
+                    <div v-if="isFocusActive(task)" class="focus-session-bar">
+                      <div>
+                        <span>专注训练中</span>
+                        <strong>{{ focusSessionLabel }}</strong>
+                        <small>完成专注不会自动修改任务状态。</small>
+                      </div>
+                      <div class="focus-session-actions">
+                        <el-button size="small" @click="finishFocusSession(task)">完成专注</el-button>
+                        <el-button size="small" text @click="cancelFocusSession(task)">取消</el-button>
+                      </div>
+                    </div>
+                    <div class="task-actions">
+                      <el-button size="small" :disabled="isTaskPending(task)" @click="handleTaskSecondaryAction(task)">
+                        {{ getTaskActionLabel(task) }}
+                      </el-button>
+                      <el-button v-if="canStartFocusSession(task)" size="small" text :disabled="isFocusStartDisabled(task)" @click="startFocusSession(task)">开始专注</el-button>
+                      <el-dropdown trigger="click">
+                        <el-button size="small" text :icon="MoreHorizontal">更多</el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item v-if="hasAgentTaskActionEntry(task)" @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))">打开任务入口</el-dropdown-item>
+                            <el-dropdown-item v-if="canManuallyCompleteTask(task)" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
+                            <el-dropdown-item v-if="canManuallySkipTask(task)" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
+                            <el-dropdown-item v-if="canDeferTask(task)" :disabled="isTaskPending(task)" @click="openDeferDialog(task)">推迟任务</el-dropdown-item>
+                            <el-dropdown-item v-if="['SKIPPED', 'DEFERRED'].includes(String(task.status || '').toUpperCase())" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
+                            <el-dropdown-item v-if="task.reason" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'EXPLAIN_RECOMMENDATION')">查看推荐依据</el-dropdown-item>
+                            <el-dropdown-item v-if="task.status === 'DONE'" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'REVIEW_COMPLETED_TASK')">查看任务复盘</el-dropdown-item>
+                            <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </section>
+          </el-tab-pane>
+
+          <el-tab-pane label="本周策略" name="strategy">
+            <div class="secondary-panel">
+              <PlanChangeStatusBanner
+                :change-sets="planChangeSets"
+                :loading="loading"
+                :unavailable="planChangeStatusUnavailable"
+                :can-open-review="appConfig.enableV4GrowthPreview"
+                @refresh="loadPage(true)"
+                @open-review="router.push('/agent/reviews')"
+              />
               <div v-if="agentLoopSnapshotVisible" class="agent-loop-snapshot">
                 <div>
-                  <span>Agent 闭环</span>
+                  <span>本周训练节奏</span>
                   <strong>{{ agentLoopKeyActionCount }} 个关键动作</strong>
                   <small>{{ agentLoopNextAdjustment }}</small>
-                  <small v-if="agentLoopLatestReview" class="agent-loop-snapshot__review" data-latest-review>
-                    最近复盘 {{ agentLoopLatestReview.reviewDate || agentLoopLatestReview.createdAt || '日期待确认' }}
-                  </small>
                 </div>
                 <div class="agent-loop-snapshot__facts">
                   <span>{{ agentLoopWeekSummary.done }} 已完成</span>
                   <span>{{ agentLoopWeekSummary.skipped }} 已暂缓</span>
                   <span>{{ agentLoopWeekSummary.active }} 推进中</span>
                   <span v-if="agentLoopLatestReview">{{ agentLoopReviewConfidence }}</span>
-                  <span v-if="agentLoopLatestReview?.fallback">规则兜底</span>
+                  <span v-if="agentLoopLatestReview">{{ agentLoopLatestReview.fallback ? '规则兜底' : '复盘证据' }}</span>
                 </div>
-                <el-button text @click="router.push('/agent/reviews')">查看复盘</el-button>
+                <div v-if="agentLoopLatestReview" class="agent-loop-snapshot__review" data-latest-review>
+                  <span>最近一次每日复盘</span>
+                  <strong>{{ agentLoopLatestReview.reviewDate || '复盘日期待确认' }}</strong>
+                  <small>{{ agentLoopLatestReview.summary || agentLoopLatestReview.adjustments?.[0] || '复盘摘要待确认' }}</small>
+                </div>
+                <el-button
+                  v-if="appConfig.enableV4GrowthPreview"
+                  text
+                  @click="router.push('/agent/reviews')"
+                >
+                  查看复盘
+                </el-button>
               </div>
 
-                <div class="agent-week-plan">
-                  <div class="agent-week-plan__source-row">
-                    <el-tag size="small" :type="useBackendWeekPlan ? 'success' : 'warning'" effect="plain">
-                      {{ agentWeekPlanDataSourceLabel }}
-                    </el-tag>
-                    <el-tag v-if="backendWeekPlanUnavailable" size="small" type="warning" effect="plain">
-                      复盘调整状态暂不可用
-                    </el-tag>
-                  </div>
+              <div class="agent-week-plan">
+                <div class="agent-week-plan__source-row">
+                  <el-tag size="small" :type="useBackendWeekPlan ? 'success' : 'warning'" effect="plain">
+                    {{ agentWeekPlanDataSourceLabel }}
+                  </el-tag>
+                  <el-tag v-if="backendWeekPlanUnavailable" size="small" type="warning" effect="plain">复盘调整状态暂不可用</el-tag>
+                </div>
                 <article v-for="layer in agentWeekPlanLayers" :key="layer.key" class="agent-week-plan__layer">
                   <div class="agent-week-plan__head">
                     <div>
                       <span>{{ layer.title }}</span>
                       <p>{{ layer.description }}</p>
                     </div>
-                    <el-tag v-if="layer.fallback" size="small" type="warning" effect="plain">降级</el-tag>
+                    <el-tag v-if="layer.fallback" size="small" type="warning" effect="plain">保守建议</el-tag>
                   </div>
                   <ul class="agent-week-plan__actions">
                     <li v-for="action in layer.actions" :key="action.key">
-                      <div class="agent-week-plan__action-title">
-                        <strong>{{ action.title }}</strong>
-                        <div class="agent-week-plan__action-tags">
-                          <el-tag size="small" effect="plain">{{ agentWeekPlanConfidenceLabel(action.confidence) }}</el-tag>
-                          <el-tag v-if="action.fallback" size="small" type="warning" effect="plain">保守建议</el-tag>
-                          <el-tag
-                            v-if="weekPlanChangeOriginLabels(action).length"
-                            size="small"
-                            type="success"
-                            effect="plain"
-                          >
-                            复盘确认调整
-                          </el-tag>
-                        </div>
-                      </div>
+                      <strong>{{ action.title }}</strong>
                       <p>{{ action.description || action.reason }}</p>
-                      <div class="agent-week-plan__source">
-                        <span>来源：{{ agentWeekPlanSourceLabel(action.sourceType) }}</span>
-                        <span v-if="action.sourceTitle">依据：{{ action.sourceTitle }}</span>
-                        <span>推荐原因：{{ action.reason }}</span>
+                      <small>{{ agentWeekPlanEvidenceText(action) }}</small>
+                      <div
+                        v-if="weekPlanChangeOriginLabels(action).length"
+                        class="agent-week-plan__source"
+                      >
                         <span
                           v-for="label in weekPlanChangeOriginLabels(action)"
                           :key="label"
@@ -220,166 +297,46 @@
                           {{ label }}
                         </span>
                       </div>
-                      <small>{{ agentWeekPlanEvidenceText(action) }}</small>
                       <div class="agent-week-plan__next">
-                        <el-button
-                          size="small"
-                          plain
-                          :disabled="!agentWeekPlanActionPath(action)"
-                          @click="goAction(agentWeekPlanActionPath(action) || '/agent/today')"
-                        >
-                          下一步
-                        </el-button>
-                        <el-button size="small" text @click="router.push('/agent/tasks')">去任务中心</el-button>
+                        <el-button size="small" @click="goAction(agentWeekPlanActionPath(action) || '/agent/today')">查看下一步</el-button>
+                        <el-button size="small" text @click="router.push('/agent/tasks')">任务中心</el-button>
                       </div>
                     </li>
                   </ul>
                 </article>
               </div>
+            </div>
+          </el-tab-pane>
 
-              <div class="task-list">
-                <article v-for="task in taskList" :key="task.id" class="agent-task-card">
-                  <div class="task-main">
-                    <div class="task-title-row">
-                      <h3>{{ displayTaskTitle(task) }}</h3>
-                      <StatusTag :status="task.status" :map="taskStatusMap" />
-                    </div>
-                    <p>{{ displayTaskDescription(task) }}</p>
-                    <div class="task-meta">
-                      <span>{{ taskTypeLabel(task.taskType) }}</span>
-                      <span>{{ priorityLabel(task.priority) }}</span>
-                      <span>{{ task.estimatedMinutes ?? 0 }} 分钟</span>
-                      <span v-if="task.relatedSkillName">{{ task.relatedSkillName }}</span>
-                    </div>
-                    <div class="trust-tags">
-                      <span v-for="label in taskTrustLabels(task)" :key="label">{{ label }}</span>
-                    </div>
-                    <div
-                      v-if="taskPlanChangeOriginLabels(task).length"
-                      class="task-plan-change-origin"
-                    >
-                      <span>复盘确认调整</span>
-                      <small
-                        v-for="label in taskPlanChangeOriginLabels(task)"
-                        :key="label"
-                      >
-                        {{ label }}
-                      </small>
-                    </div>
-                    <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
-                    <AgentTaskEvidence
-                      :suggestion="buildAgentTaskSuggestion(task)"
-                      @open="goAction"
-                    />
-                    <div v-if="task.reviewSummary" class="task-review-summary">
-                      <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
-                      <p>{{ task.reviewSummary }}</p>
-                      <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
-                    </div>
-                    <div v-if="isFocusActive(task)" class="focus-session-bar">
-                      <div>
-                        <span>专注训练中</span>
-                        <strong>{{ focusSessionLabel }}</strong>
-                        <small>完成专注不会自动修改任务状态。</small>
-                      </div>
-                      <div class="focus-session-actions">
-                        <el-button size="small" type="success" plain @click="finishFocusSession(task)">完成专注</el-button>
-                        <el-button size="small" text @click="cancelFocusSession(task)">取消</el-button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="task-actions">
-                    <el-button
-                      v-if="task.status === 'TODO'"
-                      size="small"
-                      type="primary"
-                      :loading="isTaskActionPending(task, 'start')"
-                      :disabled="isTaskPending(task)"
-                      @click="handleStartTask(task)"
-                    >
-                      开始
-                    </el-button>
-                    <el-button
-                      v-else-if="task.status === 'DOING' && canManuallyCompleteTask(task)"
-                      size="small"
-                      type="success"
-                      :disabled="isTaskPending(task)"
-                      @click="openCompleteDialog(task)"
-                    >完成</el-button>
-                    <el-button
-                      v-else-if="task.status === 'DOING' && hasAgentTaskActionEntry(task)"
-                      size="small"
-                      type="primary"
-                      :disabled="isTaskPending(task)"
-                      @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))"
-                    >去处理</el-button>
-                    <el-button
-                      v-else-if="['SKIPPED', 'DEFERRED'].includes(String(task.status || '').toUpperCase())"
-                      size="small"
-                      type="warning"
-                      :loading="isTaskActionPending(task, 'restore')"
-                      :disabled="isTaskPending(task)"
-                      @click="handleRestoreTask(task)"
-                    >
-                      恢复
-                    </el-button>
-                    <el-button v-else-if="task.status === 'DONE'" size="small" disabled>已完成</el-button>
-                    <el-button
-                      v-else-if="canManuallyCompleteTask(task)"
-                      size="small"
-                      type="success"
-                      :disabled="isTaskPending(task)"
-                      @click="openCompleteDialog(task)"
-                    >完成</el-button>
-                    <el-button
-                      v-else
-                      size="small"
-                      :disabled="!hasAgentTaskActionEntry(task) || isTaskPending(task)"
-                      @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))"
-                    >查看任务</el-button>
-                    <el-button
-                      v-if="canStartFocusSession(task)"
-                      size="small"
-                      plain
-                      :disabled="isFocusStartDisabled(task)"
-                      @click="startFocusSession(task)"
-                    >专注</el-button>
-                    <el-dropdown trigger="click">
-                      <el-button size="small" text class="task-more-button" :icon="MoreHorizontal">更多</el-button>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item v-if="hasAgentTaskActionEntry(task)" @click="goAction(buildAgentTaskActionPath(task, '/agent/today'))">打开任务入口</el-dropdown-item>
-                          <el-dropdown-item v-if="canManuallyCompleteTask(task)" :disabled="isTaskPending(task)" @click="openCompleteDialog(task)">标记完成</el-dropdown-item>
-                          <el-dropdown-item v-if="canManuallySkipTask(task)" :disabled="isTaskPending(task)" @click="openSkipDialog(task)">跳过任务</el-dropdown-item>
-                          <el-dropdown-item v-if="canDeferTask(task)" :disabled="isTaskPending(task)" @click="openDeferDialog(task)">推迟任务</el-dropdown-item>
-                          <el-dropdown-item v-if="['SKIPPED', 'DEFERRED'].includes(String(task.status || '').toUpperCase())" :disabled="isTaskPending(task)" @click="handleRestoreTask(task)">恢复待办</el-dropdown-item>
-                          <el-dropdown-item v-if="task.reason" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'EXPLAIN_RECOMMENDATION')">AI 解释推荐理由</el-dropdown-item>
-                          <el-dropdown-item v-if="task.status === 'DONE'" :disabled="isTaskPending(task)" @click="openCoachAction(task, 'REVIEW_COMPLETED_TASK')">AI 复盘本次任务</el-dropdown-item>
-                          <el-dropdown-item divided :disabled="isTaskPending(task)" @click="openFeedbackDialog(task)">提交反馈</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </div>
-                </article>
-                <AppState
-                  v-if="!taskList.length"
-                  :type="taskListEmptyType"
-                  :title="taskListEmptyTitle"
-                  :description="taskListEmptyDescription"
-                >
-                  <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
-                  <el-button type="primary" :loading="loading" @click="loadPage(true)">刷新任务</el-button>
-                  <el-button @click="goAsyncTaskCenter">查看任务中心</el-button>
-                  <el-button @click="router.push('/applications')">补投递</el-button>
-                  <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
-                  <el-button @click="router.push('/agent/memory')">确认记忆</el-button>
-                </AppState>
+          <el-tab-pane label="计划依据" name="basis">
+            <div class="secondary-panel">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">计划说明</p>
+                  <h2>{{ plan?.targetJobTitle || '今日计划' }}</h2>
+                  <span>{{ plan?.date || queryDate }}</span>
+                </div>
+                <el-button v-if="plan?.runId" text @click="router.push(`/agent/runs/${plan.runId}`)">查看生成记录</el-button>
               </div>
-            </template>
-          </div>
-        </div>
-      </section>
-    </template>
+              <p class="plan-summary">{{ cleanUserText(plan?.summary, '暂无计划摘要，任务列表会优先展示可执行的训练动作。') }}</p>
+              <div v-if="focusSkills.length" class="skill-strip">
+                <el-tag v-for="skill in focusSkills" :key="skill.code || skill.name" effect="plain">{{ skill.name || skill.code }}</el-tag>
+              </div>
+              <AppState
+                v-if="partialErrors.length"
+                class="agent-diagnostic-state"
+                type="disabled"
+                title="部分计划数据暂未返回"
+                :description="partialErrorDescription"
+              >
+                <el-button :loading="loading" @click="loadPage(true)">重新加载</el-button>
+                <el-button @click="goAsyncTaskCenter">查看任务进度</el-button>
+              </AppState>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </template>
+    </section>
 
     <el-dialog
       v-model="generateDialogVisible"
@@ -507,6 +464,7 @@ import { getAgentPlanChangeSetsApi } from '@/api/agentPlanChange'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
 import { getAgentReviewsApi, type AgentReviewVO } from '@/api/v4'
+import { appConfig } from '@/config'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
 import PlanChangeStatusBanner from '@/components/agent-review/PlanChangeStatusBanner.vue'
 import AppState from '@/components/common/AppState.vue'
@@ -556,6 +514,7 @@ import { formatLocalDate } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { buildSafeRedirectTarget, sanitizeLocalActionPath } from '@/utils/routeSecurity'
 import { fromAgentTask } from '@/utils/suggestionAdapter'
+import { resolveAppRoutePath } from '@/features/route-safety'
 
 const router = useRouter()
 const route = useRoute()
@@ -587,6 +546,8 @@ const targetLoading = ref(false)
 const targetLoadError = ref('')
 const targetScopeResolved = ref(false)
 const targetScopeUnavailable = ref(false)
+const todaySection = ref<'today' | 'strategy' | 'basis'>('today')
+const expandedTaskIds = ref<string[]>([])
 const generateDialogVisible = ref(false)
 const taskDialogVisible = ref(false)
 const taskDialogMode = ref<'complete' | 'skip' | 'defer'>('complete')
@@ -735,6 +696,16 @@ const withTaskPending = async (task: AgentTaskVO, action: TaskAction, handler: (
 
 const focusSkills = computed(() => plan.value?.focusSkills || [])
 const taskList = computed(() => todayTasks.value?.tasks?.length ? todayTasks.value.tasks : plan.value?.tasks || [])
+const priorityTask = computed(() => {
+  const openTasks = taskList.value.filter(isOpenTaskStatus)
+  return openTasks.find((task) => String(task.priority || '').toUpperCase() === 'HIGH') ||
+    openTasks[0] ||
+    taskList.value.find((task) => !taskClosedStatuses.includes(String(task.status || '').toUpperCase())) ||
+    null
+})
+const remainingTasks = computed(() =>
+  taskList.value.filter((task) => !priorityTask.value || task.id !== priorityTask.value.id)
+)
 const focusSessionLabel = computed(() => {
   if (!focusSession.value) return ''
   const startedAt = new Date(focusSession.value.startedAt)
@@ -907,60 +878,26 @@ const canManuallySkipTask = (task: AgentTaskVO) =>
   ['TODO', 'DOING', 'EXPIRED'].includes(String(task.status || '').toUpperCase())
 const canDeferTask = (task: AgentTaskVO) => canManuallySkipTask(task)
 const isOpenTaskStatus = (task: AgentTaskVO) => ['DOING', 'TODO'].includes(String(task.status || '').toUpperCase())
-const isUnfinishedTask = (task: AgentTaskVO) => !taskClosedStatuses.includes(String(task.status || '').toUpperCase())
-const isTrustedMobilePriorityTask = (task: AgentTaskVO) => {
-  const suggestion = fromAgentTask(task)
-  const strength = String(suggestion.qualityGate?.suggestionStrength || '').toUpperCase()
-  const trustStatus = String(suggestion.trustStatus || '').toUpperCase()
-  const confidenceLevel = String(suggestion.confidenceLevel || '').toUpperCase()
-  return !suggestion.fallback &&
-    !suggestion.mock &&
-    !['LOW', 'UNKNOWN'].includes(confidenceLevel) &&
-    !['FALLBACK', 'UNKNOWN', 'DISABLED', 'STALE'].includes(trustStatus) &&
-    !['FALLBACK', 'MOCK', 'LOW_SAMPLE', 'WEAK'].includes(strength)
-}
-const mobileNextTask = computed(() => {
-  const active = taskList.value.filter(isOpenTaskStatus)
-  return active.find(isTrustedMobilePriorityTask) ||
-    taskList.value.filter(isUnfinishedTask).find(isTrustedMobilePriorityTask) ||
-    null
-})
-const mobileNextTaskTitle = computed(() => {
-  if (mobileNextTask.value) return displayTaskTitle(mobileNextTask.value)
-  return taskList.value.length ? '暂无可信优先任务' : '生成今日计划'
-})
-const mobileNextTaskSubtitle = computed(() => {
-  const task = mobileNextTask.value
-  if (!task) {
-    return taskList.value.length
-      ? '当前任务依据不足或为降级输出，请从列表中复核后处理'
-      : '还没有训练任务，先生成计划或进入刷题/面试'
-  }
-  const normalizedStatus = String(task.status || '').toUpperCase()
-  const status = taskStatusMap[normalizedStatus as keyof typeof taskStatusMap] || '待处理'
-  const minutes = task.estimatedMinutes ? `${task.estimatedMinutes} 分钟` : '短训练'
-  const source = task.relatedSkillName || task.targetJobTitle || taskTypeLabel(task.taskType) || '今日训练'
-  return `${status} · ${minutes} · ${source}`
-})
-const mobilePrimaryActionLabel = computed(() => {
-  const task = mobileNextTask.value
-  if (!task) return taskList.value.length ? '刷新' : '生成计划'
+const getTaskActionLabel = (task: AgentTaskVO) => {
   const status = String(task.status || '').toUpperCase()
-  if (status === 'TODO') return '开始'
-  if (isEvidenceBoundAgentTask(task) && hasAgentTaskActionEntry(task)) return '去处理'
-  if (status === 'DOING') return '完成'
-  if (['SKIPPED', 'DEFERRED'].includes(status)) return '恢复'
-  if (status === 'DONE') return '查看'
-  return '完成'
-})
-const mobilePrimaryActionLoading = computed(() => {
-  const task = mobileNextTask.value
-  if (!task) return taskList.value.length ? loading.value : generating.value
+  if (status === 'TODO') return '开始任务'
+  if (status === 'DOING' && isEvidenceBoundAgentTask(task) && hasAgentTaskActionEntry(task)) return '去处理'
+  if (status === 'DOING') return '标记完成'
+  if (['SKIPPED', 'DEFERRED'].includes(status)) return '恢复待办'
+  if (status === 'DONE') return hasAgentTaskActionEntry(task) ? '查看任务' : '已完成'
+  return hasAgentTaskActionEntry(task) ? '查看任务' : '标记完成'
+}
+const priorityTaskActionLabel = computed(() =>
+  priorityTask.value ? getTaskActionLabel(priorityTask.value) : '生成下一轮计划'
+)
+const priorityTaskActionLoading = computed(() => {
+  const task = priorityTask.value
+  if (!task) return generating.value
   const status = String(task.status || '').toUpperCase()
   if (status === 'TODO') return isTaskActionPending(task, 'start')
   if (['SKIPPED', 'DEFERRED'].includes(status)) return isTaskActionPending(task, 'restore')
-  if (isEvidenceBoundAgentTask(task)) return false
-  return isTaskActionPending(task, 'complete')
+  if (status === 'DOING' && !isEvidenceBoundAgentTask(task)) return isTaskActionPending(task, 'complete')
+  return false
 })
 const planStatusType = computed(() => (planStatus.value === 'FAILED' ? 'error' : planStatus.value === 'RUNNING' ? 'warning' : 'info'))
 const planStatusTitle = computed(() => {
@@ -1602,16 +1539,7 @@ const openFeedbackFromReview = () => {
   openFeedbackDialog(completionReviewTask.value)
 }
 
-const handleMobilePrimaryAction = async () => {
-  const task = mobileNextTask.value
-  if (!task) {
-    if (taskList.value.length) {
-      await loadPage(true)
-      return
-    }
-    openGenerateDialog()
-    return
-  }
+const handleTaskSecondaryAction = async (task: AgentTaskVO) => {
   const status = String(task.status || '').toUpperCase()
   if (status === 'TODO') {
     await handleStartTask(task)
@@ -1636,6 +1564,14 @@ const handleMobilePrimaryAction = async () => {
   router.push('/agent/tasks')
 }
 
+const handlePriorityTaskAction = async () => {
+  if (!priorityTask.value) {
+    openGenerateDialog()
+    return
+  }
+  await handleTaskSecondaryAction(priorityTask.value)
+}
+
 const goCompletionNextAction = () => {
   const targetPath = completionReviewNextAction.value.path
   trackCompletionReviewCtaClick(targetPath)
@@ -1655,11 +1591,13 @@ const goAsyncTaskCenter = () => {
 
 const goAction = (actionUrl: string) => {
   const safePath = sanitizeLocalActionPath(actionUrl)
-  if (safePath) {
-    router.push(safePath)
+  if (!safePath) {
+    ElMessage.warning('任务链接暂不支持跳转到站外地址')
     return
   }
-  ElMessage.warning('任务链接暂不支持跳转到站外地址')
+  const resolved = resolveAppRoutePath(safePath, { fallbackPath: '/agent/today' })
+  if (resolved.unavailableReason) ElMessage.info(resolved.unavailableReason)
+  router.push(resolved.path)
 }
 
 onMounted(() => {
@@ -2357,6 +2295,324 @@ onMounted(() => {
   .content-card__body,
   .agent-task-card {
     padding: 14px;
+  }
+}
+
+.agent-page {
+  gap: 16px;
+}
+
+.agent-hero {
+  padding: 20px;
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.agent-hero h1 {
+  font-size: 24px;
+}
+
+.today-workspace {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.today-tabs :deep(.el-tabs__header) {
+  margin-bottom: 20px;
+}
+
+.today-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--arena-border, var(--user-border));
+}
+
+.today-tabs :deep(.el-tabs__item) {
+  height: 36px;
+  color: var(--arena-text-muted, var(--user-text-muted));
+}
+
+.today-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--arena-primary, var(--user-primary));
+  font-weight: 700;
+}
+
+.today-tabs :deep(.el-tabs__active-bar) {
+  background: var(--arena-primary, var(--user-primary));
+}
+
+.priority-task-panel,
+.today-remaining,
+.secondary-panel {
+  min-width: 0;
+}
+
+.priority-task-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--arena-primary-border, var(--user-primary-border));
+  border-radius: 8px;
+  background: var(--arena-primary-soft, var(--user-primary-soft));
+}
+
+.priority-task-panel__head,
+.priority-task-panel__action,
+.section-head,
+.plan-async-row,
+.focus-session-bar,
+.agent-loop-snapshot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.priority-task-panel__head > div,
+.section-head > div,
+.plan-async-row > div,
+.agent-loop-snapshot > div {
+  min-width: 0;
+}
+
+.priority-task-panel h2,
+.section-head h2 {
+  margin: 0;
+  color: var(--arena-text, var(--user-text));
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.priority-task-panel__head p:not(.section-kicker),
+.section-head > span {
+  margin: 7px 0 0;
+  color: var(--arena-text-muted, var(--user-text-muted));
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.priority-task-panel__meta,
+.task-meta,
+.trust-tags,
+.skill-strip,
+.agent-loop-snapshot__facts,
+.task-actions,
+.focus-session-actions,
+.agent-week-plan__next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-task-panel__meta span,
+.task-meta span,
+.trust-tags span,
+.agent-loop-snapshot__facts span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.priority-task-panel__action {
+  align-items: center;
+}
+
+.today-remaining {
+  margin-top: 28px;
+}
+
+.section-head {
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.section-kicker {
+  margin: 0 0 5px;
+  color: var(--arena-primary, var(--user-primary));
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.remaining-task-list {
+  border-top: 1px solid var(--arena-border, var(--user-border));
+}
+
+.remaining-task-list :deep(.el-collapse-item__header),
+.remaining-task-list :deep(.el-collapse-item__wrap) {
+  height: auto;
+  min-height: 58px;
+  border-color: var(--arena-border, var(--user-border));
+  background: transparent;
+}
+
+.remaining-task-list :deep(.el-collapse-item__content) {
+  padding-bottom: 18px;
+}
+
+.remaining-task-list__title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  width: calc(100% - 24px);
+  gap: 10px;
+}
+
+.remaining-task-list__title > span {
+  overflow: hidden;
+  color: var(--arena-text, var(--user-text));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remaining-task-list__title small,
+.remaining-task-list__body > p,
+.task-detail summary,
+.task-detail > p,
+.task-review-summary p,
+.task-review-summary small,
+.focus-session-bar small {
+  color: var(--arena-text-muted, var(--user-text-muted));
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.remaining-task-list__body {
+  display: grid;
+  gap: 12px;
+}
+
+.remaining-task-list__body > p {
+  margin: 0;
+}
+
+.task-detail {
+  padding: 12px;
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.task-detail summary {
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.task-reason,
+.task-review-summary,
+.focus-session-bar {
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.task-reason {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+  line-height: 1.65;
+}
+
+.task-review-summary {
+  margin-top: 12px;
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+}
+
+.task-review-summary span,
+.focus-session-bar span,
+.focus-session-bar strong {
+  color: var(--arena-text, var(--user-text));
+}
+
+.focus-session-bar {
+  margin-top: 0;
+  padding: 12px;
+}
+
+.secondary-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.agent-loop-snapshot {
+  padding: 16px;
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.agent-loop-snapshot strong {
+  color: var(--arena-text, var(--user-text));
+}
+
+.agent-week-plan {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-week-plan__layer {
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.agent-week-plan__actions li {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-week-plan__actions li strong {
+  color: var(--arena-text, var(--user-text));
+}
+
+.agent-week-plan__actions li p,
+.agent-week-plan__actions li small {
+  color: var(--arena-text-muted, var(--user-text-muted));
+}
+
+.plan-summary {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.agent-diagnostic-state {
+  margin-top: 4px;
+  border-color: var(--arena-warning-border, var(--user-border));
+  background: var(--arena-warning-soft, var(--user-surface-muted));
+}
+
+@media (max-width: 760px) {
+  .today-workspace {
+    padding: 16px;
+  }
+
+  .priority-task-panel,
+  .priority-task-panel__head,
+  .priority-task-panel__action,
+  .section-head,
+  .plan-async-row,
+  .agent-loop-snapshot {
+    flex-direction: column;
+  }
+
+  .priority-task-panel__action :deep(.el-button--large) {
+    width: 100%;
+  }
+
+  .remaining-task-list__title {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .remaining-task-list__title :deep(.el-tag) {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .agent-week-plan {
+    grid-template-columns: 1fr;
   }
 }
 </style>

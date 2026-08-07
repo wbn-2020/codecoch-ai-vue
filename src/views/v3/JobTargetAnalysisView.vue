@@ -1,5 +1,5 @@
 <template>
-  <div class="job-analysis-page page-shell">
+  <div class="arena job-analysis-page page-shell">
     <section class="analysis-hero">
       <div>
         <div class="hero-kicker">
@@ -18,105 +18,14 @@
           <Pencil :size="16" />
           编辑岗位
         </el-button>
-        <el-button v-if="targetId" type="primary" @click="goResumeMatch">
-          <Files :size="16" />
-          进入简历匹配
-        </el-button>
-        <el-button v-if="targetId" type="primary" plain @click="goApplicationPackage">
-          <PackageCheck :size="16" />
-          生成投递包
+        <el-button :loading="loading" @click="loadAll">
+          <RefreshCw :size="16" />
+          刷新
         </el-button>
       </div>
     </section>
 
     <section class="analysis-layout">
-      <aside class="content-card side-panel">
-        <div class="content-card__body">
-          <h2>岗位上下文</h2>
-          <div class="info-list">
-            <div>
-              <span>公司</span>
-              <strong>{{ target?.companyName || '--' }}</strong>
-            </div>
-            <div>
-              <span>级别 / 经验</span>
-              <strong>{{ target?.jobLevel || '--' }}</strong>
-            </div>
-            <div>
-              <span>岗位描述来源</span>
-              <strong>{{ target?.jdSource || '--' }}</strong>
-            </div>
-            <div>
-              <span>当前主目标</span>
-              <strong>{{ target?.currentFlag === 1 ? '是' : '否' }}</strong>
-            </div>
-            <div>
-              <span>分析状态</span>
-              <JobTargetStatusTag :status="displayParseStatus" />
-            </div>
-            <div>
-              <span>更新时间</span>
-              <strong>{{ formatDateTime(target?.updatedAt || analysis?.updatedAt) }}</strong>
-            </div>
-          </div>
-
-          <div class="parse-actions">
-            <el-button
-              type="primary"
-              :loading="parsing"
-              :disabled="loading || !target || target.parseStatus === 'PARSING'"
-              @click="handleParse"
-            >
-              <Sparkles :size="16" />
-              {{ analysis ? '重新分析岗位描述' : '分析岗位描述' }}
-            </el-button>
-            <el-button :loading="loading" @click="loadAll">
-              <RefreshCw :size="16" />
-              刷新结果
-            </el-button>
-          </div>
-
-          <div v-if="parseTaskVisible" class="parse-task-progress">
-            <div class="parse-task-progress__head">
-              <span class="cc-badge" :class="parseTaskBadgeClass(parseSseStatus)">
-                <i class="cc-badge__dot" />
-                {{ parseTaskStatusLabel(parseSseStatus) }}
-              </span>
-              <strong>{{ latestParseSseMessage }}</strong>
-            </div>
-            <p v-if="parseSseError">{{ parseSseError }}</p>
-            <div v-if="parseRecoveryVisible" class="parse-task-progress__recovery">
-              <span>{{ parseRecoveryHint }}</span>
-              <el-button text type="primary" :loading="loading" @click="refreshAnalysisAfterInterrupt">
-                刷新分析结果
-              </el-button>
-            </div>
-            <div v-if="parseTaskDiagnostics.length" class="parse-task-progress__diagnostics">
-              <span v-for="item in parseTaskDiagnostics" :key="item">{{ item }}</span>
-            </div>
-            <div v-if="recentParseSseEvents.length" class="sse-progress__events">
-              <span v-for="item in recentParseSseEvents" :key="item.key">
-                {{ parseSseEventText(item) }}
-              </span>
-            </div>
-            <div class="parse-task-progress__actions">
-              <el-button text type="primary" @click="goTaskCenter">去任务中心查看</el-button>
-              <el-button text :loading="loading" @click="loadAll">刷新结果</el-button>
-            </div>
-          </div>
-
-          <el-alert
-            v-if="target?.parseErrorMessage || analysis?.parseErrorMessage"
-            class="side-alert"
-            type="error"
-            :closable="false"
-            show-icon
-            title="岗位分析失败"
-            :description="toFriendlyMessage(target?.parseErrorMessage || analysis?.parseErrorMessage, '岗位描述解析没有成功，请补充岗位描述内容或稍后重试。')"
-          />
-        </div>
-      </aside>
-
       <main class="content-card main-panel">
         <div v-if="loading" class="state-wrap">
           <AppState type="loading" title="正在读取岗位分析结果" description="正在同步岗位信息和分析结果。" />
@@ -142,69 +51,205 @@
             :description="partialLoadWarning"
           />
 
-          <section class="jd-preview">
-            <div class="section-head">
-              <div>
-                <h2>完整岗位描述</h2>
-                <p>这里展示你保存的岗位描述，重新分析会基于这段内容生成结构化信息。</p>
-              </div>
-              <JobTargetStatusTag :status="displayParseStatus" />
-            </div>
-            <pre v-if="target.jdText">{{ target.jdText }}</pre>
-            <AppState
-              v-else
-              type="empty"
-              title="岗位描述为空"
-              description="请先编辑岗位目标补充岗位描述，再触发分析。"
-            >
-              <el-button type="primary" @click="router.push(`/job-targets/${target.id}/edit`)">编辑岗位目标</el-button>
-            </AppState>
-          </section>
+          <el-tabs v-model="activeSection" class="analysis-tabs">
+            <el-tab-pane label="概览" name="overview">
+              <section class="overview-pane">
+                <header class="overview-context">
+                  <div>
+                    <span class="overview-kicker">当前岗位</span>
+                    <h2>{{ target.jobTitle }}</h2>
+                    <p>{{ targetSubtitle }} · {{ target.jdSource || '未标注来源' }}</p>
+                  </div>
+                  <JobTargetStatusTag :status="displayParseStatus" />
+                </header>
 
-          <section>
-            <div class="section-head">
-              <div>
-                <h2>结构化分析结果</h2>
-                <p>职责、技能、关键词和经验要求会在分析完成后展示。</p>
-              </div>
-              <el-button
-                :loading="parsing"
-                :disabled="!target.jdText || target.parseStatus === 'PARSING'"
-                @click="handleParse"
-              >
-                <Sparkles :size="16" />
-                {{ analysis ? '重新分析' : '分析岗位描述' }}
-              </el-button>
-            </div>
+                <section class="overview-conclusion">
+                  <span class="overview-kicker">关键结论</span>
+                  <template v-if="hasStructuredAnalysis(analysis)">
+                    <p>{{ overviewSummary }}</p>
+                    <div v-if="overviewSkillItems.length" class="overview-skills">
+                      <span v-for="item in overviewSkillItems" :key="item">{{ item }}</span>
+                    </div>
+                  </template>
+                  <p v-else>{{ analysisEmptyStateDescription }}</p>
+                </section>
 
-            <AppState
-              v-if="!analysis"
-              :type="analysisEmptyStateType"
-              :title="analysisEmptyStateTitle"
-              :description="analysisEmptyStateDescription"
-            >
-              <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发分析</el-button>
-            </AppState>
+                <section class="overview-next">
+                  <div>
+                    <span class="overview-kicker">下一步</span>
+                    <h3>{{ primaryActionTitle }}</h3>
+                    <p>{{ primaryActionDescription }}</p>
+                  </div>
+                  <el-button
+                    v-if="primaryAction === 'edit'"
+                    type="primary"
+                    @click="router.push(`/job-targets/${target.id}/edit`)"
+                  >
+                    <Pencil :size="16" />
+                    编辑岗位目标
+                  </el-button>
+                  <el-button
+                    v-else-if="primaryAction === 'parse'"
+                    type="primary"
+                    :loading="parsing"
+                    :disabled="target.parseStatus === 'PARSING'"
+                    @click="handleParse"
+                  >
+                    <Sparkles :size="16" />
+                    {{ analysis ? '重新分析岗位描述' : '分析岗位描述' }}
+                  </el-button>
+                  <el-button v-else-if="primaryAction === 'task'" type="primary" @click="goTaskCenter">
+                    查看任务
+                  </el-button>
+                  <el-button v-else type="primary" @click="goResumeMatch">
+                    <Files :size="16" />
+                    进入简历匹配
+                  </el-button>
+                </section>
 
-            <JobTargetAnalysisPanel v-else :analysis="analysis" />
-          </section>
+                <div v-if="hasStructuredAnalysis(analysis)" class="overview-secondary">
+                  <span>已完成岗位分析</span>
+                  <el-button plain @click="goApplicationPackage">
+                    <PackageCheck :size="16" />
+                    生成投递包
+                  </el-button>
+                </div>
+              </section>
+            </el-tab-pane>
 
-          <JobRequirementEvidenceMatrix
-            :target-job-id="target.id"
-            :matrix="requirementMatrix"
-            :readiness="readinessSnapshot"
-            :readiness-history="readinessHistory"
-            :selected-snapshot-id="readinessSnapshot?.id"
-            :snapshot-loading-id="readinessSnapshotLoadingId"
-            :loading="requirementLoading"
-            :refreshing="requirementRefreshing"
-            :error="requirementError"
-            @refresh="refreshRequirementInsights"
-            @action="handleRequirementAction"
-            @select-snapshot="selectReadinessSnapshot"
-          />
+            <el-tab-pane label="完整 JD" name="jd">
+              <section class="tab-section jd-preview">
+                <div class="section-head">
+                  <div>
+                    <h2>完整岗位描述</h2>
+                    <p>重新分析会基于这段内容生成结构化信息。</p>
+                  </div>
+                  <el-button @click="router.push(`/job-targets/${target.id}/edit`)">
+                    <Pencil :size="16" />
+                    编辑岗位
+                  </el-button>
+                </div>
+                <pre v-if="target.jdText">{{ target.jdText }}</pre>
+                <AppState
+                  v-else
+                  type="empty"
+                  title="岗位描述为空"
+                  description="请先编辑岗位目标补充岗位描述，再触发分析。"
+                >
+                  <el-button type="primary" @click="router.push(`/job-targets/${target.id}/edit`)">编辑岗位目标</el-button>
+                </AppState>
+              </section>
+            </el-tab-pane>
+
+            <el-tab-pane label="深度分析" name="analysis">
+              <section class="tab-section">
+                <div class="section-head">
+                  <div>
+                    <h2>全量结构化分析</h2>
+                    <p>职责、技能、关键词、经验要求和技能权重。</p>
+                  </div>
+                  <el-button
+                    :loading="parsing"
+                    :disabled="!target.jdText || target.parseStatus === 'PARSING'"
+                    @click="handleParse"
+                  >
+                    <Sparkles :size="16" />
+                    {{ analysis ? '重新分析' : '分析岗位描述' }}
+                  </el-button>
+                </div>
+
+                <AppState
+                  v-if="!analysis"
+                  :type="analysisEmptyStateType"
+                  :title="analysisEmptyStateTitle"
+                  :description="analysisEmptyStateDescription"
+                >
+                  <el-button type="primary" :loading="parsing" :disabled="!target.jdText" @click="handleParse">触发分析</el-button>
+                </AppState>
+
+                <JobTargetAnalysisPanel v-else :analysis="analysis" />
+              </section>
+            </el-tab-pane>
+
+            <el-tab-pane label="证据矩阵" name="evidence">
+              <section class="tab-section">
+                <div class="section-head">
+                  <div>
+                    <h2>岗位证据矩阵</h2>
+                    <p>按岗位要求核对现有证据与投递准备度。</p>
+                  </div>
+                </div>
+                <JobRequirementEvidenceMatrix
+                  :target-job-id="target.id"
+                  :matrix="requirementMatrix"
+                  :readiness="readinessSnapshot"
+                  :readiness-history="readinessHistory"
+                  :selected-snapshot-id="readinessSnapshot?.id"
+                  :snapshot-loading-id="readinessSnapshotLoadingId"
+                  :loading="requirementLoading"
+                  :refreshing="requirementRefreshing"
+                  :error="requirementError"
+                  @refresh="refreshRequirementInsights"
+                  @action="handleRequirementAction"
+                  @select-snapshot="selectReadinessSnapshot"
+                />
+              </section>
+            </el-tab-pane>
+          </el-tabs>
         </div>
       </main>
+
+      <aside class="content-card side-panel">
+        <div class="content-card__body">
+          <div class="status-panel__head">
+            <div>
+              <span class="overview-kicker">分析状态</span>
+              <strong>{{ formatDateTime(target?.updatedAt || analysis?.updatedAt) }}</strong>
+            </div>
+            <JobTargetStatusTag :status="displayParseStatus" />
+          </div>
+
+          <div v-if="parseTaskVisible" class="parse-task-progress">
+            <div class="parse-task-progress__head">
+              <span class="cc-badge" :class="parseTaskBadgeClass(parseSseStatus)">
+                <i class="cc-badge__dot" />
+                {{ parseTaskStatusLabel(parseSseStatus) }}
+              </span>
+              <strong>{{ latestParseSseMessage }}</strong>
+            </div>
+            <el-button text type="primary" @click="goTaskCenter">查看任务</el-button>
+          </div>
+
+          <details v-if="parseTaskVisible" class="parse-task-diagnostics">
+            <summary>查看任务诊断</summary>
+            <p v-if="parseSseError">{{ parseSseError }}</p>
+            <div v-if="parseRecoveryVisible" class="parse-task-progress__recovery">
+              <span>{{ parseRecoveryHint }}</span>
+              <el-button text type="primary" :loading="loading" @click="refreshAnalysisAfterInterrupt">
+                刷新分析结果
+              </el-button>
+            </div>
+            <div v-if="parseTaskDiagnostics.length" class="parse-task-progress__diagnostics">
+              <span v-for="item in parseTaskDiagnostics" :key="item">{{ item }}</span>
+            </div>
+            <div v-if="recentParseSseEvents.length" class="sse-progress__events">
+              <span v-for="item in recentParseSseEvents" :key="item.key">
+                {{ parseSseEventText(item) }}
+              </span>
+            </div>
+          </details>
+
+          <el-alert
+            v-if="target?.parseErrorMessage || analysis?.parseErrorMessage"
+            class="side-alert"
+            type="error"
+            :closable="false"
+            show-icon
+            title="岗位分析失败"
+            :description="toFriendlyMessage(target?.parseErrorMessage || analysis?.parseErrorMessage, '岗位描述解析没有成功，请补充岗位描述内容或稍后重试。')"
+          />
+        </div>
+      </aside>
     </section>
   </div>
 </template>
@@ -265,6 +310,8 @@ const loading = ref(false)
 const parsing = ref(false)
 const loadError = ref('')
 const partialLoadWarning = ref('')
+type AnalysisSection = 'overview' | 'jd' | 'analysis' | 'evidence'
+const activeSection = ref<AnalysisSection>('overview')
 const target = ref<TargetJobVO | null>(null)
 const analysis = ref<JobDescriptionAnalysisVO | null>(null)
 const requirementMatrix = ref<JobRequirementMatrixVO | null>(null)
@@ -323,6 +370,38 @@ const analysisEmptyStateDescription = computed(() =>
     ? '系统已提交岗位分析任务，页面会自动刷新结果；也可以去任务中心查看进度。'
     : '当前还没有分析结果，可以先触发分析。'
 )
+const overviewSummary = computed(() => (
+  analysis.value?.summary
+  || target.value?.analysisSummary
+  || '已完成结构化提取，可进入深度分析查看职责、技能和经验要求。'
+))
+const overviewSkillItems = computed(() => toDisplayItems(
+  analysis.value?.requiredSkills || target.value?.requiredSkills
+).slice(0, 6))
+const primaryAction = computed<'edit' | 'parse' | 'task' | 'match'>(() => {
+  if (!target.value?.jdText) return 'edit'
+  if (hasStructuredAnalysis(analysis.value)) return 'match'
+  if (shouldAutoPollParse.value || target.value.parseStatus === 'PARSING') return 'task'
+  return 'parse'
+})
+const primaryActionTitle = computed(() => {
+  const titles = {
+    edit: '补充岗位描述',
+    parse: '生成岗位分析',
+    task: '跟进分析任务',
+    match: '开始简历匹配'
+  }
+  return titles[primaryAction.value]
+})
+const primaryActionDescription = computed(() => {
+  const descriptions = {
+    edit: '先补齐完整 JD，才能生成可靠的岗位要求和后续准备建议。',
+    parse: '基于当前 JD 提取岗位要求、技能重点和面试关注点。',
+    task: '分析正在处理中，任务中心会保留完整处理状态。',
+    match: '将当前岗位要求与一份简历对账，定位覆盖项和缺口。'
+  }
+  return descriptions[primaryAction.value]
+})
 const parseTaskDiagnostics = computed(() => {
   const result = analysis.value
   const items: string[] = []
@@ -380,6 +459,28 @@ const compactRouteQuery = (query: Record<string, string | undefined>) =>
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+
+const stringifyDisplayItem = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  const record = asRecord(value)
+  if (!record || Array.isArray(value)) return ''
+  const preferred = ['name', 'skill', 'label', 'title', 'description', 'requirement', 'point']
+  const text = preferred.map((key) => record[key]).find((item) => typeof item === 'string')
+  if (typeof text === 'string') return text
+  return Object.entries(record)
+    .map(([key, item]) => `${key}: ${stringifyDisplayItem(item)}`)
+    .join(' / ')
+}
+
+const toDisplayItems = (value: unknown): string[] => {
+  if (!value) return []
+  if (Array.isArray(value)) return value.map(stringifyDisplayItem).filter(Boolean)
+  const record = asRecord(value)
+  if (record) return Object.entries(record).map(([key, item]) => `${key}: ${stringifyDisplayItem(item)}`)
+  const text = stringifyDisplayItem(value)
+  return text ? [text] : []
+}
 
 const firstText = (...values: unknown[]) => {
   for (const value of values) {
@@ -587,6 +688,11 @@ const refreshRequirementInsights = async () => {
   }
 }
 
+const loadRequirementInsightsForActiveTab = async (silent = false) => {
+  if (activeSection.value !== 'evidence') return
+  await loadRequirementInsights(silent)
+}
+
 const handleRequirementAction = (action: JobRequirementActionVO) => {
   if (!action.actionUrl) {
     ElMessage.info(action.description || '该行动暂时没有可用入口。')
@@ -602,7 +708,7 @@ const handleRequirementAction = (action: JobRequirementActionVO) => {
 const refreshAnalysisAfterInterrupt = async () => {
   const hadStructuredAnalysis = hasStructuredAnalysis(analysis.value)
   await loadAll()
-  await loadRequirementInsights(true)
+  await loadRequirementInsightsForActiveTab(true)
   if (loadError.value) {
     ElMessage.error(loadError.value)
     return
@@ -692,7 +798,7 @@ const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => 
     setParseSseDone()
     ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     await loadAll()
-    await loadRequirementInsights(true)
+    await loadRequirementInsightsForActiveTab(true)
   } catch (error) {
     const message = getErrorMessage(error, '岗位分析失败，请稍后重试。')
     setParseSseError(message)
@@ -742,7 +848,7 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
         if (parseSseStatus.value === 'error') return
         setParseSseDone()
         void loadAll()
-          .then(() => loadRequirementInsights(true))
+          .then(() => loadRequirementInsightsForActiveTab(true))
           .then(() => ElMessage.success('岗位分析已完成'))
       }
     }
@@ -765,7 +871,7 @@ const submitParseTask = async (id: number, payload: JobDescriptionParseDTO) => {
       ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     }
     await loadAll()
-    await loadRequirementInsights(true)
+    await loadRequirementInsightsForActiveTab(true)
   } catch (error) {
     addParseSseEvent('fallback', '任务提交暂时失败，已尝试继续分析')
     ElMessage.warning(getErrorMessage(error, '岗位分析提交暂时失败，已尝试继续处理。'))
@@ -838,13 +944,19 @@ watch(
   () => route.params.id,
   () => {
     stopParsePolling()
-    void loadAll().then(() => loadRequirementInsights())
+    activeSection.value = 'overview'
+    void loadAll().then(() => loadRequirementInsightsForActiveTab())
   }
 )
 
+watch(activeSection, (section) => {
+  if (section === 'evidence') {
+    void loadRequirementInsights()
+  }
+})
+
 onMounted(async () => {
   await loadAll()
-  await loadRequirementInsights()
 })
 onBeforeUnmount(() => {
   stopParseSse()
@@ -855,6 +967,7 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .job-analysis-page {
   gap: 16px;
+  color: var(--arena-ink);
 }
 
 .analysis-hero {
@@ -862,15 +975,14 @@ onBeforeUnmount(() => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px;
-  border: 1px solid rgba(129, 140, 248, 0.28);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  padding: 20px;
+  border: 1.5px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
 }
 
 .hero-kicker,
 .hero-actions,
-.parse-actions,
 .section-head {
   display: flex;
   align-items: center;
@@ -878,20 +990,20 @@ onBeforeUnmount(() => {
 
 .hero-kicker {
   gap: 8px;
-  color: var(--cc-ai-cyan);
+  color: var(--arena-grn-d);
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .analysis-hero h1 {
   margin: 8px 0 0;
-  font-size: 26px;
+  color: var(--arena-ink);
+  font-size: 28px;
 }
 
 .analysis-hero p {
   margin: 8px 0 0;
-  color: var(--app-text-muted);
+  color: var(--arena-sub);
   line-height: 1.7;
 }
 
@@ -903,7 +1015,8 @@ onBeforeUnmount(() => {
 
 .analysis-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  align-items: start;
   gap: 16px;
 }
 
@@ -914,84 +1027,81 @@ onBeforeUnmount(() => {
 
 .side-panel {
   align-self: start;
-
-  h2 {
-    margin: 0 0 14px;
-    font-size: 19px;
-  }
-}
-
-.info-list {
-  display: grid;
-  gap: 10px;
-
-  div {
-    padding: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 10px;
-    background: rgba(2, 6, 23, 0.3);
-  }
-
-  span,
-  strong {
-    display: block;
-  }
-
-  span {
-    color: var(--app-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    margin-top: 6px;
-    overflow-wrap: anywhere;
-    color: #dbeafe;
-    font-size: 13px;
-  }
-}
-
-.parse-actions {
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
+  border-color: var(--arena-line);
 }
 
 .side-alert {
   margin-top: 16px;
 }
 
+.status-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--arena-sub);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+}
+
+.overview-kicker {
+  display: block;
+  color: var(--arena-grn-d);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .parse-task-progress {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 16px;
   padding: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.24);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid var(--arena-line);
+  border-radius: 12px;
+  background: var(--arena-grn-soft);
 
   p {
     margin: 0;
-    color: #fca5a5;
+    color: var(--arena-red);
     font-size: 12px;
     line-height: 1.5;
   }
 }
 
-.parse-task-progress__head,
-.sse-progress__events {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.parse-task-progress__head {
+  strong {
+    display: block;
+    margin-top: 8px;
+    color: var(--arena-ink);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
 }
 
-.parse-task-progress__head {
-  align-items: flex-start;
-  flex-direction: column;
+.parse-task-diagnostics {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--arena-line);
 
-  strong {
-    color: #dbeafe;
-    font-size: 13px;
-    line-height: 1.5;
+  summary {
+    color: var(--arena-sub);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  > p {
+    margin: 12px 0 0;
+    color: var(--arena-red);
+    font-size: 12px;
+    line-height: 1.6;
   }
 }
 
@@ -999,14 +1109,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 12px;
 
   span {
     min-width: 0;
     max-width: 100%;
     padding: 4px 8px;
-    border: 1px dashed rgba(148, 163, 184, 0.34);
+    border: 1px dashed var(--arena-line);
     border-radius: 6px;
-    color: #cbd5e1;
+    color: var(--arena-sub);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 11px;
     line-height: 1.4;
@@ -1019,30 +1130,28 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 12px;
   padding: 8px 10px;
-  border: 1px dashed rgba(34, 211, 238, 0.28);
+  border: 1px dashed var(--arena-grn);
   border-radius: 8px;
-  background: rgba(8, 47, 73, 0.24);
-  color: #bfdbfe;
+  background: var(--arena-grn-soft);
+  color: var(--arena-sub);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.parse-task-progress__actions {
+.sse-progress__events {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-}
-
-.sse-progress__events {
-  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
 
   span {
     max-width: 100%;
     padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.12);
-    color: var(--app-text-muted);
+    border-radius: 6px;
+    background: var(--arena-line2);
+    color: var(--arena-sub);
     font-size: 11px;
     line-height: 1.4;
     overflow-wrap: anywhere;
@@ -1056,7 +1165,138 @@ onBeforeUnmount(() => {
 .analysis-workspace {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-tabs {
+  :deep(.el-tabs__header) {
+    margin: 0 0 20px;
+  }
+
+  :deep(.el-tabs__nav-wrap::after) {
+    background: var(--arena-line);
+  }
+
+  :deep(.el-tabs__item) {
+    height: 38px;
+    color: var(--arena-sub);
+    font-weight: 600;
+  }
+
+  :deep(.el-tabs__item.is-active) {
+    color: var(--arena-grn-d);
+  }
+
+  :deep(.el-tabs__active-bar) {
+    background: var(--arena-grn);
+  }
+}
+
+.overview-pane {
+  display: grid;
   gap: 16px;
+}
+
+.overview-context,
+.overview-conclusion,
+.overview-next,
+.overview-secondary,
+.tab-section {
+  min-width: 0;
+}
+
+.overview-context {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--arena-line);
+
+  h2 {
+    margin: 6px 0 0;
+    color: var(--arena-ink);
+    font-size: 22px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--arena-sub);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+.overview-conclusion {
+  padding: 18px;
+  border: 1px solid var(--arena-line);
+  border-radius: 12px;
+  background: var(--arena-card);
+
+  > p {
+    margin: 10px 0 0;
+    color: var(--arena-ink);
+    line-height: 1.75;
+  }
+}
+
+.overview-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+
+  span {
+    max-width: 100%;
+    padding: 5px 9px;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--arena-line);
+    border-radius: 999px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.overview-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1.5px solid var(--arena-grn);
+  border-radius: 12px;
+  background: var(--arena-grn-soft);
+
+  h3 {
+    margin: 6px 0 0;
+    color: var(--arena-ink);
+    font-size: 17px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--arena-sub);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  :deep(.el-button--primary) {
+    flex: 0 0 auto;
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 3px 0 var(--arena-grn-d);
+  }
+}
+
+.overview-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--arena-sub);
+  font-size: 13px;
 }
 
 .section-head {
@@ -1066,12 +1306,13 @@ onBeforeUnmount(() => {
 
   h2 {
     margin: 0;
+    color: var(--arena-ink);
     font-size: 20px;
   }
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted);
+    color: var(--arena-sub);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1082,10 +1323,10 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 16px;
   overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--arena-line);
   border-radius: 12px;
-  background: rgba(2, 6, 23, 0.42);
-  color: #cbd5e1;
+  background: var(--arena-line2);
+  color: var(--arena-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 13px;
   line-height: 1.7;
@@ -1093,7 +1334,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 980px) {
-  .analysis-hero,
   .analysis-layout {
     grid-template-columns: 1fr;
   }
@@ -1107,6 +1347,29 @@ onBeforeUnmount(() => {
   .section-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .overview-next {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .analysis-hero,
+  .overview-conclusion,
+  .overview-next {
+    padding: 16px;
+  }
+
+  .overview-context,
+  .overview-secondary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .overview-next :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

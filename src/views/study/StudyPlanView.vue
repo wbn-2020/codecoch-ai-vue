@@ -23,60 +23,70 @@
 
     <section class="content-card generate-card">
       <div class="content-card__body">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">从报告生成</p>
-            <h2>选择一份真实报告，生成下一轮训练路线</h2>
-          </div>
-          <el-tag effect="plain" type="success">已接入</el-tag>
-        </div>
+        <details class="generate-plan-details" :open="Boolean(streamStatus)">
+          <summary>
+            <span>
+              <b>从面试报告生成训练路线</b>
+              <small>已有路线时，先选择并推进当前计划</small>
+            </span>
+            <el-tag effect="plain" type="success">创建路线</el-tag>
+          </summary>
+          <div class="generate-plan-details__body">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">从报告生成</p>
+                <h2>选择一份真实报告，生成下一轮训练路线</h2>
+              </div>
+            </div>
 
-        <el-form class="generate-form" :model="generateForm" label-position="top">
-        <el-form-item label="关联面试报告">
-            <el-input-number v-model="generateForm.reportId" :min="1" :precision="0" controls-position="right" />
-          </el-form-item>
-          <el-form-item label="目标岗位">
-            <el-input v-model="generateForm.targetPosition" placeholder="例如：Java 后端开发工程师" clearable />
-          </el-form-item>
-          <el-form-item label="行业方向">
-            <el-input v-model="generateForm.industryDirection" placeholder="例如：电商 / 金融 / SaaS" clearable />
-          </el-form-item>
-          <el-form-item label="计划周期">
-            <el-select v-model="generateForm.expectedDurationDays">
-              <el-option label="7 天" :value="7" />
-              <el-option label="14 天" :value="14" />
-              <el-option label="30 天" :value="30" />
-            </el-select>
-          </el-form-item>
-          <el-form-item class="form-wide" label="补充要求">
-            <el-input
-              v-model="generateForm.extraRequirements"
-              type="textarea"
-              :rows="3"
-              maxlength="300"
-              show-word-limit
-              placeholder="可选：例如优先补 Redis、Spring Cloud 或项目表达"
-            />
-          </el-form-item>
-          <el-form-item class="form-actions">
-            <el-button type="primary" :loading="generating" :disabled="!generateForm.reportId" @click="handleGenerate">
-              <Sparkles :size="16" />
-              生成训练路线
-            </el-button>
-          </el-form-item>
-        </el-form>
+            <el-form class="generate-form" :model="generateForm" label-position="top">
+              <el-form-item label="关联面试报告">
+                <el-input-number v-model="generateForm.reportId" :min="1" :precision="0" controls-position="right" />
+              </el-form-item>
+              <el-form-item label="目标岗位">
+                <el-input v-model="generateForm.targetPosition" placeholder="例如：Java 后端开发工程师" clearable />
+              </el-form-item>
+              <el-form-item label="行业方向">
+                <el-input v-model="generateForm.industryDirection" placeholder="例如：电商 / 金融 / SaaS" clearable />
+              </el-form-item>
+              <el-form-item label="计划周期">
+                <el-select v-model="generateForm.expectedDurationDays">
+                  <el-option label="7 天" :value="7" />
+                  <el-option label="14 天" :value="14" />
+                  <el-option label="30 天" :value="30" />
+                </el-select>
+              </el-form-item>
+              <el-form-item class="form-wide" label="补充要求">
+                <el-input
+                  v-model="generateForm.extraRequirements"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="300"
+                  show-word-limit
+                  placeholder="可选：例如优先补 Redis、Spring Cloud 或项目表达"
+                />
+              </el-form-item>
+              <el-form-item class="form-actions">
+                <el-button type="primary" :loading="generating" :disabled="!generateForm.reportId" @click="handleGenerate">
+                  <Sparkles :size="16" />
+                  生成训练路线
+                </el-button>
+              </el-form-item>
+            </el-form>
 
-        <div v-if="streamStatus" class="stream-panel">
-          <div class="stream-panel__head">
-            <span>{{ streamStatus }}</span>
-            <el-button v-if="generating" link type="warning" @click="requestCancelStream">取消</el-button>
+            <div v-if="streamStatus" class="stream-panel">
+              <div class="stream-panel__head">
+                <span>{{ streamStatus }}</span>
+                <el-button v-if="generating" link type="warning" @click="requestCancelStream">取消</el-button>
+              </div>
+              <pre>{{ streamContent || '正在整理训练路线，耗时较长时可以稍后刷新列表查看结果。' }}</pre>
+              <div class="stream-panel__actions">
+                <el-button @click="fetchPlans">刷新路线列表</el-button>
+                <el-button @click="goStudyPlanTaskCenterByForm">去任务中心查看</el-button>
+              </div>
+            </div>
           </div>
-          <pre>{{ streamContent || '正在整理训练路线，耗时较长时可以稍后刷新列表查看结果。' }}</pre>
-          <div class="stream-panel__actions">
-            <el-button @click="fetchPlans">刷新路线列表</el-button>
-            <el-button @click="goStudyPlanTaskCenterByForm">去任务中心查看</el-button>
-          </div>
-        </div>
+        </details>
       </div>
     </section>
 
@@ -200,7 +210,7 @@
                     :clearable="false"
                     @change="fetchDailyView"
                   />
-                  <el-button :loading="dailyLoading" @click="fetchDailyView">
+                  <el-button :loading="dailyLoading" @click="fetchDailyView()">
                     <RefreshCcw :size="16" />
                     刷新当天任务
                   </el-button>
@@ -231,15 +241,12 @@
                     <span>待完成</span>
                     <strong>{{ dailyView?.pendingTaskCount ?? 0 }}</strong>
                   </div>
-                  <div class="daily-metric is-muted">
-                    <span>已跳过</span>
-                    <strong>{{ dailyView?.skippedTaskCount ?? 0 }}</strong>
-                  </div>
-                  <div class="daily-metric is-primary">
-                    <span>完成率</span>
-                    <strong>{{ dailyView?.completionRate ?? 0 }}%</strong>
-                  </div>
                 </div>
+                <p class="daily-metrics-summary">
+                  完成率 {{ dailyView?.completionRate ?? 0 }}%
+                  <span aria-hidden="true">·</span>
+                  已跳过 {{ dailyView?.skippedTaskCount ?? 0 }} 项
+                </p>
 
                 <div class="daily-task-list">
                   <template v-if="dailyTasks.length">
@@ -285,51 +292,58 @@
               </div>
             </section>
 
-            <div class="all-task-head">
-              <p class="section-kicker">完整路线</p>
-              <h3>所有训练任务</h3>
-              <span>这里保留当前路线的全部任务，方便你查看后续阶段，不和上方日期筛选混在一起。</span>
-            </div>
+            <details class="all-task-details">
+              <summary>
+                <span class="all-task-details__copy">
+                  <span class="section-kicker">完整路线</span>
+                  <strong>查看后续训练安排</strong>
+                  <small>按需展开全部任务，不和当天行动混在同一首屏。</small>
+                </span>
+                <span class="all-task-details__action">查看全部</span>
+              </summary>
 
-            <div class="task-list" v-loading="detailLoading">
-              <template v-if="tasks.length">
-                <article v-for="task in tasks" :key="task.id" class="task-item">
-                  <div class="task-head">
-                    <div>
-                      <span class="task-stage">{{ task.stageTitle || `阶段 ${task.stageNo || '-'}` }}</span>
-                      <h3>{{ task.taskTitle }}</h3>
-                    </div>
-                    <el-tag size="small" :type="taskStatusType(task.taskStatus)" effect="plain">
-                      {{ taskStatusText(task.taskStatus) }}
-                    </el-tag>
-                  </div>
-                  <p>{{ task.taskDescription || '暂无任务描述' }}</p>
-                  <div class="task-tags">
-                    <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
-                    <span>{{ formatPlannedDate(task.plannedDate) }}</span>
-                    <span v-if="task.priority">{{ priorityText(task.priority) }}</span>
-                    <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
-                    <span v-for="tag in task.relatedTags || []" :key="tag">{{ tag }}</span>
-                  </div>
-                  <div class="task-actions">
-                    <el-button size="small" :disabled="task.taskStatus === 'DOING'" @click="updateTask(task.id, 'DOING')">
-                      进行中
-                    </el-button>
-                    <el-button size="small" type="success" plain @click="completeTask(task.id)">完成</el-button>
-                    <el-button size="small" plain @click="skipTask(task)">跳过</el-button>
-                  </div>
-                </article>
-              </template>
-              <AppState
-                v-else
-                type="empty"
-                title="当前路线还没有任务明细"
-                description="计划可能仍在生成中，或生成结果没有拆分成可执行任务。可以刷新路线，或回到面试报告重新生成。"
-              >
-                <el-button type="primary" :loading="detailLoading" @click="selectedPlan && selectPlan(selectedPlan.id, false)">刷新路线详情</el-button>
-                <el-button @click="router.push('/interviews/history')">返回面试报告</el-button>
-              </AppState>
-            </div>
+              <div class="all-task-details__body">
+                <div class="task-list" v-loading="detailLoading">
+                  <template v-if="tasks.length">
+                    <article v-for="task in tasks" :key="task.id" class="task-item">
+                      <div class="task-head">
+                        <div>
+                          <span class="task-stage">{{ task.stageTitle || `阶段 ${task.stageNo || '-'}` }}</span>
+                          <h3>{{ task.taskTitle }}</h3>
+                        </div>
+                        <el-tag size="small" :type="taskStatusType(task.taskStatus)" effect="plain">
+                          {{ taskStatusText(task.taskStatus) }}
+                        </el-tag>
+                      </div>
+                      <p>{{ task.taskDescription || '暂无任务描述' }}</p>
+                      <div class="task-tags">
+                        <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
+                        <span>{{ formatPlannedDate(task.plannedDate) }}</span>
+                        <span v-if="task.priority">{{ priorityText(task.priority) }}</span>
+                        <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
+                        <span v-for="tag in task.relatedTags || []" :key="tag">{{ tag }}</span>
+                      </div>
+                      <div class="task-actions">
+                        <el-button size="small" :disabled="task.taskStatus === 'DOING'" @click="updateTask(task.id, 'DOING')">
+                          进行中
+                        </el-button>
+                        <el-button size="small" type="success" plain @click="completeTask(task.id)">完成</el-button>
+                        <el-button size="small" plain @click="skipTask(task)">跳过</el-button>
+                      </div>
+                    </article>
+                  </template>
+                  <AppState
+                    v-else
+                    type="empty"
+                    title="当前路线还没有任务明细"
+                    description="计划可能仍在生成中，或生成结果没有拆分成可执行任务。可以刷新路线，或回到面试报告重新生成。"
+                  >
+                    <el-button type="primary" :loading="detailLoading" @click="selectedPlan && selectPlan(selectedPlan.id, false)">刷新路线详情</el-button>
+                    <el-button @click="router.push('/interviews/history')">返回面试报告</el-button>
+                  </AppState>
+                </div>
+              </div>
+            </details>
           </template>
 
           <AppState
@@ -391,11 +405,33 @@ const dailyView = ref<StudyPlanDailyViewVO | null>(null)
 const dailyLoading = ref(false)
 const dailyError = ref('')
 const dailyDate = ref(formatDate(new Date()))
+const STUDY_PLAN_LOAD_TIMEOUT_MS = 15000
+
+const withStudyPlanTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('学习计划读取超时，请稍后重试。'))
+    }, STUDY_PLAN_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const pollCount = ref(0)
 const streamContent = ref('')
 const streamStatus = ref('')
 let streamController: AbortController | undefined
 let pollTimer: number | undefined
+let plansRequestId = 0
+let planDetailRequestId = 0
+let dailyViewRequestId = 0
 const streamAbortReason = ref<'user' | 'dispose' | ''>('')
 
 const query = reactive<StudyPlanQueryDTO>({
@@ -490,9 +526,12 @@ const schedulePlanPoll = () => {
 }
 
 const fetchPlans = async () => {
+  const requestId = ++plansRequestId
   listLoading.value = true
   try {
-    const page = await getStudyPlansApi(query)
+    const page = await withStudyPlanTimeout(getStudyPlansApi(query))
+    if (requestId !== plansRequestId) return
+
     plans.value = page.records
     pagination.total = page.total
     pagination.pageSize = page.pageSize
@@ -505,18 +544,27 @@ const fetchPlans = async () => {
       dailyView.value = null
     }
   } finally {
-    listLoading.value = false
+    if (requestId === plansRequestId) {
+      listLoading.value = false
+    }
   }
 }
 
 const selectPlan = async (id: number, updateRoute = true) => {
   if (!id) return
+  const requestId = ++planDetailRequestId
+  ++dailyViewRequestId
+  clearPoll()
   detailLoading.value = true
   try {
-    const detail = await getStudyPlanDetailApi(id)
+    const detail = await withStudyPlanTimeout(getStudyPlanDetailApi(id))
+    if (requestId !== planDetailRequestId) return
+
     selectedPlan.value = detail
     tasks.value = detail.tasks || []
-    await fetchDailyView()
+    await fetchDailyView(detail.id)
+    if (requestId !== planDetailRequestId) return
+
     if (updateRoute) {
       await router.replace({ path: '/study-plans', query: { planId: String(id) } })
     }
@@ -526,25 +574,41 @@ const selectPlan = async (id: number, updateRoute = true) => {
       clearPoll()
     }
   } finally {
-    detailLoading.value = false
+    if (requestId === planDetailRequestId) {
+      detailLoading.value = false
+    }
   }
 }
 
-const fetchDailyView = async () => {
-  const planId = selectedPlan.value?.id
+const fetchDailyView = async (targetPlanId?: number) => {
+  const requestId = ++dailyViewRequestId
+  // Element Plus passes the native event/value to handlers declared without
+  // an explicit wrapper. Only a numeric argument is a plan id.
+  const planId = typeof targetPlanId === 'number' && targetPlanId > 0
+    ? targetPlanId
+    : selectedPlan.value?.id
   if (!planId) {
-    dailyView.value = null
+    if (requestId === dailyViewRequestId) {
+      dailyView.value = null
+    }
     return
   }
   dailyLoading.value = true
   dailyError.value = ''
   try {
-    dailyView.value = await getStudyPlanDailyViewApi(planId, dailyDate.value)
+    const result = await withStudyPlanTimeout(getStudyPlanDailyViewApi(planId, dailyDate.value))
+    if (requestId !== dailyViewRequestId || selectedPlan.value?.id !== planId) return
+
+    dailyView.value = result
   } catch (error) {
+    if (requestId !== dailyViewRequestId || selectedPlan.value?.id !== planId) return
+
     dailyView.value = null
     dailyError.value = getErrorMessage(error, '请稍后重试')
   } finally {
-    dailyLoading.value = false
+    if (requestId === dailyViewRequestId) {
+      dailyLoading.value = false
+    }
   }
 }
 
@@ -771,7 +835,7 @@ const taskStatusType = (status?: string) => {
   if (value === 'DONE' || value === 'COMPLETED') return 'success'
   if (value === 'DOING') return 'warning'
   if (value === 'SKIPPED') return 'info'
-  return ''
+  return 'info'
 }
 
 const taskTypeText = (value?: string) => {
@@ -809,16 +873,16 @@ onBeforeUnmount(() => {
 .study-plan-page {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
   color: var(--user-text);
 }
 
 .study-hero,
 .content-card {
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border: 1.5px solid var(--user-border);
+  border-radius: var(--arena-radius-card);
   background: var(--user-surface);
-  box-shadow: none;
+  box-shadow: var(--user-shadow-sm);
   backdrop-filter: none;
 }
 
@@ -826,18 +890,22 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
+  gap: 20px;
+  padding: 22px 24px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
 
   h1 {
     margin: 8px 0;
     color: var(--user-text);
-    font-size: 24px;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.3;
   }
 
   p {
     margin: 0;
-    color: var(--user-text-muted);
+    color: var(--user-text-secondary);
     line-height: 1.65;
   }
 }
@@ -853,12 +921,12 @@ onBeforeUnmount(() => {
 .section-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 800;
+  text-transform: none;
 }
 
 .content-card__body {
-  padding: 16px;
+  padding: 18px;
 }
 
 .section-head,
@@ -872,12 +940,13 @@ onBeforeUnmount(() => {
   h2 {
     margin: 4px 0 0;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: 19px;
+    font-weight: 900;
   }
 
   p {
     margin: 6px 0 0;
-    color: var(--user-text-muted);
+    color: var(--user-text-secondary);
     line-height: 1.6;
   }
 }
@@ -885,6 +954,58 @@ onBeforeUnmount(() => {
 .section-kicker {
   margin: 0;
   font-size: 11px;
+}
+
+.generate-plan-details {
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface-muted);
+}
+
+.generate-plan-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.generate-plan-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.generate-plan-details > summary > span {
+  display: grid;
+  gap: 3px;
+}
+
+.generate-plan-details > summary b {
+  color: var(--user-text);
+  font-size: 13px;
+}
+
+.generate-plan-details > summary small {
+  color: var(--user-text-muted);
+  font-size: 12px;
+}
+
+.generate-plan-details > summary:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: -2px;
+}
+
+.generate-plan-details[open] > summary {
+  border-bottom: 1px solid var(--user-border);
+  background: var(--user-surface);
+}
+
+.generate-plan-details__body {
+  padding: 16px;
+  background: var(--user-surface);
 }
 
 .generate-form {
@@ -909,7 +1030,7 @@ onBeforeUnmount(() => {
   margin-top: 16px;
   padding: 14px;
   border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-bg-soft);
 
   pre {
@@ -941,7 +1062,7 @@ onBeforeUnmount(() => {
 .study-layout {
   display: grid;
   grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  gap: 22px;
 }
 
 .status-filter {
@@ -960,7 +1081,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
   color: var(--user-text);
   text-align: left;
@@ -1021,9 +1142,9 @@ onBeforeUnmount(() => {
   margin-bottom: 14px;
   padding: 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-warning-soft);
-  color: var(--user-warning);
+  color: var(--user-warning-text);
 }
 
 .status-panel--error {
@@ -1060,7 +1181,7 @@ onBeforeUnmount(() => {
   margin-bottom: 18px;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
 }
 
@@ -1105,7 +1226,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .daily-metric {
@@ -1137,12 +1258,17 @@ onBeforeUnmount(() => {
     color: var(--user-warning);
   }
 
-  &.is-muted strong {
-    color: var(--user-text-secondary);
-  }
+}
 
-  &.is-primary strong {
-    color: var(--user-primary);
+.daily-metrics-summary {
+  margin: 0 0 14px;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+
+  span {
+    margin: 0 6px;
+    color: var(--user-text-subtle);
   }
 }
 
@@ -1154,7 +1280,7 @@ onBeforeUnmount(() => {
 .daily-task-item {
   padding: 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 
   h3 {
@@ -1175,27 +1301,73 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.all-task-head {
-  margin: 8px 0 12px;
+.all-task-details {
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface-muted);
+}
 
-  h3 {
-    margin: 4px 0 0;
+.all-task-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 66px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.all-task-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.all-task-details > summary:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: -2px;
+}
+
+.all-task-details[open] > summary {
+  border-bottom: 1px solid var(--user-border);
+  background: var(--user-surface);
+}
+
+.all-task-details__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+
+  strong {
     color: var(--user-text);
-    font-size: 17px;
+    font-size: 15px;
+    line-height: 1.35;
   }
 
-  span {
-    display: inline-block;
-    margin-top: 6px;
+  small {
+    overflow-wrap: anywhere;
     color: var(--user-text-muted);
     font-size: 12px;
+    line-height: 1.45;
   }
+}
+
+.all-task-details__action {
+  flex: 0 0 auto;
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.all-task-details__body {
+  padding: 14px;
+  background: var(--user-surface);
 }
 
 .task-item {
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 
   h3 {
@@ -1285,7 +1457,16 @@ onBeforeUnmount(() => {
   }
 
   .study-hero h1 {
-    font-size: 22px;
+    font-size: 24px;
+  }
+
+  .all-task-details > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .all-task-details__body {
+    padding: 12px;
   }
 }
 </style>

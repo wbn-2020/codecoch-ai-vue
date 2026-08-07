@@ -398,14 +398,14 @@ const trustTagType = (value?: string): 'success' | 'warning' | 'info' => {
   display: flex;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--user-warning);
-  border-radius: 8px;
-  background: var(--user-warning-soft);
-  color: var(--user-warning);
+  border: 1px solid var(--user-warning-soft);
+  border-radius: 12px;
+  background: var(--arena-amber-soft);
+  color: var(--user-warning-text);
 
   p {
     margin: 4px 0 0;
-    color: var(--user-warning);
+    color: var(--user-warning-text);
     line-height: 1.55;
   }
 }

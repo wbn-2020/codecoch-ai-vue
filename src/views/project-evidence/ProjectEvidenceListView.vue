@@ -63,7 +63,19 @@
     </section>
 
     <section class="content-card evidence-section" v-loading="loading">
-      <div class="evidence-grid" v-if="items.length">
+      <AppState
+        v-if="loadError"
+        type="error"
+        title="项目证据加载失败"
+        :description="loadError"
+      >
+        <div class="state-actions">
+          <el-button type="primary" @click="fetchList">重新加载</el-button>
+          <el-button @click="router.push('/resumes')">返回准备</el-button>
+        </div>
+      </AppState>
+
+      <div v-else-if="items.length" class="evidence-grid">
         <article v-for="item in items" :key="item.id" class="evidence-card">
           <div class="evidence-card__top">
             <div class="evidence-title">
@@ -112,20 +124,9 @@
             <p v-else>当前列表字段没有返回明显缺口，可进入详情复核能力证据和 JD 覆盖。</p>
           </div>
 
-          <div class="connection-strip">
-            <span>
-              <FileText :size="14" />
-              简历表达
-            </span>
-            <span>
-              <Target :size="14" />
-              JD 匹配
-            </span>
-            <span>
-              <MessagesSquare :size="14" />
-              面试追问
-            </span>
-          </div>
+          <p class="connection-strip">
+            可用于简历表达、JD 匹配和面试追问
+          </p>
 
           <div class="card-actions">
             <el-button @click="router.push(`/project-evidence/${item.id}`)">
@@ -174,7 +175,6 @@ import {
   CheckCircle2,
   FileText,
   Link2,
-  MessagesSquare,
   Plus,
   Search,
   Target
@@ -186,9 +186,11 @@ import { getProjectEvidenceListApi } from '@/api/projectEvidence'
 import AppState from '@/components/common/AppState.vue'
 import { getCompletenessTone, normalizeMissingFields, summarizeSourceState } from '@/features/project-evidence'
 import type { ProjectEvidenceListVO, ProjectEvidenceQueryDTO } from '@/types/projectEvidence'
+import { toFriendlyMessage } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
+const loadError = ref('')
 const items = ref<ProjectEvidenceListVO[]>([])
 const query = reactive<ProjectEvidenceQueryDTO>({
   pageNo: 1,
@@ -236,11 +238,16 @@ const proofSummary = (item: ProjectEvidenceListVO) => {
 
 const fetchList = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const page = await getProjectEvidenceListApi(query)
     items.value = page.records || []
     pagination.total = page.total || 0
     pagination.pageSize = page.pageSize || query.pageSize || 8
+  } catch (error) {
+    items.value = []
+    pagination.total = 0
+    loadError.value = toFriendlyMessage(error, '暂时无法读取项目证据，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -268,7 +275,7 @@ onMounted(fetchList)
 .project-evidence-list {
   gap: 14px;
   min-width: 0;
-  color: var(--user-text);
+  color: var(--arena-ink);
 }
 
 .evidence-hero,
@@ -290,17 +297,18 @@ onMounted(fetchList)
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 22px 24px;
   overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: var(--arena-radius-card);
+  background: var(--user-surface-tint);
+  box-shadow: var(--arena-shadow-card);
 }
 
 .hero-kicker {
   gap: 8px;
   margin: 0;
-  color: var(--user-primary);
+  color: var(--arena-grn-d);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -312,7 +320,7 @@ onMounted(fetchList)
   h1 {
     max-width: 760px;
     margin: 12px 0 0;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 28px;
     line-height: 1.2;
   }
@@ -320,7 +328,7 @@ onMounted(fetchList)
   p:not(.hero-kicker) {
     max-width: 760px;
     margin: 12px 0 0;
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     line-height: 1.65;
   }
 }
@@ -336,34 +344,34 @@ onMounted(fetchList)
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  border: 1.5px solid var(--arena-line);
+  border-radius: 14px;
+  background: var(--user-surface);
 
   div {
     min-width: 0;
     padding: 12px;
 
     & + div {
-      border-left: 1px solid var(--user-border);
+      border-left: 1px solid var(--arena-line);
     }
   }
 
   span {
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 24px;
   }
 
   p {
     margin: 4px 0 0;
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -382,7 +390,7 @@ onMounted(fetchList)
 
 .section-kicker {
   margin: 0;
-  color: var(--user-primary);
+  color: var(--arena-grn-d);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -420,16 +428,18 @@ onMounted(fetchList)
   min-width: 0;
   min-height: 0;
   padding: 16px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
+  border: 1.5px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
+  box-shadow: var(--arena-shadow-card);
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
 
   &:hover {
     border-color: var(--user-primary-border);
-    background: var(--user-surface-raised);
+    background: var(--user-surface);
+    box-shadow: var(--arena-shadow-hover);
   }
 }
 
@@ -446,7 +456,7 @@ onMounted(fetchList)
   h2 {
     margin: 0;
     overflow: hidden;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -454,7 +464,7 @@ onMounted(fetchList)
 
   p {
     margin: 6px 0 0;
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     font-size: 13px;
   }
 }
@@ -466,10 +476,10 @@ onMounted(fetchList)
   justify-content: center;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
-  background: var(--user-primary-soft);
-  color: var(--user-primary);
+  border: 0;
+  border-radius: 12px;
+  background: var(--arena-vio-soft);
+  color: var(--arena-vio);
 }
 
 .proof-panel,
@@ -479,17 +489,17 @@ onMounted(fetchList)
 
 .proof-panel {
   padding: 2px 0 12px;
-  border-bottom: 1px solid var(--user-border);
+  border-bottom: 1px solid var(--arena-line);
 
   span {
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     font-size: 12px;
   }
 
   strong {
     display: block;
     margin-top: 6px;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 15px;
     line-height: 1.6;
   }
@@ -498,7 +508,7 @@ onMounted(fetchList)
     display: -webkit-box;
     margin: 8px 0 0;
     overflow: hidden;
-    color: var(--user-text-secondary);
+    color: var(--arena-sub);
     font-size: 13px;
     line-height: 1.7;
     -webkit-box-orient: vertical;
@@ -511,20 +521,20 @@ onMounted(fetchList)
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border: 1px solid var(--arena-line);
+  border-radius: 12px;
 
   > div {
     padding: 12px;
-    background: var(--user-control-bg);
-    color: var(--user-text-secondary);
+    background: var(--user-surface-muted);
+    color: var(--arena-sub);
 
     & + div {
-      border-left: 1px solid var(--user-border);
+      border-left: 1px solid var(--arena-line);
     }
 
     svg {
-      color: var(--user-primary);
+      color: var(--arena-grn-d);
     }
   }
 
@@ -535,14 +545,14 @@ onMounted(fetchList)
 
   span {
     margin-top: 8px;
-    color: var(--user-text-muted);
+    color: var(--arena-sub);
     font-size: 12px;
   }
 
   strong {
     margin-top: 4px;
     overflow: hidden;
-    color: var(--user-text);
+    color: var(--arena-ink);
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -551,9 +561,9 @@ onMounted(fetchList)
 
 .gap-panel {
   padding: 12px;
-  border: 1px solid var(--user-warning);
-  border-radius: 8px;
-  background: var(--user-warning-soft);
+  border: 1px solid var(--user-warning-soft);
+  border-radius: 12px;
+  background: var(--arena-amber-soft);
 
   &.clear {
     border-color: var(--user-success-border);
@@ -562,7 +572,7 @@ onMounted(fetchList)
 
   p {
     margin: 8px 0 0;
-    color: var(--user-text-secondary);
+    color: var(--arena-sub);
     font-size: 12px;
     line-height: 1.6;
   }
@@ -570,7 +580,7 @@ onMounted(fetchList)
 
 .gap-panel__head {
   gap: 8px;
-  color: var(--user-warning);
+  color: var(--user-warning-text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -590,10 +600,10 @@ onMounted(fetchList)
   span {
     gap: 6px;
     padding: 6px 9px;
-    border: 1px solid var(--user-border);
+    border: 1px solid var(--arena-line);
     border-radius: 999px;
     background: var(--user-surface-muted);
-    color: var(--user-text-secondary);
+    color: var(--arena-sub);
     font-size: 12px;
   }
 }
@@ -653,7 +663,7 @@ onMounted(fetchList)
 
   .hero-panel div + div,
   .evidence-signal-grid > div + div {
-    border-top: 1px solid var(--user-border);
+    border-top: 1px solid var(--arena-line);
     border-left: 0;
   }
 

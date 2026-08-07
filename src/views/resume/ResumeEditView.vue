@@ -40,7 +40,7 @@
         </div>
         <el-button type="primary" :loading="saving" @click="handleSave">
           <Save :size="16" />
-          保存 · 去匹配
+          保存简历
         </el-button>
       </div>
     </section>
@@ -3597,6 +3597,61 @@ onBeforeUnmount(() => {
   }
 }
 
+:deep(.resume-project-dialog .el-dialog) {
+  display: flex;
+  max-height: min(90dvh, 860px);
+  flex-direction: column;
+  overflow: hidden;
+}
+
+:deep(.resume-project-dialog .el-dialog__header) {
+  flex: none;
+  margin-right: 0;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--arena-line);
+}
+
+:deep(.resume-project-dialog .el-dialog__body) {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px;
+}
+
+:deep(.resume-project-dialog .el-dialog__footer) {
+  flex: none;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--arena-line);
+  background: var(--user-surface);
+}
+
+@media (max-width: 760px) {
+  :deep(.resume-project-dialog .el-dialog) {
+    max-height: calc(100dvh - 24px);
+  }
+
+  :deep(.resume-project-dialog .el-dialog__header) {
+    padding: 16px 18px 12px;
+  }
+
+  :deep(.resume-project-dialog .el-dialog__body) {
+    padding: 16px 18px;
+  }
+
+  :deep(.resume-project-dialog .el-dialog__footer) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+
+    .el-button {
+      width: 100%;
+      margin: 0;
+    }
+  }
+}
+
 @media (max-width: 1180px) {
   .arena-resume-studio {
     .editor-workspace {
@@ -3673,7 +3728,10 @@ onBeforeUnmount(() => {
 // 方向 D 1:1 简历工坊。旧的工作台样式保留给业务表单与弹窗，
 // 这里以原型的 modules / preview / editor 网格接管页面构图。
 .arena-resume-studio {
-  width: min(1320px, calc(100% - 64px));
+  // Direction D keeps the workshop inside the same reading column as the
+  // prototype page. A wider canvas makes the preview/editor relationship
+  // look disconnected from the primary navigation.
+  width: min(1060px, calc(100% - 64px));
   margin-inline: auto !important;
   padding: 28px 0 42px;
   gap: 18px;
@@ -3886,8 +3944,8 @@ onBeforeUnmount(() => {
   }
 
   .editor-workspace {
-    grid-template-columns: minmax(180px, 0.72fr) minmax(390px, 1.15fr) minmax(440px, 1.28fr);
-    gap: 22px;
+    grid-template-columns: 200px 360px minmax(0, 1fr);
+    gap: 18px;
     align-items: start;
   }
 
@@ -4344,8 +4402,8 @@ onBeforeUnmount(() => {
   .arena-resume-studio {
     .editor-workspace {
       display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(150px, 0.8fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
       align-items: start;
     }
 
@@ -4354,24 +4412,30 @@ onBeforeUnmount(() => {
     }
 
     .workspace-tabs {
-      display: none;
+      display: flex;
     }
 
     .editor-main {
-      display: grid;
       grid-column: 1;
       grid-row: 1;
     }
 
-    .mobile-pane-edit {
+    .mobile-pane-edit,
+    .mobile-pane-preview {
+      display: none;
+    }
+
+    .editor-workspace.is-mobile-edit .mobile-pane-edit {
       display: grid;
     }
 
-    .preview-column,
-    .mobile-pane-preview {
-      grid-column: 2;
-      grid-row: 1;
+    .editor-workspace.is-mobile-preview .mobile-pane-preview {
       display: flex;
+    }
+
+    .preview-column {
+      grid-column: 1;
+      grid-row: 1;
       height: auto;
       max-height: none;
     }
@@ -4428,10 +4492,6 @@ onBeforeUnmount(() => {
       padding-inline: 12px;
     }
 
-    .workspace-tabs {
-      display: none;
-    }
-
     .resume-template-strip {
       padding: 13px 14px;
     }
@@ -4458,16 +4518,8 @@ onBeforeUnmount(() => {
     }
 
     .editor-workspace {
-      grid-template-columns: minmax(0, 1.22fr) minmax(132px, 0.78fr);
-      gap: 10px;
-    }
-
-    .preview-column {
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      box-shadow: none;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
     }
 
     .preview-toolbar {

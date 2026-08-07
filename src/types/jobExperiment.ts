@@ -86,13 +86,13 @@ export interface ExperimentSampleBoundaryVO {
 }
 
 export interface JobExperimentApplicationFeedbackSummaryVO {
-  applicationCount: number
-  feedbackCount: number
-  rejectedCount: number
-  noFeedbackCount: number
-  interviewRoundCount: number
-  interviewCompletedCount: number
-  interviewReportSummaryCount: number
+  applicationCount?: number
+  feedbackCount?: number
+  rejectedCount?: number
+  noFeedbackCount?: number
+  interviewRoundCount?: number
+  interviewCompletedCount?: number
+  interviewReportSummaryCount?: number
   statusCounts: Record<string, number>
   resumeVersionUsageCounts: Record<string, number>
   directionSampleCounts: Record<string, number>

@@ -5,27 +5,14 @@
         <span class="arena-kicker">答题间</span>
         <span class="arena-xp-tag">+18 / 题</span>
       </div>
-      <h1>开始一组训练</h1>
-      <p>{{ heroSubtitle }}</p>
+      <h1>{{ loadError ? '本轮训练暂未开始' : '正在准备本轮训练' }}</h1>
+      <p>{{ loadError ? '题目暂时无法加载。请返回推荐训练页调整题组后再进入答题间。' : heroSubtitle }}</p>
       <div class="practice-ready__actions">
         <el-button @click="router.push('/questions/recommendations')">回推荐题组</el-button>
-        <el-button type="primary" size="large" :loading="loadingQuestions" @click="startPractice"><Play :size="16" /> 开始本轮训练</el-button>
+        <el-button v-if="loadError" type="primary" size="large" :loading="loadingQuestions" @click="startPractice">
+          <Play :size="16" /> 重新加载
+        </el-button>
       </div>
-      <details class="practice-ready__settings">
-        <summary>训练设置与题源</summary>
-        <div class="practice-mode-list">
-          <button v-for="mode in modeOptions" :key="mode.value" type="button" :class="{ 'is-active': config.mode === mode.value }" @click="setMode(mode.value)">
-            <component :is="mode.icon" :size="15" /><span><b>{{ mode.label }}</b>{{ mode.desc }}</span>
-          </button>
-        </div>
-        <el-form label-position="top">
-          <el-form-item v-if="config.mode === 'category' || config.mode === 'recommended'" label="训练关键词"><el-input v-model="config.keyword" placeholder="例如 Redis、JVM、Spring Cloud" clearable /></el-form-item>
-          <el-form-item label="题目数量"><el-input-number v-model="config.count" :min="1" :max="30" /></el-form-item>
-          <el-form-item label="难度"><el-select v-model="config.difficulty" clearable placeholder="不限"><el-option label="简单" value="EASY" /><el-option label="中等" value="MEDIUM" /><el-option label="困难" value="HARD" /></el-select></el-form-item>
-        </el-form>
-        <p v-if="routeQuestionIds.length" class="practice-ready__context">已接收 {{ routeQuestionIds.length }} 道推荐题</p>
-        <p v-if="hasRouteSourceContext" class="practice-ready__context">{{ routeSourceLabel }} · {{ routeTrustLabel }} · {{ routeEvidenceSummary || routeRecommendReason || routeTrustBoundary }}</p>
-      </details>
       <AppState v-if="loadError" type="error" title="题目加载失败" :description="loadError" />
       <el-alert v-if="partialLoadWarning && !loadError" type="warning" :title="partialLoadWarning" :closable="false" show-icon />
     </section>
@@ -165,7 +152,16 @@ const parseQuestionIds = () => {
 const initialMode = (() => {
   const mode = queryString('mode') as PracticeMode
   if (['recommended', 'random', 'category', 'wrong', 'favorite'].includes(mode)) return mode
-  return parseQuestionIds().length ? 'recommended' : 'random'
+  if (parseQuestionIds().length) return 'recommended'
+  if (
+    queryString('skillName')
+    || queryString('keyword')
+    || queryString('categoryId')
+    || queryString('difficulty')
+  ) {
+    return 'category'
+  }
+  return 'random'
 })()
 
 const routeQuestionIds = computed(parseQuestionIds)
@@ -220,6 +216,7 @@ const routeTrustBoundary = computed(() => {
 const config = reactive({
   mode: initialMode,
   keyword: queryString('skillName') || queryString('keyword'),
+  categoryId: Number(queryString('categoryId')) > 0 ? Number(queryString('categoryId')) : undefined,
   count: Number(queryString('count')) > 0 ? Math.min(30, Number(queryString('count'))) : 10,
   difficulty: queryString('difficulty')
 })
@@ -262,6 +259,7 @@ const currentModeLabel = computed(() => modeOptions.find((item) => item.value ==
 const sourceText = computed(() => {
   if (routeEvidenceSummary.value) return routeEvidenceSummary.value
   if (routeRecommendReason.value) return routeRecommendReason.value
+  if (config.categoryId) return `围绕题目分类 ${config.categoryId} 进行本轮专项训练。`
   if (config.keyword) return `围绕 ${config.keyword} 进行本轮训练。`
   if (config.mode === 'recommended') return '来自推荐题组。'
   return modeOptions.find((item) => item.value === config.mode)?.desc || '题库训练'
@@ -470,6 +468,7 @@ const fetchQuestions = async () => {
       pageNo: 1,
       pageSize: config.count,
       keyword: config.mode === 'category' || config.mode === 'recommended' ? config.keyword : '',
+      categoryId: config.mode === 'category' ? config.categoryId : undefined,
       difficulty: config.difficulty || undefined
     }
 
@@ -641,15 +640,30 @@ const resetPractice = () => {
   partialLoadWarning.value = ''
 }
 
-onMounted(() => {
-  const hasDirectPracticeEntry = !routeQuestionIds.value.length && !queryString('mode')
-  if (
-    !practicing.value
-    && !finished.value
-    && ((shouldAutoStart.value && routeQuestionIds.value.length) || hasDirectPracticeEntry)
-  ) {
-    void startPractice()
+onMounted(async () => {
+  const hasPracticeContext = Boolean(
+    routeQuestionIds.value.length
+    || queryString('mode')
+    || config.keyword
+    || config.categoryId
+    || config.difficulty
+    || hasRouteSourceContext.value
+  )
+  if (!hasPracticeContext) {
+    config.mode = 'random'
+    config.count = 5
+    await router.replace({
+      path: '/questions/practice',
+      query: {
+        mode: 'random',
+        sourceType: 'FALLBACK',
+        fallback: 'true',
+        count: '5'
+      }
+    })
   }
+
+  if (!practicing.value && !finished.value) void startPractice()
 })
 
 onBeforeUnmount(stopTimer)
@@ -1411,7 +1425,7 @@ onBeforeUnmount(stopTimer)
 
 // 方向 D · 答题间。保留题目加载、判分、复盘与来源可信边界，改为连续闯关反馈。
 .arena-practice {
-  width: min(1060px, 100%);
+  width: min(900px, 100%);
   margin: 0 auto;
   padding: 28px 24px 46px;
   gap: 16px;
@@ -1489,7 +1503,7 @@ onBeforeUnmount(stopTimer)
   }
 
   .practice-workspace {
-    width: min(832px, 100%);
+    width: min(900px, 100%);
     margin: 0 auto;
     gap: 16px;
   }
@@ -1824,7 +1838,7 @@ onBeforeUnmount(stopTimer)
 // Direction D: single-task answer surface. Legacy setup/workspace selectors above
 // are no longer mounted; these rules own every rendered state in the template.
 .practice-session-page {
-  width: min(860px, 100%);
+  width: min(900px, 100%);
   margin: 0 auto;
   padding: 30px 24px 48px;
 }
@@ -1957,7 +1971,7 @@ onBeforeUnmount(stopTimer)
 }
 
 .practice-stage {
-  width: min(830px, 100%);
+  width: min(900px, 100%);
   margin: 0 auto;
 }
 

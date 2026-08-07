@@ -50,6 +50,27 @@ export const formatLocalDate = (value: Date = new Date()): string => {
   return `${year}-${month}-${day}`
 }
 
+export const formatDateInTimezone = (
+  value: Date = new Date(),
+  timezone = 'Asia/Shanghai'
+): string => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(value)
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+    if (values.year && values.month && values.day) {
+      return `${values.year}-${values.month}-${values.day}`
+    }
+  } catch {
+    // Invalid timezone data should not prevent the page from rendering.
+  }
+  return formatLocalDate(value)
+}
+
 export const formatLocalDateTime = (value: Date = new Date()): string => {
   const hours = padDatePart(value.getHours())
   const minutes = padDatePart(value.getMinutes())

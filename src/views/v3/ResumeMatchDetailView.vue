@@ -40,29 +40,33 @@
             <el-button type="primary" :loading="regenerating" @click="regenerateReport">
               <RefreshCw :size="16" /> 重新生成匹配报告
             </el-button>
-            <el-button plain @click="copyDiagnostic">
-              复制处理线索
-            </el-button>
-            <el-button plain @click="goMatchTaskCenter">
-              查看任务中心
-            </el-button>
+            <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">返回匹配</el-button>
           </div>
         </div>
-        <dl class="diagnostic-list">
-          <div v-for="item in diagnosticItems" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+        <details class="failure-details">
+          <summary>查看处理线索与可选修复</summary>
+          <div class="failure-details__body">
+            <div class="failure-details__actions">
+              <el-button plain @click="copyDiagnostic">复制处理线索</el-button>
+              <el-button plain @click="goMatchTaskCenter">查看任务中心</el-button>
+            </div>
+            <dl class="diagnostic-list">
+              <div v-for="item in diagnosticItems" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+            <div class="repair-actions">
+              <article v-for="item in failureRepairActions" :key="item.key">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.desc }}</p>
+                <el-button size="small" :type="item.primary ? 'primary' : ''" :plain="!item.primary" :loading="item.key === 'regenerate' && regenerating" @click="runFailureRepairAction(item.key)">
+                  {{ item.action }}
+                </el-button>
+              </article>
+            </div>
           </div>
-        </dl>
-        <div class="repair-actions">
-          <article v-for="item in failureRepairActions" :key="item.key">
-            <strong>{{ item.title }}</strong>
-            <p>{{ item.desc }}</p>
-            <el-button size="small" :type="item.primary ? 'primary' : ''" :plain="!item.primary" :loading="item.key === 'regenerate' && regenerating" @click="runFailureRepairAction(item.key)">
-              {{ item.action }}
-            </el-button>
-          </article>
-        </div>
+        </details>
       </section>
       <section v-else-if="isTrackingReport" class="content-panel report-tracker">
         <div>
@@ -420,6 +424,25 @@ const regenerating = ref(false)
 const versionSaving = ref(false)
 const applicationCreating = ref(false)
 const loadError = ref('')
+const REPORT_LOAD_TIMEOUT_MS = 15000
+
+const withReportLoadTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('匹配报告读取超时，请稍后重试。'))
+    }, REPORT_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const report = ref<ResumeJobMatchReportDetailVO | null>(null)
 const gameProfile = useGameProfileStore()
 let reportPollTimer: ReturnType<typeof setTimeout> | undefined
@@ -993,7 +1016,7 @@ const loadReport = async (silent = false) => {
     loadError.value = ''
   }
   try {
-    report.value = await getResumeJobMatchReportDetailApi(reportId.value)
+    report.value = await withReportLoadTimeout(getResumeJobMatchReportDetailApi(reportId.value))
     grantTrustedReportXp()
     reportPollRetryCount = 0
     reportPollFailureNoticeShown = false
@@ -1284,7 +1307,7 @@ onBeforeUnmount(stopReportPoll)
 
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface, var(--app-surface)); }
 .page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head, .section-actions { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
@@ -1300,17 +1323,26 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .failure-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .failure-actions h2 { font-size: 18px; }
 .failure-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.failure-details { overflow: hidden; border: 1px solid var(--app-border); border-radius: 10px; background: var(--app-surface); }
+.failure-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 14px; color: var(--app-text); cursor: pointer; font-size: 13px; font-weight: 800; list-style: none; }
+.failure-details > summary::-webkit-details-marker { display: none; }
+.failure-details > summary::after { content: '展开'; color: var(--app-text-muted); font-size: 12px; }
+.failure-details[open] > summary { border-bottom: 1px solid var(--app-border); }
+.failure-details[open] > summary::after { content: '收起'; }
+.failure-details > summary:focus-visible { outline: 2px solid var(--app-primary); outline-offset: -2px; }
+.failure-details__body { display: grid; gap: 12px; padding: 14px; }
+.failure-details__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .diagnostic-list { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; margin: 0; }
-.diagnostic-list div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.diagnostic-list div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .diagnostic-list dt { color: var(--app-text-muted); font-size: 12px; }
 .diagnostic-list dd { margin: 6px 0 0; color: var(--app-text); overflow-wrap: anywhere; }
 .repair-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .repair-actions strong { font-size: 14px; }
 .repair-actions p { margin: 0; font-size: 12px; line-height: 1.6; }
 .report-overview { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); gap: 14px; align-items: stretch; }
 .overview-main { display: grid; grid-template-columns: minmax(150px, 0.34fr) minmax(0, 0.66fr); gap: 16px; align-items: center; background: rgba(30, 64, 175, 0.12); }
-.overview-score { display: grid; gap: 6px; padding: 18px; border: 1px solid rgba(37, 99, 235, 0.28); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.overview-score { display: grid; gap: 6px; padding: 18px; border: 1px solid var(--user-primary-border); border-radius: 14px; background: var(--user-primary-faint); }
 .overview-score span, .overview-score small, .overview-action span, .insight-card span { color: var(--app-text-muted); font-size: 12px; }
 .overview-score strong { font-size: 34px; line-height: 1.05; overflow-wrap: anywhere; }
 .overview-score small { line-height: 1.5; }
@@ -1326,8 +1358,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .insight-card--success { border-color: rgba(22, 163, 74, 0.34); background: rgba(22, 163, 74, 0.07); }
 .insight-card--warning { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); }
 .insight-card--danger { border-color: rgba(239, 68, 68, 0.34); background: rgba(239, 68, 68, 0.07); }
-.insight-card--neutral { background: rgba(15, 23, 42, 0.2); }
-.score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.insight-card--neutral { background: var(--user-surface-muted, var(--app-surface-raised)); }
+.score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .score-card { padding: 12px 14px; border-right: 1px solid var(--app-border); background: transparent; box-shadow: none; }
 .score-card:last-child { border-right: 0; }
 .score-card span { color: var(--app-text-muted); font-size: 13px; }
@@ -1343,13 +1375,13 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
 .section-actions { flex-wrap: wrap; justify-content: flex-end; }
 .json-sections { display: grid; gap: 14px; }
-.data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .data-block h3 { font-size: 15px; }
 .data-block__details { margin-top: 10px; }
 .data-block__details summary { cursor: pointer; color: var(--app-primary); font-size: 13px; font-weight: 700; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
 .dimension-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .dimension-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .dimension-card__head span { color: var(--app-text-muted); font-size: 12px; }
 .dimension-card__head h3 { margin-top: 4px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
@@ -1358,7 +1390,36 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .dimension-card dt { color: var(--app-text-muted); font-size: 12px; }
 .dimension-card dd { margin: 4px 0 0; color: var(--app-text); line-height: 1.65; overflow-wrap: anywhere; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
-@media (max-width: 1080px) { .score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .score-card:nth-child(3) { border-right: 0; } .score-card:nth-child(-n + 3) { border-bottom: 1px solid var(--app-border); } .detail-grid, .report-overview { grid-template-columns: 1fr 1fr; } .overview-main { grid-column: 1 / -1; } }
+@media (max-width: 1080px) {
+  .diagnostic-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .repair-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .score-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .score-card:nth-child(3) {
+    border-right: 0;
+  }
+
+  .score-card:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .detail-grid,
+  .report-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .overview-main {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 760px) {
   .page-hero,
   .detail-grid,
@@ -1397,6 +1458,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .hero-actions,
   .section-head,
   .failure-buttons,
+  .failure-details__actions,
   .tracker-actions,
   .overview-action__buttons {
     display: grid;
@@ -1410,6 +1472,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .hero-actions :deep(.el-button),
   .failure-buttons :deep(.el-button),
+  .failure-details__actions :deep(.el-button),
   .tracker-actions :deep(.el-button),
   .overview-action__buttons :deep(.el-button),
   .action-panel :deep(.el-button) {

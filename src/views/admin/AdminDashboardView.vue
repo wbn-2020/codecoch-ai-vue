@@ -631,7 +631,14 @@ const buildLineOption = (legendData: string[], series: SeriesOption[]): EChartsO
   color: ['#60a5fa', '#22d3ee', '#a78bfa', '#f87171'],
   tooltip: { trigger: 'axis' },
   legend: { data: legendData, right: 8, top: 0, textStyle: baseChartTextStyle },
-  grid: { left: 10, right: 14, top: 34, bottom: 8, containLabel: true },
+  grid: {
+    left: 10,
+    right: 14,
+    top: 34,
+    bottom: 8,
+    outerBoundsMode: 'same',
+    outerBoundsContain: 'axisLabel'
+  },
   xAxis: {
     type: 'category',
     data: trendStats.value.map((item) => item.date),

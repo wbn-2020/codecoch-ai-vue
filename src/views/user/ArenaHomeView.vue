@@ -69,6 +69,30 @@
               </button>
             </div>
           </div>
+          <div v-if="missions.length === 0" class="arena-home__side-grid arena-home__side-grid--empty" aria-label="待生成的支线任务">
+            <div class="arena-card arena-home__side">
+              <div class="arena-between">
+                <span class="arena-chip arena-chip--grn">支线 2</span>
+                <span class="arena-xp-tag">待生成</span>
+              </div>
+              <div class="arena-h3" style="margin-top: 11px">岗位关键词整理</div>
+              <div class="arena-tiny" style="margin-top: 3px">生成今日计划后自动出现</div>
+              <span class="arena-home__placeholder-status" aria-label="岗位关键词整理将在生成今日计划后出现">
+                生成今日计划后出现
+              </span>
+            </div>
+            <div class="arena-card arena-home__side">
+              <div class="arena-between">
+                <span class="arena-chip arena-chip--grn">支线 3</span>
+                <span class="arena-xp-tag">待生成</span>
+              </div>
+              <div class="arena-h3" style="margin-top: 11px">专项训练准备</div>
+              <div class="arena-tiny" style="margin-top: 3px">完成前置关卡后自动出现</div>
+              <span class="arena-home__placeholder-status" aria-label="专项训练准备将在完成前置关卡后出现">
+                完成前置关卡后出现
+              </span>
+            </div>
+          </div>
 
           <template v-else>
             <!-- Boss 关 -->
@@ -100,7 +124,7 @@
                 <button
                   class="arena-btn arena-btn--sec"
                   style="padding: 12px 18px; font-size: 13.5px"
-                  @click="router.push('/questions/practice?mode=recommended&count=5')"
+                  @click="router.push('/questions/practice?mode=random&count=5')"
                 >
                   先热身 5 题
                 </button>
@@ -491,6 +515,29 @@ onMounted(async () => {
 
   &__side {
     padding: 18px 20px;
+  }
+
+  &__side-grid--empty {
+    .arena-home__side {
+      background: linear-gradient(135deg, #fff, #f7faf7);
+      border-style: dashed;
+    }
+
+    .arena-home__placeholder-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      margin-top: 12px;
+      color: var(--arena-mut);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .is-placeholder {
+      color: var(--arena-mut);
+      cursor: default;
+      pointer-events: none;
+    }
   }
 
   &__chest {

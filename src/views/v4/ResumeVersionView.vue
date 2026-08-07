@@ -584,9 +584,10 @@ onMounted(async () => {
   align-items: flex-end;
   justify-content: space-between;
   padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border: 1.5px solid var(--app-border);
+  border-radius: var(--arena-radius-card, var(--app-radius));
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .v4-page-header h1,
@@ -607,10 +608,9 @@ onMounted(async () => {
 
 .v4-eyebrow,
 .section-kicker {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .v4-actions,
@@ -647,9 +647,10 @@ onMounted(async () => {
 
 .v4-row {
   padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1.5px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .v4-row-head {
@@ -668,7 +669,8 @@ onMounted(async () => {
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: 12px;
+  background: var(--app-surface);
 }
 
 .diff-row span {
@@ -679,7 +681,7 @@ onMounted(async () => {
 
 .diff-row--head,
 .diff-row.changed {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
 }
 
 @media (max-width: 900px) {

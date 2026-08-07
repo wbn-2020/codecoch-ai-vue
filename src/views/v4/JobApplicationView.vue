@@ -2,19 +2,13 @@
   <div class="page-shell v4-application-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">求职进度管理</div>
-        <h1>投递漏斗</h1>
-        <p>跟踪目标池、准备、投递、面试、结果和复盘线索，只展示个人记录与跟进风险。</p>
+        <div class="v4-eyebrow">我的求职</div>
+        <h1>投递工作台</h1>
+        <p>处理今天的推进事项，集中查看每一条投递的下一步。</p>
       </div>
       <div class="v4-actions">
-        <el-select v-model="status" clearable placeholder="全部状态" style="width: 180px" @change="applyStatusFilter">
-          <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="followUpFilter" clearable placeholder="跟进筛选" style="width: 180px" @change="applyFollowUpFilter">
-          <el-option v-for="item in followUpFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-button type="primary" @click="openCreate">新增进度</el-button>
-        <el-button :loading="loading" @click="load">刷新</el-button>
+        <el-button :icon="RefreshCw" circle :loading="loading" title="刷新投递记录" @click="load" />
+        <el-button type="primary" :icon="Plus" @click="openCreate">新增投递</el-button>
       </div>
     </section>
 
@@ -22,7 +16,7 @@
       <el-button type="primary" @click="load">重试</el-button>
     </AppState>
 
-    <section v-if="!errorMessage" class="application-stats" v-loading="statsLoading">
+    <template v-else>
       <el-alert
         v-if="statsWarning"
         class="stats-warning"
@@ -47,95 +41,217 @@
         :closable="false"
         title="没有找到深链指定的投递记录，已保留当前列表，你可以新增记录或清空筛选后查看。"
       />
-      <div class="stats-grid">
-        <button v-for="item in metricItems" :key="item.key" class="metric-card" type="button" @click="item.onClick?.()">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.hint }}</small>
-        </button>
-      </div>
-      <div class="status-funnel" aria-label="Application status funnel">
+      <nav class="application-view-tabs" aria-label="投递工作台视图">
         <button
-          v-for="item in funnelItems"
-          :key="item.key"
-          class="funnel-item"
-          :class="{ 'is-active': isFunnelItemActive(item) }"
           type="button"
-          @click="applyFunnelStage(item)"
+          :class="{ 'is-active': activeApplicationView === 'today' }"
+          @click="activeApplicationView = 'today'"
         >
-          <span>
-            {{ item.label }}
-            <small>{{ item.actionHint }}</small>
-          </span>
-          <strong>{{ item.count }}</strong>
+          今日推进
         </button>
-      </div>
-    </section>
-
-    <CareerCalendarPanel
-      v-if="!errorMessage"
-      :applications="rawApplications"
-    />
-
-    <CareerCampaignPanel v-if="!errorMessage" />
-
-    <section v-if="!errorMessage" class="content-card">
-      <div class="content-card__body v4-list" v-loading="loading">
-        <article v-for="item in applications" :key="item.id" class="v4-row" :class="{ 'is-highlighted': item.id === highlightedApplicationId }">
-          <div class="v4-row-head">
-            <div>
-              <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
-              <p class="muted">
-                {{ sourceLabel(item.source) }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
-              </p>
-              <p class="muted row-meta">
-                <span>{{ resumeVersionLabel(item) }}</span>
-                <span v-if="item.matchReportId">匹配报告 #{{ item.matchReportId }}</span>
-                <span>{{ latestEventText(item) }}</span>
-              </p>
-              <div class="quality-tags">
-                <el-tag
-                  v-for="tag in dataQualityTags(item)"
-                  :key="`${item.id}-${tag.key}`"
-                  :type="tagType(tag.tone)"
-                  size="small"
-                  effect="plain"
-                  :title="tag.description"
-                >
-                  {{ tag.label }}
-                </el-tag>
-              </div>
-              <p class="follow-up-note" :class="`follow-up-note--${followUpState(item).key}`">
-                {{ followUpDescription(item) }}
-              </p>
-              <p class="muted">{{ item.note || '--' }}</p>
-            </div>
-            <div class="v4-actions">
-              <el-tag>{{ statusLabel(item.status) }}</el-tag>
-              <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
-                <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
-              </template>
-              <el-button link type="primary" @click="goWorkspace(item)">工作区</el-button>
-              <el-button link type="primary" @click="openDraftAssistant(item, 'follow-up')">跟进助手</el-button>
-              <el-button link type="primary" @click="goInterviewCreate(item)">文本面试</el-button>
-              <el-button link type="primary" @click="openEvents(item)">事件</el-button>
-              <el-button link type="primary" @click="openEdit(item)">编辑</el-button>
-            </div>
-          </div>
-        </article>
-        <AppState
-          v-if="!applications.length && !loading"
-          type="empty"
-          :title="applicationEmptyTitle"
-          :description="applicationEmptyDescription"
+        <button
+          type="button"
+          :class="{ 'is-active': activeApplicationView === 'records' }"
+          @click="activeApplicationView = 'records'"
         >
-          <div class="empty-actions">
-            <el-button v-if="hasListFilter" @click="clearStatusFilter">清空筛选</el-button>
-            <el-button type="primary" @click="openCreate">新增第一条进度</el-button>
+          全部记录
+          <span>{{ rawApplications.length }}</span>
+        </button>
+      </nav>
+
+      <section v-if="activeApplicationView === 'today'" class="application-workbench" v-loading="statsLoading">
+        <div class="today-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">今日推进</p>
+              <h2>先完成最需要处理的投递</h2>
+            </div>
+            <el-button link type="primary" @click="applyFollowUpFilter('due-today')">查看今日跟进</el-button>
           </div>
-        </AppState>
-      </div>
-    </section>
+          <div v-if="todayFocusApplications.length" class="today-list">
+            <article v-for="item in todayFocusApplications" :key="item.id" class="today-row">
+              <div class="today-row__main">
+                <div class="today-row__title">
+                  <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
+                  <el-tag :type="tagType(followUpState(item).tone)" size="small" effect="plain">
+                    {{ followUpState(item).label }}
+                  </el-tag>
+                </div>
+                <p>{{ followUpDescription(item) }}</p>
+              </div>
+              <div class="today-row__actions">
+                <el-button v-if="applicationWorkspaceEnabled" link type="primary" @click="goWorkspace(item)">
+                  工作区
+                </el-button>
+                <el-button link type="primary" @click="handleTodayAction(item)">{{ todayActionLabel(item) }}</el-button>
+              </div>
+            </article>
+          </div>
+          <div v-else class="today-empty">
+            <CheckCircle2 :size="18" />
+            <span>今天没有待处理的跟进事项。</span>
+          </div>
+        </div>
+
+        <div class="application-side-rail">
+          <aside class="calendar-entry" aria-label="日历与近期安排">
+            <div class="calendar-entry__head">
+              <div class="calendar-entry__icon"><CalendarDays :size="18" /></div>
+              <div>
+                <p class="section-kicker">日历与近期安排</p>
+                <h2>查看完整时间表</h2>
+              </div>
+            </div>
+            <div v-if="upcomingScheduleApplications.length" class="schedule-list">
+              <button
+                v-for="item in upcomingScheduleApplications"
+                :key="item.id"
+                class="schedule-row"
+                type="button"
+                @click="openScheduledApplication(item)"
+              >
+                <span>{{ item.nextFollowUpAt || '待定' }}</span>
+                <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
+              </button>
+            </div>
+            <p v-else class="muted">近期没有已安排的跟进。</p>
+            <el-button class="calendar-entry__action" :icon="ArrowUpRight" @click="goCareerCalendar">
+              打开求职日历
+            </el-button>
+          </aside>
+
+          <aside class="campaign-entry" aria-label="求职周期">
+            <div class="campaign-entry__head">
+              <div class="campaign-entry__icon"><FolderKanban :size="18" /></div>
+              <div>
+                <p class="section-kicker">求职周期</p>
+                <h2>集中管理一次求职尝试</h2>
+              </div>
+            </div>
+            <p>把相关投递、面试和复盘收进同一个周期，平时只处理当前机会。</p>
+            <el-button class="campaign-entry__action" :icon="ArrowUpRight" @click="campaignManagementVisible = true">
+              管理求职周期
+            </el-button>
+          </aside>
+        </div>
+      </section>
+
+      <template v-else>
+      <section class="funnel-section" aria-label="投递状态漏斗">
+        <div class="funnel-section__head">
+          <div>
+            <p class="section-kicker">投递状态</p>
+            <h2>按阶段查看进度</h2>
+          </div>
+          <div class="funnel-overview">
+            <span>推进中 <strong>{{ statsNumber(applicationStats?.activeCount) }}</strong></span>
+            <span>逾期 <strong class="is-risk">{{ statsNumber(applicationStats?.overdueFollowUpCount) }}</strong></span>
+            <span>今日 <strong>{{ statsNumber(applicationStats?.dueTodayFollowUpCount) }}</strong></span>
+          </div>
+        </div>
+        <div class="status-funnel">
+          <button
+            v-for="item in funnelItems"
+            :key="item.key"
+            class="funnel-item"
+            :class="{ 'is-active': isFunnelItemActive(item) }"
+            type="button"
+            :title="item.actionHint"
+            @click="applyFunnelStage(item)"
+          >
+            <span>{{ item.label }}</span>
+            <strong>{{ item.count }}</strong>
+          </button>
+        </div>
+      </section>
+
+      <section class="records-section">
+        <div class="records-toolbar">
+          <div>
+            <p class="section-kicker">投递记录</p>
+            <h2>{{ applications.length }} 条记录</h2>
+          </div>
+          <div class="records-filters">
+            <el-select v-model="status" clearable placeholder="全部状态" @change="applyStatusFilter">
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-select v-model="followUpFilter" clearable placeholder="跟进筛选" @change="applyFollowUpFilter">
+              <el-option v-for="item in followUpFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-button v-if="hasListFilter" :icon="RotateCcw" circle title="清空筛选" @click="clearStatusFilter" />
+          </div>
+        </div>
+        <p v-if="listContextNotice" class="list-context">{{ listContextNotice }}</p>
+
+        <div class="v4-list" v-loading="loading">
+          <article v-for="item in applications" :key="item.id" class="v4-row" :class="{ 'is-highlighted': item.id === highlightedApplicationId }">
+            <div class="v4-row-head">
+              <div class="v4-row__main">
+                <div class="record-title">
+                  <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
+                  <el-tag>{{ statusLabel(item.status) }}</el-tag>
+                  <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
+                    <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
+                  </template>
+                </div>
+                <p class="muted">
+                  {{ sourceLabel(item.source) }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
+                </p>
+                <p class="muted row-meta">
+                  <span>{{ resumeVersionLabel(item) }}</span>
+                  <span v-if="item.matchReportId">匹配报告 #{{ item.matchReportId }}</span>
+                  <span>{{ latestEventText(item) }}</span>
+                </p>
+                <div class="quality-tags">
+                  <el-tag
+                    v-for="tag in dataQualityTags(item)"
+                    :key="`${item.id}-${tag.key}`"
+                    :type="tagType(tag.tone)"
+                    size="small"
+                    effect="plain"
+                    :title="tag.description"
+                  >
+                    {{ tag.label }}
+                  </el-tag>
+                </div>
+                <p class="follow-up-note" :class="`follow-up-note--${followUpState(item).key}`">
+                  {{ followUpDescription(item) }}
+                </p>
+                <p v-if="item.note" class="muted record-note">{{ item.note }}</p>
+              </div>
+              <div class="record-actions">
+                <el-button v-if="applicationWorkspaceEnabled" link type="primary" @click="goWorkspace(item)">
+                  工作区
+                </el-button>
+                <el-dropdown trigger="click" @command="(command: string) => handleRecordAction(item, command)">
+                  <el-button :icon="MoreHorizontal" circle title="更多投递操作" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="draft">跟进助手</el-dropdown-item>
+                      <el-dropdown-item command="interview">文本面试</el-dropdown-item>
+                      <el-dropdown-item command="events">事件记录</el-dropdown-item>
+                      <el-dropdown-item command="edit">编辑投递</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+            </div>
+          </article>
+          <AppState
+            v-if="!applications.length && !loading"
+            type="empty"
+            :title="applicationEmptyTitle"
+            :description="applicationEmptyDescription"
+          >
+            <div class="empty-actions">
+              <el-button v-if="hasListFilter" @click="clearStatusFilter">清空筛选</el-button>
+              <el-button type="primary" :icon="Plus" @click="openCreate">新增第一条投递</el-button>
+            </div>
+          </AppState>
+        </div>
+      </section>
+      </template>
+    </template>
 
     <el-dialog v-model="dialogVisible" title="求职进度" width="620px">
       <el-form ref="applicationFormRef" :model="form" :rules="applicationFormRules" label-position="top">
@@ -203,6 +319,16 @@
         <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="campaignManagementVisible"
+      class="campaign-management-drawer"
+      title="求职周期管理"
+      size="min(760px, 100vw)"
+      destroy-on-close
+    >
+      <CareerCampaignPanel v-if="campaignManagementVisible" />
+    </el-drawer>
 
     <el-drawer v-model="eventsVisible" :title="eventsDrawerTitle" size="560px">
       <div class="drawer-actions">
@@ -369,6 +495,7 @@
 
 <script setup lang="ts">
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ArrowUpRight, CalendarDays, CheckCircle2, FolderKanban, MoreHorizontal, Plus, RefreshCw, RotateCcw } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -388,10 +515,10 @@ import {
 import { generateApplicationEventAiReviewApi } from '@/api/careerGrowth'
 import { getResumesApi } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
+import { appConfig } from '@/config'
 import ApplicationEventReviewDialog from '@/views/application/components/ApplicationEventReviewDialog.vue'
 import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
 import ApplicationEventReviewPanel from '@/views/application/components/ApplicationEventReviewPanel.vue'
-import CareerCalendarPanel from '@/views/application/components/CareerCalendarPanel.vue'
 import CareerCampaignPanel from '@/views/application/components/CareerCampaignPanel.vue'
 import {
   applicationFollowUpFilterOptions,
@@ -434,6 +561,7 @@ import type { ResumeVO } from '@/types/resume'
 
 const route = useRoute()
 const router = useRouter()
+const applicationWorkspaceEnabled = computed(() => appConfig.enableV7CampaignWorkspace)
 
 const statusOptions = applicationStatusOptions
 const followUpFilterOptions = applicationFollowUpFilterOptions
@@ -478,6 +606,8 @@ const pendingEventDraft = ref<Partial<JobApplicationEventVO>>()
 const deepLinkMissing = ref(false)
 const suppressNextRouteQuery = ref(false)
 const dialogVisible = ref(false)
+const campaignManagementVisible = ref(false)
+const activeApplicationView = ref<'today' | 'records'>('today')
 const editingId = ref<number>()
 const rawApplications = ref<JobApplicationVO[]>([])
 const resumeOptions = ref<ResumeVO[]>([])
@@ -587,49 +717,31 @@ const applications = computed(() => {
 
   return rows
 })
-const metricItems = computed(() => [
-  {
-    key: 'total',
-    label: '投递记录',
-    value: statsNumber(applicationStats.value?.total),
-    hint: '所有个人投递记录',
-    onClick: clearStatusFilter
-  },
-  {
-    key: 'active',
-    label: '推进中',
-    value: statsNumber(applicationStats.value?.activeCount),
-    hint: '仍需要关注的记录'
-  },
-  {
-    key: 'overdue',
-    label: '逾期跟进',
-    value: statsNumber(applicationStats.value?.overdueFollowUpCount),
-    hint: '只表示执行风险',
-    onClick: () => applyFollowUpFilter('overdue')
-  },
-  {
-    key: 'dueToday',
-    label: '今日跟进',
-    value: statsNumber(applicationStats.value?.dueTodayFollowUpCount),
-    hint: '今日行动候选',
-    onClick: () => applyFollowUpFilter('due-today')
-  },
-  {
-    key: 'missing',
-    label: '未设跟进',
-    value: statsNumber(applicationStats.value?.noFollowUpCount),
-    hint: '缺少下一次跟进时间',
-    onClick: () => applyFollowUpFilter('missing')
-  },
-  {
-    key: 'stale',
-    label: '久未更新',
-    value: statsNumber(applicationStats.value?.staleActiveCount),
-    hint: '建议复核当前状态'
-  }
-])
 const funnelItems = computed(() => buildApplicationFunnelStages(rawApplications.value, applicationStats.value))
+const focusPriority = (item: JobApplicationVO) => {
+  const state = followUpState(item)
+  if (state.key === 'overdue') return 0
+  if (state.key === 'due-today') return 1
+  if (state.key === 'missing') return 2
+  return 3
+}
+const byNextFollowUp = (left: JobApplicationVO, right: JobApplicationVO) => {
+  const leftTime = left.nextFollowUpAt || '9999-12-31 23:59:59'
+  const rightTime = right.nextFollowUpAt || '9999-12-31 23:59:59'
+  return leftTime.localeCompare(rightTime)
+}
+const todayFocusApplications = computed(() =>
+  rawApplications.value
+    .filter((item) => isApplicationActiveStatus(item.status))
+    .sort((left, right) => focusPriority(left) - focusPriority(right) || byNextFollowUp(left, right))
+    .slice(0, 3)
+)
+const upcomingScheduleApplications = computed(() =>
+  rawApplications.value
+    .filter((item) => isApplicationActiveStatus(item.status) && Boolean(item.nextFollowUpAt))
+    .sort(byNextFollowUp)
+    .slice(0, 3)
+)
 const listContextNotice = computed(() => {
   const parts: string[] = []
   if (status.value) parts.push(`状态：${statusLabel(status.value)}`)
@@ -712,7 +824,30 @@ const goInterviewCreate = (item: JobApplicationVO) => {
 }
 
 const goWorkspace = (item: JobApplicationVO) => {
+  if (!applicationWorkspaceEnabled.value) {
+    ElMessage.info('投递工作区当前未开放，请先使用本页跟进助手或事件记录。')
+    return
+  }
   void router.push(`/applications/${encodeURIComponent(String(item.id))}`)
+}
+const openScheduledApplication = (item: JobApplicationVO) => {
+  if (applicationWorkspaceEnabled.value) {
+    goWorkspace(item)
+    return
+  }
+  goCareerCalendar()
+}
+const goCareerCalendar = () => {
+  void router.push('/career-calendar')
+}
+const todayActionLabel = (item: JobApplicationVO) =>
+  followUpState(item).key === 'missing' ? '补充时间' : '起草跟进'
+const handleTodayAction = (item: JobApplicationVO) => {
+  if (followUpState(item).key === 'missing') {
+    openEdit(item)
+    return
+  }
+  void openDraftAssistant(item, 'follow-up')
 }
 const latestEventText = (item: JobApplicationVO) => {
   const latestEvent = buildBackendLatestApplicationEvent(item)
@@ -953,6 +1088,7 @@ const applyStatusFilter = (value?: string) => {
 }
 
 const applyFollowUpFilter = (value?: ApplicationDeepLinkFollowUpFilter | '') => {
+  activeApplicationView.value = 'records'
   followUpFilter.value = value || ''
   funnelStageFilter.value = ''
   highlightedApplicationId.value = undefined
@@ -963,6 +1099,7 @@ const applyFollowUpFilter = (value?: ApplicationDeepLinkFollowUpFilter | '') => 
 }
 
 const applyFunnelStage = (item: ApplicationFunnelStage) => {
+  activeApplicationView.value = 'records'
   followUpFilter.value = ''
   highlightedApplicationId.value = undefined
   pendingOpenEvents.value = false
@@ -996,6 +1133,7 @@ const clearStatusFilter = () => {
 
 const applyRouteQuery = () => {
   const queryState = parseApplicationListQuery(route.query as Record<string, unknown>)
+  activeApplicationView.value = queryState.status || queryState.followUp || queryState.applicationId ? 'records' : 'today'
   status.value = queryState.status || ''
   followUpFilter.value = queryState.followUp || ''
   funnelStageFilter.value = ''
@@ -1128,12 +1266,28 @@ const openEventCreate = (draft?: Partial<JobApplicationEventVO>) => {
   void nextTick(() => eventFormRef.value?.clearValidate())
 }
 
-const openDraftAssistant = async (item: JobApplicationVO, kind: ApplicationDraftKind) => {
-  if (selectedApplication.value?.id !== item.id || !eventsVisible.value) {
-    await openEvents(item)
-  }
+const openDraftAssistant = (item: JobApplicationVO, kind: ApplicationDraftKind) => {
+  selectedApplication.value = item
   selectedDraft.value = buildApplicationOutboundDraft(item, kind)
   draftDialogVisible.value = true
+}
+
+const handleRecordAction = (item: JobApplicationVO, command: string) => {
+  if (command === 'draft') {
+    openDraftAssistant(item, 'follow-up')
+    return
+  }
+  if (command === 'interview') {
+    goInterviewCreate(item)
+    return
+  }
+  if (command === 'events') {
+    void openEvents(item)
+    return
+  }
+  if (command === 'edit') {
+    openEdit(item)
+  }
 }
 
 const openSelectedDraft = (kind: ApplicationDraftKind) => {
@@ -1336,26 +1490,47 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
+.v4-application-page {
+  display: grid;
+  gap: 16px;
+}
+
 .v4-page-header,
-.v4-row-head,
 .v4-actions,
+.panel-heading,
+.calendar-entry__head,
+.funnel-section__head,
+.records-toolbar,
+.records-filters,
+.v4-row-head,
+.record-title,
+.record-actions,
+.today-row,
+.today-row__title,
+.today-row__actions,
 .drawer-actions,
 .event-row__head {
   display: flex;
-  gap: 16px;
+  gap: 12px;
 }
 
 .v4-page-header {
   align-items: flex-end;
   justify-content: space-between;
   padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.v4-page-header h1,
+.panel-heading h2,
+.calendar-entry h2,
+.funnel-section h2,
+.records-toolbar h2 {
+  margin: 0;
 }
 
 .v4-page-header h1 {
-  margin: 8px 0 0;
+  margin-top: 6px;
   font-size: 26px;
 }
 
@@ -1367,142 +1542,432 @@ onMounted(async () => {
   line-height: 1.7;
 }
 
-.v4-eyebrow {
-  color: #93c5fd;
+.v4-eyebrow,
+.section-kicker {
+  margin: 0;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .v4-actions,
+.records-filters,
+.record-actions,
 .drawer-actions {
   flex-wrap: wrap;
   align-items: center;
 }
 
-.empty-actions {
+.stats-warning,
+.query-alert,
+.outbound-boundary-alert {
+  border-radius: 8px;
+}
+
+.application-view-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
 }
 
-.v4-list,
-.event-list {
-  display: grid;
-  gap: 12px;
+.application-view-tabs button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--app-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.application-stats {
+.application-view-tabs button.is-active {
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+.application-view-tabs span {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+  color: inherit;
+  font-size: 11px;
+}
+
+.application-workbench {
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  gap: 16px;
+  align-items: start;
   min-width: 0;
 }
 
-.stats-warning {
-  border-radius: 8px;
-}
-
-.query-alert {
-  border-radius: 8px;
-}
-
-.stats-grid {
+.application-side-rail {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
 }
 
-.metric-card,
-.funnel-item {
-  border: 1px solid var(--app-border);
+.today-panel,
+.calendar-entry,
+.campaign-entry {
+  min-width: 0;
+  border: 1.5px solid var(--app-border);
+  border-radius: var(--arena-radius-card, var(--app-radius));
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+}
+
+.today-panel {
+  padding: 16px;
+}
+
+.panel-heading,
+.funnel-section__head,
+.records-toolbar {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.panel-heading h2,
+.calendar-entry h2,
+.funnel-section h2,
+.records-toolbar h2 {
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.today-list {
+  display: grid;
+  margin-top: 14px;
+  border-top: 1px solid var(--app-border);
+}
+
+.today-row {
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.today-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.today-row__main {
+  min-width: 0;
+}
+
+.today-row__title {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.today-row__title strong,
+.record-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-row p {
+  margin: 4px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.today-row__actions {
+  flex: 0 0 auto;
+}
+
+.today-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 104px;
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+.calendar-entry {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.calendar-entry__head {
+  align-items: flex-start;
+}
+
+.calendar-entry__icon,
+.campaign-entry__icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #b9e7cd;
+  border-radius: 12px;
+  color: var(--arena-grn-d, var(--app-primary-hover));
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
+}
+
+.schedule-list {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0;
+}
+
+.schedule-row {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
   color: var(--app-text);
   cursor: pointer;
   font: inherit;
   text-align: left;
-}
-
-.metric-card {
-  display: grid;
-  gap: 6px;
-  min-height: 80px;
-  padding: 12px;
-  border-width: 0 1px 0 0;
-  border-radius: 0;
   background: transparent;
-
-  &:last-child {
-    border-right: 0;
-  }
 }
 
-.metric-card span,
-.funnel-item span {
+.schedule-row:hover {
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
+}
+
+.schedule-row span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.schedule-row strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-entry > .muted {
+  margin: 16px 0;
+  font-size: 13px;
+}
+
+.calendar-entry__action {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.campaign-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.campaign-entry__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.campaign-entry h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.campaign-entry__icon {
+  border-color: rgba(124, 92, 252, 0.24);
+  color: var(--arena-vio, #7c5cfc);
+  background: var(--arena-vio-soft, rgba(124, 92, 252, 0.12));
+}
+
+.campaign-entry > p {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.campaign-entry__action {
+  align-self: flex-start;
+}
+
+.campaign-management-drawer :deep(.el-drawer__body) {
+  padding-top: 0;
+}
+
+.campaign-management-drawer :deep(.campaign-panel) {
+  margin: 0;
+}
+
+.funnel-section {
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.funnel-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   color: var(--app-text-muted);
   font-size: 13px;
 }
 
-.metric-card strong {
-  font-size: 24px;
-  line-height: 1;
+.funnel-overview strong {
+  margin-left: 4px;
+  color: var(--app-text);
 }
 
-.metric-card small {
-  color: var(--app-text-muted);
+.funnel-overview .is-risk {
+  color: var(--arena-red, #e5484d);
 }
 
 .status-funnel {
   display: grid;
-  grid-template-columns: repeat(7, minmax(126px, 1fr));
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
   min-width: 0;
+  margin-top: 12px;
   overflow-x: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.38);
+  border: 1.5px solid var(--app-border);
+  border-radius: var(--arena-radius-card, var(--app-radius));
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .funnel-item {
   display: flex;
-  min-height: 76px;
-  align-items: flex-start;
+  min-height: 58px;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
-  border-width: 0 1px 0 0;
-  background: transparent;
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--app-border);
+  color: var(--app-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: var(--app-surface);
 }
 
 .funnel-item:last-child {
   border-right: 0;
 }
 
-.funnel-item.is-active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #bfdbfe;
+.funnel-item span {
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
-.funnel-item small {
-  display: block;
-  margin-top: 4px;
+.funnel-item strong {
+  font-size: 18px;
+}
+
+.funnel-item:hover,
+.funnel-item.is-active {
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
+}
+
+.funnel-item.is-active span,
+.funnel-item.is-active strong {
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+@media (max-width: 900px) {
+  .status-funnel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .funnel-item {
+    min-height: 54px;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .funnel-item:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .funnel-item:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .status-funnel {
+    grid-template-columns: 1fr;
+  }
+
+  .funnel-item,
+  .funnel-item:nth-child(2n),
+  .funnel-item:nth-last-child(-n + 2) {
+    min-height: 48px;
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .funnel-item:last-child {
+    border-bottom: 0;
+  }
+}
+
+.records-section {
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+
+.records-filters :deep(.el-select) {
+  width: 160px;
+}
+
+.list-context {
+  margin: 12px 0 0;
   color: var(--app-text-muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+}
+
+.v4-list,
+.event-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .v4-row,
 .event-row {
-  padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  padding: 14px;
+  border: 1.5px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .v4-row.is-highlighted {
-  border-color: rgba(59, 130, 246, 0.72);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.22);
+  border-color: var(--arena-grn, var(--app-primary));
+  box-shadow: 0 0 0 3px var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
 }
 
 .v4-row-head,
@@ -1511,11 +1976,30 @@ onMounted(async () => {
   justify-content: space-between;
 }
 
+.v4-row__main {
+  min-width: 0;
+}
+
+.record-title {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.record-actions {
+  justify-content: flex-end;
+  max-width: 160px;
+}
+
 .row-meta,
 .quality-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.row-meta {
+  margin: 6px 0 0;
+  font-size: 13px;
 }
 
 .quality-tags {
@@ -1530,15 +2014,26 @@ onMounted(async () => {
 }
 
 .follow-up-note--overdue {
-  color: #fecaca;
+  color: var(--arena-red, #e5484d);
 }
 
 .follow-up-note--due-today {
-  color: #fde68a;
+  color: var(--arena-amber, #f79009);
 }
 
 .follow-up-note--upcoming {
-  color: #bbf7d0;
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+.record-note {
+  margin: 8px 0 0;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .drawer-actions {
@@ -1547,11 +2042,6 @@ onMounted(async () => {
 
 .event-impact-alert {
   margin: -4px 0 16px;
-}
-
-.outbound-boundary-alert {
-  margin-bottom: 14px;
-  border-radius: 8px;
 }
 
 .event-row p {
@@ -1570,6 +2060,10 @@ onMounted(async () => {
     min-width: 0;
   }
 
+  .application-workbench {
+    grid-template-columns: 1fr;
+  }
+
   .v4-page-header,
   .v4-row-head,
   .event-row__head {
@@ -1577,30 +2071,33 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .metric-card:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .metric-card {
-    border-bottom: 1px solid var(--app-border);
-  }
-
-  .metric-card:last-child {
-    border-bottom: 0;
+  .record-actions {
+    justify-content: flex-start;
+    max-width: none;
   }
 }
 
-@media (max-width: 560px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .v4-page-header,
+  .records-toolbar,
+  .panel-heading,
+  .funnel-section__head,
+  .today-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .metric-card {
-    border-right: 0;
+  .records-filters {
+    width: 100%;
+  }
+
+  .records-filters :deep(.el-select) {
+    width: 100%;
+    flex: 1 1 140px;
+  }
+
+  .today-row__actions {
+    width: 100%;
   }
 }
 </style>

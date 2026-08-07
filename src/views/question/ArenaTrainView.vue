@@ -44,11 +44,19 @@
                 <span class="arena-tiny">{{ practiceQuestionIds.length || items.length }} 题 · 选择 · 简答</span>
               </div>
               <article v-for="(item, index) in items.slice(0, 3)" :key="item.id" class="arena-train__level">
-                <button type="button" class="arena-train__question-row" :disabled="!itemPracticeQuestionId(item)" @click="openQuestion(item)">
+                <button
+                  type="button"
+                  class="arena-train__question-row"
+                  :disabled="!itemPracticeQuestionId(item)"
+                  :title="itemPracticeQuestionId(item) ? '进入题目训练' : '暂不可直接练，已准备通用训练'"
+                  :aria-label="itemPracticeQuestionId(item) ? `${item.questionTitle || `今日训练题 ${index + 1}`}，进入题目训练` : `${item.questionTitle || `今日训练题 ${index + 1}`}，暂不可直接练，已准备通用训练`"
+                  @click="openQuestion(item)"
+                >
                   <span class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">{{ index + 1 }}</span>
                   <span class="arena-train__question-copy">
                     <b>{{ item.questionTitle || `今日训练题 ${index + 1}` }}</b>
                     <small>{{ item.skillName || item.skillCode || '综合能力' }} · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
+                    <small v-if="!itemPracticeQuestionId(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
                   </span>
                   <span class="arena-xp-tag">+18 XP/答对</span>
                 </button>
@@ -62,7 +70,7 @@
           <section class="arena-card arena-train__panel arena-train__revive">
             <div class="arena-h3">💀 错题复活点</div>
             <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">错题和收藏是下一轮训练的弹药库，复活后可以重新获得经验。</p>
-            <button class="arena-btn arena-btn--sec" style="margin-top: 12px; padding: 10px 14px; font-size: 12.5px" @click="router.push('/questions/wrong-records')">复活错题</button>
+            <button class="arena-btn arena-btn--sec" style="margin-top: 12px; padding: 10px 14px; font-size: 12.5px" @click="router.push('/questions/practice?mode=wrong&autoStart=true')">复活错题</button>
           </section>
           <section class="arena-card arena-train__panel">
             <div class="arena-h3">本周训练</div>
@@ -75,7 +83,7 @@
             <div class="arena-h3">更多练习方式</div>
             <div class="arena-train__quick">
               <button type="button" @click="router.push('/questions/favorites')">收藏复习</button>
-              <button type="button" @click="router.push('/questions/practice')">按知识点</button>
+              <button type="button" @click="router.push('/questions/practice?mode=category&sourceType=TRAINING_HUB&count=5')">按知识点</button>
               <button type="button" @click="router.push('/study-plans')">学习计划</button>
             </div>
           </section>
@@ -255,14 +263,35 @@ const itemPracticeQuestionId = (item: QuestionRecommendationItemVO) => {
   return item.practiceQuestionId || item.questionId
 }
 const actionableItems = computed(() => items.value.filter((item) => Boolean(itemPracticeQuestionId(item))))
-const weekTrainingDays = computed(() =>
-  ['一', '二', '三', '四', '五'].map((label) => ({ label, completed: false }))
-)
-const weekTrainingSummary = computed(() =>
-  gameProfile.streakDays > 0
-    ? `当前连胜 ${gameProfile.streakDays} 天 · 本周完成记录暂未同步`
-    : '本周完成记录暂未同步 · 完成一题后会继续积累连胜'
-)
+const toLocalDateKey = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const weekTrainingDays = computed(() => {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  const completedDates = new Set(
+    gameProfile.xpRewards
+      .filter((reward) => reward.event === 'practice_correct' || reward.event === 'warmup_5')
+      .map((reward) => toLocalDateKey(new Date(reward.grantedAt)))
+  )
+
+  return ['一', '二', '三', '四', '五'].map((label, index) => {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + index)
+    return { label, completed: completedDates.has(toLocalDateKey(date)) }
+  })
+})
+const weekTrainingSummary = computed(() => {
+  const completedCount = weekTrainingDays.value.filter((day) => day.completed).length
+  return completedCount > 0
+    ? `本周已完成 ${completedCount} 天训练 · 连胜 ${gameProfile.streakDays} 天`
+    : '本周还没有训练记录 · 完成一题后会在这里留下进度'
+})
 const practiceQuestionIds = computed(() =>
   actionableItems.value
     .map(itemPracticeQuestionId)
@@ -875,9 +904,9 @@ onMounted(() => {
   margin: 0;
 
   &__page {
-    width: min(990px, 100%);
+    width: min(1060px, 100%);
     margin: 0 auto;
-    padding: 30px 24px 48px;
+    padding: 30px 34px 48px;
   }
 
   &__kicker {
@@ -997,6 +1026,11 @@ onMounted(() => {
       margin-top: 3px;
       color: var(--arena-mut);
       font-size: 11px;
+    }
+
+    .is-unavailable {
+      color: var(--user-warning-text);
+      font-weight: 700;
     }
   }
 

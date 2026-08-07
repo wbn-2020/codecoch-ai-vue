@@ -119,9 +119,9 @@ const sourceTagType = (status: WeeklyReportSourceStatus) => {
 .weekly-panel {
   min-width: 0;
   padding: 18px 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
+  background: var(--user-surface, var(--app-surface));
 }
 
 .weekly-panel__header {
@@ -195,7 +195,7 @@ const sourceTagType = (status: WeeklyReportSourceStatus) => {
   gap: 6px;
   margin: 14px 0 0;
   padding-left: 18px;
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--user-warning));
   font-size: 13px;
   line-height: 1.55;
 }

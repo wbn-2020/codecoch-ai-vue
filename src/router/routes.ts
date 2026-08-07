@@ -21,7 +21,12 @@ export const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/user/ArenaHomeView.vue'), meta: { title: '今天', arenaTheme: true } },
       { path: 'dashboard/legacy', name: 'DashboardLegacy', component: () => import('@/views/user/JobCoachHomeView.vue'), meta: { title: '工作台（旧版）', hidden: true, commandHidden: true } },
       { path: 'onboarding', name: 'UserOnboarding', component: () => import('@/views/user/UserOnboardingView.vue'), meta: { title: '新手引导' } },
-      { path: 'dashboard/v3', name: 'V3Dashboard', component: () => import('@/views/v3/V3DashboardView.vue'), meta: { title: '求职驾驶舱', hidden: true, commandHidden: true } },
+      {
+        path: 'dashboard/v3',
+        name: 'V3Dashboard',
+        redirect: (to) => ({ name: 'Dashboard', query: to.query, hash: to.hash }),
+        meta: { title: '求职驾驶舱', hidden: true, commandHidden: true }
+      },
       { path: 'profile', name: 'Profile', component: () => import('@/views/user/ProfileView.vue'), meta: { title: '个人资料' } },
       { path: 'password', name: 'Password', component: () => import('@/views/user/PasswordView.vue'), meta: { title: '修改密码' } },
       { path: 'notifications', name: 'Notifications', component: () => import('@/views/user/NotificationCenterView.vue'), meta: { title: '通知中心' } },
@@ -126,6 +131,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, title: '管理后台' },
     children: [
+      { path: '', redirect: '/admin/dashboard', meta: { hidden: true, commandHidden: true } },
       { path: 'dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/AdminDashboardView.vue'), meta: { title: '运营首页', icon: 'DataBoard', requiredPermissions: ['admin:system:overview'] } },
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManageView.vue'), meta: { title: '用户管理', icon: 'UserFilled', requiredPermissions: ['admin:user:list'] } },
       { path: 'roles', name: 'AdminRoles', component: () => import('@/views/admin/RoleManageView.vue'), meta: { title: '角色管理', icon: 'Connection', requiredPermissions: ['admin:role:list'] } },

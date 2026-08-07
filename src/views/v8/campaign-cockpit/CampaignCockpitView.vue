@@ -70,10 +70,10 @@
                       <p>{{ application.lastEventSummary || '暂无最近事件摘要。' }}</p>
                     </div>
                     <el-button
-                      v-if="application.actionUrl"
+                      v-if="resolveCampaignLink(application.actionUrl)"
                       link
                       type="primary"
-                      @click="router.push(application.actionUrl)"
+                      @click="openCampaignLink(application.actionUrl)"
                     >
                       查看机会
                     </el-button>
@@ -195,6 +195,7 @@ import type {
 } from '@/types/v8/campaign'
 import type { V7ExternalPlanIntent } from '@/types/v7/career'
 import { appConfig } from '@/config'
+import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import { getErrorMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
@@ -371,7 +372,21 @@ const decideAction = async (payload: { action: CampaignActionDecision; status: C
 }
 
 const openAction = (action: CampaignActionDecision) => {
-  if (action.actionUrl) void router.push(action.actionUrl)
+  openCampaignLink(action.actionUrl)
+}
+
+const resolveCampaignLink = (rawPath?: string | null) => {
+  if (!rawPath) return ''
+  const resolved = resolveAppRoutePath(rawPath, {
+    fallbackPath: '/applications',
+    knownPaths: defaultUserKnownPaths
+  })
+  return resolved.blockedPath ? '' : resolved.path
+}
+
+const openCampaignLink = (rawPath?: string | null) => {
+  const path = resolveCampaignLink(rawPath)
+  if (path) void router.push(path)
 }
 
 const createPulsePlanPreview = (idempotencyKey: string) => {
@@ -542,8 +557,8 @@ onMounted(() => {
   gap: 16px;
   padding: 18px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-surface, #151c27);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--arena-card, var(--app-surface, #ffffff));
 }
 
 .section-kicker {

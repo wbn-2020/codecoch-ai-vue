@@ -54,33 +54,36 @@
         <div class="arena-prepare__workspace">
           <!-- 闯关地图 -->
           <div class="arena-prepare__map">
-          <div class="arena-prepare__track">
-            <template v-for="(node, idx) in mainNodes" :key="node.key">
-              <div v-if="idx > 0" class="arena-prepare__link" :class="{ 'is-done': mainNodes[idx - 1].state === 'done' }"></div>
-              <button type="button" class="arena-prepare__node" :class="`is-${node.state}`" @click="node.action">
+            <div class="arena-prepare__track">
+              <button
+                v-if="currentMainNode"
+                type="button"
+                class="arena-prepare__node"
+                :class="`is-${currentMainNode.state}`"
+                @click="currentMainNode.action"
+              >
                 <span class="arena-prepare__badge">
-                  <template v-if="node.state === 'done'">✓</template>
-                  <template v-else-if="node.state === 'failed'">✗</template>
-                  <template v-else-if="node.state === 'running'">⏳</template>
-                  <template v-else-if="node.state === 'locked'">🔒</template>
+                  <template v-if="currentMainNode.state === 'done'">✓</template>
+                  <template v-else-if="currentMainNode.state === 'failed'">✗</template>
+                  <template v-else-if="currentMainNode.state === 'running'">⏳</template>
+                  <template v-else-if="currentMainNode.state === 'locked'">🔒</template>
                   <template v-else>⚡</template>
                 </span>
                 <span class="arena-prepare__node-body">
                   <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                    <b>{{ node.title }}</b>
-                    <span v-if="node.state === 'current'" class="arena-chip arena-chip--amber">当前关</span>
-                    <span v-else-if="node.state === 'done'" class="arena-chip arena-chip--grn">已通关</span>
-                    <span v-else-if="node.state === 'failed'" class="arena-chip arena-chip--red">挑战失败</span>
-                    <span v-else-if="node.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
+                    <b>{{ currentMainNode.title }}</b>
+                    <span v-if="currentMainNode.state === 'current'" class="arena-chip arena-chip--amber">当前关</span>
+                    <span v-else-if="currentMainNode.state === 'done'" class="arena-chip arena-chip--grn">已通关</span>
+                    <span v-else-if="currentMainNode.state === 'failed'" class="arena-chip arena-chip--red">挑战失败</span>
+                    <span v-else-if="currentMainNode.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
                     <span v-else class="arena-chip arena-chip--mut">未解锁</span>
-                    <span class="arena-xp-tag">+{{ node.xp }} XP</span>
+                    <span class="arena-xp-tag">+{{ currentMainNode.xp }} XP</span>
                   </span>
-                  <small>{{ node.desc }}</small>
-                  <span class="arena-prepare__node-cta">{{ node.cta }} →</span>
+                  <small>{{ currentMainNode.desc }}</small>
+                  <span class="arena-prepare__node-cta">{{ currentMainNode.cta }} →</span>
                 </span>
               </button>
-            </template>
-          </div>
+            </div>
 
             <aside class="arena-card arena-prepare__coach">
               <div class="arena-row" style="gap: 8px">
@@ -118,7 +121,11 @@
           </div>
 
           <!-- 当前关：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
-          <section class="arena-card arena-prepare__jd-card" aria-labelledby="prepare-jd-title">
+          <section
+            v-if="currentMainNode?.key === 'target' && currentMainNode.state !== 'locked'"
+            class="arena-card arena-prepare__jd-card"
+            aria-labelledby="prepare-jd-title"
+          >
           <div class="arena-prepare__jd-head">
             <div>
               <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
@@ -176,6 +183,51 @@
 
           </div>
           </section>
+
+          <section
+            v-else-if="currentMainNode"
+            class="arena-card arena-prepare__stage-card"
+            aria-labelledby="prepare-current-stage-title"
+          >
+            <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+              <span class="arena-chip arena-chip--grn">当前准备关</span>
+              <span class="arena-xp-tag">+{{ currentMainNode.xp }} XP</span>
+            </div>
+            <h2 id="prepare-current-stage-title" class="arena-h2" style="margin-top: 10px">
+              {{ currentMainNode.title }}
+            </h2>
+            <p class="arena-p" style="margin-top: 6px">{{ currentMainNode.desc }}</p>
+            <button class="arena-btn arena-btn--pri" type="button" style="margin-top: 16px" @click="currentMainNode.action">
+              {{ currentMainNode.cta }} →
+            </button>
+          </section>
+
+          <details
+            v-if="currentTarget && currentMainNode?.key !== 'target'"
+            class="arena-card arena-prepare__jd-quick-edit"
+          >
+            <summary>编辑目标岗位 JD</summary>
+            <p class="arena-p">更新岗位描述后，旧的匹配报告会清除，避免把旧岗位上下文继续当成当前依据。</p>
+            <label class="arena-prepare__jd-textarea">
+              <span>岗位 JD 原文</span>
+              <textarea
+                v-model="jdDraft"
+                rows="7"
+                maxlength="12000"
+                placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
+                :disabled="jdSaving"
+              />
+            </label>
+            <div class="arena-prepare__jd-actions">
+              <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
+                {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
+              </button>
+              <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
+                去生成匹配 →
+              </button>
+            </div>
+            <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+          </details>
         </div>
 
         <details class="arena-prepare__more">
@@ -818,6 +870,12 @@ const mainNodes = computed<MapNode[]>(() => [
     action: goMatchAction
   }
 ])
+
+const currentMainNode = computed(() =>
+  mainNodes.value.find((node) => node.state === 'current' || node.state === 'running')
+  || mainNodes.value.find((node) => node.state !== 'done')
+  || mainNodes.value[mainNodes.value.length - 1]
+)
 
 const mainDoneCount = computed(() => mainNodes.value.filter((node) => node.state === 'done').length)
 
@@ -1580,7 +1638,7 @@ onBeforeUnmount(() => {
   &__grid {
     margin-top: 20px;
     display: grid;
-    grid-template-columns: 1.55fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
     gap: 20px;
   }
 
@@ -1714,11 +1772,26 @@ onBeforeUnmount(() => {
   }
 
   &__snapshot {
+    --resume-snapshot-scale: 0.62;
     margin-top: 12px;
+    display: grid;
+    height: 530px;
+    place-items: start center;
     border: 1.5px solid var(--arena-line2);
     border-radius: 12px;
+    background:
+      linear-gradient(135deg, rgba(23, 178, 106, 0.08), transparent 45%),
+      #f7faf7;
     overflow: hidden;
-    max-height: 260px;
+
+    :deep(.resume-document) {
+      width: 620px;
+      max-width: none;
+      margin: 14px 0 0;
+      transform: scale(var(--resume-snapshot-scale));
+      transform-origin: top center;
+      box-shadow: 0 10px 24px rgba(21, 33, 27, 0.16);
+    }
   }
 
   &__snapshot-empty {
@@ -1768,6 +1841,49 @@ onBeforeUnmount(() => {
     background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
+  }
+}
+
+@media (max-width: 1160px) {
+  .arena-prepare {
+    &__page {
+      max-width: 1060px;
+    }
+
+    &__grid {
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+    }
+
+    &__snapshot {
+      --resume-snapshot-scale: 0.54;
+      height: 466px;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .arena-prepare {
+    &__page {
+      padding-inline: 18px;
+    }
+
+    &__grid {
+      grid-template-columns: 1fr;
+    }
+
+    &__snapshot {
+      --resume-snapshot-scale: 0.61;
+      height: 520px;
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .arena-prepare {
+    &__snapshot {
+      --resume-snapshot-scale: 0.47;
+      height: 408px;
+    }
   }
 }
 

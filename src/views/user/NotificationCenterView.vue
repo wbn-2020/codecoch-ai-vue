@@ -1,13 +1,13 @@
 <template>
   <div class="notification-page page-shell">
-    <section class="notification-hero cc-glass--ai">
+    <section class="notification-hero">
       <div class="hero-copy">
         <div class="eyebrow">
           <Bell :size="16" />
           通知中心
         </div>
         <h1>通知中心</h1>
-        <p>查看系统通知、报告完成提醒、任务提醒和公告。</p>
+        <p>集中处理系统通知、报告完成提醒、训练提醒和公告。</p>
       </div>
       <div class="hero-actions">
         <el-button :loading="markingAll" :disabled="unreadCount <= 0" @click="handleMarkAllRead">
@@ -392,50 +392,79 @@ onMounted(() => {
 <style scoped lang="scss">
 .notification-page {
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
 .notification-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 8px;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
+  background: var(--user-surface-tint);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .eyebrow {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--cc-ai-cyan);
+  color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .hero-copy {
   h1 {
-    margin: 14px 0 0;
-    font-size: 24px;
+    margin: 8px 0 0;
+    color: var(--user-text);
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.3;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--user-text-muted);
+    max-width: 620px;
+    color: var(--user-text-secondary);
+    font-size: 13.5px;
     line-height: 1.7;
   }
 }
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.notification-page > .content-card {
+  border: 1px solid var(--user-border);
+  border-radius: 20px;
+  background: var(--user-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .notification-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--user-border);
+}
+
+.notification-toolbar :deep(.el-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.notification-toolbar :deep(.el-select) {
+  width: 160px !important;
 }
 
 .unread-badge {
@@ -448,15 +477,14 @@ onMounted(() => {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--el-color-danger);
-  color: var(--user-text);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
 }
 
 .notification-list {
   min-height: 0;
-  padding: 0 20px 20px;
-  border-top: 1px solid var(--user-border);
+  padding: 2px 20px 20px;
 }
 
 .notification-error {
@@ -478,9 +506,9 @@ onMounted(() => {
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 16px 0;
+  padding: 14px 2px;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid var(--user-border);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -489,7 +517,7 @@ onMounted(() => {
   transition: background 0.15s;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.04);
+    background: var(--user-primary-faint);
   }
 
   &:focus-visible {
@@ -498,8 +526,18 @@ onMounted(() => {
   }
 
   &.unread {
+    margin-inline: -8px;
+    padding-inline: 10px;
+    border-bottom-color: transparent;
+    border-radius: 12px;
+    background: var(--user-surface-tint);
+
     .notification-body strong {
       color: var(--user-text);
+    }
+
+    .notification-body p {
+      color: var(--user-text-secondary);
     }
   }
 }
@@ -521,19 +559,26 @@ onMounted(() => {
 .notification-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 
   strong {
-    color: var(--user-text-muted);
-    font-size: 14px;
+    color: var(--user-text);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
   }
 }
 
 .notification-body p {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 6px 0 0;
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
   font-size: 13px;
   line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .notification-time {
@@ -541,7 +586,6 @@ onMounted(() => {
   margin-top: 6px;
   color: var(--user-text-muted);
   font-size: 12px;
-  opacity: 0.7;
 }
 
 .pagination-wrap {
@@ -560,7 +604,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
   font-size: 13px;
 }
 
@@ -581,6 +625,14 @@ onMounted(() => {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .notification-toolbar :deep(.el-select) {
+    width: 100% !important;
+  }
+
+  .notification-toolbar :deep(.el-radio-group) {
+    width: 100%;
+  }
 }
 
 
@@ -596,6 +648,10 @@ onMounted(() => {
     align-items: stretch;
   }
 
+  .notification-hero {
+    padding: 20px 18px;
+  }
+
   .hero-actions,
   .report-actions,
   .topbar-actions,
@@ -604,5 +660,22 @@ onMounted(() => {
   .notification-toolbar {
     justify-content: flex-start;
   }
+
+  .notification-list,
+  .notification-error,
+  .pagination-wrap {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .pagination-wrap {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+}
+
+:global(.notification-dialog) {
+  width: min(560px, calc(100vw - 28px)) !important;
+  margin: 7vh auto;
 }
 </style>

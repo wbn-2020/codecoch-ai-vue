@@ -6,15 +6,21 @@
           <CalendarCheck :size="16" />
           今日训练节奏
         </div>
-        <h1>跟着路线推进今天这一小步</h1>
-        <p>每日任务来自你的学习计划，你可以切换日期、完成或跳过任务，并把当天训练记录沉淀下来。</p>
+          <h1>把今天的训练推进一小步</h1>
+          <p>选择一条路线和日期，完成、跳过或复盘当天任务。</p>
         <div class="hero-actions">
           <el-date-picker v-model="selectedDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadDailyView" />
           <el-button :loading="loading || retryingDailyView" @click="loadDailyView">
             <RefreshCw :size="16" />
             刷新任务
           </el-button>
-          <el-button type="primary" :loading="checkingIn" :disabled="!selectedPlanId" @click="handleCheckin">
+          <el-button
+            type="primary"
+            :loading="checkingIn"
+            :disabled="!selectedPlanId || selectedDate !== today"
+            :title="selectedDate !== today ? '请切换到中国标准时间的今天再打卡' : undefined"
+            @click="handleCheckin"
+          >
             <CheckCircle2 :size="16" />
             今日打卡
           </el-button>
@@ -89,7 +95,6 @@
 
           <div v-else v-loading="loading" class="daily-content">
             <div class="metric-grid">
-              <div class="metric"><span>总任务</span><strong>{{ dailyView?.totalTaskCount ?? 0 }}</strong></div>
               <div class="metric is-success"><span>已完成</span><strong>{{ dailyView?.completedTaskCount ?? 0 }}</strong></div>
               <div class="metric is-warning"><span>待完成</span><strong>{{ dailyView?.pendingTaskCount ?? 0 }}</strong></div>
               <div class="metric is-primary"><span>完成率</span><strong>{{ dailyView?.completionRate ?? 0 }}%</strong></div>
@@ -160,9 +165,11 @@ import AppState from '@/components/common/AppState.vue'
 import type { StudyPlanDailyViewVO, StudyPlanListVO, StudyTaskStatus, StudyTaskVO } from '@/types/studyPlan'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+import { formatDateInTimezone } from '@/utils/format'
 
 const router = useRouter()
-const today = new Date().toISOString().slice(0, 10)
+
+const today = formatDateInTimezone(new Date(), 'Asia/Shanghai')
 
 const plans = ref<StudyPlanListVO[]>([])
 const selectedPlanId = ref<number>()
@@ -273,6 +280,8 @@ const handleCheckin = async () => {
   try {
     await checkinApi(selectedPlanId.value ? { planId: selectedPlanId.value } : undefined)
     ElMessage.success('打卡成功')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '今日打卡暂时失败，请稍后重试。'))
   } finally {
     checkingIn.value = false
   }
@@ -311,38 +320,41 @@ onMounted(loadPlans)
 .daily-task-page {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
   color: var(--user-text);
 }
 
 .daily-hero,
 .content-card {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 20px;
   background: var(--user-surface);
-  box-shadow: none;
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .daily-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: 16px;
-  padding: 18px;
-  background: var(--user-surface);
+  grid-template-columns: minmax(0, 1fr) minmax(214px, 248px);
+  gap: 22px;
+  padding: 22px 24px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
 }
 
 .hero-copy h1 {
-  max-width: 720px;
+  max-width: 660px;
   margin: 8px 0;
   color: var(--user-text);
-  font-size: 24px;
+  font-size: 26px;
+  font-weight: 900;
   line-height: 1.3;
 }
 
 .hero-copy p {
-  max-width: 740px;
+  max-width: 640px;
   margin: 0;
-  color: var(--user-text-muted);
+  color: var(--user-text-secondary);
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -359,24 +371,20 @@ onMounted(loadPlans)
 .section-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .hero-summary {
   display: grid;
   align-content: center;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
+  gap: 8px;
+  padding-left: 24px;
+  border-left: 1.5px solid var(--user-primary-border);
 }
 
 .hero-summary span,
@@ -389,18 +397,31 @@ onMounted(loadPlans)
 
 .hero-summary strong {
   color: var(--user-text);
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 900;
   line-height: 1.25;
 }
 
 .daily-layout {
   display: grid;
-  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(236px, 270px) minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
 }
 
 .content-card__body {
-  padding: 16px;
+  padding: 20px;
+}
+
+.daily-main.content-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.daily-main .content-card__body {
+  padding: 0;
 }
 
 .section-head {
@@ -426,17 +447,17 @@ onMounted(loadPlans)
 .plan-list,
 .task-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .plan-item {
   display: grid;
   gap: 8px;
   width: 100%;
-  padding: 14px;
+  padding: 11px 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
+  border-radius: 14px;
+  background: var(--user-surface-muted);
   color: var(--user-text);
   text-align: left;
   cursor: pointer;
@@ -469,19 +490,17 @@ onMounted(loadPlans)
 }
 
 .metric-grid {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
 }
 
 .metric {
   min-width: 0;
-  flex: 1 1 150px;
-  padding: 10px 12px;
+  padding: 13px 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--user-surface-muted);
 
   span {
@@ -513,11 +532,11 @@ onMounted(loadPlans)
 .focus-task {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 14px;
-  padding: 14px;
-  border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: 20px;
   background: var(--user-primary-faint);
 
   span {
@@ -529,13 +548,18 @@ onMounted(loadPlans)
   h3 {
     margin: 6px 0;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: 19px;
+    font-weight: 900;
   }
 
   p {
     margin: 0;
-    color: var(--user-text-muted);
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--user-text-secondary);
     line-height: 1.6;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 }
 
@@ -554,15 +578,25 @@ onMounted(loadPlans)
 }
 
 .task-card {
-  padding: 16px;
+  padding: 16px 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: 18px;
   background: var(--user-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 
   h3 {
     margin: 4px 0 0;
     color: var(--user-text);
     font-size: 16px;
+  }
+
+  p {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--user-text-secondary);
+    line-height: 1.6;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 }
 
@@ -609,6 +643,10 @@ onMounted(loadPlans)
     width: 100%;
   }
 
+  .hero-actions :deep(.el-button) {
+    flex: 1 1 0;
+  }
+
   .focus-task__meta {
     justify-items: start;
   }
@@ -617,11 +655,21 @@ onMounted(loadPlans)
 @media (max-width: 720px) {
   .daily-hero,
   .content-card__body {
-    padding: 16px;
+    padding: 20px 18px;
+  }
+
+  .daily-main .content-card__body {
+    padding: 0;
   }
 
   .metric-grid {
-    display: flex;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-summary {
+    padding: 16px 0 0;
+    border-top: 1.5px solid var(--user-primary-border);
+    border-left: 0;
   }
 }
 </style>

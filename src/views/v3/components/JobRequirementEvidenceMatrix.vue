@@ -287,7 +287,7 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   flex-direction: column;
   gap: 18px;
   padding-top: 24px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1px solid var(--app-border);
 }
 
 .matrix-head {
@@ -313,7 +313,7 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   display: grid;
   gap: 12px;
   padding: 16px 0;
-  border-block: 1px solid rgba(148, 163, 184, 0.14);
+  border-block: 1px solid var(--app-border);
 }
 
 .history-head,
@@ -348,9 +348,9 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   min-width: 112px;
   gap: 4px;
   padding: 10px;
-  border: 1px solid rgba(99, 102, 241, 0.28);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.08);
+  background: var(--app-primary-soft, var(--user-surface-muted));
   color: inherit;
   font: inherit;
   text-align: left;
@@ -366,12 +366,12 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   &:hover:not(:disabled),
   &:focus-visible,
   &.is-active {
-    border-color: rgba(34, 211, 238, 0.58);
-    background: rgba(8, 145, 178, 0.16);
+    border-color: var(--app-primary);
+    background: var(--user-cyan-soft, var(--app-primary-soft));
   }
 
   &:focus-visible {
-    outline: 2px solid rgba(34, 211, 238, 0.52);
+    outline: 2px solid var(--app-primary);
     outline-offset: 2px;
   }
 
@@ -401,12 +401,12 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
 .matrix-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  border-block: 1px solid rgba(148, 163, 184, 0.14);
+  border-block: 1px solid var(--app-border);
 
   > div {
     min-width: 0;
     padding: 16px;
-    border-right: 1px solid rgba(148, 163, 184, 0.14);
+    border-right: 1px solid var(--app-border);
 
     &:last-child {
       border-right: 0;
@@ -430,15 +430,15 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
 }
 
 .metric-success {
-  color: #86efac;
+  color: var(--arena-grn-d, var(--user-success));
 }
 
 .metric-warning {
-  color: #fde68a;
+  color: var(--user-warning-text, var(--arena-amber));
 }
 
 .metric-danger {
-  color: #fca5a5;
+  color: var(--user-danger, var(--arena-red));
 }
 
 .readiness-band {
@@ -446,9 +446,9 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   grid-template-columns: 190px minmax(0, 1fr);
   gap: 18px;
   padding: 16px;
-  border: 1px solid rgba(34, 211, 238, 0.18);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(8, 47, 73, 0.2);
+  background: var(--user-cyan-soft, var(--app-primary-soft));
 }
 
 .readiness-summary,
@@ -478,7 +478,7 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   > div {
     min-width: 0;
     padding-left: 12px;
-    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    border-left: 1px solid var(--app-border);
   }
 
   strong {
@@ -529,9 +529,9 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
 }
 
 .requirement-item {
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 
   summary {
     display: grid;
@@ -556,19 +556,19 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: var(--arena-mut, var(--app-text-muted));
 }
 
 .status-mark[data-tone='success'] {
-  background: #4ade80;
+  background: var(--arena-grn-d, var(--user-success));
 }
 
 .status-mark[data-tone='warning'] {
-  background: #facc15;
+  background: var(--user-warning, var(--arena-amber));
 }
 
 .status-mark[data-tone='danger'] {
-  background: #f87171;
+  background: var(--user-danger, var(--arena-red));
 }
 
 .requirement-copy {
@@ -591,27 +591,27 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
 
 .status-label {
   padding: 4px 8px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--app-border);
   border-radius: 999px;
-  color: #cbd5e1;
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
 .status-label[data-tone='success'] {
-  color: #86efac;
+  color: var(--arena-grn-d, var(--user-success));
 }
 
 .status-label[data-tone='warning'] {
-  color: #fde68a;
+  color: var(--user-warning-text, var(--arena-amber));
 }
 
 .status-label[data-tone='danger'] {
-  color: #fca5a5;
+  color: var(--user-danger, var(--arena-red));
 }
 
 .requirement-detail {
   padding: 0 14px 14px 36px;
-  color: #cbd5e1;
+  color: var(--app-text);
 
   > p {
     line-height: 1.65;
@@ -620,7 +620,7 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   ul {
     margin: 12px 0;
     padding-left: 18px;
-    color: #fca5a5;
+    color: var(--user-danger, var(--arena-red));
   }
 }
 
@@ -632,8 +632,8 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
   article {
     min-width: 0;
     padding: 12px;
-    border-left: 2px solid rgba(34, 211, 238, 0.36);
-    background: rgba(15, 23, 42, 0.42);
+    border-left: 2px solid var(--app-primary);
+    background: var(--user-surface-muted, var(--app-surface-raised));
   }
 
   span,
@@ -697,7 +697,7 @@ const evidenceMetaText = (evidence: JobRequirementEvidenceVO) => [
 
   .matrix-metrics > div {
     border-right: 0;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    border-bottom: 1px solid var(--app-border);
   }
 
   .requirement-item summary {

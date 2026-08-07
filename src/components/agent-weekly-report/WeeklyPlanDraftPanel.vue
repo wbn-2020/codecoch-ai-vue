@@ -97,9 +97,9 @@ const planIntents = computed(() => props.draft.items.map((item, index) => ({
 .weekly-panel {
   min-width: 0;
   padding: 18px 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
+  background: var(--user-surface, var(--app-surface));
 }
 
 .weekly-panel__header {
@@ -205,7 +205,7 @@ dl div {
   min-width: 0;
   padding: 9px 10px;
   border-radius: 6px;
-  background: rgba(2, 6, 23, 0.34);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 }
 
 dt {

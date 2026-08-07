@@ -1,4 +1,5 @@
-html.dark {
+body.admin-overlay-theme {
+  & {
   --el-bg-color: rgba(15, 23, 42, 0.92);
   --el-bg-color-page: #020617;
   --el-bg-color-overlay: #111827;
@@ -32,7 +33,7 @@ html.dark {
   --el-border-radius-base: 8px;
   --el-datepicker-hover-text-color: var(--cc-primary-hover);
   --el-datepicker-active-color: var(--cc-primary);
-}
+  }
 
 .app-layout {
   min-height: 100vh;
@@ -648,4 +649,5 @@ html.dark {
 
 .admin-console-page .el-table .el-button + .el-button {
   margin-left: 4px;
+}
 }

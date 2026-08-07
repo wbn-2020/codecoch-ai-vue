@@ -128,12 +128,12 @@ describe('ArenaPrepareView', () => {
 
     expect(wrapper.text()).toContain('装备你的求职背包')
     expect(wrapper.text()).toContain('第 1 关 · 做出能匹配的简历')
-    expect(wrapper.text()).toContain('第 2 关 · 锁定目标岗位')
-    expect(wrapper.text()).toContain('第 3 关 · 生成 JD 匹配报告')
     expect(wrapper.text()).toContain('已完成 0/3')
+    expect(wrapper.text()).toContain('目标岗位')
+    expect(wrapper.text()).toContain('JD 匹配状态')
+    expect(wrapper.findAll('.arena-prepare__node')).toHaveLength(1)
     // 第 1 关为当前关，其余未解锁
     expect(wrapper.get('.arena-prepare__map').findAll('.arena-chip--amber')).toHaveLength(1)
-    expect(wrapper.text()).toContain('未解锁')
     // 下一步行动
     expect(wrapper.text()).toContain('先补简历')
     expect(wrapper.text()).toContain('0/6')
@@ -196,11 +196,11 @@ describe('ArenaPrepareView', () => {
     const wrapper = mountPrepare()
     await flush()
 
-    // 简历已通关，第 2 关为当前关，第 3 关仍未解锁
+    // 当前实现将未完成主线压缩为一个当前节点，并把岗位 JD 接入留在当前工作区。
     expect(wrapper.text()).toContain('已完成 1/3')
     expect(wrapper.text()).toContain('补目标岗位')
-    const matchNode = wrapper.findAll('.arena-prepare__node').at(2)
-    expect(matchNode?.classes()).toContain('is-locked')
+    expect(wrapper.text()).toContain('贴上你的目标岗位 JD')
+    expect(wrapper.find('.arena-prepare__jd-textarea').exists()).toBe(true)
   })
 
   it('falls back to target keywords for the coverage panel before any match exists', async () => {

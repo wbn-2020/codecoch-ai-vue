@@ -672,7 +672,7 @@ onBeforeUnmount(() => {
 .variant-row {
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: var(--arena-radius-card, 16px);
 }
 
 .actions {

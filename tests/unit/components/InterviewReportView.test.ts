@@ -92,7 +92,7 @@ describe('InterviewReportView metrics', () => {
     vi.mocked(generateStudyPlanApi).mockResolvedValue({})
   })
 
-  it('does not record report action metrics from top navigation when report is not generated', async () => {
+  it('does not render legacy top actions or record report action metrics in recovery state', async () => {
     vi.mocked(getInterviewReportApi).mockResolvedValue({
       interviewId: 42,
       reportStatus: 'FAILED',
@@ -100,13 +100,8 @@ describe('InterviewReportView metrics', () => {
     })
 
     const wrapper = await mountReport()
-    const todayPlanButton = wrapper
-      .findAll('.report-actions .el-button-stub')
-      .find((button) => button.text().includes('今日计划'))
-    expect(todayPlanButton).toBeDefined()
-    await todayPlanButton!.trigger('click')
-
-    expect(routerPush).toHaveBeenCalledWith('/dashboard')
+    expect(wrapper.find('.report-actions').exists()).toBe(false)
+    expect(wrapper.find('.report-recovery-card__actions').text()).toContain('重新生成报告')
     expect(recordAgentMetricEventApi).not.toHaveBeenCalled()
   })
 
@@ -128,8 +123,9 @@ describe('InterviewReportView metrics', () => {
     })
 
     const wrapper = await mountReport()
-    expect(wrapper.find('.report-deep-dive').exists()).toBe(true)
-    expect(wrapper.find('.report-deep-dive > summary').text()).toContain('完整报告')
+    const fullReport = wrapper.find('.report-deep-dive:not(.report-insights-drawer)')
+    expect(fullReport.exists()).toBe(true)
+    expect(fullReport.find('summary').text()).toContain('完整报告')
 
     expect(recordAgentMetricEventApi).toHaveBeenCalledTimes(1)
     expect(recordAgentMetricEventApi).toHaveBeenCalledWith(

@@ -11,6 +11,11 @@ const resumePrepare = readSource('src/views/resume/ArenaPrepareView.vue')
 const resumeEditor = readSource('src/views/resume/ResumeEditView.vue')
 const abilityMap = readSource('src/views/ability-map/AbilityMapView.vue')
 const arenaInterviewCreate = readSource('src/views/interview/ArenaInterviewCreateView.vue')
+const interviewReport = readSource('src/views/interview/InterviewReportView.vue')
+const questionDetail = readSource('src/views/question/QuestionTrainingDetailView.vue')
+const tools = readSource('src/views/tools/RecordsToolsView.vue')
+const applicationWorkspace = readSource('src/views/v4/application-workspace/ApplicationWorkspaceView.vue')
+const campaignCockpit = readSource('src/views/v8/campaign-cockpit/CampaignCockpitView.vue')
 
 describe('direction D critical flows', () => {
   it('keeps a text answer path available in the compact interview room', () => {
@@ -58,5 +63,47 @@ describe('direction D critical flows', () => {
     expect(arenaInterviewCreate).toMatch(
       /const selectDungeon = \(item: ModeCard\) => \{[\s\S]*?selectMode\(item\)[\s\S]*?if \(item\.industry\) \{[\s\S]*?scrollToConfig\(\)[\s\S]*?\}/
     )
+  })
+
+  it('does not expose report-only recommendations as actionable buttons', () => {
+    expect(interviewReport).toContain(':disabled="!item.questionId"')
+    expect(interviewReport).toContain(':aria-disabled="!item.questionId"')
+  })
+
+  it('keeps direct question links inside the question-bank flow', () => {
+    expect(questionDetail).toContain('@click="goBackToQuestionBank"')
+    expect(questionDetail).toContain("void router.push('/questions')")
+    expect(questionDetail).not.toContain('router.back()')
+  })
+
+  it('keeps gated tool entries readable when a feature is unavailable', () => {
+    expect(tools).toContain('filter: none;')
+    expect(tools).toContain('color: var(--arena-ink);')
+    expect(tools).toContain('color: var(--user-warning-text);')
+    expect(tools).toContain(':disabled="item.enabled === false"')
+    expect(tools).toContain('if (item.enabled === false) return')
+  })
+
+  it('keeps the ability-map entry action aligned with the Direction D prototype', () => {
+    expect(tools).toContain('<span class="arena-tools__enter">进入 ›</span>')
+    expect(tools).toMatch(
+      /\.arena-tools__enter\s*\{[\s\S]*?color:\s*var\(--arena-grn-d\);[\s\S]*?font-size:\s*13px;[\s\S]*?font-weight:\s*800;/
+    )
+  })
+
+  it('keeps task status tags valid for unknown backend states', () => {
+    const studyPlans = readSource('src/views/study/StudyPlanView.vue')
+
+    expect(studyPlans).toMatch(
+      /const taskStatusType = \(status\?: string\) => \{[\s\S]*?if \(value === 'SKIPPED'\) return 'info'[\s\S]*?return 'info'/
+    )
+  })
+
+  it('guards backend-provided workspace links before rendering or navigating', () => {
+    for (const source of [applicationWorkspace, campaignCockpit]) {
+      expect(source).toContain("from '@/features/route-safety'")
+      expect(source).toContain('resolveAppRoutePath')
+      expect(source).toContain('defaultUserKnownPaths')
+    }
   })
 })

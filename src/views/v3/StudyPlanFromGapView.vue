@@ -29,14 +29,21 @@
         <AppState v-if="loadError" type="error" title="短板加载失败" :description="loadError"><el-button type="primary" @click="loadProfile">重试</el-button></AppState>
         <AppState v-else-if="!gapItems.length" type="empty" title="暂无可选短板" description="请先生成能力画像，或刷新后再试。" />
         <el-checkbox-group v-else v-model="form.gapItemIds" class="gap-list">
-          <label v-for="gap in gapItems" :key="gap.id" class="gap-card">
+          <label
+            v-for="gap in gapItems"
+            :key="gap.id"
+            class="gap-card"
+            :class="{ 'is-selected': form.gapItemIds.includes(gap.id) }"
+          >
             <el-checkbox :value="gap.id" />
-            <span>
-              <strong>
-                {{ gapTitle(gap) }}
-                <el-tag v-if="isEvidenceFeedbackGap(gap)" size="small" type="warning" effect="plain">证据反馈</el-tag>
-              </strong>
-              <small>{{ gapMeta(gap) }}</small>
+            <span class="gap-card__body">
+              <span class="gap-card__head">
+                <strong>
+                  {{ gapTitle(gap) }}
+                  <el-tag v-if="isEvidenceFeedbackGap(gap)" size="small" type="warning" effect="plain">证据反馈</el-tag>
+                </strong>
+                <small>{{ gapMeta(gap) }}</small>
+              </span>
               <em>{{ gapDescription(gap) }}</em>
             </span>
           </label>
@@ -179,6 +186,25 @@ const clearLoadedProfile = () => {
   contextWarning.value = ''
 }
 
+const GAP_PROFILE_LOAD_TIMEOUT_MS = 15000
+
+const withGapProfileTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('能力画像读取超时，请稍后重试。'))
+    }, GAP_PROFILE_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const loadProfileForContext = async (context: {
   profileId?: number
   targetJobId?: number
@@ -196,7 +222,7 @@ const loadProfileForContext = async (context: {
     let nextWarning = ''
     if (!resolvedTargetJobId && !context.profileId) {
       try {
-        const currentTarget = await getCurrentJobTargetApi()
+        const currentTarget = await withGapProfileTimeout(getCurrentJobTargetApi())
         if (!isCurrentProfileRequest(requestSeq)) return
         resolvedTargetJobId = currentTarget?.id
       } catch (error) {
@@ -210,21 +236,21 @@ const loadProfileForContext = async (context: {
     let nextMatchReportId: number | undefined
     let nextGapItems: SkillGapItemVO[] = []
     if (context.profileId) {
-      const detail = await getSkillProfileByIdApi(context.profileId)
+      const detail = await withGapProfileTimeout(getSkillProfileByIdApi(context.profileId))
       if (!isCurrentProfileRequest(requestSeq)) return
       nextProfileId = detail?.profileId || context.profileId
       nextTargetJobId = detail?.targetJobId || resolvedTargetJobId
       nextMatchReportId = detail?.matchReportId
       nextGapItems = detail?.gapItems || []
     } else {
-      const overview = await getSkillProfileOverviewApi(resolvedTargetJobId)
+      const overview = await withGapProfileTimeout(getSkillProfileOverviewApi(resolvedTargetJobId))
       if (!isCurrentProfileRequest(requestSeq)) return
       nextProfileId = overview.profileId
       nextTargetJobId = resolvedTargetJobId || overview.targetJobId
       nextGapItems = overview.topGaps || []
       if (nextTargetJobId) {
         try {
-          const detail = await getSkillProfileByJobTargetApi(nextTargetJobId)
+          const detail = await withGapProfileTimeout(getSkillProfileByJobTargetApi(nextTargetJobId))
           if (!isCurrentProfileRequest(requestSeq)) return
           nextProfileId = detail?.profileId || nextProfileId
           nextTargetJobId = detail?.targetJobId || nextTargetJobId
@@ -332,25 +358,215 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
-.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
-.hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
-.hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
-h1, h2, p { margin: 0; }
-h1 { margin-top: 8px; font-size: 26px; }
-p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: 16px; }
-.content-panel { padding: 16px; min-width: 0; }
-.section-head { justify-content: space-between; margin-bottom: 12px; }
-.context-alert { margin-bottom: 14px; }
-.gap-list { display: grid; gap: 12px; }
-.gap-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); cursor: pointer; }
-.gap-card strong, .gap-card small, .gap-card em { display: block; overflow-wrap: anywhere; }
-.gap-card strong { color: var(--app-text); font-size: 15px; line-height: 1.45; }
-.gap-card small { margin-top: 4px; color: var(--app-text-muted); }
-.gap-card em { margin-top: 8px; color: var(--app-text); font-style: normal; line-height: 1.6; }
-.form-panel { display: flex; flex-direction: column; gap: 14px; align-self: start; }
-.full { width: 100%; }
-@media (max-width: 900px) { .page-hero, .plan-grid { grid-template-columns: 1fr; flex-direction: column; } .hero-actions { flex-wrap: wrap; } }
+.v3-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--user-text);
+}
+
+.page-hero,
+.content-panel {
+  min-width: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+}
+
+.page-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px;
+}
+
+.hero-kicker,
+.hero-actions,
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-kicker {
+  color: var(--user-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 7px;
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+h2 {
+  color: var(--user-text);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+p {
+  max-width: 68ch;
+  margin-top: 7px;
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.hero-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(276px, 304px);
+  align-items: start;
+  gap: 20px;
+}
+
+.content-panel {
+  padding: 20px;
+}
+
+.section-head {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.context-alert {
+  margin-bottom: 14px;
+}
+
+.gap-list {
+  display: grid;
+  gap: 10px;
+}
+
+.gap-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  color: var(--user-text);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+
+  &:hover {
+    border-color: var(--user-primary-border);
+    background: var(--user-surface);
+  }
+
+  &.is-selected {
+    border-color: var(--user-primary);
+    background: var(--user-primary-faint);
+  }
+}
+
+.gap-card__body,
+.gap-card__head,
+.gap-card strong,
+.gap-card small,
+.gap-card em {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.gap-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gap-card strong {
+  color: var(--user-text);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.gap-card small {
+  flex: 0 0 auto;
+  max-width: 58%;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.gap-card em {
+  margin-top: 8px;
+  color: var(--user-text-secondary);
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-self: start;
+
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
+}
+
+.full {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .page-hero,
+  .plan-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .page-hero,
+  .content-panel {
+    padding: 16px;
+  }
+
+  .hero-actions {
+    width: 100%;
+
+    :deep(.el-button) {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+
+  .gap-card__head {
+    display: block;
+  }
+
+  .gap-card small {
+    max-width: none;
+    margin-top: 5px;
+    text-align: left;
+  }
+}
 </style>
