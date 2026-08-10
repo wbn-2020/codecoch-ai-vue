@@ -1,6 +1,16 @@
 <template>
-  <div class="jobcoach-layout" :class="{ 'is-arena-page': usesArenaShell }">
-    <div v-if="usesArenaShell" class="arena-frame">
+  <div
+    class="jobcoach-layout"
+    :class="{
+      'is-arena-page': usesArenaShell,
+      'is-resume-workbench-page': isResumeWorkbench
+    }"
+  >
+    <div
+      v-if="usesArenaShell"
+      class="arena-frame"
+      :class="{ 'is-resume-workbench-frame': isResumeWorkbench }"
+    >
       <ArenaTopNav
         v-if="!isImmersivePage"
         :display-name="displayName"
@@ -15,7 +25,8 @@
         class="jobcoach-main"
         :class="{
           'is-arena-main': usesArenaShell,
-          'is-immersive': isImmersivePage
+          'is-immersive': isImmersivePage,
+          'is-resume-workbench-main': isResumeWorkbench
         }"
       >
         <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
@@ -70,6 +81,7 @@ const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
 const usesArenaShell = computed(() => !isImmersivePage.value)
+const isResumeWorkbench = computed(() => route.meta?.layoutMode === 'resume-workbench')
 
 watch(usesArenaShell, (enabled) => {
   document.body.classList.toggle('arena-overlay-theme', enabled)
@@ -161,6 +173,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 24px 60px rgba(21, 33, 27, 0.18);
 }
 
+.arena-frame.is-resume-workbench-frame {
+  width: min(calc(100% - 16px), 1600px);
+  min-height: 100dvh;
+  border-radius: 12px;
+  background: var(--user-bg);
+  box-shadow: 0 10px 28px rgba(21, 33, 27, 0.14);
+}
+
 .jobcoach-main {
   width: min(100%, 1440px);
   min-width: 0;
@@ -221,6 +241,11 @@ onBeforeUnmount(() => {
     min-height: 100vh;
     padding: 0;
   }
+
+  &.is-resume-workbench-main {
+    min-height: calc(100dvh - 62px);
+    overflow: hidden;
+  }
 }
 
 .demo-readonly-banner {
@@ -251,6 +276,12 @@ onBeforeUnmount(() => {
     min-height: 100vh;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  .arena-frame.is-resume-workbench-frame {
+    width: 100%;
+    min-height: 100dvh;
+    border-radius: 0;
   }
 
   .jobcoach-main {

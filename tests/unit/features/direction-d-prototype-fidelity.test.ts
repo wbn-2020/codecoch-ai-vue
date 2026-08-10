@@ -34,6 +34,7 @@ describe('Direction D prototype fidelity contracts', () => {
   it('keeps the shared arena shell, navigation and route metadata explicit', () => {
     const layout = readSource('src/layouts/UserLayout.vue')
     const topNav = readSource('src/components/layout/ArenaTopNav.vue')
+    const navigation = readSource('src/config/userNavigation.ts')
     const routes = readSource('src/router/routes.ts')
     const arena = readSource('src/styles/arena.scss')
 
@@ -48,12 +49,16 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(layout).toContain("document.body.classList.remove('is-user-layout-active')")
     expect(layout).not.toContain('UserTopNav')
 
-    for (const label of ['今天', '准备', '训练', '面试', '工具']) {
-      expect(topNav, `primary navigation: ${label}`).toContain(label)
+    for (const label of ['今日', '准备', '训练', '面试', '进度', '资源', '成长']) {
+      expect(navigation, `primary navigation: ${label}`).toContain(`label: '${label}'`)
     }
+    expect(topNav).toContain("from '@/config/userNavigation'")
+    expect(topNav).toContain('@click="go(group.path)"')
+    expect(topNav).toContain('toggleDesktopMenu(group.key)')
     expect(topNav).toContain('arena-bottom-nav')
+    expect(topNav).toContain('arena-mobile-more')
     expect(topNav).toContain('@media (max-width: 720px)')
-    expect(topNav).toContain("@click=\"go('/tools')\"")
+    expect(navigation).toContain("path: '/tools'")
 
     for (const route of [
       "path: 'dashboard'",
@@ -102,16 +107,19 @@ describe('Direction D prototype fidelity contracts', () => {
     const tools = readSource('src/views/tools/RecordsToolsView.vue')
     const userComponents = readSource('src/styles/user-components.scss')
     const layout = readSource('src/layouts/UserLayout.vue')
-    const topNav = readSource('src/components/layout/ArenaTopNav.vue')
+    const navigation = readSource('src/config/userNavigation.ts')
     const acceptanceEnv = readSource('.env.acceptance')
     const routes = readSource('src/router/routes.ts')
 
-    // The user explicitly requested the preview in the middle and editing on the right.
+    // Resume workbench v2 keeps the A4 canvas central and the contextual editor on the right.
     expect(resume).toContain(
-      'grid-template-columns: 200px 360px minmax(0, 1fr)'
+      'grid-template-columns: 220px minmax(640px, 1fr) 370px'
     )
-    expect(resume).toContain('.preview-column {\n    grid-column: 2;')
-    expect(resume).toContain('.editor-main {\n    grid-column: 3;')
+    expect(resume).toContain('<ResumeSectionRail')
+    expect(resume).toContain('<ResumeWorkbenchTopbar')
+    expect(resume).toContain('<ResumeTemplateGallery')
+    expect(resume).toMatch(/\.preview-column\s*\{[\s\S]*?grid-column:\s*2;/)
+    expect(resume).toMatch(/\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;/)
     expect(resume).toContain('label="背景"')
     expect(resume).toContain('label="技术决策"')
     expect(resume).toContain('label="量化结果"')
@@ -119,9 +127,12 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(resume).toContain('handleSaveInlineProject')
     expect(resume).toContain('openPdfExport')
     expect(resume).toContain('@media (max-width: 1020px)')
-    expect(resume).toContain('grid-template-columns: 180px minmax(300px, 0.9fr) minmax(0, 1fr)')
-    expect(resume).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(resume).toContain('grid-template-columns: 64px minmax(600px, 1fr) 350px')
+    expect(resume).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
     expect(resume).toContain('A4 预览 · 分页以导出为准')
+    expect(layout).toContain("'is-resume-workbench-frame': isResumeWorkbench")
+    expect(layout).toContain('width: min(calc(100% - 16px), 1600px)')
+    expect(routes).toContain("layoutMode: 'resume-workbench'")
 
     // Direction D defines the tools page as a focused 760px single-column inventory.
     expect(tools).toContain('width: min(100%, 760px)')
@@ -162,7 +173,7 @@ describe('Direction D prototype fidelity contracts', () => {
       "'/portfolio-demo'",
       "'/onboarding'"
     ]) {
-      expect(topNav, `tools navigation ownership: ${routePrefix}`).toContain(routePrefix)
+      expect(navigation, `navigation ownership: ${routePrefix}`).toContain(routePrefix)
     }
 
     // Legacy workbench rules must not turn an arena page root into a grid.

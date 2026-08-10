@@ -6,18 +6,130 @@
         <strong>CodeCoachAI</strong>
       </button>
 
-      <nav class="arena-top-nav__desktop-links" aria-label="用户端主导航">
-        <button
-          v-for="item in primaryItems"
-          :key="item.key"
-          class="arena-top-nav__link"
-          :class="{ 'is-active': isActive(item) }"
-          type="button"
-          :aria-current="isActive(item) ? 'page' : undefined"
-          @click="go(item.path)"
+      <nav ref="desktopNavRoot" class="arena-top-nav__desktop-links" aria-label="用户端主导航">
+        <div
+          v-for="group in visibleNavigationGroups"
+          :key="group.key"
+          class="arena-top-nav__group"
+          :class="{ 'arena-top-nav__group--compact-overflow': group.compactOverflow }"
         >
-          {{ item.label }}
-        </button>
+          <button
+            class="arena-top-nav__link arena-top-nav__link--primary"
+            :class="{ 'is-active': activeGroup?.key === group.key }"
+            type="button"
+            :aria-current="activeGroup?.key === group.key ? 'page' : undefined"
+            @click="go(group.path)"
+          >
+            <span>{{ group.label }}</span>
+          </button>
+          <button
+            class="arena-top-nav__link arena-top-nav__link--toggle"
+            :class="{ 'is-active': activeGroup?.key === group.key }"
+            type="button"
+            :data-nav-trigger="group.key"
+            :aria-label="`展开${group.label}菜单`"
+            aria-haspopup="menu"
+            :aria-expanded="openDesktopKey === group.key"
+            :aria-controls="`arena-nav-menu-${group.key}`"
+            @click="toggleDesktopMenu(group.key)"
+            @keydown="handleDesktopTriggerKeydown($event, group.key)"
+          >
+            <ChevronDown :size="13" aria-hidden="true" />
+          </button>
+
+          <Transition name="arena-nav-menu">
+            <section
+              v-if="openDesktopKey === group.key"
+              :id="`arena-nav-menu-${group.key}`"
+              class="arena-top-nav__menu"
+              role="menu"
+              :aria-label="`${group.label}导航`"
+              @keydown="handleMenuKeydown($event, group.key)"
+            >
+              <header class="arena-top-nav__menu-header">
+                <strong>{{ group.label }}</strong>
+                <span>{{ group.description }}</span>
+              </header>
+              <button
+                v-for="item in group.items"
+                :key="item.key"
+                class="arena-top-nav__menu-item"
+                :class="{ 'is-active': activeItem?.item.key === item.key }"
+                type="button"
+                role="menuitem"
+                :data-nav-menu-item="group.key"
+                :data-nav-path="item.path"
+                :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
+                @click="go(item.path)"
+              >
+                <component :is="item.icon" :size="17" aria-hidden="true" />
+                <span>
+                  <strong>{{ item.label }}</strong>
+                  <small>{{ item.description }}</small>
+                </span>
+              </button>
+            </section>
+          </Transition>
+        </div>
+
+        <div class="arena-top-nav__group arena-top-nav__overflow">
+          <button
+            class="arena-top-nav__link"
+            :class="{ 'is-active': isOverflowActive }"
+            type="button"
+            data-nav-trigger="more"
+            :aria-current="isOverflowActive ? 'page' : undefined"
+            aria-haspopup="menu"
+            :aria-expanded="openDesktopKey === 'more'"
+            aria-controls="arena-nav-menu-more"
+            @click="toggleDesktopMenu('more')"
+            @keydown="handleDesktopTriggerKeydown($event, 'more')"
+          >
+            <MoreHorizontal :size="16" aria-hidden="true" />
+            <span>更多</span>
+          </button>
+
+          <Transition name="arena-nav-menu">
+            <section
+              v-if="openDesktopKey === 'more'"
+              id="arena-nav-menu-more"
+              class="arena-top-nav__menu arena-top-nav__menu--overflow"
+              role="menu"
+              aria-label="更多导航"
+              @keydown="handleMenuKeydown($event, 'more')"
+            >
+              <section
+                v-for="group in overflowNavigationGroups"
+                :key="group.key"
+                class="arena-top-nav__overflow-group"
+                :aria-labelledby="`arena-overflow-${group.key}`"
+              >
+                <header>
+                  <strong :id="`arena-overflow-${group.key}`">{{ group.label }}</strong>
+                  <span>{{ group.description }}</span>
+                </header>
+                <button
+                  v-for="item in group.items"
+                  :key="item.key"
+                  class="arena-top-nav__menu-item"
+                  :class="{ 'is-active': activeItem?.item.key === item.key }"
+                  type="button"
+                  role="menuitem"
+                  data-nav-menu-item="more"
+                  :data-nav-path="item.path"
+                  :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
+                  @click="go(item.path)"
+                >
+                  <component :is="item.icon" :size="17" aria-hidden="true" />
+                  <span>
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.description }}</small>
+                  </span>
+                </button>
+              </section>
+            </section>
+          </Transition>
+        </div>
       </nav>
 
       <div class="arena-top-nav__desktop-actions">
@@ -40,15 +152,6 @@
         >
           <span aria-hidden="true">◆</span>
           {{ formattedXp }}
-        </button>
-        <button
-          class="arena-top-nav__tools"
-          :class="{ 'is-active': isToolsActive }"
-          type="button"
-          aria-label="前往记录与工具"
-          @click="go('/tools')"
-        >
-          工具
         </button>
         <el-dropdown trigger="click" @command="handleUserCommand">
           <button class="arena-top-nav__avatar-button" type="button" :aria-label="`打开 ${displayName} 的账户菜单`">
@@ -118,47 +221,102 @@
         </div>
       </div>
     </div>
-
   </header>
+
+  <Transition name="arena-mobile-more">
+    <div
+      v-if="mobileMoreOpen"
+      class="arena-mobile-more"
+      role="presentation"
+      @click.self="closeMobileMore(true)"
+    >
+      <section
+        id="arena-mobile-more-panel"
+        ref="mobileMorePanel"
+        class="arena-mobile-more__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="arena-mobile-more-title"
+        @click.stop
+        @keydown="handleMobileMenuKeydown"
+      >
+        <header class="arena-mobile-more__header">
+          <div>
+            <strong id="arena-mobile-more-title">全部功能</strong>
+            <span>按求职阶段快速进入</span>
+          </div>
+          <button type="button" aria-label="关闭全部功能" @click="closeMobileMore(true)">
+            <X :size="19" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div class="arena-mobile-more__groups">
+          <section v-for="group in visibleNavigationGroups" :key="group.key" class="arena-mobile-more__group">
+            <h2>{{ group.label }}</h2>
+            <div>
+              <button
+                v-for="item in group.items"
+                :key="item.key"
+                class="arena-mobile-more__item"
+                :class="{ 'is-active': activeItem?.item.key === item.key }"
+                type="button"
+                :data-mobile-nav-item="item.path"
+                :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
+                @click="go(item.path)"
+              >
+                <component :is="item.icon" :size="17" aria-hidden="true" />
+                <span>{{ item.label }}</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </Transition>
 
   <nav class="arena-bottom-nav" aria-label="手机主导航">
     <button
-      v-for="item in primaryItems"
-      :key="item.key"
+      v-for="group in mobilePrimaryGroups"
+      :key="group.key"
       class="arena-bottom-nav__item"
-      :class="{ 'is-active': isActive(item) }"
+      :class="{ 'is-active': activeGroup?.key === group.key }"
       type="button"
-      :aria-current="isActive(item) ? 'page' : undefined"
-      @click="go(item.path)"
+      :aria-label="group.label"
+      :aria-current="activeGroup?.key === group.key ? 'page' : undefined"
+      @click="go(group.path)"
     >
-      <component :is="item.icon" :size="18" aria-hidden="true" />
-      <span>{{ item.label }}</span>
+      <component :is="group.icon" :size="18" aria-hidden="true" />
+      <span>{{ group.mobileLabel }}</span>
     </button>
     <button
       class="arena-bottom-nav__item"
-      :class="{ 'is-active': isBottomToolsActive }"
+      :class="{ 'is-active': isMobileMoreActive || mobileMoreOpen }"
       type="button"
-      :aria-current="isBottomToolsActive ? 'page' : undefined"
-      @click="go('/tools')"
+      aria-label="打开全部功能"
+      :aria-current="isMobileMoreActive ? 'page' : undefined"
+      aria-haspopup="dialog"
+      :aria-expanded="mobileMoreOpen"
+      aria-controls="arena-mobile-more-panel"
+      @click="toggleMobileMore"
     >
-      <Wrench :size="18" aria-hidden="true" />
-      <span>工具</span>
+      <MoreHorizontal :size="18" aria-hidden="true" />
+      <span>更多</span>
     </button>
   </nav>
 </template>
 
 <script setup lang="ts">
-import {
-  BookOpenCheck,
-  FileText,
-  MessageSquare,
-  Target,
-  Wrench
-} from 'lucide-vue-next'
-import type { Component } from 'vue'
-import { computed } from 'vue'
+import { ChevronDown, MoreHorizontal, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import {
+  getVisibleUserNavigationGroups,
+  mobilePrimaryNavigationKeys,
+  resolveUserNavigationGroup,
+  resolveUserNavigationItem,
+  type UserNavigationGroupKey
+} from '@/config/userNavigation'
 import { useGameProfileStore } from '@/features/game-profile'
 
 const props = defineProps<{
@@ -173,89 +331,42 @@ const emit = defineEmits<{
   'user-command': [command: string]
 }>()
 
-interface ArenaNavItem {
-  key: 'today' | 'prepare' | 'train' | 'interview'
-  label: string
-  path: string
-  matches: string[]
-  icon: Component
-}
-
 const router = useRouter()
 const route = useRoute()
 const gameProfile = useGameProfileStore()
+const desktopNavRoot = ref<HTMLElement | null>(null)
+const mobileMorePanel = ref<HTMLElement | null>(null)
+const openDesktopKey = ref<UserNavigationGroupKey | 'more' | null>(null)
+const mobileMoreOpen = ref(false)
+let previousBodyOverflow = ''
 
-const primaryItems: ArenaNavItem[] = [
-  {
-    key: 'today',
-    label: '今天',
-    path: '/dashboard',
-    matches: [
-      '/dashboard',
-      '/agent/today',
-      '/agent/tasks'
-    ],
-    icon: Target
-  },
-  {
-    key: 'prepare',
-    label: '准备',
-    path: '/resumes',
-    matches: [
-      '/resumes',
-      '/job-targets',
-      '/resume-match'
-    ],
-    icon: FileText
-  },
-  {
-    key: 'train',
-    label: '训练',
-    path: '/questions/recommendations',
-    matches: ['/questions', '/study-plans'],
-    icon: BookOpenCheck
-  },
-  {
-    key: 'interview',
-    label: '面试',
-    path: '/interviews/create',
-    matches: ['/interviews'],
-    icon: MessageSquare
-  }
-]
-
+const visibleNavigationGroups = computed(() => getVisibleUserNavigationGroups())
+const currentRoute = computed(() => ({
+  name: route.name,
+  path: route.path
+}))
+const activeItem = computed(() =>
+  resolveUserNavigationItem(currentRoute.value, visibleNavigationGroups.value)
+)
+const activeGroup = computed(() =>
+  resolveUserNavigationGroup(currentRoute.value, visibleNavigationGroups.value)
+)
+const overflowNavigationGroups = computed(() =>
+  visibleNavigationGroups.value.filter((group) => group.compactOverflow)
+)
+const mobilePrimaryGroups = computed(() =>
+  mobilePrimaryNavigationKeys
+    .map((key) => visibleNavigationGroups.value.find((group) => group.key === key))
+    .filter((group): group is NonNullable<typeof group> => Boolean(group))
+)
 const formattedXp = computed(() => gameProfile.xp.toLocaleString('zh-CN'))
-const toolRoutePrefixes = [
-  '/tools',
-  '/applications',
-  '/career-calendar',
-  '/project-evidence',
-  '/application-packages',
-  '/knowledge',
-  '/ability-map',
-  '/agent/weekly-reports',
-  '/analytics/personal',
-  '/agent/reviews',
-  '/agent/memory',
-  '/growth/profile',
-  '/growth/skills',
-  '/growth/readiness',
-  '/weakness-analysis',
-  '/job-experiments',
-  '/portfolio-demo',
-  '/onboarding',
-  '/evidence-assets'
-]
-const isToolsActive = computed(() => toolRoutePrefixes.some((prefix) => matchesPath(prefix)))
-const isBottomToolsActive = computed(() => isToolsActive.value)
-const activePrimaryItem = computed(() => primaryItems.find((item) => isActive(item)))
+const isOverflowActive = computed(() => Boolean(activeGroup.value?.compactOverflow))
+const isMobileMoreActive = computed(() =>
+  Boolean(activeGroup.value && !mobilePrimaryNavigationKeys.includes(activeGroup.value.key))
+)
 const currentLabel = computed(() => {
-  if (route.path === '/tools') return '工具'
-  if (route.path === '/ability-map') return '能力图谱'
-  if (isToolsActive.value) return String(route.meta?.title || '工具')
-  if (route.path.startsWith('/resume-match')) return 'JD 匹配'
-  if (/^\/interviews\/\d+\/report$/.test(route.path)) return '面试报告'
-  return activePrimaryItem.value?.label || String(route.meta?.title || '今天')
+  return activeItem.value?.item.label
+    || String(route.meta?.title || activeGroup.value?.label || '今日')
 })
 
 const mobileStatusKind = computed<'streak' | 'completion' | 'avatar' | 'reward' | 'ability' | 'match' | 'report'>(() => {
@@ -264,7 +375,7 @@ const mobileStatusKind = computed<'streak' | 'completion' | 'avatar' | 'reward' 
   if (route.path.startsWith('/resume-match')) return 'match'
   if (/^\/interviews\/\d+\/report$/.test(route.path)) return 'report'
   if (route.path.startsWith('/ability-map')) return 'ability'
-  if (isToolsActive.value) return 'avatar'
+  if (isMobileMoreActive.value) return 'avatar'
   return 'streak'
 })
 
@@ -286,17 +397,150 @@ const mobileStatusAriaLabel = computed(() => {
   return `返回今天查看连胜 ${gameProfile.streakDays} 天`
 })
 
-function isActive(item: ArenaNavItem) {
-  if (isToolsActive.value) return false
-  return item.matches.some((prefix) => matchesPath(prefix))
-}
-
-function matchesPath(prefix: string) {
-  return route.path === prefix || route.path.startsWith(`${prefix}/`)
-}
-
 async function go(path: string) {
+  closeDesktopMenu()
+  closeMobileMore()
   await router.push(path)
+}
+
+function toggleDesktopMenu(key: UserNavigationGroupKey | 'more') {
+  closeMobileMore()
+  openDesktopKey.value = openDesktopKey.value === key ? null : key
+}
+
+function closeDesktopMenu(restoreFocus = false) {
+  const previousKey = openDesktopKey.value
+  if (!previousKey) return
+  openDesktopKey.value = null
+
+  if (restoreFocus) {
+    void nextTick(() => {
+      desktopNavRoot.value
+        ?.querySelector<HTMLButtonElement>(`[data-nav-trigger="${previousKey}"]`)
+        ?.focus()
+    })
+  }
+}
+
+function focusDesktopMenuItem(key: UserNavigationGroupKey | 'more', position: 'first' | 'last') {
+  void nextTick(() => {
+    const items = Array.from(
+      desktopNavRoot.value?.querySelectorAll<HTMLButtonElement>(`[data-nav-menu-item="${key}"]`) || []
+    )
+    const target = position === 'first' ? items[0] : items[items.length - 1]
+    target?.focus()
+  })
+}
+
+function handleDesktopTriggerKeydown(
+  event: KeyboardEvent,
+  key: UserNavigationGroupKey | 'more'
+) {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    openDesktopKey.value = key
+    focusDesktopMenuItem(key, event.key === 'ArrowDown' ? 'first' : 'last')
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeDesktopMenu(true)
+  }
+}
+
+function handleMenuKeydown(
+  event: KeyboardEvent,
+  key: UserNavigationGroupKey | 'more'
+) {
+  const items = Array.from(
+    desktopNavRoot.value?.querySelectorAll<HTMLButtonElement>(`[data-nav-menu-item="${key}"]`) || []
+  )
+  const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeDesktopMenu(true)
+    return
+  }
+
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || items.length === 0) return
+
+  event.preventDefault()
+  if (event.key === 'Home') {
+    items[0]?.focus()
+    return
+  }
+  if (event.key === 'End') {
+    items[items.length - 1]?.focus()
+    return
+  }
+
+  const direction = event.key === 'ArrowDown' ? 1 : -1
+  const nextIndex = currentIndex < 0
+    ? direction > 0 ? 0 : items.length - 1
+    : (currentIndex + direction + items.length) % items.length
+  items[nextIndex]?.focus()
+}
+
+function toggleMobileMore() {
+  if (mobileMoreOpen.value) {
+    closeMobileMore(true)
+    return
+  }
+
+  closeDesktopMenu()
+  previousBodyOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
+  mobileMoreOpen.value = true
+  void nextTick(() => {
+    mobileMorePanel.value?.querySelector<HTMLButtonElement>('[data-mobile-nav-item]')?.focus()
+  })
+}
+
+function closeMobileMore(restoreFocus = false) {
+  if (!mobileMoreOpen.value) return
+  mobileMoreOpen.value = false
+  document.body.style.overflow = previousBodyOverflow
+
+  if (restoreFocus) {
+    void nextTick(() => {
+      document.querySelector<HTMLButtonElement>('[aria-controls="arena-mobile-more-panel"]')?.focus()
+    })
+  }
+}
+
+function handleMobileMenuKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobileMore(true)
+    return
+  }
+
+  if (event.key !== 'Tab') return
+
+  const focusable = Array.from(
+    mobileMorePanel.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || []
+  )
+  if (focusable.length === 0) return
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+    return
+  }
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!openDesktopKey.value) return
+  if (desktopNavRoot.value?.contains(event.target as Node)) return
+  closeDesktopMenu()
 }
 
 function handleUserCommand(command: string) {
@@ -305,6 +549,36 @@ function handleUserCommand(command: string) {
     return
   }
   emit('user-command', command)
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    closeDesktopMenu()
+    closeMobileMore()
+  }
+)
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+  if (mobileMoreOpen.value) {
+    document.body.style.overflow = previousBodyOverflow
+  }
+})
+
+function handleDocumentKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (mobileMoreOpen.value) {
+    closeMobileMore(true)
+    return
+  }
+  closeDesktopMenu(true)
 }
 </script>
 
@@ -332,10 +606,11 @@ function handleUserCommand(command: string) {
 .arena-top-nav__brand,
 .arena-top-nav__link,
 .arena-top-nav__chip,
-.arena-top-nav__tools,
 .arena-top-nav__avatar-button,
 .arena-top-nav__mobile-status,
-.arena-bottom-nav__item {
+.arena-bottom-nav__item,
+.arena-top-nav__menu-item,
+.arena-mobile-more button {
   border: 0;
   font: inherit;
   cursor: pointer;
@@ -368,13 +643,24 @@ function handleUserCommand(command: string) {
 
 .arena-top-nav__desktop-links {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin-left: 22px;
 }
 
+.arena-top-nav__group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .arena-top-nav__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-height: 36px;
-  padding: 8px 14px;
+  padding: 8px 11px;
   border-radius: 11px;
   background: transparent;
   color: var(--arena-sub);
@@ -395,6 +681,153 @@ function handleUserCommand(command: string) {
   }
 }
 
+.arena-top-nav__link--primary {
+  border-radius: 11px 6px 6px 11px;
+  padding-right: 8px;
+}
+
+.arena-top-nav__link--toggle {
+  width: 24px;
+  padding: 0;
+  border-radius: 6px 11px 11px 6px;
+}
+
+.arena-top-nav__link--primary + .arena-top-nav__link--toggle {
+  margin-left: -3px;
+}
+
+.arena-top-nav__overflow {
+  display: none;
+}
+
+.arena-top-nav__menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 60;
+  display: grid;
+  width: 310px;
+  max-height: min(68vh, 560px);
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--arena-line);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 14px rgba(21, 33, 27, 0.12);
+}
+
+.arena-top-nav__menu::before {
+  position: absolute;
+  top: -10px;
+  right: 0;
+  left: 0;
+  height: 10px;
+  content: '';
+}
+
+.arena-top-nav__menu-header,
+.arena-top-nav__overflow-group > header {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px 8px;
+
+  strong {
+    color: var(--arena-ink);
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  span {
+    color: var(--arena-mut);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
+
+.arena-top-nav__menu-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--arena-sub);
+  text-align: left;
+
+  > svg {
+    margin-top: 2px;
+    color: var(--arena-mut);
+  }
+
+  > span {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  strong {
+    color: inherit;
+    font-size: 12.5px;
+    font-weight: 800;
+  }
+
+  small {
+    color: var(--arena-mut);
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  &:hover,
+  &:focus-visible,
+  &.is-active {
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    outline: 0;
+
+    > svg,
+    small {
+      color: var(--arena-action);
+    }
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--arena-grn);
+  }
+}
+
+.arena-top-nav__menu--overflow {
+  position: fixed;
+  top: 70px;
+  right: 0;
+  left: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(72vh, 610px);
+  margin-inline: auto;
+  gap: 8px;
+}
+
+.arena-top-nav__overflow-group {
+  min-width: 0;
+}
+
+.arena-nav-menu-enter-active,
+.arena-nav-menu-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.arena-nav-menu-enter-from,
+.arena-nav-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .arena-top-nav__desktop-actions {
   display: flex;
   align-items: center;
@@ -402,8 +835,7 @@ function handleUserCommand(command: string) {
   margin-left: auto;
 }
 
-.arena-top-nav__chip,
-.arena-top-nav__tools {
+.arena-top-nav__chip {
   min-height: 32px;
   border-radius: 999px;
   font-size: 12px;
@@ -422,27 +854,6 @@ function handleUserCommand(command: string) {
 .arena-top-nav__chip--xp {
   background: var(--arena-grn-soft);
   color: var(--arena-action);
-}
-
-.arena-top-nav__tools {
-  padding: 0 10px;
-  background: transparent;
-  color: var(--arena-sub);
-
-  &:hover,
-  &:focus-visible {
-    background: var(--arena-line2);
-    color: var(--arena-ink);
-    outline: 0;
-  }
-
-  &.is-active {
-    min-height: 36px;
-    border-radius: 10px;
-    padding-inline: 10px;
-    background: var(--arena-grn-soft);
-    color: var(--arena-grn-d);
-  }
 }
 
 .arena-top-nav__avatar-button {
@@ -466,8 +877,45 @@ function handleUserCommand(command: string) {
 }
 
 .arena-top-nav__mobile,
-.arena-bottom-nav {
+.arena-bottom-nav,
+.arena-mobile-more {
   display: none;
+}
+
+@media (max-width: 1160px) and (min-width: 721px) {
+  .arena-top-nav__group--compact-overflow {
+    display: none;
+  }
+
+  .arena-top-nav__overflow {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  .arena-top-nav__inner {
+    padding-inline: 18px;
+  }
+
+  .arena-top-nav__brand strong {
+    display: none;
+  }
+
+  .arena-top-nav__desktop-links {
+    margin-left: 12px;
+  }
+
+  .arena-top-nav__link {
+    padding-inline: 8px;
+  }
+
+  .arena-top-nav__desktop-actions {
+    gap: 6px;
+  }
+
+  .arena-top-nav__chip--xp {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -588,6 +1036,150 @@ function handleUserCommand(command: string) {
     backdrop-filter: blur(8px);
   }
 
+  .arena-mobile-more {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 54px 8px calc(68px + env(safe-area-inset-bottom));
+    background: rgba(21, 33, 27, 0.32);
+  }
+
+  .arena-mobile-more__panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(100%, 520px);
+    max-height: min(78vh, 680px);
+    overflow: hidden;
+    border: 1px solid var(--arena-line);
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 8px 14px rgba(21, 33, 27, 0.14);
+  }
+
+  .arena-mobile-more__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--arena-line);
+
+    > div {
+      display: grid;
+      gap: 2px;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    span {
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--arena-sub);
+
+      &:hover,
+      &:focus-visible {
+        background: var(--arena-line2);
+        color: var(--arena-ink);
+        outline: 0;
+      }
+    }
+  }
+
+  .arena-mobile-more__groups {
+    display: grid;
+    gap: 14px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .arena-mobile-more__group {
+    display: grid;
+    gap: 6px;
+
+    h2 {
+      margin: 0;
+      padding: 0 2px;
+      color: var(--arena-ink);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    > div {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+  }
+
+  .arena-mobile-more__item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px 9px;
+    border-radius: 8px;
+    background: var(--arena-line2);
+    color: var(--arena-sub);
+    text-align: left;
+
+    span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 11.5px;
+      font-weight: 750;
+    }
+
+    &.is-active,
+    &:hover,
+    &:focus-visible {
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+      outline: 0;
+    }
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 2px var(--arena-grn);
+    }
+  }
+
+  .arena-mobile-more-enter-active,
+  .arena-mobile-more-leave-active {
+    transition: opacity 160ms ease;
+  }
+
+  .arena-mobile-more-enter-active .arena-mobile-more__panel,
+  .arena-mobile-more-leave-active .arena-mobile-more__panel {
+    transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .arena-mobile-more-enter-from,
+  .arena-mobile-more-leave-to {
+    opacity: 0;
+  }
+
+  .arena-mobile-more-enter-from .arena-mobile-more__panel,
+  .arena-mobile-more-leave-to .arena-mobile-more__panel {
+    transform: translateY(10px);
+  }
+
   .arena-bottom-nav__item {
     display: flex;
     flex: 1;
@@ -611,6 +1203,17 @@ function handleUserCommand(command: string) {
       outline: 2px solid var(--arena-grn);
       outline-offset: -2px;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-nav-menu-enter-active,
+  .arena-nav-menu-leave-active,
+  .arena-mobile-more-enter-active,
+  .arena-mobile-more-leave-active,
+  .arena-mobile-more-enter-active .arena-mobile-more__panel,
+  .arena-mobile-more-leave-active .arena-mobile-more__panel {
+    transition-duration: 0.01ms;
   }
 }
 </style>

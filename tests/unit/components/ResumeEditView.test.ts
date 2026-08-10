@@ -153,11 +153,9 @@ describe('ResumeEditView', () => {
     })
 
     await flushPromises()
-    const saveButton = wrapper
-      .findAll('.resume-workshop-hero__completion button')
-      .find((button) => button.text().includes('保存简历'))
+    const saveButton = wrapper.find('.resume-workbench-topbar__action--primary')
     expect(saveButton, wrapper.html()).toBeDefined()
-    await saveButton!.trigger('click')
+    await saveButton.trigger('click')
     await flushPromises()
 
     expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledWith(2, expect.objectContaining({
@@ -222,6 +220,10 @@ describe('ResumeEditView', () => {
     })
 
     await flushPromises()
+    const aiModeButton = wrapper.findAll('button').find((button) => button.text().includes('AI 优化'))
+    expect(aiModeButton, wrapper.html()).toBeDefined()
+    await aiModeButton!.trigger('click')
+    await flushPromises()
     const selectAllButton = wrapper.findAll('button').find((button) => button.text().includes('全选'))
     expect(selectAllButton, wrapper.html()).toBeDefined()
     await selectAllButton!.trigger('click')
@@ -244,17 +246,23 @@ describe('ResumeEditView', () => {
     expect(gameProfile.rewardCountForPrefix('resume:optimize-apply:88')).toBe(1)
   })
 
-  it('keeps the advice grid inside the editor column on desktop so it cannot sit below the sticky preview', () => {
+  it('keeps the canvas central and both inspector modes in the right workbench column', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
     )
-    const adviceRule = source.match(/\.editor-aside\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
 
-    expect(adviceRule).toMatch(/grid-column:\s*1;/)
-    expect(adviceRule).toMatch(/grid-row:\s*2;/)
-    expect(adviceRule).not.toMatch(/grid-column:\s*1\s*\/\s*-1;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*auto;/)
+    expect(workbenchStyles).toContain('grid-template-columns: 220px minmax(640px, 1fr) 370px')
+    expect(workbenchStyles).toMatch(/\.preview-column\s*\{[\s\S]*?grid-column:\s*2;/)
+    expect(workbenchStyles).toMatch(/\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;/)
+    expect(workbenchStyles).toMatch(
+      /\.preview-column,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?position:\s*static;[\s\S]*?align-self:\s*stretch;[\s\S]*?height:\s*100%;/
+    )
+    expect(workbenchStyles).toMatch(
+      /\.editor-aside > \.side-panel:not\(\.section-nav-card\)\s*\{[\s\S]*?display:\s*block;/
+    )
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
   })
 
   it('switches the resume workspace to stable mobile panes at the tablet breakpoint', () => {
@@ -262,20 +270,14 @@ describe('ResumeEditView', () => {
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
     )
-    const previewRule = source.match(/\.preview-column\s*\{[\s\S]*?\n\}/)?.[0] || ''
-    const paperRule = source.match(/\.resume-paper-wrap\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
 
-    expect(previewRule).toMatch(/height:\s*var\(--resume-preview-viewport-height\);/)
-    expect(previewRule).toMatch(/max-height:\s*var\(--resume-preview-viewport-height\);/)
-    expect(previewRule).toMatch(/overflow:\s*visible;/)
-    expect(previewRule).not.toMatch(/overflow:\s*hidden;/)
-    expect(paperRule).toMatch(/flex:\s*1\s+1\s+auto;/)
-    expect(paperRule).toMatch(/overflow:\s*auto;/)
-    expect(paperRule).toMatch(/scrollbar-gutter:\s*stable both-edges;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview,\s*[\s\S]*?display:\s*none;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit\s+\.mobile-pane-edit\s*\{[\s\S]*?display:\s*grid;/)
-    expect(source).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview\s+\.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/\.preview-column\s*\{[\s\S]*?overflow:\s*hidden;/)
+    expect(workbenchStyles).toMatch(/\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?overflow:\s*auto;[\s\S]*?scrollbar-gutter:\s*stable both-edges;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?display:\s*none;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit \.mobile-pane-edit\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
   })
 })

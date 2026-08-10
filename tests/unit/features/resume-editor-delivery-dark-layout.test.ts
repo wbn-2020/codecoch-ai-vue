@@ -49,29 +49,29 @@ describe('resume editor and delivery workspace layout', () => {
 
   it('keeps the supporting workspace in the editor column and bounds the sticky preview to the viewport', () => {
     const source = readSource('src/views/resume/ResumeEditView.vue')
+    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
 
-    expect(source).toMatch(
-      /\.editor-workspace\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(520px,\s*1\.05fr\)/
+    expect(workbenchStyles).toContain('grid-template-columns: 220px minmax(640px, 1fr) 370px')
+    expect(workbenchStyles).toMatch(
+      /\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
     )
-    expect(source).toMatch(
-      /\.editor-aside\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(260px,\s*1fr\)\)/
+    expect(workbenchStyles).toMatch(
+      /\.preview-column\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?overflow:\s*hidden/
     )
-    expect(source).toMatch(
-      /\.preview-column\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?height:\s*var\(--resume-preview-viewport-height\);[\s\S]*?max-height:\s*var\(--resume-preview-viewport-height\);[\s\S]*?overflow:\s*visible/
-    )
-    expect(source).toMatch(
+    expect(workbenchStyles).toMatch(
       /\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?max-height:\s*none;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto/
     )
-    expect(source).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*visible;[\s\S]*?\}[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?min-height:\s*0;/
+    expect(workbenchStyles).toMatch(
+      /@media \(max-width: 1020px\)[\s\S]*?\.editor-main,\s*[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*auto;/
     )
     expect(source).toContain('ResumeDocumentPreview')
-    expect(source).toContain('template-selector')
+    expect(source).toContain('ResumeTemplateGallery')
   })
 
   it('keeps list, delivery, and artifact actions close to their content on narrow screens', () => {
     const list = readSource('src/views/resume/ResumeListView.vue')
     const editor = readSource('src/views/resume/ResumeEditView.vue')
+    const templateGallery = readSource('src/views/resume/components/ResumeTemplateGallery.vue')
     const workbench = readSource('src/views/resume/components/ResumeDeliveryWorkbench.vue')
     const artifactPanel = readSource('src/views/resume/components/ResumeArtifactDeliveryPanel.vue')
 
@@ -92,23 +92,20 @@ describe('resume editor and delivery workspace layout', () => {
     expect(workbench).not.toContain(':draft="draft"')
     expect(editor).toContain(':has-unsaved-changes="hasUnsavedResumeChanges"')
     expect(editor).toContain('moveRovingSelection')
-    expect(editor).toContain(':tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"')
-    expect(editor).toContain('{{ template.roleFit }}')
-    expect(editor).toContain('{{ template.pageTendency }}')
-    expect(editor).toContain('{{ template.atsRiskLabel }}')
-    expect(editor).toContain('{{ template.typographyLayout }}')
+    expect(templateGallery).toContain(':tabindex="pendingCode === template.code ? 0 : -1"')
+    expect(templateGallery).toContain(':global(.resume-template-gallery-dialog)')
+    expect(templateGallery).toContain('--user-surface: #ffffff')
+    expect(templateGallery).toContain('--el-text-color-primary: #17211b')
+    expect(templateGallery).toContain('{{ template.roleFit }}')
+    expect(templateGallery).toContain('{{ template.pageTendency }}')
+    expect(templateGallery).toContain('{{ template.atsRiskLabel }}')
+    expect(templateGallery).toContain('{{ template.typographyLayout }}')
     expect(editor).toContain('这里不生成真实 ATS 分数')
     expect(editor).toContain('A4 预览 · 分页以导出为准')
     expect(editor).toContain('打开稳定版本分页与导出工作台')
-    expect(editor).toMatch(
-      /\.editor-aside > \.export-check-panel\s*\{[\s\S]*?display:\s*grid;/
-    )
-    expect(editor).toMatch(
-      /@media \(max-width: 720px\)[\s\S]*?\.resume-template-strip \.template-selector > button\s*\{[\s\S]*?flex-basis:\s*min\(272px,\s*84vw\)/
-    )
-    expect(editor).toMatch(
-      /\.template-facts dd\s*\{[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?word-break:\s*break-word/
-    )
+    expect(editor).toContain('v-show="inspectorMode === \'review\'" class="content-card side-panel export-check-panel"')
+    expect(templateGallery).toMatch(/@media \(max-width: 760px\)[\s\S]*?flex:\s*0\s+0\s+min\(290px,\s*82vw\)/)
+    expect(templateGallery).toMatch(/dd\s*\{[\s\S]*?overflow-wrap:\s*anywhere;/)
     expect(workbench).not.toContain('previewPages')
     expect(artifactPanel).toMatch(/@media\s*\(max-width:\s*760px\)/)
     expect(artifactPanel).toMatch(/\.artifact-main\s*\{[\s\S]*?min-width:\s*0/)

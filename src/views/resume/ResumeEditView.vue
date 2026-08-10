@@ -22,30 +22,20 @@
     </AppState>
 
     <template v-else>
-    <section class="editor-hero resume-workshop-hero">
-      <div>
-        <h1>简历编辑</h1>
-        <p>{{ form.resumeName?.trim() || '未命名简历' }} · 内容修改会实时同步到预览，导出前请完成检查。</p>
-      </div>
-      <div class="resume-workshop-hero__completion">
-        <div class="resume-document-status">
-          <span>完成度</span>
-          <strong>{{ completion }}%</strong>
-        </div>
-        <div class="resume-document-status">
-          <span>保存状态</span>
-          <strong :class="{ 'is-warning': hasUnsavedResumeChanges || !isEdit }">{{ documentSaveStatus }}</strong>
-        </div>
-        <el-button @click="openDeliveryChecks">
-          <FileCheck2 :size="16" />
-          检查并导出
-        </el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">
-          <Save :size="16" />
-          保存简历
-        </el-button>
-      </div>
-    </section>
+    <ResumeWorkbenchTopbar
+      :title="form.resumeName?.trim() || '未命名简历'"
+      :save-state="documentSaveStatus"
+      :completion="completion"
+      :saving="saving"
+      :is-edit="isEdit"
+      :template-label="selectedResumeTemplateLabel"
+      :inspector-mode="inspectorMode"
+      @back="router.push('/resumes')"
+      @save="handleSave"
+      @open-templates="openTemplateGallery"
+      @open-export="openDeliveryChecks"
+      @mode-change="setInspectorMode"
+    />
 
     <div class="workspace-tabs" role="tablist" aria-label="移动端简历工作区">
       <button
@@ -76,107 +66,20 @@
       </button>
     </div>
 
-    <details class="resume-template-strip content-card">
-      <summary class="resume-template-strip__head">
-        <div>
-          <h2>模板与版式</h2>
-          <span>当前：{{ selectedResumeTemplateLabel }}</span>
-        </div>
-        <span class="resume-template-strip__hint">次级设置 · 展开调整</span>
-      </summary>
-
-      <div class="preview-customizer resume-template-strip__body">
-        <div class="template-selector" role="radiogroup" aria-label="选择简历模板">
-          <button
-            v-for="template in resumeTemplateOptions"
-            :key="template.code"
-            type="button"
-            role="radio"
-            :aria-checked="selectedResumeTemplateCode === template.code"
-            :aria-disabled="!isTemplateUnlocked(template)"
-            :tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"
-            :class="{
-              active: selectedResumeTemplateCode === template.code,
-              locked: !isTemplateUnlocked(template)
-            }"
-            :disabled="!isTemplateUnlocked(template)"
-            @click="selectResumeTemplate(template)"
-            @keydown="moveTemplateSelection($event)"
-          >
-            <span class="template-thumb" :class="`is-${template.className}`">
-              <i></i><i></i><i></i>
-            </span>
-            <span class="template-copy">
-              <strong>{{ template.name }}</strong>
-              <small>{{ template.description }}</small>
-              <dl class="template-facts">
-                <div>
-                  <dt>适用岗位</dt>
-                  <dd>{{ template.roleFit }}</dd>
-                </div>
-                <div>
-                  <dt>页数倾向</dt>
-                  <dd>{{ template.pageTendency }}</dd>
-                </div>
-                <div>
-                  <dt>ATS 风险</dt>
-                  <dd>{{ template.atsRiskLabel }} · {{ template.atsRiskDetail }}</dd>
-                </div>
-                <div>
-                  <dt>字体 / 版式</dt>
-                  <dd>{{ template.typographyLayout }}</dd>
-                </div>
-              </dl>
-            </span>
-            <CheckCircle2 v-if="selectedResumeTemplateCode === template.code" :size="16" />
-          </button>
-        </div>
-
-        <div class="preview-controls">
-          <div class="accent-control">
-            <span>编辑预览色</span>
-            <div class="accent-swatches" role="radiogroup" aria-label="选择编辑预览强调色">
-              <button
-                v-for="option in resumeAccentOptions"
-                :key="option.value"
-                type="button"
-                role="radio"
-                :aria-label="option.label"
-                :aria-checked="previewAccent === option.value"
-                :tabindex="previewAccent === option.value ? 0 : -1"
-                :class="[`is-${option.value}`, { active: previewAccent === option.value }]"
-                @click="previewAccent = option.value"
-                @keydown="moveAccentSelection($event)"
-              ></button>
-            </div>
-          </div>
-          <div class="zoom-control" aria-label="预览缩放">
-            <button
-              type="button"
-              aria-label="缩小预览"
-              :disabled="previewZoom <= 0.72"
-              @click="changePreviewZoom(-0.08)"
-            >
-              <Minus :size="15" />
-            </button>
-            <span>{{ Math.round(previewZoom * 100) }}%</span>
-            <button
-              type="button"
-              aria-label="放大预览"
-              :disabled="previewZoom >= 1.12"
-              @click="changePreviewZoom(0.08)"
-            >
-              <Plus :size="15" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </details>
-
     <div :class="['editor-workspace', `is-mobile-${mobileWorkspaceTab}`]">
+      <ResumeSectionRail
+        :items="sectionNavItems"
+        :active-id="activeWorkshopModule"
+        :completion="completion"
+        :export-ready-count="exportReadyCount"
+        :export-total="exportChecklistItems.length"
+        @select="focusSection"
+        @review="setInspectorMode('review')"
+      />
       <div id="resume-panel-advice-mount" class="workspace-teleport-target"></div>
       <div id="resume-panel-preview-mount" class="workspace-teleport-target"></div>
       <main
+        v-show="inspectorMode === 'edit'"
         id="resume-panel-edit"
         class="editor-column editor-main mobile-pane-edit"
         role="tabpanel"
@@ -477,10 +380,33 @@
         >
           <div class="preview-toolbar">
             <div>
-              <h2>📄 实时预览 · {{ selectedResumeTemplateLabel }}</h2>
-              <p>当前填写内容会同步到纸张预览。</p>
+              <span>文档画布</span>
+              <h2>{{ selectedResumeTemplateLabel }}</h2>
             </div>
-            <span class="resume-preview-page-chip">A4 预览 · 分页以导出为准</span>
+            <div class="preview-toolbar__actions">
+              <button type="button" @click="openTemplateGallery">
+                模板
+              </button>
+              <div class="zoom-control" aria-label="预览缩放">
+                <button
+                  type="button"
+                  aria-label="缩小预览"
+                  :disabled="previewZoom <= 0.72"
+                  @click="changePreviewZoom(-0.08)"
+                >
+                  <Minus :size="15" />
+                </button>
+                <span>{{ Math.round(previewZoom * 100) }}%</span>
+                <button
+                  type="button"
+                  aria-label="放大预览"
+                  :disabled="previewZoom >= 1.12"
+                  @click="changePreviewZoom(0.08)"
+                >
+                  <Plus :size="15" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="resume-paper-wrap">
@@ -495,41 +421,32 @@
           </div>
           <div class="resume-preview-actions">
             <el-button @click="openPdfExport">
+              <FileCheck2 :size="15" />
               导出 PDF
             </el-button>
             <el-button @click="enlargePreview">
               放大检查
             </el-button>
+            <span class="resume-preview-page-chip">A4 预览 · 分页以导出为准</span>
           </div>
         </section>
       </Teleport>
 
       <Teleport defer to="#resume-panel-advice-mount">
         <aside
+          v-show="inspectorMode !== 'edit'"
           id="resume-panel-advice"
-          class="editor-column editor-aside"
+          class="editor-column editor-aside mobile-pane-edit"
         >
-        <section class="content-card side-panel section-nav-card">
-          <div class="panel-kicker">
-            <Layers3 :size="15" />
-            模块目录
+        <header class="resume-inspector-heading">
+          <div>
+            <span>{{ inspectorMode === 'review' ? '简历检查' : 'AI 优化' }}</span>
+            <h2>{{ inspectorMode === 'review' ? '发布前复核' : '基于稳定版本生成建议' }}</h2>
           </div>
-          <div class="section-nav">
-            <button
-              v-for="item in sectionNavItems"
-              :key="item.id"
-              type="button"
-              :class="{ done: item.done, active: activeWorkshopModule === item.id }"
-              @click="focusSection(item.id)"
-            >
-              <CheckCircle2 v-if="item.done" :size="15" />
-              <Circle v-else :size="15" />
-              {{ item.label }}
-            </button>
-          </div>
-        </section>
+          <button type="button" @click="setInspectorMode('edit')">返回编辑</button>
+        </header>
 
-        <section class="content-card side-panel readiness-panel">
+        <section v-show="inspectorMode === 'review'" class="content-card side-panel readiness-panel">
           <div class="completion-head">
             <span>简历完整度</span>
             <strong>{{ completion }}%</strong>
@@ -545,7 +462,7 @@
           </div>
         </section>
 
-        <section class="content-card side-panel export-check-panel">
+        <section v-show="inspectorMode === 'review'" class="content-card side-panel export-check-panel">
           <div class="completion-head">
             <span>导出前检查 · 启发式</span>
             <strong>{{ exportReadyCount }}/{{ exportChecklistItems.length }} 通过</strong>
@@ -574,7 +491,7 @@
           </el-button>
         </section>
 
-        <section class="content-card side-panel jd-match-panel">
+        <section v-show="inspectorMode === 'review'" class="content-card side-panel jd-match-panel">
           <div class="completion-head">
             <span>JD 匹配准备度</span>
             <strong>{{ jdMatchReadiness }}%</strong>
@@ -590,7 +507,7 @@
           </div>
         </section>
 
-        <section class="content-card side-panel evidence-panel">
+        <section v-show="inspectorMode === 'review'" class="content-card side-panel evidence-panel">
           <h3>项目证据</h3>
           <p>项目是否能支撑岗位能力，先看数量、结果和技能映射。</p>
           <div class="evidence-list">
@@ -605,7 +522,7 @@
           </el-button>
         </section>
 
-        <section class="content-card side-panel gap-panel">
+        <section v-show="inspectorMode === 'review'" class="content-card side-panel gap-panel">
           <h3>缺口建议</h3>
           <div class="gap-list">
             <article v-for="item in gapSuggestionItems" :key="item.title">
@@ -615,7 +532,7 @@
           </div>
         </section>
 
-        <section v-if="isEdit && resumeId" class="content-card side-panel ai-panel">
+        <section v-if="inspectorMode === 'ai' && isEdit && resumeId" class="content-card side-panel ai-panel">
           <h3>AI 优化建议</h3>
           <p>基于已保存简历生成建议。建议需要人工复核，应用时会创建草稿，不会覆盖当前简历。</p>
           <el-form class="optimize-form" :model="optimizeForm" label-position="top">
@@ -747,7 +664,7 @@
           </div>
         </section>
 
-        <section v-else class="content-card side-panel ai-panel ai-locked-panel">
+        <section v-else-if="inspectorMode === 'ai'" class="content-card side-panel ai-panel ai-locked-panel">
           <h3>AI 优化建议</h3>
           <p>先保存简历，系统才能基于稳定版本生成建议。建议应用时会创建草稿，不会覆盖当前编辑内容。</p>
           <div class="ai-empty">
@@ -755,30 +672,35 @@
           </div>
         </section>
 
-        <section class="content-card side-panel">
-          <h3>闭环动作</h3>
-          <p>保存后可以把项目补成证据，也可以进入面试训练验证简历表达。</p>
-          <el-button class="full-button" @click="router.push('/interviews/create')">
-            <MessagesSquare :size="16" />
-            进入模拟面试
-          </el-button>
-        </section>
-
-        <section class="content-card side-panel">
-          <h3>填写建议</h3>
-          <ul>
-            <li>技术栈尽量按语言、框架、中间件、数据库分组。</li>
-            <li>项目经历建议写清背景、职责、难点和可量化结果。</li>
-            <li>个人摘要保持真实，不写无法在面试中展开的内容。</li>
-          </ul>
-        </section>
         </aside>
       </Teleport>
     </div>
 
-    <details v-if="isEdit" ref="deliveryWorkbenchDetails" class="resume-delivery-details">
-      <summary>稳定版本分页与导出工作台</summary>
+    <ResumeTemplateGallery
+      v-model="templateGalleryVisible"
+      :templates="resumeTemplateOptions"
+      :pending-code="pendingResumeTemplateCode"
+      :accent="previewAccent"
+      :accent-options="resumeAccentOptions"
+      :zoom="previewZoom"
+      :is-unlocked="isTemplateUnlocked"
+      @select="pendingResumeTemplateCode = $event"
+      @accent-change="previewAccent = $event"
+      @zoom-change="changePreviewZoom"
+      @cancel="closeTemplateGallery"
+      @confirm="applyPendingTemplate"
+    />
+
+    <el-dialog
+      v-model="deliveryWorkbenchVisible"
+      title="稳定版本分页与导出"
+      width="min(1240px, 96vw)"
+      class="resume-delivery-dialog"
+      append-to-body
+      destroy-on-close
+    >
       <ResumeDeliveryWorkbench
+        v-if="isEdit"
         ref="deliveryWorkbenchRef"
         :resume-id="resumeId || undefined"
         :preferred-template-code="selectedResumeTemplateCode"
@@ -787,7 +709,7 @@
         @resume-version-applied="reloadCurrentResume"
         @template-change="selectedResumeTemplateCode = $event"
       />
-    </details>
+    </el-dialog>
 
     <el-dialog
       v-model="projectDialogVisible"
@@ -810,7 +732,6 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   Circle,
   FileCheck2,
@@ -818,7 +739,6 @@ import {
   FolderOpen,
   GitCompareArrows,
   Layers3,
-  MessagesSquare,
   Minus,
   Plus,
   Save,
@@ -856,6 +776,9 @@ import {
 import { useGameProfileStore } from '@/features/game-profile'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
+import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
+import ResumeTemplateGallery from '@/views/resume/components/ResumeTemplateGallery.vue'
+import ResumeWorkbenchTopbar from '@/views/resume/components/ResumeWorkbenchTopbar.vue'
 import type {
   ResumeCreateDTO,
   ResumeDetailVO,
@@ -897,8 +820,9 @@ const editingProjectId = ref<number | null>(null)
 const editingProject = ref<ResumeProjectVO | null>(null)
 const projects = ref<ResumeProjectVO[]>([])
 const selectedInlineProjectId = ref<number | null>(null)
-const deliveryWorkbenchDetails = ref<HTMLDetailsElement>()
 const deliveryWorkbenchRef = ref<InstanceType<typeof ResumeDeliveryWorkbench>>()
+const deliveryWorkbenchVisible = ref(false)
+const templateGalleryVisible = ref(false)
 const optimizeRecords = ref<ResumeOptimizeRecordVO[]>([])
 const optimizeDetail = ref<ResumeOptimizeDetailVO | null>(null)
 const selectedOptimizeSuggestionIndexes = ref<number[]>([])
@@ -908,8 +832,10 @@ const optimizeSseStatus = ref('未开始')
 const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
 const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
+const inspectorMode = ref<'edit' | 'review' | 'ai'>('edit')
 const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-basic')
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
+const pendingResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const previewAccent = ref<ResumeAccent>('ocean')
 const previewZoom = ref(0.88)
 const deliveryRefreshKey = ref(0)
@@ -923,19 +849,8 @@ const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
   { value: 'berry', label: '莓红色' }
 ]
 const mobileWorkspaceTabs = ['edit', 'preview'] as const
-const availableResumeTemplateCodes = computed(() =>
-  resumeTemplateOptions
-    .filter((template) => isTemplateUnlocked(template))
-    .map((template) => template.code)
-)
-
 const isTemplateUnlocked = (template: ResumeTemplateOption) =>
   isResumeTemplateUnlocked(template, gameProfile?.streakDays || 0)
-
-const selectResumeTemplate = (template: ResumeTemplateOption) => {
-  if (!isTemplateUnlocked(template)) return
-  selectedResumeTemplateCode.value = template.code
-}
 
 const moveRovingSelection = <T>(
   event: KeyboardEvent,
@@ -975,22 +890,6 @@ const moveMobileWorkspaceTab = (event: KeyboardEvent) =>
     mobileWorkspaceTabs,
     mobileWorkspaceTab.value,
     (value) => { mobileWorkspaceTab.value = value }
-  )
-
-const moveTemplateSelection = (event: KeyboardEvent) =>
-  moveRovingSelection(
-    event,
-    availableResumeTemplateCodes.value,
-    selectedResumeTemplateCode.value,
-    (value) => { selectedResumeTemplateCode.value = value }
-  )
-
-const moveAccentSelection = (event: KeyboardEvent) =>
-  moveRovingSelection(
-    event,
-    resumeAccentOptions.map((item) => item.value),
-    previewAccent.value,
-    (value) => { previewAccent.value = value }
   )
 
 const createDefaultResumeForm = (): ResumeCreateDTO => ({
@@ -1136,7 +1035,10 @@ const resumeDocumentDraft = computed(() => ({
   resumeName: form.resumeName
 }))
 const savedResumeSignature = ref('')
-const resumeDraftSignature = computed(() => JSON.stringify(resumeDeliveryDraft.value))
+const resumeDraftSignature = computed(() => JSON.stringify({
+  ...resumeDeliveryDraft.value,
+  isDefault: form.isDefault
+}))
 const hasUnsavedResumeChanges = computed(() =>
   isEdit.value
   && (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
@@ -1191,6 +1093,23 @@ const changePreviewZoom = (delta: number) => {
   previewZoom.value = Math.round(
     Math.min(1.12, Math.max(0.72, previewZoom.value + delta)) * 100
   ) / 100
+}
+
+const openTemplateGallery = () => {
+  pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
+  templateGalleryVisible.value = true
+}
+
+const closeTemplateGallery = () => {
+  pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
+  templateGalleryVisible.value = false
+}
+
+const applyPendingTemplate = () => {
+  const template = resumeTemplateOptions.find((item) => item.code === pendingResumeTemplateCode.value)
+  if (!template || !isTemplateUnlocked(template)) return
+  selectedResumeTemplateCode.value = template.code
+  templateGalleryVisible.value = false
 }
 
 const projectsWithResult = computed(() =>
@@ -1296,12 +1215,18 @@ const focusSection = (sectionId: string) => {
     || moduleId === 'resume-experience'
   ) {
     activeWorkshopModule.value = moduleId
+    inspectorMode.value = 'edit'
     mobileWorkspaceTab.value = 'edit'
   }
 
   void nextTick(() => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
+}
+
+const setInspectorMode = (mode: 'edit' | 'review' | 'ai') => {
+  inspectorMode.value = mode
+  mobileWorkspaceTab.value = 'edit'
 }
 
 const liveFeedbackItems = computed(() => [
@@ -1462,10 +1387,14 @@ const resetRouteState = () => {
   optimizing.value = false
   applyingOptimize.value = false
   mobileWorkspaceTab.value = 'edit'
+  inspectorMode.value = 'edit'
   activeWorkshopModule.value = 'resume-basic'
   selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
+  pendingResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
   previewAccent.value = 'ocean'
   previewZoom.value = 0.88
+  templateGalleryVisible.value = false
+  deliveryWorkbenchVisible.value = false
   savedResumeSignature.value = ''
   detailError.value = ''
   loading.value = false
@@ -1637,6 +1566,10 @@ const optimizeSseTypeLabel = (type?: string) => {
 const handleOptimizeResume = async () => {
   const targetResumeId = resumeId.value
   if (!targetResumeId || optimizing.value) return
+  if (hasUnsavedResumeChanges.value) {
+    ElMessage.warning('当前内容尚未保存。请先保存简历，再基于最新稳定版本生成 AI 建议。')
+    return
+  }
   const requestGeneration = resumeLoadGeneration
   const payload = buildOptimizePayload()
   optimizing.value = true
@@ -1885,9 +1818,8 @@ const openDeliveryChecks = async () => {
     ElMessage.warning('请先保存简历，再进行版本、分页和导出检查')
     return
   }
-  deliveryWorkbenchDetails.value?.setAttribute('open', '')
+  deliveryWorkbenchVisible.value = true
   await nextTick()
-  deliveryWorkbenchDetails.value?.scrollIntoView({ block: 'start' })
 }
 
 const openPdfExport = async () => {
@@ -4863,6 +4795,902 @@ onBeforeUnmount(() => {
 
     .resume-preview-actions {
       gap: 8px;
+    }
+  }
+}
+
+// Resume workbench v2. This final scoped layer owns only the resume editor route.
+.arena-resume-studio.resume-editor {
+  --resume-workbench-bg: #e9edf2;
+  --resume-workbench-surface: #ffffff;
+  --resume-workbench-surface-soft: #f5f7fa;
+  --resume-workbench-line: #dde2e9;
+  --resume-workbench-line-strong: #c7cfda;
+  --resume-workbench-text: #18202b;
+  --resume-workbench-text-soft: #3f4b5c;
+  --resume-workbench-muted: #667386;
+  --resume-workbench-accent: #2563eb;
+  --resume-workbench-accent-strong: #1d4ed8;
+  --resume-workbench-accent-soft: #eaf1ff;
+  --resume-workbench-success: #137a63;
+  --resume-workbench-success-soft: #e8f6f1;
+  --resume-workbench-warning: #9a5d0b;
+  width: 100%;
+  max-width: none;
+  min-height: calc(100dvh - 62px);
+  height: calc(100dvh - 62px);
+  padding: 0;
+  overflow: hidden;
+  background: var(--resume-workbench-bg);
+  color: var(--resume-workbench-text);
+
+  .workspace-tabs {
+    display: none;
+  }
+
+  .editor-workspace {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 220px minmax(640px, 1fr) 370px;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--resume-workbench-bg);
+  }
+
+  .workspace-teleport-target {
+    display: contents;
+  }
+
+  .preview-column,
+  .editor-main,
+  .editor-aside {
+    position: static;
+    top: auto;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .preview-column {
+    position: relative;
+    top: auto;
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    padding: 0;
+    overflow: hidden;
+    background: var(--resume-workbench-bg);
+  }
+
+  .preview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 55px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+
+    > div:first-child {
+      display: flex;
+      align-items: baseline;
+      min-width: 0;
+      gap: 8px;
+    }
+
+    > div:first-child > span {
+      color: var(--resume-workbench-muted);
+      font-size: 11px;
+    }
+
+    h2 {
+      overflow: hidden;
+      margin: 0;
+      color: var(--resume-workbench-text);
+      font-size: 13px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .preview-toolbar__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    > button {
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--resume-workbench-line-strong);
+      border-radius: 6px;
+      background: var(--resume-workbench-surface);
+      color: var(--resume-workbench-text-soft);
+      font: inherit;
+      font-size: 11.5px;
+      font-weight: 650;
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        border-color: var(--resume-workbench-accent);
+        color: var(--resume-workbench-accent);
+        outline: 0;
+      }
+    }
+  }
+
+  .zoom-control {
+    display: grid;
+    grid-template-columns: 30px 48px 30px;
+    align-items: center;
+    min-height: 32px;
+    overflow: hidden;
+    border: 1px solid var(--resume-workbench-line-strong);
+    border-radius: 6px;
+    background: var(--resume-workbench-surface);
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--resume-workbench-muted);
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--resume-workbench-surface-soft);
+        color: var(--resume-workbench-accent);
+        outline: 0;
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.38;
+      }
+    }
+
+    span {
+      color: var(--resume-workbench-text-soft);
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+  }
+
+  .resume-paper-wrap {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    padding: 24px 32px 38px;
+    overflow: auto;
+    background: var(--resume-workbench-bg);
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .resume-paper-stage {
+    width: max-content;
+    min-width: 100%;
+    margin: 0 auto;
+    transform-origin: top center;
+
+    > * {
+      margin-inline: auto;
+    }
+  }
+
+  .resume-preview-actions {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+
+    :deep(.el-button) {
+      min-height: 32px;
+      margin: 0;
+      border-radius: 6px;
+      font-size: 11.5px;
+    }
+
+    .resume-preview-page-chip {
+      margin-left: auto;
+      color: var(--resume-workbench-muted);
+      font-size: 10.5px;
+    }
+  }
+
+  .editor-main,
+  .editor-aside {
+    grid-column: 3;
+    grid-row: 1;
+    align-content: start;
+    max-height: 100%;
+    padding: 0;
+    overflow: auto;
+    border-left: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+    scrollbar-gutter: stable;
+  }
+
+  .editor-main {
+    display: flex;
+    flex-direction: column;
+
+    > .editor-section {
+      order: 1;
+    }
+
+    > .ai-writing-card {
+      order: 2;
+    }
+  }
+
+  .editor-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .editor-aside > .side-panel:not(.section-nav-card) {
+    display: block;
+  }
+
+  .editor-aside > .export-check-panel {
+    margin-top: 0;
+    padding: 16px 18px;
+  }
+
+  .resume-inspector-heading,
+  .section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+  }
+
+  .resume-inspector-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+
+    > div {
+      min-width: 0;
+    }
+
+    span {
+      color: var(--resume-workbench-muted);
+      font-size: 10.5px;
+    }
+
+    h2 {
+      margin: 4px 0 0;
+      color: var(--resume-workbench-text);
+      font-size: 15px;
+    }
+
+    button {
+      min-height: 30px;
+      padding: 0 9px;
+      border: 1px solid var(--resume-workbench-line);
+      border-radius: 6px;
+      background: var(--resume-workbench-surface);
+      color: var(--resume-workbench-text-soft);
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+  }
+
+  .section-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+
+    .section-icon {
+      display: none;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--resume-workbench-text);
+      font-size: 15px;
+    }
+
+    p {
+      margin: 5px 0 0;
+      color: var(--resume-workbench-muted);
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+  }
+
+  .content-card,
+  .side-panel,
+  .editor-section {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .editor-section {
+    padding: 0;
+  }
+
+  .resume-form,
+  .inline-project-editor {
+    display: grid;
+    gap: 0;
+    padding: 4px 18px 18px;
+  }
+
+  .editor-block {
+    padding: 13px 0 3px;
+    border-bottom: 1px solid var(--resume-workbench-line);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    color: var(--resume-workbench-text);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .form-grid,
+  .inline-project-editor__meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 10px;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 13px;
+  }
+
+  :deep(.el-form-item__label) {
+    height: auto;
+    margin-bottom: 6px;
+    color: var(--resume-workbench-text-soft);
+    font-size: 11.5px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+
+  :deep(.el-input__wrapper),
+  :deep(.el-textarea__inner),
+  :deep(.el-input-number) {
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px var(--resume-workbench-line-strong) inset;
+  }
+
+  :deep(.el-input__wrapper:hover),
+  :deep(.el-textarea__inner:hover),
+  :deep(.el-input__wrapper.is-focus),
+  :deep(.el-textarea__inner:focus) {
+    box-shadow: 0 0 0 1px var(--resume-workbench-accent) inset;
+  }
+
+  .form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 11px 18px;
+    border-top: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+  }
+
+  .ai-writing-card {
+    margin: 0;
+    padding: 15px 18px 20px;
+    border-top: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface-soft);
+
+    h3 {
+      margin: 8px 0 4px;
+      color: var(--resume-workbench-text);
+      font-size: 13px;
+    }
+
+    > p {
+      margin: 0;
+      color: var(--resume-workbench-muted);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+  }
+
+  .panel-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--resume-workbench-accent);
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+
+  .prompt-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 11px;
+  }
+
+  .prompt-card {
+    display: grid;
+    gap: 3px;
+    padding: 10px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 6px;
+    background: var(--resume-workbench-surface);
+    color: var(--resume-workbench-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    span,
+    small {
+      color: var(--resume-workbench-muted);
+      font-size: 10.5px;
+    }
+
+    strong {
+      font-size: 11.5px;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+  }
+
+  .project-section {
+    padding: 0;
+  }
+
+  .project-header__actions,
+  .workshop-ai-rewrite__actions {
+    display: flex;
+    gap: 7px;
+  }
+
+  .project-switcher {
+    display: flex;
+    gap: 4px;
+    padding: 10px 18px 0;
+    overflow-x: auto;
+
+    button {
+      flex: 0 0 auto;
+      min-width: 120px;
+      padding: 8px 9px;
+      border: 1px solid var(--resume-workbench-line);
+      border-radius: 6px;
+      background: var(--resume-workbench-surface);
+      color: var(--resume-workbench-muted);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+
+      span,
+      small {
+        display: block;
+      }
+
+      span {
+        color: var(--resume-workbench-text);
+        font-size: 11.5px;
+        font-weight: 650;
+      }
+
+      small {
+        margin-top: 3px;
+        font-size: 10px;
+      }
+
+      &.active {
+        border-color: var(--resume-workbench-accent);
+        background: var(--resume-workbench-accent-soft);
+      }
+    }
+  }
+
+  .workshop-ai-rewrite,
+  .project-empty {
+    margin: 0 18px 18px;
+    padding: 13px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 7px;
+    background: var(--resume-workbench-surface-soft);
+  }
+
+  .project-empty {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+
+    h3,
+    p {
+      margin: 0;
+    }
+
+    p {
+      color: var(--resume-workbench-muted);
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+  }
+
+  .side-panel {
+    margin: 0;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--resume-workbench-line);
+
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h3 {
+      color: var(--resume-workbench-text);
+      font-size: 13px;
+    }
+
+    > p {
+      color: var(--resume-workbench-muted);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+  }
+
+  .completion-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--resume-workbench-text-soft);
+    font-size: 11.5px;
+
+    strong {
+      color: var(--resume-workbench-accent);
+    }
+  }
+
+  .completion-list,
+  .diagnostic-list,
+  .gap-list,
+  .evidence-list,
+  .optimize-records,
+  .rewrite-list {
+    display: grid;
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .completion-list > span,
+  .diagnostic-list > span,
+  .evidence-list > div,
+  .export-check-item,
+  .gap-list article,
+  .record-row,
+  .rewrite-list article {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 6px;
+    background: var(--resume-workbench-surface-soft);
+  }
+
+  .completion-list > span,
+  .diagnostic-list > span {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--resume-workbench-muted);
+    font-size: 11px;
+
+    &.done {
+      color: var(--resume-workbench-success);
+    }
+  }
+
+  .export-check-item__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--resume-workbench-text);
+    font-size: 11px;
+
+    > span {
+      margin-left: auto;
+      color: var(--resume-workbench-muted);
+      font-size: 9.5px;
+    }
+  }
+
+  .export-check-item p,
+  .gap-list p {
+    margin: 5px 0 0;
+    color: var(--resume-workbench-muted);
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+
+  .full-button {
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .optimize-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 10px;
+  }
+
+  .optimize-form :deep(.el-form-item:first-child),
+  .optimize-form :deep(.el-form-item:last-child) {
+    grid-column: 1 / -1;
+  }
+
+  .record-row {
+    display: grid;
+    gap: 3px;
+    color: var(--resume-workbench-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    small {
+      color: var(--resume-workbench-muted);
+      font-size: 10px;
+    }
+  }
+
+  .rewrite-toolbar,
+  .rewrite-head,
+  .score-line,
+  .capability-item,
+  .sse-progress__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .rewrite-diff {
+    display: grid;
+    gap: 7px;
+    margin-top: 7px;
+
+    p {
+      margin: 3px 0 0;
+      font-size: 10.5px;
+      line-height: 1.5;
+    }
+
+    span {
+      color: var(--resume-workbench-muted);
+      font-size: 9.5px;
+    }
+  }
+
+  .ai-empty,
+  .sse-progress,
+  .optimize-result {
+    margin-top: 11px;
+    padding: 10px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 6px;
+    background: var(--resume-workbench-surface-soft);
+    color: var(--resume-workbench-muted);
+    font-size: 11px;
+  }
+
+  .resume-editor-state {
+    margin: auto;
+  }
+}
+
+:global(.resume-delivery-dialog) {
+  --el-dialog-border-radius: 8px;
+}
+
+:global(.resume-delivery-dialog .el-dialog__body) {
+  max-height: min(800px, calc(100dvh - 150px));
+  padding: 0 18px 18px;
+  overflow: auto;
+}
+
+@media (max-width: 1180px) {
+  .arena-resume-studio.resume-editor {
+    .editor-workspace {
+      grid-template-columns: 64px minmax(600px, 1fr) 350px;
+    }
+  }
+}
+
+@media (max-width: 1020px) {
+  .arena-resume-studio.resume-editor {
+    height: auto;
+    min-height: calc(100dvh - 62px);
+    overflow: visible;
+
+    .workspace-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      min-height: 44px;
+      padding: 5px;
+      border-bottom: 1px solid var(--resume-workbench-line);
+      background: var(--resume-workbench-surface);
+
+      button {
+        min-width: 108px;
+        min-height: 32px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--resume-workbench-muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+
+        &.active {
+          background: var(--resume-workbench-accent-soft);
+          color: var(--resume-workbench-accent);
+        }
+      }
+    }
+
+    .editor-workspace {
+      display: block;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .mobile-pane-edit,
+    .mobile-pane-preview {
+      display: none;
+    }
+
+    .editor-workspace.is-mobile-edit .mobile-pane-edit {
+      display: flex;
+    }
+
+    .editor-workspace.is-mobile-preview .mobile-pane-preview {
+      display: flex;
+    }
+
+    .editor-main,
+    .editor-aside,
+    .preview-column {
+      position: static;
+      width: 100%;
+      height: min(780px, calc(100dvh - 160px));
+      max-height: min(780px, calc(100dvh - 160px));
+      border-left: 0;
+      overflow: auto;
+    }
+
+    .resume-paper-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-inline: 18px;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-resume-studio.resume-editor {
+    min-height: calc(100dvh - 54px);
+
+    .editor-main,
+    .editor-aside,
+    .preview-column {
+      height: auto;
+      min-height: calc(100dvh - 158px);
+      max-height: none;
+    }
+
+    .preview-toolbar {
+      padding-inline: 12px;
+    }
+
+    .preview-toolbar > div:first-child > span,
+    .preview-toolbar__actions > button {
+      display: none;
+    }
+
+    .resume-paper-wrap {
+      min-height: calc(100dvh - 260px);
+      padding: 14px 8px 24px;
+    }
+
+    .resume-preview-actions {
+      flex-wrap: wrap;
+      padding-inline: 12px;
+    }
+
+    .resume-preview-actions .resume-preview-page-chip {
+      width: 100%;
+      margin: 0;
+    }
+
+    .form-grid,
+    .inline-project-editor__meta,
+    .optimize-form {
+      grid-template-columns: 1fr;
+    }
+
+    .optimize-form :deep(.el-form-item) {
+      grid-column: auto;
+    }
+
+    .section-heading,
+    .resume-inspector-heading {
+      padding-inline: 14px;
+    }
+
+    .resume-form,
+    .inline-project-editor {
+      padding-inline: 14px;
+    }
+
+    .project-header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .project-header__actions {
+      width: 100%;
+    }
+
+    .project-header__actions :deep(.el-button) {
+      flex: 1 1 0;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-resume-studio.resume-editor {
+    .prompt-card,
+    .project-switcher button,
+    .preview-toolbar button {
+      transition: none;
     }
   }
 }
