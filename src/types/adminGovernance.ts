@@ -30,6 +30,8 @@ export interface AdminLogSummaryVO {
   failedLoginLogs: number
   todayFailedLoginLogs: number
   latestLoginAt?: string
+  queryAvailable?: boolean
+  degradedReason?: string
 }
 
 export interface AsyncTaskVO {
@@ -216,6 +218,11 @@ export interface AiModelConfigVO {
   temperature?: number
   maxTokens?: number
   description?: string
+  callHealthStatus?: string
+  lastCallSuccessAt?: string
+  lastCallSuccessSummary?: string
+  lastCallFailureAt?: string
+  lastCallFailureSummary?: string
   createdAt?: string
   updatedAt?: string
 }

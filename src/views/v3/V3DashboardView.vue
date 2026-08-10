@@ -127,7 +127,8 @@
           @click="router.push(activeStudyPlanRoute)"
         >
           <strong>{{ activeStudyPlanTitle }}</strong>
-          <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
+          <span>{{ activeStudyProgress.cumulativeDoneTaskCount ?? activeStudyProgress.doneTaskCount ?? 0 }}/{{ activeStudyProgress.cumulativeTaskCount ?? activeStudyProgress.totalTaskCount ?? 0 }} · {{ activeStudyProgress.cumulativeProgressPercent ?? activeStudyProgress.progressPercent ?? 0 }}%</span>
+          <small>{{ activeStudyProgress.todayStatus === 'NO_SCHEDULE' ? '业务日无安排' : `业务日 ${activeStudyProgress.todayDoneTaskCount ?? 0}/${activeStudyProgress.todayTaskCount ?? 0}` }}</small>
           <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
         </button>
       </div>
@@ -388,7 +389,9 @@ const notificationText = (item: NotificationVO) => {
 const metrics = computed(() => [
   { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
   { label: '面试', value: overview.value?.interviewCount ?? 0, hint: '模拟面试记录', path: '/interviews/history', icon: Bell },
-  { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
+  { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: activeStudyProgress.value?.todayStatus === 'NO_SCHEDULE'
+    ? '当前路线业务日无安排'
+    : `${activeStudyProgress.value?.todayDoneTaskCount ?? overview.value?.todayCompletedTaskCount ?? 0}/${activeStudyProgress.value?.todayTaskCount ?? overview.value?.todayTaskCount ?? 0} 业务日任务`, path: '/study-plans', icon: BookOpenCheck },
   { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
 ])
 const onboardingSteps = computed(() => [
@@ -432,9 +435,17 @@ const onboardingSteps = computed(() => [
     key: 'today',
     order: 4,
     title: '生成今日计划',
-    desc: (overview.value?.todayTaskCount || 0) > 0 ? `今日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成` : '让智能教练给出今天最该推进的动作',
+    desc: activeStudyProgress.value?.todayStatus === 'NO_SCHEDULE'
+      ? `累计 ${activeStudyProgress.value?.cumulativeDoneTaskCount ?? activeStudyProgress.value?.doneTaskCount ?? 0}/${activeStudyProgress.value?.cumulativeTaskCount ?? activeStudyProgress.value?.totalTaskCount ?? 0}，业务日无安排`
+      : (overview.value?.todayTaskCount || 0) > 0
+        ? `业务日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成`
+        : '让智能教练给出今天最该推进的动作',
     cta: '去今日任务',
-    done: Boolean((overview.value?.todayTaskCount || 0) > 0 || activeStudyProgress.value),
+    done: Boolean(
+      activeStudyProgress.value
+        && (activeStudyProgress.value.todayStatus === 'NO_SCHEDULE'
+          || (activeStudyProgress.value.todayTaskCount || 0) > 0)
+    ),
     path: '/agent/today'
   }
 ])

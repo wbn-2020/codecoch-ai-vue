@@ -15,32 +15,52 @@
     <div class="analysis-grid">
       <article class="analysis-block">
         <h3>核心职责</h3>
-        <div v-if="toDisplayItems(analysis.responsibilities).length" class="item-list">
-          <p v-for="item in toDisplayItems(analysis.responsibilities)" :key="item">{{ item }}</p>
+        <div v-if="responsibilityItems.length" class="item-list">
+          <p v-for="item in previewItems(responsibilityItems)" :key="item">{{ item }}</p>
+          <details v-if="remainingItems(responsibilityItems).length" class="analysis-more">
+            <summary>展开其余 {{ remainingItems(responsibilityItems).length }} 项</summary>
+            <p v-for="item in remainingItems(responsibilityItems)" :key="item">{{ item }}</p>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
 
       <article class="analysis-block">
         <h3>技能要求</h3>
-        <div v-if="toDisplayItems(analysis.requiredSkills).length" class="tag-list">
-          <span v-for="item in toDisplayItems(analysis.requiredSkills)" :key="item">{{ item }}</span>
+        <div v-if="requiredSkillItems.length" class="tag-list">
+          <span v-for="item in previewItems(requiredSkillItems)" :key="item">{{ item }}</span>
+          <details v-if="remainingItems(requiredSkillItems).length" class="analysis-more analysis-more--tags">
+            <summary>展开其余 {{ remainingItems(requiredSkillItems).length }} 项</summary>
+            <div>
+              <span v-for="item in remainingItems(requiredSkillItems)" :key="item">{{ item }}</span>
+            </div>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
 
       <article class="analysis-block">
         <h3>加分项</h3>
-        <div v-if="toDisplayItems(analysis.bonusSkills).length" class="tag-list">
-          <span v-for="item in toDisplayItems(analysis.bonusSkills)" :key="item">{{ item }}</span>
+        <div v-if="bonusSkillItems.length" class="tag-list">
+          <span v-for="item in previewItems(bonusSkillItems)" :key="item">{{ item }}</span>
+          <details v-if="remainingItems(bonusSkillItems).length" class="analysis-more analysis-more--tags">
+            <summary>展开其余 {{ remainingItems(bonusSkillItems).length }} 项</summary>
+            <div>
+              <span v-for="item in remainingItems(bonusSkillItems)" :key="item">{{ item }}</span>
+            </div>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
 
       <article class="analysis-block">
         <h3>面试重点</h3>
-        <div v-if="toDisplayItems(analysis.interviewFocusPoints).length" class="item-list">
-          <p v-for="item in toDisplayItems(analysis.interviewFocusPoints)" :key="item">{{ item }}</p>
+        <div v-if="interviewFocusItems.length" class="item-list">
+          <p v-for="item in previewItems(interviewFocusItems)" :key="item">{{ item }}</p>
+          <details v-if="remainingItems(interviewFocusItems).length" class="analysis-more">
+            <summary>展开其余 {{ remainingItems(interviewFocusItems).length }} 项</summary>
+            <p v-for="item in remainingItems(interviewFocusItems)" :key="item">{{ item }}</p>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
@@ -49,15 +69,27 @@
     <div class="analysis-grid compact">
       <article class="analysis-block">
         <h3>技术栈关键词</h3>
-        <div v-if="toDisplayItems(analysis.techStackKeywords).length" class="tag-list">
-          <span v-for="item in toDisplayItems(analysis.techStackKeywords)" :key="item">{{ item }}</span>
+        <div v-if="techStackItems.length" class="tag-list">
+          <span v-for="item in previewItems(techStackItems)" :key="item">{{ item }}</span>
+          <details v-if="remainingItems(techStackItems).length" class="analysis-more analysis-more--tags">
+            <summary>展开其余 {{ remainingItems(techStackItems).length }} 项</summary>
+            <div>
+              <span v-for="item in remainingItems(techStackItems)" :key="item">{{ item }}</span>
+            </div>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
       <article class="analysis-block">
         <h3>业务关键词</h3>
-        <div v-if="toDisplayItems(analysis.businessKeywords).length" class="tag-list">
-          <span v-for="item in toDisplayItems(analysis.businessKeywords)" :key="item">{{ item }}</span>
+        <div v-if="businessKeywordItems.length" class="tag-list">
+          <span v-for="item in previewItems(businessKeywordItems)" :key="item">{{ item }}</span>
+          <details v-if="remainingItems(businessKeywordItems).length" class="analysis-more analysis-more--tags">
+            <summary>展开其余 {{ remainingItems(businessKeywordItems).length }} 项</summary>
+            <div>
+              <span v-for="item in remainingItems(businessKeywordItems)" :key="item">{{ item }}</span>
+            </div>
+          </details>
         </div>
         <span v-else class="empty-text">--</span>
       </article>
@@ -74,10 +106,19 @@
     <article class="analysis-block weights">
       <h3>技能权重</h3>
       <div v-if="weightItems.length" class="weight-list">
-        <div v-for="item in weightItems" :key="item.label" class="weight-item">
+        <div v-for="item in previewItems(weightItems)" :key="item.label" class="weight-item">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
         </div>
+        <details v-if="remainingItems(weightItems).length" class="analysis-more weight-more">
+          <summary>展开其余 {{ remainingItems(weightItems).length }} 项</summary>
+          <div class="weight-list">
+            <div v-for="item in remainingItems(weightItems)" :key="item.label" class="weight-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </details>
       </div>
       <span v-else class="empty-text">--</span>
     </article>
@@ -95,6 +136,8 @@ import JobTargetStatusTag from './JobTargetStatusTag.vue'
 const props = defineProps<{
   analysis: JobDescriptionAnalysisVO
 }>()
+
+const PREVIEW_LIMIT = 3
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -127,6 +170,15 @@ const toDisplayItems = (value: unknown): string[] => {
   const text = stringifyItem(value)
   return text ? [text] : []
 }
+
+const previewItems = <T>(items: T[]) => items.slice(0, PREVIEW_LIMIT)
+const remainingItems = <T>(items: T[]) => items.slice(PREVIEW_LIMIT)
+const responsibilityItems = computed(() => toDisplayItems(props.analysis.responsibilities))
+const requiredSkillItems = computed(() => toDisplayItems(props.analysis.requiredSkills))
+const bonusSkillItems = computed(() => toDisplayItems(props.analysis.bonusSkills))
+const interviewFocusItems = computed(() => toDisplayItems(props.analysis.interviewFocusPoints))
+const techStackItems = computed(() => toDisplayItems(props.analysis.techStackKeywords))
+const businessKeywordItems = computed(() => toDisplayItems(props.analysis.businessKeywords))
 
 const weightItems = computed(() => {
   if (!isRecord(props.analysis.skillWeights)) return []
@@ -225,6 +277,36 @@ const weightItems = computed(() => {
     background: var(--app-primary-soft, var(--user-surface-muted));
     color: var(--app-primary);
     font-size: 12px;
+  }
+}
+
+.analysis-more {
+  width: 100%;
+
+  summary {
+    color: var(--app-primary);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  > p:first-of-type {
+    margin-top: 8px;
+  }
+}
+
+.analysis-more--tags > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.weight-more {
+  grid-column: 1 / -1;
+
+  > .weight-list {
+    margin-top: 10px;
   }
 }
 

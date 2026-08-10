@@ -4,7 +4,7 @@
       <div>
         <div class="v4-eyebrow">成长画像</div>
         <h1>成长画像</h1>
-        <p>汇总准备度、任务完成率、技能趋势和长期记忆信号，帮助你判断最近该补哪里。</p>
+        <p>仅汇总最近 Agent 任务状态，展示任务完成率、技能标签趋势和样本可信度。</p>
       </div>
       <div class="v4-actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="load" />
@@ -42,12 +42,10 @@
         <div>
           <span class="growth-next-action__label">下一步</span>
           <h2 id="growth-next-action-title">先补一条可信训练记录</h2>
-          <p>{{ overview?.coldStartReason || '当前证据不足，完成一次今日任务、题库练习或模拟面试后再查看趋势。' }}</p>
+          <p>{{ overview?.coldStartReason || '当前 Agent 任务证据不足，完成今日任务后再查看趋势。' }}</p>
         </div>
         <div class="growth-next-action__actions">
           <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
-          <el-button @click="goQuestionTraining">练一组题</el-button>
-          <el-button @click="goInterviewCreate">模拟面试</el-button>
         </div>
         <ul v-if="nextEvidenceActions.length" class="evidence-action-list" aria-label="建议补充的证据">
           <li v-for="action in nextEvidenceActions" :key="action">{{ action }}</li>
@@ -58,7 +56,7 @@
         <article class="v4-card">
           <span>准备度</span>
           <strong>{{ showStrongScore ? overview?.readinessScore : '待补证据' }}</strong>
-          <small>{{ showStrongScore ? '基于近期任务和教练运行记录' : '证据不足时不展示评分' }}</small>
+          <small>{{ showStrongScore ? '仅基于近期 Agent 任务状态' : '证据不足时不展示评分' }}</small>
         </article>
         <article class="v4-card">
           <span>任务完成率</span>
@@ -66,9 +64,9 @@
           <small>{{ showStrongScore ? '仅展示可信时间窗内结果' : '完成更多任务后显示' }}</small>
         </article>
         <article class="v4-card">
-          <span>今日计划成功率</span>
-          <strong>{{ showStrongScore ? formatPercent(overview?.agentSuccessRate) : '--' }}</strong>
-          <small>{{ showStrongScore ? '来自 AI 教练运行记录' : '运行记录不足时隐藏' }}</small>
+          <span>任务证据数</span>
+          <strong>{{ overview?.evidenceCount ?? 0 }}</strong>
+          <small>不纳入计划生成运行、复盘或长期记忆</small>
         </article>
         <article class="v4-card">
           <span>启用记忆数</span>
@@ -108,7 +106,7 @@
               <strong>{{ topSkillEmptyTitle }}</strong>
               <p>{{ topSkillEmptyDescription }}</p>
             </div>
-            <el-button type="primary" @click="goQuestionTraining">练一组题</el-button>
+              <el-button type="primary" @click="goTodayPlan">去今日任务</el-button>
           </div>
         </div>
       </section>
@@ -126,7 +124,7 @@
               <div>
                 <strong>{{ item.scoreDate || '--' }}</strong>
                 <span>
-                  {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? 0 }} · 完成率 {{ item.taskCompletionRate ?? 0 }}% · 今日计划 {{ item.agentSuccessRate ?? 0 }}%
+                  {{ item.timeWindow || overview?.timeWindow || '近期' }} · 证据 {{ item.evidenceCount ?? 0 }} · Agent 任务完成率 {{ item.taskCompletionRate ?? 0 }}%
                 </span>
                 <small class="trend-meta">可信度：{{ confidenceText(item.confidenceLevel) }} · 来源：{{ trendSourceText(item) }}</small>
                 <small v-if="item.coldStartReason" class="trend-cold">{{ item.coldStartReason }}</small>
@@ -196,7 +194,7 @@ const nextEvidenceActions = computed(() => overview.value?.nextEvidenceActions |
 const topSkillEmptyTitle = computed(() => showTopSkillTrend.value ? '还没有重点技能' : '重点技能暂不展示强趋势')
 const topSkillEmptyDescription = computed(() =>
   showTopSkillTrend.value
-    ? '完成带技能标签的题库练习、今日任务或模拟面试后，系统会汇总你最近反复暴露的技能点。'
+    ? '完成带技能标签的 Agent 今日任务后，系统会汇总最近反复出现的技能点。'
     : '当前证据还不够稳定，页面只保留补资料入口，不把零散技能记录包装成 Top 趋势。'
 )
 const confidenceLabel = computed(() => {
@@ -224,8 +222,6 @@ const trendSourceText = (item: SkillGrowthSnapshotVO | ReadinessScoreRecordVO) =
 }
 
 const goTodayPlan = () => router.push('/agent/today')
-const goQuestionTraining = () => router.push('/questions/recommendations')
-const goInterviewCreate = () => router.push('/interviews/create')
 const goWeeklyReport = () => router.push('/agent/weekly-reports')
 
 const getErrorMessage = (error: unknown) => {

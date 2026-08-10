@@ -141,7 +141,7 @@ const visibleGroups = computed(() =>
   groups
     .map((group) => ({
       ...group,
-      items: group.items
+      items: group.items.filter((item) => item.enabled !== false)
     }))
     .filter((group) => group.items.length > 0)
 )

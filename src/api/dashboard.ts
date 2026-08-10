@@ -23,6 +23,10 @@ const normalizeAdminDashboardOverview = (data: Partial<AdminDashboardOverviewVO>
 type StudyPlanLike = Partial<UserDashboardActiveStudyPlanVO> & {
   id?: number | string
   studyPlanId?: number | string
+  activePlanId?: number | string
+  totalTasks?: number
+  completedTasks?: number
+  completionRate?: number
 }
 
 const toPositiveNumber = (value: unknown) => {
@@ -33,11 +37,23 @@ const toPositiveNumber = (value: unknown) => {
 const normalizeStudyProgress = (value?: unknown): UserDashboardActiveStudyPlanVO | null => {
   if (!value || typeof value !== 'object') return null
   const plan = value as StudyPlanLike
-  const planId = toPositiveNumber(plan.planId || plan.studyPlanId || plan.id)
+  const planId = toPositiveNumber(plan.planId || plan.studyPlanId || plan.activePlanId || plan.id)
   if (!planId) return null
+  const cumulativeTaskCount = plan.cumulativeTaskCount ?? plan.totalTaskCount ?? plan.totalTasks ?? 0
+  const cumulativeDoneTaskCount = plan.cumulativeDoneTaskCount ?? plan.doneTaskCount ?? plan.completedTasks ?? 0
+  const cumulativeProgressPercent = plan.cumulativeProgressPercent ?? plan.progressPercent ?? plan.completionRate ?? 0
   return {
     ...plan,
-    planId
+    planId,
+    totalTaskCount: cumulativeTaskCount,
+    doneTaskCount: cumulativeDoneTaskCount,
+    progressPercent: cumulativeProgressPercent,
+    cumulativeTaskCount,
+    cumulativeDoneTaskCount,
+    cumulativeProgressPercent,
+    todayTaskCount: plan.todayTaskCount ?? 0,
+    todayDoneTaskCount: plan.todayDoneTaskCount ?? 0,
+    todayProgressPercent: plan.todayProgressPercent ?? 0
   }
 }
 
@@ -52,6 +68,9 @@ const normalizeUserDashboardOverview = (data: Partial<UserDashboardOverviewVO> =
   activeStudyPlan: normalizeStudyProgress(data.activeStudyPlan),
   todayTaskCount: data.todayTaskCount || 0,
   todayCompletedTaskCount: data.todayCompletedTaskCount || 0,
+  businessDate: data.businessDate,
+  businessTimezone: data.businessTimezone || 'Asia/Shanghai',
+  agentTodayPlanStatus: data.agentTodayPlanStatus,
   entryStatuses: data.entryStatuses || [],
   generatedAt: data.generatedAt
 })

@@ -1,17 +1,18 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useGameProfileStore } from '@/features/game-profile'
 import QuestionPracticeSessionView from '@/views/question/QuestionPracticeSessionView.vue'
 
+const routeState = vi.hoisted(() => ({
+  query: { mode: 'random' } as Record<string, string>
+}))
 const questionApi = vi.hoisted(() => ({
   getQuestions: vi.fn(),
-  submitAnswer: vi.fn()
+  submitReview: vi.fn()
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: { mode: 'random' }, params: {} }),
+  useRoute: () => ({ query: routeState.query, params: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() })
 }))
 
@@ -20,7 +21,7 @@ vi.mock('@/api/question', () => ({
   getQuestionDetailApi: vi.fn(),
   getQuestionsApi: questionApi.getQuestions,
   getWrongQuestionsApi: vi.fn(),
-  submitQuestionAnswerApi: questionApi.submitAnswer,
+  submitQuestionAnswerReviewApi: questionApi.submitReview,
   updateQuestionMasteryApi: vi.fn()
 }))
 
@@ -31,7 +32,8 @@ vi.mock('@/utils/dangerAction', () => ({
 vi.mock('element-plus', () => ({
   ElMessage: {
     error: vi.fn(),
-    warning: vi.fn()
+    warning: vi.fn(),
+    success: vi.fn()
   }
 }))
 
@@ -85,87 +87,112 @@ const startSession = async (wrapper: ReturnType<typeof mountSession>) => {
 
 const submitCurrentAnswer = async (wrapper: ReturnType<typeof mountSession>) => {
   await wrapper.find('textarea').setValue('先说明缓存穿透的边界，再使用布隆过滤器和空值缓存处理。')
-  await wrapper.findAll('button').find((button) => button.text().includes('提交答案'))!.trigger('click')
+  await wrapper.findAll('button').find((button) => button.text().includes('提交 AI 点评'))!.trigger('click')
   await flushPromises()
 }
 
-describe('QuestionPracticeSessionView XP rewards', () => {
+describe('QuestionPracticeSessionView answer review flow', () => {
   beforeEach(() => {
     localStorage.clear()
-    setActivePinia(createPinia())
     vi.clearAllMocks()
+    routeState.query = { mode: 'random' }
     questionApi.getQuestions.mockResolvedValue({ records: [QUESTION] })
   })
 
-  it('awards practice_correct once after a correct answer result is applied', async () => {
-    questionApi.submitAnswer.mockResolvedValue({
-      recordId: 9001,
+  it('submits the answer-review contract and renders the returned score and feedback', async () => {
+    routeState.query = {
+      mode: 'random',
+      sourceType: 'SKILL_PROFILE',
+      targetJobId: '42'
+    }
+    questionApi.submitReview.mockResolvedValue({
+      id: 9001,
       questionId: QUESTION.id,
-      answerResult: 'CORRECT',
-      answeredAt: '2026-07-31T08:00:00Z'
+      reviewStatus: 'SUCCESS',
+      score: 86,
+      level: '良好',
+      summary: '结论清晰，但项目指标还可以更具体。',
+      strengths: ['说明了布隆过滤器'],
+      weaknesses: ['缺少误判率边界'],
+      improvementSuggestions: ['补充空值缓存过期策略'],
+      suggestedFollowUps: ['布隆过滤器误判如何处理？'],
+      knowledgePoints: ['缓存穿透', '布隆过滤器']
     })
 
     const wrapper = mountSession()
     await startSession(wrapper)
     await submitCurrentAnswer(wrapper)
 
-    const profile = useGameProfileStore()
-    expect(profile.xp).toBe(18)
-    expect(profile.xpRewards).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        event: 'practice_correct',
-        rewardKey: 'practice:answer:9001'
-      })
-    ]))
+    expect(questionApi.submitReview).toHaveBeenCalledWith(QUESTION.id, {
+      answerContent: '先说明缓存穿透的边界，再使用布隆过滤器和空值缓存处理。',
+      answerDurationSeconds: expect.any(Number),
+      source: 'SKILL_PROFILE',
+      targetJobId: 42
+    })
+    expect(wrapper.text()).toContain('本次真实评分')
+    expect(wrapper.text()).toContain('86')
+    expect(wrapper.text()).toContain('说明了布隆过滤器')
+    expect(wrapper.text()).toContain('缺少误判率边界')
+    expect(wrapper.text()).toContain('补充空值缓存过期策略')
+    expect(wrapper.text()).toContain('布隆过滤器误判如何处理？')
+    expect(wrapper.text()).not.toContain('答对 +18 XP')
+    expect(wrapper.text()).not.toContain('回答通过')
 
-    wrapper.unmount()
-    const repeatedWrapper = mountSession()
-    await startSession(repeatedWrapper)
-    await submitCurrentAnswer(repeatedWrapper)
-
-    expect(useGameProfileStore().xp).toBe(18)
-    expect(questionApi.submitAnswer).toHaveBeenCalledTimes(2)
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    expect(wrapper.text()).toContain('缓存穿透')
+    expect(wrapper.text()).toContain('布隆过滤器')
   })
 
-  it('does not award XP for wrong answers, failed submission, or question loading failure', async () => {
-    questionApi.submitAnswer.mockResolvedValue({
-      recordId: 9002,
+  it('keeps an isolated draft after failure and clears it after a successful review', async () => {
+    routeState.query = { mode: 'random', targetJobId: '42' }
+    questionApi.submitReview.mockRejectedValueOnce(new Error('submit failed'))
+
+    const wrapper = mountSession()
+    await startSession(wrapper)
+    await submitCurrentAnswer(wrapper)
+
+    const draftKey = 'question-practice-draft:101:random:42'
+    expect(localStorage.getItem(draftKey)).toContain('布隆过滤器')
+    expect(wrapper.find('textarea').element.value).toContain('布隆过滤器')
+
+    questionApi.submitReview.mockResolvedValueOnce({
+      id: 9002,
       questionId: QUESTION.id,
-      answerResult: 'WRONG',
-      answeredAt: '2026-07-31T08:00:00Z'
+      reviewStatus: 'SUCCESS',
+      score: 72
+    })
+    await wrapper.findAll('button').find((button) => button.text().includes('提交 AI 点评'))!.trigger('click')
+    await flushPromises()
+
+    expect(localStorage.getItem(draftKey)).toBeNull()
+    expect(localStorage.getItem('question-practice-draft:101:random:all')).toBeNull()
+  })
+
+  it('keeps the draft when the API returns a failed PracticeRecordVO', async () => {
+    questionApi.submitReview.mockResolvedValue({
+      id: 9003,
+      questionId: QUESTION.id,
+      reviewStatus: 'FAILED',
+      errorMessage: 'review failed'
     })
 
-    const wrongWrapper = mountSession()
-    await startSession(wrongWrapper)
-    await submitCurrentAnswer(wrongWrapper)
+    const wrapper = mountSession()
+    await startSession(wrapper)
+    await submitCurrentAnswer(wrapper)
 
-    expect(useGameProfileStore().xp).toBe(0)
-    wrongWrapper.unmount()
-
-    questionApi.getQuestions.mockRejectedValueOnce(new Error('load failed'))
-    const loadFailureWrapper = mountSession()
-    await startSession(loadFailureWrapper)
-
-    expect(useGameProfileStore().xp).toBe(0)
-    loadFailureWrapper.unmount()
-
-    questionApi.submitAnswer.mockRejectedValueOnce(new Error('submit failed'))
-    const failedSubmitWrapper = mountSession()
-    await startSession(failedSubmitWrapper)
-    await submitCurrentAnswer(failedSubmitWrapper)
-
-    expect(useGameProfileStore().xp).toBe(0)
+    expect(localStorage.getItem('question-practice-draft:101:random:all')).toContain('布隆过滤器')
+    expect(wrapper.find('textarea').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('本次真实评分')
   })
 
-  it('uses the direction D single-task answer surface after training starts', async () => {
+  it('shows suggested answer length and the real scoring-point toggle', async () => {
     const wrapper = mountSession()
     await startSession(wrapper)
 
     expect(wrapper.findAll('.practice-question-card')).toHaveLength(1)
     expect(wrapper.findAll('.practice-support-card')).toHaveLength(2)
-    expect(wrapper.find('.active-grid').exists()).toBe(false)
-    expect(wrapper.find('.side-stack').exists()).toBe(false)
-    expect(wrapper.text()).toContain('评分点提示（可关）')
+    expect(wrapper.text()).toContain('建议 180-300 字')
+    expect(wrapper.text()).toContain('显示真实评分点')
     expect(wrapper.text()).toContain('可引用项目证据')
   })
 })

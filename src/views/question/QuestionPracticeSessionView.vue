@@ -3,7 +3,7 @@
     <section v-if="!practicing && !finished" class="practice-ready">
       <div class="practice-ready__head">
         <span class="arena-kicker">答题间</span>
-        <span class="arena-xp-tag">+18 / 题</span>
+        <span class="arena-xp-tag">按真实点评复盘</span>
       </div>
       <h1>{{ loadError ? '本轮训练暂未开始' : '正在准备本轮训练' }}</h1>
       <p>{{ loadError ? '题目暂时无法加载。请返回推荐训练页调整题组后再进入答题间。' : heroSubtitle }}</p>
@@ -27,7 +27,11 @@
       </header>
 
       <main v-if="currentQuestion" class="practice-question-card">
-        <div class="practice-question-card__meta"><span class="arena-chip arena-chip--grn">{{ difficultyLabel(currentQuestion.difficulty) }}</span><span>建议 3 分钟</span></div>
+        <div class="practice-question-card__meta">
+          <span class="arena-chip arena-chip--grn">{{ difficultyLabel(currentQuestion.difficulty) }}</span>
+          <span>建议 {{ suggestedAnswerLength }} 字</span>
+          <span>建议 {{ suggestedAnswerMinutes }} 分钟</span>
+        </div>
         <h2>{{ currentQuestion.title }}</h2>
         <MarkdownPreview
           v-if="shouldShowCurrentQuestionPrompt"
@@ -38,17 +42,33 @@
         <template v-if="!answered">
           <el-input v-model="userAnswer" class="practice-answer-input" type="textarea" :rows="7" maxlength="5000" show-word-limit placeholder="按你的真实排查思路写，AI 会对照评分点给反馈…" :disabled="submitting" />
           <div class="practice-answer-actions">
-            <el-button class="practice-answer-actions__skip" :disabled="submitting" @click="skipQuestion">跳过 · 不记分</el-button>
-            <div><span>答对 +18 XP</span><el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer"><Send :size="16" /> 提交答案 ✓</el-button></div>
+            <el-button class="practice-answer-actions__skip" :disabled="submitting" @click="skipQuestion">跳过本题</el-button>
+            <div>
+              <span>{{ draftStatusText }}</span>
+              <el-button type="primary" :loading="submitting" :disabled="!userAnswer.trim()" @click="submitAnswer"><Send :size="16" /> 提交 AI 点评</el-button>
+            </div>
           </div>
         </template>
 
         <section v-else class="practice-review">
-          <el-alert :type="lastResult?.isCorrect ? 'success' : 'warning'" show-icon :closable="false" :title="lastResult?.isCorrect ? '回答通过' : '需要补强'" :description="resultDescription" />
-          <div class="practice-review__coverage">
-            <span v-for="item in answerCoverageItems" :key="item.title" :class="{ 'is-done': item.done }">{{ item.title }}：{{ item.done ? '已覆盖' : item.hint }}</span>
+          <el-alert :type="reviewAlertType" show-icon :closable="false" :title="reviewTitle" :description="resultDescription" />
+          <div class="practice-review__score" v-if="hasScore(lastResult?.score)">
+            <span>本次真实评分</span>
+            <strong>{{ lastResult?.score }}<small>/ 100</small></strong>
+            <em>{{ lastResult?.level || '评分已返回' }}</em>
           </div>
-          <details><summary>查看参考答案与 AI 点评</summary><div class="practice-review__detail"><section><h3>参考答案</h3><MarkdownPreview :content="referenceAnswerText" /></section><section><h3>AI 点评与解析</h3><MarkdownPreview :content="analysisText" /></section></div></details>
+          <div v-if="showScoringPoints" class="practice-review__scoring-points">
+            <strong>真实评分点</strong>
+            <span v-for="item in scoringPointItems" :key="item">{{ item }}</span>
+            <p v-if="!scoringPointItems.length">本次点评未返回评分点明细，请以优缺点和建议为准。</p>
+          </div>
+          <details open><summary>查看参考答案与 AI 点评</summary><div class="practice-review__detail"><section><h3>参考答案</h3><MarkdownPreview :content="referenceAnswerText" /></section><section><h3>AI 点评</h3><MarkdownPreview :content="analysisText" /></section></div></details>
+          <div class="practice-review__feedback-grid">
+            <section><h3>优点</h3><p v-for="item in reviewStrengths" :key="item">{{ item }}</p></section>
+            <section><h3>不足</h3><p v-for="item in reviewWeaknesses" :key="item">{{ item }}</p></section>
+            <section><h3>改进建议</h3><p v-for="item in reviewSuggestions" :key="item">{{ item }}</p></section>
+            <section><h3>可能追问</h3><p v-for="item in reviewFollowUps" :key="item">{{ item }}</p></section>
+          </div>
           <div class="practice-review__actions">
             <el-button type="primary" @click="nextQuestion">{{ isLastQuestion ? '查看结果' : '下一题' }} <ArrowRight :size="16" /></el-button>
             <el-button-group><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.MASTERED ? 'success' : ''" @click="markMastery(MASTERY_STATUS.MASTERED)">已掌握</el-button><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.VAGUE ? 'warning' : ''" @click="markMastery(MASTERY_STATUS.VAGUE)">模糊</el-button><el-button :disabled="submitting" :type="masteryChoice === MASTERY_STATUS.UNKNOWN ? 'danger' : ''" @click="markMastery(MASTERY_STATUS.UNKNOWN)">未掌握</el-button></el-button-group>
@@ -58,14 +78,18 @@
       <AppState v-else type="empty" title="当前没有可作答的题目" description="请重新加载，或返回推荐题组。" />
 
       <div class="practice-support-grid">
-        <section class="practice-support-card practice-support-card--ai"><div><span>✦ AI 骨架</span><b>评分点提示（可关）</b></div><p>{{ answered ? '已生成点评，展开当前题中的复盘即可查看。' : '① 先给结论 ② 说明排查路径 ③ 补充对象来源 ④ 给出修复与验证。' }}</p></section>
+        <section class="practice-support-card practice-support-card--ai">
+          <div><span>✦ AI 反馈</span><b>评分点提示</b></div>
+          <label class="practice-scoring-toggle"><input v-model="showScoringPoints" type="checkbox" /> 显示真实评分点</label>
+          <p>{{ answered ? '评分点仅展示 answer-review 返回的内容，不做本地猜测。' : '提交后按服务端点评结果展示真实评分点。' }}</p>
+        </section>
         <section class="practice-support-card"><b>📎 可引用项目证据</b><p>{{ sourceText }}</p></section>
       </div>
     </section>
 
     <section v-if="finished" class="practice-finish">
       <span class="arena-kicker">本轮结算</span><h1>训练完成</h1><p>{{ completionInsight }}</p>
-      <div class="practice-finish__stats"><span>总题数 <b>{{ questions.length }}</b></span><span>已答 <b>{{ answeredCount }}</b></span><span>正确 <b>{{ correctCount }}</b></span><span>跳过 <b>{{ skippedCount }}</b></span><span>正确率 <b>{{ accuracyText }}</b></span><span>用时 <b>{{ elapsedText }}</b></span></div>
+      <div class="practice-finish__stats"><span>总题数 <b>{{ questions.length }}</b></span><span>已点评 <b>{{ answeredCount }}</b></span><span>跳过 <b>{{ skippedCount }}</b></span><span>平均评分 <b>{{ averageScoreText }}</b></span><span>用时 <b>{{ elapsedText }}</b></span></div>
       <el-alert v-if="lastResult?.agentTaskCompleted" type="success" :closable="false" show-icon :title="lastResult.agentTaskTitle || '今日计划已同步记录'" />
       <div class="practice-finish__actions"><el-button type="primary" @click="resetPractice">再练一轮</el-button><el-button @click="router.push('/questions/wrong-records')">错题复盘</el-button><el-button @click="router.push('/questions/favorites')">收藏复习</el-button><el-button @click="router.push('/ability-map')">能力图谱</el-button><el-button @click="router.push('/interviews/create')">模拟面试</el-button></div>
     </section>
@@ -87,7 +111,7 @@ import {
   Shuffle,
   Target
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -96,14 +120,13 @@ import {
   getQuestionDetailApi,
   getQuestionsApi,
   getWrongQuestionsApi,
-  submitQuestionAnswerApi,
+  submitQuestionAnswerReviewApi,
   updateQuestionMasteryApi
 } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import { MASTERY_STATUS } from '@/constants/enums'
-import { useGameProfileStore } from '@/features/game-profile'
-import type { FavoriteQuestionVO, MasteryStatus, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
+import type { FavoriteQuestionVO, MasteryStatus, PracticeRecordVO, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 
@@ -117,23 +140,8 @@ interface ModeOption {
   icon: Component
 }
 
-interface PracticeAnswerResult {
-  isCorrect?: boolean
-  wrong?: boolean
-  aiComment?: string
-  referenceAnswer?: string
-  answerResult?: string
-  masteryStatus?: string
-  agentTaskCompleted?: boolean
-  agentTaskId?: number
-  agentTaskTitle?: string
-  agentTaskStatus?: string
-  agentReviewSummary?: string
-}
-
 const route = useRoute()
 const router = useRouter()
-const gameProfile = useGameProfileStore()
 
 const queryString = (name: string) => {
   const value = route.query[name]
@@ -239,13 +247,16 @@ const questions = ref<QuestionDetailVO[]>([])
 const currentIndex = ref(0)
 const userAnswer = ref('')
 const answered = ref(false)
-const lastResult = ref<PracticeAnswerResult | null>(null)
+const lastResult = ref<PracticeRecordVO | null>(null)
 const masteryChoice = ref<MasteryStatus | ''>('')
-const correctCount = ref(0)
 const skippedCount = ref(0)
 const answeredCount = ref(0)
 const elapsedSeconds = ref(0)
+const questionStartedAtSeconds = ref(0)
+const showScoringPoints = ref(false)
+const reviewedScores = ref<number[]>([])
 let elapsedTimer: number | undefined
+const draftPrefix = 'question-practice-draft'
 
 const heroTitle = computed(() => config.mode === 'recommended' ? '按推荐题组训练' : '进入面试口径练习')
 const heroSubtitle = computed(() => {
@@ -270,14 +281,15 @@ const progressPercent = computed(() => {
   if (!questions.value.length) return 0
   return Math.min(100, Math.round(((currentIndex.value + 1) / questions.value.length) * 100))
 })
-const accuracyText = computed(() => {
-  if (!answeredCount.value) return '0%'
-  return `${Math.round((correctCount.value / answeredCount.value) * 100)}%`
-})
 const completionInsight = computed(() => {
   if (!answeredCount.value) return '本轮还没有提交答案，可以再练一轮或换一种模式重新开始。'
   if (skippedCount.value) return '本轮有跳过题目，建议进入错题或收藏复盘，把不稳的题重新讲清楚。'
   return '把已提交的回答沉淀到错题、收藏、能力图谱或下一场模拟面试里。'
+})
+const averageScoreText = computed(() => {
+  if (!reviewedScores.value.length) return '--'
+  const total = reviewedScores.value.reduce((sum, score) => sum + score, 0)
+  return `${Math.round(total / reviewedScores.value.length)} 分`
 })
 const elapsedText = computed(() => {
   const min = Math.floor(elapsedSeconds.value / 60)
@@ -309,46 +321,83 @@ const referenceAnswerText = computed(() => {
 const analysisText = computed(() => {
   if (lastResult.value?.aiComment) return lastResult.value.aiComment
   if (currentQuestion.value?.analysis) return currentQuestion.value.analysis
-  return '点评内容暂未返回。先按下方覆盖检查复盘：是否讲清定义/场景、核心方案、风险取舍、项目指标；缺哪一项就把掌握状态标为“模糊”或“未掌握”。'
-})
-const answerCoverageItems = computed(() => {
-  const answer = userAnswer.value.trim()
-  const normalized = answer.toLowerCase()
-  const hasAny = (tokens: string[]) => tokens.some((token) => normalized.includes(token.toLowerCase()))
-  return [
-    {
-      title: '定义或场景',
-      done: answer.length >= 30 || hasAny(['是什么', '场景', '问题', '背景', '边界']),
-      hint: '先说明问题边界'
-    },
-    {
-      title: '方案或原理',
-      done: hasAny(['方案', '原理', '流程', '步骤', '实现', '机制', '架构']),
-      hint: '补核心方案'
-    },
-    {
-      title: '风险取舍',
-      done: hasAny(['风险', '缺点', '取舍', '代价', '一致性', '性能', '异常']),
-      hint: '补权衡和失败场景'
-    },
-    {
-      title: '项目证据',
-      done: hasAny(['项目', '线上', '指标', 'qps', '耗时', '监控', '压测', '用户']),
-      hint: '补项目指标或结果'
-    }
-  ]
+  return '点评内容暂未返回，请以本次 answer-review 的优缺点和建议为准。'
 })
 const resultDescription = computed(() => {
-  if (!lastResult.value?.answerResult) return ''
-  const map: Record<string, string> = {
-    CORRECT: '回答结构基本通过，继续补项目表达。',
-    PARTIAL_CORRECT: '方向正确，但关键点还需要补齐。',
-    WRONG: '建议先看参考答案，再标记为未掌握。'
-  }
-  return map[lastResult.value.answerResult] || '本次点评结果待确认，请先查看参考答案和解析。'
+  return lastResult.value?.summary || lastResult.value?.aiComment || '本次点评已返回，请结合优缺点、建议和追问复盘。'
 })
+const reviewAlertType = computed<'success' | 'warning' | 'info'>(() => {
+  if (lastResult.value?.reviewStatus === 'FAILED') return 'warning'
+  if (hasScore(lastResult.value?.score)) return Number(lastResult.value?.score) >= 60 ? 'success' : 'warning'
+  return 'info'
+})
+const reviewTitle = computed(() => {
+  if (lastResult.value?.reviewStatus === 'FAILED') return '点评生成失败'
+  if (hasScore(lastResult.value?.score)) return `本次评分 ${lastResult.value?.score} 分`
+  return '点评已返回'
+})
+const normalizeReviewList = (value?: string[] | string, fallback = '暂无返回') => {
+  if (Array.isArray(value)) {
+    const items = value.map((item) => String(item).trim()).filter(Boolean)
+    return items.length ? items : [fallback]
+  }
+  if (typeof value === 'string') {
+    const items = value.split(/\r?\n|[;；]/).map((item) => item.trim()).filter(Boolean)
+    return items.length ? items : [fallback]
+  }
+  return [fallback]
+}
+const reviewStrengths = computed(() => normalizeReviewList(lastResult.value?.strengths, '暂未返回优点'))
+const reviewWeaknesses = computed(() => normalizeReviewList(lastResult.value?.weaknesses, '暂未返回不足'))
+const reviewSuggestions = computed(() => normalizeReviewList(
+  lastResult.value?.improvementSuggestions || lastResult.value?.suggestions,
+  '暂未返回改进建议'
+))
+const reviewFollowUps = computed(() => normalizeReviewList(lastResult.value?.suggestedFollowUps, '暂无追问建议'))
+const scoringPointItems = computed(() => normalizeReviewList(lastResult.value?.knowledgePoints, '').filter(Boolean))
+const hasScore = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+const suggestedAnswerLength = computed(() => {
+  const type = String(currentQuestion.value?.questionType || '').toUpperCase()
+  if (type === 'CODING') return '300-500'
+  if (type === 'SCENARIO') return '250-400'
+  if (currentQuestion.value?.difficulty === 'HARD') return '280-450'
+  return '180-300'
+})
+const suggestedAnswerMinutes = computed(() => currentQuestion.value?.questionType === 'CODING' ? 8 : 3)
+const draftKey = (questionId?: number) =>
+  `${draftPrefix}:${questionId || 'unknown'}:${config.mode}:${routeTargetJobId.value || 'all'}`
+const readDraft = (questionId?: number) => {
+  if (!questionId) return ''
+  try {
+    return localStorage.getItem(draftKey(questionId)) || ''
+  } catch {
+    return ''
+  }
+}
+const writeDraft = (questionId: number | undefined, value: string) => {
+  if (!questionId) return
+  try {
+    const key = draftKey(questionId)
+    if (value.trim()) localStorage.setItem(key, value)
+    else localStorage.removeItem(key)
+  } catch {
+    // Draft persistence is best effort and must not block answering.
+  }
+}
+const clearDraft = (questionId?: number) => {
+  if (!questionId) return
+  try {
+    localStorage.removeItem(draftKey(questionId))
+  } catch {
+    // Ignore storage failures; the server result is authoritative.
+  }
+}
+const restoreCurrentDraft = () => {
+  userAnswer.value = readDraft(currentQuestion.value?.id)
+}
+const draftStatusText = computed(() => userAnswer.value.trim() ? '草稿已保留' : '提交失败会保留草稿')
 const mobilePracticeTitle = computed(() => {
-  if (finished.value) return `正确率 ${accuracyText.value}`
+  if (finished.value) return `平均评分 ${averageScoreText.value}`
   return currentQuestion.value?.title || '准备下一题'
 })
 const mobilePracticeSubtitle = computed(() => {
@@ -514,13 +563,15 @@ const startPractice = async () => {
   practicing.value = true
   finished.value = false
   currentIndex.value = 0
-  correctCount.value = 0
   skippedCount.value = 0
   answeredCount.value = 0
   answered.value = false
-  userAnswer.value = ''
+  userAnswer.value = readDraft(questions.value[0]?.id)
   lastResult.value = null
   masteryChoice.value = ''
+  reviewedScores.value = []
+  questionStartedAtSeconds.value = 0
+  restoreCurrentDraft()
   startTimer()
 }
 
@@ -528,37 +579,27 @@ const submitAnswer = async () => {
   if (submitting.value || !currentQuestion.value || !userAnswer.value.trim()) return
   submitting.value = true
   try {
-    const result = await submitQuestionAnswerApi(currentQuestion.value.id, {
-      userAnswer: userAnswer.value,
+    const questionId = currentQuestion.value.id
+    const result = await submitQuestionAnswerReviewApi(questionId, {
       answerContent: userAnswer.value,
+      answerDurationSeconds: Math.max(1, elapsedSeconds.value - questionStartedAtSeconds.value),
+      source: routeSourceType.value || 'QUESTION_BANK',
       targetJobId: routeTargetJobId.value
     })
-    const normalizedAnswerResult = String(result.answerResult || '').toUpperCase()
-    const isCorrect = normalizedAnswerResult === 'CORRECT'
+    const reviewStatus = String(result.reviewStatus || 'SUCCESS').toUpperCase()
+    if (reviewStatus !== 'SUCCESS') {
+      ElMessage.error(result.errorMessage || 'AI 点评暂时没有生成成功，草稿已保留。')
+      return
+    }
     currentQuestion.value.referenceAnswer = result.referenceAnswer || currentQuestion.value.referenceAnswer
-    currentQuestion.value.analysis = result.analysis || currentQuestion.value.analysis
+    currentQuestion.value.analysis = result.aiComment || currentQuestion.value.analysis
     currentQuestion.value.masteryStatus = result.masteryStatus || currentQuestion.value.masteryStatus
     currentQuestion.value.lastAnswer = userAnswer.value
-    currentQuestion.value.lastAnswerResult = normalizedAnswerResult || (result.wrong === true ? 'WRONG' : 'UNKNOWN')
-    lastResult.value = {
-      isCorrect,
-      wrong: result.wrong,
-      aiComment: result.analysis,
-      referenceAnswer: result.referenceAnswer,
-      answerResult: currentQuestion.value.lastAnswerResult,
-      masteryStatus: result.masteryStatus,
-      agentTaskCompleted: result.agentTaskCompleted,
-      agentTaskId: result.agentTaskId,
-      agentTaskTitle: result.agentTaskTitle,
-      agentTaskStatus: result.agentTaskStatus,
-      agentReviewSummary: result.agentReviewSummary
-    }
+    lastResult.value = result
     answeredCount.value++
-    if (isCorrect) correctCount.value++
+    if (hasScore(result.score)) reviewedScores.value.push(Number(result.score))
     answered.value = true
-    if (isCorrect && Number.isFinite(result.recordId) && result.recordId > 0) {
-      gameProfile.grantXpOnce('practice_correct', `practice:answer:${result.recordId}`)
-    }
+    clearDraft(questionId)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '提交失败'))
   } finally {
@@ -587,10 +628,11 @@ const nextQuestion = () => {
     return
   }
   currentIndex.value++
+  questionStartedAtSeconds.value = elapsedSeconds.value
   answered.value = false
-  userAnswer.value = ''
   lastResult.value = null
   masteryChoice.value = ''
+  restoreCurrentDraft()
 }
 
 const markMastery = async (status: MasteryStatus) => {
@@ -638,7 +680,17 @@ const resetPractice = () => {
   currentIndex.value = 0
   loadError.value = ''
   partialLoadWarning.value = ''
+  reviewedScores.value = []
+  questionStartedAtSeconds.value = 0
 }
+
+watch(userAnswer, (value) => {
+  if (!answered.value) writeDraft(currentQuestion.value?.id, value)
+})
+
+watch(currentQuestion, () => {
+  if (practicing.value && !answered.value) restoreCurrentDraft()
+})
 
 onMounted(async () => {
   const hasPracticeContext = Boolean(
@@ -2080,6 +2132,63 @@ onBeforeUnmount(stopTimer)
   gap: 14px;
 }
 
+.practice-review__score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #b9e7cd;
+  border-radius: 10px;
+  background: #f5fcf7;
+
+  span,
+  em {
+    color: var(--arena-sub);
+    font-size: 12px;
+    font-style: normal;
+  }
+
+  strong {
+    color: var(--arena-grn-d);
+    font-size: 24px;
+  }
+
+  small {
+    margin-left: 2px;
+    font-size: 12px;
+  }
+}
+
+.practice-review__scoring-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--arena-line);
+  border-radius: 10px;
+  background: #f8faf8;
+
+  strong {
+    width: 100%;
+    color: var(--arena-ink);
+    font-size: 13px;
+  }
+
+  span {
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--arena-grn-soft);
+    color: var(--arena-grn-d);
+    font-size: 12px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--arena-sub);
+    font-size: 12px;
+  }
+}
+
 .practice-review__coverage {
   display: grid;
   gap: 7px;
@@ -2122,6 +2231,34 @@ onBeforeUnmount(stopTimer)
   margin: 0 0 7px;
   color: var(--arena-ink);
   font-size: 13px;
+}
+
+.practice-review__feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+
+  section {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--arena-line);
+    border-radius: 10px;
+    background: #f8faf8;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    color: var(--arena-ink);
+    font-size: 13px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: var(--arena-sub);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
 }
 
 .practice-review__actions {
@@ -2167,7 +2304,26 @@ onBeforeUnmount(stopTimer)
 }
 
 .practice-support-card--ai {
-  border-left: 3px solid var(--arena-vio);
+  border-color: #d7ccff;
+  background: #fbfaff;
+}
+
+.practice-scoring-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--arena-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--arena-vio);
+  }
 }
 
 .practice-finish {
@@ -2248,6 +2404,10 @@ onBeforeUnmount(stopTimer)
   .practice-support-grid {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+
+  .practice-review__feedback-grid {
+    grid-template-columns: 1fr;
   }
 
   .practice-answer-actions > div {

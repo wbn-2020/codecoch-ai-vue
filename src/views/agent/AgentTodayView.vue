@@ -460,6 +460,7 @@ import {
   skipAgentTaskApi,
   startAgentTaskApi
 } from '@/api/agent'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getAgentPlanChangeSetsApi } from '@/api/agentPlanChange'
 import { submitAiResultFeedbackApi } from '@/api/aiFeedback'
 import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
@@ -510,7 +511,7 @@ import {
 } from '@/utils/agentTaskAction'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage as normalizeErrorMessage, toFriendlyMessage } from '@/utils/error'
-import { formatLocalDate } from '@/utils/format'
+import { formatDateInTimezone } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { buildSafeRedirectTarget, sanitizeLocalActionPath } from '@/utils/routeSecurity'
 import { fromAgentTask } from '@/utils/suggestionAdapter'
@@ -518,7 +519,7 @@ import { resolveAppRoutePath } from '@/features/route-safety'
 
 const router = useRouter()
 const route = useRoute()
-const today = formatLocalDate()
+const today = formatDateInTimezone(new Date(), 'Asia/Shanghai')
 
 type AgentTaskWithPlanChangeOrigin = AgentTaskVO & AgentPlanChangeTaskOriginFields
 type AgentWeekPlanItemWithReviewOrigin =
@@ -718,6 +719,10 @@ const partialErrorDescription = computed(() =>
 const hasAsyncReceipt = computed(() => Boolean(plan.value?.asyncMessageId || plan.value?.asyncTraceId || plan.value?.asyncBizType))
 const hasRegenerationImpact = computed(() => Boolean(plan.value?.runId || taskList.value.length || hasAsyncReceipt.value))
 const planStatus = computed(() => String(plan.value?.status || '').toUpperCase())
+const allAgentTasksDone = computed(() =>
+  taskList.value.length > 0
+  && taskList.value.every((task) => String(task.status || '').toUpperCase() === 'DONE')
+)
 const isAsyncPlanRunning = computed(() => planStatus.value === 'RUNNING' && !taskList.value.length)
 const showAsyncTaskEntry = computed(() => hasAsyncReceipt.value || isAsyncPlanRunning.value)
 const hasPlanDataError = computed(() => sourceFailed(dataSourceLabels.plan) || sourceFailed(dataSourceLabels.tasks))
@@ -899,13 +904,25 @@ const priorityTaskActionLoading = computed(() => {
   if (status === 'DOING' && !isEvidenceBoundAgentTask(task)) return isTaskActionPending(task, 'complete')
   return false
 })
-const planStatusType = computed(() => (planStatus.value === 'FAILED' ? 'error' : planStatus.value === 'RUNNING' ? 'warning' : 'info'))
+const planStatusType = computed(() => (
+  allAgentTasksDone.value
+    ? 'success'
+    : planStatus.value === 'FAILED'
+      ? 'error'
+      : planStatus.value === 'RUNNING'
+        ? 'warning'
+        : 'info'
+))
 const planStatusTitle = computed(() => {
+  if (allAgentTasksDone.value) return '今日计划已完成'
   if (planStatus.value === 'RUNNING') return '计划生成中'
   if (planStatus.value === 'FAILED') return '计划生成失败'
   return '计划状态'
 })
 const planStatusMessage = computed(() => {
+  if (allAgentTasksDone.value) {
+    return `业务日 ${queryDate.value} 的 ${taskList.value.length} 项 Agent 任务均已完成，不需要重新生成今日计划。`
+  }
   if (planStatus.value === 'RUNNING') {
     return '计划正在生成，可以离开页面；系统会避免重复提交同一天同岗位的生成请求，也可以到任务中心查看进度。'
   }
@@ -1601,7 +1618,17 @@ const goAction = (actionUrl: string) => {
 }
 
 onMounted(() => {
-  void loadJobTargets().then(() => loadPage(false))
+  void getUserDashboardOverviewApi()
+    .then((dashboard) => {
+      if (dashboard.businessDate) {
+        queryDate.value = dashboard.businessDate
+        generateForm.date = dashboard.businessDate
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      void loadJobTargets().then(() => loadPage(false))
+    })
 })
 </script>
 

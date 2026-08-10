@@ -436,9 +436,19 @@
               <strong>原因说明</strong>
               <p>{{ recoveryReason }}</p>
             </div>
+            <dl class="report-recovery-card__facts">
+              <div v-for="item in recoveryFacts" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
             <div class="report-recovery-card__actions">
               <el-button type="primary" :loading="retrying" :disabled="!interviewId" @click="handleRetry">
                 重新生成报告
+              </el-button>
+              <el-button :disabled="!interviewId" @click="goReportTaskCenter">
+                <ListChecks :size="16" />
+                查看处理进度
               </el-button>
               <el-button @click="router.push('/interviews/history')">返回历史</el-button>
             </div>
@@ -1282,6 +1292,30 @@ const recoveryReason = computed(() => {
   if (isFailed.value || isUnscorable.value) return failureReason.value
   return reportRecoveryNotice.value || '请确认本轮面试已结束且问答已保存；如仍未恢复，可重新生成报告。'
 })
+const recoveryFacts = computed(() => [
+  {
+    label: '已保留问答',
+    value: qaMessages.value.length ? `${qaMessages.value.length} 条，可在下方继续复盘` : '暂未读取到可复盘问答'
+  },
+  {
+    label: '报告阶段',
+    value: recoveryStatusLabel.value
+  },
+  {
+    label: '生成队列',
+    value: asyncReceipt.value.sendStatus
+      ? asyncSendStatusLabel(asyncReceipt.value.sendStatus)
+      : asyncReceipt.value.messageId
+        ? '已提交，等待状态回执'
+        : '未返回队列回执'
+  },
+  {
+    label: '追踪状态',
+    value: asyncReceipt.value.traceId || asyncReceipt.value.messageId
+      ? '已记录，可从任务中心继续查询'
+      : '可按当前面试记录继续查询'
+  }
+])
 const taskMetaText = computed(() => {
   const items = []
   const reportId = taskReportId.value || report.value?.reportId || report.value?.id
@@ -3981,6 +4015,34 @@ onBeforeUnmount(() => {
     overflow-wrap: anywhere;
   }
 
+  .report-recovery-card__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0 0;
+
+    > div {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--arena-line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    dt {
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    dd {
+      margin: 4px 0 0;
+      color: var(--arena-ink);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+  }
+
   .report-recovery-card--error {
     .report-recovery-card__icon {
       background: var(--arena-red-soft);
@@ -4434,6 +4496,10 @@ onBeforeUnmount(() => {
     .report-recovery-card__actions :deep(.el-button) {
       width: 100%;
       margin-left: 0;
+    }
+
+    .report-recovery-card__facts {
+      grid-template-columns: 1fr;
     }
 
     .content-card__body {

@@ -120,7 +120,9 @@
             </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('traceId')" label="追踪号" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ displayAiTraceId(row) }}</template>
+            <template #default="{ row }">
+              <span :title="row.traceId || displayAiTraceId(row)">{{ displayAiTraceId(row) }}</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('scene')" label="场景 / 类型" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">{{ getSceneLabel(row.scene || row.callType) }}</template>

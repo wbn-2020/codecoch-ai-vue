@@ -121,7 +121,7 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(resume).toContain('@media (max-width: 1020px)')
     expect(resume).toContain('grid-template-columns: 180px minmax(300px, 0.9fr) minmax(0, 1fr)')
     expect(resume).toContain('grid-template-columns: minmax(0, 1fr)')
-    expect(resume).toContain('A4 · 自动分页')
+    expect(resume).toContain('A4 预览 · 分页以导出为准')
 
     // Direction D defines the tools page as a focused 760px single-column inventory.
     expect(tools).toContain('width: min(100%, 760px)')

@@ -1090,7 +1090,7 @@ const journeySteps = computed(() => [
     status: '待确认',
     tone: 'pill--warning'
   }
-])
+].filter((item) => item.key !== 'knowledge' || appConfig.enableV4KnowledgePreview))
 
 const readinessItems = computed(() => [
   {

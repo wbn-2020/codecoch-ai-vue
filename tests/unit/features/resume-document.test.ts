@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import {
+  buildResumeExportChecks,
   buildResumeDocumentModel,
   isResumeTemplateUnlocked,
   normalizeResumeTemplateCode,
@@ -235,6 +236,69 @@ describe('resume document model', () => {
     expect(signature?.unlockStreakDays).toBe(RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)
     expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS - 1)).toBe(false)
     expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)).toBe(true)
+  })
+
+  it('describes role fit, page tendency, ATS risk, and typography for every template', () => {
+    for (const template of resumeTemplateOptions) {
+      expect(template.roleFit).toBeTruthy()
+      expect(template.pageTendency).toMatch(/页/)
+      expect(['LOW', 'MEDIUM']).toContain(template.atsRisk)
+      expect(template.atsRiskLabel).toMatch(/低|中/)
+      expect(template.atsRiskDetail).toBeTruthy()
+      expect(template.typographyLayout).toMatch(/Arial|微软雅黑/)
+    }
+
+    expect(
+      resumeTemplateOptions.find((template) => template.code === 'ATS_CLASSIC_SIDEBAR')?.atsRisk
+    ).toBe('MEDIUM')
+  })
+
+  it('builds export checks without inventing a real ATS score', () => {
+    const checks = buildResumeExportChecks({
+      isSaved: true,
+      templateCode: 'ATS_PROJECT_FOCUS',
+      realName: '测试用户',
+      email: 'candidate@example.com',
+      phone: '13800000000',
+      targetPosition: 'Java 后端工程师',
+      summary: 'Java 后端工程师，负责 Spring Boot 服务建设。',
+      skillStack: 'Java、Spring Boot、Redis',
+      workExperience: '负责 Java 交易服务开发和 Redis 缓存治理。',
+      projects: [{
+        projectName: '交易平台',
+        techStack: 'Java / Spring Boot / Redis',
+        optimizationResult: '接口错误率下降 30%'
+      }]
+    })
+
+    expect(checks.find((item) => item.key === 'saved')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'contact-readability')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'keyword-evidence')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'page-volume')).toMatchObject({
+      heuristic: true
+    })
+    expect(checks.find((item) => item.key === 'page-volume')?.detail).toContain('不是实际页数')
+    expect(checks.some((item) => /ATS 分数|ATS 评分/.test(`${item.label}${item.detail}`))).toBe(false)
+  })
+
+  it('warns about unreadable contacts and long blocks while directing formal pagination review', () => {
+    const checks = buildResumeExportChecks({
+      isSaved: false,
+      templateCode: 'ATS_CLASSIC_SIDEBAR',
+      email: 'candidate at example.com',
+      targetPosition: '',
+      skillStack: 'Java、Redis',
+      workExperience: '负责超长项目说明。'.repeat(100)
+    })
+
+    expect(checks.find((item) => item.key === 'saved')?.state).toBe('WARNING')
+    expect(checks.find((item) => item.key === 'contact-readability')?.state).toBe('WARNING')
+    expect(checks.find((item) => item.key === 'page-break-risk')).toMatchObject({
+      state: 'WARNING',
+      heuristic: true
+    })
+    expect(checks.find((item) => item.key === 'page-break-risk')?.detail).toContain('版本分页导出工作台')
+    expect(checks.find((item) => item.key === 'target-position')?.state).toBe('WARNING')
   })
 
   it('renders the classic sidebar and signature paper variants as distinct documents', () => {

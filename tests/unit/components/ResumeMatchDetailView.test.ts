@@ -113,6 +113,19 @@ describe('ResumeMatchDetailView XP rewards', () => {
     wrapper.unmount()
   })
 
+  it('labels overallScore as comprehensive match and does not infer covered dimensions from empty details', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.arena-match-settlement__ring').text()).toContain('综合匹配度')
+    expect(wrapper.find('.arena-match-settlement__ring').text()).not.toContain('JD 覆盖率')
+    expect(wrapper.find('.arena-match-settlement__keywords').text()).toContain('暂无可确认的高覆盖维度')
+    expect(wrapper.find('.arena-match-settlement__reconciliation-head').text()).toContain('暂无维度明细，不能推断覆盖情况')
+    expect(wrapper.findAll('.arena-match-settlement__keywords section:first-child > div > span')).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
   it.each([
     { status: 'FAILED', trustStatus: 'VERIFIED', fallback: false, schemaWarnings: [] },
     { status: 'PENDING', trustStatus: 'VERIFIED', fallback: false, schemaWarnings: [] },

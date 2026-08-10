@@ -69,28 +69,42 @@
       </div>
     </section>
 
-    <div v-if="showQuestionManagement" class="admin-insight-grid">
+    <div
+      v-if="showQuestionManagement"
+      class="admin-insight-grid"
+      role="status"
+      aria-live="polite"
+      :aria-busy="questionStatsLoading"
+    >
       <article class="admin-insight-card">
-        <span>题目总数</span>
-        <strong>{{ total }}</strong>
-        <small>当前题库列表总数</small>
+        <span>正式题总数</span>
+        <strong>{{ displayQuestionStat(formalQuestionTotal) }}</strong>
+        <small>不含 AI 待审核草稿</small>
       </article>
       <article class="admin-insight-card">
-        <span>当前页分类</span>
-        <strong>{{ categoryCount }}</strong>
-        <small>仅统计当前页记录</small>
+        <span>可训练题数</span>
+        <strong>{{ displayQuestionStat(trainableQuestionTotal) }}</strong>
+        <small>已启用、可进入用户训练链路</small>
       </article>
       <article class="admin-insight-card">
-        <span>当前页高频题</span>
-        <strong>{{ highFrequencyCount }}</strong>
-        <small>仅统计当前页记录</small>
+        <span>停用题数</span>
+        <strong>{{ displayQuestionStat(disabledQuestionTotal) }}</strong>
+        <small>正式题中已停用记录</small>
       </article>
       <article class="admin-insight-card">
-        <span>AI 生成审核</span>
-        <strong>{{ reviewTotal }}</strong>
-        <small>待审核题目数量</small>
+        <span>待审核数</span>
+        <strong>{{ displayQuestionStat(pendingReviewTotal) }}</strong>
+        <small>尚未写入正式题库的 AI 草稿</small>
       </article>
     </div>
+    <el-alert
+      v-if="showQuestionManagement && questionStatsError"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="题库统计部分不可用"
+      :description="questionStatsError"
+    />
 
     <section v-if="showQuestionManagement" class="admin-panel">
       <div class="admin-panel__header">
@@ -98,24 +112,16 @@
           <h2>题目列表</h2>
           <p>维护题目内容、分类标签和上下架状态，保持题库质量稳定。</p>
         </div>
-        <div v-if="!isQuestionBankEmpty" class="table-view-tools">
-          <el-segmented v-model="questionTableSize" :options="questionTableSizeOptions" />
-          <el-dropdown trigger="click" :hide-on-click="false">
-            <el-button plain>列配置</el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="column-config-menu">
-                <el-dropdown-item v-for="item in questionColumnOptions" :key="item.key">
-                  <el-checkbox v-model="questionVisibleColumns[item.key]" :disabled="item.required">
-                    {{ item.label }}
-                  </el-checkbox>
-                </el-dropdown-item>
-                <el-dropdown-item divided>
-                  <el-button link type="primary" @click.stop="resetQuestionTableView">恢复默认视图</el-button>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <AdminTableViewSettings
+          v-if="!isQuestionBankEmpty"
+          v-model:size="questionTableSize"
+          :size-options="questionTableSizeOptions"
+          :columns="questionColumnOptions"
+          :visible-columns="questionVisibleColumns"
+          aria-label="正式题列表表格视图设置"
+          @update:column-visible="({ key, visible }) => questionVisibleColumns[key as QuestionColumnKey] = visible"
+          @reset="resetQuestionTableView"
+        />
       </div>
 
       <div class="admin-filter-bar">
@@ -423,24 +429,15 @@
                 批量驳回
               </el-button>
             </el-space>
-            <div class="table-view-tools">
-              <el-segmented v-model="reviewTableSize" :options="reviewTableSizeOptions" />
-              <el-dropdown trigger="click" :hide-on-click="false">
-                <el-button plain>列配置</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu class="column-config-menu">
-                    <el-dropdown-item v-for="item in reviewColumnOptions" :key="item.key">
-                      <el-checkbox v-model="reviewVisibleColumns[item.key]" :disabled="item.required">
-                        {{ item.label }}
-                      </el-checkbox>
-                    </el-dropdown-item>
-                    <el-dropdown-item divided>
-                      <el-button link type="primary" @click.stop="resetReviewTableView">恢复默认视图</el-button>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <AdminTableViewSettings
+              v-model:size="reviewTableSize"
+              :size-options="reviewTableSizeOptions"
+              :columns="reviewColumnOptions"
+              :visible-columns="reviewVisibleColumns"
+              aria-label="审核池表格视图设置"
+              @update:column-visible="({ key, visible }) => reviewVisibleColumns[key as ReviewColumnKey] = visible"
+              @reset="resetReviewTableView"
+            />
           </div>
           <div class="table-card admin-table-card">
             <el-table
@@ -824,23 +821,16 @@
 
             <div class="duplicate-eval-dataset__body">
               <div class="duplicate-eval-cases">
-                <div class="duplicate-eval-cases__toolbar table-view-tools">
-                  <el-segmented v-model="duplicateEvalCaseTableSize" :options="duplicateEvalCaseTableSizeOptions" />
-                  <el-dropdown trigger="click" :hide-on-click="false">
-                    <el-button plain>样本列配置</el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu class="column-config-menu">
-                        <el-dropdown-item v-for="item in duplicateEvalCaseColumnOptions" :key="item.key">
-                          <el-checkbox v-model="duplicateEvalCaseVisibleColumns[item.key]" :disabled="item.required">
-                            {{ item.label }}
-                          </el-checkbox>
-                        </el-dropdown-item>
-                        <el-dropdown-item divided>
-                          <el-button link type="primary" @click.stop="resetDuplicateEvalCaseTableView">恢复默认视图</el-button>
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                <div class="duplicate-eval-cases__toolbar">
+                  <AdminTableViewSettings
+                    v-model:size="duplicateEvalCaseTableSize"
+                    :size-options="duplicateEvalCaseTableSizeOptions"
+                    :columns="duplicateEvalCaseColumnOptions"
+                    :visible-columns="duplicateEvalCaseVisibleColumns"
+                    aria-label="重复题回归样本表格视图设置"
+                    @update:column-visible="({ key, visible }) => duplicateEvalCaseVisibleColumns[key as DuplicateEvalCaseColumnKey] = visible"
+                    @reset="resetDuplicateEvalCaseTableView"
+                  />
                 </div>
                 <el-table :data="duplicateEvalCases" row-key="id" :size="duplicateEvalCaseTableSize" max-height="260">
                   <el-table-column v-if="isDuplicateEvalCaseColumnVisible('sample')" label="样本" min-width="150" show-overflow-tooltip>
@@ -985,24 +975,16 @@
                 批量忽略
               </el-button>
             </el-space>
-            <div v-if="showDuplicateAdvanced" class="table-view-tools">
-              <el-segmented v-model="duplicateTableSize" :options="duplicateTableSizeOptions" />
-              <el-dropdown trigger="click" :hide-on-click="false">
-                <el-button plain>列配置</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu class="column-config-menu">
-                    <el-dropdown-item v-for="item in duplicateColumnOptions" :key="item.key">
-                      <el-checkbox v-model="duplicateVisibleColumns[item.key]" :disabled="item.required">
-                        {{ item.label }}
-                      </el-checkbox>
-                    </el-dropdown-item>
-                    <el-dropdown-item divided>
-                      <el-button link type="primary" @click.stop="resetDuplicateTableView">恢复默认视图</el-button>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <AdminTableViewSettings
+              v-if="showDuplicateAdvanced"
+              v-model:size="duplicateTableSize"
+              :size-options="duplicateTableSizeOptions"
+              :columns="duplicateColumnOptions"
+              :visible-columns="duplicateVisibleColumns"
+              aria-label="重复题候选表格视图设置"
+              @update:column-visible="({ key, visible }) => duplicateVisibleColumns[key as DuplicateColumnKey] = visible"
+              @reset="resetDuplicateTableView"
+            />
           </div>
           <div class="table-card admin-table-card">
             <el-table
@@ -1559,6 +1541,7 @@ import { getQuestionDuplicateConfigApi } from '@/api/analytics'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminTableView } from '@/composables/useAdminTableView'
@@ -1640,6 +1623,12 @@ const showDuplicateAdvanced = ref(false)
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
+const questionStatsLoading = ref(false)
+const questionStatsError = ref('')
+const formalQuestionTotal = ref<number | null>(null)
+const trainableQuestionTotal = ref<number | null>(null)
+const disabledQuestionTotal = ref<number | null>(null)
+const pendingReviewTotal = ref<number | null>(null)
 const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
@@ -1886,8 +1875,7 @@ const rules: FormRules<QuestionCreateDTO> = {
   referenceAnswer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
 }
 
-const categoryCount = computed(() => new Set(questions.value.map((item) => item.categoryId || item.categoryName).filter(Boolean)).size)
-const highFrequencyCount = computed(() => questions.value.filter((item) => item.isHighFrequency === true || item.isHighFrequency === 1).length)
+const displayQuestionStat = (value: number | null) => value ?? '未知'
 const difficultyStats = computed(() => ({
   EASY: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.EASY).length,
   MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
@@ -2591,6 +2579,39 @@ const fetchOptions = async () => {
   optionLoadWarning.value = warnings.join('；')
 }
 
+const fetchQuestionStats = async () => {
+  questionStatsLoading.value = true
+  questionStatsError.value = ''
+  const results = await Promise.allSettled([
+    getAdminQuestionsApi({ pageNo: 1, pageSize: 1 }),
+    getAdminQuestionsApi({ status: 1, pageNo: 1, pageSize: 1 }),
+    getAdminQuestionsApi({ status: 0, pageNo: 1, pageSize: 1 }),
+    getQuestionReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 })
+  ])
+  const targets = [
+    formalQuestionTotal,
+    trainableQuestionTotal,
+    disabledQuestionTotal,
+    pendingReviewTotal
+  ]
+  const labels = ['正式题总数', '可训练题数', '停用题数', '待审核数']
+  const failures: string[] = []
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      targets[index].value = Number(result.value.total || 0)
+      return
+    }
+    targets[index].value = null
+    failures.push(labels[index])
+  })
+
+  if (failures.length) {
+    questionStatsError.value = `${failures.join('、')}暂时无法确认；未知值不会按 0 展示。`
+  }
+  questionStatsLoading.value = false
+}
+
 const fetchQuestions = async () => {
   loading.value = true
   questionError.value = ''
@@ -2716,15 +2737,15 @@ const refreshDuplicateAdvancedWorkspace = async () => {
 }
 
 const refreshReviewPublishWorkspace = async () => {
-  await Promise.allSettled([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchReviews(), fetchQuestions(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshQuestionDuplicateWorkspace = async () => {
-  await Promise.allSettled([fetchQuestions(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchQuestions(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshFullGovernanceWorkspace = async () => {
-  await Promise.allSettled([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchQuestions(), fetchReviews(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshDuplicateGovernanceWorkspace = async () => {
@@ -2930,7 +2951,7 @@ const handleSave = async () => {
     }
     ElMessage.success('题目已保存')
     dialogVisible.value = false
-    await fetchQuestions()
+    await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
   } finally {
     saving.value = false
   }
@@ -2965,7 +2986,7 @@ const handleStatus = async (row: AdminQuestionVO) => {
     idempotencyKey: createOperationIdempotencyKey(`admin-question-status-${row.id}`)
   })
   ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
-  await fetchQuestions()
+  await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
 }
 
 const handleDelete = async (row: AdminQuestionVO) => {
@@ -2992,7 +3013,7 @@ const handleDelete = async (row: AdminQuestionVO) => {
     idempotencyKey: createOperationIdempotencyKey(`admin-question-delete-${row.id}`)
   })
   ElMessage.success('题目已删除')
-  await fetchQuestions()
+  await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
 }
 
 const handleQuestionCommand = (row: AdminQuestionVO, command: string) => {

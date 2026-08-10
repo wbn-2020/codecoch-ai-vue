@@ -12,26 +12,17 @@
       <div class="admin-panel__header">
         <div>
           <h2>模型列表</h2>
-          <p>支持按供应商、模型和状态筛选；可调整表格密度和列显隐，排查接口地址、参数和说明时更清楚。</p>
+          <p>支持按供应商、模型和配置状态筛选；调用健康和最近调用摘要仅按后端真实字段展示，未提供时保持未知。</p>
         </div>
-        <div class="table-view-tools">
-          <el-segmented v-model="tableSize" :options="tableSizeOptions" />
-          <el-dropdown trigger="click" :hide-on-click="false">
-            <el-button plain>列配置</el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="column-config-menu">
-                <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                  <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                    {{ item.label }}
-                  </el-checkbox>
-                </el-dropdown-item>
-                <el-dropdown-item divided>
-                  <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <AdminTableViewSettings
+          v-model:size="tableSize"
+          :size-options="tableSizeOptions"
+          :columns="columnOptions"
+          :visible-columns="visibleColumns"
+          aria-label="模型列表表格视图设置"
+          @update:column-visible="({ key, visible }) => visibleColumns[key as AiModelColumnKey] = visible"
+          @reset="resetTableView"
+        />
       </div>
       <div class="admin-filter-bar">
         <el-form :model="query" inline>
@@ -64,7 +55,26 @@
           </el-table-column>
           <el-table-column v-if="isColumnVisible('description')" prop="description" label="说明" min-width="180" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('isDefault')" label="默认" width="90"><template #default="{ row }"><el-tag v-if="row.isDefault === 1" type="success">默认</el-tag><span v-else>-</span></template></el-table-column>
-          <el-table-column v-if="isColumnVisible('status')" label="状态" width="100"><template #default="{ row }"><el-tag :type="getModelStatus(row) === 1 ? 'success' : 'info'">{{ getModelStatus(row) === 1 ? '启用' : '停用' }}</el-tag></template></el-table-column>
+          <el-table-column v-if="isColumnVisible('status')" label="配置状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="getModelStatus(row) === 1 ? 'success' : 'info'">
+                {{ getModelStatus(row) === 1 ? '启用' : '停用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="isColumnVisible('callHealth')" label="调用健康" width="120">
+            <template #default="{ row }">
+              <el-tag :type="getModelHealth(row).type">{{ getModelHealth(row).label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="isColumnVisible('recentCalls')" label="最近成功 / 失败摘要" min-width="300">
+            <template #default="{ row }">
+              <div class="model-call-summary">
+                <span><strong>成功</strong>{{ formatModelCallEvent(row.lastCallSuccessAt, row.lastCallSuccessSummary) }}</span>
+                <span><strong>失败</strong>{{ formatModelCallEvent(row.lastCallFailureAt, row.lastCallFailureSummary) }}</span>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column v-if="isColumnVisible('updatedAt')" prop="updatedAt" label="更新时间" min-width="170" />
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
@@ -120,6 +130,7 @@ import { Bot } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { createAdminAiModelApi, deleteAdminAiModelApi, getAdminAiModelsApi, setDefaultAdminAiModelApi, updateAdminAiModelApi, updateAdminAiModelStatusApi } from '@/api/adminGovernance'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
@@ -140,6 +151,8 @@ type AiModelColumnKey =
   | 'description'
   | 'isDefault'
   | 'status'
+  | 'callHealth'
+  | 'recentCalls'
   | 'updatedAt'
 
 const loading = ref(false)
@@ -169,7 +182,9 @@ const {
   { key: 'maxTokens', label: '最大输出', defaultVisible: false },
   { key: 'description', label: '说明', defaultVisible: false },
   { key: 'isDefault', label: '默认' },
-  { key: 'status', label: '状态', required: true },
+  { key: 'status', label: '配置状态', required: true },
+  { key: 'callHealth', label: '调用健康' },
+  { key: 'recentCalls', label: '最近成功 / 失败摘要' },
   { key: 'updatedAt', label: '更新时间', defaultVisible: false }
 ])
 const query = reactive<AdminListQuery>({ keyword: '', status: '', pageNo: 1, pageSize: 10 })
@@ -180,6 +195,23 @@ const rules: FormRules<AiModelConfigDTO> = {
   modelName: [{ required: true, message: '请输入模型名称', trigger: 'blur' }]
 }
 const getModelStatus = (row: AiModelConfigVO) => Number(row.enabled ?? row.status ?? 0)
+const getModelHealth = (row: AiModelConfigVO) => {
+  const status = String(row.callHealthStatus || '').trim().toUpperCase()
+  if (['HEALTHY', 'SUCCESS', 'SUCCEEDED', 'AVAILABLE', 'OK'].includes(status)) {
+    return { label: '健康', type: 'success' as const }
+  }
+  if (['DEGRADED', 'WARNING', 'PARTIAL'].includes(status)) {
+    return { label: '受限', type: 'warning' as const }
+  }
+  if (['FAILED', 'ERROR', 'DOWN', 'UNHEALTHY'].includes(status)) {
+    return { label: '异常', type: 'danger' as const }
+  }
+  return { label: '未知', type: 'info' as const }
+}
+const formatModelCallEvent = (at?: string, summary?: string) => {
+  if (!at && !summary) return '未提供'
+  return [at || '时间未知', summary || '摘要未提供'].join(' · ')
+}
 const canManageModelWrite = computed(() => authStore.hasAnyAuthority(['admin:ai:model:write', 'ADMIN']))
 const canManageModelPublish = computed(() => authStore.hasAnyAuthority(['admin:ai:model:publish', 'ADMIN']))
 const hasModelFilters = computed(() => Boolean(query.keyword || query.status !== ''))
@@ -366,27 +398,24 @@ onMounted(fetchModels)
   font-weight: 600;
 }
 
-.table-view-tools {
+.model-call-summary {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.45;
 }
 
-:global(.column-config-menu) {
-  min-width: 180px;
-  padding: 8px;
+.model-call-summary span {
+  overflow: hidden;
+  color: var(--app-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-:global(.column-config-menu .el-checkbox) {
-  width: 100%;
-}
-
-@media (max-width: 900px) {
-  .table-view-tools {
-    justify-content: flex-start;
-    width: 100%;
-  }
+.model-call-summary strong {
+  margin-right: 8px;
+  color: var(--app-text);
+  font-weight: 600;
 }
 </style>

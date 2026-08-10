@@ -19,7 +19,7 @@
       <div class="topbar-actions">
         <span class="room-timer">{{ elapsedText }}</span>
         <el-button
-          v-if="interviewId"
+          v-if="interviewId && current?.status !== 'NOT_STARTED'"
           class="topbar-report-action"
           text
           :disabled="!current || finishing || (current.status === 'COMPLETED' && !canViewReport)"
@@ -28,7 +28,7 @@
           @click="canViewReport ? handleViewReport() : handleManualFinish()"
         >
           <FileText :size="15" />
-          {{ canViewReport ? reportButtonText : '结束报告' }}
+          {{ canViewReport ? reportButtonText : '结束本轮' }}
         </el-button>
         <el-button class="room-back" text @click="router.push('/interviews/history')">
           <ArrowLeft :size="16" />
@@ -40,6 +40,27 @@
     <section class="war-room">
       <main class="conversation-panel">
         <template v-if="current">
+          <section
+            v-if="current.currentQuestion && !canViewReport"
+            class="question-briefbar"
+            aria-label="当前作答信息"
+          >
+            <div class="question-briefbar__item">
+              <span>当前题号</span>
+              <strong>{{ currentQuestionNumberText }}</strong>
+            </div>
+            <div class="question-briefbar__item">
+              <span>回答方式</span>
+              <strong>{{ answerModeText }}</strong>
+              <small>{{ voiceAssistStateLabel }}</small>
+            </div>
+            <div class="question-briefbar__item question-briefbar__item--time">
+              <span>剩余 / 建议时间</span>
+              <strong>{{ questionTimeRemainingText }}</strong>
+              <small>单题建议 {{ questionTimeSuggestedText }}</small>
+            </div>
+          </section>
+
           <div class="conversation-scroll">
             <div class="question-context">
               <span class="question-context__persona">{{ INTERVIEWER_PERSONA }}</span>
@@ -65,6 +86,23 @@
               :title="roomError"
             />
 
+            <section v-if="canViewReport" class="completion-card">
+              <div>
+                <span class="completion-card__eyebrow">本轮面试已完成</span>
+                <h2>报告已准备好，进入结构化复盘</h2>
+                <p>查看评分、回答证据和下一步训练建议。</p>
+              </div>
+              <el-button
+                type="primary"
+                class="completion-primary-action"
+                :disabled="!canViewReport"
+                @click="handleViewReport"
+              >
+                <FileText :size="16" />
+                查看结构化报告
+              </el-button>
+            </section>
+
             <div v-if="current.status === 'NOT_STARTED'" class="start-card">
               <Rocket :size="24" />
               <div>
@@ -74,7 +112,7 @@
               <el-button type="primary" size="large" :loading="starting" @click="handleStart">开始面试</el-button>
             </div>
 
-            <article v-if="current.currentQuestion" class="message-card ai question-card">
+            <article v-if="current.currentQuestion && !canViewReport" class="message-card ai question-card">
               <div class="message-body">
                 <div class="message-head">
                   <span class="question-kicker">
@@ -92,13 +130,12 @@
             </article>
 
             <AppState
-              v-else-if="current.status !== 'NOT_STARTED'"
+              v-else-if="current.status !== 'NOT_STARTED' && !canViewReport"
               type="empty"
               :title="emptyQuestionTitle"
               :description="emptyQuestionDescription"
             >
-              <el-button v-if="current.status === 'COMPLETED'" type="primary" :disabled="!canViewReport" @click="handleViewReport">查看结构化报告</el-button>
-              <el-button v-else type="primary" @click="fetchCurrent">重新生成这一题</el-button>
+              <el-button type="default" @click="fetchCurrent">重新生成这一题</el-button>
               <el-button v-if="current.status !== 'NOT_STARTED'" plain :loading="finishing" @click="handleManualFinish">结束并生成报告</el-button>
             </AppState>
 
@@ -117,7 +154,7 @@
             id="room-answer-composer"
             class="answer-console"
             :class="{ 'is-mobile-open': mobileAnswerComposerOpen }"
-            v-show="current.status !== 'NOT_STARTED'"
+            v-if="current.status !== 'NOT_STARTED' && !canViewReport"
           >
             <template v-if="current.status !== 'NOT_STARTED'">
               <div class="console-head">
@@ -128,7 +165,39 @@
                 <span class="answer-dock-meta">{{ answerWordCount }} 字 · {{ answerDurationText }}</span>
               </div>
               <details class="room-voice-drawer">
-                <summary>语音作答与转写</summary>
+                <summary class="voice-tool-summary">
+                  <span>语音作答与转写</span>
+                  <strong :class="`voice-tool-summary__state voice-tool-summary__state--${voiceAssistStateClass}`">
+                    {{ voiceAssistStateLabel }}
+                  </strong>
+                </summary>
+                <section class="voice-preflight-panel">
+                  <div>
+                    <span class="console-kicker">语音设备预检</span>
+                    <strong>{{ voicePreflightTitle }}</strong>
+                    <p>{{ voicePreflightDescription }}</p>
+                  </div>
+                  <div class="voice-preflight-panel__actions">
+                    <el-button
+                      class="voice-preflight-action"
+                      :disabled="answerDisabled || voicePreflightState === 'checking'"
+                      :loading="voicePreflightState === 'checking'"
+                      @click="handleVoicePreflight"
+                    >
+                      <Mic :size="16" />
+                      {{ voicePreflightActionText }}
+                    </el-button>
+                    <el-button
+                      v-if="voicePreflightState === 'unavailable' || voicePreview.state.value === 'fallback_text'"
+                      class="voice-fallback-action"
+                      :disabled="answerDisabled || voiceConfirming"
+                      @click="handleVoiceFallback"
+                    >
+                      <Keyboard :size="16" />
+                      使用文本回答
+                    </el-button>
+                  </div>
+                </section>
                 <InterviewVoiceLiveConsole
                   v-if="interviewId"
                   ref="liveVoiceConsoleRef"
@@ -136,7 +205,7 @@
                   :session-id="interviewId"
                   :question-key="current.currentQuestion?.messageId || 'no-question'"
                   :question-text="current.currentQuestion?.questionContent || ''"
-                  :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
+                  :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive || !voicePreflightReady"
                   :preflight-ready="voicePreflightReady"
                   :persist-recording="persistLiveVoiceRecording"
                   @transcript-confirmed="handleLiveTranscriptConfirmed"
@@ -154,7 +223,7 @@
                   </div>
                   <div class="voice-preview__actions">
                     <el-button
-                      :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
+                      :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreflightReady || !voicePreview.canRecord.value"
                       @click="handleVoiceStart"
                     >
                       <Mic :size="16" />
@@ -218,7 +287,7 @@
               <div class="answer-actions">
                 <el-button class="answer-reload-action" text @click="handleReloadCurrentQuestion">
                   <RotateCcw :size="16" />
-                  重取题目
+                  <span>重取题目</span>
                 </el-button>
                 <el-button
                   type="primary"
@@ -362,6 +431,10 @@ import { NEXT_ACTION } from '@/constants/enums'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
 import {
+  inspectInterviewVoiceDeviceSupport,
+  interviewVoicePermissionMessage
+} from '@/features/interview-voice-device'
+import {
   type InterviewVoiceConfirmedMeta,
   type InterviewVoiceRecordedAudio,
   answerContainsConfirmedVoiceText,
@@ -455,6 +528,17 @@ const uploadedVoiceFileId = ref<number | null>(null)
 const voiceProductContext = ref<InterviewVoiceProductContext | null>(
   interviewId ? loadInterviewVoiceProductContext(interviewId) : null
 )
+type VoicePreflightState = 'unchecked' | 'checking' | 'ready' | 'unavailable'
+const voicePreflightState = ref<VoicePreflightState>(
+  route.query.voicePreflight === 'ready' || voiceProductContext.value?.voicePreflightReady
+    ? 'ready'
+    : 'unchecked'
+)
+const voicePreflightSecondsLeft = ref(10)
+const voicePreflightMessage = ref('')
+let voicePreflightTimer: number | undefined
+let voicePreflightStream: MediaStream | null = null
+let voicePreflightRun = 0
 const scenarioBinding = ref<InterviewScenarioBindingVO | null>(
   voiceProductContext.value?.scenarioBinding || null
 )
@@ -614,10 +698,52 @@ const outlineStages = computed(() => current.value?.outline || [])
 
 const answerWordCount = computed(() => answerContent.value.trim().length)
 
-const voicePreflightReady = computed(() =>
-  route.query.voicePreflight === 'ready'
-  || Boolean(voiceProductContext.value?.voicePreflightReady)
-)
+const voicePreflightReady = computed(() => voicePreflightState.value === 'ready')
+
+const voiceAssistStateLabel = computed(() => {
+  if (voicePreview.state.value === 'fallback_text') return '文本降级'
+  if (voicePreflightState.value === 'unavailable') return '语音不可用'
+  if (voicePreflightState.value === 'checking') return `预检中 ${voicePreflightSecondsLeft.value}s`
+  if (voicePreflightReady.value) return '语音已预检'
+  return '语音未预检'
+})
+
+const voiceAssistStateClass = computed(() => {
+  if (voicePreview.state.value === 'fallback_text') return 'fallback'
+  if (voicePreflightState.value === 'unavailable') return 'unavailable'
+  if (voicePreflightState.value === 'checking') return 'checking'
+  if (voicePreflightReady.value) return 'ready'
+  return 'unchecked'
+})
+
+const answerModeText = computed(() => {
+  if (liveAsrRuntimeActive.value) return '实时字幕'
+  if (confirmedVoiceMeta.value) return '语音转写 + 文本校对'
+  if (voicePreview.state.value === 'fallback_text') return '文本作答（降级）'
+  return '文本作答（默认）'
+})
+
+const voicePreflightTitle = computed(() => {
+  if (voicePreflightState.value === 'checking') return `请持续说话，剩余 ${voicePreflightSecondsLeft.value} 秒`
+  if (voicePreflightState.value === 'ready') return '语音设备已通过预检'
+  if (voicePreflightState.value === 'unavailable') return '语音能力当前不可用'
+  return '使用语音前先完成 10 秒预检'
+})
+
+const voicePreflightDescription = computed(() => {
+  if (voicePreflightMessage.value) return voicePreflightMessage.value
+  if (voicePreflightState.value === 'checking') return '预检期间仅验证麦克风权限和输入设备，结束后会立即释放。'
+  if (voicePreflightState.value === 'ready') return '可以使用实时字幕或录音转写；写入回答前仍需人工确认。'
+  if (voicePreflightState.value === 'unavailable') return '请检查浏览器权限和系统输入设备，或直接使用文本回答。'
+  return '预检会短暂占用麦克风 10 秒，不提交、不评分，也不会保存录音。'
+})
+
+const voicePreflightActionText = computed(() => {
+  if (voicePreflightState.value === 'checking') return `预检中 ${voicePreflightSecondsLeft.value}s`
+  if (voicePreflightState.value === 'ready') return '重新预检（10 秒）'
+  if (voicePreflightState.value === 'unavailable') return '重试 10 秒预检'
+  return '开始 10 秒预检'
+})
 
 const scenarioBindingStatus = computed<'BOUND' | 'PENDING' | 'NONE'>(() => {
   if (scenarioBinding.value) return 'BOUND'
@@ -863,6 +989,51 @@ const expectedTotalText = computed(() => {
   return '多'
 })
 
+const currentQuestionNumberText = computed(() => {
+  const currentNumber = Math.max(1, answeredCount.value + 1)
+  const total = Number(expectedTotalText.value)
+  if (Number.isFinite(total) && total > 0) {
+    return `第 ${Math.min(currentNumber, total)} / ${total} 题`
+  }
+  return `第 ${currentNumber} 题`
+})
+
+const suggestedQuestionSeconds = computed(() => {
+  const stageOrder = current.value?.currentStage?.stageOrder
+  const outlineStage = outlineStages.value.find((stage) => stage.stageOrder === stageOrder)
+  const stageMinutes = Number(outlineStage?.estimatedMinutes)
+  const stageQuestionCount = Number(
+    outlineStage?.expectedQuestionCount
+    || current.value?.currentStage?.expectedQuestionCount
+  )
+  if (stageMinutes > 0 && stageQuestionCount > 0) {
+    return Math.min(600, Math.max(60, Math.round((stageMinutes * 60) / stageQuestionCount)))
+  }
+
+  const scenarioMinutes = Number(voiceProductContext.value?.scenario?.estimatedMinutes)
+  const scenarioQuestionCount = Number(voiceProductContext.value?.scenario?.questionCount)
+  if (scenarioMinutes > 0 && scenarioQuestionCount > 0) {
+    return Math.min(600, Math.max(60, Math.round((scenarioMinutes * 60) / scenarioQuestionCount)))
+  }
+  return 180
+})
+
+const formatQuestionTime = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainder = safeSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+const questionTimeSuggestedText = computed(() =>
+  formatQuestionTime(suggestedQuestionSeconds.value)
+)
+
+const questionTimeRemainingText = computed(() => {
+  const remaining = suggestedQuestionSeconds.value - elapsedSeconds.value
+  return remaining > 0 ? formatQuestionTime(remaining) : '建议时间已用完'
+})
+
 const battleProgressPercent = computed(() => {
   const total = Number(expectedTotalText.value)
   if (!Number.isFinite(total) || total <= 0) return Math.min(100, answeredCount.value * 15)
@@ -1006,6 +1177,112 @@ const persistVoiceProductContext = (
   saveInterviewVoiceProductContext(next)
 }
 
+const clearVoicePreflightTimer = () => {
+  if (voicePreflightTimer !== undefined) {
+    window.clearInterval(voicePreflightTimer)
+    voicePreflightTimer = undefined
+  }
+}
+
+const releaseVoicePreflightStream = () => {
+  voicePreflightStream?.getTracks().forEach((track) => track.stop())
+  voicePreflightStream = null
+}
+
+const stopVoicePreflight = () => {
+  voicePreflightRun += 1
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  if (voicePreflightState.value === 'checking') {
+    voicePreflightState.value = 'unchecked'
+    voicePreflightSecondsLeft.value = 10
+    voicePreflightMessage.value = ''
+  }
+}
+
+const persistCurrentVoicePreflightState = () => {
+  persistVoiceProductContext(
+    scenarioBindingStatus.value,
+    scenarioBinding.value || undefined
+  )
+}
+
+const markVoicePreflightUnavailable = (message: string, run?: number) => {
+  if (run !== undefined && run !== voicePreflightRun) return
+  voicePreflightRun += 1
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  voicePreflightState.value = 'unavailable'
+  voicePreflightSecondsLeft.value = 10
+  voicePreflightMessage.value = message
+  persistCurrentVoicePreflightState()
+}
+
+const completeVoicePreflight = (run: number) => {
+  if (run !== voicePreflightRun) return
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  voicePreflightState.value = 'ready'
+  voicePreflightSecondsLeft.value = 0
+  voicePreflightMessage.value = '麦克风权限和输入设备可用，预检录音未保存。'
+  persistCurrentVoicePreflightState()
+}
+
+const handleVoicePreflight = async () => {
+  if (voicePreflightState.value === 'checking') return
+  stopVoicePreflight()
+  await resetRealtimeVoice()
+  await cancelVoiceLifecycle('MODE_SWITCH')
+
+  const support = inspectInterviewVoiceDeviceSupport()
+  if (!support.canRequestMicrophone || !support.canRecord) {
+    markVoicePreflightUnavailable(
+      support.warnings.join(' ') || '当前浏览器不支持语音录制，请继续使用文本回答。'
+    )
+    return
+  }
+
+  const run = ++voicePreflightRun
+  voicePreflightState.value = 'checking'
+  voicePreflightSecondsLeft.value = 10
+  voicePreflightMessage.value = support.warnings.join(' ')
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
+    if (run !== voicePreflightRun) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    const audioTrack = stream.getAudioTracks()[0]
+    if (!audioTrack) {
+      stream.getTracks().forEach((track) => track.stop())
+      markVoicePreflightUnavailable('没有检测到可用麦克风，请连接设备后重试。', run)
+      return
+    }
+
+    voicePreflightStream = stream
+    voicePreflightTimer = window.setInterval(() => {
+      if (run !== voicePreflightRun) return
+      if (audioTrack.readyState === 'ended') {
+        markVoicePreflightUnavailable('麦克风连接已中断，请检查输入设备后重试。', run)
+        return
+      }
+      voicePreflightSecondsLeft.value -= 1
+      if (voicePreflightSecondsLeft.value <= 0) {
+        completeVoicePreflight(run)
+      }
+    }, 1000)
+  } catch (error) {
+    markVoicePreflightUnavailable(interviewVoicePermissionMessage(error), run)
+  }
+}
+
 const loadScenarioBinding = async () => {
   if (!interviewId) return
   try {
@@ -1114,6 +1391,7 @@ const resetRealtimeVoice = async () => {
 }
 
 const cleanupVoiceResources = async (reason: InterviewVoiceDiscardReason) => {
+  stopVoicePreflight()
   await Promise.all([
     resetRealtimeVoice(),
     cancelVoiceLifecycle(reason)
@@ -5410,6 +5688,417 @@ onBeforeUnmount(() => {
     :deep(.answer-console .el-textarea__inner) {
       min-height: 112px !important;
       max-height: 28vh;
+    }
+  }
+}
+
+// Current interview task contract. This final layer keeps task context fixed,
+// leaves one primary action per state, and contains all mobile controls.
+.interview-room.arena-room {
+  .conversation-panel {
+    min-width: 0;
+  }
+
+  .question-briefbar {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    padding: 10px clamp(22px, 5vw, 88px);
+    border-bottom: 1px solid var(--room-line);
+    background: rgba(16, 21, 19, 0.96);
+  }
+
+  .question-briefbar__item {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 0 18px;
+    border-right: 1px solid var(--room-line);
+
+    &:first-child {
+      padding-left: 0;
+    }
+
+    &:last-child {
+      padding-right: 0;
+      border-right: 0;
+    }
+
+    > span,
+    > small {
+      overflow: hidden;
+      color: var(--room-sub);
+      font-size: 11px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > strong {
+      overflow: hidden;
+      color: var(--room-text);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.4;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .question-briefbar__item--time > strong {
+    color: var(--room-amber);
+    font-family: ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .completion-card {
+    display: flex;
+    width: min(100%, 820px);
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin: min(12vh, 96px) auto 0;
+    padding: 24px;
+    border: 1px solid rgba(163, 230, 53, 0.28);
+    border-radius: 12px;
+    background: rgba(23, 178, 106, 0.09);
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--room-text);
+      font-size: 20px;
+      line-height: 1.4;
+      text-wrap: balance;
+    }
+
+    p {
+      margin: 7px 0 0;
+      color: var(--room-sub);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  }
+
+  .completion-card__eyebrow {
+    color: var(--room-lime);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .topbar-report-action {
+    color: var(--room-sub);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--room-text);
+      background: rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  .answer-console,
+  .answer-console .answer-actions,
+  .answer-console .room-voice-drawer,
+  .voice-preflight-panel,
+  .voice-preflight-panel__actions {
+    min-width: 0;
+  }
+
+  .voice-tool-summary {
+    display: flex;
+    width: 100% !important;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0 !important;
+
+    > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .voice-tool-summary__state {
+    flex: 0 0 auto;
+    color: var(--room-sub);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .voice-tool-summary__state--ready {
+    color: var(--room-lime);
+  }
+
+  .voice-tool-summary__state--checking {
+    color: var(--room-amber);
+  }
+
+  .voice-tool-summary__state--unavailable {
+    color: #ff9a9e;
+  }
+
+  .voice-tool-summary__state--fallback {
+    color: #b8c8ff;
+  }
+
+  .voice-preflight-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--room-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+
+    > div:first-child {
+      min-width: 0;
+    }
+
+    > div:first-child > strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--room-text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    p {
+      margin: 4px 0 0;
+      color: var(--room-sub);
+      font-size: 11px;
+      line-height: 1.55;
+      text-wrap: pretty;
+    }
+  }
+
+  .voice-preflight-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+
+    :deep(.el-button) {
+      min-width: 0;
+      margin: 0;
+    }
+  }
+
+  .room-voice-drawer :deep(.el-button--primary),
+  .room-voice-drawer :deep(.el-button--primary.is-plain) {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+    color: var(--room-text) !important;
+    box-shadow: none !important;
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(163, 230, 53, 0.45) !important;
+      background: rgba(163, 230, 53, 0.08) !important;
+      color: var(--room-lime) !important;
+    }
+  }
+
+  .answer-console .answer-actions {
+    flex-wrap: nowrap;
+
+    :deep(.el-button) {
+      min-width: 0;
+      max-width: 100%;
+    }
+  }
+
+  .answer-reload-action {
+    flex: 0 0 auto;
+  }
+
+  .answer-submit-action,
+  .completion-primary-action {
+    flex: 0 1 auto;
+    min-width: 178px;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .answer-submit-action :deep(span),
+  .completion-primary-action :deep(span) {
+    min-width: 0;
+    justify-content: center;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .message-card.ai.question-card h2 {
+    font-size: 26px;
+    text-wrap: balance;
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar,
+    .topbar-actions,
+    .war-room,
+    .conversation-panel,
+    .question-briefbar,
+    .answer-console,
+    .answer-console .answer-actions,
+    .answer-console .room-voice-drawer {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .topbar-actions {
+      overflow: hidden;
+    }
+
+    .question-briefbar {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      padding: 8px 12px;
+    }
+
+    .question-briefbar__item {
+      gap: 1px;
+      padding: 0 8px;
+
+      > span,
+      > small {
+        font-size: 9px;
+      }
+
+      > strong {
+        font-size: 12px;
+        white-space: normal;
+      }
+    }
+
+    .conversation-scroll {
+      min-width: 0;
+    }
+
+    .answer-console {
+      display: block;
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      display: block;
+      width: 100%;
+    }
+
+    .completion-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+      margin-top: 28px;
+      padding: 18px;
+
+      :deep(.el-button) {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
+    .message-card.ai.question-card h2 {
+      font-size: 21px;
+    }
+
+    .voice-tool-summary {
+      gap: 8px;
+    }
+
+    .voice-tool-summary > span,
+    .voice-tool-summary__state {
+      white-space: normal;
+    }
+
+    .voice-preflight-panel {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .voice-preflight-panel__actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      justify-content: stretch;
+
+      :deep(.el-button) {
+        width: 100%;
+        white-space: normal;
+      }
+    }
+
+    .voice-preview__actions,
+    :deep(.room-voice-drawer .voice-actions) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      min-width: 0;
+      gap: 8px;
+    }
+
+    .voice-preview__actions :deep(.el-button),
+    :deep(.room-voice-drawer .voice-actions .el-button) {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      white-space: normal;
+    }
+
+    :deep(.room-voice-drawer .voice-control-grid) {
+      grid-template-columns: minmax(0, 1fr);
+      min-width: 0;
+    }
+
+    .answer-console .answer-actions {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      width: 100%;
+    }
+
+    .answer-reload-action {
+      width: 40px;
+      padding: 0;
+    }
+
+    .answer-reload-action span {
+      display: none;
+    }
+
+    .answer-submit-action {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+}
+
+@media (max-width: 420px) {
+  .interview-room.arena-room {
+    .room-session-name {
+      font-size: 12px;
+    }
+
+    .room-timer {
+      display: none;
+    }
+
+    .question-briefbar__item {
+      padding: 0 6px;
+
+      > strong {
+        font-size: 11px;
+      }
+    }
+
+    .voice-preflight-panel__actions,
+    .voice-preview__actions,
+    :deep(.room-voice-drawer .voice-actions) {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

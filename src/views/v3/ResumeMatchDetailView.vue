@@ -104,7 +104,7 @@
             >
               <div class="arena-ring__hole">
                 <b>{{ overallScoreText }}</b>
-                <span>JD 覆盖率</span>
+                <span>综合匹配度</span>
               </div>
             </div>
 
@@ -126,7 +126,7 @@
                 <span>关键词对账</span>
                 <h3>已覆盖与待补维度</h3>
               </div>
-              <small>{{ gapDetailCount ? `还差 ${gapDetailCount} 项` : '当前无待补维度' }}</small>
+              <small>{{ gapDetailCount ? `还差 ${gapDetailCount} 项` : (report.details?.length ? '当前无待补维度' : '暂无维度明细，不能推断覆盖情况') }}</small>
             </div>
             <div class="arena-match-settlement__keywords">
               <section>
@@ -590,7 +590,7 @@ const scoreEvidenceText = computed(() => {
   if (isUnscorableReport.value) return '本次报告未形成可信评分，页面不会补造分数。'
   if (!isSuccessReport.value) return '报告生成完成后才会显示评分。'
   if (!hasUsableScore(report.value?.overallScore)) return '后端未返回可信综合分，页面不会补造分数。'
-  return trustStatusLabel(report.value?.trustStatus, report.value?.fallback)
+  return `综合匹配度来自报告返回的 overallScore；${trustStatusLabel(report.value?.trustStatus, report.value?.fallback)}`
 })
 const overviewConclusion = computed((): { label: string; title: string; desc: string; type: OverviewTone } => {
   if (isUnscorableReport.value) {
@@ -733,7 +733,7 @@ const failureRepairActions = computed(() => {
   ] as Array<{ key: string; title: string; desc: string; action: string; primary: boolean }>
 })
 const scoreCards = computed(() => [
-  { label: '综合匹配', value: report.value?.overallScore },
+  { label: '综合匹配度', value: report.value?.overallScore },
   { label: '技术栈', value: report.value?.techStackScore },
   { label: '项目经验', value: report.value?.projectExperienceScore },
   { label: '业务契合', value: report.value?.businessFitScore },

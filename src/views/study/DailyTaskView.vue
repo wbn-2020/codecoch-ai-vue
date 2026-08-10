@@ -160,6 +160,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { checkinApi, completeTaskApi, skipTaskApi } from '@/api/dailyTask'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getStudyPlanDailyViewApi, getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import type { StudyPlanDailyViewVO, StudyPlanListVO, StudyTaskStatus, StudyTaskVO } from '@/types/studyPlan'
@@ -169,11 +170,13 @@ import { formatDateInTimezone } from '@/utils/format'
 
 const router = useRouter()
 
-const today = formatDateInTimezone(new Date(), 'Asia/Shanghai')
+const fallbackBusinessDate = formatDateInTimezone(new Date(), 'Asia/Shanghai')
+const businessDate = ref(fallbackBusinessDate)
+const today = computed(() => businessDate.value)
 
 const plans = ref<StudyPlanListVO[]>([])
 const selectedPlanId = ref<number>()
-const selectedDate = ref(today)
+const selectedDate = ref(fallbackBusinessDate)
 const dailyView = ref<StudyPlanDailyViewVO>()
 const plansLoading = ref(false)
 const loading = ref(false)
@@ -313,7 +316,18 @@ const taskTypeText = (value?: string) => {
   return map[String(value || '').toUpperCase()] || '训练任务'
 }
 
-onMounted(loadPlans)
+onMounted(async () => {
+  try {
+    const dashboard = await getUserDashboardOverviewApi()
+    if (dashboard.businessDate) {
+      businessDate.value = dashboard.businessDate
+      selectedDate.value = dashboard.businessDate
+    }
+  } catch {
+    businessDate.value = fallbackBusinessDate
+  }
+  await loadPlans()
+})
 </script>
 
 <style scoped lang="scss">

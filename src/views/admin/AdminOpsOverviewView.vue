@@ -8,7 +8,7 @@
         </div>
         <h1 class="admin-hero__title">运维监控</h1>
         <p class="admin-hero__desc">
-          聚合 AI 运行、智能教练生成运行、系统状态和失败分布。已接入服务健康探测；QPS、TPS、CPU、内存和缓存命中率会在监控指标可用后自动替换。
+          聚合 AI 运行、智能教练生成运行、系统状态和失败分布。每项运行指标都会标明数据是否已接入、部分可用或采集失败。
         </p>
       </div>
       <div class="admin-hero__actions">
@@ -69,6 +69,9 @@
               {{ group.statusLabel }}
             </el-tag>
           </div>
+          <p v-if="group.availabilityReason" class="ops-card__availability">
+            {{ group.availabilityReason }}
+          </p>
           <div class="ops-mini-grid">
             <div v-for="metric in group.metrics" :key="metric.label" class="ops-mini">
               <span>{{ metric.label }}</span>
@@ -1096,6 +1099,85 @@ const sourceMetric = (
   return formatter(Number(value))
 }
 
+type MetricAvailability = 'AVAILABLE' | 'PARTIAL' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | string
+
+const componentMetric = (
+  sourceLabel: DataSourceLabel,
+  status: MetricAvailability | undefined,
+  value: number | null | undefined,
+  formatter: (metric: number) => string = (metric) => String(metric)
+) => {
+  if (sourceState(sourceLabel) === 'unknown') return '未知'
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'NOT_CONFIGURED') return '未接入'
+  if (normalized === 'UNAVAILABLE') return '采集失败'
+  if (value == null || !Number.isFinite(Number(value))) {
+    return normalized === 'PARTIAL' ? '部分可用' : '未知'
+  }
+  return formatter(Number(value))
+}
+
+const componentPresentation = (
+  sourceLabel: DataSourceLabel,
+  status: MetricAvailability | undefined,
+  reason?: string
+) => {
+  if (sourceState(sourceLabel) === 'unknown') {
+    return {
+      status: 'unknown' as const,
+      statusLabel: '待确认',
+      statusType: 'danger' as const,
+      statusHint: sourceStatusHint([sourceLabel]),
+      availabilityReason: ''
+    }
+  }
+  if (sourceState(sourceLabel) === 'stale') {
+    const staleReason = sourceStatusHint([sourceLabel])
+    return {
+      status: 'stale' as const,
+      statusLabel: '陈旧',
+      statusType: 'warning' as const,
+      statusHint: staleReason,
+      availabilityReason: staleReason
+    }
+  }
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'AVAILABLE') {
+    return {
+      status: 'fresh' as const,
+      statusLabel: '已接入',
+      statusType: 'success' as const,
+      statusHint: reason || '指标采集正常。',
+      availabilityReason: ''
+    }
+  }
+  if (normalized === 'PARTIAL') {
+    return {
+      status: 'stale' as const,
+      statusLabel: '部分可用',
+      statusType: 'warning' as const,
+      statusHint: reason || '部分指标源未返回。',
+      availabilityReason: reason || '部分指标源未返回，当前数值只覆盖已接入的数据源。'
+    }
+  }
+  if (normalized === 'NOT_CONFIGURED') {
+    return {
+      status: 'unknown' as const,
+      statusLabel: '未接入',
+      statusType: 'info' as const,
+      statusHint: reason || '当前环境未配置该指标源。',
+      availabilityReason: reason || '当前环境未配置该指标源。'
+    }
+  }
+  return {
+    status: 'unknown' as const,
+    statusLabel: '采集失败',
+    statusType: 'danger' as const,
+    statusHint: reason || '指标采集失败。',
+    availabilityReason: reason || '指标采集失败，请刷新或查看服务日志。'
+  }
+}
+
 const sourceText = (label: DataSourceLabel, value: string) =>
   sourceState(label) === 'unknown' ? '未知' : value
 
@@ -1278,74 +1360,77 @@ const compact = (value?: number) => {
   return String(num)
 }
 
-const errorRate = computed(() => {
-  if (!aiOverview.value) return undefined
-  const total = aiOverview.value?.totalAiCalls || 0
-  if (!total) return 0
-  return ((aiOverview.value?.failedAiCalls || 0) / total) * 100
-})
-
 const metricGroups = computed(() => {
   const aiSource = dataSourceLabels.aiOverview
   const agentSource = dataSourceLabels.agentOverview
   const dashboardSource = dataSourceLabels.dashboard
   return [
     {
-    key: 'usage',
-    title: '使用统计',
-    subtitle: '请求、消耗与调用',
-    icon: Activity,
-    tone: 'tone-blue',
-    ...sourcePresentation([aiSource, agentSource]),
-    metrics: [
-      { label: 'AI 运行', value: sourceMetric(aiSource, aiOverview.value?.totalAiCalls, compact), hint: `失败 ${sourceMetric(aiSource, aiOverview.value?.failedAiCalls, compact)}` },
-      { label: '总消耗', value: sourceMetric(aiSource, aiOverview.value?.totalTokens, compact), hint: `输入 ${sourceMetric(aiSource, aiOverview.value?.totalInputTokens, compact)}` },
-      { label: '生成运行', value: sourceMetric(agentSource, agentOverview.value?.totalAgentRuns, compact), hint: `成功 ${sourceMetric(agentSource, agentOverview.value?.successAgentRuns, compact)}` },
-      { label: '生成任务', value: sourceMetric(agentSource, agentOverview.value?.totalAgentTasks, compact), hint: `完成 ${sourceMetric(agentSource, agentOverview.value?.doneTaskCount, compact)}` }
-    ]
-  },
-  {
-    key: 'ops',
-    title: '系统运维',
-    subtitle: '实时吞吐和限流',
-    icon: Gauge,
-    tone: 'tone-cyan',
-    ...sourcePresentation([dashboardSource]),
-    metrics: [
-      { label: 'QPS', value: sourceMetric(dashboardSource, opsMetrics.value?.qps, formatMetric), hint: '最近 1 分钟请求均值' },
-      { label: 'TPS', value: sourceMetric(dashboardSource, opsMetrics.value?.tps, formatMetric), hint: '最近 1 分钟业务写入均值' },
-      { label: 'RPM', value: sourceMetric(dashboardSource, opsMetrics.value?.rpm, compact), hint: '最近 1 分钟请求数' },
-      { label: '每分钟消耗', value: sourceMetric(dashboardSource, opsMetrics.value?.tpm, compact), hint: '最近 1 分钟调用消耗' }
-    ]
-  },
-  {
-    key: 'load',
-    title: '系统负载',
-    subtitle: '进程与主机资源',
-    icon: Server,
-    tone: 'tone-violet',
-    ...sourcePresentation([dashboardSource]),
-    metrics: [
-      { label: 'CPU', value: sourceMetric(dashboardSource, opsMetrics.value?.processCpuUsage, formatPercent), hint: `系统 ${sourceMetric(dashboardSource, opsMetrics.value?.systemCpuUsage, formatPercent)}` },
-      { label: '内存', value: sourceMetric(dashboardSource, opsMetrics.value?.heapUsedMb, formatMb), hint: `JVM ${sourceMetric(dashboardSource, opsMetrics.value?.heapUsage, formatPercent)} / ${sourceMetric(dashboardSource, opsMetrics.value?.heapMaxMb, formatMb)}` },
-      { label: '服务数', value: sourceMetric(dashboardSource, dashboard.value?.systemStatus ? services.value.length : undefined), hint: '来自管理驾驶舱' },
-      { label: '数据库', value: sourceText(dashboardSource, statusText(services.value.find((item) => item.serviceName === 'database')?.status)), hint: 'SELECT 1' }
-    ]
-  },
-  {
-    key: 'health',
-    title: '缓存 + 健康',
-    subtitle: '命中率、延迟和错误率',
-    icon: ShieldCheck,
-    tone: 'tone-green',
-    ...sourcePresentation([aiSource, agentSource, dashboardSource]),
-    metrics: [
-      { label: 'AI 成功率', value: sourceMetric(aiSource, aiOverview.value?.aiSuccessRate, formatPercent), hint: `平均 ${sourceMetric(aiSource, aiOverview.value?.avgElapsedMs, formatMs)}` },
-      { label: '生成成功率', value: sourceMetric(agentSource, agentOverview.value?.agentSuccessRate, formatPercent), hint: `平均 ${sourceMetric(agentSource, agentOverview.value?.avgDurationMs, formatMs)}` },
-      { label: '缓存命中', value: sourceMetric(dashboardSource, opsMetrics.value?.redisHitRate, formatPercent), hint: `hits ${sourceMetric(dashboardSource, opsMetrics.value?.redisKeyspaceHits, compact)} / misses ${sourceMetric(dashboardSource, opsMetrics.value?.redisKeyspaceMisses, compact)}` },
-      { label: '错误率', value: sourceMetric(aiSource, errorRate.value, formatPercent), hint: `失败 ${sourceMetric(aiSource, aiOverview.value?.failedAiCalls, compact)}` }
-    ]
-  }
+      key: 'usage',
+      title: '使用统计',
+      subtitle: '请求、消耗与调用',
+      icon: Activity,
+      tone: 'tone-blue',
+      ...sourcePresentation([aiSource, agentSource]),
+      availabilityReason: '',
+      metrics: [
+        { label: 'AI 运行', value: sourceMetric(aiSource, aiOverview.value?.totalAiCalls, compact), hint: `失败 ${sourceMetric(aiSource, aiOverview.value?.failedAiCalls, compact)}` },
+        { label: '总消耗', value: sourceMetric(aiSource, aiOverview.value?.totalTokens, compact), hint: `输入 ${sourceMetric(aiSource, aiOverview.value?.totalInputTokens, compact)}` },
+        { label: '生成运行', value: sourceMetric(agentSource, agentOverview.value?.totalAgentRuns, compact), hint: `完整 ${sourceMetric(agentSource, Math.max(0, (agentOverview.value?.successAgentRuns || 0) - (agentOverview.value?.degradedAgentRuns || 0)), compact)}` },
+        { label: '生成任务', value: sourceMetric(agentSource, agentOverview.value?.totalAgentTasks, compact), hint: `完成 ${sourceMetric(agentSource, agentOverview.value?.doneTaskCount, compact)}` }
+      ]
+    },
+    {
+      key: 'ops',
+      title: '系统运维',
+      subtitle: '最近 1 分钟吞吐',
+      icon: Gauge,
+      tone: 'tone-cyan',
+      ...componentPresentation(
+        dashboardSource,
+        opsMetrics.value?.trafficMetricsStatus,
+        opsMetrics.value?.trafficMetricsReason
+      ),
+      metrics: [
+        { label: 'QPS', value: componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.qps, formatMetric), hint: '请求均值' },
+        { label: 'TPS', value: componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.tps, formatMetric), hint: '业务写入均值' },
+        { label: 'RPM', value: componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.rpm, compact), hint: '请求数' },
+        { label: '每分钟消耗', value: componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.tpm, compact), hint: 'Token 消耗' }
+      ]
+    },
+    {
+      key: 'load',
+      title: '系统负载',
+      subtitle: '进程与主机资源',
+      icon: Server,
+      tone: 'tone-violet',
+      ...componentPresentation(
+        dashboardSource,
+        opsMetrics.value?.jvmMetricsStatus,
+        opsMetrics.value?.jvmMetricsReason
+      ),
+      metrics: [
+        { label: 'CPU', value: componentMetric(dashboardSource, opsMetrics.value?.jvmMetricsStatus, opsMetrics.value?.processCpuUsage, formatPercent), hint: `系统 ${componentMetric(dashboardSource, opsMetrics.value?.jvmMetricsStatus, opsMetrics.value?.systemCpuUsage, formatPercent)}` },
+        { label: '内存', value: componentMetric(dashboardSource, opsMetrics.value?.jvmMetricsStatus, opsMetrics.value?.heapUsedMb, formatMb), hint: `JVM ${componentMetric(dashboardSource, opsMetrics.value?.jvmMetricsStatus, opsMetrics.value?.heapUsage, formatPercent)} / ${componentMetric(dashboardSource, opsMetrics.value?.jvmMetricsStatus, opsMetrics.value?.heapMaxMb, formatMb)}` },
+        { label: '服务数', value: sourceMetric(dashboardSource, dashboard.value?.systemStatus ? services.value.length : undefined), hint: '来自管理驾驶舱' },
+        { label: '数据库', value: sourceText(dashboardSource, statusText(services.value.find((item) => item.serviceName === 'database')?.status)), hint: 'SELECT 1' }
+      ]
+    },
+    {
+      key: 'health',
+      title: '缓存 + 健康',
+      subtitle: '命中率、生成和错误率',
+      icon: ShieldCheck,
+      tone: 'tone-green',
+      ...sourcePresentation([aiSource, agentSource, dashboardSource]),
+      availabilityReason: '',
+      metrics: [
+        { label: 'AI 成功率', value: sourceMetric(aiSource, aiOverview.value?.aiSuccessRate, formatPercent), hint: `平均 ${sourceMetric(aiSource, aiOverview.value?.avgElapsedMs, formatMs)}` },
+        { label: '完整生成成功率', value: sourceMetric(agentSource, agentOverview.value?.agentSuccessRate, formatPercent), hint: `降级 ${sourceMetric(agentSource, agentOverview.value?.degradedAgentRuns, compact)}` },
+        { label: '有效可用率', value: sourceMetric(agentSource, agentOverview.value?.effectiveSuccessRate, formatPercent), hint: '含降级可用结果' },
+        { label: '缓存命中', value: componentMetric(dashboardSource, opsMetrics.value?.redisMetricsStatus, opsMetrics.value?.redisHitRate, formatPercent), hint: `hits ${componentMetric(dashboardSource, opsMetrics.value?.redisMetricsStatus, opsMetrics.value?.redisKeyspaceHits, compact)} / misses ${componentMetric(dashboardSource, opsMetrics.value?.redisMetricsStatus, opsMetrics.value?.redisKeyspaceMisses, compact)}` }
+      ]
+    }
   ]
 })
 
@@ -2161,6 +2246,13 @@ onBeforeUnmount(() => {
 .ops-card__head {
   justify-content: flex-start;
   margin-bottom: 18px;
+}
+
+.ops-card__availability {
+  margin: -8px 0 14px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .ops-card__status {

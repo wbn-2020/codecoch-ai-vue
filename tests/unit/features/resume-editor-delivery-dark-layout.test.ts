@@ -93,6 +93,22 @@ describe('resume editor and delivery workspace layout', () => {
     expect(editor).toContain(':has-unsaved-changes="hasUnsavedResumeChanges"')
     expect(editor).toContain('moveRovingSelection')
     expect(editor).toContain(':tabindex="selectedResumeTemplateCode === template.code ? 0 : -1"')
+    expect(editor).toContain('{{ template.roleFit }}')
+    expect(editor).toContain('{{ template.pageTendency }}')
+    expect(editor).toContain('{{ template.atsRiskLabel }}')
+    expect(editor).toContain('{{ template.typographyLayout }}')
+    expect(editor).toContain('这里不生成真实 ATS 分数')
+    expect(editor).toContain('A4 预览 · 分页以导出为准')
+    expect(editor).toContain('打开稳定版本分页与导出工作台')
+    expect(editor).toMatch(
+      /\.editor-aside > \.export-check-panel\s*\{[\s\S]*?display:\s*grid;/
+    )
+    expect(editor).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.resume-template-strip \.template-selector > button\s*\{[\s\S]*?flex-basis:\s*min\(272px,\s*84vw\)/
+    )
+    expect(editor).toMatch(
+      /\.template-facts dd\s*\{[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?word-break:\s*break-word/
+    )
     expect(workbench).not.toContain('previewPages')
     expect(artifactPanel).toMatch(/@media\s*\(max-width:\s*760px\)/)
     expect(artifactPanel).toMatch(/\.artifact-main\s*\{[\s\S]*?min-width:\s*0/)

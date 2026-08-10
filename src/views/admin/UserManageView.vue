@@ -31,24 +31,15 @@
               <el-button @click="handleReset">重置</el-button>
             </el-form-item>
           </el-form>
-          <div class="table-view-tools">
-            <el-segmented v-model="tableSize" :options="tableSizeOptions" />
-            <el-dropdown trigger="click" :hide-on-click="false">
-              <el-button plain>列配置</el-button>
-              <template #dropdown>
-                <el-dropdown-menu class="column-config-menu">
-                  <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                    <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                      {{ item.label }}
-                    </el-checkbox>
-                  </el-dropdown-item>
-                  <el-dropdown-item divided>
-                    <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
+          <AdminTableViewSettings
+            v-model:size="tableSize"
+            :size-options="tableSizeOptions"
+            :columns="columnOptions"
+            :visible-columns="visibleColumns"
+            aria-label="用户列表表格视图设置"
+            @update:column-visible="({ key, visible }) => visibleColumns[key as UserColumnKey] = visible"
+            @reset="resetTableView"
+          />
         </div>
       </div>
 
@@ -257,6 +248,7 @@ import {
   resetAdminUserPasswordApi,
   updateAdminUserStatusApi
 } from '@/api/user'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'

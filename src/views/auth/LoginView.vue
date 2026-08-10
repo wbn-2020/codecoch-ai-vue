@@ -122,7 +122,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { appConfig } from '@/config'
+import { needsUserOnboarding } from '@/features/login-entry'
 import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 import { sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 
@@ -199,17 +201,25 @@ const syncRouteReasonNotice = () => {
   errorMessage.value = '检测到密码重置链接。为避免当前登录账号与重置目标账号混淆，请先重新登录目标账号，再从邮件中重新打开重置链接。'
 }
 
-const getDefaultPostLoginRoute = (): RouteLocationRaw => {
-  if (!authStore.canAccessAdmin) return '/dashboard'
-  const adminPath = firstAccessibleAdminPath(authStore)
-  if (adminPath) return adminPath
-  return {
-    path: '/403',
-    query: {
-      reason: 'noAdminMenu',
-      target: '/admin',
-      title: '管理后台'
+const getDefaultPostLoginRoute = async (): Promise<RouteLocationRaw> => {
+  if (authStore.canAccessAdmin) {
+    const adminPath = firstAccessibleAdminPath(authStore)
+    if (adminPath) return adminPath
+    return {
+      path: '/403',
+      query: {
+        reason: 'noAdminMenu',
+        target: '/admin',
+        title: '管理后台'
+      }
     }
+  }
+
+  try {
+    const overview = await getUserDashboardOverviewApi()
+    return needsUserOnboarding(overview) ? '/onboarding' : '/dashboard'
+  } catch {
+    return '/dashboard'
   }
 }
 
@@ -235,7 +245,8 @@ const handleSubmit = async () => {
     try {
       ElMessage.success('登录成功')
       const redirect = sanitizeLocalRedirectPath(route.query.redirect)
-      await router.replace(redirect || getDefaultPostLoginRoute())
+      const targetRoute = redirect || await getDefaultPostLoginRoute()
+      await router.replace(targetRoute)
     } catch (error) {
       alertTitle.value = '登录后页面加载失败'
       alertType.value = 'warning'

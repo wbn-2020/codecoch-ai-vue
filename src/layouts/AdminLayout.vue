@@ -1,5 +1,9 @@
 <template>
-  <el-container class="app-layout admin-layout" :class="{ 'is-collapsed': appStore.sidebarCollapsed }">
+  <el-container
+    class="app-layout admin-layout"
+    :class="{ 'is-collapsed': appStore.sidebarCollapsed }"
+    :style="{ '--admin-health-height': healthStripExpanded ? '32px' : '0px' }"
+  >
     <el-aside class="app-layout__aside">
       <div class="app-layout__brand">
         <div class="brand-mark">A</div>
@@ -52,7 +56,7 @@
         </div>
       </el-header>
 
-      <div class="admin-health-strip">
+      <div v-if="healthStripExpanded" class="admin-health-strip" role="status" aria-live="polite">
         <button class="admin-health-strip__status" type="button" @click="router.push('/admin/dashboard')">
           <span class="health-dot" :class="`is-${healthTone}`"></span>
           <strong>{{ healthLabel }}</strong>
@@ -158,7 +162,7 @@
           </div>
           <div>
             <dt>追踪号</dt>
-            <dd>{{ item.traceId ? '已生成，可复制反馈信息' : '-' }}</dd>
+            <dd :title="item.traceId || undefined">{{ displayTraceId(item.traceId) }}</dd>
           </div>
         </dl>
         <div class="diagnostic-card__actions">
@@ -259,6 +263,10 @@ const mobileReadonlyHint = computed(() =>
     : '手机端保留运营首页和诊断入口；更多后台功能需等待权限恢复或切换桌面端处理。'
 )
 const healthStatus = computed<DashboardStatus>(() => dashboardOverview.value?.systemStatus?.status || 'UNKNOWN')
+const healthStripExpanded = computed(() => {
+  if (adminPermissionDrift.value || !authStore.tokenVerified || dashboardHealthError.value || latestError.value) return true
+  return !['HEALTHY', 'SUPPORTED'].includes(String(healthStatus.value).toUpperCase())
+})
 const healthTone = computed(() => {
   if (dashboardHealthError.value) return 'danger'
   const status = String(healthStatus.value).toUpperCase()
@@ -321,6 +329,13 @@ const formatTime = (value?: string) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const displayTraceId = (traceId?: string) => {
+  const value = String(traceId || '').trim()
+  if (!value) return '-'
+  if (value.length <= 20) return value
+  return `${value.slice(0, 10)}...${value.slice(-6)}`
 }
 
 const fetchDashboardHealth = async () => {

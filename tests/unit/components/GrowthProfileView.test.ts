@@ -59,8 +59,8 @@ describe('GrowthProfileView', () => {
       evidenceCount: 3,
       timeWindow: '最近30天',
       dataSourceLabels: [
-        '当前纳入：任务完成记录',
-        '当前未纳入：AI 教练运行记录、复盘记录、成长记忆、反馈信号、提醒信号'
+        '当前纳入：Agent 任务状态记录',
+        '当前未纳入：计划生成运行、复盘、成长记忆、反馈、提醒及其他业务任务'
       ],
       displayPolicy: {
         showStrongScore: true,
@@ -117,8 +117,8 @@ describe('GrowthProfileView', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('当前纳入：任务完成记录')
-    expect(wrapper.text()).toContain('当前未纳入：AI 教练运行记录、复盘记录、成长记忆、反馈信号、提醒信号')
+    expect(wrapper.text()).toContain('当前纳入：Agent 任务状态记录')
+    expect(wrapper.text()).toContain('当前未纳入：计划生成运行、复盘、成长记忆、反馈、提醒及其他业务任务')
     expect(wrapper.text()).toContain('Trusted Skill')
     expect(wrapper.text()).not.toContain('Low Skill')
     expect(wrapper.text()).toContain('2026-06-03')
@@ -132,8 +132,8 @@ describe('GrowthProfileView', () => {
       evidenceCount: 1,
       timeWindow: '最近30天',
       dataSourceLabels: [
-        '当前纳入：任务完成记录',
-        '当前未纳入：AI 教练运行记录、复盘记录、成长记忆、反馈信号、提醒信号'
+        '当前纳入：Agent 任务状态记录',
+        '当前未纳入：计划生成运行、复盘、成长记忆、反馈、提醒及其他业务任务'
       ],
       coldStartReason: 'Growth 仅在至少 3 条任务记录且 2 条已完成任务时展示强结论。',
       nextEvidenceActions: ['至少补齐到 3 条任务记录', '至少完成 2 条任务记录'],
@@ -156,7 +156,7 @@ describe('GrowthProfileView', () => {
     expect(wrapper.text()).toContain('待补证据')
     expect(wrapper.text()).toContain('至少补齐到 3 条任务记录')
     expect(wrapper.text()).toContain('至少完成 2 条任务记录')
-    expect(wrapper.text()).toContain('当前未纳入：AI 教练运行记录、复盘记录、成长记忆、反馈信号、提醒信号')
+    expect(wrapper.text()).toContain('当前未纳入：计划生成运行、复盘、成长记忆、反馈、提醒及其他业务任务')
   })
 
   it('only exposes the weekly report action when the feature is enabled', async () => {

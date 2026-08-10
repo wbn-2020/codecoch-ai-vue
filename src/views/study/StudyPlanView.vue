@@ -375,6 +375,7 @@ import {
   streamStudyPlanGenerateApi,
   updateStudyTaskStatusApi
 } from '@/api/studyPlan'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
 import type {
   SseEventVO,
@@ -389,6 +390,7 @@ import type {
 } from '@/types/studyPlan'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
+import { formatDateInTimezone } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -404,7 +406,9 @@ const tasks = ref<StudyTaskVO[]>([])
 const dailyView = ref<StudyPlanDailyViewVO | null>(null)
 const dailyLoading = ref(false)
 const dailyError = ref('')
-const dailyDate = ref(formatDate(new Date()))
+const fallbackBusinessDate = formatDateInTimezone(new Date(), 'Asia/Shanghai')
+const businessDate = ref(fallbackBusinessDate)
+const dailyDate = ref(fallbackBusinessDate)
 const STUDY_PLAN_LOAD_TIMEOUT_MS = 15000
 
 const withStudyPlanTimeout = <T>(promise: Promise<T>) =>
@@ -498,13 +502,6 @@ const goStudyPlanTaskCenterByForm = () => router.push({
   })
 })
 
-function formatDate(date: Date) {
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 const clearPoll = () => {
   if (pollTimer) {
     window.clearTimeout(pollTimer)
@@ -535,7 +532,14 @@ const fetchPlans = async () => {
     plans.value = page.records
     pagination.total = page.total
     pagination.pageSize = page.pageSize
-    const nextId = selectedPlanId.value || selectedPlan.value?.id || plans.value[0]?.id
+    const selectedStillVisible = plans.value.some((plan) => plan.id === selectedPlan.value?.id)
+    const defaultActivePlanId = plans.value.find((plan) =>
+      String(plan.planStatus || '').toUpperCase() === 'ACTIVE'
+    )?.id
+    const nextId = selectedPlanId.value
+      || (selectedStillVisible ? selectedPlan.value?.id : 0)
+      || defaultActivePlanId
+      || plans.value[0]?.id
     if (nextId) {
       await selectPlan(nextId, false)
     } else {
@@ -613,7 +617,7 @@ const fetchDailyView = async (targetPlanId?: number) => {
 }
 
 const resetDailyDateToToday = () => {
-  dailyDate.value = formatDate(new Date())
+  dailyDate.value = businessDate.value
   fetchDailyView()
 }
 
@@ -862,7 +866,18 @@ const priorityText = (priority: string) => {
 
 const formatPlannedDate = (value?: string) => value || '未规划日期'
 
-onMounted(fetchPlans)
+onMounted(async () => {
+  try {
+    const dashboard = await getUserDashboardOverviewApi()
+    if (dashboard.businessDate) {
+      businessDate.value = dashboard.businessDate
+      dailyDate.value = dashboard.businessDate
+    }
+  } catch {
+    businessDate.value = fallbackBusinessDate
+  }
+  await fetchPlans()
+})
 onBeforeUnmount(() => {
   clearPoll()
   abortStream('dispose')

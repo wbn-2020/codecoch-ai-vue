@@ -120,6 +120,22 @@ describe('ArenaHomeView', () => {
     expect(wrapper.text()).toContain('去生成今日计划')
   })
 
+  it('keeps an all-DONE Agent plan as completed instead of an ungenerated plan', async () => {
+    todayTasks.value = {
+      tasks: [
+        { id: 31, title: '任务一', status: 'DONE' },
+        { id: 32, title: '任务二', status: 'DONE' },
+        { id: 33, title: '任务三', status: 'DONE' }
+      ]
+    }
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('今天的训练已全部完成')
+    expect(wrapper.text()).toContain('查看今日完成记录')
+    expect(wrapper.text()).not.toContain('今天还没有关卡，先开第一关')
+  })
+
   it('falls back to resume creation when the user has no resume', async () => {
     todayTasks.value = { tasks: [] }
     overview.value = { ...overview.value, resumeCount: 0 }
@@ -187,5 +203,13 @@ describe('ArenaHomeView', () => {
     expect(wrapper.findAll('.arena-streak__day')).toHaveLength(7)
     expect(wrapper.text()).toContain('六')
     expect(wrapper.text()).toContain('日')
+  })
+
+  it('derives the weekday from the backend business date', async () => {
+    overview.value = { ...overview.value, businessDate: '2026-08-09' }
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('周日')
   })
 })

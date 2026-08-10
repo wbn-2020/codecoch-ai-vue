@@ -24,20 +24,22 @@
     <template v-else>
     <section class="editor-hero resume-workshop-hero">
       <div>
-        <h1>简历工坊 <span aria-hidden="true">⚒</span></h1>
-        <p>每完善一个模块都有经验，中间简历实时成型。</p>
+        <h1>简历编辑</h1>
+        <p>{{ form.resumeName?.trim() || '未命名简历' }} · 内容修改会实时同步到预览，导出前请完成检查。</p>
       </div>
       <div class="resume-workshop-hero__completion">
-        <div
-          class="resume-workshop-ring"
-          :style="{ background: `conic-gradient(var(--arena-grn) 0 ${completion}%, var(--arena-line) ${completion}% 100%)` }"
-        >
-          <div><strong>{{ completion }}%</strong></div>
+        <div class="resume-document-status">
+          <span>完成度</span>
+          <strong>{{ completion }}%</strong>
         </div>
-        <div class="resume-workshop-hero__copy">
-          <strong>简历完成度</strong>
-          <span>再补 {{ Math.max(0, 7 - completionItems.filter((item) => item.done).length) }} 块拿满 <b>+120 XP</b></span>
+        <div class="resume-document-status">
+          <span>保存状态</span>
+          <strong :class="{ 'is-warning': hasUnsavedResumeChanges || !isEdit }">{{ documentSaveStatus }}</strong>
         </div>
+        <el-button @click="openDeliveryChecks">
+          <FileCheck2 :size="16" />
+          检查并导出
+        </el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">
           <Save :size="16" />
           保存简历
@@ -74,15 +76,16 @@
       </button>
     </div>
 
-    <section class="resume-template-strip content-card">
-      <div class="resume-template-strip__head">
+    <details class="resume-template-strip content-card">
+      <summary class="resume-template-strip__head">
         <div>
-          <h2>🎨 选择模板皮肤</h2>
+          <h2>模板与版式</h2>
+          <span>当前：{{ selectedResumeTemplateLabel }}</span>
         </div>
-        <span class="resume-template-strip__hint">ATS 友好 · 随时换肤不重排</span>
-      </div>
+        <span class="resume-template-strip__hint">次级设置 · 展开调整</span>
+      </summary>
 
-      <div class="preview-customizer">
+      <div class="preview-customizer resume-template-strip__body">
         <div class="template-selector" role="radiogroup" aria-label="选择简历模板">
           <button
             v-for="template in resumeTemplateOptions"
@@ -103,9 +106,27 @@
             <span class="template-thumb" :class="`is-${template.className}`">
               <i></i><i></i><i></i>
             </span>
-            <span>
+            <span class="template-copy">
               <strong>{{ template.name }}</strong>
               <small>{{ template.description }}</small>
+              <dl class="template-facts">
+                <div>
+                  <dt>适用岗位</dt>
+                  <dd>{{ template.roleFit }}</dd>
+                </div>
+                <div>
+                  <dt>页数倾向</dt>
+                  <dd>{{ template.pageTendency }}</dd>
+                </div>
+                <div>
+                  <dt>ATS 风险</dt>
+                  <dd>{{ template.atsRiskLabel }} · {{ template.atsRiskDetail }}</dd>
+                </div>
+                <div>
+                  <dt>字体 / 版式</dt>
+                  <dd>{{ template.typographyLayout }}</dd>
+                </div>
+              </dl>
             </span>
             <CheckCircle2 v-if="selectedResumeTemplateCode === template.code" :size="16" />
           </button>
@@ -150,7 +171,7 @@
           </div>
         </div>
       </div>
-    </section>
+    </details>
 
     <div :class="['editor-workspace', `is-mobile-${mobileWorkspaceTab}`]">
       <div id="resume-panel-advice-mount" class="workspace-teleport-target"></div>
@@ -459,7 +480,7 @@
               <h2>📄 实时预览 · {{ selectedResumeTemplateLabel }}</h2>
               <p>当前填写内容会同步到纸张预览。</p>
             </div>
-            <span class="resume-preview-page-chip">A4 · 自动分页</span>
+            <span class="resume-preview-page-chip">A4 预览 · 分页以导出为准</span>
           </div>
 
           <div class="resume-paper-wrap">
@@ -522,6 +543,35 @@
               {{ item.label }}
             </span>
           </div>
+        </section>
+
+        <section class="content-card side-panel export-check-panel">
+          <div class="completion-head">
+            <span>导出前检查 · 启发式</span>
+            <strong>{{ exportReadyCount }}/{{ exportChecklistItems.length }} 通过</strong>
+          </div>
+          <p>这里不生成真实 ATS 分数。页数与分页断裂只根据字段长度、段落数量和模板倾向提示，正式结果请以稳定版本工作台的 PDF/DOCX 为准。</p>
+          <div class="completion-list export-check-list">
+            <article
+              v-for="item in exportChecklistItems"
+              :key="item.key"
+              class="export-check-item"
+              :class="`is-${item.state.toLowerCase()}`"
+            >
+              <div class="export-check-item__head">
+                <CheckCircle2 v-if="item.state === 'PASS'" :size="15" />
+                <AlertTriangle v-else-if="item.state === 'WARNING'" :size="15" />
+                <Circle v-else :size="15" />
+                <strong>{{ item.label }}</strong>
+                <span v-if="item.heuristic">启发式</span>
+              </div>
+              <p>{{ item.detail }}</p>
+            </article>
+          </div>
+          <el-button class="full-button" :disabled="!isEdit" @click="openDeliveryChecks">
+            <FileCheck2 :size="16" />
+            {{ isEdit ? '打开稳定版本分页与导出工作台' : '保存后进行导出检查' }}
+          </el-button>
         </section>
 
         <section class="content-card side-panel jd-match-panel">
@@ -727,7 +777,7 @@
     </div>
 
     <details v-if="isEdit" ref="deliveryWorkbenchDetails" class="resume-delivery-details">
-      <summary>投递级简历工作台</summary>
+      <summary>稳定版本分页与导出工作台</summary>
       <ResumeDeliveryWorkbench
         ref="deliveryWorkbenchRef"
         :resume-id="resumeId || undefined"
@@ -759,9 +809,11 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Circle,
+  FileCheck2,
   FilePenLine,
   FolderOpen,
   GitCompareArrows,
@@ -794,6 +846,7 @@ import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import {
+  buildResumeExportChecks,
   isResumeTemplateUnlocked,
   resumeTemplateOptions,
   type ResumeTemplateOption,
@@ -855,7 +908,7 @@ const optimizeSseStatus = ref('未开始')
 const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
 const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
-const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-projects')
+const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-basic')
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const previewAccent = ref<ResumeAccent>('ocean')
 const previewZoom = ref(0.88)
@@ -1088,6 +1141,11 @@ const hasUnsavedResumeChanges = computed(() =>
   isEdit.value
   && (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
 )
+const documentSaveStatus = computed(() => {
+  if (saving.value) return '保存中'
+  if (!isEdit.value) return '未保存草稿'
+  return hasUnsavedResumeChanges.value ? '有未保存改动' : '已保存'
+})
 
 const previewPreferenceKey = computed(() =>
   `codecoachai:resume-preview:${resumeId.value || 'draft'}`
@@ -1137,6 +1195,14 @@ const changePreviewZoom = (delta: number) => {
 
 const projectsWithResult = computed(() =>
   projects.value.filter((project) => Boolean(project.optimizationResult || project.optimizationResults)).length
+)
+const exportChecklistItems = computed(() => buildResumeExportChecks({
+  ...resumeDocumentDraft.value,
+  templateCode: selectedResumeTemplateCode.value,
+  isSaved: isEdit.value && !hasUnsavedResumeChanges.value
+}))
+const exportReadyCount = computed(() =>
+  exportChecklistItems.value.filter((item) => item.state === 'PASS').length
 )
 
 const aiWritingPrompts = computed(() => [
@@ -1396,7 +1462,7 @@ const resetRouteState = () => {
   optimizing.value = false
   applyingOptimize.value = false
   mobileWorkspaceTab.value = 'edit'
-  activeWorkshopModule.value = 'resume-projects'
+  activeWorkshopModule.value = 'resume-basic'
   selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
   previewAccent.value = 'ocean'
   previewZoom.value = 0.88
@@ -1814,6 +1880,16 @@ const handleSaveInlineProject = async () => {
   }
 }
 
+const openDeliveryChecks = async () => {
+  if (!isEdit.value || !resumeId.value) {
+    ElMessage.warning('请先保存简历，再进行版本、分页和导出检查')
+    return
+  }
+  deliveryWorkbenchDetails.value?.setAttribute('open', '')
+  await nextTick()
+  deliveryWorkbenchDetails.value?.scrollIntoView({ block: 'start' })
+}
+
 const openPdfExport = async () => {
   if (!isEdit.value || !resumeId.value) {
     ElMessage.warning('请先保存简历，再导出稳定版本的 PDF')
@@ -1823,8 +1899,7 @@ const openPdfExport = async () => {
     ElMessage.warning('当前有未保存改动，请先保存简历再导出 PDF')
     return
   }
-  deliveryWorkbenchDetails.value?.setAttribute('open', '')
-  await nextTick()
+  await openDeliveryChecks()
   await deliveryWorkbenchRef.value?.createExport('PDF')
 }
 
@@ -3761,6 +3836,7 @@ onBeforeUnmount(() => {
 
   .resume-workshop-hero__completion {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 11px;
     padding: 11px 18px;
@@ -3768,6 +3844,29 @@ onBeforeUnmount(() => {
     border-radius: var(--arena-radius-card);
     background: #ffffff;
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .resume-document-status {
+    display: grid;
+    min-width: 76px;
+    gap: 3px;
+
+    span {
+      color: var(--arena-mut);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+
+    strong.is-warning {
+      color: #9a5a10;
+    }
   }
 
   .resume-workshop-ring {
@@ -3836,8 +3935,13 @@ onBeforeUnmount(() => {
   }
 
   .resume-template-strip__head {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 12px;
+    cursor: pointer;
+    list-style: none;
 
     h2 {
       margin: 0;
@@ -3845,6 +3949,30 @@ onBeforeUnmount(() => {
       font-size: 13px;
       font-weight: 800;
     }
+
+    div > span {
+      display: block;
+      margin-top: 3px;
+      color: var(--arena-mut);
+      font-size: 11.5px;
+    }
+  }
+
+  .resume-template-strip__head::-webkit-details-marker {
+    display: none;
+  }
+
+  .resume-template-strip:not([open]) > .resume-template-strip__head {
+    margin-bottom: 0;
+  }
+
+  .resume-template-strip__body {
+    padding-top: 12px;
+    border-top: 1px solid var(--arena-line);
+  }
+
+  .export-check-list {
+    margin-bottom: 14px;
   }
 
   .resume-template-strip__hint {
@@ -3863,55 +3991,89 @@ onBeforeUnmount(() => {
 
   .resume-template-strip .template-selector {
     display: grid;
-    grid-template-columns: repeat(5, minmax(86px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
     gap: 12px;
   }
 
   .resume-template-strip .template-selector > button {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 116px auto;
-    gap: 7px;
-    justify-items: center;
+    grid-template-columns: 68px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
     min-height: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
+    padding: 10px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 10px;
+    background: #ffffff;
     color: var(--arena-sub);
-    text-align: center;
+    text-align: left;
 
     .template-thumb {
-      width: 86px;
-      height: 116px;
+      width: 68px;
+      height: 92px;
       border: 1.5px solid var(--arena-line);
-      border-radius: 10px;
+      border-radius: 7px;
       background: #ffffff;
       box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
     }
 
-    > span:nth-child(2) {
+    .template-copy {
       display: grid;
-      gap: 2px;
+      gap: 4px;
       min-width: 0;
     }
 
     strong {
       color: var(--arena-sub);
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 800;
       line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     small {
-      display: none;
+      display: block;
+      margin: 0;
+      overflow: visible;
+      color: var(--arena-mut);
+      font-size: 10.5px;
+      line-height: 1.45;
+      text-overflow: clip;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .template-facts {
+      display: grid;
+      gap: 4px;
+      margin: 3px 0 0;
+    }
+
+    .template-facts div {
+      display: grid;
+      grid-template-columns: 50px minmax(0, 1fr);
+      gap: 5px;
+      min-width: 0;
+      font-size: 10px;
+      line-height: 1.42;
+    }
+
+    .template-facts dt {
+      color: var(--arena-mut);
+      font-weight: 700;
+    }
+
+    .template-facts dd {
+      min-width: 0;
+      margin: 0;
+      color: var(--arena-sub);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     > svg {
-      position: absolute;
-      top: 9px;
-      right: calc(50% - 34px);
+      margin-top: 1px;
       padding: 2px;
       border-radius: 50%;
       background: #ffffff;
@@ -3925,7 +4087,8 @@ onBeforeUnmount(() => {
     }
 
     &.active {
-      background: transparent;
+      border-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
 
       .template-thumb {
         border-color: var(--arena-grn);
@@ -3949,6 +4112,80 @@ onBeforeUnmount(() => {
     align-items: start;
   }
 
+  .export-check-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .export-check-item {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--arena-line);
+    border-radius: 8px;
+    background: #ffffff;
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 11px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+
+    &.is-pass {
+      border-color: #b9e7cd;
+    }
+
+    &.is-warning {
+      border-color: #e8c898;
+      background: #fffaf1;
+    }
+  }
+
+  .export-check-item__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+
+    svg {
+      flex: 0 0 auto;
+      margin-top: 1px;
+      color: var(--arena-mut);
+    }
+
+    strong {
+      min-width: 0;
+      flex: 1 1 auto;
+      color: var(--arena-ink);
+      font-size: 11.5px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    span {
+      flex: 0 0 auto;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+  }
+
+  .export-check-item.is-pass .export-check-item__head svg {
+    color: var(--arena-grn);
+  }
+
+  .export-check-item.is-warning .export-check-item__head svg {
+    color: #9a5a10;
+  }
+
   .editor-aside {
     grid-column: 1;
     grid-row: 1;
@@ -3959,6 +4196,20 @@ onBeforeUnmount(() => {
 
   .editor-aside > .side-panel:not(.section-nav-card) {
     display: none;
+  }
+
+  .editor-aside > .export-check-panel {
+    display: grid;
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .export-check-panel .full-button {
+    min-height: 42px;
+    height: auto;
+    padding-block: 8px;
+    line-height: 1.4;
+    white-space: normal;
   }
 
   .section-nav-card {
@@ -4393,7 +4644,7 @@ onBeforeUnmount(() => {
     }
 
     .resume-template-strip .template-selector {
-      grid-template-columns: repeat(5, minmax(76px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
   }
 }
@@ -4449,7 +4700,7 @@ onBeforeUnmount(() => {
     }
 
     .resume-template-strip .template-selector > button {
-      flex: 0 0 86px;
+      flex: 0 0 min(290px, 82vw);
       scroll-snap-align: start;
     }
   }
@@ -4482,7 +4733,8 @@ onBeforeUnmount(() => {
     }
 
     .resume-workshop-ring,
-    .resume-workshop-hero__copy {
+    .resume-workshop-hero__copy,
+    .resume-document-status {
       display: none;
     }
 
@@ -4502,6 +4754,21 @@ onBeforeUnmount(() => {
 
     .resume-template-strip .template-selector {
       gap: 10px;
+    }
+
+    .resume-template-strip .template-selector > button {
+      grid-template-columns: 58px minmax(0, 1fr) auto;
+      flex-basis: min(272px, 84vw);
+      padding: 9px;
+
+      .template-thumb {
+        width: 58px;
+        height: 80px;
+      }
+
+      .template-facts div {
+        grid-template-columns: 46px minmax(0, 1fr);
+      }
     }
 
     .preview-column {

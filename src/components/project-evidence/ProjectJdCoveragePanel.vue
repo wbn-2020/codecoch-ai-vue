@@ -9,7 +9,10 @@
     </div>
 
     <div class="coverage-form">
-      <el-input-number v-model="targetJobId" :min="1" :controls="false" placeholder="目标岗位 ID" />
+      <div class="linked-job">
+        <strong>{{ targetJobId ? '默认使用已关联岗位' : '尚未关联目标岗位' }}</strong>
+        <span>{{ targetJobId ? '分析会直接使用项目证据关联的岗位上下文。' : '可粘贴 JD，或在高级设置中补充岗位关联。' }}</span>
+      </div>
       <el-button type="primary" :loading="analyzing" @click="handleAnalyze">
         <Search :size="16" />
         开始分析
@@ -21,6 +24,11 @@
       :rows="3"
       placeholder="可选：粘贴岗位描述。留空时将使用已关联目标岗位的分析结果。"
     />
+    <details class="coverage-advanced">
+      <summary>高级设置</summary>
+      <p>通常不需要填写数字 ID；仅在要临时切换关联岗位时调整。</p>
+      <el-input-number v-model="targetJobId" :min="1" :controls="false" placeholder="目标岗位 ID" />
+    </details>
 
     <div v-if="coverage" class="coverage-grid">
       <div class="coverage-block">
@@ -48,7 +56,7 @@
 
 <script setup lang="ts">
 import { Search } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { analyzeProjectJdCoverageApi } from '@/api/projectEvidence'
@@ -64,6 +72,14 @@ const targetJobId = ref<number | undefined>(props.defaultTargetJobId)
 const jdText = ref('')
 const analyzing = ref(false)
 const coverage = ref<ProjectJdCoverageVO | null>(null)
+
+watch(
+  () => props.defaultTargetJobId,
+  (value) => {
+    if (value && targetJobId.value !== value) targetJobId.value = value
+  },
+  { immediate: true }
+)
 
 const handleAnalyze = async () => {
   analyzing.value = true
@@ -111,7 +127,50 @@ h4 {
 
 .coverage-form {
   flex-wrap: wrap;
+  justify-content: space-between;
   margin-bottom: 10px;
+}
+
+.linked-job {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+
+  strong {
+    color: var(--app-text);
+    font-size: 14px;
+  }
+
+  span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
+}
+
+.coverage-advanced {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--arena-line);
+  border-radius: 8px;
+  background: var(--arena-bg);
+
+  summary {
+    color: var(--app-text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 8px 0 10px;
+    color: var(--app-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  :deep(.el-input-number) {
+    width: 100%;
+  }
 }
 
 .coverage-grid {
@@ -165,8 +224,14 @@ h4 {
     grid-template-columns: 1fr;
   }
 
-  .coverage-form :deep(.el-input-number) {
-    width: 100%;
+  .coverage-form {
+    align-items: stretch;
+    flex-direction: column;
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
   }
 }
 </style>

@@ -10,6 +10,9 @@ const routerPush = vi.hoisted(() => vi.fn())
 const routeHooks = vi.hoisted(() => ({
   beforeLeave: null as null | (() => Promise<void>)
 }))
+const routeState = vi.hoisted(() => ({
+  query: { voicePreflight: 'ready' } as Record<string, string>
+}))
 const liveConsole = vi.hoisted(() => ({
   cancelActiveAsr: vi.fn(),
   resetRealtimeVoice: vi.fn()
@@ -52,7 +55,7 @@ vi.mock('vue-router', () => ({
   },
   useRoute: () => ({
     params: { id: '42' },
-    query: {}
+    query: routeState.query
   }),
   useRouter: () => ({ push: routerPush })
 }))
@@ -201,6 +204,7 @@ describe('InterviewRoomView voice recording coordination', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     routeHooks.beforeLeave = null
+    routeState.query = { voicePreflight: 'ready' }
     routerPush.mockResolvedValue(undefined)
     liveConsole.cancelActiveAsr.mockResolvedValue(undefined)
     liveConsole.resetRealtimeVoice.mockResolvedValue(undefined)
@@ -215,6 +219,7 @@ describe('InterviewRoomView voice recording coordination', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: originalMediaDevices
@@ -239,6 +244,75 @@ describe('InterviewRoomView voice recording coordination', () => {
     expect(wrapper.find('.rail-overview').text()).toContain('训练进度')
     expect(wrapper.find('.room-feedback-drawer > summary').text()).toContain('本题反馈')
     expect(wrapper.find('.answer-console').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps the current question contract fixed above the scrollable question area', async () => {
+    routeState.query = {}
+    const wrapper = await mountRoom()
+
+    expect(wrapper.find('.question-briefbar').text()).toContain('第 1 题')
+    expect(wrapper.find('.question-briefbar').text()).toContain('文本作答（默认）')
+    expect(wrapper.find('.question-briefbar').text()).toContain('单题建议 03:00')
+    expect(wrapper.find('.voice-tool-summary').text()).toContain('语音未预检')
+    expect(wrapper.find('.voice-preflight-action').text()).toContain('开始 10 秒预检')
+    expect(wrapper.find('.answer-submit-action').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('exposes voice unavailability and text fallback when preflight cannot start', async () => {
+    routeState.query = {}
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: undefined
+    })
+    const wrapper = await mountRoom()
+
+    await wrapper.find('.voice-preflight-action').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.voice-tool-summary').text()).toContain('语音不可用')
+    expect(wrapper.find('.voice-preflight-panel').text()).toContain('使用文本回答')
+    wrapper.unmount()
+  })
+
+  it('finishes the 10 second preflight and releases the microphone stream', async () => {
+    routeState.query = {}
+    vi.useFakeTimers()
+    const stopTrack = vi.fn()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getAudioTracks: () => [{ readyState: 'live' }],
+          getTracks: () => [{ stop: stopTrack }]
+        })
+      }
+    })
+    vi.stubGlobal('MediaRecorder', class {})
+    const wrapper = await mountRoom()
+
+    await wrapper.find('.voice-preflight-action').trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(10_000)
+    await nextTick()
+
+    expect(wrapper.find('.voice-tool-summary').text()).toContain('语音已预检')
+    expect(stopTrack).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('removes the answer submit action when the report becomes the primary outcome', async () => {
+    interviewApi.getCurrentQuestion.mockResolvedValue({
+      interviewId: 42,
+      status: 'COMPLETED',
+      currentQuestion: null
+    })
+    const wrapper = await mountRoom()
+
+    expect(wrapper.find('.completion-primary-action').exists()).toBe(true)
+    expect(wrapper.find('.answer-submit-action').exists()).toBe(false)
+    expect(wrapper.find('.topbar-report-action').exists()).toBe(true)
     wrapper.unmount()
   })
 
