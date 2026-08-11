@@ -112,6 +112,8 @@ describe('AbilityMapView layout', () => {
     expect(wrapper.find('.priority-action-card.is-muted').exists()).toBe(true)
     expect(wrapper.findAll('.ability-node.is-unassessed')).toHaveLength(2)
     expect(wrapper.find('.ability-node.is-weak').exists()).toBe(false)
+    expect(wrapper.text()).toContain('评估证据不足')
+    expect(wrapper.text()).not.toContain('战力')
   })
 
   it('shows real weak and strong nodes after training data is available', async () => {
@@ -131,5 +133,18 @@ describe('AbilityMapView layout', () => {
     expect(routerPush).toHaveBeenCalledWith(expect.objectContaining({
       path: '/questions/practice'
     }))
+  })
+
+  it('shows a distinct query failure state instead of an empty directory', async () => {
+    vi.mocked(getAbilityMapApi).mockRejectedValueOnce(new Error('ability unavailable'))
+    const wrapper = mount(AbilityMapView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('能力图谱暂时加载失败')
+    expect(wrapper.text()).not.toContain('还没有能力评估目录')
   })
 })

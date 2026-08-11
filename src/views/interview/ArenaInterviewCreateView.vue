@@ -1,13 +1,13 @@
 <template>
   <div class="arena arena-iv">
     <div class="arena-iv__page">
-      <!-- 方向 D 首屏只承载副本选择，推荐依据和微调留在后续折叠区。 -->
+      <!-- 首屏只承载模拟形式选择，推荐依据和微调留在后续折叠区。 -->
       <div class="arena-between arena-iv__head">
         <div>
-          <div class="arena-iv__kicker">第 1 步 · 选副本</div>
-          <h1 class="arena-h1 arena-iv__title">今晚打哪个副本？ <span aria-hidden="true">🎤</span></h1>
+          <div class="arena-iv__kicker">第 1 步 · 选择模拟形式</div>
+          <h1 class="arena-h1 arena-iv__title">开始一场模拟面试 <span aria-hidden="true">🎤</span></h1>
           <p class="arena-p" style="margin-top: 6px; max-width: 620px">
-            完成任意一场 +200 XP，计入「3 场模拟面试」Offer 清单。
+            选择适合当前目标的场景，完成后将生成面试复盘报告。
           </p>
         </div>
         <div class="arena-row" style="flex-wrap: wrap">
@@ -17,17 +17,17 @@
         </div>
       </div>
 
-      <!-- 推荐计划保留为辅助入口，首屏先让用户完成副本选择。 -->
+      <!-- 推荐计划保留为辅助入口，首屏先让用户完成模拟形式选择。 -->
       <details v-if="configExpanded" class="arena-card arena-iv__boss">
-        <summary>推荐副本与依据</summary>
+        <summary>推荐面试方案与依据</summary>
         <div class="arena-iv__boss-main">
           <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-            <span class="arena-chip arena-chip--grn-solid">👑 Boss 副本 · 推荐</span>
+            <span class="arena-chip arena-chip--grn-solid">推荐面试方案</span>
             <span class="arena-chip" :class="quickTrustChipClass">{{ quickRecommendationTrustLabel }}</span>
             <span class="arena-chip" :class="voicePreflightReady ? 'arena-chip--grn' : 'arena-chip--mut'">
               {{ voicePreflightReady ? '语音设备已预检' : '语音可选' }}
             </span>
-            <span class="arena-xp-tag">通关 +200 XP</span>
+            <span class="arena-xp-tag">完成后生成复盘</span>
           </div>
           <h2 class="arena-h2" style="margin-top: 13px">{{ quickInterviewTitle }}</h2>
           <p class="arena-p" style="margin-top: 8px">{{ quickInterviewDesc }}</p>
@@ -94,7 +94,7 @@
             :disabled="creating || resumeLoading || matchReportVerifyLoading"
             @click="handleQuickCreate"
           >
-            {{ creating ? '创建中…' : '⚔ 开始推荐面试' }}
+            {{ creating ? '创建中…' : '开始推荐面试' }}
           </button>
           <button class="arena-btn arena-btn--sec" style="padding: 11px 16px; font-size: 13px; width: 100%" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
             ✦ 使用推荐并微调
@@ -110,7 +110,7 @@
 
       <div class="arena-iv__grid">
         <div class="arena-col">
-          <!-- 副本选择 -->
+          <!-- 模拟形式选择 -->
           <div class="arena-card arena-iv__panel">
             <div class="arena-between">
               <span class="arena-tiny">根据简历、JD 与训练记录给出推荐。</span>
@@ -126,8 +126,8 @@
               >
                 <div class="arena-between">
                   <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
-                  <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
-                  <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
+                  <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐方案</span>
+                  <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">已选择</span>
                 </div>
                 <b>{{ item.title }}</b>
                 <small>{{ item.desc }}</small>
@@ -141,7 +141,7 @@
 
             <div class="arena-iv__selection-summary">
               <div>
-                <span class="arena-chip arena-chip--grn">当前副本</span>
+                <span class="arena-chip arena-chip--grn">当前选择</span>
                 <b>{{ selectedModeTitle }}</b>
                 <p>{{ selectedModeDesc }}</p>
                 <p class="arena-tiny">上下文：{{ selectedResumeName }} · {{ form.targetPosition || '通用岗位' }}</p>
@@ -153,7 +153,7 @@
                   :disabled="creating || resumeLoading || matchReportVerifyLoading"
                   @click="handleQuickCreate"
                 >
-                  {{ creating ? '创建中…' : '⚔ 开始面试' }}
+                  {{ creating ? '创建中…' : '开始面试' }}
                 </button>
                 <button class="arena-btn arena-btn--sec" type="button" @click="toggleConfigExpanded">
                   微调
@@ -307,7 +307,7 @@
 
                 <div class="arena-row" style="margin-top: 16px; flex-wrap: wrap">
                   <button type="button" class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
-                    {{ creating ? '创建中…' : '⚔ 按当前计划开始' }}
+                    {{ creating ? '创建中…' : '按当前计划开始' }}
                   </button>
                   <button type="button" class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13px" :disabled="creating" @click="applyQuickRecommendation">
                     恢复推荐计划
@@ -331,8 +331,8 @@
                 >
                   <div class="arena-between">
                     <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
-                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
-                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
+                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐方案</span>
+                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">已选择</span>
                   </div>
                   <b>{{ item.title }}</b>
                   <small>{{ item.desc }}</small>
@@ -357,7 +357,7 @@
         <!-- 右栏 -->
         <div class="arena-col">
           <div class="arena-card arena-iv__panel">
-            <div class="arena-h3">本轮闯关流程</div>
+            <div class="arena-h3">本轮面试流程</div>
             <div class="arena-iv__wizard">
               <article v-for="(step, index) in wizardSteps" :key="step.title" :class="{ 'is-active': index === 0 }">
                 <span>{{ index + 1 }}</span>
@@ -571,7 +571,7 @@ const modeCards: ModeCard[] = [
     key: 'full',
     title: '全真模拟',
     desc: '按正式节奏覆盖技术、项目和岗位场景，完成一场完整面试。',
-    badge: 'Boss 战',
+    badge: '完整流程',
     value: INTERVIEW_MODE.COMPREHENSIVE,
     icon: Target,
     forceResume: true,
@@ -977,7 +977,7 @@ const wizardSteps = computed(() => [
   { title: '开始训练', desc: '创建后直接进入面试房间' }
 ])
 
-// ---- 副本卡片展示 ----
+// ---- 模拟形式卡片展示 ----
 const recommendedModeKey = computed(() => {
   const payload = quickRecommendation.value.payload
   const mode = modeCards.find((item) => item.value === payload.interviewMode && item.forceResume === Boolean(payload.resumeId))

@@ -29,7 +29,15 @@
         show-icon
       />
 
-      <section class="analytics-metric-grid" v-loading="loading">
+      <AppState
+        v-if="isInitialLoading"
+        type="loading"
+        title="正在生成训练分析"
+        description="正在汇总任务趋势、训练时长和技能证据。"
+      />
+
+      <template v-else>
+      <section class="analytics-metric-grid">
         <article v-for="item in metrics" :key="item.key" class="analytics-metric-card">
           <div class="metric-icon" :class="item.tone">
             <component :is="item.icon" :size="18" />
@@ -49,15 +57,24 @@
               <span>按日期展示生成、完成、跳过和训练耗时</span>
             </div>
           </div>
-          <div v-if="!trend.length && !loading" class="empty-inline">
+          <AppState
+            v-if="trendError"
+            type="error"
+            title="任务趋势暂时不可用"
+            :description="trendError"
+          >
+            <div class="empty-actions">
+              <el-button type="primary" @click="loadPage">重新加载</el-button>
+            </div>
+          </AppState>
+          <div v-else-if="!trend.length" class="empty-inline">
             <AppState
               type="empty"
-              title="还没有训练趋势"
-              description="完成今日任务或题库练习后，这里会按日期展示生成、完成和耗时。"
+              :title="trendEmptyState.title"
+              :description="trendEmptyState.description"
             >
               <div class="empty-actions">
                 <el-button type="primary" @click="goTodayPlan">去今日计划</el-button>
-                <el-button @click="goQuestionTraining">练一组题</el-button>
               </div>
             </AppState>
           </div>
@@ -81,19 +98,29 @@
               <strong>{{ item.value }}</strong>
             </div>
             <AppState
-              v-if="!skillDistribution.length && !loading"
+              v-if="skillError"
+              type="error"
+              title="技能分布暂时不可用"
+              :description="skillError"
+            >
+              <div class="empty-actions">
+                <el-button type="primary" @click="loadPage">重新加载</el-button>
+              </div>
+            </AppState>
+            <AppState
+              v-else-if="!skillDistribution.length"
               type="empty"
-              title="还没有技能分布"
-              description="完成带技能标签的练习、错题复盘或模拟面试后，这里会汇总重点技能。"
+              :title="skillEmptyState.title"
+              :description="skillEmptyState.description"
             >
               <div class="empty-actions">
                 <el-button type="primary" @click="goQuestionTraining">进入题库训练</el-button>
-                <el-button @click="goInterviewCreate">创建模拟面试</el-button>
               </div>
             </AppState>
           </div>
         </div>
       </section>
+      </template>
     </template>
   </div>
 </template>
@@ -114,6 +141,7 @@ import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
+const hasLoadedPage = ref(false)
 const router = useRouter()
 const errorMessage = ref('')
 const partialErrors = ref<string[]>([])
@@ -121,6 +149,9 @@ const rangeDays = ref(7)
 const overview = ref<PersonalAgentOverviewVO>()
 const trend = ref<TrendPointVO[]>([])
 const skillDistribution = ref<MetricPointVO[]>([])
+const overviewError = ref('')
+const trendError = ref('')
+const skillError = ref('')
 const trendChartRef = ref<HTMLElement>()
 let trendChart: ECharts | null = null
 let analyticsMounted = false
@@ -141,23 +172,92 @@ const formatWaitSeconds = (durationMs?: number) => {
 
 const analyticsLoadErrorText = '分析数据暂时加载失败，请稍后重试。'
 
-const metrics = computed(() => [
-  { key: 'today', label: '今日任务', value: overview.value?.todayTaskCount || 0, hint: `完成 ${overview.value?.todayDoneCount || 0} / 跳过 ${overview.value?.todaySkippedCount || 0}`, icon: Target, tone: 'tone-blue' },
-  { key: 'minutes', label: '今日预计耗时', value: formatMinutes(overview.value?.todayEstimatedMinutes), hint: '来自今日训练任务', icon: Timer, tone: 'tone-cyan' },
-  { key: 'week', label: '近 7 天完成率', value: `${overview.value?.last7DaysCompletionRate || 0}%`, hint: `${overview.value?.last7DaysDoneCount || 0}/${overview.value?.last7DaysTaskCount || 0} 个任务`, icon: CheckCircle2, tone: 'tone-green' },
-  { key: 'agent', label: '今日计划成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: formatWaitSeconds(overview.value?.avgAgentDurationMs), icon: Sparkles, tone: 'tone-violet' }
-])
+const hasRecentTaskSample = computed(() => (overview.value?.last7DaysTaskCount || 0) > 0)
+const hasAgentPlanSample = computed(() =>
+  (overview.value?.totalAgentPlanCount || 0) > 0 || (overview.value?.agentGeneratedTaskCount || 0) > 0
+)
+const isInitialLoading = computed(() => loading.value && !hasLoadedPage.value)
+
+const metrics = computed(() => {
+  if (!overview.value) {
+    return [
+      { key: 'today', label: '今日任务', value: '暂不可用', hint: overviewError.value || '训练总览暂时不可用', icon: Target, tone: 'tone-blue' },
+      { key: 'minutes', label: '今日预计耗时', value: '暂不可用', hint: overviewError.value || '训练总览暂时不可用', icon: Timer, tone: 'tone-cyan' },
+      { key: 'week', label: '近 7 天完成率', value: '待生成', hint: overviewError.value || '尚未取得可用训练样本', icon: CheckCircle2, tone: 'tone-green' },
+      { key: 'agent', label: '计划执行情况', value: '待生成', hint: overviewError.value || '尚未取得可用计划样本', icon: Sparkles, tone: 'tone-violet' }
+    ]
+  }
+
+  const todayTaskCount = overview.value.todayTaskCount || 0
+  return [
+    {
+      key: 'today',
+      label: '今日任务',
+      value: todayTaskCount,
+      hint: todayTaskCount
+        ? `完成 ${overview.value.todayDoneCount || 0} / 跳过 ${overview.value.todaySkippedCount || 0}`
+        : '今天没有安排训练任务',
+      icon: Target,
+      tone: 'tone-blue'
+    },
+    {
+      key: 'minutes',
+      label: '今日预计耗时',
+      value: formatMinutes(overview.value.todayEstimatedMinutes),
+      hint: todayTaskCount ? '来自今日训练任务' : '当前没有需要安排的训练时长',
+      icon: Timer,
+      tone: 'tone-cyan'
+    },
+    {
+      key: 'week',
+      label: '近 7 天完成率',
+      value: hasRecentTaskSample.value ? `${overview.value.last7DaysCompletionRate || 0}%` : '待生成',
+      hint: hasRecentTaskSample.value
+        ? `${overview.value.last7DaysDoneCount || 0}/${overview.value.last7DaysTaskCount || 0} 个任务`
+        : '近 7 天尚无可分析的训练样本',
+      icon: CheckCircle2,
+      tone: 'tone-green'
+    },
+    {
+      key: 'agent',
+      label: '计划执行情况',
+      value: hasAgentPlanSample.value ? `${overview.value.agentSuccessRate || 0}%` : '待生成',
+      hint: hasAgentPlanSample.value
+        ? formatWaitSeconds(overview.value.avgAgentDurationMs)
+        : '尚无可分析的计划执行样本',
+      icon: Sparkles,
+      tone: 'tone-violet'
+    }
+  ]
+})
 
 const maxSkillValue = computed(() => Math.max(...skillDistribution.value.map((item) => item.value || 0), 1))
 const partialErrorMessage = computed(() =>
   partialErrors.value.length ? `部分分析数据暂时不可用：${partialErrors.value.join('；')}` : ''
 )
+const trendEmptyState = computed(() => hasRecentTaskSample.value
+  ? {
+      title: '所选周期没有训练记录',
+      description: '该时间范围内没有生成或完成的训练任务，当前为空是正常结果。'
+    }
+  : {
+      title: '尚无可分析的训练样本',
+      description: '完成今日任务或题库练习后，这里会按日期展示生成、完成和耗时。'
+    })
+const skillEmptyState = computed(() => hasRecentTaskSample.value
+  ? {
+      title: '暂无可归因的技能样本',
+      description: '已有训练记录，但尚未关联到技能标签；完成带标签的练习后会在这里汇总。'
+    }
+  : {
+      title: '尚无技能证据',
+      description: '完成带技能标签的练习、错题复盘或模拟面试后，这里会汇总重点技能。'
+    })
 
 const barWidth = (value?: number) => `${Math.max(6, ((value || 0) / maxSkillValue.value) * 100)}%`
 
 const goTodayPlan = () => router.push('/agent/today')
 const goQuestionTraining = () => router.push('/questions/recommendations')
-const goInterviewCreate = () => router.push('/interviews/create')
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -231,6 +331,9 @@ const loadPage = async () => {
   loading.value = true
   errorMessage.value = ''
   partialErrors.value = []
+  overviewError.value = ''
+  trendError.value = ''
+  skillError.value = ''
   try {
     const params = { days: rangeDays.value }
     const [overviewResult, trendResult, skillResult] = await Promise.allSettled([
@@ -243,21 +346,24 @@ const loadPage = async () => {
       overview.value = overviewResult.value
     } else {
       overview.value = undefined
-      partialErrors.value.push(`训练总览加载失败：${getErrorMessage(overviewResult.reason)}`)
+      overviewError.value = getErrorMessage(overviewResult.reason)
+      partialErrors.value.push(`训练总览加载失败：${overviewError.value}`)
     }
 
     if (trendResult.status === 'fulfilled') {
       trend.value = trendResult.value
     } else {
       trend.value = []
-      partialErrors.value.push(`任务趋势加载失败：${getErrorMessage(trendResult.reason)}`)
+      trendError.value = getErrorMessage(trendResult.reason)
+      partialErrors.value.push(`任务趋势加载失败：${trendError.value}`)
     }
 
     if (skillResult.status === 'fulfilled') {
       skillDistribution.value = skillResult.value
     } else {
       skillDistribution.value = []
-      partialErrors.value.push(`技能分布加载失败：${getErrorMessage(skillResult.reason)}`)
+      skillError.value = getErrorMessage(skillResult.reason)
+      partialErrors.value.push(`技能分布加载失败：${skillError.value}`)
     }
 
     if (partialErrors.value.length === 3) {
@@ -270,9 +376,13 @@ const loadPage = async () => {
     trend.value = []
     skillDistribution.value = []
     partialErrors.value = []
+    overviewError.value = ''
+    trendError.value = ''
+    skillError.value = ''
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
+    hasLoadedPage.value = true
   }
 }
 

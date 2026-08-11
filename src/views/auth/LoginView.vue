@@ -1,10 +1,5 @@
 <template>
   <main class="arena login-page">
-    <span class="login-floaty" style="top: 14%; left: 6%">🔥</span>
-    <span class="login-floaty login-floaty--sm" style="top: 62%; left: 4%; animation-delay: 1.4s">⚡</span>
-    <span class="login-floaty login-floaty--sm" style="top: 20%; right: 6%; animation-delay: 0.8s">🎯</span>
-    <span class="login-floaty" style="bottom: 12%; right: 9%; animation-delay: 2.1s">🎁</span>
-
     <header class="login-brand">
       <div class="login-brand__logo">
         <span class="login-brand__cube">C</span>
@@ -17,13 +12,13 @@
 
     <div class="login-grid">
       <section class="login-hero">
-        <span class="arena-chip arena-chip--amber">把备战变成每天想刷的闯关</span>
+        <span class="arena-chip arena-chip--amber">围绕目标岗位，系统完成每一步准备</span>
         <h1 class="login-hero__title">
-          升级你的<br />
-          <span class="login-hero__accent">面试战斗力</span>
+          有条理地准备<br />
+          <span class="login-hero__accent">每一场面试</span>
         </h1>
         <p class="arena-p login-hero__sub">
-          每天 15 分钟，刷题、练面试、攒战力。看着自己的 Offer 就绪度一路涨上去。
+          每天投入一点时间，整理简历、匹配岗位、专项训练并完成模拟面试。
         </p>
 
         <div class="arena-card login-hero__power" aria-label="示例成长面板预览">
@@ -33,23 +28,23 @@
           >
             <div class="arena-ring__hole" style="width: 50px; height: 50px">
               <b style="font-size: 16px; line-height: 1">68</b>
-              <span class="arena-tiny" style="font-size: 8.5px; font-weight: 700">战力</span>
+              <span class="arena-tiny" style="font-size: 8.5px; font-weight: 700">准备度</span>
             </div>
           </div>
           <div>
             <div class="arena-row" style="gap: 7px">
-              <b style="font-size: 14px">示例 · LV.6 面试新星</b>
-              <span class="arena-chip arena-chip--amber" style="font-size: 10px">示例 6 连胜</span>
+              <b style="font-size: 14px">示例 · 求职准备进行中</b>
+              <span class="arena-chip arena-chip--amber" style="font-size: 10px">已完成 6 项</span>
             </div>
             <div class="arena-xpbar" style="margin-top: 6px; width: 180px"><i style="width: 70%"></i></div>
-            <div class="arena-tiny" style="margin-top: 5px">登录后显示你的真实进度</div>
+            <div class="arena-tiny" style="margin-top: 5px">登录后查看你的真实准备进度</div>
           </div>
         </div>
       </section>
 
       <section class="arena-card login-card">
-        <h2 class="login-card__title">继续闯关</h2>
-        <p class="arena-p login-card__sub">每天 15 分钟，把连胜续下去。</p>
+        <h2 class="login-card__title">登录继续准备</h2>
+        <p class="arena-p login-card__sub">从今天的重点任务开始，持续推进求职计划。</p>
 
         <el-alert
           v-if="errorMessage"
@@ -89,7 +84,7 @@
             :disabled="loading"
             @click="handleSubmit"
           >
-            进入竞技场
+            进入工作台
           </el-button>
           <el-button
             v-if="hasDemoAccount"
@@ -292,27 +287,6 @@ watch(
     #f5f7f4;
 }
 
-.login-floaty {
-  position: absolute;
-  z-index: 0;
-  font-size: 26px;
-  opacity: 0.5;
-  pointer-events: none;
-  animation: loginFloaty 7s ease-in-out infinite;
-}
-.login-floaty--sm {
-  font-size: 20px;
-}
-@keyframes loginFloaty {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-4deg);
-  }
-  50% {
-    transform: translateY(-14px) rotate(5deg);
-  }
-}
-
 .login-brand {
   position: relative;
   z-index: 1;
@@ -510,12 +484,6 @@ watch(
   background: var(--arena-line);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .login-floaty {
-    animation: none;
-  }
-}
-
 @media (max-width: 860px) {
   .login-grid {
     grid-template-columns: 1fr;
@@ -530,9 +498,6 @@ watch(
   }
   .login-hero__power {
     max-width: none;
-  }
-  .login-floaty {
-    display: none;
   }
 }
 </style>

@@ -2,8 +2,8 @@
   <div class="arena arena-tools records-tools-page page-shell">
     <div class="arena-tools__page">
       <header class="arena-tools__head">
-        <h1 class="arena-h1">背包与仓库 <span aria-hidden="true">🧰</span></h1>
-        <p class="arena-p">主线闯关之外的能力，都收在这里。</p>
+        <h1 class="arena-h1">求职资料与工具</h1>
+        <p class="arena-p">集中管理投递安排、求职资料和成长分析入口。</p>
       </header>
 
       <div class="arena-tools__grid">
@@ -86,7 +86,7 @@ const router = useRouter()
 const groups: ToolGroup[] = [
   {
     key: 'progress',
-    title: '进度',
+    title: '投递管理',
     icon: '📈',
     items: [
       { title: '投递管理', description: '1 条推进中 · 无逾期', path: '/applications', icon: '📮' },
@@ -95,8 +95,8 @@ const groups: ToolGroup[] = [
   },
   {
     key: 'assets',
-    title: '资产',
-    icon: '🎒',
+    title: '求职资料',
+    icon: '🗂',
     items: [
       { title: '项目证据库', description: '沉淀可追问的项目素材', path: '/project-evidence', icon: '🗂' },
       { title: '投递包', description: '组合简历、材料与导出', path: '/application-packages', icon: '📦' },
@@ -111,10 +111,10 @@ const groups: ToolGroup[] = [
   },
   {
     key: 'growth',
-    title: '成长',
+    title: '成长分析',
     icon: '🌱',
     items: [
-      { title: '能力图谱', description: '技能树 · 已点亮 9/14', path: '/ability-map', icon: '🌳' },
+      { title: '能力图谱', description: '查看能力结构与待补充项', path: '/ability-map', icon: '🌳' },
       {
         title: '求职周报',
         description: '本周事实、变化与下一步',

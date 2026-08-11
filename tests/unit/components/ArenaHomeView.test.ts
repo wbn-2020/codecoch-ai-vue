@@ -97,16 +97,16 @@ describe('ArenaHomeView', () => {
     }
   })
 
-  it('renders three missions with boss and side quests from real agent tasks', async () => {
+  it('renders a priority task and follow-up tasks from real agent tasks', async () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('第 1 关 · Boss')
+    expect(wrapper.text()).toContain('今日优先任务')
     expect(wrapper.text()).toContain('做出一份能匹配的简历')
-    expect(wrapper.text()).toContain('+150 经验')
-    expect(wrapper.text()).toContain('支线 2')
+    expect(wrapper.text()).toContain('约 8 分钟')
+    expect(wrapper.text()).toContain('后续任务 1')
     expect(wrapper.text()).toContain('贴一段目标 JD')
-    expect(wrapper.text()).toContain('支线 3')
+    expect(wrapper.text()).toContain('后续任务 2')
     expect(wrapper.text()).toContain('轻量技术面 5 题')
   })
 
@@ -115,9 +115,9 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('今天还没有关卡，先开第一关')
+    expect(wrapper.text()).toContain('今天还没有任务，先安排第一项')
     // mock 概览中已有简历（resumeCount=1），主行动为生成今日计划
-    expect(wrapper.text()).toContain('去生成今日计划')
+    expect(wrapper.text()).toContain('生成今日计划')
   })
 
   it('keeps an all-DONE Agent plan as completed instead of an ungenerated plan', async () => {
@@ -133,7 +133,7 @@ describe('ArenaHomeView', () => {
 
     expect(wrapper.text()).toContain('今天的训练已全部完成')
     expect(wrapper.text()).toContain('查看今日完成记录')
-    expect(wrapper.text()).not.toContain('今天还没有关卡，先开第一关')
+    expect(wrapper.text()).not.toContain('今天还没有任务，先安排第一项')
   })
 
   it('falls back to resume creation when the user has no resume', async () => {
@@ -142,27 +142,30 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('8 分钟创建简历')
+    expect(wrapper.text()).toContain('创建简历')
   })
 
-  it('completes a mission via the real api and banks xp into game profile', async () => {
+  it('completes a task via the real api and updates progress state', async () => {
     const gameProfile = useGameProfileStore()
     const wrapper = mountHome()
     await flush()
 
-    const completeButtons = wrapper.findAll('button').filter((btn) => btn.text().includes('已完成，收下经验'))
-    expect(completeButtons.length).toBe(1)
-    await completeButtons[0].trigger('click')
+    const primaryCompleteButton = wrapper
+      .get('.arena-home__boss')
+      .findAll('button')
+      .find((btn) => btn.text().includes('标记为已完成'))
+    expect(primaryCompleteButton).toBeTruthy()
+    await primaryCompleteButton!.trigger('click')
     await flush()
 
-    expect(completeAgentTaskApi).toHaveBeenCalledWith(11, { note: '用户在竞技场首页标记完成' })
+    expect(completeAgentTaskApi).toHaveBeenCalledWith(11, { note: '用户在今日任务页标记完成' })
     expect(gameProfile.xp).toBe(150)
     expect(gameProfile.streakDays).toBe(1)
     expect(gameProfile.todayMissionDone).toBe(1)
     expect(wrapper.text()).not.toContain('做出一份能匹配的简历')
   })
 
-  it('grants the daily chest after all missions are done', async () => {
+  it('updates the daily completion record after all tasks are done', async () => {
     todayTasks.value = {
       tasks: [
         { id: 21, title: '唯一一关', status: 'TODO', taskType: 'JOB_TARGET', estimatedMinutes: 5 }
@@ -173,13 +176,13 @@ describe('ArenaHomeView', () => {
     await flush()
 
     expect(wrapper.text()).toContain('唯一一关')
-    await wrapper.findAll('button').find((btn) => btn.text().includes('已完成，收下经验'))!.trigger('click')
+    await wrapper.findAll('button').find((btn) => btn.text().includes('标记为已完成'))!.trigger('click')
     await flush()
 
     expect(gameProfile.chestReady).toBe(true)
-    expect(wrapper.text()).toContain('今日宝箱可以开了')
+    expect(wrapper.text()).toContain('今日任务已全部完成')
 
-    const chestButton = wrapper.findAll('button').find((btn) => btn.text().includes('开箱'))
+    const chestButton = wrapper.findAll('button').find((btn) => btn.text().includes('确认完成'))
     expect(chestButton).toBeTruthy()
     await chestButton!.trigger('click')
     await flush()

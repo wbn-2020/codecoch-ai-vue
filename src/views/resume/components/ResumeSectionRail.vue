@@ -2,13 +2,15 @@
   <aside class="resume-section-rail" aria-label="简历区块">
     <div class="resume-section-rail__heading">
       <div>
-        <strong>简历内容</strong>
-        <span>{{ completedCount }}/{{ items.length }} 个区块已完善</span>
+        <strong>填写进度</strong>
+        <span v-if="hasStarted">{{ completedCount }}/{{ items.length }} 个区块已完善</span>
+        <span v-else>从基本信息开始</span>
       </div>
-      <span>{{ completion }}%</span>
+      <span v-if="hasStarted">{{ completion }}%</span>
+      <span v-else class="is-pending">待填写</span>
     </div>
 
-    <div class="resume-section-rail__progress" aria-hidden="true">
+    <div v-if="hasStarted" class="resume-section-rail__progress" aria-hidden="true">
       <i :style="{ width: `${completion}%` }"></i>
     </div>
 
@@ -31,11 +33,12 @@
     </nav>
 
     <div class="resume-section-rail__review">
-      <strong>导出准备</strong>
-      <span>{{ exportReadyCount }}/{{ exportTotal }} 项通过</span>
+      <strong>下一步：检查</strong>
+      <span v-if="hasStarted">{{ exportReadyCount }}/{{ exportTotal }} 项通过</span>
+      <span v-else>填写后检查完整度</span>
       <button type="button" @click="emit('review')">
         <ClipboardCheck :size="16" aria-hidden="true" />
-        查看检查结果
+        开始检查
       </button>
     </div>
   </aside>
@@ -65,6 +68,7 @@ const props = defineProps<{
   items: SectionItem[]
   activeId: string
   completion: number
+  hasStarted: boolean
   exportReadyCount: number
   exportTotal: number
 }>()
@@ -125,6 +129,11 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
     color: var(--resume-workbench-success);
     font-size: 11px;
     font-weight: 700;
+
+    &.is-pending {
+      background: var(--resume-workbench-surface-soft);
+      color: var(--resume-workbench-muted);
+    }
   }
 }
 

@@ -1,11 +1,11 @@
 <template>
   <div class="arena arena-home">
     <div class="arena-home__page">
-      <!-- 页头：问候 + 战力 -->
+      <!-- 页头：问候 + 求职准备度 -->
       <div class="arena-between arena-home__head">
         <div>
           <div class="arena-home__level">
-            LV.{{ gameProfile.levelInfo.level }} {{ gameProfile.levelInfo.title }} · {{ weekdayLabel }}
+            求职准备 · {{ weekdayLabel }}
           </div>
           <h1 class="arena-h1 arena-home__title">{{ greetingName }}，{{ headTitle }} 🎯</h1>
         </div>
@@ -20,13 +20,13 @@
           >
             <div class="arena-ring__hole" style="width: 44px; height: 44px">
               <b style="font-size: 15px; line-height: 1">{{ power }}</b>
-              <span class="arena-tiny" style="font-size: 8px; font-weight: 800">战力</span>
+              <span class="arena-tiny" style="font-size: 8px; font-weight: 800">准备度</span>
             </div>
           </div>
           <div>
             <div style="font-size: 12px; font-weight: 800">Offer 就绪度</div>
             <div class="arena-tiny" style="margin-top: 2px">
-              再得 {{ gameProfile.levelInfo.nextLevelXp - gameProfile.levelInfo.curLevelXp }} 经验到 LV.{{ gameProfile.levelInfo.level + 1 }}
+              完成下一项重点任务，持续完善求职准备
             </div>
           </div>
         </div>
@@ -39,7 +39,7 @@
 
       <!-- 错误态 -->
       <div v-else-if="loadError" class="arena-card arena-home__error">
-        <b>今天的关卡没加载出来</b>
+        <b>今日任务未能加载</b>
         <p class="arena-p">不影响已有进度，刷新重试一下。</p>
         <button class="arena-btn arena-btn--pri" style="padding: 11px 22px" @click="loadAll(true)">重新加载</button>
       </div>
@@ -54,14 +54,14 @@
                 <span class="arena-tiny">{{ allAgentTasksDone ? `业务日 ${businessDate}` : '约 8 分钟起步' }}</span>
               </div>
               <h2 class="arena-h2" style="margin-top: 13px">
-                {{ allAgentTasksDone ? '今天的训练已全部完成' : '今天还没有关卡，先开第一关' }}
+                {{ allAgentTasksDone ? '今天的训练已全部完成' : '今天还没有任务，先安排第一项' }}
               </h2>
               <p class="arena-p" style="margin-top: 9px">
                 {{ allAgentTasksDone
                   ? '今日 Agent 任务均已记录为完成，可以查看完成记录或等待下一业务日。'
                   : hasResume
-                    ? '生成今日计划，AI 教练按你的目标岗位排好今天三关。'
-                    : '做出一份能匹配的简历，解锁 JD 精准匹配，之后的题目都会贴着你的项目走。' }}
+                    ? '生成今日计划，AI 教练会根据目标岗位安排重点任务。'
+                    : '先完成一份可用简历，再根据岗位要求进行匹配与训练。' }}
               </p>
               <div class="arena-row" style="margin-top: 18px">
                 <button
@@ -69,17 +69,17 @@
                   style="padding: 13px 24px"
                   @click="go(allAgentTasksDone || hasResume ? '/agent/today' : '/resumes')"
                 >
-                  ⚔ {{ allAgentTasksDone ? '查看今日完成记录' : hasResume ? '去生成今日计划' : '8 分钟创建简历' }}
+                  {{ allAgentTasksDone ? '查看今日完成记录' : hasResume ? '生成今日计划' : '创建简历' }}
                 </button>
                 <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" @click="go('/questions/recommendations')">
                   先热身 5 题
                 </button>
               </div>
             </div>
-            <div v-if="!allAgentTasksDone" class="arena-home__side-grid arena-home__side-grid--empty" aria-label="待生成的支线任务">
+            <div v-if="!allAgentTasksDone" class="arena-home__side-grid arena-home__side-grid--empty" aria-label="待生成的后续任务">
               <div class="arena-card arena-home__side">
                 <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">支线 2</span>
+                  <span class="arena-chip arena-chip--grn">后续任务</span>
                   <span class="arena-xp-tag">待生成</span>
                 </div>
                 <div class="arena-h3" style="margin-top: 11px">岗位关键词整理</div>
@@ -90,24 +90,23 @@
               </div>
               <div class="arena-card arena-home__side">
                 <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">支线 3</span>
+                  <span class="arena-chip arena-chip--grn">后续任务</span>
                   <span class="arena-xp-tag">待生成</span>
                 </div>
                 <div class="arena-h3" style="margin-top: 11px">专项训练准备</div>
-                <div class="arena-tiny" style="margin-top: 3px">完成前置关卡后自动出现</div>
-                <span class="arena-home__placeholder-status" aria-label="专项训练准备将在完成前置关卡后出现">
-                  完成前置关卡后出现
+                <div class="arena-tiny" style="margin-top: 3px">完成前置任务后自动出现</div>
+                <span class="arena-home__placeholder-status" aria-label="专项训练准备将在完成前置任务后出现">
+                  完成前置任务后出现
                 </span>
               </div>
             </div>
           </template>
 
           <template v-else>
-            <!-- Boss 关 -->
+            <!-- 今日优先任务 -->
             <div class="arena-card arena-card--hero arena-home__boss">
               <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                <span class="arena-chip arena-chip--grn-solid">第 1 关 · Boss</span>
-                <span class="arena-chip arena-chip--line">+{{ missions[0].xp }} 经验</span>
+                <span class="arena-chip arena-chip--grn-solid">今日优先任务</span>
                 <span class="arena-tiny">约 {{ missions[0].minutes }} 分钟</span>
               </div>
               <h2 class="arena-h2" style="margin-top: 13px">{{ missions[0].title }}</h2>
@@ -119,7 +118,7 @@
                   :disabled="completingId === missions[0].id"
                   @click="enterMission(missions[0])"
                 >
-                  ⚔ 开始闯关
+                  开始处理
                 </button>
                 <button
                   class="arena-btn arena-btn--sec"
@@ -127,7 +126,7 @@
                   :disabled="completingId === missions[0].id"
                   @click="completeMission(missions[0])"
                 >
-                  {{ completingId === missions[0].id ? '正在入账…' : '已完成，收下经验' }}
+                  {{ completingId === missions[0].id ? '正在保存…' : '标记为已完成' }}
                 </button>
                 <button
                   class="arena-btn arena-btn--sec"
@@ -139,12 +138,12 @@
               </div>
             </div>
 
-            <!-- 支线 -->
+            <!-- 后续任务 -->
             <div v-if="sideMissions.length" class="arena-home__side-grid">
               <div v-for="(m, idx) in sideMissions" :key="m.id" class="arena-card arena-home__side">
                 <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">支线 {{ idx + 2 }}</span>
-                  <span class="arena-xp-tag">+{{ m.xp }}</span>
+                  <span class="arena-chip arena-chip--grn">后续任务 {{ idx + 1 }}</span>
+                  <span class="arena-xp-tag">约 {{ m.minutes }} 分钟</span>
                 </div>
                 <div class="arena-h3" style="margin-top: 11px">{{ m.title }}</div>
                 <div class="arena-tiny" style="margin-top: 3px">{{ m.reason }} · {{ m.minutes }} 分钟</div>
@@ -155,22 +154,22 @@
                     :disabled="completingId === m.id"
                     @click="completeMission(m)"
                   >
-                    {{ completingId === m.id ? '正在入账…' : '完成支线' }}
+                    {{ completingId === m.id ? '正在保存…' : '标记为已完成' }}
                   </button>
                 </div>
               </div>
             </div>
           </template>
 
-          <!-- 每日宝箱 -->
+          <!-- 每日任务进度 -->
           <div class="arena-card arena-card--treasure arena-home__chest">
-            <span style="font-size: 22px">{{ gameProfile.chestReady ? '🎁' : '🎁' }}</span>
+            <span style="font-size: 22px">✓</span>
             <div style="flex: 1">
               <div class="arena-h3" style="font-size: 13.5px">
-                {{ gameProfile.chestReady ? '今日宝箱可以开了！' : `完成全部 ${gameProfile.todayMissionTotal || 3} 关，开启今日宝箱` }}
+                {{ gameProfile.chestReady ? '今日任务已全部完成' : `完成全部 ${gameProfile.todayMissionTotal || 3} 项任务，更新今日记录` }}
               </div>
               <div class="arena-tiny" style="margin-top: 1px">
-                {{ gameProfile.chestReady ? '额外 +100 经验，点我领取' : '额外 +100 经验' }}
+                {{ gameProfile.chestReady ? '确认后将更新连续完成记录' : '完成后将更新连续完成记录' }}
               </div>
             </div>
             <div class="arena-row" style="gap: 4px">
@@ -186,7 +185,7 @@
               style="padding: 10px 18px; font-size: 13px"
               @click="claimChest"
             >
-              开箱 +100
+              确认完成
             </button>
           </div>
         </div>
@@ -194,7 +193,7 @@
         <!-- 右栏 -->
         <div class="arena-col">
           <div class="arena-card arena-home__panel">
-            <div class="arena-h3">本周连胜</div>
+            <div class="arena-h3">本周完成记录</div>
             <div class="arena-streak" style="margin-top: 14px">
               <div v-for="d in weekStreak" :key="d.label" class="arena-streak__day">
                 <div
@@ -207,14 +206,14 @@
               </div>
             </div>
             <div class="arena-home__streak-note">
-              连胜 <b style="color: var(--arena-amber)">{{ gameProfile.streakDays }} 天</b>
-              <span v-if="gameProfile.streakTodayDone"> · 今天已续上</span>
-              <span v-else> · 完成一关即可续上</span>
+              连续完成 <b style="color: var(--arena-amber)">{{ gameProfile.streakDays }} 天</b>
+              <span v-if="gameProfile.streakTodayDone"> · 今天已完成</span>
+              <span v-else> · 完成一项任务即可延续</span>
             </div>
           </div>
 
           <div class="arena-card arena-home__panel arena-home__offer">
-            <div class="arena-h3">🏆 离 Offer 还差</div>
+            <div class="arena-h3">求职准备清单</div>
             <div class="arena-col" style="margin-top: 13px; gap: 10px; font-size: 12.5px">
               <div class="arena-row" style="gap: 9px">
                 <span :style="`color: ${hasResume ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ hasResume ? '✓' : '○' }}</span>
@@ -228,7 +227,7 @@
               </div>
               <div class="arena-row" style="gap: 9px">
                 <span :style="`color: ${power >= 80 ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ power >= 80 ? '✓' : '○' }}</span>
-                <span :style="power >= 80 ? '' : 'color: var(--arena-mut)'">战力达到 80（{{ power }}/80）</span>
+                <span :style="power >= 80 ? '' : 'color: var(--arena-mut)'">准备度达到 80（{{ power }}/80）</span>
               </div>
             </div>
           </div>
@@ -239,7 +238,7 @@
               <b style="font-size: 12.5px">{{ evidenceNote?.title || '建议依据' }}</b>
             </div>
             <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">
-              {{ evidenceNote?.body || '完成简历、岗位和训练记录后，AI 会把下一关与这些真实资料关联起来。' }}
+              {{ evidenceNote?.body || '完成简历、岗位和训练记录后，AI 会把下一步建议与你的真实资料关联起来。' }}
             </p>
           </div>
         </div>
@@ -310,7 +309,7 @@ const entryReadyRatio = computed(() => {
   return ready / entries.length
 })
 
-/** 战力 = 简历 30% + 岗位 20% + 训练 30% + 面试 20%（readiness 真数据加权） */
+/** 求职准备度 = 简历 30% + 岗位 20% + 训练 30% + 面试 20%（readiness 真数据加权） */
 const power = computed(() => {
   const o = overview.value
   const resumeScore = hasResume.value ? 55 + entryReadyRatio.value * 45 : entryReadyRatio.value * 40
@@ -370,10 +369,10 @@ const missions = computed<Mission[]>(() =>
 const sideMissions = computed(() => missions.value.slice(1))
 
 const headTitle = computed(() => {
-  if (allAgentTasksDone.value) return '今天已通关'
-  if (missions.value.length === 0) return '先开第一关'
-  if (missions.value.length === 1) return '今天闯这一关'
-  return `今天闯这 ${missions.value.length} 关`
+  if (allAgentTasksDone.value) return '今日计划已完成'
+  if (missions.value.length === 0) return '安排第一项任务'
+  if (missions.value.length === 1) return '完成今日重点任务'
+  return `今天安排 ${missions.value.length} 项任务`
 })
 
 const evidenceNote = computed(() => {
@@ -390,7 +389,7 @@ const evidenceNote = computed(() => {
   return null
 })
 
-/** 本周连胜推导：以 streakLastDate 为终点向前连续标记（mock 层展示推导） */
+/** 本周连续完成记录推导：以 streakLastDate 为终点向前连续标记（mock 层展示推导） */
 const weekStreak = computed(() => {
   const today = businessCalendarDate.value
   const mondayOffset = (today.getUTCDay() + 6) % 7
@@ -431,7 +430,7 @@ const completeMission = async (mission: Mission) => {
   if (completingId.value != null) return
   completingId.value = mission.id
   try {
-    await completeAgentTaskApi(mission.id, { note: '用户在竞技场首页标记完成' })
+    await completeAgentTaskApi(mission.id, { note: '用户在今日任务页标记完成' })
     const grant = gameProfile.grantXpOnce(mission.xpEvent, `agent-task:${mission.id}`)
     if (grant) gameProfile.completeMission()
     tasks.value = tasks.value.map((task) => (task.id === mission.id ? { ...task, status: 'DONE' } : task))
@@ -444,7 +443,7 @@ const completeMission = async (mission: Mission) => {
 
 const claimChest = () => {
   const grant = gameProfile.claimChest()
-  chestNotice.value = grant ? `+${grant.xp} XP 已入账` : ''
+  chestNotice.value = grant ? '今日完成记录已更新' : ''
 }
 
 const loadAll = async (force = false) => {

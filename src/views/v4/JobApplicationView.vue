@@ -41,6 +41,14 @@
         :closable="false"
         title="没有找到深链指定的投递记录，已保留当前列表，你可以新增记录或清空筛选后查看。"
       />
+      <AppState
+        v-if="isInitialLoading"
+        type="loading"
+        title="正在加载投递记录"
+        description="正在整理投递阶段、简历版本和下一步安排。"
+      />
+
+      <template v-else>
       <nav class="application-view-tabs" aria-label="投递工作台视图">
         <button
           type="button"
@@ -59,7 +67,22 @@
         </button>
       </nav>
 
-      <section v-if="activeApplicationView === 'today'" class="application-workbench" v-loading="statsLoading">
+      <AppState
+        v-if="activeApplicationView === 'today' && !rawApplications.length"
+        type="empty"
+        title="还没有投递记录"
+        description="先记录一条已收藏或已投递的岗位，后续才能集中跟踪阶段、简历版本和跟进安排。"
+      >
+        <div class="empty-actions">
+          <el-button type="primary" :icon="Plus" @click="openCreate">新增第一条投递</el-button>
+        </div>
+      </AppState>
+
+      <section
+        v-else-if="activeApplicationView === 'today'"
+        class="application-workbench"
+        v-loading="statsLoading"
+      >
         <div class="today-panel">
           <div class="panel-heading">
             <div>
@@ -194,11 +217,30 @@
                     <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
                   </template>
                 </div>
-                <p class="muted">
-                  {{ sourceLabel(item.source) }} · 投递 {{ item.appliedAt || '--' }} · 下次跟进 {{ item.nextFollowUpAt || '--' }}
-                </p>
+                <dl class="record-priority-summary">
+                  <div>
+                    <dt>当前阶段</dt>
+                    <dd>
+                      <el-tag>{{ statusLabel(item.status) }}</el-tag>
+                      <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-summary-follow-up`">
+                        <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
+                      </template>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>使用简历</dt>
+                    <dd>{{ resumeVersionLabel(item) }}</dd>
+                  </div>
+                  <div class="record-next-step">
+                    <dt>下一步</dt>
+                    <dd :class="`follow-up-note--${followUpState(item).key}`">
+                      {{ followUpDescription(item) }}
+                    </dd>
+                  </div>
+                </dl>
                 <p class="muted row-meta">
-                  <span>{{ resumeVersionLabel(item) }}</span>
+                  <span>{{ sourceLabel(item.source) }}</span>
+                  <span>投递 {{ item.appliedAt || '--' }}</span>
                   <span v-if="item.matchReportId">匹配报告 #{{ item.matchReportId }}</span>
                   <span>{{ latestEventText(item) }}</span>
                 </p>
@@ -214,9 +256,6 @@
                     {{ tag.label }}
                   </el-tag>
                 </div>
-                <p class="follow-up-note" :class="`follow-up-note--${followUpState(item).key}`">
-                  {{ followUpDescription(item) }}
-                </p>
                 <p v-if="item.note" class="muted record-note">{{ item.note }}</p>
               </div>
               <div class="record-actions">
@@ -244,12 +283,13 @@
             :description="applicationEmptyDescription"
           >
             <div class="empty-actions">
-              <el-button v-if="hasListFilter" @click="clearStatusFilter">清空筛选</el-button>
-              <el-button type="primary" :icon="Plus" @click="openCreate">新增第一条投递</el-button>
+              <el-button v-if="hasListFilter" type="primary" @click="clearStatusFilter">清空筛选</el-button>
+              <el-button v-else type="primary" :icon="Plus" @click="openCreate">新增第一条投递</el-button>
             </div>
           </AppState>
         </div>
       </section>
+      </template>
       </template>
     </template>
 
@@ -591,6 +631,7 @@ const eventTypeOptions = [
 ]
 
 const loading = ref(false)
+const hasLoadedApplications = ref(false)
 const statsLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -681,6 +722,7 @@ const validateForm = async (formRef: FormInstance | undefined, fallbackMessage: 
 }
 
 const hasListFilter = computed(() => Boolean(status.value || followUpFilter.value || funnelStageFilter.value))
+const isInitialLoading = computed(() => loading.value && !hasLoadedApplications.value)
 const applicationEmptyTitle = computed(() => hasListFilter.value ? '当前筛选没有进度' : '还没有求职进度')
 const applicationEmptyDescription = computed(() =>
   hasListFilter.value
@@ -1007,6 +1049,7 @@ const loadApplications = async () => {
     errorMessage.value = getErrorMessage(error)
   } finally {
     loading.value = false
+    hasLoadedApplications.value = true
   }
 }
 
@@ -1208,7 +1251,14 @@ const save = async () => {
   saving.value = true
   try {
     if (editingId.value) {
-      await updateApplicationApi(editingId.value, form)
+      const original = rawApplications.value.find((item) => item.id === editingId.value)
+      const clearNextFollowUp = Boolean(
+        original?.nextFollowUpAt && !form.nextFollowUpAt
+      )
+      await updateApplicationApi(editingId.value, {
+        ...form,
+        ...(clearNextFollowUp ? { clearNextFollowUp: true } : {})
+      })
     } else {
       await createApplicationApi(form)
     }
@@ -1985,6 +2035,42 @@ onMounted(async () => {
   align-items: center;
 }
 
+.record-priority-summary {
+  display: grid;
+  grid-template-columns: minmax(122px, 0.9fr) minmax(168px, 1.15fr) minmax(260px, 1.8fr);
+  gap: 10px 18px;
+  margin: 12px 0 0;
+}
+
+.record-priority-summary > div {
+  min-width: 0;
+}
+
+.record-priority-summary dt {
+  margin-bottom: 4px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.record-priority-summary dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.record-priority-summary .record-next-step dd {
+  display: block;
+  color: var(--app-text);
+  font-weight: 600;
+}
+
 .record-actions {
   justify-content: flex-end;
   max-width: 160px;
@@ -2075,6 +2161,14 @@ onMounted(async () => {
     justify-content: flex-start;
     max-width: none;
   }
+
+  .record-priority-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .record-next-step {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2098,6 +2192,14 @@ onMounted(async () => {
 
   .today-row__actions {
     width: 100%;
+  }
+
+  .record-priority-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .record-next-step {
+    grid-column: auto;
   }
 }
 </style>

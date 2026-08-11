@@ -17,16 +17,25 @@ const allFeatures: UserNavigationFeatureState = {
 }
 
 describe('userNavigation', () => {
-  it('defines the seven signed-off information architecture groups', () => {
+  it('defines job-search-oriented information architecture groups', () => {
     expect(userNavigationGroups.map((group) => group.label)).toEqual([
       '今日',
-      '准备',
-      '训练',
-      '面试',
-      '进度',
-      '资源',
-      '成长'
+      '简历准备',
+      '岗位匹配',
+      '面试训练',
+      '模拟面试',
+      '投递管理',
+      '求职资料',
+      '成长分析'
     ])
+  })
+
+  it('keeps applications as a first-class navigation group outside compact overflow', () => {
+    const applicationsGroup = userNavigationGroups.find((group) => group.key === 'progress')
+
+    expect(applicationsGroup?.label).toBe('投递管理')
+    expect(applicationsGroup?.compactOverflow).toBeUndefined()
+    expect(applicationsGroup?.items.map((item) => item.path)).toContain('/applications')
   })
 
   it('keeps feature-gated destinations out of the visible navigation', () => {

@@ -196,6 +196,7 @@ export interface JobApplicationVO {
   idempotencyKey?: string
   appliedAt?: string
   nextFollowUpAt?: string
+  clearNextFollowUp?: boolean
   note?: string
   createdAt?: string
   updatedAt?: string

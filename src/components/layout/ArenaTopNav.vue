@@ -136,22 +136,20 @@
         <button
           class="arena-top-nav__chip arena-top-nav__chip--streak"
           type="button"
-          :title="`连胜 ${gameProfile.streakDays} 天`"
-          aria-label="返回今天查看连胜"
+          :title="`已连续完成 ${gameProfile.streakDays} 天学习任务`"
+          aria-label="返回今天查看连续完成记录"
           @click="go('/dashboard')"
         >
-          <span aria-hidden="true">🔥</span>
-          {{ gameProfile.streakDays }}
+          连续 {{ gameProfile.streakDays }} 天
         </button>
         <button
           class="arena-top-nav__chip arena-top-nav__chip--xp"
           type="button"
-          :title="`LV.${gameProfile.levelInfo.level} ${gameProfile.levelInfo.title}，${formattedXp} 经验`"
-          aria-label="返回今天查看经验"
+          :title="`当前学习进度 ${formattedXp}`"
+          aria-label="返回今天查看学习进度"
           @click="go('/dashboard')"
         >
-          <span aria-hidden="true">◆</span>
-          {{ formattedXp }}
+          进度 {{ formattedXp }}
         </button>
         <el-dropdown trigger="click" @command="handleUserCommand">
           <button class="arena-top-nav__avatar-button" type="button" :aria-label="`打开 ${displayName} 的账户菜单`">
@@ -184,7 +182,7 @@
               {{ completionLabel }}
             </template>
             <template v-else-if="mobileStatusKind === 'reward'">
-              +18 / 题
+              练习
             </template>
             <template v-else-if="mobileStatusKind === 'ability'">
               技能树
@@ -196,7 +194,7 @@
               报告
             </template>
             <template v-else>
-              🔥 {{ gameProfile.streakDays }}
+              连续 {{ gameProfile.streakDays }} 天
             </template>
           </button>
           <el-dropdown trigger="click" @command="handleUserCommand">
@@ -394,7 +392,7 @@ const mobileStatusAriaLabel = computed(() => {
   if (mobileStatusKind.value === 'ability') return '查看技能树状态'
   if (mobileStatusKind.value === 'match') return '查看 JD 匹配'
   if (mobileStatusKind.value === 'report') return '返回面试复盘记录'
-  return `返回今天查看连胜 ${gameProfile.streakDays} 天`
+  return `返回今天查看连续完成 ${gameProfile.streakDays} 天的记录`
 })
 
 async function go(path: string) {
@@ -882,7 +880,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   display: none;
 }
 
-@media (max-width: 1160px) and (min-width: 721px) {
+@media (max-width: 1280px) and (min-width: 721px) {
   .arena-top-nav__group--compact-overflow {
     display: none;
   }

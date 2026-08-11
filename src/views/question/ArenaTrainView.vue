@@ -2,7 +2,7 @@
   <div class="arena arena-train">
     <div class="arena-train__page">
       <header class="arena-train__head">
-        <div class="arena-train__kicker">训练场 · 支线</div>
+        <div class="arena-train__kicker">面试训练计划</div>
         <h1 class="arena-h1 arena-train__title">{{ todayFocusTitle }}</h1>
       </header>
 
@@ -11,13 +11,13 @@
           <section class="arena-card arena-card--hero arena-train__hero">
             <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
               <span class="arena-chip arena-chip--grn-solid">推荐 · {{ todayTrustTag.label }}</span>
-              <span class="arena-xp-tag">+90 经验</span>
+              <span class="arena-xp-tag">今日建议</span>
               <span class="arena-tiny">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</span>
             </div>
             <h2 class="arena-h2" style="margin-top: 13px">{{ todayPlanName }}</h2>
             <p class="arena-p" style="margin-top: 8px">{{ todayReasonText }}</p>
             <div class="arena-row" style="margin-top: 18px; flex-wrap: wrap">
-              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" @click="startPrimaryPractice">⚔ {{ primaryPracticeLabel }}</button>
+              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" @click="startPrimaryPractice">{{ primaryPracticeLabel }}</button>
               <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" :disabled="!canGenerate || generating" @click="generateRecommendations">{{ generating ? '生成中…' : '换一组' }}</button>
             </div>
           </section>
@@ -58,7 +58,7 @@
                     <small>{{ item.skillName || item.skillCode || '综合能力' }} · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
                     <small v-if="!itemPracticeQuestionId(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
                   </span>
-                  <span class="arena-xp-tag">+18 XP/答对</span>
+                  <span class="arena-xp-tag">答后复盘</span>
                 </button>
               </article>
               <button v-if="items.length > 3" type="button" class="arena-train__remaining" @click="startPrimaryPractice"><span>还有 {{ items.length - 3 }} 题</span><b>开始题组查看全部 →</b></button>
@@ -68,9 +68,9 @@
 
         <aside class="arena-col arena-train__side">
           <section class="arena-card arena-train__panel arena-train__revive">
-            <div class="arena-h3">💀 错题复活点</div>
-            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">错题和收藏是下一轮训练的弹药库，复活后可以重新获得经验。</p>
-            <button class="arena-btn arena-btn--sec" style="margin-top: 12px; padding: 10px 14px; font-size: 12.5px" @click="router.push('/questions/practice?mode=wrong&autoStart=true')">复活错题</button>
+            <div class="arena-h3">错题复盘</div>
+            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">错题和收藏会进入下一轮复习清单，帮助你针对薄弱点安排训练。</p>
+            <button class="arena-btn arena-btn--sec" style="margin-top: 12px; padding: 10px 14px; font-size: 12.5px" @click="router.push('/questions/practice?mode=wrong&autoStart=true')">开始错题复习</button>
           </section>
           <section class="arena-card arena-train__panel">
             <div class="arena-h3">本周训练</div>
@@ -289,7 +289,7 @@ const weekTrainingDays = computed(() => {
 const weekTrainingSummary = computed(() => {
   const completedCount = weekTrainingDays.value.filter((day) => day.completed).length
   return completedCount > 0
-    ? `本周已完成 ${completedCount} 天训练 · 连胜 ${gameProfile.streakDays} 天`
+    ? `本周已完成 ${completedCount} 天训练 · 连续完成 ${gameProfile.streakDays} 天`
     : '本周还没有训练记录 · 完成一题后会在这里留下进度'
 })
 const practiceQuestionIds = computed(() =>

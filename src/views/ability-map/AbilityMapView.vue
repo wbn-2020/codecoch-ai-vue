@@ -1,21 +1,21 @@
 <template>
-  <div class="arena arena-ability ability-map page-shell" v-loading="loading">
+  <div class="arena arena-ability ability-map page-shell" :aria-busy="loading">
     <section class="growth-hero ability-summary">
       <div class="growth-hero__main">
         <div class="eyebrow">
           <Map :size="16" />
-          技能树 · 已点亮 {{ abilityMap.assessedSkillCount }} / {{ abilityMap.totalSkillCount }}
+          {{ assessmentSummary }}
         </div>
-        <h1>你的技能树 <span aria-hidden="true">🌳</span></h1>
+        <h1>能力评估概览</h1>
         <p>
-          把训练记录、能力状态和证据沉淀放到同一张地图里，先看哪些能力已经可用，再决定下一组题练什么。
+          汇总训练记录、能力状态和评估依据，帮助你确定下一轮准备重点；没有证据的能力不会被推断为强项或薄弱项。
         </p>
         <div class="hero-actions">
           <el-button @click="router.push('/project-evidence')">
             <FolderOpen :size="16" />
-            补项目证据
+            查看项目证据
           </el-button>
-          <el-button type="primary" :disabled="!canStartTraining" @click="startDomainTraining(activeDomain)">
+          <el-button plain :disabled="!canStartTraining" @click="startDomainTraining(activeDomain)">
             <Play :size="16" />
             开始专项训练
           </el-button>
@@ -25,7 +25,7 @@
       <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
         <div class="next-training-card__label">
           <Target :size="16" />
-          下一组训练建议
+          下一步训练建议
         </div>
         <h2>{{ nextTrainingTitle }}</h2>
         <p>{{ nextTrainingDescription }}</p>
@@ -47,15 +47,23 @@
     </section>
 
     <el-alert
-      v-if="!loading && !abilityMap.hasTrainingData"
+      v-if="isEvidenceInsufficient"
       class="honesty-alert"
       type="info"
       :closable="false"
       show-icon
-      title="暂无训练评估数据：当前只展示能力点目录，不生成强项、薄弱项或训练结论。"
+      title="评估证据不足：当前只展示能力点目录，不生成强项、薄弱项或综合结论。"
     />
 
-    <section v-if="loadError" class="load-error-card">
+    <section v-if="isInitialLoading" class="ability-state-card">
+      <AppState
+        type="loading"
+        title="正在加载能力评估"
+        description="正在汇总能力目录、训练记录和评估依据。"
+      />
+    </section>
+
+    <section v-else-if="loadError" class="load-error-card">
       <div>
         <AlertTriangle :size="18" />
         <strong>能力图谱暂时加载失败</strong>
@@ -64,29 +72,30 @@
       <el-button type="primary" plain :loading="loading" @click="fetchAbilityMap">重试</el-button>
     </section>
 
-    <section v-else-if="!abilityMap.domains.length && !loading" class="empty-map-card">
+    <section v-else-if="!hasAbilityDirectory" class="empty-map-card">
       <CircleHelp :size="28" />
-      <h2>还没有能力点目录</h2>
-      <p>完成一次题库训练或模拟面试后，这里会逐步形成能力图谱。</p>
-      <el-button type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">先做一组训练</el-button>
+      <h2>还没有能力评估目录</h2>
+      <p>完成一次题库训练或模拟面试后，这里会逐步建立可评估的能力目录。</p>
+      <el-button type="primary" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">开始一组训练</el-button>
     </section>
 
     <section v-else class="ability-tree-layout">
       <header class="ability-tree-head">
         <div>
-          <span>技能树 · 已点亮 {{ abilityMap.assessedSkillCount }} / {{ abilityMap.totalSkillCount }}</span>
-          <h2>你的技能树</h2>
-          <p>未评估项保持未点亮，不用猜测；优先补齐能同时提升战力和岗位覆盖的能力。</p>
+          <span>{{ assessmentSummary }}</span>
+          <h2>能力评估明细</h2>
+          <p>未评估项会明确保留为待验证状态；优先处理有证据支持的薄弱项或训练覆盖不足项。</p>
         </div>
         <div class="ability-formula">
           <div
             class="ability-formula__ring"
             :style="{ background: `conic-gradient(var(--arena-grn) 0 ${abilityPower}%, var(--arena-line) ${abilityPower}% 100%)` }"
           >
-            <span>{{ abilityPower }}</span>
+            <span v-if="abilityMap.hasTrainingData">{{ abilityPower }}</span>
+            <span v-else>--</span>
           </div>
-          <p v-if="abilityMap.hasTrainingData">战力 = 简历 30% + 岗位 20%<br />训练 30% + 面试 20%</p>
-          <p v-else>暂无训练评估<br />尚未生成战力结论</p>
+          <p v-if="abilityMap.hasTrainingData">综合评估参考<br />训练与面试证据</p>
+          <p v-else>评估证据不足<br />尚未生成综合结论</p>
         </div>
       </header>
 
@@ -122,7 +131,7 @@
                     <i :style="{ width: `${skillScore(skill)}%` }"></i>
                   </div>
                 </div>
-                <b>{{ skillScore(skill) }}</b>
+                <b>{{ skillScoreLabel(skill) }}</b>
               </button>
             </div>
           </section>
@@ -132,7 +141,7 @@
           <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
             <div class="priority-action-card__label">
               <Target :size="16" />
-              最高性价比
+              建议优先处理
             </div>
             <h2>{{ nextTrainingTitle }}</h2>
             <p>{{ nextTrainingDescription }}</p>
@@ -140,7 +149,7 @@
               <span><BookOpenCheck :size="14" />{{ nextTrainingMeta }}</span>
               <span><ShieldCheck :size="14" />{{ trainingTrustText }}</span>
             </div>
-            <el-button type="primary" :disabled="!canStartTraining" @click="startRecommendedTraining">
+            <el-button plain :disabled="!canStartTraining" @click="startRecommendedTraining">
               {{ nextTrainingActionLabel }}
               <ArrowRight :size="16" />
             </el-button>
@@ -148,14 +157,14 @@
 
           <section class="ability-evidence-card">
             <div class="ability-evidence-card__head">
-              <span>评分依据</span>
+              <span>评估依据</span>
               <ShieldCheck :size="15" />
             </div>
-            <strong>{{ totalEvidenceCount }} 条训练证据</strong>
+            <strong>{{ totalEvidenceCount }} 条可用训练证据</strong>
             <p>
               {{ abilityMap.hasTrainingData
                 ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
-                : '完成一次训练后，这里会展示真实的评估依据。' }}
+              : '完成一次训练后，这里会展示真实的评估依据，不会把空白状态当成零分。' }}
             </p>
             <el-button plain @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
               去补一组训练
@@ -185,6 +194,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAbilityMapApi } from '@/api/abilityMap'
+import AppState from '@/components/common/AppState.vue'
 import { normalizeAbilityMap, statusLabel } from '@/features/ability-map'
 import type { AbilityDomainVO, AbilityMapVO, AbilitySkillNodeVO } from '@/types/abilityMap'
 import { getErrorMessage } from '@/utils/error'
@@ -453,6 +463,17 @@ const activeDomain = computed(() =>
   abilityMap.value.domains[0]
 )
 
+const hasAbilityDirectory = computed(() => abilityMap.value.domains.length > 0)
+const isInitialLoading = computed(() => loading.value && !hasAbilityDirectory.value && !loadError.value)
+const isEvidenceInsufficient = computed(() =>
+  !loading.value && !loadError.value && hasAbilityDirectory.value && !abilityMap.value.hasTrainingData
+)
+const assessmentSummary = computed(() => {
+  if (isInitialLoading.value) return '能力评估 · 正在加载'
+  if (!hasAbilityDirectory.value) return '能力评估 · 尚未建立目录'
+  if (!abilityMap.value.hasTrainingData) return `能力评估 · 目录 ${abilityMap.value.totalSkillCount} 项，证据不足`
+  return `能力评估 · 已评估 ${abilityMap.value.assessedSkillCount} / ${abilityMap.value.totalSkillCount}`
+})
 const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
 const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
 const canStartTraining = computed(() => !loading.value && !loadError.value && allSkills.value.length > 0)
@@ -548,6 +569,11 @@ const skillScore = (skill: AbilitySkillNodeVO) => {
   return scores[String(skill.status).toUpperCase()] || 0
 }
 
+const skillScoreLabel = (skill: AbilitySkillNodeVO) =>
+  abilityMap.value.hasTrainingData && skill.status !== 'UNASSESSED'
+    ? String(skillScore(skill))
+    : honestStatusLabel(skill)
+
 const abilityPower = computed(() => {
   if (!allSkills.value.length || !abilityMap.value.hasTrainingData) return 0
   return Math.round(allSkills.value.reduce((total, skill) => total + skillScore(skill), 0) / allSkills.value.length)
@@ -595,7 +621,7 @@ const startRecommendedTraining = () => {
   router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')
 }
 
-/** 技能树节点状态：已解锁 / 修炼中 / 未解锁 */
+/** 能力节点状态用于展示评估可用性。 */
 const skillNodeState = (skill: AbilitySkillNodeVO) => {
   if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'locked'
   if (skill.status === 'WEAK') return 'training'
@@ -604,8 +630,8 @@ const skillNodeState = (skill: AbilitySkillNodeVO) => {
 const skillNodeIcon = (skill: AbilitySkillNodeVO) => {
   const state = skillNodeState(skill)
   if (state === 'unlocked') return '✓'
-  if (state === 'training') return '⚡'
-  return '🔒'
+  if (state === 'training') return '!'
+  return '—'
 }
 
 onMounted(fetchAbilityMap)
@@ -637,7 +663,8 @@ onMounted(fetchAbilityMap)
 .domain-rail,
 .domain-panel,
 .load-error-card,
-.empty-map-card {
+.empty-map-card,
+.ability-state-card {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
   background: var(--user-surface);

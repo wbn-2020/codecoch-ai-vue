@@ -26,14 +26,17 @@
       :title="form.resumeName?.trim() || '未命名简历'"
       :save-state="documentSaveStatus"
       :completion="completion"
+      :has-started="hasResumeContentStarted"
       :saving="saving"
       :is-edit="isEdit"
       :template-label="selectedResumeTemplateLabel"
       :inspector-mode="inspectorMode"
+      :active-step="activeWorkbenchStep"
       @back="router.push('/resumes')"
       @save="handleSave"
       @open-templates="openTemplateGallery"
       @open-export="openDeliveryChecks"
+      @open-preview="openPreviewStep"
       @mode-change="setInspectorMode"
     />
 
@@ -71,6 +74,7 @@
         :items="sectionNavItems"
         :active-id="activeWorkshopModule"
         :completion="completion"
+        :has-started="hasResumeContentStarted"
         :export-ready-count="exportReadyCount"
         :export-total="exportChecklistItems.length"
         @select="focusSection"
@@ -227,8 +231,11 @@
           </el-form>
 
           <div class="form-actions">
-            <el-button @click="router.push('/resumes')">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="handleSave">保存简历</el-button>
+            <span v-if="!isEdit" class="draft-save-hint">未保存的内容仅保留在当前页面</span>
+            <el-button @click="router.push('/resumes')">{{ isEdit ? '取消' : '返回简历列表' }}</el-button>
+            <el-button type="primary" :loading="saving" @click="handleSave">
+              {{ isEdit ? '保存更改' : '保存并创建简历' }}
+            </el-button>
           </div>
         </section>
 
@@ -448,12 +455,12 @@
 
         <section v-show="inspectorMode === 'review'" class="content-card side-panel readiness-panel">
           <div class="completion-head">
-            <span>简历完整度</span>
-            <strong>{{ completion }}%</strong>
+            <span>填写完整度</span>
+            <strong>{{ hasResumeContentStarted ? `${completion}%` : '尚未开始' }}</strong>
           </div>
-          <el-progress :percentage="completion" :stroke-width="10" :show-text="false" />
-          <p>仅基于当前表单真实填写项计算，不代表 AI 评分。</p>
-          <div class="completion-list">
+          <el-progress v-if="hasResumeContentStarted" :percentage="completion" :stroke-width="10" :show-text="false" />
+          <p>{{ hasResumeContentStarted ? '仅基于当前表单真实填写项计算，不代表 AI 评分。' : '先填写基本信息、求职方向和技术栈，再检查导出准备度。' }}</p>
+          <div v-if="hasResumeContentStarted" class="completion-list">
             <span v-for="item in completionItems" :key="item.label" :class="{ done: item.done }">
               <CheckCircle2 v-if="item.done" :size="15" />
               <Circle v-else :size="15" />
@@ -465,10 +472,10 @@
         <section v-show="inspectorMode === 'review'" class="content-card side-panel export-check-panel">
           <div class="completion-head">
             <span>导出前检查 · 启发式</span>
-            <strong>{{ exportReadyCount }}/{{ exportChecklistItems.length }} 通过</strong>
+            <strong>{{ hasResumeContentStarted ? `${exportReadyCount}/${exportChecklistItems.length} 通过` : '待填写后检查' }}</strong>
           </div>
-          <p>这里不生成真实 ATS 分数。页数与分页断裂只根据字段长度、段落数量和模板倾向提示，正式结果请以稳定版本工作台的 PDF/DOCX 为准。</p>
-          <div class="completion-list export-check-list">
+          <p>{{ hasResumeContentStarted ? '这里不生成真实 ATS 分数。页数与分页断裂只根据字段长度、段落数量和模板倾向提示，正式结果请以稳定版本工作台的 PDF/DOCX 为准。' : '完成基础填写后，系统会提示缺失信息、页数和分页风险。' }}</p>
+          <div v-if="hasResumeContentStarted" class="completion-list export-check-list">
             <article
               v-for="item in exportChecklistItems"
               :key="item.key"
@@ -487,18 +494,18 @@
           </div>
           <el-button class="full-button" :disabled="!isEdit" @click="openDeliveryChecks">
             <FileCheck2 :size="16" />
-            {{ isEdit ? '打开稳定版本分页与导出工作台' : '保存后进行导出检查' }}
+            {{ isEdit ? '打开稳定版本分页与导出工作台' : '保存并创建后导出' }}
           </el-button>
         </section>
 
         <section v-show="inspectorMode === 'review'" class="content-card side-panel jd-match-panel">
           <div class="completion-head">
             <span>JD 匹配准备度</span>
-            <strong>{{ jdMatchReadiness }}%</strong>
+            <strong>{{ hasResumeContentStarted ? `${jdMatchReadiness}%` : '待检查' }}</strong>
           </div>
-          <el-progress :percentage="jdMatchReadiness" :stroke-width="10" :show-text="false" />
-          <p>用于判断当前简历是否适合进入 JD 匹配，不替代正式匹配报告。</p>
-          <div class="diagnostic-list">
+          <el-progress v-if="hasResumeContentStarted" :percentage="jdMatchReadiness" :stroke-width="10" :show-text="false" />
+          <p>{{ hasResumeContentStarted ? '用于判断当前简历是否适合进入 JD 匹配，不替代正式匹配报告。' : '填写目标岗位和技术栈后，可在此检查是否适合发起 JD 匹配。' }}</p>
+          <div v-if="hasResumeContentStarted" class="diagnostic-list">
             <span v-for="item in jdMatchItems" :key="item.label" :class="{ done: item.done }">
               <CheckCircle2 v-if="item.done" :size="15" />
               <Circle v-else :size="15" />
@@ -833,6 +840,7 @@ const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
 const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
 const inspectorMode = ref<'edit' | 'review' | 'ai'>('edit')
+const activeWorkbenchStep = ref<'fill' | 'review' | 'preview' | 'export'>('fill')
 const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-basic')
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const pendingResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
@@ -934,6 +942,19 @@ const completion = computed(() => {
   const done = completionItems.value.filter((item) => item.done).length
   return Math.round((done / completionItems.value.length) * 100)
 })
+
+const hasResumeContentStarted = computed(() => Boolean(
+  form.resumeName?.trim()
+  || form.realName?.trim()
+  || form.email?.trim()
+  || form.phone?.trim()
+  || form.targetPosition?.trim()
+  || form.summary?.trim()
+  || form.skills?.trim()
+  || form.workSummary?.trim()
+  || form.education?.trim()
+  || projects.value.length
+))
 
 const sectionNavItems = computed(() => [
   { id: 'resume-basic', label: '基本信息', done: Boolean(form.resumeName?.trim() && form.realName?.trim()) },
@@ -1045,7 +1066,7 @@ const hasUnsavedResumeChanges = computed(() =>
 )
 const documentSaveStatus = computed(() => {
   if (saving.value) return '保存中'
-  if (!isEdit.value) return '未保存草稿'
+  if (!isEdit.value) return hasResumeContentStarted.value ? '未保存，尚未创建简历' : '新建草稿，尚未保存'
   return hasUnsavedResumeChanges.value ? '有未保存改动' : '已保存'
 })
 
@@ -1227,7 +1248,23 @@ const focusSection = (sectionId: string) => {
 const setInspectorMode = (mode: 'edit' | 'review' | 'ai') => {
   inspectorMode.value = mode
   mobileWorkspaceTab.value = 'edit'
+  if (mode === 'edit') activeWorkbenchStep.value = 'fill'
+  if (mode === 'review') activeWorkbenchStep.value = 'review'
 }
+
+const openPreviewStep = () => {
+  inspectorMode.value = 'edit'
+  mobileWorkspaceTab.value = 'preview'
+  activeWorkbenchStep.value = 'preview'
+}
+
+watch(mobileWorkspaceTab, (tab) => {
+  if (tab === 'preview') {
+    activeWorkbenchStep.value = 'preview'
+  } else if (activeWorkbenchStep.value === 'preview') {
+    activeWorkbenchStep.value = 'fill'
+  }
+})
 
 const liveFeedbackItems = computed(() => [
   {
@@ -1814,6 +1851,7 @@ const handleSaveInlineProject = async () => {
 }
 
 const openDeliveryChecks = async () => {
+  activeWorkbenchStep.value = 'export'
   if (!isEdit.value || !resumeId.value) {
     ElMessage.warning('请先保存简历，再进行版本、分页和导出检查')
     return
@@ -5212,9 +5250,16 @@ onBeforeUnmount(() => {
     background: var(--resume-workbench-surface);
   }
 
+  .draft-save-hint {
+    margin-right: auto;
+    color: var(--resume-workbench-muted);
+    font-size: 11px;
+    line-height: 32px;
+  }
+
   .ai-writing-card {
     margin: 0;
-    padding: 15px 18px 20px;
+    padding: 13px 18px 16px;
     border-top: 1px solid var(--resume-workbench-line);
     background: var(--resume-workbench-surface-soft);
 
@@ -5229,6 +5274,14 @@ onBeforeUnmount(() => {
       color: var(--resume-workbench-muted);
       font-size: 11px;
       line-height: 1.55;
+    }
+
+    .prompt-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .prompt-card {
+      min-height: 86px;
     }
   }
 

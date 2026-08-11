@@ -15,46 +15,71 @@
       </div>
     </div>
 
-    <nav class="resume-workbench-topbar__modes" aria-label="简历工作台模式">
+    <nav class="resume-workbench-topbar__steps" aria-label="简历工作流程">
       <button
         type="button"
-        :class="{ 'is-active': inspectorMode === 'edit' }"
-        :aria-current="inspectorMode === 'edit' ? 'page' : undefined"
+        :class="{ 'is-active': activeStep === 'fill' }"
+        :aria-current="activeStep === 'fill' ? 'step' : undefined"
         @click="emit('mode-change', 'edit')"
       >
-        编辑
+        <span>1</span>
+        填写
       </button>
       <button
         type="button"
-        :class="{ 'is-active': inspectorMode === 'review' }"
-        :aria-current="inspectorMode === 'review' ? 'page' : undefined"
+        :class="{ 'is-active': activeStep === 'review' }"
+        :aria-current="activeStep === 'review' ? 'step' : undefined"
         @click="emit('mode-change', 'review')"
       >
-        <ClipboardCheck :size="16" aria-hidden="true" />
+        <span>2</span>
         检查
       </button>
       <button
         type="button"
-        :class="{ 'is-active': inspectorMode === 'ai' }"
-        :aria-current="inspectorMode === 'ai' ? 'page' : undefined"
-        @click="emit('mode-change', 'ai')"
+        :class="{ 'is-active': activeStep === 'preview' }"
+        :aria-current="activeStep === 'preview' ? 'step' : undefined"
+        @click="emit('open-preview')"
       >
-        <Sparkles :size="16" aria-hidden="true" />
-        AI 优化
+        <span>3</span>
+        预览
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': activeStep === 'export' }"
+        :aria-current="activeStep === 'export' ? 'step' : undefined"
+        @click="emit('open-export')"
+      >
+        <span>4</span>
+        导出
       </button>
     </nav>
 
     <div class="resume-workbench-topbar__actions">
-      <span class="resume-workbench-topbar__completion" :aria-label="`简历完成度 ${completion}%`">
-        {{ completion }}%
+      <span v-if="hasStarted" class="resume-workbench-topbar__completion" :aria-label="`已完善 ${completion}%`">
+        已完善 {{ completion }}%
       </span>
-      <button class="resume-workbench-topbar__action" type="button" @click="emit('open-templates')">
-        <LayoutTemplate :size="16" aria-hidden="true" />
-        <span>{{ templateLabel }}</span>
+      <span v-else class="resume-workbench-topbar__completion is-pending">
+        待填写
+      </span>
+      <button
+        class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
+        type="button"
+        aria-label="打开 AI 优化建议"
+        title="打开 AI 优化建议"
+        @click="emit('mode-change', 'ai')"
+      >
+        <Sparkles :size="16" aria-hidden="true" />
+        <span>AI 优化</span>
       </button>
-      <button class="resume-workbench-topbar__action" type="button" @click="emit('open-export')">
-        <Download :size="16" aria-hidden="true" />
-        <span>导出</span>
+      <button
+        class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
+        type="button"
+        :aria-label="`调整模板，当前为 ${templateLabel}`"
+        :title="`调整模板，当前为 ${templateLabel}`"
+        @click="emit('open-templates')"
+      >
+        <LayoutTemplate :size="16" aria-hidden="true" />
+        <span>模板</span>
       </button>
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--primary"
@@ -63,7 +88,7 @@
         @click="emit('save')"
       >
         <Save :size="16" aria-hidden="true" />
-        <span>{{ saving ? '保存中' : isEdit ? '保存' : '创建简历' }}</span>
+        <span>{{ saving ? '保存中' : isEdit ? '保存更改' : '保存并创建简历' }}</span>
       </button>
     </div>
   </header>
@@ -72,8 +97,6 @@
 <script setup lang="ts">
 import {
   ArrowLeft,
-  ClipboardCheck,
-  Download,
   FileText,
   LayoutTemplate,
   Save,
@@ -84,10 +107,12 @@ defineProps<{
   title: string
   saveState: string
   completion: number
+  hasStarted: boolean
   saving: boolean
   isEdit: boolean
   templateLabel: string
   inspectorMode: 'edit' | 'review' | 'ai'
+  activeStep: 'fill' | 'review' | 'preview' | 'export'
 }>()
 
 const emit = defineEmits<{
@@ -95,6 +120,7 @@ const emit = defineEmits<{
   save: []
   'open-templates': []
   'open-export': []
+  'open-preview': []
   'mode-change': [mode: 'edit' | 'review' | 'ai']
 }>()
 </script>
@@ -102,7 +128,7 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .resume-workbench-topbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(330px, 1fr);
+  grid-template-columns: minmax(250px, 1fr) auto minmax(360px, 1fr);
   align-items: center;
   min-height: 58px;
   padding: 0 16px;
@@ -113,7 +139,7 @@ const emit = defineEmits<{
 
 .resume-workbench-topbar__document,
 .resume-workbench-topbar__title,
-.resume-workbench-topbar__modes,
+.resume-workbench-topbar__steps,
 .resume-workbench-topbar__actions {
   display: flex;
   align-items: center;
@@ -188,7 +214,7 @@ const emit = defineEmits<{
   }
 }
 
-.resume-workbench-topbar__modes {
+.resume-workbench-topbar__steps {
   justify-content: center;
   gap: 3px;
 
@@ -196,7 +222,7 @@ const emit = defineEmits<{
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
     min-height: 34px;
     padding: 0 12px;
     border-radius: 6px;
@@ -216,6 +242,18 @@ const emit = defineEmits<{
       background: var(--resume-workbench-accent-soft);
       color: var(--resume-workbench-accent);
     }
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-size: 9px;
+      line-height: 1;
+    }
   }
 }
 
@@ -232,6 +270,11 @@ const emit = defineEmits<{
   color: var(--resume-workbench-success);
   font-size: 11px;
   font-weight: 700;
+
+  &.is-pending {
+    background: var(--resume-workbench-surface-soft);
+    color: var(--resume-workbench-muted);
+  }
 }
 
 .resume-workbench-topbar__action {
@@ -278,12 +321,25 @@ const emit = defineEmits<{
   }
 }
 
+.resume-workbench-topbar__action--utility {
+  border-color: transparent;
+  background: transparent;
+  color: var(--resume-workbench-muted);
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--resume-workbench-line);
+    background: var(--resume-workbench-surface-soft);
+    color: var(--resume-workbench-text);
+  }
+}
+
 @media (max-width: 1180px) {
   .resume-workbench-topbar {
     grid-template-columns: minmax(220px, 1fr) auto;
   }
 
-  .resume-workbench-topbar__modes {
+  .resume-workbench-topbar__steps {
     order: 3;
     grid-column: 1 / -1;
     min-height: 42px;
@@ -302,9 +358,9 @@ const emit = defineEmits<{
     flex: 1;
   }
 
-  .resume-workbench-topbar__modes,
+  .resume-workbench-topbar__steps,
   .resume-workbench-topbar__completion,
-  .resume-workbench-topbar__action:not(.resume-workbench-topbar__action--primary) {
+  .resume-workbench-topbar__action--utility {
     display: none;
   }
 

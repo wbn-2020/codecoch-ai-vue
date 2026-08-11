@@ -85,17 +85,17 @@ describe('ArenaTrainView', () => {
     const wrapper = mountTrain()
     await flush()
 
-    expect(wrapper.text()).toContain('训练场 · 支线')
+    expect(wrapper.text()).toContain('面试训练计划')
     expect(wrapper.text()).toContain('HashMap 扩容机制讲清楚')
     expect(wrapper.text()).toContain('★★☆ 中等')
     expect(wrapper.text()).toContain('★★★ 困难')
-    expect(wrapper.text()).toContain('+18 XP/答对')
+    expect(wrapper.text()).toContain('答后复盘')
     expect(wrapper.text()).toContain('开始推荐题组')
     // 今日重点汇总技能
     expect(wrapper.text()).toContain('Java 集合')
     expect(wrapper.text()).toContain('消息队列')
-    // 复活点入口
-    expect(wrapper.text()).toContain('错题复活点')
+    // 错题复盘入口
+    expect(wrapper.text()).toContain('错题复盘')
   })
 
   it('shows the hero plan name from the first actionable item', async () => {

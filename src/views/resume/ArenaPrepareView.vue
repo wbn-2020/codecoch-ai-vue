@@ -5,10 +5,10 @@
       <div class="arena-between arena-prepare__head">
         <div>
           <div class="arena-prepare__kicker">
-            准备线 · 第 {{ Math.min(mainDoneCount + 1, 3) }} 关进行中 · 已完成 {{ mainDoneCount }}/3
+            求职准备 · 第 {{ Math.min(mainDoneCount + 1, 3) }} 步进行中 · 已完成 {{ mainDoneCount }}/3
           </div>
-          <h1 class="arena-h1 arena-prepare__title">装备你的求职背包 🎒</h1>
-          <p class="arena-p" style="margin-top: 8px">三关装备齐，训练题才会贴着你的项目和目标岗位走。</p>
+          <h1 class="arena-h1 arena-prepare__title">建立完整的求职资料</h1>
+          <p class="arena-p" style="margin-top: 8px">完善简历、目标岗位和匹配依据，让训练与模拟面试围绕真实求职目标展开。</p>
         </div>
         <div class="arena-card arena-prepare__readiness">
           <div
@@ -30,7 +30,7 @@
           </div>
         </div>
       </div>
-      <div class="arena-prepare__progress" aria-label="准备主线进度">
+      <div class="arena-prepare__progress" aria-label="求职准备进度">
         <i
           v-for="node in mainNodes"
           :key="node.key"
@@ -52,7 +52,7 @@
         </div>
 
         <div class="arena-prepare__workspace">
-          <!-- 闯关地图 -->
+          <!-- 准备流程 -->
           <div class="arena-prepare__map">
             <div class="arena-prepare__track">
               <button
@@ -72,12 +72,11 @@
                 <span class="arena-prepare__node-body">
                   <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
                     <b>{{ currentMainNode.title }}</b>
-                    <span v-if="currentMainNode.state === 'current'" class="arena-chip arena-chip--amber">当前关</span>
-                    <span v-else-if="currentMainNode.state === 'done'" class="arena-chip arena-chip--grn">已通关</span>
-                    <span v-else-if="currentMainNode.state === 'failed'" class="arena-chip arena-chip--red">挑战失败</span>
+                    <span v-if="currentMainNode.state === 'current'" class="arena-chip arena-chip--amber">当前步骤</span>
+                    <span v-else-if="currentMainNode.state === 'done'" class="arena-chip arena-chip--grn">已完成</span>
+                    <span v-else-if="currentMainNode.state === 'failed'" class="arena-chip arena-chip--red">需要重新处理</span>
                     <span v-else-if="currentMainNode.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
-                    <span v-else class="arena-chip arena-chip--mut">未解锁</span>
-                    <span class="arena-xp-tag">+{{ currentMainNode.xp }} XP</span>
+                    <span v-else class="arena-chip arena-chip--mut">待开始</span>
                   </span>
                   <small>{{ currentMainNode.desc }}</small>
                   <span class="arena-prepare__node-cta">{{ currentMainNode.cta }} →</span>
@@ -97,7 +96,7 @@
               </p>
             </aside>
 
-            <!-- 支线 -->
+            <!-- 补充资料 -->
             <details class="arena-prepare__side">
               <summary>更多准备动作</summary>
               <div class="arena-prepare__side-grid">
@@ -110,8 +109,7 @@
                   @click="router.push(side.path)"
                 >
                   <span class="arena-between">
-                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完成' : '支线' }}</span>
-                    <span class="arena-xp-tag">+{{ side.xp }} XP</span>
+                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完善' : '可选资料' }}</span>
                   </span>
                   <b>{{ side.title }}</b>
                   <small>{{ side.desc }}</small>
@@ -120,7 +118,7 @@
             </details>
           </div>
 
-          <!-- 当前关：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
+          <!-- 当前步骤：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
           <section
             v-if="currentMainNode?.key === 'target' && currentMainNode.state !== 'locked'"
             class="arena-card arena-prepare__jd-card"
@@ -129,8 +127,7 @@
           <div class="arena-prepare__jd-head">
             <div>
               <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                <span class="arena-chip arena-chip--amber">第 2 关 · 当前补给</span>
-                <span class="arena-xp-tag">+60 XP</span>
+                <span class="arena-chip arena-chip--amber">第 2 步 · 目标岗位</span>
                 <span class="arena-tiny">{{ currentTarget ? parseStatusLabel(currentTarget.parseStatus) : '等待岗位描述' }}</span>
               </div>
               <h2 id="prepare-jd-title" class="arena-h2" style="margin-top: 10px">贴上你的目标岗位 JD</h2>
@@ -155,7 +152,7 @@
               </label>
               <div class="arena-prepare__jd-actions">
                 <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
-                  {{ jdSaving ? '正在保存并解析…' : '⚔ 保存并解析 JD' }}
+                  {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
                 </button>
                 <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
                   去生成匹配 →
@@ -190,8 +187,7 @@
             aria-labelledby="prepare-current-stage-title"
           >
             <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-              <span class="arena-chip arena-chip--grn">当前准备关</span>
-              <span class="arena-xp-tag">+{{ currentMainNode.xp }} XP</span>
+              <span class="arena-chip arena-chip--grn">当前准备步骤</span>
             </div>
             <h2 id="prepare-current-stage-title" class="arena-h2" style="margin-top: 10px">
               {{ currentMainNode.title }}
@@ -234,12 +230,12 @@
           <summary>查看准备资料与进度</summary>
           <div class="arena-prepare__grid">
           <div class="arena-col">
-            <!-- 关键词覆盖 = 技能解锁 -->
+            <!-- 岗位关键词覆盖情况 -->
             <div class="arena-card arena-prepare__panel">
               <div class="arena-between">
                 <div>
                   <div class="arena-prepare__kicker" style="color: var(--arena-vio)">岗位关键词覆盖</div>
-                  <div class="arena-h3" style="margin-top: 4px">哪些技能已解锁，哪些还灰着</div>
+                  <div class="arena-h3" style="margin-top: 4px">哪些能力已覆盖，哪些仍需补充</div>
                 </div>
                 <button class="arena-btn arena-btn--txt" :disabled="!latestMatch" @click="goMatchAction">报告详情 →</button>
               </div>
@@ -265,7 +261,7 @@
                 <b>还没有岗位关键词覆盖结果</b>
                 <p class="arena-p">完成岗位分析和简历匹配后，这里会显示已覆盖、部分覆盖和缺失关键词。</p>
                 <button class="arena-btn arena-btn--pri" style="padding: 11px 20px" :disabled="!canMatch" @click="goMatchAction">
-                  ⚔ 去生成匹配报告
+                  去生成匹配报告
                 </button>
               </div>
             </div>
@@ -294,7 +290,7 @@
               <div class="arena-between">
                 <div>
                   <div class="arena-prepare__kicker">项目证据</div>
-                  <div class="arena-h3" style="margin-top: 4px">把项目经历改成可追问的弹药</div>
+                  <div class="arena-h3" style="margin-top: 4px">将项目经历整理为可引用的面试证据</div>
                 </div>
                 <button class="arena-btn arena-btn--txt" @click="router.push('/project-evidence')">打开证据库 →</button>
               </div>
@@ -719,7 +715,7 @@ const nextStep = computed(() => {
   }
 })
 
-// ---- 闯关地图 ----
+// ---- 求职准备流程 ----
 const goResumeAction = () => {
   router.push(getResumeEditPath())
 }
@@ -836,8 +832,8 @@ const matchNodeState = computed<NodeState>(() => {
 const mainNodes = computed<MapNode[]>(() => [
   {
     key: 'resume',
-    title: '第 1 关 · 做出能匹配的简历',
-    desc: defaultResume.value ? `${defaultResumeTitle.value} · 已就位` : '8 分钟创建第一份简历，解锁 JD 精准匹配',
+    title: '第 1 步 · 完成可用简历',
+    desc: defaultResume.value ? `${defaultResumeTitle.value} · 已就位` : '创建第一份简历，为 JD 匹配和面试训练提供依据',
     cta: defaultResume.value ? '进入简历工作台' : '创建简历',
     xp: 150,
     state: resumeNodeState.value,
@@ -845,7 +841,7 @@ const mainNodes = computed<MapNode[]>(() => [
   },
   {
     key: 'target',
-    title: '第 2 关 · 锁定目标岗位',
+    title: '第 2 步 · 明确目标岗位',
     desc: currentTarget.value
       ? `${currentTarget.value.jobTitle || '目标岗位'} · ${parseStatusLabel(currentTarget.value.parseStatus)}`
       : '粘贴岗位 JD，题目和面试都贴着你的目标走',
@@ -856,15 +852,15 @@ const mainNodes = computed<MapNode[]>(() => [
   },
   {
     key: 'match',
-    title: '第 3 关 · 生成 JD 匹配报告',
+    title: '第 3 步 · 生成 JD 匹配报告',
     desc: hasSuccessfulMatch.value
-      ? `匹配分 ${matchScoreText.value} · 缺口已转成训练弹药`
+      ? `匹配分 ${matchScoreText.value} · 能力缺口已纳入训练建议`
       : latestMatch.value?.status === 'FAILED'
-        ? '上次生成失败，重新挑战这一关'
+        ? '上次生成失败，请重新生成报告'
         : matchNodeState.value === 'running'
           ? '报告生成中，稍等片刻'
           : '对齐岗位风险、简历证据和能力缺口',
-    cta: hasSuccessfulMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新挑战' : '发起匹配',
+    cta: hasSuccessfulMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新生成' : '发起匹配',
     xp: 120,
     state: matchNodeState.value,
     action: goMatchAction
@@ -883,7 +879,7 @@ const sideNodes = computed(() => [
   {
     key: 'evidence',
     title: '项目证据库',
-    desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习，面试追问有弹药` : '补项目指标和技术决策',
+    desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习，面试追问可引用真实证据` : '补充项目指标和技术决策',
     xp: 40,
     done: projectCards.value.length > 0,
     path: '/project-evidence'
@@ -891,14 +887,14 @@ const sideNodes = computed(() => [
   {
     key: 'train',
     title: '回流今日训练',
-    desc: hasSuccessfulMatch.value ? '匹配已就绪，今日三关按缺口排好了' : '需要先通关第 3 关匹配',
+    desc: hasSuccessfulMatch.value ? '匹配已就绪，今日训练已按能力缺口安排' : '请先完成第 3 步 JD 匹配',
     xp: 90,
     done: hasSuccessfulMatch.value,
     path: '/dashboard'
   }
 ])
 
-// ---- 关键词覆盖（技能解锁面板） ----
+// ---- 岗位关键词覆盖面板 ----
 const toKeywordCoverage = (item: ResumeJobMatchDetailItemVO): KeywordCoverageItem => {
   const score = item.score
   const rawLevel = `${item.matchLevel || item.dimension || ''}`

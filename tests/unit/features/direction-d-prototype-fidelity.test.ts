@@ -49,7 +49,7 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(layout).toContain("document.body.classList.remove('is-user-layout-active')")
     expect(layout).not.toContain('UserTopNav')
 
-    for (const label of ['今日', '准备', '训练', '面试', '进度', '资源', '成长']) {
+    for (const label of ['今日', '简历准备', '岗位匹配', '面试训练', '模拟面试', '投递管理', '求职资料', '成长分析']) {
       expect(navigation, `primary navigation: ${label}`).toContain(`label: '${label}'`)
     }
     expect(topNav).toContain("from '@/config/userNavigation'")
@@ -138,7 +138,7 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(tools).toContain('width: min(100%, 760px)')
     expect(tools).toContain('gap: 14px')
     expect(tools).toContain('@media (max-width: 720px)')
-    expect(tools).toContain('背包与仓库 <span aria-hidden="true">🧰</span>')
+    expect(tools).toContain('求职资料与工具')
     expect(tools).toContain(':data-tool-path="item.path"')
     expect(tools).toContain(':disabled="item.enabled === false"')
     expect(tools).toContain("appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放'")
@@ -205,12 +205,12 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(evidenceList).toContain('color: var(--user-warning-text)')
   })
 
-  it('keeps interview creation as the prototype four-dungeon launch screen', () => {
+  it('keeps interview creation as the prototype four-mode launch screen', () => {
     const interview = readSource('src/views/interview/ArenaInterviewCreateView.vue')
 
-    expect(interview).toContain('第 1 步 · 选副本')
-    expect(interview).toContain('今晚打哪个副本？ <span aria-hidden="true">🎤</span>')
-    expect(interview).toContain('完成任意一场 +200 XP，计入「3 场模拟面试」Offer 清单。')
+    expect(interview).toContain('第 1 步 · 选择模拟形式')
+    expect(interview).toContain('开始一场模拟面试 <span aria-hidden="true">🎤</span>')
+    expect(interview).toContain('选择适合当前目标的场景，完成后将生成面试复盘报告。')
     expect(interview).toContain('grid-template-columns: repeat(2, 1fr)')
     expect(interview).toContain('min-height: 150px')
     expect(interview).toContain('border-radius: var(--arena-radius-card)')

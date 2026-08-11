@@ -35,6 +35,7 @@ import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 export type UserNavigationGroupKey =
   | 'today'
   | 'prepare'
+  | 'matching'
   | 'train'
   | 'interview'
   | 'progress'
@@ -92,14 +93,14 @@ export const userNavigationGroups: UserNavigationGroup[] = [
     key: 'today',
     label: '今日',
     mobileLabel: '今日',
-    description: '今日行动、任务和连胜进度',
+    description: '今日任务、安排和下一步行动',
     path: '/dashboard',
     icon: Target,
     items: [
       {
         key: 'today-overview',
         label: '今日总览',
-        description: '查看今日闯关、连胜和下一步行动',
+        description: '查看今日任务、完成记录和下一步行动',
         path: '/dashboard',
         icon: Target,
         routeNames: ['Dashboard'],
@@ -137,9 +138,9 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'prepare',
-    label: '准备',
-    mobileLabel: '准备',
-    description: '简历、岗位目标和投递材料',
+    label: '简历准备',
+    mobileLabel: '简历',
+    description: '创建、维护和优化求职简历',
     path: '/resumes',
     icon: FileText,
     items: [
@@ -172,6 +173,16 @@ export const userNavigationGroups: UserNavigationGroup[] = [
         routeNames: ['ResumeVersions', 'ResumeVersionsByResume'],
         exactPaths: ['/resume-versions']
       },
+    ]
+  },
+  {
+    key: 'matching',
+    label: '岗位匹配',
+    mobileLabel: '匹配',
+    description: '目标岗位、JD 分析和投递材料',
+    path: '/job-targets',
+    icon: Search,
+    items: [
       {
         key: 'job-targets',
         label: '岗位目标',
@@ -206,7 +217,7 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'train',
-    label: '训练',
+    label: '面试训练',
     mobileLabel: '训练',
     description: '题目练习、学习计划和能力补强',
     path: '/questions/recommendations',
@@ -288,8 +299,8 @@ export const userNavigationGroups: UserNavigationGroup[] = [
       },
       {
         key: 'arena-leaderboard',
-        label: '训练排行榜',
-        description: '查看经验、连胜和训练排名',
+        label: '训练统计',
+        description: '查看练习记录和训练表现',
         path: '/arena/leaderboard',
         icon: Trophy,
         routeNames: ['ArenaLeaderboard'],
@@ -297,8 +308,8 @@ export const userNavigationGroups: UserNavigationGroup[] = [
       },
       {
         key: 'arena-battle',
-        label: '多人竞技',
-        description: '进入 1v1 答题对战',
+        label: '协作练习',
+        description: '进入双人答题练习',
         path: '/arena/battle',
         icon: Swords,
         routeNames: ['ArenaBattle'],
@@ -308,7 +319,7 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'interview',
-    label: '面试',
+    label: '模拟面试',
     mobileLabel: '面试',
     description: '模拟面试、报告和复盘记录',
     path: '/interviews/create',
@@ -343,12 +354,11 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'progress',
-    label: '进度',
-    mobileLabel: '进度',
+    label: '投递管理',
+    mobileLabel: '投递',
     description: '投递推进、求职日历和行动复盘',
     path: '/applications',
     icon: BriefcaseBusiness,
-    compactOverflow: true,
     items: [
       {
         key: 'applications',
@@ -409,8 +419,8 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'resources',
-    label: '资源',
-    mobileLabel: '资源',
+    label: '求职资料',
+    mobileLabel: '资料',
     description: '项目证据、个人资料和求职资产',
     path: '/project-evidence',
     icon: FolderKanban,
@@ -482,7 +492,7 @@ export const userNavigationGroups: UserNavigationGroup[] = [
   },
   {
     key: 'growth',
-    label: '成长',
+    label: '成长分析',
     mobileLabel: '成长',
     description: '能力画像、训练分析和长期趋势',
     path: '/ability-map',

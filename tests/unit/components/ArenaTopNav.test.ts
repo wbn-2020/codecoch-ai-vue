@@ -83,13 +83,13 @@ describe('ArenaTopNav', () => {
     push.mockReset()
   })
 
-  it('renders seven config-driven desktop groups and a compact overflow trigger', () => {
+  it('renders job-search-oriented desktop groups with applications directly visible', () => {
     const wrapper = mountNav()
     const labels = wrapper
       .findAll('.arena-top-nav__group:not(.arena-top-nav__overflow) > .arena-top-nav__link--primary')
       .map((item) => item.text())
 
-    expect(labels).toEqual(['今日', '准备', '训练', '面试', '进度', '资源', '成长'])
+    expect(labels).toEqual(['今日', '简历准备', '岗位匹配', '面试训练', '模拟面试', '投递管理', '求职资料', '成长分析'])
     expect(wrapper.get('[data-nav-trigger="more"]').text()).toContain('更多')
     expect(wrapper.get('.arena-top-nav__group:first-child .arena-top-nav__link--primary').attributes('aria-current')).toBe('page')
     wrapper.unmount()
@@ -100,7 +100,7 @@ describe('ArenaTopNav', () => {
 
     await wrapper
       .findAll('.arena-top-nav__link--primary')
-      .find((item) => item.text() === '进度')!
+      .find((item) => item.text() === '投递管理')!
       .trigger('click')
 
     expect(push).toHaveBeenCalledWith('/applications')
@@ -172,7 +172,7 @@ describe('ArenaTopNav', () => {
     const bottomItems = wrapper.findAll('.arena-bottom-nav__item')
 
     expect(bottomItems).toHaveLength(5)
-    expect(bottomItems.map((item) => item.text())).toEqual(['今日', '准备', '训练', '进度', '更多'])
+    expect(bottomItems.map((item) => item.text())).toEqual(['今日', '简历', '训练', '投递', '更多'])
 
     const moreTrigger = bottomItems[4]
     moreTrigger.element.focus()

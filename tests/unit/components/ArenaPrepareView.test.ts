@@ -122,17 +122,17 @@ describe('ArenaPrepareView', () => {
     }))
   })
 
-  it('renders the three-step quest map with only the first node unlocked when empty', async () => {
+  it('renders the three-step preparation flow with only the first step active when empty', async () => {
     const wrapper = mountPrepare()
     await flush()
 
-    expect(wrapper.text()).toContain('装备你的求职背包')
-    expect(wrapper.text()).toContain('第 1 关 · 做出能匹配的简历')
+    expect(wrapper.text()).toContain('建立完整的求职资料')
+    expect(wrapper.text()).toContain('第 1 步 · 完成可用简历')
     expect(wrapper.text()).toContain('已完成 0/3')
     expect(wrapper.text()).toContain('目标岗位')
     expect(wrapper.text()).toContain('JD 匹配状态')
     expect(wrapper.findAll('.arena-prepare__node')).toHaveLength(1)
-    // 第 1 关为当前关，其余未解锁
+    // 第 1 步为当前步骤，其余待开始
     expect(wrapper.get('.arena-prepare__map').findAll('.arena-chip--amber')).toHaveLength(1)
     // 下一步行动
     expect(wrapper.text()).toContain('先补简历')
@@ -171,8 +171,8 @@ describe('ArenaPrepareView', () => {
     const wrapper = mountPrepare()
     await flush()
 
-    expect(wrapper.text()).toContain('挑战失败')
-    expect(wrapper.text()).toContain('重新挑战')
+    expect(wrapper.text()).toContain('需要重新处理')
+    expect(wrapper.text()).toContain('重新生成')
     expect(wrapper.text()).toContain('重新生成 JD 匹配报告')
   })
 

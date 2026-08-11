@@ -220,7 +220,12 @@
         </div>
 
         <div v-else-if="!loadError" class="resume-card-grid">
-          <article v-for="item in resumes" :key="item.id" class="resume-card">
+          <article
+            v-for="item in resumes"
+            :key="item.id"
+            class="resume-card"
+            :class="{ 'resume-card--data-issue': getResumeDataIssue(item) }"
+          >
             <div class="resume-card__header">
               <div class="resume-title-block">
                 <div class="resume-icon">
@@ -232,8 +237,9 @@
                 </div>
               </div>
               <div class="resume-tags">
-                <el-tag v-if="item.isDefault === 1" type="success" effect="plain">默认</el-tag>
-                <StatusTag :status="item.status" />
+                <el-tag v-if="getResumeDataIssue(item)" type="warning" effect="plain">数据待核验</el-tag>
+                <el-tag v-else-if="item.isDefault === 1" type="success" effect="plain">默认</el-tag>
+                <StatusTag v-if="!getResumeDataIssue(item)" :status="item.status" />
               </div>
             </div>
 
@@ -263,7 +269,15 @@
               <span v-else class="is-placeholder">暂未填写技术栈</span>
             </div>
 
-            <div class="resume-card__status">
+            <div v-if="getResumeDataIssue(item)" class="resume-data-issue" role="status">
+              <CircleAlert :size="16" aria-hidden="true" />
+              <div>
+                <strong>简历数据需要核验</strong>
+                <p>{{ getResumeDataIssue(item) }}</p>
+              </div>
+            </div>
+
+            <div v-else class="resume-card__status">
               <div>
                 <span>解析来源</span>
                 <strong>已入库</strong>
@@ -288,7 +302,12 @@
                 <Eye :size="15" />
                 打开工作台
               </el-button>
-              <el-button :loading="optimizingId === item.id" @click="handleOptimize(item)">
+              <el-button
+                :loading="optimizingId === item.id"
+                :disabled="Boolean(getResumeDataIssue(item))"
+                :title="getResumeDataIssue(item) ? '请先在工作台核验并保存这份简历' : undefined"
+                @click="handleOptimize(item)"
+              >
                 <Sparkles :size="15" />
                 AI 建议
               </el-button>
@@ -298,13 +317,19 @@
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item @click="router.push('/interviews/create')">
+                    <el-dropdown-item
+                      :disabled="Boolean(getResumeDataIssue(item))"
+                      @click="startInterviewWithResume(item)"
+                    >
                       用于模拟面试
                     </el-dropdown-item>
                     <el-dropdown-item :disabled="!latestRecord(item.id)" @click="openOptimizeDetail(latestRecord(item.id)?.optimizeRecordId)">
                       查看建议对比
                     </el-dropdown-item>
-                    <el-dropdown-item :disabled="item.isDefault === 1" @click="handleSetDefault(item)">
+                    <el-dropdown-item
+                      :disabled="item.isDefault === 1 || Boolean(getResumeDataIssue(item))"
+                      @click="handleSetDefault(item)"
+                    >
                       设为默认
                     </el-dropdown-item>
                     <el-dropdown-item divided @click="handleDelete(item)">
@@ -455,6 +480,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
   BriefcaseBusiness,
+  CircleAlert,
   Clock3,
   Eye,
   FilePlus2,
@@ -660,6 +686,37 @@ const splitSkills = (value?: string) => {
     .split(/[,\n;；、，]/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+const suspiciousResumeValue = (value?: string | null) => {
+  const normalized = String(value || '').trim()
+  return /^(?:undefined|null|nan|\[object object\]|--|n\/a|none|test|测试|demo|示例|asd|abc|123+)$/i.test(normalized)
+}
+
+const getResumeDataIssue = (resume: ResumeVO) => {
+  const resumeName = String(resume.resumeName || resume.title || '').trim()
+  if (!resumeName) return '缺少可识别的简历名称，暂不允许作为默认简历或面试上下文。'
+
+  const suspiciousFields = [
+    ['简历名称', resumeName],
+    ['求职方向', resume.targetPosition],
+    ['技术栈', resume.skills || resume.skillStack],
+    ['个人摘要', resume.summary],
+    ['工作经历', resume.workExperience]
+  ].filter(([, value]) => suspiciousResumeValue(value as string | null))
+
+  if (suspiciousFields.length) {
+    return `检测到异常占位内容：${suspiciousFields.map(([label]) => label).join('、')}。请核对后保存。`
+  }
+
+  return ''
+}
+
+const ensureResumeCanBeUsed = (resume: ResumeVO, action: string) => {
+  const issue = getResumeDataIssue(resume)
+  if (!issue) return true
+  ElMessage.warning(`${action}已暂停：${issue}`)
+  return false
 }
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -1124,6 +1181,7 @@ const submitOptimizeTask = async (row: ResumeVO) => {
 
 const handleOptimize = async (row: ResumeVO) => {
   if (optimizingId.value) return
+  if (!ensureResumeCanBeUsed(row, '生成 AI 建议')) return
   optimizingId.value = row.id
   optimizeRecoveryMessage.value = ''
   optimizeTask.value = null
@@ -1208,9 +1266,15 @@ const handleReset = () => {
 }
 
 const handleSetDefault = async (row: ResumeVO) => {
+  if (!ensureResumeCanBeUsed(row, '设为默认简历')) return
   await setDefaultResumeApi(row.id)
   ElMessage.success('默认简历已更新')
   await fetchResumes()
+}
+
+const startInterviewWithResume = (row: ResumeVO) => {
+  if (!ensureResumeCanBeUsed(row, '用于模拟面试')) return
+  router.push('/interviews/create')
 }
 
 const handleDelete = async (row: ResumeVO) => {
@@ -1672,6 +1736,14 @@ onUnmounted(() => {
   }
 }
 
+.resume-card--data-issue {
+  border-color: var(--user-warning);
+
+  &:hover {
+    border-color: var(--user-warning);
+  }
+}
+
 .resume-card__header {
   grid-area: header;
   display: flex;
@@ -1805,6 +1877,40 @@ onUnmounted(() => {
     margin-top: 4px;
     color: var(--user-warning);
     font-size: 13px;
+  }
+}
+
+.resume-data-issue {
+  grid-area: status;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--user-warning);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-warning-soft);
+  color: var(--user-warning);
+
+  > svg {
+    flex: 0 0 auto;
+    margin-top: 1px;
+  }
+
+  strong,
+  p {
+    display: block;
+  }
+
+  strong {
+    color: var(--user-text);
+    font-size: 12px;
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: var(--user-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
   }
 }
 
