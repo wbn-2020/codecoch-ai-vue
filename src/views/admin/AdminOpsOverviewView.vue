@@ -508,6 +508,7 @@
                     <div class="vector-row-actions">
                       <el-tooltip content="查看题目" placement="top">
                         <el-button
+                          v-permission="'admin:question:list'"
                           link
                           type="primary"
                           :icon="ExternalLink"

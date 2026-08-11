@@ -33,7 +33,7 @@
             <RefreshCw :size="16" />
             索引状态
           </el-button>
-          <el-button v-if="lastEmbeddingJob" plain @click="openLatestEmbeddingJob">
+          <el-button v-if="lastEmbeddingJob" v-permission="'admin:analytics:ai'" plain @click="openLatestEmbeddingJob">
             <BookOpenCheck :size="16" />
             查看索引任务
           </el-button>
@@ -369,6 +369,7 @@
               <div class="generate-result-card__actions">
                 <el-button
                   v-if="generateResult.asyncBizType || generateResult.asyncTraceId || generateResult.asyncMessageId"
+                  v-permission="'admin:task:list'"
                   type="primary"
                   plain
                   @click="viewGenerateTask"

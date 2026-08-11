@@ -57,11 +57,21 @@
       </el-header>
 
       <div v-if="healthStripExpanded" class="admin-health-strip" role="status" aria-live="polite">
-        <button class="admin-health-strip__status" type="button" @click="router.push('/admin/dashboard')">
+        <button
+          v-if="canLoadDashboardHealth"
+          class="admin-health-strip__status"
+          type="button"
+          @click="router.push('/admin/dashboard')"
+        >
           <span class="health-dot" :class="`is-${healthTone}`"></span>
           <strong>{{ healthLabel }}</strong>
           <small>{{ healthDetail }}</small>
         </button>
+        <div v-else class="admin-health-strip__status is-readonly">
+          <span class="health-dot" :class="`is-${healthTone}`"></span>
+          <strong>{{ healthLabel }}</strong>
+          <small>{{ healthDetail }}</small>
+        </div>
         <div class="admin-health-strip__item">
           <span>权限</span>
           <strong>{{ authStore.permissions.length }} 个</strong>
@@ -109,7 +119,7 @@
             </el-button>
           </div>
         </div>
-        <RouteErrorBoundary fallback-path="/admin/dashboard">
+        <RouteErrorBoundary :fallback-path="adminFallbackPath">
           <RouterView />
         </RouteErrorBoundary>
       </el-main>
@@ -142,7 +152,7 @@
       title="当前会话没有请求错误"
       description="如果页面出现空表或权限异常，可以先刷新相关页面；新的请求失败会记录在这里，便于复制追踪号定位。"
     >
-      <el-button type="primary" @click="router.push('/admin/dashboard')">查看运营首页</el-button>
+      <el-button type="primary" @click="router.push(adminFallbackPath)">{{ adminFallbackLabel }}</el-button>
     </AppState>
 
     <div v-else class="diagnostic-list">
@@ -199,7 +209,7 @@
     <template #footer>
       <el-button @click="clearRequestErrors">清空记录</el-button>
       <el-button @click="reloadCurrentPage">重新加载当前页</el-button>
-      <el-button type="primary" @click="router.push('/admin/dashboard')">查看运营首页</el-button>
+      <el-button type="primary" @click="router.push(adminFallbackPath)">{{ adminFallbackLabel }}</el-button>
     </template>
   </el-drawer>
 </template>
@@ -217,7 +227,7 @@ import AppState from '@/components/common/AppState.vue'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
-import { canAccessAdminPermissions } from '@/router/adminAccess'
+import { canAccessAdminPermissions, firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -246,6 +256,8 @@ const latestError = computed(() => requestErrors.value[0])
 const adminPermissionDrift = computed(() => authStore.isAdmin && authStore.permissions.length === 0)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
 const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))
+const adminFallbackPath = computed(() => firstAccessibleAdminPath(authStore) || '/403')
+const adminFallbackLabel = computed(() => canLoadDashboardHealth.value ? '查看运营首页' : '返回可访问页面')
 const mobileReadonlyDefinitions = [
   { label: '运营首页', path: '/admin/dashboard', permissions: ['admin:system:overview'] },
   { label: '失败任务', path: '/admin/async-tasks?status=FAILED', permissions: ['admin:task:list'] },
@@ -531,6 +543,10 @@ onBeforeUnmount(() => {
     border-color: rgba(6, 182, 212, 0.45);
     background: rgba(6, 182, 212, 0.1);
   }
+}
+
+.admin-health-strip__status.is-readonly {
+  cursor: default;
 }
 
 .admin-health-strip__status {
@@ -821,12 +837,13 @@ onBeforeUnmount(() => {
   }
 
   :deep(.layout-menu) {
-    display: flex;
-    overflow-x: auto;
+    display: block;
+    overflow: visible;
   }
 
-  :deep(.el-menu-item) {
-    flex: 0 0 auto;
+  :deep(.el-menu-item),
+  :deep(.el-sub-menu__title) {
+    width: 100%;
   }
 
   .app-layout__main {

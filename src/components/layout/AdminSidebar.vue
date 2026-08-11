@@ -18,7 +18,7 @@
         </el-icon>
         <template #title>{{ section.children[0].label }}</template>
       </el-menu-item>
-      <el-sub-menu v-else :index="section.key">
+      <el-sub-menu v-else :index="section.key" popper-class="admin-sidebar-submenu-popper">
         <template #title>
           <el-icon>
             <component :is="section.icon" />

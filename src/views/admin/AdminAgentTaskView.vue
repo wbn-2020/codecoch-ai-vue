@@ -97,7 +97,7 @@
             <el-table-column v-if="isColumnVisible('traceId')" prop="traceId" label="追踪号" min-width="180" show-overflow-tooltip />
             <el-table-column v-if="isColumnVisible('run')" label="运行" width="100">
               <template #default="{ row }">
-                <el-button v-if="row.agentRunId" link type="primary" @click="openRun(row.agentRunId)">详情</el-button>
+                <el-button v-if="row.agentRunId" v-permission="'admin:agent:run:list'" link type="primary" @click="openRun(row.agentRunId)">详情</el-button>
                 <span v-else>--</span>
               </template>
             </el-table-column>

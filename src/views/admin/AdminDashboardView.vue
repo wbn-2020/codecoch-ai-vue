@@ -298,7 +298,7 @@
             :description="serviceEmptyDescription"
           >
             <el-button type="primary" plain :loading="loading" @click="fetchOverview">重新加载</el-button>
-            <el-button plain @click="router.push('/admin/analytics/ai')">打开 AI 运营看板</el-button>
+            <el-button v-permission="'admin:analytics:ai'" plain @click="router.push('/admin/analytics/ai')">打开 AI 运营看板</el-button>
           </AppState>
         </div>
       </section>

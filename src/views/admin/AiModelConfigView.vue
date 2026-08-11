@@ -109,11 +109,12 @@
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑模型' : '新增模型'" width="680px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
-        <el-form-item label="供应商" prop="provider"><el-input v-model.trim="form.provider" placeholder="openai / deepseek" /></el-form-item>
-        <el-form-item label="模型名称" prop="modelName"><el-input v-model.trim="form.modelName" /></el-form-item>
+        <el-form-item label="供应商标识" prop="provider"><el-input v-model.trim="form.provider" placeholder="OPENAI_COMPATIBLE" /></el-form-item>
+        <el-form-item label="模型标识" prop="modelName"><el-input v-model.trim="form.modelName" placeholder="服务商要求的模型 ID" /></el-form-item>
         <el-form-item label="显示名"><el-input v-model.trim="form.displayName" /></el-form-item>
-        <el-form-item label="接口地址"><el-input v-model.trim="form.apiBaseUrl" /></el-form-item>
-        <el-form-item label="API Key"><el-input v-model.trim="form.apiKey" show-password placeholder="留空则不修改" /></el-form-item>
+        <el-form-item label="接口地址" prop="apiBaseUrl"><el-input v-model.trim="form.apiBaseUrl" placeholder="https://provider.example.com/v1/chat/completions" /></el-form-item>
+        <el-form-item label="API Key" prop="apiKey"><el-input v-model.trim="form.apiKey" show-password :placeholder="editingId ? '留空则不修改' : '新增模型时必填'" /></el-form-item>
+        <el-form-item label="配置状态"><el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" /></el-form-item>
         <el-form-item label="Temperature"><el-input-number v-model="form.temperature" :min="0" :max="2" :step="0.1" /></el-form-item>
         <el-form-item label="最大输出长度"><el-input-number v-model="form.maxTokens" :min="1" :step="512" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
@@ -188,11 +189,29 @@ const {
   { key: 'updatedAt', label: '更新时间', defaultVisible: false }
 ])
 const query = reactive<AdminListQuery>({ keyword: '', status: '', pageNo: 1, pageSize: 10 })
-const form = reactive<AiModelConfigDTO>({ provider: '', modelName: '', displayName: '', apiBaseUrl: '', apiKey: '', enabled: 1, temperature: 0.7, maxTokens: 4096, description: '' })
+const form = reactive<AiModelConfigDTO>({ provider: '', modelName: '', displayName: '', apiBaseUrl: '', apiKey: '', enabled: 0, temperature: 0.7, maxTokens: 4096, description: '' })
 type AiModelRiskCommand = 'toggle-status' | 'set-default' | 'delete'
+const validateApiBaseUrl = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
+  const rawValue = String(value || '').trim()
+  if (!rawValue) {
+    callback(editingId.value ? undefined : new Error('请输入接口地址'))
+    return
+  }
+  try {
+    const url = new URL(rawValue)
+    callback(url.protocol === 'https:' ? undefined : new Error('接口地址必须使用 HTTPS'))
+  } catch {
+    callback(new Error('请输入有效的 HTTPS 接口地址'))
+  }
+}
+const validateApiKey = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
+  callback(!editingId.value && !String(value || '').trim() ? new Error('新增模型时必须填写 API Key') : undefined)
+}
 const rules: FormRules<AiModelConfigDTO> = {
   provider: [{ required: true, message: '请输入供应商', trigger: 'blur' }],
-  modelName: [{ required: true, message: '请输入模型名称', trigger: 'blur' }]
+  modelName: [{ required: true, message: '请输入模型标识', trigger: 'blur' }],
+  apiBaseUrl: [{ validator: validateApiBaseUrl, trigger: 'blur' }],
+  apiKey: [{ validator: validateApiKey, trigger: 'blur' }]
 }
 const getModelStatus = (row: AiModelConfigVO) => Number(row.enabled ?? row.status ?? 0)
 const getModelHealth = (row: AiModelConfigVO) => {
@@ -210,7 +229,7 @@ const getModelHealth = (row: AiModelConfigVO) => {
 }
 const formatModelCallEvent = (at?: string, summary?: string) => {
   if (!at && !summary) return '未提供'
-  return [at || '时间未知', summary || '摘要未提供'].join(' · ')
+  return [at, summary].filter(Boolean).join(' · ')
 }
 const canManageModelWrite = computed(() => authStore.hasAnyAuthority(['admin:ai:model:write', 'ADMIN']))
 const canManageModelPublish = computed(() => authStore.hasAnyAuthority(['admin:ai:model:publish', 'ADMIN']))
@@ -240,7 +259,7 @@ const fetchModels = async () => {
 }
 const openDialog = (row?: AiModelConfigVO) => {
   editingId.value = row?.id
-  Object.assign(form, { provider: row?.provider || '', modelName: row?.modelName || '', displayName: row?.displayName || '', apiBaseUrl: row?.apiBaseUrl || '', apiKey: '', enabled: row?.enabled ?? 1, temperature: row?.temperature ?? 0.7, maxTokens: row?.maxTokens ?? 4096, description: row?.description || '' })
+  Object.assign(form, { provider: row?.provider || '', modelName: row?.modelName || '', displayName: row?.displayName || '', apiBaseUrl: row?.apiBaseUrl || '', apiKey: '', enabled: row?.enabled ?? 0, temperature: row?.temperature ?? 0.7, maxTokens: row?.maxTokens ?? 4096, description: row?.description || '' })
   dialogVisible.value = true
 }
 const handleSave = async () => {
@@ -284,6 +303,8 @@ const handleSave = async () => {
     ElMessage.success('模型配置已保存')
     dialogVisible.value = false
     await fetchModels()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '模型配置保存失败，请检查接口地址、密钥和当前账号权限后重试。'))
   } finally { saving.value = false }
 }
 const handleStatus = async (row: AiModelConfigVO, status: number) => {

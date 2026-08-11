@@ -16,6 +16,8 @@ const readOptionalSource = (relativePath: string) => {
 const adminLayoutSource = readSource('src/layouts/AdminLayout.vue')
 const adminStyleSource = readOptionalSource('src/views/admin/admin-workspace.scss')
 const adminDashboardSource = readSource('src/views/admin/AdminDashboardView.vue')
+const adminSidebarSource = readSource('src/components/layout/AdminSidebar.vue')
+const elementDarkSource = readSource('src/styles/element-dark.scss')
 const authStyleSource = readOptionalSource('src/views/auth/auth-workspace.scss')
 
 const readVueSources = (relativeDirectory: string) => {
@@ -62,9 +64,19 @@ describe('admin workspace layout system', () => {
   it('keeps the admin root and error recovery on a routable content page', () => {
     const routesSource = readSource('src/router/routes.ts')
 
-    expect(adminLayoutSource).toContain('fallback-path="/admin/dashboard"')
-    expect(routesSource).toContain(
+    expect(adminLayoutSource).toContain(':fallback-path="adminFallbackPath"')
+    expect(adminLayoutSource).toContain('firstAccessibleAdminPath(authStore)')
+    expect(routesSource).not.toContain(
       "{ path: '', redirect: '/admin/dashboard', meta: { hidden: true, commandHidden: true } }"
+    )
+  })
+
+  it('keeps the mobile admin navigation vertically scrollable instead of clipping submenus', () => {
+    expect(adminStyleSource).toMatch(
+      /@media \(max-width:\s*760px\)[\s\S]*?\.admin-layout \.app-layout__aside\s*\{[\s\S]*?max-height:\s*min\(42dvh,\s*360px\)[\s\S]*?overflow-y:\s*auto/
+    )
+    expect(adminStyleSource).not.toMatch(
+      /@media \(max-width:\s*760px\)[\s\S]*?\.admin-layout \.app-layout__aside\s*\{[\s\S]*?max-height:\s*48px[\s\S]*?overflow:\s*hidden/
     )
   })
 
@@ -78,6 +90,13 @@ describe('admin workspace layout system', () => {
     })
 
     expect(violations).toEqual([])
+  })
+
+  it('keeps collapsed admin submenu poppers on the dedicated dark theme', () => {
+    expect(adminSidebarSource).toContain('popper-class="admin-sidebar-submenu-popper"')
+    expect(elementDarkSource).toContain('.admin-sidebar-submenu-popper.el-menu--popup')
+    expect(elementDarkSource).toContain('background: #0d141e;')
+    expect(elementDarkSource).toContain('.admin-sidebar-submenu-popper .el-menu-item.is-active')
   })
 
   it('keeps mobile filters and diagnostic drawers within the viewport with touch-sized actions', () => {

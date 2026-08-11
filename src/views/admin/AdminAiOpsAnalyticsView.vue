@@ -38,8 +38,8 @@
       >
         <div class="diagnostic-actions">
           <el-button type="primary" @click="loadPage">重新加载</el-button>
-          <el-button @click="$router.push('/admin/ai/logs')">查看智能生成记录</el-button>
-          <el-button @click="$router.push('/admin/analytics/jobs')">查看聚合任务</el-button>
+          <el-button v-permission="'admin:ai:log:list'" @click="$router.push('/admin/ai/logs')">查看智能生成记录</el-button>
+          <el-button v-permission="'admin:analytics:agent'" @click="$router.push('/admin/analytics/jobs')">查看聚合任务</el-button>
         </div>
       </AppState>
 
@@ -69,7 +69,7 @@
             :description="aiCallStructureEmptyDescription"
           >
             <div class="diagnostic-actions">
-              <el-button type="primary" @click="$router.push('/admin/ai/logs')">查看运行记录</el-button>
+              <el-button v-permission="'admin:ai:log:list'" type="primary" @click="$router.push('/admin/ai/logs')">查看运行记录</el-button>
               <el-button @click="loadPage">重新加载</el-button>
             </div>
           </AppState>
@@ -94,7 +94,7 @@
               :description="failureEmptyDescription"
             >
               <div class="diagnostic-actions">
-                <el-button type="primary" @click="$router.push('/admin/ai/logs?status=FAILED')">查看失败日志</el-button>
+                <el-button v-permission="'admin:ai:log:list'" type="primary" @click="$router.push('/admin/ai/logs?status=FAILED')">查看失败日志</el-button>
                 <el-button @click="loadPage">重新加载</el-button>
               </div>
             </AppState>
@@ -129,7 +129,7 @@
               :description="feedbackEmptyDescription"
             >
               <div class="diagnostic-actions">
-                <el-button type="primary" @click="$router.push('/admin/agent/tasks')">查看智能任务</el-button>
+                <el-button v-permission="'admin:agent:task:list'" type="primary" @click="$router.push('/admin/agent/tasks')">查看智能任务</el-button>
                 <el-button @click="loadPage">重新加载</el-button>
               </div>
             </AppState>
@@ -162,7 +162,7 @@
               :description="qualityFeedbackEmptyDescription"
             >
               <div class="diagnostic-actions">
-                <el-button type="primary" @click="$router.push('/admin/ai/logs')">查看运行记录</el-button>
+                <el-button v-permission="'admin:ai:log:list'" type="primary" @click="$router.push('/admin/ai/logs')">查看运行记录</el-button>
                 <el-button @click="loadPage">重新加载</el-button>
               </div>
             </AppState>
@@ -196,7 +196,7 @@
               :description="trainingTrendEmptyDescription"
             >
               <div class="diagnostic-actions">
-                <el-button type="primary" @click="$router.push('/admin/analytics/jobs')">查看聚合任务</el-button>
+                <el-button v-permission="'admin:analytics:agent'" type="primary" @click="$router.push('/admin/analytics/jobs')">查看聚合任务</el-button>
                 <el-button @click="loadPage">重新加载</el-button>
               </div>
             </AppState>
@@ -407,7 +407,7 @@
               <AppState :type="vectorJobEmptyType" :title="vectorJobEmptyTitle" :description="vectorJobEmptyDescription">
                 <div class="diagnostic-actions">
                   <el-button type="primary" @click="loadVectorJobs">刷新索引任务</el-button>
-                  <el-button @click="$router.push('/admin/async-tasks')">查看任务中心</el-button>
+                  <el-button v-permission="'admin:task:list'" @click="$router.push('/admin/async-tasks')">查看任务中心</el-button>
                 </div>
               </AppState>
             </template>

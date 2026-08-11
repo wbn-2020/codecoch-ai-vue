@@ -29,8 +29,8 @@
       >
         <div class="diagnostic-actions">
           <el-button type="primary" @click="loadPage">重新加载</el-button>
-          <el-button @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
-          <el-button @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+          <el-button v-permission="'admin:agent:run:list'" @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
+          <el-button v-permission="'admin:agent:task:list'" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
         </div>
       </AppState>
 
@@ -59,7 +59,7 @@
         >
           <div class="diagnostic-actions">
             <el-button type="primary" @click="loadPage">刷新趋势</el-button>
-            <el-button @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
+            <el-button v-permission="'admin:agent:run:list'" @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
           </div>
         </AppState>
         <div v-else ref="trendChartRef" class="analytics-chart"></div>
@@ -82,7 +82,7 @@
             :description="taskTypeEmptyDescription"
           >
             <div class="diagnostic-actions">
-              <el-button type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+              <el-button v-permission="'admin:agent:task:list'" type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
               <el-button @click="loadPage">重新加载</el-button>
             </div>
           </AppState>
@@ -104,7 +104,7 @@
             :description="priorityEmptyDescription"
           >
             <div class="diagnostic-actions">
-              <el-button type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+              <el-button v-permission="'admin:agent:task:list'" type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
               <el-button @click="loadPage">重新加载</el-button>
             </div>
           </AppState>
