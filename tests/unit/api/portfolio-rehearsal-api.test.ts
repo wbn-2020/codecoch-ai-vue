@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { get, post, put } = vi.hoisted(() => ({
+const { get, post } = vi.hoisted(() => ({
   get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn()
+  post: vi.fn()
 }))
 
 vi.mock('@/utils/request', () => ({
-  default: { get, post, put }
+  default: { get, post }
 }))
 
 import {
@@ -21,7 +20,6 @@ describe('portfolio rehearsal session api', () => {
     vi.clearAllMocks()
     get.mockResolvedValue({})
     post.mockResolvedValue({})
-    put.mockResolvedValue({})
   })
 
   it('loads the current rehearsal session', async () => {
@@ -39,7 +37,7 @@ describe('portfolio rehearsal session api', () => {
     expect(session.completedNodeIds).toEqual(['deep-loop', 'deep-experiment'])
   })
 
-  it('saves rehearsal progress via PUT', async () => {
+  it('saves rehearsal progress via POST', async () => {
     const payload = {
       activeRouteKey: 'quick',
       activeNodeIndex: 3,
@@ -49,7 +47,7 @@ describe('portfolio rehearsal session api', () => {
 
     await savePortfolioRehearsalSessionApi(payload)
 
-    expect(put).toHaveBeenCalledWith('/portfolio-demo/rehearsal-session', payload)
+    expect(post).toHaveBeenCalledWith('/portfolio-demo/rehearsal-session', payload)
   })
 
   it('resets the rehearsal session via POST', async () => {

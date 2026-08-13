@@ -10,7 +10,10 @@ import type {
   AdminTaskActionPayload,
   AdminTaskImpactPreviewVO,
   AiModelConfigDTO,
+  AiModelProbeVO,
+  AiModelProbeDTO,
   AiModelConfigVO,
+  AiRuntimeStatusVO,
   AsyncTaskVO,
   LoginLogVO,
   MenuVO,
@@ -128,7 +131,7 @@ const normalizeLoginLog = (item: any): LoginLogVO => ({
   ip: pick(item, 'ipMasked', 'ip_masked', 'maskedIp', 'masked_ip', 'ip', 'ipAddress', 'ip_address'),
   ipMasked: pick(item, 'ipMasked', 'ip_masked', 'maskedIp', 'masked_ip', 'ip', 'ipAddress', 'ip_address'),
   maskedIp: pick(item, 'maskedIp', 'masked_ip', 'ipMasked', 'ip_masked', 'ip', 'ipAddress', 'ip_address'),
-  traceId: pick(item, 'traceIdShort', 'traceId', 'shortTraceId', 'trace_id'),
+  traceId: pick(item, 'traceId', 'trace_id', 'traceIdShort', 'shortTraceId'),
   traceIdShort: pick(item, 'traceIdShort', 'shortTraceId', 'traceId', 'trace_id'),
   shortTraceId: pick(item, 'shortTraceId', 'traceIdShort', 'traceId', 'trace_id'),
   loginType: pick(item, 'loginType', 'login_type'),
@@ -191,6 +194,11 @@ const normalizeAiModel = (item: any): AiModelConfigVO => ({
   temperature: pick(item, 'temperature'),
   maxTokens: pick(item, 'maxTokens', 'max_tokens'),
   description: pick(item, 'description', 'remark'),
+  callHealthStatus: pick(item, 'callHealthStatus', 'call_health_status', 'invocationHealthStatus', 'invocation_health_status', 'healthStatus', 'health_status'),
+  lastCallSuccessAt: pick(item, 'lastCallSuccessAt', 'last_call_success_at', 'lastSuccessAt', 'last_success_at'),
+  lastCallSuccessSummary: pick(item, 'lastCallSuccessSummary', 'last_call_success_summary', 'lastSuccessSummary', 'last_success_summary'),
+  lastCallFailureAt: pick(item, 'lastCallFailureAt', 'last_call_failure_at', 'lastFailureAt', 'last_failure_at', 'lastFailedAt', 'last_failed_at'),
+  lastCallFailureSummary: pick(item, 'lastCallFailureSummary', 'last_call_failure_summary', 'lastFailureSummary', 'last_failure_summary', 'lastErrorMessage', 'last_error_message'),
   createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
   updatedAt: pick(item, 'updatedAt', 'updateTime', 'updated_at')
 })
@@ -334,6 +342,9 @@ export const getAdminAiModelsApi = (params: AdminListQuery) =>
     })
     .then((result) => normalizePageResult(result, params, normalizeAiModel, { allowArrayFallback: true }))
 
+export const getAdminAiRuntimeStatusApi = () =>
+  request.get<AiRuntimeStatusVO, AiRuntimeStatusVO>('/admin/ai/runtime-status')
+
 export const createAdminAiModelApi = (data: AiModelConfigDTO & AdminOperationConfirmPayload) =>
   request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)
 
@@ -342,6 +353,9 @@ export const updateAdminAiModelApi = (id: number, data: AiModelConfigDTO & Admin
 
 export const updateAdminAiModelStatusApi = (id: number, status: number, data: AdminOperationConfirmPayload) =>
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/status`, { status, ...data })
+
+export const probeAdminAiModelApi = (id: number, data: AiModelProbeDTO) =>
+  request.post<AiModelProbeVO, AiModelProbeVO>(`/admin/ai/models/${id}/probe`, data)
 
 export const setDefaultAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/default`, data)

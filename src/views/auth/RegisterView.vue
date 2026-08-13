@@ -1,5 +1,5 @@
 <template>
-  <main class="auth-page">
+  <main class="arena arena-auth auth-page">
     <section class="auth-card">
       <div class="auth-card__intro">
         <div class="auth-card__brand">CodeCoachAI</div>

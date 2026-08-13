@@ -1,192 +1,71 @@
 <template>
-  <div class="interview-room">
+  <div class="interview-room arena-room">
     <section class="room-topbar">
       <div class="room-identity">
-        <div class="eyebrow">
-          <el-button class="room-back" text @click="router.push('/interviews/history')">
-            <ArrowLeft :size="15" />
-            返回
-          </el-button>
+        <p class="room-session-name">
           <Bot :size="16" />
-          AI 面试训练室
-        </div>
-        <h1>{{ current?.currentQuestion?.isFollowUp ? '追问训练中' : '模拟面试进行中' }}</h1>
+          <span>AI 面试训练</span>
+        </p>
       </div>
 
-      <div class="topbar-status">
-        <span class="dungeon-chip">⚔ 副本战斗</span>
-        <span class="dungeon-chip dungeon-chip--xp">+{{ sessionXp }} XP 本场</span>
-        <span class="cc-badge" :class="sseStatusBadgeClass">
-          <span class="cc-badge__dot"></span>
-          {{ sseStatusLabel }}
-        </span>
-        <span v-if="loading" class="topbar-chip topbar-chip--live">Loading</span>
-        <span v-if="submitting" class="topbar-chip topbar-chip--live">Scoring</span>
-        <span v-if="roomError" class="topbar-chip topbar-chip--danger">Error</span>
-        <span class="topbar-chip">计时 {{ elapsedText }}</span>
-        <span class="topbar-chip">{{ interviewStatusLabel(current?.status) }}</span>
-        <el-button class="ghost-action" text @click="fetchCurrent">重新获取当前题</el-button>
+      <div class="topbar-progress" aria-label="本场进度">
+        <span>{{ current?.currentStage?.stageName || '本场训练' }}</span>
+        <div class="topbar-progress__track" aria-hidden="true">
+          <i :style="{ width: `${progressPercent}%` }"></i>
+        </div>
+        <strong>{{ answeredCount }}/{{ expectedTotalText }}</strong>
+      </div>
+
+      <div class="topbar-actions">
+        <span class="room-timer">{{ elapsedText }}</span>
         <el-button
-          v-if="interviewId"
-          class="ghost-action"
+          v-if="interviewId && current?.status !== 'NOT_STARTED'"
+          class="topbar-report-action"
           text
-          :disabled="!canViewReport"
-          :title="reportButtonTip"
-          @click="handleViewReport"
+          :disabled="!current || finishing || (current.status === 'COMPLETED' && !canViewReport)"
+          :title="canViewReport ? reportButtonTip : '结束本轮面试并生成结构化报告'"
+          :aria-label="canViewReport ? reportButtonText : '结束并生成报告'"
+          @click="canViewReport ? handleViewReport() : handleManualFinish()"
         >
-          {{ reportButtonText }}
+          <FileText :size="15" />
+          {{ canViewReport ? reportButtonText : '结束本轮' }}
+        </el-button>
+        <el-button class="room-back" text @click="router.push('/interviews/history')">
+          <ArrowLeft :size="16" />
+          <span>退出</span>
         </el-button>
       </div>
     </section>
 
-    <section class="war-room" v-loading="loading">
-      <aside class="progress-panel">
-        <div class="panel-title">
-          <span>阶段轨道</span>
-          <StatusTag :status="current?.status || 'NOT_STARTED'" />
-        </div>
-
-        <div class="session-card">
-          <strong>{{ current?.currentStage?.stageName || '当前阶段' }}</strong>
-          <p>{{ current?.currentQuestion?.stageProgress || 'AI 会按阶段推进题目与追问。' }}</p>
-          <div class="mini-meta">
-            <span>{{ current?.currentQuestion?.isFollowUp ? '追问链' : '主问题' }}</span>
-            <span>{{ reportStatusText }}</span>
-          </div>
-        </div>
-
-        <div v-if="voiceProductContext?.scenario || scenarioBinding" class="scenario-binding-card">
-          <div>
-            <span>版本化剧本</span>
-            <strong>{{ scenarioBindingTitle }}</strong>
-          </div>
-          <el-tag :type="scenarioBindingTagType" effect="plain">
-            {{ scenarioBindingStatusText }}
-          </el-tag>
-          <p>{{ scenarioBindingMessage }}</p>
-        </div>
-
-        <div class="progress-list">
-          <article
-            v-for="item in progressItems"
-            :key="item.key"
-            class="progress-item"
-            :class="item.state"
-          >
-            <span class="dot"></span>
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.desc }}</p>
-            </div>
-          </article>
-        </div>
-
-        <div v-if="outlineStages.length" class="outline-section">
-          <div class="outline-title">本轮大纲</div>
-          <div class="outline-list">
-            <div
-              v-for="stage in outlineStages"
-              :key="stage.stageOrder"
-              class="outline-item"
-              :class="outlineStageState(stage)"
-            >
-              <span class="outline-order">{{ stage.stageOrder }}</span>
-              <div class="outline-info">
-                <strong>{{ stage.stageName }}</strong>
-                <span v-if="stage.expectedQuestionCount">{{ stage.expectedQuestionCount }} 题</span>
-                <span v-if="stage.estimatedMinutes">~{{ stage.estimatedMinutes }}min</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <AppState
-          v-if="!current && !loading && !roomError"
-          type="empty"
-          title="未找到面试会话"
-          description="可能是面试记录无效、会话已结束，或当前账号没有访问这场面试。请从历史记录重新进入。"
-        >
-          <el-button type="primary" @click="router.push('/interviews/history')">返回面试历史</el-button>
-          <el-button @click="fetchCurrent">重新加载</el-button>
-        </AppState>
-
-        <AppState
-          v-if="!current && !loading && roomError"
-          type="error"
-          title="面试房间加载失败"
-          :description="roomError"
-        >
-          <el-button type="primary" @click="fetchCurrent">重新加载</el-button>
-          <el-button @click="router.push('/interviews/history')">返回面试历史</el-button>
-        </AppState>
-
-        <div class="side-actions">
-          <el-button plain @click="fetchCurrent">重新获取当前题</el-button>
-          <el-button
-            v-if="interviewId"
-            type="primary"
-            plain
-            :disabled="!canViewReport"
-            :title="reportButtonTip"
-            @click="handleViewReport"
-          >
-            {{ reportButtonText }}
-          </el-button>
-        </div>
-
-        <div v-if="current && current.status !== 'NOT_STARTED'" class="finish-zone">
-          <div>
-            <strong>结束本轮训练</strong>
-            <p>未提交的当前回答不会自动补交，确认后会进入报告生成。</p>
-          </div>
-          <el-button type="danger" plain :loading="finishing" @click="handleManualFinish">
-            <Square :size="16" />
-            结束面试
-          </el-button>
-        </div>
-      </aside>
-
+    <section class="war-room">
       <main class="conversation-panel">
         <template v-if="current">
+          <section
+            v-if="current.currentQuestion && !canViewReport"
+            class="question-briefbar"
+            aria-label="当前作答信息"
+          >
+            <div class="question-briefbar__item">
+              <span>当前题号</span>
+              <strong>{{ currentQuestionNumberText }}</strong>
+            </div>
+            <div class="question-briefbar__item">
+              <span>回答方式</span>
+              <strong>{{ answerModeText }}</strong>
+              <small>{{ voiceAssistStateLabel }}</small>
+            </div>
+            <div class="question-briefbar__item question-briefbar__item--time">
+              <span>剩余 / 建议时间</span>
+              <strong>{{ questionTimeRemainingText }}</strong>
+              <small>单题建议 {{ questionTimeSuggestedText }}</small>
+            </div>
+          </section>
+
           <div class="conversation-scroll">
-            <div class="training-boundary">
-              <ShieldCheck :size="16" />
-              <span>本房间仅用于模拟训练与复盘，不用于真实面试实时作答。</span>
-            </div>
-
-            <section class="ai-presence">
-              <div class="ai-orbit" :class="{ 'is-thinking': loading || submitting || starting }">
-                <span></span>
-                <span></span>
-                <Bot :size="30" />
-              </div>
-              <div class="ai-presence__copy">
-                <div class="ai-persona">
-                  <span class="ai-persona__dot"></span>
-                  {{ INTERVIEWER_PERSONA }}
-                  <span v-if="submitting || loading || starting" class="ai-persona__typing">正在思考<i></i><i></i><i></i></span>
-                </div>
-                <p>{{ roomPresenceLabel }}</p>
-                <h2>{{ roomPresenceTitle }}</h2>
-                <span>{{ roomPresenceHint }}</span>
-                <div class="ai-signal" :class="{ 'is-active': loading || submitting || starting }" aria-hidden="true">
-                  <i v-for="item in 18" :key="item"></i>
-                </div>
-              </div>
-            </section>
-
-            <div class="battle-strip">
-              <span class="battle-strip__label">⚔ 战斗进度</span>
-              <div class="battle-strip__bar"><i :style="{ width: `${battleProgressPercent}%` }"></i></div>
-              <span class="battle-strip__text">{{ answeredCount }}/{{ expectedTotalText }} 题</span>
-              <span class="battle-strip__xp">+{{ sessionXp }} XP</span>
-            </div>
-
-            <div class="cockpit-state-strip">
-              <article v-for="item in cockpitStateItems" :key="item.key" :class="item.state">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-              </article>
+            <div class="question-context">
+              <span class="question-context__persona">{{ INTERVIEWER_PERSONA }}</span>
+              <span v-if="submitting || loading || starting" class="question-context__status">{{ sseStatusLabel }}</span>
+              <StatusTag v-else :status="current.status" />
             </div>
 
             <el-alert
@@ -207,19 +86,33 @@
               :title="roomError"
             />
 
-            <div v-if="current.status === 'NOT_STARTED'" class="start-card">
-              <Rocket :size="26" />
+            <section v-if="canViewReport" class="completion-card">
               <div>
-                <h2>准备进入 AI 面试</h2>
-                <p>开始后将获取第一道题，并根据你的回答继续推进面试。</p>
+                <span class="completion-card__eyebrow">本轮面试已完成</span>
+                <h2>报告已准备好，进入结构化复盘</h2>
+                <p>查看评分、回答证据和下一步训练建议。</p>
+              </div>
+              <el-button
+                type="primary"
+                class="completion-primary-action"
+                :disabled="!canViewReport"
+                @click="handleViewReport"
+              >
+                <FileText :size="16" />
+                查看结构化报告
+              </el-button>
+            </section>
+
+            <div v-if="current.status === 'NOT_STARTED'" class="start-card">
+              <Rocket :size="24" />
+              <div>
+                <h2>开始这一轮训练</h2>
+                <p>第一题会在开始后生成，并随回答继续推进。</p>
               </div>
               <el-button type="primary" size="large" :loading="starting" @click="handleStart">开始面试</el-button>
             </div>
 
-            <article v-if="current.currentQuestion" class="message-card ai question-card">
-              <div class="message-avatar message-avatar--ai">
-                <Bot :size="18" />
-              </div>
+            <article v-if="current.currentQuestion && !canViewReport" class="message-card ai question-card">
               <div class="message-body">
                 <div class="message-head">
                   <span class="question-kicker">
@@ -230,10 +123,6 @@
                 </div>
                 <h2>{{ current.currentQuestion.questionTitle || '当前问题' }}</h2>
                 <MarkdownPreview :content="current.currentQuestion.questionContent" />
-                <div v-if="current.currentQuestion.followUpReason" class="reason-box">
-                  <strong>追问原因</strong>
-                  <p>{{ current.currentQuestion.followUpReason }}</p>
-                </div>
                 <div v-if="current.currentQuestion.knowledgePoints?.length" class="tag-row">
                   <el-tag v-for="item in current.currentQuestion.knowledgePoints" :key="item" effect="plain">{{ item }}</el-tag>
                 </div>
@@ -241,24 +130,19 @@
             </article>
 
             <AppState
-              v-else
+              v-else-if="current.status !== 'NOT_STARTED' && !canViewReport"
               type="empty"
               :title="emptyQuestionTitle"
               :description="emptyQuestionDescription"
             >
-              <el-button v-if="current.status === 'NOT_STARTED'" type="primary" :loading="starting" @click="handleStart">开始面试</el-button>
-              <el-button v-else-if="current.status === 'COMPLETED'" type="primary" :disabled="!canViewReport" @click="handleViewReport">查看结构化报告</el-button>
-              <el-button v-else type="primary" @click="fetchCurrent">重新生成这一题</el-button>
+              <el-button type="default" @click="fetchCurrent">重新生成这一题</el-button>
               <el-button v-if="current.status !== 'NOT_STARTED'" plain :loading="finishing" @click="handleManualFinish">结束并生成报告</el-button>
             </AppState>
 
             <article v-if="lastSubmittedAnswer" class="message-card user">
-              <div class="message-avatar">
-                <UserRound :size="18" />
-              </div>
               <div class="message-body">
                 <div class="message-head">
-                  <strong>我的上一轮回答</strong>
+                  <strong><UserRound :size="14" /> 上一轮回答</strong>
                   <span>{{ answerDurationText }}</span>
                 </div>
                 <p class="answer-preview">{{ lastSubmittedAnswer }}</p>
@@ -266,142 +150,171 @@
             </article>
           </div>
 
-          <div class="answer-console">
-            <div class="console-head">
-              <div>
-                <span class="console-kicker">回答工作台</span>
-                <h2>把思路讲完整</h2>
-                <p>{{ answerDisabled ? '当前状态不可提交回答' : '提交后 AI 会分析结构、亮点、不足，并决定是否追问。' }}</p>
-              </div>
-              <StatusTag :status="submitting ? 'AI_EVALUATING' : current.status" />
-            </div>
-            <div class="answer-dock-meta">
-              <span>{{ answerWordCount }} 字</span>
-              <span>{{ answerDurationText }}</span>
-              <span>{{ answerDisabled ? '不可提交' : '可提交' }}</span>
-            </div>
-            <InterviewVoiceLiveConsole
-              v-if="interviewId"
-              ref="liveVoiceConsoleRef"
-              :key="current.currentQuestion?.messageId || 'no-question'"
-              :session-id="interviewId"
-              :question-key="current.currentQuestion?.messageId || 'no-question'"
-              :question-text="current.currentQuestion?.questionContent || ''"
-              :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive"
-              :preflight-ready="voicePreflightReady"
-              :persist-recording="persistLiveVoiceRecording"
-              @transcript-confirmed="handleLiveTranscriptConfirmed"
-              @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
-              @runtime-active-changed="handleLiveAsrRuntimeChanged"
-            />
-            <section class="voice-preview">
-              <div class="voice-preview__head">
+          <div
+            id="room-answer-composer"
+            class="answer-console"
+            :class="{ 'is-mobile-open': mobileAnswerComposerOpen }"
+            v-if="current.status !== 'NOT_STARTED' && !canViewReport"
+          >
+            <template v-if="current.status !== 'NOT_STARTED'">
+              <div class="console-head">
                 <div>
-                  <span class="console-kicker">录音文件转写（兼容模式）</span>
-                  <strong>{{ voicePreviewTitle }}</strong>
-                  <p>{{ voicePreviewHint }}</p>
+                  <span class="console-kicker">你的回答</span>
+                  <p>{{ answerDisabled ? '当前状态不可提交回答' : '用结论、原理、实践和取舍组织表达。' }}</p>
                 </div>
-                <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
+                <span class="answer-dock-meta">{{ answerWordCount }} 字 · {{ answerDurationText }}</span>
               </div>
-              <div class="voice-preview__actions">
-                <el-button
-                  :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreview.canRecord.value"
-                  @click="handleVoiceStart"
-                >
-                  <Mic :size="16" />
-                  开始录音
-                </el-button>
-                <el-button
-                  :disabled="!voicePreview.canStopRecording.value"
-                  @click="handleVoiceStop"
-                >
-                  <MicOff :size="16" />
-                  停止
-                </el-button>
-                <el-button
-                  :disabled="answerDisabled || voiceConfirming"
-                  @click="handleVoiceFallback"
-                >
-                  <Keyboard :size="16" />
-                  文本降级
-                </el-button>
-              </div>
+              <details class="room-voice-drawer">
+                <summary class="voice-tool-summary">
+                  <span>语音作答与转写</span>
+                  <strong :class="`voice-tool-summary__state voice-tool-summary__state--${voiceAssistStateClass}`">
+                    {{ voiceAssistStateLabel }}
+                  </strong>
+                </summary>
+                <section class="voice-preflight-panel">
+                  <div>
+                    <span class="console-kicker">语音设备预检</span>
+                    <strong>{{ voicePreflightTitle }}</strong>
+                    <p>{{ voicePreflightDescription }}</p>
+                  </div>
+                  <div class="voice-preflight-panel__actions">
+                    <el-button
+                      class="voice-preflight-action"
+                      :disabled="answerDisabled || voicePreflightState === 'checking'"
+                      :loading="voicePreflightState === 'checking'"
+                      @click="handleVoicePreflight"
+                    >
+                      <Mic :size="16" />
+                      {{ voicePreflightActionText }}
+                    </el-button>
+                    <el-button
+                      v-if="voicePreflightState === 'unavailable' || voicePreview.state.value === 'fallback_text'"
+                      class="voice-fallback-action"
+                      :disabled="answerDisabled || voiceConfirming"
+                      @click="handleVoiceFallback"
+                    >
+                      <Keyboard :size="16" />
+                      使用文本回答
+                    </el-button>
+                  </div>
+                </section>
+                <InterviewVoiceLiveConsole
+                  v-if="interviewId"
+                  ref="liveVoiceConsoleRef"
+                  :key="current.currentQuestion?.messageId || 'no-question'"
+                  :session-id="interviewId"
+                  :question-key="current.currentQuestion?.messageId || 'no-question'"
+                  :question-text="current.currentQuestion?.questionContent || ''"
+                  :disabled="answerDisabled || submitting || compatibilityVoiceRuntimeActive || !voicePreflightReady"
+                  :preflight-ready="voicePreflightReady"
+                  :persist-recording="persistLiveVoiceRecording"
+                  @transcript-confirmed="handleLiveTranscriptConfirmed"
+                  @analysis-updated="handleVoiceDeliveryAnalysisUpdated"
+                  @runtime-active-changed="handleLiveAsrRuntimeChanged"
+                />
+                <section class="voice-preview">
+                  <div class="voice-preview__head">
+                    <div>
+                      <span class="console-kicker">录音文件转写（兼容模式）</span>
+                      <strong>{{ voicePreviewTitle }}</strong>
+                      <p>{{ voicePreviewHint }}</p>
+                    </div>
+                    <span class="voice-preview__state">{{ voicePreviewStateLabel }}</span>
+                  </div>
+                  <div class="voice-preview__actions">
+                    <el-button
+                      :disabled="answerDisabled || liveAsrRuntimeActive || !voicePreflightReady || !voicePreview.canRecord.value"
+                      @click="handleVoiceStart"
+                    >
+                      <Mic :size="16" />
+                      开始录音
+                    </el-button>
+                    <el-button
+                      :disabled="!voicePreview.canStopRecording.value"
+                      @click="handleVoiceStop"
+                    >
+                      <MicOff :size="16" />
+                      停止
+                    </el-button>
+                    <el-button
+                      :disabled="answerDisabled || voiceConfirming"
+                      @click="handleVoiceFallback"
+                    >
+                      <Keyboard :size="16" />
+                      文本降级
+                    </el-button>
+                  </div>
+                  <el-input
+                    v-if="voicePreview.canEditDraft.value"
+                    v-model="voicePreview.draftText.value"
+                    type="textarea"
+                    :rows="3"
+                    :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
+                    placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
+                    @input="handleVoiceDraftInput"
+                  />
+                  <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
+                    <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
+                    <el-button
+                      type="primary"
+                      plain
+                      :loading="voiceConfirming"
+                      :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
+                      @click="handleVoiceConfirm"
+                    >
+                      <Check :size="16" />
+                      确认到文本回答
+                    </el-button>
+                  </div>
+                  <el-alert
+                    v-if="voicePreview.errorMessage.value"
+                    class="voice-preview__alert"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                    :title="voicePreview.errorMessage.value"
+                  />
+                </section>
+              </details>
               <el-input
-                v-if="voicePreview.canEditDraft.value"
-                v-model="voicePreview.draftText.value"
+                ref="answerInputRef"
+                v-model="answerContent"
                 type="textarea"
-                :rows="3"
-                :disabled="answerDisabled || liveAsrRuntimeActive || voicePreview.isBusy.value || voiceConfirming"
-                placeholder="当前没有 ASR 接口。请在这里手动粘贴或编辑转写草稿，确认后才会写入正式回答。"
-                @input="handleVoiceDraftInput"
+                :rows="9"
+                :disabled="answerDisabled"
+                placeholder="请输入你的回答，建议按结论、原理、项目实践、风险取舍组织表达"
               />
-              <div v-if="voicePreview.canEditDraft.value" class="voice-preview__confirm">
-                <span>未确认草稿不会提交、评分、入库或进入 Agent。</span>
+              <div class="answer-actions">
+                <el-button class="answer-reload-action" text @click="handleReloadCurrentQuestion">
+                  <RotateCcw :size="16" />
+                  <span>重取题目</span>
+                </el-button>
                 <el-button
                   type="primary"
-                  plain
-                  :loading="voiceConfirming"
-                  :disabled="answerDisabled || voiceConfirming || !voicePreview.canConfirmDraft.value"
-                  @click="handleVoiceConfirm"
+                  class="answer-submit-action"
+                  :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
+                  :loading="submitting"
+                  @click="handleSubmit"
                 >
-                  <Check :size="16" />
-                  确认到文本回答
+                  <Send :size="16" />
+                  {{ submitting ? '正在评分' : '提交并进入下一步' }}
                 </el-button>
               </div>
-              <el-alert
-                v-if="voicePreview.errorMessage.value"
-                class="voice-preview__alert"
-                type="warning"
-                show-icon
-                :closable="false"
-                :title="voicePreview.errorMessage.value"
-              />
-            </section>
-            <el-input
-              ref="answerInputRef"
-              v-model="answerContent"
-              type="textarea"
-              :rows="9"
-              :disabled="answerDisabled"
-              placeholder="请输入你的回答，建议按结论、原理、项目实践、风险取舍组织表达"
-            />
-            <div class="answer-actions">
-              <el-button
-                type="primary"
-                :disabled="answerDisabled || voicePreview.isBusy.value || voiceConfirming"
-                :loading="submitting"
-                @click="handleSubmit"
-              >
-                <Send :size="16" />
-                {{ submitting ? 'AI 正在评分并生成下一步问题' : '提交回答' }}
-              </el-button>
-              <el-button @click="fetchCurrent">重新获取当前题</el-button>
-            </div>
-            <el-alert
-              v-if="submitting"
-              class="state-alert"
-              type="info"
-              show-icon
-              :closable="false"
-              title="AI 正在分析你的回答"
-              :description="answerReviewMessage || '正在检查回答结构、技术深度与追问方向，预计需要 5-20 秒。'"
-            />
-            <section
-              v-if="submitting && answerReviewStreamingFeedback"
-              class="review-stream-preview"
-            >
-              <span>AI 实时点评</span>
-              <p>{{ answerReviewStreamingFeedback }}</p>
-            </section>
-            <div v-if="submitting && answerReviewEvents.length" class="review-stage-list">
-              <article v-for="item in answerReviewEvents" :key="item.key" class="review-stage-item">
-                <span>{{ item.eventLabel || item.event }}</span>
-                <strong>{{ item.stageLabel || item.message || '-' }}</strong>
-                <p>{{ item.message || item.stageLabel || '-' }}</p>
-              </article>
+            </template>
+            <div v-else class="answer-console__locked">
+              <span>开始面试后，在这里完成本题作答。</span>
             </div>
           </div>
         </template>
+
+        <AppState
+          v-else-if="loading"
+          type="loading"
+          title="正在进入面试房间"
+          description="正在同步本场进度；如果长时间没有响应，可以重新加载。"
+        >
+          <el-button type="primary" @click="fetchCurrent">重新加载</el-button>
+        </AppState>
 
         <AppState
           v-else-if="!loading"
@@ -414,154 +327,84 @@
         </AppState>
       </main>
 
-      <aside class="feedback-panel">
-        <div class="panel-title">
-          <span>AI 实时点评</span>
-          <Activity :size="16" />
-        </div>
-
-        <div class="battle-status-card">
-          <div class="battle-status-card__head">
-            <span>战况</span>
-            <span class="battle-status-card__lv">LV.{{ gameProfile.levelInfo.level }} {{ gameProfile.levelInfo.title }}</span>
+      <aside class="feedback-panel training-rail">
+        <section class="rail-section rail-overview">
+          <div class="rail-section__head">
+            <span>训练进度</span>
+            <StatusTag :status="submitting ? 'AI_EVALUATING' : current?.status || 'NOT_STARTED'" />
           </div>
-          <div class="battle-status-card__grid">
-            <div>
-              <span>本场已拿</span>
-              <strong>+{{ sessionXp }} XP</strong>
-            </div>
-            <div>
-              <span>题序</span>
-              <strong>{{ answeredCount }}/{{ expectedTotalText }}</strong>
-            </div>
-            <div>
-              <span>连胜</span>
-              <strong>🔥 {{ gameProfile.streakDays }} 天</strong>
-            </div>
-            <div>
-              <span>计时</span>
-              <strong>{{ elapsedText }}</strong>
-            </div>
+          <strong class="rail-count">{{ answeredCount }}<small>/{{ expectedTotalText }}</small></strong>
+          <p>{{ current?.currentStage?.stageName || '等待本轮开始' }}</p>
+          <div class="rail-progress" aria-hidden="true"><i :style="{ width: `${progressPercent}%` }"></i></div>
+        </section>
+
+        <section class="rail-section rail-pace">
+          <div>
+            <span>训练节奏</span>
+            <strong>{{ submitting ? 'AI 正在点评' : loading ? '正在准备题目' : '等待你的回答' }}</strong>
           </div>
-        </div>
-
-        <div class="score-card">
-          <span>当前题表现</span>
-          <strong>{{ latestScoreText }}</strong>
-          <p>{{ latestEvaluationLevelText }}</p>
-          <span v-if="lastResult" class="score-card__xp">+18 XP 已入账</span>
-        </div>
-
-        <InterviewVoiceDeliveryMetrics :analysis="voiceDeliveryAnalysis" />
-
-        <div class="answer-rubric">
-          <div class="panel-title compact">
-            <span>答题结构</span>
-            <ListChecks :size="16" />
+          <div>
+            <span>本场用时</span>
+            <strong>{{ elapsedText }}</strong>
           </div>
-          <div class="rubric-list">
-            <article v-for="item in answerStructureItems" :key="item.title">
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.desc }}</p>
-            </article>
-          </div>
-        </div>
+        </section>
 
-        <div v-if="followUpReasonText" class="followup-brief">
-          <div class="panel-title compact">
-            <span>追问链</span>
-            <Route :size="16" />
-          </div>
-          <p>{{ followUpReasonText }}</p>
-        </div>
+        <section v-if="current?.currentQuestion?.knowledgePoints?.length" class="rail-section rail-hint">
+          <span>本题提示</span>
+          <p>{{ current.currentQuestion.knowledgePoints.slice(0, 2).join(' · ') }}</p>
+        </section>
 
-        <el-tabs class="feedback-tabs" model-value="evaluation">
-          <el-tab-pane label="点评" name="evaluation">
-            <div v-if="lastResult" class="feedback-stack">
+        <details class="room-feedback-drawer">
+          <summary>
+            <span>本题反馈</span>
+            <strong>{{ latestScoreText }}</strong>
+          </summary>
+          <div class="room-feedback-drawer__body">
+            <template v-if="lastResult">
               <el-alert
                 v-if="reviewFallbackVisible"
                 type="warning"
                 show-icon
                 :closable="false"
                 title="点评内容未完整返回"
-                description="当前题已有评分或作答记录，但结构化点评为空；请先按下方兜底建议复盘，也可以重新获取当前题后继续。"
               />
               <section>
                 <h3>AI 点评</h3>
                 <MarkdownPreview :content="reviewCommentText" />
               </section>
-              <section>
-                <h3>回答亮点</h3>
-                <p>{{ reviewAdvantageText }}</p>
-              </section>
-              <section>
-                <h3>不足之处</h3>
-                <p>{{ reviewWeaknessText }}</p>
-              </section>
-              <section>
-                <h3>提升建议</h3>
-                <p>{{ reviewSuggestionText }}</p>
-              </section>
-              <section v-if="lastResult.followUpQuestion || lastResult.followUpReason">
-                <h3>AI 追问</h3>
-                <p v-if="lastResult.followUpQuestion">{{ lastResult.followUpQuestion }}</p>
-                <p v-if="lastResult.followUpReason" class="muted">原因：{{ lastResult.followUpReason }}</p>
-              </section>
-              <section v-if="lastResult.knowledgePoints?.length">
-                <h3>相关知识点</h3>
-                <div class="tag-row">
-                  <el-tag v-for="item in lastResult.knowledgePoints" :key="item" effect="plain">{{ item }}</el-tag>
+              <section class="feedback-points">
+                <div>
+                  <span>亮点</span>
+                  <p>{{ reviewAdvantageText }}</p>
+                </div>
+                <div>
+                  <span>待加强</span>
+                  <p>{{ reviewWeaknessText }}</p>
+                </div>
+                <div>
+                  <span>下一步</span>
+                  <p>{{ reviewSuggestionText }}</p>
                 </div>
               </section>
+              <section v-if="lastResult.followUpQuestion || lastResult.followUpReason">
+                <h3>追问方向</h3>
+                <p>{{ lastResult.followUpQuestion || lastResult.followUpReason }}</p>
+              </section>
               <el-alert :type="nextActionAlertType" :closable="false" show-icon :title="nextActionText" />
-            </div>
-            <AppState
-              v-else
-              type="empty"
-              title="等待你的第一轮回答"
-              description="提交回答后，这里会展示 AI 点评、答题结构、追问方向和下一步动作。"
-            >
-              <el-button type="primary" :disabled="answerDisabled" @click="focusAnswerInput">去作答</el-button>
-            </AppState>
-          </el-tab-pane>
-
-          <el-tab-pane label="简历" name="resume">
-            <AppState
-              type="empty"
-              title="当前房间没有简历快照"
-              description="这场面试可能没有绑定简历，或快照只保存在面试详情中。补齐简历和岗位后，后续推荐会更准确。"
-            >
-              <el-button type="primary" @click="router.push('/resumes')">查看简历与岗位</el-button>
-              <el-button v-if="interviewId" @click="router.push(`/interviews/${interviewId}`)">查看面试详情</el-button>
-            </AppState>
-          </el-tab-pane>
-
-          <el-tab-pane label="笔记" name="notes">
-            <div class="pending-note">
-              <FilePenLine :size="18" />
-              <strong>本轮暂不保存笔记</strong>
-              <p>这里先作为面试中的临时提示区，结束后请以问答记录和报告为准。</p>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+            </template>
+            <p v-else class="feedback-empty">提交回答后，可在这里查看评分与建议。</p>
+            <InterviewVoiceDeliveryMetrics :analysis="voiceDeliveryAnalysis" />
+          </div>
+        </details>
       </aside>
     </section>
-
-    <footer class="room-statusbar">
-      <span>会话：{{ interviewId || '-' }}</span>
-      <span>进度：{{ interviewStatusLabel(current?.status) }}</span>
-      <span>计时：{{ elapsedText }}</span>
-      <span>AI 节奏：{{ submitting ? '正在点评' : loading ? '题目加载中' : '等待作答' }}</span>
-      <span v-if="answerReviewMetaText">点评：{{ answerReviewMetaText }}</span>
-      <span>报告：{{ reportStatusText }}</span>
-    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Activity, ArrowLeft, Bot, Check, FilePenLine, Keyboard, ListChecks, Mic, MicOff, Rocket, Route, Send, ShieldCheck, Square, UserRound } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ArrowLeft, Bot, Check, FileText, Keyboard, Mic, MicOff, Rocket, RotateCcw, Send, UserRound } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -585,8 +428,10 @@ import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
-import { useGameProfileStore } from '@/features/game-profile'
-import { useAuthStore } from '@/stores/auth'
+import {
+  inspectInterviewVoiceDeviceSupport,
+  interviewVoicePermissionMessage
+} from '@/features/interview-voice-device'
 import {
   type InterviewVoiceConfirmedMeta,
   type InterviewVoiceRecordedAudio,
@@ -623,20 +468,20 @@ import InterviewVoiceLiveConsole from '@/views/interview/components/InterviewVoi
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
-const gameProfile = useGameProfileStore()
 const interviewId = getRouteNumberParam(route.params.id as string)
 
-// ---- 副本战斗（游戏化增量，不改变面试逻辑） ----
 /** AI 面试官人格 */
 const INTERVIEWER_PERSONA = '面试官 · 岚'
-/** 本场已入账 XP（从持久化奖励账本汇总，刷新后不丢失也不重复） */
-const sessionXp = computed(() =>
-  interviewId ? gameProfile.rewardXpForPrefix(`interview:${interviewId}:`) : 0
-)
-const grantedAnswerIds = new Set<number>()
+let currentRequestVersion = 0
+let currentLoadingTimeout: number | null = null
 
-const answeredCount = ref(0)
+const clearCurrentLoadingTimeout = () => {
+  if (currentLoadingTimeout !== null) {
+    window.clearTimeout(currentLoadingTimeout)
+    currentLoadingTimeout = null
+  }
+}
+
 const loading = ref(false)
 const starting = ref(false)
 const submitting = ref(false)
@@ -646,6 +491,7 @@ const roomError = ref('')
 const lastResult = ref<InterviewAnswerResultVO | null>(null)
 const answerContent = ref('')
 const answerInputRef = ref<{ focus?: () => void } | null>(null)
+const mobileAnswerComposerOpen = ref(false)
 const liveVoiceConsoleRef = ref<{
   cancelActiveAsr: () => Promise<void>
   resetRealtimeVoice: () => Promise<void>
@@ -653,7 +499,6 @@ const liveVoiceConsoleRef = ref<{
 const liveAsrRuntimeActive = ref(false)
 const lastSubmittedAnswer = ref('')
 const lastAnswerDuration = ref(0)
-const answerStartTime = ref(Date.now())
 const answerReviewMessage = ref('')
 const answerReviewAnswerId = ref<number | undefined>()
 const answerReviewAiCallLogId = ref<number | undefined>()
@@ -671,6 +516,17 @@ const uploadedVoiceFileId = ref<number | null>(null)
 const voiceProductContext = ref<InterviewVoiceProductContext | null>(
   interviewId ? loadInterviewVoiceProductContext(interviewId) : null
 )
+type VoicePreflightState = 'unchecked' | 'checking' | 'ready' | 'unavailable'
+const voicePreflightState = ref<VoicePreflightState>(
+  route.query.voicePreflight === 'ready' || voiceProductContext.value?.voicePreflightReady
+    ? 'ready'
+    : 'unchecked'
+)
+const voicePreflightSecondsLeft = ref(10)
+const voicePreflightMessage = ref('')
+let voicePreflightTimer: number | undefined
+let voicePreflightStream: MediaStream | null = null
+let voicePreflightRun = 0
 const scenarioBinding = ref<InterviewScenarioBindingVO | null>(
   voiceProductContext.value?.scenarioBinding || null
 )
@@ -739,7 +595,11 @@ const elapsedText = computed(() => {
 
 const startElapsedTimer = () => {
   stopElapsedTimer()
-  elapsedSeconds.value = 0
+  const presentedAt = current.value?.currentQuestion?.questionPresentedAt
+  const presentedAtMs = presentedAt ? new Date(presentedAt).getTime() : Number.NaN
+  elapsedSeconds.value = Number.isFinite(presentedAtMs)
+    ? Math.max(0, Math.floor((Date.now() - presentedAtMs) / 1000))
+    : 0
   elapsedTimer = window.setInterval(() => {
     elapsedSeconds.value++
   }, 1000)
@@ -830,10 +690,52 @@ const outlineStages = computed(() => current.value?.outline || [])
 
 const answerWordCount = computed(() => answerContent.value.trim().length)
 
-const voicePreflightReady = computed(() =>
-  route.query.voicePreflight === 'ready'
-  || Boolean(voiceProductContext.value?.voicePreflightReady)
-)
+const voicePreflightReady = computed(() => voicePreflightState.value === 'ready')
+
+const voiceAssistStateLabel = computed(() => {
+  if (voicePreview.state.value === 'fallback_text') return '文本降级'
+  if (voicePreflightState.value === 'unavailable') return '语音不可用'
+  if (voicePreflightState.value === 'checking') return `预检中 ${voicePreflightSecondsLeft.value}s`
+  if (voicePreflightReady.value) return '语音已预检'
+  return '语音未预检'
+})
+
+const voiceAssistStateClass = computed(() => {
+  if (voicePreview.state.value === 'fallback_text') return 'fallback'
+  if (voicePreflightState.value === 'unavailable') return 'unavailable'
+  if (voicePreflightState.value === 'checking') return 'checking'
+  if (voicePreflightReady.value) return 'ready'
+  return 'unchecked'
+})
+
+const answerModeText = computed(() => {
+  if (liveAsrRuntimeActive.value) return '实时字幕'
+  if (confirmedVoiceMeta.value) return '语音转写 + 文本校对'
+  if (voicePreview.state.value === 'fallback_text') return '文本作答（降级）'
+  return '文本作答（默认）'
+})
+
+const voicePreflightTitle = computed(() => {
+  if (voicePreflightState.value === 'checking') return `请持续说话，剩余 ${voicePreflightSecondsLeft.value} 秒`
+  if (voicePreflightState.value === 'ready') return '语音设备已通过预检'
+  if (voicePreflightState.value === 'unavailable') return '语音能力当前不可用'
+  return '使用语音前先完成 10 秒预检'
+})
+
+const voicePreflightDescription = computed(() => {
+  if (voicePreflightMessage.value) return voicePreflightMessage.value
+  if (voicePreflightState.value === 'checking') return '预检期间仅验证麦克风权限和输入设备，结束后会立即释放。'
+  if (voicePreflightState.value === 'ready') return '可以使用实时字幕或录音转写；写入回答前仍需人工确认。'
+  if (voicePreflightState.value === 'unavailable') return '请检查浏览器权限和系统输入设备，或直接使用文本回答。'
+  return '预检会短暂占用麦克风 10 秒，不提交、不评分，也不会保存录音。'
+})
+
+const voicePreflightActionText = computed(() => {
+  if (voicePreflightState.value === 'checking') return `预检中 ${voicePreflightSecondsLeft.value}s`
+  if (voicePreflightState.value === 'ready') return '重新预检（10 秒）'
+  if (voicePreflightState.value === 'unavailable') return '重试 10 秒预检'
+  return '开始 10 秒预检'
+})
 
 const scenarioBindingStatus = computed<'BOUND' | 'PENDING' | 'NONE'>(() => {
   if (scenarioBinding.value) return 'BOUND'
@@ -1023,30 +925,10 @@ const latestEvaluationLevelText = computed(() => {
   return latestScoreText.value !== '--' ? '已评分，点评待补' : '等待评分结果'
 })
 
-// ---- 副本战斗：XP 挂钩与战斗进度 ----
-/** 每次 AI 评分返回（按 answerMessageId 去重）→ +18 XP 即时奖励 */
-watch(lastResult, (result) => {
-  const answerMessageId = result?.answerMessageId
-  if (!answerMessageId) return
-  if (!grantedAnswerIds.has(answerMessageId)) {
-    grantedAnswerIds.add(answerMessageId)
-    answeredCount.value = grantedAnswerIds.size
-  }
-  gameProfile.grantXpOnce('practice_correct', `interview:${interviewId}:answer:${answerMessageId}`)
-})
-
-/** 面试完成（一次性）→ 通关 +200 XP 并续连胜 */
-watch(
-  () => current.value?.status,
-  (status) => {
-    if (!['COMPLETED', 'REPORT_GENERATING', 'REPORT_DONE', 'GENERATED', 'FINISHED'].includes(String(status || '').toUpperCase())) return
-    const grant = gameProfile.grantXpOnce('interview_complete', `interview:${interviewId}:complete`)
-    if (grant) gameProfile.recordActivity()
-  }
-)
-
 /** 预计题量：大纲预期题数合计，退化为当前阶段预期 */
 const expectedTotalText = computed(() => {
+  const fromServer = Number(current.value?.totalQuestionCount)
+  if (Number.isFinite(fromServer) && fromServer > 0) return `${fromServer}`
   const fromOutline = outlineStages.value.reduce((sum, stage) => sum + (Number(stage.expectedQuestionCount) || 0), 0)
   if (fromOutline > 0) return `${fromOutline}`
   const fromStage = Number(current.value?.currentStage?.expectedQuestionCount)
@@ -1054,10 +936,69 @@ const expectedTotalText = computed(() => {
   return '多'
 })
 
-const battleProgressPercent = computed(() => {
+const answeredCount = computed(() => {
+  const fromServer = Number(current.value?.answeredQuestionCount)
+  if (Number.isFinite(fromServer) && fromServer >= 0) return fromServer
+  const currentIndex = Number(current.value?.currentQuestionIndex)
+  return Number.isFinite(currentIndex) && currentIndex > 0 ? currentIndex - 1 : 0
+})
+
+const currentQuestionNumberText = computed(() => {
+  const serverIndex = Number(current.value?.currentQuestionIndex)
+  const currentNumber = Number.isFinite(serverIndex) && serverIndex > 0
+    ? serverIndex
+    : Math.max(1, answeredCount.value + 1)
   const total = Number(expectedTotalText.value)
-  if (!Number.isFinite(total) || total <= 0) return Math.min(100, answeredCount.value * 15)
-  return Math.min(100, Math.round((answeredCount.value / total) * 100))
+  if (Number.isFinite(total) && total > 0) {
+    return `第 ${Math.min(currentNumber, total)} / ${total} 题`
+  }
+  return `第 ${currentNumber} 题`
+})
+
+const suggestedQuestionSeconds = computed(() => {
+  const stageOrder = current.value?.currentStage?.stageOrder
+  const outlineStage = outlineStages.value.find((stage) => stage.stageOrder === stageOrder)
+  const stageMinutes = Number(outlineStage?.estimatedMinutes)
+  const stageQuestionCount = Number(
+    outlineStage?.expectedQuestionCount
+    || current.value?.currentStage?.expectedQuestionCount
+  )
+  if (stageMinutes > 0 && stageQuestionCount > 0) {
+    return Math.min(600, Math.max(60, Math.round((stageMinutes * 60) / stageQuestionCount)))
+  }
+
+  const scenarioMinutes = Number(voiceProductContext.value?.scenario?.estimatedMinutes)
+  const scenarioQuestionCount = Number(voiceProductContext.value?.scenario?.questionCount)
+  if (scenarioMinutes > 0 && scenarioQuestionCount > 0) {
+    return Math.min(600, Math.max(60, Math.round((scenarioMinutes * 60) / scenarioQuestionCount)))
+  }
+  return 180
+})
+
+const formatQuestionTime = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainder = safeSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+const questionTimeSuggestedText = computed(() =>
+  formatQuestionTime(suggestedQuestionSeconds.value)
+)
+
+const questionTimeRemainingText = computed(() => {
+  const remaining = suggestedQuestionSeconds.value - elapsedSeconds.value
+  return remaining > 0 ? formatQuestionTime(remaining) : '建议时间已用完'
+})
+
+const progressPercent = computed(() => {
+  const total = Number(expectedTotalText.value)
+  const serverAnswered = Number(current.value?.answeredQuestionCount)
+  const completed = Number.isFinite(serverAnswered) && serverAnswered >= 0
+    ? serverAnswered
+    : answeredCount.value
+  if (!Number.isFinite(total) || total <= 0) return Math.min(100, completed * 15)
+  return Math.min(100, Math.round((completed / total) * 100))
 })
 
 const reviewFallbackVisible = computed(() => {
@@ -1134,8 +1075,19 @@ const answerReviewMetaText = computed(() => {
 })
 
 const focusAnswerInput = () => {
-  answerInputRef.value?.focus?.()
-  document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  mobileAnswerComposerOpen.value = true
+  void nextTick(() => {
+    answerInputRef.value?.focus?.()
+    document.querySelector('.answer-console')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+const handleMobileSubmit = () => {
+  if (!mobileAnswerComposerOpen.value) {
+    focusAnswerInput()
+    return
+  }
+  void handleSubmit()
 }
 
 const handleLiveTranscriptConfirmed = (
@@ -1184,6 +1136,112 @@ const persistVoiceProductContext = (
   }
   voiceProductContext.value = next
   saveInterviewVoiceProductContext(next)
+}
+
+const clearVoicePreflightTimer = () => {
+  if (voicePreflightTimer !== undefined) {
+    window.clearInterval(voicePreflightTimer)
+    voicePreflightTimer = undefined
+  }
+}
+
+const releaseVoicePreflightStream = () => {
+  voicePreflightStream?.getTracks().forEach((track) => track.stop())
+  voicePreflightStream = null
+}
+
+const stopVoicePreflight = () => {
+  voicePreflightRun += 1
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  if (voicePreflightState.value === 'checking') {
+    voicePreflightState.value = 'unchecked'
+    voicePreflightSecondsLeft.value = 10
+    voicePreflightMessage.value = ''
+  }
+}
+
+const persistCurrentVoicePreflightState = () => {
+  persistVoiceProductContext(
+    scenarioBindingStatus.value,
+    scenarioBinding.value || undefined
+  )
+}
+
+const markVoicePreflightUnavailable = (message: string, run?: number) => {
+  if (run !== undefined && run !== voicePreflightRun) return
+  voicePreflightRun += 1
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  voicePreflightState.value = 'unavailable'
+  voicePreflightSecondsLeft.value = 10
+  voicePreflightMessage.value = message
+  persistCurrentVoicePreflightState()
+}
+
+const completeVoicePreflight = (run: number) => {
+  if (run !== voicePreflightRun) return
+  clearVoicePreflightTimer()
+  releaseVoicePreflightStream()
+  voicePreflightState.value = 'ready'
+  voicePreflightSecondsLeft.value = 0
+  voicePreflightMessage.value = '麦克风权限和输入设备可用，预检录音未保存。'
+  persistCurrentVoicePreflightState()
+}
+
+const handleVoicePreflight = async () => {
+  if (voicePreflightState.value === 'checking') return
+  stopVoicePreflight()
+  await resetRealtimeVoice()
+  await cancelVoiceLifecycle('MODE_SWITCH')
+
+  const support = inspectInterviewVoiceDeviceSupport()
+  if (!support.canRequestMicrophone || !support.canRecord) {
+    markVoicePreflightUnavailable(
+      support.warnings.join(' ') || '当前浏览器不支持语音录制，请继续使用文本回答。'
+    )
+    return
+  }
+
+  const run = ++voicePreflightRun
+  voicePreflightState.value = 'checking'
+  voicePreflightSecondsLeft.value = 10
+  voicePreflightMessage.value = support.warnings.join(' ')
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
+    if (run !== voicePreflightRun) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    const audioTrack = stream.getAudioTracks()[0]
+    if (!audioTrack) {
+      stream.getTracks().forEach((track) => track.stop())
+      markVoicePreflightUnavailable('没有检测到可用麦克风，请连接设备后重试。', run)
+      return
+    }
+
+    voicePreflightStream = stream
+    voicePreflightTimer = window.setInterval(() => {
+      if (run !== voicePreflightRun) return
+      if (audioTrack.readyState === 'ended') {
+        markVoicePreflightUnavailable('麦克风连接已中断，请检查输入设备后重试。', run)
+        return
+      }
+      voicePreflightSecondsLeft.value -= 1
+      if (voicePreflightSecondsLeft.value <= 0) {
+        completeVoicePreflight(run)
+      }
+    }, 1000)
+  } catch (error) {
+    markVoicePreflightUnavailable(interviewVoicePermissionMessage(error), run)
+  }
 }
 
 const loadScenarioBinding = async () => {
@@ -1294,6 +1352,7 @@ const resetRealtimeVoice = async () => {
 }
 
 const cleanupVoiceResources = async (reason: InterviewVoiceDiscardReason) => {
+  stopVoicePreflight()
   await Promise.all([
     resetRealtimeVoice(),
     cancelVoiceLifecycle(reason)
@@ -1317,7 +1376,7 @@ const buildVoiceAudioFile = (audio: InterviewVoiceRecordedAudio) => {
 
 const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
   if (!interviewId || !current.value?.currentQuestion) {
-    voicePreview.setError('upload_failed', 'No active interview question. Please refresh and retry.')
+    voicePreview.setError('upload_failed', '当前没有可作答的面试题，请刷新页面后重试。')
     return
   }
 
@@ -1382,7 +1441,7 @@ const persistLiveVoiceRecording = async (
   request: InterviewRealtimeVoicePersistenceRequest
 ): Promise<InterviewRealtimeVoicePersistenceResult> => {
   if (!interviewId || !current.value?.currentQuestion) {
-    throw new Error('No active interview question. Please refresh and retry.')
+    throw new Error('当前没有可作答的面试题，请刷新页面后重试。')
   }
 
   await cancelVoiceLifecycle('REPLACED')
@@ -1436,7 +1495,7 @@ const persistLiveVoiceRecording = async (
     }
     const transcript = transcribed.transcript
     if (!transcript?.transcriptId) {
-      throw new Error('Voice transcription did not persist a transcript row for confirmation.')
+      throw new Error('语音转写结果未成功保存，暂时无法确认，请重新录音或使用文本回答。')
     }
 
     const confirmed = await confirmInterviewVoiceTranscriptApi(
@@ -1530,11 +1589,11 @@ const handleVoiceConfirm = async () => {
       }
     }
     if (voicePreview.confirmDraft(meta)) {
-      ElMessage.success('Voice transcript confirmed. Please review the answer before submitting.')
+      ElMessage.success('语音转写已确认，请检查回答内容后再提交。')
     }
   } catch (error) {
     if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
-    ElMessage.error(getErrorMessage(error, 'Voice transcript confirmation failed.'))
+    ElMessage.error(getErrorMessage(error, '语音转写确认失败，请稍后重试。'))
   } finally {
     if (voiceRequestController === controller) {
       voiceRequestController = null
@@ -1545,26 +1604,62 @@ const handleVoiceConfirm = async () => {
 
 const fetchCurrent = async () => {
   if (!interviewId) return
+  const requestVersion = ++currentRequestVersion
+  clearCurrentLoadingTimeout()
   loading.value = true
   roomError.value = ''
+  currentLoadingTimeout = window.setTimeout(() => {
+    if (requestVersion !== currentRequestVersion || !loading.value) return
+    loading.value = false
+    currentLoadingTimeout = null
+    roomError.value = '同步面试房间超时，请检查网络后重试。'
+  }, 12000)
   try {
     const previousMessageId = current.value?.currentQuestion?.messageId
     const nextCurrent = await getCurrentInterviewQuestionApi(interviewId)
+    if (requestVersion !== currentRequestVersion) return
     const nextMessageId = nextCurrent?.currentQuestion?.messageId
     if (previousMessageId && nextMessageId !== previousMessageId) {
+      const discardedDraft = Boolean(answerContent.value.trim() || confirmedVoiceText.value.trim())
       await cleanupVoiceResources('QUESTION_CHANGED')
+      answerContent.value = ''
+      mobileAnswerComposerOpen.value = false
+      if (discardedDraft) {
+        ElMessage.info('题目已更新，上一题未提交草稿已清除。')
+      }
     }
     current.value = nextCurrent
-    answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
     }
   } catch (error) {
+    if (requestVersion !== currentRequestVersion) return
     current.value = null
     roomError.value = getErrorMessage(error, '面试房间暂时无法加载，请稍后重试。')
   } finally {
+    if (requestVersion !== currentRequestVersion) return
+    clearCurrentLoadingTimeout()
     loading.value = false
   }
+}
+
+const handleReloadCurrentQuestion = async () => {
+  const hasDraft = Boolean(answerContent.value.trim() || confirmedVoiceText.value.trim())
+  if (hasDraft) {
+    const confirmed = await confirmDangerActionPreview({
+      title: '重新获取题目',
+      action: '丢弃当前未提交回答并重新获取当前题目',
+      target: '当前题目',
+      impact: '当前输入框和已确认但未提交的语音转写会被清除；系统可能返回新的题目。',
+      rollback: '草稿尚未保存，确认后无法恢复。',
+      audit: '不会提交、评分或记录当前草稿。',
+      tips: ['确认当前草稿不再需要。'],
+      confirmButtonText: '丢弃草稿并换题'
+    })
+    if (!confirmed) return
+  }
+
+  await fetchCurrent()
 }
 
 const handleStart = async () => {
@@ -1584,28 +1679,47 @@ const handleStart = async () => {
 }
 
 const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
-  lastResult.value = result
+  const normalizedResult = normalizeAnswerResultState(result)
+  lastResult.value = normalizedResult
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
+  mobileAnswerComposerOpen.value = false
   voicePreview.markSubmitted()
   activeVoiceSubmissionId = null
   uploadedVoiceFileId.value = null
   resetConfirmedVoiceAnswer()
 
-  if (result.nextAction === NEXT_ACTION.FINISH) {
+  if (normalizedResult.nextAction === NEXT_ACTION.FINISH) {
     await handleFinish(false)
     return
   }
 
-  if (result.nextAction === NEXT_ACTION.FOLLOW_UP && result.nextQuestion) {
+  if (normalizedResult.nextAction === NEXT_ACTION.FOLLOW_UP && normalizedResult.nextQuestion) {
     await cleanupVoiceResources('QUESTION_CHANGED')
-    current.value = {
-      interviewId: result.interviewId,
-      status: result.interviewStatus,
-      currentStage: result.currentStage,
-      currentQuestion: result.nextQuestion
+    const activeInterviewId = normalizedResult.interviewId || current.value?.interviewId || interviewId
+    if (!activeInterviewId) {
+      await fetchCurrent()
+      return
     }
-    answerStartTime.value = Date.now()
+    current.value = {
+      ...current.value,
+      interviewId: activeInterviewId,
+      status: normalizedResult.interviewStatus || current.value?.status || 'IN_PROGRESS',
+      interviewStatus: normalizedResult.interviewStatus || current.value?.interviewStatus,
+      currentStage: normalizedResult.currentStage || current.value?.currentStage,
+      currentQuestion: normalizedResult.nextQuestion,
+      currentQuestionIndex: normalizedResult.progress?.currentQuestionIndex
+        ?? normalizedResult.currentQuestionIndex
+        ?? current.value?.currentQuestionIndex,
+      totalQuestionCount: normalizedResult.progress?.totalQuestionCount
+        ?? normalizedResult.totalQuestionCount
+        ?? current.value?.totalQuestionCount,
+      answeredQuestionCount: normalizedResult.progress?.answeredQuestionCount
+        ?? normalizedResult.answeredQuestionCount
+        ?? current.value?.answeredQuestionCount,
+      overallProgress: normalizedResult.overallProgress || current.value?.overallProgress,
+      outline: normalizedResult.outline || current.value?.outline
+    }
     startElapsedTimer()
     return
   }
@@ -1673,7 +1787,24 @@ const normalizeAnswerReviewResult = (
     currentStage: raw.currentStage,
     interviewStatus: raw.interviewStatus || 'IN_PROGRESS',
     reportStatus: raw.reportStatus,
-    progress: raw.progress
+    progress: raw.progress || data?.progress,
+    outline: raw.outline || data?.outline,
+    currentQuestionIndex: raw.currentQuestionIndex,
+    totalQuestionCount: raw.totalQuestionCount,
+    answeredQuestionCount: raw.answeredQuestionCount,
+    overallProgress: raw.overallProgress
+  }
+}
+
+const normalizeAnswerResultState = (result: InterviewAnswerResultVO): InterviewAnswerResultVO => {
+  const progress = result.progress
+  return {
+    ...result,
+    progress,
+    outline: result.outline,
+    currentQuestionIndex: result.currentQuestionIndex ?? progress?.currentQuestionIndex,
+    totalQuestionCount: result.totalQuestionCount ?? progress?.totalQuestionCount,
+    answeredQuestionCount: result.answeredQuestionCount ?? progress?.answeredQuestionCount
   }
 }
 
@@ -1726,7 +1857,7 @@ const handleSubmit = async () => {
   }
 
   if (voicePreview.hasPendingUnconfirmedTranscript.value) {
-    ElMessage.warning('Please confirm or clear the voice transcript draft before submitting.')
+    ElMessage.warning('请先确认或清空语音转写草稿，再提交回答。')
     return
   }
 
@@ -1760,7 +1891,9 @@ const handleSubmit = async () => {
     messageId: current.value.currentQuestion.messageId,
     questionId: current.value.currentQuestion.questionId,
     answerContent: answerContent.value,
-    answerDurationSeconds: Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000)),
+    // The server persists timing from questionPresentedAt. Keep this client value only
+    // for backward-compatible API consumers and local display before the response returns.
+    answerDurationSeconds: Math.max(1, elapsedSeconds.value),
     clientSubmitTime: new Date().toISOString(),
     ...voicePayload
   }
@@ -1876,7 +2009,6 @@ const handleManualFinish = async () => {
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   void fetchCurrent()
   void loadScenarioBinding()
 })
@@ -1885,6 +2017,7 @@ onBeforeRouteLeave(async () => {
 })
 onBeforeUnmount(() => {
   window.clearTimeout(slowSubmitTimer)
+  clearCurrentLoadingTimeout()
   stopAnswerReviewSse()
   stopElapsedTimer()
   void cleanupVoiceResources('PAGE_UNLOAD')
@@ -3198,27 +3331,6 @@ onBeforeUnmount(() => {
   }
 }
 
-// ---- 副本战斗（游戏化增量样式，暗色霓虹） ----
-.dungeon-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  background: rgba(124, 92, 252, 0.16);
-  color: #b3a1ff;
-  border: 1px solid rgba(124, 92, 252, 0.35);
-  white-space: nowrap;
-}
-
-.dungeon-chip--xp {
-  background: rgba(247, 144, 9, 0.14);
-  color: #f7b955;
-  border-color: rgba(247, 144, 9, 0.35);
-}
-
 .ai-persona {
   display: inline-flex;
   align-items: center;
@@ -3250,7 +3362,7 @@ onBeforeUnmount(() => {
     height: 3px;
     border-radius: 50%;
     background: currentColor;
-    animation: dungeonTyping 1.2s ease-in-out infinite;
+    animation: personaTyping 1.2s ease-in-out infinite;
   }
 
   i:nth-child(2) {
@@ -3262,116 +3374,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.battle-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(2, 6, 23, 0.5);
-}
-
-.battle-strip__label {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #f7b955;
-}
-
-.battle-strip__bar {
-  flex: 1;
-  height: 8px;
-  border-radius: 99px;
-  background: rgba(148, 163, 184, 0.18);
-  overflow: hidden;
-
-  i {
-    display: block;
-    height: 100%;
-    border-radius: 99px;
-    background: linear-gradient(90deg, #17b26a, #a3e635);
-    box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
-    transition: width 0.3s ease;
-  }
-}
-
-.battle-strip__text {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #cbd5e1;
-}
-
-.battle-strip__xp {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #f7b955;
-}
-
-.battle-status-card {
-  padding: 13px 15px;
-  border-radius: 14px;
-  border: 1px solid rgba(124, 92, 252, 0.3);
-  background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(2, 6, 23, 0.5));
-}
-
-.battle-status-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  font-weight: 800;
-  color: #e5edf8;
-}
-
-.battle-status-card__lv {
-  font-size: 10.5px;
-  color: #b3a1ff;
-}
-
-.battle-status-card__grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
-
-  > div {
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(148, 163, 184, 0.08);
-
-    span {
-      display: block;
-      font-size: 10px;
-      font-weight: 700;
-      color: rgba(203, 213, 225, 0.6);
-    }
-
-    strong {
-      display: block;
-      margin-top: 2px;
-      font-size: 12.5px;
-      color: #f8fafc;
-    }
-  }
-}
-
-.score-card__xp {
-  display: inline-flex;
-  margin-top: 7px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 800;
-  background: rgba(247, 144, 9, 0.16);
-  color: #f7b955;
-  border: 1px solid rgba(247, 144, 9, 0.35);
-}
-
-@keyframes dungeonTyping {
+@keyframes personaTyping {
   0%,
   100% {
     opacity: 0.3;
@@ -3380,6 +3383,2528 @@ onBeforeUnmount(() => {
   50% {
     opacity: 1;
     transform: translateY(-2px);
+  }
+}
+
+// ---- 副本战斗（游戏化增量样式，暗色霓虹） ----
+.arena-room {
+  --room-bg: #101513;
+  --room-surface: #1a201d;
+  --room-surface-raised: #202723;
+  --room-line: rgba(228, 234, 229, 0.13);
+  --room-text: #edf3ef;
+  --room-sub: #9faba4;
+  --room-green: #17b26a;
+  --room-lime: #a3e635;
+  --room-amber: #ffc966;
+  --el-color-primary: var(--room-green);
+  --el-color-primary-dark-2: #0e9f5d;
+  --el-color-primary-light-3: #54c78d;
+  --el-color-primary-light-7: rgba(23, 178, 106, 0.32);
+  --el-color-primary-light-9: rgba(23, 178, 106, 0.12);
+
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(23, 178, 106, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(124, 92, 252, 0.1), transparent 60%),
+    var(--room-bg);
+  color: var(--room-text);
+
+  .room-topbar,
+  .war-room {
+    border-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.78);
+  }
+
+  .progress-panel,
+  .feedback-panel {
+    background: rgba(26, 32, 29, 0.62);
+  }
+
+  .conversation-panel {
+    border-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.32);
+  }
+
+  .room-identity h1,
+  .panel-title,
+  .message-card,
+  .score-card,
+  .ai-presence h2 {
+    color: var(--room-text);
+  }
+
+  .eyebrow,
+  .ai-presence p {
+    color: #7fd8a8;
+  }
+
+  .room-back,
+  .topbar-chip,
+  .cc-badge {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.05);
+    color: #b9c4bd;
+  }
+
+  .cc-badge--thinking,
+  .cc-badge--streaming,
+  .topbar-chip--live {
+    border-color: rgba(163, 230, 53, 0.36);
+    background: rgba(163, 230, 53, 0.1);
+    color: var(--room-lime);
+
+    .cc-badge__dot {
+      background: var(--room-lime);
+      box-shadow: 0 0 14px rgba(163, 230, 53, 0.65);
+    }
+  }
+
+  .training-boundary,
+  .session-card,
+  .scenario-binding-card,
+  .score-card,
+  .message-card,
+  .question-card,
+  .answer-console,
+  .start-card,
+  .pending-note,
+  .feedback-stack section,
+  .answer-rubric,
+  .followup-brief {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .ai-presence {
+    border-color: rgba(23, 178, 106, 0.32);
+    border-radius: 18px;
+    background: rgba(23, 178, 106, 0.08);
+  }
+
+  .ai-orbit {
+    color: #d9f2e4;
+    background: rgba(23, 178, 106, 0.22);
+
+    span {
+      border-color: rgba(163, 230, 53, 0.32);
+    }
+  }
+
+  .cockpit-state-strip article {
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.04);
+
+    &.active {
+      border-color: rgba(163, 230, 53, 0.35);
+      background: rgba(23, 178, 106, 0.1);
+    }
+  }
+
+}
+
+// 房间是独立沉浸壳，不继承用户端顶栏或底栏。
+.interview-room.arena-room {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(23, 178, 106, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(124, 92, 252, 0.12), transparent 60%),
+    #101513;
+
+  .room-topbar {
+    flex: 0 0 auto;
+    min-height: 72px;
+    padding: 14px 22px;
+    border: 0;
+    border-bottom: 1px solid var(--room-line);
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .room-identity {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+
+    .eyebrow {
+      gap: 8px;
+      color: var(--room-sub);
+      font-size: 12px;
+      text-transform: none;
+    }
+
+    h1 {
+      display: none;
+    }
+  }
+
+  .room-session-name {
+    max-width: min(42vw, 520px);
+    margin: 0;
+    overflow: hidden;
+    color: var(--room-text);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-status {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .topbar-status > .cc-badge,
+  .topbar-status > .topbar-chip:not(.room-timer),
+  .topbar-status > .ghost-action:first-of-type {
+    display: none;
+  }
+
+  .room-timer {
+    color: var(--room-lime);
+    font-family: ui-monospace, Consolas, monospace;
+    font-weight: 800;
+  }
+
+  .ghost-action {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 10px;
+    color: var(--room-sub);
+    white-space: nowrap;
+  }
+
+  .war-room {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-areas:
+      'conversation feedback'
+      'progress progress';
+    grid-template-columns: minmax(0, 1fr) 260px;
+    grid-template-rows: minmax(0, 1fr) auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .progress-panel {
+    display: block;
+    grid-area: progress;
+    width: min(100%, 860px);
+    margin: 0 22px 16px;
+    padding: 0;
+    border: 1px solid var(--room-line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      color: var(--room-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary strong {
+      color: var(--room-text);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    &[open] {
+      padding: 14px;
+
+      > summary {
+        padding: 0 0 12px;
+      }
+    }
+  }
+
+  .conversation-panel {
+    grid-area: conversation;
+    display: flex;
+    flex-direction: column;
+    align-content: start;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 22px;
+    border: 0;
+    background: transparent;
+  }
+
+  .feedback-panel {
+    grid-area: feedback;
+    width: 260px;
+    padding: 18px;
+    border-left: 1px solid var(--room-line);
+    background: rgba(26, 32, 29, 0.62);
+  }
+
+  .conversation-scroll {
+    flex: 0 1 auto;
+    min-height: min-content;
+    max-height: min(48dvh, 520px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .training-boundary,
+  .cockpit-state-strip,
+  .answer-rubric,
+  .followup-brief,
+  .feedback-tabs,
+  .feedback-panel > :not(.panel-title) {
+    display: none;
+  }
+
+  .ai-presence {
+    display: grid;
+    width: min(100%, 360px);
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+
+    .ai-orbit {
+      width: 44px;
+      height: 44px;
+
+      span {
+        inset: 6px;
+      }
+
+      span:nth-child(2) {
+        inset: 12px;
+      }
+
+      svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .ai-presence__copy {
+      display: grid;
+      gap: 2px;
+    }
+
+    .ai-persona {
+      color: var(--room-text);
+      font-size: 12px;
+    }
+
+    p {
+      color: #7fd8a8;
+      font-size: 11px;
+    }
+
+    h2,
+    > .ai-presence__copy > span,
+    .ai-signal {
+      display: none;
+    }
+  }
+
+  .conversation-scroll {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+  }
+
+  .room-progress-summary {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--room-line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .room-progress-summary__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--room-sub);
+    font-size: 11px;
+    font-weight: 800;
+
+    strong {
+      color: var(--room-text);
+      font-family: ui-monospace, Consolas, monospace;
+    }
+  }
+
+  .room-progress-summary article {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+
+    > span {
+      width: 8px;
+      height: 8px;
+      margin-top: 4px;
+      border: 1px solid var(--room-line);
+      border-radius: 50%;
+    }
+
+    strong,
+    small {
+      display: block;
+    }
+
+    strong {
+      color: var(--room-text);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    small {
+      margin-top: 2px;
+      color: var(--room-sub);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    &.done > span {
+      border-color: var(--room-green);
+      background: var(--room-green);
+    }
+
+    &.active > span {
+      border-color: var(--room-lime);
+      background: var(--room-lime);
+      box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
+    }
+  }
+
+  .message-card.ai.question-card {
+    width: min(100%, 560px);
+    margin: 0;
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.055);
+
+    .message-avatar {
+      display: none;
+    }
+
+    .message-body {
+      padding: 0;
+    }
+
+    .message-head {
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    :deep(.markdown-preview) {
+      margin-top: 8px;
+      color: var(--room-text);
+      font-size: 14px;
+      line-height: 1.75;
+    }
+  }
+
+  .message-card.user {
+    width: min(100%, 630px);
+    margin-left: auto;
+    padding: 14px 16px;
+    border-color: rgba(23, 178, 106, 0.5);
+    border-radius: 14px;
+    background: rgba(10, 104, 60, 0.55);
+
+    .message-avatar {
+      display: none;
+    }
+
+    .message-body {
+      padding: 0;
+    }
+  }
+
+  .answer-console {
+    flex: 0 0 auto;
+    position: static;
+    z-index: 2;
+    width: min(100%, 960px);
+    max-width: min(100%, 960px);
+    margin: 14px auto 0;
+    padding: 16px 20px;
+    max-height: none;
+    overflow: visible;
+    border-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.06);
+
+    .console-head {
+      display: none;
+    }
+
+    .voice-preview {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--room-line);
+    }
+
+    .voice-preview__head {
+      display: none;
+    }
+
+    .voice-preview__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+
+      :deep(.el-button) {
+        min-height: 34px;
+        margin: 0;
+        border-color: var(--room-line);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--room-sub);
+      }
+    }
+
+    .room-voice-drawer {
+      margin-top: 10px;
+      border-top: 1px solid var(--room-line);
+
+      > summary {
+        padding: 10px 0 0;
+        color: var(--room-sub);
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 800;
+        list-style: none;
+      }
+
+      > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      &[open] > summary {
+        margin-bottom: 10px;
+      }
+    }
+
+    .voice-preview__confirm {
+      color: var(--room-sub);
+      font-size: 11px;
+    }
+
+    :deep(.el-textarea__inner) {
+      min-height: 118px !important;
+      border-color: var(--room-line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--room-text);
+      box-shadow: none;
+    }
+
+    .answer-dock-meta {
+      display: none;
+    }
+
+    .answer-actions {
+      justify-content: space-between;
+      margin-top: 12px;
+
+      :deep(.el-button:first-child) {
+        margin-left: auto;
+      }
+    }
+  }
+
+  .feedback-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    > .panel-title {
+      display: none;
+    }
+  }
+
+  .feedback-panel > :not(.panel-title):not(.room-feedback-drawer) {
+    display: none;
+  }
+
+  .room-feedback-drawer {
+    display: block;
+    margin-top: 12px;
+    border-top: 1px solid var(--room-line);
+
+    > summary {
+      padding: 12px 0 0;
+      color: var(--room-sub);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] > summary {
+      margin-bottom: 12px;
+    }
+  }
+
+  .room-statusbar {
+    display: none;
+  }
+
+  .room-mobile-actions {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      min-height: 64px;
+      padding: 10px 12px;
+      gap: 8px;
+    }
+
+    .room-session-name {
+      max-width: 52vw;
+      font-size: 12px;
+    }
+
+    .topbar-status {
+      gap: 6px;
+    }
+
+    .topbar-status > .cc-badge,
+    .topbar-status > .topbar-chip:not(.room-timer),
+    .topbar-status > .ghost-action:first-of-type {
+      display: none;
+    }
+
+    .topbar-status > .ghost-action:last-of-type {
+      min-height: 36px;
+      padding: 0 9px;
+      color: #ffffff;
+      background: var(--room-green);
+      border-radius: 10px;
+      box-shadow: 0 3px 0 rgba(10, 104, 60, 0.9);
+    }
+
+    .room-timer {
+      min-height: 36px;
+      padding: 0 9px;
+      border-radius: 10px;
+    }
+
+    .war-room {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .feedback-panel,
+    .progress-panel {
+      display: none;
+    }
+
+    .conversation-panel {
+      padding: 12px 12px 10px;
+    }
+
+    .conversation-scroll {
+      padding-right: 0;
+      scroll-padding-bottom: 18px;
+    }
+
+    .answer-console {
+      display: block;
+      flex: 0 0 auto;
+      max-height: none;
+      margin-top: 12px;
+      overflow: visible;
+      padding: 12px;
+      border-color: var(--room-line);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .answer-console:not(.is-mobile-open) {
+      display: none;
+    }
+
+    .room-progress-summary,
+    .ai-presence {
+      display: none;
+    }
+
+    .answer-console .console-head,
+    .answer-console .answer-actions {
+      display: none;
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      min-height: 128px !important;
+      max-height: none;
+    }
+
+    .room-mobile-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr);
+      gap: 8px;
+      flex: 0 0 auto;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--room-line);
+      background: rgba(16, 21, 19, 0.96);
+
+      :deep(.el-button) {
+        min-width: 0;
+        min-height: 44px;
+        margin: 0;
+        padding: 0 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .room-mobile-action {
+      display: flex;
+      min-width: 0;
+
+      :deep(.el-button) {
+        width: 100%;
+      }
+    }
+  }
+}
+
+// 方向 D · 浅色训练室。题目和回答各自承担单一、明确的工作区域，避免面板嵌套滚动。
+.interview-room.arena-room {
+  --room-bg: #f5f7f4;
+  --room-surface: #ffffff;
+  --room-surface-raised: #ffffff;
+  --room-line: #dce4dc;
+  --room-text: #1d2921;
+  --room-sub: #68756b;
+  --room-green: #17824b;
+  --room-lime: #8cae32;
+  --room-amber: #b7791f;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--room-bg);
+  color: var(--room-text);
+
+  .room-topbar {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: minmax(160px, 0.7fr) minmax(260px, 1.3fr) minmax(240px, 0.9fr);
+    gap: 20px;
+    align-items: center;
+    min-height: 64px;
+    padding: 0 28px;
+    border: 0;
+    border-bottom: 1px solid var(--room-line);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: none;
+  }
+
+  .room-identity,
+  .room-session-name,
+  .topbar-progress,
+  .topbar-actions {
+    min-width: 0;
+  }
+
+  .room-session-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--room-text);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+
+    svg {
+      color: var(--room-green);
+    }
+  }
+
+  .topbar-progress {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(90px, 1.4fr) auto;
+    gap: 10px;
+    align-items: center;
+    color: var(--room-sub);
+    font-size: 12px;
+    font-weight: 700;
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--room-text);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 12px;
+    }
+  }
+
+  .topbar-progress__track,
+  .rail-progress {
+    height: 5px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #e6ebe6;
+
+    i {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--room-green);
+      transition: width 0.25s ease;
+    }
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .room-timer {
+    padding: 0 8px;
+    color: var(--room-sub);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .topbar-icon-action,
+  .room-back {
+    min-width: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--room-sub);
+    background: transparent;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--room-text);
+      background: #edf2ed;
+    }
+  }
+
+  .topbar-icon-action {
+    padding: 0;
+  }
+
+  .room-back {
+    display: inline-flex;
+    gap: 5px;
+  }
+
+  .topbar-report-action {
+    display: inline-flex;
+    gap: 6px;
+    min-height: 34px;
+    margin: 0 4px;
+    padding: 0 8px;
+    border-radius: 6px;
+    color: var(--room-green);
+
+    &:hover,
+    &:focus-visible {
+      background: #edf7f0;
+    }
+  }
+
+  :deep(.el-button--primary) {
+    --el-button-bg-color: var(--room-green);
+    --el-button-border-color: var(--room-green);
+    --el-button-hover-bg-color: #0e9f5d;
+    --el-button-hover-border-color: #0e9f5d;
+    --el-button-text-color: #ffffff;
+    border-color: var(--room-green) !important;
+    background: var(--room-green) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 0 #0e9f5d;
+
+    &:hover,
+    &:focus-visible {
+      border-color: #0e9f5d !important;
+      background: #0e9f5d !important;
+    }
+  }
+
+  .war-room {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-areas: 'conversation feedback';
+    grid-template-columns: minmax(0, 1fr) 272px;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .progress-panel,
+  .room-statusbar,
+  .room-mobile-actions {
+    display: none;
+  }
+
+  .conversation-panel {
+    grid-area: conversation;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+  }
+
+  .conversation-scroll {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: start;
+    gap: 18px;
+    overflow-y: auto;
+    padding: 28px clamp(20px, 5vw, 76px) 24px;
+    scroll-padding-bottom: 24px;
+    scrollbar-color: #c8d2c9 transparent;
+    scrollbar-width: thin;
+  }
+
+  .question-context {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: min(100%, 780px);
+    margin: 0 auto;
+    color: var(--room-sub);
+    font-size: 12px;
+  }
+
+  .question-context__persona {
+    color: var(--room-green);
+    font-weight: 800;
+  }
+
+  .question-context :deep(.el-tag),
+  .rail-section__head :deep(.el-tag) {
+    border-color: rgba(163, 230, 53, 0.3);
+    background: rgba(163, 230, 53, 0.1);
+    color: var(--room-lime);
+  }
+
+  .question-context__status {
+    color: var(--room-amber);
+    font-weight: 700;
+  }
+
+  .state-alert {
+    width: min(100%, 780px);
+    margin: 0 auto;
+  }
+
+  .start-card {
+    display: grid;
+    width: min(100%, 780px);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #cfe2d5;
+    border-radius: 8px;
+    background: #f4fbf6;
+    color: var(--room-green);
+
+    h2 {
+      margin: 0;
+      color: var(--room-text);
+      font-size: 16px;
+    }
+
+    p {
+      margin: 5px 0 0;
+      color: var(--room-sub);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  }
+
+  .message-card.ai.question-card,
+  .message-card.user {
+    width: min(100%, 780px);
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .message-card.ai.question-card {
+    .message-body {
+      padding: 0;
+    }
+
+    .message-head {
+      margin: 0 0 14px;
+    }
+
+    .question-kicker {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: baseline;
+      color: var(--room-sub);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .question-kicker small {
+      max-width: none;
+      color: var(--room-sub);
+      font-weight: 500;
+      white-space: normal;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--room-text);
+      font-size: clamp(21px, 2vw, 28px);
+      font-weight: 800;
+      line-height: 1.42;
+    }
+
+    :deep(.markdown-preview) {
+      margin-top: 18px;
+      color: #354238;
+      font-size: 16px;
+      line-height: 1.82;
+    }
+
+    :deep(.markdown-preview p:first-child) {
+      margin-top: 0;
+    }
+  }
+
+  .message-card.user {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--room-line);
+
+    .message-head {
+      margin-bottom: 8px;
+
+      strong {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--room-text);
+        font-size: 13px;
+      }
+
+      span {
+        color: var(--room-sub);
+        font-size: 12px;
+      }
+    }
+  }
+
+  .answer-preview {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--room-sub);
+    font-size: 13px;
+    line-height: 1.65;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .tag-row {
+    gap: 6px;
+    margin-top: 16px;
+
+    :deep(.el-tag) {
+      border-color: #d6e5da;
+      border-radius: 4px;
+      background: #f5faf6;
+      color: #477052;
+    }
+  }
+
+  .answer-console {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 16px clamp(20px, 5vw, 76px) 18px;
+    overflow: visible;
+    border: 0;
+    border-top: 1px solid var(--room-line);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 -8px 22px rgba(48, 70, 53, 0.04);
+
+    .console-head {
+      display: flex;
+      width: min(100%, 780px);
+      align-items: flex-end;
+      margin: 0 auto 10px;
+
+      p {
+        margin: 4px 0 0;
+        color: var(--room-sub);
+        font-size: 12px;
+      }
+    }
+
+    .console-kicker {
+      color: var(--room-text);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .answer-dock-meta {
+      display: inline;
+      color: var(--room-sub);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .room-voice-drawer {
+      width: min(100%, 780px);
+      margin: 0 auto 10px;
+      border: 0;
+
+      > summary {
+        width: fit-content;
+        padding: 0;
+        color: var(--room-green);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        list-style: none;
+      }
+
+      > summary::-webkit-details-marker {
+        display: none;
+      }
+    }
+
+    .voice-preview {
+      margin: 12px 0 0;
+      padding: 12px;
+      border: 1px solid var(--room-line);
+      border-radius: 6px;
+      background: #f8faf8;
+    }
+
+    .voice-preview__head {
+      display: none;
+    }
+
+    .voice-preview__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .voice-preview__confirm {
+      color: var(--room-sub);
+      font-size: 12px;
+    }
+
+    > :deep(.el-textarea) {
+      display: block;
+      width: min(100%, 780px);
+      margin: 0 auto;
+    }
+
+    :deep(.el-textarea__inner) {
+      min-height: 132px !important;
+      max-height: min(26vh, 230px);
+      padding: 12px 14px;
+      border-color: #cfdacf;
+      border-radius: 6px;
+      background: #fbfcfb;
+      color: var(--room-text);
+      font-size: 14px;
+      line-height: 1.72;
+      box-shadow: none;
+      resize: vertical;
+
+      &:focus {
+        border-color: var(--room-green);
+        box-shadow: 0 0 0 3px rgba(23, 130, 75, 0.1);
+      }
+    }
+
+    .answer-actions {
+      display: flex;
+      width: min(100%, 780px);
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 12px auto 0;
+
+      :deep(.el-button) {
+        min-height: 40px;
+        margin: 0;
+        border-radius: 6px;
+      }
+    }
+
+    .answer-reload-action {
+      color: var(--room-sub);
+    }
+
+    .answer-submit-action {
+      min-width: 178px;
+      font-weight: 800;
+    }
+  }
+
+  .feedback-panel.training-rail {
+    grid-area: feedback;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    width: auto;
+    flex-direction: column;
+    gap: 0;
+    padding: 24px 20px 18px;
+    overflow-y: auto;
+    border: 0;
+    border-left: 1px solid var(--room-line);
+    border-radius: 0;
+    background: #fbfcfa;
+  }
+
+  .rail-section {
+    padding: 0 0 18px;
+    border-bottom: 1px solid var(--room-line);
+
+    + .rail-section {
+      padding-top: 18px;
+    }
+  }
+
+  .rail-section__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--room-sub);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .rail-count {
+    display: block;
+    margin-top: 12px;
+    color: var(--room-text);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 28px;
+    line-height: 1;
+
+    small {
+      color: var(--room-sub);
+      font-size: 15px;
+      font-weight: 600;
+    }
+  }
+
+  .rail-overview p {
+    margin: 8px 0 12px;
+    color: var(--room-sub);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .rail-pace {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+
+    div {
+      display: grid;
+      gap: 4px;
+    }
+
+    span,
+    .rail-hint > span {
+      color: var(--room-sub);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    strong {
+      color: var(--room-text);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  }
+
+  .rail-hint {
+    > span {
+      display: block;
+    }
+
+    p {
+      margin: 7px 0 0;
+      color: #49614e;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+  }
+
+  .room-feedback-drawer {
+    display: block;
+    margin: 0;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--room-line);
+
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--room-text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      list-style: none;
+
+      strong {
+        color: var(--room-green);
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 12px;
+      }
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .room-feedback-drawer__body {
+    display: grid;
+    gap: 14px;
+    padding-top: 14px;
+
+    section {
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    h3 {
+      margin: 0 0 6px;
+      color: var(--room-sub);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    p,
+    :deep(.markdown-preview) {
+      margin: 0;
+      color: #3c4b40;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+  }
+
+  .feedback-points {
+    display: grid;
+    gap: 10px;
+
+    div {
+      padding-left: 10px;
+      border-left: 2px solid #d4dfd5;
+    }
+
+    span {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--room-sub);
+      font-size: 11px;
+      font-weight: 800;
+    }
+  }
+
+  .feedback-empty {
+    color: var(--room-sub);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .rail-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 18px;
+
+    :deep(.el-button) {
+      min-height: 38px;
+      margin: 0;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+  }
+
+  .training-boundary,
+  .ai-presence,
+  .cockpit-state-strip,
+  .room-progress-summary,
+  .panel-title,
+  .feedback-tabs,
+  .answer-rubric,
+  .followup-brief,
+  .review-stage-list,
+  .review-stream-preview {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      grid-template-columns: minmax(136px, 1fr) minmax(160px, 1fr) auto;
+      gap: 10px;
+      padding: 0 16px;
+    }
+
+    .topbar-report-action {
+      padding: 0 5px;
+
+      svg {
+        display: none;
+      }
+    }
+
+    .war-room {
+      grid-template-columns: minmax(0, 1fr) 230px;
+    }
+
+    .feedback-panel.training-rail {
+      padding: 20px 16px 16px;
+    }
+
+    .conversation-scroll,
+    .answer-console {
+      padding-right: 28px;
+      padding-left: 28px;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      min-height: 58px;
+      padding: 0 12px;
+    }
+
+    .topbar-progress {
+      display: none;
+    }
+
+    .room-timer,
+    .topbar-icon-action,
+    .topbar-report-action {
+      display: none;
+    }
+
+    .room-back {
+      padding: 0 4px;
+    }
+
+    .war-room {
+      grid-template-areas:
+        'conversation'
+        'feedback';
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+
+    .conversation-scroll {
+      gap: 14px;
+      padding: 18px 16px;
+    }
+
+    .question-context {
+      width: 100%;
+    }
+
+    .message-card.ai.question-card,
+    .message-card.user,
+    .state-alert {
+      width: 100%;
+    }
+
+    .message-card.ai.question-card {
+      h2 {
+        font-size: 21px;
+      }
+
+      :deep(.markdown-preview) {
+        margin-top: 14px;
+        font-size: 15px;
+      }
+    }
+
+    .start-card {
+      width: 100%;
+      grid-template-columns: auto minmax(0, 1fr);
+
+      :deep(.el-button) {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+    }
+
+    .answer-console {
+      display: block;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      background: var(--room-surface-raised);
+    }
+
+    .answer-console.is-mobile-open {
+      display: block;
+    }
+
+    .answer-console .console-head,
+    .answer-console .room-voice-drawer,
+    .answer-console > :deep(.el-textarea),
+    .answer-console .answer-actions {
+      width: 100%;
+    }
+
+    .answer-console :deep(.el-textarea__inner) {
+      min-height: 112px !important;
+      max-height: 28vh;
+      resize: none;
+    }
+
+    .answer-console .answer-actions {
+      gap: 8px;
+    }
+
+    .answer-console .answer-reload-action {
+      padding-right: 4px;
+      padding-left: 4px;
+    }
+
+    .answer-console .answer-submit-action {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .feedback-panel.training-rail {
+      display: block;
+      min-height: 0;
+      max-height: 36dvh;
+      padding: 0 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      overflow-y: auto;
+      border-top: 1px solid var(--room-line);
+      border-left: 0;
+    }
+
+    .rail-section,
+    .rail-actions {
+      display: none;
+    }
+
+    .room-feedback-drawer {
+      padding: 14px 0;
+      border-bottom: 0;
+    }
+
+    .room-feedback-drawer__body {
+      padding-bottom: 4px;
+    }
+  }
+}
+
+// 面试房间最终视觉契约：严格保持方向 D 原型的独立深色训练室，
+// 启动、作答和反馈分别只占据一个明确的工作区域。
+.interview-room.arena-room {
+  --room-bg: #101513;
+  --room-surface: rgba(255, 255, 255, 0.05);
+  --room-surface-raised: rgba(255, 255, 255, 0.08);
+  --room-line: rgba(255, 255, 255, 0.1);
+  --room-text: #edf3ef;
+  --room-sub: #a5afa8;
+  --room-green: #17b26a;
+  --room-lime: #a3e635;
+  --room-amber: #ffc966;
+
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(23, 178, 106, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(124, 92, 252, 0.12), transparent 60%),
+    var(--room-bg);
+  color: var(--room-text);
+
+  .room-topbar {
+    grid-template-columns: minmax(180px, 0.75fr) minmax(280px, 1.2fr) minmax(250px, 0.85fr);
+    min-height: 66px;
+    padding: 0 26px;
+    border-bottom-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.92);
+  }
+
+  .room-session-name,
+  .topbar-progress strong,
+  .question-context,
+  .message-card.ai.question-card h2,
+  .console-kicker,
+  .rail-count,
+  .rail-section strong,
+  .room-feedback-drawer > summary,
+  .room-feedback-drawer > summary strong {
+    color: var(--room-text);
+  }
+
+  .room-session-name svg,
+  .question-context__persona,
+  .topbar-report-action,
+  .room-feedback-drawer > summary strong {
+    color: var(--room-lime);
+  }
+
+  .topbar-progress,
+  .room-timer,
+  .topbar-icon-action,
+  .room-back,
+  .answer-reload-action,
+  .rail-section,
+  .rail-section__head,
+  .rail-overview p,
+  .room-feedback-drawer__body,
+  .feedback-empty {
+    color: var(--room-sub);
+  }
+
+  .topbar-progress__track,
+  .rail-progress {
+    background: rgba(255, 255, 255, 0.12);
+
+    i {
+      background: linear-gradient(90deg, var(--room-green), var(--room-lime));
+    }
+  }
+
+  .topbar-icon-action,
+  .room-back {
+    color: var(--room-sub);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--room-text);
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+
+  .topbar-report-action {
+    &:hover,
+    &:focus-visible {
+      background: rgba(163, 230, 53, 0.1);
+    }
+  }
+
+  .war-room {
+    grid-template-columns: minmax(0, 1fr) 264px;
+    background: transparent;
+  }
+
+  .conversation-panel {
+    background: transparent;
+  }
+
+  .conversation-scroll {
+    gap: 18px;
+    padding: clamp(24px, 4vw, 56px) clamp(22px, 5vw, 88px) 26px;
+  }
+
+  .conversation-panel:has(.start-card) .conversation-scroll {
+    max-height: none;
+  }
+
+  .question-context,
+  .state-alert,
+  .start-card,
+  .message-card.ai.question-card,
+  .message-card.user,
+  .answer-console > :deep(.el-textarea),
+  .answer-console .console-head,
+  .answer-console .room-voice-drawer,
+  .answer-console .answer-actions,
+  .answer-console__locked {
+    width: min(100%, 820px);
+  }
+
+  .state-alert.el-alert--info {
+    display: none;
+  }
+
+  .state-alert {
+    border-color: rgba(229, 72, 77, 0.45);
+    background: rgba(229, 72, 77, 0.12);
+    color: var(--room-text);
+  }
+
+  .start-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-self: center;
+    margin: min(14vh, 120px) auto auto;
+    padding: 28px;
+    border-color: rgba(163, 230, 53, 0.3);
+    border-radius: 18px;
+    background:
+      linear-gradient(135deg, rgba(23, 178, 106, 0.14), rgba(255, 255, 255, 0.035)),
+      rgba(255, 255, 255, 0.035);
+    color: var(--room-lime);
+
+    h2 {
+      color: var(--room-text);
+      font-size: 20px;
+    }
+
+    p {
+      color: var(--room-sub);
+      font-size: 14px;
+    }
+
+    :deep(.el-button) {
+      grid-column: 1 / -1;
+      justify-self: start;
+      min-width: 152px;
+      min-height: 42px;
+      border-radius: 12px;
+      font-weight: 800;
+    }
+  }
+
+  .message-card.ai.question-card {
+    padding: 28px;
+    border: 1px solid var(--room-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.045);
+
+    .message-head {
+      margin-bottom: 12px;
+    }
+
+    .question-kicker,
+    .question-kicker small {
+      color: var(--room-sub);
+    }
+
+    h2 {
+      font-size: clamp(22px, 2vw, 30px);
+      line-height: 1.4;
+    }
+
+    :deep(.markdown-preview) {
+      color: #dbe7de;
+      font-size: 15px;
+      line-height: 1.82;
+    }
+  }
+
+  .tag-row :deep(.el-tag) {
+    border-color: rgba(163, 230, 53, 0.25);
+    border-radius: 999px;
+    background: rgba(163, 230, 53, 0.09);
+    color: var(--room-lime);
+  }
+
+  .message-card.user {
+    padding-top: 16px;
+    border-top-color: var(--room-line);
+
+    .message-head strong {
+      color: var(--room-text);
+    }
+
+    .message-head span,
+    .answer-preview {
+      color: var(--room-sub);
+    }
+  }
+
+  .answer-console {
+    padding: 16px clamp(22px, 5vw, 88px) 18px;
+    border-top-color: var(--room-line);
+    background: rgba(16, 21, 19, 0.96);
+    box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.16);
+
+    .console-head p,
+    .answer-dock-meta,
+    .voice-preview__confirm {
+      color: var(--room-sub);
+    }
+
+    .room-voice-drawer > summary {
+      color: var(--room-lime);
+    }
+
+    .voice-preview {
+      border-color: var(--room-line);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    :deep(.el-textarea__inner) {
+      min-height: 128px !important;
+      border-color: rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.055);
+      color: var(--room-text);
+
+      &::placeholder {
+        color: #7f8c84;
+      }
+
+      &:focus {
+        border-color: var(--room-green);
+        box-shadow: 0 0 0 3px rgba(23, 178, 106, 0.14);
+      }
+    }
+
+    .answer-actions :deep(.el-button) {
+      border-radius: 10px;
+    }
+  }
+
+  .answer-console__locked {
+    margin: 0 auto;
+    padding: 4px 0;
+    color: var(--room-sub);
+    font-size: 13px;
+  }
+
+  .feedback-panel.training-rail {
+    padding: 22px 18px 18px;
+    border-left-color: var(--room-line);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  // Restore the compact rail after legacy compatibility rules hide the
+  // pre-answer details. The empty column was visually worse than a minimal
+  // score, pace, and feedback summary on the launch state.
+  .feedback-panel.training-rail > .rail-section.rail-overview {
+    display: block !important;
+  }
+
+  .feedback-panel.training-rail > .rail-section.rail-pace,
+  .feedback-panel.training-rail > .rail-actions {
+    display: grid !important;
+  }
+
+  .feedback-panel.training-rail > .room-feedback-drawer {
+    display: block !important;
+  }
+
+  .rail-section,
+  .room-feedback-drawer {
+    border-color: var(--room-line);
+  }
+
+  .rail-hint p,
+  .room-feedback-drawer__body p,
+  .room-feedback-drawer__body :deep(.markdown-preview) {
+    color: #c7d4ca;
+  }
+
+  .feedback-points div {
+    border-left-color: rgba(163, 230, 53, 0.4);
+  }
+
+  .rail-actions :deep(.el-button) {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--room-text);
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(163, 230, 53, 0.45);
+      color: var(--room-lime);
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar,
+    .answer-console {
+      background: rgba(16, 21, 19, 0.98);
+    }
+
+    .conversation-scroll {
+      padding: 20px 16px;
+    }
+
+    .start-card {
+      margin-top: 36px;
+      padding: 22px;
+    }
+
+    .message-card.ai.question-card {
+      padding: 20px;
+    }
+
+    .answer-console,
+    .answer-console.is-mobile-open {
+      display: block;
+      background: rgba(16, 21, 19, 0.98);
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      min-height: 112px !important;
+      max-height: 28vh;
+    }
+
+    .feedback-panel.training-rail {
+      background: rgba(255, 255, 255, 0.035);
+    }
+  }
+}
+
+// Keep the responsive room contract after the desktop visual overrides above.
+@media (max-width: 860px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      grid-template-columns: minmax(136px, 1fr) minmax(160px, 1fr) auto;
+      gap: 10px;
+      padding: 0 16px;
+    }
+
+    .war-room {
+      grid-template-columns: minmax(0, 1fr) 230px;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar {
+      grid-template-areas:
+        'identity actions'
+        'progress progress';
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto;
+      min-height: 80px;
+      row-gap: 6px;
+      padding: 8px 12px 9px;
+    }
+
+    .room-identity {
+      grid-area: identity;
+      min-width: 0;
+    }
+
+    .topbar-actions {
+      grid-area: actions;
+      align-self: center;
+      gap: 6px;
+    }
+
+    .topbar-progress {
+      display: grid;
+      grid-area: progress;
+      grid-template-columns: minmax(0, 1fr) minmax(52px, 0.55fr) auto;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      color: var(--room-sub);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .topbar-progress > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .topbar-progress__track {
+      height: 5px;
+      min-width: 0;
+    }
+
+    .topbar-progress strong {
+      color: var(--room-text);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .room-timer {
+      display: inline-flex;
+      flex: 0 0 auto;
+      color: var(--room-sub);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .topbar-icon-action {
+      display: none;
+    }
+
+    .topbar-report-action {
+      display: inline-flex;
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      min-height: 34px;
+      padding: 0;
+      border-radius: 10px;
+      color: var(--room-lime);
+      font-size: 0;
+    }
+
+    .topbar-report-action svg {
+      display: block;
+      width: 17px;
+      height: 17px;
+    }
+
+    .room-back {
+      width: 30px;
+      min-width: 30px;
+      padding: 0;
+    }
+
+    .room-back span {
+      display: none;
+    }
+
+    .war-room {
+      grid-template-areas:
+        'conversation'
+        'feedback';
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      min-width: 0;
+    }
+
+    .feedback-panel.training-rail {
+      display: block;
+      min-height: 0;
+      max-height: 36dvh;
+      padding: 0 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      overflow-y: auto;
+      border-top: 1px solid var(--room-line);
+      border-left: 0;
+    }
+
+    .answer-console {
+      display: block;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      background: rgba(16, 21, 19, 0.98);
+    }
+
+    .answer-console.is-mobile-open {
+      display: block;
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      min-height: 112px !important;
+      max-height: 28vh;
+    }
+  }
+}
+
+// Current interview task contract. This final layer keeps task context fixed,
+// leaves one primary action per state, and contains all mobile controls.
+.interview-room.arena-room {
+  .conversation-panel {
+    min-width: 0;
+  }
+
+  .question-briefbar {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    padding: 10px clamp(22px, 5vw, 88px);
+    border-bottom: 1px solid var(--room-line);
+    background: rgba(16, 21, 19, 0.96);
+  }
+
+  .question-briefbar__item {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 0 18px;
+    border-right: 1px solid var(--room-line);
+
+    &:first-child {
+      padding-left: 0;
+    }
+
+    &:last-child {
+      padding-right: 0;
+      border-right: 0;
+    }
+
+    > span,
+    > small {
+      overflow: hidden;
+      color: var(--room-sub);
+      font-size: 11px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > strong {
+      overflow: hidden;
+      color: var(--room-text);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.4;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .question-briefbar__item--time > strong {
+    color: var(--room-amber);
+    font-family: ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .completion-card {
+    display: flex;
+    width: min(100%, 820px);
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin: min(12vh, 96px) auto 0;
+    padding: 24px;
+    border: 1px solid rgba(163, 230, 53, 0.28);
+    border-radius: 12px;
+    background: rgba(23, 178, 106, 0.09);
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--room-text);
+      font-size: 20px;
+      line-height: 1.4;
+      text-wrap: balance;
+    }
+
+    p {
+      margin: 7px 0 0;
+      color: var(--room-sub);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  }
+
+  .completion-card__eyebrow {
+    color: var(--room-lime);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .topbar-report-action {
+    color: var(--room-sub);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--room-text);
+      background: rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  .answer-console,
+  .answer-console .answer-actions,
+  .answer-console .room-voice-drawer,
+  .voice-preflight-panel,
+  .voice-preflight-panel__actions {
+    min-width: 0;
+  }
+
+  .voice-tool-summary {
+    display: flex;
+    width: 100% !important;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0 !important;
+
+    > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .voice-tool-summary__state {
+    flex: 0 0 auto;
+    color: var(--room-sub);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .voice-tool-summary__state--ready {
+    color: var(--room-lime);
+  }
+
+  .voice-tool-summary__state--checking {
+    color: var(--room-amber);
+  }
+
+  .voice-tool-summary__state--unavailable {
+    color: #ff9a9e;
+  }
+
+  .voice-tool-summary__state--fallback {
+    color: #b8c8ff;
+  }
+
+  .voice-preflight-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--room-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+
+    > div:first-child {
+      min-width: 0;
+    }
+
+    > div:first-child > strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--room-text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    p {
+      margin: 4px 0 0;
+      color: var(--room-sub);
+      font-size: 11px;
+      line-height: 1.55;
+      text-wrap: pretty;
+    }
+  }
+
+  .voice-preflight-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+
+    :deep(.el-button) {
+      min-width: 0;
+      margin: 0;
+    }
+  }
+
+  .room-voice-drawer :deep(.el-button--primary),
+  .room-voice-drawer :deep(.el-button--primary.is-plain) {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+    color: var(--room-text) !important;
+    box-shadow: none !important;
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(163, 230, 53, 0.45) !important;
+      background: rgba(163, 230, 53, 0.08) !important;
+      color: var(--room-lime) !important;
+    }
+  }
+
+  .answer-console .answer-actions {
+    flex-wrap: nowrap;
+
+    :deep(.el-button) {
+      min-width: 0;
+      max-width: 100%;
+    }
+  }
+
+  .answer-reload-action {
+    flex: 0 0 auto;
+  }
+
+  .answer-submit-action,
+  .completion-primary-action {
+    flex: 0 1 auto;
+    min-width: 178px;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .answer-submit-action :deep(span),
+  .completion-primary-action :deep(span) {
+    min-width: 0;
+    justify-content: center;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .message-card.ai.question-card h2 {
+    font-size: 26px;
+    text-wrap: balance;
+  }
+}
+
+@media (max-width: 720px) {
+  .interview-room.arena-room {
+    .room-topbar,
+    .topbar-actions,
+    .war-room,
+    .conversation-panel,
+    .question-briefbar,
+    .answer-console,
+    .answer-console .answer-actions,
+    .answer-console .room-voice-drawer {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .topbar-actions {
+      overflow: hidden;
+    }
+
+    .question-briefbar {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      padding: 8px 12px;
+    }
+
+    .question-briefbar__item {
+      gap: 1px;
+      padding: 0 8px;
+
+      > span,
+      > small {
+        font-size: 9px;
+      }
+
+      > strong {
+        font-size: 12px;
+        white-space: normal;
+      }
+    }
+
+    .conversation-scroll {
+      min-width: 0;
+    }
+
+    .answer-console {
+      display: block;
+    }
+
+    :deep(.answer-console .el-textarea__inner) {
+      display: block;
+      width: 100%;
+    }
+
+    .completion-card {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+      margin-top: 28px;
+      padding: 18px;
+
+      :deep(.el-button) {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
+    .message-card.ai.question-card h2 {
+      font-size: 21px;
+    }
+
+    .voice-tool-summary {
+      gap: 8px;
+    }
+
+    .voice-tool-summary > span,
+    .voice-tool-summary__state {
+      white-space: normal;
+    }
+
+    .voice-preflight-panel {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .voice-preflight-panel__actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      justify-content: stretch;
+
+      :deep(.el-button) {
+        width: 100%;
+        white-space: normal;
+      }
+    }
+
+    .voice-preview__actions,
+    :deep(.room-voice-drawer .voice-actions) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      min-width: 0;
+      gap: 8px;
+    }
+
+    .voice-preview__actions :deep(.el-button),
+    :deep(.room-voice-drawer .voice-actions .el-button) {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      white-space: normal;
+    }
+
+    :deep(.room-voice-drawer .voice-control-grid) {
+      grid-template-columns: minmax(0, 1fr);
+      min-width: 0;
+    }
+
+    .answer-console .answer-actions {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      width: 100%;
+    }
+
+    .answer-reload-action {
+      width: 40px;
+      padding: 0;
+    }
+
+    .answer-reload-action span {
+      display: none;
+    }
+
+    .answer-submit-action {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+}
+
+@media (max-width: 420px) {
+  .interview-room.arena-room {
+    .room-session-name {
+      font-size: 12px;
+    }
+
+    .room-timer {
+      display: none;
+    }
+
+    .question-briefbar__item {
+      padding: 0 6px;
+
+      > strong {
+        font-size: 11px;
+      }
+    }
+
+    .voice-preflight-panel__actions,
+    .voice-preview__actions,
+    :deep(.room-voice-drawer .voice-actions) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-room *,
+  .arena-room *::before,
+  .arena-room *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 </style>

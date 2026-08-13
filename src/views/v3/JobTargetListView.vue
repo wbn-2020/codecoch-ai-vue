@@ -81,36 +81,42 @@
           <el-button text :loading="loading" @click="fetchAll">同步最新</el-button>
         </div>
 
-        <el-form class="filter-form" :model="query" inline>
-          <el-form-item label="关键词">
-            <el-input
-              v-model.trim="query.keyword"
-              clearable
-              placeholder="岗位 / 公司 / 级别"
-              @keyup.enter="handleSearch"
-            >
-              <template #prefix>
-                <Search :size="15" />
-              </template>
-            </el-input>
-          </el-form-item>
-          <el-form-item label="状态">
-            <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px">
-              <el-option label="启用" :value="1" />
-              <el-option label="停用" :value="0" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="当前主目标">
-            <el-select v-model="query.current" clearable placeholder="全部" style="width: 140px">
-              <el-option label="是" :value="true" />
-              <el-option label="否" :value="false" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="loading" @click="handleSearch">开始筛选</el-button>
-            <el-button :disabled="loading" @click="handleReset">重置</el-button>
-          </el-form-item>
-        </el-form>
+        <details class="target-filter-drawer">
+          <summary>
+            <Search :size="16" />
+            筛选岗位
+          </summary>
+          <el-form class="filter-form" :model="query" inline>
+            <el-form-item label="关键词">
+              <el-input
+                v-model.trim="query.keyword"
+                clearable
+                placeholder="岗位 / 公司 / 级别"
+                @keyup.enter="handleSearch"
+              >
+                <template #prefix>
+                  <Search :size="15" />
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px">
+                <el-option label="启用" :value="1" />
+                <el-option label="停用" :value="0" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="当前主目标">
+              <el-select v-model="query.current" clearable placeholder="全部" style="width: 140px">
+                <el-option label="是" :value="true" />
+                <el-option label="否" :value="false" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="loading" @click="handleSearch">开始筛选</el-button>
+              <el-button :disabled="loading" @click="handleReset">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </details>
       </div>
 
       <div class="target-list" v-loading="loading">
@@ -164,38 +170,29 @@
                 <ScanSearch :size="15" />
                 {{ analysisActionLabel(row) }}
               </el-button>
-              <el-button plain @click="router.push(`/job-targets/${row.id}/edit`)">
-                <Pencil :size="15" />
-                编辑岗位描述
-              </el-button>
-              <el-button
-                plain
-                :loading="parsingId === row.id"
-                :disabled="parsingId !== null"
-                @click="handleRowCommand(row, 'parse')"
-              >
-                <Sparkles :size="15" />
-                {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析岗位描述' }}
-              </el-button>
-              <el-button
-                plain
-                :loading="settingCurrentId === row.id"
-                :disabled="row.currentFlag === 1 || settingCurrentId !== null"
-                @click="handleRowCommand(row, 'current')"
-              >
-                <CircleDot :size="15" />
-                设为当前
-              </el-button>
-              <el-button
-                type="danger"
-                plain
-                :loading="deletingId === row.id"
-                :disabled="deletingId !== null"
-                @click="handleRowCommand(row, 'delete')"
-              >
-                <Trash2 :size="15" />
-                删除
-              </el-button>
+              <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(row, command)">
+                <el-button :icon="MoreHorizontal" circle title="更多岗位操作" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">
+                      <Pencil :size="15" />
+                      编辑岗位描述
+                    </el-dropdown-item>
+                    <el-dropdown-item :disabled="parsingId !== null" command="parse">
+                      <Sparkles :size="15" />
+                      {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析岗位描述' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item :disabled="row.currentFlag === 1 || settingCurrentId !== null" command="current">
+                      <CircleDot :size="15" />
+                      设为当前
+                    </el-dropdown-item>
+                    <el-dropdown-item :disabled="deletingId !== null" divided command="delete">
+                      <Trash2 :size="15" />
+                      删除岗位
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </article>
         </div>
@@ -210,6 +207,7 @@ import {
   CircleDot,
   Crosshair,
   GitCompareArrows,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
@@ -445,9 +443,10 @@ onMounted(fetchAll)
   grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
   gap: 16px;
   padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border: 1.5px solid var(--app-border);
+  border-radius: var(--arena-radius-card, var(--app-radius));
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-kicker,
@@ -507,8 +506,8 @@ onMounted(fetchAll)
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.32);
+  border-radius: 14px;
+  background: var(--arena-bg, var(--app-bg));
 }
 
 .hero-panel span,
@@ -527,13 +526,14 @@ onMounted(fetchAll)
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1.5px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .metric-card {
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-right: 1px solid var(--app-border);
   background: transparent;
 
@@ -546,7 +546,7 @@ onMounted(fetchAll)
   display: block;
   margin-top: 6px;
   color: var(--app-text);
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .metric-date {
@@ -570,8 +570,30 @@ onMounted(fetchAll)
 
 .filter-form {
   display: flex;
-  justify-content: flex-end;
+  padding-top: 14px;
   flex-wrap: wrap;
+}
+
+.target-filter-drawer {
+  margin-top: 12px;
+  border-top: 1px solid var(--app-border);
+
+  summary {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: 8px;
+    padding-top: 12px;
+    color: var(--arena-grn-d, var(--app-primary-hover));
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
 }
 
 .target-list {
@@ -592,14 +614,15 @@ onMounted(fetchAll)
 
 .target-card {
   padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1.5px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .target-card.is-current {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(20, 83, 45, 0.12);
+  border-color: #b9e7cd;
+  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
 }
 
 .target-card__head {
@@ -648,9 +671,7 @@ onMounted(fetchAll)
 
 .target-card__summary {
   margin: 14px 0 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.28);
+  color: var(--app-text-muted);
   line-height: 1.7;
 }
 

@@ -227,6 +227,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
+import { Briefcase, FileText, Plus, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -626,7 +627,7 @@ watch(routeResumeId, async (resumeId) => {
 }
 
 .resume-item.active {
-  border-color: rgba(37, 99, 235, 0.35);
+  border-color: var(--user-primary-border);
   background: var(--user-primary-soft);
 }
 

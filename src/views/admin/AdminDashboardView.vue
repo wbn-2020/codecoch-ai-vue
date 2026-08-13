@@ -29,7 +29,7 @@
     <el-alert
       v-if="overviewError"
       class="dashboard-alert"
-      title="管理首页数据加载失败"
+      :title="overviewErrorTitle"
       :description="overviewErrorDescription"
       type="error"
       show-icon
@@ -40,9 +40,14 @@
       </template>
     </el-alert>
 
-    <div class="admin-metric-grid" v-loading="loading">
+    <div class="admin-metric-grid" role="status" aria-live="polite" :aria-busy="loading">
+      <template v-if="initialLoading">
+        <article v-for="index in 6" :key="`metric-skeleton-${index}`" class="admin-metric-card dashboard-metric-card dashboard-skeleton-card">
+          <el-skeleton animated :rows="2" />
+        </article>
+      </template>
       <AppState
-        v-if="!metrics.length && !loading"
+        v-else-if="!metrics.length"
         class="dashboard-grid-state"
         :type="overviewEmptyType"
         :title="overviewEmptyTitle"
@@ -50,7 +55,7 @@
       >
         <el-button type="primary" plain :loading="loading" @click="fetchOverview">重新加载</el-button>
       </AppState>
-      <template v-for="item in metrics" :key="item.key">
+      <template v-for="item in metrics" v-else :key="item.key">
         <button
           v-if="item.path"
           type="button"
@@ -87,8 +92,14 @@
         </div>
         <el-tag type="warning" effect="plain">只读巡检</el-tag>
       </div>
-      <div class="dashboard-watch-grid">
+      <div class="dashboard-watch-grid" :aria-busy="initialLoading">
+        <template v-if="initialLoading">
+          <div v-for="index in 3" :key="`watch-skeleton-${index}`" class="dashboard-watch-item dashboard-skeleton-card">
+            <el-skeleton animated :rows="2" />
+          </div>
+        </template>
         <button
+          v-else
           v-for="item in mobileWatchItems"
           :key="item.key"
           class="dashboard-watch-item"
@@ -105,7 +116,7 @@
           <span class="dashboard-watch-item__count">{{ item.displayValue }}</span>
         </button>
         <AppState
-          v-if="!mobileWatchItems.length && !loading"
+          v-if="!initialLoading && !mobileWatchItems.length"
           :type="overviewEmptyType"
           :title="mobileWatchEmptyTitle"
           :description="mobileWatchEmptyDescription"
@@ -121,11 +132,16 @@
           <h2>近 7 日趋势</h2>
           <p>观察面试、简历、学习计划和 AI 运行的近期变化。</p>
         </div>
-        <el-tag type="success" effect="plain">已更新</el-tag>
+        <el-tag :type="freshnessTagType" effect="plain">{{ freshnessLabel }}</el-tag>
       </div>
 
+      <div v-if="initialLoading" class="dashboard-chart-grid" role="status" aria-label="趋势数据加载中">
+        <article v-for="index in 2" :key="`trend-skeleton-${index}`" class="dashboard-chart-card dashboard-chart-card--wide dashboard-skeleton-chart">
+          <el-skeleton animated :rows="5" />
+        </article>
+      </div>
       <AppState
-        v-if="!trendStats.length && !loading"
+        v-else-if="!trendStats.length"
         class="dashboard-empty-state"
         :type="trendEmptyType"
         :title="trendEmptyTitle"
@@ -217,8 +233,14 @@
             </div>
             <el-tag type="success" effect="plain">待处理</el-tag>
           </div>
-          <div class="admin-work-list dashboard-work-list">
+          <div class="admin-work-list dashboard-work-list" :aria-busy="initialLoading">
+            <template v-if="initialLoading">
+              <div v-for="index in 4" :key="`pending-skeleton-${index}`" class="admin-work-item dashboard-work-item dashboard-skeleton-card">
+                <el-skeleton animated :rows="2" />
+              </div>
+            </template>
             <button
+              v-else
               v-for="item in visiblePendingItems"
               :key="item.key"
               class="admin-work-item dashboard-work-item"
@@ -232,7 +254,7 @@
               <strong>{{ item.count ?? 0 }}</strong>
             </button>
             <AppState
-              v-if="!visiblePendingItems.length && !loading"
+              v-if="!initialLoading && !visiblePendingItems.length"
               :type="pendingEmptyType"
               :title="pendingEmptyTitle"
               :description="pendingEmptyDescription"
@@ -282,23 +304,28 @@
             {{ dashboardStatusText }}
           </el-tag>
         </div>
-        <div class="dashboard-status-list">
+        <div class="dashboard-status-list" :aria-busy="initialLoading">
+          <template v-if="initialLoading">
+            <div v-for="index in 4" :key="`status-skeleton-${index}`" class="dashboard-status-item dashboard-skeleton-card">
+              <el-skeleton animated :rows="2" />
+            </div>
+          </template>
           <div v-for="item in services" :key="item.serviceName" class="dashboard-status-item">
             <Server :size="18" />
             <div>
               <span>{{ serviceLabel(item.serviceName) }}</span>
               <strong :class="`status-${statusTone(item.status)}`">{{ statusText(item.status) }}</strong>
-              <small>{{ serviceReasonLabel(item) }}</small>
+              <small :title="item.reason || item.source || undefined">{{ serviceReasonLabel(item) }}</small>
             </div>
           </div>
           <AppState
-            v-if="!services.length && !loading"
+            v-if="!initialLoading && !services.length"
             :type="serviceEmptyType"
             :title="serviceEmptyTitle"
             :description="serviceEmptyDescription"
           >
             <el-button type="primary" plain :loading="loading" @click="fetchOverview">重新加载</el-button>
-            <el-button plain @click="router.push('/admin/analytics/ai')">打开 AI 运营看板</el-button>
+            <el-button v-permission="'admin:analytics:ai'" plain @click="router.push('/admin/analytics/ai')">打开 AI 运营看板</el-button>
           </AppState>
         </div>
       </section>
@@ -338,18 +365,20 @@ import type {
   AdminDashboardOverviewVO,
   AdminDashboardPendingItemVO,
   AdminDashboardServiceStatusVO,
-  AdminDashboardTrendStatVO
+  AdminDashboardTrendStatVO,
+  DashboardStatus
 } from '@/types/dashboard'
 import type { ECharts, EChartsOption, SeriesOption } from '@/utils/echarts'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const loading = ref(false)
+const loading = ref(true)
 const overviewError = ref(false)
 const overviewErrorMessage = ref('')
 const overviewErrorTraceId = ref('')
 const dashboard = ref<AdminDashboardOverviewVO | null>(null)
+const lastSuccessAt = ref('')
 const businessTrendRef = ref<HTMLElement>()
 const aiTrendRef = ref<HTMLElement>()
 const dashboardLeftStackRef = ref<HTMLElement>()
@@ -403,19 +432,36 @@ const systemStatus = computed(() => dashboard.value?.systemStatus)
 const services = computed(() =>
   (systemStatus.value?.services || []).filter((item) => String(item.status || '').toUpperCase() !== 'UNSUPPORTED')
 )
+const initialLoading = computed(() => loading.value && !dashboard.value)
+const dataStale = computed(() => overviewError.value && Boolean(dashboard.value))
+const effectiveSystemStatus = computed<DashboardStatus>(() => {
+  if (overviewError.value && !dashboard.value) return 'ERROR'
+  const serviceStatuses = services.value.map((item) => String(item.status || 'UNKNOWN').toUpperCase())
+  if (serviceStatuses.some((status) => status === 'DOWN' || status === 'ERROR')) return 'DOWN'
+  if (!serviceStatuses.length || serviceStatuses.some((status) => status === 'DEGRADED' || status === 'UNKNOWN')) {
+    return 'DEGRADED'
+  }
+  return systemStatus.value?.status || 'UNKNOWN'
+})
 const overviewEmptyType = computed(() => overviewError.value ? 'error' : 'empty')
 const dashboardSourceText = computed(() => {
+  if (initialLoading.value) return '正在获取管理概览'
+  if (dataStale.value) return '刷新失败，当前展示上次成功数据'
   if (overviewError.value) return '管理概览加载失败'
   return dashboard.value?.dataSourceDesc || '管理概览已更新'
 })
 const dashboardGeneratedAtText = computed(() => {
+  if (initialLoading.value) return '等待首次返回'
+  if (dataStale.value) return formatDateTime(dashboard.value?.generatedAt || lastSuccessAt.value)
   if (overviewError.value) return '等待重新加载'
   return formatDateTime(dashboard.value?.generatedAt)
 })
+const overviewErrorTitle = computed(() => dataStale.value ? '管理首页刷新失败，已保留上次数据' : '管理首页数据加载失败')
 const overviewErrorDescription = computed(() => {
   const message = overviewErrorMessage.value || '暂时无法获取统计概览，请稍后重试或检查服务状态。'
   const trace = overviewErrorTraceId.value ? `诊断信息：${overviewErrorTraceId.value}` : '诊断信息已记录到后台诊断抽屉。'
-  return `${message} ${trace}`
+  const stale = dataStale.value ? ' 当前页面保留的是上次成功结果，仅供排查参考，请勿据此判断实时状态。' : ''
+  return `${message} ${trace}${stale}`
 })
 const overviewEmptyTitle = computed(() => overviewError.value ? '管理指标加载失败' : '暂无管理指标')
 const overviewEmptyDescription = computed(() =>
@@ -450,8 +496,22 @@ const serviceEmptyDescription = computed(() =>
     ? '系统状态检查暂未返回，当前不能把数据库或关键服务判断为正常。请重新加载，或到运维监控页查看更细的服务健康和失败任务。'
     : '系统状态检查暂未返回可展示服务。可刷新概览，或到运维监控页查看更细的服务健康和失败任务。'
 )
-const dashboardStatusText = computed(() => overviewError.value ? '加载失败' : statusText(systemStatus.value?.status))
-const dashboardStatusTagType = computed(() => overviewError.value ? 'danger' : statusTagType(systemStatus.value?.status))
+const dashboardStatusText = computed(() => {
+  if (initialLoading.value) return '加载中'
+  if (overviewError.value && !dashboard.value) return '加载失败'
+  return statusText(effectiveSystemStatus.value)
+})
+const dashboardStatusTagType = computed(() => {
+  if (overviewError.value && !dashboard.value) return 'danger'
+  return statusTagType(effectiveSystemStatus.value)
+})
+const freshnessLabel = computed(() => {
+  if (initialLoading.value) return '加载中'
+  if (dataStale.value) return '上次成功数据'
+  if (overviewError.value) return '加载失败'
+  return '已更新'
+})
+const freshnessTagType = computed(() => overviewError.value ? 'warning' : initialLoading.value ? 'info' : 'success')
 const statusPanelStyle = computed(() => statusPanelHeight.value ? { height: statusPanelHeight.value + 'px' } : undefined)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
 const primaryLinkItems = computed(() => primaryLinks.filter((item) => canOpenAdminLink(item.permissions)))
@@ -631,7 +691,14 @@ const buildLineOption = (legendData: string[], series: SeriesOption[]): EChartsO
   color: ['#60a5fa', '#22d3ee', '#a78bfa', '#f87171'],
   tooltip: { trigger: 'axis' },
   legend: { data: legendData, right: 8, top: 0, textStyle: baseChartTextStyle },
-  grid: { left: 10, right: 14, top: 34, bottom: 8, containLabel: true },
+  grid: {
+    left: 10,
+    right: 14,
+    top: 34,
+    bottom: 8,
+    outerBoundsMode: 'same',
+    outerBoundsContain: 'axisLabel'
+  },
   xAxis: {
     type: 'category',
     data: trendStats.value.map((item) => item.date),
@@ -700,8 +767,8 @@ const fetchOverview = async () => {
   overviewErrorTraceId.value = ''
   try {
     dashboard.value = await getAdminDashboardOverviewApi()
+    lastSuccessAt.value = dashboard.value.generatedAt || new Date().toISOString()
   } catch (error) {
-    dashboard.value = null
     overviewError.value = true
     overviewErrorMessage.value = getErrorMessage(error, '管理首页数据暂时加载失败，请稍后重试。')
     overviewErrorTraceId.value = getTraceId(error)
@@ -730,7 +797,8 @@ const statusText = (status?: string) => {
     HEALTHY: '正常',
     DEGRADED: '能力受限',
     DOWN: '不可用',
-    UNKNOWN: '未配置监控源',
+    ERROR: '异常',
+    UNKNOWN: '状态待确认',
     UNSUPPORTED: '未纳入监控',
     SUPPORTED: '已支持'
   }
@@ -778,8 +846,20 @@ const pendingSourceLabel = (item: AdminDashboardPendingItemVO) => {
 }
 
 const serviceReasonLabel = (item: AdminDashboardServiceStatusVO) => {
-  if (item.reason) return item.reason
-  if (item.source) return item.source
+  const rawReason = String(item.reason || item.source || '').trim()
+  if (/HttpConnectTimeoutException|connect timed out|connection timed out/i.test(rawReason)) {
+    return '健康探测连接超时，请检查服务地址、容器网络和 Actuator 端口'
+  }
+  if (/connection refused|connectexception/i.test(rawReason)) {
+    return '健康探测连接被拒绝，请确认服务进程和健康检查端口'
+  }
+  if (/not configured|monitoring source|未配置/i.test(rawReason)) {
+    return '尚未配置可用的健康监控源'
+  }
+  if (/timeout|timed out/i.test(rawReason)) {
+    return '健康探测超时，请稍后重试并核对服务日志'
+  }
+  if (rawReason) return rawReason
   const value = String(item.status || '').toUpperCase()
   if (value === 'UNKNOWN') return '该服务暂未返回监控源或最近探测结果'
   if (value === 'UNSUPPORTED') return '该服务当前未纳入运行态探测，不计入核心健康状态'
@@ -865,6 +945,18 @@ onBeforeUnmount(() => {
 
   .dashboard-alert {
     margin-bottom: 16px;
+  }
+
+  .dashboard-skeleton-card {
+    pointer-events: none;
+  }
+
+  .dashboard-skeleton-card :deep(.el-skeleton__item) {
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  .dashboard-skeleton-chart {
+    min-height: 324px;
   }
 
   .dashboard-grid-state,

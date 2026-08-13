@@ -72,8 +72,6 @@
       <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
       <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" :description="emptyRecommendationDescription">
         <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">{{ primaryActionText }}</el-button>
-        <el-button type="success" @click="startFallbackPractice">先做一组通用训练</el-button>
-        <el-button @click="router.push('/dashboard')">回到今日计划</el-button>
       </AppState>
       <div v-else class="question-list">
         <div class="practice-strip">

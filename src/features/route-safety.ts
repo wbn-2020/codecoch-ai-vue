@@ -6,6 +6,8 @@ export interface RouteSafetyOptions {
   enableV4Growth?: boolean
   enableV4Knowledge?: boolean
   enableV6WeeklyReport?: boolean
+  enableV7CampaignWorkspace?: boolean
+  enableV8CampaignCockpit?: boolean
   enableV9EvidenceLearning?: boolean
   knownPaths?: string[]
 }
@@ -28,8 +30,7 @@ export const v4PreviewPaths = [
 
 export const v4ReleasedPaths = [
   '/applications',
-  '/career-calendar',
-  '/career-campaigns'
+  '/career-calendar'
 ]
 
 export const v6WeeklyReportPaths = [
@@ -57,12 +58,12 @@ export const defaultUserKnownPaths = [
   '/project-evidence',
   ...v9EvidenceLearningPaths,
   '/resumes',
+  '/resumes/manage',
   '/resume-match',
   '/resume-job-match',
   ...v4ReleasedPaths,
   '/application-packages',
   '/application-packages/preview',
-  '/interviews',
   '/interviews/create',
   '/interviews/history',
   '/questions',
@@ -82,6 +83,8 @@ export const defaultUserKnownPaths = [
   '/analytics/personal',
   '/job-experiments',
   '/portfolio-demo',
+  '/arena/leaderboard',
+  '/arena/battle',
   ...v4PreviewPaths
 ]
 
@@ -152,25 +155,25 @@ export const defaultKnownPaths = [...defaultUserKnownPaths, ...defaultAdminKnown
 
 export const routePathOnly = (path: string) => path.split(/[?#]/)[0] || path
 
-export const exactOnlyKnownPaths = [
-  '/application-packages',
-  '/application-packages/preview'
-]
-
 export const knownPathDynamicMatchers = [
-  /^\/application-packages\/[^/?#]+$/
+  /^\/questions\/[^/?#]+$/,
+  /^\/job-targets\/[^/?#]+\/(?:edit|analysis)$/,
+  /^\/resumes\/[^/?#]+\/(?:edit|versions)$/,
+  /^\/resume-match\/[^/?#]+$/,
+  /^\/resume-job-match\/[^/?#]+$/,
+  /^\/project-evidence\/[^/?#]+(?:\/edit)?$/,
+  /^\/application-packages\/[^/?#]+$/,
+  /^\/applications\/[^/?#]+$/,
+  /^\/interviews\/room\/[^/?#]+$/,
+  /^\/interviews\/comparisons\/[^/?#]+$/,
+  /^\/interviews\/[^/?#]+(?:\/report)?$/,
+  /^\/agent\/runs\/[^/?#]+$/,
+  /^\/job-experiments\/[^/?#]+(?:\/(?:edit|review))?$/,
+  /^\/career-campaigns\/[^/?#]+\/cockpit$/
 ]
-
-const canMatchChildPath = (knownPath: string) =>
-  knownPath !== '/admin' &&
-  !knownPath.startsWith('/admin/') &&
-  !exactOnlyKnownPaths.includes(knownPath)
 
 export const isKnownAppPath = (path: string, knownPaths: string[] = defaultKnownPaths) =>
-  knownPaths.some((knownPath) => (
-    path === knownPath ||
-    (canMatchChildPath(knownPath) && path.startsWith(`${knownPath}/`))
-  )) ||
+  knownPaths.includes(path) ||
   knownPathDynamicMatchers.some((matcher) => matcher.test(path))
 
 export const isV4PreviewPath = (path: string) =>
@@ -190,6 +193,12 @@ export const isV4KnowledgePath = (path: string) =>
 
 export const isV6WeeklyReportPath = (path: string) =>
   v6WeeklyReportPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+
+export const isV7CampaignWorkspacePath = (path: string) =>
+  /^\/applications\/[^/?#]+$/.test(path)
+
+export const isV8CampaignCockpitPath = (path: string) =>
+  /^\/career-campaigns\/[^/?#]+\/cockpit$/.test(path)
 
 export const isV9EvidenceLearningPath = (path: string) =>
   v9EvidenceLearningPaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
@@ -243,6 +252,24 @@ export const resolveAppRoutePath = (
     return {
       path: fallbackPath,
       unavailableReason: '求职周报当前未开放，已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV7CampaignWorkspace =
+    options.enableV7CampaignWorkspace ?? appConfig.enableV7CampaignWorkspace
+  if (isV7CampaignWorkspacePath(routePath) && !enableV7CampaignWorkspace) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '投递工作区当前未开放，已回落到可用入口。',
+      blockedPath: path
+    }
+  }
+  const enableV8CampaignCockpit =
+    options.enableV8CampaignCockpit ?? appConfig.enableV8CampaignCockpit
+  if (isV8CampaignCockpitPath(routePath) && !enableV8CampaignCockpit) {
+    return {
+      path: fallbackPath,
+      unavailableReason: '求职周期驾驶舱当前未开放，已回落到可用入口。',
       blockedPath: path
     }
   }

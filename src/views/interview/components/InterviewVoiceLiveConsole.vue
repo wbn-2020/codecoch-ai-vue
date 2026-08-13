@@ -787,7 +787,7 @@ const confirmTranscript = async () => {
     })
     if (operationVersion !== confirmationOperationVersion) return
     if (!evidence?.voiceSubmissionId) {
-      throw new Error('Confirmed voice submission evidence is required before analysis.')
+      throw new Error('语音提交凭证缺失，暂时无法进行表达分析。')
     }
     emit('transcript-confirmed', text, evidence)
     await analyzeConfirmedSubmission(evidence.voiceSubmissionId)

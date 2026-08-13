@@ -36,8 +36,9 @@
             <span></span><span></span><span></span>
           </div>
           <code>
+            <span>业务日：{{ businessDate }}</span>
             <span>生成时间：{{ formatDateTime(overview?.generatedAt) }}</span>
-            <span>Agent 今日任务：{{ todayDoneCount }}/{{ todayTotalCount }}</span>
+            <span>Agent 今日计划：{{ allAgentTasksDone ? '已完成' : `${todayDoneCount}/${todayTotalCount}` }}</span>
             <span>默认下一步：{{ primaryNextAction.title }}</span>
             <span>错题复盘：{{ wrongQuestions.length }} 道待关注</span>
           </code>
@@ -172,17 +173,18 @@
 
         <div class="study-summary">
           <div>
-            <span>学习计划今日任务</span>
-            <strong>{{ overview?.todayCompletedTaskCount ?? 0 }}/{{ overview?.todayTaskCount ?? 0 }}</strong>
+            <span>当前路线当日任务</span>
+            <strong>{{ overview?.activeStudyPlan?.todayDoneTaskCount ?? overview?.todayCompletedTaskCount ?? 0 }}/{{ overview?.activeStudyPlan?.todayTaskCount ?? overview?.todayTaskCount ?? 0 }}</strong>
           </div>
           <div>
-            <span>计划总数</span>
-            <strong>{{ overview?.studyPlanCount ?? 0 }}</strong>
+            <span>当前路线累计</span>
+            <strong>{{ overview?.activeStudyPlan?.cumulativeDoneTaskCount ?? overview?.activeStudyPlan?.doneTaskCount ?? 0 }}/{{ overview?.activeStudyPlan?.cumulativeTaskCount ?? overview?.activeStudyPlan?.totalTaskCount ?? 0 }}</strong>
           </div>
         </div>
         <div v-if="overview?.activeStudyPlan" class="active-plan" @click="go(`/study-plans?planId=${overview.activeStudyPlan.planId}`)">
           <strong>{{ overview.activeStudyPlan.planTitle || '学习计划' }}</strong>
-          <span>{{ overview.activeStudyPlan.doneTaskCount || 0 }}/{{ overview.activeStudyPlan.totalTaskCount || 0 }} · {{ overview.activeStudyPlan.progressPercent || 0 }}%</span>
+          <span>{{ overview.activeStudyPlan.cumulativeDoneTaskCount ?? overview.activeStudyPlan.doneTaskCount ?? 0 }}/{{ overview.activeStudyPlan.cumulativeTaskCount ?? overview.activeStudyPlan.totalTaskCount ?? 0 }} · {{ overview.activeStudyPlan.cumulativeProgressPercent ?? overview.activeStudyPlan.progressPercent ?? 0 }}%</span>
+          <small>{{ overview.activeStudyPlan.todayStatus === 'NO_SCHEDULE' ? '业务日无安排' : `业务日 ${overview.activeStudyPlan.todayDoneTaskCount ?? 0}/${overview.activeStudyPlan.todayTaskCount ?? 0}` }}</small>
         </div>
         <AppState
           v-else
@@ -347,7 +349,7 @@ import type { AgentTaskVO } from '@/types/agent'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
-import { formatLocalDate } from '@/utils/format'
+import { formatDateInTimezone } from '@/utils/format'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 
 interface MetricItem {
@@ -377,8 +379,10 @@ let secondaryDataCancelled = false
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
 const entryStatuses = computed(() => overview.value?.entryStatuses || [])
+const businessDate = computed(() => overview.value?.businessDate || formatDateInTimezone(new Date(), 'Asia/Shanghai'))
 const todayTotalCount = computed(() => agentTasks.value.length)
 const todayDoneCount = computed(() => agentTasks.value.filter((task) => task.status === 'DONE').length)
+const allAgentTasksDone = computed(() => todayTotalCount.value > 0 && todayDoneCount.value === todayTotalCount.value)
 
 const primaryNextAction = computed(() => {
   const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
@@ -387,6 +391,15 @@ const primaryNextAction = computed(() => {
       title: displayAgentTaskTitle(firstTodo),
       cta: '继续今日任务',
       path: sanitizeLocalActionPath(firstTodo.actionUrl, '/agent/today'),
+      icon: BookOpenCheck
+    }
+  }
+
+  if (allAgentTasksDone.value) {
+    return {
+      title: '今日计划已完成',
+      cta: '查看完成记录',
+      path: '/agent/today',
       icon: BookOpenCheck
     }
   }
@@ -429,6 +442,18 @@ const todayFocusCards = computed(() => {
       path: sanitizeLocalActionPath(task.actionUrl, '/agent/today'),
       badge: formatStatus(task.status)
     }))
+  }
+
+  if (allAgentTasksDone.value) {
+    return [{
+      key: 'agent-completed',
+      index: 1,
+      title: '今日 Agent 计划已完成',
+      desc: `业务日 ${businessDate.value} 的任务均已记录为完成。`,
+      reason: '状态来自今日 Agent 任务记录',
+      path: '/agent/today',
+      badge: '已完成'
+    }]
   }
 
   return [
@@ -671,7 +696,7 @@ const fetchAgentTasks = async (force: unknown = true) => {
   agentTasksLoading.value = true
   agentTasksError.value = ''
   try {
-    const result = await fetchCachedTodayAgentTasks(formatLocalDate(), shouldForceRefresh(force))
+    const result = await fetchCachedTodayAgentTasks(businessDate.value, shouldForceRefresh(force))
     agentTasks.value = result.tasks || []
   } catch (error) {
     agentTasks.value = []
@@ -701,8 +726,9 @@ const deferSecondaryDashboardData = (callback: () => void, timeout = 1200, fallb
 
 onMounted(() => {
   secondaryDataCancelled = false
-  fetchOverview(false)
-  deferSecondaryDashboardData(() => fetchAgentTasks(false), 900, 180)
+  void fetchOverview(false).finally(() => {
+    deferSecondaryDashboardData(() => fetchAgentTasks(false), 900, 180)
+  })
   deferSecondaryDashboardData(() => fetchWrongQuestions(false), 1600, 420)
 })
 

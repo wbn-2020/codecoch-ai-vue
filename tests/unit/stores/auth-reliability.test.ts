@@ -110,6 +110,31 @@ describe('auth store reliability', () => {
     expect(token.getToken()).toBe('current-token')
   })
 
+  it('retries a transient current-user failure once before failing verification', async () => {
+    vi.useFakeTimers()
+    try {
+      const { store } = await loadStore()
+      store.setToken('current-token', { newSession: true })
+      authApi.getCurrentUserApi
+        .mockRejectedValueOnce({ response: { status: 500 } })
+        .mockResolvedValueOnce({
+          id: 7,
+          userId: 7,
+          username: 'verified-user',
+          roles: ['USER'],
+          permissions: []
+        })
+
+      const request = store.fetchCurrentUser()
+      await vi.advanceTimersByTimeAsync(350)
+
+      await expect(request).resolves.toMatchObject({ username: 'verified-user' })
+      expect(authApi.getCurrentUserApi).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('clears the invalidated session after logout completes', async () => {
     const { store, token } = await loadStore()
     store.setToken('logout-token', { newSession: true })

@@ -549,9 +549,10 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 20px;
   padding: 18px 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border: 1.5px solid var(--arena-line, var(--app-border));
+  border-radius: var(--arena-radius-card, 20px);
+  background: var(--arena-card, var(--app-surface));
+  box-shadow: var(--arena-shadow-card, 0 2px 4px rgba(21, 33, 27, 0.04));
 }
 
 .weekly-header__copy {
@@ -559,7 +560,7 @@ onMounted(async () => {
 }
 
 .weekly-header__copy > span {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
   font-weight: 700;
 }
@@ -626,9 +627,9 @@ onMounted(async () => {
   display: grid;
   gap: 10px;
   padding: 13px 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.24);
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
+  background: var(--user-surface-muted, var(--app-surface));
 }
 
 .snapshot-strip__tags,
@@ -660,7 +661,7 @@ onMounted(async () => {
 }
 
 .weekly-summary span {
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
   font-weight: 700;
 }
@@ -674,7 +675,7 @@ onMounted(async () => {
 
 .weekly-summary small {
   max-width: 36ch;
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--user-warning));
   line-height: 1.55;
 }
 
@@ -688,10 +689,10 @@ onMounted(async () => {
   gap: 5px;
   width: 100%;
   padding: 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 7px;
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
   color: var(--app-text);
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--arena-card, var(--app-surface));
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -699,7 +700,8 @@ onMounted(async () => {
 
 .history-row:hover,
 .history-row.is-current {
-  border-color: #3b82f6;
+  border-color: var(--arena-grn, var(--app-primary));
+  background: var(--user-primary-faint, var(--app-surface-raised));
 }
 
 .history-row span,

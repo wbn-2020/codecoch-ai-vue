@@ -5,13 +5,14 @@ import { getJobExperimentDetailApi } from '@/api/jobExperiment'
 import JobExperimentDetailView from '@/views/job-experiment/JobExperimentDetailView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
+const routerReplace = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     params: { id: '9' },
     query: { demoFlag: 'true' }
   }),
-  useRouter: () => ({ push: routerPush })
+  useRouter: () => ({ push: routerPush, replace: routerReplace })
 }))
 
 vi.mock('element-plus', () => ({
@@ -83,6 +84,7 @@ describe('JobExperimentDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     routerPush.mockResolvedValue(undefined)
+    routerReplace.mockResolvedValue(undefined)
     vi.mocked(getJobExperimentDetailApi).mockResolvedValue({
       id: 9,
       title: '演示投递实验',
@@ -115,9 +117,10 @@ describe('JobExperimentDetailView', () => {
     const wrapper = await mountDetail()
     const buttons = wrapper.findAll('button')
 
-    await buttons.find((button) => button.text() === '返回')?.trigger('click')
-    await buttons.find((button) => button.text() === '复盘')?.trigger('click')
-    await buttons.find((button) => button.text() === 'Agent 下一步任务')?.trigger('click')
+    await buttons.find((button) => button.text() === '返回列表')?.trigger('click')
+    await buttons.find((button) => button.text() === '进入复盘')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '查看详细材料')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '打开下一步任务')?.trigger('click')
 
     expect(routerPush).toHaveBeenCalledWith('/job-experiments?demoFlag=true')
     expect(routerPush).toHaveBeenCalledWith('/job-experiments/9/review?demoFlag=true')
@@ -169,9 +172,8 @@ describe('JobExperimentDetailView', () => {
     const wrapper = await mountDetail()
 
     expect(wrapper.text()).toContain('高置信度')
-    expect(wrapper.text()).toContain('可复盘')
+    expect(wrapper.text()).toContain('可以继续复盘')
     expect(wrapper.text()).toContain('样本可用于高置信复盘')
-    expect(wrapper.text()).toContain('不能完全归因到单一因素')
     expect(wrapper.text()).not.toContain('弱建议')
   })
 

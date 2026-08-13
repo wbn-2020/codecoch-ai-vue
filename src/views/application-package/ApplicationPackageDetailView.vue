@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker">
           <PackageCheck :size="16" />
-          岗位投递包
+          投前准备台
         </div>
         <h1>{{ packageTitle }}</h1>
         <p>{{ packageSubtitle }}</p>
@@ -35,7 +35,12 @@
           <ClipboardCheck :size="16" />
           记录本次使用
         </el-button>
-        <el-button type="primary" :loading="applicationCreating" @click="handleApplicationEntry">
+        <el-button
+          type="primary"
+          :loading="applicationCreating"
+          :disabled="loading || !currentPackage"
+          @click="handleApplicationEntry"
+        >
           <Briefcase :size="16" />
           {{ applicationEntryLabel }}
         </el-button>
@@ -43,7 +48,7 @@
     </section>
 
     <section v-if="loading && !currentPackage" class="content-panel">
-      <AppState type="loading" title="正在生成投递包预览" description="正在聚合岗位/JD、简历版本、匹配报告和项目证据。" />
+      <AppState type="loading" title="正在生成投递包预览" description="正在聚合岗位描述、简历版本、匹配报告和项目证据。" />
     </section>
 
     <section v-else-if="loadError && !currentPackage" class="content-panel">
@@ -61,10 +66,10 @@
       <AppState
         type="empty"
         title="还没有可生成投递包的岗位上下文"
-        description="请先从目标岗位分析页或 JD 匹配报告进入。页面不会在缺少 JD、简历或证据时补造结论。"
+        description="请先从目标岗位分析页或岗位匹配报告进入。页面不会在缺少岗位描述、简历或证据时补造结论。"
       >
         <el-button type="primary" @click="router.push('/job-targets')">选择目标岗位</el-button>
-        <el-button @click="router.push('/resume-match')">进入 JD 匹配实验台</el-button>
+        <el-button @click="router.push('/resume-match')">进入岗位匹配实验台</el-button>
       </AppState>
     </section>
 
@@ -98,65 +103,26 @@
         </el-button>
       </section>
 
-      <section class="overview-grid">
+      <section class="readiness-workbench">
         <article class="content-panel readiness-card" :class="`readiness-card--${readinessTone}`">
-          <span>Readiness</span>
+          <span>投递就绪状态</span>
           <strong>{{ readinessLabel }}</strong>
-          <p>{{ currentPackage.readinessReason || '投递准备状态正在汇总，请结合检查清单确认下一步。' }}</p>
+          <p>{{ currentPackage.readinessReason || '投递准备状态正在汇总，请结合关键缺口确认下一步。' }}</p>
           <div class="meta-tags">
             <el-tag v-if="currentPackage.fallback || currentPackage.degraded" type="warning" effect="plain">降级结果</el-tag>
-            <el-tag v-if="currentPackage.resultSource" effect="plain">{{ currentPackage.resultSource }}</el-tag>
-            <el-tag v-if="currentPackage.trace?.traceId" type="info" effect="plain">Trace {{ currentPackage.trace.traceId }}</el-tag>
+            <el-tag v-if="currentPackage.resultSource" effect="plain">{{ resultSourceLabel }}</el-tag>
           </div>
         </article>
 
-        <article class="content-panel job-card">
+        <article class="content-panel gaps-card">
           <div class="section-head">
             <div>
-              <h2>岗位 / JD</h2>
-              <p>{{ currentPackage.job?.jdSummary || '当前投递包会围绕这个岗位上下文组织简历、证据和行动。' }}</p>
+              <h2>关键缺口</h2>
+              <p>{{ checklistBlockedCount ? `当前有 ${checklistBlockedCount} 项需要处理` : '当前没有明确阻塞项' }}</p>
             </div>
-            <el-tag type="info" effect="plain">{{ currentPackage.job?.jdSource || '目标岗位' }}</el-tag>
           </div>
-          <dl class="compact-facts">
-            <div>
-              <dt>公司</dt>
-              <dd>{{ currentPackage.companyName || currentPackage.job?.companyName || '--' }}</dd>
-            </div>
-            <div>
-              <dt>岗位</dt>
-              <dd>{{ currentPackage.jobTitle || currentPackage.job?.jobTitle || '--' }}</dd>
-            </div>
-            <div>
-              <dt>目标岗位 ID</dt>
-              <dd>{{ currentPackage.targetJobId || currentPackage.job?.targetJobId || '--' }}</dd>
-            </div>
-            <div>
-              <dt>岗位描述分析 ID</dt>
-              <dd>{{ currentPackage.jdAnalysisId || currentPackage.job?.jdAnalysisId || '--' }}</dd>
-            </div>
-          </dl>
-        </article>
-      </section>
-
-      <ResumeArtifactDeliveryPanel
-        :resume-version-id="interviewContext.resumeVersionId"
-        :application-package-id="isPersistedPackageRoute ? packageId : undefined"
-      />
-
-      <section class="detail-grid">
-        <article class="content-panel checklist-panel">
-          <div class="section-head">
-            <div>
-              <h2>投递前检查清单</h2>
-              <p>非 READY 状态会优先暴露缺口，而不是替用户决定是否投递。</p>
-            </div>
-            <el-tag :type="checklistBlockedCount ? 'warning' : 'success'" effect="plain">
-              {{ checklistBlockedCount ? `${checklistBlockedCount} 项待处理` : '检查通过' }}
-            </el-tag>
-          </div>
-          <div class="checklist">
-            <article v-for="item in checklistItems" :key="item.key || item.title" class="checklist-item">
+          <div v-if="criticalGaps.length" class="critical-gaps">
+            <article v-for="item in criticalGaps" :key="item.key || item.title">
               <span :class="`check-dot check-dot--${statusTone(item.status)}`" />
               <div>
                 <strong>{{ item.title }}</strong>
@@ -167,171 +133,275 @@
               </el-button>
             </article>
           </div>
-        </article>
-
-        <aside class="content-panel action-panel">
-          <h2>下一步行动</h2>
-          <p>行动只进入准备、记录或训练流程，不会自动投递、自动发送消息或跨用户共享数据。</p>
-          <div class="next-actions">
-            <article v-for="action in nextActions" :key="String(action.id || action.title)">
-              <strong>{{ action.title }}</strong>
-              <p>{{ action.description || '根据当前投递包上下文生成的待确认行动。' }}</p>
-              <el-button
-                v-if="action.actionUrl || action.actionPath || action.actionCode || action.actionType || action.id"
-                size="small"
-                :loading="executingActionKey === actionExecutionKey(action)"
-                @click="handleActionClick(action)"
-              >
-                {{ action.actionType === 'PRACTICE_INTERVIEW' ? '开始准备' : '查看' }}
-              </el-button>
-            </article>
+          <p v-else class="gaps-empty">可继续在下方确认完整检查清单与材料细节。</p>
+          <div class="primary-action">
+            <p>{{ primaryActionDescription }}</p>
+            <el-button
+              type="primary"
+              :loading="primaryActionLoading"
+              @click="handlePrimaryAction"
+            >
+              {{ primaryActionLabel }}
+            </el-button>
           </div>
-        </aside>
+        </article>
       </section>
 
-      <section class="detail-grid">
-        <article class="content-panel">
-          <div class="section-head">
-            <div>
-              <h2>推荐简历与匹配结果</h2>
-              <p>推荐理由需要来自简历版本、JD 匹配报告或明确的降级说明。</p>
-            </div>
-            <el-tag :type="matchTrustTag.type" effect="plain">{{ matchTrustTag.label }}</el-tag>
-          </div>
-          <div class="resume-match-grid">
-            <div>
-              <span>推荐简历</span>
-              <strong>{{ resumeVersionLabel }}</strong>
-              <p>{{ currentPackage.recommendedResume?.reason || '暂无可解释推荐理由，请先补齐简历版本或重新生成匹配报告。' }}</p>
-            </div>
-            <div>
-              <span>匹配报告</span>
-              <strong>{{ matchScoreText }}</strong>
-              <p>{{ matchSummaryText }}</p>
-            </div>
-          </div>
-          <div class="link-actions">
-            <el-button
-              :disabled="!currentPackage.matchReportId"
-              @click="router.push(`/resume-match/${currentPackage.matchReportId}`)"
-            >
-              查看匹配报告
-            </el-button>
-            <el-button
-              :disabled="!currentPackage.recommendedResumeVersionId"
-              @click="goResumeVersion"
-            >
-              查看简历版本
-            </el-button>
-          </div>
-        </article>
+      <section class="detail-tabs" aria-label="投前准备详情">
+        <el-tabs v-model="activeDetailTab">
+          <el-tab-pane name="checklist">
+            <template #label>完整检查清单</template>
+            <div class="tab-grid tab-grid--checklist">
+              <article class="content-panel checklist-panel">
+                <div class="section-head">
+                  <div>
+                    <h2>投递前检查清单</h2>
+                    <p>未满足项会明确暴露缺口，不替用户作出投递决定。</p>
+                  </div>
+                  <el-tag :type="checklistBlockedCount ? 'warning' : 'success'" effect="plain">
+                    {{ checklistBlockedCount ? `${checklistBlockedCount} 项待处理` : '检查通过' }}
+                  </el-tag>
+                </div>
+                <div class="checklist">
+                  <article v-for="item in checklistItems" :key="item.key || item.title" class="checklist-item">
+                    <span :class="`check-dot check-dot--${statusTone(item.status)}`" />
+                    <div>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.description || checklistDefaultDescription(item.status) }}</p>
+                    </div>
+                    <el-button v-if="item.actionPath" text type="primary" @click="pushSafeAppPath(item.actionPath)">
+                      {{ item.actionLabel || '去处理' }}
+                    </el-button>
+                  </article>
+                </div>
+              </article>
 
-        <article class="content-panel">
-          <div class="section-head">
-            <div>
-              <h2>项目证据覆盖</h2>
-              <p>展示哪些要求已有证据、哪些要求证据不足，以及建议补充什么。</p>
+              <aside class="content-panel action-panel">
+                <h2>后续行动</h2>
+                <p>行动只进入准备、记录或训练流程，不会自动投递、发送消息或共享数据。</p>
+                <div v-if="nextActions.length" class="next-actions">
+                  <article v-for="action in nextActions" :key="String(action.id || action.title)">
+                    <strong>{{ action.title }}</strong>
+                    <p>{{ action.description || '根据当前投递包上下文生成的待确认行动。' }}</p>
+                    <el-button
+                      v-if="action.actionUrl || action.actionPath || action.actionCode || action.actionType || action.id"
+                      size="small"
+                      :loading="executingActionKey === actionExecutionKey(action)"
+                      @click="handleActionClick(action)"
+                    >
+                      {{ actionButtonLabel(action) }}
+                    </el-button>
+                  </article>
+                </div>
+                <AppState
+                  v-else
+                  type="empty"
+                  title="暂无待执行行动"
+                  description="请结合检查清单确认是否需要补齐岗位、简历或证据。"
+                />
+              </aside>
             </div>
-            <el-tag effect="plain">{{ evidenceCoverageText }}</el-tag>
-          </div>
-          <div v-if="evidenceCoverageItems.length" class="coverage-list">
-            <article v-for="item in evidenceCoverageItems" :key="item.requirement || item.gap">
-              <div class="coverage-head">
-                <strong>{{ item.requirement || '岗位要求' }}</strong>
-                <el-tag :type="statusTagType(item.status)" effect="plain">{{ statusLabel(item.status) }}</el-tag>
+          </el-tab-pane>
+
+          <el-tab-pane name="materials">
+            <template #label>材料与匹配</template>
+            <div class="tab-stack">
+              <article class="content-panel context-card">
+                <div class="section-head">
+                  <div>
+                    <h2>岗位与简历</h2>
+                    <p>{{ currentPackage.job?.jdSummary || '投递材料将围绕当前岗位上下文组织。' }}</p>
+                  </div>
+                  <el-tag type="info" effect="plain">{{ jobSourceLabel }}</el-tag>
+                </div>
+                <dl class="compact-facts compact-facts--overview">
+                  <div>
+                    <dt>公司</dt>
+                    <dd>{{ currentPackage.companyName || currentPackage.job?.companyName || '--' }}</dd>
+                  </div>
+                  <div>
+                    <dt>岗位</dt>
+                    <dd>{{ currentPackage.jobTitle || currentPackage.job?.jobTitle || '--' }}</dd>
+                  </div>
+                  <div>
+                    <dt>推荐简历</dt>
+                    <dd>{{ resumeVersionLabel }}</dd>
+                  </div>
+                  <div>
+                    <dt>匹配情况</dt>
+                    <dd>{{ matchScoreText }}</dd>
+                  </div>
+                </dl>
+              </article>
+
+              <ResumeArtifactDeliveryPanel
+                :resume-version-id="interviewContext.resumeVersionId"
+                :application-package-id="isPersistedPackageRoute ? packageId : undefined"
+              />
+              <article class="content-panel">
+                <div class="section-head">
+                  <div>
+                    <h2>推荐简历与匹配结果</h2>
+                    <p>推荐理由来自简历版本、岗位匹配报告或明确的降级说明。</p>
+                  </div>
+                  <el-tag :type="matchTrustTag.type" effect="plain">{{ matchTrustTag.label }}</el-tag>
+                </div>
+                <div class="resume-match-grid">
+                  <div>
+                    <span>推荐简历</span>
+                    <strong>{{ resumeVersionLabel }}</strong>
+                    <p>{{ currentPackage.recommendedResume?.reason || '暂无可解释推荐理由，请先补齐简历版本或重新生成匹配报告。' }}</p>
+                  </div>
+                  <div>
+                    <span>匹配报告</span>
+                    <strong>{{ matchScoreText }}</strong>
+                    <p>{{ matchSummaryText }}</p>
+                  </div>
+                </div>
+                <div class="link-actions">
+                  <el-button
+                    :disabled="!currentPackage.matchReportId"
+                    @click="router.push(`/resume-match/${currentPackage.matchReportId}`)"
+                  >
+                    查看匹配报告
+                  </el-button>
+                  <el-button
+                    :disabled="!currentPackage.recommendedResumeVersionId"
+                    @click="goResumeVersion"
+                  >
+                    查看简历版本
+                  </el-button>
+                </div>
+              </article>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane name="evidence">
+            <template #label>证据覆盖</template>
+            <article class="content-panel">
+              <div class="section-head">
+                <div>
+                  <h2>项目证据覆盖</h2>
+                  <p>展示已有支撑、证据不足项与建议补充内容。</p>
+                </div>
+                <el-tag effect="plain">{{ evidenceCoverageText }}</el-tag>
               </div>
-              <p>{{ item.coverageSummary || item.gap || '当前要求还没有形成明确证据覆盖。' }}</p>
-              <small v-if="item.suggestedSupplement">建议补充：{{ item.suggestedSupplement }}</small>
+              <div v-if="evidenceCoverageItems.length" class="coverage-list">
+                <article v-for="item in evidenceCoverageItems" :key="item.requirement || item.gap">
+                  <div class="coverage-head">
+                    <strong>{{ item.requirement || '岗位要求' }}</strong>
+                    <el-tag :type="statusTagType(item.status)" effect="plain">{{ statusLabel(item.status) }}</el-tag>
+                  </div>
+                  <p>{{ item.coverageSummary || item.gap || '当前要求还没有形成明确证据覆盖。' }}</p>
+                  <small v-if="item.suggestedSupplement">建议补充：{{ item.suggestedSupplement }}</small>
+                </article>
+              </div>
+              <AppState
+                v-else
+                type="empty"
+                title="暂无项目证据覆盖"
+                description="还没有可展示的证据覆盖结果。建议先补项目证据或等待投递包接口返回。"
+              >
+                <el-button @click="router.push('/project-evidence')">去项目证据库</el-button>
+              </AppState>
             </article>
-          </div>
-          <AppState
-            v-else
-            type="empty"
-            title="暂无项目证据覆盖"
-            description="还没有可展示的证据覆盖结果。建议先补项目证据或等待投递包接口返回。"
-          >
-            <el-button @click="router.push('/project-evidence')">去项目证据库</el-button>
-          </AppState>
-        </article>
-      </section>
+          </el-tab-pane>
 
-      <section class="detail-grid">
-        <article class="content-panel">
-          <div class="section-head">
-            <div>
-              <h2>风险与可信边界</h2>
-              <p>低证据、fallback 或样本不足会在这里明确标出。</p>
+          <el-tab-pane name="trust">
+            <template #label>风险与依据</template>
+            <div class="tab-grid">
+              <article class="content-panel">
+                <div class="section-head">
+                  <div>
+                    <h2>风险与可信边界</h2>
+                    <p>低证据、降级结果或样本不足会在这里明确标出。</p>
+                  </div>
+                </div>
+                <div v-if="riskSignals.length" class="risk-list">
+                  <article v-for="risk in riskSignals" :key="risk.key || risk.title" :class="`risk-card risk-card--${riskTone(risk.level)}`">
+                    <strong>{{ risk.title }}</strong>
+                    <p>{{ risk.description || '该风险需要人工复核。' }}</p>
+                    <small v-if="risk.mitigation">处理建议：{{ risk.mitigation }}</small>
+                  </article>
+                </div>
+                <AppState
+                  v-else
+                  type="empty"
+                  title="暂无明确风险提示"
+                  description="仍请结合材料与岗位要求进行人工确认。"
+                />
+              </article>
+
+              <article class="content-panel">
+                <div class="section-head">
+                  <div>
+                    <h2>建议依据与链路标识</h2>
+                    <p>关键建议会展示置信程度、降级状态与可追溯标识。</p>
+                  </div>
+                </div>
+                <div v-if="currentPackage.trace?.traceId" class="trace-row">
+                  <span>投递包链路标识</span>
+                  <code>{{ currentPackage.trace.traceId }}</code>
+                </div>
+                <div v-if="suggestions.length" class="suggestion-list">
+                  <article v-for="suggestion in suggestions" :key="suggestion.id" class="suggestion-card">
+                    <div>
+                      <strong>{{ suggestion.title || suggestion.content || '待确认建议' }}</strong>
+                      <p>{{ suggestion.reason || suggestion.content || '当前建议缺少详细说明，请结合证据来源复核。' }}</p>
+                    </div>
+                    <div class="meta-tags">
+                      <el-tag effect="plain">{{ confidenceLabel(suggestion.confidenceLevel || suggestion.confidence) }}</el-tag>
+                      <el-tag v-if="suggestion.fallback || suggestion.degraded || suggestion.mock" type="warning" effect="plain">降级或模拟结果</el-tag>
+                      <el-tag v-if="suggestion.trace?.traceId" type="info" effect="plain">链路标识 {{ suggestion.trace.traceId }}</el-tag>
+                    </div>
+                  </article>
+                </div>
+                <AppState
+                  v-else
+                  type="empty"
+                  title="暂无明确建议"
+                  description="当前没有足够证据生成明确建议。请先补齐岗位描述分析、简历匹配或项目证据。"
+                />
+              </article>
             </div>
-          </div>
-          <div class="risk-list">
-            <article v-for="risk in riskSignals" :key="risk.key || risk.title" :class="`risk-card risk-card--${riskTone(risk.level)}`">
-              <strong>{{ risk.title }}</strong>
-              <p>{{ risk.description || '该风险需要人工复核。' }}</p>
-              <small v-if="risk.mitigation">处理建议：{{ risk.mitigation }}</small>
+          </el-tab-pane>
+
+          <el-tab-pane name="interview">
+            <template #label>面试准备</template>
+            <article class="content-panel interview-panel">
+              <div class="section-head">
+                <div>
+                  <h2>面试上下文</h2>
+                  <p>可使用当前岗位、简历、匹配和项目证据创建带上下文的文字模拟面试。</p>
+                </div>
+              </div>
+              <dl class="compact-facts">
+                <div>
+                  <dt>目标岗位编号</dt>
+                  <dd>{{ interviewContext.targetJobId || '--' }}</dd>
+                </div>
+                <div>
+                  <dt>简历版本编号</dt>
+                  <dd>{{ interviewContext.resumeVersionId || '--' }}</dd>
+                </div>
+                <div>
+                  <dt>匹配报告编号</dt>
+                  <dd>{{ interviewContext.matchReportId || '--' }}</dd>
+                </div>
+                <div>
+                  <dt>项目证据</dt>
+                  <dd>{{ interviewContext.projectEvidenceIds?.length || 0 }} 项</dd>
+                </div>
+              </dl>
+              <div class="link-actions">
+                <el-button type="primary" :disabled="!interviewContext.targetJobId" @click="goInterviewCreate">
+                  创建岗位面试
+                </el-button>
+                <el-button @click="router.push('/interviews/history')">查看面试记录</el-button>
+              </div>
             </article>
-          </div>
-        </article>
-
-        <article class="content-panel">
-          <div class="section-head">
-            <div>
-              <h2>模拟面试上下文预留</h2>
-              <p>阶段三可直接使用这些参数创建带上下文的文本模拟面试。</p>
-            </div>
-          </div>
-          <dl class="compact-facts">
-            <div>
-              <dt>Target Job</dt>
-              <dd>{{ interviewContext.targetJobId || '--' }}</dd>
-            </div>
-            <div>
-              <dt>Resume Version</dt>
-              <dd>{{ interviewContext.resumeVersionId || '--' }}</dd>
-            </div>
-            <div>
-              <dt>Match Report</dt>
-              <dd>{{ interviewContext.matchReportId || '--' }}</dd>
-            </div>
-            <div>
-              <dt>Evidence</dt>
-              <dd>{{ interviewContext.projectEvidenceIds?.length || 0 }} 项</dd>
-            </div>
-          </dl>
-          <div class="link-actions">
-            <el-button type="primary" :disabled="!interviewContext.targetJobId" @click="goInterviewCreate">
-              创建岗位面试
-            </el-button>
-            <el-button @click="router.push('/interviews/history')">查看面试记录</el-button>
-          </div>
-        </article>
-      </section>
-
-      <section class="content-panel">
-        <div class="section-head">
-          <div>
-            <h2>建议、证据与 Trace</h2>
-            <p>关键建议必须能说明证据来源、置信度和是否降级。</p>
-          </div>
-        </div>
-        <div v-if="suggestions.length" class="suggestion-list">
-          <article v-for="suggestion in suggestions" :key="suggestion.id" class="suggestion-card">
-            <div>
-              <strong>{{ suggestion.title || suggestion.content || '待确认建议' }}</strong>
-              <p>{{ suggestion.reason || suggestion.content || '当前建议缺少详细说明，请结合证据来源复核。' }}</p>
-            </div>
-            <div class="meta-tags">
-              <el-tag effect="plain">{{ suggestion.confidenceLevel || suggestion.confidence || 'UNKNOWN' }}</el-tag>
-              <el-tag v-if="suggestion.fallback || suggestion.degraded || suggestion.mock" type="warning" effect="plain">降级/模拟</el-tag>
-              <el-tag v-if="suggestion.trace?.traceId" type="info" effect="plain">Trace {{ suggestion.trace.traceId }}</el-tag>
-            </div>
-          </article>
-        </div>
-        <AppState
-          v-else
-          type="empty"
-          title="暂无明确建议"
-          description="当前没有足够证据生成明确建议。请先补齐岗位描述分析、简历匹配或项目证据。"
-        />
+          </el-tab-pane>
+        </el-tabs>
       </section>
     </template>
   </div>
@@ -377,6 +447,8 @@ const recordingEvidenceUsage = ref(false)
 const executingActionKey = ref('')
 const loadError = ref('')
 const currentPackage = ref<JobApplicationPackageVO | null>(null)
+const activeDetailTab = ref('checklist')
+let packageRequestId = 0
 
 const openEvidenceUsages = () => {
   const snapshotId = currentPackage.value?.currentSnapshotId
@@ -501,9 +573,9 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
     checklist: [
       {
         key: 'jd-analysis',
-        title: 'JD 已解析',
+        title: '岗位描述已解析',
         status: jdAnalysisId || targetJobId ? 'WARN' : 'BLOCKED',
-        description: jdAnalysisId ? '已携带岗位描述分析 ID，仍需接口确认结构化结果。' : '请先完成岗位描述分析。',
+        description: jdAnalysisId ? '已携带岗位描述分析编号，仍需接口确认结构化结果。' : '请先完成岗位描述分析。',
         actionLabel: '查看岗位分析',
         actionPath: targetJobId ? `/job-targets/${targetJobId}/analysis` : '/job-targets'
       },
@@ -511,7 +583,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
         key: 'resume-version',
         title: '有可用简历版本',
         status: resumeVersionId ? 'WARN' : 'BLOCKED',
-        description: resumeVersionId ? '已携带简历版本，仍需确认是否适配当前 JD。' : '请先选择或生成简历版本。',
+        description: resumeVersionId ? '已携带简历版本，仍需确认是否适配当前岗位描述。' : '请先选择或生成简历版本。',
         actionLabel: '查看简历版本',
         actionPath: '/resume-versions'
       },
@@ -544,7 +616,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
         title: '当前是降级预览',
         level: 'HIGH',
         description: '缺少后端聚合结果时，不输出“可以投”的强结论。',
-        mitigation: '补齐 JD、简历、匹配报告和项目证据后刷新投递包。'
+        mitigation: '补齐岗位描述、简历、匹配报告和项目证据后刷新投递包。'
       }
     ],
     actions: [
@@ -570,22 +642,38 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
 }
 
 const loadPackage = async () => {
+  const requestId = ++packageRequestId
+  const requestPath = route.fullPath
+  const isCurrentRequest = () => requestId === packageRequestId && route.fullPath === requestPath
+
   if (!hasLoadContext.value) {
-    currentPackage.value = null
-    loadError.value = ''
+    if (isCurrentRequest()) {
+      currentPackage.value = null
+      loadError.value = ''
+      loading.value = false
+    }
     return
   }
+
   loading.value = true
   loadError.value = ''
+  currentPackage.value = null
   try {
-    currentPackage.value = isPersistedPackageRoute.value
+    const nextPackage = isPersistedPackageRoute.value
       ? await getApplicationPackageApi(packageId.value)
       : await previewApplicationPackageApi(previewParams.value)
+    if (!isCurrentRequest()) return
+
+    currentPackage.value = nextPackage
   } catch (error) {
+    if (!isCurrentRequest()) return
+
     loadError.value = getErrorMessage(error, '投递包接口暂不可用，已切换为降级预览。')
     currentPackage.value = isPersistedPackageRoute.value ? null : buildFallbackPackage()
   } finally {
-    loading.value = false
+    if (isCurrentRequest()) {
+      loading.value = false
+    }
   }
 }
 
@@ -594,16 +682,32 @@ const handleRefresh = async () => {
     await loadPackage()
     return
   }
+
+  const requestId = ++packageRequestId
+  const requestPath = route.fullPath
+  const targetPackageId = packageId.value
+  const isCurrentRequest = () =>
+    requestId === packageRequestId &&
+    route.fullPath === requestPath &&
+    packageId.value === targetPackageId
+
   loading.value = true
   loadError.value = ''
   try {
-    currentPackage.value = await refreshApplicationPackageApi(packageId.value)
+    const nextPackage = await refreshApplicationPackageApi(targetPackageId)
+    if (!isCurrentRequest()) return
+
+    currentPackage.value = nextPackage
     ElMessage.success('投递包已刷新。')
   } catch (error) {
+    if (!isCurrentRequest()) return
+
     loadError.value = getErrorMessage(error, '投递包刷新失败，已保留当前详情。')
     ElMessage.error(loadError.value)
   } finally {
-    loading.value = false
+    if (isCurrentRequest()) {
+      loading.value = false
+    }
   }
 }
 
@@ -620,7 +724,25 @@ const packageSubtitle = computed(() => {
     currentPackage.value?.recommendedResume?.resumeVersionName || currentPackage.value?.recommendedResume?.versionName,
     currentPackage.value?.matchReportId ? `匹配报告 #${currentPackage.value.matchReportId}` : ''
   ].filter(Boolean)
-  return parts.length ? parts.join(' · ') : '围绕一个 JD 汇总简历、证据、风险、检查清单和下一步行动。'
+  return parts.length ? parts.join(' · ') : '围绕一个岗位描述汇总简历、证据、风险、检查清单和下一步行动。'
+})
+const jobSourceLabel = computed(() => {
+  const source = String(currentPackage.value?.job?.jdSource || '').toUpperCase()
+  const labels: Record<string, string> = {
+    JOB_TARGET: '目标岗位',
+    JD_ANALYSIS: '岗位描述分析',
+    MANUAL: '手动录入'
+  }
+  return labels[source] || '目标岗位'
+})
+const resultSourceLabel = computed(() => {
+  const source = String(currentPackage.value?.resultSource || '').toUpperCase()
+  const labels: Record<string, string> = {
+    DEGRADED_PREVIEW: '降级预览',
+    APPLICATION_PACKAGE: '投递包结果',
+    PREVIEW: '预览结果'
+  }
+  return `结果来源：${labels[source] || '已标记'}`
 })
 
 const versionNoticeVisible = computed(() => (currentPackage.value?.contextPackageCount || 0) > 1)
@@ -658,7 +780,7 @@ const readinessMap: Record<string, { label: string; tone: string }> = {
 
 const readinessInfo = computed(() => {
   const key = String(currentPackage.value?.readinessLevel || '').toUpperCase()
-  return readinessMap[key] || { label: key || '待判断', tone: 'info' }
+  return readinessMap[key] || { label: '待判断', tone: 'info' }
 })
 const readinessLabel = computed(() => readinessInfo.value.label)
 const readinessTone = computed(() => readinessInfo.value.tone)
@@ -678,7 +800,7 @@ const statusLabel = (status?: string) => {
     BLOCKED: '需补齐',
     PENDING: '待生成'
   }
-  return map[key] || key || '待确认'
+  return map[key] || '待确认'
 }
 const statusTagType = (status?: string): 'success' | 'warning' | 'danger' | 'info' => {
   const tone = statusTone(status)
@@ -710,6 +832,11 @@ const checklistItems = computed<ApplicationPackageChecklistItemVO[]>(() =>
 const checklistBlockedCount = computed(() =>
   checklistItems.value.filter((item) => ['WARN', 'BLOCKED', 'PENDING'].includes(String(item.status || '').toUpperCase())).length
 )
+const criticalGaps = computed(() =>
+  checklistItems.value
+    .filter((item) => statusTone(item.status) !== 'success')
+    .slice(0, 3)
+)
 const isDirectApplicationAction = (action?: CareerActionItemVO | null) =>
   ['CREATE_APPLICATION', 'CREATE_APPLICATION_RECORD', 'SET_FOLLOW_UP', 'SET_FOLLOW_UP_PLAN']
     .includes(String(action?.actionType || '').toUpperCase())
@@ -719,6 +846,28 @@ const nextActions = computed<CareerActionItemVO[]>(() => {
   if (!pack?.fallback && !pack?.degraded && pack?.id !== 'preview-degraded') return actions
   return actions.filter((action) => !isDirectApplicationAction(action))
 })
+const actionButtonLabel = (action: CareerActionItemVO) =>
+  String(action.actionType || '').toUpperCase() === 'PRACTICE_INTERVIEW' ? '开始准备' : '查看详情'
+const primaryAction = computed(() => nextActions.value[0])
+const primaryActionLabel = computed(() => primaryAction.value?.title || applicationEntryLabel.value)
+const primaryActionDescription = computed(() =>
+  primaryAction.value?.description ||
+  (currentPackage.value?.jobApplicationId
+    ? '查看当前投递记录和后续进展。'
+    : '确认无误后创建投递记录；系统不会自动投递。')
+)
+const primaryActionLoading = computed(() =>
+  primaryAction.value
+    ? executingActionKey.value === actionExecutionKey(primaryAction.value)
+    : applicationCreating.value
+)
+const handlePrimaryAction = async () => {
+  if (primaryAction.value) {
+    await handleActionClick(primaryAction.value)
+    return
+  }
+  await handleApplicationEntry()
+}
 const evidenceSummaryToCoverage = (item: ApplicationPackageProjectEvidenceSummaryVO): ApplicationPackageEvidenceCoverageItemVO => ({
   requirement: item.title || `项目证据 #${item.id || ''}`,
   status: String(item.completenessStatus || '').toUpperCase() === 'COMPLETE' || Number(item.completenessScore || 0) >= 60 ? 'PASS' : 'WARN',
@@ -761,7 +910,7 @@ const evidenceCoverageText = computed(() => {
 const resumeVersionLabel = computed(() => {
   const resume = currentPackage.value?.recommendedResume
   if (resume?.resumeVersionName || resume?.versionName) return resume.resumeVersionName || resume.versionName
-  if (resume?.resumeVersionNo || resume?.versionNo) return `V${resume.resumeVersionNo || resume.versionNo}`
+  if (resume?.resumeVersionNo || resume?.versionNo) return `第 ${resume.resumeVersionNo || resume.versionNo} 版`
   const versionId = currentPackage.value?.recommendedResumeVersionId || resume?.resumeVersionId
   return versionId ? `简历版本 #${versionId}` : '暂无推荐版本'
 })
@@ -783,10 +932,21 @@ const matchSummaryText = computed(() =>
 const matchTrustTag = computed(() => {
   const match = matchSummary.value
   if (match?.fallback || match?.degraded || currentPackage.value?.fallback) return { label: '降级/待复核', type: 'warning' as const }
-  const trust = match?.trustStatus || match?.status
-  if (String(trust || '').toUpperCase() === 'VERIFIED' || String(trust || '').toUpperCase() === 'SUCCESS') return { label: '来源可信', type: 'success' as const }
-  return { label: trust || '待确认', type: 'info' as const }
+  const trust = String(match?.trustStatus || match?.status || '').toUpperCase()
+  if (trust === 'VERIFIED' || trust === 'SUCCESS') return { label: '来源可信', type: 'success' as const }
+  if (trust === 'WARNING' || trust === 'WARN') return { label: '需要复核', type: 'warning' as const }
+  return { label: '待确认', type: 'info' as const }
 })
+const confidenceLabel = (value?: string | number | null) => {
+  const confidence = String(value || '').toUpperCase()
+  const labels: Record<string, string> = {
+    HIGH: '置信程度高',
+    MEDIUM: '置信程度中等',
+    LOW: '置信程度低',
+    UNKNOWN: '置信程度待确认'
+  }
+  return labels[confidence] || '置信程度待确认'
+}
 
 const riskTone = (level?: string) => {
   const key = String(level || '').toUpperCase()
@@ -928,7 +1088,7 @@ const goInterviewCreate = async () => {
     try {
       await ensurePersistedPackage()
     } catch (error) {
-      ElMessage.error(getErrorMessage(error, '投递包保存失败，暂时无法携带投递包 ID 创建面试。'))
+      ElMessage.error(getErrorMessage(error, '投递包保存失败，暂时无法携带投递包编号创建面试。'))
       return
     }
   }
@@ -1015,24 +1175,27 @@ onMounted(loadPackage)
 .application-package-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 22px;
   min-width: 0;
+  overflow-x: hidden;
   color: var(--user-text);
 }
 
 .package-hero,
 .content-panel {
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border: 1.5px solid var(--user-border);
+  border-radius: var(--arena-radius-card);
   background: var(--user-surface);
-  box-shadow: none;
+  box-shadow: var(--user-shadow-sm);
 }
 
 .package-hero {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 20px;
+  padding: 22px 24px;
+  border-color: var(--user-primary-border);
+  background: var(--user-surface-tint);
 }
 
 .hero-kicker,
@@ -1040,7 +1203,9 @@ onMounted(loadPackage)
 .section-head,
 .meta-tags,
 .link-actions,
-.coverage-head {
+.coverage-head,
+.primary-action,
+.trace-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1050,7 +1215,6 @@ onMounted(loadPackage)
   color: var(--user-primary);
   font-size: 12px;
   font-weight: 800;
-  text-transform: uppercase;
 }
 
 .package-hero h1,
@@ -1077,7 +1241,7 @@ onMounted(loadPackage)
 
 .content-panel {
   min-width: 0;
-  padding: 16px;
+  padding: 18px;
 }
 
 .degraded-panel {
@@ -1085,31 +1249,77 @@ onMounted(loadPackage)
   gap: 10px;
 }
 
-.overview-grid,
-.detail-grid,
+.readiness-workbench,
+.tab-grid,
 .resume-match-grid {
   display: grid;
   gap: 14px;
 }
 
-.overview-grid {
-  grid-template-columns: minmax(260px, 0.42fr) minmax(0, 0.58fr);
+.readiness-workbench {
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.28fr);
+  align-items: stretch;
 }
 
-.detail-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
+.tab-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.58fr);
 }
 
-.readiness-card {
+.tab-grid--checklist {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+}
+
+.tab-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.detail-tabs {
+  min-width: 0;
+  padding: 0 2px;
+
+  :deep(.el-tabs__header) {
+    margin: 0 0 14px;
+  }
+
+  :deep(.el-tabs__nav-wrap) {
+    min-width: 0;
+  }
+
+  :deep(.el-tabs__item) {
+    height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  :deep(.el-tabs__content) {
+    overflow: visible;
+  }
+}
+
+.context-card,
+.readiness-card,
+.gaps-card {
   display: grid;
   gap: 10px;
   align-content: start;
+}
 
+.gaps-card {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.context-card .section-head,
+.gaps-card .section-head {
+  margin-bottom: 0;
+}
+
+.readiness-card {
   span {
     color: var(--user-text-muted);
     font-size: 12px;
     font-weight: 800;
-    text-transform: uppercase;
   }
 
   strong {
@@ -1153,7 +1363,7 @@ onMounted(loadPackage)
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
 
   div {
     min-width: 0;
@@ -1180,6 +1390,10 @@ onMounted(loadPackage)
   }
 }
 
+.compact-facts--overview dd {
+  font-weight: 700;
+}
+
 .version-panel {
   display: flex;
   align-items: center;
@@ -1191,12 +1405,55 @@ onMounted(loadPackage)
 }
 
 .checklist,
+.critical-gaps,
 .next-actions,
 .coverage-list,
 .risk-list,
 .suggestion-list {
   display: grid;
   gap: 10px;
+}
+
+.critical-gaps article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--user-border);
+
+  strong,
+  p {
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin-top: 3px;
+    font-size: 12px;
+  }
+}
+
+.gaps-empty {
+  align-self: center;
+  font-size: 13px;
+}
+
+.primary-action {
+  justify-content: space-between;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--user-border);
+
+  p {
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  :deep(.el-button) {
+    flex: 0 0 auto;
+    max-width: 100%;
+    white-space: normal;
+  }
 }
 
 .checklist-item {
@@ -1261,7 +1518,7 @@ onMounted(loadPackage)
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
 
   div {
     min-width: 0;
@@ -1318,14 +1575,33 @@ onMounted(loadPackage)
   align-items: start;
 }
 
+.trace-row {
+  justify-content: space-between;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-control-bg);
+  color: var(--user-text-muted);
+  font-size: 13px;
+
+  code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--user-text);
+    font-family: inherit;
+    text-align: right;
+  }
+}
+
 .meta-tags {
   flex-wrap: wrap;
 }
 
 @media (max-width: 900px) {
   .package-hero,
-  .overview-grid,
-  .detail-grid,
+  .readiness-workbench,
+  .tab-grid,
   .resume-match-grid,
   .compact-facts,
   .suggestion-card {
@@ -1339,7 +1615,10 @@ onMounted(loadPackage)
 
   .hero-actions,
   .section-head,
-  .checklist-item {
+  .checklist-item,
+  .critical-gaps article,
+  .primary-action,
+  .trace-row {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1355,17 +1634,32 @@ onMounted(loadPackage)
   }
 
   .hero-actions,
-  .checklist-item {
+  .checklist-item,
+  .critical-gaps article {
     display: grid;
     grid-template-columns: 1fr;
   }
 
   .hero-actions :deep(.el-button),
   .checklist-item :deep(.el-button),
+  .critical-gaps :deep(.el-button),
   .link-actions :deep(.el-button),
-  .action-panel :deep(.el-button) {
+  .action-panel :deep(.el-button),
+  .primary-action :deep(.el-button) {
     width: 100%;
     margin-left: 0;
+  }
+
+  .detail-tabs {
+    padding: 0;
+
+    :deep(.el-tabs__item) {
+      padding: 0 12px;
+    }
+  }
+
+  .trace-row code {
+    text-align: left;
   }
 }
 </style>

@@ -10,17 +10,18 @@ const theme = readSource('src/styles/user-theme.scss')
 const components = readSource('src/styles/user-components.scss')
 const layout = readSource('src/layouts/UserLayout.vue')
 const topNav = readSource('src/components/layout/UserTopNav.vue')
+const arenaTopNav = readSource('src/components/layout/ArenaTopNav.vue')
+const userNavigation = readSource('src/config/userNavigation.ts')
 const componentsWithoutResumePaper = components.replace(/\.resume-paper\s*\{[\s\S]*?\}/g, '')
 
 describe('user dashboard visual guardrails', () => {
-  it('contains no legacy dashboard blocks or light decorative surfaces', () => {
+  it('contains no legacy dashboard blocks or unbounded decorative surfaces', () => {
     expect(home).not.toMatch(/class="(?:home-hero|cockpit-grid|application-stats-strip|command-center-grid|mobile-action-dock)"/)
     expect(home).not.toMatch(/\.(?:home-hero|cockpit-grid|application-stats-strip|command-center-grid|mobile-action-dock)\b/)
     expect(home).not.toContain('Focused cockpit theme')
 
     expect(home).not.toMatch(/radial-gradient|linear-gradient/)
     expect(theme).not.toMatch(/radial-gradient|linear-gradient/)
-    expect(layout).not.toMatch(/radial-gradient|linear-gradient/)
     expect(home).not.toMatch(/backdrop-filter|\bfilter:\s*blur/)
     expect(home).not.toMatch(/box-shadow:\s*(?:inset\s+)?0 0 [1-9]\d*px/)
     expect(home).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
@@ -30,17 +31,28 @@ describe('user dashboard visual guardrails', () => {
     expect(components).toMatch(/\.resume-paper\s*\{[\s\S]*?background:\s*#ffffff\b/)
   })
 
-  it('keeps the arena light override scoped to the top navigation surface only', () => {
-    // 方向 D Phase V1：浅色覆写只允许出现在顶栏覆写块内，
-    // 其余用户端暗色 token 文件（theme/layout/components）不得引入浅色装饰。
-    expect(topNav).toContain('Arena 浅色化覆写')
-    const arenaOverride = topNav.slice(topNav.indexOf('Arena 浅色化覆写'))
-    expect(arenaOverride).toContain('rgba(23, 178, 106')
-    expect(arenaOverride).toContain('game-chip--streak')
+  it('uses the dedicated direction D top navigation instead of overriding the legacy dark navigation', () => {
+    expect(layout).toContain('ArenaTopNav')
+    expect(layout).toContain('v-if="!isImmersivePage"')
+    expect(layout).toContain("'is-arena-main': usesArenaShell")
+    expect(layout).toContain('radial-gradient(900px 480px at 90% -5%')
+    expect(layout).toContain('var(--arena-bg)')
 
-    const topNavBeforeOverride = topNav.slice(0, topNav.indexOf('Arena 浅色化覆写'))
-    expect(topNavBeforeOverride).not.toMatch(/radial-gradient|linear-gradient/)
-    expect(topNavBeforeOverride).not.toMatch(/background(?:-color)?:\s*(?:#fff(?:fff)?|white)\b/i)
+    expect(arenaTopNav).toContain("from '@/config/userNavigation'")
+    expect(userNavigation).toContain("label: '今日'")
+    expect(userNavigation).toContain("label: '简历准备'")
+    expect(userNavigation).toContain("label: '岗位匹配'")
+    expect(userNavigation).toContain("label: '面试训练'")
+    expect(userNavigation).toContain("label: '模拟面试'")
+    expect(userNavigation).toContain("label: '投递管理'")
+    expect(userNavigation).toContain("label: '求职资料'")
+    expect(userNavigation).toContain("label: '成长分析'")
+    expect(userNavigation).toContain('mobilePrimaryNavigationKeys')
+    expect(arenaTopNav).toContain('class="arena-bottom-nav"')
+    expect(arenaTopNav).toContain('isMobileMoreActive')
+    expect(arenaTopNav).toContain("route.path.startsWith('/ability-map')")
+    expect(arenaTopNav).toMatch(/\.arena-top-nav\s*\{[\s\S]*?min-height:\s*62px/)
+    expect(arenaTopNav).toMatch(/\.arena-bottom-nav\s*\{[\s\S]*?position:\s*fixed/)
   })
 
   it('avoids broad important overrides and text-clipping patterns in the dashboard', () => {

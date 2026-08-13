@@ -1,13 +1,13 @@
 <template>
   <div class="arena arena-iv">
     <div class="arena-iv__page">
-      <!-- 页头 -->
+      <!-- 首屏只承载模拟形式选择，推荐依据和微调留在后续折叠区。 -->
       <div class="arena-between arena-iv__head">
         <div>
-          <div class="arena-iv__kicker">面试 · 副本大厅</div>
-          <h1 class="arena-h1 arena-iv__title">选一个副本，开练 ⚔️</h1>
+          <div class="arena-iv__kicker">第 1 步 · 选择模拟形式</div>
+          <h1 class="arena-h1 arena-iv__title">开始一场模拟面试</h1>
           <p class="arena-p" style="margin-top: 6px; max-width: 620px">
-            系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。
+            选择适合当前目标的场景，完成后将生成面试复盘报告。
           </p>
         </div>
         <div class="arena-row" style="flex-wrap: wrap">
@@ -17,16 +17,17 @@
         </div>
       </div>
 
-      <!-- Boss 副本：推荐计划 -->
-      <div class="arena-card arena-card--hero arena-iv__boss">
+      <!-- 推荐计划保留为辅助入口，首屏先让用户完成模拟形式选择。 -->
+      <details v-if="configExpanded" class="arena-card arena-iv__boss">
+        <summary>推荐面试方案与依据</summary>
         <div class="arena-iv__boss-main">
           <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-            <span class="arena-chip arena-chip--grn-solid">👑 Boss 副本 · 推荐</span>
+            <span class="arena-chip arena-chip--grn-solid">推荐面试方案</span>
             <span class="arena-chip" :class="quickTrustChipClass">{{ quickRecommendationTrustLabel }}</span>
             <span class="arena-chip" :class="voicePreflightReady ? 'arena-chip--grn' : 'arena-chip--mut'">
               {{ voicePreflightReady ? '语音设备已预检' : '语音可选' }}
             </span>
-            <span class="arena-xp-tag">通关 +200 XP</span>
+            <span class="arena-chip arena-chip--mut">完成后生成复盘</span>
           </div>
           <h2 class="arena-h2" style="margin-top: 13px">{{ quickInterviewTitle }}</h2>
           <p class="arena-p" style="margin-top: 8px">{{ quickInterviewDesc }}</p>
@@ -85,15 +86,15 @@
         </div>
 
         <div class="arena-iv__boss-actions">
-          <div v-if="quickStartNotice" class="arena-iv__warn">⚠ {{ quickStartNotice }}</div>
-          <div v-if="routeContextNotice" class="arena-iv__warn">⚠ {{ routeContextNotice }}</div>
+          <div v-if="quickStartNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ quickStartNotice }}</div>
+          <div v-if="routeContextNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ routeContextNotice }}</div>
           <button
             class="arena-btn arena-btn--pri"
             style="padding: 14px 26px; width: 100%"
             :disabled="creating || resumeLoading || matchReportVerifyLoading"
             @click="handleQuickCreate"
           >
-            {{ creating ? '创建中…' : '⚔ 开始推荐面试' }}
+            {{ creating ? '创建中…' : '开始推荐面试' }}
           </button>
           <button class="arena-btn arena-btn--sec" style="padding: 11px 16px; font-size: 13px; width: 100%" :disabled="creating || resumeLoading || matchReportVerifyLoading" @click="applyQuickRecommendation">
             ✦ 使用推荐并微调
@@ -102,25 +103,21 @@
             查看可选微调
           </button>
           <button class="arena-btn arena-btn--txt" style="width: 100%" @click="voiceDeviceCheckVisible = true">
-            🎙 语音设备预检
+            <Mic :size="15" />语音设备预检
           </button>
         </div>
-      </div>
+      </details>
 
       <div class="arena-iv__grid">
         <div class="arena-col">
-          <!-- 副本选择 -->
+          <!-- 模拟形式选择 -->
           <div class="arena-card arena-iv__panel">
             <div class="arena-between">
-              <div>
-                <div class="arena-iv__kicker" style="color: var(--arena-vio)">副本选择</div>
-                <div class="arena-h3" style="margin-top: 4px">7 个训练副本，按目标挑一个</div>
-              </div>
-              <span class="arena-tiny">全真模拟 = Boss 战</span>
+              <span class="arena-tiny">根据简历、JD 与训练记录给出推荐。</span>
             </div>
             <div class="arena-iv__dungeons">
               <button
-                v-for="item in modeCards"
+                v-for="item in primaryModeCards"
                 :key="item.key"
                 type="button"
                 class="arena-iv__dungeon"
@@ -129,48 +126,56 @@
               >
                 <div class="arena-between">
                   <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
-                  <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐副本</span>
-                  <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">当前副本</span>
+                  <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐方案</span>
+                  <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">已选择</span>
                 </div>
                 <b>{{ item.title }}</b>
                 <small>{{ item.desc }}</small>
                 <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
                   <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
+                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
                   <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                 </div>
               </button>
             </div>
+
+            <div class="arena-iv__selection-summary">
+              <div>
+                <span class="arena-chip arena-chip--grn">当前选择</span>
+                <b>{{ selectedModeTitle }}</b>
+                <p>{{ selectedModeDesc }}</p>
+                <p class="arena-tiny">上下文：{{ selectedResumeName }} · {{ form.targetPosition || '通用岗位' }}</p>
+              </div>
+              <div class="arena-iv__selection-actions">
+                <button
+                  class="arena-btn arena-btn--pri"
+                  type="button"
+                  :disabled="creating || resumeLoading || matchReportVerifyLoading"
+                  @click="handleQuickCreate"
+                >
+                  {{ creating ? '创建中…' : '开始面试' }}
+                </button>
+                <button class="arena-btn arena-btn--sec" type="button" @click="toggleConfigExpanded">
+                  微调
+                </button>
+              </div>
+            </div>
+
           </div>
 
           <!-- 可选微调 -->
-          <div ref="configPanelRef" class="arena-card arena-iv__panel">
+          <div v-if="configExpanded" ref="configPanelRef" class="arena-card arena-iv__panel">
             <div class="arena-between" style="flex-wrap: wrap">
               <div>
                 <div class="arena-iv__kicker" style="color: var(--arena-amber)">可选微调</div>
                 <div class="arena-h3" style="margin-top: 4px">默认按推荐计划开始，想换配置再展开</div>
               </div>
-              <button class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" @click="toggleConfigExpanded">
-                {{ configExpanded ? '收起微调' : '展开微调' }}
+              <button type="button" class="arena-btn arena-btn--sec" style="padding: 9px 15px; font-size: 12.5px" @click="toggleConfigExpanded">
+                收起微调
               </button>
             </div>
 
-            <div v-if="!configExpanded" class="arena-iv__collapsed">
-              <b style="font-size: 13.5px">{{ quickInterviewTitle }}</b>
-              <p class="arena-tiny" style="margin-top: 4px">{{ quickInterviewDesc }}</p>
-              <div class="arena-iv__context-grid" style="margin-top: 12px">
-                <article v-for="item in quickStartItems" :key="item.label">
-                  <component :is="item.icon" :size="15" />
-                  <div>
-                    <span>{{ item.label }}</span>
-                    <strong>{{ item.value }}</strong>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <template v-else>
-              <el-form ref="formRef" class="arena-iv__form" :model="form" :rules="rules" label-position="top">
+            <el-form ref="formRef" class="arena-iv__form" :model="form" :rules="rules" label-position="top">
                 <div class="arena-iv__form-section">
                   <div class="arena-iv__form-title"><span>01</span>面试目标</div>
                   <div class="arena-iv__form-grid">
@@ -286,7 +291,7 @@
                     </el-select>
                     <div v-if="resumeLoadError" class="arena-iv__warn" style="margin-top: 6px">
                       <span>{{ resumeLoadError }}</span>
-                      <button class="arena-btn arena-btn--txt" :disabled="resumeLoading" @click="fetchResumes">重试</button>
+                      <button type="button" class="arena-btn arena-btn--txt" :disabled="resumeLoading" @click="fetchResumes">重试</button>
                     </div>
                     <div v-else-if="!resumeLoading && !resumes.length" class="arena-tiny" style="margin-top: 5px">
                       暂无可选简历，请先进入简历中心创建后再开启简历上下文。
@@ -294,36 +299,65 @@
                   </el-form-item>
                 </div>
 
-                <div v-if="resumeRequired" class="arena-iv__warn">⚠ 当前面试模式建议选择简历，便于进行项目深挖和综合追问。</div>
+                <div v-if="resumeRequired" class="arena-iv__warn"><AlertTriangle :size="15" />当前面试模式建议选择简历，便于进行项目深挖和综合追问。</div>
                 <div v-if="isJobTargetFlow && !quickResumeId" class="arena-iv__warn">
-                  ⚠ 目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。
+                  <AlertTriangle :size="15" />目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。
                 </div>
-                <div v-if="routeContextNotice" class="arena-iv__warn">⚠ {{ routeContextNotice }}</div>
+                <div v-if="routeContextNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ routeContextNotice }}</div>
 
                 <div class="arena-row" style="margin-top: 16px; flex-wrap: wrap">
-                  <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
-                    {{ creating ? '创建中…' : '⚔ 按当前计划开始' }}
+                  <button type="button" class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
+                    {{ creating ? '创建中…' : '按当前计划开始' }}
                   </button>
-                  <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13px" :disabled="creating" @click="applyQuickRecommendation">
+                  <button type="button" class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13px" :disabled="creating" @click="applyQuickRecommendation">
                     恢复推荐计划
                   </button>
                 </div>
-              </el-form>
+            </el-form>
 
-              <div class="arena-iv__form-section" style="margin-top: 18px">
-                <InterviewScenarioSelector
-                  v-model="selectedScenario"
-                  :mode-key="selectedModeKey"
-                />
+            <details class="arena-iv__advanced-modes" :open="showAdvancedModes">
+              <summary>
+                <span>更多训练方式</span>
+                <small>压力追问、HR 行为和行业场景</small>
+              </summary>
+              <div class="arena-iv__dungeons arena-iv__dungeons--advanced">
+                <button
+                  v-for="item in advancedModeCards"
+                  :key="item.key"
+                  type="button"
+                  class="arena-iv__dungeon"
+                  :class="{ 'is-active': selectedModeKey === item.key, 'is-recommended': recommendedModeKey === item.key }"
+                  @click="selectDungeon(item)"
+                >
+                  <div class="arena-between">
+                    <span class="arena-iv__dungeon-icon"><component :is="item.icon" :size="17" /></span>
+                    <span v-if="recommendedModeKey === item.key" class="arena-chip arena-chip--grn-solid">推荐方案</span>
+                    <span v-else-if="selectedModeKey === item.key" class="arena-chip arena-chip--amber">已选择</span>
+                  </div>
+                  <b>{{ item.title }}</b>
+                  <small>{{ item.desc }}</small>
+                  <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
+                    <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
+                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
+                    <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
+                  </div>
+                </button>
               </div>
-            </template>
+            </details>
+
+            <div class="arena-iv__form-section" style="margin-top: 18px">
+              <InterviewScenarioSelector
+                v-model="selectedScenario"
+                :mode-key="selectedModeKey"
+              />
+            </div>
           </div>
         </div>
 
         <!-- 右栏 -->
         <div class="arena-col">
           <div class="arena-card arena-iv__panel">
-            <div class="arena-h3">本轮闯关流程</div>
+            <div class="arena-h3">本轮面试流程</div>
             <div class="arena-iv__wizard">
               <article v-for="(step, index) in wizardSteps" :key="step.title" :class="{ 'is-active': index === 0 }">
                 <span>{{ index + 1 }}</span>
@@ -367,7 +401,7 @@
 
           <div class="arena-card arena-iv__panel arena-iv__tip">
             <div class="arena-row" style="gap: 8px">
-              <span style="font-size: 16px">⚡</span>
+              <Zap :size="16" />
               <b style="font-size: 13px">本轮重点</b>
             </div>
             <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">{{ selectedModeTip }}</p>
@@ -387,7 +421,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { BrainCircuit, BriefcaseBusiness, Files, Sparkles, Target, Zap } from 'lucide-vue-next'
+import { AlertTriangle, BrainCircuit, BriefcaseBusiness, Files, Mic, Sparkles, Target, Zap } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -534,6 +568,21 @@ const modeCards: ModeCard[] = [
     }
   },
   {
+    key: 'full',
+    title: '完整模拟',
+    desc: '按正式节奏覆盖技术、项目和岗位场景，完成一场完整面试。',
+    badge: '完整流程',
+    value: INTERVIEW_MODE.COMPREHENSIVE,
+    icon: Target,
+    forceResume: true,
+    defaults: {
+      difficulty: 'HARD',
+      interviewerStyle: 'NORMAL',
+      practiceMode: 'FORMAL',
+      questionCount: 8
+    }
+  },
+  {
     key: 'system',
     title: '系统设计',
     desc: '训练限流、缓存、库存、搜索、链路治理等方案设计。',
@@ -590,6 +639,16 @@ const modeCards: ModeCard[] = [
     }
   }
 ]
+
+const primaryModeKeys = new Set(['technical', 'project', 'resume', 'full'])
+const primaryModeOrder = ['technical', 'project', 'resume', 'full'] as const
+const primaryModeCards = computed(() =>
+  primaryModeOrder
+    .map((key) => modeCards.find((item) => item.key === key))
+    .filter((item): item is ModeCard => Boolean(item))
+)
+const advancedModeCards = computed(() => modeCards.filter((item) => !primaryModeKeys.has(item.key)))
+const showAdvancedModes = computed(() => !primaryModeKeys.has(selectedModeKey.value))
 
 const isIndustryMode = computed(() => selectedModeKey.value === 'industry')
 
@@ -918,7 +977,7 @@ const wizardSteps = computed(() => [
   { title: '开始训练', desc: '创建后直接进入面试房间' }
 ])
 
-// ---- 副本卡片展示 ----
+// ---- 模拟形式卡片展示 ----
 const recommendedModeKey = computed(() => {
   const payload = quickRecommendation.value.payload
   const mode = modeCards.find((item) => item.value === payload.interviewMode && item.forceResume === Boolean(payload.resumeId))
@@ -926,16 +985,19 @@ const recommendedModeKey = computed(() => {
   return mode?.key || 'technical'
 })
 
-const modeStars = (item: ModeCard) => {
+const modeDifficultyLabel = (item: ModeCard) => {
   const difficulty = item.defaults?.difficulty
-  if (difficulty === 'HARD') return '★★★'
-  if (difficulty === 'EASY') return '★☆☆'
-  return '★★☆'
+  if (difficulty === 'HARD') return '高强度'
+  if (difficulty === 'EASY') return '轻量'
+  return '标准'
 }
 
 const selectDungeon = (item: ModeCard) => {
   selectMode(item)
-  void scrollToConfig()
+  // Industry mode needs an extra template before it can start; other dungeons stay at the start action.
+  if (item.industry) {
+    void scrollToConfig()
+  }
 }
 
 const optionLabel = (options: SelectOption[], value?: string) => {
@@ -1636,7 +1698,7 @@ onMounted(async () => {
 <style scoped lang="scss">
 .arena-iv {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  margin: 0;
 
   &__page {
     max-width: 1060px;
@@ -1644,11 +1706,18 @@ onMounted(async () => {
     padding: 28px 34px 42px;
     position: relative;
     z-index: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   &__head {
+    order: 1;
     flex-wrap: wrap;
     gap: 12px;
+
+    > .arena-row {
+      display: none;
+    }
   }
 
   &__kicker {
@@ -1662,12 +1731,41 @@ onMounted(async () => {
   }
 
   &__boss {
-    margin-top: 20px;
-    padding: 22px 24px;
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    gap: 22px;
-    align-items: start;
+    order: 3;
+    display: block;
+    margin-top: 14px;
+    padding: 0;
+    overflow: hidden;
+
+    > summary {
+      display: flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 0 16px;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
+      gap: 18px;
+      padding: 16px;
+
+      > summary {
+        grid-column: 1 / -1;
+        min-height: 0;
+        padding: 0;
+        color: var(--arena-grn-d);
+      }
+    }
   }
 
   &__boss-main {
@@ -1857,31 +1955,88 @@ onMounted(async () => {
   }
 
   &__grid {
+    order: 2;
     margin-top: 20px;
     display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: 20px;
+    grid-template-columns: minmax(0, 1060px);
+    justify-content: center;
+    gap: 14px;
     align-items: start;
+
+    > .arena-col:last-child {
+      display: none;
+    }
   }
 
   &__panel {
     padding: 20px 22px;
   }
 
+  &__grid > .arena-col > &__panel:first-child {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    > .arena-between {
+      display: none;
+    }
+
+    > .arena-iv__dungeons {
+      margin-top: 0;
+    }
+  }
+
   &__dungeons {
     margin-top: 14px;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 11px;
+    gap: 14px;
+  }
+
+  &__advanced-modes {
+    margin-top: 14px;
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 2px 0;
+      color: var(--arena-sub);
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      span {
+        color: var(--arena-ink);
+        font-size: 12.5px;
+        font-weight: 800;
+      }
+
+      small {
+        color: var(--arena-mut);
+        font-size: 11px;
+      }
+    }
+  }
+
+  &__dungeons--advanced {
+    padding-top: 2px;
   }
 
   &__dungeon {
     display: flex;
     flex-direction: column;
+    min-height: 150px;
     gap: 7px;
-    padding: 14px 15px;
-    border: 2px solid var(--arena-line);
-    border-radius: 15px;
+    padding: 20px 22px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
     background: #fff;
     font-family: inherit;
     text-align: left;
@@ -1889,14 +2044,15 @@ onMounted(async () => {
     transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 
     &:hover {
-      transform: translateY(-2px);
+      transform: translateY(-1px);
       border-color: var(--arena-grn);
-      box-shadow: 0 6px 16px rgba(23, 178, 106, 0.1);
+      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
     }
 
     &.is-active {
       border-color: var(--arena-grn);
-      background: linear-gradient(135deg, #f0fbf4, #ffffff 75%);
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--arena-grn-soft);
     }
 
     &.is-recommended {
@@ -1911,6 +2067,48 @@ onMounted(async () => {
       font-size: 11.5px;
       color: var(--arena-sub);
       line-height: 1.5;
+    }
+  }
+
+  &__selection-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 18px;
+    padding: 16px 22px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #fff;
+
+    > div:first-child {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    b {
+      color: var(--arena-ink);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+
+  &__selection-actions {
+    display: flex;
+    flex: none;
+    gap: 10px;
+
+    .arena-btn {
+      min-height: 42px;
+      padding: 0 18px;
     }
   }
 
@@ -2071,7 +2269,7 @@ onMounted(async () => {
 
 @media (max-width: 720px) {
   .arena-iv {
-    margin: -12px -12px 0;
+    margin: 0;
 
     &__page {
       padding: 18px 14px 26px;
@@ -2086,6 +2284,20 @@ onMounted(async () => {
     &__trust-grid,
     &__form-grid {
       grid-template-columns: 1fr;
+    }
+
+    &__selection-summary,
+    &__selection-actions {
+      width: 100%;
+    }
+
+    &__selection-summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    &__selection-actions .arena-btn {
+      flex: 1;
     }
   }
 }

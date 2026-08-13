@@ -36,6 +36,7 @@ interface ClearAuthOptions {
 }
 
 const AUTH_VERIFY_TTL = 15000
+const AUTH_VERIFY_RETRY_DELAY_MS = 350
 let pendingCurrentUserRequest: Promise<CurrentUserVO | null> | null = null
 let pendingCurrentUserSessionKey = ''
 let lastVerifiedToken = ''
@@ -133,6 +134,18 @@ const isAuthFailure = (error: unknown) => {
     || code === HTTP_STATUS_CODE.TOKEN_INVALID
     || status === 401
 }
+
+const isTransientAuthVerificationFailure = (error: unknown) => {
+  const status = (error as { response?: { status?: number } })?.response?.status
+  const networkCode = String((error as { code?: unknown })?.code || '').toUpperCase()
+  return (typeof status === 'number' && (status === 408 || status === 429 || status >= 500))
+    || ['ECONNABORTED', 'ECONNRESET', 'ERR_NETWORK', 'ETIMEDOUT'].includes(networkCode)
+}
+
+const waitForAuthVerificationRetry = () =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, AUTH_VERIFY_RETRY_DELAY_MS)
+  })
 
 const hasOwnPayload = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
 
@@ -404,7 +417,14 @@ export const useAuthStore = defineStore('auth', {
       let currentRequest: Promise<CurrentUserVO | null> | undefined
       currentRequest = (async (): Promise<CurrentUserVO | null> => {
         try {
-          const userInfo = await getCurrentUserApi()
+          let userInfo: CurrentUserVO
+          try {
+            userInfo = await getCurrentUserApi()
+          } catch (error) {
+            if (!isTransientAuthVerificationFailure(error)) throw error
+            await waitForAuthVerificationRetry()
+            userInfo = await getCurrentUserApi()
+          }
           if (!isAuthSessionCurrent(requestSession)) {
             this.syncFromStorage()
             if (this.tokenVerified && this.userInfo) return this.userInfo

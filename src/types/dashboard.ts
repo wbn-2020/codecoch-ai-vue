@@ -55,6 +55,12 @@ export interface AdminDashboardOpsMetricsVO {
   redisKeyspaceMisses?: number
   redisConnectedClients?: number
   metricsSource?: string
+  trafficMetricsStatus?: 'AVAILABLE' | 'PARTIAL' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | string
+  trafficMetricsReason?: string
+  jvmMetricsStatus?: 'AVAILABLE' | 'PARTIAL' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | string
+  jvmMetricsReason?: string
+  redisMetricsStatus?: 'AVAILABLE' | 'PARTIAL' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | string
+  redisMetricsReason?: string
 }
 
 export interface AdminDashboardOverviewVO {
@@ -106,10 +112,18 @@ export interface UserDashboardRecentReportVO {
 export interface UserDashboardActiveStudyPlanVO {
   planId: number
   planTitle?: string
+  planSummary?: string
   planStatus?: string
   totalTaskCount?: number
   doneTaskCount?: number
   progressPercent?: number
+  cumulativeTaskCount?: number
+  cumulativeDoneTaskCount?: number
+  cumulativeProgressPercent?: number
+  todayTaskCount?: number
+  todayDoneTaskCount?: number
+  todayProgressPercent?: number
+  todayStatus?: 'NO_SCHEDULE' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | string
   updatedAt?: string
 }
 
@@ -147,6 +161,10 @@ export interface V3DashboardLatestMatchVO {
 
 export interface V3DashboardStudyProgressVO extends UserDashboardActiveStudyPlanVO {
   planId: number
+  activePlanId?: number
+  totalTasks?: number
+  completedTasks?: number
+  completionRate?: number
 }
 
 export interface V3DashboardRecommendedQuestionsVO {
@@ -196,6 +214,9 @@ export interface UserDashboardOverviewVO {
   activeStudyPlan?: UserDashboardActiveStudyPlanVO | null
   todayTaskCount: number
   todayCompletedTaskCount: number
+  businessDate?: string
+  businessTimezone?: string
+  agentTodayPlanStatus?: 'NOT_GENERATED' | 'IN_PROGRESS' | 'COMPLETED' | string
   entryStatuses: UserDashboardEntryStatusVO[]
   generatedAt?: string
 }

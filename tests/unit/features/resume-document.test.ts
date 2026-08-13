@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import {
+  buildResumeExportChecks,
   buildResumeDocumentModel,
+  isResumeTemplateUnlocked,
   normalizeResumeTemplateCode,
+  resumeTemplateOptions,
+  RESUME_STREAK_TEMPLATE_UNLOCK_DAYS,
   resumeTemplateSectionOrder
 } from '@/features/resume-document'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
@@ -211,7 +215,7 @@ describe('resume document model', () => {
     expect(wrapper.find('.document-entry li').text()).toBe('负责订单服务重构')
   })
 
-  it('keeps preview order aligned with the three server ATS templates', () => {
+  it('keeps preview order aligned with stored ATS templates and degrades unknown values', () => {
     expect(resumeTemplateSectionOrder('ATS_SINGLE_COLUMN')).toEqual([
       'summary',
       'experience',
@@ -221,6 +225,101 @@ describe('resume document model', () => {
     ])
     expect(resumeTemplateSectionOrder('ATS_COMPACT')[1]).toBe('skills')
     expect(resumeTemplateSectionOrder('ATS_PROJECT_FOCUS')[2]).toBe('projects')
+    expect(resumeTemplateSectionOrder('ATS_CLASSIC_SIDEBAR')).not.toContain('skills')
     expect(normalizeResumeTemplateCode('UNKNOWN')).toBe('ATS_SINGLE_COLUMN')
+  })
+
+  it('provides four base templates and unlocks the signature template at seven streak days', () => {
+    const signature = resumeTemplateOptions.find((template) => template.code === 'ATS_STREAK_SIGNATURE')
+
+    expect(resumeTemplateOptions.filter((template) => !template.unlockStreakDays)).toHaveLength(4)
+    expect(signature?.unlockStreakDays).toBe(RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)
+    expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS - 1)).toBe(false)
+    expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)).toBe(true)
+  })
+
+  it('describes role fit, page tendency, ATS risk, and typography for every template', () => {
+    for (const template of resumeTemplateOptions) {
+      expect(template.roleFit).toBeTruthy()
+      expect(template.pageTendency).toMatch(/页/)
+      expect(['LOW', 'MEDIUM']).toContain(template.atsRisk)
+      expect(template.atsRiskLabel).toMatch(/低|中/)
+      expect(template.atsRiskDetail).toBeTruthy()
+      expect(template.typographyLayout).toMatch(/Arial|微软雅黑/)
+    }
+
+    expect(
+      resumeTemplateOptions.find((template) => template.code === 'ATS_CLASSIC_SIDEBAR')?.atsRisk
+    ).toBe('MEDIUM')
+  })
+
+  it('builds export checks without inventing a real ATS score', () => {
+    const checks = buildResumeExportChecks({
+      isSaved: true,
+      templateCode: 'ATS_PROJECT_FOCUS',
+      realName: '测试用户',
+      email: 'candidate@example.com',
+      phone: '13800000000',
+      targetPosition: 'Java 后端工程师',
+      summary: 'Java 后端工程师，负责 Spring Boot 服务建设。',
+      skillStack: 'Java、Spring Boot、Redis',
+      workExperience: '负责 Java 交易服务开发和 Redis 缓存治理。',
+      projects: [{
+        projectName: '交易平台',
+        techStack: 'Java / Spring Boot / Redis',
+        optimizationResult: '接口错误率下降 30%'
+      }]
+    })
+
+    expect(checks.find((item) => item.key === 'saved')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'contact-readability')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'keyword-evidence')?.state).toBe('PASS')
+    expect(checks.find((item) => item.key === 'page-volume')).toMatchObject({
+      heuristic: true
+    })
+    expect(checks.find((item) => item.key === 'page-volume')?.detail).toContain('不是实际页数')
+    expect(checks.some((item) => /ATS 分数|ATS 评分/.test(`${item.label}${item.detail}`))).toBe(false)
+  })
+
+  it('warns about unreadable contacts and long blocks while directing formal pagination review', () => {
+    const checks = buildResumeExportChecks({
+      isSaved: false,
+      templateCode: 'ATS_CLASSIC_SIDEBAR',
+      email: 'candidate at example.com',
+      targetPosition: '',
+      skillStack: 'Java、Redis',
+      workExperience: '负责超长项目说明。'.repeat(100)
+    })
+
+    expect(checks.find((item) => item.key === 'saved')?.state).toBe('WARNING')
+    expect(checks.find((item) => item.key === 'contact-readability')?.state).toBe('WARNING')
+    expect(checks.find((item) => item.key === 'page-break-risk')).toMatchObject({
+      state: 'WARNING',
+      heuristic: true
+    })
+    expect(checks.find((item) => item.key === 'page-break-risk')?.detail).toContain('版本分页导出工作台')
+    expect(checks.find((item) => item.key === 'target-position')?.state).toBe('WARNING')
+  })
+
+  it('renders the classic sidebar and signature paper variants as distinct documents', () => {
+    const draft = {
+      realName: '李明远',
+      targetPosition: '高级 Java 工程师',
+      phone: '13800000000',
+      email: 'limingyuan@example.com',
+      skillStack: 'Java、Spring Boot、Redis'
+    }
+    const classic = mount(ResumeDocumentPreview, {
+      props: { draft, templateCode: 'ATS_CLASSIC_SIDEBAR' }
+    })
+    const signature = mount(ResumeDocumentPreview, {
+      props: { draft, templateCode: 'ATS_STREAK_SIGNATURE' }
+    })
+
+    expect(classic.classes()).toContain('is-classic')
+    expect(classic.find('.document-sidebar').text()).toContain('高级 Java 工程师')
+    expect(classic.find('.document-sidebar').text()).toContain('Redis')
+    expect(signature.classes()).toContain('is-streak')
+    expect(signature.find('.document-sidebar').exists()).toBe(false)
   })
 })

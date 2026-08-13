@@ -94,7 +94,7 @@
           <el-button type="primary" plain @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">去匹配</el-button>
         </div>
         <div v-else class="loop-summary">
-          <strong>{{ overview.latestMatch.overallScore ?? '--' }} 分</strong>
+          <strong>{{ latestMatchScoreText }}</strong>
           <span>{{ latestMatchSummary }}</span>
           <el-button
             type="primary"
@@ -108,13 +108,17 @@
 
     <section class="dashboard-grid">
       <div v-if="skillLoading || (skillOverview && !skillOverview.empty)" class="content-panel">
-        <div class="section-head"><div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
+        <div class="section-head">
+          <div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div>
+          <el-button v-if="latestMatchTrusted" text @click="router.push('/skill-profile')">查看</el-button>
+          <el-button v-else text @click="router.push('/resume-match')">先完成可信匹配</el-button>
+        </div>
         <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
         <div v-else-if="skillOverview" class="skill-summary">
-          <strong>{{ skillOverview.overallScore ?? '--' }}</strong>
+          <strong>{{ skillProfileScoreText }}</strong>
           <span>{{ skillOverview.profileName || '当前能力画像' }}</span>
           <p>{{ skillOverview.summary || '暂无画像摘要。' }}</p>
-          <el-progress :percentage="Number(skillOverview.overallScore || 0)" :stroke-width="10" />
+          <el-progress v-if="skillProfileScore != null" :percentage="skillProfileScore" :stroke-width="10" />
         </div>
       </div>
 
@@ -127,7 +131,8 @@
           @click="router.push(activeStudyPlanRoute)"
         >
           <strong>{{ activeStudyPlanTitle }}</strong>
-          <span>{{ activeStudyProgress.doneTaskCount || 0 }}/{{ activeStudyProgress.totalTaskCount || 0 }} · {{ activeStudyProgress.progressPercent || 0 }}%</span>
+          <span>{{ activeStudyProgress.cumulativeDoneTaskCount ?? activeStudyProgress.doneTaskCount ?? 0 }}/{{ activeStudyProgress.cumulativeTaskCount ?? activeStudyProgress.totalTaskCount ?? 0 }} · {{ activeStudyProgress.cumulativeProgressPercent ?? activeStudyProgress.progressPercent ?? 0 }}%</span>
+          <small>{{ activeStudyProgress.todayStatus === 'NO_SCHEDULE' ? '业务日无安排' : `业务日 ${activeStudyProgress.todayDoneTaskCount ?? 0}/${activeStudyProgress.todayTaskCount ?? 0}` }}</small>
           <el-progress :percentage="activeStudyProgress.progressPercent || 0" />
         </button>
       </div>
@@ -223,11 +228,26 @@ const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchRep
 const latestMatchTrusted = computed(() => {
   const match = overview.value?.latestMatch
   return latestMatchStatus.value === 'SUCCESS' &&
-    !match?.fallback &&
-    String(match?.trustStatus || '').toUpperCase() === 'VERIFIED' &&
-    match?.schemaWarningCount != null &&
-    Number(match.schemaWarningCount) === 0
+    match?.trustStatus === 'VERIFIED' &&
+    match?.fallback !== true &&
+    match?.schemaWarningCount === 0
 })
+const toQuantifiedScore = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return undefined
+  const score = Number(value)
+  return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : undefined
+}
+const latestMatchScore = computed(() =>
+  latestMatchTrusted.value ? toQuantifiedScore(overview.value?.latestMatch?.overallScore) : undefined
+)
+const latestMatchScoreText = computed(() => {
+  if (!latestMatchTrusted.value) return latestMatchStatus.value === 'SUCCESS' ? '结果待复核' : formatStatus(latestMatchStatus.value)
+  return latestMatchScore.value == null ? '匹配分待量化' : `${latestMatchScore.value} 分`
+})
+const skillProfileScore = computed(() =>
+  latestMatchTrusted.value ? toQuantifiedScore(skillOverview.value?.overallScore) : undefined
+)
+const skillProfileScoreText = computed(() => skillProfileScore.value ?? '--')
 const latestSuccessfulMatchReportId = computed(() => latestMatchTrusted.value ? latestMatchReportId.value : undefined)
 const latestSuccessfulMatch = computed(() => latestMatchTrusted.value ? overview.value?.latestMatch : null)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
@@ -315,7 +335,9 @@ const recommendationQuery = computed(() => compactQuery({
   batchId: overview.value?.recommendedQuestions?.batchId,
   studyPlanId: activeStudyProgress.value?.planId,
   matchReportId: overview.value?.recommendedQuestions?.matchReportId || (activeStudyProgress.value?.planId ? undefined : latestSuccessfulMatchReportId.value),
-  skillProfileId: overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId,
+  skillProfileId: latestMatchTrusted.value
+    ? overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId
+    : undefined,
   sourceType: overview.value?.recommendedQuestions?.sourceType,
   sourceId: overview.value?.recommendedQuestions?.sourceId,
   targetJobId: currentTargetJobId.value
@@ -388,8 +410,16 @@ const notificationText = (item: NotificationVO) => {
 const metrics = computed(() => [
   { label: '简历', value: overview.value?.resumeCount ?? 0, hint: '进入匹配输入', path: '/resumes', icon: FileText },
   { label: '面试', value: overview.value?.interviewCount ?? 0, hint: '模拟面试记录', path: '/interviews/history', icon: Bell },
-  { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: `${overview.value?.todayCompletedTaskCount ?? 0}/${overview.value?.todayTaskCount ?? 0} 今日任务`, path: '/study-plans', icon: BookOpenCheck },
-  { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
+  { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: activeStudyProgress.value?.todayStatus === 'NO_SCHEDULE'
+    ? '当前路线业务日无安排'
+    : `${activeStudyProgress.value?.todayDoneTaskCount ?? overview.value?.todayCompletedTaskCount ?? 0}/${activeStudyProgress.value?.todayTaskCount ?? overview.value?.todayTaskCount ?? 0} 业务日任务`, path: '/study-plans', icon: BookOpenCheck },
+  {
+    label: '能力分',
+    value: skillProfileScoreText.value,
+    hint: latestMatchTrusted.value ? `${skillOverview.value?.gapCount ?? 0} 个短板` : '需先完成可信匹配',
+    path: latestMatchTrusted.value ? '/skill-profile' : '/resume-match',
+    icon: Radar
+  }
 ])
 const onboardingSteps = computed(() => [
   {
@@ -432,9 +462,17 @@ const onboardingSteps = computed(() => [
     key: 'today',
     order: 4,
     title: '生成今日计划',
-    desc: (overview.value?.todayTaskCount || 0) > 0 ? `今日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成` : '让智能教练给出今天最该推进的动作',
+    desc: activeStudyProgress.value?.todayStatus === 'NO_SCHEDULE'
+      ? `累计 ${activeStudyProgress.value?.cumulativeDoneTaskCount ?? activeStudyProgress.value?.doneTaskCount ?? 0}/${activeStudyProgress.value?.cumulativeTaskCount ?? activeStudyProgress.value?.totalTaskCount ?? 0}，业务日无安排`
+      : (overview.value?.todayTaskCount || 0) > 0
+        ? `业务日 ${overview.value?.todayCompletedTaskCount || 0}/${overview.value?.todayTaskCount || 0} 已完成`
+        : '让智能教练给出今天最该推进的动作',
     cta: '去今日任务',
-    done: Boolean((overview.value?.todayTaskCount || 0) > 0 || activeStudyProgress.value),
+    done: Boolean(
+      activeStudyProgress.value
+        && (activeStudyProgress.value.todayStatus === 'NO_SCHEDULE'
+          || (activeStudyProgress.value.todayTaskCount || 0) > 0)
+    ),
     path: '/agent/today'
   }
 ])
@@ -530,7 +568,7 @@ onMounted(loadDashboard)
 
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface, var(--app-surface)); }
 .page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
@@ -540,10 +578,10 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .content-panel { padding: 16px; min-width: 0; }
 .error-strip { display: grid; gap: 10px; }
 .priority-panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid rgba(59, 130, 246, 0.42); border-radius: 8px; background: rgba(59, 130, 246, 0.1); }
-.priority-panel span { color: #93c5fd; font-size: 12px; font-weight: 700; }
+.priority-panel span { color: var(--arena-grn-d, var(--app-primary-hover)); font-size: 12px; font-weight: 700; }
 .priority-panel h2 { margin-top: 4px; font-size: 20px; }
 .priority-panel p { max-width: 68ch; margin-top: 6px; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .metric-card { min-width: 0; padding: 12px 14px; border: 0; border-right: 1px solid var(--app-border); border-radius: 0; background: transparent; box-shadow: none; color: var(--app-text); text-align: left; cursor: pointer; }
 .metric-card:last-child { border-right: 0; }
 .metric-card span, .metric-card small { display: block; margin-top: 6px; color: var(--app-text-muted); }
@@ -557,7 +595,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .onboarding-summary p, .utilities-panel p { margin-top: 4px; }
 .onboarding-body { padding: 0 16px 16px; }
 .onboarding-track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.onboarding-step { display: grid; gap: 7px; align-content: start; min-height: 108px; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); color: var(--app-text); text-align: left; cursor: pointer; }
+.onboarding-step { display: grid; gap: 7px; align-content: start; min-height: 108px; padding: 12px; border: 1px solid var(--app-border); border-radius: 12px; background: var(--user-surface-muted, var(--app-surface-raised)); color: var(--app-text); text-align: left; cursor: pointer; }
 .onboarding-step:hover, .onboarding-step.is-current { border-color: rgba(59, 130, 246, 0.42); background: rgba(59, 130, 246, 0.1); }
 .onboarding-step.is-done { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
 .onboarding-step__marker { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(148, 163, 184, 0.16); color: var(--app-text); font-size: 12px; font-weight: 800; }
@@ -587,7 +625,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .loop-summary strong { font-size: 24px; }
 .loop-summary span, .loop-summary small { color: var(--app-text-muted); line-height: 1.5; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.notification-list article, .entry-grid button { padding: 14px; border: 1px solid var(--app-border); border-radius: 12px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .notification-list article { display: block; }
 .notification-list span { display: block; margin-top: 6px; color: var(--app-text-muted); }
 .entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

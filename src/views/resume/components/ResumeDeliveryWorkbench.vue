@@ -992,6 +992,10 @@ watch(() => props.preferredTemplateCode, (templateCode) => {
 watch(selectedTemplateKey, emitSelectedTemplate)
 onMounted(loadAll)
 onBeforeUnmount(clearArtifactPolling)
+
+defineExpose({
+  createExport
+})
 </script>
 
 <style scoped lang="scss">

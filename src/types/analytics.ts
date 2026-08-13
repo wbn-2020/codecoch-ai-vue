@@ -34,7 +34,10 @@ export interface AdminAgentOverviewVO {
   totalAgentRuns: number
   successAgentRuns: number
   failedAgentRuns: number
+  degradedAgentRuns: number
+  effectiveAgentRuns: number
   agentSuccessRate: number
+  effectiveSuccessRate: number
   avgDurationMs: number
   totalAgentTasks: number
   doneTaskCount: number

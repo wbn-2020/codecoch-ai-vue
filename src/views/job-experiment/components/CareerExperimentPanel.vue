@@ -2,8 +2,8 @@
   <section class="career-experiment-panel">
     <div class="section-head">
       <div>
-        <p class="section-kicker">EXPERIMENT V2</p>
-        <h2>{{ mode === 'review' ? '分层归因复盘' : '假设、分组与归因' }}</h2>
+        <p class="section-kicker">实验设置</p>
+        <h2>实验设置与归因</h2>
       </div>
       <el-button :loading="loading" @click="load">刷新</el-button>
     </div>
@@ -13,8 +13,8 @@
       type="info"
       show-icon
       :closable="false"
-      title="当前旧实验尚未关联 v2 hypothesis"
-      description="请从新版实验创建页创建证据化假设；系统会使用后端持久关联自动加载。"
+      title="当前实验还没有关联实验方案"
+      description="请从新版实验创建页建立实验方案；系统会使用后端持久关联自动加载。"
     />
 
     <el-alert
@@ -22,7 +22,7 @@
       type="error"
       show-icon
       :closable="false"
-      title="实验 v2 数据加载失败"
+      title="实验设置加载失败"
       :description="errorMessage"
     />
 
@@ -34,159 +34,156 @@
         </div>
         <div class="summary-tags">
           <el-tag effect="plain">{{ metricLabel(hypothesis.primaryMetric) }}</el-tag>
-          <el-tag effect="plain">归因窗口 {{ hypothesis.attributionWindowDays }} 天</el-tag>
-          <el-tag effect="plain">每组最少 {{ hypothesis.minSamplePerVariant }} 条</el-tag>
+          <el-tag effect="plain">观察窗口 {{ hypothesis.attributionWindowDays }} 天</el-tag>
+          <el-tag effect="plain">每组至少 {{ hypothesis.minSamplePerVariant }} 条</el-tag>
         </div>
       </div>
 
-      <div class="variant-grid">
-        <article v-for="variant in hypothesis.variants" :key="variant.id" class="variant-item">
-          <div>
-            <el-tag :type="variant.control ? 'info' : 'primary'" effect="plain">
-              {{ variant.control ? '对照组' : '实验组' }}
-            </el-tag>
-            <strong>{{ variant.name }}</strong>
-          </div>
-          <p>{{ variant.description || '未填写变体说明' }}</p>
-          <span>分配权重 {{ variant.allocationWeight }} · {{ variant.variantCode }}</span>
-        </article>
-      </div>
-
-      <div v-if="mode === 'detail'" class="operation-band">
-        <div class="operation-block">
-          <div class="block-head">
-            <div>
-              <strong>投递分组</strong>
-              <p>从已有投递业务对象选择，自动分组或指定变体。</p>
+      <el-tabs v-model="activePanel">
+        <el-tab-pane label="实验方案" name="settings">
+          <div class="panel-content">
+            <div class="variant-grid">
+              <article v-for="variant in hypothesis.variants" :key="variant.id" class="variant-item">
+                <div class="variant-head">
+                  <el-tag :type="variant.control ? 'info' : 'primary'" effect="plain">
+                    {{ variant.control ? '对照组' : '实验组' }}
+                  </el-tag>
+                  <strong>{{ variant.name }}</strong>
+                </div>
+                <p>{{ variant.description || '未填写变体说明' }}</p>
+                <span>分配权重 {{ variant.allocationWeight }} · {{ variant.variantCode }}</span>
+              </article>
             </div>
-            <el-tag effect="plain">{{ assignments.length }} 条</el-tag>
-          </div>
-          <div class="inline-form">
-            <el-select
-              v-model="assignmentForm.applicationId"
-              filterable
-              placeholder="选择投递记录"
-              class="wide-control"
-            >
-              <el-option
-                v-for="application in applications"
-                :key="application.id"
-                :label="applicationLabel(application)"
-                :value="application.id"
-                :disabled="assignedApplicationIds.has(application.id)"
-              />
-            </el-select>
-            <el-select v-model="assignmentForm.variantId" clearable placeholder="自动稳定分组">
-              <el-option
-                v-for="variant in hypothesis.variants"
-                :key="variant.id"
-                :label="variant.name"
-                :value="variant.id"
-              />
-            </el-select>
-            <el-button type="primary" :loading="assigning" @click="assignApplication">加入实验</el-button>
-          </div>
-          <p v-if="!applications.length && !loading" class="empty-note">暂无投递记录，请先在投递管理中创建真实业务记录。</p>
-          <el-table v-if="assignments.length" :data="assignments" size="small">
-            <el-table-column label="投递" min-width="210">
-              <template #default="{ row }">{{ assignmentApplicationLabel(row.applicationId) }}</template>
-            </el-table-column>
-            <el-table-column prop="variantCode" label="变体" width="120" />
-            <el-table-column prop="assignmentMethod" label="分配方式" width="120" />
-            <el-table-column prop="jobFamily" label="岗位族" width="140" />
-            <el-table-column prop="channel" label="渠道" width="120" />
-          </el-table>
-        </div>
 
-        <div class="operation-block">
-          <div class="block-head">
-            <div>
-              <strong>归因 cohort</strong>
-              <p>固定岗位族、渠道和时间窗口，减少样本结构变化带来的误判。</p>
+            <div v-if="mode === 'detail'" class="operation-block">
+              <div class="block-head">
+                <div>
+                  <strong>投递分组</strong>
+                  <p>从已有投递记录中选择，自动分组或指定实验组。</p>
+                </div>
+                <el-tag effect="plain">{{ assignments.length }} 条</el-tag>
+              </div>
+              <div class="inline-form">
+                <el-select
+                  v-model="assignmentForm.applicationId"
+                  filterable
+                  placeholder="选择投递记录"
+                  class="wide-control"
+                >
+                  <el-option
+                    v-for="application in applications"
+                    :key="application.id"
+                    :label="applicationLabel(application)"
+                    :value="application.id"
+                    :disabled="assignedApplicationIds.has(application.id)"
+                  />
+                </el-select>
+                <el-select v-model="assignmentForm.variantId" clearable placeholder="自动分组">
+                  <el-option
+                    v-for="variant in hypothesis.variants"
+                    :key="variant.id"
+                    :label="variant.name"
+                    :value="variant.id"
+                  />
+                </el-select>
+                <el-button type="primary" :loading="assigning" @click="assignApplication">加入实验</el-button>
+              </div>
+              <p v-if="!applications.length && !loading" class="empty-note">暂无投递记录，请先在投递管理中创建真实业务记录。</p>
+              <el-table v-if="assignments.length" :data="assignments" size="small">
+                <el-table-column label="投递" min-width="210">
+                  <template #default="{ row }">{{ assignmentApplicationLabel(row.applicationId) }}</template>
+                </el-table-column>
+                <el-table-column prop="variantCode" label="实验组" width="120" />
+                <el-table-column prop="assignmentMethod" label="分配方式" width="120" />
+                <el-table-column prop="jobFamily" label="岗位族" width="140" />
+                <el-table-column prop="channel" label="渠道" width="120" />
+              </el-table>
             </div>
-            <el-button type="primary" plain @click="cohortDialogVisible = true">新建 cohort</el-button>
           </div>
-        </div>
-      </div>
+        </el-tab-pane>
 
-      <div class="attribution-band">
-        <div class="block-head">
-          <div>
-            <strong>归因计算</strong>
-            <p>结果只描述关联性，不宣称单因素因果。</p>
-          </div>
-          <div class="inline-actions">
-            <el-select v-model="selectedCohortId" placeholder="选择 cohort" class="cohort-select">
-              <el-option
-                v-for="cohort in cohorts"
-                :key="cohort.id"
-                :label="cohortLabel(cohort)"
-                :value="cohort.id"
-              />
-            </el-select>
-            <el-button
-              type="primary"
-              :loading="calculating"
-              :disabled="!selectedCohortId"
-              @click="calculateAttribution"
-            >
-              计算归因
-            </el-button>
-          </div>
-        </div>
-
-        <el-alert
-          v-if="!cohorts.length"
-          type="info"
-          :closable="false"
-          title="暂无 cohort"
-          description="详情页可创建 cohort；计算后的归因快照会保存在后端，可在刷新后继续查看最近结果。"
-        />
-
-        <template v-if="attribution">
-          <div class="attribution-summary" :class="`is-${presentation.level.toLowerCase()}`">
-            <div>
-              <strong>{{ presentation.title }}</strong>
-              <p>{{ presentation.summary }}</p>
+        <el-tab-pane label="归因结果" name="attribution">
+          <div class="panel-content">
+            <div class="block-head">
+              <div>
+                <strong>对比样本组</strong>
+                <p>固定岗位族、渠道和时间窗口，减少样本结构变化带来的误判。</p>
+              </div>
+              <el-button type="primary" plain @click="cohortDialogVisible = true">新建样本组</el-button>
             </div>
-            <el-tag :type="attribution.comparable ? 'warning' : 'info'" effect="plain">
-              {{ attribution.comparable ? '弱观察' : '不可比较' }}
-            </el-tag>
+            <div class="attribution-controls">
+              <el-select v-model="selectedCohortId" placeholder="选择样本组" class="cohort-select">
+                <el-option
+                  v-for="cohort in cohorts"
+                  :key="cohort.id"
+                  :label="cohortLabel(cohort)"
+                  :value="cohort.id"
+                />
+              </el-select>
+              <el-button
+                type="primary"
+                :loading="calculating"
+                :disabled="!selectedCohortId"
+                @click="calculateAttribution"
+              >
+                计算对比结果
+              </el-button>
+            </div>
+
+            <el-alert
+              v-if="!cohorts.length"
+              type="info"
+              :closable="false"
+              title="暂无对比样本组"
+              description="先创建样本组，再计算可比较的结果。计算快照会保存在后端，刷新后仍可查看。"
+            />
+
+            <template v-if="attribution">
+              <div class="attribution-summary" :class="`is-${presentation.level.toLowerCase()}`">
+                <div>
+                  <strong>{{ presentation.title }}</strong>
+                  <p>{{ presentation.summary }}</p>
+                </div>
+                <el-tag :type="attribution.comparable ? 'warning' : 'info'" effect="plain">
+                  {{ attribution.comparable ? '弱观察' : '暂不可比较' }}
+                </el-tag>
+              </div>
+              <ul class="fact-list">
+                <li v-for="fact in presentation.facts" :key="fact">{{ fact }}</li>
+              </ul>
+              <el-alert
+                v-for="caution in presentation.cautions"
+                :key="caution"
+                class="caution-alert"
+                type="warning"
+                :closable="false"
+                :title="caution"
+              />
+              <el-table :data="attribution.variants" size="small">
+                <el-table-column prop="variantCode" label="实验组" min-width="110" />
+                <el-table-column label="角色" width="90">
+                  <template #default="{ row }">{{ row.control ? '对照组' : '实验组' }}</template>
+                </el-table-column>
+                <el-table-column prop="assignedCount" label="分配" width="76" />
+                <el-table-column prop="matureCount" label="成熟" width="76" />
+                <el-table-column prop="outcomeCount" label="目标结果" width="90" />
+                <el-table-column label="原始率" width="90">
+                  <template #default="{ row }">{{ rateText(row.rawRate) }}</template>
+                </el-table-column>
+                <el-table-column label="校正率" width="90">
+                  <template #default="{ row }">{{ rateText(row.adjustedRate) }}</template>
+                </el-table-column>
+                <el-table-column label="相对对照" min-width="100">
+                  <template #default="{ row }">{{ liftText(row.adjustedLiftVsControl) }}</template>
+                </el-table-column>
+              </el-table>
+            </template>
           </div>
-          <ul class="fact-list">
-            <li v-for="fact in presentation.facts" :key="fact">{{ fact }}</li>
-          </ul>
-          <el-alert
-            v-for="caution in presentation.cautions"
-            :key="caution"
-            class="caution-alert"
-            type="warning"
-            :closable="false"
-            :title="caution"
-          />
-          <el-table :data="attribution.variants" size="small">
-            <el-table-column prop="variantCode" label="变体" min-width="110" />
-            <el-table-column label="角色" width="90">
-              <template #default="{ row }">{{ row.control ? '对照组' : '实验组' }}</template>
-            </el-table-column>
-            <el-table-column prop="assignedCount" label="分配" width="76" />
-            <el-table-column prop="matureCount" label="成熟" width="76" />
-            <el-table-column prop="outcomeCount" label="目标结果" width="90" />
-            <el-table-column label="原始率" width="90">
-              <template #default="{ row }">{{ rateText(row.rawRate) }}</template>
-            </el-table-column>
-            <el-table-column label="校正率" width="90">
-              <template #default="{ row }">{{ rateText(row.adjustedRate) }}</template>
-            </el-table-column>
-            <el-table-column label="相对对照" min-width="100">
-              <template #default="{ row }">{{ liftText(row.adjustedLiftVsControl) }}</template>
-            </el-table-column>
-          </el-table>
-        </template>
-      </div>
+        </el-tab-pane>
+      </el-tabs>
     </template>
 
-    <el-dialog v-model="cohortDialogVisible" title="新建归因 cohort" width="620px">
+    <el-dialog v-model="cohortDialogVisible" title="新建对比样本组" width="620px">
       <el-form label-position="top">
         <el-form-item label="名称">
           <el-input v-model.trim="cohortForm.name" maxlength="80" />
@@ -268,6 +265,7 @@ const assigning = ref(false)
 const calculating = ref(false)
 const creatingCohort = ref(false)
 const errorMessage = ref('')
+const activePanel = ref('settings')
 const hypothesisId = ref<number>()
 const hypothesis = ref<CareerExperimentHypothesisVO>()
 const assignments = ref<CareerExperimentAssignmentVO[]>([])
@@ -481,7 +479,7 @@ onMounted(load)
 .operation-block {
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: var(--arena-radius-card, 16px);
 }
 
 .variant-grid {
@@ -493,7 +491,8 @@ onMounted(load)
 .variant-item {
   min-width: 0;
   padding: 14px;
-  border-left: 3px solid var(--app-primary);
+  border: 1px solid var(--app-border);
+  border-radius: var(--arena-radius-card, 16px);
   background: var(--app-surface-muted, rgba(15, 23, 42, 0.035));
 }
 

@@ -22,7 +22,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/job-targets': '岗位目标',
   '/resumes': '简历实验',
   '/resumes/manage': '简历列表',
-  '/resume-match': 'JD 匹配实验台',
+  '/resume-match': '岗位匹配',
   '/skill-profile': '能力画像',
   '/project-evidence': '项目证据库',
   '/ability-map': '能力图谱',

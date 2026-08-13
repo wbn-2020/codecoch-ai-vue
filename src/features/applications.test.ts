@@ -20,10 +20,24 @@ describe('application workbench helpers', () => {
 
     expect(getApplicationFollowUpState(undefined, now).key).toBe('missing')
     expect(getApplicationFollowUpState('2026-06-29 18:00:00', now).key).toBe('overdue')
-    expect(getApplicationFollowUpState('2026-06-30 08:00:00', now).key).toBe('overdue')
+    expect(getApplicationFollowUpState('2026-06-30 08:00:00', now).key).toBe('due-today')
     expect(getApplicationFollowUpState('2026-06-30 18:00:00', now).key).toBe('due-today')
     expect(getApplicationFollowUpState('2026-07-01 09:00:00', now).key).toBe('upcoming')
     expect(getApplicationFollowUpState('2026-06-30 18:00:00', now).dueAt).toBe('2026-06-30 18:00:00')
+  })
+
+  it('uses local calendar days instead of elapsed milliseconds for follow-up labels', () => {
+    const now = '2026-08-12 23:30:00'
+
+    expect(getApplicationFollowUpState('2026-08-13 00:15:00', now)).toMatchObject({
+      key: 'upcoming',
+      dueInDays: 1
+    })
+    expect(getApplicationFollowUpState('2026-08-11 23:45:00', now)).toMatchObject({
+      key: 'overdue',
+      overdueByDays: 1
+    })
+    expect(getApplicationFollowUpState('2026-08-12T10:00:00', now).key).toBe('due-today')
   })
 
   it('filters applications by follow-up query value', () => {
@@ -78,7 +92,10 @@ describe('application workbench helpers', () => {
 
   it('returns a graceful latest event summary for empty or unknown events', () => {
     expect(getLatestApplicationEvent([])).toBeUndefined()
-    expect(getApplicationEventMeta('CUSTOM_EVENT').label).toBe('CUSTOM_EVENT')
+    expect(getApplicationEventMeta('CUSTOM_EVENT')).toMatchObject({
+      label: '自定义事项',
+      description: '该事项来自自定义记录，原始类型仅用于内部追踪。'
+    })
     expect(getApplicationEventMeta('INTERVIEW_COMPLETED')).toMatchObject({
       label: '\u9762\u8bd5\u5b8c\u6210',
       tone: 'success'

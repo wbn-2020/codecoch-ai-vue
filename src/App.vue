@@ -6,24 +6,29 @@
       <p>正在卸载上一会话的数据并重新确认访问权限...</p>
     </section>
   </main>
-  <RouterView v-else v-slot="{ Component }">
-    <Suspense v-if="Component">
-      <component :is="Component" />
-      <template #fallback>
-        <main class="app-route-loading">
-          <section class="app-route-loading__panel">
-            <span class="app-route-loading__mark">C</span>
-            <strong>CodeCoachAI 正在加载</strong>
-            <p>正在确认登录状态和页面资源...</p>
-          </section>
-        </main>
-      </template>
-    </Suspense>
-  </RouterView>
+  <main v-else-if="routeLoadError" class="app-route-error" role="alert">
+    <section class="app-route-error__panel">
+      <span class="app-route-loading__mark">C</span>
+      <strong>页面资源没有加载成功</strong>
+      <p>{{ routeLoadError }}</p>
+      <div class="app-route-error__actions">
+        <button type="button" class="app-route-error__primary" @click="reloadPage">重新加载</button>
+        <button type="button" class="app-route-error__secondary" @click="goToSafePage">返回工作台</button>
+      </div>
+    </section>
+  </main>
+  <main v-else-if="routeLoading" class="app-route-loading" aria-live="polite">
+    <section class="app-route-loading__panel">
+      <span class="app-route-loading__mark">C</span>
+      <strong>正在加载页面</strong>
+      <p>正在准备页面内容，请稍候...</p>
+    </section>
+  </main>
+  <RouterView v-else />
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, provide, readonly, ref } from 'vue'
 import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { STORAGE_KEYS } from '@/constants/storage'
@@ -40,7 +45,11 @@ const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const authBoundaryBlocked = ref(false)
+const routeLoading = ref(false)
+const routeLoadError = ref('')
 let authTransitionGeneration = 0
+let pendingRouteKey = ''
+const routeAssetErrorPattern = /Unable to preload CSS|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|ChunkLoadError|Loading chunk failed/i
 const authStorageKeys = new Set<string>([
   STORAGE_KEYS.token,
   STORAGE_KEYS.userInfo,
@@ -48,6 +57,41 @@ const authStorageKeys = new Set<string>([
   STORAGE_KEYS.permissions,
   AUTH_SESSION_STORAGE_KEY
 ])
+
+provide('codecoachai:route-loading', readonly(routeLoading))
+
+const stopBeforeEach = router.beforeEach?.((to) => {
+  pendingRouteKey = to.fullPath
+  routeLoading.value = true
+})
+
+const stopAfterEach = router.afterEach?.((to) => {
+  if (to.fullPath === pendingRouteKey) {
+    pendingRouteKey = ''
+    routeLoading.value = false
+  }
+})
+
+const stopRouteError = router.onError?.((error, to) => {
+  if (!to || to.fullPath === pendingRouteKey) {
+    pendingRouteKey = ''
+    routeLoading.value = false
+  }
+  const message = error instanceof Error ? error.message : String(error || '')
+  if (!routeAssetErrorPattern.test(message)) return
+  routeLoadError.value = '请检查网络后重新加载页面，或先返回工作台继续使用。'
+})
+
+const reloadPage = () => {
+  window.location.reload()
+}
+
+const goToSafePage = async () => {
+  routeLoadError.value = ''
+  await router.push('/dashboard').catch(() => {
+    routeLoadError.value = '工作台暂时无法打开，请重新加载页面后再试。'
+  })
+}
 
 const handleAuthRefreshed = (event: Event) => {
   const detail = (event as CustomEvent<LoginVO>).detail
@@ -198,6 +242,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   authTransitionGeneration += 1
   authBoundaryBlocked.value = false
+  stopBeforeEach?.()
+  stopAfterEach?.()
+  stopRouteError?.()
   window.removeEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
   window.removeEventListener(AUTH_CLEARED_EVENT, handleAuthCleared)
   window.removeEventListener('storage', handleAuthStorageChange)
@@ -217,6 +264,15 @@ onBeforeUnmount(() => {
     linear-gradient(135deg, rgb(37 99 235 / 10%), transparent 42%),
     linear-gradient(315deg, rgb(15 118 110 / 10%), transparent 38%),
     var(--app-bg);
+}
+
+.app-route-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--app-bg);
 }
 
 .app-route-loading__panel {
@@ -240,6 +296,59 @@ onBeforeUnmount(() => {
     color: var(--app-text-muted);
     font-size: 14px;
   }
+}
+
+.app-route-error__panel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
+  text-align: center;
+
+  strong {
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--app-text-muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+}
+
+.app-route-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.app-route-error__primary,
+.app-route-error__secondary {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.app-route-error__primary {
+  border: 1px solid var(--app-primary);
+  background: var(--app-primary);
+  color: #fff;
+}
+
+.app-route-error__secondary {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
 }
 
 .app-route-loading__mark {

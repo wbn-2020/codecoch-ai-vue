@@ -2,9 +2,9 @@
   <div class="career-calendar-view page-shell">
     <header class="view-header">
       <div>
-        <p class="view-kicker">CAREER CRM</p>
-        <h1>求职日历与数据导入</h1>
-        <p class="view-subtitle">集中管理面试、笔试、跟进和 Offer 截止等求职日程，并支持 CSV / ICS 批量导入。</p>
+        <p class="view-kicker">今日推进</p>
+        <h1>求职日历</h1>
+        <p class="view-subtitle">集中安排投递、跟进、面试和 Offer 截止，重要节点一眼可见。</p>
       </div>
     </header>
 

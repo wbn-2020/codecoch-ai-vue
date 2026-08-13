@@ -8,10 +8,18 @@
       <el-tag :type="getCompletenessTone(status)" effect="dark">{{ score }}%</el-tag>
     </div>
     <el-progress :percentage="score" :stroke-width="10" :show-text="false" />
+    <div v-if="firstPriorityGap" class="priority-gap" data-testid="first-priority-gap">
+      <span>第一优先缺口</span>
+      <strong>{{ firstPriorityGap }}</strong>
+      <p>先补这一项，再继续完善其他证据。</p>
+    </div>
     <div class="missing-list">
-      <el-tag v-for="field in labels" :key="field" :type="labels.length ? 'warning' : 'success'" effect="plain">
-        {{ field }}
-      </el-tag>
+      <template v-if="remainingGaps.length">
+        <span>其他待补</span>
+        <el-tag v-for="field in remainingGaps" :key="field" type="warning" effect="plain">
+          {{ field }}
+        </el-tag>
+      </template>
       <el-tag v-if="labels.length === 0" type="success" effect="plain">核心素材已齐备</el-tag>
     </div>
   </section>
@@ -30,6 +38,8 @@ const props = defineProps<{
 
 const score = computed(() => Math.max(0, Math.min(100, props.score ?? 0)))
 const labels = computed(() => normalizeMissingFields(props.missingFields))
+const firstPriorityGap = computed(() => labels.value[0] || '')
+const remainingGaps = computed(() => labels.value.slice(1))
 </script>
 
 <style scoped lang="scss">
@@ -60,8 +70,42 @@ h3 {
 
 .missing-list {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+
+  > span {
+    color: var(--app-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.priority-gap {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--el-color-warning-light-5);
+  border-radius: 8px;
+  background: var(--el-color-warning-light-9);
+
+  span {
+    color: var(--el-color-warning-dark-2);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  strong {
+    color: var(--app-text);
+    font-size: 16px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--app-text-muted);
+    font-size: 12px;
+  }
 }
 </style>

@@ -33,7 +33,7 @@
             <RefreshCw :size="16" />
             索引状态
           </el-button>
-          <el-button v-if="lastEmbeddingJob" plain @click="openLatestEmbeddingJob">
+          <el-button v-if="lastEmbeddingJob" v-permission="'admin:analytics:ai'" plain @click="openLatestEmbeddingJob">
             <BookOpenCheck :size="16" />
             查看索引任务
           </el-button>
@@ -69,28 +69,42 @@
       </div>
     </section>
 
-    <div v-if="showQuestionManagement" class="admin-insight-grid">
+    <div
+      v-if="showQuestionManagement"
+      class="admin-insight-grid"
+      role="status"
+      aria-live="polite"
+      :aria-busy="questionStatsLoading"
+    >
       <article class="admin-insight-card">
-        <span>题目总数</span>
-        <strong>{{ total }}</strong>
-        <small>当前题库列表总数</small>
+        <span>正式题总数</span>
+        <strong>{{ displayQuestionStat(formalQuestionTotal) }}</strong>
+        <small>不含 AI 待审核草稿</small>
       </article>
       <article class="admin-insight-card">
-        <span>当前页分类</span>
-        <strong>{{ categoryCount }}</strong>
-        <small>仅统计当前页记录</small>
+        <span>可训练题数</span>
+        <strong>{{ displayQuestionStat(trainableQuestionTotal) }}</strong>
+        <small>已启用、可进入用户训练链路</small>
       </article>
       <article class="admin-insight-card">
-        <span>当前页高频题</span>
-        <strong>{{ highFrequencyCount }}</strong>
-        <small>仅统计当前页记录</small>
+        <span>停用题数</span>
+        <strong>{{ displayQuestionStat(disabledQuestionTotal) }}</strong>
+        <small>正式题中已停用记录</small>
       </article>
       <article class="admin-insight-card">
-        <span>AI 生成审核</span>
-        <strong>{{ reviewTotal }}</strong>
-        <small>待审核题目数量</small>
+        <span>待审核数</span>
+        <strong>{{ displayQuestionStat(pendingReviewTotal) }}</strong>
+        <small>尚未写入正式题库的 AI 草稿</small>
       </article>
     </div>
+    <el-alert
+      v-if="showQuestionManagement && questionStatsError"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="题库统计部分不可用"
+      :description="questionStatsError"
+    />
 
     <section v-if="showQuestionManagement" class="admin-panel">
       <div class="admin-panel__header">
@@ -98,24 +112,16 @@
           <h2>题目列表</h2>
           <p>维护题目内容、分类标签和上下架状态，保持题库质量稳定。</p>
         </div>
-        <div v-if="!isQuestionBankEmpty" class="table-view-tools">
-          <el-segmented v-model="questionTableSize" :options="questionTableSizeOptions" />
-          <el-dropdown trigger="click" :hide-on-click="false">
-            <el-button plain>列配置</el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="column-config-menu">
-                <el-dropdown-item v-for="item in questionColumnOptions" :key="item.key">
-                  <el-checkbox v-model="questionVisibleColumns[item.key]" :disabled="item.required">
-                    {{ item.label }}
-                  </el-checkbox>
-                </el-dropdown-item>
-                <el-dropdown-item divided>
-                  <el-button link type="primary" @click.stop="resetQuestionTableView">恢复默认视图</el-button>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <AdminTableViewSettings
+          v-if="!isQuestionBankEmpty"
+          v-model:size="questionTableSize"
+          :size-options="questionTableSizeOptions"
+          :columns="questionColumnOptions"
+          :visible-columns="questionVisibleColumns"
+          aria-label="正式题列表表格视图设置"
+          @update:column-visible="({ key, visible }) => questionVisibleColumns[key as QuestionColumnKey] = visible"
+          @reset="resetQuestionTableView"
+        />
       </div>
 
       <div class="admin-filter-bar">
@@ -208,7 +214,14 @@
               <div class="question-row-actions">
                 <el-button v-permission="'admin:question:write'" link type="primary" :loading="editingId === row.id && dialogLoading" @click="openDialog(row)">编辑</el-button>
                 <el-dropdown trigger="click" @command="(command: string) => handleQuestionCommand(row, command)">
-                  <el-button v-permission="'admin:question:write'" text :icon="MoreHorizontal" aria-label="更多操作" />
+                  <el-button
+                    v-permission="'admin:question:write'"
+                    text
+                    :icon="MoreHorizontal"
+                    :loading="questionActionLoadingKey.endsWith(`-${row.id}`)"
+                    :disabled="questionActionLoadingKey.endsWith(`-${row.id}`)"
+                    aria-label="更多操作"
+                  />
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="status">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
@@ -363,6 +376,7 @@
               <div class="generate-result-card__actions">
                 <el-button
                   v-if="generateResult.asyncBizType || generateResult.asyncTraceId || generateResult.asyncMessageId"
+                  v-permission="'admin:task:list'"
                   type="primary"
                   plain
                   @click="viewGenerateTask"
@@ -423,24 +437,15 @@
                 批量驳回
               </el-button>
             </el-space>
-            <div class="table-view-tools">
-              <el-segmented v-model="reviewTableSize" :options="reviewTableSizeOptions" />
-              <el-dropdown trigger="click" :hide-on-click="false">
-                <el-button plain>列配置</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu class="column-config-menu">
-                    <el-dropdown-item v-for="item in reviewColumnOptions" :key="item.key">
-                      <el-checkbox v-model="reviewVisibleColumns[item.key]" :disabled="item.required">
-                        {{ item.label }}
-                      </el-checkbox>
-                    </el-dropdown-item>
-                    <el-dropdown-item divided>
-                      <el-button link type="primary" @click.stop="resetReviewTableView">恢复默认视图</el-button>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <AdminTableViewSettings
+              v-model:size="reviewTableSize"
+              :size-options="reviewTableSizeOptions"
+              :columns="reviewColumnOptions"
+              :visible-columns="reviewVisibleColumns"
+              aria-label="审核池表格视图设置"
+              @update:column-visible="({ key, visible }) => reviewVisibleColumns[key as ReviewColumnKey] = visible"
+              @reset="resetReviewTableView"
+            />
           </div>
           <div class="table-card admin-table-card">
             <el-table
@@ -483,8 +488,15 @@
               <el-table-column label="操作" width="170">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openReviewDrawer(row.id)">详情</el-button>
-                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleReviewCommand(row.id, command)">
-                    <el-button v-permission="'admin:question:review'" text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多审核操作" />
+                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING' || reviewActionLoadingId === row.id" @command="(command: string) => handleReviewCommand(row.id, command)">
+                    <el-button
+                      v-permission="'admin:question:review'"
+                      text
+                      :icon="MoreHorizontal"
+                      :loading="reviewActionLoadingId === row.id"
+                      :disabled="row.reviewStatus !== 'PENDING' || reviewActionLoadingId === row.id"
+                      aria-label="更多审核操作"
+                    />
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item command="editApprove">编辑通过</el-dropdown-item>
@@ -824,23 +836,16 @@
 
             <div class="duplicate-eval-dataset__body">
               <div class="duplicate-eval-cases">
-                <div class="duplicate-eval-cases__toolbar table-view-tools">
-                  <el-segmented v-model="duplicateEvalCaseTableSize" :options="duplicateEvalCaseTableSizeOptions" />
-                  <el-dropdown trigger="click" :hide-on-click="false">
-                    <el-button plain>样本列配置</el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu class="column-config-menu">
-                        <el-dropdown-item v-for="item in duplicateEvalCaseColumnOptions" :key="item.key">
-                          <el-checkbox v-model="duplicateEvalCaseVisibleColumns[item.key]" :disabled="item.required">
-                            {{ item.label }}
-                          </el-checkbox>
-                        </el-dropdown-item>
-                        <el-dropdown-item divided>
-                          <el-button link type="primary" @click.stop="resetDuplicateEvalCaseTableView">恢复默认视图</el-button>
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                <div class="duplicate-eval-cases__toolbar">
+                  <AdminTableViewSettings
+                    v-model:size="duplicateEvalCaseTableSize"
+                    :size-options="duplicateEvalCaseTableSizeOptions"
+                    :columns="duplicateEvalCaseColumnOptions"
+                    :visible-columns="duplicateEvalCaseVisibleColumns"
+                    aria-label="重复题回归样本表格视图设置"
+                    @update:column-visible="({ key, visible }) => duplicateEvalCaseVisibleColumns[key as DuplicateEvalCaseColumnKey] = visible"
+                    @reset="resetDuplicateEvalCaseTableView"
+                  />
                 </div>
                 <el-table :data="duplicateEvalCases" row-key="id" :size="duplicateEvalCaseTableSize" max-height="260">
                   <el-table-column v-if="isDuplicateEvalCaseColumnVisible('sample')" label="样本" min-width="150" show-overflow-tooltip>
@@ -869,7 +874,16 @@
                   </el-table-column>
                   <el-table-column label="操作" width="118" fixed="right">
                     <template #default="{ row }">
-                      <el-button v-permission="'admin:question:dedupe'" link type="danger" @click="deleteDuplicateEvalCase(row.id)">删除</el-button>
+                      <el-button
+                        v-permission="'admin:question:dedupe'"
+                        link
+                        type="danger"
+                        :loading="duplicateEvalDeletingId === row.id"
+                        :disabled="duplicateEvalDeletingId === row.id"
+                        @click="deleteDuplicateEvalCase(row.id)"
+                      >
+                        删除
+                      </el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -985,24 +999,16 @@
                 批量忽略
               </el-button>
             </el-space>
-            <div v-if="showDuplicateAdvanced" class="table-view-tools">
-              <el-segmented v-model="duplicateTableSize" :options="duplicateTableSizeOptions" />
-              <el-dropdown trigger="click" :hide-on-click="false">
-                <el-button plain>列配置</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu class="column-config-menu">
-                    <el-dropdown-item v-for="item in duplicateColumnOptions" :key="item.key">
-                      <el-checkbox v-model="duplicateVisibleColumns[item.key]" :disabled="item.required">
-                        {{ item.label }}
-                      </el-checkbox>
-                    </el-dropdown-item>
-                    <el-dropdown-item divided>
-                      <el-button link type="primary" @click.stop="resetDuplicateTableView">恢复默认视图</el-button>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            <AdminTableViewSettings
+              v-if="showDuplicateAdvanced"
+              v-model:size="duplicateTableSize"
+              :size-options="duplicateTableSizeOptions"
+              :columns="duplicateColumnOptions"
+              :visible-columns="duplicateVisibleColumns"
+              aria-label="重复题候选表格视图设置"
+              @update:column-visible="({ key, visible }) => duplicateVisibleColumns[key as DuplicateColumnKey] = visible"
+              @reset="resetDuplicateTableView"
+            />
           </div>
           <div class="table-card admin-table-card">
             <el-table
@@ -1094,8 +1100,15 @@
                   <el-button link type="info" @click="openDuplicateDrawer(row.id)">
                     详情
                   </el-button>
-                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING'" @command="(command: string) => handleDuplicateCommand(row.id, command)">
-                    <el-button v-permission="'admin:question:dedupe'" text :icon="MoreHorizontal" :disabled="row.reviewStatus !== 'PENDING'" aria-label="更多重复题操作" />
+                  <el-dropdown trigger="click" :disabled="row.reviewStatus !== 'PENDING' || duplicateActionLoadingId === row.id" @command="(command: string) => handleDuplicateCommand(row.id, command)">
+                    <el-button
+                      v-permission="'admin:question:dedupe'"
+                      text
+                      :icon="MoreHorizontal"
+                      :loading="duplicateActionLoadingId === row.id"
+                      :disabled="row.reviewStatus !== 'PENDING' || duplicateActionLoadingId === row.id"
+                      aria-label="更多重复题操作"
+                    />
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item command="merge">合并</el-dropdown-item>
@@ -1222,7 +1235,8 @@
           v-if="!isAdminMobileReadonly"
           v-permission="'admin:question:dedupe'"
           type="primary"
-          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          :loading="duplicateActionLoadingId === duplicateDetail?.id"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING' || duplicateActionLoadingId === duplicateDetail?.id"
           @click="duplicateDetail && handleMergeDuplicate(duplicateDetail.id)"
         >
           合并
@@ -1231,7 +1245,8 @@
           v-if="!isAdminMobileReadonly"
           v-permission="'admin:question:dedupe'"
           type="warning"
-          :disabled="duplicateDetail?.reviewStatus !== 'PENDING'"
+          :loading="duplicateActionLoadingId === duplicateDetail?.id"
+          :disabled="duplicateDetail?.reviewStatus !== 'PENDING' || duplicateActionLoadingId === duplicateDetail?.id"
           @click="duplicateDetail && handleIgnoreDuplicate(duplicateDetail.id)"
         >
           忽略
@@ -1381,7 +1396,8 @@
         <el-button
           v-permission="'admin:question:review'"
           type="warning"
-          :disabled="reviewDetail?.reviewStatus !== 'PENDING'"
+          :loading="reviewActionLoadingId === reviewDetail?.id"
+          :disabled="reviewDetail?.reviewStatus !== 'PENDING' || reviewActionLoadingId === reviewDetail?.id"
           @click="reviewDetail && handleCancelReview(reviewDetail.id)"
         >
           作废
@@ -1559,6 +1575,7 @@ import { getQuestionDuplicateConfigApi } from '@/api/analytics'
 import { getQuestionCategoriesApi } from '@/api/questionCategory'
 import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminTableView } from '@/composables/useAdminTableView'
@@ -1622,6 +1639,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { guardAdminMobileWrite, isAdminMobileReadonly } = useAdminMobileReadonly()
 const saving = ref(false)
+const questionActionLoadingKey = ref('')
 const dialogLoading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
@@ -1635,11 +1653,18 @@ const duplicateEvalCaseLoading = ref(false)
 const duplicateEvalRunLoading = ref(false)
 const duplicateEvalSaving = ref(false)
 const duplicateEvalRunning = ref(false)
+const duplicateEvalDeletingId = ref<number | null>(null)
 const duplicateEvalRunDetailLoading = ref(false)
 const showDuplicateAdvanced = ref(false)
 const tags = ref<QuestionTagVO[]>([])
 const groups = ref<QuestionGroupVO[]>([])
 const total = ref(0)
+const questionStatsLoading = ref(false)
+const questionStatsError = ref('')
+const formalQuestionTotal = ref<number | null>(null)
+const trainableQuestionTotal = ref<number | null>(null)
+const disabledQuestionTotal = ref<number | null>(null)
+const pendingReviewTotal = ref<number | null>(null)
 const governanceTab = ref<GovernanceTab>(props.initialGovernanceTab)
 const reviewLoading = ref(false)
 const duplicateLoading = ref(false)
@@ -1649,12 +1674,14 @@ const duplicateFeedbackLoading = ref(false)
 const duplicateEvaluating = ref(false)
 const generating = ref(false)
 const batchReviewProcessing = ref(false)
+const reviewActionLoadingId = ref<number | null>(null)
 const reviewDetailLoading = ref(false)
 const reviewApproveSaving = ref(false)
 const reviewDrawerVisible = ref(false)
 const duplicateDrawerVisible = ref(false)
 const duplicateChecking = ref(false)
 const duplicateBatchProcessing = ref(false)
+const duplicateActionLoadingId = ref<number | null>(null)
 const embeddingRebuilding = ref(false)
 const duplicateEvalCases = ref<QuestionDuplicateEvalCaseVO[]>([])
 const duplicateEvalRuns = ref<QuestionDuplicateEvalRunVO[]>([])
@@ -1886,8 +1913,7 @@ const rules: FormRules<QuestionCreateDTO> = {
   referenceAnswer: [{ required: true, message: '请输入参考答案', trigger: 'blur' }]
 }
 
-const categoryCount = computed(() => new Set(questions.value.map((item) => item.categoryId || item.categoryName).filter(Boolean)).size)
-const highFrequencyCount = computed(() => questions.value.filter((item) => item.isHighFrequency === true || item.isHighFrequency === 1).length)
+const displayQuestionStat = (value: number | null) => value ?? '未知'
 const difficultyStats = computed(() => ({
   EASY: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.EASY).length,
   MEDIUM: questions.value.filter((item) => item.difficulty === QUESTION_DIFFICULTY.MEDIUM).length,
@@ -2591,6 +2617,39 @@ const fetchOptions = async () => {
   optionLoadWarning.value = warnings.join('；')
 }
 
+const fetchQuestionStats = async () => {
+  questionStatsLoading.value = true
+  questionStatsError.value = ''
+  const results = await Promise.allSettled([
+    getAdminQuestionsApi({ pageNo: 1, pageSize: 1 }),
+    getAdminQuestionsApi({ status: 1, pageNo: 1, pageSize: 1 }),
+    getAdminQuestionsApi({ status: 0, pageNo: 1, pageSize: 1 }),
+    getQuestionReviewsApi({ reviewStatus: 'PENDING', pageNo: 1, pageSize: 1 })
+  ])
+  const targets = [
+    formalQuestionTotal,
+    trainableQuestionTotal,
+    disabledQuestionTotal,
+    pendingReviewTotal
+  ]
+  const labels = ['正式题总数', '可训练题数', '停用题数', '待审核数']
+  const failures: string[] = []
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      targets[index].value = Number(result.value.total || 0)
+      return
+    }
+    targets[index].value = null
+    failures.push(labels[index])
+  })
+
+  if (failures.length) {
+    questionStatsError.value = `${failures.join('、')}暂时无法确认；未知值不会按 0 展示。`
+  }
+  questionStatsLoading.value = false
+}
+
 const fetchQuestions = async () => {
   loading.value = true
   questionError.value = ''
@@ -2716,15 +2775,15 @@ const refreshDuplicateAdvancedWorkspace = async () => {
 }
 
 const refreshReviewPublishWorkspace = async () => {
-  await Promise.allSettled([fetchReviews(), fetchQuestions(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchReviews(), fetchQuestions(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshQuestionDuplicateWorkspace = async () => {
-  await Promise.allSettled([fetchQuestions(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchQuestions(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshFullGovernanceWorkspace = async () => {
-  await Promise.allSettled([fetchQuestions(), fetchReviews(), refreshDuplicateWorkspace()])
+  await Promise.allSettled([fetchQuestions(), fetchReviews(), fetchQuestionStats(), refreshDuplicateWorkspace()])
 }
 
 const refreshDuplicateGovernanceWorkspace = async () => {
@@ -2930,8 +2989,10 @@ const handleSave = async () => {
     }
     ElMessage.success('题目已保存')
     dialogVisible.value = false
-    await fetchQuestions()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目保存失败，当前题库状态已重新加载。'))
   } finally {
+    await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
     saving.value = false
   }
 }
@@ -2958,14 +3019,21 @@ const handleStatus = async (row: AdminQuestionVO) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
-  await updateAdminQuestionStatusApi(row.id, nextStatus, {
-    confirm: true,
-    dryRun: false,
-    reason: `admin question status confirmed id=${row.id} status=${nextStatus}`,
-    idempotencyKey: createOperationIdempotencyKey(`admin-question-status-${row.id}`)
-  })
-  ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
-  await fetchQuestions()
+  questionActionLoadingKey.value = `status-${row.id}`
+  try {
+    await updateAdminQuestionStatusApi(row.id, nextStatus, {
+      confirm: true,
+      dryRun: false,
+      reason: `admin question status confirmed id=${row.id} status=${nextStatus}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-question-status-${row.id}`)
+    })
+    ElMessage.success(nextStatus === 1 ? '题目已启用' : '题目已禁用')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `题目${actionLabel}失败，当前题目状态已重新加载。`))
+  } finally {
+    await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
+    questionActionLoadingKey.value = ''
+  }
 }
 
 const handleDelete = async (row: AdminQuestionVO) => {
@@ -2985,14 +3053,21 @@ const handleDelete = async (row: AdminQuestionVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteAdminQuestionApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: `admin question delete confirmed id=${row.id}`,
-    idempotencyKey: createOperationIdempotencyKey(`admin-question-delete-${row.id}`)
-  })
-  ElMessage.success('题目已删除')
-  await fetchQuestions()
+  questionActionLoadingKey.value = `delete-${row.id}`
+  try {
+    await deleteAdminQuestionApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: `admin question delete confirmed id=${row.id}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-question-delete-${row.id}`)
+    })
+    ElMessage.success('题目已删除')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目删除失败，当前题库状态已重新加载。'))
+  } finally {
+    await Promise.allSettled([fetchQuestions(), fetchQuestionStats()])
+    questionActionLoadingKey.value = ''
+  }
 }
 
 const handleQuestionCommand = (row: AdminQuestionVO, command: string) => {
@@ -3147,7 +3222,7 @@ const completeGenerateSubmitFlow = async (result: AiQuestionGenerateResultVO) =>
   ElMessage.success('已提交 AI 题目生成任务，可在任务中心跟踪进度。')
 }
 
-const runLegacyGenerateFallback = async (payload: AiQuestionGenerateRequestDTO) => {
+const runLegacyGenerateFallback = async (payload: AiQuestionGenerateRequestDTO): Promise<unknown | null> => {
   generateSseStatus.value = '兼容生成'
   generateSseMessage.value = '异步任务提交不可用，正在尝试旧版阶段式生成。'
   let streamStarted = false
@@ -3172,14 +3247,19 @@ const runLegacyGenerateFallback = async (payload: AiQuestionGenerateRequestDTO) 
     } else {
       await fetchReviews()
     }
+    return null
   } catch (error) {
     if (!streamStarted) {
       generateSseStatus.value = '同步生成'
       generateSseMessage.value = '阶段式进度未启动，已改用同步生成。'
-      await completeGenerateFlow(await generateAiQuestionsApi(payload))
-      return
+      try {
+        await completeGenerateFlow(await generateAiQuestionsApi(payload))
+        return null
+      } catch (fallbackError) {
+        return fallbackError
+      }
     }
-    throw error
+    return error
   }
 }
 
@@ -3318,15 +3398,28 @@ const handleGenerateReviews = async () => {
   try {
     await completeGenerateSubmitFlow(await submitAiQuestionGenerateApi(confirmedPayload))
   } catch (error) {
-    try {
-      await runLegacyGenerateFallback(confirmedPayload)
-    } catch (fallbackError) {
+    const fallbackError = await runLegacyGenerateFallback(confirmedPayload)
+    if (fallbackError) {
       generateError.value = getErrorMessage(fallbackError, getErrorMessage(error, 'AI 题目生成失败，请稍后重试。'))
       ElMessage.error(generateError.value)
     }
   } finally {
+    await Promise.allSettled([fetchReviews(), fetchQuestionStats()])
     generating.value = false
     generateSseHandle.value = null
+  }
+}
+
+const promptForQuestionAction = async (
+  message: string,
+  title: string,
+  options: Parameters<typeof ElMessageBox.prompt>[2]
+) => {
+  try {
+    const result = await ElMessageBox.prompt(message, title, options)
+    return String(result.value ?? '')
+  } catch {
+    return null
   }
 }
 
@@ -3348,14 +3441,21 @@ const handleApproveReview = async (id: number) => {
     confirmButtonText: '确认通过'
   })
   if (!confirmed) return
-  await approveQuestionReviewApi(id, {
-    confirm: true,
-    dryRun: false,
-    reason: `admin question review approve confirmed id=${id}`,
-    idempotencyKey: createOperationIdempotencyKey(`question-review-approve-${id}`)
-  })
-  ElMessage.success('题目已通过审核')
-  await refreshReviewPublishWorkspace()
+  reviewActionLoadingId.value = id
+  try {
+    await approveQuestionReviewApi(id, {
+      confirm: true,
+      dryRun: false,
+      reason: `admin question review approve confirmed id=${id}`,
+      idempotencyKey: createOperationIdempotencyKey(`question-review-approve-${id}`)
+    })
+    ElMessage.success('题目已通过审核')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目审核通过失败，当前审核状态已重新加载。'))
+  } finally {
+    await refreshReviewPublishWorkspace()
+    reviewActionLoadingId.value = null
+  }
 }
 
 const handleRejectReview = async (id: number) => {
@@ -3364,10 +3464,11 @@ const handleRejectReview = async (id: number) => {
     ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
     return
   }
-  const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回题目', {
+  const value = await promptForQuestionAction('请输入驳回原因', '驳回题目', {
     inputType: 'textarea',
     inputValidator: (value) => Boolean(value?.trim()) || '请输入驳回原因'
   })
+  if (value === null) return
   const review = reviews.value.find((item) => item.id === id) || (reviewDetail.value?.id === id ? reviewDetail.value : null)
   const confirmed = await confirmDangerActionPreview({
     title: 'AI 题目驳回预览',
@@ -3380,14 +3481,21 @@ const handleRejectReview = async (id: number) => {
     confirmButtonText: '确认驳回'
   })
   if (!confirmed) return
-  await rejectQuestionReviewApi(id, {
-    rejectReason: value.trim(),
-    confirm: true,
-    dryRun: false,
-    idempotencyKey: createOperationIdempotencyKey(`question-review-reject-${id}`)
-  })
-  ElMessage.success('题目已驳回')
-  await fetchReviews()
+  reviewActionLoadingId.value = id
+  try {
+    await rejectQuestionReviewApi(id, {
+      rejectReason: value.trim(),
+      confirm: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`question-review-reject-${id}`)
+    })
+    ElMessage.success('题目已驳回')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目驳回失败，当前审核状态已重新加载。'))
+  } finally {
+    await refreshReviewPublishWorkspace()
+    reviewActionLoadingId.value = null
+  }
 }
 
 const handleCancelReview = async (id: number) => {
@@ -3396,7 +3504,7 @@ const handleCancelReview = async (id: number) => {
     ElMessage.warning('当前账号没有题目审核权限，操作未提交。')
     return
   }
-  const { value } = await ElMessageBox.prompt('请输入作废原因', '作废 AI 草稿', {
+  const value = await promptForQuestionAction('请输入作废原因', '作废 AI 草稿', {
     inputType: 'textarea',
     inputPlaceholder: '例如：E2E 测试数据清理或生成内容不再需要',
     inputValue: '管理员作废草稿',
@@ -3407,6 +3515,7 @@ const handleCancelReview = async (id: number) => {
       return true
     }
   })
+  if (value === null) return
   const review = reviews.value.find((item) => item.id === id) || (reviewDetail.value?.id === id ? reviewDetail.value : null)
   const confirmed = await confirmDangerActionPreview({
     title: 'AI 题目作废预览',
@@ -3419,17 +3528,24 @@ const handleCancelReview = async (id: number) => {
     confirmButtonText: '确认作废'
   })
   if (!confirmed) return
-  await cancelQuestionReviewApi(id, {
-    rejectReason: value.trim(),
-    confirm: true,
-    dryRun: false,
-    idempotencyKey: createOperationIdempotencyKey(`question-review-cancel-${id}`)
-  })
-  ElMessage.success('题目草稿已作废')
-  if (reviewDetail.value?.id === id) {
-    reviewDrawerVisible.value = false
+  reviewActionLoadingId.value = id
+  try {
+    await cancelQuestionReviewApi(id, {
+      rejectReason: value.trim(),
+      confirm: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`question-review-cancel-${id}`)
+    })
+    ElMessage.success('题目草稿已作废')
+    if (reviewDetail.value?.id === id) {
+      reviewDrawerVisible.value = false
+    }
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目草稿作废失败，当前审核状态已重新加载。'))
+  } finally {
+    await refreshReviewPublishWorkspace()
+    reviewActionLoadingId.value = null
   }
-  await fetchReviews()
 }
 
 const handleReviewCommand = (id: number, command: string) => {
@@ -3489,10 +3605,10 @@ const handleApproveReviewWithEdit = async () => {
     })
     ElMessage.success('题目已编辑并通过审核')
     reviewDrawerVisible.value = false
-    await refreshReviewPublishWorkspace()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '编辑后通过失败'))
   } finally {
+    await refreshReviewPublishWorkspace()
     reviewApproveSaving.value = false
   }
 }
@@ -3508,17 +3624,18 @@ const handleBatchApproveReviews = async () => {
     ElMessage.warning('请先选择待审核记录')
     return
   }
-  const { value } = await ElMessageBox.prompt(`确认批量通过 ${reviewIds.length} 条待审核题目？`, '批量通过', {
+  const value = await promptForQuestionAction(`确认批量通过 ${reviewIds.length} 条待审核题目？`, '批量通过', {
     inputPlaceholder: '可选：填写通过说明',
     inputValue: '批量审核通过'
   })
+  if (value === null) return
   const confirmed = await confirmDangerActionPreview({
     title: '批量通过 AI 题目预览',
     action: `批量通过 ${reviewIds.length} 条 AI 题目并写入正式题库`,
     target: selectedReviewTargetText(reviewIds),
     impact: '这些草稿会批量进入正式题库，可能影响用户侧题库、推荐题、练习和重复题治理。',
     rollback: '批量写入正式题库后无法自动撤销；误操作后需按正式题目逐条禁用、删除或人工修正。',
-    audit: `批量通过会记录审核人、审核编号列表、写入题目和时间；说明：${value?.trim() || '批量审核通过'}`,
+    audit: `批量通过会记录审核人、审核编号列表、写入题目和时间；说明：${value.trim() || '批量审核通过'}`,
     tips: ['确认当前选择只包含已人工抽检过的待审核题目。', '建议批次较大时先小批量处理。'],
     confirmButtonText: '确认批量通过'
   })
@@ -3530,16 +3647,18 @@ const handleBatchApproveReviews = async () => {
       approveData: {
         status: 1,
         isHighFrequency: 0,
-        editedReason: value?.trim() || '批量审核通过'
+        editedReason: value.trim() || '批量审核通过'
       },
       confirm: true,
       dryRun: false,
-      reason: value?.trim() || 'admin question review batch approve confirmed',
+      reason: value.trim() || 'admin question review batch approve confirmed',
       idempotencyKey: createOperationIdempotencyKey('question-review-batch-approve')
     })
     showBatchReviewResult(result)
-    await refreshReviewPublishWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '批量通过失败，当前审核和题库状态已重新加载。'))
   } finally {
+    await refreshReviewPublishWorkspace()
     batchReviewProcessing.value = false
   }
 }
@@ -3555,7 +3674,7 @@ const handleBatchRejectReviews = async () => {
     ElMessage.warning('请先选择待审核记录')
     return
   }
-  const { value } = await ElMessageBox.prompt(`请输入 ${reviewIds.length} 条题目的批量驳回原因`, '批量驳回', {
+  const value = await promptForQuestionAction(`请输入 ${reviewIds.length} 条题目的批量驳回原因`, '批量驳回', {
     inputType: 'textarea',
     inputPlaceholder: '例如：不符合题库质量要求',
     inputValidator: (value) => {
@@ -3565,6 +3684,7 @@ const handleBatchRejectReviews = async () => {
       return true
     }
   })
+  if (value === null) return
   const confirmed = await confirmDangerActionPreview({
     title: '批量驳回 AI 题目预览',
     action: `批量驳回 ${reviewIds.length} 条 AI 题目草稿`,
@@ -3586,8 +3706,10 @@ const handleBatchRejectReviews = async () => {
       idempotencyKey: createOperationIdempotencyKey('question-review-batch-reject')
     })
     showBatchReviewResult(result)
-    await fetchReviews()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '批量驳回失败，当前审核状态已重新加载。'))
   } finally {
+    await refreshReviewPublishWorkspace()
     batchReviewProcessing.value = false
   }
 }
@@ -3624,8 +3746,10 @@ const handleCheckDuplicates = async () => {
       idempotencyKey: createOperationIdempotencyKey('question-duplicate-check')
     })
     ElMessage.success(`已检测 ${result.checkedCount || questionIds.length} 道题，新增 ${result.createdCount || 0} 条候选`)
-    await refreshDuplicateWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '重复题检测失败，当前候选状态已重新加载。'))
   } finally {
+    await refreshDuplicateWorkspace()
     duplicateChecking.value = false
   }
 }
@@ -3707,6 +3831,7 @@ const handleEvaluateDuplicates = async () => {
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '重复题评估失败'))
   } finally {
+    await refreshDuplicateWorkspace()
     duplicateEvaluating.value = false
   }
 }
@@ -3750,10 +3875,10 @@ const saveCurrentDuplicateEvalCases = async () => {
       saved++
     }
     ElMessage.success(`已保存 ${saved} 个评估样本`)
-    await refreshDuplicateEvalWorkspace()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '评估样本保存失败'))
   } finally {
+    await refreshDuplicateEvalWorkspace()
     duplicateEvalSaving.value = false
   }
 }
@@ -3786,13 +3911,10 @@ const runDuplicateEvalCases = async () => {
     ElMessage.success(
       `评估运行完成：${result.passedCount || 0}/${result.evaluatedCount || 0}，准确率 ${formatRate(result.accuracyRate)}`
     )
-    await fetchDuplicateEvalRuns()
-    if (result.id) {
-      await openDuplicateEvalRun(result.id)
-    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '评估运行失败'))
   } finally {
+    await refreshDuplicateEvalWorkspace()
     duplicateEvalRunning.value = false
   }
 }
@@ -3832,6 +3954,7 @@ const sweepDuplicateThresholds = async () => {
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '阈值扫描失败'))
   } finally {
+    await refreshDuplicateEvalWorkspace()
     duplicateThresholdSweeping.value = false
   }
 }
@@ -3854,6 +3977,7 @@ const deleteDuplicateEvalCase = async (id?: number) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
+  duplicateEvalDeletingId.value = id
   try {
     await deleteQuestionDuplicateEvalCaseApi(id, {
       confirm: true,
@@ -3862,9 +3986,20 @@ const deleteDuplicateEvalCase = async (id?: number) => {
       idempotencyKey: createOperationIdempotencyKey(`question-duplicate-eval-case-delete-${id}`)
     })
     ElMessage.success('评估样本已删除')
-    await fetchDuplicateEvalCases()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '评估样本删除失败'))
+  } finally {
+    await fetchDuplicateEvalCases()
+    duplicateEvalDeletingId.value = null
+  }
+}
+
+const refreshEmbeddingServerState = async () => {
+  try {
+    const stats = await getQuestionEmbeddingStatsApi()
+    embeddingFailedCount.value = stats.failed || 0
+  } catch {
+    embeddingFailedCount.value = null
   }
 }
 
@@ -3913,7 +4048,10 @@ const handleRebuildEmbedding = async () => {
       return
     }
     ElMessage.success(summary)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目语义索引重建失败，当前索引状态已重新加载。'))
   } finally {
+    await Promise.allSettled([refreshEmbeddingServerState(), fetchQuestionStats()])
     embeddingRebuilding.value = false
   }
 }
@@ -3994,7 +4132,10 @@ const handleRetryFailedEmbedding = async () => {
       return
     }
     ElMessage.success(summary)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '失败题目索引重试失败，当前索引状态已重新加载。'))
   } finally {
+    await Promise.allSettled([refreshEmbeddingServerState(), fetchQuestionStats()])
     embeddingRetrying.value = false
   }
 }
@@ -4005,11 +4146,12 @@ const handleMergeDuplicate = async (id: number) => {
     ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
     return
   }
-  const { value } = await ElMessageBox.prompt('请输入合并原因', '合并重复题', {
+  const value = await promptForQuestionAction('请输入合并原因', '合并重复题', {
     inputType: 'textarea',
     inputPlaceholder: '例如：语义重复，保留主问题并建立重复关系'
   })
-  const reason = value?.trim() || '确认重复'
+  if (value === null) return
+  const reason = value.trim() || '确认重复'
   const confirmed = await confirmDangerActionPreview({
     title: '合并重复题预览',
     action: '确认同意图重复题并建立 SAME_INTENT 关系',
@@ -4021,15 +4163,22 @@ const handleMergeDuplicate = async (id: number) => {
     confirmButtonText: '确认合并'
   })
   if (!confirmed) return
-  await mergeQuestionDuplicateReviewApi(id, {
-    relationType: 'SAME_INTENT',
-    reason,
-    confirm: true,
-    dryRun: false,
-    idempotencyKey: createOperationIdempotencyKey(`question-duplicate-merge-${id}`)
-  })
-  ElMessage.success('重复题已合并')
-  await refreshDuplicateWorkspace()
+  duplicateActionLoadingId.value = id
+  try {
+    await mergeQuestionDuplicateReviewApi(id, {
+      relationType: 'SAME_INTENT',
+      reason,
+      confirm: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`question-duplicate-merge-${id}`)
+    })
+    ElMessage.success('重复题已合并')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '重复题合并失败，当前候选状态已重新加载。'))
+  } finally {
+    await refreshDuplicateWorkspace()
+    duplicateActionLoadingId.value = null
+  }
 }
 
 const handleIgnoreDuplicate = async (id: number) => {
@@ -4038,11 +4187,12 @@ const handleIgnoreDuplicate = async (id: number) => {
     ElMessage.warning('当前账号没有重复题处理权限，操作未提交。')
     return
   }
-  const { value } = await ElMessageBox.prompt('请输入忽略原因', '忽略重复候选', {
+  const value = await promptForQuestionAction('请输入忽略原因', '忽略重复候选', {
     inputType: 'textarea',
     inputPlaceholder: '例如：考察角度不同',
     inputValidator: (value) => Boolean(value?.trim()) || '请输入忽略原因'
   })
+  if (value === null) return
   const confirmed = await confirmDangerActionPreview({
     title: '忽略重复候选预览',
     action: '忽略重复题候选',
@@ -4054,14 +4204,21 @@ const handleIgnoreDuplicate = async (id: number) => {
     confirmButtonText: '确认忽略'
   })
   if (!confirmed) return
-  await ignoreQuestionDuplicateReviewApi(id, {
-    ignoredReason: value.trim(),
-    confirm: true,
-    dryRun: false,
-    idempotencyKey: createOperationIdempotencyKey(`question-duplicate-ignore-${id}`)
-  })
-  ElMessage.success('重复候选已忽略')
-  await refreshDuplicateWorkspace()
+  duplicateActionLoadingId.value = id
+  try {
+    await ignoreQuestionDuplicateReviewApi(id, {
+      ignoredReason: value.trim(),
+      confirm: true,
+      dryRun: false,
+      idempotencyKey: createOperationIdempotencyKey(`question-duplicate-ignore-${id}`)
+    })
+    ElMessage.success('重复候选已忽略')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '重复候选忽略失败，当前候选状态已重新加载。'))
+  } finally {
+    await refreshDuplicateWorkspace()
+    duplicateActionLoadingId.value = null
+  }
 }
 
 const handleDuplicateCommand = (id: number, command: string) => {
@@ -4082,11 +4239,12 @@ const handleBatchMergeDuplicates = async () => {
   }
   const ids = selectedPendingDuplicateIds.value
   if (!ids.length) return
-  const { value } = await ElMessageBox.prompt('请输入批量合并原因', '批量合并重复题', {
+  const value = await promptForQuestionAction('请输入批量合并原因', '批量合并重复题', {
     inputType: 'textarea',
     inputPlaceholder: '例如：批量确认同意图重复'
   })
-  const reason = value?.trim() || '批量确认重复'
+  if (value === null) return
+  const reason = value.trim() || '批量确认重复'
   const confirmed = await confirmDangerActionPreview({
     title: '批量合并重复题预览',
     action: `批量确认 ${ids.length} 条同意图重复题并建立 SAME_INTENT 关系`,
@@ -4110,8 +4268,10 @@ const handleBatchMergeDuplicates = async () => {
     })
     showBatchDuplicateResult(result)
     selectedDuplicateRows.value = []
-    await refreshDuplicateWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '批量合并重复题失败，当前候选状态已重新加载。'))
   } finally {
+    await refreshDuplicateWorkspace()
     duplicateBatchProcessing.value = false
   }
 }
@@ -4124,11 +4284,12 @@ const handleBatchIgnoreDuplicates = async () => {
   }
   const ids = selectedPendingDuplicateIds.value
   if (!ids.length) return
-  const { value } = await ElMessageBox.prompt('请输入批量忽略原因', '批量忽略重复候选', {
+  const value = await promptForQuestionAction('请输入批量忽略原因', '批量忽略重复候选', {
     inputType: 'textarea',
     inputPlaceholder: '例如：考察角度不同'
   })
-  const reason = value?.trim() || '批量确认不是重复题'
+  if (value === null) return
+  const reason = value.trim() || '批量确认不是重复题'
   const confirmed = await confirmDangerActionPreview({
     title: '批量忽略重复候选预览',
     action: `批量忽略 ${ids.length} 条重复题候选`,
@@ -4151,8 +4312,10 @@ const handleBatchIgnoreDuplicates = async () => {
     })
     showBatchDuplicateResult(result)
     selectedDuplicateRows.value = []
-    await refreshDuplicateWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '批量忽略重复候选失败，当前候选状态已重新加载。'))
   } finally {
+    await refreshDuplicateWorkspace()
     duplicateBatchProcessing.value = false
   }
 }
@@ -4220,10 +4383,10 @@ const handleImport = async () => {
     }
     importDialogVisible.value = false
     importFile.value = null
-    await refreshQuestionDuplicateWorkspace()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '题目导入失败，请检查文件格式、重复题策略或稍后重试。'))
   } finally {
+    await refreshQuestionDuplicateWorkspace()
     importing.value = false
   }
 }

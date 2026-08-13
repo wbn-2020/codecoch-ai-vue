@@ -41,24 +41,15 @@
           <h2>日志列表</h2>
           <p>支持按排障场景调整密度和列显隐；视图偏好会保存在当前浏览器。</p>
         </div>
-        <div class="table-view-tools">
-          <el-segmented v-model="tableSize" :options="tableSizeOptions" aria-label="操作日志表格密度" />
-          <el-dropdown trigger="click" :hide-on-click="false">
-            <el-button plain>列配置</el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="column-config-menu">
-                <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                  <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                    {{ item.label }}
-                  </el-checkbox>
-                </el-dropdown-item>
-                <el-dropdown-item divided>
-                  <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <AdminTableViewSettings
+          v-model:size="tableSize"
+          :size-options="tableSizeOptions"
+          :columns="columnOptions"
+          :visible-columns="visibleColumns"
+          aria-label="操作日志表格视图设置"
+          @update:column-visible="({ key, visible }) => visibleColumns[key as OperationLogColumnKey] = visible"
+          @reset="resetTableView"
+        />
       </div>
 
       <div class="admin-filter-bar">
@@ -206,6 +197,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getAdminLogSummaryApi, getAdminOperationLogsApi } from '@/api/adminGovernance'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminListQuery, AdminLogSummaryVO, OperationLogVO } from '@/types/adminGovernance'

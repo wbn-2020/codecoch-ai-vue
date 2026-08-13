@@ -2,44 +2,61 @@
   <div class="page-shell knowledge-page">
     <section class="knowledge-hero">
       <div>
-        <p class="eyebrow">个人知识检索</p>
+        <p class="eyebrow">个人资料空间</p>
         <h1>个人知识库</h1>
-        <p>维护你的学习资料、项目笔记和面试复盘，并用语义检索快速找到真正相关的片段。</p>
+        <p>{{ knowledgeViewDescription }}</p>
       </div>
       <div class="hero-actions">
         <el-button :icon="Refresh" :loading="loading" @click="refreshKnowledgePage">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
-        <el-upload
-          class="knowledge-upload"
-          :accept="uploadAccept"
-          :show-file-list="false"
-          :auto-upload="false"
-          :on-change="handleKnowledgeFileChange"
-        >
-          <el-button :icon="Files" :loading="uploading">上传资料</el-button>
-        </el-upload>
-        <el-button
-          :icon="Refresh"
-          :loading="rebuilding"
-          :disabled="!semanticEnabled"
-          :title="!semanticEnabled ? semanticDisabledReason : undefined"
-          @click="handleRebuildVectors"
-        >
-          重建索引
-        </el-button>
-        <el-button
-          :icon="Refresh"
-          :loading="retryingFailedVectors"
-          :disabled="!semanticEnabled"
-          :title="!semanticEnabled ? semanticDisabledReason : undefined"
-          @click="handleRetryFailedVectors"
-        >
-          重试失败索引
-        </el-button>
+        <template v-if="isMaterialsView">
+          <el-button type="primary" :icon="Plus" @click="openCreate">新增资料</el-button>
+          <el-upload
+            class="knowledge-upload"
+            :accept="uploadAccept"
+            :show-file-list="false"
+            :auto-upload="false"
+            :on-change="handleKnowledgeFileChange"
+          >
+            <el-button :icon="Files" :loading="uploading" :disabled="uploading">上传资料</el-button>
+          </el-upload>
+        </template>
+        <template v-else-if="isGovernanceView">
+          <el-button
+            :icon="Refresh"
+            :loading="rebuilding"
+            :disabled="!semanticEnabled"
+            :title="!semanticEnabled ? semanticDisabledReason : undefined"
+            @click="handleRebuildVectors"
+          >
+            重建索引
+          </el-button>
+          <el-button
+            :icon="Refresh"
+            :loading="retryingFailedVectors"
+            :disabled="!semanticEnabled"
+            :title="!semanticEnabled ? semanticDisabledReason : undefined"
+            @click="handleRetryFailedVectors"
+          >
+            重试失败索引
+          </el-button>
+        </template>
       </div>
     </section>
 
-    <section class="summary-grid">
+    <nav class="knowledge-tabs" aria-label="个人知识库视图">
+      <button
+        v-for="item in knowledgeViewItems"
+        :key="item.key"
+        type="button"
+        :class="{ 'is-active': activeKnowledgeView === item.key }"
+        @click="selectKnowledgeView(item.key)"
+      >
+        <span>{{ item.label }}</span>
+        <small>{{ item.description }}</small>
+      </button>
+    </nav>
+
+    <section v-if="isMaterialsView && !errorMessage" class="summary-grid summary-grid--compact">
       <article class="summary-item">
         <span>文档</span>
         <strong>{{ documentTotal }}</strong>
@@ -49,156 +66,184 @@
         <strong>{{ chunkTotal }}</strong>
       </article>
       <article class="summary-item">
-        <span>重复片段</span>
-        <strong>{{ duplicateChunkTotal }}</strong>
-      </article>
-      <article class="summary-item">
-        <span>{{ retrievalModeLabel }}</span>
-        <strong>{{ chunkStrategyLabel }}</strong>
-      </article>
-      <article class="summary-item">
         <span>类型分布</span>
         <strong>{{ documentTypeSummary }}</strong>
       </article>
     </section>
 
-    <details class="knowledge-operations">
+    <template v-if="isGovernanceView && !errorMessage">
+      <details class="knowledge-operations">
       <summary>
-        <div>
-          <span>索引与治理</span>
-          <strong>{{ governanceActionSummary }}</strong>
-        </div>
-        <small>{{ knowledgeGovernanceHealthBadge }} · {{ failedChunkCount }} 个失败片段</small>
+        <span>治理与维护</span>
+        <small>索引状态、重复审核和质量评估</small>
       </summary>
-      <div class="knowledge-operations__body">
-    <section class="config-strip">
-      <article>
-        <span>语义检索</span>
-        <strong>{{ vectorCapabilityLabel }}</strong>
-        <small>{{ vectorCapabilityDetail }}</small>
-      </article>
-      <article>
-        <span>切片策略</span>
-        <strong>{{ chunkConfigLabel }}</strong>
-        <small>{{ chunkStrategyDetail }}</small>
-      </article>
-      <article>
-        <span>近重复阈值</span>
-        <strong>{{ nearDuplicateThresholdLabel }}</strong>
-        <small>问答阈值 >= {{ askMinScoreLabel }}</small>
-      </article>
-      <article>
-        <span>上传限制</span>
-        <strong>{{ uploadLimitLabel }}</strong>
-        <small>{{ uploadExtensionsLabel }}</small>
-      </article>
-    </section>
-
-    <section class="governance-strip">
-      <div class="governance-strip__head">
-        <div>
-          <p class="section-kicker">治理状态</p>
-          <strong>{{ knowledgeGovernanceHealthLabel }}</strong>
-          <small>{{ knowledgeGovernanceHealthDetail }}</small>
-        </div>
-        <el-tag :type="knowledgeGovernanceHealthType" effect="light">{{ knowledgeGovernanceHealthBadge }}</el-tag>
-      </div>
-      <div class="governance-grid">
-        <article v-for="item in knowledgeGovernanceItems" :key="item.key">
+      <nav class="governance-panel-tabs" aria-label="知识库治理视图">
+        <button
+          v-for="item in governancePanelItems"
+          :key="item.key"
+          type="button"
+          :class="{ 'is-active': activeGovernancePanel === item.key }"
+          @click="activeGovernancePanel = item.key"
+        >
           <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.detail }}</small>
-        </article>
-      </div>
-      <div v-if="knowledgeGovernanceWarnings.length" class="governance-alerts">
-        <el-alert
-          v-for="warning in knowledgeGovernanceWarnings"
-          :key="warning"
-          type="warning"
-          :closable="false"
-          :title="warning"
-        />
-      </div>
-    </section>
+          <small>{{ item.description }}</small>
+        </button>
+      </nav>
 
-    <section class="quality-gate-strip">
-      <div class="quality-gate-strip__head">
-        <div>
-          <p class="section-kicker">质量门槛</p>
-          <strong>强结论必须有可追溯来源</strong>
-          <small>引用不足、评测样本不足、候选记忆或低置信记忆只作为弱观察和治理入口。</small>
-        </div>
-      </div>
-      <div class="quality-gate-grid">
-        <article v-for="item in qualityGateItems" :key="item.key">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.status }}</strong>
-          <small>{{ item.detail }}</small>
-        </article>
-      </div>
-    </section>
-
-    <section class="governance-action-strip">
-      <div class="governance-action-strip__head">
-        <div>
-          <p class="section-kicker">治理行动</p>
-          <strong>{{ governanceActionSummary }}</strong>
-          <small>优先处理会影响检索、问答引用和长期记忆可信度的问题。</small>
-        </div>
-        <el-button text type="primary" @click="refreshKnowledgePage">刷新治理状态</el-button>
-      </div>
-      <div class="governance-action-list">
-        <article v-for="item in knowledgeGovernanceActions" :key="item.key">
-          <div>
-            <div class="governance-action-title">
-              <strong>{{ item.title }}</strong>
-              <el-tag size="small" :type="item.tagType" effect="light">{{ item.priority }}</el-tag>
+      <div v-if="isGovernanceOverviewPanel" class="knowledge-operations__body">
+        <section class="governance-strip">
+          <div class="governance-strip__head">
+            <div>
+              <p class="section-kicker">治理状态</p>
+              <strong>{{ knowledgeGovernanceHealthLabel }}</strong>
+              <small>{{ knowledgeGovernanceHealthDetail }}</small>
             </div>
-            <p>{{ item.description }}</p>
-            <small>{{ item.impact }}</small>
+            <el-tag :type="knowledgeGovernanceHealthType" effect="light">{{ knowledgeGovernanceHealthBadge }}</el-tag>
           </div>
-          <el-button size="small" :type="item.buttonType" plain @click="runGovernanceAction(item.action)">
-            {{ item.cta }}
-          </el-button>
-        </article>
-      </div>
-    </section>
+          <div class="governance-grid">
+            <article v-for="item in knowledgeGovernanceItems" :key="item.key">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.detail }}</small>
+            </article>
+          </div>
+          <div v-if="knowledgeGovernanceWarnings.length" class="governance-alerts">
+            <el-alert
+              v-for="warning in knowledgeGovernanceWarnings"
+              :key="warning"
+              type="warning"
+              :closable="false"
+              :title="warning"
+            />
+          </div>
+        </section>
 
-    <section class="index-observability-strip">
-      <article>
-        <span>索引状态</span>
-        <div class="index-pill-row">
-          <el-tag v-for="item in indexStatusItems" :key="item.status" size="small" :type="statusType(item.status)" effect="light">
-            {{ statusLabel(item.status) }} {{ item.count }}
-          </el-tag>
-        </div>
-      </article>
-      <article>
-        <span>检索索引</span>
-        <strong>{{ embeddingModelSummary }}</strong>
-        <small>{{ vectorIndexHealthLabel }}</small>
-      </article>
-      <article>
-        <span>失败片段</span>
-        <strong>{{ failedChunkCount }}</strong>
-        <small>{{ pendingChunkCount }} 待索引 / {{ disabledChunkCount }} 未启用</small>
-      </article>
-    </section>
+        <section class="governance-action-strip">
+          <div class="governance-action-strip__head">
+            <div>
+              <p class="section-kicker">下一步</p>
+              <strong>{{ governanceActionSummary }}</strong>
+              <small>优先处理会影响检索、问答引用和长期记忆可信度的问题。</small>
+            </div>
+            <el-button text type="primary" @click="refreshKnowledgePage">刷新治理状态</el-button>
+          </div>
+          <div class="governance-action-list">
+            <article v-for="item in knowledgeGovernanceActions.slice(0, 3)" :key="item.key">
+              <div>
+                <div class="governance-action-title">
+                  <strong>{{ item.title }}</strong>
+                  <el-tag size="small" :type="item.tagType" effect="light">{{ item.priority }}</el-tag>
+                </div>
+                <p>{{ item.description }}</p>
+                <small>{{ item.impact }}</small>
+              </div>
+              <el-button size="small" :type="item.buttonType" plain @click="runGovernanceAction(item.action)">
+                {{ item.cta }}
+              </el-button>
+            </article>
+          </div>
+        </section>
 
-    <section class="duplicate-review-strip">
-      <div>
-        <p class="section-kicker">去重审核</p>
-        <strong>{{ duplicateReviewSummary }}</strong>
-        <small>阈值 {{ duplicateReviewThresholdLabel }} · 已扫描 {{ duplicateReview?.scannedChunkCount || 0 }}</small>
+        <details class="governance-technical-details">
+          <summary>索引与质量门槛</summary>
+          <div class="governance-technical-details__body">
+            <section class="config-strip">
+              <article>
+                <span>语义检索</span>
+                <strong>{{ vectorCapabilityLabel }}</strong>
+                <small>{{ vectorCapabilityDetail }}</small>
+              </article>
+              <article>
+                <span>切片策略</span>
+                <strong>{{ chunkConfigLabel }}</strong>
+                <small>{{ chunkStrategyDetail }}</small>
+              </article>
+              <article>
+                <span>近重复阈值</span>
+                <strong>{{ nearDuplicateThresholdLabel }}</strong>
+                <small>问答阈值 >= {{ askMinScoreLabel }}</small>
+              </article>
+              <article>
+                <span>上传限制</span>
+                <strong>{{ uploadLimitLabel }}</strong>
+                <small>{{ uploadExtensionsLabel }}</small>
+              </article>
+            </section>
+
+            <section class="quality-gate-strip">
+              <div class="quality-gate-strip__head">
+                <div>
+                  <p class="section-kicker">质量门槛</p>
+                  <strong>强结论必须有可追溯来源</strong>
+                  <small>引用不足、评测样本不足、候选记忆或低置信记忆只作为弱观察和治理入口。</small>
+                </div>
+              </div>
+              <div class="quality-gate-grid">
+                <article v-for="item in qualityGateItems" :key="item.key">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.status }}</strong>
+                  <small>{{ item.detail }}</small>
+                </article>
+              </div>
+            </section>
+
+            <section class="index-observability-strip">
+              <article>
+                <span>索引状态</span>
+                <div class="index-pill-row">
+                  <el-tag v-for="item in indexStatusItems" :key="item.status" size="small" :type="statusType(item.status)" effect="light">
+                    {{ statusLabel(item.status) }} {{ item.count }}
+                  </el-tag>
+                </div>
+              </article>
+              <article>
+                <span>检索索引</span>
+                <strong>{{ embeddingModelSummary }}</strong>
+                <small>{{ vectorIndexHealthLabel }}</small>
+              </article>
+              <article>
+                <span>失败片段</span>
+                <strong>{{ failedChunkCount }}</strong>
+                <small>{{ pendingChunkCount }} 待索引 / {{ disabledChunkCount }} 未启用</small>
+              </article>
+            </section>
+          </div>
+        </details>
       </div>
-      <div class="dedup-actions">
-        <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" aria-label="近重复阈值百分比" />
-        <el-button :icon="Search" :loading="duplicateReviewLoading" :disabled="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
-        <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates()">完全重复</el-button>
+
+      <div v-else-if="isGovernanceDuplicatePanel" class="knowledge-operations__body">
+        <section class="duplicate-review-strip">
+          <div>
+            <p class="section-kicker">去重审核</p>
+            <strong>{{ duplicateReviewSummary }}</strong>
+            <small>阈值 {{ duplicateReviewThresholdLabel }} · 已扫描 {{ duplicateReview?.scannedChunkCount || 0 }}</small>
+          </div>
+          <div class="dedup-actions">
+            <el-input-number v-model="duplicateThresholdPercent" :min="0" :max="100" :step="2" controls-position="right" aria-label="近重复阈值百分比" />
+            <el-button :icon="Search" :loading="duplicateReviewLoading" :disabled="duplicateReviewLoading" @click="loadDuplicateReview">扫描近重复</el-button>
+            <el-button :icon="Files" :loading="exactDuplicateLoading" @click="loadExactDuplicates()">完全重复</el-button>
+          </div>
+        </section>
+
+        <section v-if="hasDuplicateHotspots" class="duplicate-hotspot-strip">
+          <article>
+            <span>重复类型</span>
+            <strong>{{ duplicateTypeSummary }}</strong>
+            <el-button v-if="topDuplicateType" link type="primary" @click="loadExactDuplicates(undefined, topDuplicateType)">查看</el-button>
+          </article>
+          <article>
+            <span>主要重复资料</span>
+            <strong>{{ topDuplicateHotspotLabel }}</strong>
+            <el-button v-if="topDuplicateHotspotId" link type="primary" @click="loadExactDuplicates(topDuplicateHotspotId)">查看</el-button>
+          </article>
+          <article>
+            <span>清理候选</span>
+            <strong>{{ duplicateChunkTotal }}</strong>
+          </article>
+        </section>
       </div>
-    </section>
-      </div>
-    </details>
+      </details>
+    </template>
 
     <el-alert
       v-if="partialLoadWarning && !errorMessage"
@@ -214,26 +259,13 @@
       <el-button type="primary" @click="refreshKnowledgePage">重试</el-button>
     </AppState>
 
-    <section v-if="hasDuplicateHotspots && !errorMessage" class="duplicate-hotspot-strip">
-      <article>
-        <span>重复类型</span>
-        <strong>{{ duplicateTypeSummary }}</strong>
-        <el-button v-if="topDuplicateType" link type="primary" @click="loadExactDuplicates(undefined, topDuplicateType)">查看</el-button>
-      </article>
-      <article>
-        <span>主要重复资料</span>
-        <strong>{{ topDuplicateHotspotLabel }}</strong>
-        <el-button v-if="topDuplicateHotspotId" link type="primary" @click="loadExactDuplicates(topDuplicateHotspotId)">查看</el-button>
-      </article>
-      <article>
-        <span>清理候选</span>
-        <strong>{{ duplicateChunkTotal }}</strong>
-      </article>
-    </section>
-
-    <section v-if="!errorMessage" class="workspace-grid">
+    <section
+      v-if="!errorMessage && (isSearchView || isMaterialsView || isGovernanceQualityPanel)"
+      class="workspace-grid"
+      :class="{ 'workspace-grid--single': isGovernanceQualityPanel }"
+    >
       <main class="main-stack">
-        <section class="content-card">
+        <section v-if="isMaterialsView" class="content-card">
           <div class="content-card__body">
             <div class="section-head">
               <div>
@@ -361,15 +393,21 @@
           </div>
         </section>
 
-        <section class="content-card">
+        <section v-if="isSearchView || isGovernanceQualityPanel" class="content-card">
           <div class="content-card__body">
-            <div class="section-head">
+            <div v-if="isSearchView" class="section-head">
               <div>
                 <p class="section-kicker">语义搜索</p>
                 <h2>语义搜索</h2>
               </div>
             </div>
-            <el-form class="search-toolbar" inline @submit.prevent>
+            <div v-else class="section-head">
+              <div>
+                <p class="section-kicker">检索质量</p>
+                <h2>质量评测</h2>
+              </div>
+            </div>
+            <el-form v-if="isSearchView" class="search-toolbar" inline @submit.prevent>
               <el-form-item label="关键词">
                 <el-input
                   v-model.trim="keyword"
@@ -397,10 +435,9 @@
               <el-form-item>
                 <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索</el-button>
                 <el-button :icon="Search" :loading="tracingSearch" @click="handleSearchTrace">查看匹配说明</el-button>
-                <el-button :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">评估匹配效果</el-button>
               </el-form-item>
             </el-form>
-            <div v-if="searchTrace" class="search-trace-panel">
+            <div v-if="isSearchView && searchTrace" class="search-trace-panel">
               <div class="search-trace-panel__head">
                 <div>
                   <span>匹配说明</span>
@@ -466,7 +503,7 @@
                 :title="warning"
               />
             </div>
-            <div v-if="knowledgeEvaluation" class="knowledge-evaluation-panel">
+            <div v-if="isGovernanceQualityPanel && knowledgeEvaluation" class="knowledge-evaluation-panel">
               <div class="knowledge-evaluation-panel__head">
                 <div>
                   <span>检索评估</span>
@@ -511,6 +548,7 @@
                 :title="knowledgeEvaluationTop.failureReason || knowledgeEvaluationTop.citationWarning"
               />
             </div>
+            <template v-if="isGovernanceQualityPanel">
             <details class="knowledge-eval-details">
               <summary>
                 <span>检索质量评估</span>
@@ -677,7 +715,8 @@
               </div>
             </div>
             </details>
-            <div class="result-list" v-loading="searching">
+            </template>
+            <div v-if="isSearchView" class="result-list" v-loading="searching">
               <article v-for="item in searchResults" :key="resultKey(item)" class="result-row">
                 <div>
                   <div class="result-title">
@@ -724,7 +763,7 @@
         </section>
       </main>
 
-      <aside class="side-stack">
+      <aside v-if="isSearchView" class="side-stack">
         <section class="content-card">
           <div class="content-card__body ask-panel">
             <div class="section-head compact">
@@ -759,10 +798,6 @@
             <el-button class="ask-button" type="primary" :icon="ChatDotRound" :loading="asking" @click="handleAsk">
               生成回答
             </el-button>
-            <el-button class="ask-button ask-button--secondary" :icon="Search" :loading="knowledgeEvaluating" @click="handleEvaluateKnowledge">
-              评估检索质量
-            </el-button>
-
             <div v-if="answer" class="answer-box">
               <span>回答</span>
               <el-alert
@@ -1269,7 +1304,7 @@
           <div class="section-head compact">
             <div>
               <p class="section-kicker">间接影响</p>
-              <h2>Agent 计划与训练队列</h2>
+              <h2>智能计划与训练队列</h2>
             </div>
           </div>
           <article v-for="item in selectedInfluencePreview.indirectImpacts" :key="item.key" class="influence-preview-row">
@@ -1390,9 +1425,53 @@ import AppState from '@/components/common/AppState.vue'
 import type { StreamSseHandle } from '@/utils/sse'
 import type { AgentContextImpactPreviewVO } from '@/types/agent'
 
+type KnowledgeViewKey = 'materials' | 'search' | 'governance'
+type GovernancePanelKey = 'overview' | 'duplicates' | 'quality'
+
 const loading = ref(false)
 const route = useRoute()
 const router = useRouter()
+const knowledgeViewFromQuery = (): KnowledgeViewKey => {
+  const rawValue = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
+  return rawValue === 'search' || rawValue === 'governance' ? rawValue : 'materials'
+}
+const activeKnowledgeView = ref<KnowledgeViewKey>(knowledgeViewFromQuery())
+const activeGovernancePanel = ref<GovernancePanelKey>('overview')
+const knowledgeViewItems = [
+  { key: 'materials' as const, label: '资料', description: '新增、上传与管理' },
+  { key: 'search' as const, label: '检索与问答', description: '查找资料并获得回答' },
+  { key: 'governance' as const, label: '治理', description: '索引、去重与质量评测' }
+]
+const governancePanelItems = [
+  { key: 'overview' as const, label: '状态', description: '当前风险与下一步' },
+  { key: 'duplicates' as const, label: '重复资料', description: '扫描与清理候选' },
+  { key: 'quality' as const, label: '质量评测', description: '样本与运行记录' }
+]
+const isMaterialsView = computed(() => activeKnowledgeView.value === 'materials')
+const isSearchView = computed(() => activeKnowledgeView.value === 'search')
+const isGovernanceView = computed(() => activeKnowledgeView.value === 'governance')
+const isGovernanceOverviewPanel = computed(() =>
+  isGovernanceView.value && activeGovernancePanel.value === 'overview'
+)
+const isGovernanceDuplicatePanel = computed(() =>
+  isGovernanceView.value && activeGovernancePanel.value === 'duplicates'
+)
+const isGovernanceQualityPanel = computed(() =>
+  isGovernanceView.value && activeGovernancePanel.value === 'quality'
+)
+const knowledgeViewDescription = computed(() => {
+  if (isSearchView.value) return '通过检索和问答回看已有资料，每一次回答都会标明可追溯来源。'
+  if (isGovernanceView.value) return '在需要时处理索引、重复资料和检索质量，不干扰日常资料管理。'
+  return '集中维护学习资料、项目笔记和面试复盘，为后续检索和问答提供可靠依据。'
+})
+const selectKnowledgeView = (view: KnowledgeViewKey) => {
+  activeKnowledgeView.value = view
+  void router.push({ query: { ...route.query, view: view === 'materials' ? undefined : view } })
+  if (view === 'governance') {
+    activeGovernancePanel.value = 'overview'
+    void refreshKnowledgeGovernance()
+  }
+}
 const searching = ref(false)
 const tracingSearch = ref(false)
 const asking = ref(false)
@@ -2546,6 +2625,25 @@ const getErrorMessage = (error: unknown) => {
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
 
+const KNOWLEDGE_PAGE_LOAD_TIMEOUT_MS = 15000
+
+const withKnowledgePageLoadTimeout = <T>(promise: Promise<T>, label: string) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label}请求超时，请稍后重试。`))
+    }, KNOWLEDGE_PAGE_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const addPartialLoadWarning = (label: string, error: unknown) => {
   const message = `${label}：${getErrorMessage(error)}`
   if (!partialLoadWarnings.value.includes(message)) {
@@ -2605,11 +2703,11 @@ const loadDocuments = async () => {
   partialLoadWarnings.value = []
   try {
     const [page, stats, config, types, options] = await Promise.allSettled([
-      getKnowledgeDocumentsApi(documentQueryParams()),
-      getKnowledgeStatsApi(),
-      getKnowledgeConfigApi(),
-      getKnowledgeDocumentTypesApi(),
-      getKnowledgeDocumentOptionsApi()
+      withKnowledgePageLoadTimeout(getKnowledgeDocumentsApi(documentQueryParams()), '知识资料列表'),
+      withKnowledgePageLoadTimeout(getKnowledgeStatsApi(), '知识库统计'),
+      withKnowledgePageLoadTimeout(getKnowledgeConfigApi(), '知识库配置'),
+      withKnowledgePageLoadTimeout(getKnowledgeDocumentTypesApi(), '资料类型'),
+      withKnowledgePageLoadTimeout(getKnowledgeDocumentOptionsApi(), '资料范围')
     ])
 
     if (!isFulfilled(page)) {
@@ -2908,6 +3006,12 @@ const fetchAgentMemoryGovernance = async () => {
 const refreshKnowledgePage = async () => {
   partialLoadWarnings.value = []
   await loadDocuments()
+  if (isGovernanceView.value) {
+    await refreshKnowledgeGovernance()
+  }
+}
+
+const refreshKnowledgeGovernance = async () => {
   await Promise.allSettled([refreshKnowledgeEvalWorkspace(), fetchAgentMemoryGovernance()])
 }
 
@@ -2937,6 +3041,7 @@ const runGovernanceAction = async (action: KnowledgeGovernanceActionKind) => {
     return
   }
   if (action === 'RETRY_ASK') {
+    selectKnowledgeView('search')
     seedKnowledgeEvalQuestion()
     return
   }
@@ -3339,7 +3444,7 @@ const handleCleanupExactDuplicates = async () => {
       title: '清理完全重复片段',
       action: '按预览结果删除完全重复片段并同步清理索引',
       target: `${preview.duplicateGroupCount || 0} 组重复，${preview.deleteCandidateCount || 0} 个待删除片段`,
-      impact: '会删除完全重复片段并同步清理对应检索索引，后续检索会减少重复命中。基础影响范围：重复片段将转为 MERGE_DUPLICATE_KNOWLEDGE 治理行动；清理后投递包、面试训练、报告和 Agent 计划引用应以刷新后的检索结果为准。',
+      impact: '会删除完全重复片段并同步清理对应检索索引，后续检索会减少重复命中。基础影响范围：重复片段将转为重复资料治理行动；清理后投递包、面试训练、报告和智能计划引用应以刷新后的检索结果为准。',
       rollback: '系统不会自动恢复清理结果；如误删，需要重新导入或重新保存资料生成片段。',
       audit: '清理操作会按当前筛选范围、删除数量和当前账号记录。',
       tips: ['已完成 dry-run 预览并确认待删除数量。', '确认当前筛选范围就是要清理的资料范围。'],
@@ -3506,6 +3611,7 @@ const saveDocument = async () => {
 }
 
 const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
+  if (uploading.value) return
   const file = uploadFile.raw
   if (!file) return
   const lowerName = file.name.toLowerCase()
@@ -3538,6 +3644,8 @@ const handleKnowledgeFileChange = async (uploadFile: UploadFile) => {
     const result = await uploadKnowledgeDocumentApi(file, documentType)
     showKnowledgeIndexResult(result, '上传完成')
     await loadDocuments()
+  } catch (error) {
+    ElMessage.error(`上传资料失败：${getErrorMessage(error)}`)
   } finally {
     uploading.value = false
   }
@@ -3625,12 +3733,12 @@ const handleRetryFailedVectors = async () => {
     ElMessage.warning(semanticDisabledReason.value)
     return
   }
-  const previewText = `基础影响范围：失败 ${failedChunkCount.value} 个、待索引 ${pendingChunkCount.value} 个片段；重试前相关检索、问答、训练队列和 Agent 计划应按降级证据处理。`
+  const previewText = `基础影响范围：失败 ${failedChunkCount.value} 个、待索引 ${pendingChunkCount.value} 个片段；重试前相关检索、问答、训练队列和智能计划应按降级证据处理。`
   const confirmed = await confirmDangerActionPreview({
     title: '重试知识库检索索引',
     action: '重试失败或超时的知识库检索索引任务',
     target: '当前用户最多 500 个失败或超时待索引片段所属文档',
-    impact: `会再次提交检索索引任务，期间可能消耗语义检索服务调用资源；成功后相关资料的语义检索可用性会更新。${previewText}`,
+      impact: `会再次提交检索索引任务，期间可能消耗语义检索服务调用资源；成功后相关资料的语义检索可用性会更新。${previewText}`,
     rollback: '重试结果不会自动回到重试前状态；如仍失败，需要查看任务错误并修正资料或配置。',
     audit: '重试任务会保留处理记录、成功数量和失败数量。',
     tips: ['确认当前不是重复点击造成的短时间重试。', '确认语义检索服务和索引配置可用。'],
@@ -3835,7 +3943,20 @@ onBeforeUnmount(() => {
 watch(
   () => [route.query.documentId, route.query.chunkId],
   async () => {
+    if (route.query.documentId || route.query.chunkId) {
+      activeKnowledgeView.value = 'materials'
+    }
     await openKnowledgeFailureFromQuery()
+  }
+)
+
+watch(
+  () => route.query.view,
+  async () => {
+    const nextView = knowledgeViewFromQuery()
+    if (activeKnowledgeView.value === nextView) return
+    activeKnowledgeView.value = nextView
+    await refreshKnowledgePage()
   }
 )
 </script>
@@ -3856,9 +3977,9 @@ watch(
   align-items: flex-end;
   justify-content: space-between;
   padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
 }
 
 .knowledge-hero h1,
@@ -3882,9 +4003,9 @@ watch(
 .knowledge-operations,
 .knowledge-eval-details {
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
 }
 
 .knowledge-operations > summary,
@@ -3923,16 +4044,11 @@ watch(
   outline-offset: -2px;
 }
 
-.knowledge-operations > summary div,
 .knowledge-operations > summary span,
-.knowledge-operations > summary strong,
+.knowledge-operations > summary small,
 .knowledge-eval-details > summary span,
 .knowledge-eval-details > summary small {
   display: block;
-}
-
-.knowledge-operations > summary strong {
-  margin-top: 3px;
 }
 
 .knowledge-operations > summary small,
@@ -3954,10 +4070,143 @@ watch(
 .eyebrow,
 .section-kicker {
   margin: 0;
-  color: #67e8f9;
+  color: var(--arena-grn);
   font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
+}
+
+.knowledge-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
+
+  button {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--arena-sub);
+    text-align: left;
+    cursor: pointer;
+
+    span {
+      color: var(--arena-ink);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    small {
+      overflow: hidden;
+      color: var(--arena-sub);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover,
+    &.is-active {
+      border-color: color-mix(in srgb, var(--arena-grn) 28%, var(--arena-line));
+      background: var(--arena-grn-soft);
+    }
+  }
+}
+
+.governance-panel-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px 0;
+  border-bottom: 1px solid var(--arena-line);
+  background: var(--arena-card);
+
+  button {
+    display: grid;
+    gap: 2px;
+    min-width: 116px;
+    padding: 9px 10px 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--arena-sub);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    span {
+      color: var(--arena-ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    small {
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    &:hover,
+    &:focus-visible,
+    &.is-active {
+      border-bottom-color: var(--arena-grn);
+      background: var(--arena-grn-soft);
+      outline: 0;
+    }
+  }
+}
+
+.governance-technical-details {
+  overflow: hidden;
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 46px;
+    padding: 0 14px;
+    color: var(--arena-ink);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: '展开';
+      color: var(--arena-sub);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--arena-grn);
+      outline-offset: -2px;
+    }
+  }
+
+  &[open] summary {
+    border-bottom: 1px solid var(--arena-line);
+
+    &::after {
+      content: '收起';
+    }
+  }
+}
+
+.governance-technical-details__body {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
 }
 
 .hero-actions {
@@ -3982,9 +4231,9 @@ watch(
 
 .rebuild-stat {
   padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--user-surface-muted);
 }
 
 .rebuild-stat span,
@@ -4002,9 +4251,9 @@ watch(
 
 .rebuild-errors {
   padding: 14px;
-  border: 1px solid rgba(248, 113, 113, 0.28);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.16);
+  border: 1px solid var(--user-danger-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-red-soft);
 }
 
 .rebuild-errors strong {
@@ -4036,9 +4285,9 @@ watch(
 .chunk-row,
 .duplicate-review-row,
 .version-row {
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .chunk-summary article {
@@ -4110,9 +4359,9 @@ watch(
 
 .similar-list article {
   padding: 10px;
-  border: 1px solid rgba(34, 197, 94, 0.22);
-  border-radius: 8px;
-  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid var(--user-success-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-grn-soft);
 }
 
 .similar-list strong,
@@ -4142,9 +4391,9 @@ watch(
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
 }
 
 .config-strip,
@@ -4152,9 +4401,9 @@ watch(
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.32);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--user-surface-muted);
 }
 
 .config-strip {
@@ -4163,8 +4412,8 @@ watch(
 
 .index-observability-strip {
   grid-template-columns: 1.4fr 1fr 1fr;
-  border-color: rgba(34, 197, 94, 0.24);
-  background: rgba(20, 83, 45, 0.1);
+  border-color: var(--user-success-border);
+  background: var(--arena-grn-soft);
 }
 
 .config-strip article,
@@ -4200,9 +4449,9 @@ watch(
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgba(20, 184, 166, 0.26);
-  border-radius: 8px;
-  background: rgba(15, 118, 110, 0.1);
+  border: 1px solid var(--user-success-border);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-grn-soft);
 }
 
 .governance-strip__head {
@@ -4238,9 +4487,9 @@ watch(
 .governance-grid article {
   min-width: 0;
   padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .governance-grid span,
@@ -4277,14 +4526,14 @@ watch(
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgba(59, 130, 246, 0.24);
-  border-radius: 8px;
-  background: rgba(30, 64, 175, 0.1);
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-vio-soft);
 }
 
 .governance-action-strip {
-  border-color: rgba(245, 158, 11, 0.24);
-  background: rgba(120, 53, 15, 0.1);
+  border-color: color-mix(in srgb, var(--arena-amber) 36%, var(--arena-line));
+  background: var(--arena-amber-soft);
 }
 
 .quality-gate-strip__head,
@@ -4330,9 +4579,9 @@ watch(
 .governance-action-list article {
   min-width: 0;
   padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .quality-gate-grid span,
@@ -4407,9 +4656,9 @@ watch(
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
-  border: 1px solid rgba(245, 158, 11, 0.28);
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid color-mix(in srgb, var(--arena-amber) 36%, var(--arena-line));
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-amber-soft);
 }
 
 .duplicate-review-strip strong,
@@ -4436,9 +4685,9 @@ watch(
 .duplicate-hotspot-strip article {
   min-width: 0;
   padding: 14px;
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.1);
+  border: 1px solid var(--user-danger-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-red-soft);
 }
 
 .duplicate-hotspot-strip span,
@@ -4481,9 +4730,9 @@ watch(
   justify-content: space-between;
   gap: 12px;
   padding: 14px;
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.12);
+  border: 1px solid var(--user-danger-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-red-soft);
 }
 
 .duplicate-cleanup-bar strong,
@@ -4534,6 +4783,10 @@ watch(
   align-items: flex-start;
 }
 
+.workspace-grid--single {
+  grid-template-columns: 1fr;
+}
+
 .main-stack,
 .side-stack {
   display: grid;
@@ -4578,9 +4831,9 @@ watch(
 .result-row,
 .reference-row,
 .answer-box {
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .result-row {
@@ -4614,8 +4867,8 @@ watch(
 .result-row p :deep(mark) {
   padding: 0 3px;
   border-radius: 4px;
-  color: #fef3c7;
-  background: rgba(245, 158, 11, 0.28);
+  color: var(--arena-ink);
+  background: var(--arena-amber-soft);
 }
 
 .matched-terms {
@@ -4630,9 +4883,9 @@ watch(
   gap: 12px;
   margin-bottom: 14px;
   padding: 14px;
-  border: 1px solid rgba(20, 184, 166, 0.24);
-  border-radius: 8px;
-  background: rgba(15, 118, 110, 0.12);
+  border: 1px solid var(--user-success-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-grn-soft);
 }
 
 .search-trace-panel__head {
@@ -4667,9 +4920,9 @@ watch(
 .search-trace-metrics article {
   min-width: 0;
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.24);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .search-trace-metrics small {
@@ -4700,9 +4953,9 @@ watch(
   gap: 12px;
   margin-bottom: 14px;
   padding: 14px;
-  border: 1px solid rgba(59, 130, 246, 0.26);
-  border-radius: 8px;
-  background: rgba(30, 64, 175, 0.14);
+  border: 1px solid var(--user-primary-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-vio-soft);
 }
 
 .knowledge-evaluation-panel__head {
@@ -4736,9 +4989,9 @@ watch(
 .knowledge-evaluation-grid article {
   min-width: 0;
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.26);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .knowledge-evaluation-grid strong {
@@ -4765,9 +5018,9 @@ watch(
   justify-content: space-between;
   gap: 16px;
   padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.24);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .influence-preview-summary span,
@@ -4827,9 +5080,9 @@ watch(
   gap: 12px;
   margin-bottom: 14px;
   padding: 14px;
-  border: 1px solid rgba(34, 197, 94, 0.24);
-  border-radius: 8px;
-  background: rgba(20, 83, 45, 0.1);
+  border: 1px solid var(--user-success-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-grn-soft);
 }
 
 .knowledge-eval-details .knowledge-eval-dataset {
@@ -4941,9 +5194,9 @@ watch(
 .knowledge-eval-failures article {
   min-width: 0;
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid var(--arena-line);
+  border-radius: var(--arena-radius-btn);
+  background: var(--arena-card);
 }
 
 .knowledge-eval-run-item {
@@ -4953,8 +5206,8 @@ watch(
 }
 
 .knowledge-eval-run-item:hover {
-  border-color: rgba(34, 197, 94, 0.42);
-  background: rgba(34, 197, 94, 0.1);
+  border-color: var(--user-success-border);
+  background: var(--arena-grn-soft);
 }
 
 .knowledge-eval-run-item strong {
@@ -5107,7 +5360,17 @@ watch(
     flex-direction: column;
   }
 
-  .knowledge-operations > summary,
+  .governance-panel-tabs {
+    overflow-x: auto;
+    padding-right: 10px;
+    padding-left: 10px;
+
+    button {
+      flex: 0 0 136px;
+    }
+  }
+
+  .governance-technical-details summary,
   .knowledge-eval-details > summary {
     align-items: flex-start;
     flex-direction: column;

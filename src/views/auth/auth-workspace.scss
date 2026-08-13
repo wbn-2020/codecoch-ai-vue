@@ -145,6 +145,94 @@
   background: rgba(148, 163, 184, 0.22);
 }
 
+// 方向 D 认证辅助页与登录门面统一为浅色竞技场；认证逻辑保持不变。
+.arena-auth.auth-page {
+  color: var(--arena-ink);
+  background:
+    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
+    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
+    var(--arena-bg);
+
+  .auth-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(21, 33, 27, 0.06);
+  }
+
+  .auth-card__brand {
+    min-height: 30px;
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--arena-grn), var(--arena-lime));
+    color: #ffffff;
+  }
+
+  .auth-card__intro {
+    h1 {
+      color: var(--arena-ink);
+      font-weight: 900;
+    }
+
+    p {
+      color: var(--arena-sub);
+    }
+  }
+
+  .auth-form {
+    :deep(.el-form-item__label) {
+      color: var(--arena-sub);
+      font-weight: 800;
+    }
+
+    :deep(.el-input__wrapper) {
+      border-radius: 13px;
+      background: #ffffff;
+      box-shadow: 0 0 0 1.5px var(--arena-line) inset;
+    }
+
+    :deep(.el-input__wrapper:hover) {
+      box-shadow: 0 0 0 1.5px #b9e7cd inset;
+    }
+
+    :deep(.el-input__wrapper.is-focus) {
+      box-shadow: 0 0 0 2px var(--arena-grn) inset;
+    }
+
+    :deep(.el-input__inner) {
+      color: var(--arena-ink);
+    }
+
+    :deep(.el-input__inner::placeholder) {
+      color: var(--arena-mut);
+    }
+  }
+
+  .auth-form__submit {
+    border-color: var(--arena-grn);
+    border-radius: var(--arena-radius-btn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .auth-tip {
+    border-color: var(--arena-line);
+    border-radius: 13px;
+    background: #f8faf8;
+    color: var(--arena-sub);
+  }
+
+  .auth-card__footer {
+    border-color: var(--arena-line);
+    color: var(--arena-sub);
+  }
+
+  .footer-divider {
+    background: var(--arena-line);
+  }
+}
+
 @media (max-width: 640px) {
   .auth-page {
     place-items: start center;

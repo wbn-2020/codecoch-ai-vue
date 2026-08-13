@@ -164,6 +164,13 @@ const mountHistory = async () => {
     }
   })
   await flushPromises()
+  await wrapper.find('[role="tab"][aria-selected="false"]').trigger('click')
+  await flushPromises()
+  const comparisonSummary = wrapper.find('details.comparison-panel summary')
+  if (comparisonSummary.exists()) {
+    await comparisonSummary.trigger('click')
+    await nextTick()
+  }
   return wrapper
 }
 
@@ -179,7 +186,7 @@ const selectFirstTwoCandidates = async (
 const clickCreateComparison = async (
   wrapper: Awaited<ReturnType<typeof mountHistory>>
 ) => {
-  const buttons = wrapper.find('.comparison-toolbar__actions').findAll('button')
+  const buttons = wrapper.find('.comparison-panel__actions').findAll('button')
   await buttons[buttons.length - 1].trigger('click')
   await nextTick()
 }

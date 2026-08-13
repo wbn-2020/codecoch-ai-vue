@@ -43,6 +43,9 @@ vi.mock('vue-router', async () => {
 })
 
 vi.mock('element-plus', () => ({
+  ElButton: {
+    template: '<button class="el-button-mock" v-bind="$attrs"><slot /></button>'
+  },
   ElMessage: {
     warning: ui.warning,
     success: ui.success,
@@ -215,7 +218,8 @@ describe('ApplicationWorkspaceView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Alex')
-    expect(wrapper.text()).toContain('还没有活动记录')
+    expect(wrapper.text()).toContain('活动台账')
+    expect(wrapper.text()).not.toContain('还没有活动记录')
     expect((wrapper.vm as unknown as {
       $: { setupState: { sectionErrors: Record<string, string> } }
     }).$.setupState.sectionErrors.contacts).toContain('联系人或活动来源部分不可用')

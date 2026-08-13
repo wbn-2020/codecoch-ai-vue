@@ -1,13 +1,13 @@
 <template>
-  <div class="v3-page">
-    <section class="page-hero">
+  <div class="arena arena-match-detail v3-page">
+    <section v-if="!isSuccessReport" class="page-hero">
       <div>
         <div class="hero-kicker"><FileChartColumn :size="16" /> 匹配报告</div>
         <h1>{{ report?.jobTitle || '匹配报告详情' }}</h1>
         <p>{{ report ? reportSubtitle : '读取匹配报告、失败原因与短板建议。' }}</p>
       </div>
       <div class="hero-actions">
-        <el-button @click="router.push({ path: '/resume-match', query: returnMatchQuery })"><ArrowLeft :size="16" /> 返回实验台</el-button>
+        <el-button @click="router.push({ path: '/resume-match', query: returnMatchQuery })"><ArrowLeft :size="16" /> 新建匹配</el-button>
         <el-button :loading="loading" @click="loadReport"><RefreshCw :size="16" /> 刷新</el-button>
       </div>
     </section>
@@ -20,9 +20,9 @@
       <AppState
         type="empty"
         title="没有可验证的 JD 匹配报告"
-        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到实验台选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
+        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到岗位匹配选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
       >
-        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">回实验台生成报告</el-button>
+        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">返回岗位匹配生成报告</el-button>
         <el-button @click="goMatchTaskCenter">查看任务中心</el-button>
         <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
       </AppState>
@@ -40,29 +40,33 @@
             <el-button type="primary" :loading="regenerating" @click="regenerateReport">
               <RefreshCw :size="16" /> 重新生成匹配报告
             </el-button>
-            <el-button plain @click="copyDiagnostic">
-              复制处理线索
-            </el-button>
-            <el-button plain @click="goMatchTaskCenter">
-              查看任务中心
-            </el-button>
+            <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">返回匹配</el-button>
           </div>
         </div>
-        <dl class="diagnostic-list">
-          <div v-for="item in diagnosticItems" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+        <details class="failure-details">
+          <summary>查看处理线索与可选修复</summary>
+          <div class="failure-details__body">
+            <div class="failure-details__actions">
+              <el-button plain @click="copyDiagnostic">复制处理线索</el-button>
+              <el-button plain @click="goMatchTaskCenter">查看任务中心</el-button>
+            </div>
+            <dl class="diagnostic-list">
+              <div v-for="item in diagnosticItems" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+            <div class="repair-actions">
+              <article v-for="item in failureRepairActions" :key="item.key">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.desc }}</p>
+                <el-button size="small" :type="item.primary ? 'primary' : ''" :plain="!item.primary" :loading="item.key === 'regenerate' && regenerating" @click="runFailureRepairAction(item.key)">
+                  {{ item.action }}
+                </el-button>
+              </article>
+            </div>
           </div>
-        </dl>
-        <div class="repair-actions">
-          <article v-for="item in failureRepairActions" :key="item.key">
-            <strong>{{ item.title }}</strong>
-            <p>{{ item.desc }}</p>
-            <el-button size="small" :type="item.primary ? 'primary' : ''" :plain="!item.primary" :loading="item.key === 'regenerate' && regenerating" @click="runFailureRepairAction(item.key)">
-              {{ item.action }}
-            </el-button>
-          </article>
-        </div>
+        </details>
       </section>
       <section v-else-if="isTrackingReport" class="content-panel report-tracker">
         <div>
@@ -79,6 +83,129 @@
         </div>
       </section>
 
+      <section v-if="isSuccessReport && report" class="arena-match-settlement">
+        <header class="arena-match-settlement__head">
+          <div>
+            <span class="arena-match-settlement__kicker">岗位匹配 · 结果概览</span>
+            <h2>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h2>
+          </div>
+          <div class="arena-match-settlement__head-actions">
+            <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
+          </div>
+        </header>
+
+        <div class="arena-match-settlement__result-column">
+          <div class="arena-match-settlement__summary">
+            <div
+              class="arena-ring arena-match-settlement__ring"
+              :style="{
+                background: `conic-gradient(var(--arena-grn) 0 ${overallScorePercent}%, var(--arena-line) ${overallScorePercent}% 100%)`
+              }"
+            >
+              <div class="arena-ring__hole">
+                <b>{{ overallScoreText }}</b>
+                <span>综合匹配度</span>
+              </div>
+            </div>
+
+            <div class="arena-match-settlement__copy">
+              <h3>{{ report.companyName || '目标岗位' }} · {{ report.jobTitle || '岗位待确认' }}</h3>
+              <p>{{ overviewConclusion.desc }}</p>
+              <small>{{ report.resumeTitle || '已绑定简历' }} · {{ reportResumeVersionLabel || '当前版本' }}</small>
+              <div class="arena-match-settlement__trust">
+                <el-tag v-for="tag in reportTrustTags.slice(0, 3)" :key="tag.label" :type="tag.type" effect="plain">
+                  {{ tag.label }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+
+          <section class="arena-match-settlement__reconciliation">
+            <div class="arena-match-settlement__reconciliation-head">
+              <div>
+                <span>关键词对账</span>
+                <h3>已覆盖与待补维度</h3>
+              </div>
+              <small>{{ gapDetailCount ? `还差 ${gapDetailCount} 项` : (report.details?.length ? '当前无待补维度' : '暂无维度明细，不能推断覆盖情况') }}</small>
+            </div>
+            <div class="arena-match-settlement__keywords">
+              <section>
+                <span>已形成匹配证据</span>
+                <div>
+                  <el-tag v-for="item in coverageDetails.covered" :key="item.id" type="success" effect="plain">
+                    {{ detailKeywordLabel(item) }}
+                  </el-tag>
+                  <small v-if="!coverageDetails.covered.length">暂无可确认的高覆盖维度</small>
+                </div>
+              </section>
+              <section>
+                <span>待补维度</span>
+                <div>
+                  <el-tag v-for="item in coverageDetails.gaps" :key="item.id" type="warning" effect="plain">
+                    {{ detailKeywordLabel(item) }}
+                  </el-tag>
+                  <small v-if="!coverageDetails.gaps.length">当前明细未标记待补维度</small>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+
+        <aside class="arena-match-settlement__right-rail">
+          <section class="arena-match-settlement__action">
+            <span>推荐下一步</span>
+            <strong>{{ primaryNextAction.title }}</strong>
+            <p>{{ primaryNextAction.desc }}</p>
+            <el-button
+              type="primary"
+              :disabled="primaryNextAction.disabled"
+              :loading="primaryNextAction.key === 'profile' && profileGenerating"
+              @click="runPrimaryNextAction"
+            >
+              {{ primaryNextAction.action }}
+            </el-button>
+          </section>
+
+          <section class="arena-match-settlement__secondary">
+            <span class="arena-match-settlement__secondary-label">还可以</span>
+            <button
+              v-if="report.resumeId"
+              class="arena-match-settlement__secondary-action"
+              type="button"
+              @click="router.push(`/resumes/${report.resumeId}/edit`)"
+            >
+              <span>补简历</span>
+              <strong>回到简历工作台补齐项目证据</strong>
+            </button>
+            <button
+              class="arena-match-settlement__secondary-action"
+              type="button"
+              :disabled="!isTrustedSuccessReport"
+              @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: report.targetJobId, resumeId: report.resumeId, matchReportId: report.reportId, ...(report.resumeVersionId ? { resumeVersionId: report.resumeVersionId } : {}) } })"
+            >
+              <span>直接开练</span>
+              <strong>用当前 JD 发起一场押题面试</strong>
+            </button>
+          </section>
+
+          <details class="arena-match-settlement__evidence">
+            <summary>AI 匹配依据</summary>
+            <p>{{ trustPanelDescription }}</p>
+          </details>
+        </aside>
+      </section>
+
+      <details v-if="isSuccessReport" class="arena-match-detail__more">
+        <summary>报告依据与详细指标</summary>
+        <div class="arena-match-detail__more-body">
+          <div class="arena-match-detail__more-actions">
+            <el-button plain @click="router.push({ path: '/resume-match', query: returnMatchQuery })">
+              <ArrowLeft :size="16" /> 新建匹配
+            </el-button>
+            <el-button :loading="loading" @click="loadReport">
+              <RefreshCw :size="16" /> 刷新报告
+            </el-button>
+          </div>
       <section v-if="showReportOverview" class="report-overview">
         <article class="overview-main content-panel">
           <div class="overview-score">
@@ -117,15 +244,15 @@
         </article>
       </section>
 
-      <section v-if="isSuccessReport && hasAnyDimensionScore" class="score-grid">
+      <section v-if="isTrustedSuccessReport && hasAnyDimensionScore" class="score-grid arena-match-detail__secondary-content">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
-          <el-progress :percentage="Number(item.value || 0)" :stroke-width="8" :show-text="false" />
+          <el-progress :percentage="scorePercent(item.value)" :stroke-width="8" :show-text="false" />
         </article>
       </section>
 
-      <section v-if="isSuccessReport" class="content-panel trust-panel">
+      <section v-if="isSuccessReport" class="content-panel trust-panel arena-match-detail__secondary-content">
         <div>
           <h2>AI 推荐来源</h2>
           <p>{{ trustPanelDescription }}</p>
@@ -135,7 +262,7 @@
         </div>
       </section>
 
-      <section v-if="schemaWarningItems.length" class="content-panel schema-warning-panel">
+      <section v-if="schemaWarningItems.length" class="content-panel schema-warning-panel arena-match-detail__secondary-content">
         <div class="section-head">
           <div>
             <h2>内容待确认</h2>
@@ -151,7 +278,7 @@
         </ul>
       </section>
 
-      <section v-if="isSuccessReport" class="detail-grid">
+      <section v-if="isSuccessReport" class="detail-grid arena-match-detail__secondary-content">
         <div class="content-panel">
           <div class="section-head">
             <div><h2>报告摘要</h2><p>{{ report.summary || '暂无摘要。' }}</p></div>
@@ -237,7 +364,7 @@
         </aside>
       </section>
 
-      <section v-if="isSuccessReport" class="content-panel">
+      <section v-if="isSuccessReport" class="content-panel arena-match-detail__secondary-content">
         <div class="section-head">
           <div><h2>维度诊断</h2><p>按技能维度看风险、证据和下一步动作。</p></div>
         </div>
@@ -265,6 +392,8 @@
         </div>
         <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
       </section>
+        </div>
+      </details>
     </template>
   </div>
 </template>
@@ -281,7 +410,8 @@ import { createApplicationApi, createResumeVersionApi, getApplicationsApi } from
 import AppState from '@/components/common/AppState.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import { appConfig } from '@/config'
-import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
+import { useGameProfileStore } from '@/features/game-profile'
+import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import { redactSensitiveText } from '@/utils/sensitiveText'
@@ -294,7 +424,27 @@ const regenerating = ref(false)
 const versionSaving = ref(false)
 const applicationCreating = ref(false)
 const loadError = ref('')
+const REPORT_LOAD_TIMEOUT_MS = 15000
+
+const withReportLoadTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('匹配报告读取超时，请稍后重试。'))
+    }, REPORT_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const report = ref<ResumeJobMatchReportDetailVO | null>(null)
+const gameProfile = useGameProfileStore()
 let reportPollTimer: ReturnType<typeof setTimeout> | undefined
 let reportPollRetryCount = 0
 let reportPollFailureNoticeShown = false
@@ -340,13 +490,19 @@ function firstReadableSnippet(value: unknown, fallback = ''): string {
 }
 
 const hasUsableScore = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return false
   const score = Number(value)
-  return Number.isFinite(score) && score > 0
+  return Number.isFinite(score)
 }
 
-const dimensionScoreText = (value?: number) => hasUsableScore(value) ? `${value} 分` : '待确认'
+const scorePercent = (value: unknown) => {
+  if (!hasUsableScore(value)) return 0
+  return Math.min(100, Math.max(0, Number(value)))
+}
+const dimensionScoreText = (value?: number) =>
+  isTrustedSuccessReport.value && hasUsableScore(value) ? `${value} 分` : '待复核'
 const dimensionTone = (value?: number) => {
-  if (!hasUsableScore(value)) return 'info'
+  if (!isTrustedSuccessReport.value || !hasUsableScore(value)) return 'info'
   if (Number(value) >= 80) return 'success'
   if (Number(value) >= 60) return 'warning'
   return 'danger'
@@ -364,9 +520,9 @@ const isUnscorableReport = computed(() => {
 })
 const isTrustedSuccessReport = computed(() =>
   isSuccessReport.value
-  && !report.value?.fallback
-  && String(report.value?.trustStatus || '').toUpperCase() === 'VERIFIED'
-  && !schemaWarningItems.value.length
+  && report.value?.trustStatus === 'VERIFIED'
+  && report.value?.fallback !== true
+  && report.value?.schemaWarningCount === 0
 )
 const canAccessResumeVersionPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
 const canAccessApplicationPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
@@ -379,12 +535,14 @@ const returnMatchQuery = computed(() => {
   const current = report.value
   if (current) {
     return compactQuery({
+      new: '1',
       resumeId: current.resumeId ? String(current.resumeId) : undefined,
       targetJobId: current.targetJobId ? String(current.targetJobId) : undefined,
       resumeVersionId: current.resumeVersionId ? String(current.resumeVersionId) : undefined
     })
   }
   return compactQuery({
+    new: '1',
     resumeId: typeof route.query.resumeId === 'string' ? route.query.resumeId : undefined,
     targetJobId: typeof route.query.targetJobId === 'string' ? route.query.targetJobId : undefined,
     resumeVersionId: typeof route.query.resumeVersionId === 'string' ? route.query.resumeVersionId : undefined
@@ -409,16 +567,46 @@ const trustPanelDescription = computed(() =>
     ? '这份匹配报告已绑定简历版本快照、目标岗位描述和岗位分析结果；如果来源或明细不完整，后续建议会先标记为待复核。'
     : '这份匹配报告基于当前简历、目标岗位描述和岗位分析结果生成；如果来源或明细不完整，后续建议会先标记为待复核。'
 )
-const showReportOverview = computed(() => Boolean(report.value && (isSuccessReport.value || isUnscorableReport.value)))
+const showReportOverview = computed(() => Boolean(report.value && isUnscorableReport.value))
 const overallScoreText = computed(() => {
+  if (!isTrustedSuccessReport.value) return '待复核'
   const score = report.value?.overallScore
   return hasUsableScore(score) ? `${score}` : '未形成评分'
 })
+const overallScorePercent = computed(() =>
+  isTrustedSuccessReport.value ? scorePercent(report.value?.overallScore) : 0
+)
+const detailKeywordLabel = (item: ResumeJobMatchDetailItemVO) =>
+  item.skillName || item.dimension || '待确认维度'
+const coverageDetails = computed(() => {
+  const details = report.value?.details || []
+  if (!isTrustedSuccessReport.value) {
+    return {
+      covered: [],
+      gaps: details
+        .filter((item) => Boolean(item.gapDescription?.trim()))
+        .slice(0, 6)
+    }
+  }
+  return {
+    covered: details
+      .filter((item) => hasUsableScore(item.score) && Number(item.score) >= 75)
+      .slice(0, 6),
+    gaps: details
+      .filter((item) => Boolean(item.gapDescription?.trim()) || (hasUsableScore(item.score) && Number(item.score) < 75))
+      .slice(0, 6)
+  }
+})
+const gapDetailCount = computed(() => (report.value?.details || []).filter(
+  (item) => Boolean(item.gapDescription?.trim())
+    || (isTrustedSuccessReport.value && hasUsableScore(item.score) && Number(item.score) < 75)
+).length)
 const scoreEvidenceText = computed(() => {
   if (isUnscorableReport.value) return '本次报告未形成可信评分，页面不会补造分数。'
   if (!isSuccessReport.value) return '报告生成完成后才会显示评分。'
+  if (!isTrustedSuccessReport.value) return '当前报告未通过可信校验，数字评分不作为结论。'
   if (!hasUsableScore(report.value?.overallScore)) return '后端未返回可信综合分，页面不会补造分数。'
-  return trustStatusLabel(report.value?.trustStatus, report.value?.fallback)
+  return `综合匹配度来自报告返回的 overallScore；${trustStatusLabel(report.value?.trustStatus, report.value?.fallback)}`
 })
 const overviewConclusion = computed((): { label: string; title: string; desc: string; type: OverviewTone } => {
   if (isUnscorableReport.value) {
@@ -561,7 +749,7 @@ const failureRepairActions = computed(() => {
   ] as Array<{ key: string; title: string; desc: string; action: string; primary: boolean }>
 })
 const scoreCards = computed(() => [
-  { label: '综合匹配', value: report.value?.overallScore },
+  { label: '综合匹配度', value: report.value?.overallScore },
   { label: '技术栈', value: report.value?.techStackScore },
   { label: '项目经验', value: report.value?.projectExperienceScore },
   { label: '业务契合', value: report.value?.businessFitScore },
@@ -599,10 +787,12 @@ const reportInsightCards = computed(() => [
 ] as Array<{ key: string; label: string; title: string; desc: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }>)
 const reportTrustTags = computed(() => {
   if (!report.value) return []
-  const hasScore = Number.isFinite(Number(report.value.overallScore)) && Number(report.value.overallScore) > 0
+  const hasScore = isTrustedSuccessReport.value && hasUsableScore(report.value.overallScore)
   return [
     {
-      label: report.value.evidenceSummary || '推荐来源待确认',
+      label: report.value.evidenceSummary
+        ? (report.value.fallback ? '匹配依据待复核' : '匹配依据已记录')
+        : '推荐来源待确认',
       type: trustStatusType(report.value.trustStatus, report.value.fallback ? 'warning' : 'info')
     },
     {
@@ -826,6 +1016,12 @@ const DataBlock = defineComponent({
   }
 })
 
+const grantTrustedReportXp = () => {
+  const current = report.value
+  if (!current?.reportId || !isTrustedSuccessReport.value) return
+  gameProfile.grantXpOnce('jd_cover_boost', `resume-match-report:${current.reportId}:jd-cover-boost`)
+}
+
 const loadReport = async (silent = false) => {
   if (!reportId.value) {
     loadError.value = '报告记录无效。'
@@ -836,7 +1032,8 @@ const loadReport = async (silent = false) => {
     loadError.value = ''
   }
   try {
-    report.value = await getResumeJobMatchReportDetailApi(reportId.value)
+    report.value = await withReportLoadTimeout(getResumeJobMatchReportDetailApi(reportId.value))
+    grantTrustedReportXp()
     reportPollRetryCount = 0
     reportPollFailureNoticeShown = false
     loadError.value = ''
@@ -1126,7 +1323,7 @@ onBeforeUnmount(stopReportPoll)
 
 <style scoped lang="scss">
 .v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
+.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface, var(--app-surface)); }
 .page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
 .hero-kicker, .hero-actions, .section-head, .section-actions { display: flex; align-items: center; gap: 10px; }
 .hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
@@ -1142,17 +1339,26 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .failure-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .failure-actions h2 { font-size: 18px; }
 .failure-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.failure-details { overflow: hidden; border: 1px solid var(--app-border); border-radius: 10px; background: var(--app-surface); }
+.failure-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 14px; color: var(--app-text); cursor: pointer; font-size: 13px; font-weight: 800; list-style: none; }
+.failure-details > summary::-webkit-details-marker { display: none; }
+.failure-details > summary::after { content: '展开'; color: var(--app-text-muted); font-size: 12px; }
+.failure-details[open] > summary { border-bottom: 1px solid var(--app-border); }
+.failure-details[open] > summary::after { content: '收起'; }
+.failure-details > summary:focus-visible { outline: 2px solid var(--app-primary); outline-offset: -2px; }
+.failure-details__body { display: grid; gap: 12px; padding: 14px; }
+.failure-details__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .diagnostic-list { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; margin: 0; }
-.diagnostic-list div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.diagnostic-list div { min-width: 0; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .diagnostic-list dt { color: var(--app-text-muted); font-size: 12px; }
 .diagnostic-list dd { margin: 6px 0 0; color: var(--app-text); overflow-wrap: anywhere; }
 .repair-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.repair-actions article { display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .repair-actions strong { font-size: 14px; }
 .repair-actions p { margin: 0; font-size: 12px; line-height: 1.6; }
 .report-overview { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); gap: 14px; align-items: stretch; }
 .overview-main { display: grid; grid-template-columns: minmax(150px, 0.34fr) minmax(0, 0.66fr); gap: 16px; align-items: center; background: rgba(30, 64, 175, 0.12); }
-.overview-score { display: grid; gap: 6px; padding: 18px; border: 1px solid rgba(37, 99, 235, 0.28); border-radius: 8px; background: rgba(15, 23, 42, 0.24); }
+.overview-score { display: grid; gap: 6px; padding: 18px; border: 1px solid var(--user-primary-border); border-radius: 14px; background: var(--user-primary-faint); }
 .overview-score span, .overview-score small, .overview-action span, .insight-card span { color: var(--app-text-muted); font-size: 12px; }
 .overview-score strong { font-size: 34px; line-height: 1.05; overflow-wrap: anywhere; }
 .overview-score small { line-height: 1.5; }
@@ -1168,8 +1374,8 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .insight-card--success { border-color: rgba(22, 163, 74, 0.34); background: rgba(22, 163, 74, 0.07); }
 .insight-card--warning { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); }
 .insight-card--danger { border-color: rgba(239, 68, 68, 0.34); background: rgba(239, 68, 68, 0.07); }
-.insight-card--neutral { background: rgba(15, 23, 42, 0.2); }
-.score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.42); }
+.insight-card--neutral { background: var(--user-surface-muted, var(--app-surface-raised)); }
+.score-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); overflow: hidden; border: 1px solid var(--app-border); border-radius: 14px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .score-card { padding: 12px 14px; border-right: 1px solid var(--app-border); background: transparent; box-shadow: none; }
 .score-card:last-child { border-right: 0; }
 .score-card span { color: var(--app-text-muted); font-size: 13px; }
@@ -1185,13 +1391,13 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .section-head { justify-content: space-between; margin-bottom: 16px; }
 .section-actions { flex-wrap: wrap; justify-content: flex-end; }
 .json-sections { display: grid; gap: 14px; }
-.data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); }
+.data-block { padding: 14px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .data-block h3 { font-size: 15px; }
 .data-block__details { margin-top: 10px; }
 .data-block__details summary { cursor: pointer; color: var(--app-primary); font-size: 13px; font-weight: 700; }
 .data-block pre { margin: 10px 0 0; white-space: pre-wrap; color: var(--app-text); line-height: 1.7; }
 .dimension-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.22); }
+.dimension-card { min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--user-surface-muted, var(--app-surface-raised)); }
 .dimension-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .dimension-card__head span { color: var(--app-text-muted); font-size: 12px; }
 .dimension-card__head h3 { margin-top: 4px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
@@ -1200,7 +1406,36 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .dimension-card dt { color: var(--app-text-muted); font-size: 12px; }
 .dimension-card dd { margin: 4px 0 0; color: var(--app-text); line-height: 1.65; overflow-wrap: anywhere; }
 .action-panel { display: flex; flex-direction: column; gap: 12px; align-self: start; }
-@media (max-width: 1080px) { .score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .score-card:nth-child(3) { border-right: 0; } .score-card:nth-child(-n + 3) { border-bottom: 1px solid var(--app-border); } .detail-grid, .report-overview { grid-template-columns: 1fr 1fr; } .overview-main { grid-column: 1 / -1; } }
+@media (max-width: 1080px) {
+  .diagnostic-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .repair-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .score-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .score-card:nth-child(3) {
+    border-right: 0;
+  }
+
+  .score-card:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .detail-grid,
+  .report-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .overview-main {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 760px) {
   .page-hero,
   .detail-grid,
@@ -1239,6 +1474,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   .hero-actions,
   .section-head,
   .failure-buttons,
+  .failure-details__actions,
   .tracker-actions,
   .overview-action__buttons {
     display: grid;
@@ -1252,6 +1488,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .hero-actions :deep(.el-button),
   .failure-buttons :deep(.el-button),
+  .failure-details__actions :deep(.el-button),
   .tracker-actions :deep(.el-button),
   .overview-action__buttons :deep(.el-button),
   .action-panel :deep(.el-button) {
@@ -1267,6 +1504,600 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 
   .trust-tags {
     justify-content: flex-start;
+  }
+}
+
+// 方向 D · JD 匹配详情。保留报告证据、重跑和训练动作，只统一视觉层级。
+.arena-match-detail {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
+
+  .page-hero,
+  .content-panel,
+  .report-tracker,
+  .report-overview > *,
+  .score-card,
+  .dimension-card,
+  .insight-card,
+  .data-block,
+  .action-panel,
+  .failure-panel {
+    border-color: var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  }
+
+  .arena-match-settlement {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    gap: 18px 20px;
+  }
+
+  .arena-match-settlement__head,
+  .arena-match-settlement__summary,
+  .arena-match-settlement__keywords,
+  .arena-match-settlement__keywords section,
+  .arena-match-settlement__trust,
+  .arena-match-settlement__head-actions,
+  .arena-match-settlement__head-actions > div {
+    display: flex;
+  }
+
+  .arena-match-settlement__head {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--arena-ink);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.3;
+    }
+  }
+
+  .arena-match-settlement__kicker {
+    color: var(--arena-grn-d);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .arena-match-settlement__status {
+    flex: none;
+    max-width: 280px;
+    color: var(--arena-sub);
+    font-size: 12px;
+    line-height: 1.55;
+    text-align: right;
+  }
+
+  .arena-match-settlement__head-actions {
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .arena-match-settlement__head-actions > div {
+    gap: 8px;
+
+    :deep(.el-button) {
+      margin-left: 0;
+    }
+  }
+
+  .arena-match-settlement__summary {
+    align-items: center;
+    gap: 18px;
+    padding: 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .arena-match-settlement__result-column {
+    display: grid;
+    grid-column: 1;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .arena-match-settlement__ring {
+    flex: none;
+    width: 116px;
+    height: 116px;
+
+    .arena-ring__hole {
+      width: 88px;
+      height: 88px;
+
+      b {
+        font-size: 28px;
+      }
+
+      span {
+        color: var(--arena-sub);
+        font-size: 10px;
+        font-weight: 800;
+      }
+    }
+  }
+
+  .arena-match-settlement__copy {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 7px;
+    min-width: 0;
+
+    h3 {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 16px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    p,
+    small {
+      margin: 0;
+      color: var(--arena-sub);
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+
+    p {
+      font-size: 13px;
+    }
+
+    small {
+      font-size: 11px;
+    }
+  }
+
+  .arena-match-settlement__trust {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+
+  .arena-match-settlement__trust :deep(.el-tag) {
+    max-width: 100%;
+  }
+
+  .arena-match-settlement__trust :deep(.el-tag__content) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .arena-match-settlement__right-rail {
+    display: grid;
+    grid-column: 2;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .arena-match-settlement__action {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1.5px solid #b9e7cd;
+    border-radius: 14px;
+    background: #f5fcf7;
+
+    > span {
+      color: var(--arena-grn-d);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 14px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
+
+  .arena-match-settlement__reconciliation {
+    display: grid;
+    gap: 13px;
+    padding: 18px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 16px;
+    background: #ffffff;
+  }
+
+  .arena-match-settlement__reconciliation-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+
+    > div {
+      min-width: 0;
+    }
+
+    span,
+    small {
+      display: block;
+      color: var(--arena-sub);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    h3 {
+      margin: 4px 0 0;
+      color: var(--arena-ink);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    small {
+      flex: none;
+      color: var(--arena-amber);
+      text-align: right;
+    }
+  }
+
+  .arena-match-settlement__keywords {
+    gap: 12px;
+
+    section {
+      flex: 1 1 0;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+      padding: 0;
+
+      > span {
+        color: var(--arena-sub);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      small {
+        color: var(--arena-mut);
+        font-size: 11px;
+      }
+    }
+  }
+
+  .arena-match-settlement__secondary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 14px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .arena-match-settlement__secondary-label {
+    margin-bottom: 5px;
+    color: var(--arena-ink);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .arena-match-settlement__secondary-action {
+    min-width: 0;
+    padding: 9px 0;
+    border: 0;
+    border-bottom: 1px solid var(--arena-line);
+    background: transparent;
+    color: var(--arena-ink);
+    text-align: left;
+    cursor: pointer;
+
+    &:not(:disabled):hover,
+    &:not(:disabled):focus-visible {
+      color: var(--arena-grn-d);
+      outline: 0;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    span,
+    strong {
+      display: block;
+    }
+
+    span {
+      color: var(--arena-grn-d);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    strong {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+  }
+
+  .arena-match-settlement__evidence {
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1.5px solid #d7ccff;
+    border-radius: 14px;
+    border-color: #d7ccff;
+    background: #fbfaff;
+
+    summary {
+      color: var(--arena-vio);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    p {
+      margin: 8px 0 0;
+      color: var(--arena-sub);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+  }
+
+  .arena-match-detail__secondary-content {
+    margin-top: 0;
+  }
+
+  .arena-match-detail__more {
+    overflow: hidden;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: #ffffff;
+    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 52px;
+      padding: 0 18px;
+      color: var(--arena-ink);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary::after {
+      content: '+';
+      color: var(--arena-grn-d);
+      font-size: 18px;
+    }
+
+    &[open] > summary::after {
+      content: '-';
+    }
+  }
+
+  .arena-match-detail__more-body {
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+    border-top: 1px solid var(--arena-line);
+  }
+
+  .arena-match-detail__more-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+
+    :deep(.el-button) {
+      margin-left: 0;
+    }
+  }
+
+  .page-hero {
+    border: 1.5px solid #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  h1,
+  h2,
+  h3,
+  strong {
+    color: var(--arena-ink);
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 900;
+  }
+
+  p,
+  .hero-kicker,
+  .score-card span,
+  .dimension-card__head span,
+  .report-tracker p,
+  .overview-score span,
+  .overview-score small,
+  .overview-action span,
+  .insight-card span,
+  .schema-warning-list span,
+  .dimension-card dt {
+    color: var(--arena-sub);
+  }
+
+  .hero-kicker {
+    color: var(--arena-grn-d);
+    font-weight: 800;
+  }
+
+  .overview-main,
+  .overview-score {
+    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  .overview-score strong {
+    color: var(--arena-grn-d);
+  }
+
+  .overview-action,
+  .insight-card--success {
+    border-color: #b9e7cd;
+    background: #f5fcf7;
+  }
+
+  .insight-card--warning,
+  .failure-panel {
+    border-color: #f3ddc0;
+    background: #fffaf2;
+  }
+
+  .insight-card--danger {
+    border-color: #f4c3c5;
+    background: #fff6f6;
+  }
+
+  .insight-card--neutral,
+  .data-block,
+  .dimension-card,
+  .repair-actions article {
+    background: #f8faf8;
+  }
+
+  .score-grid {
+    border-color: var(--arena-line);
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .score-card {
+    background: transparent;
+
+    strong {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  .dimension-card__evidence {
+    background: var(--arena-grn-soft);
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
+    font-weight: 800;
+  }
+}
+
+@media (max-width: 760px) {
+  .arena-match-detail {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .arena-match-settlement {
+      grid-template-columns: 1fr;
+    }
+
+    .arena-match-settlement__head,
+    .arena-match-settlement__summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .arena-match-settlement__status {
+      max-width: none;
+      text-align: left;
+    }
+
+    .arena-match-settlement__head-actions {
+      align-items: stretch;
+    }
+
+    .arena-match-settlement__head-actions > div {
+      display: grid;
+      grid-template-columns: 1fr;
+
+      :deep(.el-button) {
+        width: 100%;
+      }
+    }
+
+    .arena-match-settlement__ring {
+      align-self: center;
+      justify-self: center;
+    }
+
+    .arena-match-settlement__summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: stretch;
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .arena-match-settlement__copy {
+      width: 100%;
+    }
+
+    .arena-match-settlement__trust :deep(.el-tag) {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .arena-match-settlement__result-column,
+    .arena-match-settlement__right-rail {
+      grid-column: 1;
+    }
+
+    .arena-match-settlement__keywords {
+      flex-direction: column;
+    }
+
+    .arena-match-settlement__reconciliation-head {
+      align-items: flex-start;
+    }
+
+    .arena-match-detail__more-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+
+      :deep(.el-button) {
+        width: 100%;
+      }
+    }
   }
 }
 </style>

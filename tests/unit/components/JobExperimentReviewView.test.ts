@@ -5,13 +5,14 @@ import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api
 import JobExperimentReviewView from '@/views/job-experiment/JobExperimentReviewView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
+const routerReplace = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     params: { id: '9' },
     query: { demoFlag: 'true' }
   }),
-  useRouter: () => ({ push: routerPush })
+  useRouter: () => ({ push: routerPush, replace: routerReplace })
 }))
 
 vi.mock('@/api/jobExperiment', () => ({
@@ -125,10 +126,25 @@ const mountReview = async () => {
   return wrapper
 }
 
+const openReviewMaterials = async (
+  wrapper: Awaited<ReturnType<typeof mountReview>>,
+  tab: 'facts' | 'actionEvidence' = 'facts'
+) => {
+  const openButton = wrapper.findAll('.el-button-stub').find((button) => button.text().includes('查看完整材料'))
+  expect(openButton).toBeDefined()
+  await openButton!.trigger('click')
+  await flushPromises()
+
+  const vm = wrapper.vm as typeof wrapper.vm & { activeReviewTab: string }
+  vm.activeReviewTab = tab
+  await flushPromises()
+}
+
 describe('JobExperimentReviewView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     routerPush.mockResolvedValue(undefined)
+    routerReplace.mockResolvedValue(undefined)
     vi.mocked(generateJobExperimentReviewApi).mockResolvedValue({
       id: 301,
       experimentId: 9
@@ -179,14 +195,20 @@ describe('JobExperimentReviewView', () => {
 
     const wrapper = await mountReview()
 
-    expect(wrapper.text()).toContain('事实摘要')
-    expect(wrapper.text()).toContain('样本限制')
-    expect(wrapper.text()).toContain('不支持结论')
+    expect(wrapper.text()).toContain('结论摘要')
+    expect(wrapper.text()).toContain('判断边界')
+    expect(wrapper.text()).toContain('完整复盘材料')
+
+    await openReviewMaterials(wrapper, 'facts')
+    expect(wrapper.text()).toContain('暂不支持的判断')
     expect(wrapper.text()).toContain('证据来源')
-    expect(wrapper.text()).toContain('下一步行动')
+    expect(wrapper.text()).toContain('下一步')
     expect(wrapper.text()).toContain('低置信度')
     expect(wrapper.text()).toContain('FACTS_ONLY')
     expect(wrapper.text()).toContain('不能得出项目证据版本显著优于其他版本的结论。')
+
+    await openReviewMaterials(wrapper, 'actionEvidence')
+    expect(wrapper.text()).toContain('行动记录')
     expect(wrapper.text()).toContain('WEAK')
     expect(wrapper.text()).toContain('Agent 今日任务')
     expect(wrapper.text()).toContain('简历')
@@ -222,6 +244,7 @@ describe('JobExperimentReviewView', () => {
 
     const wrapper = await mountReview()
     await wrapper.findAll('.el-button-stub')[0].trigger('click')
+    await openReviewMaterials(wrapper, 'actionEvidence')
     await wrapper.findAll('.el-button-stub').find((button) => button.text() === 'Agent 今日任务')?.trigger('click')
 
     expect(routerPush).toHaveBeenCalledWith('/job-experiments/9?demoFlag=true')
@@ -271,7 +294,7 @@ describe('JobExperimentReviewView', () => {
 
     const wrapper = await mountReview()
 
-    expect(wrapper.text()).toContain('可作为候选判断')
+    expect(wrapper.text()).toContain('可以形成候选判断')
     expect(wrapper.text()).toContain('高置信度')
     expect(wrapper.text()).toContain('样本可用于高置信复盘')
     expect(wrapper.text()).toContain('不能完全归因到单一因素')
@@ -387,6 +410,7 @@ describe('JobExperimentReviewView', () => {
     }))
 
     const wrapper = await mountReview()
+    await openReviewMaterials(wrapper, 'facts')
 
     expect(wrapper.text()).toContain('SERVER_LOW_FACT')
     expect(wrapper.text()).toContain('FACTS_ONLY')
@@ -400,6 +424,7 @@ describe('JobExperimentReviewView', () => {
     vi.mocked(getJobExperimentDetailApi).mockResolvedValue(reviewDetail())
 
     const wrapper = await mountReview()
+    await openReviewMaterials(wrapper, 'actionEvidence')
 
     expect(wrapper.find('.suggestion-evidence-panel-stub').exists()).toBe(true)
     expect(wrapper.find('.suggestion-title').text()).toContain('继续收集同方向样本')
@@ -412,6 +437,7 @@ describe('JobExperimentReviewView', () => {
     vi.mocked(getJobExperimentDetailApi).mockResolvedValue(reviewDetail())
 
     const wrapper = await mountReview()
+    await openReviewMaterials(wrapper, 'actionEvidence')
     const feedbackContext = wrapper.find('.suggestion-feedback-context')
 
     expect(feedbackContext.text()).toContain('JOB_EXPERIMENT_STRATEGY')
@@ -439,6 +465,7 @@ describe('JobExperimentReviewView', () => {
     }))
 
     const wrapper = await mountReview()
+    await openReviewMaterials(wrapper, 'actionEvidence')
     await wrapper.find('.suggestion-action').trigger('click')
 
     expect(routerPush).not.toHaveBeenCalledWith('https://evil.example/phish')
@@ -456,6 +483,7 @@ describe('JobExperimentReviewView', () => {
     } as any)
 
     const wrapper = await mountReview()
+    await openReviewMaterials(wrapper, 'facts')
     const metricValues = wrapper.findAll('.metric-strip strong').map((item) => item.text())
 
     expect(wrapper.text()).toContain('置信度待确认')

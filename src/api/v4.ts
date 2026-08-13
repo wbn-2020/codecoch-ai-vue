@@ -196,9 +196,18 @@ export interface JobApplicationVO {
   idempotencyKey?: string
   appliedAt?: string
   nextFollowUpAt?: string
+  archivedAt?: string
+  archiveReason?: string
+  clearNextFollowUp?: boolean
   note?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface JobApplicationArchiveDTO {
+  expectedLockVersion: number
+  idempotencyKey?: string
+  reason?: string
 }
 
 export interface JobApplicationStatsVO {
@@ -688,7 +697,7 @@ export const rollbackResumeVersionApi = (resumeId: number, versionId: number, pa
 export const applyResumeVersionSuggestionApi = (versionId: number, data?: ResumeApplyAiSuggestionDTO) =>
   request.post<ResumeSuggestionAdoptionVO, ResumeSuggestionAdoptionVO>(`/resume-versions/${versionId}/apply-ai-suggestion`, data || {})
 
-export const getApplicationsApi = (params?: { status?: string }) =>
+export const getApplicationsApi = (params?: { status?: string; includeArchived?: boolean }) =>
   request.get<JobApplicationVO[], JobApplicationVO[]>('/applications', { params: compactQueryParams(params) }).then((data) => data || [])
 
 export const getApplicationStatsApi = () =>
@@ -709,6 +718,15 @@ export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>
     idempotencyKey
   })
 }
+
+export const archiveApplicationApi = (id: number, data: JobApplicationArchiveDTO) =>
+  request.post<JobApplicationVO, JobApplicationVO>(`/applications/${id}/archive`, data)
+
+export const restoreApplicationApi = (id: number, data: JobApplicationArchiveDTO) =>
+  request.post<JobApplicationVO, JobApplicationVO>(`/applications/${id}/restore`, data)
+
+export const deleteApplicationApi = (id: number, data: JobApplicationArchiveDTO) =>
+  request.delete<void, void>(`/applications/${id}`, { data })
 
 export const getApplicationEventsApi = (id: number) =>
   request.get<JobApplicationEventVO[], JobApplicationEventVO[]>(`/applications/${id}/events`).then((data) => data || [])

@@ -120,10 +120,14 @@
             </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('traceId')" label="追踪号" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ displayAiTraceId(row) }}</template>
+            <template #default="{ row }">
+              <span :title="row.traceId || displayAiTraceId(row)">{{ displayAiTraceId(row) }}</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('scene')" label="场景 / 类型" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ getSceneLabel(row.scene || row.callType) }}</template>
+            <template #default="{ row }">
+              <span :title="sceneTitle(row.scene || row.callType)">{{ getSceneLabel(row.scene || row.callType) }}</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('tokens')" label="消耗" width="110">
             <template #default="{ row }">{{ row.totalTokens ?? '-' }}</template>
@@ -134,8 +138,18 @@
           <el-table-column v-if="isColumnVisible('status')" label="状态" width="110">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column v-if="isColumnVisible('failure')" label="失败原因" min-width="180" show-overflow-tooltip>
-            <template #default="{ row }">{{ translateFailureReason(row.failReason || row.errorMessage) }}</template>
+          <el-table-column v-if="isColumnVisible('failure')" label="失败原因" min-width="280">
+            <template #default="{ row }">
+              <div
+                v-if="rawAiFailure(row)"
+                class="failure-diagnosis"
+                :title="`原始技术错误：${rawAiFailure(row)}`"
+              >
+                <strong>{{ aiFailureDiagnosis(row).reason }}</strong>
+                <small>{{ aiFailureDiagnosis(row).action }}</small>
+              </div>
+              <span v-else>-</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('preview')" label="摘要 / 脱敏预览" min-width="320" show-overflow-tooltip>
             <template #default="{ row }">
@@ -200,7 +214,12 @@
         <el-descriptions :column="1" border>
           <el-descriptions-item label="生成记录">{{ detail.id }}</el-descriptions-item>
           <el-descriptions-item label="追踪号">{{ detail.traceId || displayAiTraceId(detail) }}</el-descriptions-item>
-          <el-descriptions-item label="处理场景">{{ getSceneLabel(detail.scene || detail.callType) }}</el-descriptions-item>
+          <el-descriptions-item label="处理场景">
+            <span :title="sceneTitle(detail.scene || detail.callType)">{{ getSceneLabel(detail.scene || detail.callType) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="!isRegisteredScene(detail.scene || detail.callType)" label="原始场景代码">
+            <code>{{ sceneCode(detail.scene || detail.callType) || '-' }}</code>
+          </el-descriptions-item>
           <el-descriptions-item label="状态"><StatusTag :status="detail.status" /></el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.modelName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="生成来源">
@@ -209,7 +228,10 @@
           <el-descriptions-item label="关联业务">{{ detail.businessId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="调用资源">{{ detail.totalTokens ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ detail.elapsedMs ?? detail.latencyMs ?? '-' }} ms</el-descriptions-item>
-          <el-descriptions-item label="失败原因">{{ translateFailureReason(detail.failReason || detail.errorMessage) }}</el-descriptions-item>
+          <el-descriptions-item label="失败原因">{{ aiFailureDiagnosis(detail).reason }}</el-descriptions-item>
+          <el-descriptions-item label="建议动作">{{ aiFailureDiagnosis(detail).action }}</el-descriptions-item>
+          <el-descriptions-item label="建议责任方">{{ aiFailureDiagnosis(detail).owner }}</el-descriptions-item>
+          <el-descriptions-item label="诊断追踪号">{{ failureTraceId(detail) || '-' }}</el-descriptions-item>
           <el-descriptions-item label="摘要">{{ displayAiSummary(detail) }}</el-descriptions-item>
           <el-descriptions-item label="脱敏预览">{{ displayAiMaskedPreview(detail) }}</el-descriptions-item>
           <el-descriptions-item label="敏感诊断内容">
@@ -217,9 +239,12 @@
           </el-descriptions-item>
         </el-descriptions>
         <el-collapse
-          v-if="detail.requestPromptHash || detail.requestBodyHash || detail.responseContentHash || detail.responseBodyHash"
+          v-if="rawAiFailure(detail) || detail.requestPromptHash || detail.requestBodyHash || detail.responseContentHash || detail.responseBodyHash"
           class="log-diagnostic-collapse"
         >
+          <el-collapse-item v-if="rawAiFailure(detail)" title="原始技术错误（按需展开）" name="raw-error">
+            <pre class="technical-error">{{ rawAiFailure(detail) }}</pre>
+          </el-collapse-item>
           <el-collapse-item title="技术诊断（内容指纹，按需展开）" name="content-fingerprint">
             <div class="log-diagnostic-list">
               <span v-if="detail.requestPromptHash">输入上下文指纹 {{ detail.requestPromptHash }}</span>
@@ -291,7 +316,6 @@ import { useAdminTableView } from '@/composables/useAdminTableView'
 import { AI_SCENE } from '@/constants/enums'
 import { useAuthStore } from '@/stores/auth'
 import type { AiCallLogQueryDTO, AiCallLogVO, AiScene } from '@/types/ai'
-import { translateFailureReason } from '@/utils/adminDisplay'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
@@ -302,8 +326,34 @@ const sceneOptions = [
   { label: '项目深挖提问', value: AI_SCENE.PROJECT_DEEP_DIVE_QUESTION },
   { label: '回答评分', value: AI_SCENE.INTERVIEW_ANSWER_EVALUATE },
   { label: '动态追问', value: AI_SCENE.INTERVIEW_FOLLOW_UP_GENERATE },
-  { label: '面试报告生成', value: AI_SCENE.INTERVIEW_REPORT_GENERATE }
+  { label: '面试报告生成', value: AI_SCENE.INTERVIEW_REPORT_GENERATE },
+  { label: '简历结构化解析', value: 'RESUME_STRUCTURED_PARSE' },
+  { label: '简历内容优化', value: 'RESUME_OPTIMIZE' },
+  { label: '简历岗位匹配', value: 'RESUME_JOB_MATCH' },
+  { label: '岗位描述解析', value: 'JOB_DESCRIPTION_PARSE' },
+  { label: '学习计划生成', value: 'LEARNING_PLAN_GENERATE' },
+  { label: '定向学习计划生成', value: 'TARGETED_STUDY_PLAN_GENERATE' },
+  { label: '练习回答点评', value: 'PRACTICE_ANSWER_REVIEW' },
+  { label: '能力差距分析', value: 'SKILL_GAP_ANALYZE' },
+  { label: '智能教练每日计划', value: 'JOB_COACH_DAILY_PLAN' },
+  { label: '智能教练复盘', value: 'AGENT_REVIEW_GENERATE' },
+  { label: '求职事件复盘', value: 'APPLICATION_EVENT_REVIEW_GENERATE' },
+  { label: '面试准备包生成', value: 'INTERVIEW_PREPARATION_GENERATE' },
+  { label: '求职周报生成', value: 'WEEKLY_CAREER_REPORT_GENERATE' },
+  { label: '智能任务推荐', value: 'AGENT_TASK_RECOMMENDATION' },
+  { label: '求职实验策略', value: 'JOB_EXPERIMENT_STRATEGY' },
+  { label: '语音面试回答', value: 'INTERVIEW.VOICE.ANSWER' }
 ]
+
+const sceneLabels = new Map(
+  sceneOptions.flatMap((item) => {
+    const code = String(item.value).trim()
+    return [
+      [code, item.label],
+      [code.toUpperCase(), item.label]
+    ] as Array<[string, string]>
+  })
+)
 
 const loading = ref(false)
 const drawerVisible = ref(false)
@@ -385,7 +435,124 @@ const logEmptyDescription = computed(() =>
 )
 const logEmptyActionLabel = computed(() => (hasLogFilters.value ? '清空筛选' : '刷新列表'))
 
-const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || (value ? '场景待确认' : '-')
+const sceneCode = (value?: AiScene | null | '') => String(value || '').trim()
+
+const registeredSceneLabel = (value?: AiScene | null | '') => {
+  const raw = sceneCode(value)
+  return raw ? sceneLabels.get(raw) || sceneLabels.get(raw.toUpperCase()) : undefined
+}
+
+const isRegisteredScene = (value?: AiScene | null | '') => Boolean(registeredSceneLabel(value))
+
+const getSceneLabel = (value?: AiScene | null | '') => {
+  const raw = sceneCode(value)
+  if (!raw) return '-'
+  return registeredSceneLabel(raw) || '未登记场景'
+}
+
+const sceneTitle = (value?: AiScene | null | '') => {
+  const raw = sceneCode(value)
+  if (!raw) return '未返回场景代码'
+  return isRegisteredScene(raw) ? `场景代码：${raw}` : `未登记场景，原始代码：${raw}`
+}
+
+type FailureDiagnosis = {
+  reason: string
+  action: string
+  owner: string
+}
+
+const rawAiFailure = (row?: Pick<AiCallLogVO, 'failReason' | 'errorMessage'> | null) =>
+  String(row?.failReason || row?.errorMessage || '').replace(/\s+/g, ' ').trim()
+
+const includesAny = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword))
+
+const diagnoseFailureText = (value?: string | null): FailureDiagnosis => {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!raw) {
+    return {
+      reason: '未记录失败原因',
+      action: '先按追踪号核对生成记录和服务日志，再判断是否需要重试。',
+      owner: '平台运维 / 业务研发'
+    }
+  }
+
+  const lower = raw.toLowerCase()
+  if (includesAny(lower, ['rate limit', 'too many requests', 'http 429', 'status 429', 'quota exceeded', 'insufficient quota'])) {
+    return {
+      reason: 'AI 调用频率或额度受限',
+      action: '检查供应商额度和限流策略，降低并发或等待限流窗口恢复后再重试。',
+      owner: 'AI 平台管理员'
+    }
+  }
+  if (includesAny(lower, ['unauthorized', 'forbidden', 'invalid api key', 'invalid_api_key', 'authentication', 'http 401', 'status 401', 'http 403', 'status 403', 'api-key decrypt failed'])) {
+    return {
+      reason: 'AI 供应商认证失败',
+      action: '核对模型配置中的密钥、权限和密钥解密状态，修复后执行测活再重试。',
+      owner: 'AI 平台管理员'
+    }
+  }
+  if (includesAny(lower, ['not configured', 'missing configuration', 'base-url', 'base url', 'model is not configured', 'provider not configured'])) {
+    return {
+      reason: 'AI 模型或供应商配置不完整',
+      action: '补齐服务地址、模型、供应商和密钥配置，保存并测活通过后再重试。',
+      owner: 'AI 平台管理员'
+    }
+  }
+  if (includesAny(lower, ['timeout', 'timed out', 'read timed out', 'connect timeout', 'deadline exceeded', 'provider timeout'])) {
+    return {
+      reason: 'AI 供应商响应超时',
+      action: '检查供应商状态、网络延迟和超时配置；确认服务恢复后按追踪号重试。',
+      owner: 'AI 平台管理员 / 基础设施运维'
+    }
+  }
+  if (includesAny(lower, ['connection refused', 'connection reset', 'connection failed', 'connectexception', 'unknownhost', 'dns', 'no route to host', 'network is unreachable', 'socket'])) {
+    return {
+      reason: 'AI 服务连接失败',
+      action: '检查服务地址、DNS、网络连通性和网关状态，恢复连接后再重试。',
+      owner: '基础设施运维'
+    }
+  }
+  if (includesAny(lower, ['empty response', 'response is empty', 'no content'])) {
+    return {
+      reason: 'AI 供应商返回空内容',
+      action: '核对模型可用性、提示词和供应商响应；必要时切换健康模型后重试。',
+      owner: 'AI 平台管理员 / 提示词运营'
+    }
+  }
+  if (includesAny(lower, ['json', 'deserialize', 'serialization', 'parse response', 'malformed response', 'invalid response format'])) {
+    return {
+      reason: 'AI 返回内容格式无法解析',
+      action: '检查提示词输出约束和模型原始响应，修正格式契约后再重试。',
+      owner: 'AI 研发 / 提示词运营'
+    }
+  }
+  if (includesAny(lower, ['provider request failed', 'request failed', 'bad gateway', 'service unavailable', 'http 502', 'http 503', 'status 502', 'status 503'])) {
+    return {
+      reason: 'AI 供应商请求失败',
+      action: '按追踪号查看供应商响应和网关日志，确认上游恢复后再重试。',
+      owner: 'AI 平台管理员 / 基础设施运维'
+    }
+  }
+
+  return {
+    reason: /[\u4e00-\u9fff]/.test(raw) ? compactText(raw, 90) : '未识别的 AI 技术错误',
+    action: '按追踪号查看原始技术错误和上下游日志，确认根因后再决定是否重试。',
+    owner: 'AI 研发 / 平台运维'
+  }
+}
+
+const aiFailureDiagnosis = (row?: Pick<AiCallLogVO, 'failReason' | 'errorMessage'> | null) =>
+  diagnoseFailureText(rawAiFailure(row))
+
+const extractTraceId = (value?: string | null) => {
+  const text = String(value || '')
+  const match = text.match(/(?:trace[\s_-]*id|traceId)\s*[=:]\s*["']?([a-zA-Z0-9._:-]+)/i)
+  return match?.[1] || ''
+}
+
+const failureTraceId = (row?: Pick<AiCallLogVO, 'traceId' | 'failReason' | 'errorMessage'> | null) =>
+  String(row?.traceId || '').trim() || extractTraceId(rawAiFailure(row))
 
 const normalizedResultSource = (row?: Pick<AiCallLogVO, 'resultSource' | 'fallback' | 'modelName'> | null) => {
   const source = String(row?.resultSource || '').toUpperCase()
@@ -703,6 +870,36 @@ watch(
   small {
     color: var(--app-text-muted);
   }
+}
+
+.failure-diagnosis {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.45;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--app-danger, #dc2626);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--app-text-muted);
+  }
+}
+
+.technical-error {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .admin-detail-dialog__body {

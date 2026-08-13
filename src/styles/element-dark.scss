@@ -1,4 +1,5 @@
-html.dark {
+body.admin-overlay-theme {
+  & {
   --el-bg-color: rgba(15, 23, 42, 0.92);
   --el-bg-color-page: #020617;
   --el-bg-color-overlay: #111827;
@@ -32,7 +33,7 @@ html.dark {
   --el-border-radius-base: 8px;
   --el-datepicker-hover-text-color: var(--cc-primary-hover);
   --el-datepicker-active-color: var(--cc-primary);
-}
+  }
 
 .app-layout {
   min-height: 100vh;
@@ -96,6 +97,65 @@ html.dark {
 
 .layout-menu .el-menu-item.is-active {
   background: var(--cc-primary-soft);
+  color: #ffffff;
+}
+
+.admin-sidebar-menu.el-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--app-text-muted);
+  --el-menu-hover-bg-color: rgba(79, 140, 255, 0.14);
+  --el-menu-active-color: var(--app-text);
+}
+
+.admin-sidebar-menu .el-sub-menu__title {
+  height: 44px;
+  margin: 4px 10px;
+  border-radius: 8px;
+  color: var(--app-text-muted);
+}
+
+.admin-sidebar-menu .el-sub-menu__title:hover,
+.admin-sidebar-menu .el-sub-menu.is-active > .el-sub-menu__title {
+  background: rgba(79, 140, 255, 0.14);
+  color: var(--app-text);
+}
+
+.admin-sidebar-menu .el-sub-menu .el-menu {
+  background: var(--app-surface-soft);
+}
+
+.admin-sidebar-menu .el-sub-menu .el-menu-item {
+  color: var(--app-text-muted);
+}
+
+.admin-sidebar-menu .el-sub-menu .el-menu-item.is-active {
+  background: rgba(79, 140, 255, 0.18);
+  color: #ffffff;
+}
+
+.admin-sidebar-submenu-popper.el-menu--popup {
+  min-width: 196px;
+  padding: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #0d141e;
+}
+
+.admin-sidebar-submenu-popper .el-menu-item {
+  height: 38px;
+  margin: 2px 0;
+  border-radius: 6px;
+  color: var(--app-text-muted);
+}
+
+.admin-sidebar-submenu-popper .el-menu-item:hover,
+.admin-sidebar-submenu-popper .el-menu-item:focus {
+  background: rgba(79, 140, 255, 0.14);
+  color: var(--app-text);
+}
+
+.admin-sidebar-submenu-popper .el-menu-item.is-active {
+  background: rgba(79, 140, 255, 0.2);
   color: #ffffff;
 }
 
@@ -648,4 +708,5 @@ html.dark {
 
 .admin-console-page .el-table .el-button + .el-button {
   margin-left: 4px;
+}
 }

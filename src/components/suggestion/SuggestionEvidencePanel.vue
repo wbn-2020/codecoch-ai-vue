@@ -455,9 +455,9 @@ const handleActionClick = (action: SuggestionAction) => {
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.28);
+  background: var(--user-surface-muted);
   color: var(--app-text);
 }
 
@@ -527,7 +527,7 @@ const handleActionClick = (action: SuggestionAction) => {
   width: 100%;
   padding: 10px 0 0;
   border: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1px solid var(--app-border);
   background: transparent;
   color: var(--app-text-muted);
   cursor: pointer;
@@ -573,9 +573,9 @@ const handleActionClick = (action: SuggestionAction) => {
   gap: 4px;
   width: 100%;
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.2);
+  background: var(--user-control-bg-muted);
   color: var(--app-text);
   text-align: left;
   cursor: pointer;

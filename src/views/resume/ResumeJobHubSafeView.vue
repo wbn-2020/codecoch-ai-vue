@@ -6,16 +6,16 @@
       <div>
         <div class="safe-kicker">
           <FileText :size="16" />
-          简历实验室
+          简历工作台
         </div>
-        <h1>先继续推进简历实验</h1>
+        <h1>先继续推进简历准备</h1>
         <p>
-          当前实验室总览没有加载成功，可能是部分接口或资料状态暂时不可用。你仍然可以先创建简历、补目标岗位描述、整理项目证据，或直接进入匹配实验台。
+          当前工作台总览没有加载成功，可能是部分接口或资料状态暂时不可用。你仍然可以先创建简历、补目标岗位描述、整理项目证据，或直接进入岗位匹配。
         </p>
       </div>
       <el-button text :loading="retrying" @click="retryHub">
         <RefreshCw :size="16" />
-        重试实验室总览
+        重试工作台总览
       </el-button>
     </section>
 
@@ -39,7 +39,7 @@
     <section class="safe-note">
       <AppState
         type="error"
-        title="实验室总览暂时不可用"
+        title="工作台总览暂时不可用"
         :description="hubError"
       >
         <div class="safe-note__actions">
@@ -72,7 +72,7 @@ const createResumeJobHubView = () => defineAsyncComponent({
       retry()
       return
     }
-    hubError.value = getErrorMessage(error, '简历实验室总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
+    hubError.value = getErrorMessage(error, '简历工作台总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
     fail()
   }
 })
@@ -116,7 +116,7 @@ const retryHub = async () => {
 }
 
 onErrorCaptured((error) => {
-  hubError.value = getErrorMessage(error, '简历实验室总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
+  hubError.value = getErrorMessage(error, '简历工作台总览暂时无法加载，请先使用下方入口继续完成简历、岗位和项目证据准备。')
   return false
 })
 </script>

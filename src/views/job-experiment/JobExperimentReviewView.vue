@@ -9,221 +9,253 @@
       <el-button @click="router.push(demoPath('/job-experiments'))">返回列表</el-button>
       <el-button type="primary" :loading="loading" @click="load">重新加载</el-button>
     </AppState>
+
     <template v-else-if="detail">
-      <section class="review-hero">
+      <section class="review-hero arena-card">
         <div class="hero-copy">
-          <p class="hero-kicker">实验复盘</p>
+          <p class="page-kicker">实验复盘</p>
           <h1>{{ detail.title }}</h1>
-          <p>{{ detail.goal || detail.targetDirection || '用事实、样本限制和下一步行动复盘求职实验。' }}</p>
+          <p class="hero-description">
+            {{ detail.goal || detail.targetDirection || '用事实、样本边界和一个下一步行动复盘求职实验。' }}
+          </p>
           <div class="hero-meta">
             <el-tag v-if="detail.demoFlag" type="warning" effect="plain">演示数据</el-tag>
             <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
-              {{ weakConclusion ? '低样本弱建议' : '可作为候选判断' }}
+              {{ weakConclusion ? '暂时只能弱判断' : '可以形成候选判断' }}
             </el-tag>
             <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
           </div>
         </div>
         <div class="actions">
-          <el-button :icon="ArrowLeft" @click="router.push(demoPath(`/job-experiments/${detail.id}`))">实验详情</el-button>
-          <el-button
-            v-if="appConfig.enableV9EvidenceLearning"
-            data-testid="experiment-evidence-usages"
-            :icon="ClipboardCheck"
-            @click="openEvidenceSamples"
-          >
-            查看证据使用样本
+          <el-button :icon="ArrowLeft" @click="router.push(demoPath(`/job-experiments/${detail.id}`))">
+            实验详情
           </el-button>
-          <el-button type="primary" :icon="RefreshCcw" :loading="generating" :disabled="isDemoContext()" @click="generate">生成复盘</el-button>
-        </div>
-      </section>
-
-      <section class="review-section fact-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">事实</p>
-            <h2>事实摘要</h2>
-          </div>
-          <el-tag effect="plain">metrics.facts</el-tag>
-        </div>
-        <p class="summary-text">{{ factSummary }}</p>
-        <ul class="fact-list" v-if="factItems.length">
-          <li v-for="fact in factItems" :key="fact">{{ fact }}</li>
-        </ul>
-        <div class="metric-strip">
-          <div>
-            <strong>{{ feedbackSummary.applicationCount }}</strong>
-            <span>投递数</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.feedbackCount }}</strong>
-            <span>反馈数</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.interviewCompletedCount }}</strong>
-            <span>完成面试</span>
-          </div>
-          <div>
-            <strong>{{ metricCountLabel(detail.metrics?.sampleCount ?? detail.metrics?.applicationCount) }}</strong>
-            <span>样本数</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.rejectedCount }}</strong>
-            <span>拒信</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.noFeedbackCount }}</strong>
-            <span>无反馈</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.interviewRoundCount }}</strong>
-            <span>面试轮次</span>
-          </div>
-          <div>
-            <strong>{{ feedbackSummary.interviewReportSummaryCount }}</strong>
-            <span>报告摘要</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="review-section sample-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">样本边界</p>
-            <h2>样本限制</h2>
-          </div>
-          <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
-            {{ confidenceLabel(displayConfidenceLevel) }}
-          </el-tag>
-        </div>
-        <el-alert
-          v-if="sampleWarning"
-          type="warning"
-          :closable="false"
-          title="样本不足提醒"
-          :description="sampleWarning"
-        />
-        <p v-if="sampleWarning" class="sample-warning-text">{{ sampleWarning }}</p>
-        <p v-else class="summary-text">当前没有后端样本不足提醒，但复盘仍应结合证据链验证后再行动。</p>
-        <p class="limit-note">
-          {{ reviewModeText }}
-        </p>
-        <ul v-if="lowSampleRules.length" class="rule-list">
-          <li v-for="rule in lowSampleRules" :key="rule">{{ rule }}</li>
-        </ul>
-      </section>
-
-      <section class="review-section unsupported-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">不支持结论</p>
-            <h2>不支持结论</h2>
-          </div>
-          <el-tag type="warning" effect="plain">unsupportedConclusion</el-tag>
-        </div>
-        <div class="stack-list">
-          <article v-for="item in unsupportedConclusions" :key="`${item.conclusionType}-${item.blockedReason}`">
-            <strong>{{ item.conclusionType || '样本边界' }}</strong>
-            <p class="unsupported-text">{{ item.blockedReason }}</p>
-            <span>{{ item.requiredSampleHint || '补足样本和证据后再判断。' }}</span>
-          </article>
-        </div>
-      </section>
-
-      <section class="review-section weak-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">弱观察</p>
-            <h2>弱观察</h2>
-          </div>
-          <el-tag type="warning" effect="plain">{{ qualityGateLabel }}</el-tag>
-        </div>
-        <div v-if="weakObservations.length" class="stack-list">
-          <article v-for="item in weakObservations" :key="`${item.observationType}-${item.text}`">
-            <strong>{{ item.observationType || '观察' }}</strong>
-            <p>{{ item.text }}</p>
-            <span>{{ metricCountLabel(item.evidenceCount, '条证据') }} · {{ confidenceLabel(item.confidenceLevel) }}</span>
-            <span v-if="item.actionHint">{{ item.actionHint }}</span>
-          </article>
-        </div>
-        <p v-else class="summary-text">暂无弱观察。先补投递、反馈、简历版本和项目证据，再观察趋势。</p>
-      </section>
-
-      <section class="review-section hypothesis-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">实验假设</p>
-            <h2>实验假设</h2>
-          </div>
-          <el-tag effect="plain">hypotheses</el-tag>
-        </div>
-        <div class="stack-list">
-          <article v-for="item in hypotheses" :key="`${item.targetDirection}-${item.assumption}`">
-            <strong>{{ item.targetDirection || detail.targetDirection || '当前方向' }}</strong>
-            <p>{{ item.assumption }}</p>
-            <span>{{ item.expectedSignal || '观察下一轮投递反馈、面试邀约和证据覆盖变化。' }}</span>
-          </article>
-        </div>
-      </section>
-
-      <section class="review-section next-action">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">下一步行动</p>
-            <h2>下一步行动</h2>
-          </div>
-          <el-tag effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
-        </div>
-        <p class="summary-text">{{ nextActionText }}</p>
-        <div v-if="reviewNextActions.length" class="stack-list action-stack">
-          <article v-for="action in reviewNextActions" :key="`${action.actionType}-${action.title}`">
-            <strong>{{ action.title }}</strong>
-            <p>{{ action.reason || '把复盘变成下一轮可执行动作。' }}</p>
-            <el-button v-if="action.targetRoute" size="small" @click="goStrategyAction(action.targetRoute)">打开入口</el-button>
-          </article>
-        </div>
-        <div class="action-grid">
+          <el-dropdown trigger="click" @command="handleReviewCommand">
+            <el-button circle :icon="MoreHorizontal" aria-label="更多复盘操作" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-if="appConfig.enableV9EvidenceLearning"
+                  command="evidence"
+                >
+                  <ClipboardCheck :size="15" /> 查看证据使用样本
+                </el-dropdown-item>
+                <el-dropdown-item command="settings">
+                  <Settings2 :size="15" /> 打开实验设置与归因
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-button
-            v-for="action in nextActionLinks"
-            :key="action.path"
-            :icon="action.icon"
-            @click="router.push(demoPath(action.path))"
+            type="primary"
+            :icon="RefreshCcw"
+            :loading="generating"
+            :disabled="isDemoContext()"
+            @click="generate"
           >
-            {{ action.label }}
+            {{ latest ? '更新复盘' : '生成复盘' }}
           </el-button>
         </div>
       </section>
 
-      <section class="review-section evidence-section">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">证据来源</p>
-            <h2>证据来源</h2>
+      <section class="review-overview-grid">
+        <article class="review-section conclusion-panel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">结论摘要</p>
+              <h2>{{ factSummary }}</h2>
+            </div>
+            <el-tag :type="weakConclusion ? 'warning' : 'success'" effect="plain">
+              {{ qualityGateLabel === 'STRONG' ? '证据较充分' : '仍需验证' }}
+            </el-tag>
           </div>
-          <el-tag effect="plain">{{ explainableStrategy.qualityGate?.suggestionStrength || 'WEAK' }}</el-tag>
-        </div>
-        <p class="summary-text">{{ strategySummary }}</p>
-        <p class="strategy-content">{{ strategyContent }}</p>
-        <SuggestionEvidencePanel
-          :suggestion="explainableStrategy"
-          :default-open="true"
-          @open-action="goStrategyAction"
-        />
-        <div class="strategy-evidence-list" v-if="explainableStrategy.evidenceSources.length">
-          <el-tag
-            v-for="source in explainableStrategy.evidenceSources"
-            :key="`${source.sourceType || 'SOURCE'}:${source.sourceId ?? source.evidenceSummary}`"
-            effect="plain"
-          >
-            {{ strategyEvidenceLabel(source.sourceType) }} #{{ source.sourceId }} {{ source.evidenceSummary || source.sourceSummary || '' }}
-          </el-tag>
-        </div>
-        <p v-else class="summary-text">暂无可展示证据来源，请先在实验详情中绑定关联证据。</p>
+          <p class="summary-text">{{ strategySummary }}</p>
+        </article>
+
+        <article class="review-section boundary-panel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">判断边界</p>
+              <h2>哪些事情现在还不能确定</h2>
+            </div>
+            <el-tag type="warning" effect="plain">{{ confidenceLabel(displayConfidenceLevel) }}</el-tag>
+          </div>
+          <el-alert
+            v-if="sampleWarning"
+            type="warning"
+            :closable="false"
+            title="样本需要继续积累"
+            :description="sampleWarning"
+          />
+          <p v-else class="summary-text">{{ reviewModeText }}</p>
+          <p v-if="unsupportedConclusions.length" class="boundary-hint">
+            {{ unsupportedConclusions[0].blockedReason }}
+          </p>
+        </article>
       </section>
 
-      <CareerExperimentPanel
-        :legacy-experiment-id="detail.id"
-        mode="review"
-      />
+      <section class="review-section next-step-panel">
+        <div class="next-step-copy">
+          <p class="section-kicker">下一步</p>
+          <h2>{{ reviewNextActions[0]?.title || '把复盘变成一个可执行动作' }}</h2>
+          <p>{{ nextActionText }}</p>
+        </div>
+        <el-button
+          type="primary"
+          :icon="ArrowRight"
+          @click="runPrimaryNextAction"
+        >
+          执行下一步
+        </el-button>
+      </section>
+
+      <section class="materials-entry review-section">
+        <div>
+          <p class="section-kicker">按需查看</p>
+          <h2>完整复盘材料</h2>
+          <p class="summary-text">事实明细、观察、假设、行动和证据来源已分开整理，按需要查看。</p>
+        </div>
+        <el-button :icon="PanelsTopLeft" @click="openReviewMaterials('facts')">
+          查看完整材料
+        </el-button>
+      </section>
+
+      <section v-if="reviewMaterialsOpen" class="review-section review-materials">
+        <div class="materials-header">
+          <div>
+            <p class="section-kicker">完整材料</p>
+            <h2>复盘依据与行动记录</h2>
+          </div>
+          <el-button link :icon="X" aria-label="收起完整材料" @click="closeReviewMaterials">收起</el-button>
+        </div>
+        <el-tabs v-model="activeReviewTab" @tab-change="handleReviewTabChange">
+          <el-tab-pane label="事实与限制" name="facts">
+            <div class="material-content">
+              <div class="metric-strip">
+                <div><strong>{{ metricCountLabel(feedbackSummary.applicationCount) }}</strong><span>投递数</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.feedbackCount) }}</strong><span>反馈数</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.interviewCompletedCount) }}</strong><span>完成面试</span></div>
+                <div><strong>{{ metricCountLabel(detail.metrics?.sampleCount ?? detail.metrics?.applicationCount) }}</strong><span>样本数</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.rejectedCount) }}</strong><span>拒信</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.noFeedbackCount) }}</strong><span>无反馈</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.interviewRoundCount) }}</strong><span>面试轮次</span></div>
+                <div><strong>{{ metricCountLabel(feedbackSummary.interviewReportSummaryCount) }}</strong><span>报告摘要</span></div>
+              </div>
+              <ul v-if="factItems.length" class="fact-list">
+                <li v-for="fact in factItems" :key="fact">{{ fact }}</li>
+              </ul>
+              <div class="material-subsection">
+                <div class="section-head">
+                  <h3>暂不支持的判断</h3>
+                  <el-tag type="warning" effect="plain">需要更多证据</el-tag>
+                </div>
+                <div v-if="unsupportedConclusions.length" class="stack-list">
+                  <article
+                    v-for="item in unsupportedConclusions"
+                    :key="`${item.conclusionType}-${item.blockedReason}`"
+                  >
+                    <strong>{{ item.conclusionType || '样本边界' }}</strong>
+                    <p>{{ item.blockedReason }}</p>
+                    <span>{{ item.requiredSampleHint || '补足样本和证据后再判断。' }}</span>
+                  </article>
+                </div>
+                <p v-else class="summary-text">暂无需要特别标记的判断边界。</p>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="观察与假设" name="observations">
+            <div class="material-content">
+              <div class="material-subsection first-subsection">
+                <div class="section-head">
+                  <h3>弱观察</h3>
+                  <el-tag type="warning" effect="plain">{{ qualityGateLabel }}</el-tag>
+                </div>
+                <div v-if="weakObservations.length" class="stack-list">
+                  <article v-for="item in weakObservations" :key="`${item.observationType}-${item.text}`">
+                    <strong>{{ item.observationType || '观察' }}</strong>
+                    <p>{{ item.text }}</p>
+                    <span>{{ metricCountLabel(item.evidenceCount, ' 条证据') }} · {{ confidenceLabel(item.confidenceLevel) }}</span>
+                    <span v-if="item.actionHint">{{ item.actionHint }}</span>
+                  </article>
+                </div>
+                <p v-else class="summary-text">暂无弱观察。先补充真实样本，再观察趋势。</p>
+              </div>
+              <div class="material-subsection">
+                <div class="section-head">
+                  <h3>实验假设</h3>
+                  <el-tag effect="plain">{{ hypotheses.length }} 条</el-tag>
+                </div>
+                <div v-if="hypotheses.length" class="stack-list">
+                  <article v-for="item in hypotheses" :key="`${item.targetDirection}-${item.assumption}`">
+                    <strong>{{ item.targetDirection || detail.targetDirection || '当前方向' }}</strong>
+                    <p>{{ item.assumption }}</p>
+                    <span>{{ item.expectedSignal || '观察下一轮投递反馈、面试邀约和证据覆盖变化。' }}</span>
+                  </article>
+                </div>
+                <p v-else class="summary-text">暂无实验假设。</p>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="行动与证据" name="actionEvidence">
+            <div class="material-content">
+              <div class="section-head">
+                <div>
+                  <h3>行动记录</h3>
+                  <p class="muted">完整行动列表保留在这里，首屏只突出一项下一步。</p>
+                </div>
+                <el-button plain @click="openExperimentSettings">实验设置与归因</el-button>
+              </div>
+              <div v-if="reviewNextActions.length" class="stack-list">
+                <article v-for="action in reviewNextActions" :key="`${action.actionType}-${action.title}`">
+                  <strong>{{ action.title }}</strong>
+                  <p>{{ action.reason || '把复盘变成下一轮可执行动作。' }}</p>
+                  <el-button v-if="action.targetRoute" size="small" @click="goStrategyAction(action.targetRoute)">
+                    打开入口
+                  </el-button>
+                </article>
+              </div>
+              <div v-else class="empty-state">暂无额外行动记录。</div>
+              <div class="material-subsection">
+                <div class="section-head">
+                  <div>
+                    <h3>证据来源</h3>
+                    <p class="muted">{{ strategyContent }}</p>
+                  </div>
+                  <el-tag effect="plain">{{ explainableStrategy.qualityGate?.suggestionStrength || 'WEAK' }}</el-tag>
+                </div>
+                <SuggestionEvidencePanel
+                  :suggestion="explainableStrategy"
+                  :default-open="false"
+                  @open-action="goStrategyAction"
+                />
+                <div v-if="explainableStrategy.evidenceSources.length" class="strategy-evidence-list">
+                  <el-tag
+                    v-for="source in explainableStrategy.evidenceSources"
+                    :key="`${source.sourceType || 'SOURCE'}:${source.sourceId ?? source.evidenceSummary}`"
+                    effect="plain"
+                  >
+                    {{ strategyEvidenceLabel(source.sourceType) }} #{{ source.sourceId }}
+                    {{ source.evidenceSummary || source.sourceSummary || '' }}
+                  </el-tag>
+                </div>
+                <p v-else class="summary-text">暂无可展示证据来源，请先在实验详情中绑定关联证据。</p>
+              </div>
+              <div class="secondary-actions">
+                <el-button
+                  v-for="action in nextActionLinks"
+                  :key="action.path"
+                  :icon="action.icon"
+                  @click="router.push(demoPath(action.path))"
+                >
+                  {{ action.label }}
+                </el-button>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </section>
     </template>
   </div>
 </template>
@@ -232,12 +264,25 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Bot, BriefcaseBusiness, ClipboardCheck, FileText, FolderKanban, Mic, RefreshCcw } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bot,
+  BriefcaseBusiness,
+  ClipboardCheck,
+  FileText,
+  FolderKanban,
+  Mic,
+  MoreHorizontal,
+  PanelsTopLeft,
+  RefreshCcw,
+  Settings2,
+  X
+} from 'lucide-vue-next'
 
 import { generateJobExperimentReviewApi, getJobExperimentDetailApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
 import SuggestionEvidencePanel from '@/components/suggestion/SuggestionEvidencePanel.vue'
-import CareerExperimentPanel from '@/views/job-experiment/components/CareerExperimentPanel.vue'
 import { buildJobExperimentReviewDisplayModel, confidenceLabel, shouldKeepConclusionWeak } from '@/features/job-experiment'
 import { appConfig } from '@/config'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
@@ -257,6 +302,10 @@ const loading = ref(false)
 const generating = ref(false)
 const errorMessage = ref('')
 const detail = ref<JobSearchExperimentDetailVO>()
+type ReviewTab = 'facts' | 'observations' | 'actionEvidence'
+const reviewTabs: ReviewTab[] = ['facts', 'observations', 'actionEvidence']
+const activeReviewTab = ref<ReviewTab>('facts')
+const reviewMaterialsOpen = ref(false)
 const experimentId = computed(() => {
   const value = Number(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id)
   return Number.isSafeInteger(value) && value > 0 ? value : null
@@ -377,6 +426,30 @@ const demoPath = (path: string) => {
   return path.includes('?') ? `${path}&demoFlag=true` : `${path}?demoFlag=true`
 }
 
+const resolveReviewTab = (value: unknown): ReviewTab | undefined => {
+  const name = Array.isArray(value) ? value[0] : value
+  return typeof name === 'string' && reviewTabs.includes(name as ReviewTab)
+    ? name as ReviewTab
+    : undefined
+}
+
+const openReviewMaterials = (tab: ReviewTab) => {
+  activeReviewTab.value = tab
+  reviewMaterialsOpen.value = true
+  void router.replace({ path: route.path, query: { ...route.query, reviewTab: tab } })
+}
+
+const closeReviewMaterials = () => {
+  reviewMaterialsOpen.value = false
+  const { reviewTab: _reviewTab, ...query } = route.query
+  void router.replace({ path: route.path, query })
+}
+
+const handleReviewTabChange = (value: string | number) => {
+  const tab = resolveReviewTab(value)
+  if (tab) openReviewMaterials(tab)
+}
+
 const openEvidenceSamples = () => {
   const currentExperimentId = detail.value?.id ?? experimentId.value
   if (!currentExperimentId || !Number.isSafeInteger(currentExperimentId)) {
@@ -390,6 +463,29 @@ const openEvidenceSamples = () => {
       experimentId: String(currentExperimentId)
     }
   })
+}
+
+const openExperimentSettings = () => {
+  const id = detail.value?.id ?? experimentId.value
+  if (!id) return
+  router.push(demoPath(`/job-experiments/${id}?tab=settings`))
+}
+
+const handleReviewCommand = (command: string | number | object) => {
+  if (command === 'evidence') {
+    openEvidenceSamples()
+  } else if (command === 'settings') {
+    openExperimentSettings()
+  }
+}
+
+const runPrimaryNextAction = () => {
+  const firstAction = reviewNextActions.value[0]
+  if (firstAction?.targetRoute) {
+    goStrategyAction(firstAction.targetRoute)
+    return
+  }
+  goStrategyAction(detail.value?.strategy?.actionUrl || '/agent/today')
 }
 
 const textFromStrategy = (key: string) => {
@@ -462,6 +558,20 @@ const generate = async () => {
 }
 
 watch(
+  () => route.query.reviewTab,
+  (value) => {
+    const tab = resolveReviewTab(value)
+    if (tab) {
+      activeReviewTab.value = tab
+      reviewMaterialsOpen.value = true
+    } else {
+      reviewMaterialsOpen.value = false
+    }
+  },
+  { immediate: true }
+)
+
+watch(
   experimentId,
   () => {
     detailRequestGeneration += 1
@@ -495,7 +605,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding: 18px 20px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface);
 }
 
@@ -541,7 +651,7 @@ onBeforeUnmount(() => {
 .review-section {
   padding: 16px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface);
 }
 
@@ -562,7 +672,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   margin: 12px 0 0;
   padding-left: 20px;
-  color: #fbbf24;
+  color: var(--user-warning-text);
   line-height: 1.6;
 }
 
@@ -574,7 +684,7 @@ onBeforeUnmount(() => {
 .stack-list article {
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface-muted);
 }
 
@@ -614,7 +724,7 @@ onBeforeUnmount(() => {
 .metric-strip > div {
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface-muted);
 }
 
@@ -628,13 +738,13 @@ onBeforeUnmount(() => {
 }
 
 .unsupported-text {
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--arena-amber, var(--user-warning)));
   line-height: 1.7;
 }
 
 .sample-warning-text {
   margin-bottom: 8px;
-  color: #fbbf24;
+  color: var(--user-warning-text, var(--arena-amber, var(--user-warning)));
   line-height: 1.7;
 }
 
@@ -664,6 +774,309 @@ onBeforeUnmount(() => {
 
   .actions {
     justify-content: flex-start;
+  }
+}
+</style>
+
+<style scoped lang="scss">
+.job-experiment-review {
+  display: grid;
+  gap: 16px;
+  color: var(--arena-ink);
+}
+
+.arena-card,
+.review-section {
+  border: 1px solid var(--arena-line);
+  border-radius: 16px;
+  background: var(--arena-card);
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+}
+
+.review-hero,
+.review-section,
+.materials-entry {
+  padding: 20px;
+}
+
+.review-hero,
+.hero-meta,
+.actions,
+.section-head,
+.next-step-panel,
+.materials-entry,
+.materials-header,
+.secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-hero,
+.next-step-panel,
+.materials-entry,
+.materials-header,
+.section-head {
+  justify-content: space-between;
+}
+
+.hero-copy,
+.next-step-copy,
+.materials-entry > div {
+  min-width: 0;
+}
+
+.page-kicker,
+.section-kicker {
+  margin: 0 0 6px;
+  color: var(--arena-grn-d);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 8px;
+  font-size: 26px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  margin-bottom: 6px;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+h3 {
+  margin-bottom: 6px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.hero-description,
+.summary-text,
+.muted,
+.boundary-hint,
+.stack-list p,
+.stack-list span {
+  color: var(--arena-sub);
+  line-height: 1.65;
+}
+
+.hero-description {
+  max-width: 72ch;
+  margin-bottom: 0;
+}
+
+.hero-meta,
+.actions,
+.secondary-actions {
+  flex-wrap: wrap;
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
+.review-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 16px;
+}
+
+.review-section {
+  min-width: 0;
+}
+
+.conclusion-panel {
+  background: #f0fbf4;
+  border-color: #b9e7cd;
+}
+
+.conclusion-panel h2 {
+  max-width: 40ch;
+  overflow-wrap: anywhere;
+}
+
+.summary-text {
+  margin-bottom: 0;
+}
+
+.boundary-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.boundary-hint {
+  margin: 12px 0 0;
+}
+
+.next-step-panel {
+  align-items: flex-end;
+  padding: 18px 20px;
+  background: #f0fbf4;
+  border-color: #b9e7cd;
+}
+
+.next-step-copy {
+  max-width: 70ch;
+}
+
+.next-step-copy p:last-child {
+  margin-bottom: 0;
+}
+
+.materials-entry {
+  background: var(--user-surface-muted);
+  box-shadow: none;
+}
+
+.materials-entry p:last-child {
+  margin-bottom: 0;
+}
+
+.review-materials {
+  min-width: 0;
+}
+
+.materials-header {
+  margin-bottom: 8px;
+}
+
+.material-content {
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.metric-strip,
+.stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.metric-strip {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.metric-strip > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--arena-line2);
+  border-radius: 10px;
+  background: var(--user-surface-muted);
+}
+
+.metric-strip strong {
+  display: block;
+  color: var(--arena-ink);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.metric-strip span {
+  display: block;
+  margin-top: 4px;
+  color: var(--arena-sub);
+  font-size: 12px;
+}
+
+.fact-list {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding-left: 20px;
+  color: var(--arena-sub);
+  line-height: 1.6;
+}
+
+.material-subsection {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--arena-line2);
+}
+
+.first-subsection {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.stack-list article {
+  padding: 14px;
+  border: 1px solid var(--arena-line);
+  border-radius: 12px;
+  background: var(--user-surface-muted);
+}
+
+.stack-list strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.stack-list p {
+  margin-bottom: 6px;
+}
+
+.stack-list span {
+  display: block;
+  font-size: 12px;
+}
+
+.strategy-evidence-list,
+.secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.empty-state {
+  padding: 24px;
+  border: 1px dashed var(--arena-line);
+  border-radius: 12px;
+  color: var(--arena-sub);
+  text-align: center;
+}
+
+@media (max-width: 840px) {
+  .review-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .review-hero,
+  .actions,
+  .section-head,
+  .next-step-panel,
+  .materials-entry,
+  .materials-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions,
+  .secondary-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .next-step-panel .el-button {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 440px) {
+  .review-hero,
+  .review-section {
+    padding: 16px;
   }
 }
 </style>

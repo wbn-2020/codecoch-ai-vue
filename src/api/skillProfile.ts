@@ -74,7 +74,12 @@ const pickText = (source: Record<string, unknown>, keys: string[], fallback = ''
 const pickNumber = (source: Record<string, unknown>, keys: string[], fallback?: number) => {
   for (const key of keys) {
     const value = parseMaybeJson(source[key])
-    const numberValue = typeof value === 'number' ? value : Number(value)
+    if (value === null || value === undefined || value === '') continue
+    const numberValue = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : Number.NaN
     if (Number.isFinite(numberValue)) return numberValue
   }
   return fallback

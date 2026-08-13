@@ -93,7 +93,7 @@ const go = (to: RouteLocationRaw) => {
 .v3-section {
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--arena-card, var(--app-surface));
 }
 
 .v3-hero {
@@ -148,7 +148,7 @@ const go = (to: RouteLocationRaw) => {
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.42);
+  background: var(--user-surface-muted, var(--app-surface-raised));
 
   strong {
     color: var(--app-text);
@@ -165,10 +165,10 @@ const go = (to: RouteLocationRaw) => {
 .v3-status-pill {
   width: fit-content;
   padding: 5px 10px;
-  border: 1px solid rgba(129, 140, 248, 0.38);
+  border: 1px solid var(--arena-vio, var(--app-primary));
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.14);
-  color: var(--cc-primary-hover);
+  background: var(--arena-vio-soft, var(--app-primary-soft));
+  color: var(--arena-vio, var(--app-primary));
   font-size: 12px;
 }
 
@@ -205,10 +205,10 @@ const go = (to: RouteLocationRaw) => {
   display: block;
   overflow-wrap: anywhere;
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.48);
-  color: #bfdbfe;
+  background: var(--user-surface-muted, var(--app-surface-raised));
+  color: var(--app-text);
 }
 
 .v3-scope-list li {

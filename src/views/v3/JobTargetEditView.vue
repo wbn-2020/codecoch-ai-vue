@@ -163,9 +163,10 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
-  border: 1px solid rgba(129, 140, 248, 0.28);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.58);
+  border: 1.5px solid var(--arena-line, var(--app-border));
+  border-radius: var(--arena-radius-card, 20px);
+  background: var(--arena-card, var(--app-surface));
+  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
 .hero-kicker,
@@ -176,10 +177,9 @@ onMounted(() => {
 
 .hero-kicker {
   gap: 8px;
-  color: var(--cc-ai-cyan);
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .edit-hero h1 {
@@ -211,7 +211,7 @@ onMounted(() => {
 
 .form-side {
   padding-right: 16px;
-  border-right: 1px solid rgba(148, 163, 184, 0.14);
+  border-right: 1px solid var(--arena-line, var(--app-border));
 
   h2 {
     margin: 0;
@@ -232,9 +232,9 @@ onMounted(() => {
 
   div {
     padding: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 10px;
-    background: rgba(2, 6, 23, 0.3);
+    border: 1px solid var(--arena-line, var(--app-border));
+    border-radius: 12px;
+    background: var(--arena-bg, var(--app-bg));
   }
 
   span,
@@ -249,7 +249,7 @@ onMounted(() => {
 
   strong {
     margin-top: 6px;
-    color: #dbeafe;
+    color: var(--app-text);
     font-size: 13px;
   }
 }

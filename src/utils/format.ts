@@ -40,7 +40,17 @@ export const notificationTypeLabels: Record<string, string> = {
 
 export const formatNotificationType = (type?: string | null): string => {
   if (!type) return '通知'
-  return notificationTypeLabels[type] || type
+  const normalized = String(type).trim().replace(/[.-]/g, '_').toUpperCase()
+  if (notificationTypeLabels[normalized]) return notificationTypeLabels[normalized]
+  if (normalized.includes('APPLICATION') && normalized.includes('FOLLOW')) return '投递跟进提醒'
+  if (normalized.includes('INTERVIEW') && normalized.includes('REPORT')) return '面试报告提醒'
+  if (normalized.includes('INTERVIEW')) return '模拟面试提醒'
+  if (normalized.includes('REPORT')) return '报告提醒'
+  if (normalized.includes('TASK') || normalized.includes('AGENT')) return '训练任务提醒'
+  if (normalized.includes('PLAN') || normalized.includes('STUDY')) return '学习计划提醒'
+  if (normalized.includes('RESUME')) return '简历处理提醒'
+  if (normalized.includes('SECURITY') || normalized.includes('AUTH')) return '账户安全提醒'
+  return '系统通知'
 }
 
 export const formatLocalDate = (value: Date = new Date()): string => {
@@ -48,6 +58,27 @@ export const formatLocalDate = (value: Date = new Date()): string => {
   const month = padDatePart(value.getMonth() + 1)
   const day = padDatePart(value.getDate())
   return `${year}-${month}-${day}`
+}
+
+export const formatDateInTimezone = (
+  value: Date = new Date(),
+  timezone = 'Asia/Shanghai'
+): string => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(value)
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+    if (values.year && values.month && values.day) {
+      return `${values.year}-${values.month}-${values.day}`
+    }
+  } catch {
+    // Invalid timezone data should not prevent the page from rendering.
+  }
+  return formatLocalDate(value)
 }
 
 export const formatLocalDateTime = (value: Date = new Date()): string => {

@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -33,48 +30,50 @@ const componentStubs = {
   }
 }
 
-const abilityMapFixture = (hasTrainingData: boolean): AbilityMapVO => ({
+const abilityMapFixture = (hasTrainingData: boolean, domainCount = 1): AbilityMapVO => ({
   userId: 1,
-  totalSkillCount: 2,
-  assessedSkillCount: hasTrainingData ? 2 : 0,
+  totalSkillCount: domainCount * 2,
+  assessedSkillCount: hasTrainingData ? domainCount * 2 : 0,
   weakSkillCount: hasTrainingData ? 1 : 0,
   strongSkillCount: hasTrainingData ? 1 : 0,
   hasTrainingData,
-  domains: [
-    {
-      domainCode: 'JAVA_CORE',
-      domainName: 'Java 基础',
+  domains: Array.from({ length: domainCount }, (_, index) => {
+    const domainCode = `JAVA_CORE_${index + 1}`
+    const domainName = `Java 基础 ${index + 1}`
+    return {
+      domainCode,
+      domainName,
       totalCount: 2,
       assessedCount: hasTrainingData ? 2 : 0,
-      weakCount: hasTrainingData ? 1 : 0,
+      weakCount: hasTrainingData && index === 0 ? 1 : 0,
       skills: [
         {
-          code: 'COLLECTIONS',
-          name: '集合与数据结构',
-          domainCode: 'JAVA_CORE',
-          domainName: 'Java 基础',
+          code: `COLLECTIONS_${index + 1}`,
+          name: `集合与数据结构 ${index + 1}`,
+          domainCode,
+          domainName,
           description: '掌握集合选型与常见实现。',
-          status: hasTrainingData ? 'WEAK' : 'UNASSESSED',
+          status: hasTrainingData && index === 0 ? 'WEAK' : 'UNASSESSED',
           evidenceCount: hasTrainingData ? 2 : 0,
           confidence: hasTrainingData ? 'MEDIUM' : 'UNKNOWN'
         },
         {
-          code: 'JAVA_CORE',
-          name: 'Java 基础',
-          domainCode: 'JAVA_CORE',
-          domainName: 'Java 基础',
+          code: `JAVA_CORE_${index + 1}`,
+          name: `Java 基础 ${index + 1}`,
+          domainCode,
+          domainName,
           description: '掌握 Java 核心语言能力。',
-          status: hasTrainingData ? 'STRONG' : 'UNASSESSED',
+          status: hasTrainingData && index === 0 ? 'STRONG' : 'UNASSESSED',
           evidenceCount: hasTrainingData ? 3 : 0,
           confidence: hasTrainingData ? 'HIGH' : 'UNKNOWN'
         }
       ]
     }
-  ]
+  })
 })
 
-const mountAbilityMap = async (hasTrainingData: boolean) => {
-  vi.mocked(getAbilityMapApi).mockResolvedValue(abilityMapFixture(hasTrainingData))
+const mountAbilityMap = async (hasTrainingData: boolean, domainCount = 1) => {
+  vi.mocked(getAbilityMapApi).mockResolvedValue(abilityMapFixture(hasTrainingData, domainCount))
   const wrapper = mount(AbilityMapView, {
     global: {
       stubs: componentStubs
@@ -89,64 +88,63 @@ describe('AbilityMapView layout', () => {
     vi.clearAllMocks()
   })
 
-  it('uses a compact directory track and lets the main content own the remaining width', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/ability-map/AbilityMapView.vue'),
-      'utf8'
-    )
-    const workspaceRule = source.match(/\.map-workspace\s*\{[\s\S]*?\n\}/)?.[0] || ''
-
-    expect(workspaceRule).toMatch(
-      /grid-template-columns:\s*clamp\(220px,\s*18vw,\s*240px\)\s+minmax\(0,\s*1fr\)/
-    )
-    expect(workspaceRule).toMatch(/align-items:\s*stretch;/)
-    expect(workspaceRule).not.toMatch(/\s280px/)
-    expect(source).not.toContain('map-workspace--without-insights')
-  })
-
-  it('keeps the directory visual rail aligned with the full map while its contents remain sticky', async () => {
+  it('uses the compact Direction D skill board and places the action rail within the visible grid', async () => {
     const wrapper = await mountAbilityMap(false)
-    const shell = wrapper.get('.map-workspace > .domain-rail-shell')
 
-    expect(shell.find('.domain-rail').attributes('aria-label')).toBe('能力域目录')
+    expect(wrapper.find('.ability-summary').exists()).toBe(true)
+    expect(wrapper.find('.ability-tree-layout').exists()).toBe(true)
+    expect(wrapper.find('.ability-node-board').exists()).toBe(true)
+    expect(wrapper.find('.ability-action-rail').exists()).toBe(true)
+    expect(wrapper.findAll('.ability-node')).toHaveLength(2)
   })
 
-  it('does not reserve an insight region before training data exists', async () => {
+  it('keeps every domain in the visual node board while retaining action and evidence cards', async () => {
+    const wrapper = await mountAbilityMap(true, 3)
+
+    expect(wrapper.findAll('.ability-node-board .ability-domain-card')).toHaveLength(3)
+    expect(wrapper.find('.ability-action-rail').exists()).toBe(true)
+    expect(wrapper.find('.ability-evidence-card').exists()).toBe(true)
+  })
+
+  it('keeps unassessed skills visually honest before training data exists', async () => {
     const wrapper = await mountAbilityMap(false)
-    const workspace = wrapper.get('.map-workspace')
 
-    expect(workspace.classes()).toEqual(['map-workspace'])
-    expect(workspace.find('.insight-panel').exists()).toBe(false)
+    expect(wrapper.find('.priority-action-card.is-muted').exists()).toBe(true)
+    expect(wrapper.findAll('.ability-node.is-unassessed')).toHaveLength(2)
+    expect(wrapper.find('.ability-node.is-weak').exists()).toBe(false)
+    expect(wrapper.text()).toContain('评估证据不足')
+    expect(wrapper.text()).not.toContain('战力')
   })
 
-  it('keeps populated insights inside the flexible main content instead of a third page column', async () => {
+  it('shows real weak and strong nodes after training data is available', async () => {
     const wrapper = await mountAbilityMap(true)
 
-    expect(wrapper.find('.map-workspace > .insight-panel').exists()).toBe(false)
-    expect(wrapper.find('.domain-panel > .insight-panel').exists()).toBe(true)
+    expect(wrapper.find('.ability-node.is-weak').exists()).toBe(true)
+    expect(wrapper.find('.ability-node.is-strong').exists()).toBe(true)
+    expect(wrapper.find('.ability-evidence-card').exists()).toBe(true)
   })
 
-  it('terminates the skill rail at the final node instead of the final card bottom', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/ability-map/AbilityMapView.vue'),
-      'utf8'
-    )
-    const skillGridRule = source.match(/\.skill-grid\s*\{[\s\S]*?\n\}/)?.[0] || ''
+  it('keeps each skill node itself tappable for training', async () => {
+    const wrapper = await mountAbilityMap(true)
+    const buttons = wrapper.findAll('button.ability-node')
 
-    expect(skillGridRule).not.toContain('&::before')
-    expect(source).toMatch(/&:not\(:last-child\)::after\s*\{[\s\S]*?top:\s*26px;/)
-    expect(source).toMatch(/&:not\(:last-child\)::after\s*\{[\s\S]*?height:\s*calc\(100%\s*\+\s*10px\);/)
-    expect(source).toMatch(/\.skill-card:not\(:last-child\)::after\s*\{[\s\S]*?left:\s*-10px;/)
+    expect(buttons).toHaveLength(2)
+    await buttons[0].trigger('click')
+    expect(routerPush).toHaveBeenCalledWith(expect.objectContaining({
+      path: '/questions/practice'
+    }))
   })
 
-  it('aligns the growth-stage rail with each node center at desktop and mobile widths', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/views/ability-map/AbilityMapView.vue'),
-      'utf8'
-    )
+  it('shows a distinct query failure state instead of an empty directory', async () => {
+    vi.mocked(getAbilityMapApi).mockRejectedValueOnce(new Error('ability unavailable'))
+    const wrapper = mount(AbilityMapView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
 
-    expect(source).toMatch(/--growth-stage-node-center:\s*27px;/)
-    expect(source).toMatch(/\.growth-stage-track\s*\{[\s\S]*?top:\s*var\(--growth-stage-node-center\);/)
-    expect(source).toMatch(/&::before\s*\{[\s\S]*?bottom:\s*var\(--growth-stage-node-center\);[\s\S]*?left:\s*var\(--growth-stage-node-center\);/)
+    expect(wrapper.text()).toContain('能力图谱暂时加载失败')
+    expect(wrapper.text()).not.toContain('还没有能力评估目录')
   })
 })

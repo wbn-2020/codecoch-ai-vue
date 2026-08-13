@@ -7,7 +7,7 @@
           <span>生成效果</span>
         </div>
         <h1 class="admin-hero__title">生成效果分析</h1>
-        <p class="admin-hero__desc">围绕智能教练生成成功率、任务完成率和任务结构做运营观测。</p>
+        <p class="admin-hero__desc">区分完整生成、降级可用与失败运行，并结合任务完成率和任务结构做运营观测。</p>
       </div>
       <div class="admin-hero__actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
@@ -29,8 +29,8 @@
       >
         <div class="diagnostic-actions">
           <el-button type="primary" @click="loadPage">重新加载</el-button>
-          <el-button @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
-          <el-button @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+          <el-button v-permission="'admin:agent:run:list'" @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
+          <el-button v-permission="'admin:agent:task:list'" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
         </div>
       </AppState>
 
@@ -59,7 +59,7 @@
         >
           <div class="diagnostic-actions">
             <el-button type="primary" @click="loadPage">刷新趋势</el-button>
-            <el-button @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
+            <el-button v-permission="'admin:agent:run:list'" @click="$router.push('/admin/agent/runs')">查看运行记录</el-button>
           </div>
         </AppState>
         <div v-else ref="trendChartRef" class="analytics-chart"></div>
@@ -82,7 +82,7 @@
             :description="taskTypeEmptyDescription"
           >
             <div class="diagnostic-actions">
-              <el-button type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+              <el-button v-permission="'admin:agent:task:list'" type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
               <el-button @click="loadPage">重新加载</el-button>
             </div>
           </AppState>
@@ -104,7 +104,7 @@
             :description="priorityEmptyDescription"
           >
             <div class="diagnostic-actions">
-              <el-button type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
+              <el-button v-permission="'admin:agent:task:list'" type="primary" @click="$router.push('/admin/agent/tasks')">查看任务明细</el-button>
               <el-button @click="loadPage">重新加载</el-button>
             </div>
           </AppState>
@@ -155,11 +155,36 @@ const rangeOptions = [
   { label: '近 90 天', value: 90 }
 ]
 
+const fullSuccessRuns = computed(() => Math.max(
+  0,
+  (overview.value?.successAgentRuns || 0) - (overview.value?.degradedAgentRuns || 0)
+))
+
 const metrics = computed(() => [
-  { key: 'runs', label: '运行次数', value: overview.value?.totalAgentRuns || 0, hint: `成功 ${overview.value?.successAgentRuns || 0} / 失败 ${overview.value?.failedAgentRuns || 0}` },
-  { key: 'success', label: '运行成功率', value: `${overview.value?.agentSuccessRate || 0}%`, hint: `平均耗时 ${overview.value?.avgDurationMs || 0}ms` },
-  { key: 'tasks', label: '任务总数', value: overview.value?.totalAgentTasks || 0, hint: `完成 ${overview.value?.doneTaskCount || 0} / 跳过 ${overview.value?.skippedTaskCount || 0}` },
-  { key: 'completion', label: '任务完成率', value: `${overview.value?.taskCompletionRate || 0}%`, hint: '已完成 / 任务总数' }
+  {
+    key: 'runs',
+    label: '运行次数',
+    value: overview.value?.totalAgentRuns || 0,
+    hint: `完整 ${fullSuccessRuns.value} / 降级 ${overview.value?.degradedAgentRuns || 0} / 失败 ${overview.value?.failedAgentRuns || 0}`
+  },
+  {
+    key: 'success',
+    label: '完整生成成功率',
+    value: `${overview.value?.agentSuccessRate || 0}%`,
+    hint: `不含降级结果 · 平均 ${overview.value?.avgDurationMs || 0}ms`
+  },
+  {
+    key: 'effective',
+    label: '有效可用率',
+    value: `${overview.value?.effectiveSuccessRate || 0}%`,
+    hint: `含降级可用 ${overview.value?.degradedAgentRuns || 0} 次`
+  },
+  {
+    key: 'completion',
+    label: '任务完成率',
+    value: `${overview.value?.taskCompletionRate || 0}%`,
+    hint: `完成 ${overview.value?.doneTaskCount || 0} / 任务 ${overview.value?.totalAgentTasks || 0}`
+  }
 ])
 
 const partialErrorDescription = computed(() =>
@@ -169,6 +194,7 @@ const partialErrorDescription = computed(() =>
 const hasAgentRunSignal = computed(() => Boolean(
   (overview.value?.totalAgentRuns || 0) ||
   (overview.value?.successAgentRuns || 0) ||
+  (overview.value?.degradedAgentRuns || 0) ||
   (overview.value?.failedAgentRuns || 0)
 ))
 
@@ -271,7 +297,14 @@ const renderCharts = async () => {
       color: ['#60a5fa', '#34d399', '#f87171'],
       tooltip: { trigger: 'axis' },
       legend: { top: 0, right: 8, textStyle: { color: '#94a3b8' } },
-      grid: { left: 12, right: 16, top: 38, bottom: 8, containLabel: true },
+      grid: {
+        left: 12,
+        right: 16,
+        top: 38,
+        bottom: 8,
+        outerBoundsMode: 'same',
+        outerBoundsContain: 'axisLabel'
+      },
       xAxis: { type: 'category', data: trend.value.map((item) => item.date), axisLabel: { color: '#94a3b8' } },
       yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.14)' } }, axisLabel: { color: '#94a3b8' } },
       series: [

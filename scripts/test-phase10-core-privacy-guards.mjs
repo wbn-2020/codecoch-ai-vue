@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveBackendRoot } from './workspace-paths.mjs'
@@ -5,20 +6,37 @@ import { resolveBackendRoot } from './workspace-paths.mjs'
 const frontendRoot = process.cwd()
 const backendRoot = resolveBackendRoot(frontendRoot)
 
+const resolveBackendFile = (relativePath) => {
+  const primaryPath = path.join(backendRoot, relativePath)
+  if (existsSync(primaryPath)) return primaryPath
+
+  const [moduleName, ...moduleRelativePath] = relativePath.split('/')
+  if (moduleName.startsWith('codecoachai-')) {
+    const consolidatedPath = path.join(
+      backendRoot,
+      'codecoachai-core',
+      ...moduleRelativePath
+    )
+    if (existsSync(consolidatedPath)) return consolidatedPath
+  }
+
+  return primaryPath
+}
+
 const files = {
-  aiConvert: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/convert/AiConvert.java'),
-  aiConvertTest: path.join(backendRoot, 'codecoachai-ai/src/test/java/com/codecoachai/ai/convert/AiConvertTest.java'),
-  adminAiController: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/controller/AdminAiController.java'),
-  adminAgentController: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AdminAgentController.java'),
-  adminRawAccessTest: path.join(backendRoot, 'codecoachai-ai/src/test/java/com/codecoachai/ai/controller/AdminRawAccessControllerTest.java'),
-  agentServiceTest: path.join(backendRoot, 'codecoachai-ai/src/test/java/com/codecoachai/ai/agent/service/impl/JobCoachAgentServiceImplTest.java'),
-  agentService: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/service/impl/JobCoachAgentServiceImpl.java'),
-  agentConvert: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/convert/AgentConvert.java'),
-  questionPracticeEvidenceFeign: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/QuestionPracticeEvidenceFeignClient.java'),
-  aiPracticeRecordEvidenceVo: path.join(backendRoot, 'codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/vo/PracticeRecordEvidenceVO.java'),
-  innerPracticeRecordController: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/controller/InnerPracticeRecordController.java'),
-  questionPracticeRecordEvidenceVo: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/domain/vo/PracticeRecordAgentEvidenceVO.java'),
-  questionAgentNotifier: path.join(backendRoot, 'codecoachai-question/src/main/java/com/codecoachai/question/service/impl/AgentBusinessActionNotifier.java'),
+  aiConvert: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/convert/AiConvert.java'),
+  aiConvertTest: resolveBackendFile('codecoachai-ai/src/test/java/com/codecoachai/ai/convert/AiConvertTest.java'),
+  adminAiController: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/controller/AdminAiController.java'),
+  adminAgentController: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/controller/AdminAgentController.java'),
+  adminRawAccessTest: resolveBackendFile('codecoachai-ai/src/test/java/com/codecoachai/ai/controller/AdminRawAccessControllerTest.java'),
+  agentServiceTest: resolveBackendFile('codecoachai-ai/src/test/java/com/codecoachai/ai/agent/service/impl/JobCoachAgentServiceImplTest.java'),
+  agentService: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/service/impl/JobCoachAgentServiceImpl.java'),
+  agentConvert: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/convert/AgentConvert.java'),
+  questionPracticeEvidenceFeign: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/QuestionPracticeEvidenceFeignClient.java'),
+  aiPracticeRecordEvidenceVo: resolveBackendFile('codecoachai-ai/src/main/java/com/codecoachai/ai/agent/feign/vo/PracticeRecordEvidenceVO.java'),
+  innerPracticeRecordController: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/controller/InnerPracticeRecordController.java'),
+  questionPracticeRecordEvidenceVo: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/domain/vo/PracticeRecordAgentEvidenceVO.java'),
+  questionAgentNotifier: resolveBackendFile('codecoachai-question/src/main/java/com/codecoachai/question/service/impl/AgentBusinessActionNotifier.java'),
   frontendAgentApi: path.join(frontendRoot, 'src/api/agent.ts'),
   frontendAdminAgentApi: path.join(frontendRoot, 'src/api/adminAgent.ts'),
   frontendAiAdminApi: path.join(frontendRoot, 'src/api/aiAdmin.ts'),
@@ -139,11 +157,22 @@ expect(hasAll(content.agentService, [
   'Do not include raw prompts, private resume text, secrets, phone, email, or hidden input snapshots.'
 ]), 'backend-agent', 'Agent review implementation must retain bounded AI request snapshots and privacy guardrails')
 
-expect(hasAll(content.questionPracticeEvidenceFeign, [
-  '@FeignClient(name = "codecoachai-question", contextId = "questionPracticeEvidenceFeignClient")',
-  '@GetMapping("/inner/practice-records/users/{userId}/{recordId}/agent-evidence")',
-  'Result<PracticeRecordEvidenceVO> getPracticeRecordEvidence'
-]), 'backend-agent-evidence', 'AI module must call question service through an internal practice-record evidence Feign client')
+expect(
+  (
+    content.questionPracticeEvidenceFeign.includes(
+      '@FeignClient(name = "codecoachai-question", contextId = "questionPracticeEvidenceFeignClient")'
+    ) ||
+    content.questionPracticeEvidenceFeign.includes(
+      '@FeignClient(name = "codecoachai-core", contextId = "questionPracticeEvidenceFeignClient")'
+    )
+  ) &&
+    hasAll(content.questionPracticeEvidenceFeign, [
+      '@GetMapping("/inner/practice-records/users/{userId}/{recordId}/agent-evidence")',
+      'Result<PracticeRecordEvidenceVO> getPracticeRecordEvidence'
+    ]),
+  'backend-agent-evidence',
+  'AI module must call question service through an internal practice-record evidence Feign client'
+)
 
 expect(hasAll(content.aiPracticeRecordEvidenceVo, [
   'private Long id',

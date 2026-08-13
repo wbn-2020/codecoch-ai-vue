@@ -15,24 +15,15 @@
             <h2>角色列表</h2>
             <p>角色状态会影响后台菜单、按钮权限和管理员登录态恢复结果，可按排障场景调整诊断列。</p>
           </div>
-          <div class="table-view-tools">
-            <el-segmented v-model="tableSize" :options="tableSizeOptions" />
-            <el-dropdown trigger="click" :hide-on-click="false">
-              <el-button plain>列配置</el-button>
-              <template #dropdown>
-                <el-dropdown-menu class="column-config-menu">
-                  <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                    <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                      {{ item.label }}
-                    </el-checkbox>
-                  </el-dropdown-item>
-                  <el-dropdown-item divided>
-                    <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
+          <AdminTableViewSettings
+            v-model:size="tableSize"
+            :size-options="tableSizeOptions"
+            :columns="columnOptions"
+            :visible-columns="visibleColumns"
+            aria-label="角色列表表格视图设置"
+            @update:column-visible="({ key, visible }) => visibleColumns[key as RoleColumnKey] = visible"
+            @reset="resetTableView"
+          />
         </div>
 
         <el-table v-loading="loading" :data="roles" row-key="roleId" :size="tableSize">
@@ -133,6 +124,7 @@ import {
   updateAdminRoleApi,
   updateAdminRoleStatusApi
 } from '@/api/user'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
@@ -210,7 +202,8 @@ const openDialog = (row?: RoleVO) => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const actionLabel = editingRoleId.value ? '更新角色' : '新增角色'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
@@ -244,6 +237,8 @@ const handleSave = async () => {
     }
     dialogVisible.value = false
     await fetchRoles()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '角色保存失败，请检查表单内容或权限后重试。'))
   } finally {
     saving.value = false
   }
@@ -268,15 +263,19 @@ const handleToggleStatus = async (row: RoleVO) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
-  await updateAdminRoleStatusApi(row.roleId, {
-    status: nextStatus,
-    confirm: true,
-    dryRun: false,
-    reason: `${actionLabel}角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
-    idempotencyKey: createOperationIdempotencyKey(`admin-role-status-${row.roleId}`)
-  })
-  ElMessage.success(`角色已${actionLabel}`)
-  await fetchRoles()
+  try {
+    await updateAdminRoleStatusApi(row.roleId, {
+      status: nextStatus,
+      confirm: true,
+      dryRun: false,
+      reason: `${actionLabel}角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-role-status-${row.roleId}`)
+    })
+    ElMessage.success(`角色已${actionLabel}`)
+    await fetchRoles()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `${actionLabel}角色失败，请确认权限或稍后重试。`))
+  }
 }
 
 const normalizeRoleCode = (roleCode?: string) => String(roleCode || '').trim().replace(/^ROLE_/i, '').toUpperCase()

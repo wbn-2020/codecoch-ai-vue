@@ -55,7 +55,7 @@
         >
           <el-table-column prop="taskId" label="处理编号" min-width="170" show-overflow-tooltip />
           <el-table-column label="关联功能" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }"><span :title="taskTypeCode(row.taskType)">{{ taskTypeLabel(row.taskType) }}</span></template>
+            <template #default="{ row }"><span :title="taskTypeTitle(row.taskType)">{{ taskTypeLabel(row.taskType) }}</span></template>
           </el-table-column>
           <el-table-column prop="bizId" label="关联记录" min-width="120" show-overflow-tooltip />
           <el-table-column prop="traceId" label="追踪号" min-width="160" show-overflow-tooltip />
@@ -63,8 +63,8 @@
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-              <el-button link type="primary" :disabled="!row.traceId" @click="goAiLogsByTrace(row.traceId)">生成记录</el-button>
-              <el-button link type="primary" :disabled="!row.traceId" @click="goOperationLogsByTrace(row.traceId)">审计记录</el-button>
+              <el-button v-permission="'admin:ai:log:list'" link type="primary" :disabled="!row.traceId" @click="goAiLogsByTrace(row.traceId)">生成记录</el-button>
+              <el-button v-permission="'admin:audit:operation-log'" link type="primary" :disabled="!row.traceId" @click="goOperationLogsByTrace(row.traceId)">审计记录</el-button>
             </template>
           </el-table-column>
           <template #empty>
@@ -132,7 +132,7 @@
         <el-table v-loading="loading" :data="tasks" row-key="id" :size="tableSize">
           <el-table-column v-if="isColumnVisible('taskName')" prop="taskName" label="任务" min-width="180" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('taskType')" label="类型" min-width="170" show-overflow-tooltip>
-            <template #default="{ row }"><span :title="taskTypeCode(row.taskType)">{{ taskTypeLabel(row.taskType) }}</span></template>
+            <template #default="{ row }"><span :title="taskTypeTitle(row.taskType)">{{ taskTypeLabel(row.taskType) }}</span></template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('bizId')" prop="bizId" label="关联记录" min-width="130" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('status')" label="状态" width="120"><template #default="{ row }"><el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
@@ -141,9 +141,15 @@
           <el-table-column v-if="isColumnVisible('createdAt')" prop="createdAt" label="创建时间" min-width="170" />
           <el-table-column v-if="isColumnVisible('errorMessage')" label="失败原因" min-width="260">
             <template #default="{ row }">
-              <p :class="['task-error-preview', { 'task-error-preview--empty': !row.errorMessage }]">
-                {{ row.errorMessage || '-' }}
-              </p>
+              <div
+                v-if="rawTaskFailure(row)"
+                class="task-error-preview"
+                :title="`原始技术错误：${rawTaskFailure(row)}`"
+              >
+                <strong>{{ taskFailureDiagnosis(row).reason }}</strong>
+                <small>{{ taskFailureDiagnosis(row).action }}</small>
+              </div>
+              <span v-else class="task-error-preview--empty">-</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="170">
@@ -197,7 +203,12 @@
       <el-descriptions v-if="detail" :column="1" border>
         <el-descriptions-item label="处理编号">{{ primaryTaskId(detail) }}</el-descriptions-item>
         <el-descriptions-item v-if="secondaryTaskId(detail)" label="消息编号">{{ secondaryTaskId(detail) }}</el-descriptions-item>
-        <el-descriptions-item label="任务类型">{{ taskTypeLabel(detail.taskType) }}</el-descriptions-item>
+        <el-descriptions-item label="任务类型">
+          <span :title="taskTypeTitle(detail.taskType)">{{ taskTypeLabel(detail.taskType) }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item v-if="!isRegisteredTaskType(detail.taskType)" label="原始任务代码">
+          <code>{{ taskTypeCode(detail.taskType) || '-' }}</code>
+        </el-descriptions-item>
         <el-descriptions-item label="状态"><el-tag :type="statusType(detail.status)">{{ statusLabel(detail.status) }}</el-tag></el-descriptions-item>
         <el-descriptions-item label="关联记录">{{ detail.bizType || '-' }} / {{ detail.bizId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="追踪号">{{ detail.traceId || '-' }}</el-descriptions-item>
@@ -208,7 +219,13 @@
             <el-button size="small" :disabled="!detail.bizType || !detail.bizId" @click="fillDiagnosticFromTask(detail)">按关联记录反查任务</el-button>
           </div>
         </el-descriptions-item>
-        <el-descriptions-item label="失败说明">{{ detail.errorMessage || '暂无失败说明' }}</el-descriptions-item>
+        <el-descriptions-item label="失败原因">{{ taskFailureDiagnosis(detail).reason }}</el-descriptions-item>
+        <el-descriptions-item label="建议动作">{{ taskFailureDiagnosis(detail).action }}</el-descriptions-item>
+        <el-descriptions-item label="建议责任方">{{ taskFailureDiagnosis(detail).owner }}</el-descriptions-item>
+        <el-descriptions-item label="诊断追踪号">{{ failureTraceId(detail) || '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="rawTaskFailure(detail)" label="原始技术错误">
+          <pre class="detail-preview technical-error">{{ rawTaskFailure(detail) }}</pre>
+        </el-descriptions-item>
         <el-descriptions-item label="处理输入摘要">
           <pre class="detail-preview">{{ previewText(detail.payloadPreview, '暂无输入摘要') }}</pre>
           <small v-if="hasPreviewDigest(detail.payloadHash)" class="detail-preview-meta">输入摘要已生成校验指纹，可用于后续核对。</small>
@@ -363,27 +380,158 @@ const statusLabels: Record<string, string> = {
 const statusLabel = (status?: string | null) => {
   const value = String(status || '').trim().toUpperCase()
   if (!value) return '-'
-  return statusLabels[value] || '状态待确认'
+  return statusLabels[value] || '未登记状态'
 }
 
 const taskTypeLabels: Record<string, string> = {
   'agent.daily-plan.generate': '今日计划生成',
+  'agent.week-plan.generate': '每周计划生成',
+  'agent.review.generate': '智能教练复盘',
   'job-target.parse': '岗位描述解析',
   'resume.parse': '简历解析',
+  'resume.optimize': '简历优化',
+  'resume.export': '简历导出',
   'resume-job-match.analyze': '简历匹配',
   'question-recommendation.generate': '推荐题生成',
+  'question.generate': '题目生成',
+  'question.ai-generate': 'AI 题目生成',
   'interview.report': '面试报告生成',
+  'interview.voice.transcribe': '面试语音转写',
   'study-plan.generate': '学习计划生成',
-  'search.sync': '检索索引同步'
+  'search.sync': '检索索引同步',
+  'knowledge.sync': '知识库索引同步',
+  'knowledge.rebuild': '知识库索引重建',
+  'application-package.generate': '求职材料包生成',
+  'notification.send': '通知发送',
+  QUESTION_PRACTICE: '刷题练习',
+  QUESTION_REVIEW: '题目复盘',
+  WRONG_QUESTION_REVIEW: '错题复习',
+  RESUME_OPTIMIZE: '简历优化',
+  APPLICATION_FOLLOW_UP: '投递跟进',
+  INTERVIEW: '面试准备',
+  INTERVIEW_REPORT: '面试报告复盘',
+  REPORT_REVIEW: '报告复盘',
+  KNOWLEDGE_REVIEW: '知识复盘',
+  STUDY_TASK: '学习任务'
 }
 
 const taskTypeCode = (value?: string | null) => String(value || '').trim()
 
-const taskTypeLabel = (value?: string | null) => {
-  const raw = String(value || '').trim()
-  if (!raw) return '-'
-  return taskTypeLabels[raw] || raw
+const registeredTaskTypeLabel = (value?: string | null) => {
+  const raw = taskTypeCode(value)
+  if (!raw) return undefined
+  return taskTypeLabels[raw] || taskTypeLabels[raw.toLowerCase()] || taskTypeLabels[raw.toUpperCase()]
 }
+
+const isRegisteredTaskType = (value?: string | null) => Boolean(registeredTaskTypeLabel(value))
+
+const taskTypeLabel = (value?: string | null) => {
+  const raw = taskTypeCode(value)
+  if (!raw) return '-'
+  return registeredTaskTypeLabel(raw) || '未登记任务类型'
+}
+
+const taskTypeTitle = (value?: string | null) => {
+  const raw = taskTypeCode(value)
+  if (!raw) return '未返回任务类型代码'
+  return isRegisteredTaskType(raw) ? `任务类型代码：${raw}` : `未登记任务类型，原始代码：${raw}`
+}
+
+type FailureDiagnosis = {
+  reason: string
+  action: string
+  owner: string
+}
+
+const rawTaskFailure = (row?: Pick<AsyncTaskVO, 'errorMessage'> | null) =>
+  String(row?.errorMessage || '').replace(/\s+/g, ' ').trim()
+
+const includesAny = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword))
+
+const compactFailureText = (value?: string | null, maxLength = 90) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+}
+
+const diagnoseTaskFailureText = (value?: string | null): FailureDiagnosis => {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!raw) {
+    return {
+      reason: '未记录失败原因',
+      action: '先按追踪号核对生成记录和审计记录，再判断是否需要人工重试。',
+      owner: '平台运维 / 业务研发'
+    }
+  }
+
+  const lower = raw.toLowerCase()
+  if (includesAny(lower, ['rate limit', 'too many requests', 'http 429', 'status 429', 'quota exceeded', 'insufficient quota'])) {
+    return {
+      reason: '上游调用频率或额度受限',
+      action: '检查供应商额度和限流策略，等待限流窗口恢复或降低并发后再重试。',
+      owner: 'AI 平台管理员'
+    }
+  }
+  if (includesAny(lower, ['unauthorized', 'forbidden', 'invalid api key', 'invalid_api_key', 'authentication', 'http 401', 'status 401', 'http 403', 'status 403', 'api-key decrypt failed'])) {
+    return {
+      reason: '上游服务认证失败',
+      action: '核对调用凭据、账号权限和密钥解密状态，验证通过后再重试任务。',
+      owner: '平台管理员'
+    }
+  }
+  if (includesAny(lower, ['not configured', 'missing configuration', 'base-url', 'base url', 'model is not configured', 'provider not configured', 'configuration error'])) {
+    return {
+      reason: '任务依赖配置不完整',
+      action: '补齐模型、供应商或业务服务配置，确认依赖健康后再重试。',
+      owner: '平台管理员 / 业务研发'
+    }
+  }
+  if (includesAny(lower, ['timeout', 'timed out', 'read timed out', 'connect timeout', 'deadline exceeded', 'provider timeout'])) {
+    return {
+      reason: '任务等待上游响应超时',
+      action: '检查上游服务状态、网络延迟和超时配置，确认恢复后按追踪号重试。',
+      owner: '平台运维 / 上游服务负责人'
+    }
+  }
+  if (includesAny(lower, ['connection refused', 'connection reset', 'connection failed', 'connectexception', 'unknownhost', 'dns', 'no route to host', 'network is unreachable', 'socket'])) {
+    return {
+      reason: '任务依赖服务连接失败',
+      action: '检查服务地址、DNS、网络和网关状态，恢复连通后再重试。',
+      owner: '基础设施运维'
+    }
+  }
+  if (includesAny(lower, ['json', 'deserialize', 'serialization', 'parse response', 'malformed', 'invalid format'])) {
+    return {
+      reason: '任务数据格式无法解析',
+      action: '核对任务输入、上游响应和数据契约，修正格式问题后再重试。',
+      owner: '业务研发'
+    }
+  }
+  if (includesAny(lower, ['async task failed', 'request failed', 'provider request failed', 'bad gateway', 'service unavailable', 'http 502', 'http 503', 'status 502', 'status 503'])) {
+    return {
+      reason: '异步任务调用上游服务失败',
+      action: '使用追踪号查看生成记录和审计记录，确认上游恢复且不存在重复结果后再重试。',
+      owner: '业务研发 / 平台运维'
+    }
+  }
+
+  return {
+    reason: /[\u4e00-\u9fff]/.test(raw) ? compactFailureText(raw) : '未识别的任务技术错误',
+    action: '按追踪号查看原始技术错误和上下游日志，确认根因及幂等影响后再决定是否重试。',
+    owner: '业务研发 / 平台运维'
+  }
+}
+
+const taskFailureDiagnosis = (row?: Pick<AsyncTaskVO, 'errorMessage'> | null) =>
+  diagnoseTaskFailureText(rawTaskFailure(row))
+
+const extractTraceId = (value?: string | null) => {
+  const text = String(value || '')
+  const match = text.match(/(?:trace[\s_-]*id|traceId)\s*[=:]\s*["']?([a-zA-Z0-9._:-]+)/i)
+  return match?.[1] || ''
+}
+
+const failureTraceId = (row?: Pick<AsyncTaskVO, 'traceId' | 'errorMessage'> | null) =>
+  String(row?.traceId || '').trim() || extractTraceId(rawTaskFailure(row))
 
 const primaryTaskId = (row: AsyncTaskVO) => row.taskId || row.messageId || row.id || '-'
 
@@ -460,8 +608,12 @@ const fetchTasks = async () => {
 }
 
 const openDetail = async (row: AsyncTaskVO) => {
-  detail.value = await getAdminTaskDetailApi(row.id)
-  drawerVisible.value = true
+  try {
+    detail.value = await getAdminTaskDetailApi(row.id)
+    drawerVisible.value = true
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '任务详情加载失败，请稍后重试或按追踪号查询。'))
+  }
 }
 
 const handleDiagnosticSearch = async () => {
@@ -504,35 +656,54 @@ const resetDiagnosticSearch = () => {
 const handleRetry = async (row: AsyncTaskVO) => {
   if (!guardAdminMobileWrite()) return
   retryingId.value = row.id
+  let attempted = false
   try {
     const preview = await getAdminTaskRetryPreviewApi(row.id)
     const note = await promptActionNote('重试失败任务', row, preview)
     if (note === null) return
+    attempted = true
     await retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note))
     ElMessage.success('已提交重试')
-    await fetchTasks()
   } catch (error) {
-    if ((error as Error)?.message === '当前状态不可执行') ElMessage.warning('当前状态不可执行')
+    if (isTaskActionCancelled(error)) return
+    const message = getErrorMessage(error, '任务重试失败，请检查依赖状态和当前账号权限后重试。')
+    if (message === '当前状态不可执行') ElMessage.warning(message)
+    else ElMessage.error(message)
   } finally {
     retryingId.value = null
+    if (attempted) await fetchTasks()
   }
 }
 
 const handleDeadRetry = async (row: AsyncTaskVO) => {
   if (!guardAdminMobileWrite()) return
   retryingId.value = row.id
+  let attempted = false
   try {
     const preview = await getAdminDeadLetterRetryPreviewApi(row.id)
     const note = await promptActionNote('死信任务重试', row, preview)
     if (note === null) return
+    attempted = true
     await retryAdminDeadLetterTaskApi(row.id, buildTaskActionPayload('admin-dead-letter-retry', row, note))
     ElMessage.success('已提交死信重试')
-    await fetchTasks()
   } catch (error) {
-    if ((error as Error)?.message === '当前状态不可执行') ElMessage.warning('当前状态不可执行')
+    if (isTaskActionCancelled(error)) return
+    const message = getErrorMessage(error, '死信任务重试失败，请检查依赖状态和当前账号权限后重试。')
+    if (message === '当前状态不可执行') ElMessage.warning(message)
+    else ElMessage.error(message)
   } finally {
     retryingId.value = null
+    if (attempted) await fetchTasks()
   }
+}
+
+const isTaskActionCancelled = (error: unknown) => {
+  const value = String(
+    typeof error === 'object' && error !== null && 'action' in error
+      ? (error as { action?: unknown }).action
+      : (error as Error)?.message || error || ''
+  ).toLowerCase()
+  return value === 'cancel' || value === 'close'
 }
 
 const promptActionNote = async (title: string, row: AsyncTaskVO, preview?: AdminTaskImpactPreviewVO) => {
@@ -673,15 +844,27 @@ onMounted(() => {
 }
 
 .task-error-preview {
-  display: -webkit-box;
-  max-height: 42px;
-  margin: 0;
-  overflow: hidden;
-  color: var(--app-text, #1f2937);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.45;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--app-danger, #dc2626);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--app-text-muted, #64748b);
+  }
 }
 
 .task-error-preview--empty {
@@ -697,6 +880,11 @@ onMounted(() => {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.technical-error {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .detail-preview-meta {

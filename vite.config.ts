@@ -89,7 +89,14 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: gatewayTarget,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
+          configure(proxy) {
+            proxy.on('proxyReq', (proxyReq) => {
+              // The test gateway validates browser origins. Local Vite is a
+              // same-origin proxy, so do not forward its localhost origin.
+              proxyReq.removeHeader('origin')
+              proxyReq.removeHeader('referer')
+            })
+          }
         }
       }
     }

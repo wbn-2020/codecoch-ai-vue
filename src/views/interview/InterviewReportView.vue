@@ -1,15 +1,9 @@
 <template>
-  <div class="interview-report page-shell">
-    <section class="report-top report-top--compact">
-      <div>
-        <div class="eyebrow">
-          <ChartNoAxesCombined :size="16" />
-          面试复盘
-        </div>
-        <h1>结构化 AI 面试报告</h1>
-        <p>看清这轮面试哪里说得好、哪里要补强、下一步该练什么。</p>
-      </div>
-      <div class="report-actions">
+  <div class="arena arena-report interview-report page-shell">
+    <section v-if="!isRecoveryState" class="report-top report-top--compact">
+      <details class="report-actions">
+        <summary>更多操作</summary>
+        <div class="report-actions__menu">
         <el-dropdown
           :disabled="!interviewId || !isGenerated || exporting"
           @command="handleExportReport"
@@ -58,10 +52,11 @@
           <RotateCcw :size="16" />
           新建面试
         </el-button>
-      </div>
+        </div>
+      </details>
     </section>
 
-    <section v-if="isGenerating" class="content-card">
+    <section v-if="isGenerating" class="content-card report-generating-card">
       <div class="content-card__body generating-panel">
         <div class="state-eyebrow">报告生成中</div>
         <el-icon class="generating-icon"><Loading /></el-icon>
@@ -75,6 +70,15 @@
           :closable="false"
           title="报告读取暂时不可用"
           :description="reportRecoveryNotice"
+        />
+        <el-alert
+          v-if="canRequeryReport"
+          class="report-requery-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="报告状态查询连续失败"
+          description="暂未确认报告是否完成。重新查询只会再次读取当前状态，不会重新生成报告。"
         />
         <el-progress :percentage="pollProgress" :show-text="false" />
         <div class="task-stage-list">
@@ -96,6 +100,10 @@
             <ListChecks :size="16" />
             查看准备进度
           </el-button>
+          <el-button v-if="canRequeryReport" :loading="loading" @click="handleRequeryReport">
+            <RotateCcw :size="16" />
+            重新查询
+          </el-button>
           <el-button @click="router.push('/interviews/history')">
             <History :size="16" />
             稍后回来
@@ -106,55 +114,44 @@
 
     <section v-else class="content-card" v-loading="loading">
       <div v-if="report && isGenerated" class="content-card__body">
-        <div class="settle-banner">
-          <div class="settle-banner__left">
-            <span class="settle-banner__emoji">🏆</span>
-            <div>
-              <div class="settle-banner__kicker">副本通关 · 结算</div>
-              <b class="settle-banner__score">{{ displayTotalScore }}<small> 分</small></b>
-            </div>
-          </div>
-          <div class="settle-banner__xp">
-            <div class="settle-banner__xp-row">
-              <span>通关奖励（已入账）</span>
-              <b>+{{ completionRewardXp }} XP</b>
-            </div>
-            <div class="settle-banner__xp-row">
-              <span>答题奖励（已入账 {{ answerRewardCount }} 题）</span>
-              <b>+{{ answerRewardXp }} XP</b>
-            </div>
-            <div class="settle-banner__xp-row is-total">
-              <span>本场合计</span>
-              <b>+{{ sessionRewardXp }} XP</b>
-            </div>
-          </div>
-          <div v-if="improveTop3.length" class="settle-banner__improve">
-            <span>三点改进</span>
-            <ol>
-              <li v-for="item in improveTop3" :key="item">{{ item }}</li>
-            </ol>
-          </div>
+        <div class="settlement-intro">
+          <span>{{ report.targetJobTitle || '模拟面试' }}</span>
+          <h2>本次面试复盘</h2>
         </div>
 
-        <div class="report-hero-grid">
-          <section class="report-score-panel" :class="{ 'report-score-panel--muted': isScoreUnavailable }">
-            <span class="panel-kicker">综合得分</span>
-            <div class="score-value">{{ displayTotalScore }}</div>
-            <p v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</p>
-            <p v-else>{{ scoreVerdict }}</p>
-            <div class="score-meta">
-              <StatusTag :status="report.reportStatus" />
-              <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
+        <section class="settlement-card" :class="{ 'settlement-card--muted': isScoreUnavailable }">
+          <div class="settlement-score">
+            <div class="score-ring" :style="{ '--score-progress': `${scoreRingProgress}%` }">
+              <div class="score-ring__hole">
+                <strong>{{ displayTotalScore }}</strong>
+                <span>{{ isScoreUnavailable ? '评分待确认' : '真实评分' }}</span>
+              </div>
             </div>
-          </section>
+            <div class="settlement-score__copy">
+              <p>{{ scoreComparisonText }}</p>
+              <small v-if="isScoreUnavailable">本轮没有可信评分，保留问答复盘，不强行给分。</small>
+              <small v-else>{{ scoreVerdict }}</small>
+              <div class="score-meta">
+                <StatusTag :status="report.reportStatus" />
+                <span>{{ qaMessages.length ? `基于 ${qaMessages.length} 条问答` : '问答样本不足' }}</span>
+              </div>
+            </div>
+          </div>
 
+        </section>
+
+        <div class="report-hero-grid">
           <section class="report-summary-panel">
-            <span class="panel-kicker">一句话总评</span>
-            <h2>{{ reportSummaryPreview.title }}</h2>
-            <p>{{ reportSummaryPreview.description }}</p>
-            <div class="evidence-strip">
-              <strong>证据摘要</strong>
-              <span>{{ evidenceSummaryPreview }}</span>
+            <span class="panel-kicker">三个失分点</span>
+            <div v-if="improveTop3.length" class="report-loss-list">
+              <article v-for="(item, index) in improveTop3" :key="item">
+                <span>{{ index + 1 }}</span>
+                <strong>{{ item }}</strong>
+              </article>
+            </div>
+            <div v-else class="report-loss-list report-loss-list--empty">
+              <strong>{{ reportSummaryPreview.title }}</strong>
+              <p>{{ reportSummaryPreview.description }}</p>
             </div>
           </section>
 
@@ -169,7 +166,7 @@
               <el-button
                 type="primary"
                 :disabled="!canUsePrimaryNextAction"
-                :loading="primaryNextAction.actionType === 'STUDY_PLAN' && studyPlanGenerating"
+                :loading="isStudyPlanAction(primaryNextAction) && studyPlanGenerating"
                 @click="handlePrimaryNextAction"
               >
                 {{ nextActionButtonLabel(primaryNextAction.actionType) }}
@@ -179,38 +176,43 @@
           </section>
         </div>
 
-        <div class="report-support-strip">
-          <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
-          <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
-          <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
-        </div>
+        <details class="report-detail-summary">
+          <summary>报告依据与详细指标</summary>
+          <div class="report-detail-summary__body">
+            <div class="report-support-strip">
+              <span>{{ report.generatedAt || report.createdAt || '生成时间待确认' }}</span>
+              <span>{{ report.reportId || report.id ? `报告 #${report.reportId || report.id}` : '报告记录待确认' }}</span>
+              <span>{{ recommendedQuestionIds.length ? `${recommendedQuestionIds.length} 道推荐题可练习` : '推荐题待确认' }}</span>
+            </div>
 
-        <div class="report-professional-strip">
-          <article v-for="item in reportReviewCriteria" :key="item.label">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-            <small>{{ item.desc }}</small>
-          </article>
-        </div>
+            <div class="report-professional-strip">
+              <article v-for="item in reportReviewCriteria" :key="item.label">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.desc }}</small>
+              </article>
+            </div>
 
-        <div class="overview-grid">
-          <div class="overview-card">
-            <span>报告状态</span>
-            <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
+            <div class="overview-grid">
+              <div class="overview-card">
+                <span>报告状态</span>
+                <strong>{{ isScoreUnavailable ? '评分待确认' : '已生成复盘' }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>面试记录</span>
+                <strong>{{ report.interviewId || interviewId }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>生成时间</span>
+                <strong>{{ report.generatedAt || report.createdAt || '-' }}</strong>
+              </div>
+              <div class="overview-card">
+                <span>题目明细</span>
+                <strong>{{ qaMessages.length }} 条</strong>
+              </div>
+            </div>
           </div>
-          <div class="overview-card">
-            <span>面试记录</span>
-            <strong>{{ report.interviewId || interviewId }}</strong>
-          </div>
-          <div class="overview-card">
-            <span>生成时间</span>
-            <strong>{{ report.generatedAt || report.createdAt || '-' }}</strong>
-          </div>
-          <div class="overview-card">
-            <span>题目明细</span>
-            <strong>{{ qaMessages.length }} 条</strong>
-          </div>
-        </div>
+        </details>
 
         <el-alert
           v-if="isScoreUnavailable"
@@ -231,6 +233,9 @@
           title="综合得分已生成。"
         />
 
+        <details class="report-deep-dive report-insights-drawer">
+          <summary>查看关联信息与训练计划</summary>
+          <div class="report-deep-dive__body">
         <div class="report-trust-strip">
           <el-tag v-for="tag in reportTrustTags" :key="tag.label" :type="tag.type" effect="plain">
             {{ tag.label }}
@@ -327,14 +332,14 @@
           </div>
         </div>
 
-        <div v-if="nextActions.length" class="next-action-section">
+        <div v-if="visibleNextActions.length" class="next-action-section">
           <div class="section-head">
             <h2>闭环行动</h2>
             <p>把这份报告接到下一轮训练，按优先级继续推进。</p>
           </div>
           <div class="next-action-grid">
             <article
-              v-for="action in nextActions"
+              v-for="action in visibleNextActions"
               :key="`${action.actionType}-${action.priority}`"
               class="next-action-card"
             >
@@ -349,7 +354,9 @@
               <el-button
                 type="primary"
                 plain
-                :loading="action.actionType === 'STUDY_PLAN' && studyPlanGenerating"
+                :loading="isStudyPlanAction(action) && studyPlanGenerating"
+                :disabled="isStudyPlanAction(action) && !canGenerateStudyPlan"
+                :title="isStudyPlanAction(action) ? studyPlanUnavailableReason : undefined"
                 @click="handleNextAction(action)"
               >
                 {{ nextActionButtonLabel(action.actionType) }}
@@ -409,41 +416,48 @@
             <el-button type="primary" plain @click="router.push('/interviews/history')">查看面试历史</el-button>
           </AppState>
         </div>
+          </div>
+        </details>
       </div>
 
-      <div v-else-if="isFailed || isUnscorable" class="content-card__body failed-panel">
-        <div class="state-eyebrow">{{ isUnscorable ? '不可评分' : '生成失败' }}</div>
-        <h2>{{ isUnscorable ? '本轮样本不足，暂不展示强结论' : '报告生成没有完成' }}</h2>
-        <p class="failed-panel__lead">
-          {{ isUnscorable ? '问答明细仍可继续复盘；页面不会补写分数、短板或推荐题。' : '可以重新生成报告，或先返回历史记录保留本轮面试证据。' }}
-        </p>
-        <el-alert
-          :type="isUnscorable ? 'warning' : 'error'"
-          show-icon
-          :closable="false"
-          :title="isUnscorable ? '报告暂不可评分' : '报告生成失败'"
-          :description="failureReason"
-        />
-        <div class="retry-row">
-          <el-button type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
-          <el-button @click="router.push('/interviews/history')">返回历史</el-button>
-        </div>
+      <div v-else-if="!loading" class="report-recovery-shell">
+        <section class="report-recovery-card" :class="{ 'report-recovery-card--error': isFailed }">
+          <div class="report-recovery-card__icon" aria-hidden="true">
+            <CircleAlert :size="24" />
+          </div>
+          <div class="report-recovery-card__content">
+            <span class="report-recovery-card__status">{{ recoveryStatusLabel }}</span>
+            <h2>{{ recoveryTitle }}</h2>
+            <p class="report-recovery-card__lead">{{ recoveryLead }}</p>
+            <div class="report-recovery-card__reason">
+              <strong>原因说明</strong>
+              <p>{{ recoveryReason }}</p>
+            </div>
+            <dl class="report-recovery-card__facts">
+              <div v-for="item in recoveryFacts" :key="item.label">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.value }}</dd>
+              </div>
+            </dl>
+            <div class="report-recovery-card__actions">
+              <el-button type="primary" :loading="retrying" :disabled="!interviewId" @click="handleRetry">
+                重新生成报告
+              </el-button>
+              <el-button :disabled="!interviewId" @click="goReportTaskCenter">
+                <ListChecks :size="16" />
+                查看处理进度
+              </el-button>
+              <el-button @click="router.push('/interviews/history')">返回历史</el-button>
+            </div>
+          </div>
+        </section>
       </div>
-
-      <AppState
-        v-else-if="!loading"
-        type="empty"
-        title="还没有可验证的面试报告"
-        description="页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。若本轮面试已结束，可以手动重新生成报告；如果还没完成答题，请先回到历史记录继续面试。"
-      >
-        <el-button v-if="interviewId" type="primary" :loading="retrying" @click="handleRetry">重新生成报告</el-button>
-        <el-button @click="goReportTaskCenter">查看准备进度</el-button>
-        <el-button @click="router.push('/interviews/history')">返回历史</el-button>
-        <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
-      </AppState>
     </section>
 
-    <section v-if="report && isGenerated" class="analysis-grid">
+    <details v-if="report && isGenerated" class="report-deep-dive">
+      <summary>查看完整报告、阶段评分与训练建议</summary>
+      <div class="report-deep-dive__body">
+    <section class="analysis-grid">
       <article class="analysis-card wide">
         <div class="section-head">
           <h2>AI 总结</h2>
@@ -471,7 +485,16 @@
         </div>
         <MarkdownPreview v-if="report.mainProblems || report.weaknesses" :content="report.mainProblems || report.weaknesses" />
         <AppState v-else type="empty" title="短板暂未提取" :description="emptyReportCopy.weaknesses">
-          <el-button type="primary" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">生成学习计划</el-button>
+          <el-button
+            type="primary"
+            plain
+            :loading="studyPlanGenerating"
+            :disabled="!canGenerateStudyPlan"
+            :title="studyPlanUnavailableReason"
+            @click="handleGenerateStudyPlan"
+          >
+            生成学习计划
+          </el-button>
         </AppState>
       </article>
 
@@ -540,6 +563,8 @@
             class="recommended-item"
             :class="{ 'recommended-item--disabled': !item.questionId }"
             type="button"
+            :disabled="!item.questionId"
+            :aria-disabled="!item.questionId"
             @click="openRecommendedQuestion(item)"
           >
             <div>
@@ -558,7 +583,7 @@
       </article>
     </section>
 
-    <section v-if="stageReports.length && isGenerated" class="content-card">
+    <section v-if="stageReports.length" class="content-card">
       <div class="content-card__body">
         <div class="section-head">
           <h2>阶段得分</h2>
@@ -595,8 +620,13 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
 
-    <section v-if="qaMessages.length && (isGenerated || isFailed || isUnscorable)" class="content-card">
+    <details v-if="qaMessages.length && (isGenerated || isFailed || isUnscorable)" class="report-deep-dive report-qa-drawer">
+      <summary>{{ isGenerated ? '查看题目明细与 AI 点评' : '查看已保留问答明细' }}</summary>
+      <div class="report-deep-dive__body">
+    <section class="content-card">
       <div class="content-card__body">
         <div class="section-head">
           <h2>{{ isGenerated ? '题目明细' : '已保留问答明细' }}</h2>
@@ -631,8 +661,13 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
 
-    <section v-if="isGenerated" class="content-card">
+    <details v-if="isGenerated" class="report-deep-dive report-action-drawer">
+      <summary>更多训练行动</summary>
+      <div class="report-deep-dive__body">
+    <section class="content-card">
       <div class="content-card__body action-zone">
         <div>
           <h2>下一步行动</h2>
@@ -647,22 +682,48 @@
             <BookOpenCheck :size="16" />
             重练薄弱题
           </el-button>
-          <el-button type="success" plain :loading="studyPlanGenerating" @click="handleGenerateStudyPlan">
+          <el-button
+            type="success"
+            plain
+            :loading="studyPlanGenerating"
+            :disabled="!canGenerateStudyPlan"
+            :title="studyPlanUnavailableReason"
+            @click="handleGenerateStudyPlan"
+          >
             <CalendarClock :size="16" />
             生成学习计划
           </el-button>
           <el-button @click="handleStaticTodayAction(true)">返回今日计划</el-button>
         </div>
+        <p v-if="!canGenerateStudyPlan" class="study-plan-unavailable">
+          学习计划入口已禁用：{{ studyPlanUnavailableReason }}
+        </p>
       </div>
     </section>
+      </div>
+    </details>
+    <el-dialog v-model="studyPlanConfigVisible" title="生成学习计划" width="420px">
+      <p class="study-plan-config-copy">请确认计划周期和每天投入时间，系统会把这两个配置提交给学习计划服务。</p>
+      <el-form label-position="top">
+        <el-form-item label="计划周期">
+          <el-input-number v-model="studyPlanConfig.expectedDurationDays" :min="7" :max="30" :step="1" :precision="0" />
+        </el-form-item>
+        <el-form-item label="每日投入（分钟）">
+          <el-input-number v-model="studyPlanConfig.dailyMinutes" :min="20" :max="360" :step="10" :precision="0" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="studyPlanConfigVisible = false">取消</el-button>
+        <el-button type="primary" :loading="studyPlanGenerating" @click="confirmGenerateStudyPlan">生成计划</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, BookOpenCheck, CalendarClock, ChartNoAxesCombined, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
-import { getActivePinia } from 'pinia'
+import { ArrowRight, BookOpenCheck, CalendarClock, CircleAlert, Download, History, LayoutDashboard, ListChecks, Radar, Repeat2, RotateCcw, Target } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
@@ -696,7 +757,8 @@ import {
 } from '@/features/interview-comparison'
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
-import { useGameProfileStore } from '@/features/game-profile'
+import { appConfig } from '@/config'
+import { resolveAppRoutePath } from '@/features/route-safety'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -706,13 +768,13 @@ import type {
   StageReportVO
 } from '@/types/interview'
 import type { InterviewReplayEligibilityVO } from '@/types/interviewAdvanced'
+import type { StudyPlanGenerateDTO } from '@/types/studyPlan'
 import { toFriendlyMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
 const route = useRoute()
 const router = useRouter()
-const gameProfile = getActivePinia() ? useGameProfileStore() : null
 const interviewId = computed(() => getRouteNumberParam(route.params.id as string) || undefined)
 type RouterQueryValue = string | number | boolean | null | undefined
 const loading = ref(false)
@@ -726,6 +788,11 @@ const replayIdempotencyKey = ref('')
 const replayIdempotencyKeys = new Map<number, string>()
 const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
+const studyPlanConfigVisible = ref(false)
+const studyPlanConfig = ref<Pick<StudyPlanGenerateDTO, 'expectedDurationDays' | 'dailyMinutes'>>({
+  expectedDurationDays: 14,
+  dailyMinutes: 60
+})
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
 const nextActionShownMetricKey = ref('')
@@ -829,6 +896,27 @@ const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes
 const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
+const isRecoveryState = computed(() => !loading.value && !isGenerating.value && !isGenerated.value)
+const normalizedTrustStatus = computed(() => String(report.value?.trustStatus || '').toUpperCase())
+const hasVerifiedReport = computed(() =>
+  isGenerated.value
+  && normalizedTrustStatus.value === 'VERIFIED'
+  && report.value?.fallback !== true
+)
+const studyPlanUnavailableReason = computed(() => {
+  if (!isGenerated.value) return '报告尚未生成完成'
+  if (report.value?.fallback === true || normalizedTrustStatus.value === 'FALLBACK') {
+    return '当前报告来自 fallback，不能作为学习计划依据'
+  }
+  if (normalizedTrustStatus.value === 'PARTIAL') return '当前报告仅部分可信，暂不能生成学习计划'
+  if (!normalizedTrustStatus.value) return '报告缺少可信状态，暂不能生成学习计划'
+  if (normalizedTrustStatus.value !== 'VERIFIED') return '报告可信状态待确认，暂不能生成学习计划'
+  if (!report.value?.reportId && !report.value?.id) return '当前报告缺少报告编号'
+  return ''
+})
+const canGenerateStudyPlan = computed(() =>
+  hasVerifiedReport.value && Boolean(report.value?.reportId || report.value?.id)
+)
 const advancedReportMeta = computed(() => {
   const normalized = normalizeInterviewReportAdvanced(report.value, interviewId.value)
   return replayEligibility.value
@@ -902,6 +990,18 @@ const nextActions = computed<InterviewReportNextActionVO[]>(() => {
     .filter((action) => action && action.actionType && action.title)
     .sort((left, right) => (left.priority || 0) - (right.priority || 0))
 })
+const isStudyPlanAction = (action?: InterviewReportNextActionVO) =>
+  String(action?.actionType || '').toUpperCase() === 'STUDY_PLAN'
+const isNextActionUsable = (action?: InterviewReportNextActionVO) => {
+  const actionType = String(action?.actionType || '').toUpperCase()
+  if (actionType === 'QUESTION_PRACTICE') return recommendedQuestionIds.value.length > 0
+  if (isStudyPlanAction(action)) return canGenerateStudyPlan.value
+  return Boolean(actionType)
+}
+const actionableNextActions = computed(() => nextActions.value.filter(isNextActionUsable))
+const visibleNextActions = computed(() => nextActions.value.filter((action) =>
+  isNextActionUsable(action) || isStudyPlanAction(action)
+))
 
 /** 结算画面"三点改进"：优先取下一步行动前三条，退化为短板文本拆分 */
 const improveTop3 = computed(() => {
@@ -955,7 +1055,7 @@ const isStaticFallbackNextAction = (action?: InterviewReportNextActionVO) =>
   String(action?.actionSource || '').toUpperCase() === 'STATIC_FALLBACK'
 const backendNextActions = computed(() => nextActions.value.filter((action) => !isStaticFallbackNextAction(action)))
 const nextActionUnavailableReason = computed(() => {
-  if (!isGenerated.value || nextActions.value.length) return ''
+  if (!isGenerated.value || visibleNextActions.value.length) return ''
   if (recommendedQuestionIds.value.length) {
     return '报告暂未给出结构化行动，页面先用推荐题、重新面试和今日计划入口承接下一轮训练。'
   }
@@ -965,12 +1065,12 @@ const nextActionUnavailableReason = computed(() => {
   return '报告缺少足够问答和短板证据，本轮不硬生成训练建议；建议先补一次完整模拟面试。'
 })
 const primaryNextAction = computed<InterviewReportNextActionVO>(() => {
-  if (nextActions.value.length) return nextActions.value[0]
+  if (actionableNextActions.value.length) return actionableNextActions.value[0]
   if (recommendedQuestionIds.value.length) {
     return staticNextAction('QUESTION_PRACTICE', '去题库重练薄弱题', '/questions/practice', 1)
   }
   const reportId = report.value?.reportId || report.value?.id
-  if (reportId && (report.value?.reviewSuggestions || report.value?.suggestions || report.value?.mainProblems || report.value?.weaknesses)) {
+  if (canGenerateStudyPlan.value && reportId && (report.value?.reviewSuggestions || report.value?.suggestions || report.value?.mainProblems || report.value?.weaknesses)) {
     return staticNextAction('STUDY_PLAN', '生成学习计划', '/study-plans', 2)
   }
   if (report.value?.projectProblems || report.value?.projectExpressionProblems || report.value?.resumeSuggestions || report.value?.resumeAdvice) {
@@ -979,9 +1079,7 @@ const primaryNextAction = computed<InterviewReportNextActionVO>(() => {
   return staticNextAction('INTERVIEW', '再来一轮模拟面试', '/interviews/create', 4)
 })
 const canUsePrimaryNextAction = computed(() => {
-  if (primaryNextAction.value.actionType === 'QUESTION_PRACTICE') return recommendedQuestionIds.value.length > 0
-  if (primaryNextAction.value.actionType === 'STUDY_PLAN') return Boolean(report.value?.reportId || report.value?.id)
-  return true
+  return isNextActionUsable(primaryNextAction.value)
 })
 const primaryNextActionMeta = computed(() => {
   if (!isStaticFallbackNextAction(primaryNextAction.value)) {
@@ -995,20 +1093,6 @@ const primaryNextActionMeta = computed(() => {
 const qaMessages = computed<InterviewMessageVO[]>(() =>
   objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
 )
-const interviewRewardPrefix = computed(() => interviewId.value ? `interview:${interviewId.value}:` : '')
-const answerRewardXp = computed(() => interviewRewardPrefix.value
-  ? gameProfile?.rewardXpForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
-  : 0
-)
-const answerRewardCount = computed(() => interviewRewardPrefix.value
-  ? gameProfile?.rewardCountForPrefix(`${interviewRewardPrefix.value}answer:`) || 0
-  : 0
-)
-const completionRewardXp = computed(() => interviewRewardPrefix.value
-  ? gameProfile?.rewardXpForKey(`${interviewRewardPrefix.value}complete`) || 0
-  : 0
-)
-const sessionRewardXp = computed(() => answerRewardXp.value + completionRewardXp.value)
 const recommendedQuestionIds = computed(() =>
   recommendedQuestions.value
     .map((item) => Number(item.questionId || item.id))
@@ -1016,10 +1100,40 @@ const recommendedQuestionIds = computed(() =>
 )
 const hasValidTotalScore = computed(() => {
   const score = Number(report.value?.totalScore)
-  return isGenerated.value && Number.isFinite(score) && score > 0
+  return isGenerated.value
+    && hasVerifiedReport.value
+    && Number.isFinite(score)
+    && score > 0
 })
 const isScoreUnavailable = computed(() => isGenerated.value && !hasValidTotalScore.value)
 const displayTotalScore = computed(() => hasValidTotalScore.value ? report.value?.totalScore : '--')
+const scoreRingProgress = computed(() => {
+  const score = Number(report.value?.totalScore)
+  return hasValidTotalScore.value && Number.isFinite(score) && score > 0 ? Math.min(100, Math.max(0, score)) : 0
+})
+const scoreComparisonText = computed(() => {
+  if (!hasValidTotalScore.value) return '无法确认真实评分，暂不比较历史变化'
+  const source = report.value as (InterviewReportVO & {
+    totalScoreDelta?: number
+    previousScore?: number
+    previousTotalScore?: number
+    comparison?: { totalScoreDelta?: number }
+  }) | null
+  const score = Number(source?.totalScore)
+  const declaredDelta = Number(source?.totalScoreDelta ?? source?.comparison?.totalScoreDelta)
+  const previousScore = Number(source?.previousTotalScore ?? source?.previousScore)
+  const delta = Number.isFinite(declaredDelta)
+    ? declaredDelta
+    : Number.isFinite(score) && Number.isFinite(previousScore)
+      ? score - previousScore
+      : Number.NaN
+  if (Number.isFinite(delta)) {
+    if (delta === 0) return '与上一场同配置面试持平'
+    return `比上一场 ${delta > 0 ? '+' : ''}${delta} 分`
+  }
+  if (advancedReportMeta.value.comparisonAvailable) return '已具备与历史场次的比较条件'
+  return '本轮真实评分，后续同配置面试可比较变化'
+})
 const textExcerpt = (value?: string | null, fallback = '暂无可展示内容') => {
   const text = String(value || '')
     .replace(/[#>*_`~\[\]()]/g, '')
@@ -1201,6 +1315,49 @@ const failureReason = computed(() => toFriendlyMessage(
   report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
   isUnscorable.value ? '本次面试答题样本不足或题目明细不完整，暂时无法生成可信评分。请继续答题或重新生成报告。' : '报告生成失败，请稍后重试。'
 ))
+const recoveryStatusLabel = computed(() => {
+  if (isUnscorable.value) return '暂不可评分'
+  if (isFailed.value) return '生成失败'
+  return '报告暂不可用'
+})
+const recoveryTitle = computed(() => {
+  if (isUnscorable.value) return '本轮样本不足，暂不展示强结论'
+  if (isFailed.value) return '报告生成没有完成'
+  return '暂时没有可验证的面试报告'
+})
+const recoveryLead = computed(() => {
+  if (isUnscorable.value) return '已保留本轮问答明细；在缺少足够证据时，系统不会补写分数、短板或推荐题。'
+  if (isFailed.value) return '本轮面试记录仍然保留。重新生成后，系统会基于已有问答重新整理复盘结果。'
+  return '页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。'
+})
+const recoveryReason = computed(() => {
+  if (isFailed.value || isUnscorable.value) return failureReason.value
+  return reportRecoveryNotice.value || '请确认本轮面试已结束且问答已保存；如仍未恢复，可重新生成报告。'
+})
+const recoveryFacts = computed(() => [
+  {
+    label: '已保留问答',
+    value: qaMessages.value.length ? `${qaMessages.value.length} 条，可在下方继续复盘` : '暂未读取到可复盘问答'
+  },
+  {
+    label: '报告阶段',
+    value: recoveryStatusLabel.value
+  },
+  {
+    label: '生成队列',
+    value: asyncReceipt.value.sendStatus
+      ? asyncSendStatusLabel(asyncReceipt.value.sendStatus)
+      : asyncReceipt.value.messageId
+        ? '已提交，等待状态回执'
+        : '未返回队列回执'
+  },
+  {
+    label: '追踪状态',
+    value: asyncReceipt.value.traceId || asyncReceipt.value.messageId
+      ? '已记录，可从任务中心继续查询'
+      : '可按当前面试记录继续查询'
+  }
+])
 const taskMetaText = computed(() => {
   const items = []
   const reportId = taskReportId.value || report.value?.reportId || report.value?.id
@@ -1211,8 +1368,8 @@ const taskMetaText = computed(() => {
 })
 const reportTrustTags = computed(() => [
   {
-    label: report.value?.evidenceSummary || '面试报告证据待确认',
-    type: trustStatusType(report.value?.trustStatus, report.value?.fallback ? 'warning' : 'info')
+    label: hasVerifiedReport.value ? '报告可信状态：VERIFIED' : `报告可信状态：${normalizedTrustStatus.value || '待确认'}`,
+    type: hasVerifiedReport.value ? 'success' : 'warning'
   },
   {
     label: report.value?.reportId || report.value?.id ? '报告记录已保存' : '报告记录待确认',
@@ -1387,7 +1544,7 @@ const nextActionTypeLabel = (type?: string) => {
     PROJECT_EVIDENCE: '项目证据',
     KNOWLEDGE_CANDIDATE: '知识候选',
     JOB_FOLLOW_UP: '投递跟进',
-    REVIEW_EXPERIMENT: '复盘实验'
+    REVIEW_EXPERIMENT: '复盘记录'
   }
   return labels[String(type || '').toUpperCase()] || '下一步'
 }
@@ -1401,7 +1558,7 @@ const nextActionButtonLabel = (type?: string) => {
     PROJECT_EVIDENCE: '补证据',
     KNOWLEDGE_CANDIDATE: '确认候选',
     JOB_FOLLOW_UP: '去跟进',
-    REVIEW_EXPERIMENT: '去复盘'
+    REVIEW_EXPERIMENT: '查看复盘'
   }
   return labels[String(type || '').toUpperCase()] || '开始'
 }
@@ -1417,7 +1574,11 @@ const knowledgeCandidateSourceLabel = (sourceField?: string) => {
 }
 
 const openKnowledgeCandidate = async (candidate: InterviewKnowledgeCandidateVO) => {
-  await router.push(candidate.actionUrl || {
+  if (!appConfig.enableV4KnowledgePreview) {
+    ElMessage.info('个人知识库当前未开放，候选内容已保留在本报告中。')
+    return
+  }
+  const target = candidate.actionUrl || {
     path: '/knowledge',
     query: compactRouterQuery({
       source: 'interviewReport',
@@ -1425,11 +1586,19 @@ const openKnowledgeCandidate = async (candidate: InterviewKnowledgeCandidateVO) 
       interviewId: interviewId.value,
       reportId: report.value?.reportId || report.value?.id
     })
-  })
+  }
+  const resolved = resolveAppRoutePath(
+    typeof target === 'string' ? target : router.resolve(target).fullPath,
+    { fallbackPath: `/interviews/${interviewId.value}/report` }
+  )
+  if (resolved.unavailableReason) ElMessage.info(resolved.unavailableReason)
+  await router.push(resolved.path)
 }
 
 const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') => {
-  await router.push(actionUrl || fallback)
+  const resolved = resolveAppRoutePath(actionUrl || fallback, { fallbackPath: fallback })
+  if (resolved.unavailableReason && actionUrl) ElMessage.info(resolved.unavailableReason)
+  await router.push(resolved.path)
 }
 
 const reportMetricId = () => report.value?.reportId || report.value?.id
@@ -1682,6 +1851,17 @@ const stopPolling = () => {
   }
 }
 
+const canRequeryReport = computed(() => isGenerating.value && pollFailures.value >= 3)
+
+const handleRequeryReport = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
+  if (!id || !canRequeryReport.value || loading.value) return
+  pollFailures.value = 0
+  reportRecoveryNotice.value = ''
+  await fetchReport(id, generation)
+}
+
 const rememberAsyncReceipt = (result?: {
   asyncMessageId?: string | null
   asyncTraceId?: string | null
@@ -1720,7 +1900,9 @@ const fetchReport = async (id: number, generation: number) => {
     if (!isCurrentReportRequest(id, generation)) return
     report.value = nextReport
     pollFailures.value = 0
-    if (isGenerated.value) void loadReplayEligibility(id, generation)
+    if (isGenerated.value) {
+      void loadReplayEligibility(id, generation)
+    }
     if (isGenerating.value) {
       pollCount.value += 1
       schedulePolling(id, generation)
@@ -1732,7 +1914,7 @@ const fetchReport = async (id: number, generation: number) => {
     pollFailures.value += 1
     if (pollFailures.value >= 3) {
       stopPolling()
-      ElMessage.error(toFriendlyMessage(error, '报告状态查询失败，请稍后刷新。'))
+      reportRecoveryNotice.value = toFriendlyMessage(error, '报告状态查询失败，请点击“重新查询”再次读取。')
     } else {
       schedulePolling(id, generation)
     }
@@ -1827,18 +2009,43 @@ const handleGenerateStudyPlan = async () => {
   const id = interviewId.value
   const generation = reportGeneration
   const reportId = report.value?.reportId || report.value?.id
-  if (!id || !reportId || studyPlanGenerating.value) {
+  if (!canGenerateStudyPlan.value || !id || !reportId || studyPlanGenerating.value) {
     if (id && !reportId) {
       ElMessage.warning('当前报告缺少 reportId，无法生成学习计划')
+    } else if (!canGenerateStudyPlan.value) {
+      ElMessage.warning(studyPlanUnavailableReason.value)
     }
     return
   }
   if (!isCurrentReportRequest(id, generation)) {
     return
   }
+  studyPlanConfigVisible.value = true
+}
+
+const confirmGenerateStudyPlan = async () => {
+  const id = interviewId.value
+  const generation = reportGeneration
+  const reportId = report.value?.reportId || report.value?.id
+  if (!canGenerateStudyPlan.value || !id || !reportId || studyPlanGenerating.value) return
+  studyPlanConfig.value = {
+    expectedDurationDays: Math.min(
+      30,
+      Math.max(7, Math.round(Number(studyPlanConfig.value.expectedDurationDays) || 14))
+    ),
+    dailyMinutes: Math.min(
+      360,
+      Math.max(20, Math.round(Number(studyPlanConfig.value.dailyMinutes) || 60))
+    )
+  }
   studyPlanGenerating.value = true
   try {
-    const result = await generateStudyPlanApi({ reportId })
+    const payload: StudyPlanGenerateDTO = {
+      reportId,
+      expectedDurationDays: studyPlanConfig.value.expectedDurationDays,
+      dailyMinutes: studyPlanConfig.value.dailyMinutes
+    }
+    const result = await generateStudyPlanApi(payload)
     if (!isCurrentReportRequest(id, generation)) return
     if (String(result.planStatus || '').toUpperCase() === 'FAILED') {
       ElMessage.error(toFriendlyMessage(result.failureReason, '学习计划生成失败，请稍后重试'))
@@ -1870,7 +2077,10 @@ const handleGenerateStudyPlan = async () => {
       ElMessage.error(toFriendlyMessage(error, '学习计划生成失败，请稍后重试'))
     }
   } finally {
-    if (isCurrentReportRequest(id, generation)) studyPlanGenerating.value = false
+    if (isCurrentReportRequest(id, generation)) {
+      studyPlanGenerating.value = false
+      studyPlanConfigVisible.value = false
+    }
   }
 }
 
@@ -2652,6 +2862,14 @@ onBeforeUnmount(() => {
 .score-source,
 .retry-row {
   margin: 16px 0;
+}
+
+.study-plan-unavailable,
+.study-plan-config-copy {
+  margin: 12px 0 0;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .report-trust-strip {
@@ -3537,108 +3755,699 @@ onBeforeUnmount(() => {
   }
 }
 
-// ---- 通关结算（游戏化增量样式，暗色霓虹） ----
-.settle-banner {
-  display: grid;
-  grid-template-columns: auto 1fr 1fr;
-  gap: 22px;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 18px 22px;
-  border-radius: 16px;
-  border: 1px solid rgba(247, 144, 9, 0.35);
-  background:
-    radial-gradient(420px 160px at 8% 0%, rgba(247, 144, 9, 0.14), transparent 65%),
-    rgba(2, 6, 23, 0.55);
-}
+.arena-report {
+  position: relative;
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px 24px 46px;
+  gap: 16px;
 
-.settle-banner__left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.settle-banner__emoji {
-  font-size: 40px;
-}
-
-.settle-banner__kicker {
-  font-size: 11px;
-  font-weight: 800;
-  color: #f7b955;
-}
-
-.settle-banner__score {
-  display: block;
-  margin-top: 2px;
-  font-size: 34px;
-  font-weight: 900;
-  letter-spacing: -0.5px;
-  color: #f8fafc;
-
-  small {
-    font-size: 13px;
-    font-weight: 700;
-    color: rgba(203, 213, 225, 0.7);
-  }
-}
-
-.settle-banner__xp {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settle-banner__xp-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  color: rgba(203, 213, 225, 0.75);
-
-  b {
-    color: #f7b955;
-    font-size: 12.5px;
+  .report-top,
+  .analysis-card,
+  .content-card {
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--user-surface);
+    box-shadow: var(--user-shadow-sm);
   }
 
-  &.is-total {
-    padding-top: 6px;
-    border-top: 1px dashed rgba(148, 163, 184, 0.25);
+  .report-top {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+    }
+  }
+
+  .eyebrow {
+    color: var(--arena-grn-d);
+  }
+
+  .report-hero-grid,
+  .report-support-strip,
+  .report-professional-strip,
+  .overview-grid,
+  .voice-delivery-facts,
+  .next-grid,
+  .alignment-card-grid {
+    border-color: var(--arena-line);
+  }
+
+  .report-score-panel,
+  .report-summary-panel,
+  .report-action-panel,
+  .voice-delivery-facts article,
+  .report-professional-strip article,
+  .overview-card,
+  .alignment-card,
+  .next-grid article,
+  .stage-report-card,
+  .stage-copy,
+  .next-action-card,
+  .knowledge-candidate-card,
+  .recommended-item {
+    border-color: var(--arena-line);
+    background: var(--user-surface);
+  }
+
+  .report-score-panel {
+    background: var(--user-surface-tint);
+  }
+
+  .report-action-panel,
+  .recommended-training-callout {
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
+  }
+
+  .knowledge-candidate-card {
+    border-color: var(--user-ai);
+    background: var(--user-ai-soft);
+  }
+
+  .stage-score-pill {
+    border-radius: 13px;
+    background: var(--arena-grn-soft);
+
+    strong {
+      color: var(--arena-grn-d);
+    }
+  }
+
+  :deep(.el-button--primary) {
+    border-color: var(--arena-grn);
+    background: var(--arena-grn);
+    box-shadow: 0 4px 0 var(--arena-grn-d);
     font-weight: 800;
-    color: #e5edf8;
+  }
+}
 
-    b {
-      font-size: 14px;
-      color: #a3e635;
+// 方向 D · 报告首屏先完成“评分结算”，详细报告保持在结算和下一步行动之后。
+.arena-report {
+  .report-generating-card {
+    width: min(100%, 760px);
+    margin: 54px auto;
+  }
+
+  .report-generating-card .generating-panel {
+    min-height: 0;
+    padding: 34px 32px;
+  }
+
+  .report-recovery-shell {
+    display: grid;
+    min-height: min(520px, calc(100vh - 176px));
+    place-items: start center;
+    padding: clamp(36px, 7vh, 84px) 0;
+  }
+
+  .report-recovery-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 18px;
+    width: min(100%, 860px);
+    padding: 30px 34px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--user-surface);
+    box-shadow: var(--user-shadow-sm);
+  }
+
+  .report-recovery-card__icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--arena-amber-soft);
+    color: var(--user-warning-text);
+  }
+
+  .report-recovery-card__content {
+    min-width: 0;
+  }
+
+  .report-recovery-card__status {
+    display: block;
+    color: var(--arena-sub);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .report-recovery-card h2 {
+    margin: 6px 0 0;
+    color: var(--arena-ink);
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .report-recovery-card__lead {
+    max-width: 62ch;
+    margin: 10px 0 0;
+    color: var(--arena-sub);
+    font-size: 14px;
+    line-height: 1.7;
+    text-wrap: pretty;
+  }
+
+  .report-recovery-card__reason {
+    margin-top: 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--arena-line);
+    border-radius: 10px;
+    background: var(--arena-bg);
+  }
+
+  .report-recovery-card__reason strong {
+    display: block;
+    color: var(--arena-ink);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .report-recovery-card__reason p {
+    margin: 6px 0 0;
+    color: var(--arena-sub);
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+
+  .report-recovery-card__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0 0;
+
+    > div {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--arena-line);
+      border-radius: 8px;
+      background: var(--user-surface);
+    }
+
+    dt {
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    dd {
+      margin: 4px 0 0;
+      color: var(--arena-ink);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .report-recovery-card--error {
+    .report-recovery-card__icon {
+      background: var(--arena-red-soft);
+      color: var(--arena-red);
+    }
+
+    .report-recovery-card__reason {
+      border-color: var(--user-danger-border);
+      background: var(--user-danger-soft);
+    }
+
+    .report-recovery-card__reason p {
+      color: var(--user-danger-text);
+    }
+  }
+
+  .report-recovery-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .report-recovery-card__actions :deep(.el-button) {
+    min-width: 128px;
+  }
+
+  .report-actions {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+
+    summary {
+      min-height: 34px;
+      padding: 8px 12px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 12px;
+      background: var(--user-surface);
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .report-actions__menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 8px);
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(136px, 1fr));
+    gap: 8px;
+    width: min(360px, calc(100vw - 44px));
+    padding: 10px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: 14px;
+    background: var(--user-surface);
+    box-shadow: var(--user-shadow-md);
+
+    :deep(.el-button),
+    :deep(.el-dropdown) {
+      width: 100%;
+      margin: 0;
+    }
+  }
+
+  .report-top {
+    position: absolute;
+    top: 28px;
+    right: 24px;
+    z-index: 3;
+    min-height: 34px;
+    padding: 0;
+    text-align: center;
+
+    h1 {
+      margin: 5px 0;
+      font-size: 22px;
+    }
+
+    p {
+      font-size: 13px;
+    }
+
+    .eyebrow {
+      justify-content: center;
+    }
+
+    .report-actions {
+      position: relative;
+      top: auto;
+      right: auto;
+      text-align: left;
+    }
+  }
+
+  .content-card__body {
+    padding: 28px;
+  }
+
+  .settlement-intro {
+    text-align: center;
+
+    > span {
+      color: var(--arena-grn-d);
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+
+    h2 {
+      margin: 5px 0 0;
+      color: var(--arena-ink);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+  }
+
+  .settlement-card {
+    display: grid;
+    gap: 18px;
+    width: 100%;
+    max-width: none;
+    margin: 20px auto 24px;
+    padding: 28px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--user-surface);
+    box-shadow: var(--user-shadow-sm);
+  }
+
+  .settlement-card--muted {
+    .score-ring {
+      --score-progress: 0%;
+      opacity: 0.58;
+    }
+  }
+
+  .settlement-score {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .score-ring {
+    display: grid;
+    width: 170px;
+    aspect-ratio: 1;
+    place-items: center;
+    border-radius: 50%;
+    border: 12px solid var(--arena-line);
+    background: var(--user-surface-tint);
+  }
+
+  .score-ring__hole {
+    display: flex;
+    width: 136px;
+    aspect-ratio: 1;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: 50%;
+    background: var(--user-surface);
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    span {
+      margin-top: 5px;
+      color: var(--arena-mut);
+      font-size: 11px;
+      font-weight: 800;
+    }
+  }
+
+  .settlement-score__copy {
+    max-width: 420px;
+
+    p {
+      margin: 0;
+      color: var(--arena-ink);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    small {
+      display: block;
+      margin-top: 8px;
+      color: var(--arena-sub);
+      line-height: 1.6;
+    }
+  }
+
+  .score-meta {
+    margin-top: 14px;
+    color: var(--arena-mut);
+    justify-content: center;
+  }
+
+  .settlement-improve {
+    grid-column: 1 / -1;
+    padding: 14px 16px;
+    border: 1.5px solid var(--user-ai);
+    border-radius: 13px;
+    background: var(--user-ai-soft);
+
+    > span {
+      color: var(--arena-vio);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    ol {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px 16px;
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--arena-ink);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+  }
+
+  .report-hero-grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: 16px;
+    max-width: none;
+    margin: 0 auto 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .report-summary-panel,
+  .report-action-panel {
+    min-height: 238px;
+    padding: 20px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    box-shadow: var(--user-shadow-sm);
+  }
+
+  .report-summary-panel {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    grid-column: auto;
+    border-right: 1.5px solid var(--arena-line);
+    background: var(--user-surface);
+  }
+
+  .report-loss-list {
+    display: grid;
+    gap: 10px;
+
+    article {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      align-items: start;
+      gap: 9px;
+      color: var(--arena-ink);
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+
+    article > span {
+      display: inline-grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--arena-red-soft);
+      color: var(--arena-red);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    article strong {
+      padding-top: 2px;
+    }
+  }
+
+  .report-loss-list--empty {
+    display: grid;
+    gap: 8px;
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+  }
+
+  .report-action-panel {
+    grid-column: auto;
+    border-top: 1.5px solid var(--user-success-border);
+    border-right: 1.5px solid var(--user-success-border);
+    border-color: var(--user-success-border);
+    background: var(--user-success-soft);
+  }
+
+  .report-detail-summary {
+    max-width: none;
+    margin: 0 auto 16px;
+    padding: 0 2px;
+
+    summary {
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .report-detail-summary__body {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .report-deep-dive {
+    width: 100%;
+    margin: 0 auto 16px;
+    border: 1.5px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--user-surface);
+
+    > summary {
+      padding: 14px 18px;
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    &[open] > summary {
+      border-bottom: 1px solid var(--arena-line);
+      color: var(--arena-ink);
+    }
+  }
+
+  .report-deep-dive__body {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .report-deep-dive .analysis-grid,
+  .report-deep-dive .content-card {
+    width: 100%;
+    margin: 0;
+  }
+
+  .report-deep-dive .content-card__body {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .arena-report {
+    .report-recovery-shell {
+      min-height: auto;
+      padding: 24px 0;
+    }
+
+    .report-recovery-card {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 22px 18px;
+    }
+
+    .report-recovery-card__icon {
+      width: 38px;
+      height: 38px;
+    }
+
+    .report-recovery-card h2 {
+      font-size: 22px;
+    }
+
+    .report-recovery-card__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .report-recovery-card__actions :deep(.el-button) {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .report-recovery-card__facts {
+      grid-template-columns: 1fr;
+    }
+
+    .content-card__body {
+      padding: 20px 14px;
+    }
+
+    .settlement-intro h2 {
+      font-size: 24px;
+    }
+
+    .settlement-card {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 16px;
+      padding: 22px 18px;
+    }
+
+    .settlement-score {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 14px;
+      text-align: center;
+    }
+
+    .settlement-score__copy {
+      max-width: 320px;
+    }
+
+    .score-meta {
+      justify-content: center;
+    }
+
+    .settlement-improve ol {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+
+    .report-hero-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .report-actions__menu {
+      right: 0;
+      left: auto;
+      grid-template-columns: 1fr;
+      width: min(280px, calc(100vw - 32px));
+    }
+
+    .report-summary-panel,
+    .report-action-panel {
+      min-height: 0;
     }
   }
 }
 
-.settle-banner__improve {
-  padding: 12px 15px;
-  border-radius: 12px;
-  background: rgba(148, 163, 184, 0.08);
+@media (max-width: 760px) {
+  .arena-report {
+    padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
 
-  > span {
-    font-size: 11px;
-    font-weight: 800;
-    color: #b3a1ff;
-  }
-
-  ol {
-    margin: 7px 0 0;
-    padding-left: 17px;
-    font-size: 12px;
-    line-height: 1.65;
-    color: #e5edf8;
-  }
-}
-
-@media (max-width: 900px) {
-  .settle-banner {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    .report-top {
+      top: 16px;
+      right: 14px;
+    }
   }
 }
 </style>

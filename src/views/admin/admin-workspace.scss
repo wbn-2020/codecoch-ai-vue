@@ -712,8 +712,9 @@
   .admin-layout .app-layout__aside {
     position: static;
     height: auto;
-    max-height: 48px;
-    overflow: hidden;
+    max-height: min(42dvh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .admin-layout .app-layout__brand {
@@ -721,7 +722,7 @@
   }
 
   .admin-layout .layout-menu {
-    min-height: 48px;
+    min-height: 0;
     background: var(--admin-sidebar);
   }
 

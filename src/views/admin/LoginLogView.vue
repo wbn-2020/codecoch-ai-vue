@@ -14,6 +14,16 @@
       </div>
     </section>
 
+    <el-alert
+      v-if="summaryUnavailableMessage"
+      class="login-log-availability"
+      type="error"
+      show-icon
+      :closable="false"
+      title="登录审计汇总不可用"
+      :description="summaryUnavailableMessage"
+    />
+
     <section class="audit-metrics" role="status" aria-live="polite" :aria-busy="summaryLoading">
       <article
         v-for="item in summaryMetricCards"
@@ -41,24 +51,15 @@
           <h2>登录记录</h2>
           <p>支持按登录态排障场景调整密度和列显隐，便于复查刷新、深链和新标签登录恢复问题。</p>
         </div>
-        <div class="table-view-tools">
-          <el-segmented v-model="tableSize" :options="tableSizeOptions" aria-label="登录日志表格密度" />
-          <el-dropdown trigger="click" :hide-on-click="false">
-            <el-button plain>列配置</el-button>
-            <template #dropdown>
-              <el-dropdown-menu class="column-config-menu">
-                <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                  <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                    {{ item.label }}
-                  </el-checkbox>
-                </el-dropdown-item>
-                <el-dropdown-item divided>
-                  <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
+        <AdminTableViewSettings
+          v-model:size="tableSize"
+          :size-options="tableSizeOptions"
+          :columns="columnOptions"
+          :visible-columns="visibleColumns"
+          aria-label="登录日志表格视图设置"
+          @update:column-visible="({ key, visible }) => visibleColumns[key as LoginLogColumnKey] = visible"
+          @reset="resetTableView"
+        />
       </div>
 
       <div class="admin-filter-bar">
@@ -100,7 +101,9 @@
           <el-table-column v-if="isColumnVisible('username')" prop="username" label="用户" min-width="140" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('loginType')" prop="loginType" label="登录类型" min-width="120" />
           <el-table-column v-if="isColumnVisible('traceId')" label="追踪号" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ displayLoginTraceId(row) }}</template>
+            <template #default="{ row }">
+              <span :title="row.traceId || displayLoginTraceId(row)">{{ displayLoginTraceId(row) }}</span>
+            </template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('ip')" label="IP" min-width="130">
             <template #default="{ row }">{{ row.ipMasked || row.maskedIp || maskIp(row.ip) }}</template>
@@ -157,6 +160,7 @@ import { KeyRound, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getAdminLogSummaryApi, getAdminLoginLogsApi } from '@/api/adminGovernance'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import type { AdminListQuery, AdminLogSummaryVO, LoginLogVO } from '@/types/adminGovernance'
@@ -210,9 +214,16 @@ const query = reactive<AdminListQuery>({
 })
 
 const isSuccess = (status?: string | number) => status === 1 || status === '1' || String(status).toUpperCase() === 'SUCCESS'
+const summaryUnavailableMessage = computed(() => {
+  if (summaryError.value) return summaryError.value
+  if (summary.value?.queryAvailable === false) {
+    return summary.value.degradedReason || '登录日志表或字段未就绪，当前汇总数据不可用于审计判断。'
+  }
+  return ''
+})
 const summaryMetricCards = computed(() => {
-  const unavailable = Boolean(summaryError.value) || !summary.value
-  const unknownHint = summaryError.value || '汇总数据尚未返回，请点击刷新重试。'
+  const unavailable = Boolean(summaryUnavailableMessage.value) || !summary.value
+  const unknownHint = summaryUnavailableMessage.value || '汇总数据尚未返回，请点击刷新重试。'
   return [
     {
       key: 'total',
@@ -356,6 +367,10 @@ onMounted(loadPage)
 .audit-metric--unknown strong,
 .audit-metric--unknown small {
   color: #fca5a5;
+}
+
+.login-log-availability {
+  margin-bottom: 16px;
 }
 
 .pagination-wrap {

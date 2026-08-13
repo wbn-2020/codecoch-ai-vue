@@ -122,7 +122,7 @@ const router = useRouter()
   padding: 18px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.34);
+  background: var(--user-surface-muted);
 
   h2 {
     margin: 0 0 12px;
@@ -141,10 +141,10 @@ const router = useRouter()
     display: block;
     overflow-wrap: anywhere;
     padding: 10px 12px;
-    border: 1px solid rgba(148, 163, 184, 0.14);
+    border: 1px solid var(--app-border);
     border-radius: 8px;
-    background: rgba(15, 23, 42, 0.62);
-    color: #bfdbfe;
+    background: var(--user-control-bg-muted);
+    color: var(--app-text);
   }
 }
 

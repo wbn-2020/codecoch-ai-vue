@@ -1,55 +1,50 @@
 <template>
   <main class="arena login-page">
-    <span class="login-floaty" style="top: 14%; left: 6%">🔥</span>
-    <span class="login-floaty login-floaty--sm" style="top: 62%; left: 4%; animation-delay: 1.4s">⚡</span>
-    <span class="login-floaty login-floaty--sm" style="top: 20%; right: 6%; animation-delay: 0.8s">🎯</span>
-    <span class="login-floaty" style="bottom: 12%; right: 9%; animation-delay: 2.1s">🎁</span>
-
     <header class="login-brand">
       <div class="login-brand__logo">
         <span class="login-brand__cube">C</span>
         <span>CodeCoachAI</span>
       </div>
       <div class="login-brand__aside">
-        新用户？<a class="login-link" @click="router.push('/register')">免费开始</a>
+        新用户？<button class="login-link" type="button" @click="router.push('/register')">免费开始</button>
       </div>
     </header>
 
     <div class="login-grid">
       <section class="login-hero">
-        <span class="arena-chip arena-chip--amber">🔥 把备战变成每天想刷的闯关</span>
+        <span class="arena-chip arena-chip--amber">围绕目标岗位，系统完成每一步准备</span>
         <h1 class="login-hero__title">
-          升级你的<br />
-          <span class="arena-grad-text">面试战斗力</span>
+          有条理地准备<br />
+          <span class="login-hero__accent">每一场面试</span>
         </h1>
         <p class="arena-p login-hero__sub">
-          每天 15 分钟，刷题、练面试、攒战力。看着自己的 Offer 就绪度一路涨上去。
+          每天投入一点时间，整理简历、匹配岗位、专项训练并完成模拟面试。
         </p>
 
-        <div class="arena-card login-hero__power" aria-label="成长面板预览">
+        <div class="arena-card login-hero__power" aria-label="示例成长面板预览">
           <div
             class="arena-ring"
             style="width: 64px; height: 64px; background: conic-gradient(var(--arena-grn) 0 68%, var(--arena-line) 68% 100%)"
           >
             <div class="arena-ring__hole" style="width: 50px; height: 50px">
               <b style="font-size: 16px; line-height: 1">68</b>
-              <span class="arena-tiny" style="font-size: 8.5px; font-weight: 700">战力</span>
+              <span class="arena-tiny" style="font-size: 8.5px; font-weight: 700">准备度</span>
             </div>
           </div>
           <div>
             <div class="arena-row" style="gap: 7px">
-              <b style="font-size: 14px">LV.6 面试新星</b>
-              <span class="arena-chip arena-chip--amber" style="font-size: 10px">🔥 6 连胜</span>
+              <b style="font-size: 14px">示例 · 求职准备进行中</b>
+              <span class="arena-chip arena-chip--amber" style="font-size: 10px">已完成 6 项</span>
             </div>
             <div class="arena-xpbar" style="margin-top: 6px; width: 180px"><i style="width: 70%"></i></div>
-            <div class="arena-tiny" style="margin-top: 5px">你的成长面板 · 登录后可见真实进度</div>
+            <div class="arena-tiny" style="margin-top: 5px">登录后查看你的真实准备进度</div>
           </div>
         </div>
       </section>
 
       <section class="arena-card login-card">
-        <h2 class="login-card__title">继续闯关</h2>
-        <p class="arena-p login-card__sub">每天 15 分钟，把连胜续下去。</p>
+        <h2 class="login-card__title">登录继续准备</h2>
+        <p class="arena-p login-card__sub">从今天的重点任务开始，持续推进求职计划。</p>
 
         <el-alert
           v-if="errorMessage"
@@ -89,7 +84,7 @@
             :disabled="loading"
             @click="handleSubmit"
           >
-            进入竞技场 →
+            进入工作台
           </el-button>
           <el-button
             v-if="hasDemoAccount"
@@ -98,7 +93,7 @@
             :disabled="loading"
             @click="fillDemoAccount"
           >
-            先逛逛演示
+            填入演示账号
           </el-button>
         </el-form>
 
@@ -122,7 +117,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { appConfig } from '@/config'
+import { needsUserOnboarding } from '@/features/login-entry'
 import { getErrorMessage as normalizeErrorMessage } from '@/utils/error'
 import { sanitizeLocalRedirectPath } from '@/utils/routeSecurity'
 
@@ -199,17 +196,25 @@ const syncRouteReasonNotice = () => {
   errorMessage.value = '检测到密码重置链接。为避免当前登录账号与重置目标账号混淆，请先重新登录目标账号，再从邮件中重新打开重置链接。'
 }
 
-const getDefaultPostLoginRoute = (): RouteLocationRaw => {
-  if (!authStore.canAccessAdmin) return '/dashboard'
-  const adminPath = firstAccessibleAdminPath(authStore)
-  if (adminPath) return adminPath
-  return {
-    path: '/403',
-    query: {
-      reason: 'noAdminMenu',
-      target: '/admin',
-      title: '管理后台'
+const getDefaultPostLoginRoute = async (): Promise<RouteLocationRaw> => {
+  if (authStore.canAccessAdmin) {
+    const adminPath = firstAccessibleAdminPath(authStore)
+    if (adminPath) return adminPath
+    return {
+      path: '/403',
+      query: {
+        reason: 'noAdminMenu',
+        target: '/admin',
+        title: '管理后台'
+      }
     }
+  }
+
+  try {
+    const overview = await getUserDashboardOverviewApi()
+    return needsUserOnboarding(overview) ? '/onboarding' : '/dashboard'
+  } catch {
+    return '/dashboard'
   }
 }
 
@@ -235,7 +240,8 @@ const handleSubmit = async () => {
     try {
       ElMessage.success('登录成功')
       const redirect = sanitizeLocalRedirectPath(route.query.redirect)
-      await router.replace(redirect || getDefaultPostLoginRoute())
+      const targetRoute = redirect || await getDefaultPostLoginRoute()
+      await router.replace(targetRoute)
     } catch (error) {
       alertTitle.value = '登录后页面加载失败'
       alertType.value = 'warning'
@@ -275,37 +281,10 @@ watch(
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-}
-
-.login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.55;
-  background-image: radial-gradient(rgba(21, 33, 27, 0.06) 1.2px, transparent 1.2px);
-  background-size: 24px 24px;
-}
-
-.login-floaty {
-  position: absolute;
-  z-index: 0;
-  font-size: 26px;
-  opacity: 0.5;
-  pointer-events: none;
-  animation: loginFloaty 7s ease-in-out infinite;
-}
-.login-floaty--sm {
-  font-size: 20px;
-}
-@keyframes loginFloaty {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-4deg);
-  }
-  50% {
-    transform: translateY(-14px) rotate(5deg);
-  }
+  background:
+    radial-gradient(920px 520px at 88% -12%, rgba(163, 230, 53, 0.18), transparent 60%),
+    radial-gradient(760px 500px at -8% 105%, rgba(23, 178, 106, 0.13), transparent 58%),
+    #f5f7f4;
 }
 
 .login-brand {
@@ -342,7 +321,11 @@ watch(
 }
 
 .login-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--arena-grn-d);
+  font: inherit;
   font-weight: 800;
   cursor: pointer;
 }
@@ -365,7 +348,10 @@ watch(
   font-size: 44px;
   line-height: 1.12;
   font-weight: 900;
-  letter-spacing: -1.2px;
+  letter-spacing: -0.6px;
+}
+.login-hero__accent {
+  color: var(--arena-grn);
 }
 .login-hero__sub {
   margin-top: 16px;
@@ -512,9 +498,6 @@ watch(
   }
   .login-hero__power {
     max-width: none;
-  }
-  .login-floaty {
-    display: none;
   }
 }
 </style>

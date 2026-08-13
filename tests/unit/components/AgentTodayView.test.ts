@@ -10,6 +10,7 @@ import { fetchCachedLatestDailyPlan, fetchCachedTodayAgentTasks } from '@/compos
 import AgentTodayView from '@/views/agent/AgentTodayView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
+const getUserDashboardOverviewApi = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -28,6 +29,10 @@ vi.mock('@/api/agent', () => ({
   restoreAgentTaskApi: vi.fn(),
   skipAgentTaskApi: vi.fn(),
   startAgentTaskApi: vi.fn()
+}))
+
+vi.mock('@/api/dashboard', () => ({
+  getUserDashboardOverviewApi
 }))
 
 vi.mock('@/api/aiFeedback', () => ({
@@ -151,6 +156,7 @@ describe('AgentTodayView agent task evidence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     routerPush.mockResolvedValue(undefined)
+    getUserDashboardOverviewApi.mockResolvedValue({ businessDate: '2026-07-05' })
     vi.mocked(fetchCachedLatestDailyPlan).mockResolvedValue({
       runId: 777,
       date: '2026-07-05',
@@ -315,6 +321,39 @@ describe('AgentTodayView agent task evidence', () => {
     expect(wrapper.find('.agent-task-evidence-stub').exists()).toBe(true)
     expect(wrapper.get('.agent-loop-snapshot').text()).toContain('先完成或暂缓至少一项任务')
     expect(wrapper.find('[data-latest-review]').exists()).toBe(false)
+  })
+
+  it('shows completed plan status when every Agent task is DONE', async () => {
+    vi.mocked(fetchCachedLatestDailyPlan).mockResolvedValue({
+      runId: 777,
+      date: '2026-07-05',
+      planDate: '2026-07-05',
+      status: 'SUCCESS',
+      summary: '今日训练'
+    })
+    vi.mocked(fetchCachedTodayAgentTasks).mockResolvedValue({
+      date: '2026-07-05',
+      total: 3,
+      doneCount: 3,
+      todoCount: 0,
+      tasks: [
+        { id: 1, title: '任务一', status: 'DONE' },
+        { id: 2, title: '任务二', status: 'DONE' },
+        { id: 3, title: '任务三', status: 'DONE' }
+      ]
+    })
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: { loading: {} },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('今天的任务已完成')
+    expect(wrapper.text()).not.toContain('今天还没有计划')
   })
 
   it('keeps the full-page error when both core sources and DAILY reviews fail', async () => {

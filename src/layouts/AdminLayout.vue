@@ -1,5 +1,9 @@
 <template>
-  <el-container class="app-layout admin-layout" :class="{ 'is-collapsed': appStore.sidebarCollapsed }">
+  <el-container
+    class="app-layout admin-layout"
+    :class="{ 'is-collapsed': appStore.sidebarCollapsed }"
+    :style="{ '--admin-health-height': healthStripExpanded ? '32px' : '0px' }"
+  >
     <el-aside class="app-layout__aside">
       <div class="app-layout__brand">
         <div class="brand-mark">A</div>
@@ -52,19 +56,31 @@
         </div>
       </el-header>
 
-      <div class="admin-health-strip">
-        <button class="admin-health-strip__status" type="button" @click="router.push('/admin/dashboard')">
+      <div v-if="healthStripExpanded" class="admin-health-strip" role="status" aria-live="polite">
+        <button
+          v-if="canLoadDashboardHealth"
+          class="admin-health-strip__status"
+          type="button"
+          @click="router.push('/admin/dashboard')"
+        >
           <span class="health-dot" :class="`is-${healthTone}`"></span>
+          <span>服务状态</span>
           <strong>{{ healthLabel }}</strong>
           <small>{{ healthDetail }}</small>
         </button>
-        <div class="admin-health-strip__item">
-          <span>权限</span>
-          <strong>{{ authStore.permissions.length }} 个</strong>
+        <div v-else class="admin-health-strip__status is-readonly">
+          <span class="health-dot" :class="`is-${healthTone}`"></span>
+          <span>服务状态</span>
+          <strong>{{ healthLabel }}</strong>
+          <small>{{ healthDetail }}</small>
         </div>
         <div class="admin-health-strip__item">
-          <span>登录凭证</span>
-          <strong>{{ authStore.tokenVerified ? '已恢复' : '待校验' }}</strong>
+          <span>权限数量</span>
+          <strong>{{ authStore.permissions.length }} 项</strong>
+        </div>
+        <div class="admin-health-strip__item">
+          <span>登录态</span>
+          <strong>{{ authStore.tokenVerified ? '已验证' : '待验证' }}</strong>
         </div>
         <div class="admin-health-strip__item admin-health-strip__item--mobile-readonly">
           <span>手机模式</span>
@@ -77,8 +93,8 @@
           @click="diagnosticVisible = true"
         >
           <AlertTriangle :size="15" />
-          <span>{{ latestError ? '查看最近异常' : '诊断中心' }}</span>
-          <small>{{ latestError ? (latestError.traceId ? '追踪号已生成' : latestError.code || '有异常待处理') : '暂无异常' }}</small>
+          <span>请求诊断</span>
+          <small>{{ latestError ? (latestError.traceId ? '最近异常有追踪号' : latestError.code || '有异常待处理') : '无请求异常' }}</small>
         </button>
       </div>
 
@@ -105,7 +121,7 @@
             </el-button>
           </div>
         </div>
-        <RouteErrorBoundary fallback-path="/admin">
+        <RouteErrorBoundary :fallback-path="adminFallbackPath">
           <RouterView />
         </RouteErrorBoundary>
       </el-main>
@@ -119,12 +135,12 @@
         <strong>{{ displayName }}</strong>
       </div>
       <div>
-        <span>角色 / 权限</span>
-        <strong>{{ roleSummary }} / {{ authStore.permissions.length }} 个</strong>
+        <span>角色 / 权限数量</span>
+        <strong>{{ roleSummary }} / {{ authStore.permissions.length }} 项</strong>
       </div>
       <div>
-        <span>登录凭证状态</span>
-        <strong>{{ authStore.tokenVerified ? '已恢复当前用户' : '等待路由校验' }}</strong>
+        <span>登录态</span>
+        <strong>{{ authStore.tokenVerified ? '当前会话已验证' : '等待路由验证' }}</strong>
       </div>
       <div>
         <span>服务状态</span>
@@ -138,7 +154,7 @@
       title="当前会话没有请求错误"
       description="如果页面出现空表或权限异常，可以先刷新相关页面；新的请求失败会记录在这里，便于复制追踪号定位。"
     >
-      <el-button type="primary" @click="router.push('/admin/dashboard')">查看运营首页</el-button>
+      <el-button type="primary" @click="router.push(adminFallbackPath)">{{ adminFallbackLabel }}</el-button>
     </AppState>
 
     <div v-else class="diagnostic-list">
@@ -158,7 +174,7 @@
           </div>
           <div>
             <dt>追踪号</dt>
-            <dd>{{ item.traceId ? '已生成，可复制反馈信息' : '-' }}</dd>
+            <dd :title="item.traceId || undefined">{{ displayTraceId(item.traceId) }}</dd>
           </div>
         </dl>
         <div class="diagnostic-card__actions">
@@ -195,7 +211,7 @@
     <template #footer>
       <el-button @click="clearRequestErrors">清空记录</el-button>
       <el-button @click="reloadCurrentPage">重新加载当前页</el-button>
-      <el-button type="primary" @click="router.push('/admin/dashboard')">查看运营首页</el-button>
+      <el-button type="primary" @click="router.push(adminFallbackPath)">{{ adminFallbackLabel }}</el-button>
     </template>
   </el-drawer>
 </template>
@@ -213,7 +229,7 @@ import AppState from '@/components/common/AppState.vue'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import TagsView from '@/components/layout/TagsView.vue'
-import { canAccessAdminPermissions } from '@/router/adminAccess'
+import { canAccessAdminPermissions, firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
@@ -232,6 +248,7 @@ const diagnosticVisible = ref(false)
 const requestErrors = ref<RequestErrorDiagnostic[]>([])
 const dashboardOverview = ref<AdminDashboardOverviewVO | null>(null)
 const dashboardHealthError = ref(false)
+const dashboardHealthLoading = ref(true)
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || '管理员'
@@ -242,6 +259,8 @@ const latestError = computed(() => requestErrors.value[0])
 const adminPermissionDrift = computed(() => authStore.isAdmin && authStore.permissions.length === 0)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
 const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))
+const adminFallbackPath = computed(() => firstAccessibleAdminPath(authStore) || '/403')
+const adminFallbackLabel = computed(() => canLoadDashboardHealth.value ? '查看运营首页' : '返回可访问页面')
 const mobileReadonlyDefinitions = [
   { label: '运营首页', path: '/admin/dashboard', permissions: ['admin:system:overview'] },
   { label: '失败任务', path: '/admin/async-tasks?status=FAILED', permissions: ['admin:task:list'] },
@@ -258,8 +277,21 @@ const mobileReadonlyHint = computed(() =>
     ? '手机端仅用于查看告警、失败任务、AI 异常和发送失败；写入操作请切换到桌面端处理。'
     : '手机端保留运营首页和诊断入口；更多后台功能需等待权限恢复或切换桌面端处理。'
 )
-const healthStatus = computed<DashboardStatus>(() => dashboardOverview.value?.systemStatus?.status || 'UNKNOWN')
+const healthStatus = computed<DashboardStatus>(() => {
+  const services = dashboardOverview.value?.systemStatus?.services || []
+  const statuses = services
+    .filter((item) => String(item.status || '').toUpperCase() !== 'UNSUPPORTED')
+    .map((item) => String(item.status || 'UNKNOWN').toUpperCase())
+  if (statuses.some((status) => status === 'DOWN' || status === 'ERROR')) return 'DOWN'
+  if (!statuses.length || statuses.some((status) => status === 'DEGRADED' || status === 'UNKNOWN')) return 'DEGRADED'
+  return dashboardOverview.value?.systemStatus?.status || 'UNKNOWN'
+})
+const healthStripExpanded = computed(() => {
+  if (dashboardHealthLoading.value || adminPermissionDrift.value || !authStore.tokenVerified || dashboardHealthError.value || latestError.value) return true
+  return !['HEALTHY', 'SUPPORTED'].includes(String(healthStatus.value).toUpperCase())
+})
 const healthTone = computed(() => {
+  if (dashboardHealthLoading.value && !dashboardOverview.value) return 'warning'
   if (dashboardHealthError.value) return 'danger'
   const status = String(healthStatus.value).toUpperCase()
   if (status === 'HEALTHY' || status === 'SUPPORTED') return 'healthy'
@@ -268,7 +300,9 @@ const healthTone = computed(() => {
 })
 const healthLabel = computed(() => {
   if (adminPermissionDrift.value) return '权限待恢复'
-  if (dashboardHealthError.value) return '状态加载失败'
+  if (!canLoadDashboardHealth.value) return '无查看权限'
+  if (dashboardHealthLoading.value && !dashboardOverview.value) return '加载中'
+  if (dashboardHealthError.value) return dashboardOverview.value ? '刷新失败' : '状态加载失败'
   const status = String(healthStatus.value).toUpperCase()
   const map: Record<string, string> = {
     HEALTHY: '服务正常',
@@ -281,15 +315,21 @@ const healthLabel = computed(() => {
 })
 const healthDetail = computed(() => {
   if (adminPermissionDrift.value) return '后台权限配置未完成，请检查角色权限初始化'
-  if (dashboardHealthError.value) return latestError.value?.traceId ? '最近异常已记录，可打开诊断中心' : '可打开运营首页重试'
+  if (!canLoadDashboardHealth.value) return '当前账号不能读取运营首页健康摘要'
+  if (dashboardHealthLoading.value && !dashboardOverview.value) return '正在获取关键服务健康摘要'
+  if (dashboardHealthLoading.value && dashboardOverview.value) return '正在刷新，当前展示上次成功状态'
+  if (dashboardHealthError.value && dashboardOverview.value) return '当前展示上次成功状态，可打开运营首页重试'
+  if (dashboardHealthError.value) return latestError.value?.traceId ? '最近异常已记录，可打开请求诊断' : '可打开运营首页重试'
   const services = dashboardOverview.value?.systemStatus?.services || []
   const generatedAt = dashboardOverview.value?.generatedAt || dashboardOverview.value?.systemStatus?.generatedAt
   if (!services.length) return generatedAt ? `更新时间 ${formatTime(generatedAt)}` : '运营首页状态未加载'
   const downCount = services.filter((item) => ['DOWN', 'ERROR'].includes(String(item.status || '').toUpperCase())).length
-  const warningCount = services.filter((item) => ['DEGRADED', 'UNKNOWN'].includes(String(item.status || '').toUpperCase())).length
-  if (downCount) return `${downCount} 个服务异常`
-  if (warningCount) return `${warningCount} 个服务需关注`
-  return `${services.length} 个服务已汇总`
+  const unknownCount = services.filter((item) => String(item.status || '').toUpperCase() === 'UNKNOWN').length
+  const degradedCount = services.filter((item) => String(item.status || '').toUpperCase() === 'DEGRADED').length
+  if (downCount) return `${downCount} 项服务异常`
+  if (unknownCount) return `${unknownCount} 项服务状态待确认`
+  if (degradedCount) return `${degradedCount} 项服务能力受限`
+  return `${services.length} 项服务已汇总`
 })
 
 watch(
@@ -323,13 +363,22 @@ const formatTime = (value?: string) => {
   })
 }
 
+const displayTraceId = (traceId?: string) => {
+  const value = String(traceId || '').trim()
+  if (!value) return '-'
+  if (value.length <= 20) return value
+  return `${value.slice(0, 10)}...${value.slice(-6)}`
+}
+
 const fetchDashboardHealth = async () => {
+  dashboardHealthLoading.value = true
   dashboardHealthError.value = false
   try {
     dashboardOverview.value = await getAdminDashboardOverviewApi({ silentError: true })
   } catch {
-    dashboardOverview.value = null
     dashboardHealthError.value = true
+  } finally {
+    dashboardHealthLoading.value = false
   }
 }
 
@@ -389,13 +438,17 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
 }
 
 onMounted(() => {
+  document.body.classList.add('admin-overlay-theme')
   if (canLoadDashboardHealth.value) {
     fetchDashboardHealth()
+  } else {
+    dashboardHealthLoading.value = false
   }
   window.addEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 
 onBeforeUnmount(() => {
+  document.body.classList.remove('admin-overlay-theme')
   window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 </script>
@@ -514,6 +567,10 @@ onBeforeUnmount(() => {
     border-color: rgba(6, 182, 212, 0.45);
     background: rgba(6, 182, 212, 0.1);
   }
+}
+
+.admin-health-strip__status.is-readonly {
+  cursor: default;
 }
 
 .admin-health-strip__status {
@@ -804,12 +861,13 @@ onBeforeUnmount(() => {
   }
 
   :deep(.layout-menu) {
-    display: flex;
-    overflow-x: auto;
+    display: block;
+    overflow: visible;
   }
 
-  :deep(.el-menu-item) {
-    flex: 0 0 auto;
+  :deep(.el-menu-item),
+  :deep(.el-sub-menu__title) {
+    width: 100%;
   }
 
   .app-layout__main {

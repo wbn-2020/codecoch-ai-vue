@@ -21,7 +21,7 @@
           type="primary"
           :disabled="pageActionDisabled"
           :title="pageActionDisabledTitle"
-          @click="runDialogVisible = true"
+          @click="openRunDialog()"
         >
           运行用例
         </el-button>
@@ -206,7 +206,7 @@
                 </AppState>
                 <AppState v-else type="empty" :title="resultEmptyTitle" :description="resultEmptyDescription">
                   <el-button v-if="resultCaseId" type="primary" @click="clearResultFilter">查看全部结果</el-button>
-                  <el-button v-else v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="runDialogVisible = true">运行用例</el-button>
+                  <el-button v-else v-permission="'admin:agent:prompt-regression:run'" type="primary" @click="openRunDialog()">运行用例</el-button>
                 </AppState>
               </template>
             </el-table>
@@ -232,6 +232,15 @@
     </section>
 
     <el-dialog v-model="runDialogVisible" title="运行提示词回归" width="460px">
+      <el-alert
+        v-if="runErrorMessage"
+        class="dialog-error-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="回归运行失败"
+        :description="runErrorMessage"
+      />
       <el-form label-position="top">
         <el-form-item label="用例编号">
           <el-input-number v-model="runForm.caseId" :min="1" controls-position="right" />
@@ -256,6 +265,15 @@
     </el-dialog>
 
     <el-dialog v-model="caseDialogVisible" :title="caseForm.id ? '编辑回归用例' : '新增回归用例'" width="760px">
+      <el-alert
+        v-if="caseSaveError"
+        class="dialog-error-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="回归用例保存失败"
+        :description="caseSaveError"
+      />
       <el-form :model="caseForm" label-position="top">
         <div class="form-grid">
           <el-form-item label="用例名称" required>
@@ -392,6 +410,8 @@ const resultPage = reactive({
 const runDialogVisible = ref(false)
 const caseDialogVisible = ref(false)
 const savingCase = ref(false)
+const caseSaveError = ref('')
+const runErrorMessage = ref('')
 const jsonDialogVisible = ref(false)
 const jsonDialogTitle = ref('')
 const jsonDialogContent = ref('')
@@ -459,11 +479,11 @@ const resultEmptyDescription = computed(() =>
 
 const sensitiveKeyPattern = /(prompt|input|output|resume|jd|jobDescription|job_description|content|answer|question|mobile|phone|email|idCard|token|secret|password|raw)/i
 
-const getErrorMessage = (error: unknown) => {
+const getErrorMessage = (error: unknown, fallback = '提示词回归数据加载失败，请稍后重试。') => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '提示词回归数据加载失败，请稍后重试。')
+    return toFriendlyMessage((error as { message?: unknown }).message, fallback)
   }
-  return '提示词回归数据加载失败，请稍后重试。'
+  return fallback
 }
 
 const firstQueryString = (value: unknown) => {
@@ -602,8 +622,14 @@ const handleReset = () => {
 }
 
 const openRun = (caseId: number) => {
+  runErrorMessage.value = ''
   runForm.caseId = caseId
   runForm.promptVersionId = undefined
+  runDialogVisible.value = true
+}
+
+const openRunDialog = () => {
+  runErrorMessage.value = ''
   runDialogVisible.value = true
 }
 
@@ -621,6 +647,7 @@ const clearResultFilter = async () => {
 }
 
 const openCaseDialog = (row?: PromptRegressionCaseVO) => {
+  caseSaveError.value = ''
   Object.assign(caseForm, {
     id: row?.id,
     caseName: row?.caseName || '',
@@ -684,26 +711,27 @@ const saveCase = async () => {
   if (!validateJson(caseForm.inputJson, '输入内容') || !validateJson(caseForm.expectedSchemaJson, '预期结构')) {
     return
   }
+  caseSaveError.value = ''
   const actionLabel = caseForm.id ? '更新提示词回归用例' : '新增提示词回归用例'
-  const confirmed = await confirmDangerActionPreview({
-    title: '提示词回归用例保存预览',
-    action: `${actionLabel}「${caseForm.caseName.trim()}」`,
-    target: `提示词类型：${caseForm.promptType.trim()}；状态：${caseForm.enabled === 1 ? '启用' : '禁用'}${
-      caseForm.id ? `；用例编号：${caseForm.id}` : ''
-    }`,
-    impact: '保存后会影响后续提示词回归运行的输入内容、预期结构和启用范围，可能改变 AI 质量验收结果。',
-    rollback: '保存后无法自动恢复旧输入或旧预期结构；如误改，需要根据操作记录或历史备份手动还原用例内容。',
-    audit: '该操作受 admin:agent:prompt-regression:write 权限保护，系统会记录操作人和变更时间，便于追踪回归配置变更。',
-    tips: [
-      '确认输入内容不包含真实用户敏感信息或临时调试字段。',
-      '确认预期结构与当前提示词输出约束一致，避免误判回归通过或失败。',
-      '确认启用状态符合本次回归范围。'
-    ],
-    confirmButtonText: '确认保存用例'
-  })
-  if (!confirmed) return
-  savingCase.value = true
   try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '提示词回归用例保存预览',
+      action: `${actionLabel}「${caseForm.caseName.trim()}」`,
+      target: `提示词类型：${caseForm.promptType.trim()}；状态：${caseForm.enabled === 1 ? '启用' : '禁用'}${
+        caseForm.id ? `；用例编号：${caseForm.id}` : ''
+      }`,
+      impact: '保存后会影响后续提示词回归运行的输入内容、预期结构和启用范围，可能改变 AI 质量验收结果。',
+      rollback: '保存后无法自动恢复旧输入或旧预期结构；如误改，需要根据操作记录或历史备份手动还原用例内容。',
+      audit: '该操作受 admin:agent:prompt-regression:write 权限保护，系统会记录操作人和变更时间，便于追踪回归配置变更。',
+      tips: [
+        '确认输入内容不包含真实用户敏感信息或临时调试字段。',
+        '确认预期结构与当前提示词输出约束一致，避免误判回归通过或失败。',
+        '确认启用状态符合本次回归范围。'
+      ],
+      confirmButtonText: '确认保存用例'
+    })
+    if (!confirmed) return
+    savingCase.value = true
     const operationKey = caseForm.id ? `prompt-regression-case-update-${caseForm.id}` : 'prompt-regression-case-create'
     const payload = {
       caseName: caseForm.caseName.trim(),
@@ -724,6 +752,9 @@ const saveCase = async () => {
     ElMessage.success('回归用例已保存')
     caseDialogVisible.value = false
     await loadPage()
+  } catch (error) {
+    caseSaveError.value = getErrorMessage(error, '回归用例保存失败，请检查用例内容和预期结构后重试。')
+    ElMessage.error(caseSaveError.value)
   } finally {
     savingCase.value = false
   }
@@ -736,22 +767,23 @@ const runRegression = async () => {
     return
   }
   const caseName = cases.value.find((item) => item.id === runForm.caseId)?.caseName
-  const confirmed = await confirmDangerActionPreview({
-    title: '提示词回归运行预览',
-    action: '运行提示词回归用例',
-    target: `用例编号：${runForm.caseId}${caseName ? `（${caseName}）` : ''}；提示词版本编号：${runForm.promptVersionId}`,
-    impact: '运行后会写入一条新的回归结果记录，并可能触发提示词解析、结构校验或后续 AI 回归执行逻辑。',
-    rollback: '回归结果会作为历史诊断记录保留，无法自动撤销；如误运行，需要在结果列表和操作日志中标记排查。',
-    audit: '该操作受 admin:agent:prompt-regression:run 权限保护，系统会保留回归结果，便于按用例、版本和时间追踪。',
-    tips: [
-      '确认用例输入内容与预期结构已经保存且可复现。',
-      '确认选择的是要验证的提示词版本，避免把旧版本结果误当作当前质量。'
-    ],
-    confirmButtonText: '确认运行回归'
-  })
-  if (!confirmed) return
-  running.value = true
+  runErrorMessage.value = ''
   try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '提示词回归运行预览',
+      action: '运行提示词回归用例',
+      target: `用例编号：${runForm.caseId}${caseName ? `（${caseName}）` : ''}；提示词版本编号：${runForm.promptVersionId}`,
+      impact: '运行后会写入一条新的回归结果记录，并可能触发提示词解析、结构校验或后续 AI 回归执行逻辑。',
+      rollback: '回归结果会作为历史诊断记录保留，无法自动撤销；如误运行，需要在结果列表和操作日志中标记排查。',
+      audit: '该操作受 admin:agent:prompt-regression:run 权限保护，系统会保留回归结果，便于按用例、版本和时间追踪。',
+      tips: [
+        '确认用例输入内容与预期结构已经保存且可复现。',
+        '确认选择的是要验证的提示词版本，避免把旧版本结果误当作当前质量。'
+      ],
+      confirmButtonText: '确认运行回归'
+    })
+    if (!confirmed) return
+    running.value = true
     await runPromptRegressionApi({
       caseId: runForm.caseId,
       promptVersionId: runForm.promptVersionId,
@@ -764,6 +796,9 @@ const runRegression = async () => {
     ElMessage.success('回归运行请求已提交')
     activeTab.value = 'results'
     await loadPage()
+  } catch (error) {
+    runErrorMessage.value = getErrorMessage(error, '回归运行提交失败，请确认用例和提示词版本后重试。')
+    ElMessage.error(runErrorMessage.value)
   } finally {
     running.value = false
   }
@@ -864,6 +899,10 @@ onMounted(() => {
   padding: 12px 20px 0;
   color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.dialog-error-alert {
+  margin-bottom: 16px;
 }
 
 .pagination-wrap {

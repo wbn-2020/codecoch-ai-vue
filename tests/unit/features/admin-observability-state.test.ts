@@ -44,8 +44,18 @@ describe('admin observability data states', () => {
   })
 
   it('does not substitute cumulative totals for missing per-minute operations metrics', () => {
-    expect(opsOverviewSource).toContain("sourceMetric(dashboardSource, opsMetrics.value?.rpm, compact)")
-    expect(opsOverviewSource).toContain("sourceMetric(dashboardSource, opsMetrics.value?.tpm, compact)")
+    expect(opsOverviewSource).toContain(
+      'componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.rpm, compact)'
+    )
+    expect(opsOverviewSource).toContain(
+      'componentMetric(dashboardSource, opsMetrics.value?.trafficMetricsStatus, opsMetrics.value?.tpm, compact)'
+    )
+    expect(opsOverviewSource).toContain(
+      'componentPresentation('
+    )
+    expect(opsOverviewSource).toContain(
+      'opsMetrics.value?.trafficMetricsReason'
+    )
     expect(opsOverviewSource).not.toMatch(/opsMetrics\.value\?\.rpm \|\| aiOverview/)
     expect(opsOverviewSource).not.toMatch(/opsMetrics\.value\?\.tpm \|\| aiOverview/)
     expect(opsOverviewSource).toContain('sourceMetric(dataSourceLabels.vectorHealth, vectorHealth?.embeddingMetrics?.callCount, compact)')
@@ -62,9 +72,10 @@ describe('admin observability data states', () => {
   })
 
   it.each([
-    ['登录日志', loginLogSource, 'aria-label="登录日志表格密度"'],
-    ['操作日志', operationLogSource, 'aria-label="操作日志表格密度"']
-  ])('%s labels its density control', (_label, source, label) => {
+    ['登录日志', loginLogSource, 'aria-label="登录日志表格视图设置"'],
+    ['操作日志', operationLogSource, 'aria-label="操作日志表格视图设置"']
+  ])('%s labels its shared view settings control', (_label, source, label) => {
     expect(source).toContain(label)
+    expect(source).toContain('AdminTableViewSettings')
   })
 })

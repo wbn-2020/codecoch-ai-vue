@@ -26,7 +26,7 @@ let chartRenderSeq = 0
 let echartsModulePromise: Promise<typeof import('@/utils/echarts')> | null = null
 
 const baseTextStyle = {
-  color: '#94a3b8',
+  color: '#5f6e66',
   fontFamily: 'Inter, "Microsoft YaHei", sans-serif'
 }
 
@@ -73,19 +73,19 @@ const renderRadar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
       shape: 'polygon',
       radius: '65%',
       axisName: {
-        color: '#94a3b8',
+        color: '#5f6e66',
         fontSize: 11
       },
       splitArea: {
         areaStyle: {
-          color: ['rgba(99, 102, 241, 0.04)', 'rgba(99, 102, 241, 0.08)']
+          color: ['rgba(124, 92, 252, 0.04)', 'rgba(124, 92, 252, 0.08)']
         }
       },
       splitLine: {
-        lineStyle: { color: 'rgba(148, 163, 184, 0.18)' }
+        lineStyle: { color: '#d5ddd6' }
       },
       axisLine: {
-        lineStyle: { color: 'rgba(148, 163, 184, 0.18)' }
+        lineStyle: { color: '#d5ddd6' }
       }
     },
     series: [
@@ -96,14 +96,14 @@ const renderRadar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
             value: values,
             name: '知识点掌握度',
             areaStyle: {
-              color: 'rgba(99, 102, 241, 0.25)'
+              color: 'rgba(124, 92, 252, 0.18)'
             },
             lineStyle: {
-              color: '#818cf8',
+              color: '#7c5cfc',
               width: 2
             },
             itemStyle: {
-              color: '#818cf8'
+              color: '#7c5cfc'
             }
           }
         ]
@@ -127,17 +127,24 @@ const renderBar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
   barChart.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis' },
-    grid: { left: 36, right: 16, top: 24, bottom: 32, containLabel: true },
+    grid: {
+      left: 36,
+      right: 16,
+      top: 24,
+      bottom: 32,
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel'
+    },
     xAxis: {
       type: 'category',
       data: stages.map((item) => item.stageName),
-      axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } },
+      axisLine: { lineStyle: { color: '#d5ddd6' } },
       axisLabel: { ...baseTextStyle, fontSize: 11 }
     },
     yAxis: {
       type: 'value',
       max: 100,
-      splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.12)' } },
+      splitLine: { lineStyle: { color: '#eef2ee' } },
       axisLabel: baseTextStyle
     },
     series: [
@@ -147,12 +154,12 @@ const renderBar = (echarts: Awaited<ReturnType<typeof loadEcharts>>) => {
           value: item.score || 0,
           itemStyle: {
             color: (item.score || 0) >= 80
-              ? '#22c55e'
+              ? '#0a8750'
               : (item.score || 0) >= 60
-                ? '#60a5fa'
+                ? '#4f8ec9'
                 : (item.score || 0) >= 40
-                  ? '#f59e0b'
-                  : '#ef4444',
+                  ? '#b26a00'
+                  : '#c23b41',
             borderRadius: [6, 6, 0, 0]
           }
         })),
@@ -214,7 +221,7 @@ onBeforeUnmount(() => {
   height: 300px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
-  background: rgba(2, 6, 23, 0.28);
+  background: var(--app-surface);
 }
 
 @media (max-width: 860px) {

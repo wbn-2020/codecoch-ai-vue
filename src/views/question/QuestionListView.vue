@@ -9,21 +9,13 @@
         <h1>题库训练中心</h1>
         <p>先选一题开始表达，再用 AI 点评、参考思路和复盘记录把它沉淀成面试可用的回答。</p>
         <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/questions/practice')">
+          <el-button type="primary" size="large" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
             <Dumbbell :size="17" />
             开始训练
           </el-button>
           <el-button size="large" @click="router.push('/questions/recommendations')">
             <Sparkles :size="17" />
             看今日推荐
-          </el-button>
-          <el-button size="large" text @click="router.push('/questions/wrong-records')">
-            <RotateCcw :size="17" />
-            复盘错题
-          </el-button>
-          <el-button size="large" text @click="router.push('/questions/favorites')">
-            <Bookmark :size="17" />
-            收藏复习
           </el-button>
         </div>
       </div>
@@ -44,23 +36,29 @@
       </aside>
     </section>
 
-    <section class="training-strip">
-      <article class="training-note">
-        <span>今天先练</span>
-        <strong>{{ weakCount ? `${weakCount} 道待补强题` : '任选一题开练' }}</strong>
-        <p>未评估、模糊和未掌握会优先提示，但不会伪造你的能力结论。</p>
-      </article>
-      <article class="training-note">
-        <span>复盘资产</span>
-        <strong>{{ favoriteCount }} 道本页收藏</strong>
-        <p>收藏不抢主动作，只作为面试前回看和串联表达的入口。</p>
-      </article>
-      <article class="training-note is-muted">
-        <span>已掌握</span>
-        <strong>{{ masteredCount }} 道可低频回看</strong>
-        <p>已掌握题建议用于巩固表达，不占用主训练精力。</p>
-      </article>
-    </section>
+    <details class="training-summary">
+      <summary>
+        <span>训练进度</span>
+        <small>{{ weakCount ? `${weakCount} 道待补强` : '任选一题开练' }} · {{ favoriteCount }} 道收藏</small>
+      </summary>
+      <div class="training-strip">
+        <article class="training-note">
+          <span>今天先练</span>
+          <strong>{{ weakCount ? `${weakCount} 道待补强题` : '任选一题开练' }}</strong>
+          <p>未评估、模糊和未掌握会优先提示，但不会伪造你的能力结论。</p>
+        </article>
+        <article class="training-note">
+          <span>复盘资产</span>
+          <strong>{{ favoriteCount }} 道本页收藏</strong>
+          <p>收藏不抢主动作，只作为面试前回看和串联表达的入口。</p>
+        </article>
+        <article class="training-note is-muted">
+          <span>已掌握</span>
+          <strong>{{ masteredCount }} 道可低频回看</strong>
+          <p>已掌握题建议用于巩固表达，不占用主训练精力。</p>
+        </article>
+      </div>
+    </details>
 
     <section class="content-card question-workbench">
       <div class="content-card__body workbench-head">
@@ -71,8 +69,6 @@
         </div>
         <div class="workbench-actions">
           <el-button text :loading="loading" @click="fetchQuestions">刷新</el-button>
-          <el-button text @click="router.push('/questions/practice')">专项练习</el-button>
-          <el-button text @click="router.push('/questions/wrong-records')">错题复盘</el-button>
         </div>
       </div>
 
@@ -119,7 +115,6 @@
           v-else
           :key="item.id"
           class="question-card"
-          @click="openQuestion(item)"
         >
           <div class="question-card__top">
             <div>
@@ -139,10 +134,6 @@
             <div>
               <span>为什么练这题</span>
               <p>{{ trainingReason(item) }}</p>
-            </div>
-            <div>
-              <span>训练状态</span>
-              <p>{{ trainingState(item) }}</p>
             </div>
             <div>
               <span>下一步</span>
@@ -190,7 +181,7 @@
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpenCheck, Bookmark, Dumbbell, PlayCircle, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
+import { BookOpenCheck, Dumbbell, PlayCircle, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
 
 import { favoriteQuestionApi, getQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
@@ -205,6 +196,7 @@ const loading = ref(false)
 const favoriteChangingId = ref<number | null>(null)
 const loadError = ref('')
 const questions = ref<QuestionVO[]>([])
+const optionPool = ref<QuestionVO[]>([])
 const total = ref(0)
 
 const query = reactive<QuestionQueryDTO>({
@@ -224,9 +216,15 @@ const masteryMap = {
   UNKNOWN: '未掌握'
 }
 
+const collectQuestionOptions = (items: QuestionVO[]) => {
+  const existing = new Map(optionPool.value.map((item) => [item.id, item]))
+  items.forEach((item) => existing.set(item.id, item))
+  optionPool.value = Array.from(existing.values())
+}
+
 const categoryOptions = computed<QuestionCategoryVO[]>(() => {
   const map = new Map<number, QuestionCategoryVO>()
-  questions.value.forEach((item) => {
+  optionPool.value.forEach((item) => {
     if (item.categoryId && item.categoryName) {
       map.set(item.categoryId, {
         id: item.categoryId,
@@ -241,7 +239,7 @@ const categoryOptions = computed<QuestionCategoryVO[]>(() => {
 const tagOptions = computed<QuestionTagVO[]>(() => {
   const byName = new Map<string, QuestionTagVO>()
 
-  questions.value.forEach((item) => {
+  optionPool.value.forEach((item) => {
     item.tags?.forEach((tag) => {
       const name = (tag?.name || tag?.tagName || '').trim()
       const id = Number(tag?.id)
@@ -289,13 +287,6 @@ const trainingReason = (item: QuestionVO) => {
   return '作为通用训练题，适合保持答题手感和表达节奏。'
 }
 
-const trainingState = (item: QuestionVO) => {
-  if (item.masteryStatus === 'MASTERED') return item.answered ? '已练过且标记为已掌握，可低频回看。' : '已标记为已掌握，建议用来巩固表达。'
-  if (item.masteryStatus === 'VAGUE') return '还没讲透，建议先写答题骨架再看点评。'
-  if (item.masteryStatus === 'UNKNOWN') return '需要补强，训练后再更新掌握状态。'
-  return '尚未评估，先完成一次作答再判断掌握程度。'
-}
-
 const nextAction = (item: QuestionVO) => {
   if (item.masteryStatus === 'MASTERED') return '进入训练页快速复述，确认面试表达是否稳定。'
   if (item.masteryStatus === 'VAGUE') return '先用自己的话回答，再对照 AI 点评补齐遗漏。'
@@ -310,6 +301,7 @@ const fetchQuestions = async () => {
   try {
     const result = await getQuestionsApi(query)
     questions.value = result.records || []
+    collectQuestionOptions(questions.value)
     total.value = result.total || 0
   } catch (error) {
     questions.value = []
@@ -317,6 +309,34 @@ const fetchQuestions = async () => {
     loadError.value = toFriendlyMessage(error, '训练题暂时加载失败，请稍后重试。')
   } finally {
     loading.value = false
+  }
+}
+
+const loadOptionCatalog = async () => {
+  try {
+    const pageSize = 100
+    let pageNo = 1
+    let catalogTotal = 0
+
+    do {
+      const result = await getQuestionsApi({
+        keyword: '',
+        categoryId: undefined,
+        tagId: undefined,
+        difficulty: '',
+        masteryStatus: '',
+        favoriteOnly: false,
+        pageNo,
+        pageSize
+      })
+      const records = result.records || []
+      collectQuestionOptions(records)
+      catalogTotal = Number(result.total || 0)
+      if (!records.length) break
+      pageNo += 1
+    } while ((pageNo - 1) * pageSize < catalogTotal)
+  } catch {
+    // The question list remains usable when the optional filter catalog is unavailable.
   }
 }
 
@@ -356,7 +376,10 @@ const toggleFavorite = async (item: QuestionVO) => {
   }
 }
 
-onMounted(fetchQuestions)
+onMounted(() => {
+  void loadOptionCatalog()
+  void fetchQuestions()
+})
 </script>
 
 <style scoped lang="scss">
@@ -487,6 +510,47 @@ onMounted(fetchQuestions)
   min-width: 0;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.training-summary {
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
+}
+
+.training-summary summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 50px;
+  padding: 0 14px;
+  color: var(--user-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.training-summary summary::-webkit-details-marker {
+  display: none;
+}
+
+.training-summary summary small {
+  color: var(--user-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.training-summary summary:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: -2px;
+}
+
+.training-summary[open] summary {
+  border-bottom: 1px solid var(--user-border);
 }
 
 .training-note {
@@ -595,17 +659,9 @@ onMounted(fetchQuestions)
   border-radius: 8px;
   background: var(--user-surface);
   box-shadow: none;
-  cursor: pointer;
   transition:
     border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.question-card:hover {
-  border-color: var(--user-primary-border);
-  box-shadow: none;
-  transform: translateY(-1px);
+    box-shadow 0.18s ease;
 }
 
 .question-card__top {
@@ -624,7 +680,7 @@ onMounted(fetchQuestions)
 
 .question-card__insights {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 

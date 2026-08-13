@@ -30,6 +30,8 @@ export interface AdminLogSummaryVO {
   failedLoginLogs: number
   todayFailedLoginLogs: number
   latestLoginAt?: string
+  queryAvailable?: boolean
+  degradedReason?: string
 }
 
 export interface AsyncTaskVO {
@@ -216,8 +218,68 @@ export interface AiModelConfigVO {
   temperature?: number
   maxTokens?: number
   description?: string
+  callHealthStatus?: string
+  lastCallSuccessAt?: string
+  lastCallSuccessSummary?: string
+  lastCallFailureAt?: string
+  lastCallFailureSummary?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AiRuntimeProviderStatusVO {
+  provider: string
+  routeRoles?: string[]
+  effectiveConfigSource?: string
+  selectedModelCode?: string
+  activeModelCount?: number
+  defaultModelCount?: number
+  providerDefaultContractSatisfied?: boolean
+  readyForCall?: boolean
+  governanceStatus?: string
+  riskCodes?: string[]
+}
+
+export interface AiRuntimeStatusVO {
+  serviceEnabled?: boolean
+  mockEnabled?: boolean
+  realRoutingAllowed?: boolean
+  effectiveMode?: string
+  effectiveModeLabel?: string
+  defaultModelScope?: string
+  defaultModelScopeLabel?: string
+  configuredDefaultProvider?: string
+  effectivePrimaryProvider?: string
+  effectivePrimaryModel?: string
+  globalDefaultModelCount?: number
+  fallbackEnabled?: boolean
+  configuredFallbackProvider?: string
+  configuredEmbeddingProvider?: string
+  databaseStatus?: string
+  riskCodes?: string[]
+  operatorMessages?: string[]
+  providers?: AiRuntimeProviderStatusVO[]
+}
+
+export interface AiModelProbeVO {
+  modelId: number
+  provider: string
+  modelCode: string
+  success: boolean
+  status: string
+  failureType?: string
+  httpStatus?: number
+  elapsedMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  message?: string
+  requestPromptPreview?: string
+  responsePreview?: string
+}
+
+export interface AiModelProbeDTO extends AdminOperationConfirmPayload {
+  prompt?: string
 }
 
 export interface AiModelConfigDTO {

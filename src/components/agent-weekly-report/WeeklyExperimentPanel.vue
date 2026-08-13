@@ -92,9 +92,9 @@ const suggestionDescription = (item: WeeklyExperimentSuggestion) =>
 .weekly-panel {
   min-width: 0;
   padding: 18px 20px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid var(--arena-line, var(--app-border));
+  border-radius: 14px;
+  background: var(--user-surface, var(--app-surface));
 }
 
 .weekly-panel__header h2,
@@ -144,7 +144,7 @@ const suggestionDescription = (item: WeeklyExperimentSuggestion) =>
 
 .experiment-group > h3 {
   margin: 0;
-  color: #93c5fd;
+  color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
 }
 

@@ -23,12 +23,16 @@ const overview = vi.hoisted(() => ({
   } as Record<string, unknown>
 }))
 const completeAgentTaskApi = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 1, status: 'DONE' }))
+const getV3DashboardOverviewApi = vi.hoisted(() => vi.fn())
+const getLatestJobReadinessApi = vi.hoisted(() => vi.fn())
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
   fetchCachedTodayAgentTasks: vi.fn(async () => todayTasks.value),
   fetchCachedDashboardOverview: vi.fn(async () => overview.value)
 }))
 vi.mock('@/api/agent', () => ({ completeAgentTaskApi }))
+vi.mock('@/api/dashboard', () => ({ getV3DashboardOverviewApi }))
+vi.mock('@/api/jobRequirement', () => ({ getLatestJobReadinessApi }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ path: '/dashboard', fullPath: '/dashboard', meta: {} })
@@ -54,6 +58,18 @@ describe('ArenaHomeView', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     completeAgentTaskApi.mockClear()
+    getV3DashboardOverviewApi.mockResolvedValue({
+      currentTargetJob: { targetJobId: 88 }
+    })
+    getLatestJobReadinessApi.mockResolvedValue({
+      targetJobId: 88,
+      readinessScore: 76,
+      missingCount: 2,
+      fallback: false,
+      sampleInsufficient: false,
+      dimensions: [],
+      warnings: []
+    })
     overview.value = {
       resumeCount: 1,
       interviewCount: 1,
@@ -97,16 +113,16 @@ describe('ArenaHomeView', () => {
     }
   })
 
-  it('renders three missions with boss and side quests from real agent tasks', async () => {
+  it('renders a priority task and follow-up tasks from real agent tasks', async () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('第 1 关 · Boss')
+    expect(wrapper.text()).toContain('今日优先任务')
     expect(wrapper.text()).toContain('做出一份能匹配的简历')
-    expect(wrapper.text()).toContain('+150 经验')
-    expect(wrapper.text()).toContain('支线 2')
+    expect(wrapper.text()).toContain('约 8 分钟')
+    expect(wrapper.text()).toContain('后续任务 1')
     expect(wrapper.text()).toContain('贴一段目标 JD')
-    expect(wrapper.text()).toContain('支线 3')
+    expect(wrapper.text()).toContain('后续任务 2')
     expect(wrapper.text()).toContain('轻量技术面 5 题')
   })
 
@@ -115,9 +131,25 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('今天还没有关卡，先开第一关')
+    expect(wrapper.text()).toContain('今天还没有任务，先安排第一项')
     // mock 概览中已有简历（resumeCount=1），主行动为生成今日计划
-    expect(wrapper.text()).toContain('去生成今日计划')
+    expect(wrapper.text()).toContain('生成今日计划')
+  })
+
+  it('keeps an all-DONE Agent plan as completed instead of an ungenerated plan', async () => {
+    todayTasks.value = {
+      tasks: [
+        { id: 31, title: '任务一', status: 'DONE' },
+        { id: 32, title: '任务二', status: 'DONE' },
+        { id: 33, title: '任务三', status: 'DONE' }
+      ]
+    }
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('今天的训练已全部完成')
+    expect(wrapper.text()).toContain('查看今日完成记录')
+    expect(wrapper.text()).not.toContain('今天还没有任务，先安排第一项')
   })
 
   it('falls back to resume creation when the user has no resume', async () => {
@@ -126,27 +158,30 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('8 分钟创建简历')
+    expect(wrapper.text()).toContain('创建简历')
   })
 
-  it('completes a mission via the real api and banks xp into game profile', async () => {
+  it('completes a task via the real api and updates progress state', async () => {
     const gameProfile = useGameProfileStore()
     const wrapper = mountHome()
     await flush()
 
-    const completeButtons = wrapper.findAll('button').filter((btn) => btn.text().includes('已完成，收下经验'))
-    expect(completeButtons.length).toBe(1)
-    await completeButtons[0].trigger('click')
+    const primaryCompleteButton = wrapper
+      .get('.arena-home__boss')
+      .findAll('button')
+      .find((btn) => btn.text().includes('标记为已完成'))
+    expect(primaryCompleteButton).toBeTruthy()
+    await primaryCompleteButton!.trigger('click')
     await flush()
 
-    expect(completeAgentTaskApi).toHaveBeenCalledWith(11, { note: '用户在竞技场首页标记完成' })
+    expect(completeAgentTaskApi).toHaveBeenCalledWith(11, { note: '用户在今日任务页标记完成' })
     expect(gameProfile.xp).toBe(150)
     expect(gameProfile.streakDays).toBe(1)
     expect(gameProfile.todayMissionDone).toBe(1)
     expect(wrapper.text()).not.toContain('做出一份能匹配的简历')
   })
 
-  it('grants the daily chest after all missions are done', async () => {
+  it('updates the daily completion record after all tasks are done', async () => {
     todayTasks.value = {
       tasks: [
         { id: 21, title: '唯一一关', status: 'TODO', taskType: 'JOB_TARGET', estimatedMinutes: 5 }
@@ -157,26 +192,59 @@ describe('ArenaHomeView', () => {
     await flush()
 
     expect(wrapper.text()).toContain('唯一一关')
-    await wrapper.findAll('button').find((btn) => btn.text().includes('已完成，收下经验'))!.trigger('click')
+    await wrapper.findAll('button').find((btn) => btn.text().includes('标记为已完成'))!.trigger('click')
     await flush()
 
     expect(gameProfile.chestReady).toBe(true)
-    expect(wrapper.text()).toContain('今日宝箱可以开了')
+    expect(wrapper.text()).toContain('今日任务已全部完成')
 
-    const chestButton = wrapper.findAll('button').find((btn) => btn.text().includes('开箱'))
+    const chestButton = wrapper.findAll('button').find((btn) => btn.text().includes('确认完成'))
     expect(chestButton).toBeTruthy()
     await chestButton!.trigger('click')
     await flush()
     expect(gameProfile.xp).toBe(60 + 100)
   })
 
-  it('computes power ring from readiness overview data', async () => {
+  it('renders the backend readiness snapshot instead of a client-side weighted score', async () => {
     const wrapper = mountHome()
     await flush()
 
     const hole = wrapper.get('.arena-ring__hole')
-    const score = Number(hole.text().replace(/[^\d]/g, ''))
-    expect(score).toBeGreaterThan(0)
-    expect(score).toBeLessThanOrEqual(100)
+    expect(hole.text()).toContain('76')
+    expect(wrapper.text()).toContain('仍有 2 项岗位要求待补齐')
+    expect(getLatestJobReadinessApi).toHaveBeenCalledWith(88)
+  })
+
+  it('does not display a score when the only readiness snapshot is fallback evidence', async () => {
+    getLatestJobReadinessApi.mockResolvedValue({
+      targetJobId: 88,
+      readinessScore: 92,
+      fallback: true,
+      sampleInsufficient: false,
+      dimensions: [],
+      warnings: []
+    })
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.get('.arena-ring__hole').text()).toContain('--')
+    expect(wrapper.text()).toContain('当前证据不足，暂不展示准备度分数')
+  })
+
+  it('keeps the full seven-day streak visible', async () => {
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.findAll('.arena-streak__day')).toHaveLength(7)
+    expect(wrapper.text()).toContain('六')
+    expect(wrapper.text()).toContain('日')
+  })
+
+  it('derives the weekday from the backend business date', async () => {
+    overview.value = { ...overview.value, businessDate: '2026-08-09' }
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('周日')
   })
 })

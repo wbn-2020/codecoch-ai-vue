@@ -109,6 +109,7 @@
                   empty-title="还没有时间线事件"
                   empty-description="投递、跟进、面试和结果事件会按时间顺序显示在这里。"
                   :error="sectionErrors.timeline"
+                  :retry="() => retryTab('timeline')"
                 >
                   <template #default="{ item }">
                     <div class="timeline-row">
@@ -130,6 +131,7 @@
                   empty-title="还没有关联材料"
                   empty-description="关联的简历版本、匹配报告和投递包会在这里集中展示。"
                   :error="sectionErrors.materials"
+                  :retry="() => retryTab('materials')"
                 >
                   <template #default="{ item }">
                     <div class="material-row">
@@ -137,7 +139,14 @@
                         <strong>{{ item.title || item.label || '未命名材料' }}</strong>
                         <span>{{ item.type || '材料' }} · {{ item.status || '状态待确认' }}</span>
                       </div>
-                      <el-button v-if="item.href" link type="primary" @click="router.push(item.href)">查看</el-button>
+                      <el-button
+                        v-if="resolveWorkspaceLink(item.href)"
+                        link
+                        type="primary"
+                        @click="openWorkspaceLink(item.href)"
+                      >
+                        查看
+                      </el-button>
                     </div>
                   </template>
                 </WorkspaceList>
@@ -150,6 +159,7 @@
                   empty-title="暂时没有下一步建议"
                   empty-description="记录新的事件或准备动作后，这里会出现可确认的下一步。"
                   :error="sectionErrors['next-steps']"
+                  :retry="() => retryTab('next-steps')"
                 >
                   <template #default="{ item }">
                     <div class="next-step-row">
@@ -283,7 +293,12 @@
                         <el-tag size="small" effect="plain">仅提示</el-tag>
                       </article>
                     </div>
-                    <AppState v-else type="empty" title="还没有联系人" description="首期只保存显示名、角色、渠道和遮罩提示，不保存完整联系方式。" />
+                    <AppState
+                      v-else-if="!sectionErrors.contacts"
+                      type="empty"
+                      title="还没有联系人"
+                      description="首期只保存显示名、角色、渠道和遮罩提示，不保存完整联系方式。"
+                    />
                   </article>
                   <article class="workspace-section">
                     <header class="section-header"><h2>活动台账</h2><el-tag effect="plain">只记录不发送</el-tag></header>
@@ -294,7 +309,12 @@
                         <p>{{ activity.summary || '暂无活动摘要' }}</p>
                       </div>
                     </div>
-                    <AppState v-else type="empty" title="还没有活动记录" description="沟通草稿只能复制、编辑和记录，不提供发送接口。" />
+                    <AppState
+                      v-else-if="!sectionErrors.contacts"
+                      type="empty"
+                      title="还没有活动记录"
+                      description="沟通草稿只能复制、编辑和记录，不提供发送接口。"
+                    />
                   </article>
                 </div>
                 <CareerContactPanel
@@ -339,7 +359,12 @@
                       </el-tag>
                     </article>
                   </div>
-                  <AppState v-else type="empty" title="还没有研究来源" description="可登记用户提供的 JD、官方链接或已有材料，不做无限制网页抓取。" />
+                  <AppState
+                    v-else-if="!sectionErrors.research"
+                    type="empty"
+                    title="还没有研究来源"
+                    description="可登记用户提供的 JD、官方链接或已有材料，不做无限制网页抓取。"
+                  />
                   <CareerResearchPanel
                     :application-id="applicationId"
                     :sources="researchSources"
@@ -389,7 +414,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElButton, ElMessage, ElMessageBox } from 'element-plus'
 import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ClipboardCheck } from 'lucide-vue-next'
@@ -410,6 +435,7 @@ import CareerInterviewPanel from '@/components/v7/career-interview/CareerIntervi
 import CareerResearchPanel from '@/components/v7/career-research/CareerResearchPanel.vue'
 import CareerContactPanel from '@/components/v7/career-contact/CareerContactPanel.vue'
 import { appConfig } from '@/config'
+import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import {
   buildOfferComparison,
   classifyV7GetError,
@@ -460,6 +486,18 @@ let workspaceLoadToken = 0
 let transitionRequestToken = 0
 
 const application = computed<ApplicationWorkspaceApplication>(() => workspace.value.application || { id: applicationId.value })
+const resolveWorkspaceLink = (rawPath?: string | null) => {
+  if (!rawPath) return ''
+  const resolved = resolveAppRoutePath(rawPath, {
+    fallbackPath: '/applications',
+    knownPaths: defaultUserKnownPaths
+  })
+  return resolved.blockedPath ? '' : resolved.path
+}
+const openWorkspaceLink = (rawPath?: string | null) => {
+  const path = resolveWorkspaceLink(rawPath)
+  if (path) void router.push(path)
+}
 const openEvidenceResults = () => {
   if (!Number.isSafeInteger(applicationId.value) || applicationId.value <= 0) return
   void router.push({
@@ -785,15 +823,30 @@ const WorkspaceList = defineComponent({
     items: { type: Array, default: () => [] },
     emptyTitle: { type: String, required: true },
     emptyDescription: { type: String, required: true },
-    error: { type: String, default: '' }
+    error: { type: String, default: '' },
+    retry: { type: Function, default: undefined }
   },
   setup(props, { slots }) {
     return () => h('article', { class: 'workspace-section' }, [
       h('header', { class: 'section-header' }, [h('h2', props.title)]),
-      props.error ? h('div', { class: 'inline-warning', 'data-testid': 'workspace-section-error' }, props.error) : null,
-      props.items.length
-        ? h('div', { class: 'workspace-list' }, props.items.map((item, index) => slots.default?.({ item, index })))
-        : h(AppState, { type: 'empty', title: props.emptyTitle, description: props.emptyDescription })
+      props.error
+        ? h('div', { class: 'workspace-section-error', 'data-testid': 'workspace-section-error' }, [
+            h('div', { class: 'inline-warning' }, props.error),
+            props.retry
+              ? h(
+                  ElButton,
+                  {
+                    type: 'primary',
+                    plain: true,
+                    onClick: (event: MouseEvent) => props.retry?.(event)
+                  },
+                  { default: () => '重新加载' }
+                )
+              : null
+          ])
+        : props.items.length
+          ? h('div', { class: 'workspace-list' }, props.items.map((item, index) => slots.default?.({ item, index })))
+          : h(AppState, { type: 'empty', title: props.emptyTitle, description: props.emptyDescription })
     ])
   }
 })
@@ -853,9 +906,9 @@ onMounted(() => { void loadWorkspace() })
 .workspace-header {
   align-items: flex-end;
   padding: 16px 18px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.48);
+  border: 1.5px solid var(--user-primary-border);
+  border-radius: var(--arena-radius-card);
+  background: var(--user-surface-tint);
 }
 
 .workspace-header__main > .el-button {
@@ -865,7 +918,7 @@ onMounted(() => { void loadWorkspace() })
 
 .workspace-eyebrow {
   display: block;
-  color: #93c5fd;
+  color: var(--user-primary-hover);
   font-size: 12px;
   font-weight: 700;
 }
@@ -920,9 +973,9 @@ onMounted(() => { void loadWorkspace() })
 .workspace-section {
   min-width: 0;
   padding: 16px 18px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.34);
+  border: 1px solid var(--user-border);
+  border-radius: var(--arena-radius-btn);
+  background: var(--user-surface);
 }
 
 .section-header {
@@ -946,8 +999,9 @@ onMounted(() => { void loadWorkspace() })
 .fact-grid div {
   min-width: 0;
   padding: 10px;
-  border-radius: 6px;
-  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid var(--user-border);
+  border-radius: 10px;
+  background: var(--user-surface-muted);
 }
 
 dt,
@@ -1055,9 +1109,10 @@ dd {
 .inline-warning {
   margin-bottom: 10px;
   padding: 10px 12px;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: 6px;
-  color: #fcd34d;
+  border: 1px solid rgba(247, 144, 9, 0.34);
+  border-radius: 10px;
+  background: var(--user-warning-soft);
+  color: #9a5e00;
   font-size: 12px;
   line-height: 1.55;
 }

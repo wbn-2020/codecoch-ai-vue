@@ -4,38 +4,36 @@
       <div>
         <div class="task-eyebrow">
           <ListChecks :size="16" />
-          处理进度中心
+          任务中心
         </div>
-        <h1>把长耗时生成和训练任务整理成可恢复行动</h1>
-        <p>集中回看智能教练任务、运行详情和各 AI 能力入口；生成中、失败或稍后继续的任务，先从这里查看进度、失败原因和下一步处理建议。</p>
+        <h1>只处理眼前需要推进的任务</h1>
+        <p>待办、生成进度和历史记录分别查看，避免把训练任务和系统处理记录堆在同一页。</p>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/agent/today')">
           <CalendarDays :size="16" />
           今日计划
         </el-button>
-        <el-button type="primary" :loading="loading" @click="fetchTasks">
+        <el-button :loading="workspaceTab === 'progress' ? asyncLoading : loading" @click="refreshCurrentWorkspace">
           <RefreshCw :size="16" />
-          刷新任务
+          刷新
         </el-button>
       </div>
     </section>
 
-    <section class="metric-grid">
-      <article v-for="metric in metrics" :key="metric.label" class="metric-card">
-        <span>{{ metric.label }}</span>
-        <strong>{{ metric.value }}</strong>
-        <p>{{ metric.desc }}</p>
-      </article>
-    </section>
+    <section class="task-workspace">
+      <el-tabs v-model="workspaceTab" class="workspace-tabs">
+        <el-tab-pane :label="`待处理 ${pendingTasks.length ? `(本页 ${pendingTasks.length})` : ''}`" name="pending" />
+        <el-tab-pane :label="`生成进度 ${activeAsyncTasks.length ? `(${activeAsyncTasks.length})` : ''}`" name="progress" />
+        <el-tab-pane :label="`历史 ${historyTasks.length ? `(本页 ${historyTasks.length})` : ''}`" name="history" />
+      </el-tabs>
 
+    <template v-if="workspaceTab === 'progress'">
     <section class="recovery-panel">
       <div class="recovery-panel__copy">
-        <span>长任务恢复入口</span>
-        <strong>岗位分析、简历匹配、今日计划、推荐题和面试报告先统一回到这里接续</strong>
-        <p>
-          系统会尽量保留进度、失败原因和下一步入口；离开原页面后，也可以回到这里继续查看、复制处理线索或回到相关页面处理。
-        </p>
+        <span>生成进度</span>
+        <strong>查看状态，必要时回到对应功能继续处理</strong>
+        <p>这里仅保留处理状态、失败原因和恢复入口，不展示业务材料或完整诊断内容。</p>
       </div>
       <div class="recovery-links">
         <button v-for="item in recoveryLinks" :key="item.path" type="button" class="recovery-link" @click="goRecovery(item.path)">
@@ -51,9 +49,9 @@
     <section class="async-task-panel">
       <div class="async-task-panel__head">
         <div>
-          <span>处理进度</span>
-          <strong>岗位分析、简历解析、匹配报告、今日计划、推荐题和面试报告的处理进度</strong>
-          <p>长耗时任务会保留进度、关联页面和必要处理线索，离开原页面后也能继续查看。</p>
+          <span>当前处理记录</span>
+          <strong>生成中、失败或刚完成的任务</strong>
+          <p>失败后可回到对应功能重新处理；详情页仅提供必要的定位摘要。</p>
         </div>
         <div class="async-task-actions">
           <el-select v-model="asyncQuery.bizType" clearable filterable placeholder="关联功能" @change="handleAsyncSearch">
@@ -91,10 +89,11 @@
         <AppState
           v-if="!asyncTasks.length && !asyncLoading"
           type="empty"
-          title="暂无处理进度"
-          description="提交岗位分析、简历解析、匹配报告、今日计划或推荐题生成后，可以在这里查看处理进度。"
+          :title="asyncEmptyTitle"
+          :description="asyncEmptyDescription"
         >
-          <el-button @click="handleAsyncReset">清空筛选</el-button>
+          <el-button v-if="hasExactAsyncReceiptFilter" @click="handleAsyncReset">查看全部处理记录</el-button>
+          <el-button v-else @click="handleAsyncReset">清空筛选</el-button>
         </AppState>
 
         <article v-for="task in asyncTasks" :key="task.id" class="async-task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
@@ -103,27 +102,30 @@
               <span>{{ formatTaskDate(task.createdAt) }}</span>
               <StatusTag :status="task.status || 'PENDING'" :map="asyncStatusMap" />
             </div>
-            <h3>{{ getAsyncBizLabel(task.bizType) }}处理记录</h3>
+            <h3>{{ getAsyncBizLabel(task.bizType) }}</h3>
             <p class="task-recovery-hint">{{ asyncTaskRecoveryHint(task) }}</p>
-            <div class="task-diagnostics">
-              <span>处理记录已保存</span>
-              <span v-if="task.messageId">处理进度已提交</span>
-              <span v-if="task.traceId">处理线索已记录</span>
-              <span>{{ getAsyncBizLabel(task.bizType) }}已关联</span>
-              <span v-if="task.retryCount != null">重试 {{ task.retryCount }} / {{ task.maxRetry ?? '-' }}</span>
-            </div>
             <p v-if="task.failureReason" class="task-failure">失败原因：{{ toFriendlyMessage(task.failureReason, '任务失败原因尚未透出') }}</p>
           </div>
           <div class="async-task-card__actions">
-            <el-button v-if="getAsyncTaskEntry(task)" @click="goAction(getAsyncTaskEntry(task) || '')">回到相关页面</el-button>
+            <el-button v-if="getAsyncTaskEntry(task)" @click="goAction(getAsyncTaskEntry(task) || '')">前往功能页处理</el-button>
             <el-button :loading="isAsyncDetailPending(task.id)" @click="openAsyncTaskDetail(task)">查看详情</el-button>
-            <el-button text :disabled="!task.traceId" @click="copyTrace(task.traceId)">复制处理线索</el-button>
+            <el-button v-if="task.traceId" text @click="copyTrace(task.traceId)">复制处理线索</el-button>
           </div>
         </article>
       </div>
     </section>
+    </template>
 
-    <section class="task-panel">
+    <section v-else class="task-panel">
+      <div class="task-panel__summary">
+        <div>
+          <span>{{ workspaceTab === 'pending' ? '待处理' : '历史记录' }}</span>
+          <strong>{{ workspaceTab === 'pending' ? '从一项任务开始，不必同时处理全部事项。' : '已完成、暂缓和跳过的任务会保留在这里，便于回顾。' }}</strong>
+        </div>
+        <small v-if="workspaceTab === 'pending'">
+          {{ taskScopeLabel }} · 服务端筛选共 {{ total }} 条记录 · 当前页 {{ workspaceTasks.length }} 项可推进 · 本页约 {{ workspaceEstimatedMinutes }} 分钟
+        </small>
+      </div>
       <div class="filter-bar">
         <el-date-picker
           v-model="dateRange"
@@ -160,22 +162,27 @@
         <el-button type="primary" @click="fetchTasks">重试</el-button>
       </AppState>
 
-      <div v-else v-loading="loading" class="task-stream">
+      <div
+        v-else
+        v-loading="loading"
+        class="task-stream"
+        :class="{ 'is-empty': !workspaceTasks.length && !loading }"
+      >
         <AppState
-          v-if="!visibleTasks.length && !loading"
+          v-if="!workspaceTasks.length && !loading"
           type="empty"
-          :title="taskEmptyTitle"
-          :description="taskEmptyDescription"
+          :title="workspaceTaskEmptyTitle"
+          :description="workspaceTaskEmptyDescription"
         >
           <el-button type="primary" @click="router.push('/agent/today')">去生成今日计划</el-button>
           <el-button @click="handleReset">清空筛选</el-button>
           <el-button @click="router.push('/applications')">补投递</el-button>
           <el-button @click="router.push('/interviews/create')">做面试复盘</el-button>
-          <el-button @click="router.push('/knowledge')">补知识资料</el-button>
-          <el-button @click="router.push('/agent/memory')">确认记忆</el-button>
+          <el-button v-if="appConfig.enableV4KnowledgePreview" @click="router.push('/knowledge')">补知识资料</el-button>
+          <el-button v-if="appConfig.enableV4GrowthPreview" @click="router.push('/agent/memory')">确认记忆</el-button>
         </AppState>
 
-        <article v-for="task in visibleTasks" :key="task.id" class="task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
+        <article v-for="task in workspaceTasks" :key="task.id" class="task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
           <div class="task-card__main">
             <div class="task-card__head">
               <div>
@@ -218,21 +225,26 @@
               </span>
             </div>
 
-            <div class="task-diagnostics">
-              <span v-for="item in taskDiagnosticItems(task)" :key="item">{{ item }}</span>
-              <span v-for="item in agentLoopDiagnosticItems(task)" :key="item">{{ item }}</span>
-            </div>
-
-            <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
-            <div v-if="task.reviewSummary" class="task-review-summary">
-              <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
-              <p>{{ task.reviewSummary }}</p>
-              <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
-            </div>
-            <p v-if="taskFailureText(task)" class="task-failure">{{ taskFailureText(task) }}</p>
-            <p v-if="(task.skipReason && normalizeStatus(task.status) === 'SKIPPED') || isDeferredAgentTask(task)" class="task-skip-reason">{{ taskSkipReasonText(task) }}</p>
-            <p v-if="taskFeedbackSummaryText(task)" class="task-feedback-summary">{{ taskFeedbackSummaryText(task) }}</p>
-            <p v-if="taskNextPlanImpactText(task)" class="task-plan-impact">{{ taskNextPlanImpactText(task) }}</p>
+            <details
+              v-if="displayTaskReason(task) || task.reviewSummary || taskFailureText(task) || taskSkipReasonText(task) || taskFeedbackSummaryText(task) || taskNextPlanImpactText(task)"
+              class="task-detail"
+            >
+              <summary>查看任务说明</summary>
+              <p v-if="displayTaskReason(task)" class="task-reason">{{ displayTaskReason(task) }}</p>
+              <div v-if="task.reviewSummary" class="task-review-summary">
+                <span>{{ task.reviewSourceLabel || '复盘记录' }}</span>
+                <p>{{ task.reviewSummary }}</p>
+                <small v-if="task.reviewNextActions?.length">{{ task.reviewNextActions[0] }}</small>
+              </div>
+              <p v-if="taskFailureText(task)" class="task-failure">{{ taskFailureText(task) }}</p>
+              <p v-if="(task.skipReason && normalizeStatus(task.status) === 'SKIPPED') || isDeferredAgentTask(task)" class="task-skip-reason">{{ taskSkipReasonText(task) }}</p>
+              <p v-if="taskFeedbackSummaryText(task)" class="task-feedback-summary">{{ taskFeedbackSummaryText(task) }}</p>
+              <p v-if="taskNextPlanImpactText(task)" class="task-plan-impact">{{ taskNextPlanImpactText(task) }}</p>
+              <div class="task-diagnostics">
+                <span v-for="item in taskDiagnosticItems(task)" :key="item">{{ item }}</span>
+                <span v-for="item in agentLoopDiagnosticItems(task)" :key="item">{{ item }}</span>
+              </div>
+            </details>
           </div>
 
           <aside class="task-card__side">
@@ -368,6 +380,7 @@
           @change="fetchTasks"
         />
       </div>
+    </section>
     </section>
 
     <el-dialog v-model="dialogVisible" :title="actionDialogTitle" width="460px">
@@ -537,12 +550,15 @@ import {
   startAgentTaskApi,
   submitAgentFeedbackApi
 } from '@/api/agent'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getUserAsyncTaskDetailApi, getUserAsyncTasksApi } from '@/api/task'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
+import { appConfig } from '@/config'
 import { buildAgentLoopActions } from '@/features/agent-loop/agentLoopRules'
+import { resolveAppRoutePath } from '@/features/route-safety'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
 import {
@@ -567,6 +583,7 @@ interface SelectOption {
 
 const route = useRoute()
 const router = useRouter()
+const workspaceTab = ref<'pending' | 'progress' | 'history'>('pending')
 const loading = ref(false)
 const asyncLoading = ref(false)
 const errorMessage = ref('')
@@ -586,6 +603,25 @@ const selectedTask = ref<AgentTaskVO>()
 const note = ref('')
 const feedbackDialogVisible = ref(false)
 const feedbackTask = ref<AgentTaskVO>()
+const AGENT_TASK_LOAD_TIMEOUT_MS = 15000
+
+const withTaskLoadTimeout = <T>(promise: Promise<T>, label: string) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label}请求超时，请稍后重试。`))
+    }, AGENT_TASK_LOAD_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const feedbackForm = reactive({
   feedbackType: 'HELPFUL',
   comment: ''
@@ -778,11 +814,7 @@ const setAsyncDetailPending = (id: number, pending: boolean) => {
 const isAsyncDetailPending = (id: number) => pendingAsyncDetailIds.value.has(id)
 
 const activeTasks = computed(() => tasks.value.filter((task) => ['PENDING', 'RUNNING', 'TODO', 'DOING'].includes(normalizeStatus(task.status))))
-const estimatedMinutes = computed(() => tasks.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
-const highPriorityTasks = computed(() => tasks.value.filter((task) => normalizeStatus(task.priority) === 'HIGH'))
-const recoverableTasks = computed(() => tasks.value.filter((task) => task.actionUrl || getTaskRunId(task) || task.relatedBizId))
 const activeAsyncTasks = computed(() => asyncTasks.value.filter((task) => ['PENDING', 'RUNNING'].includes(normalizeStatus(task.status))))
-const recoverableAsyncTasks = computed(() => asyncTasks.value.filter((task) => getAsyncTaskEntry(task) || task.traceId || task.messageId))
 const hasTaskExperienceFilter = computed(() => Boolean(sourceFilter.value || trustFilter.value))
 const taskSourceBucket = (task: AgentTaskVO) => {
   const value = [task.sourceType, task.relatedBizType, task.taskType, task.actionUrl].filter(Boolean).join(' ').toUpperCase()
@@ -808,12 +840,36 @@ const visibleTasks = computed(() =>
     (!trustFilter.value || taskTrustBucket(task) === trustFilter.value)
   )
 )
+const historyTasks = computed(() =>
+  visibleTasks.value.filter((task) => ['DONE', 'SKIPPED', 'DEFERRED', 'EXPIRED', 'FAILED', 'SUCCESS', 'CANCELED'].includes(normalizeStatus(task.status)))
+)
+const pendingTasks = computed(() => activeTasks.value.filter((task) => visibleTasks.value.includes(task)))
+const workspaceTasks = computed(() => workspaceTab.value === 'history' ? historyTasks.value : pendingTasks.value)
+const workspaceEstimatedMinutes = computed(() =>
+  workspaceTasks.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0)
+)
+const taskScopeLabel = computed(() => {
+  if (query.startDate && query.endDate && query.startDate === query.endDate) {
+    return `${query.startDate} · 全部岗位`
+  }
+  return '当前筛选范围'
+})
 const taskEmptyTitle = computed(() => hasTaskExperienceFilter.value ? '当前来源/可信度下暂无任务' : '暂无训练任务')
 const taskEmptyDescription = computed(() =>
   hasTaskExperienceFilter.value
     ? '当前页没有符合来源或可信度筛选的任务。可以清空筛选，或先补投递、面试复盘、知识资料和长期记忆，让下一轮计划有更多依据。'
     : '当前筛选条件下没有处理记录。可以回到今日计划生成新的准备任务，或先补投递、面试复盘、知识资料和长期记忆。'
 )
+const workspaceTaskEmptyTitle = computed(() => {
+  if (hasTaskExperienceFilter.value) return taskEmptyTitle.value
+  return workspaceTab.value === 'history' ? '暂无历史记录' : '当前没有待处理任务'
+})
+const workspaceTaskEmptyDescription = computed(() => {
+  if (hasTaskExperienceFilter.value) return taskEmptyDescription.value
+  return workspaceTab.value === 'history'
+    ? '完成、跳过或推迟的任务会保留在这里。'
+    : '可以回到今日计划生成新的准备任务，或先补充投递、面试复盘、知识资料和长期记忆。'
+})
 const agentLoopActionsByTaskId = computed(() => {
   const map = new Map<number, ReturnType<typeof buildAgentLoopActions>[number]>()
   buildAgentLoopActions(tasks.value, { historyTasks: tasks.value }).forEach((action) => {
@@ -831,17 +887,18 @@ const asyncActiveFilterItems = computed(() => {
   if (asyncQuery.keyword) items.push({ key: 'keyword', label: '关键词', value: asyncQuery.keyword })
   return items
 })
-
-const metrics = computed(() => [
-  {
-    label: '当前结果',
-    value: (hasTaskExperienceFilter.value ? visibleTasks.value.length : (total.value || tasks.value.length)) + (asyncTotal.value || asyncTasks.value.length),
-    desc: hasTaskExperienceFilter.value ? '已按来源/可信度筛选当前页任务' : '训练任务和处理进度合计'
-  },
-  { label: '待推进', value: activeTasks.value.length + activeAsyncTasks.value.length, desc: '排队中、生成中或待执行的任务' },
-  { label: '可恢复', value: recoverableTasks.value.length + recoverableAsyncTasks.value.length, desc: '带入口或反馈码的任务' },
-  { label: '预计耗时', value: `${estimatedMinutes.value}m`, desc: highPriorityTasks.value.length ? `${highPriorityTasks.value.length} 个高优先级任务` : '本页任务耗时合计' }
-])
+const hasExactAsyncReceiptFilter = computed(() =>
+  Boolean(asyncQuery.messageId || (asyncQuery.bizType && asyncQuery.bizId))
+)
+const asyncEmptyTitle = computed(() =>
+  hasExactAsyncReceiptFilter.value ? '处理记录仍在登记' : '暂无处理进度'
+)
+const asyncEmptyDescription = computed(() => {
+  if (hasExactAsyncReceiptFilter.value) {
+    return '本次提交对应的业务运行已登记，但任务中心暂未查询到处理记录。请稍后刷新；若持续没有记录，请保留关联记录和处理线索并联系管理员。'
+  }
+  return '提交岗位分析、简历解析、匹配报告、今日计划或推荐题生成后，可以在这里查看处理进度。'
+})
 
 const completionReviewItems = computed(() => {
   const task = completionReviewTask.value
@@ -1275,7 +1332,29 @@ const goAction = async (url: string) => {
     ElMessage.warning('任务链接暂不支持跳转到站外地址')
     return
   }
-  await router.push(safePath)
+  const resolved = resolveAppRoutePath(safePath, { fallbackPath: '/agent/tasks' })
+  if (resolved.unavailableReason) ElMessage.info(resolved.unavailableReason)
+  await router.push(resolved.path)
+}
+
+const asyncTaskPayloadRecord = (task: AsyncTaskVO) => {
+  const payload = task.payload
+  if (!payload) return null
+  try {
+    const parsed = JSON.parse(payload)
+    return isAsyncPayloadRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const getInterviewSessionId = (task: AsyncTaskVO) => {
+  const payload = asyncTaskPayloadRecord(task)
+  const sessionId = payload?.sessionId ?? payload?.interviewId
+  if (typeof sessionId === 'number' || (typeof sessionId === 'string' && sessionId.trim())) {
+    return String(sessionId)
+  }
+  return task.bizId || ''
 }
 
 const getAsyncTaskEntry = (task: AsyncTaskVO) => {
@@ -1286,7 +1365,10 @@ const getAsyncTaskEntry = (task: AsyncTaskVO) => {
   if (bizType === 'resume-job-match.analyze' && bizId) return `/resume-match/${bizId}`
   if (bizType === 'agent.daily-plan.generate') return bizId ? `/agent/runs/${bizId}` : '/agent/today'
   if (['question.ai-generate', 'question.generate', 'question-recommendation.generate'].includes(bizType)) return '/questions/recommendations'
-  if (bizType === 'interview.report' && bizId) return `/interviews/${bizId}/report`
+  if (bizType === 'interview.report') {
+    const sessionId = getInterviewSessionId(task)
+    return sessionId ? `/interviews/${sessionId}/report` : ''
+  }
   if (bizType === 'study-plan.generate' && bizId) return `/study-plans?planId=${bizId}`
   return ''
 }
@@ -1583,7 +1665,7 @@ const fetchTasks = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const result = await getAgentTasksApi(query)
+    const result = await withTaskLoadTimeout(getAgentTasksApi(query), '待处理任务')
     tasks.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
@@ -1599,7 +1681,7 @@ const fetchAsyncTasks = async () => {
   asyncLoading.value = true
   asyncErrorMessage.value = ''
   try {
-    const result = await getUserAsyncTasksApi(asyncQuery)
+    const result = await withTaskLoadTimeout(getUserAsyncTasksApi(asyncQuery), '生成进度')
     asyncTasks.value = result.records || []
     asyncTotal.value = result.total || 0
   } catch (error) {
@@ -1609,6 +1691,14 @@ const fetchAsyncTasks = async () => {
   } finally {
     asyncLoading.value = false
   }
+}
+
+const refreshCurrentWorkspace = async () => {
+  if (workspaceTab.value === 'progress') {
+    await fetchAsyncTasks()
+    return
+  }
+  await fetchTasks()
 }
 
 const handleSearch = () => {
@@ -1634,6 +1724,13 @@ const handleReset = () => {
     priority: ''
   })
   fetchTasks()
+}
+
+const applyTodayTaskScope = (date?: string) => {
+  if (!date) return
+  dateRange.value = [date, date]
+  query.startDate = date
+  query.endDate = date
 }
 
 const handleAsyncSearch = () => {
@@ -1840,6 +1937,7 @@ const applyRouteAsyncDiagnosticQuery = () => {
   const routeKeyword = firstRouteQueryString(route.query.keyword)
   if (!routeBizType && !routeBizId && !routeMessageId && !routeTraceId && !routeStatus && !routeKeyword) return false
 
+  workspaceTab.value = 'progress'
   asyncQuery.pageNum = 1
   asyncQuery.bizType = ''
   asyncQuery.status = ''
@@ -1870,8 +1968,14 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
   applyRouteAsyncDiagnosticQuery()
+  try {
+    const overview = await getUserDashboardOverviewApi()
+    applyTodayTaskScope(overview.businessDate)
+  } catch {
+    // Keep the task-center date filter empty when the business-date source is unavailable.
+  }
   void fetchTasks()
   void fetchAsyncTasks()
 })
@@ -2142,7 +2246,7 @@ onMounted(() => {
   align-items: center;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-left: 4px solid #94a3b8;
+  border-left: 4px solid var(--user-border-strong);
   border-radius: 8px;
   background: var(--user-surface);
 
@@ -2152,16 +2256,16 @@ onMounted(() => {
 
   &.is-running,
   &.is-pending {
-    border-left-color: #2563eb;
+    border-left-color: var(--user-ai);
   }
 
   &.is-success {
-    border-left-color: #16a34a;
+    border-left-color: var(--user-success);
   }
 
   &.is-failed,
   &.is-dead {
-    border-left-color: #ef4444;
+    border-left-color: var(--user-danger);
   }
 
   h3 {
@@ -2226,13 +2330,18 @@ onMounted(() => {
   padding: 18px;
 }
 
+.task-stream.is-empty {
+  min-height: 0;
+  padding-block: 14px 18px;
+}
+
 .task-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 210px;
   gap: 20px;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-left: 4px solid #94a3b8;
+  border-left: 4px solid var(--user-border-strong);
   border-radius: 8px;
   background: var(--user-surface);
 }
@@ -2242,23 +2351,23 @@ onMounted(() => {
 }
 
 .task-card.is-todo {
-  border-left-color: #2563eb;
+  border-left-color: var(--user-ai);
 }
 
 .task-card.is-doing {
-  border-left-color: #0f766e;
+  border-left-color: var(--user-primary);
 }
 
 .task-card.is-done {
-  border-left-color: #16a34a;
+  border-left-color: var(--user-success);
 }
 
 .task-card.is-skipped {
-  border-left-color: #f59e0b;
+  border-left-color: var(--user-warning);
 }
 
 .task-card.is-expired {
-  border-left-color: #ef4444;
+  border-left-color: var(--user-danger);
 }
 
 .task-card__main {
@@ -2723,6 +2832,231 @@ onMounted(() => {
   .pagination-wrap {
     justify-content: center;
     overflow-x: auto;
+  }
+}
+
+.agent-task-page {
+  gap: 16px;
+}
+
+.task-hero,
+.task-workspace {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.task-hero {
+  padding: 20px;
+}
+
+.task-hero h1 {
+  font-size: 24px;
+}
+
+.task-workspace {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+}
+
+.workspace-tabs :deep(.el-tabs__header) {
+  margin-bottom: 20px;
+}
+
+.workspace-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--arena-border, var(--user-border));
+}
+
+.workspace-tabs :deep(.el-tabs__item) {
+  height: 36px;
+  color: var(--arena-text-muted, var(--user-text-muted));
+}
+
+.workspace-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--arena-primary, var(--user-primary));
+  font-weight: 700;
+}
+
+.workspace-tabs :deep(.el-tabs__active-bar) {
+  background: var(--arena-primary, var(--user-primary));
+}
+
+.recovery-panel,
+.async-task-panel,
+.task-panel {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.recovery-panel__copy span,
+.async-task-panel__head span,
+.task-panel__summary span {
+  color: var(--arena-primary, var(--user-primary));
+}
+
+.recovery-panel__copy strong,
+.recovery-link strong,
+.async-task-panel__head strong,
+.async-task-card h3,
+.task-progress strong,
+.async-detail__summary h3 {
+  color: var(--arena-text, var(--user-text));
+}
+
+.recovery-panel__copy p,
+.recovery-link small,
+.async-task-panel__head p,
+.task-recovery-hint,
+.task-date,
+.dialog-helper-text,
+.async-detail__summary p {
+  color: var(--arena-text-muted, var(--user-text-muted));
+}
+
+.recovery-link,
+.async-task-panel__head,
+.filter-bar,
+.task-panel__summary {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.recovery-link:hover {
+  border-color: var(--arena-primary-border, var(--user-primary-border));
+  background: var(--arena-primary-soft, var(--user-primary-soft));
+}
+
+.task-panel__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--arena-border, var(--user-border));
+}
+
+.task-panel__summary div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.task-panel__summary strong {
+  color: var(--arena-text, var(--user-text));
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.task-panel__summary small {
+  flex: 0 0 auto;
+  color: var(--arena-text-muted, var(--user-text-muted));
+  font-size: 13px;
+}
+
+.async-task-card,
+.task-card {
+  border-left-width: 1px;
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.async-task-card.is-running,
+.async-task-card.is-pending,
+.async-task-card.is-success,
+.async-task-card.is-failed,
+.async-task-card.is-dead,
+.task-card.is-todo,
+.task-card.is-doing,
+.task-card.is-done,
+.task-card.is-skipped,
+.task-card.is-expired {
+  border-left-color: var(--arena-border, var(--user-border));
+}
+
+.task-detail {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--arena-border, var(--user-border));
+  border-radius: 8px;
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.task-detail summary {
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.task-diagnostics span,
+.task-reason,
+.task-skip-reason,
+.task-feedback-summary,
+.task-plan-impact,
+.task-failure,
+.task-review-summary {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+}
+
+.task-diagnostics span {
+  border-style: solid;
+  font-family: inherit;
+}
+
+.task-review-summary {
+  margin-top: 12px;
+}
+
+.task-review-summary p,
+.task-review-summary small,
+.task-reason,
+.task-skip-reason,
+.task-feedback-summary,
+.task-plan-impact,
+.task-failure {
+  color: var(--arena-text-muted, var(--user-text-muted));
+}
+
+.task-card__side {
+  border-color: var(--arena-border, var(--user-border));
+}
+
+.more-button {
+  color: var(--arena-text-secondary, var(--user-text-secondary));
+}
+
+.async-detail__summary,
+.async-detail__block {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface-muted, var(--user-surface-muted));
+}
+
+.async-detail__summary > span {
+  color: var(--arena-primary, var(--user-primary));
+}
+
+.async-detail__block .async-detail__list li,
+.async-detail__meta div {
+  border-color: var(--arena-border, var(--user-border));
+  background: var(--arena-surface, var(--user-surface));
+}
+
+.async-detail__block.is-error {
+  border-color: var(--arena-danger-border, var(--user-border));
+  background: var(--arena-danger-soft, var(--user-surface-muted));
+}
+
+@media (max-width: 760px) {
+  .task-workspace {
+    padding: 16px;
+  }
+
+  .task-panel__summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

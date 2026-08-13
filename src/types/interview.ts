@@ -122,6 +122,7 @@ export interface InterviewQuestionVO {
   isFollowUp: boolean
   parentMessageId?: number
   followUpCount?: number
+  questionPresentedAt?: string
   stageProgress?: string
   interviewStatus?: InterviewStatus
   stageId: number
@@ -139,6 +140,10 @@ export interface InterviewCurrentVO {
   currentStage?: InterviewStageVO
   currentQuestion?: InterviewQuestionVO
   startedAt?: string
+  currentQuestionIndex?: number
+  totalQuestionCount?: number
+  answeredQuestionCount?: number
+  overallProgress?: string
   outline?: InterviewOutlineStageVO[]
 }
 
@@ -322,7 +327,15 @@ export interface InterviewAnswerResultVO {
   currentStage?: InterviewStageVO
   interviewStatus: InterviewStatus
   reportStatus?: ReportStatus
-  progress?: InterviewProgressVO
+  /** Backend versions may omit fields while an answer-review stream is still assembling. */
+  progress?: Partial<InterviewProgressVO>
+  /** Kept on answer results so REST and SSE follow-up payloads can update the room consistently. */
+  outline?: InterviewOutlineStageVO[]
+  /** Transitional flat progress fields returned by older answer endpoints. */
+  currentQuestionIndex?: number
+  totalQuestionCount?: number
+  answeredQuestionCount?: number
+  overallProgress?: string
   voiceSubmissionId?: number
   transcriptId?: number
   transcriptConfidence?: number
@@ -386,6 +399,8 @@ export interface InterviewAnswerReviewSseEvent {
   followUpReason?: string
   nextAction?: NextAction
   nextQuestion?: InterviewQuestionVO
+  progress?: Partial<InterviewProgressVO>
+  outline?: InterviewOutlineStageVO[]
   stage?: InterviewAnswerReviewSseStage
   code?: string
   result?: InterviewAnswerResultVO | Record<string, unknown>

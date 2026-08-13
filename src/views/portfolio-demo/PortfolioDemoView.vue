@@ -1,250 +1,282 @@
 <template>
   <div class="portfolio-demo page-shell">
-    <section class="workbench content-card">
-      <div class="workbench-main">
-        <div class="workbench-copy">
-          <p class="eyebrow">Portfolio rehearsal</p>
-          <h1>作品集排练工作台</h1>
-          <p>{{ activeRoute.summary }}</p>
-        </div>
+    <section class="rehearsal-hero content-card">
+      <div class="hero-copy">
+        <p class="eyebrow">演示线 · 收口前排练</p>
+        <h1>作品集排练工作台</h1>
+        <p class="hero-summary">{{ activeRoute.summary }}</p>
 
-        <div class="timer-panel" :class="{ 'is-running': timerRunning }">
-          <span>当前路线</span>
-          <strong>{{ activeRoute.label }}</strong>
-          <em>{{ formattedElapsed }} / {{ activeRoute.durationLabel }}</em>
+        <div class="route-tabs" role="tablist" aria-label="排练路线">
+          <button
+            v-for="route in rehearsalRoutes"
+            :key="route.key"
+            type="button"
+            :class="{ active: route.key === activeRouteKey }"
+            role="tab"
+            :aria-selected="route.key === activeRouteKey"
+            @click="selectRoute(route.key)"
+          >
+            <span>{{ route.label }}</span>
+            <small>{{ route.durationLabel }}</small>
+          </button>
         </div>
       </div>
 
-      <div class="route-tabs" role="tablist" aria-label="排练路线">
+      <div class="route-status">
+        <div class="progress-dial" :style="{ '--progress-angle': `${routeProgress * 3.6}deg` }">
+          <span>{{ completedCount }}/{{ activeRoute.nodes.length }}</span>
+        </div>
+        <div class="route-status-copy">
+          <span class="section-label">本轮完成度</span>
+          <strong>{{ activeBeatIndex + 1 }}/5 段</strong>
+          <small>完成后进入排练复盘</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="route-progress content-card">
+      <div class="progress-head">
+        <div>
+          <p class="section-label">路线节拍</p>
+          <h2>{{ activeRoute.label }}</h2>
+        </div>
+        <span class="coverage">{{ completedCount }}/{{ activeRoute.nodes.length }} 已覆盖</span>
+      </div>
+
+      <div class="progress-track" aria-hidden="true">
+        <span :style="{ transform: `scaleX(${routeProgress / 100})` }"></span>
+      </div>
+
+      <div class="beat-strip" role="tablist" aria-label="五段演示节拍">
         <button
-          v-for="route in rehearsalRoutes"
-          :key="route.key"
+          v-for="(beat, index) in routeBeats"
+          :key="beat.key"
           type="button"
-          :class="{ active: route.key === activeRouteKey }"
           role="tab"
-          :aria-selected="route.key === activeRouteKey"
-          @click="selectRoute(route.key)"
+          :aria-selected="activeBeatIndex === index"
+          :class="{ 'is-current': activeBeatIndex === index, 'is-complete': beat.isComplete }"
+          @click="selectNode(beat.startIndex)"
         >
-          <span>{{ route.label }}</span>
-          <small>{{ route.durationLabel }}</small>
-        </button>
-      </div>
-
-      <div class="action-row">
-        <el-button type="primary" :icon="timerRunning ? Pause : Play" @click="toggleTimer">
-          {{ timerRunning ? '暂停排练' : '开始排练' }}
-        </el-button>
-        <el-button :icon="Check" @click="markCurrentNode">标记当前节点</el-button>
-        <el-button :icon="ArrowRight" @click="nextNode">下一个节点</el-button>
-        <el-button :icon="ExternalLink" @click="openCurrentNode">打开当前页面</el-button>
-        <el-button :icon="RotateCcw" @click="resetRoute">重置本路线</el-button>
-      </div>
-
-      <div class="progress-strip" aria-label="路线进度">
-        <button
-          v-for="(node, index) in activeRoute.nodes"
-          :key="node.id"
-          type="button"
-          :class="{
-            done: completedNodeIds.has(node.id),
-            current: index === activeNodeIndex
-          }"
-          @click="selectNode(index)"
-        >
-          <span>{{ index + 1 }}</span>
-          <small>{{ node.page }}</small>
+          <span class="beat-number">{{ beat.isComplete ? '✓' : index + 1 }}</span>
+          <span>
+            <strong>{{ beat.label }}</strong>
+            <small>{{ beat.summary }}</small>
+          </span>
         </button>
       </div>
     </section>
 
-    <section class="route-overview">
-      <article class="content-card focus-card">
-        <div class="section-head">
+    <section class="current-layout">
+      <article class="current-card content-card">
+        <div class="current-head">
           <div>
-            <p class="eyebrow">Now rehearsing</p>
+            <p class="section-label">当前讲述 · 第 {{ activeBeatIndex + 1 }} 段</p>
             <h2>{{ currentNode.title }}</h2>
           </div>
           <el-tag effect="plain">{{ currentNode.timebox }}</el-tag>
         </div>
 
-        <div class="node-meta">
-          <div>
-            <span>页面节点</span>
-            <strong>{{ currentNode.page }}</strong>
-          </div>
-          <div>
-            <span>跳转路径</span>
-            <strong>{{ currentNode.route }}</strong>
-          </div>
+        <div class="current-context">
+          <div><span>页面节点</span><strong>{{ currentNode.page }}</strong></div>
+          <div><span>讲述时长</span><strong>{{ formattedElapsed }} / {{ activeRoute.durationLabel }}</strong></div>
         </div>
 
+        <p class="current-summary">{{ currentNode.talkingPoints[0] }}</p>
+
         <div class="talk-grid">
-          <div>
+          <div class="talk-block">
             <h3>讲述重点</h3>
             <ul>
               <li v-for="point in currentNode.talkingPoints" :key="point">{{ point }}</li>
             </ul>
           </div>
-          <div>
+          <div class="talk-block risk-block">
             <h3>风险提示</h3>
             <ul>
               <li v-for="risk in currentNode.risks" :key="risk">{{ risk }}</li>
             </ul>
           </div>
         </div>
+
+        <div class="action-row">
+          <el-button type="primary" :icon="timerRunning ? Pause : Play" @click="toggleTimer">
+            {{ timerRunning ? '暂停排练' : '开始排练' }}
+          </el-button>
+          <el-button :icon="Check" @click="markCurrentNode">标记当前节点</el-button>
+          <el-button class="utility-button" :icon="ArrowRight" title="下一个节点" aria-label="下一个节点" @click="nextNode" />
+          <el-button class="utility-button" :icon="ExternalLink" title="打开当前页面" aria-label="打开当前页面" @click="openCurrentNode" />
+          <el-button class="utility-button" :icon="RotateCcw" title="重置本路线" aria-label="重置本路线" @click="resetRoute" />
+        </div>
       </article>
 
-      <aside class="content-card guardrail-card">
-        <div class="section-head compact">
+      <aside class="guardrail-card content-card">
+        <div class="card-heading">
           <div>
-            <p class="eyebrow">Guardrails</p>
-            <h2>排练边界</h2>
+            <p class="section-label">排练护栏</p>
+            <h2>只讲可确认事实</h2>
           </div>
           <el-tag type="warning" effect="plain">只读前端</el-tag>
         </div>
-        <ul>
-          <li v-for="item in guardrails" :key="item">{{ item }}</li>
+        <ul class="guardrail-list">
+          <li v-for="item in guardrails.slice(0, 3)" :key="item">
+            <span class="guardrail-check">✓</span>
+            <span>{{ item }}</span>
+          </li>
         </ul>
+        <p class="guardrail-note">不确定的内容保留“待人工确认”，不在排练中包装成已上线效果。</p>
       </aside>
     </section>
 
-    <section class="content-card route-board">
-      <div class="section-head">
+    <section class="cue-card content-card">
+      <div class="card-heading">
         <div>
-          <p class="eyebrow">Route script</p>
-          <h2>{{ activeRoute.label }}节点清单</h2>
+          <p class="section-label">精简提词</p>
+          <h2>这一段只记住三件事</h2>
         </div>
-        <span class="coverage">{{ completedCount }}/{{ activeRoute.nodes.length }} 已覆盖</span>
+        <button class="text-button" type="button" @click="openDetails('prompts')">查看完整材料 <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="cue-grid">
+        <div class="cue-item">
+          <span class="cue-index">01</span>
+          <div><strong>页面入口</strong><p>{{ currentNode.page }}</p></div>
+        </div>
+        <div class="cue-item">
+          <span class="cue-index">02</span>
+          <div><strong>一句讲法</strong><p>{{ currentNode.talkingPoints[0] }}</p></div>
+        </div>
+        <div class="cue-item">
+          <span class="cue-index">03</span>
+          <div><strong>一句边界</strong><p>{{ currentNode.risks[0] }}</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="detailsOpen" class="details-panel content-card" aria-live="polite">
+      <div class="details-heading">
+        <div>
+          <p class="section-label">按需展开</p>
+          <h2>排练辅助材料</h2>
+          <p>完整节点、健康检查和验收材料只在需要时打开，不占用首屏讲述空间。</p>
+        </div>
+        <el-button text @click="detailsOpen = false">收起</el-button>
       </div>
 
-      <div class="node-grid">
-        <article
-          v-for="(node, index) in activeRoute.nodes"
-          :key="node.id"
-          class="node-card"
-          :class="{
-            done: completedNodeIds.has(node.id),
-            current: index === activeNodeIndex
-          }"
-        >
-          <button type="button" class="node-title" @click="activeNodeIndex = index">
-            <span>{{ index + 1 }}</span>
-            <strong>{{ node.page }}</strong>
+      <div class="detail-tabs" role="tablist" aria-label="排练辅助材料">
+        <button type="button" :class="{ active: detailsPanel === 'prompts' }" @click="setDetailsPanel('prompts')">
+          <el-icon><FileText /></el-icon>
+          完整提词与节点
+        </button>
+        <button type="button" :class="{ active: detailsPanel === 'health' }" @click="setDetailsPanel('health')">
+          <el-icon><CircleCheck /></el-icon>
+          静态健康检查
+        </button>
+        <button type="button" :class="{ active: detailsPanel === 'acceptance' }" @click="setDetailsPanel('acceptance')">
+          <el-icon><ListChecks /></el-icon>
+          验收矩阵
+        </button>
+      </div>
+
+      <div v-if="detailsPanel === 'prompts'" class="detail-content">
+        <div class="detail-intro">
+          <div>
+            <p class="section-label">完整提词与节点</p>
+            <h3>{{ activeRoute.label }}完整讲述材料</h3>
+          </div>
+          <span class="coverage">{{ completedCount }}/{{ activeRoute.nodes.length }} 已覆盖</span>
+        </div>
+
+        <div class="detail-node-list">
+          <button
+            v-for="(node, index) in activeRoute.nodes"
+            :key="node.id"
+            type="button"
+            :class="{ current: index === activeNodeIndex, done: completedNodeIds.has(node.id) }"
+            @click="selectNode(index)"
+          >
+            <span>{{ completedNodeIds.has(node.id) ? '✓' : index + 1 }}</span>
+            <span><strong>{{ node.page }}</strong><small>{{ node.title }}</small></span>
+            <em>{{ node.timebox }}</em>
           </button>
-          <p>{{ node.title }}</p>
+        </div>
+
+        <div class="prompt-grid">
+          <article v-for="card in portfolioRehearsalPromptCards" :key="card.id" class="prompt-card">
+            <div class="card-line">
+              <strong>{{ card.question }}</strong>
+              <el-tag effect="plain">{{ card.statusLabel }}</el-tag>
+            </div>
+            <ol>
+              <li v-for="frame in card.answerFrame" :key="frame">{{ frame }}</li>
+            </ol>
+            <p><b>必须提到：</b>{{ card.mustMention.join(' / ') }}</p>
+            <p><b>避免提到：</b>{{ card.avoidMentioning.join(' / ') }}</p>
+          </article>
+        </div>
+      </div>
+
+      <div v-else-if="detailsPanel === 'health'" class="detail-content">
+        <div class="detail-intro">
           <div>
-            <h3>讲述重点</h3>
-            <ul>
-              <li v-for="point in node.talkingPoints" :key="point">{{ point }}</li>
-            </ul>
+            <p class="section-label">静态健康检查</p>
+            <h3>演示健康检查</h3>
+            <p>仅核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号；不连接后端业务服务。</p>
           </div>
+          <div class="status-summary">
+            <strong>{{ statusLabel(healthReport.summary.status) }}</strong>
+            <span>{{ healthReport.summary.pass }} 通过 / {{ healthReport.summary.attention }} 需关注 / {{ healthReport.summary.unknown }} 不可确认 / {{ healthReport.summary.notConnected }} 未接入</span>
+          </div>
+        </div>
+        <div class="health-grid">
+          <article v-for="check in visibleHealthChecks" :key="check.key" class="health-card">
+            <div class="card-line">
+              <strong>{{ check.title }}</strong>
+              <el-tag :type="statusTagType(check.status)" effect="plain">{{ statusLabel(check.status) }}</el-tag>
+            </div>
+            <p>{{ check.summary }}</p>
+            <ul>
+              <li v-for="signalItem in check.signals.slice(0, 3)" :key="`${check.key}-${signalItem.label}`">
+                {{ signalItem.label }}：{{ signalItem.value }}
+              </li>
+            </ul>
+          </article>
+        </div>
+      </div>
+
+      <div v-else class="detail-content">
+        <div class="detail-intro">
           <div>
-            <h3>风险提示</h3>
-            <ul>
-              <li v-for="risk in node.risks" :key="risk">{{ risk }}</li>
-            </ul>
+            <p class="section-label">Phase 5.5 handoff</p>
+            <h3>V5 非人工验收收口矩阵</h3>
+            <p>{{ portfolioRehearsalAcceptanceMatrix.acceptanceBoundary }}</p>
           </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="content-card health-board">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">静态健康检查</p>
-          <h2>演示健康检查</h2>
-          <p>仅静态核对路由、菜单、adapter、demoFlag 和 TraceCockpit 脱敏摘要信号；不连接后端业务服务，不能代表运行时健康。</p>
-        </div>
-        <div class="status-summary">
-          <strong>{{ statusLabel(healthReport.summary.status) }}</strong>
-          <span>
-            {{ healthReport.summary.pass }} 通过 /
-            {{ healthReport.summary.attention }} 需关注 /
-            {{ healthReport.summary.unknown }} 不可确认 /
-            {{ healthReport.summary.notConnected }} 未接入
-          </span>
-        </div>
-      </div>
-
-      <div class="health-grid">
-        <article v-for="check in visibleHealthChecks" :key="check.key" class="health-card">
-          <div class="card-line">
-            <strong>{{ check.title }}</strong>
-            <el-tag :type="statusTagType(check.status)" effect="plain">{{ statusLabel(check.status) }}</el-tag>
+          <div class="status-summary">
+            <strong>{{ acceptanceCapabilityCount }} 项能力</strong>
+            <span>静态收口与发布后人工验收分离</span>
           </div>
-          <p>{{ check.summary }}</p>
-          <ul>
-            <li v-for="signalItem in check.signals.slice(0, 3)" :key="`${check.key}-${signalItem.label}`">
-              {{ signalItem.label }}：{{ signalItem.value }}
-            </li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="content-card prompt-board">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Speaker cards</p>
-          <h2>提词卡与讲述材料</h2>
-          <p>只讲脱敏摘要、状态和工程边界；待发布后人工验收项不会被包装成已上线效果。</p>
         </div>
-      </div>
-
-      <div class="prompt-grid">
-        <article v-for="card in portfolioRehearsalPromptCards" :key="card.id" class="prompt-card">
-          <div class="card-line">
-            <strong>{{ card.question }}</strong>
-            <el-tag effect="plain">{{ card.statusLabel }}</el-tag>
-          </div>
-          <ol>
-            <li v-for="frame in card.answerFrame" :key="frame">{{ frame }}</li>
-          </ol>
-          <p><b>必须提到：</b>{{ card.mustMention.join(' / ') }}</p>
-          <p><b>避免提到：</b>{{ card.avoidMentioning.join(' / ') }}</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="content-card acceptance-board">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Phase 5.5 handoff</p>
-          <h2>V5 非人工验收收口矩阵</h2>
-          <p>{{ portfolioRehearsalAcceptanceMatrix.acceptanceBoundary }}</p>
+        <div class="acceptance-grid">
+          <article v-for="stage in portfolioRehearsalAcceptanceMatrix.stages" :key="stage.stageKey" class="acceptance-card">
+            <span class="stage-index">阶段 {{ stage.stageNumber }}</span>
+            <h3>{{ stage.title }}</h3>
+            <p>{{ stage.acceptanceGoal }}</p>
+            <div class="priority-row">
+              <el-tag v-for="capability in stage.capabilities" :key="capability.id">
+                {{ capability.priority }}：{{ capability.title }}
+              </el-tag>
+            </div>
+          </article>
         </div>
-        <div class="status-summary">
-          <strong>{{ acceptanceCapabilityCount }} 项能力</strong>
-          <span>覆盖 V5 五阶段，静态收口与发布后人工验收分离</span>
-        </div>
-      </div>
-
-      <div class="acceptance-grid">
-        <article v-for="stage in portfolioRehearsalAcceptanceMatrix.stages" :key="stage.stageKey" class="acceptance-card">
-          <span class="stage-index">阶段 {{ stage.stageNumber }}</span>
-          <h3>{{ stage.title }}</h3>
-          <p>{{ stage.acceptanceGoal }}</p>
-          <div class="priority-row">
-            <el-tag v-for="capability in stage.capabilities" :key="capability.id" effect="plain">
-              {{ capability.priority }}：{{ capability.title }}
-            </el-tag>
-          </div>
-        </article>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw } from 'lucide-vue-next'
+import { ArrowRight, Check, CircleCheck, ExternalLink, FileText, ListChecks, Pause, Play, RotateCcw } from 'lucide-vue-next'
 
-import {
-  getPortfolioRehearsalSessionApi,
-  savePortfolioRehearsalSessionApi
-} from '@/api/jobExperiment'
 import {
   requiredOpsDemoSteps,
   requiredUserDemoSteps,
@@ -273,7 +305,26 @@ interface RehearsalRoute {
   durationSeconds: number
   durationLabel: string
   summary: string
+  beats: RehearsalBeatConfig[]
   nodes: RehearsalNode[]
+}
+
+type DetailPanel = 'prompts' | 'health' | 'acceptance'
+
+interface RehearsalBeatConfig {
+  label: string
+  summary: string
+  startIndex: number
+  endIndex: number
+}
+
+interface RehearsalBeat {
+  key: string
+  label: string
+  summary: string
+  startIndex: number
+  endIndex: number
+  isComplete: boolean
 }
 
 const userStepTitle = (key: string, fallback: string) =>
@@ -289,6 +340,13 @@ const rehearsalRoutes: RehearsalRoute[] = [
     durationSeconds: 300,
     durationLabel: '5:00',
     summary: '用最短路径讲清用户如何从岗位目标进入投递包、投递漏斗、训练复盘和下一步行动。',
+    beats: [
+      { label: '岗位目标', summary: '建立上下文', startIndex: 0, endIndex: 0 },
+      { label: 'JD 匹配', summary: '看清差距', startIndex: 1, endIndex: 1 },
+      { label: '投递准备', summary: '形成投递闭环', startIndex: 2, endIndex: 3 },
+      { label: '证据与训练', summary: '支撑面试表达', startIndex: 4, endIndex: 5 },
+      { label: '复盘与行动', summary: '收束下一步', startIndex: 6, endIndex: 7 }
+    ],
     nodes: [
       {
         id: 'quick-target-job',
@@ -311,7 +369,7 @@ const rehearsalRoutes: RehearsalRoute[] = [
       {
         id: 'quick-application-package',
         page: userStepTitle('application-package', '岗位投递包'),
-        title: '把 JD、简历和项目证据聚合成投递准备包',
+        title: '把 JD、简历和项目证据聚合成岗位投递包',
         route: '/application-packages/preview?demoFlag=true',
         timebox: '40 秒',
         talkingPoints: ['说明投递包只做准备聚合和 readiness 判断。', '强调创建投递记录需要用户确认，不自动投递真实岗位。'],
@@ -370,6 +428,13 @@ const rehearsalRoutes: RehearsalRoute[] = [
     durationSeconds: 600,
     durationLabel: '10:00',
     summary: '从用户闭环深入到证据链、知识库、长期记忆和管理侧工程治理。',
+    beats: [
+      { label: '产品闭环', summary: '从目标到行动', startIndex: 0, endIndex: 0 },
+      { label: '实验复盘', summary: '解释策略迭代', startIndex: 1, endIndex: 1 },
+      { label: '能力与知识', summary: '说明成长依据', startIndex: 2, endIndex: 3 },
+      { label: '记忆治理', summary: '明确可控边界', startIndex: 4, endIndex: 4 },
+      { label: '工程治理', summary: '收束可维护性', startIndex: 5, endIndex: 5 }
+    ],
     nodes: [
       {
         id: 'deep-loop',
@@ -433,6 +498,13 @@ const rehearsalRoutes: RehearsalRoute[] = [
     durationSeconds: 480,
     durationLabel: '8:00',
     summary: '面向架构、隐私、AI 治理、异步任务和质量门禁的技术追问应答脚本。',
+    beats: [
+      { label: '演示边界', summary: '隔离真实数据', startIndex: 0, endIndex: 0 },
+      { label: 'Agent 建议', summary: '落到人工确认', startIndex: 1, endIndex: 1 },
+      { label: '运行链路', summary: '追踪状态与 trace', startIndex: 2, endIndex: 2 },
+      { label: 'Prompt 治理', summary: '版本与回归门禁', startIndex: 3, endIndex: 3 },
+      { label: '异步与指标', summary: '稳定性与效果评估', startIndex: 4, endIndex: 5 }
+    ],
     nodes: [
       {
         id: 'tech-boundary',
@@ -493,7 +565,7 @@ const rehearsalRoutes: RehearsalRoute[] = [
 ]
 
 const guardrails = [
-  '本页不发起接口请求，不调用模型，只做前端排练状态。',
+  '当前页面未接入会话持久化，不发起接口请求，不调用模型，状态仅保存在页面内。',
   '只展示脱敏摘要和讲述口径，不展示 raw Prompt、模型响应或原始个人材料。',
   '跳转路径统一通过 demoFlag=true 和路由安全解析，无法进入时回落提示。',
   '管理侧页面可能受权限影响，排练时可以停留在本页讲节点口径。'
@@ -505,58 +577,9 @@ const activeNodeIndex = ref(0)
 const completedNodeIds = ref(new Set<string>())
 const elapsedSeconds = ref(0)
 const timerRunning = ref(false)
+const detailsOpen = ref(false)
+const detailsPanel = ref<DetailPanel>('prompts')
 let timerId: number | undefined
-
-const validRouteKeys = new Set<RouteKey>(rehearsalRoutes.map((route) => route.key))
-const isRouteKey = (value: string | null | undefined): value is RouteKey =>
-  !!value && validRouteKeys.has(value as RouteKey)
-
-// Persistence is best-effort: rehearsal progress is convenience state, so a failed
-// save must never block the presenter. We collapse bursts of saves (e.g. per-second
-// timer ticks) into a single trailing write, and skip while hydrating.
-let hydrating = false
-let persistTimer: number | undefined
-
-const persistNow = () => {
-  if (hydrating) return
-  const nodeCount = activeRoute.value.nodes.length
-  const boundedIndex = Math.min(Math.max(activeNodeIndex.value, 0), Math.max(nodeCount - 1, 0))
-  savePortfolioRehearsalSessionApi({
-    activeRouteKey: activeRouteKey.value,
-    activeNodeIndex: boundedIndex,
-    elapsedSeconds: elapsedSeconds.value,
-    completedNodeIds: [...completedNodeIds.value]
-  }).catch(() => {
-    // Swallow: progress persistence is non-critical and must not disrupt rehearsal.
-  })
-}
-
-const schedulePersist = (delay = 800) => {
-  if (hydrating) return
-  if (persistTimer) window.clearTimeout(persistTimer)
-  persistTimer = window.setTimeout(() => {
-    persistTimer = undefined
-    persistNow()
-  }, delay)
-}
-
-const hydrateSession = async () => {
-  hydrating = true
-  try {
-    const session = await getPortfolioRehearsalSessionApi()
-    if (isRouteKey(session.activeRouteKey)) {
-      activeRouteKey.value = session.activeRouteKey
-    }
-    const nodeCount = activeRoute.value.nodes.length
-    activeNodeIndex.value = Math.min(Math.max(session.activeNodeIndex ?? 0, 0), Math.max(nodeCount - 1, 0))
-    elapsedSeconds.value = Math.max(session.elapsedSeconds ?? 0, 0)
-    completedNodeIds.value = new Set(session.completedNodeIds ?? [])
-  } catch {
-    // No saved session (or a transient error) leaves the default quick-route state in place.
-  } finally {
-    hydrating = false
-  }
-}
 
 const activeRoute = computed(
   () => rehearsalRoutes.find((route) => route.key === activeRouteKey.value) || rehearsalRoutes[0]
@@ -564,6 +587,31 @@ const activeRoute = computed(
 const currentNode = computed(() => activeRoute.value.nodes[activeNodeIndex.value] || activeRoute.value.nodes[0])
 const completedCount = computed(
   () => activeRoute.value.nodes.filter((node) => completedNodeIds.value.has(node.id)).length
+)
+const routeProgress = computed(() => {
+  const nodeCount = activeRoute.value.nodes.length
+  if (!nodeCount) return 0
+  return Math.round((completedCount.value / nodeCount) * 100)
+})
+const routeBeats = computed<RehearsalBeat[]>(() => {
+  const nodes = activeRoute.value.nodes
+  if (!nodes.length) return []
+
+  return activeRoute.value.beats.map((range, index) => ({
+    key: `${activeRouteKey.value}-${index}`,
+    ...range,
+    isComplete: nodes
+      .slice(range.startIndex, range.endIndex + 1)
+      .every((node) => completedNodeIds.value.has(node.id))
+  }))
+})
+const activeBeatIndex = computed(() =>
+  Math.max(
+    routeBeats.value.findIndex(
+      (beat) => activeNodeIndex.value >= beat.startIndex && activeNodeIndex.value <= beat.endIndex
+    ),
+    0
+  )
 )
 const formattedElapsed = computed(() => {
   const minutes = Math.floor(elapsedSeconds.value / 60)
@@ -602,6 +650,15 @@ const statusTagType = (status: PortfolioRehearsalHealthStatus) => {
   return 'info'
 }
 
+const setDetailsPanel = (panel: DetailPanel) => {
+  detailsPanel.value = panel
+  detailsOpen.value = true
+}
+
+const openDetails = (panel: DetailPanel) => {
+  setDetailsPanel(panel)
+}
+
 const stopTimer = () => {
   if (timerId) window.clearInterval(timerId)
   timerId = undefined
@@ -618,7 +675,6 @@ const toggleTimer = () => {
   timerId = window.setInterval(() => {
     elapsedSeconds.value += 1
     if (elapsedSeconds.value >= activeRoute.value.durationSeconds) stopTimer()
-    schedulePersist(2000)
   }, 1000)
 }
 
@@ -627,23 +683,19 @@ const selectRoute = (key: RouteKey) => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
-  schedulePersist(0)
 }
 
 const selectNode = (index: number) => {
   activeNodeIndex.value = index
-  schedulePersist()
 }
 
 const markCurrentNode = () => {
   completedNodeIds.value = new Set(completedNodeIds.value).add(currentNode.value.id)
-  schedulePersist()
 }
 
 const nextNode = () => {
   markCurrentNode()
   activeNodeIndex.value = Math.min(activeNodeIndex.value + 1, activeRoute.value.nodes.length - 1)
-  schedulePersist()
 }
 
 const resetRoute = () => {
@@ -652,7 +704,6 @@ const resetRoute = () => {
   activeNodeIndex.value = 0
   elapsedSeconds.value = 0
   stopTimer()
-  schedulePersist(0)
 }
 
 const openCurrentNode = () => {
@@ -661,15 +712,8 @@ const openCurrentNode = () => {
   router.push(resolved.path)
 }
 
-onMounted(hydrateSession)
-
 onBeforeUnmount(() => {
   stopTimer()
-  if (persistTimer) {
-    window.clearTimeout(persistTimer)
-    persistTimer = undefined
-    persistNow()
-  }
 })
 </script>
 
@@ -716,7 +760,7 @@ onBeforeUnmount(() => {
 
 .eyebrow {
   margin: 0 0 6px;
-  color: #5eead4;
+  color: var(--pd-green-deep, var(--user-primary));
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -765,7 +809,7 @@ h3 {
   padding: 14px;
   border: 1px solid rgba(251, 191, 36, 0.36);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.34);
+  background: var(--pd-surface-soft, var(--user-surface-muted));
 }
 
 .timer-panel strong {
@@ -773,7 +817,7 @@ h3 {
 }
 
 .timer-panel em {
-  color: #fbbf24;
+  color: var(--pd-amber, var(--user-warning));
   font-size: 22px;
   font-style: normal;
   font-weight: 800;
@@ -803,7 +847,7 @@ h3 {
 .node-title {
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.24);
+  background: var(--pd-surface, var(--user-surface));
   color: var(--app-text);
   cursor: pointer;
   text-align: left;
@@ -820,8 +864,8 @@ h3 {
 .route-tabs button.active,
 .progress-strip button.current,
 .node-card.current {
-  border-color: #5eead4;
-  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.22);
+  border-color: var(--pd-green, var(--user-primary));
+  box-shadow: 0 0 0 1px var(--pd-green-soft, var(--user-primary-faint));
 }
 
 .action-row {
@@ -848,15 +892,15 @@ h3 {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(148, 163, 184, 0.18);
-  color: #cbd5e1;
+  background: var(--pd-surface-soft, var(--user-surface-muted));
+  color: var(--pd-sub, var(--user-text-secondary));
   font-weight: 800;
 }
 
 .progress-strip button.done span,
 .node-card.done .node-title span {
-  background: rgba(52, 211, 153, 0.22);
-  color: #86efac;
+  background: var(--pd-green-soft, var(--user-success-soft));
+  color: var(--pd-green-deep, var(--user-success));
 }
 
 .route-overview {
@@ -885,7 +929,7 @@ h3 {
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.28);
+  background: var(--pd-surface-soft, var(--user-surface-muted));
 }
 
 .node-meta span,
@@ -912,7 +956,7 @@ li + li {
 }
 
 .coverage {
-  color: #fbbf24;
+  color: var(--pd-amber, var(--user-warning));
   font-weight: 800;
 }
 
@@ -935,7 +979,7 @@ li + li {
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.22);
+  background: var(--pd-surface, var(--user-surface));
 }
 
 .node-card {
@@ -965,7 +1009,7 @@ li + li {
 }
 
 .status-summary strong {
-  color: #5eead4;
+  color: var(--pd-green-deep, var(--user-primary));
   font-size: 20px;
 }
 
@@ -987,7 +1031,7 @@ li + li {
 }
 
 .stage-index {
-  color: #fbbf24;
+  color: var(--pd-amber, var(--user-warning));
   font-weight: 800;
 }
 
@@ -1020,6 +1064,885 @@ li + li {
   .status-summary {
     min-width: 0;
     text-align: left;
+  }
+}
+
+/* Direction D presentation layer. Keep the existing session and route script above intact. */
+.portfolio-demo {
+  --pd-bg: #f5f7f4;
+  --pd-surface: #ffffff;
+  --pd-surface-soft: #f0f4f1;
+  --pd-ink: #15211b;
+  --pd-sub: #5f6e66;
+  --pd-muted: #5f6e66;
+  --pd-line: #dce6df;
+  --pd-line-strong: #c5d5ca;
+  --pd-green: #17b26a;
+  --pd-green-deep: #0e9f5d;
+  --pd-green-soft: #e3f7ed;
+  --pd-lime: #a3e635;
+  --pd-amber: #f79009;
+  --pd-amber-soft: #fff3dd;
+  --pd-violet: #7c5cfc;
+  --pd-violet-soft: #eeeaFF;
+  display: grid;
+  min-height: calc(100vh - 64px);
+  margin: -14px -24px -28px;
+  padding: 30px max(24px, calc((100vw - 1120px) / 2)) 48px;
+  gap: 16px;
+  overflow: clip;
+  background: var(--pd-bg);
+  color: var(--pd-ink);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.portfolio-demo *,
+.portfolio-demo *::before,
+.portfolio-demo *::after {
+  box-sizing: border-box;
+}
+
+.portfolio-demo .content-card {
+  border: 1px solid var(--pd-line);
+  border-radius: 14px;
+  background: var(--pd-surface);
+  box-shadow: 0 2px 5px rgba(21, 33, 27, 0.05);
+  color: var(--pd-ink);
+}
+
+.portfolio-demo h1,
+.portfolio-demo h2,
+.portfolio-demo h3,
+.portfolio-demo p {
+  margin-top: 0;
+}
+
+.portfolio-demo h1 {
+  margin-bottom: 8px;
+  color: var(--pd-ink);
+  font-size: 28px;
+  line-height: 1.22;
+}
+
+.portfolio-demo h2 {
+  margin-bottom: 4px;
+  color: var(--pd-ink);
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.portfolio-demo h3 {
+  margin-bottom: 8px;
+  color: var(--pd-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.portfolio-demo .eyebrow {
+  margin-bottom: 6px;
+  color: var(--pd-green-deep);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.portfolio-demo .section-label {
+  margin: 0 0 5px;
+  color: var(--pd-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+}
+
+.portfolio-demo .hero-summary,
+.portfolio-demo .details-heading p,
+.portfolio-demo .detail-intro p {
+  max-width: 680px;
+  margin-bottom: 0;
+  color: var(--pd-sub);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.portfolio-demo .rehearsal-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 214px;
+  align-items: stretch;
+  gap: 20px;
+  padding: 22px;
+  border-color: #b9e7cd;
+  background: var(--pd-surface-soft);
+}
+
+.portfolio-demo .hero-copy {
+  min-width: 0;
+}
+
+.portfolio-demo .route-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.portfolio-demo .route-tabs button {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--pd-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--pd-surface);
+  color: var(--pd-ink);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.portfolio-demo .route-tabs button:hover {
+  border-color: var(--pd-green);
+  transform: translateY(-1px);
+}
+
+.portfolio-demo .route-tabs button.active {
+  border-color: var(--pd-green);
+  background: var(--pd-green-soft);
+  color: var(--pd-green-deep);
+}
+
+.portfolio-demo .route-tabs small {
+  color: var(--pd-muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.portfolio-demo .route-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--pd-line);
+  border-radius: 12px;
+  background: var(--pd-surface);
+}
+
+.portfolio-demo .progress-dial {
+  display: grid;
+  width: 78px;
+  height: 78px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--pd-green) 0 var(--progress-angle, 0deg), var(--pd-line) var(--progress-angle, 0deg) 360deg);
+}
+
+.portfolio-demo .progress-dial span {
+  display: grid;
+  width: 61px;
+  height: 61px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pd-surface);
+  color: var(--pd-ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.portfolio-demo .route-status-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.portfolio-demo .route-status-copy strong {
+  font-size: 17px;
+}
+
+.portfolio-demo .route-status-copy small {
+  color: var(--pd-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.portfolio-demo .route-progress {
+  padding: 18px 20px 20px;
+}
+
+.portfolio-demo .progress-head,
+.portfolio-demo .current-head,
+.portfolio-demo .card-heading,
+.portfolio-demo .details-heading,
+.portfolio-demo .detail-intro,
+.portfolio-demo .card-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portfolio-demo .progress-head {
+  align-items: center;
+}
+
+.portfolio-demo .coverage {
+  color: var(--pd-green-deep);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.portfolio-demo .progress-track {
+  height: 7px;
+  margin: 14px 0;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--pd-line);
+}
+
+.portfolio-demo .progress-track span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--pd-green);
+  transform-origin: left center;
+  transition: transform 180ms ease;
+}
+
+.portfolio-demo .beat-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.portfolio-demo .beat-strip button {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 62px;
+  border: 1px solid var(--pd-line);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--pd-surface);
+  color: var(--pd-sub);
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.portfolio-demo .beat-strip button:hover {
+  border-color: var(--pd-green);
+}
+
+.portfolio-demo .beat-strip button.is-current {
+  border-color: var(--pd-green);
+  background: var(--pd-green-soft);
+  color: var(--pd-green-deep);
+}
+
+.portfolio-demo .beat-strip button.is-complete .beat-number {
+  background: var(--pd-green);
+  color: #fff;
+}
+
+.portfolio-demo .beat-number {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--pd-surface-soft);
+  color: var(--pd-sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.portfolio-demo .beat-strip strong,
+.portfolio-demo .beat-strip small {
+  display: block;
+}
+
+.portfolio-demo .beat-strip strong {
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.portfolio-demo .beat-strip small {
+  margin-top: 4px;
+  color: var(--pd-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.portfolio-demo .current-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 16px;
+}
+
+.portfolio-demo .current-card,
+.portfolio-demo .guardrail-card,
+.portfolio-demo .cue-card,
+.portfolio-demo .details-panel {
+  padding: 20px;
+}
+
+.portfolio-demo .current-head {
+  align-items: center;
+}
+
+.portfolio-demo .current-head h2 {
+  max-width: 620px;
+}
+
+.portfolio-demo .current-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.portfolio-demo .current-context > div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--pd-surface-soft);
+}
+
+.portfolio-demo .current-context span,
+.portfolio-demo .current-context strong {
+  display: block;
+}
+
+.portfolio-demo .current-context span {
+  color: var(--pd-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.portfolio-demo .current-context strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--pd-ink);
+  font-size: 13px;
+}
+
+.portfolio-demo .current-summary {
+  margin-bottom: 14px;
+  color: var(--pd-sub);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.portfolio-demo .talk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-demo .talk-block {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 10px;
+  background: #f7fbf8;
+}
+
+.portfolio-demo .risk-block {
+  background: var(--pd-amber-soft);
+}
+
+.portfolio-demo ul,
+.portfolio-demo ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.portfolio-demo li {
+  color: var(--pd-sub);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.portfolio-demo li + li {
+  margin-top: 7px;
+}
+
+.portfolio-demo .action-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.portfolio-demo .utility-button {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+}
+
+.portfolio-demo .guardrail-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.portfolio-demo .guardrail-list {
+  display: grid;
+  gap: 11px;
+  margin: 15px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-demo .guardrail-list li {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pd-line);
+  list-style: none;
+}
+
+.portfolio-demo .guardrail-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.portfolio-demo .guardrail-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--pd-green-soft);
+  color: var(--pd-green-deep);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.portfolio-demo .guardrail-note {
+  margin-top: auto;
+  padding-top: 16px;
+  color: var(--pd-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.portfolio-demo .cue-card {
+  padding: 18px 20px;
+}
+
+.portfolio-demo .cue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.portfolio-demo .cue-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--pd-line);
+  border-radius: 10px;
+  background: var(--pd-surface);
+}
+
+.portfolio-demo .cue-index {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--pd-green-soft);
+  color: var(--pd-green-deep);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.portfolio-demo .cue-item strong,
+.portfolio-demo .cue-item p {
+  display: block;
+}
+
+.portfolio-demo .cue-item strong {
+  font-size: 12px;
+}
+
+.portfolio-demo .cue-item p {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--pd-sub);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.portfolio-demo .text-button {
+  border: 0;
+  background: transparent;
+  color: var(--pd-green-deep);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.portfolio-demo .details-panel {
+  border-color: var(--pd-line-strong);
+}
+
+.portfolio-demo .details-heading {
+  align-items: flex-start;
+}
+
+.portfolio-demo .detail-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+
+.portfolio-demo .detail-tabs button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--pd-line);
+  border-radius: 9px;
+  padding: 0 11px;
+  background: var(--pd-surface);
+  color: var(--pd-sub);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.portfolio-demo .detail-tabs button.active {
+  border-color: var(--pd-green);
+  background: var(--pd-green-soft);
+  color: var(--pd-green-deep);
+}
+
+.portfolio-demo .detail-content {
+  min-width: 0;
+}
+
+.portfolio-demo .detail-node-list {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 18px;
+}
+
+.portfolio-demo .detail-node-list button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid var(--pd-line);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: var(--pd-surface);
+  color: var(--pd-sub);
+  text-align: left;
+}
+
+.portfolio-demo .detail-node-list button.current {
+  border-color: var(--pd-green);
+  background: var(--pd-green-soft);
+}
+
+.portfolio-demo .detail-node-list button.done > span:first-child {
+  background: var(--pd-green);
+  color: #fff;
+}
+
+.portfolio-demo .detail-node-list button > span:first-child {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--pd-surface-soft);
+  color: var(--pd-sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.portfolio-demo .detail-node-list strong,
+.portfolio-demo .detail-node-list small {
+  display: block;
+}
+
+.portfolio-demo .detail-node-list strong {
+  color: var(--pd-ink);
+  font-size: 12px;
+}
+
+.portfolio-demo .detail-node-list small {
+  margin-top: 2px;
+  color: var(--pd-sub);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.portfolio-demo .detail-node-list em {
+  color: var(--pd-muted);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.portfolio-demo .prompt-grid,
+.portfolio-demo .health-grid,
+.portfolio-demo .acceptance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.portfolio-demo .prompt-card,
+.portfolio-demo .health-card,
+.portfolio-demo .acceptance-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--pd-line);
+  border-radius: 10px;
+  background: var(--pd-surface-soft);
+}
+
+.portfolio-demo .prompt-card p,
+.portfolio-demo .health-card p,
+.portfolio-demo .acceptance-card p {
+  margin: 0;
+  color: var(--pd-sub);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.portfolio-demo .prompt-card ol {
+  margin: 0;
+}
+
+.portfolio-demo .prompt-card li,
+.portfolio-demo .health-card li {
+  font-size: 11px;
+}
+
+.portfolio-demo .status-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  text-align: right;
+}
+
+.portfolio-demo .status-summary strong {
+  color: var(--pd-green-deep);
+  font-size: 20px;
+}
+
+.portfolio-demo .status-summary span {
+  color: var(--pd-sub);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.portfolio-demo .stage-index {
+  color: var(--pd-amber);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.portfolio-demo .priority-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.portfolio-demo :deep(.el-button) {
+  min-height: 40px;
+  border-radius: 10px;
+  font-weight: 850;
+}
+
+.portfolio-demo :deep(.el-button--primary) {
+  border-color: var(--pd-green);
+  background: var(--pd-green);
+  box-shadow: 0 3px 0 var(--pd-green-deep);
+}
+
+.portfolio-demo :deep(.el-button--primary:hover),
+.portfolio-demo :deep(.el-button--primary:focus-visible) {
+  border-color: var(--pd-green-deep);
+  background: var(--pd-green-deep);
+}
+
+.portfolio-demo :deep(.el-button:not(.el-button--primary):not(.is-text)) {
+  border-color: var(--pd-line-strong);
+  background: var(--pd-surface);
+  color: var(--pd-green-deep);
+}
+
+.portfolio-demo :deep(.el-button.is-text) {
+  color: var(--pd-green-deep);
+}
+
+.portfolio-demo :deep(.el-tag) {
+  border-radius: 999px;
+  font-weight: 850;
+}
+
+@media (max-width: 920px) {
+  .portfolio-demo .rehearsal-hero,
+  .portfolio-demo .current-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-demo .route-status {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .portfolio-demo {
+    min-height: calc(100vh - 58px);
+    margin: 0;
+    padding: 18px 14px 32px;
+    gap: 12px;
+  }
+
+  .portfolio-demo h1 {
+    font-size: 22px;
+  }
+
+  .portfolio-demo h2 {
+    font-size: 17px;
+  }
+
+  .portfolio-demo .rehearsal-hero,
+  .portfolio-demo .current-card,
+  .portfolio-demo .guardrail-card,
+  .portfolio-demo .cue-card,
+  .portfolio-demo .details-panel {
+    padding: 16px;
+  }
+
+  .portfolio-demo .route-tabs {
+    display: flex;
+    overflow-x: auto;
+    margin-right: 0;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+
+  .portfolio-demo .route-tabs button {
+    min-width: 145px;
+    flex: 0 0 145px;
+  }
+
+  .portfolio-demo .route-status {
+    justify-content: flex-start;
+  }
+
+  .portfolio-demo .beat-strip {
+    display: flex;
+    overflow-x: auto;
+    margin-right: 0;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+
+  .portfolio-demo .beat-strip button {
+    min-width: 142px;
+    flex: 0 0 142px;
+  }
+
+  .portfolio-demo .current-head,
+  .portfolio-demo .card-heading,
+  .portfolio-demo .details-heading,
+  .portfolio-demo .detail-intro {
+    display: block;
+  }
+
+  .portfolio-demo .current-head .el-tag,
+  .portfolio-demo .card-heading .text-button,
+  .portfolio-demo .details-heading .el-button,
+  .portfolio-demo .detail-intro .status-summary {
+    margin-top: 10px;
+  }
+
+  .portfolio-demo .current-context,
+  .portfolio-demo .talk-grid,
+  .portfolio-demo .cue-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-demo .action-row {
+    align-items: stretch;
+  }
+
+  .portfolio-demo .action-row :deep(.el-button:not(.utility-button)) {
+    flex: 1 1 148px;
+  }
+
+  .portfolio-demo .utility-button {
+    flex: 0 0 40px;
+  }
+
+  .portfolio-demo .details-heading .el-button {
+    width: 100%;
+  }
+
+  .portfolio-demo .detail-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-demo .detail-tabs button {
+    justify-content: flex-start;
+  }
+
+  .portfolio-demo .detail-node-list button {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .portfolio-demo .detail-node-list em {
+    display: none;
+  }
+
+  .portfolio-demo .prompt-grid,
+  .portfolio-demo .health-grid,
+  .portfolio-demo .acceptance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-demo .status-summary {
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-demo *,
+  .portfolio-demo *::before,
+  .portfolio-demo *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }
 </style>

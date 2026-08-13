@@ -106,7 +106,8 @@
                     v-permission="'admin:system:config:write'"
                     link
                     type="danger"
-                    :disabled="isAdminMobileReadonly || row.editable !== 1"
+                    :loading="deletingConfigId === row.id"
+                    :disabled="isAdminMobileReadonly || row.editable !== 1 || deletingConfigId === row.id"
                     :title="mobileReadonlyTitle(row.editable !== 1 ? '系统内置配置不可删除' : undefined)"
                     @click="handleDelete(row)"
                   >
@@ -237,6 +238,7 @@ const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = us
 
 const loading = ref(false)
 const saving = ref(false)
+const deletingConfigId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const editingConfigId = ref<number | null>(null)
 const editingSensitiveConfig = ref(false)
@@ -387,10 +389,10 @@ const handleSave = async () => {
     }
     ElMessage.success('系统配置已保存')
     dialogVisible.value = false
-    await fetchConfigs()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '系统配置保存失败，请稍后重试。'))
   } finally {
+    await fetchConfigs()
     saving.value = false
   }
 }
@@ -409,14 +411,21 @@ const handleDelete = async (row: SystemConfigVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteSystemConfigApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed system config delete from system config page.',
-    idempotencyKey: createOperationIdempotencyKey(`system-config-delete-${row.id}`)
-  })
-  ElMessage.success('系统配置已删除')
-  await fetchConfigs()
+  deletingConfigId.value = row.id
+  try {
+    await deleteSystemConfigApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed system config delete from system config page.',
+      idempotencyKey: createOperationIdempotencyKey(`system-config-delete-${row.id}`)
+    })
+    ElMessage.success('系统配置已删除')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '系统配置删除失败，当前配置状态已重新加载。'))
+  } finally {
+    await fetchConfigs()
+    deletingConfigId.value = null
+  }
 }
 
 const handleSearch = () => {

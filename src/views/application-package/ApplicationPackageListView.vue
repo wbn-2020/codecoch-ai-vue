@@ -61,7 +61,7 @@
         <el-table-column label="就绪度" width="150">
           <template #default="{ row }">
             <el-tag :type="readinessTagType(row.readinessLevel)" effect="light">
-              {{ row.readinessLevel || 'UNKNOWN' }}
+              {{ readinessLabel(row.readinessLevel) }}
             </el-tag>
             <span v-if="row.readinessScore !== undefined" class="score">{{ row.readinessScore }}</span>
           </template>
@@ -98,6 +98,32 @@
         </el-table-column>
       </el-table>
 
+      <div v-if="page.records.length" class="package-mobile-list">
+        <button
+          v-for="row in page.records"
+          :key="row.id"
+          class="package-mobile-card"
+          type="button"
+          @click="openDetail(row)"
+        >
+          <span class="package-mobile-card__main">
+            <strong>{{ row.jobTitle || '未命名岗位' }}</strong>
+            <span>{{ row.companyName || '未填写公司' }}</span>
+            <small>{{ row.packageNo || `#${row.id}` }} · {{ packageContextVersionLabel(row) }}</small>
+          </span>
+          <span class="package-mobile-card__meta">
+            <el-tag :type="readinessTagType(row.readinessLevel)" effect="light">
+              {{ readinessLabel(row.readinessLevel) }}
+            </el-tag>
+            <el-tag :type="packageStatusTagType(row.packageStatus)" effect="plain">
+              {{ packageStatusLabel(row.packageStatus) }}
+            </el-tag>
+            <small>更新于 {{ formatDateTime(row.refreshedAt || row.updatedAt || row.createdAt) }}</small>
+          </span>
+          <ArrowRight class="package-mobile-card__arrow" :size="18" aria-hidden="true" />
+        </button>
+      </div>
+
       <AppState
         v-else
         type="empty"
@@ -124,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Refresh, Search, View } from '@element-plus/icons-vue'
+import { ArrowRight, Plus, Refresh, Search, View } from '@element-plus/icons-vue'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -167,6 +193,20 @@ const readinessTagType = (level?: string) => {
   if (value === 'BLOCKED') return 'danger'
   if (value.startsWith('NEEDS_')) return 'warning'
   return 'info'
+}
+
+const readinessLabel = (level?: string) => {
+  const labels: Record<string, string> = {
+    READY: '可投递',
+    NEAR_READY: '接近就绪',
+    NEEDS_WORK: '需要补充',
+    NEEDS_RESUME: '缺少简历材料',
+    NEEDS_EVIDENCE: '缺少项目证据',
+    NEEDS_MATCH: '缺少匹配报告',
+    BLOCKED: '暂不可投递',
+    UNKNOWN: '待评估'
+  }
+  return labels[String(level || '').toUpperCase()] || '待评估'
 }
 
 const packageStatusTagType = (status?: string) => {
@@ -335,6 +375,10 @@ onMounted(load)
   justify-content: flex-end;
 }
 
+.package-mobile-list {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .list-header {
     flex-direction: column;
@@ -350,6 +394,74 @@ onMounted(load)
   .list-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .package-table {
+    display: none;
+  }
+
+  .package-mobile-list {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .package-mobile-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 20px;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px;
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface-muted);
+    color: var(--user-text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .package-mobile-card:hover,
+  .package-mobile-card:focus-visible {
+    border-color: var(--user-primary-border);
+    background: var(--user-surface-tint);
+    outline: none;
+  }
+
+  .package-mobile-card__main,
+  .package-mobile-card__meta {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .package-mobile-card__main strong,
+  .package-mobile-card__main span,
+  .package-mobile-card__main small,
+  .package-mobile-card__meta small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .package-mobile-card__main span,
+  .package-mobile-card__main small,
+  .package-mobile-card__meta small {
+    color: var(--user-text-muted);
+    font-size: 12px;
+  }
+
+  .package-mobile-card__meta {
+    justify-items: end;
+  }
+
+  .package-mobile-card__arrow {
+    color: var(--user-primary);
+  }
+
+  .package-pagination {
+    justify-content: center;
   }
 }
 </style>

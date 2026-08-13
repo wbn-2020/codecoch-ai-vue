@@ -65,9 +65,16 @@ const componentStubs = {
   ReportChart: true,
   StatusTag: true,
   'el-alert': { template: '<div class="el-alert-stub"></div>' },
+  'el-dialog': {
+    props: ['modelValue'],
+    template: '<div v-if="modelValue" class="el-dialog-stub"><slot /><slot name="footer" /></div>'
+  },
   'el-button': {
     template: '<button class="el-button-stub" v-bind="$attrs"><slot /></button>'
   },
+  'el-form': { template: '<form><slot /></form>' },
+  'el-form-item': { template: '<div><slot /></div>' },
+  'el-input-number': { template: '<input />' },
   'el-dropdown': { template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>' },
   'el-dropdown-item': { template: '<button class="el-dropdown-item-stub"><slot /></button>' },
   'el-dropdown-menu': { template: '<div class="el-dropdown-menu-stub"><slot /></div>' },
@@ -95,6 +102,8 @@ const generatedReport = (
   interviewId: 42,
   reportStatus: 'GENERATED',
   totalScore: 80,
+  trustStatus: 'VERIFIED',
+  fallback: false,
   replayEligibility,
   ...overrides
 })
@@ -463,6 +472,8 @@ describe('InterviewReportView same-config replay', () => {
       .find((button) => button.text().includes('生成学习计划'))
     expect(studyPlanButton).toBeDefined()
     await studyPlanButton!.trigger('click')
+    await flushPromises()
+    await wrapper.find('.el-dialog-stub .el-button-stub:last-child').trigger('click')
 
     routeState.current.params.id = '43'
     await nextTick()
@@ -471,7 +482,11 @@ describe('InterviewReportView same-config replay', () => {
     generation.resolve({ planId: 700, planStatus: 'GENERATED' })
     await flushPromises()
 
-    expect(generateStudyPlanApi).toHaveBeenCalledWith({ reportId: 100 })
+    expect(generateStudyPlanApi).toHaveBeenCalledWith({
+      reportId: 100,
+      expectedDurationDays: 14,
+      dailyMinutes: 60
+    })
     expect(routerPush).not.toHaveBeenCalled()
     expect(messageMocks.success).not.toHaveBeenCalled()
   })

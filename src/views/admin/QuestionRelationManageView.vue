@@ -398,7 +398,8 @@ const resetCreateForm = () => {
 const handleCreate = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
 
   const questionId = normalizeId(form.questionId)
   const targetQuestionId = normalizeId(form.targetQuestionId)

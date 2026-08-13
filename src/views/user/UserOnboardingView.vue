@@ -493,15 +493,34 @@ const toggleTech = (item: string) => {
   selectedTechStack.value = [...selectedTechStack.value, item]
 }
 
+const ONBOARDING_PROGRESS_TIMEOUT_MS = 15000
+
+const withProgressTimeout = <T>(promise: Promise<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error('真实进度读取超时，请稍后重试。'))
+    }, ONBOARDING_PROGRESS_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timeoutId)
+        reject(error)
+      }
+    )
+  })
+
 const loadRealProgress = async (force = false) => {
   realProgressLoading.value = true
-  realProgressError.value = ''
+    realProgressError.value = ''
   try {
     const [overviewResult, v3OverviewResult, dailyPlanResult, todayTasksResult] = await Promise.allSettled([
-      fetchCachedDashboardOverview(force),
-      fetchCachedV3DashboardOverview(force),
-      fetchCachedLatestDailyPlan(formatLocalDate(), force),
-      fetchCachedTodayAgentTasks(formatLocalDate(), force)
+      withProgressTimeout(fetchCachedDashboardOverview(force)),
+      withProgressTimeout(fetchCachedV3DashboardOverview(force)),
+      withProgressTimeout(fetchCachedLatestDailyPlan(formatLocalDate(), force)),
+      withProgressTimeout(fetchCachedTodayAgentTasks(formatLocalDate(), force))
     ])
 
     if (overviewResult.status === 'fulfilled') {

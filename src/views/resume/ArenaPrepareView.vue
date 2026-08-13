@@ -4,8 +4,11 @@
       <!-- 页头：标题 + 资料接入环 -->
       <div class="arena-between arena-prepare__head">
         <div>
-          <div class="arena-prepare__kicker">准备 · 补给线</div>
-          <h1 class="arena-h1 arena-prepare__title">闯过三关，解锁精准匹配 🗺️</h1>
+          <div class="arena-prepare__kicker">
+            求职准备 · 第 {{ Math.min(mainDoneCount + 1, 3) }} 步进行中 · 已完成 {{ mainDoneCount }}/3
+          </div>
+          <h1 class="arena-h1 arena-prepare__title">建立完整的求职资料</h1>
+          <p class="arena-p" style="margin-top: 8px">完善简历、目标岗位和匹配依据，让训练与模拟面试围绕真实求职目标展开。</p>
         </div>
         <div class="arena-card arena-prepare__readiness">
           <div
@@ -27,6 +30,13 @@
           </div>
         </div>
       </div>
+      <div class="arena-prepare__progress" aria-label="求职准备进度">
+        <i
+          v-for="node in mainNodes"
+          :key="node.key"
+          :class="{ 'is-done': node.state === 'done', 'is-current': node.state === 'current' || node.state === 'running' }"
+        ></i>
+      </div>
 
       <!-- 加载骨架 -->
       <div v-if="loading" class="arena-col" style="margin-top: 22px">
@@ -41,72 +51,191 @@
           <button class="arena-btn arena-btn--txt" @click="loadAll">刷新</button>
         </div>
 
-        <!-- 闯关地图 -->
-        <div class="arena-card arena-card--hero arena-prepare__map">
-          <div class="arena-between" style="flex-wrap: wrap">
-            <div class="arena-row" style="gap: 8px">
-              <span class="arena-chip arena-chip--grn-solid">主线 · 三步闯关</span>
-              <span class="arena-tiny">已完成 {{ mainDoneCount }}/3</span>
-            </div>
-            <span class="arena-xp-tag">主线全通约 +330 经验</span>
-          </div>
-
-          <div class="arena-prepare__track">
-            <template v-for="(node, idx) in mainNodes" :key="node.key">
-              <div v-if="idx > 0" class="arena-prepare__link" :class="{ 'is-done': mainNodes[idx - 1].state === 'done' }"></div>
-              <button type="button" class="arena-prepare__node" :class="`is-${node.state}`" @click="node.action">
+        <div class="arena-prepare__workspace">
+          <!-- 准备流程 -->
+          <div class="arena-prepare__map">
+            <div class="arena-prepare__track">
+              <button
+                v-if="currentMainNode"
+                type="button"
+                class="arena-prepare__node"
+                :class="`is-${currentMainNode.state}`"
+                @click="currentMainNode.action"
+              >
                 <span class="arena-prepare__badge">
-                  <template v-if="node.state === 'done'">✓</template>
-                  <template v-else-if="node.state === 'failed'">✗</template>
-                  <template v-else-if="node.state === 'running'">⏳</template>
-                  <template v-else-if="node.state === 'locked'">🔒</template>
+                  <template v-if="currentMainNode.state === 'done'">✓</template>
+                  <template v-else-if="currentMainNode.state === 'failed'">✗</template>
+                  <template v-else-if="currentMainNode.state === 'running'">⏳</template>
+                  <template v-else-if="currentMainNode.state === 'locked'">🔒</template>
                   <template v-else>⚡</template>
                 </span>
                 <span class="arena-prepare__node-body">
                   <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                    <b>{{ node.title }}</b>
-                    <span v-if="node.state === 'current'" class="arena-chip arena-chip--amber">当前关</span>
-                    <span v-else-if="node.state === 'done'" class="arena-chip arena-chip--grn">已通关</span>
-                    <span v-else-if="node.state === 'failed'" class="arena-chip arena-chip--red">挑战失败</span>
-                    <span v-else-if="node.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
-                    <span v-else class="arena-chip arena-chip--mut">未解锁</span>
-                    <span class="arena-xp-tag">+{{ node.xp }} XP</span>
+                    <b>{{ currentMainNode.title }}</b>
+                    <span v-if="currentMainNode.state === 'current'" class="arena-chip arena-chip--amber">当前步骤</span>
+                    <span v-else-if="currentMainNode.state === 'done'" class="arena-chip arena-chip--grn">已完成</span>
+                    <span v-else-if="currentMainNode.state === 'failed'" class="arena-chip arena-chip--red">需要重新处理</span>
+                    <span v-else-if="currentMainNode.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
+                    <span v-else class="arena-chip arena-chip--mut">待开始</span>
                   </span>
-                  <small>{{ node.desc }}</small>
-                  <span class="arena-prepare__node-cta">{{ node.cta }} →</span>
+                  <small>{{ currentMainNode.desc }}</small>
+                  <span class="arena-prepare__node-cta">{{ currentMainNode.cta }} →</span>
                 </span>
               </button>
-            </template>
+            </div>
+
+            <aside class="arena-card arena-prepare__coach">
+              <div class="arena-row" style="gap: 8px">
+                <span class="arena-chip arena-chip--vio">✦ AI</span>
+                <b>教练提示</b>
+              </div>
+              <p>
+                {{ currentTarget
+                  ? '岗位已接入。贴上完整 JD 后，我会帮你提取关键词并生成匹配报告。'
+                  : '先把目标岗位接进来，后续训练和模拟面试才会有明确的岗位上下文。' }}
+              </p>
+            </aside>
+
+            <!-- 补充资料 -->
+            <details class="arena-prepare__side">
+              <summary>更多准备动作</summary>
+              <div class="arena-prepare__side-grid">
+                <button
+                  v-for="side in sideNodes"
+                  :key="side.key"
+                  type="button"
+                  class="arena-prepare__side-card"
+                  :class="{ 'is-done': side.done }"
+                  @click="router.push(side.path)"
+                >
+                  <span class="arena-between">
+                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完善' : '可选资料' }}</span>
+                  </span>
+                  <b>{{ side.title }}</b>
+                  <small>{{ side.desc }}</small>
+                </button>
+              </div>
+            </details>
           </div>
 
-          <!-- 支线 -->
-          <div class="arena-prepare__side">
-            <button
-              v-for="side in sideNodes"
-              :key="side.key"
-              type="button"
-              class="arena-prepare__side-card"
-              :class="{ 'is-done': side.done }"
-              @click="router.push(side.path)"
-            >
-              <span class="arena-between">
-                <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完成' : '支线' }}</span>
-                <span class="arena-xp-tag">+{{ side.xp }} XP</span>
-              </span>
-              <b>{{ side.title }}</b>
-              <small>{{ side.desc }}</small>
-            </button>
+          <!-- 当前步骤：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
+          <section
+            v-if="currentMainNode?.key === 'target' && currentMainNode.state !== 'locked'"
+            class="arena-card arena-prepare__jd-card"
+            aria-labelledby="prepare-jd-title"
+          >
+          <div class="arena-prepare__jd-head">
+            <div>
+              <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+                <span class="arena-chip arena-chip--amber">第 2 步 · 目标岗位</span>
+                <span class="arena-tiny">{{ currentTarget ? parseStatusLabel(currentTarget.parseStatus) : '等待岗位描述' }}</span>
+              </div>
+              <h2 id="prepare-jd-title" class="arena-h2" style="margin-top: 10px">贴上你的目标岗位 JD</h2>
+              <p class="arena-p" style="margin-top: 6px">
+                把招聘描述贴进来，系统会提取岗位关键词，再用你的简历生成匹配报告。
+              </p>
+            </div>
+            <div class="arena-prepare__jd-lock" aria-hidden="true">🧭</div>
           </div>
+
+          <div class="arena-prepare__jd-grid">
+            <div>
+              <label class="arena-prepare__jd-textarea">
+                <span>岗位 JD 原文</span>
+                <textarea
+                  v-model="jdDraft"
+                  rows="7"
+                  maxlength="12000"
+                  placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
+                  :disabled="jdSaving"
+                />
+              </label>
+              <div class="arena-prepare__jd-actions">
+                <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
+                  {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
+                </button>
+                <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
+                  去生成匹配 →
+                </button>
+              </div>
+              <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+              <div class="arena-prepare__mobile-stage-cards">
+                <button
+                  v-for="node in [mainNodes[0], mainNodes[2]].filter(Boolean)"
+                  :key="node.key"
+                  type="button"
+                  class="arena-prepare__mobile-stage-card"
+                  :class="`is-${node.state}`"
+                  @click="node.action"
+                >
+                  <span>{{ node.state === 'done' ? '✓' : node.state === 'locked' ? '🔒' : '⚡' }}</span>
+                  <div>
+                    <b>{{ node.title }}</b>
+                    <small>{{ node.desc }}</small>
+                  </div>
+                  <em>{{ node.cta }} →</em>
+                </button>
+              </div>
+            </div>
+
+          </div>
+          </section>
+
+          <section
+            v-else-if="currentMainNode"
+            class="arena-card arena-prepare__stage-card"
+            aria-labelledby="prepare-current-stage-title"
+          >
+            <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+              <span class="arena-chip arena-chip--grn">当前准备步骤</span>
+            </div>
+            <h2 id="prepare-current-stage-title" class="arena-h2" style="margin-top: 10px">
+              {{ currentMainNode.title }}
+            </h2>
+            <p class="arena-p" style="margin-top: 6px">{{ currentMainNode.desc }}</p>
+            <button class="arena-btn arena-btn--pri" type="button" style="margin-top: 16px" @click="currentMainNode.action">
+              {{ currentMainNode.cta }} →
+            </button>
+          </section>
+
+          <details
+            v-if="currentTarget && currentMainNode?.key !== 'target'"
+            class="arena-card arena-prepare__jd-quick-edit"
+          >
+            <summary>编辑目标岗位 JD</summary>
+            <p class="arena-p">更新岗位描述后，旧的匹配报告会清除，避免把旧岗位上下文继续当成当前依据。</p>
+            <label class="arena-prepare__jd-textarea">
+              <span>岗位 JD 原文</span>
+              <textarea
+                v-model="jdDraft"
+                rows="7"
+                maxlength="12000"
+                placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
+                :disabled="jdSaving"
+              />
+            </label>
+            <div class="arena-prepare__jd-actions">
+              <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
+                {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
+              </button>
+              <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
+                去生成匹配 →
+              </button>
+            </div>
+            <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+          </details>
         </div>
 
-        <div class="arena-prepare__grid">
+        <details class="arena-prepare__more">
+          <summary>查看准备资料与进度</summary>
+          <div class="arena-prepare__grid">
           <div class="arena-col">
-            <!-- 关键词覆盖 = 技能解锁 -->
+            <!-- 岗位关键词覆盖情况 -->
             <div class="arena-card arena-prepare__panel">
               <div class="arena-between">
                 <div>
                   <div class="arena-prepare__kicker" style="color: var(--arena-vio)">岗位关键词覆盖</div>
-                  <div class="arena-h3" style="margin-top: 4px">哪些技能已解锁，哪些还灰着</div>
+                  <div class="arena-h3" style="margin-top: 4px">哪些能力已覆盖，哪些仍需补充</div>
                 </div>
                 <button class="arena-btn arena-btn--txt" :disabled="!latestMatch" @click="goMatchAction">报告详情 →</button>
               </div>
@@ -132,7 +261,7 @@
                 <b>还没有岗位关键词覆盖结果</b>
                 <p class="arena-p">完成岗位分析和简历匹配后，这里会显示已覆盖、部分覆盖和缺失关键词。</p>
                 <button class="arena-btn arena-btn--pri" style="padding: 11px 20px" :disabled="!canMatch" @click="goMatchAction">
-                  ⚔ 去生成匹配报告
+                  去生成匹配报告
                 </button>
               </div>
             </div>
@@ -161,7 +290,7 @@
               <div class="arena-between">
                 <div>
                   <div class="arena-prepare__kicker">项目证据</div>
-                  <div class="arena-h3" style="margin-top: 4px">把项目经历改成可追问的弹药</div>
+                  <div class="arena-h3" style="margin-top: 4px">将项目经历整理为可引用的面试证据</div>
                 </div>
                 <button class="arena-btn arena-btn--txt" @click="router.push('/project-evidence')">打开证据库 →</button>
               </div>
@@ -251,8 +380,8 @@
             <div class="arena-card arena-prepare__panel">
               <div class="arena-between">
                 <div class="arena-h3">JD 匹配状态</div>
-                <span class="arena-chip" :class="hasSuccessfulMatch ? 'arena-chip--grn' : 'arena-chip--mut'">
-                  {{ hasSuccessfulMatch ? '已出报告' : matchStatusLabel(latestMatch?.status) || (canMatch ? '待生成' : '缺资料') }}
+                <span class="arena-chip" :class="hasTrustedMatch ? 'arena-chip--grn' : 'arena-chip--mut'">
+                  {{ hasTrustedMatch ? '可信报告' : isCompletedMatch ? '待复核' : matchStatusLabel(latestMatch?.status) || (canMatch ? '待生成' : '缺资料') }}
                 </span>
               </div>
               <div class="arena-prepare__match-score">{{ matchScoreText }}</div>
@@ -262,7 +391,8 @@
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       </template>
     </div>
   </div>
@@ -272,13 +402,19 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getCurrentJobTargetApi, getJobTargetsApi } from '@/api/jobTarget'
+import {
+  createJobTargetApi,
+  getCurrentJobTargetApi,
+  getJobTargetsApi,
+  parseJobDescriptionApi,
+  updateJobTargetApi
+} from '@/api/jobTarget'
 import { getResumeDetailApi, getResumesApi } from '@/api/resume'
 import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
-import type { JobDescriptionAnalysisVO, TargetJobVO } from '@/types/jobTarget'
+import type { JobDescriptionAnalysisVO, TargetJobSaveDTO, TargetJobVO } from '@/types/jobTarget'
 import type { ResumeDetailVO, ResumeVO } from '@/types/resume'
 import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { SkillProfileOverviewVO } from '@/types/skillProfile'
@@ -329,6 +465,11 @@ const resumeDetail = ref<ResumeDetailVO | null>(null)
 const currentTarget = ref<TargetJobVO | null>(null)
 const latestMatch = ref<ResumeJobMatchReportDetailVO | null>(null)
 const skillOverview = ref<SkillProfileOverviewVO | null>(null)
+const jdTitleDraft = ref('')
+const jdCompanyDraft = ref('')
+const jdDraft = ref('')
+const jdSaving = ref(false)
+const jdFeedback = ref('')
 
 const parseMaybeJson = (value: unknown): unknown => {
   if (typeof value !== 'string') return value
@@ -400,8 +541,15 @@ const getMatchReportPath = () => {
   return reportId ? `/resume-match/${reportId}` : '/resume-match'
 }
 
+const jdReady = computed(() => jdDraft.value.trim().length >= 20)
 const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
-const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
+const isCompletedMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
+const hasTrustedMatch = computed(() =>
+  isCompletedMatch.value
+  && latestMatch.value?.trustStatus === 'VERIFIED'
+  && latestMatch.value?.fallback !== true
+  && latestMatch.value?.schemaWarningCount === 0
+)
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
 const matchRunning = computed(() => {
   const status = latestMatch.value?.status
@@ -453,7 +601,8 @@ const matchScoreText = computed(() => {
   if (!latestMatch.value) return canMatch.value ? '待匹配' : '缺资料'
   if (latestMatch.value.status === 'FAILED') return '生成失败'
   if (latestMatch.value.status !== 'SUCCESS') return matchStatusLabel(latestMatch.value.status) || '处理中'
-  return latestMatch.value.overallScore != null ? `${latestMatch.value.overallScore}` : '已完成'
+  if (!hasTrustedMatch.value) return '待复核'
+  return latestMatch.value.overallScore != null ? `${latestMatch.value.overallScore}` : '未量化'
 })
 
 const summarizeRiskItems = (items: unknown, limit = 2) => toTextList(items).slice(0, limit)
@@ -475,7 +624,8 @@ const matchSummary = computed(() => {
   if (latestMatch.value.status === 'FAILED') {
     return friendlyMatchFailure(latestMatch.value.errorMessage)
   }
-  if (!hasSuccessfulMatch.value) return '匹配报告还在生成中，请等待完成后再把结论用于训练。'
+  if (!isCompletedMatch.value) return '匹配报告还在生成中，请等待完成后再把结论用于训练。'
+  if (!hasTrustedMatch.value) return '匹配报告已生成，但未通过可信校验。当前数字和缺口只可复核，不能解锁能力画像或训练。'
   const strengths = summarizeRiskItems(latestMatch.value.strengths, 2)
   const gaps = summarizeRiskItems(latestMatch.value.gaps, 2)
   const parts = [
@@ -491,8 +641,8 @@ const readinessSignals = computed(() => [
   Boolean(resumeDetail.value?.projects?.length),
   Boolean(currentTarget.value),
   currentTarget.value?.parseStatus === 'PARSED',
-  hasSuccessfulMatch.value,
-  Boolean((skillOverview.value?.topGaps || []).length)
+  hasTrustedMatch.value,
+  hasTrustedMatch.value && Boolean((skillOverview.value?.topGaps || []).length)
 ])
 const readinessReadyCount = computed(() => readinessSignals.value.filter(Boolean).length)
 const readinessProgressPercent = computed(() => Math.round((readinessReadyCount.value / readinessSignals.value.length) * 100))
@@ -504,7 +654,8 @@ const readinessHint = computed(() => {
   if (evidenceLoading.value) return '正在补齐最近匹配报告和项目证据。'
   if (!latestMatch.value) return '简历和岗位已具备，下一步生成匹配报告。'
   if (latestMatch.value.status === 'FAILED') return '上次匹配失败，建议先重新生成报告。'
-  if (hasSuccessfulMatch.value) return '已有可信匹配依据，可以进入训练。'
+  if (isCompletedMatch.value && !hasTrustedMatch.value) return '最近报告仍待复核，暂不解锁能力画像或训练。'
+  if (hasTrustedMatch.value) return '已有可信匹配依据，可以进入训练。'
   return '匹配报告还未完成，先不要把训练结论当作依据。'
 })
 
@@ -549,11 +700,19 @@ const nextStep = computed(() => {
       path: getMatchReportPath()
     }
   }
-  if (!hasSuccessfulMatch.value) {
+  if (!isCompletedMatch.value) {
     return {
       title: '等待匹配完成',
       desc: '报告未成功前不把推荐题和面试训练标成已具备依据，避免误导训练方向。',
       cta: '查看匹配进度',
+      path: getMatchReportPath()
+    }
+  }
+  if (!hasTrustedMatch.value) {
+    return {
+      title: '先复核匹配报告',
+      desc: '当前报告未满足可信判定，不能据此生成能力画像、推荐题或岗位面试。',
+      cta: '查看并重新生成',
       path: getMatchReportPath()
     }
   }
@@ -573,13 +732,78 @@ const nextStep = computed(() => {
   }
 })
 
-// ---- 闯关地图 ----
+// ---- 求职准备流程 ----
 const goResumeAction = () => {
   router.push(getResumeEditPath())
 }
 
 const goTargetAction = () => {
   router.push(getTargetAnalysisPath())
+}
+
+const syncJdDraft = () => {
+  jdTitleDraft.value = currentTarget.value?.jobTitle || ''
+  jdCompanyDraft.value = currentTarget.value?.companyName || ''
+  jdDraft.value = currentTarget.value?.jdText || ''
+}
+
+const invalidateTargetDependentEvidence = () => {
+  // 目标岗位的 JD 一旦更新，旧报告与技能画像就不再是当前岗位上下文的证据。
+  // 同时让尚未结束的延迟加载失效，避免它把旧报告重新写回页面。
+  loadRunId += 1
+  clearEvidenceLoadTimer()
+  secondaryLoading.value = false
+  latestMatch.value = null
+  skillOverview.value = null
+}
+
+const saveTargetAndParse = async () => {
+  if (jdSaving.value || !jdReady.value) {
+    jdFeedback.value = '请粘贴至少 20 个字符的岗位描述。'
+    return
+  }
+
+  jdSaving.value = true
+  jdFeedback.value = ''
+  const payload: TargetJobSaveDTO = {
+    jobTitle: jdTitleDraft.value.trim() || currentTarget.value?.jobTitle || '目标岗位',
+    companyName: jdCompanyDraft.value.trim() || undefined,
+    jobLevel: currentTarget.value?.jobLevel || undefined,
+    jdText: jdDraft.value.trim(),
+    jdSource: currentTarget.value?.jdSource || 'ARENA_PREPARE'
+  }
+
+  try {
+    const saved = currentTarget.value?.id
+      ? await updateJobTargetApi(currentTarget.value.id, payload)
+      : await createJobTargetApi(payload)
+    currentTarget.value = saved
+    invalidateTargetDependentEvidence()
+    targets.value = [
+      saved,
+      ...targets.value.filter((target) => target.id !== saved.id)
+    ]
+
+    try {
+      const analysis = await parseJobDescriptionApi(saved.id, { forceRefresh: true })
+      currentTarget.value = {
+        ...saved,
+        parseStatus: analysis?.parseStatus || 'PARSED',
+        analysisSummary: analysis?.summary || saved.analysisSummary,
+        requiredSkills: analysis?.requiredSkills || saved.requiredSkills,
+        interviewFocusPoints: analysis?.interviewFocusPoints || saved.interviewFocusPoints
+      }
+      jdFeedback.value = 'JD 已保存并完成解析，可以继续生成匹配报告。'
+    } catch (error) {
+      jdFeedback.value = `JD 已保存，但岗位解析暂未完成：${getErrorMessage(error, '请稍后重试。')}`
+    }
+
+    gameProfile.grantXpOnce('jd_paste', `target:${saved.id}:jd`)
+  } catch (error) {
+    jdFeedback.value = getErrorMessage(error, 'JD 保存失败，请检查网络后重试。')
+  } finally {
+    jdSaving.value = false
+  }
 }
 
 const goMatchAction = () => {
@@ -601,7 +825,10 @@ const goMatchAction = () => {
 
   router.push({
     path: '/resume-match',
-    query
+    query: {
+      ...query,
+      new: 1
+    }
   })
 }
 
@@ -612,7 +839,7 @@ const targetNodeState = computed<NodeState>(() => {
   return 'current'
 })
 const matchNodeState = computed<NodeState>(() => {
-  if (hasSuccessfulMatch.value) return 'done'
+  if (hasTrustedMatch.value) return 'done'
   if (latestMatch.value?.status === 'FAILED') return 'failed'
   if (matchRunning.value || evidenceLoading.value) return 'running'
   if (!canMatch.value) return 'locked'
@@ -622,8 +849,8 @@ const matchNodeState = computed<NodeState>(() => {
 const mainNodes = computed<MapNode[]>(() => [
   {
     key: 'resume',
-    title: '第 1 关 · 做出能匹配的简历',
-    desc: defaultResume.value ? `${defaultResumeTitle.value} · 已就位` : '8 分钟创建第一份简历，解锁 JD 精准匹配',
+    title: '第 1 步 · 完成可用简历',
+    desc: defaultResume.value ? `${defaultResumeTitle.value} · 已就位` : '创建第一份简历，为 JD 匹配和面试训练提供依据',
     cta: defaultResume.value ? '进入简历工作台' : '创建简历',
     xp: 150,
     state: resumeNodeState.value,
@@ -631,7 +858,7 @@ const mainNodes = computed<MapNode[]>(() => [
   },
   {
     key: 'target',
-    title: '第 2 关 · 锁定目标岗位',
+    title: '第 2 步 · 明确目标岗位',
     desc: currentTarget.value
       ? `${currentTarget.value.jobTitle || '目标岗位'} · ${parseStatusLabel(currentTarget.value.parseStatus)}`
       : '粘贴岗位 JD，题目和面试都贴着你的目标走',
@@ -642,20 +869,28 @@ const mainNodes = computed<MapNode[]>(() => [
   },
   {
     key: 'match',
-    title: '第 3 关 · 生成 JD 匹配报告',
-    desc: hasSuccessfulMatch.value
-      ? `匹配分 ${matchScoreText.value} · 缺口已转成训练弹药`
+    title: '第 3 步 · 生成 JD 匹配报告',
+    desc: hasTrustedMatch.value
+      ? `匹配分 ${matchScoreText.value} · 能力缺口已纳入训练建议`
+      : isCompletedMatch.value
+        ? '报告待复核，数字和缺口暂不用于训练'
       : latestMatch.value?.status === 'FAILED'
-        ? '上次生成失败，重新挑战这一关'
+        ? '上次生成失败，请重新生成报告'
         : matchNodeState.value === 'running'
           ? '报告生成中，稍等片刻'
           : '对齐岗位风险、简历证据和能力缺口',
-    cta: hasSuccessfulMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新挑战' : '发起匹配',
+    cta: hasTrustedMatch.value || isCompletedMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新生成' : '发起匹配',
     xp: 120,
     state: matchNodeState.value,
     action: goMatchAction
   }
 ])
+
+const currentMainNode = computed(() =>
+  mainNodes.value.find((node) => node.state === 'current' || node.state === 'running')
+  || mainNodes.value.find((node) => node.state !== 'done')
+  || mainNodes.value[mainNodes.value.length - 1]
+)
 
 const mainDoneCount = computed(() => mainNodes.value.filter((node) => node.state === 'done').length)
 
@@ -663,7 +898,7 @@ const sideNodes = computed(() => [
   {
     key: 'evidence',
     title: '项目证据库',
-    desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习，面试追问有弹药` : '补项目指标和技术决策',
+    desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习，面试追问可引用真实证据` : '补充项目指标和技术决策',
     xp: 40,
     done: projectCards.value.length > 0,
     path: '/project-evidence'
@@ -671,14 +906,14 @@ const sideNodes = computed(() => [
   {
     key: 'train',
     title: '回流今日训练',
-    desc: hasSuccessfulMatch.value ? '匹配已就绪，今日三关按缺口排好了' : '需要先通关第 3 关匹配',
+    desc: hasTrustedMatch.value ? '匹配已就绪，今日训练已按能力缺口安排' : '请先完成可信的第 3 步 JD 匹配',
     xp: 90,
-    done: hasSuccessfulMatch.value,
+    done: hasTrustedMatch.value,
     path: '/dashboard'
   }
 ])
 
-// ---- 关键词覆盖（技能解锁面板） ----
+// ---- 岗位关键词覆盖面板 ----
 const toKeywordCoverage = (item: ResumeJobMatchDetailItemVO): KeywordCoverageItem => {
   const score = item.score
   const rawLevel = `${item.matchLevel || item.dimension || ''}`
@@ -698,7 +933,7 @@ const toKeywordCoverage = (item: ResumeJobMatchDetailItemVO): KeywordCoverageIte
 }
 
 const keywordCoverage = computed<KeywordCoverageItem[]>(() => {
-  const details = hasSuccessfulMatch.value ? latestMatch.value?.details || [] : []
+  const details = hasTrustedMatch.value ? latestMatch.value?.details || [] : []
   if (details.length) return details.slice(0, 8).map(toKeywordCoverage)
 
   const analysis = currentTarget.value as (TargetJobVO & Partial<JobDescriptionAnalysisVO>) | null
@@ -760,12 +995,12 @@ const projectCards = computed<ProjectCard[]>(() => {
 
 // ---- 风险卡 ----
 const riskItems = computed(() => {
-  const matchGaps = hasSuccessfulMatch.value ? summarizeRiskItems(latestMatch.value?.gaps, 2) : []
-  const skillGaps = hasSuccessfulMatch.value ? (skillOverview.value?.topGaps || [])
+  const matchGaps = hasTrustedMatch.value ? summarizeRiskItems(latestMatch.value?.gaps, 2) : []
+  const skillGaps = hasTrustedMatch.value ? (skillOverview.value?.topGaps || [])
     .map((gap) => gap.skillName || gap.gapDescription || '')
     .filter(Boolean)
     .slice(0, 2) : []
-  const strengths = hasSuccessfulMatch.value ? summarizeRiskItems(latestMatch.value?.strengths, 2) : []
+  const strengths = hasTrustedMatch.value ? summarizeRiskItems(latestMatch.value?.strengths, 2) : []
   const risks = [...matchGaps, ...skillGaps]
 
   if (risks.length || strengths.length) {
@@ -818,10 +1053,10 @@ const riskItems = computed(() => {
     },
     {
       source: '训练动作',
-      title: hasSuccessfulMatch.value ? '把缺口转成训练计划' : '先生成岗位匹配报告',
-      desc: hasSuccessfulMatch.value ? '优先处理最影响面试表达的短板。' : '报告成功后才会把风险、优势和下一步训练作为依据。',
-      cta: hasSuccessfulMatch.value ? '去训练' : '去匹配',
-      path: hasSuccessfulMatch.value ? '/questions/recommendations' : '/resume-match'
+      title: hasTrustedMatch.value ? '把缺口转成训练计划' : '先完成可信岗位匹配',
+      desc: hasTrustedMatch.value ? '优先处理最影响面试表达的短板。' : '只有通过可信校验的报告才会把风险、优势和下一步训练作为依据。',
+      cta: hasTrustedMatch.value ? '去训练' : '去匹配',
+      path: hasTrustedMatch.value ? '/questions/recommendations' : getMatchReportPath()
     },
     {
       source: '项目卡片',
@@ -862,6 +1097,14 @@ const matchStatusLabel = (status?: string) => {
 // ---- 数据加载（沿用旧 Hub 的分阶段加载） ----
 const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> =>
   result.status === 'fulfilled'
+
+const settleWithin = <T>(request: Promise<T>, label: string, timeoutMs = 6000) =>
+  Promise.race([
+    request,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label}响应超时`)), timeoutMs)
+    })
+  ])
 
 let loadRunId = 0
 let evidenceLoadTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -951,9 +1194,9 @@ const loadAll = async () => {
   let warnings: string[] = []
   try {
     const [resumeResult, targetResult, currentResult] = await Promise.allSettled([
-      getResumesApi({ pageNo: 1, pageSize: 50 }),
-      getJobTargetsApi({}),
-      getCurrentJobTargetApi()
+      settleWithin(getResumesApi({ pageNo: 1, pageSize: 50 }), '简历列表'),
+      settleWithin(getJobTargetsApi({}), '岗位列表'),
+      settleWithin(getCurrentJobTargetApi(), '当前岗位')
     ])
 
     if (isFulfilled(resumeResult)) {
@@ -978,6 +1221,7 @@ const loadAll = async () => {
       targets.value.find((item) => item.currentFlag === 1) ||
       targets.value[0] ||
       null
+    syncJdDraft()
 
     partialLoadWarning.value = warnings.filter(Boolean).join('；')
   } catch (error) {
@@ -1009,7 +1253,8 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .arena-prepare {
   min-height: calc(100vh - 64px);
-  margin: -14px -24px -28px;
+  width: 100%;
+  margin: 0;
 
   &__page {
     max-width: 1060px;
@@ -1034,11 +1279,33 @@ onBeforeUnmount(() => {
   }
 
   &__readiness {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 14px;
     padding: 12px 18px;
     max-width: 340px;
+  }
+
+  &__progress {
+    display: none;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 16px;
+
+    i {
+      display: block;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--arena-line);
+
+      &.is-done {
+        background: var(--arena-grn);
+      }
+
+      &.is-current {
+        background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+      }
+    }
   }
 
   &__warn {
@@ -1054,26 +1321,159 @@ onBeforeUnmount(() => {
     font-weight: 600;
   }
 
-  &__map {
+  &__workspace {
     margin-top: 20px;
+    display: grid;
+    grid-template-columns: minmax(280px, 405px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  &__map {
+    min-width: 0;
+  }
+
+  &__jd-card {
     padding: 22px 24px;
+    border: 1.5px solid #b9e7cd;
+    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+  }
+
+  &__jd-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  &__jd-lock {
+    display: inline-flex;
+    flex: none;
+    width: 46px;
+    height: 46px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--arena-amber-soft);
+    font-size: 22px;
+  }
+
+  &__jd-grid {
+    display: block;
+    margin-top: 18px;
+  }
+
+  &__jd-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  &__jd-fields label,
+  &__jd-textarea {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    > span {
+      color: var(--arena-sub);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 13px;
+      outline: 0;
+      background: #fff;
+      color: var(--arena-ink);
+      font: inherit;
+      line-height: 1.55;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+      &:focus {
+        border-color: var(--arena-grn);
+        box-shadow: 0 0 0 3px var(--arena-grn-soft);
+      }
+
+      &:disabled {
+        cursor: wait;
+        opacity: 0.7;
+      }
+    }
+
+    input {
+      min-height: 42px;
+      padding: 0 12px;
+    }
+  }
+
+  &__jd-textarea {
+    margin-top: 12px;
+
+    textarea {
+      min-height: 168px;
+      padding: 11px 12px;
+      resize: vertical;
+    }
+  }
+
+  &__jd-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  &__jd-feedback {
+    margin: 10px 0 0;
+    color: var(--arena-sub);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  &__mobile-stage-cards {
+    display: none;
+  }
+
+  &__jd-tip {
+    display: none;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 16px;
+    border: 1.5px solid #d7ccff;
+    border-radius: 16px;
+    background: linear-gradient(150deg, var(--arena-vio-soft), #fff 76%);
+
+    strong {
+      font-size: 14px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 12px;
+      line-height: 1.65;
+    }
   }
 
   &__track {
-    margin-top: 18px;
     display: flex;
-    align-items: stretch;
-    gap: 0;
+    flex-direction: column;
+    gap: 10px;
   }
 
   &__link {
     flex: none;
-    width: 34px;
-    height: 4px;
+    width: 4px;
+    height: 18px;
     border-radius: 99px;
     background: var(--arena-line);
-    align-self: center;
-    margin: 0 6px;
+    margin: 0 0 0 32px;
 
     &.is-done {
       background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
@@ -1081,7 +1481,6 @@ onBeforeUnmount(() => {
   }
 
   &__node {
-    flex: 1;
     min-width: 0;
     display: flex;
     gap: 12px;
@@ -1107,8 +1506,8 @@ onBeforeUnmount(() => {
     }
 
     &.is-current {
-      border-color: var(--arena-amber);
-      box-shadow: 0 0 0 4px var(--arena-amber-soft);
+      border-color: var(--arena-grn);
+      box-shadow: 0 0 0 3px var(--arena-grn-soft);
     }
 
     &.is-locked {
@@ -1181,6 +1580,38 @@ onBeforeUnmount(() => {
 
   &__side {
     margin-top: 14px;
+
+    summary {
+      color: var(--arena-sub);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+  }
+
+  &__coach {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 15px 16px;
+    border-color: #d7ccff;
+    background: var(--arena-vio-soft);
+
+    p {
+      margin: 0;
+      color: var(--arena-sub);
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+  }
+
+  &__side-grid {
+    margin-top: 10px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -1222,8 +1653,51 @@ onBeforeUnmount(() => {
   &__grid {
     margin-top: 20px;
     display: grid;
-    grid-template-columns: 1.55fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
     gap: 20px;
+  }
+
+  &__more {
+    margin-top: 18px;
+
+    > summary {
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: var(--arena-radius-card);
+      background: #ffffff;
+      color: var(--arena-ink);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      list-style: none;
+    }
+
+    > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    > summary::after {
+      content: '+';
+      margin-left: auto;
+      color: var(--arena-grn-d);
+      font-size: 18px;
+    }
+
+    &[open] > summary {
+      border-bottom-right-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+
+    &[open] > summary::after {
+      content: '-';
+    }
+
+    &[open] > .arena-prepare__grid {
+      padding-top: 18px;
+    }
   }
 
   &__panel {
@@ -1313,11 +1787,26 @@ onBeforeUnmount(() => {
   }
 
   &__snapshot {
+    --resume-snapshot-scale: 0.62;
     margin-top: 12px;
+    display: grid;
+    height: 530px;
+    place-items: start center;
     border: 1.5px solid var(--arena-line2);
     border-radius: 12px;
+    background:
+      linear-gradient(135deg, rgba(23, 178, 106, 0.08), transparent 45%),
+      #f7faf7;
     overflow: hidden;
-    max-height: 260px;
+
+    :deep(.resume-document) {
+      width: 620px;
+      max-width: none;
+      margin: 14px 0 0;
+      transform: scale(var(--resume-snapshot-scale));
+      transform-origin: top center;
+      box-shadow: 0 10px 24px rgba(21, 33, 27, 0.16);
+    }
   }
 
   &__snapshot-empty {
@@ -1370,6 +1859,49 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 1160px) {
+  .arena-prepare {
+    &__page {
+      max-width: 1060px;
+    }
+
+    &__grid {
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+    }
+
+    &__snapshot {
+      --resume-snapshot-scale: 0.54;
+      height: 466px;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .arena-prepare {
+    &__page {
+      padding-inline: 18px;
+    }
+
+    &__grid {
+      grid-template-columns: 1fr;
+    }
+
+    &__snapshot {
+      --resume-snapshot-scale: 0.61;
+      height: 520px;
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .arena-prepare {
+    &__snapshot {
+      --resume-snapshot-scale: 0.47;
+      height: 408px;
+    }
+  }
+}
+
 @keyframes arenaPulse {
   0%,
   100% {
@@ -1389,10 +1921,8 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 720px) {
+  @media (max-width: 720px) {
   .arena-prepare {
-    margin: -12px -12px 0;
-
     &__page {
       padding: 18px 14px 26px;
     }
@@ -1402,16 +1932,121 @@ onBeforeUnmount(() => {
       gap: 10px;
     }
 
+    &__progress {
+      display: grid;
+      margin-top: 14px;
+    }
+
     &__link {
       width: 4px;
       height: 18px;
       margin: 0 0 0 32px;
     }
 
+    &__workspace,
     &__grid,
-    &__side,
-    &__risk-grid {
+    &__side-grid,
+    &__risk-grid,
+    &__jd-grid,
+    &__jd-fields {
       grid-template-columns: 1fr;
+    }
+
+    &__workspace {
+      display: flex;
+      flex-direction: column;
+      margin-top: 16px;
+    }
+
+    &__map {
+      display: none;
+    }
+
+    &__jd-card {
+      width: 100%;
+      padding: 18px;
+    }
+
+    &__jd-head {
+      gap: 12px;
+    }
+
+    &__jd-lock {
+      display: none;
+    }
+
+    &__mobile-stage-cards {
+      display: grid;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    &__mobile-stage-card {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+      width: 100%;
+      padding: 11px 12px;
+      border: 1.5px solid var(--arena-line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--arena-ink);
+      font-family: inherit;
+      text-align: left;
+
+      > span {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: var(--arena-amber-soft);
+        color: var(--arena-amber);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      > div {
+        display: grid;
+        min-width: 0;
+        gap: 2px;
+      }
+
+      b,
+      small,
+      em {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      b {
+        font-size: 12px;
+      }
+
+      small {
+        color: var(--arena-sub);
+        font-size: 10.5px;
+      }
+
+      em {
+        max-width: 82px;
+        color: var(--arena-grn-d);
+        font-size: 10.5px;
+        font-style: normal;
+        font-weight: 800;
+      }
+
+      &.is-done {
+        border-color: #b9e7cd;
+
+        > span {
+          background: var(--arena-grn-soft);
+          color: var(--arena-grn-d);
+        }
+      }
     }
   }
 }

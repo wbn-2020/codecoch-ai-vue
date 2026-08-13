@@ -31,24 +31,15 @@
               <el-button @click="handleReset">重置</el-button>
             </el-form-item>
           </el-form>
-          <div class="table-view-tools">
-            <el-segmented v-model="tableSize" :options="tableSizeOptions" />
-            <el-dropdown trigger="click" :hide-on-click="false">
-              <el-button plain>列配置</el-button>
-              <template #dropdown>
-                <el-dropdown-menu class="column-config-menu">
-                  <el-dropdown-item v-for="item in columnOptions" :key="item.key">
-                    <el-checkbox v-model="visibleColumns[item.key]" :disabled="item.required">
-                      {{ item.label }}
-                    </el-checkbox>
-                  </el-dropdown-item>
-                  <el-dropdown-item divided>
-                    <el-button link type="primary" @click.stop="resetTableView">恢复默认视图</el-button>
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
+          <AdminTableViewSettings
+            v-model:size="tableSize"
+            :size-options="tableSizeOptions"
+            :columns="columnOptions"
+            :visible-columns="visibleColumns"
+            aria-label="用户列表表格视图设置"
+            @update:column-visible="({ key, visible }) => visibleColumns[key as UserColumnKey] = visible"
+            @reset="resetTableView"
+          />
         </div>
       </div>
 
@@ -257,6 +248,7 @@ import {
   resetAdminUserPasswordApi,
   updateAdminUserStatusApi
 } from '@/api/user'
+import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
@@ -438,7 +430,10 @@ const handleResetPassword = async (row: AdminUserVO) => {
     resetPasswordValue.value = newPassword || ''
     resetPasswordDialogVisible.value = true
     ElMessage.success('临时密码已生成，请在一次性窗口中完成安全交接。')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '用户密码重置失败，请确认账号状态和操作权限后重试。'))
   } finally {
+    await fetchUsers()
     passwordResettingId.value = null
   }
 }
@@ -536,8 +531,10 @@ const handleAssignRoles = async () => {
     })
     ElMessage.success('用户角色已更新')
     roleAssignDialogVisible.value = false
-    await fetchUsers()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '用户角色分配失败，当前授权状态已重新加载。'))
   } finally {
+    await fetchUsers()
     roleAssignSaving.value = false
   }
 }
@@ -572,8 +569,10 @@ const handleToggleStatus = async (row: AdminUserVO) => {
       idempotencyKey: createOperationIdempotencyKey(`admin-user-status-${row.id}`)
     })
     ElMessage.success('用户状态已更新')
-    await fetchUsers()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `用户${actionLabel}失败，当前账号状态已重新加载。`))
   } finally {
+    await fetchUsers()
     statusChangingId.value = null
   }
 }

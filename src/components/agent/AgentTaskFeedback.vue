@@ -331,18 +331,18 @@ watch(
   display: grid;
   gap: 16px;
   padding: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
   background: var(--user-surface);
   box-shadow: none;
 }
 
 .agent-task-feedback.is-submitted {
-  border-color: rgba(34, 197, 94, 0.32);
+  border-color: var(--user-success-border);
 }
 
 .agent-task-feedback.is-failed {
-  border-color: rgba(248, 113, 113, 0.32);
+  border-color: var(--user-danger-border);
 }
 
 .agent-task-feedback.is-disabled {
@@ -368,7 +368,7 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #93c5fd;
+  color: var(--user-primary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -410,9 +410,9 @@ watch(
   gap: 8px;
   min-height: 42px;
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--user-border);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.36);
+  background: var(--user-control-bg-muted);
   color: var(--app-text-muted);
   cursor: pointer;
   transition:
@@ -424,8 +424,8 @@ watch(
 
 .agent-task-feedback__option:hover:not(.is-disabled),
 .agent-task-feedback__option.is-active {
-  border-color: rgba(59, 130, 246, 0.46);
-  background: var(--app-primary-soft);
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-soft);
   color: var(--app-text);
 }
 
@@ -434,7 +434,7 @@ watch(
 }
 
 .agent-task-feedback__option.is-active {
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+  box-shadow: inset 0 0 0 1px var(--user-primary-border);
 }
 
 .agent-task-feedback__option.is-disabled {
@@ -454,10 +454,10 @@ watch(
 .agent-task-feedback__impact {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid rgba(20, 184, 166, 0.2);
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
-  background: rgba(20, 184, 166, 0.08);
-  color: #99f6e4;
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -478,8 +478,8 @@ watch(
 }
 
 .agent-task-feedback :deep(.el-textarea__inner) {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(2, 6, 23, 0.34);
+  border-color: var(--user-border);
+  background: var(--user-control-bg);
 }
 
 @media (max-width: 1100px) {
