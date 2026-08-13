@@ -22,13 +22,17 @@ const overview = vi.hoisted(() => ({
     recentReport: { reportId: 1, interviewId: 1, totalScore: 62 }
   } as Record<string, unknown>
 }))
+const homeCacheApi = vi.hoisted(() => ({
+  fetchCachedTodayAgentTasks: vi.fn(async () => todayTasks.value),
+  fetchCachedDashboardOverview: vi.fn(async () => overview.value)
+}))
 const completeAgentTaskApi = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 1, status: 'DONE' }))
 const getV3DashboardOverviewApi = vi.hoisted(() => vi.fn())
 const getLatestJobReadinessApi = vi.hoisted(() => vi.fn())
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
-  fetchCachedTodayAgentTasks: vi.fn(async () => todayTasks.value),
-  fetchCachedDashboardOverview: vi.fn(async () => overview.value)
+  fetchCachedTodayAgentTasks: homeCacheApi.fetchCachedTodayAgentTasks,
+  fetchCachedDashboardOverview: homeCacheApi.fetchCachedDashboardOverview
 }))
 vi.mock('@/api/agent', () => ({ completeAgentTaskApi }))
 vi.mock('@/api/dashboard', () => ({ getV3DashboardOverviewApi }))
@@ -58,6 +62,10 @@ describe('ArenaHomeView', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     completeAgentTaskApi.mockClear()
+    homeCacheApi.fetchCachedTodayAgentTasks.mockReset()
+    homeCacheApi.fetchCachedDashboardOverview.mockReset()
+    homeCacheApi.fetchCachedTodayAgentTasks.mockImplementation(async () => todayTasks.value)
+    homeCacheApi.fetchCachedDashboardOverview.mockImplementation(async () => overview.value)
     getV3DashboardOverviewApi.mockResolvedValue({
       currentTargetJob: { targetJobId: 88 }
     })
@@ -134,6 +142,32 @@ describe('ArenaHomeView', () => {
     expect(wrapper.text()).toContain('今天还没有任务，先安排第一项')
     // mock 概览中已有简历（resumeCount=1），主行动为生成今日计划
     expect(wrapper.text()).toContain('生成今日计划')
+  })
+
+  it('does not present task-loading failure as an empty task list and recovers on retry', async () => {
+    homeCacheApi.fetchCachedTodayAgentTasks
+      .mockRejectedValueOnce(new Error('任务服务暂时不可用'))
+      .mockResolvedValueOnce(todayTasks.value)
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('今日任务尚未加载')
+    expect(wrapper.text()).not.toContain('今天还没有任务，先安排第一项')
+
+    await wrapper.findAll('button').find((button) => button.text().includes('重新加载任务'))!.trigger('click')
+    await flush()
+
+    expect(wrapper.text()).toContain('做出一份能匹配的简历')
+    expect(wrapper.text()).not.toContain('今日任务尚未加载')
+  })
+
+  it('keeps successful tasks visible when only the overview request fails', async () => {
+    homeCacheApi.fetchCachedDashboardOverview.mockRejectedValueOnce(new Error('资料服务暂时不可用'))
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.text()).toContain('做出一份能匹配的简历')
+    expect(wrapper.text()).toContain('资料概览暂时无法更新')
   })
 
   it('keeps an all-DONE Agent plan as completed instead of an ungenerated plan', async () => {

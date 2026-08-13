@@ -62,7 +62,7 @@ describe('resume editor and delivery workspace layout', () => {
       /\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?max-height:\s*none;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto/
     )
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.editor-main,\s*[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*auto;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.editor-main,\s*[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*auto;/
     )
     expect(source).toContain('ResumeDocumentPreview')
     expect(source).toContain('ResumeTemplateGallery')

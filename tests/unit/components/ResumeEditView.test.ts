@@ -168,6 +168,47 @@ describe('ResumeEditView', () => {
     })
   })
 
+  it('keeps the draft visible and allows retry after a save failure', async () => {
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue({
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      projects: []
+    })
+    resumeApiMocks.updateResumeApi
+      .mockRejectedValueOnce(new Error('保存服务暂时不可用'))
+      .mockResolvedValueOnce(undefined)
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: {
+          loading: () => undefined
+        },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('简历尚未保存')
+    expect(wrapper.text()).toContain('保存服务暂时不可用')
+    expect(wrapper.text()).toContain('Java 后端简历')
+
+    await wrapper.findAll('button').find((button) => button.text().includes('重试保存'))!.trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('简历尚未保存')
+  })
+
   it('grants resume_section XP once only after a successful AI suggestion application', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -262,7 +303,7 @@ describe('ResumeEditView', () => {
     expect(workbenchStyles).toMatch(
       /\.editor-aside > \.side-panel:not\(\.section-nav-card\)\s*\{[\s\S]*?display:\s*block;/
     )
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
   })
 
   it('switches the resume workspace to stable mobile panes at the tablet breakpoint', () => {
@@ -274,11 +315,11 @@ describe('ResumeEditView', () => {
 
     expect(workbenchStyles).toMatch(/\.preview-column\s*\{[\s\S]*?overflow:\s*hidden;/)
     expect(workbenchStyles).toMatch(/\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?overflow:\s*auto;[\s\S]*?scrollbar-gutter:\s*stable both-edges;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?display:\s*none;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit \.mobile-pane-edit\s*\{[\s\S]*?display:\s*flex;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?display:\s*none;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.is-mobile-edit \.mobile-pane-edit\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
   })
 
   it('keeps mobile preview inside its pane and keeps the save action sticky', () => {
@@ -294,10 +335,10 @@ describe('ResumeEditView', () => {
     )
     expect(workbenchStyles).not.toMatch(/\.resume-paper-stage\s*\{[\s\S]*?width:\s*max-content;/)
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;/
     )
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-stage\s*\{[\s\S]*?zoom:\s*1;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-paper-stage\s*\{[\s\S]*?zoom:\s*1;/
     )
     expect(workbenchStyles).toMatch(
       /\.form-actions\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;/

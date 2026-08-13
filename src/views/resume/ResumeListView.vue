@@ -4,9 +4,9 @@
       <div class="hero-copy">
         <p class="hero-kicker">
           <FileText :size="16" />
-          我的简历
+          简历管理
         </p>
-        <h1>我的简历</h1>
+        <h1>简历管理</h1>
         <p>集中管理简历、导入文件和查看 AI 建议，把简历准备串成一条更清晰的求职路径。</p>
         <div class="hero-actions">
           <el-button type="primary" size="large" @click="router.push('/resumes/create')">
@@ -144,8 +144,8 @@
     <section class="content-card resume-workspace">
       <div class="content-card__body workspace-toolbar">
         <div>
-          <p class="section-kicker">我的简历</p>
-          <h2>简历资料</h2>
+          <p class="section-kicker">简历准备 / 简历管理</p>
+          <h2>简历管理</h2>
           <p>维护简历、项目经历和面试上下文，优先补齐能支撑面试表达的内容。</p>
         </div>
         <el-form class="search-form" :model="query" inline>

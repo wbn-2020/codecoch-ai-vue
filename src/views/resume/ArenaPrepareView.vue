@@ -7,7 +7,7 @@
           <div class="arena-prepare__kicker">
             求职准备 · 第 {{ Math.min(mainDoneCount + 1, 3) }} 步进行中 · 已完成 {{ mainDoneCount }}/3
           </div>
-          <h1 class="arena-h1 arena-prepare__title">建立完整的求职资料</h1>
+          <h1 class="arena-h1 arena-prepare__title">完成简历准备</h1>
           <p class="arena-p" style="margin-top: 8px">完善简历、目标岗位和匹配依据，让训练与模拟面试围绕真实求职目标展开。</p>
         </div>
         <div class="arena-card arena-prepare__readiness">

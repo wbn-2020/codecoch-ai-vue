@@ -37,29 +37,44 @@
         <div v-for="i in 3" :key="i" class="arena-card arena-home__skeleton"></div>
       </div>
 
-      <!-- 错误态 -->
-      <div v-else-if="loadError" class="arena-card arena-home__error">
-        <b>今日任务未能加载</b>
-        <p class="arena-p">不影响已有进度，刷新重试一下。</p>
-        <button class="arena-btn arena-btn--pri" style="padding: 11px 22px" @click="loadAll(true)">重新加载</button>
-      </div>
-
       <div v-else class="arena-home__grid">
         <div class="arena-col">
+          <div v-if="taskError" class="arena-card arena-home__module-error">
+            <b>今日任务暂时无法更新</b>
+            <p class="arena-p">{{ taskError }}{{ tasks.length ? ' 当前展示上次成功加载的任务。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="retryTasks">重新加载任务</button>
+          </div>
+
+          <template v-if="taskError && tasks.length === 0">
+            <div class="arena-card arena-card--hero arena-home__boss">
+              <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+                <span class="arena-chip arena-chip--grn-solid">任务待恢复</span>
+                <span class="arena-tiny">不会将加载失败误认为没有任务</span>
+              </div>
+              <h2 class="arena-h2" style="margin-top: 13px">今日任务尚未加载</h2>
+              <p class="arena-p" style="margin-top: 9px">请重新加载任务；恢复前不会展示“今天没有任务”的空状态。</p>
+              <div class="arena-row" style="margin-top: 18px">
+                <button class="arena-btn arena-btn--pri" :disabled="loading" @click="retryTasks">重新加载任务</button>
+              </div>
+            </div>
+          </template>
+
           <!-- 空态：无任务 -->
-          <template v-if="missions.length === 0">
+          <template v-else-if="missions.length === 0">
             <div class="arena-card arena-card--hero arena-home__boss">
               <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
                 <span class="arena-chip arena-chip--grn-solid">{{ allAgentTasksDone ? '今日完成' : '新的一天' }}</span>
                 <span class="arena-tiny">{{ allAgentTasksDone ? `业务日 ${businessDate}` : '约 8 分钟起步' }}</span>
               </div>
               <h2 class="arena-h2" style="margin-top: 13px">
-                {{ allAgentTasksDone ? '今天的训练已全部完成' : '今天还没有任务，先安排第一项' }}
+                {{ allAgentTasksDone ? '今天的训练已全部完成' : hasOverview ? '今天还没有任务，先安排第一项' : '资料概览尚未加载' }}
               </h2>
               <p class="arena-p" style="margin-top: 9px">
                 {{ allAgentTasksDone
                   ? '今日 Agent 任务均已记录为完成，可以查看完成记录或等待下一业务日。'
-                  : hasResume
+                  : !hasOverview
+                    ? '重新加载资料后，系统才能确认简历状态并给出下一步建议。'
+                    : hasResume
                     ? '生成今日计划，AI 教练会根据目标岗位安排重点任务。'
                     : '先完成一份可用简历，再根据岗位要求进行匹配与训练。' }}
               </p>
@@ -67,9 +82,9 @@
                 <button
                   class="arena-btn arena-btn--pri"
                   style="padding: 13px 24px"
-                  @click="go(allAgentTasksDone || hasResume ? '/agent/today' : '/resumes')"
+                  @click="handleEmptyPrimaryAction"
                 >
-                  {{ allAgentTasksDone ? '查看今日完成记录' : hasResume ? '生成今日计划' : '创建简历' }}
+                  {{ allAgentTasksDone ? '查看今日完成记录' : hasOverview ? hasResume ? '生成今日计划' : '创建简历' : '重新加载资料' }}
                 </button>
               </div>
             </div>
@@ -165,6 +180,12 @@
 
         <!-- 右栏 -->
         <div class="arena-col">
+          <div v-if="overviewError" class="arena-card arena-home__module-error">
+            <b>资料概览暂时无法更新</b>
+            <p class="arena-p">{{ overviewError }}{{ hasOverview ? ' 当前展示上次成功加载的资料。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="loadAll(true)">重新加载资料</button>
+          </div>
+
           <div class="arena-card arena-home__panel">
             <div class="arena-h3">本周完成记录</div>
             <div class="arena-streak" style="margin-top: 14px">
@@ -205,6 +226,12 @@
                 </span>
               </div>
             </div>
+          </div>
+
+          <div v-if="readinessError" class="arena-card arena-home__module-error">
+            <b>准备度暂时无法更新</b>
+            <p class="arena-p">{{ readinessError }}{{ readinessSnapshot ? ' 当前展示上次成功加载的准备度。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="loadAll(true)">重新加载准备度</button>
           </div>
 
           <div class="arena-card arena-home__ai-note">
@@ -256,7 +283,9 @@ const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 
 const loading = ref(true)
-const loadError = ref('')
+const taskError = ref('')
+const overviewError = ref('')
+const readinessError = ref('')
 const completingId = ref<number | null>(null)
 const tasks = ref<AgentTaskVO[]>([])
 const overview = ref<UserDashboardOverviewVO | null>(null)
@@ -269,6 +298,7 @@ const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周�
 const greetingName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || '同学')
 
 const hasResume = computed(() => (overview.value?.resumeCount ?? 0) > 0)
+const hasOverview = computed(() => overview.value !== null)
 const interviewCount = computed(() => overview.value?.interviewCount ?? 0)
 const businessDate = computed(() => overview.value?.businessDate || formatDateInTimezone(new Date(), 'Asia/Shanghai'))
 const toUtcCalendarDate = (value: string) => {
@@ -291,6 +321,9 @@ const readinessRingScore = computed(() => readinessScore.value ?? 0)
 const readinessDisplayScore = computed(() => readinessScore.value ?? '--')
 const readinessSummary = computed(() => {
   const snapshot = readinessSnapshot.value
+  if (readinessError.value) {
+    return snapshot ? '当前展示上次成功加载的准备度' : readinessError.value
+  }
   if (readinessScore.value !== undefined) {
     const missing = Number(snapshot?.missingCount ?? 0)
     return missing > 0 ? `仍有 ${missing} 项岗位要求待补齐` : '当前快照未识别出待补齐的岗位要求'
@@ -414,7 +447,7 @@ const completeMission = async (mission: Mission) => {
     if (grant) gameProfile.completeMission()
     tasks.value = tasks.value.map((task) => (task.id === mission.id ? { ...task, status: 'DONE' } : task))
   } catch (error) {
-    loadError.value = getErrorMessage(error, '任务完成失败，请稍后重试。')
+    taskError.value = getErrorMessage(error, '任务完成失败，请稍后重试。')
   } finally {
     completingId.value = null
   }
@@ -425,9 +458,24 @@ const claimChest = () => {
   chestNotice.value = grant ? '今日完成记录已更新' : ''
 }
 
+const handleEmptyPrimaryAction = () => {
+  if (allAgentTasksDone.value) {
+    go('/agent/today')
+    return
+  }
+  if (!hasOverview.value) {
+    void loadAll(true)
+    return
+  }
+  go(hasResume.value ? '/agent/today' : '/resumes')
+}
+
+const retryTasks = () => {
+  void loadAll(true)
+}
+
 const loadAll = async (force = false) => {
   loading.value = true
-  loadError.value = ''
   try {
     const [overviewRes, v3OverviewRes] = await Promise.allSettled([
       fetchCachedDashboardOverview(force),
@@ -435,6 +483,9 @@ const loadAll = async (force = false) => {
     ])
     if (overviewRes.status === 'fulfilled') {
       overview.value = overviewRes.value
+      overviewError.value = ''
+    } else {
+      overviewError.value = getErrorMessage(overviewRes.reason, '资料概览加载失败，请稍后重试。')
     }
     if (v3OverviewRes.status === 'fulfilled') {
       v3Overview.value = v3OverviewRes.value
@@ -444,25 +495,27 @@ const loadAll = async (force = false) => {
       if (Number.isFinite(targetJobId) && targetJobId > 0) {
         try {
           readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId)
-        } catch {
-          readinessSnapshot.value = null
+          readinessError.value = ''
+        } catch (error) {
+          readinessError.value = getErrorMessage(error, '准备度加载失败，请稍后重试。')
         }
       } else {
         readinessSnapshot.value = null
+        readinessError.value = ''
       }
+    } else {
+      readinessError.value = getErrorMessage(v3OverviewRes.reason, '准备度所需资料加载失败，请稍后重试。')
     }
     const [taskRes] = await Promise.allSettled([
       fetchCachedTodayAgentTasks(businessDate.value, force)
     ])
     if (taskRes.status === 'fulfilled') {
       tasks.value = Array.isArray(taskRes.value?.tasks) ? taskRes.value.tasks : []
+      taskError.value = ''
+      gameProfile.syncMissionTotal(tasks.value.length)
     } else {
-      tasks.value = []
+      taskError.value = getErrorMessage(taskRes.reason, '今日任务加载失败，请稍后重试。')
     }
-    if (taskRes.status === 'rejected' && overviewRes.status === 'rejected') {
-      loadError.value = getErrorMessage(taskRes.reason, '加载失败')
-    }
-    gameProfile.syncMissionTotal(tasks.value.length)
   } finally {
     loading.value = false
   }
@@ -597,6 +650,19 @@ onMounted(async () => {
     gap: 10px;
     align-items: flex-start;
   }
+
+  &__module-error {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+    padding: 16px 18px;
+    border-color: color-mix(in srgb, var(--arena-amber) 44%, var(--arena-line));
+    background: color-mix(in srgb, var(--arena-amber) 8%, var(--arena-surface));
+
+    .arena-p {
+      margin: 0;
+    }
+  }
 }
 
 @keyframes arenaShimmer {
@@ -615,6 +681,26 @@ onMounted(async () => {
     }
 
     &__grid,
+    &__side-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+@media (max-width: 980px) {
+  .arena-home {
+    &__page {
+      max-width: 760px;
+    }
+
+    &__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+@media (max-width: 540px) {
+  .arena-home {
     &__side-grid {
       grid-template-columns: 1fr;
     }

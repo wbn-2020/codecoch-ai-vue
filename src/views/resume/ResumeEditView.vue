@@ -40,6 +40,14 @@
       @mode-change="setInspectorMode"
     />
 
+    <div v-if="saveError" class="resume-save-error" role="alert">
+      <div>
+        <b>简历尚未保存</b>
+        <p>{{ saveError }}</p>
+      </div>
+      <el-button type="primary" plain :loading="saving" @click="handleSave">重试保存</el-button>
+    </div>
+
     <div class="workspace-tabs" role="tablist" aria-label="移动端简历工作区">
       <button
         type="button"
@@ -821,6 +829,7 @@ const routeTargetJobId = computed(() => {
 
 const loading = ref(false)
 const detailError = ref('')
+const saveError = ref('')
 const saving = ref(false)
 const projectSaving = ref(false)
 const optimizing = ref(false)
@@ -1347,6 +1356,10 @@ const clearResolvedValidation = (fieldProp: string, value: unknown) => {
   ))
 }
 
+watch(resumeDraftSignature, () => {
+  if (saveError.value) saveError.value = ''
+})
+
 const setInspectorMode = (mode: 'edit' | 'review' | 'ai') => {
   inspectorMode.value = mode
   mobileWorkspaceTab.value = 'edit'
@@ -1536,6 +1549,7 @@ const resetRouteState = () => {
   deliveryWorkbenchVisible.value = false
   savedResumeSignature.value = ''
   detailError.value = ''
+  saveError.value = ''
   loading.value = false
   deliveryRefreshKey.value += 1
   void nextTick(() => formRef.value?.clearValidate?.())
@@ -1822,6 +1836,7 @@ const handleSave = async () => {
   )
 
   saving.value = true
+  saveError.value = ''
   try {
     try {
       await formRef.value.validate()
@@ -1847,6 +1862,7 @@ const handleSave = async () => {
       )
       if (stableVersionReady === null || !isCurrentOperation()) return
       ElMessage.success(stableVersionReady ? '简历与稳定版本已保存' : '简历已保存')
+      saveError.value = ''
       await reloadCurrentResume()
       if (!isCurrentOperation()) return
       deliveryRefreshKey.value += 1
@@ -1873,7 +1889,13 @@ const handleSave = async () => {
       )
       if (stableVersionReady === null || !isCurrentOperation()) return
       ElMessage.success(stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建')
+      saveError.value = ''
       await router.replace(`/resumes/${created.id}/edit`)
+    }
+  } catch (error) {
+    if (isCurrentOperation()) {
+      saveError.value = getErrorMessage(error, '保存失败，请检查网络后重试。')
+      ElMessage.error(saveError.value)
     }
   } finally {
     if (operationGeneration === resumeSaveOperationGeneration) {
@@ -4971,6 +4993,34 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  .resume-save-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 18px;
+    border-bottom: 1px solid color-mix(in srgb, var(--resume-workbench-warning) 45%, var(--resume-workbench-line));
+    background: var(--user-warning-soft);
+    color: var(--user-warning-text, var(--user-warning));
+
+    b {
+      display: block;
+      font-size: 12px;
+    }
+
+    p {
+      margin: 3px 0 0;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    :deep(.el-button) {
+      flex: 0 0 auto;
+      margin: 0;
+      border-radius: 6px;
+    }
+  }
+
   .editor-workspace {
     display: grid;
     flex: 1 1 auto;
@@ -5701,7 +5751,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 1020px) {
+@media (max-width: 1260px) {
   .arena-resume-studio.resume-editor {
     height: auto;
     min-height: calc(100dvh - 62px);
@@ -5741,7 +5791,7 @@ onBeforeUnmount(() => {
       width: 100%;
       min-height: 0;
       max-width: 100%;
-      overflow-x: clip;
+      overflow-x: hidden;
     }
 
     .mobile-pane-edit,
@@ -5800,6 +5850,13 @@ onBeforeUnmount(() => {
 
     .preview-toolbar {
       padding-inline: 12px;
+    }
+
+    .resume-save-error {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+      padding-inline: 14px;
     }
 
     .preview-toolbar > div:first-child > span,

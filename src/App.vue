@@ -17,13 +17,6 @@
       </div>
     </section>
   </main>
-  <main v-else-if="routeLoading" class="app-route-loading" aria-live="polite">
-    <section class="app-route-loading__panel">
-      <span class="app-route-loading__mark">C</span>
-      <strong>正在加载页面</strong>
-      <p>正在准备页面内容，请稍候...</p>
-    </section>
-  </main>
   <RouterView v-else />
 </template>
 

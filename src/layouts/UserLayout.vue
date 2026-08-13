@@ -29,6 +29,16 @@
           'is-resume-workbench-main': isResumeWorkbench
         }"
       >
+        <div v-if="requestError" class="user-request-error" role="alert">
+          <div class="user-request-error__copy">
+            <strong>{{ requestError.message }}</strong>
+            <span v-if="requestError.traceId">错误编号：{{ displayTraceId(requestError.traceId) }}</span>
+          </div>
+          <div class="user-request-error__actions">
+            <button type="button" @click="reloadCurrentPage">重试当前页</button>
+            <button type="button" class="user-request-error__close" aria-label="关闭错误提示" @click="requestError = null">关闭</button>
+          </div>
+        </div>
         <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
           当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
         </div>
@@ -79,6 +89,7 @@ import { useGameProfileStore } from '@/features/game-profile'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
+import { REQUEST_ERROR_EVENT, type RequestErrorDiagnostic } from '@/utils/errorEvents'
 
 const router = useRouter()
 const route = useRoute()
@@ -98,6 +109,7 @@ const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
 const usesArenaShell = computed(() => !isImmersivePage.value)
 const isResumeWorkbench = computed(() => route.meta?.layoutMode === 'resume-workbench')
+const requestError = ref<RequestErrorDiagnostic | null>(null)
 
 watch(usesArenaShell, (enabled) => {
   document.body.classList.toggle('arena-overlay-theme', enabled)
@@ -139,6 +151,22 @@ const handleCommand = async (command: string) => {
   }
 }
 
+const displayTraceId = (traceId?: string) => {
+  const value = String(traceId || '').trim()
+  if (!value) return ''
+  return value.length <= 18 ? value : `${value.slice(0, 8)}...${value.slice(-6)}`
+}
+
+const handleRequestError = (event: Event) => {
+  const detail = (event as CustomEvent<RequestErrorDiagnostic>).detail
+  if (detail) requestError.value = detail
+}
+
+const reloadCurrentPage = () => {
+  requestError.value = null
+  router.go(0)
+}
+
 const handleRouteRetry = (reason: 'error' | 'loading') => {
   if (reason === 'loading') {
     window.location.reload()
@@ -147,11 +175,13 @@ const handleRouteRetry = (reason: 'error' | 'loading') => {
 
 onMounted(() => {
   document.body.classList.add('is-user-layout-active')
+  window.addEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 
 onBeforeUnmount(() => {
   document.body.classList.remove('is-user-layout-active')
   document.body.classList.remove('arena-overlay-theme')
+  window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 </script>
 
@@ -282,6 +312,61 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+.user-request-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 auto 12px;
+  width: min(calc(100% - 28px), 1180px);
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--user-warning) 42%, var(--user-border));
+  border-radius: 8px;
+  background: var(--user-warning-soft);
+  color: var(--user-text);
+}
+
+.user-request-error__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  span {
+    color: var(--user-text-muted);
+    font-size: 11px;
+  }
+}
+
+.user-request-error__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+
+  button {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--user-primary);
+    border-radius: 6px;
+    background: var(--user-primary);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .user-request-error__close {
+    border-color: var(--user-border);
+    background: transparent;
+    color: var(--user-text-muted);
+  }
+}
+
 .jobcoach-layout.is-arena-page .demo-readonly-banner {
   color: #b4560a;
 }
@@ -314,6 +399,13 @@ onBeforeUnmount(() => {
       min-height: calc(100vh - 54px);
       padding: 0;
     }
+  }
+
+  .user-request-error {
+    align-items: flex-start;
+    flex-direction: column;
+    width: calc(100% - 24px);
+    margin-bottom: 8px;
   }
 }
 </style>

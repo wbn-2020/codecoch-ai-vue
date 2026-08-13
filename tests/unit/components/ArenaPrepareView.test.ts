@@ -129,7 +129,7 @@ describe('ArenaPrepareView', () => {
     const wrapper = mountPrepare()
     await flush()
 
-    expect(wrapper.text()).toContain('建立完整的求职资料')
+    expect(wrapper.text()).toContain('完成简历准备')
     expect(wrapper.text()).toContain('第 1 步 · 完成可用简历')
     expect(wrapper.text()).toContain('已完成 0/3')
     expect(wrapper.text()).toContain('目标岗位')
