@@ -652,7 +652,7 @@ const selectReadinessSnapshot = async (snapshotId: number) => {
     if (requestVersion !== readinessSnapshotRequestVersion || targetId.value !== id) return
 
     const normalized = normalizeJobReadiness(detail, id)
-    if (!normalized) throw new Error('readiness snapshot detail is empty')
+    if (!normalized) throw new Error('就绪度快照详情为空')
     readinessSnapshot.value = normalized
   } catch (error) {
     if (requestVersion === readinessSnapshotRequestVersion && targetId.value === id) {

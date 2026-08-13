@@ -46,6 +46,45 @@ describe('admin governance follow-up contracts', () => {
     expect(adminGovernanceApi).toContain('lastCallFailureSummary: pick(item')
   })
 
+  it('keeps model form and mutation failures inside the current page', () => {
+    expect(aiModelConfig).toContain("validate().catch(() => false)")
+    expect(aiModelConfig).toContain('const mutatingId = ref<number>()')
+    expect(aiModelConfig).toContain('try {')
+    expect(aiModelConfig).toContain('当前页面状态未改变')
+    expect(aiModelConfig).toContain('finally {')
+    expect(aiModelConfig).toContain('await refreshModelWorkspace()')
+  })
+
+  it('shows backend runtime routing state and makes the default-model scope explicit', () => {
+    expect(adminGovernanceApi).toContain("'/admin/ai/runtime-status'")
+    expect(aiModelConfig).toContain("runtimeStatus?.effectiveModeLabel || '运行态待确认'")
+    expect(aiModelConfig).toContain('默认作用域：{{ defaultModelScopeLabel }}')
+    expect(aiModelConfig).toContain("defaultModelScopeLabel || '全局唯一默认模型'")
+    expect(aiModelConfig).toContain('实际主路由：{{ runtimeStatus.effectivePrimaryProvider }}')
+    expect(aiModelConfig).toContain("? '全局默认'")
+  })
+
+  it('allows an administrator to customize a live probe and inspect the actual response', () => {
+    expect(aiModelConfig).toContain('title="配置模型测活"')
+    expect(aiModelConfig).toContain('v-model="probePrompt"')
+    expect(aiModelConfig).toContain('maxlength="500"')
+    expect(aiModelConfig).toContain('@click="confirmProbe"')
+    expect(aiModelConfig).toContain('requestPromptPreview')
+    expect(aiModelConfig).toContain('模型返回')
+    expect(aiModelConfig).toContain('prompt')
+    expect(adminGovernanceApi).toContain('data: AiModelProbeDTO')
+  })
+
+  it('keeps a long-running probe isolated to its own row and explains the waiting stages', () => {
+    expect(aiModelConfig).toContain(':loading="probingId === row.id"')
+    expect(aiModelConfig).toContain(':disabled="isAdminMobileReadonly || probingId === row.id"')
+    expect(aiModelConfig).toContain("if (probeElapsedSeconds.value >= 30)")
+    expect(aiModelConfig).toContain("if (probeElapsedSeconds.value >= 8)")
+    expect(aiModelConfig).toContain("if (probeElapsedSeconds.value >= 2)")
+    expect(aiModelConfig).toContain('仅当前模型行处于等待状态')
+    expect(aiModelConfig).toContain('onBeforeUnmount(stopProbeProgress)')
+  })
+
   it('collapses the layout health strip only after a verified healthy state', () => {
     expect(adminLayout).toContain('v-if="healthStripExpanded"')
     expect(adminLayout).toContain("return !['HEALTHY', 'SUPPORTED'].includes")

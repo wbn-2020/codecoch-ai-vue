@@ -254,7 +254,12 @@ const groupEmptyDescription = computed(() =>
 )
 
 const fetchOptions = async () => {
-  categories.value = await getQuestionCategoriesApi()
+  try {
+    categories.value = await getQuestionCategoriesApi()
+  } catch (error) {
+    categories.value = []
+    ElMessage.error(getErrorMessage(error, '题目分类选项加载失败，暂时无法新增或编辑问题组。'))
+  }
 }
 
 const filteredGroups = computed(() => {
@@ -309,7 +314,8 @@ const openDialog = (row?: QuestionGroupVO) => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const payload: QuestionGroupDTO = {
     name: form.name,
     categoryId: form.categoryId,
@@ -351,6 +357,8 @@ const handleSave = async () => {
     ElMessage.success('问题组已保存')
     dialogVisible.value = false
     await fetchGroups()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '问题组保存失败，请检查表单内容或权限后重试。'))
   } finally {
     saving.value = false
   }
@@ -369,14 +377,18 @@ const handleDelete = async (row: QuestionGroupVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionGroupApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed question group delete from management page.',
-    idempotencyKey: createOperationIdempotencyKey('question-group-delete')
-  })
-  ElMessage.success('问题组已删除')
-  await fetchGroups()
+  try {
+    await deleteQuestionGroupApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed question group delete from management page.',
+      idempotencyKey: createOperationIdempotencyKey('question-group-delete')
+    })
+    ElMessage.success('问题组已删除')
+    await fetchGroups()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '问题组删除失败，请确认没有题目依赖或稍后重试。'))
+  }
 }
 
 const handleReset = () => {

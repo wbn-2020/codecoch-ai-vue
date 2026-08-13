@@ -179,7 +179,7 @@ export const userNavigationGroups: UserNavigationGroup[] = [
     key: 'matching',
     label: '岗位匹配',
     mobileLabel: '匹配',
-    description: '目标岗位、JD 分析和投递材料',
+    description: '目标岗位、岗位要求分析和投递材料',
     path: '/job-targets',
     icon: Search,
     items: [

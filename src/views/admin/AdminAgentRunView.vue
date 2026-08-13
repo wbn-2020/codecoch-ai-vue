@@ -238,6 +238,15 @@
               </el-button>
               <el-button v-else @click="rawDetailVisible = false">隐藏敏感内容</el-button>
             </div>
+            <el-alert
+              v-if="rawDetailError"
+              class="raw-detail-error"
+              type="error"
+              show-icon
+              :closable="false"
+              title="敏感生成内容加载失败"
+              :description="rawDetailError"
+            />
             <p v-if="!rawDetailVisible" class="raw-detail-hint">默认详情只展示脱敏摘要，敏感内容访问会写入操作审计。</p>
             <el-collapse v-else>
               <el-collapse-item title="输入摘要">
@@ -329,6 +338,7 @@ const authStore = useAuthStore()
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const loading = ref(false)
 const runRequestSeq = ref(0)
+const detailRequestSeq = ref(0)
 const detailLoading = ref(false)
 const errorMessage = ref('')
 const detailError = ref('')
@@ -341,6 +351,7 @@ const timeRange = ref<[string, string] | ''>('')
 const detailVisible = ref(false)
 const rawDetailVisible = ref(false)
 const rawDetailLoading = ref(false)
+const rawDetailError = ref('')
 const {
   tableSize,
   tableSizeOptions,
@@ -607,19 +618,26 @@ const handleReset = () => {
 }
 
 const openRunDetail = async (id: number) => {
+  const requestSeq = ++detailRequestSeq.value
   detailVisible.value = true
   detailId.value = id
   detailLoading.value = true
   detailError.value = ''
   rawDetail.value = undefined
   rawDetailVisible.value = false
+  rawDetailError.value = ''
   try {
-    detail.value = await getAdminAgentRunDetailApi(id)
+    const result = await getAdminAgentRunDetailApi(id)
+    if (requestSeq !== detailRequestSeq.value) return
+    detail.value = result
   } catch (error) {
+    if (requestSeq !== detailRequestSeq.value) return
     detail.value = undefined
     detailError.value = getErrorMessage(error, '生成运行详情暂时加载失败，请稍后重试。')
   } finally {
-    detailLoading.value = false
+    if (requestSeq === detailRequestSeq.value) {
+      detailLoading.value = false
+    }
   }
 }
 
@@ -660,6 +678,7 @@ const loadRunRawDetail = async () => {
     return
   }
 
+  rawDetailError.value = ''
   rawDetailLoading.value = true
   try {
     rawDetail.value = await getAdminAgentRunRawApi(detail.value.id, {
@@ -673,7 +692,8 @@ const loadRunRawDetail = async () => {
   } catch (error) {
     rawDetailVisible.value = false
     rawDetail.value = undefined
-    ElMessage.error(normalizeErrorMessage(error, '没有权限或敏感生成内容加载失败，请确认权限或稍后重试。'))
+    rawDetailError.value = normalizeErrorMessage(error, '没有权限或敏感生成内容加载失败，请确认权限或稍后重试。')
+    ElMessage.error(rawDetailError.value)
   } finally {
     rawDetailLoading.value = false
   }
@@ -771,6 +791,10 @@ onMounted(() => {
   border-radius: 8px;
   padding: 14px;
   background: var(--app-surface-soft);
+}
+
+.raw-detail-error {
+  margin-top: 12px;
 }
 
 .raw-detail-panel__head {

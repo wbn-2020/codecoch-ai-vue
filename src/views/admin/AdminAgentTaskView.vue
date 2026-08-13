@@ -69,6 +69,16 @@
         </el-form>
       </div>
 
+      <el-alert
+        v-if="actionErrorMessage"
+        class="task-action-error"
+        type="error"
+        show-icon
+        :closable="false"
+        title="任务操作失败"
+        :description="actionErrorMessage"
+      />
+
       <div class="table-card admin-table-card">
         <el-table v-loading="loading" :data="errorMessage ? [] : tasks" row-key="id" :size="tableSize">
             <el-table-column v-if="isColumnVisible('id')" prop="id" label="任务编号" width="100" />
@@ -86,7 +96,7 @@
               <template #default="{ row }"><StatusTag :status="row.status" :map="statusMap" /></template>
             </el-table-column>
             <el-table-column v-if="isColumnVisible('priority')" label="优先级" width="100"><template #default="{ row }">{{ priorityLabel(row.priority) }}</template></el-table-column>
-            <el-table-column v-if="isColumnVisible('taskType')" label="类型" width="150" show-overflow-tooltip><template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template></el-table-column>
+            <el-table-column v-if="isColumnVisible('taskType')" label="类型" min-width="180" show-overflow-tooltip><template #default="{ row }"><span :title="taskTypeTitle(row.taskType)">{{ taskTypeLabel(row.taskType) }}</span></template></el-table-column>
             <el-table-column v-if="isColumnVisible('estimatedMinutes')" label="耗时" width="90">
               <template #default="{ row }">{{ row.estimatedMinutes ?? '--' }}m</template>
             </el-table-column>
@@ -97,7 +107,17 @@
             <el-table-column v-if="isColumnVisible('traceId')" prop="traceId" label="追踪号" min-width="180" show-overflow-tooltip />
             <el-table-column v-if="isColumnVisible('run')" label="运行" width="100">
               <template #default="{ row }">
-                <el-button v-if="row.agentRunId" v-permission="'admin:agent:run:list'" link type="primary" @click="openRun(row.agentRunId)">详情</el-button>
+                <el-button
+                  v-if="row.agentRunId"
+                  v-permission="'admin:agent:run:list'"
+                  link
+                  type="primary"
+                  :loading="openingRunId === row.agentRunId"
+                  :disabled="openingRunId !== undefined"
+                  @click="openRun(row.agentRunId)"
+                >
+                  详情
+                </el-button>
                 <span v-else>--</span>
               </template>
             </el-table-column>
@@ -130,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { ListChecks } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -159,6 +180,8 @@ const router = useRouter()
 const loading = ref(false)
 const taskRequestSeq = ref(0)
 const errorMessage = ref('')
+const actionErrorMessage = ref('')
+const openingRunId = ref<number>()
 const tasks = ref<AgentTaskVO[]>([])
 const total = ref(0)
 const dateRange = ref<[string, string] | ''>('')
@@ -265,7 +288,16 @@ const displayTaskDescription = (row: AgentTaskVO) => {
   return map[row.taskType || ''] || readableTaskText(row.description) || '暂无描述'
 }
 
-const taskTypeLabel = (value?: string) => taskTypeMap[value || ''] || (value ? '任务类型待确认' : '--')
+const taskTypeLabel = (value?: string) => {
+  const raw = String(value || '').trim()
+  if (!raw) return '--'
+  return taskTypeMap[raw] || `未登记任务类型：${raw}`
+}
+const taskTypeTitle = (value?: string) => {
+  const raw = String(value || '').trim()
+  if (!raw) return '未返回任务类型代码'
+  return taskTypeMap[raw] ? `任务类型代码：${raw}` : `未登记任务类型，原始代码：${raw}`
+}
 const priorityLabel = (value?: string) => priorityMap[value || ''] || (value ? '优先级待确认' : '--')
 const taskSourceTypeMap: Record<string, string> = {
   TARGET_JOB: '目标岗位',
@@ -290,11 +322,11 @@ watch(dateRange, (value) => {
   query.endDate = Array.isArray(value) ? value[1] : ''
 })
 
-const getErrorMessage = (error: unknown) => {
+const getErrorMessage = (error: unknown, fallback = '生成任务列表加载失败，请稍后重试。') => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '生成任务列表加载失败，请稍后重试。')
+    return toFriendlyMessage((error as { message?: unknown }).message, fallback)
   }
-  return '生成任务列表加载失败，请稍后重试。'
+  return fallback
 }
 
 const fetchTasks = async () => {
@@ -338,8 +370,17 @@ const handleReset = () => {
   fetchTasks()
 }
 
-const openRun = (runId: number) => {
-  router.push({ path: '/admin/agent/runs', query: { runId } })
+const openRun = async (runId: number) => {
+  actionErrorMessage.value = ''
+  openingRunId.value = runId
+  try {
+    await router.push({ path: '/admin/agent/runs', query: { runId } })
+  } catch (error) {
+    actionErrorMessage.value = getErrorMessage(error, '运行详情页面打开失败，请稍后重试。')
+    ElMessage.error(actionErrorMessage.value)
+  } finally {
+    openingRunId.value = undefined
+  }
 }
 
 onMounted(fetchTasks)
@@ -350,6 +391,10 @@ onMounted(fetchTasks)
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.task-action-error {
+  margin: 0 20px 16px;
 }
 
 .task-cell strong,

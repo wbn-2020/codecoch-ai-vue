@@ -16,7 +16,7 @@
       :description="detailError"
     >
       <div class="resume-editor-state__actions">
-        <el-button @click="router.push('/resumes')">返回简历实验室</el-button>
+        <el-button @click="router.push('/resumes')">返回简历管理</el-button>
         <el-button type="primary" @click="fetchDetail">重试</el-button>
       </div>
     </AppState>
@@ -136,7 +136,11 @@
               </div>
             <div class="form-grid">
               <el-form-item label="简历名称" prop="resumeName">
-                <el-input v-model.trim="form.resumeName" placeholder="例如：Java 后端 3 年经验简历" />
+                <el-input
+                  v-model.trim="form.resumeName"
+                  placeholder="例如：Java 后端 3 年经验简历"
+                  @update:model-value="clearResolvedValidation('resumeName', $event)"
+                />
               </el-form-item>
               <el-form-item label="真实姓名">
                 <el-input v-model.trim="form.realName" placeholder="请输入姓名" />
@@ -200,6 +204,7 @@
                 type="textarea"
                 :rows="4"
                 placeholder="Spring Boot、MySQL、Redis、MQ、Spring Cloud、Vue..."
+                @update:model-value="clearResolvedValidation('skills', $event)"
               />
             </el-form-item>
             </div>
@@ -417,7 +422,7 @@
           </div>
 
           <div class="resume-paper-wrap">
-            <div class="resume-paper-stage" :style="{ zoom: previewZoom }">
+            <div class="resume-paper-stage" :style="{ '--resume-preview-zoom': previewZoom }">
               <ResumeDocumentPreview
                 :draft="resumeDocumentDraft"
                 :template-code="selectedResumeTemplateCode"
@@ -735,7 +740,7 @@
 </template>
 
 <script setup lang="ts">
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, FormValidateFailure } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   AlertTriangle,
@@ -841,7 +846,16 @@ const optimizeRecordsRefreshing = ref(false)
 const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
 const inspectorMode = ref<'edit' | 'review' | 'ai'>('edit')
 const activeWorkbenchStep = ref<'fill' | 'review' | 'preview' | 'export'>('fill')
-const activeWorkshopModule = ref<'resume-basic' | 'resume-target' | 'resume-skills' | 'resume-projects' | 'resume-experience'>('resume-basic')
+type ResumeWorkbenchModule =
+  | 'resume-basic'
+  | 'resume-target'
+  | 'resume-skills'
+  | 'resume-projects'
+  | 'resume-experience'
+
+const activeWorkshopModule = ref<ResumeWorkbenchModule>('resume-basic')
+const invalidSectionIds = ref<ResumeWorkbenchModule[]>([])
+const invalidFieldProps = ref<string[]>([])
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const pendingResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const previewAccent = ref<ResumeAccent>('ocean')
@@ -928,6 +942,18 @@ const rules: FormRules<ResumeCreateDTO> = {
   skills: [{ required: true, message: '请输入技术栈', trigger: 'blur' }]
 }
 
+const sectionByFormField: Record<string, ResumeWorkbenchModule> = {
+  resumeName: 'resume-basic',
+  realName: 'resume-basic',
+  email: 'resume-basic',
+  phone: 'resume-basic',
+  summary: 'resume-basic',
+  targetPosition: 'resume-target',
+  skills: 'resume-skills',
+  workSummary: 'resume-experience',
+  education: 'resume-experience'
+}
+
 const completionItems = computed(() => [
   { label: '简历名称', done: Boolean(form.resumeName?.trim()) },
   { label: '求职方向', done: Boolean(form.targetPosition?.trim()) },
@@ -957,11 +983,36 @@ const hasResumeContentStarted = computed(() => Boolean(
 ))
 
 const sectionNavItems = computed(() => [
-  { id: 'resume-basic', label: '基本信息', done: Boolean(form.resumeName?.trim() && form.realName?.trim()) },
-  { id: 'resume-target', label: '求职意向', done: Boolean(form.targetPosition?.trim()) },
-  { id: 'resume-skills', label: '技能栈', done: Boolean(form.skills?.trim()) },
-  { id: 'resume-projects', label: '项目经历', done: projects.value.length > 0 },
-  { id: 'resume-experience', label: '教育经历', done: Boolean(form.workSummary?.trim() || form.education?.trim()) }
+  {
+    id: 'resume-basic',
+    label: '基本信息',
+    done: Boolean(form.resumeName?.trim() && form.realName?.trim()),
+    invalid: invalidSectionIds.value.includes('resume-basic')
+  },
+  {
+    id: 'resume-target',
+    label: '求职意向',
+    done: Boolean(form.targetPosition?.trim()),
+    invalid: invalidSectionIds.value.includes('resume-target')
+  },
+  {
+    id: 'resume-skills',
+    label: '技能栈',
+    done: Boolean(form.skills?.trim()),
+    invalid: invalidSectionIds.value.includes('resume-skills')
+  },
+  {
+    id: 'resume-projects',
+    label: '项目经历',
+    done: projects.value.length > 0,
+    invalid: invalidSectionIds.value.includes('resume-projects')
+  },
+  {
+    id: 'resume-experience',
+    label: '教育经历',
+    done: Boolean(form.workSummary?.trim() || form.education?.trim()),
+    invalid: invalidSectionIds.value.includes('resume-experience')
+  }
 ])
 
 const activeWorkshopModuleMeta = computed(() => {
@@ -1245,6 +1296,57 @@ const focusSection = (sectionId: string) => {
   })
 }
 
+const getValidationFieldProps = (failure: unknown) => {
+  const fields = (failure as Partial<FormValidateFailure> | null)?.fields
+  return fields && typeof fields === 'object' ? Object.keys(fields) : []
+}
+
+const getSectionForField = (fieldProp: string) => {
+  const directSection = sectionByFormField[fieldProp]
+  if (directSection) return directSection
+
+  const rootField = fieldProp.split(/[.[\]]/)[0]
+  return sectionByFormField[rootField]
+}
+
+const focusFirstInvalidField = (fieldProp: string) => {
+  const field = formRef.value?.getField?.(fieldProp)
+  const control = field?.$el?.querySelector<HTMLElement>(
+    'input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )
+  control?.focus()
+}
+
+const handleFormValidationFailure = async (failure: unknown) => {
+  const fieldProps = getValidationFieldProps(failure)
+  const sections = Array.from(new Set(
+    fieldProps
+      .map(getSectionForField)
+      .filter((section): section is ResumeWorkbenchModule => Boolean(section))
+  ))
+  invalidFieldProps.value = fieldProps
+  invalidSectionIds.value = sections
+
+  const firstField = fieldProps.find((fieldProp) => getSectionForField(fieldProp))
+  if (!firstField) return
+
+  const section = getSectionForField(firstField)
+  if (section) focusSection(section)
+  await nextTick()
+  formRef.value?.scrollToField?.(firstField)
+  focusFirstInvalidField(firstField)
+}
+
+const clearResolvedValidation = (fieldProp: string, value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return
+  invalidFieldProps.value = invalidFieldProps.value.filter((item) => item !== fieldProp)
+  invalidSectionIds.value = Array.from(new Set(
+    invalidFieldProps.value
+      .map(getSectionForField)
+      .filter((section): section is ResumeWorkbenchModule => Boolean(section))
+  ))
+}
+
 const setInspectorMode = (mode: 'edit' | 'review' | 'ai') => {
   inspectorMode.value = mode
   mobileWorkspaceTab.value = 'edit'
@@ -1470,7 +1572,7 @@ const fetchDetail = async (targetResumeId: number, requestGeneration: number) =>
     void fetchOptimizeRecords(targetResumeId, requestGeneration)
   } catch (error) {
     if (requestGeneration === resumeLoadGeneration) {
-      detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历实验室重试。')
+      detailError.value = getErrorMessage(error, '简历详情加载失败，请返回简历管理重试。')
       ElMessage.error(detailError.value)
     }
   } finally {
@@ -1723,7 +1825,10 @@ const handleSave = async () => {
   try {
     try {
       await formRef.value.validate()
-    } catch {
+      invalidFieldProps.value = []
+      invalidSectionIds.value = []
+    } catch (failure) {
+      await handleFormValidationFailure(failure)
       return
     }
     if (!isCurrentOperation()) return
@@ -5023,10 +5128,12 @@ onBeforeUnmount(() => {
   }
 
   .resume-paper-stage {
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     margin: 0 auto;
     transform-origin: top center;
+    zoom: var(--resume-preview-zoom);
 
     > * {
       margin-inline: auto;
@@ -5631,8 +5738,10 @@ onBeforeUnmount(() => {
 
     .editor-workspace {
       display: block;
+      width: 100%;
       min-height: 0;
-      overflow: visible;
+      max-width: 100%;
+      overflow-x: clip;
     }
 
     .mobile-pane-edit,
@@ -5653,6 +5762,8 @@ onBeforeUnmount(() => {
     .preview-column {
       position: static;
       width: 100%;
+      min-width: 0;
+      max-width: 100%;
       height: min(780px, calc(100dvh - 160px));
       max-height: min(780px, calc(100dvh - 160px));
       border-left: 0;
@@ -5663,6 +5774,14 @@ onBeforeUnmount(() => {
       flex: 1 1 auto;
       min-height: 0;
       padding-inline: 18px;
+      overflow-x: hidden;
+    }
+
+    .resume-paper-stage {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      zoom: 1;
     }
   }
 }

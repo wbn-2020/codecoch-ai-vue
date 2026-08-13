@@ -83,7 +83,7 @@
           <el-table-column v-if="isColumnVisible('createdAt')" label="创建时间" min-width="170">
             <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button v-permission="'admin:notice:write'" link type="danger" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleDelete(row)">删除</el-button></template></el-table-column>
+          <el-table-column label="操作" width="110" fixed="right"><template #default="{ row }"><el-button v-permission="'admin:notice:write'" link type="danger" :loading="deletingNoticeId === row.id" :disabled="isAdminMobileReadonly || deletingNoticeId === row.id" :title="mobileReadonlyTitle()" @click="handleDelete(row)">删除</el-button></template></el-table-column>
           <template #empty>
             <AppState
               :type="noticeError ? 'error' : 'empty'"
@@ -157,6 +157,7 @@ type NotificationColumnKey =
 const route = useRoute()
 const loading = ref(false)
 const saving = ref(false)
+const deletingNoticeId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const notices = ref<AdminNotificationVO[]>([])
@@ -319,10 +320,12 @@ const handleSend = async () => {
     }
     ElMessage.success('通知已发送')
     dialogVisible.value = false
-    await fetchNotices()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '通知发送失败，请稍后重试。'))
-  } finally { saving.value = false }
+  } finally {
+    await fetchNotices()
+    saving.value = false
+  }
 }
 const handleDelete = async (row: AdminNotificationVO) => {
   if (!guardAdminMobileWrite()) return
@@ -337,6 +340,7 @@ const handleDelete = async (row: AdminNotificationVO) => {
     confirmButtonText: '确认删除通知'
   })
   if (!confirmed) return
+  deletingNoticeId.value = row.id
   try {
     await deleteAdminNotificationApi(row.id, {
       confirm: true,
@@ -345,9 +349,11 @@ const handleDelete = async (row: AdminNotificationVO) => {
       idempotencyKey: createOperationIdempotencyKey(`admin-notice-delete-${row.id}`)
     })
     ElMessage.success('通知已删除')
-    await fetchNotices()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '通知删除失败，请确认权限或稍后重试。'))
+  } finally {
+    await fetchNotices()
+    deletingNoticeId.value = null
   }
 }
 const handleSearch = () => { query.pageNo = 1; fetchNotices() }

@@ -51,15 +51,15 @@
         </div>
         <div class="evidence-tags">
           <el-tag :type="profileEvidenceTag" effect="plain">{{ profileTrustText }}</el-tag>
-          <el-tag v-if="matchReportId" effect="plain">匹配报告已绑定</el-tag>
+          <el-tag v-if="sourceMatchReportId" effect="plain">{{ matchReportId ? '可信匹配报告已绑定' : '匹配报告待核验' }}</el-tag>
           <el-tag v-if="targetJobId" effect="plain">目标岗位已绑定</el-tag>
         </div>
       </section>
 
       <section class="metric-grid">
-        <article class="metric-card"><span>综合水平</span><strong>{{ overview?.overallLevel ?? detail?.overallLevel ?? '--' }}</strong></article>
-        <article class="metric-card"><span>画像评分</span><strong>{{ overview?.overallScore ?? detail?.overallScore ?? '--' }}</strong></article>
-        <article class="metric-card"><span>短板数量</span><strong>{{ overview?.gapCount ?? detail?.gapCount ?? gapItems.length }}</strong></article>
+        <article class="metric-card"><span>综合水平</span><strong>{{ trustedMetricValue(overview?.overallLevel ?? detail?.overallLevel) }}</strong></article>
+        <article class="metric-card"><span>画像评分</span><strong>{{ trustedMetricValue(overview?.overallScore ?? detail?.overallScore) }}</strong></article>
+        <article class="metric-card"><span>已量化短板</span><strong>{{ quantifiedGapCount }}</strong></article>
         <article class="metric-card"><span>状态</span><strong class="status">{{ profileStatusLabel(overview?.status || detail?.status) }}</strong></article>
       </section>
 
@@ -89,8 +89,14 @@
                   </span>
                   <div class="skill-node__body">
                     <strong>{{ skillDisplayName(item, index) }}</strong>
-                    <small>{{ skillNodeStatusLabel(item) }} · 当前 {{ item.currentLevel ?? 0 }} / 目标 {{ item.targetLevel ?? 0 }}</small>
-                    <el-progress :percentage="toPercent(item.currentLevel)" :stroke-width="6" :show-text="false" :status="skillNodeStatus(item) === 'assessed' ? 'success' : undefined" />
+                    <small>{{ skillNodeStatusLabel(item) }} · {{ skillLevelText(item) }}</small>
+                    <el-progress
+                      v-if="hasQuantifiedLevel(item)"
+                      :percentage="toPercent(item.currentLevel)"
+                      :stroke-width="6"
+                      :show-text="false"
+                      :status="skillNodeStatus(item) === 'assessed' ? 'success' : undefined"
+                    />
                   </div>
                 </article>
               </div>
@@ -104,10 +110,10 @@
         <aside class="content-panel action-panel">
           <h2>下一步动作</h2>
           <ActionList :value="overview?.nextActions" />
-          <el-button type="primary" :disabled="!profileId" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">
+          <el-button type="primary" :disabled="!canUseProfileForTraining" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">
             <RouteIcon :size="16" /> 生成差距学习计划
           </el-button>
-          <el-button :disabled="!profileId" @click="router.push({ path: '/questions/recommendations', query: buildContextQuery({ skillProfileId: profileId, targetJobId, matchReportId, resumeId }) })">
+          <el-button :disabled="!canUseProfileForTraining" @click="router.push({ path: '/questions/recommendations', query: buildContextQuery({ skillProfileId: profileId, targetJobId, matchReportId, resumeId }) })">
             <ListChecks :size="16" /> 查看推荐题
           </el-button>
         </aside>
@@ -126,20 +132,20 @@
                 <strong>{{ item.skillName || item.category || `能力项 ${index + 1}` }}</strong>
                 <span>{{ item.category || '未分类' }}</span>
               </div>
-              <em :class="`severity-${String(item.severity || 'NORMAL').toLowerCase()}`">
-                {{ severityLabel(item.severity) }}
+              <em :class="`severity-${gapSeverity(item).toLowerCase()}`">
+                {{ severityLabel(gapSeverity(item)) }}
               </em>
             </div>
             <p>{{ item.gapDescription || '暂无差距说明，可刷新画像后补全。' }}</p>
             <div class="gap-card__foot">
-              <span>当前 <b>{{ item.currentLevel ?? '--' }}</b></span>
-              <span>目标 <b>{{ item.targetLevel ?? '--' }}</b></span>
+              <span>当前 <b>{{ displayLevel(item.currentLevel) }}</b></span>
+              <span>目标 <b>{{ displayLevel(item.targetLevel) }}</b></span>
               <span class="gap-card__source">{{ gapEvidenceText(item) }}</span>
             </div>
           </article>
         </div>
         <AppState v-else type="empty" title="暂无短板项" description="当前画像暂未识别出能力短板。">
-          <el-button type="primary" :disabled="!profileId" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">生成学习计划</el-button>
+          <el-button type="primary" :disabled="!canUseProfileForTraining" @click="router.push({ path: '/study-plans/from-gap', query: buildContextQuery({ profileId, targetJobId, matchReportId, resumeId }) })">生成学习计划</el-button>
         </AppState>
       </section>
     </template>
@@ -172,15 +178,21 @@ const matchReportVerifyMessage = ref('')
 const verifiedRouteMatchReport = ref<ResumeJobMatchReportDetailVO | null>(null)
 
 const routeMatchReportId = computed(() => Number(route.query.matchReportId) || undefined)
-const matchReportId = computed(() =>
-  routeMatchReportId.value
-    ? verifiedRouteMatchReport.value?.reportId
-    : detail.value?.matchReportId || undefined
-)
+const sourceMatchReportId = computed(() => routeMatchReportId.value || detail.value?.matchReportId || undefined)
+const matchReportId = computed(() => verifiedRouteMatchReport.value?.reportId)
 const targetJobId = computed(() => Number(route.query.targetJobId) || overview.value?.targetJobId || detail.value?.targetJobId || undefined)
 const profileId = computed(() => Number(route.query.profileId) || overview.value?.profileId || detail.value?.profileId || undefined)
 const resumeId = computed(() => Number(route.query.resumeId) || undefined)
-const canGenerateFromReport = computed(() => Boolean(matchReportId.value && !matchReportVerifyLoading.value && !matchReportVerifyMessage.value))
+const canGenerateFromReport = computed(() => Boolean(
+  matchReportId.value
+  && !matchReportVerifyLoading.value
+  && !matchReportVerifyMessage.value
+  && verifiedRouteMatchReport.value
+))
+const canUseProfileForTraining = computed(() => Boolean(
+  profileId.value
+  && verifiedRouteMatchReport.value
+))
 const buildContextQuery = (extra: Record<string, unknown>) => Object.fromEntries(
   Object.entries(extra)
     .map(([key, value]) => [
@@ -199,9 +211,17 @@ const gapItems = computed<SkillGapItemVO[]>(() => {
   const detailGaps = Array.isArray(detail.value?.gapItems) ? detail.value.gapItems : []
   return topGaps.length ? topGaps : detailGaps
 })
+const quantifiedGapCount = computed(() => gapItems.value.filter((item) => {
+  const current = numericLevel(item.currentLevel)
+  const target = numericLevel(item.targetLevel)
+  return current !== undefined && target !== undefined && target > current
+}).length)
 const isEmpty = computed(() => overview.value?.empty || (!overview.value && !detail.value))
 const levelMax = computed(() => {
-  const values = sourceItems.value.flatMap((item) => [Number(item.currentLevel || 0), Number(item.targetLevel || 0)])
+  const values = sourceItems.value.flatMap((item) => [
+    numericLevel(item.currentLevel),
+    numericLevel(item.targetLevel)
+  ]).filter((value): value is number => value !== undefined)
   return values.some((value) => value > 5) ? 100 : 5
 })
 const skillTreeItems = computed<SkillTreeItem[]>(() => {
@@ -225,15 +245,15 @@ const skillDomains = computed(() => {
   return Array.from(groups, ([name, items]) => ({
     name,
     items,
-    assessedCount: items.filter((item) => Number(item.currentLevel) > 0).length
+    assessedCount: items.filter((item) => skillNodeStatus(item) !== 'unquantified').length
   }))
 })
 const profileSourceType = computed(() => String(detail.value?.sourceType || gapItems.value[0]?.sourceType || '').toUpperCase())
-const profileSourceBizId = computed(() => detail.value?.sourceBizId || gapItems.value[0]?.sourceBizId || matchReportId.value)
+const profileSourceBizId = computed(() => detail.value?.sourceBizId || gapItems.value[0]?.sourceBizId || sourceMatchReportId.value)
 const profileStatus = computed(() => String(overview.value?.status || detail.value?.status || '').toUpperCase())
 const profileEvidenceTitle = computed(() => {
-  if (matchReportId.value) return '来自成功简历匹配报告'
-  if (profileSourceType.value === 'RESUME_JOB_MATCH' && profileSourceBizId.value) return '来自已核验的简历匹配证据'
+  if (matchReportId.value) return '来自可信简历匹配报告'
+  if (sourceMatchReportId.value || (profileSourceType.value === 'RESUME_JOB_MATCH' && profileSourceBizId.value)) return '匹配报告来源待核验'
   if (targetJobId.value) return '来自当前目标岗位的能力差距'
   return '画像来源待确认'
 })
@@ -246,12 +266,14 @@ const profileTrustText = computed(() => {
 const profileEvidenceTag = computed(() => {
   if (profileStatus.value === 'FAILED') return 'danger'
   if (profileStatus.value === 'PROCESSING' || profileStatus.value === 'PENDING') return 'warning'
-  if (matchReportId.value || profileSourceBizId.value) return 'success'
+  if (matchReportId.value) return 'success'
+  if (sourceMatchReportId.value || profileSourceBizId.value) return 'warning'
   return 'info'
 })
 const profileEvidenceText = computed(() => {
   if (matchReportVerifyMessage.value) return matchReportVerifyMessage.value
-  if (matchReportId.value) return '能力画像会优先承接已完成的简历匹配报告；报告准备好后，短板分析会更完整。'
+  if (matchReportId.value) return '该画像已绑定通过可信校验的简历匹配报告，可用于后续学习计划和推荐题。'
+  if (sourceMatchReportId.value) return '该画像关联的匹配报告尚未通过可信校验，数值仅保留为待量化状态，不能用于训练。'
   if (targetJobId.value) return '当前画像先按目标岗位和已有画像数据展示；从匹配报告进入时会获得更完整的分析。'
   return '当前画像缺少明确来源，请刷新或重新从匹配报告生成后再用于学习计划和推荐题。'
 })
@@ -269,24 +291,65 @@ const ActionList = defineComponent({
   }
 })
 
+const numericLevel = (value?: number | null) => {
+  if (value === null || value === undefined) return undefined
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : undefined
+}
+
+const trustedMetricValue = (value?: number | null) => {
+  if (!canUseProfileForTraining.value) return '--'
+  return numericLevel(value) ?? '--'
+}
+
+const hasQuantifiedLevel = (item: SkillTreeItem) =>
+  canUseProfileForTraining.value
+  && numericLevel(item.currentLevel) !== undefined
+  && numericLevel(item.targetLevel) !== undefined
+
+const displayLevel = (value?: number | null) => {
+  if (!canUseProfileForTraining.value) return '--'
+  const numeric = numericLevel(value)
+  return numeric === undefined ? '--' : numeric
+}
+
+const skillLevelText = (item: SkillTreeItem) => hasQuantifiedLevel(item)
+  ? `当前 ${displayLevel(item.currentLevel)} / 目标 ${displayLevel(item.targetLevel)}`
+  : '评分待量化'
+
 const toPercent = (level?: number) => {
-  const value = Math.max(0, Number(level || 0))
+  const value = Math.max(0, numericLevel(level) ?? 0)
   return Math.min(100, levelMax.value === 100 ? value : value * 20)
 }
 
 const skillNodeStatus = (item: SkillTreeItem) => {
-  const current = Number(item.currentLevel || 0)
-  const target = Number(item.targetLevel || 0)
-  if (current <= 0 && target > 0) return 'locked'
+  if (!canUseProfileForTraining.value) return 'unquantified'
+  const current = numericLevel(item.currentLevel)
+  const target = numericLevel(item.targetLevel)
+  if (current === undefined || target === undefined) return 'unquantified'
+  if (current === 0 && target > 0) return 'locked'
   if (target > current) return 'improvable'
   return 'assessed'
 }
 
 const skillNodeStatusLabel = (item: SkillTreeItem) => {
   const status = skillNodeStatus(item)
+  if (status === 'unquantified') return '待量化'
   if (status === 'locked') return '待评估'
   if (status === 'improvable') return '可提升'
   return '已评估'
+}
+
+const gapSeverity = (item: SkillGapItemVO) => {
+  if (!canUseProfileForTraining.value) return 'UNQUANTIFIED'
+  const current = numericLevel(item.currentLevel)
+  const target = numericLevel(item.targetLevel)
+  const gap = numericLevel(item.gapLevel)
+  if ((current !== undefined && target !== undefined && target <= current)
+    || (gap !== undefined && gap <= 0)) {
+    return 'NORMAL'
+  }
+  return String(item.severity || 'UNQUANTIFIED').toUpperCase()
 }
 
 const severityLabel = (severity?: string | null) => {
@@ -295,7 +358,8 @@ const severityLabel = (severity?: string | null) => {
     HIGH: '高',
     MEDIUM: '中',
     LOW: '低',
-    NORMAL: '正常'
+    NORMAL: '无量化差距',
+    UNQUANTIFIED: '待量化'
   }
   return map[String(severity || '').toUpperCase()] || '待确认'
 }
@@ -342,8 +406,7 @@ const profileStatusLabel = (status?: string | null) => {
   return map[String(status || '').toUpperCase()] || '待生成'
 }
 
-const verifyRouteMatchReport = async () => {
-  const id = routeMatchReportId.value
+const verifyMatchReport = async (id?: number) => {
   verifiedRouteMatchReport.value = null
   matchReportVerifyMessage.value = ''
   if (!id) return
@@ -354,6 +417,14 @@ const verifyRouteMatchReport = async () => {
       matchReportVerifyMessage.value = report.status === 'FAILED'
         ? '当前匹配报告生成失败。请重新生成匹配报告，或从已有报告进入画像。'
         : '当前匹配报告尚未生成完成。可以稍后刷新，或到任务中心查看生成进度。'
+      return
+    }
+    if (
+      report.trustStatus !== 'VERIFIED'
+      || report.fallback === true
+      || report.schemaWarningCount !== 0
+    ) {
+      matchReportVerifyMessage.value = '当前匹配报告来源或数据完整度不足，不能用于生成能力画像。请先重新生成可信报告。'
       return
     }
     verifiedRouteMatchReport.value = report
@@ -369,7 +440,7 @@ const loadAll = async () => {
   loadError.value = ''
   partialLoadWarning.value = ''
   try {
-    await verifyRouteMatchReport()
+    await verifyMatchReport(routeMatchReportId.value)
     const routeProfileId = Number(route.query.profileId) || undefined
     if (routeProfileId) {
       detail.value = await getSkillProfileByIdApi(routeProfileId)
@@ -384,6 +455,9 @@ const loadAll = async () => {
       } else {
         overview.value = null
       }
+      if (!routeMatchReportId.value && detail.value?.matchReportId) {
+        await verifyMatchReport(detail.value.matchReportId)
+      }
       return
     }
 
@@ -396,6 +470,9 @@ const loadAll = async () => {
         detail.value = null
         partialLoadWarning.value = `画像概览已加载，但短板详情暂时不可用：${getErrorMessage(error, '请稍后刷新。')}`
       }
+    }
+    if (!routeMatchReportId.value && detail.value?.matchReportId) {
+      await verifyMatchReport(detail.value.matchReportId)
     }
   } catch (error) {
     overview.value = null
@@ -440,7 +517,7 @@ const generateFromReport = async () => {
 }
 
 onMounted(loadAll)
-watch(() => route.query.matchReportId, verifyRouteMatchReport)
+watch(() => route.query.matchReportId, () => verifyMatchReport(routeMatchReportId.value))
 </script>
 
 <style scoped lang="scss">

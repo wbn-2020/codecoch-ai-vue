@@ -79,6 +79,9 @@ const SUCCESS_MATCH = {
   resumeId: 7,
   targetJobId: 3,
   status: 'SUCCESS',
+  trustStatus: 'VERIFIED',
+  fallback: false,
+  schemaWarningCount: 0,
   overallScore: 72,
   summary: '整体匹配良好',
   strengths: ['基础扎实'],
@@ -187,6 +190,28 @@ describe('ArenaPrepareView', () => {
 
     expect(wrapper.text()).toContain('生成中')
     expect(wrapper.text()).toContain('报告生成中，稍等片刻')
+  })
+
+  it('keeps a successful but untrusted report out of completion and training semantics', async () => {
+    resumesResult.value = { records: [FULL_RESUME] }
+    currentTargetResult.value = FULL_TARGET
+    resumeDetailResult.value = { id: 7, projects: [{ projectId: 1, projectName: '交易系统' }] }
+    matchResult.value = {
+      ...SUCCESS_MATCH,
+      trustStatus: 'TRUSTED',
+      schemaWarningCount: 0,
+      overallScore: 99
+    }
+    skillOverviewResult.value = { topGaps: [{ skillName: '高并发' }] }
+
+    const wrapper = mountPrepare()
+    await flush()
+
+    expect(wrapper.text()).toContain('待复核')
+    expect(wrapper.text()).not.toContain('匹配分 99')
+    expect(wrapper.text()).toContain('先复核匹配报告')
+    expect(wrapper.text()).toContain('已完成 2/3')
+    expect(wrapper.text()).not.toContain('进入模拟面试')
   })
 
   it('unlocks the match node only when both resume and target exist', async () => {

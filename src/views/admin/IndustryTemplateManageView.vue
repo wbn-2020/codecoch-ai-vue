@@ -403,7 +403,8 @@ const toPayload = (): CreateIndustryTemplateDTO => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const payload = toPayload()
   const actionLabel = editingId.value ? '更新行业模板' : '新增行业模板'
   const confirmed = await confirmDangerActionPreview({

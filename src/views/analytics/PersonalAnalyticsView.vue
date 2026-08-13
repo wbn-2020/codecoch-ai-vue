@@ -7,7 +7,7 @@
           <span>训练分析</span>
         </div>
         <h1>个人训练分析</h1>
-        <p>汇总每日任务、完成率、训练耗时和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
+        <p>汇总每日任务、完成率、已完成任务预计分钟和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
       </div>
       <div class="analytics-actions">
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
@@ -54,7 +54,7 @@
             <div>
               <p class="section-kicker">趋势</p>
               <h2>任务完成趋势</h2>
-              <span>按日期展示生成、完成、跳过和训练耗时</span>
+              <span>按日期展示生成、完成、跳过和已完成任务预计分钟，不代表实际训练耗时</span>
             </div>
           </div>
           <AppState
@@ -82,13 +82,49 @@
         </div>
       </section>
 
+      <section class="content-card analytics-insight-card">
+        <div class="content-card__body">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">变化说明</p>
+              <h2>本周期训练解读</h2>
+              <span>只根据已返回的任务记录说明完成情况，不推断未采集的原因。</span>
+            </div>
+          </div>
+          <AppState
+            v-if="!trend.length"
+            type="empty"
+            title="暂无可解释的趋势变化"
+            description="有任务记录后，这里会说明完成量、跳过量和已完成任务预计分钟的变化。"
+          >
+            <div class="empty-actions">
+              <el-button type="primary" @click="goTodayPlan">安排今日任务</el-button>
+            </div>
+          </AppState>
+          <div v-else class="analytics-insight-grid">
+            <article v-for="item in trendInsights" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+              <p>{{ item.description }}</p>
+            </article>
+          </div>
+          <div v-if="trend.length" class="analytics-insight-action">
+            <div>
+              <strong>{{ trendNextAction.title }}</strong>
+              <p>{{ trendNextAction.description }}</p>
+            </div>
+            <el-button type="primary" @click="router.push(trendNextAction.path)">{{ trendNextAction.label }}</el-button>
+          </div>
+        </div>
+      </section>
+
       <section class="content-card">
         <div class="content-card__body">
           <div class="section-head">
             <div>
               <p class="section-kicker">技能</p>
               <h2>重点训练技能</h2>
-              <span>来自训练任务关联技能 Top 分布</span>
+              <span>仅统计已完成且带有明确技能标签的任务 Top 分布</span>
             </div>
           </div>
           <div class="skill-bars">
@@ -254,6 +290,70 @@ const skillEmptyState = computed(() => hasRecentTaskSample.value
       description: '完成带技能标签的练习、错题复盘或模拟面试后，这里会汇总重点技能。'
     })
 
+const trendTotals = computed(() => trend.value.reduce((total, item) => ({
+  generated: total.generated + Math.max(0, item.generatedCount || 0),
+  completed: total.completed + Math.max(0, item.completedCount || 0),
+  skipped: total.skipped + Math.max(0, item.skippedCount || 0),
+  completedMinutes: total.completedMinutes + Math.max(0, item.completedMinutes || 0)
+}), { generated: 0, completed: 0, skipped: 0, completedMinutes: 0 }))
+
+const trendInsights = computed(() => {
+  const totals = trendTotals.value
+  const completionBase = totals.completed + totals.skipped
+  const completionRate = completionBase > 0
+    ? `${Math.round((totals.completed / completionBase) * 100)}%`
+    : '暂无结算任务'
+  return [
+    {
+      label: '已完成任务',
+      value: `${totals.completed} 项`,
+      description: totals.completed
+        ? `这些任务的预计用时合计为 ${formatMinutes(totals.completedMinutes)}，不代表实际训练耗时。`
+        : '本周期尚未记录完成任务。'
+    },
+    {
+      label: '已跳过任务',
+      value: `${totals.skipped} 项`,
+      description: totals.skipped
+        ? '跳过会保留在趋势中，便于回到任务页重新安排。'
+        : '本周期没有已记录的跳过任务。'
+    },
+    {
+      label: '已结算完成率',
+      value: completionRate,
+      description: completionBase
+        ? `按 ${totals.completed} 项完成和 ${totals.skipped} 项跳过计算。`
+        : '只有完成或跳过后才计算此比例。'
+    }
+  ]
+})
+
+const trendNextAction = computed(() => {
+  const totals = trendTotals.value
+  if (totals.skipped > 0) {
+    return {
+      title: '优先处理已跳过的训练',
+      description: '本周期存在已跳过任务，先回到今日任务重新安排，避免重复生成新的待办。',
+      label: '查看今日任务',
+      path: '/agent/today'
+    }
+  }
+  if (totals.completed === 0) {
+    return {
+      title: '完成第一项可执行任务',
+      description: '趋势已开始记录，但还没有完成事实；先完成当前任务再观察变化。',
+      label: '进入今日任务',
+      path: '/agent/today'
+    }
+  }
+  return {
+    title: '继续巩固重点技能',
+    description: '完成记录已建立，可结合下方技能分布选择下一组带标签训练。',
+    label: '查看推荐题',
+    path: '/questions/recommendations'
+  }
+})
+
 const barWidth = (value?: number) => `${Math.max(6, ((value || 0) / maxSkillValue.value) * 100)}%`
 
 const goTodayPlan = () => router.push('/agent/today')
@@ -322,7 +422,7 @@ const renderTrendChart = async () => {
       { name: '生成', type: 'line', smooth: true, data: trend.value.map((item) => item.generatedCount || 0) },
       { name: '完成', type: 'line', smooth: true, data: trend.value.map((item) => item.completedCount || 0) },
       { name: '跳过', type: 'line', smooth: true, data: trend.value.map((item) => item.skippedCount || 0) },
-      { name: '完成耗时', type: 'bar', data: trend.value.map((item) => item.completedMinutes || 0) }
+      { name: '已完成任务预计分钟', type: 'bar', data: trend.value.map((item) => item.completedMinutes || 0) }
     ]
   })
 }
@@ -525,6 +625,57 @@ onBeforeUnmount(() => {
   margin-top: 14px;
 }
 
+.analytics-insight-card {
+  border-color: color-mix(in srgb, var(--user-primary) 18%, var(--user-border));
+}
+
+.analytics-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.analytics-insight-grid article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface-muted);
+}
+
+.analytics-insight-grid span {
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.analytics-insight-grid strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+.analytics-insight-grid p,
+.analytics-insight-action p {
+  margin: 8px 0 0;
+  color: var(--app-text-muted);
+  line-height: 1.6;
+}
+
+.analytics-insight-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--user-border);
+}
+
+.analytics-insight-action strong {
+  display: block;
+}
+
 .skill-bars {
   display: grid;
   gap: 12px;
@@ -569,12 +720,21 @@ onBeforeUnmount(() => {
   .analytics-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .analytics-insight-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
   .analytics-metric-grid,
   .skill-bar-row {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-insight-action {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

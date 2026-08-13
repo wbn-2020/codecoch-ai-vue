@@ -10,7 +10,10 @@ import type {
   AdminTaskActionPayload,
   AdminTaskImpactPreviewVO,
   AiModelConfigDTO,
+  AiModelProbeVO,
+  AiModelProbeDTO,
   AiModelConfigVO,
+  AiRuntimeStatusVO,
   AsyncTaskVO,
   LoginLogVO,
   MenuVO,
@@ -339,6 +342,9 @@ export const getAdminAiModelsApi = (params: AdminListQuery) =>
     })
     .then((result) => normalizePageResult(result, params, normalizeAiModel, { allowArrayFallback: true }))
 
+export const getAdminAiRuntimeStatusApi = () =>
+  request.get<AiRuntimeStatusVO, AiRuntimeStatusVO>('/admin/ai/runtime-status')
+
 export const createAdminAiModelApi = (data: AiModelConfigDTO & AdminOperationConfirmPayload) =>
   request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)
 
@@ -347,6 +353,9 @@ export const updateAdminAiModelApi = (id: number, data: AiModelConfigDTO & Admin
 
 export const updateAdminAiModelStatusApi = (id: number, status: number, data: AdminOperationConfirmPayload) =>
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/status`, { status, ...data })
+
+export const probeAdminAiModelApi = (id: number, data: AiModelProbeDTO) =>
+  request.post<AiModelProbeVO, AiModelProbeVO>(`/admin/ai/models/${id}/probe`, data)
 
 export const setDefaultAdminAiModelApi = (id: number, data: AdminOperationConfirmPayload) =>
   request.put<AiModelConfigVO, AiModelConfigVO>(`/admin/ai/models/${id}/default`, data)

@@ -32,8 +32,14 @@
         <div v-if="appConfig.demoReadOnly" class="demo-readonly-banner">
           当前为体验模式，页面可浏览，暂不保存新增、修改或删除等更改。
         </div>
-        <RouteErrorBoundary fallback-path="/dashboard">
-          <RouterView />
+        <RouteErrorBoundary
+          :loading="routeLoading"
+          fallback-path="/dashboard"
+          @retry="handleRouteRetry"
+        >
+          <RouterView v-slot="{ Component }">
+            <component :is="Component" v-if="Component" />
+          </RouterView>
         </RouteErrorBoundary>
       </main>
     </div>
@@ -46,8 +52,14 @@
         'is-immersive': isImmersivePage
       }"
     >
-      <RouteErrorBoundary fallback-path="/dashboard">
-        <RouterView />
+      <RouteErrorBoundary
+        :loading="routeLoading"
+        fallback-path="/dashboard"
+        @retry="handleRouteRetry"
+      >
+        <RouterView v-slot="{ Component }">
+          <component :is="Component" v-if="Component" />
+        </RouterView>
       </RouteErrorBoundary>
     </main>
 
@@ -56,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, type Ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
@@ -73,6 +85,10 @@ const route = useRoute()
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 const tagsStore = useTagsViewStore()
+const routeLoading = inject<Readonly<Ref<boolean>>>(
+  'codecoachai:route-loading',
+  ref(false)
+)
 
 const displayName = computed(
   () => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户'
@@ -120,6 +136,12 @@ const handleCommand = async (command: string) => {
     gameProfile.resetSession()
     await authStore.logout()
     await router.push('/login')
+  }
+}
+
+const handleRouteRetry = (reason: 'error' | 'loading') => {
+  if (reason === 'loading') {
+    window.location.reload()
   }
 }
 

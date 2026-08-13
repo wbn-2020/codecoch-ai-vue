@@ -20,9 +20,9 @@
       <AppState
         type="empty"
         title="没有可验证的 JD 匹配报告"
-        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到实验台选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
+        description="当前路由没有读到可展示的报告，页面不会补造匹配度、优势或差距。请回到岗位匹配选择简历和 JD 后重新生成，或到任务中心查看是否仍在处理。"
       >
-        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">回实验台生成报告</el-button>
+        <el-button type="primary" @click="router.push({ path: '/resume-match', query: returnMatchQuery })">返回岗位匹配生成报告</el-button>
         <el-button @click="goMatchTaskCenter">查看任务中心</el-button>
         <el-button plain @click="router.push('/questions/recommendations')">先练今日题组</el-button>
       </AppState>
@@ -86,7 +86,7 @@
       <section v-if="isSuccessReport && report" class="arena-match-settlement">
         <header class="arena-match-settlement__head">
           <div>
-            <span class="arena-match-settlement__kicker">第 3 关 · JD 匹配结算</span>
+            <span class="arena-match-settlement__kicker">岗位匹配 · 结果概览</span>
             <h2>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h2>
           </div>
           <div class="arena-match-settlement__head-actions">
@@ -175,7 +175,7 @@
               @click="router.push(`/resumes/${report.resumeId}/edit`)"
             >
               <span>补简历</span>
-              <strong>回到简历工坊补齐项目证据</strong>
+              <strong>回到简历工作台补齐项目证据</strong>
             </button>
             <button
               class="arena-match-settlement__secondary-action"
@@ -244,11 +244,11 @@
         </article>
       </section>
 
-      <section v-if="isSuccessReport && hasAnyDimensionScore" class="score-grid arena-match-detail__secondary-content">
+      <section v-if="isTrustedSuccessReport && hasAnyDimensionScore" class="score-grid arena-match-detail__secondary-content">
         <article v-for="item in scoreCards" :key="item.label" class="score-card">
           <span>{{ item.label }}</span>
           <strong>{{ item.value ?? '--' }}</strong>
-          <el-progress :percentage="Number(item.value || 0)" :stroke-width="8" :show-text="false" />
+          <el-progress :percentage="scorePercent(item.value)" :stroke-width="8" :show-text="false" />
         </article>
       </section>
 
@@ -490,13 +490,19 @@ function firstReadableSnippet(value: unknown, fallback = ''): string {
 }
 
 const hasUsableScore = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return false
   const score = Number(value)
-  return Number.isFinite(score) && score > 0
+  return Number.isFinite(score)
 }
 
-const dimensionScoreText = (value?: number) => hasUsableScore(value) ? `${value} 分` : '待确认'
+const scorePercent = (value: unknown) => {
+  if (!hasUsableScore(value)) return 0
+  return Math.min(100, Math.max(0, Number(value)))
+}
+const dimensionScoreText = (value?: number) =>
+  isTrustedSuccessReport.value && hasUsableScore(value) ? `${value} 分` : '待复核'
 const dimensionTone = (value?: number) => {
-  if (!hasUsableScore(value)) return 'info'
+  if (!isTrustedSuccessReport.value || !hasUsableScore(value)) return 'info'
   if (Number(value) >= 80) return 'success'
   if (Number(value) >= 60) return 'warning'
   return 'danger'
@@ -514,9 +520,9 @@ const isUnscorableReport = computed(() => {
 })
 const isTrustedSuccessReport = computed(() =>
   isSuccessReport.value
-  && !report.value?.fallback
-  && String(report.value?.trustStatus || '').toUpperCase() === 'VERIFIED'
-  && !schemaWarningItems.value.length
+  && report.value?.trustStatus === 'VERIFIED'
+  && report.value?.fallback !== true
+  && report.value?.schemaWarningCount === 0
 )
 const canAccessResumeVersionPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
 const canAccessApplicationPreview = computed(() => appConfig.enableV4ExperimentalRoutes)
@@ -563,17 +569,25 @@ const trustPanelDescription = computed(() =>
 )
 const showReportOverview = computed(() => Boolean(report.value && isUnscorableReport.value))
 const overallScoreText = computed(() => {
+  if (!isTrustedSuccessReport.value) return '待复核'
   const score = report.value?.overallScore
   return hasUsableScore(score) ? `${score}` : '未形成评分'
 })
-const overallScorePercent = computed(() => {
-  const score = Number(report.value?.overallScore)
-  return Number.isFinite(score) && score > 0 ? Math.min(100, Math.max(0, score)) : 0
-})
+const overallScorePercent = computed(() =>
+  isTrustedSuccessReport.value ? scorePercent(report.value?.overallScore) : 0
+)
 const detailKeywordLabel = (item: ResumeJobMatchDetailItemVO) =>
   item.skillName || item.dimension || '待确认维度'
 const coverageDetails = computed(() => {
   const details = report.value?.details || []
+  if (!isTrustedSuccessReport.value) {
+    return {
+      covered: [],
+      gaps: details
+        .filter((item) => Boolean(item.gapDescription?.trim()))
+        .slice(0, 6)
+    }
+  }
   return {
     covered: details
       .filter((item) => hasUsableScore(item.score) && Number(item.score) >= 75)
@@ -584,11 +598,13 @@ const coverageDetails = computed(() => {
   }
 })
 const gapDetailCount = computed(() => (report.value?.details || []).filter(
-  (item) => Boolean(item.gapDescription?.trim()) || (hasUsableScore(item.score) && Number(item.score) < 75)
+  (item) => Boolean(item.gapDescription?.trim())
+    || (isTrustedSuccessReport.value && hasUsableScore(item.score) && Number(item.score) < 75)
 ).length)
 const scoreEvidenceText = computed(() => {
   if (isUnscorableReport.value) return '本次报告未形成可信评分，页面不会补造分数。'
   if (!isSuccessReport.value) return '报告生成完成后才会显示评分。'
+  if (!isTrustedSuccessReport.value) return '当前报告未通过可信校验，数字评分不作为结论。'
   if (!hasUsableScore(report.value?.overallScore)) return '后端未返回可信综合分，页面不会补造分数。'
   return `综合匹配度来自报告返回的 overallScore；${trustStatusLabel(report.value?.trustStatus, report.value?.fallback)}`
 })
@@ -771,7 +787,7 @@ const reportInsightCards = computed(() => [
 ] as Array<{ key: string; label: string; title: string; desc: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }>)
 const reportTrustTags = computed(() => {
   if (!report.value) return []
-  const hasScore = Number.isFinite(Number(report.value.overallScore)) && Number(report.value.overallScore) > 0
+  const hasScore = isTrustedSuccessReport.value && hasUsableScore(report.value.overallScore)
   return [
     {
       label: report.value.evidenceSummary
@@ -1491,7 +1507,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
   }
 }
 
-// 方向 D · JD 匹配结算详情。保留报告证据、重跑和训练动作，只统一视觉层级。
+// 方向 D · JD 匹配详情。保留报告证据、重跑和训练动作，只统一视觉层级。
 .arena-match-detail {
   width: min(1060px, 100%);
   margin: 0 auto;

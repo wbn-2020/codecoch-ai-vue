@@ -43,6 +43,8 @@ const invalidateRequestCachePrefix = (prefix: string) => {
 const scopedDateKey = (prefix: string, date: string, targetJobId?: number) =>
   `${prefix}${date}:target:${targetJobId || 'current'}`
 
+const todaySnapshotKey = (date: string) => `${TODAY_TASKS_PREFIX}${date}`
+
 export const fetchCachedDashboardOverview = (force = false): Promise<UserDashboardOverviewVO> =>
   withCache(OVERVIEW_KEY, TTL.overview, getUserDashboardOverviewApi, force)
 
@@ -64,12 +66,12 @@ export const fetchCachedLatestDailyPlan = (
 export const fetchCachedTodayAgentTasks = (
   date: string,
   force = false,
-  targetJobId?: number
+  _targetJobId?: number
 ): Promise<AgentTodayTaskVO> =>
   withCache(
-    scopedDateKey(TODAY_TASKS_PREFIX, date, targetJobId),
+    todaySnapshotKey(date),
     TTL.todayTasks,
-    () => getTodayAgentTasksApi({ date, targetJobId }),
+    () => getTodayAgentTasksApi({ date }),
     force
   )
 
@@ -100,11 +102,7 @@ export const invalidateUserHomeDailyPlanCache = (date?: string, targetJobId?: nu
 
 export const invalidateUserHomeTodayTasksCache = (date?: string, targetJobId?: number) => {
   if (date) {
-    if (targetJobId) {
-      invalidateRequestCache(scopedDateKey(TODAY_TASKS_PREFIX, date, targetJobId))
-      return
-    }
-    invalidateRequestCachePrefix(`${TODAY_TASKS_PREFIX}${date}:`)
+    invalidateRequestCache(todaySnapshotKey(date))
     return
   }
   invalidateRequestCachePrefix(TODAY_TASKS_PREFIX)

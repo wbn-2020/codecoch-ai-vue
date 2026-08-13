@@ -629,9 +629,11 @@ export const buildApplicationFunnelStages = (
 export const getApplicationEventMeta = (eventType?: string | null): ApplicationEventMeta => {
   const normalizedType = normalizeEventType(eventType)
   return applicationEventMeta[normalizedType] || {
-    label: normalizedType,
+    label: normalizedType ? '自定义事项' : '记录事项',
     tone: 'info',
-    description: '自定义投递事件。'
+    description: normalizedType
+      ? '该事项来自自定义记录，原始类型仅用于内部追踪。'
+      : '补充投递背景或沟通细节。'
   }
 }
 
@@ -682,17 +684,6 @@ export const getApplicationFollowUpState = (
     }
   }
 
-  if (next.getTime() < reference.getTime()) {
-    return {
-      key: 'overdue',
-      label: '已过期跟进',
-      tone: 'danger',
-      description: `建议尽快跟进，原定时间为 ${formatLocalDateTime(next)}`,
-      dueAt: formatLocalDateTime(next),
-      overdueByDays: Math.max(1, Math.floor((reference.getTime() - next.getTime()) / 86400000))
-    }
-  }
-
   if (isSameLocalDay(next, reference)) {
     return {
       key: 'due-today',
@@ -704,7 +695,18 @@ export const getApplicationFollowUpState = (
     }
   }
 
-  const dueInDays = Math.max(0, Math.ceil((next.getTime() - reference.getTime()) / 86400000))
+  if (next.getTime() < reference.getTime()) {
+    return {
+      key: 'overdue',
+      label: '已过期跟进',
+      tone: 'danger',
+      description: `建议尽快跟进，原定时间为 ${formatLocalDateTime(next)}`,
+      dueAt: formatLocalDateTime(next),
+      overdueByDays: Math.max(1, localCalendarDayDistance(next, reference))
+    }
+  }
+
+  const dueInDays = Math.max(0, localCalendarDayDistance(reference, next))
   return {
     key: 'upcoming',
     label: '待跟进',
@@ -779,6 +781,12 @@ const asApplicationReviewFact = (
     owner: asApplicationReviewOwner(fact.owner, fallbackOwner),
     sourceType: asApplicationReviewString(fact.sourceType) || undefined
   }
+}
+
+const localCalendarDayDistance = (from: Date, to: Date) => {
+  const fromDay = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
+  const toDay = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate())
+  return Math.round((toDay - fromDay) / 86400000)
 }
 
 const asApplicationReviewFacts = (

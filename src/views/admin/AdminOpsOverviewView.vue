@@ -17,9 +17,13 @@
       </div>
     </section>
 
-    <AppState v-if="errorMessage" type="error" title="运维数据加载失败" :description="errorMessage">
+    <AppState v-if="showFatalError" type="error" title="运维数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadPage">重试</el-button>
     </AppState>
+
+    <section v-else-if="initialLoading" class="ops-initial-skeleton" aria-label="正在加载运维数据">
+      <el-skeleton :rows="8" animated />
+    </section>
 
     <template v-else>
       <AppState
@@ -220,7 +224,7 @@
 
 
       <section class="ops-main-grid vector-admin-grid">
-        <article class="ops-panel ops-panel--wide vector-admin-panel">
+        <article class="ops-panel ops-panel--wide vector-admin-panel" v-loading="loading">
           <div class="ops-panel__head">
             <div>
               <h2>语义索引控制台</h2>
@@ -294,69 +298,125 @@
           <div class="vector-action-list">
             <div class="vector-action-group">
               <span class="vector-action-group__label">题目语义索引</span>
-              <el-button
-                v-permission="'admin:question:embedding:rebuild'"
-                type="warning"
-                plain
-                :icon="RefreshCw"
-                :loading="rebuildingQuestionVectors"
-                :disabled="isAdminMobileReadonly"
-                :title="mobileReadonlyTitle()"
-                @click="handleRebuildQuestionVectors"
+              <el-tooltip
+                :content="questionRebuildGuard.reason"
+                placement="top"
+                :disabled="questionRebuildGuard.allowed"
               >
-                重建题目索引
-              </el-button>
-              <el-button
-                v-permission="'admin:question:embedding:rebuild'"
-                type="warning"
-                plain
-                :icon="RefreshCw"
-                :loading="retryingQuestionVectors"
-                :disabled="isAdminMobileReadonly"
-                :title="mobileReadonlyTitle()"
-                @click="handleRetryQuestionVectors"
+                <span class="vector-action-button-wrap">
+                  <el-button
+                    v-permission="'admin:question:embedding:rebuild'"
+                    type="warning"
+                    plain
+                    :icon="RefreshCw"
+                    :loading="rebuildingQuestionVectors"
+                    :disabled="!questionRebuildGuard.allowed"
+                    :title="questionRebuildGuard.reason"
+                    @click="handleRebuildQuestionVectors"
+                  >
+                    重建题目索引
+                  </el-button>
+                </span>
+              </el-tooltip>
+              <el-tooltip
+                :content="questionRetryGuard.reason"
+                placement="top"
+                :disabled="questionRetryGuard.allowed"
               >
-                重试题目失败
-              </el-button>
+                <span class="vector-action-button-wrap">
+                  <el-button
+                    v-permission="'admin:question:embedding:rebuild'"
+                    type="warning"
+                    plain
+                    :icon="RefreshCw"
+                    :loading="retryingQuestionVectors"
+                    :disabled="!questionRetryGuard.allowed"
+                    :title="questionRetryGuard.reason"
+                    @click="handleRetryQuestionVectors"
+                  >
+                    重试题目失败
+                  </el-button>
+                </span>
+              </el-tooltip>
+              <div
+                class="vector-action-guard"
+                :class="{ 'vector-action-guard--ready': questionRebuildGuard.allowed && questionRetryGuard.allowed }"
+                role="status"
+              >
+                <ShieldCheck :size="15" aria-hidden="true" />
+                <span>{{ questionActionGuardSummary }}</span>
+              </div>
             </div>
             <div class="vector-action-group vector-action-group--risk">
               <span class="vector-action-group__label">知识库与删除补偿</span>
-              <el-button
-                v-permission="'admin:question:embedding:rebuild'"
-                type="warning"
-                plain
-                :icon="RefreshCw"
-                :loading="rebuildingKnowledgeVectors"
-                :disabled="isAdminMobileReadonly"
-                :title="mobileReadonlyTitle()"
-                @click="handleRebuildKnowledgeVectors"
+              <el-tooltip
+                :content="knowledgeRebuildGuard.reason"
+                placement="top"
+                :disabled="knowledgeRebuildGuard.allowed"
               >
-                重建知识库索引
-              </el-button>
-              <el-button
-                v-permission="'admin:question:embedding:rebuild'"
-                type="warning"
-                plain
-                :icon="RefreshCw"
-                :loading="retryingKnowledgeVectors"
-                :disabled="isAdminMobileReadonly"
-                :title="mobileReadonlyTitle()"
-                @click="handleRetryKnowledgeVectors"
+                <span class="vector-action-button-wrap">
+                  <el-button
+                    v-permission="'admin:question:embedding:rebuild'"
+                    type="warning"
+                    plain
+                    :icon="RefreshCw"
+                    :loading="rebuildingKnowledgeVectors"
+                    :disabled="!knowledgeRebuildGuard.allowed"
+                    :title="knowledgeRebuildGuard.reason"
+                    @click="handleRebuildKnowledgeVectors"
+                  >
+                    重建知识库索引
+                  </el-button>
+                </span>
+              </el-tooltip>
+              <el-tooltip
+                :content="knowledgeRetryGuard.reason"
+                placement="top"
+                :disabled="knowledgeRetryGuard.allowed"
               >
-                重试知识库失败
-              </el-button>
-              <el-button
-                v-permission="'admin:question:embedding:rebuild'"
-                type="danger"
-                plain
-                :icon="RefreshCw"
-                :loading="retryingVectorDeletes"
-                :disabled="isAdminMobileReadonly"
-                :title="mobileReadonlyTitle()"
-                @click="handleRetryVectorDeletes"
+                <span class="vector-action-button-wrap">
+                  <el-button
+                    v-permission="'admin:question:embedding:rebuild'"
+                    type="warning"
+                    plain
+                    :icon="RefreshCw"
+                    :loading="retryingKnowledgeVectors"
+                    :disabled="!knowledgeRetryGuard.allowed"
+                    :title="knowledgeRetryGuard.reason"
+                    @click="handleRetryKnowledgeVectors"
+                  >
+                    重试知识库失败
+                  </el-button>
+                </span>
+              </el-tooltip>
+              <el-tooltip
+                :content="deleteRetryGuard.reason"
+                placement="top"
+                :disabled="deleteRetryGuard.allowed"
               >
-                重试索引删除补偿
-              </el-button>
+                <span class="vector-action-button-wrap">
+                  <el-button
+                    v-permission="'admin:question:embedding:rebuild'"
+                    type="danger"
+                    plain
+                    :icon="RefreshCw"
+                    :loading="retryingVectorDeletes"
+                    :disabled="!deleteRetryGuard.allowed"
+                    :title="deleteRetryGuard.reason"
+                    @click="handleRetryVectorDeletes"
+                  >
+                    重试索引删除补偿
+                  </el-button>
+                </span>
+              </el-tooltip>
+              <div
+                class="vector-action-guard"
+                :class="{ 'vector-action-guard--ready': knowledgeRebuildGuard.allowed && knowledgeRetryGuard.allowed && deleteRetryGuard.allowed }"
+                role="status"
+              >
+                <ShieldCheck :size="15" aria-hidden="true" />
+                <span>{{ knowledgeActionGuardSummary }}</span>
+              </div>
             </div>
           </div>
           <div v-if="lastVectorAction" class="vector-action-result">
@@ -377,7 +437,10 @@
       </section>
 
       <section class="ops-main-grid vector-failure-grid">
-        <article class="ops-panel ops-panel--wide vector-failure-panel">
+        <article
+          class="ops-panel ops-panel--wide vector-failure-panel"
+          v-loading="loading || vectorFailureLoading"
+        >
           <div class="ops-panel__head vector-failure-head">
             <div>
               <h2>索引失败明细</h2>
@@ -833,9 +896,9 @@ import { toFriendlyMessage } from '@/utils/error'
 import { redactSensitiveText } from '@/utils/sensitiveText'
 import { useAuthStore } from '@/stores/auth'
 
-const loading = ref(false)
+const loading = ref(true)
 const router = useRouter()
-const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
+const { isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const authStore = useAuthStore()
 const canMaintainVectorIndex = computed(() => authStore.hasPermission('admin:question:embedding:rebuild'))
 const retryingVectorDeletes = ref(false)
@@ -876,6 +939,7 @@ let trendChart: ECharts | null = null
 let opsMounted = false
 let chartRenderSeq = 0
 let echartsModulePromise: Promise<typeof import('@/utils/echarts')> | null = null
+let freshnessTimer: ReturnType<typeof setInterval> | undefined
 
 const rangeOptions = [
   { label: '7 天', value: 7 },
@@ -957,8 +1021,9 @@ const formatSnapshotTime = (timestamp?: number) => {
 }
 
 const sourceIsAged = (label: DataSourceLabel) => {
-  const dataAt = sourceSnapshots[label]?.dataAt
-  return Boolean(dataAt && freshnessClock.value - dataAt > OPS_DATA_STALE_AFTER_MS)
+  const snapshot = sourceSnapshots[label]
+  const freshnessTimestamp = snapshot?.dataAt || snapshot?.receivedAt
+  return Boolean(freshnessTimestamp && freshnessClock.value - freshnessTimestamp > OPS_DATA_STALE_AFTER_MS)
 }
 
 const sourceState = (label: DataSourceLabel): SourceState => {
@@ -1000,6 +1065,9 @@ const sourcePresentation = (labels: DataSourceLabel[]) => {
 }
 
 const allDataSourceLabels = Object.values(dataSourceLabels) as DataSourceLabel[]
+const hasSuccessfulSnapshot = computed(() => Object.keys(sourceSnapshots).length > 0)
+const initialLoading = computed(() => loading.value && !hasSuccessfulSnapshot.value)
+const showFatalError = computed(() => Boolean(errorMessage.value) && !hasSuccessfulSnapshot.value)
 const staleSourceLabels = computed(() => allDataSourceLabels.filter((label) => sourceState(label) === 'stale'))
 const unknownSourceLabels = computed(() => allDataSourceLabels.filter((label) => sourceState(label) === 'unknown'))
 const showDataFreshness = computed(() => Boolean(Object.keys(sourceSnapshots).length || partialErrors.value.length))
@@ -1623,6 +1691,188 @@ const vectorDeleteOutboxHint = computed(() => {
   return `待处理 ${outbox.pending || 0} / 失败 ${outbox.failed || 0} / 已完成 ${outbox.done || 0}`
 })
 
+type VectorMaintenanceScope = 'question' | 'knowledge' | 'deleteOutbox'
+type VectorActionGuard = {
+  allowed: boolean
+  reason: string
+}
+
+const vectorMaintenanceBusy = computed(() =>
+  rebuildingQuestionVectors.value
+  || retryingQuestionVectors.value
+  || rebuildingKnowledgeVectors.value
+  || retryingKnowledgeVectors.value
+  || retryingVectorDeletes.value
+)
+
+const blockedVectorAction = (reason: string): VectorActionGuard => ({ allowed: false, reason })
+const allowedVectorAction = (reason: string): VectorActionGuard => ({ allowed: true, reason })
+
+const vectorScopeLabel = (scope: VectorMaintenanceScope) => {
+  if (scope === 'question') return '题目语义索引'
+  if (scope === 'knowledge') return '知识库语义索引'
+  return '索引删除补偿'
+}
+
+const findVectorCollection = (scope: Exclude<VectorMaintenanceScope, 'deleteOutbox'>) => {
+  const collections = vectorHealth.value?.collections || []
+  if (scope === 'question') {
+    return collections.find((item) => /question/i.test(item.collectionName || ''))
+  }
+  const configuredName = vectorHealth.value?.config?.knowledgeCollection
+  return collections.find((item) =>
+    (configuredName && item.collectionName === configuredName)
+    || /knowledge/i.test(item.collectionName || '')
+  )
+}
+
+const collectionBlockReason = (item: VectorCollectionInfoVO | undefined, label: string) => {
+  if (!item) return `${label}集合记录未返回，无法确认写入目标。`
+  if (item.errorMessage) return `${label}集合检查异常：${safeOperationalErrorText(item.errorMessage)}`
+  if (!item.exists) return `${label}集合缺失；请先修复集合配置并重新获取健康状态。`
+
+  const status = String(item.status || '').trim().toUpperCase()
+  if (!status) return `${label}集合运行状态未返回，暂不能执行写入操作。`
+  if (['ERROR', 'DOWN', 'UNHEALTHY', 'UNKNOWN', 'MISSING', 'NOT_FOUND', 'RED', 'YELLOW', 'GREY'].includes(status)) {
+    return `${label}集合状态为“${item.status}”，暂不能执行写入操作。`
+  }
+  if (!['HEALTHY', 'OK', 'UP', 'GREEN', 'READY', 'AVAILABLE', 'ACTIVE', 'EXISTS'].includes(status)) {
+    return `${label}集合返回未识别状态“${item.status}”，需确认状态含义后再操作。`
+  }
+  return ''
+}
+
+const vectorHealthBlockReason = (scope: VectorMaintenanceScope) => {
+  if (loading.value) return '语义索引健康数据正在加载，请等待刷新完成。'
+
+  const healthState = sourceState(dataSourceLabels.vectorHealth)
+  if (healthState === 'unknown') return '语义索引健康数据尚未返回，无法确认写入条件。'
+  if (healthState === 'stale') {
+    return `语义索引健康数据失败或已陈旧：${sourceStatusHint([dataSourceLabels.vectorHealth])}。请刷新成功后再操作。`
+  }
+
+  const health = vectorHealth.value
+  if (!health) return '语义索引健康数据为空，无法确认写入条件。'
+  if (!health.enabled || health.config?.enabled === false || health.checks?.enabled === false) {
+    return '语义索引功能未启用，禁止提交索引写入操作。'
+  }
+  if (health.checks?.collectionsPresent === false) {
+    return '健康检查确认存在索引集合缺失，禁止提交索引写入操作。'
+  }
+  if (health.checks?.dimensionMatched === false) {
+    return '索引向量维度与运行配置不一致，禁止提交索引写入操作。'
+  }
+  if (!Array.isArray(health.collections) || !health.collections.length) {
+    return '索引集合清单未返回，无法确认写入目标。'
+  }
+
+  if (scope === 'deleteOutbox') {
+    for (const collection of health.collections) {
+      const reason = collectionBlockReason(collection, vectorCollectionLabel(collection.collectionName))
+      if (reason) return reason
+    }
+    return ''
+  }
+
+  return collectionBlockReason(findVectorCollection(scope), vectorScopeLabel(scope))
+}
+
+const vectorFailureRows = (scope: VectorMaintenanceScope) => {
+  if (scope === 'question') return vectorFailures.value?.questionFailures
+  if (scope === 'knowledge') return vectorFailures.value?.knowledgeFailures
+  return vectorFailures.value?.deleteOutboxFailures
+}
+
+const vectorFailureDetailsBlockReason = (scope: VectorMaintenanceScope, requireRetryableRows: boolean) => {
+  if (loading.value || vectorFailureLoading.value) {
+    return `${vectorScopeLabel(scope)}失败明细正在加载，请等待刷新完成。`
+  }
+
+  const failureState = sourceState(dataSourceLabels.vectorFailures)
+  if (failureState === 'unknown') return `${vectorScopeLabel(scope)}失败明细尚未返回，无法判断操作范围。`
+  if (failureState === 'stale') {
+    return `${vectorScopeLabel(scope)}失败明细失败或已陈旧：${sourceStatusHint([dataSourceLabels.vectorFailures])}。请刷新成功后再操作。`
+  }
+  if (!vectorFailures.value) return `${vectorScopeLabel(scope)}失败明细为空，无法判断操作范围。`
+  if (vectorFailures.value.errors?.length) {
+    return `失败明细返回异常：${vectorFailures.value.errors.slice(0, 2).join('；')}。请先排除数据不完整问题。`
+  }
+
+  const rows = vectorFailureRows(scope)
+  if (!Array.isArray(rows)) return `${vectorScopeLabel(scope)}失败明细字段未返回，无法判断操作范围。`
+  if (requireRetryableRows && rows.length === 0) {
+    return `当前失败明细中没有可重试的${vectorScopeLabel(scope)}记录。`
+  }
+  return ''
+}
+
+const baseVectorActionBlockReason = () => {
+  if (!canMaintainVectorIndex.value) return '当前账号没有语义索引维护权限。'
+  if (isAdminMobileReadonly.value) return mobileReadonlyTitle()
+  if (vectorMaintenanceBusy.value) return '已有语义索引维护操作正在提交，请等待完成。'
+  return ''
+}
+
+const createVectorActionGuard = (
+  scope: VectorMaintenanceScope,
+  options: { requireRetryableRows?: boolean; requireDeleteOutbox?: boolean } = {}
+): VectorActionGuard => {
+  const baseReason = baseVectorActionBlockReason()
+  if (baseReason) return blockedVectorAction(baseReason)
+
+  const healthReason = vectorHealthBlockReason(scope)
+  if (healthReason) return blockedVectorAction(healthReason)
+
+  const failureReason = vectorFailureDetailsBlockReason(scope, Boolean(options.requireRetryableRows))
+  if (failureReason) return blockedVectorAction(failureReason)
+
+  if (options.requireDeleteOutbox) {
+    const outbox = vectorDeleteOutbox.value
+    if (!outbox) return blockedVectorAction('删除补偿状态未返回，无法确认可重试范围。')
+    if (outbox.errorMessage) {
+      return blockedVectorAction(`删除补偿状态异常：${safeOperationalErrorText(outbox.errorMessage)}`)
+    }
+    if (!Number.isFinite(outbox.retryable)) {
+      return blockedVectorAction('删除补偿可重试数量未返回，无法确认操作范围。')
+    }
+    if ((outbox.retryable || 0) <= 0) {
+      return blockedVectorAction('当前没有可重试的索引删除补偿记录。')
+    }
+  }
+
+  return allowedVectorAction('健康状态、集合状态和操作明细已确认；提交前仍需核对高风险确认信息。')
+}
+
+const questionRebuildGuard = computed(() => createVectorActionGuard('question'))
+const questionRetryGuard = computed(() =>
+  createVectorActionGuard('question', { requireRetryableRows: true })
+)
+const knowledgeRebuildGuard = computed(() => createVectorActionGuard('knowledge'))
+const knowledgeRetryGuard = computed(() =>
+  createVectorActionGuard('knowledge', { requireRetryableRows: true })
+)
+const deleteRetryGuard = computed(() =>
+  createVectorActionGuard('deleteOutbox', {
+    requireRetryableRows: true,
+    requireDeleteOutbox: true
+  })
+)
+
+const guardSummary = (entries: Array<{ label: string; guard: VectorActionGuard }>) =>
+  entries.map(({ label, guard }) =>
+    `${label}：${guard.allowed ? '可执行，提交前仍需确认' : guard.reason}`
+  ).join('；')
+
+const questionActionGuardSummary = computed(() => guardSummary([
+  { label: '重建', guard: questionRebuildGuard.value },
+  { label: '失败重试', guard: questionRetryGuard.value }
+]))
+const knowledgeActionGuardSummary = computed(() => guardSummary([
+  { label: '知识库重建', guard: knowledgeRebuildGuard.value },
+  { label: '知识库失败重试', guard: knowledgeRetryGuard.value },
+  { label: '删除补偿', guard: deleteRetryGuard.value }
+]))
+
 const vectorFailureStatusType = (status?: string) => {
   const value = String(status || 'PENDING').toUpperCase()
   if (value === 'FAILED') return 'danger'
@@ -1832,12 +2082,14 @@ const loadPage = async () => {
       { label: dataSourceLabels.duplicateConfig, result: duplicateConfigResult }
     ]
     const failed = sourceResults.filter((item) => item.result.status === 'rejected')
+    partialErrors.value = failed.map((item) => item.label)
     if (failed.length === sourceResults.length) {
-      errorMessage.value = getErrorMessage((failed[0].result as PromiseRejectedResult).reason)
-      disposeChart()
+      if (!hasSuccessfulSnapshot.value) {
+        errorMessage.value = getErrorMessage((failed[0].result as PromiseRejectedResult).reason)
+        disposeChart()
+      }
       return
     }
-    partialErrors.value = failed.map((item) => item.label)
     if (aiResult.status === 'fulfilled') {
       aiOverview.value = aiResult.value
       recordSourceSuccess(dataSourceLabels.aiOverview, { rangeDays: rangeDays.value })
@@ -1884,7 +2136,12 @@ const loadPage = async () => {
     }
     await renderChart()
   } catch (error) {
-    errorMessage.value = getErrorMessage(error)
+    if (hasSuccessfulSnapshot.value) {
+      partialErrors.value = [...allDataSourceLabels]
+      errorMessage.value = ''
+    } else {
+      errorMessage.value = getErrorMessage(error)
+    }
   } finally {
     loading.value = false
   }
@@ -2000,15 +2257,14 @@ const createVectorMaintenanceIdempotencyKey = (operation: string) => {
   return `${operation}:${random}`.replace(/[^A-Za-z0-9:_-]/g, '_').slice(0, 128)
 }
 
-const guardVectorMaintenance = () => {
-  if (canMaintainVectorIndex.value) return true
-  ElMessage.warning('当前账号没有语义索引维护权限')
+const guardVectorMaintenance = (guard: VectorActionGuard) => {
+  if (guard.allowed) return true
+  ElMessage.warning(guard.reason)
   return false
 }
 
 const handleRebuildQuestionVectors = async () => {
-  if (!guardVectorMaintenance()) return
-  if (!guardAdminMobileWrite()) return
+  if (!guardVectorMaintenance(questionRebuildGuard.value)) return
   const confirmed = await confirmVectorAction({
     title: '题目语义索引重建高风险确认',
     action: '重建题目语义索引',
@@ -2031,16 +2287,16 @@ const handleRebuildQuestionVectors = async () => {
     const summary = questionVectorSummary(result)
     recordQuestionVectorAction('题目语义索引重建', result)
     ElMessage.success(summary)
-    await loadVectorJobs()
-    await loadPage()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
+    await Promise.allSettled([loadVectorJobs(), loadPage()])
     rebuildingQuestionVectors.value = false
   }
 }
 
 const handleRetryQuestionVectors = async () => {
-  if (!guardVectorMaintenance()) return
-  if (!guardAdminMobileWrite()) return
+  if (!guardVectorMaintenance(questionRetryGuard.value)) return
   const confirmed = await confirmVectorAction({
     title: '题目失败索引重试确认',
     action: '重试失败或长时间待处理的题目索引',
@@ -2063,16 +2319,16 @@ const handleRetryQuestionVectors = async () => {
     const summary = questionVectorSummary(result)
     recordQuestionVectorAction('题目失败索引重试', result)
     ElMessage.success(summary)
-    await loadVectorJobs()
-    await loadPage()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
+    await Promise.allSettled([loadVectorJobs(), loadPage()])
     retryingQuestionVectors.value = false
   }
 }
 
 const handleRebuildKnowledgeVectors = async () => {
-  if (!guardVectorMaintenance()) return
-  if (!guardAdminMobileWrite()) return
+  if (!guardVectorMaintenance(knowledgeRebuildGuard.value)) return
   const confirmed = await confirmVectorAction({
     title: '知识库语义索引重建高风险确认',
     action: '重建个人知识库语义索引',
@@ -2095,16 +2351,16 @@ const handleRebuildKnowledgeVectors = async () => {
     const summary = knowledgeVectorSummary(result)
     recordKnowledgeVectorAction('知识库语义索引重建', result)
     ElMessage.success(summary)
-    await loadVectorJobs()
-    await loadPage()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
+    await Promise.allSettled([loadVectorJobs(), loadPage()])
     rebuildingKnowledgeVectors.value = false
   }
 }
 
 const handleRetryKnowledgeVectors = async () => {
-  if (!guardVectorMaintenance()) return
-  if (!guardAdminMobileWrite()) return
+  if (!guardVectorMaintenance(knowledgeRetryGuard.value)) return
   const confirmed = await confirmVectorAction({
     title: '知识库失败索引重试确认',
     action: '重试失败或长时间待处理的知识库索引',
@@ -2127,15 +2383,15 @@ const handleRetryKnowledgeVectors = async () => {
     const summary = knowledgeVectorSummary(result)
     recordKnowledgeVectorAction('知识库失败索引重试', result)
     ElMessage.success(summary)
-    await loadVectorJobs()
-    await loadPage()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
+    await Promise.allSettled([loadVectorJobs(), loadPage()])
     retryingKnowledgeVectors.value = false
   }
 }
 const handleRetryVectorDeletes = async () => {
-  if (!guardVectorMaintenance()) return
-  if (!guardAdminMobileWrite()) return
+  if (!guardVectorMaintenance(deleteRetryGuard.value)) return
   const retryable = vectorDeleteOutbox.value?.retryable || 0
   const confirmed = await confirmVectorAction({
     title: '索引删除补偿重试确认',
@@ -2167,9 +2423,10 @@ const handleRetryVectorDeletes = async () => {
     } else {
       ElMessage.success(summary)
     }
-    await loadVectorJobs()
-    await loadPage()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
   } finally {
+    await Promise.allSettled([loadVectorJobs(), loadPage()])
     retryingVectorDeletes.value = false
   }
 }
@@ -2178,6 +2435,10 @@ const resizeChart = () => trendChart?.resize()
 
 onMounted(async () => {
   opsMounted = true
+  freshnessClock.value = Date.now()
+  freshnessTimer = setInterval(() => {
+    freshnessClock.value = Date.now()
+  }, 60 * 1000)
   window.addEventListener('resize', resizeChart)
   await loadPage()
 })
@@ -2185,6 +2446,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   opsMounted = false
   chartRenderSeq += 1
+  if (freshnessTimer) {
+    clearInterval(freshnessTimer)
+    freshnessTimer = undefined
+  }
   window.removeEventListener('resize', resizeChart)
   disposeChart()
 })
@@ -2331,6 +2596,14 @@ onBeforeUnmount(() => {
 
 .admin-diagnostic-state {
   margin-bottom: 18px;
+}
+
+.ops-initial-skeleton {
+  min-height: 620px;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.74);
 }
 
 .ops-data-freshness {
@@ -2607,6 +2880,35 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   width: 100%;
   margin-left: 0;
+}
+
+.vector-action-button-wrap {
+  display: block;
+  width: 100%;
+}
+
+.vector-action-guard {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.12);
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.vector-action-guard svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.vector-action-guard--ready {
+  border-color: rgba(74, 222, 128, 0.22);
+  background: rgba(20, 83, 45, 0.12);
+  color: #86efac;
 }
 
 .vector-action-result {

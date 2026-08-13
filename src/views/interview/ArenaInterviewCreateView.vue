@@ -5,7 +5,7 @@
       <div class="arena-between arena-iv__head">
         <div>
           <div class="arena-iv__kicker">第 1 步 · 选择模拟形式</div>
-          <h1 class="arena-h1 arena-iv__title">开始一场模拟面试 <span aria-hidden="true">🎤</span></h1>
+          <h1 class="arena-h1 arena-iv__title">开始一场模拟面试</h1>
           <p class="arena-p" style="margin-top: 6px; max-width: 620px">
             选择适合当前目标的场景，完成后将生成面试复盘报告。
           </p>
@@ -27,7 +27,7 @@
             <span class="arena-chip" :class="voicePreflightReady ? 'arena-chip--grn' : 'arena-chip--mut'">
               {{ voicePreflightReady ? '语音设备已预检' : '语音可选' }}
             </span>
-            <span class="arena-xp-tag">完成后生成复盘</span>
+            <span class="arena-chip arena-chip--mut">完成后生成复盘</span>
           </div>
           <h2 class="arena-h2" style="margin-top: 13px">{{ quickInterviewTitle }}</h2>
           <p class="arena-p" style="margin-top: 8px">{{ quickInterviewDesc }}</p>
@@ -86,8 +86,8 @@
         </div>
 
         <div class="arena-iv__boss-actions">
-          <div v-if="quickStartNotice" class="arena-iv__warn">⚠ {{ quickStartNotice }}</div>
-          <div v-if="routeContextNotice" class="arena-iv__warn">⚠ {{ routeContextNotice }}</div>
+          <div v-if="quickStartNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ quickStartNotice }}</div>
+          <div v-if="routeContextNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ routeContextNotice }}</div>
           <button
             class="arena-btn arena-btn--pri"
             style="padding: 14px 26px; width: 100%"
@@ -103,7 +103,7 @@
             查看可选微调
           </button>
           <button class="arena-btn arena-btn--txt" style="width: 100%" @click="voiceDeviceCheckVisible = true">
-            🎙 语音设备预检
+            <Mic :size="15" />语音设备预检
           </button>
         </div>
       </details>
@@ -133,7 +133,7 @@
                 <small>{{ item.desc }}</small>
                 <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
                   <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
+                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
                   <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                 </div>
               </button>
@@ -299,11 +299,11 @@
                   </el-form-item>
                 </div>
 
-                <div v-if="resumeRequired" class="arena-iv__warn">⚠ 当前面试模式建议选择简历，便于进行项目深挖和综合追问。</div>
+                <div v-if="resumeRequired" class="arena-iv__warn"><AlertTriangle :size="15" />当前面试模式建议选择简历，便于进行项目深挖和综合追问。</div>
                 <div v-if="isJobTargetFlow && !quickResumeId" class="arena-iv__warn">
-                  ⚠ 目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。
+                  <AlertTriangle :size="15" />目标岗位推荐缺少可用简历时会先降级为轻量技术面；也可以先进入简历中心创建简历后再回来。
                 </div>
-                <div v-if="routeContextNotice" class="arena-iv__warn">⚠ {{ routeContextNotice }}</div>
+                <div v-if="routeContextNotice" class="arena-iv__warn"><AlertTriangle :size="15" />{{ routeContextNotice }}</div>
 
                 <div class="arena-row" style="margin-top: 16px; flex-wrap: wrap">
                   <button type="button" class="arena-btn arena-btn--pri" style="padding: 13px 24px" :disabled="creating" @click="handleCreate">
@@ -338,7 +338,7 @@
                   <small>{{ item.desc }}</small>
                   <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
                     <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeStars(item) }}</span>
+                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
                     <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                   </div>
                 </button>
@@ -401,7 +401,7 @@
 
           <div class="arena-card arena-iv__panel arena-iv__tip">
             <div class="arena-row" style="gap: 8px">
-              <span style="font-size: 16px">⚡</span>
+              <Zap :size="16" />
               <b style="font-size: 13px">本轮重点</b>
             </div>
             <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">{{ selectedModeTip }}</p>
@@ -421,7 +421,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { BrainCircuit, BriefcaseBusiness, Files, Sparkles, Target, Zap } from 'lucide-vue-next'
+import { AlertTriangle, BrainCircuit, BriefcaseBusiness, Files, Mic, Sparkles, Target, Zap } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -569,7 +569,7 @@ const modeCards: ModeCard[] = [
   },
   {
     key: 'full',
-    title: '全真模拟',
+    title: '完整模拟',
     desc: '按正式节奏覆盖技术、项目和岗位场景，完成一场完整面试。',
     badge: '完整流程',
     value: INTERVIEW_MODE.COMPREHENSIVE,
@@ -985,11 +985,11 @@ const recommendedModeKey = computed(() => {
   return mode?.key || 'technical'
 })
 
-const modeStars = (item: ModeCard) => {
+const modeDifficultyLabel = (item: ModeCard) => {
   const difficulty = item.defaults?.difficulty
-  if (difficulty === 'HARD') return '★★★'
-  if (difficulty === 'EASY') return '★☆☆'
-  return '★★☆'
+  if (difficulty === 'HARD') return '高强度'
+  if (difficulty === 'EASY') return '轻量'
+  return '标准'
 }
 
 const selectDungeon = (item: ModeCard) => {

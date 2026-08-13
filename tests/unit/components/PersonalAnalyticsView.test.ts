@@ -96,4 +96,34 @@ describe('PersonalAnalyticsView data-state boundaries', () => {
     expect(wrapper.text()).toContain('任务趋势暂时不可用')
     expect(wrapper.text()).toContain('分析数据暂时加载失败，请稍后重试。')
   })
+
+  it('labels completed estimated minutes without presenting them as actual duration', async () => {
+    vi.mocked(getPersonalTaskTrendApi).mockResolvedValue([{
+      date: '2026-08-12',
+      generatedCount: 2,
+      completedCount: 1,
+      skippedCount: 1,
+      estimatedMinutes: 50,
+      completedMinutes: 30
+    }])
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('已完成任务预计分钟')
+    expect(wrapper.text()).toContain('预计用时合计为 30 分钟')
+    expect(wrapper.text()).toContain('不代表实际训练耗时')
+    expect(wrapper.text()).not.toContain('完成耗时')
+  })
+
+  it('explains that skill distribution requires completed tasks with explicit skills', async () => {
+    vi.mocked(getPersonalSkillDistributionApi).mockResolvedValue([
+      { name: 'Java', value: 2 }
+    ])
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('仅统计已完成且带有明确技能标签的任务')
+    expect(wrapper.text()).toContain('Java')
+    expect(wrapper.text()).not.toContain('Unclassified')
+  })
 })

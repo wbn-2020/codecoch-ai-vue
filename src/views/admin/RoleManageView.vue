@@ -202,7 +202,8 @@ const openDialog = (row?: RoleVO) => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const actionLabel = editingRoleId.value ? '更新角色' : '新增角色'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
@@ -236,6 +237,8 @@ const handleSave = async () => {
     }
     dialogVisible.value = false
     await fetchRoles()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '角色保存失败，请检查表单内容或权限后重试。'))
   } finally {
     saving.value = false
   }
@@ -260,15 +263,19 @@ const handleToggleStatus = async (row: RoleVO) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) return
-  await updateAdminRoleStatusApi(row.roleId, {
-    status: nextStatus,
-    confirm: true,
-    dryRun: false,
-    reason: `${actionLabel}角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
-    idempotencyKey: createOperationIdempotencyKey(`admin-role-status-${row.roleId}`)
-  })
-  ElMessage.success(`角色已${actionLabel}`)
-  await fetchRoles()
+  try {
+    await updateAdminRoleStatusApi(row.roleId, {
+      status: nextStatus,
+      confirm: true,
+      dryRun: false,
+      reason: `${actionLabel}角色；roleId=${row.roleId}；roleCode=${row.roleCode || '-'}`,
+      idempotencyKey: createOperationIdempotencyKey(`admin-role-status-${row.roleId}`)
+    })
+    ElMessage.success(`角色已${actionLabel}`)
+    await fetchRoles()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `${actionLabel}角色失败，请确认权限或稍后重试。`))
+  }
 }
 
 const normalizeRoleCode = (roleCode?: string) => String(roleCode || '').trim().replace(/^ROLE_/i, '').toUpperCase()

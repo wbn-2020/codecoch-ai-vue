@@ -4,15 +4,15 @@
       <AppState
         type="loading"
         :title="redirectingToLatestReport ? '正在打开最近的匹配报告' : '正在确认最近的匹配报告'"
-        :description="redirectingToLatestReport ? '已找到可继续使用的报告，正在进入覆盖率和短板结算页。' : '先确认是否已有可继续使用的报告，避免重复回到新建工作台。'"
+        :description="redirectingToLatestReport ? '已找到可继续使用的报告，正在进入覆盖情况与能力短板分析页。' : '先确认是否已有可继续使用的报告，避免重复回到新建工作台。'"
       />
     </section>
 
     <template v-else>
       <header class="match-entry-head">
         <div>
-          <div class="arena-kicker">第 3 关 · 新建 JD 匹配</div>
-          <h1 class="arena-h1">为这份岗位做一次对账 🔍</h1>
+          <div class="arena-kicker">岗位匹配 · 新建分析</div>
+          <h1 class="arena-h1">为这份岗位做一次匹配分析</h1>
           <p class="arena-p">选择一份简历和目标岗位，生成覆盖率、缺口和下一步训练建议。</p>
         </div>
         <div class="match-entry-head__actions">
@@ -588,6 +588,11 @@ const statusTag = (status?: string) => {
 }
 
 const isReportSuccess = (status?: string) => status === 'SUCCESS'
+const isTrustedReport = (report: ResumeJobMatchReportListVO) =>
+  report.status === 'SUCCESS'
+  && report.trustStatus === 'VERIFIED'
+  && report.fallback !== true
+  && report.schemaWarningCount === 0
 
 const trustStatusType = (
   value?: string | null,
@@ -611,7 +616,8 @@ const trustStatusLabel = (value?: string | null) => {
 }
 
 const reportScoreText = (report: ResumeJobMatchReportListVO) => {
-  if (isReportSuccess(report.status)) return report.overallScore ?? '--'
+  if (isTrustedReport(report)) return report.overallScore ?? '未量化'
+  if (isReportSuccess(report.status)) return '待复核'
   if (report.status === 'FAILED') return '重试'
   if (report.status === 'PROCESSING' || report.status === 'PENDING') return '生成中'
   return '--'
@@ -815,7 +821,7 @@ const routeToLatestCompletedReport = async () => {
     || versionSourceId.value
   )
   const latestReport = reports.value.find((item) =>
-    item.status === 'SUCCESS'
+    isTrustedReport(item)
     && item.reportId
     && (!hasScopedEntry || (
       (!routeResumeId.value || item.resumeId === routeResumeId.value)

@@ -59,7 +59,7 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/evidence-assets/EvidenceAssetsView.vue'),
         meta: { title: '证据资产工作台', featureFlag: 'v9EvidenceLearning' }
       },
-      { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: 'JD 匹配实验台', arenaTheme: true } },
+      { path: 'resume-match', name: 'ResumeMatch', component: () => import('@/views/v3/ResumeMatchView.vue'), meta: { title: '岗位匹配', arenaTheme: true } },
       { path: 'resume-match/:id', name: 'ResumeMatchDetail', component: () => import('@/views/v3/ResumeMatchDetailView.vue'), meta: { title: 'JD 匹配报告', arenaTheme: true } },
       { path: 'application-packages', name: 'ApplicationPackageList', component: () => import('@/views/application-package/ApplicationPackageListView.vue'), meta: { title: '投递包列表' } },
       { path: 'application-packages/preview', name: 'ApplicationPackagePreview', component: () => import('@/views/application-package/ApplicationPackageDetailView.vue'), meta: { title: '岗位投递包' } },

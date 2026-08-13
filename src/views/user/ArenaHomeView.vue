@@ -7,7 +7,7 @@
           <div class="arena-home__level">
             求职准备 · {{ weekdayLabel }}
           </div>
-          <h1 class="arena-h1 arena-home__title">{{ greetingName }}，{{ headTitle }} 🎯</h1>
+          <h1 class="arena-h1 arena-home__title">{{ greetingName }}，{{ headTitle }}</h1>
         </div>
         <div class="arena-card arena-home__power">
           <div
@@ -15,18 +15,18 @@
             :style="{
               width: '56px',
               height: '56px',
-              background: `conic-gradient(var(--arena-grn) 0 ${power}%, var(--arena-line) ${power}% 100%)`
+              background: `conic-gradient(var(--arena-grn) 0 ${readinessRingScore}%, var(--arena-line) ${readinessRingScore}% 100%)`
             }"
           >
             <div class="arena-ring__hole" style="width: 44px; height: 44px">
-              <b style="font-size: 15px; line-height: 1">{{ power }}</b>
+              <b style="font-size: 15px; line-height: 1">{{ readinessDisplayScore }}</b>
               <span class="arena-tiny" style="font-size: 8px; font-weight: 800">准备度</span>
             </div>
           </div>
           <div>
             <div style="font-size: 12px; font-weight: 800">Offer 就绪度</div>
             <div class="arena-tiny" style="margin-top: 2px">
-              完成下一项重点任务，持续完善求职准备
+              {{ readinessSummary }}
             </div>
           </div>
         </div>
@@ -71,33 +71,6 @@
                 >
                   {{ allAgentTasksDone ? '查看今日完成记录' : hasResume ? '生成今日计划' : '创建简历' }}
                 </button>
-                <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" @click="go('/questions/recommendations')">
-                  先热身 5 题
-                </button>
-              </div>
-            </div>
-            <div v-if="!allAgentTasksDone" class="arena-home__side-grid arena-home__side-grid--empty" aria-label="待生成的后续任务">
-              <div class="arena-card arena-home__side">
-                <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">后续任务</span>
-                  <span class="arena-xp-tag">待生成</span>
-                </div>
-                <div class="arena-h3" style="margin-top: 11px">岗位关键词整理</div>
-                <div class="arena-tiny" style="margin-top: 3px">生成今日计划后自动出现</div>
-                <span class="arena-home__placeholder-status" aria-label="岗位关键词整理将在生成今日计划后出现">
-                  生成今日计划后出现
-                </span>
-              </div>
-              <div class="arena-card arena-home__side">
-                <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">后续任务</span>
-                  <span class="arena-xp-tag">待生成</span>
-                </div>
-                <div class="arena-h3" style="margin-top: 11px">专项训练准备</div>
-                <div class="arena-tiny" style="margin-top: 3px">完成前置任务后自动出现</div>
-                <span class="arena-home__placeholder-status" aria-label="专项训练准备将在完成前置任务后出现">
-                  完成前置任务后出现
-                </span>
               </div>
             </div>
           </template>
@@ -226,8 +199,10 @@
                 </span>
               </div>
               <div class="arena-row" style="gap: 9px">
-                <span :style="`color: ${power >= 80 ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ power >= 80 ? '✓' : '○' }}</span>
-                <span :style="power >= 80 ? '' : 'color: var(--arena-mut)'">准备度达到 80（{{ power }}/80）</span>
+                <span :style="`color: ${readinessScore !== undefined && readinessScore >= 80 ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ readinessScore !== undefined && readinessScore >= 80 ? '✓' : '○' }}</span>
+                <span :style="readinessScore !== undefined && readinessScore >= 80 ? '' : 'color: var(--arena-mut)'">
+                  {{ readinessScore === undefined ? '准备度尚无可解释快照' : `准备度达到 80（${readinessScore}/80）` }}
+                </span>
               </div>
             </div>
           </div>
@@ -253,14 +228,17 @@ import { useRouter } from 'vue-router'
 
 import { completeAgentTaskApi } from '@/api/agent'
 import { fetchCachedDashboardOverview, fetchCachedTodayAgentTasks } from '@/composables/useUserHomeDataCache'
-import { computePower, useGameProfileStore, type XpEventKey } from '@/features/game-profile'
+import { getV3DashboardOverviewApi } from '@/api/dashboard'
+import { getLatestJobReadinessApi } from '@/api/jobRequirement'
+import { useGameProfileStore, type XpEventKey } from '@/features/game-profile'
 import { buildAgentTaskActionPath, hasAgentTaskActionEntry } from '@/utils/agentTaskAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateInTimezone } from '@/utils/format'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO } from '@/types/agent'
-import type { UserDashboardOverviewVO } from '@/types/dashboard'
+import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
+import type { JobReadinessSnapshotVO } from '@/types/jobRequirement'
 
 interface Mission {
   id: number
@@ -282,6 +260,8 @@ const loadError = ref('')
 const completingId = ref<number | null>(null)
 const tasks = ref<AgentTaskVO[]>([])
 const overview = ref<UserDashboardOverviewVO | null>(null)
+const v3Overview = ref<V3DashboardOverviewVO | null>(null)
+const readinessSnapshot = ref<JobReadinessSnapshotVO | null>(null)
 const chestNotice = ref('')
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -301,24 +281,23 @@ const allAgentTasksDone = computed(() =>
   tasks.value.length > 0 && tasks.value.every((task) => String(task.status || '').toUpperCase() === 'DONE')
 )
 
-const READY_STATUS = new Set(['READY', 'DONE', 'COMPLETE', 'COMPLETED', 'OK', 'ACTIVE', 'GENERATED', 'VERIFIED'])
-const entryReadyRatio = computed(() => {
-  const entries = overview.value?.entryStatuses || []
-  if (!entries.length) return 0
-  const ready = entries.filter((entry) => READY_STATUS.has(String(entry.status || '').toUpperCase())).length
-  return ready / entries.length
+const readinessScore = computed(() => {
+  const snapshot = readinessSnapshot.value
+  if (!snapshot || snapshot.fallback || snapshot.sampleInsufficient) return undefined
+  const score = Number(snapshot.readinessScore ?? snapshot.overallScore)
+  return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : undefined
 })
-
-/** 求职准备度 = 简历 30% + 岗位 20% + 训练 30% + 面试 20%（readiness 真数据加权） */
-const power = computed(() => {
-  const o = overview.value
-  const resumeScore = hasResume.value ? 55 + entryReadyRatio.value * 45 : entryReadyRatio.value * 40
-  const jobScore = entryReadyRatio.value * 100
-  const total = o?.todayTaskCount ?? 0
-  const done = o?.todayCompletedTaskCount ?? 0
-  const trainingScore = total > 0 ? Math.min(100, (done / total) * 100 + 20) : 10
-  const reportScore = typeof o?.recentReport?.totalScore === 'number' ? o.recentReport.totalScore : interviewCount.value > 0 ? 40 : 0
-  return computePower({ resume: resumeScore, job: jobScore, training: trainingScore, interview: reportScore })
+const readinessRingScore = computed(() => readinessScore.value ?? 0)
+const readinessDisplayScore = computed(() => readinessScore.value ?? '--')
+const readinessSummary = computed(() => {
+  const snapshot = readinessSnapshot.value
+  if (readinessScore.value !== undefined) {
+    const missing = Number(snapshot?.missingCount ?? 0)
+    return missing > 0 ? `仍有 ${missing} 项岗位要求待补齐` : '当前快照未识别出待补齐的岗位要求'
+  }
+  return snapshot?.sampleInsufficient || snapshot?.fallback
+    ? '当前证据不足，暂不展示准备度分数'
+    : '尚未生成可解释的岗位准备度快照'
 })
 
 const XP_EVENT_BY_TASK: Array<[RegExp, XpEventKey]> = [
@@ -450,9 +429,27 @@ const loadAll = async (force = false) => {
   loading.value = true
   loadError.value = ''
   try {
-    const [overviewRes] = await Promise.allSettled([fetchCachedDashboardOverview(force)])
+    const [overviewRes, v3OverviewRes] = await Promise.allSettled([
+      fetchCachedDashboardOverview(force),
+      getV3DashboardOverviewApi({ silentError: true })
+    ])
     if (overviewRes.status === 'fulfilled') {
       overview.value = overviewRes.value
+    }
+    if (v3OverviewRes.status === 'fulfilled') {
+      v3Overview.value = v3OverviewRes.value
+      const targetJobId = Number(
+        v3Overview.value?.currentTargetJob?.targetJobId || v3Overview.value?.currentTargetJob?.id
+      )
+      if (Number.isFinite(targetJobId) && targetJobId > 0) {
+        try {
+          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId)
+        } catch {
+          readinessSnapshot.value = null
+        }
+      } else {
+        readinessSnapshot.value = null
+      }
     }
     const [taskRes] = await Promise.allSettled([
       fetchCachedTodayAgentTasks(businessDate.value, force)

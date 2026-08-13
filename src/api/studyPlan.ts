@@ -60,6 +60,7 @@ const toStudyPlanSseParams = (data: StudyPlanGenerateDTO) => ({
   targetPosition: data.targetPosition || '',
   industryDirection: data.industryDirection || '',
   expectedDurationDays: data.expectedDurationDays ? String(data.expectedDurationDays) : '',
+  dailyMinutes: data.dailyMinutes ? String(data.dailyMinutes) : '',
   extraRequirements: data.extraRequirements || ''
 })
 

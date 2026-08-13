@@ -9,7 +9,8 @@ export interface StudyPlanGenerateDTO {
   optimizeRecordId?: number
   targetPosition?: string
   industryDirection?: string
-  expectedDurationDays?: number
+  expectedDurationDays: number
+  dailyMinutes: number
   extraRequirements?: string
 }
 
@@ -45,6 +46,8 @@ export interface StudyPlanGenerateVO {
   planId: number
   planStatus: StudyPlanStatus
   planTitle?: string
+  durationDays?: number
+  dailyMinutes?: number
   taskCount?: number
   skillGapCount?: number
   aiCallLogId?: number
@@ -76,6 +79,7 @@ export interface SseEventVO {
 export interface StudyPlanListVO {
   id: number
   reportId: number
+  sourceId?: number
   sessionId?: number
   sourceType?: string
   targetPosition?: string
@@ -84,6 +88,7 @@ export interface StudyPlanListVO {
   planSummary?: string
   planStatus: StudyPlanStatus
   durationDays?: number
+  dailyMinutes?: number
   totalTaskCount?: number
   doneTaskCount?: number
   progressPercent?: number
@@ -125,6 +130,7 @@ export interface StudyTaskVO {
   taskType?: string
   priority?: string
   estimatedHours?: number
+  estimatedMinutes?: number
   taskStatus: StudyTaskStatus
   relatedQuestionIds?: number[]
   relatedTags?: string[]

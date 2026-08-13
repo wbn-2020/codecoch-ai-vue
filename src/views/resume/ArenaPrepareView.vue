@@ -380,8 +380,8 @@
             <div class="arena-card arena-prepare__panel">
               <div class="arena-between">
                 <div class="arena-h3">JD 匹配状态</div>
-                <span class="arena-chip" :class="hasSuccessfulMatch ? 'arena-chip--grn' : 'arena-chip--mut'">
-                  {{ hasSuccessfulMatch ? '已出报告' : matchStatusLabel(latestMatch?.status) || (canMatch ? '待生成' : '缺资料') }}
+                <span class="arena-chip" :class="hasTrustedMatch ? 'arena-chip--grn' : 'arena-chip--mut'">
+                  {{ hasTrustedMatch ? '可信报告' : isCompletedMatch ? '待复核' : matchStatusLabel(latestMatch?.status) || (canMatch ? '待生成' : '缺资料') }}
                 </span>
               </div>
               <div class="arena-prepare__match-score">{{ matchScoreText }}</div>
@@ -543,7 +543,13 @@ const getMatchReportPath = () => {
 
 const jdReady = computed(() => jdDraft.value.trim().length >= 20)
 const canMatch = computed(() => Boolean(toPositiveId(defaultResume.value?.id) && toPositiveId(currentTarget.value?.id)))
-const hasSuccessfulMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
+const isCompletedMatch = computed(() => latestMatch.value?.status === 'SUCCESS')
+const hasTrustedMatch = computed(() =>
+  isCompletedMatch.value
+  && latestMatch.value?.trustStatus === 'VERIFIED'
+  && latestMatch.value?.fallback !== true
+  && latestMatch.value?.schemaWarningCount === 0
+)
 const evidenceLoading = computed(() => secondaryLoading.value && canMatch.value && !latestMatch.value)
 const matchRunning = computed(() => {
   const status = latestMatch.value?.status
@@ -595,7 +601,8 @@ const matchScoreText = computed(() => {
   if (!latestMatch.value) return canMatch.value ? '待匹配' : '缺资料'
   if (latestMatch.value.status === 'FAILED') return '生成失败'
   if (latestMatch.value.status !== 'SUCCESS') return matchStatusLabel(latestMatch.value.status) || '处理中'
-  return latestMatch.value.overallScore != null ? `${latestMatch.value.overallScore}` : '已完成'
+  if (!hasTrustedMatch.value) return '待复核'
+  return latestMatch.value.overallScore != null ? `${latestMatch.value.overallScore}` : '未量化'
 })
 
 const summarizeRiskItems = (items: unknown, limit = 2) => toTextList(items).slice(0, limit)
@@ -617,7 +624,8 @@ const matchSummary = computed(() => {
   if (latestMatch.value.status === 'FAILED') {
     return friendlyMatchFailure(latestMatch.value.errorMessage)
   }
-  if (!hasSuccessfulMatch.value) return '匹配报告还在生成中，请等待完成后再把结论用于训练。'
+  if (!isCompletedMatch.value) return '匹配报告还在生成中，请等待完成后再把结论用于训练。'
+  if (!hasTrustedMatch.value) return '匹配报告已生成，但未通过可信校验。当前数字和缺口只可复核，不能解锁能力画像或训练。'
   const strengths = summarizeRiskItems(latestMatch.value.strengths, 2)
   const gaps = summarizeRiskItems(latestMatch.value.gaps, 2)
   const parts = [
@@ -633,8 +641,8 @@ const readinessSignals = computed(() => [
   Boolean(resumeDetail.value?.projects?.length),
   Boolean(currentTarget.value),
   currentTarget.value?.parseStatus === 'PARSED',
-  hasSuccessfulMatch.value,
-  Boolean((skillOverview.value?.topGaps || []).length)
+  hasTrustedMatch.value,
+  hasTrustedMatch.value && Boolean((skillOverview.value?.topGaps || []).length)
 ])
 const readinessReadyCount = computed(() => readinessSignals.value.filter(Boolean).length)
 const readinessProgressPercent = computed(() => Math.round((readinessReadyCount.value / readinessSignals.value.length) * 100))
@@ -646,7 +654,8 @@ const readinessHint = computed(() => {
   if (evidenceLoading.value) return '正在补齐最近匹配报告和项目证据。'
   if (!latestMatch.value) return '简历和岗位已具备，下一步生成匹配报告。'
   if (latestMatch.value.status === 'FAILED') return '上次匹配失败，建议先重新生成报告。'
-  if (hasSuccessfulMatch.value) return '已有可信匹配依据，可以进入训练。'
+  if (isCompletedMatch.value && !hasTrustedMatch.value) return '最近报告仍待复核，暂不解锁能力画像或训练。'
+  if (hasTrustedMatch.value) return '已有可信匹配依据，可以进入训练。'
   return '匹配报告还未完成，先不要把训练结论当作依据。'
 })
 
@@ -691,11 +700,19 @@ const nextStep = computed(() => {
       path: getMatchReportPath()
     }
   }
-  if (!hasSuccessfulMatch.value) {
+  if (!isCompletedMatch.value) {
     return {
       title: '等待匹配完成',
       desc: '报告未成功前不把推荐题和面试训练标成已具备依据，避免误导训练方向。',
       cta: '查看匹配进度',
+      path: getMatchReportPath()
+    }
+  }
+  if (!hasTrustedMatch.value) {
+    return {
+      title: '先复核匹配报告',
+      desc: '当前报告未满足可信判定，不能据此生成能力画像、推荐题或岗位面试。',
+      cta: '查看并重新生成',
       path: getMatchReportPath()
     }
   }
@@ -822,7 +839,7 @@ const targetNodeState = computed<NodeState>(() => {
   return 'current'
 })
 const matchNodeState = computed<NodeState>(() => {
-  if (hasSuccessfulMatch.value) return 'done'
+  if (hasTrustedMatch.value) return 'done'
   if (latestMatch.value?.status === 'FAILED') return 'failed'
   if (matchRunning.value || evidenceLoading.value) return 'running'
   if (!canMatch.value) return 'locked'
@@ -853,14 +870,16 @@ const mainNodes = computed<MapNode[]>(() => [
   {
     key: 'match',
     title: '第 3 步 · 生成 JD 匹配报告',
-    desc: hasSuccessfulMatch.value
+    desc: hasTrustedMatch.value
       ? `匹配分 ${matchScoreText.value} · 能力缺口已纳入训练建议`
+      : isCompletedMatch.value
+        ? '报告待复核，数字和缺口暂不用于训练'
       : latestMatch.value?.status === 'FAILED'
         ? '上次生成失败，请重新生成报告'
         : matchNodeState.value === 'running'
           ? '报告生成中，稍等片刻'
           : '对齐岗位风险、简历证据和能力缺口',
-    cta: hasSuccessfulMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新生成' : '发起匹配',
+    cta: hasTrustedMatch.value || isCompletedMatch.value ? '查看匹配报告' : latestMatch.value?.status === 'FAILED' ? '重新生成' : '发起匹配',
     xp: 120,
     state: matchNodeState.value,
     action: goMatchAction
@@ -887,9 +906,9 @@ const sideNodes = computed(() => [
   {
     key: 'train',
     title: '回流今日训练',
-    desc: hasSuccessfulMatch.value ? '匹配已就绪，今日训练已按能力缺口安排' : '请先完成第 3 步 JD 匹配',
+    desc: hasTrustedMatch.value ? '匹配已就绪，今日训练已按能力缺口安排' : '请先完成可信的第 3 步 JD 匹配',
     xp: 90,
-    done: hasSuccessfulMatch.value,
+    done: hasTrustedMatch.value,
     path: '/dashboard'
   }
 ])
@@ -914,7 +933,7 @@ const toKeywordCoverage = (item: ResumeJobMatchDetailItemVO): KeywordCoverageIte
 }
 
 const keywordCoverage = computed<KeywordCoverageItem[]>(() => {
-  const details = hasSuccessfulMatch.value ? latestMatch.value?.details || [] : []
+  const details = hasTrustedMatch.value ? latestMatch.value?.details || [] : []
   if (details.length) return details.slice(0, 8).map(toKeywordCoverage)
 
   const analysis = currentTarget.value as (TargetJobVO & Partial<JobDescriptionAnalysisVO>) | null
@@ -976,12 +995,12 @@ const projectCards = computed<ProjectCard[]>(() => {
 
 // ---- 风险卡 ----
 const riskItems = computed(() => {
-  const matchGaps = hasSuccessfulMatch.value ? summarizeRiskItems(latestMatch.value?.gaps, 2) : []
-  const skillGaps = hasSuccessfulMatch.value ? (skillOverview.value?.topGaps || [])
+  const matchGaps = hasTrustedMatch.value ? summarizeRiskItems(latestMatch.value?.gaps, 2) : []
+  const skillGaps = hasTrustedMatch.value ? (skillOverview.value?.topGaps || [])
     .map((gap) => gap.skillName || gap.gapDescription || '')
     .filter(Boolean)
     .slice(0, 2) : []
-  const strengths = hasSuccessfulMatch.value ? summarizeRiskItems(latestMatch.value?.strengths, 2) : []
+  const strengths = hasTrustedMatch.value ? summarizeRiskItems(latestMatch.value?.strengths, 2) : []
   const risks = [...matchGaps, ...skillGaps]
 
   if (risks.length || strengths.length) {
@@ -1034,10 +1053,10 @@ const riskItems = computed(() => {
     },
     {
       source: '训练动作',
-      title: hasSuccessfulMatch.value ? '把缺口转成训练计划' : '先生成岗位匹配报告',
-      desc: hasSuccessfulMatch.value ? '优先处理最影响面试表达的短板。' : '报告成功后才会把风险、优势和下一步训练作为依据。',
-      cta: hasSuccessfulMatch.value ? '去训练' : '去匹配',
-      path: hasSuccessfulMatch.value ? '/questions/recommendations' : '/resume-match'
+      title: hasTrustedMatch.value ? '把缺口转成训练计划' : '先完成可信岗位匹配',
+      desc: hasTrustedMatch.value ? '优先处理最影响面试表达的短板。' : '只有通过可信校验的报告才会把风险、优势和下一步训练作为依据。',
+      cta: hasTrustedMatch.value ? '去训练' : '去匹配',
+      path: hasTrustedMatch.value ? '/questions/recommendations' : getMatchReportPath()
     },
     {
       source: '项目卡片',

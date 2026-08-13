@@ -94,7 +94,7 @@
           <el-button type="primary" plain @click="router.push({ path: '/resume-match', query: compactQuery({ targetJobId: currentTargetJobId }) })">去匹配</el-button>
         </div>
         <div v-else class="loop-summary">
-          <strong>{{ overview.latestMatch.overallScore ?? '--' }} 分</strong>
+          <strong>{{ latestMatchScoreText }}</strong>
           <span>{{ latestMatchSummary }}</span>
           <el-button
             type="primary"
@@ -108,13 +108,17 @@
 
     <section class="dashboard-grid">
       <div v-if="skillLoading || (skillOverview && !skillOverview.empty)" class="content-panel">
-        <div class="section-head"><div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div><el-button text @click="router.push('/skill-profile')">查看</el-button></div>
+        <div class="section-head">
+          <div><h2>能力画像</h2><p>展示与目标岗位相关的能力概览。</p></div>
+          <el-button v-if="latestMatchTrusted" text @click="router.push('/skill-profile')">查看</el-button>
+          <el-button v-else text @click="router.push('/resume-match')">先完成可信匹配</el-button>
+        </div>
         <AppState v-if="skillLoading" type="loading" title="正在读取能力画像" />
         <div v-else-if="skillOverview" class="skill-summary">
-          <strong>{{ skillOverview.overallScore ?? '--' }}</strong>
+          <strong>{{ skillProfileScoreText }}</strong>
           <span>{{ skillOverview.profileName || '当前能力画像' }}</span>
           <p>{{ skillOverview.summary || '暂无画像摘要。' }}</p>
-          <el-progress :percentage="Number(skillOverview.overallScore || 0)" :stroke-width="10" />
+          <el-progress v-if="skillProfileScore != null" :percentage="skillProfileScore" :stroke-width="10" />
         </div>
       </div>
 
@@ -224,11 +228,26 @@ const latestMatchReportId = computed(() => overview.value?.latestMatch?.matchRep
 const latestMatchTrusted = computed(() => {
   const match = overview.value?.latestMatch
   return latestMatchStatus.value === 'SUCCESS' &&
-    !match?.fallback &&
-    String(match?.trustStatus || '').toUpperCase() === 'VERIFIED' &&
-    match?.schemaWarningCount != null &&
-    Number(match.schemaWarningCount) === 0
+    match?.trustStatus === 'VERIFIED' &&
+    match?.fallback !== true &&
+    match?.schemaWarningCount === 0
 })
+const toQuantifiedScore = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return undefined
+  const score = Number(value)
+  return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : undefined
+}
+const latestMatchScore = computed(() =>
+  latestMatchTrusted.value ? toQuantifiedScore(overview.value?.latestMatch?.overallScore) : undefined
+)
+const latestMatchScoreText = computed(() => {
+  if (!latestMatchTrusted.value) return latestMatchStatus.value === 'SUCCESS' ? '结果待复核' : formatStatus(latestMatchStatus.value)
+  return latestMatchScore.value == null ? '匹配分待量化' : `${latestMatchScore.value} 分`
+})
+const skillProfileScore = computed(() =>
+  latestMatchTrusted.value ? toQuantifiedScore(skillOverview.value?.overallScore) : undefined
+)
+const skillProfileScoreText = computed(() => skillProfileScore.value ?? '--')
 const latestSuccessfulMatchReportId = computed(() => latestMatchTrusted.value ? latestMatchReportId.value : undefined)
 const latestSuccessfulMatch = computed(() => latestMatchTrusted.value ? overview.value?.latestMatch : null)
 const activeStudyProgress = computed(() => overview.value?.studyProgress || overview.value?.activeStudyPlan || null)
@@ -316,7 +335,9 @@ const recommendationQuery = computed(() => compactQuery({
   batchId: overview.value?.recommendedQuestions?.batchId,
   studyPlanId: activeStudyProgress.value?.planId,
   matchReportId: overview.value?.recommendedQuestions?.matchReportId || (activeStudyProgress.value?.planId ? undefined : latestSuccessfulMatchReportId.value),
-  skillProfileId: overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId,
+  skillProfileId: latestMatchTrusted.value
+    ? overview.value?.recommendedQuestions?.skillProfileId || skillOverview.value?.profileId
+    : undefined,
   sourceType: overview.value?.recommendedQuestions?.sourceType,
   sourceId: overview.value?.recommendedQuestions?.sourceId,
   targetJobId: currentTargetJobId.value
@@ -392,7 +413,13 @@ const metrics = computed(() => [
   { label: '学习计划', value: overview.value?.studyPlanCount ?? 0, hint: activeStudyProgress.value?.todayStatus === 'NO_SCHEDULE'
     ? '当前路线业务日无安排'
     : `${activeStudyProgress.value?.todayDoneTaskCount ?? overview.value?.todayCompletedTaskCount ?? 0}/${activeStudyProgress.value?.todayTaskCount ?? overview.value?.todayTaskCount ?? 0} 业务日任务`, path: '/study-plans', icon: BookOpenCheck },
-  { label: '能力分', value: skillOverview.value?.overallScore ?? '--', hint: `${skillOverview.value?.gapCount ?? 0} 个短板`, path: '/skill-profile', icon: Radar }
+  {
+    label: '能力分',
+    value: skillProfileScoreText.value,
+    hint: latestMatchTrusted.value ? `${skillOverview.value?.gapCount ?? 0} 个短板` : '需先完成可信匹配',
+    path: latestMatchTrusted.value ? '/skill-profile' : '/resume-match',
+    icon: Radar
+  }
 ])
 const onboardingSteps = computed(() => [
   {

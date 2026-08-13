@@ -23,9 +23,9 @@
 
     <section class="task-workspace">
       <el-tabs v-model="workspaceTab" class="workspace-tabs">
-        <el-tab-pane :label="`待处理 ${activeTasks.length ? `(${activeTasks.length})` : ''}`" name="pending" />
+        <el-tab-pane :label="`待处理 ${pendingTasks.length ? `(本页 ${pendingTasks.length})` : ''}`" name="pending" />
         <el-tab-pane :label="`生成进度 ${activeAsyncTasks.length ? `(${activeAsyncTasks.length})` : ''}`" name="progress" />
-        <el-tab-pane :label="`历史 ${historyTasks.length ? `(${historyTasks.length})` : ''}`" name="history" />
+        <el-tab-pane :label="`历史 ${historyTasks.length ? `(本页 ${historyTasks.length})` : ''}`" name="history" />
       </el-tabs>
 
     <template v-if="workspaceTab === 'progress'">
@@ -89,10 +89,11 @@
         <AppState
           v-if="!asyncTasks.length && !asyncLoading"
           type="empty"
-          title="暂无处理进度"
-          description="提交岗位分析、简历解析、匹配报告、今日计划或推荐题生成后，可以在这里查看处理进度。"
+          :title="asyncEmptyTitle"
+          :description="asyncEmptyDescription"
         >
-          <el-button @click="handleAsyncReset">清空筛选</el-button>
+          <el-button v-if="hasExactAsyncReceiptFilter" @click="handleAsyncReset">查看全部处理记录</el-button>
+          <el-button v-else @click="handleAsyncReset">清空筛选</el-button>
         </AppState>
 
         <article v-for="task in asyncTasks" :key="task.id" class="async-task-card" :class="`is-${normalizeStatus(task.status).toLowerCase()}`">
@@ -121,7 +122,9 @@
           <span>{{ workspaceTab === 'pending' ? '待处理' : '历史记录' }}</span>
           <strong>{{ workspaceTab === 'pending' ? '从一项任务开始，不必同时处理全部事项。' : '已完成、暂缓和跳过的任务会保留在这里，便于回顾。' }}</strong>
         </div>
-        <small v-if="workspaceTab === 'pending'">{{ workspaceTasks.length }} 项当前可推进 · 约 {{ workspaceEstimatedMinutes }} 分钟</small>
+        <small v-if="workspaceTab === 'pending'">
+          {{ taskScopeLabel }} · 服务端筛选共 {{ total }} 条记录 · 当前页 {{ workspaceTasks.length }} 项可推进 · 本页约 {{ workspaceEstimatedMinutes }} 分钟
+        </small>
       </div>
       <div class="filter-bar">
         <el-date-picker
@@ -547,6 +550,7 @@ import {
   startAgentTaskApi,
   submitAgentFeedbackApi
 } from '@/api/agent'
+import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getUserAsyncTaskDetailApi, getUserAsyncTasksApi } from '@/api/task'
 import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vue'
 import AppState from '@/components/common/AppState.vue'
@@ -839,10 +843,17 @@ const visibleTasks = computed(() =>
 const historyTasks = computed(() =>
   visibleTasks.value.filter((task) => ['DONE', 'SKIPPED', 'DEFERRED', 'EXPIRED', 'FAILED', 'SUCCESS', 'CANCELED'].includes(normalizeStatus(task.status)))
 )
-const workspaceTasks = computed(() => workspaceTab.value === 'history' ? historyTasks.value : activeTasks.value.filter((task) => visibleTasks.value.includes(task)))
+const pendingTasks = computed(() => activeTasks.value.filter((task) => visibleTasks.value.includes(task)))
+const workspaceTasks = computed(() => workspaceTab.value === 'history' ? historyTasks.value : pendingTasks.value)
 const workspaceEstimatedMinutes = computed(() =>
   workspaceTasks.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0)
 )
+const taskScopeLabel = computed(() => {
+  if (query.startDate && query.endDate && query.startDate === query.endDate) {
+    return `${query.startDate} · 全部岗位`
+  }
+  return '当前筛选范围'
+})
 const taskEmptyTitle = computed(() => hasTaskExperienceFilter.value ? '当前来源/可信度下暂无任务' : '暂无训练任务')
 const taskEmptyDescription = computed(() =>
   hasTaskExperienceFilter.value
@@ -875,6 +886,18 @@ const asyncActiveFilterItems = computed(() => {
   if (asyncQuery.bizId) items.push({ key: 'bizId', label: '关联记录', value: asyncQuery.bizId })
   if (asyncQuery.keyword) items.push({ key: 'keyword', label: '关键词', value: asyncQuery.keyword })
   return items
+})
+const hasExactAsyncReceiptFilter = computed(() =>
+  Boolean(asyncQuery.messageId || (asyncQuery.bizType && asyncQuery.bizId))
+)
+const asyncEmptyTitle = computed(() =>
+  hasExactAsyncReceiptFilter.value ? '处理记录仍在登记' : '暂无处理进度'
+)
+const asyncEmptyDescription = computed(() => {
+  if (hasExactAsyncReceiptFilter.value) {
+    return '本次提交对应的业务运行已登记，但任务中心暂未查询到处理记录。请稍后刷新；若持续没有记录，请保留关联记录和处理线索并联系管理员。'
+  }
+  return '提交岗位分析、简历解析、匹配报告、今日计划或推荐题生成后，可以在这里查看处理进度。'
 })
 
 const completionReviewItems = computed(() => {
@@ -1314,6 +1337,26 @@ const goAction = async (url: string) => {
   await router.push(resolved.path)
 }
 
+const asyncTaskPayloadRecord = (task: AsyncTaskVO) => {
+  const payload = task.payload
+  if (!payload) return null
+  try {
+    const parsed = JSON.parse(payload)
+    return isAsyncPayloadRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const getInterviewSessionId = (task: AsyncTaskVO) => {
+  const payload = asyncTaskPayloadRecord(task)
+  const sessionId = payload?.sessionId ?? payload?.interviewId
+  if (typeof sessionId === 'number' || (typeof sessionId === 'string' && sessionId.trim())) {
+    return String(sessionId)
+  }
+  return task.bizId || ''
+}
+
 const getAsyncTaskEntry = (task: AsyncTaskVO) => {
   const bizType = String(task.bizType || '')
   const bizId = task.bizId
@@ -1322,7 +1365,10 @@ const getAsyncTaskEntry = (task: AsyncTaskVO) => {
   if (bizType === 'resume-job-match.analyze' && bizId) return `/resume-match/${bizId}`
   if (bizType === 'agent.daily-plan.generate') return bizId ? `/agent/runs/${bizId}` : '/agent/today'
   if (['question.ai-generate', 'question.generate', 'question-recommendation.generate'].includes(bizType)) return '/questions/recommendations'
-  if (bizType === 'interview.report' && bizId) return `/interviews/${bizId}/report`
+  if (bizType === 'interview.report') {
+    const sessionId = getInterviewSessionId(task)
+    return sessionId ? `/interviews/${sessionId}/report` : ''
+  }
   if (bizType === 'study-plan.generate' && bizId) return `/study-plans?planId=${bizId}`
   return ''
 }
@@ -1680,6 +1726,13 @@ const handleReset = () => {
   fetchTasks()
 }
 
+const applyTodayTaskScope = (date?: string) => {
+  if (!date) return
+  dateRange.value = [date, date]
+  query.startDate = date
+  query.endDate = date
+}
+
 const handleAsyncSearch = () => {
   applyAsyncDiagnosticKeyword()
   asyncQuery.pageNum = 1
@@ -1915,8 +1968,14 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
   applyRouteAsyncDiagnosticQuery()
+  try {
+    const overview = await getUserDashboardOverviewApi()
+    applyTodayTaskScope(overview.businessDate)
+  } catch {
+    // Keep the task-center date filter empty when the business-date source is unavailable.
+  }
   void fetchTasks()
   void fetchAsyncTasks()
 })

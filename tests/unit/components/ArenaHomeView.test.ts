@@ -23,12 +23,16 @@ const overview = vi.hoisted(() => ({
   } as Record<string, unknown>
 }))
 const completeAgentTaskApi = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 1, status: 'DONE' }))
+const getV3DashboardOverviewApi = vi.hoisted(() => vi.fn())
+const getLatestJobReadinessApi = vi.hoisted(() => vi.fn())
 
 vi.mock('@/composables/useUserHomeDataCache', () => ({
   fetchCachedTodayAgentTasks: vi.fn(async () => todayTasks.value),
   fetchCachedDashboardOverview: vi.fn(async () => overview.value)
 }))
 vi.mock('@/api/agent', () => ({ completeAgentTaskApi }))
+vi.mock('@/api/dashboard', () => ({ getV3DashboardOverviewApi }))
+vi.mock('@/api/jobRequirement', () => ({ getLatestJobReadinessApi }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ path: '/dashboard', fullPath: '/dashboard', meta: {} })
@@ -54,6 +58,18 @@ describe('ArenaHomeView', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     completeAgentTaskApi.mockClear()
+    getV3DashboardOverviewApi.mockResolvedValue({
+      currentTargetJob: { targetJobId: 88 }
+    })
+    getLatestJobReadinessApi.mockResolvedValue({
+      targetJobId: 88,
+      readinessScore: 76,
+      missingCount: 2,
+      fallback: false,
+      sampleInsufficient: false,
+      dimensions: [],
+      warnings: []
+    })
     overview.value = {
       resumeCount: 1,
       interviewCount: 1,
@@ -189,14 +205,30 @@ describe('ArenaHomeView', () => {
     expect(gameProfile.xp).toBe(60 + 100)
   })
 
-  it('computes power ring from readiness overview data', async () => {
+  it('renders the backend readiness snapshot instead of a client-side weighted score', async () => {
     const wrapper = mountHome()
     await flush()
 
     const hole = wrapper.get('.arena-ring__hole')
-    const score = Number(hole.text().replace(/[^\d]/g, ''))
-    expect(score).toBeGreaterThan(0)
-    expect(score).toBeLessThanOrEqual(100)
+    expect(hole.text()).toContain('76')
+    expect(wrapper.text()).toContain('仍有 2 项岗位要求待补齐')
+    expect(getLatestJobReadinessApi).toHaveBeenCalledWith(88)
+  })
+
+  it('does not display a score when the only readiness snapshot is fallback evidence', async () => {
+    getLatestJobReadinessApi.mockResolvedValue({
+      targetJobId: 88,
+      readinessScore: 92,
+      fallback: true,
+      sampleInsufficient: false,
+      dimensions: [],
+      warnings: []
+    })
+    const wrapper = mountHome()
+    await flush()
+
+    expect(wrapper.get('.arena-ring__hole').text()).toContain('--')
+    expect(wrapper.text()).toContain('当前证据不足，暂不展示准备度分数')
   })
 
   it('keeps the full seven-day streak visible', async () => {

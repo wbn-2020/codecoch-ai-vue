@@ -14,7 +14,7 @@
           :aria-labelledby="`tools-group-${group.key}`"
         >
           <h2 :id="`tools-group-${group.key}`" class="arena-tools__group-title">
-            <span class="arena-tools__group-symbol" aria-hidden="true">{{ group.icon }}</span>
+            <component :is="group.icon" class="arena-tools__group-symbol" :size="15" aria-hidden="true" />
             {{ group.title }}
           </h2>
 
@@ -35,7 +35,7 @@
               @click="openTool(item)"
             >
               <span class="arena-tools__icon" :class="`is-${group.key}`">
-                <span aria-hidden="true">{{ item.icon }}</span>
+                <component :is="item.icon" :size="18" stroke-width="1.9" aria-hidden="true" />
               </span>
               <span class="arena-tools__copy">
                 <strong>{{ item.title }}</strong>
@@ -61,8 +61,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
+import {
+  BarChart3,
+  BookOpenText,
+  BriefcaseBusiness,
+  CalendarDays,
+  ClipboardCheck,
+  FileArchive,
+  FlaskConical,
+  FolderKanban,
+  Map,
+  Presentation,
+  Settings,
+  Target,
+  TreePine
+} from 'lucide-vue-next'
 
 import { appConfig } from '@/config'
 
@@ -70,14 +85,14 @@ interface ToolItem {
   title: string
   description: string
   path: string
-  icon: string
+  icon: Component
   enabled?: boolean
 }
 
 interface ToolGroup {
-  key: 'progress' | 'assets' | 'growth' | 'other'
+  key: 'today' | 'assets' | 'analysis' | 'settings'
   title: string
-  icon: string
+  icon: Component
   items: ToolItem[]
 }
 
@@ -85,54 +100,55 @@ const router = useRouter()
 
 const groups: ToolGroup[] = [
   {
-    key: 'progress',
-    title: '投递管理',
-    icon: '📈',
+    key: 'today',
+    title: '今天要做',
+    icon: ClipboardCheck,
     items: [
-      { title: '投递管理', description: '1 条推进中 · 无逾期', path: '/applications', icon: '📮' },
-      { title: '求职日历', description: '跨投递的安排与提醒', path: '/career-calendar', icon: '📅' }
+      { title: '今日任务', description: '查看今天的安排与完成进度', path: '/agent/today', icon: ClipboardCheck },
+      { title: '投递管理', description: '跟进岗位、事件与提醒', path: '/applications', icon: BriefcaseBusiness },
+      { title: '求职日历', description: '跨投递的安排与提醒', path: '/career-calendar', icon: CalendarDays }
     ]
   },
   {
     key: 'assets',
-    title: '求职资料',
-    icon: '🗂',
+    title: '资料资产',
+    icon: FolderKanban,
     items: [
-      { title: '项目证据库', description: '沉淀可追问的项目素材', path: '/project-evidence', icon: '🗂' },
-      { title: '投递包', description: '组合简历、材料与导出', path: '/application-packages', icon: '📦' },
+      { title: '项目证据库', description: '沉淀可追问的项目素材', path: '/project-evidence', icon: FolderKanban },
+      { title: '投递包', description: '组合简历、材料与导出', path: '/application-packages', icon: FileArchive },
       {
         title: '个人知识库',
         description: appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放',
         path: '/knowledge',
-        icon: '📚',
+        icon: BookOpenText,
         enabled: appConfig.enableV4KnowledgePreview
       }
     ]
   },
   {
-    key: 'growth',
-    title: '成长分析',
-    icon: '🌱',
+    key: 'analysis',
+    title: '分析复盘',
+    icon: BarChart3,
     items: [
-      { title: '能力图谱', description: '查看能力结构与待补充项', path: '/ability-map', icon: '🌳' },
+      { title: '能力图谱', description: '查看能力结构与待补充项', path: '/ability-map', icon: TreePine },
       {
         title: '求职周报',
         description: '本周事实、变化与下一步',
         path: '/agent/weekly-reports',
-        icon: '📊',
+        icon: BarChart3,
         enabled: appConfig.enableV6WeeklyReport
       },
-      { title: '训练分析', description: '正确率与个人趋势', path: '/analytics/personal', icon: '📉' }
+      { title: '训练分析', description: '正确率与个人趋势', path: '/analytics/personal', icon: Target }
     ]
   },
   {
-    key: 'other',
-    title: '其他',
-    icon: '⚙️',
+    key: 'settings',
+    title: '设置',
+    icon: Settings,
     items: [
-      { title: '求职实验台', description: '策略分组与复盘', path: '/job-experiments', icon: '🧪' },
-      { title: '作品集演示', description: '可展示的项目成果', path: '/portfolio-demo', icon: '🖼' },
-      { title: '新手引导', description: '重走一遍上手路线', path: '/onboarding', icon: '🧭' }
+      { title: '求职实验台', description: '策略分组与复盘', path: '/job-experiments', icon: FlaskConical },
+      { title: '作品集演示', description: '可展示的项目成果', path: '/portfolio-demo', icon: Presentation },
+      { title: '新手引导', description: '重走一遍上手路线', path: '/onboarding', icon: Map }
     ]
   }
 ]
@@ -189,8 +205,7 @@ function openTool(item: ToolItem) {
 }
 
 .arena-tools__group-symbol {
-  font-size: 14px;
-  line-height: 1;
+  flex: 0 0 auto;
 }
 
 .arena-tools__rows {
@@ -283,12 +298,12 @@ function openTool(item: ToolItem) {
     background: var(--arena-vio-soft);
   }
 
-  &.is-growth {
+  &.is-analysis {
     color: var(--arena-amber);
     background: var(--arena-amber-soft);
   }
 
-  &.is-other {
+  &.is-settings {
     background: var(--arena-line2);
   }
 }

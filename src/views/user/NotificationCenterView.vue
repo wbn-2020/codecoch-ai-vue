@@ -147,10 +147,10 @@ import {
   type NotificationVO
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
-import { resolveNotificationAction } from '@/features/notifications'
+import { normalizeNotificationType, resolveNotificationAction } from '@/features/notifications'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
-import { formatDateTime, formatNotificationType, notificationTypeLabels } from '@/utils/format'
+import { formatDateTime, notificationTypeLabels } from '@/utils/format'
 import { notifyUnreadChanged } from '@/utils/notificationEvents'
 import request from '@/utils/request'
 
@@ -174,10 +174,9 @@ const query = reactive<NotificationQueryDTO>({
 
 const notificationTypeOptions = Object.entries(notificationTypeLabels).map(([value, label]) => ({ value, label }))
 
-const typeLabel = formatNotificationType
 const notificationTypeText = (type?: string | null) => {
   if (type === 'AGENT_REMINDER') return '训练回访提醒'
-  return typeLabel(type)
+  return normalizeNotificationType({ type: type || undefined } as NotificationVO).label
 }
 
 const normalizeTypeToken = (value?: string) => String(value || '').replace(/[.-]/g, '_').toUpperCase()

@@ -81,6 +81,7 @@ const normalizeQuestion = (question: any) => {
     stageId: question.stageId || 0,
     stageName: question.stageName,
     followUpReason: question.followUpReason,
+    questionPresentedAt: question.questionPresentedAt || question.question_presented_at,
     knowledgePoints: normalizeKnowledgePoints(question.knowledgePoints)
   }
 }
@@ -92,6 +93,10 @@ const normalizeCurrent = (current: any): InterviewCurrentVO => ({
   status: current.interviewStatus || current.status,
   interviewStatus: current.interviewStatus || current.status,
   currentStage: current.currentStage ? normalizeStage(current.currentStage) : undefined,
+  currentQuestionIndex: current.currentQuestionIndex ?? current.question?.currentQuestionIndex,
+  totalQuestionCount: current.totalQuestionCount ?? current.question?.totalQuestionCount,
+  answeredQuestionCount: current.answeredQuestionCount ?? current.question?.answeredQuestionCount,
+  overallProgress: current.overallProgress ?? current.question?.overallProgress,
   currentQuestion: normalizeQuestion(current.currentQuestion || current.question)
 })
 

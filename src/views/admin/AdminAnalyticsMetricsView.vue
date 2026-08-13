@@ -138,6 +138,15 @@
     </section>
 
     <el-dialog v-model="metricDialogVisible" :title="metricForm.id ? '编辑指标' : '新增指标'" width="680px">
+      <el-alert
+        v-if="metricSaveError"
+        class="dialog-error-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="指标保存失败"
+        :description="metricSaveError"
+      />
       <el-form :model="metricForm" label-position="top">
         <div class="form-grid">
           <el-form-item label="指标编码" required>
@@ -218,6 +227,7 @@ const metrics = ref<AdminAnalyticsMetricDefinitionVO[]>([])
 const total = ref(0)
 const metricDialogVisible = ref(false)
 const savingMetric = ref(false)
+const metricSaveError = ref('')
 const {
   tableSize,
   tableSizeOptions,
@@ -281,11 +291,11 @@ const metricEnabled = computed({
   }
 })
 
-const getErrorMessage = (error: unknown) => {
+const getErrorMessage = (error: unknown, fallback = '操作失败，请稍后重试。') => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, fallback)
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+  return fallback
 }
 
 const fetchMetrics = async () => {
@@ -306,6 +316,7 @@ const fetchMetrics = async () => {
 
 const openMetricDialog = (row?: AdminAnalyticsMetricDefinitionVO) => {
   if (!guardAdminMobileWrite()) return
+  metricSaveError.value = ''
   Object.assign(metricForm, {
     id: row?.id,
     metricCode: row?.metricCode || '',
@@ -325,7 +336,7 @@ const saveMetric = async () => {
     ElMessage.warning('请填写指标编码和指标名称')
     return
   }
-  savingMetric.value = true
+  metricSaveError.value = ''
   try {
     const payload: AdminAnalyticsMetricSaveDTO = {
       metricCode: metricForm.metricCode.trim(),
@@ -348,6 +359,7 @@ const saveMetric = async () => {
       confirmButtonText: '确认保存'
     })
     if (!confirmed) return
+    savingMetric.value = true
     const operation = metricForm.id ? `analytics-metric-update-${metricForm.id}` : 'analytics-metric-create'
     const confirmedPayload: AdminAnalyticsMetricSaveDTO = {
       ...payload,
@@ -364,6 +376,9 @@ const saveMetric = async () => {
     ElMessage.success('指标已保存')
     metricDialogVisible.value = false
     await fetchMetrics()
+  } catch (error) {
+    metricSaveError.value = getErrorMessage(error, '指标保存失败，请检查指标编码和数据来源后重试。')
+    ElMessage.error(metricSaveError.value)
   } finally {
     savingMetric.value = false
   }
@@ -399,6 +414,10 @@ onMounted(fetchMetrics)
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.dialog-error-alert {
+  margin-bottom: 16px;
 }
 
 .table-view-tools {

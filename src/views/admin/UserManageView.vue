@@ -430,7 +430,10 @@ const handleResetPassword = async (row: AdminUserVO) => {
     resetPasswordValue.value = newPassword || ''
     resetPasswordDialogVisible.value = true
     ElMessage.success('临时密码已生成，请在一次性窗口中完成安全交接。')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '用户密码重置失败，请确认账号状态和操作权限后重试。'))
   } finally {
+    await fetchUsers()
     passwordResettingId.value = null
   }
 }
@@ -528,8 +531,10 @@ const handleAssignRoles = async () => {
     })
     ElMessage.success('用户角色已更新')
     roleAssignDialogVisible.value = false
-    await fetchUsers()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '用户角色分配失败，当前授权状态已重新加载。'))
   } finally {
+    await fetchUsers()
     roleAssignSaving.value = false
   }
 }
@@ -564,8 +569,10 @@ const handleToggleStatus = async (row: AdminUserVO) => {
       idempotencyKey: createOperationIdempotencyKey(`admin-user-status-${row.id}`)
     })
     ElMessage.success('用户状态已更新')
-    await fetchUsers()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `用户${actionLabel}失败，当前账号状态已重新加载。`))
   } finally {
+    await fetchUsers()
     statusChangingId.value = null
   }
 }

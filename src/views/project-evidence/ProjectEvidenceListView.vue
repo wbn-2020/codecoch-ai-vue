@@ -17,7 +17,7 @@
           </el-button>
           <el-button size="large" @click="router.push('/resumes')">
             <FileText :size="17" />
-            去简历实验室
+            回到简历工作台
           </el-button>
         </div>
       </div>
@@ -148,7 +148,7 @@
       >
         <div class="state-actions">
           <el-button type="primary" @click="router.push('/project-evidence/create')">新建项目证据</el-button>
-          <el-button @click="router.push('/resumes')">去简历实验室</el-button>
+          <el-button @click="router.push('/resumes')">回到简历工作台</el-button>
         </div>
       </AppState>
 

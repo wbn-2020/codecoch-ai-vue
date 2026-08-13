@@ -24,4 +24,17 @@ describe('JobApplicationView information hierarchy', () => {
     expect(source).toContain('v-if="hasListFilter" type="primary" @click="clearStatusFilter"')
     expect(source).toContain('v-else type="primary" :icon="Plus" @click="openCreate"')
   })
+
+  it('uses recoverable archive controls and restricts deletion to archived applications', () => {
+    expect(source).toContain('command="archive"')
+    expect(source).toContain('command="restore"')
+    expect(source).toContain('v-if="item.archivedAt" command="delete"')
+    expect(source).toContain('显示已归档')
+    expect(source).toContain('archiveApplicationApi')
+    expect(source).toContain('restoreApplicationApi')
+    expect(source).toContain('deleteApplicationApi')
+    expect(source).toContain('归档不等于删除')
+    expect(source).toContain('只有已归档记录才能删除')
+    expect(source).toContain('用户端不提供自行恢复入口')
+  })
 })

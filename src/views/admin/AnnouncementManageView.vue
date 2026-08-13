@@ -398,20 +398,22 @@ const handleSave = async () => {
     ElMessage.success('公告已保存')
     dialogVisible.value = false
     resetForm()
-    await fetchAnnouncements()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '公告保存失败，请检查内容后重试。'))
   } finally {
+    await fetchAnnouncements()
     saving.value = false
   }
 }
 
-const runRowAction = async (key: string, action: () => Promise<void>) => {
+const runRowAction = async (key: string, action: () => Promise<void>, failureMessage: string) => {
   actionLoadingKey.value = key
   try {
     await action()
-    await fetchAnnouncements()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, failureMessage))
   } finally {
+    await fetchAnnouncements()
     actionLoadingKey.value = ''
   }
 }
@@ -437,7 +439,7 @@ const handlePublish = async (row: AnnouncementVO) => {
       idempotencyKey: createOperationIdempotencyKey(`announcement-publish-${row.id}`)
     })
     ElMessage.success('公告已发布')
-  })
+  }, '公告发布失败，当前公告状态已重新加载。')
 }
 
 const handleOffline = async (row: AnnouncementVO) => {
@@ -461,7 +463,7 @@ const handleOffline = async (row: AnnouncementVO) => {
       idempotencyKey: createOperationIdempotencyKey(`announcement-offline-${row.id}`)
     })
     ElMessage.success('公告已下线')
-  })
+  }, '公告下线失败，当前公告状态已重新加载。')
 }
 
 const handleDelete = async (row: AnnouncementVO) => {
@@ -485,7 +487,7 @@ const handleDelete = async (row: AnnouncementVO) => {
       idempotencyKey: createOperationIdempotencyKey(`announcement-delete-${row.id}`)
     })
     ElMessage.success('公告已删除')
-  })
+  }, '公告删除失败，当前公告状态已重新加载。')
 }
 
 const handleSearch = () => {

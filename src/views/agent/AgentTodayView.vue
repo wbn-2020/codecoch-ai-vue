@@ -7,7 +7,7 @@
           <span>今日准备</span>
         </div>
         <h1>先推进一件最重要的事</h1>
-        <p>{{ plan?.targetJobTitle ? `围绕「${plan.targetJobTitle}」安排今天的准备节奏。` : '今天只聚焦当前优先任务，其余材料按需查看。' }}</p>
+        <p>{{ plan?.targetJobTitle ? `当前计划围绕「${plan.targetJobTitle}」生成；下方任务汇总包含今天所有岗位的待办。` : '下方任务汇总包含今天所有岗位的待办，计划会按当前目标岗位单独生成。' }}</p>
       </div>
       <div class="agent-hero__actions">
         <el-date-picker v-model="queryDate" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="loadPage(true)" />
@@ -79,7 +79,7 @@
         <div v-if="showAsyncTaskEntry" class="plan-async-row">
           <div>
             <strong>生成任务已接收</strong>
-            <span>计划结果会自动回到这里，也可以前往任务中心继续查看。</span>
+            <span>{{ plan?.asyncReceiptStatus === 'RUN_REGISTERED' ? '计划运行已登记，处理记录可能仍在写入任务中心。' : '计划结果会自动回到这里，也可以前往任务中心继续查看。' }}</span>
           </div>
           <el-button @click="goAsyncTaskCenter">查看进度</el-button>
         </div>
@@ -1301,7 +1301,7 @@ const loadPage = async (force?: unknown) => {
       planChangeResult
     ] = await Promise.allSettled([
       fetchCachedLatestDailyPlan(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
-      fetchCachedTodayAgentTasks(queryDate.value, shouldForceRefresh(force), currentTargetJobId.value),
+      fetchCachedTodayAgentTasks(queryDate.value, shouldForceRefresh(force)),
       getCurrentAgentWeekPlanApi({
         date: queryDate.value,
         targetJobId: currentTargetJobId.value
@@ -1429,7 +1429,9 @@ const handleGenerate = async () => {
     queryDate.value = generateForm.date
     closeGenerateDialogAfterSubmit()
     if (showAsyncTaskEntry.value) {
-      ElMessage.success(plan.value?.asyncMessageId ? '今日计划已提交，可在任务中心查看进度。' : '今日计划已提交生成')
+      ElMessage.success(plan.value?.asyncMessageId
+        ? '今日计划已提交，可在任务中心查看进度。'
+        : '今日计划运行已登记，处理记录写入后可在任务中心查看。')
     } else {
       ElMessage.success('今日计划已生成')
     }

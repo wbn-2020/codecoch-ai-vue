@@ -50,8 +50,21 @@ const componentStubs = {
   'el-alert': {
     template: '<div class="el-alert-stub"></div>'
   },
+  'el-dialog': {
+    props: ['modelValue'],
+    template: '<div v-if="modelValue" class="el-dialog-stub"><slot /><slot name="footer" /></div>'
+  },
   'el-button': {
     template: '<button class="el-button-stub" v-bind="$attrs"><slot /></button>'
+  },
+  'el-form': {
+    template: '<form><slot /></form>'
+  },
+  'el-form-item': {
+    template: '<div><slot /></div>'
+  },
+  'el-input-number': {
+    template: '<input />'
   },
   'el-dropdown': {
     template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>'
@@ -194,5 +207,129 @@ describe('InterviewReportView metrics', () => {
 
     expect(wrapper.find('.voice-delivery-report').text()).toContain('158')
     expect(wrapper.find('.voice-delivery-report').text()).toContain('停顿指标不可用')
+  })
+
+  it('does not present a fallback reference report as a trusted score', async () => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      id: 103,
+      reportId: 103,
+      interviewId: 42,
+      reportStatus: 'GENERATED',
+      totalScore: 72,
+      trustStatus: 'FALLBACK',
+      fallback: true,
+      adviceEvidence: '[{"fallback":true,"source":"LOCAL_MOCK"}]'
+    })
+
+    const wrapper = await mountReport()
+
+    expect(wrapper.find('.settlement-score').text()).toContain('--')
+    expect(wrapper.text()).toContain('评分待确认')
+    expect(wrapper.text()).toContain('本轮没有可信评分')
+  })
+
+  it.each([
+    ['PARTIAL', false],
+    [undefined, false],
+    ['UNKNOWN', false]
+  ])('fails closed for %s report trust and disables study-plan generation', async (trustStatus, fallback) => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      id: 104,
+      reportId: 104,
+      interviewId: 42,
+      reportStatus: 'GENERATED',
+      totalScore: 86,
+      trustStatus,
+      fallback,
+      nextActions: [{
+        actionType: 'STUDY_PLAN',
+        title: '生成学习计划',
+        priority: 1
+      }]
+    } as never)
+
+    const wrapper = await mountReport()
+    const planButtons = wrapper
+      .findAll('.el-button-stub')
+      .filter((button) => button.text().includes('生成'))
+
+    expect(wrapper.find('.settlement-score').text()).toContain('--')
+    expect(wrapper.text()).toContain('无法确认真实评分，暂不比较历史变化')
+    expect(wrapper.text()).toContain('学习计划入口已禁用')
+    expect(planButtons.some((button) => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(generateStudyPlanApi).not.toHaveBeenCalled()
+  })
+
+  it('submits confirmed study-plan duration and daily minutes only for a verified report', async () => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      id: 105,
+      reportId: 105,
+      interviewId: 42,
+      reportStatus: 'GENERATED',
+      totalScore: 86,
+      trustStatus: 'VERIFIED',
+      fallback: false
+    })
+    vi.mocked(generateStudyPlanApi).mockResolvedValue({
+      planId: 501,
+      planStatus: 'ACTIVE',
+      durationDays: 14,
+      dailyMinutes: 60
+    })
+
+    const wrapper = await mountReport()
+    const openButton = wrapper
+      .findAll('.el-button-stub')
+      .find((button) => button.text().includes('生成学习计划') && button.attributes('disabled') === undefined)
+
+    expect(openButton).toBeDefined()
+    await openButton!.trigger('click')
+    await flushPromises()
+    await wrapper.find('.el-dialog-stub .el-button-stub:last-child').trigger('click')
+    await flushPromises()
+
+    expect(generateStudyPlanApi).toHaveBeenCalledWith({
+      reportId: 105,
+      expectedDurationDays: 14,
+      dailyMinutes: 60
+    })
+    expect(routerPush).toHaveBeenCalledWith('/study-plans?planId=501')
+  })
+
+  it('offers requery after three polling failures without regenerating the report', async () => {
+    vi.useFakeTimers()
+    vi.mocked(getInterviewReportApi)
+      .mockResolvedValueOnce({
+        interviewId: 42,
+        reportStatus: 'GENERATING'
+      } as never)
+      .mockRejectedValueOnce(new Error('network 1'))
+      .mockRejectedValueOnce(new Error('network 2'))
+      .mockRejectedValueOnce(new Error('network 3'))
+      .mockResolvedValueOnce({
+        interviewId: 42,
+        reportStatus: 'GENERATING'
+      } as never)
+
+    const wrapper = mount(InterviewReportView, {
+      global: { stubs: componentStubs }
+    })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('重新查询')
+    expect(retryInterviewReportApi).not.toHaveBeenCalled()
+
+    const requeryButton = wrapper
+      .findAll('.el-button-stub')
+      .find((button) => button.text().includes('重新查询'))
+    await requeryButton!.trigger('click')
+    await flushPromises()
+
+    expect(getInterviewReportApi).toHaveBeenCalledTimes(5)
+    expect(retryInterviewReportApi).not.toHaveBeenCalled()
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 })

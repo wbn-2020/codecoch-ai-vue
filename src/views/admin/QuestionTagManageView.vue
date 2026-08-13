@@ -274,7 +274,8 @@ const handleReset = () => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const actionLabel = editingId.value ? '更新题目标签' : '新增题目标签'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
@@ -310,6 +311,8 @@ const handleSave = async () => {
     ElMessage.success('标签已保存')
     dialogVisible.value = false
     await fetchTags()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目标签保存失败，请检查表单内容或权限后重试。'))
   } finally {
     saving.value = false
   }
@@ -328,14 +331,18 @@ const handleDelete = async (row: QuestionTagVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionTagApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed question tag delete from management page.',
-    idempotencyKey: createOperationIdempotencyKey('question-tag-delete')
-  })
-  ElMessage.success('标签已删除')
-  await fetchTags()
+  try {
+    await deleteQuestionTagApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed question tag delete from management page.',
+      idempotencyKey: createOperationIdempotencyKey('question-tag-delete')
+    })
+    ElMessage.success('标签已删除')
+    await fetchTags()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目标签删除失败，请确认没有题目依赖或稍后重试。'))
+  }
 }
 
 onMounted(fetchTags)

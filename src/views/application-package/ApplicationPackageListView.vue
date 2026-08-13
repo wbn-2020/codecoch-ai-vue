@@ -61,7 +61,7 @@
         <el-table-column label="就绪度" width="150">
           <template #default="{ row }">
             <el-tag :type="readinessTagType(row.readinessLevel)" effect="light">
-              {{ row.readinessLevel || 'UNKNOWN' }}
+              {{ readinessLabel(row.readinessLevel) }}
             </el-tag>
             <span v-if="row.readinessScore !== undefined" class="score">{{ row.readinessScore }}</span>
           </template>
@@ -113,7 +113,7 @@
           </span>
           <span class="package-mobile-card__meta">
             <el-tag :type="readinessTagType(row.readinessLevel)" effect="light">
-              {{ row.readinessLevel || 'UNKNOWN' }}
+              {{ readinessLabel(row.readinessLevel) }}
             </el-tag>
             <el-tag :type="packageStatusTagType(row.packageStatus)" effect="plain">
               {{ packageStatusLabel(row.packageStatus) }}
@@ -193,6 +193,20 @@ const readinessTagType = (level?: string) => {
   if (value === 'BLOCKED') return 'danger'
   if (value.startsWith('NEEDS_')) return 'warning'
   return 'info'
+}
+
+const readinessLabel = (level?: string) => {
+  const labels: Record<string, string> = {
+    READY: '可投递',
+    NEAR_READY: '接近就绪',
+    NEEDS_WORK: '需要补充',
+    NEEDS_RESUME: '缺少简历材料',
+    NEEDS_EVIDENCE: '缺少项目证据',
+    NEEDS_MATCH: '缺少匹配报告',
+    BLOCKED: '暂不可投递',
+    UNKNOWN: '待评估'
+  }
+  return labels[String(level || '').toUpperCase()] || '待评估'
 }
 
 const packageStatusTagType = (status?: string) => {

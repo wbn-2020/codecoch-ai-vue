@@ -890,7 +890,11 @@ const callLogEmptyDescription = computed(() => {
     : '当前模板暂无运行记录；如果近期确实运行过提示词调用，请到 AI 运行记录页按场景或追踪号进一步排查。'
 })
 
-const getSceneLabel = (value?: AiScene | '') => sceneOptions.find((item) => item.value === value)?.label || (value ? '场景待确认' : '-')
+const getSceneLabel = (value?: AiScene | string | '') => {
+  const raw = String(value || '').trim()
+  if (!raw) return '-'
+  return sceneOptions.find((item) => item.value === raw)?.label || `未登记场景：${raw}`
+}
 
 const fetchPrompts = async () => {
   loading.value = true
@@ -1105,7 +1109,8 @@ const handleSave = async () => {
   if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const isEditingMetadata = Boolean(editingId.value)
   const actionLabel = isEditingMetadata ? '更新提示词模板元数据' : '新增提示词模板'
   const confirmed = await confirmDangerActionPreview({
@@ -1167,6 +1172,8 @@ const handleSave = async () => {
     ElMessage.success('提示词模板已保存')
     dialogVisible.value = false
     await fetchPrompts()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '提示词模板保存失败，请检查内容、权限或当前版本状态后重试。'))
   } finally {
     saving.value = false
   }
@@ -1176,7 +1183,8 @@ const handleCreateVersion = async () => {
   if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!versionFormRef.value || !currentPrompt.value?.id) return
-  await versionFormRef.value.validate()
+  const valid = await versionFormRef.value.validate().catch(() => false)
+  if (!valid) return
   const confirmed = await confirmDangerActionPreview({
     title: '创建提示词版本预览',
     action: `为「${displayPromptName(currentPrompt.value)}」创建版本「${versionForm.versionCode}」`,
@@ -1208,6 +1216,8 @@ const handleCreateVersion = async () => {
     ElMessage.success('提示词版本已创建')
     resetVersionForm()
     await fetchVersions()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '提示词版本创建失败，请检查版本号、内容或权限后重试。'))
   } finally {
     versionSaving.value = false
   }

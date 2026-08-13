@@ -281,7 +281,8 @@ const handleReset = () => {
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
-  await formRef.value.validate()
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   const actionLabel = editingId.value ? '更新题目分类' : '新增题目分类'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
@@ -317,6 +318,8 @@ const handleSave = async () => {
     ElMessage.success('分类已保存')
     dialogVisible.value = false
     await fetchCategories()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目分类保存失败，请检查表单内容或权限后重试。'))
   } finally {
     saving.value = false
   }
@@ -335,14 +338,18 @@ const handleDelete = async (row: QuestionCategoryVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteQuestionCategoryApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed question category delete from management page.',
-    idempotencyKey: createOperationIdempotencyKey('question-category-delete')
-  })
-  ElMessage.success('分类已删除')
-  await fetchCategories()
+  try {
+    await deleteQuestionCategoryApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed question category delete from management page.',
+      idempotencyKey: createOperationIdempotencyKey('question-category-delete')
+    })
+    ElMessage.success('分类已删除')
+    await fetchCategories()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '题目分类删除失败，请确认没有题目依赖或稍后重试。'))
+  }
 }
 
 onMounted(fetchCategories)

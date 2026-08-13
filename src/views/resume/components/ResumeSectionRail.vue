@@ -19,15 +19,17 @@
         v-for="item in items"
         :key="item.id"
         type="button"
-        :class="{ 'is-active': item.id === activeId, 'is-done': item.done }"
+        :class="{ 'is-active': item.id === activeId, 'is-done': item.done, 'is-invalid': item.invalid }"
         :aria-current="item.id === activeId ? 'step' : undefined"
+        :aria-invalid="item.invalid || undefined"
         @click="emit('select', item.id)"
       >
         <span class="resume-section-rail__icon">
           <component :is="sectionIcon(item.id)" :size="17" aria-hidden="true" />
         </span>
         <span>{{ item.label }}</span>
-        <CheckCircle2 v-if="item.done" :size="15" aria-label="已完善" />
+        <AlertCircle v-if="item.invalid" :size="15" aria-label="需修正" />
+        <CheckCircle2 v-else-if="item.done" :size="15" aria-label="已完善" />
         <Circle v-else :size="15" aria-label="待完善" />
       </button>
     </nav>
@@ -48,6 +50,7 @@
 import type { Component } from 'vue'
 import { computed } from 'vue'
 import {
+  AlertCircle,
   BriefcaseBusiness,
   CheckCircle2,
   Circle,
@@ -62,6 +65,7 @@ interface SectionItem {
   id: string
   label: string
   done: boolean
+  invalid?: boolean
 }
 
 const props = defineProps<{
@@ -187,12 +191,25 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
       font-weight: 700;
     }
 
+    &.is-invalid {
+      background: color-mix(in srgb, var(--el-color-danger-light-9) 82%, var(--resume-workbench-surface));
+      color: var(--el-color-danger);
+    }
+
+    &.is-invalid.is-active {
+      box-shadow: inset 3px 0 0 var(--el-color-danger);
+    }
+
     > svg {
       color: var(--resume-workbench-line-strong);
     }
 
     &.is-done > svg {
       color: var(--resume-workbench-success);
+    }
+
+    &.is-invalid > svg {
+      color: var(--el-color-danger);
     }
   }
 }
@@ -279,7 +296,41 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
 
 @media (max-width: 900px) {
   .resume-section-rail {
+    display: block;
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--resume-workbench-line);
+    overflow: hidden;
+  }
+
+  .resume-section-rail__heading,
+  .resume-section-rail__progress,
+  .resume-section-rail__review {
     display: none;
+  }
+
+  .resume-section-rail__sections {
+    display: flex;
+    gap: 4px;
+    padding: 6px 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    button {
+      grid-template-columns: 22px minmax(0, 1fr) 16px;
+      flex: 0 0 auto;
+      min-height: 36px;
+      padding: 0 9px;
+
+      > span:nth-child(2),
+      > svg {
+        display: inline-flex;
+      }
+    }
   }
 }
 

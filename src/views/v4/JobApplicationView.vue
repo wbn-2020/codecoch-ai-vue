@@ -103,7 +103,7 @@
                 <p>{{ followUpDescription(item) }}</p>
               </div>
               <div class="today-row__actions">
-                <el-button v-if="applicationWorkspaceEnabled" link type="primary" @click="goWorkspace(item)">
+                <el-button v-if="applicationWorkspaceEnabled && !item.archivedAt" link type="primary" @click="goWorkspace(item)">
                   工作区
                 </el-button>
                 <el-button link type="primary" @click="handleTodayAction(item)">{{ todayActionLabel(item) }}</el-button>
@@ -201,6 +201,7 @@
             <el-select v-model="followUpFilter" clearable placeholder="跟进筛选" @change="applyFollowUpFilter">
               <el-option v-for="item in followUpFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+            <el-checkbox v-model="includeArchived" @change="loadApplications">显示已归档</el-checkbox>
             <el-button v-if="hasListFilter" :icon="RotateCcw" circle title="清空筛选" @click="clearStatusFilter" />
           </div>
         </div>
@@ -213,6 +214,7 @@
                 <div class="record-title">
                   <strong>{{ item.companyName || '--' }} · {{ item.jobTitle || '--' }}</strong>
                   <el-tag>{{ statusLabel(item.status) }}</el-tag>
+                  <el-tag v-if="item.archivedAt" type="info" effect="plain">已归档</el-tag>
                   <template v-for="followUp in [followUpTag(item)]" :key="`${item.id}-follow-up`">
                     <el-tag v-if="followUp" :type="followUp.type" size="small" effect="plain">{{ followUp.label }}</el-tag>
                   </template>
@@ -266,10 +268,13 @@
                   <el-button :icon="MoreHorizontal" circle title="更多投递操作" />
                   <template #dropdown>
                     <el-dropdown-menu>
-                      <el-dropdown-item command="draft">跟进助手</el-dropdown-item>
-                      <el-dropdown-item command="interview">文本面试</el-dropdown-item>
+                      <el-dropdown-item v-if="!item.archivedAt" command="draft">跟进助手</el-dropdown-item>
+                      <el-dropdown-item v-if="!item.archivedAt" command="interview">文本面试</el-dropdown-item>
                       <el-dropdown-item command="events">事件记录</el-dropdown-item>
-                      <el-dropdown-item command="edit">编辑投递</el-dropdown-item>
+                      <el-dropdown-item v-if="!item.archivedAt" command="edit">编辑投递</el-dropdown-item>
+                      <el-dropdown-item v-if="item.archivedAt" command="restore">恢复投递</el-dropdown-item>
+                      <el-dropdown-item v-if="item.archivedAt" command="delete" divided>删除投递</el-dropdown-item>
+                      <el-dropdown-item v-else command="archive" divided>归档投递</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
@@ -542,10 +547,13 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   createApplicationApi,
   createApplicationEventApi,
+  archiveApplicationApi,
+  deleteApplicationApi,
   getApplicationEventsApi,
   getApplicationStatsApi,
   getApplicationsApi,
   getResumeVersionsApi,
+  restoreApplicationApi,
   updateApplicationApi,
   type JobApplicationEventVO,
   type JobApplicationStatsVO,
@@ -639,6 +647,7 @@ const statsWarning = ref('')
 const resumeLoading = ref(false)
 const resumeVersionLoading = ref(false)
 const status = ref('')
+const includeArchived = ref(false)
 const followUpFilter = ref<ApplicationDeepLinkFollowUpFilter | ''>('')
 const funnelStageFilter = ref<ApplicationFunnelStage['key'] | ''>('')
 const highlightedApplicationId = ref<number>()
@@ -759,7 +768,9 @@ const applications = computed(() => {
 
   return rows
 })
-const funnelItems = computed(() => buildApplicationFunnelStages(rawApplications.value, applicationStats.value))
+const funnelItems = computed(() =>
+  buildApplicationFunnelStages(rawApplications.value.filter((item) => !item.archivedAt), applicationStats.value)
+)
 const focusPriority = (item: JobApplicationVO) => {
   const state = followUpState(item)
   if (state.key === 'overdue') return 0
@@ -774,12 +785,14 @@ const byNextFollowUp = (left: JobApplicationVO, right: JobApplicationVO) => {
 }
 const todayFocusApplications = computed(() =>
   rawApplications.value
+    .filter((item) => !item.archivedAt)
     .filter((item) => isApplicationActiveStatus(item.status))
     .sort((left, right) => focusPriority(left) - focusPriority(right) || byNextFollowUp(left, right))
     .slice(0, 3)
 )
 const upcomingScheduleApplications = computed(() =>
   rawApplications.value
+    .filter((item) => !item.archivedAt)
     .filter((item) => isApplicationActiveStatus(item.status) && Boolean(item.nextFollowUpAt))
     .sort(byNextFollowUp)
     .slice(0, 3)
@@ -832,6 +845,7 @@ const tagType = (tone?: ApplicationDataQualityTag['tone'] | 'primary'): 'danger'
   tone === 'danger' || tone === 'warning' || tone === 'success' ? tone : 'info'
 
 const followUpTag = (item: JobApplicationVO): FollowUpTag | null => {
+  if (item.archivedAt) return null
   if (!isApplicationActiveStatus(item.status)) return null
   const followUp = getApplicationFollowUpState(item.nextFollowUpAt)
   return { label: followUp.label, type: tagType(followUp.tone) }
@@ -840,6 +854,7 @@ const followUpTag = (item: JobApplicationVO): FollowUpTag | null => {
 const dataQualityTags = (item: JobApplicationVO) => getApplicationDataQualityTags(item)
 const followUpState = (item: JobApplicationVO) => getApplicationFollowUpState(item.nextFollowUpAt)
 const followUpDescription = (item: JobApplicationVO) => {
+  if (item.archivedAt) return '该记录已归档，不进入今日跟进、提醒或活跃上下文。'
   if (!isApplicationActiveStatus(item.status)) return '该记录已结束，不进入今日跟进候选。'
   const state = followUpState(item)
   if (state.key === 'overdue' && state.overdueByDays) {
@@ -1043,7 +1058,7 @@ const loadApplications = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    rawApplications.value = await getApplicationsApi()
+    rawApplications.value = await getApplicationsApi({ includeArchived: includeArchived.value })
   } catch (error) {
     rawApplications.value = []
     errorMessage.value = getErrorMessage(error)
@@ -1337,6 +1352,118 @@ const handleRecordAction = (item: JobApplicationVO, command: string) => {
   }
   if (command === 'edit') {
     openEdit(item)
+    return
+  }
+  if (command === 'archive') {
+    void archiveApplication(item)
+    return
+  }
+  if (command === 'restore') {
+    void restoreApplication(item)
+    return
+  }
+  if (command === 'delete') {
+    void deleteApplication(item)
+  }
+}
+
+const archiveApplication = async (item: JobApplicationVO) => {
+  if (saving.value || !item.lockVersion) {
+    ElMessage.warning('投递版本信息缺失，请刷新后重试。')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '归档投递记录',
+    action: '归档一条投递记录',
+    target: `${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'}`,
+    impact: '该记录会从默认投递列表、今日推进、统计、提醒和活跃求职上下文中移除；现有事件、简历关联和审计记录会保留。',
+    rollback: '可在“显示已归档”中恢复。恢复后，如仍有下次跟进时间，系统会重新建立该投递的自动跟进日历事项。',
+    audit: '会写入归档事件和归档时间；不会删除历史投递数据。',
+    tips: [
+      item.nextFollowUpAt ? `当前下次跟进时间：${item.nextFollowUpAt}，归档后对应系统日历事项会被取消。` : '当前没有下次跟进时间。',
+      '归档不等于删除，历史事件和材料仍会保留。'
+    ],
+    confirmButtonText: '确认归档'
+  })
+  if (!confirmed) return
+  saving.value = true
+  try {
+    await archiveApplicationApi(item.id, {
+      expectedLockVersion: item.lockVersion,
+      idempotencyKey: `application-archive:${item.id}:${item.lockVersion}`
+    })
+    ElMessage.success('投递已归档，可在“显示已归档”中恢复。')
+    await load()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    saving.value = false
+  }
+}
+
+const restoreApplication = async (item: JobApplicationVO) => {
+  if (saving.value || !item.lockVersion) {
+    ElMessage.warning('投递版本信息缺失，请刷新后重试。')
+    return
+  }
+  const confirmed = await confirmDangerActionPreview({
+    title: '恢复投递记录',
+    action: '恢复一条已归档投递',
+    target: `${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'}`,
+    impact: '该记录会重新进入默认投递列表和相关统计；符合活跃状态且保留了下次跟进时间时，会重新建立系统跟进日历事项。',
+    rollback: '恢复后可再次归档；不会删除历史事件和审计记录。',
+    audit: '会写入恢复事件，保留原归档历史。',
+    confirmButtonText: '确认恢复'
+  })
+  if (!confirmed) return
+  saving.value = true
+  try {
+    await restoreApplicationApi(item.id, {
+      expectedLockVersion: item.lockVersion,
+      idempotencyKey: `application-restore:${item.id}:${item.lockVersion}`
+    })
+    ElMessage.success('投递已恢复。')
+    await load()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    saving.value = false
+  }
+}
+
+const deleteApplication = async (item: JobApplicationVO) => {
+  if (saving.value || !item.lockVersion || !item.archivedAt) {
+    ElMessage.warning('仅已归档且版本信息完整的投递记录可以删除。')
+    return
+  }
+  const reason = '用户确认清理已归档投递记录'
+  const confirmed = await confirmDangerActionPreview({
+    title: '删除已归档投递',
+    action: '逻辑删除一条已归档投递记录',
+    target: `${item.companyName || '未填写公司'} · ${item.jobTitle || '未填写岗位'}`,
+    impact: '该记录会从投递列表和用户可见工作流中移除，不能再从“显示已归档”中恢复。',
+    rollback: '删除后用户端不提供自行恢复入口；服务端仍保留必要的关联数据和操作审计，需由受控数据恢复流程处理。',
+    audit: '会记录删除原因、操作日志和删除前的投递事件；不会物理擦除关联历史。',
+    tips: [
+      '只有已归档记录才能删除，活跃投递必须先归档。',
+      '需要暂时隐藏或稍后继续时，请使用“恢复投递”，不要删除。'
+    ],
+    confirmButtonText: '确认删除'
+  })
+  if (!confirmed) return
+  saving.value = true
+  try {
+    await deleteApplicationApi(item.id, {
+      expectedLockVersion: item.lockVersion,
+      idempotencyKey: `application-delete:${item.id}:${item.lockVersion}`,
+      reason
+    })
+    ElMessage.success('投递记录已删除。')
+    await load()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    saving.value = false
   }
 }
 

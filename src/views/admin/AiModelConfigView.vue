@@ -4,10 +4,29 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow"><Bot :size="16" /><span>模型配置</span></div>
         <h1 class="admin-hero__title">AI 模型配置</h1>
-        <p class="admin-hero__desc">维护模型供应商、调用地址、默认模型和启停状态。</p>
+        <p class="admin-hero__desc">维护模型供应商、调用地址、默认作用域、业务路由和启停状态。</p>
       </div>
       <div class="admin-hero__actions"><el-button v-permission="'admin:ai:model:write'" type="primary" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="openDialog()">新增模型</el-button></div>
     </section>
+    <section v-if="runtimeStatus || runtimeError" class="admin-runtime-strip" aria-live="polite">
+      <div class="admin-runtime-strip__summary">
+        <div>
+          <span>当前业务路由</span>
+          <strong>{{ runtimeStatus?.effectiveModeLabel || '运行态待确认' }}</strong>
+        </div>
+        <el-tag :type="runtimeModeTagType">{{ runtimeStatus?.realRoutingAllowed ? '允许真实调用' : '真实调用已阻止' }}</el-tag>
+        <el-tag effect="plain">默认作用域：{{ defaultModelScopeLabel }}</el-tag>
+        <el-tag v-if="runtimeStatus?.effectivePrimaryProvider" effect="plain">
+          实际主路由：{{ runtimeStatus.effectivePrimaryProvider }}{{ runtimeStatus.effectivePrimaryModel ? ` / ${runtimeStatus.effectivePrimaryModel}` : '' }}
+        </el-tag>
+        <el-button link type="primary" :loading="runtimeLoading" @click="fetchRuntimeStatus">刷新运行态</el-button>
+      </div>
+      <p v-if="runtimeError" class="admin-runtime-strip__error">{{ runtimeError }}</p>
+      <p v-else-if="runtimeStatus?.operatorMessages?.length" class="admin-runtime-strip__messages">
+        {{ runtimeStatus.operatorMessages.join('；') }}
+      </p>
+    </section>
+
     <section class="admin-panel">
       <div class="admin-panel__header">
         <div>
@@ -54,7 +73,15 @@
             <template #default="{ row }">{{ row.maxTokens ?? '-' }}</template>
           </el-table-column>
           <el-table-column v-if="isColumnVisible('description')" prop="description" label="说明" min-width="180" show-overflow-tooltip />
-          <el-table-column v-if="isColumnVisible('isDefault')" label="默认" width="90"><template #default="{ row }"><el-tag v-if="row.isDefault === 1" type="success">默认</el-tag><span v-else>-</span></template></el-table-column>
+          <el-table-column v-if="isColumnVisible('isDefault')" label="默认模型" min-width="180">
+            <template #default="{ row }">
+              <div v-if="row.isDefault === 1" class="model-default-cell">
+                <el-tag type="success">默认</el-tag>
+                <span>{{ defaultModelScopeShortLabel }}</span>
+              </div>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column v-if="isColumnVisible('status')" label="配置状态" width="110">
             <template #default="{ row }">
               <el-tag :type="getModelStatus(row) === 1 ? 'success' : 'info'">
@@ -80,21 +107,38 @@
             <template #default="{ row }">
               <div class="admin-row-actions">
                 <el-button v-permission="'admin:ai:model:write'" link type="primary" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="openDialog(row)">编辑</el-button>
+                <el-button
+                  v-if="canManageModelProbe"
+                  v-permission="'admin:ai:model:publish'"
+                  link
+                  type="success"
+                  :loading="probingId === row.id"
+                  :disabled="isAdminMobileReadonly || probingId === row.id"
+                  :title="mobileReadonlyTitle()"
+                  @click="handleProbe(row)"
+                >{{ probingId === row.id ? probeProgressLabel : '测活' }}</el-button>
                 <span class="admin-row-actions__risk">
                   <el-dropdown
                     v-if="canManageModelWrite || canManageModelPublish"
                     trigger="click"
-                    :disabled="isAdminMobileReadonly"
+                    :disabled="isAdminMobileReadonly || mutatingId !== undefined"
                     @command="(command: string | number | object) => handleRiskCommand(command, row)"
                   >
-                    <el-button link type="warning" class="risk-operation-trigger" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()">更多操作</el-button>
+                    <el-button
+                      link
+                      type="warning"
+                      class="risk-operation-trigger"
+                      :loading="mutatingId === row.id"
+                      :disabled="isAdminMobileReadonly || mutatingId !== undefined"
+                      :title="mobileReadonlyTitle()"
+                    >更多操作</el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item v-if="canManageModelPublish" v-permission="'admin:ai:model:publish'" command="toggle-status">
+                        <el-dropdown-item v-if="canManageModelPublish" v-permission="'admin:ai:model:publish'" command="toggle-status" :disabled="row.isDefault === 1 && getModelStatus(row) === 1">
                           {{ getModelStatus(row) === 1 ? '停用模型' : '启用模型' }}
                         </el-dropdown-item>
                         <el-dropdown-item v-if="canManageModelPublish" v-permission="'admin:ai:model:publish'" command="set-default" :disabled="row.isDefault === 1">设为默认模型</el-dropdown-item>
-                        <el-dropdown-item v-if="canManageModelWrite" v-permission="'admin:ai:model:write'" command="delete" divided>删除模型</el-dropdown-item>
+                        <el-dropdown-item v-if="canManageModelWrite" v-permission="'admin:ai:model:write'" command="delete" divided :disabled="row.isDefault === 1">删除模型</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -121,6 +165,68 @@
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-permission="'admin:ai:model:write'" type="primary" :loading="saving" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleSave">保存</el-button></template>
     </el-dialog>
+
+    <el-dialog v-model="probeDialogVisible" title="AI 模型测活结果" width="560px">
+      <div v-if="probeResult" class="model-probe-result" :class="{ 'is-success': probeResult.success, 'is-failure': !probeResult.success }">
+        <div class="model-probe-result__headline">
+          <div>
+            <strong>{{ probeResult.modelCode }}</strong>
+            <span>{{ probeResult.provider }}</span>
+          </div>
+          <el-tag :type="probeResult.success ? 'success' : 'danger'">
+            {{ probeResult.success ? '连接成功' : '连接失败' }}
+          </el-tag>
+        </div>
+        <dl class="model-probe-result__metrics">
+          <div><dt>耗时</dt><dd>{{ probeResult.elapsedMs ?? '-' }} ms</dd></div>
+          <div><dt>失败类型</dt><dd>{{ probeResult.success ? '-' : (probeResult.failureType || '-') }}</dd></div>
+          <div><dt>HTTP 状态</dt><dd>{{ probeResult.httpStatus ?? '-' }}</dd></div>
+          <div><dt>Token</dt><dd>{{ probeResult.totalTokens ?? '-' }}</dd></div>
+        </dl>
+        <div v-if="probeResult.requestPromptPreview" class="model-probe-result__section">
+          <span>测试语句</span>
+          <pre class="model-probe-result__preview">{{ probeResult.requestPromptPreview }}</pre>
+        </div>
+        <p class="model-probe-result__message">{{ probeResult.message || '-' }}</p>
+        <div v-if="probeResult.responsePreview" class="model-probe-result__section">
+          <span>模型返回</span>
+          <pre class="model-probe-result__preview">{{ probeResult.responsePreview }}</pre>
+        </div>
+      </div>
+      <template #footer><el-button @click="probeDialogVisible = false">关闭</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="probePromptDialogVisible" title="配置模型测活" width="560px" :close-on-click-modal="false">
+      <div v-if="probeTarget" class="model-probe-form__target">
+        <strong>{{ probeTarget.modelName }}</strong>
+        <span>{{ probeTarget.provider }} · {{ probeTarget.apiBaseUrl || '未配置接口地址' }}</span>
+      </div>
+      <el-form label-position="top">
+        <el-form-item label="测试语句">
+          <el-input
+            v-model="probePrompt"
+            type="textarea"
+            :rows="5"
+            maxlength="500"
+            show-word-limit
+            placeholder="例如：请用一句话回复：连接正常。"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="probingId !== undefined" @click="probePromptDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!probePrompt.trim()" @click="confirmProbe">查看测活影响</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="probeProgressVisible" title="正在测活模型" width="440px" :close-on-click-modal="false" :show-close="false">
+      <div class="model-probe-progress">
+        <strong>{{ probeProgressLabel }}</strong>
+        <p>{{ probeProgressDescription }}</p>
+        <el-progress :percentage="probeProgressPercent" :indeterminate="probeProgressPercent < 100" :show-text="false" />
+        <small>仅当前模型行处于等待状态；其它模型仍可继续查看和操作。</small>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -128,15 +234,15 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Bot } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
-import { createAdminAiModelApi, deleteAdminAiModelApi, getAdminAiModelsApi, setDefaultAdminAiModelApi, updateAdminAiModelApi, updateAdminAiModelStatusApi } from '@/api/adminGovernance'
+import { createAdminAiModelApi, deleteAdminAiModelApi, getAdminAiModelsApi, getAdminAiRuntimeStatusApi, probeAdminAiModelApi, setDefaultAdminAiModelApi, updateAdminAiModelApi, updateAdminAiModelStatusApi } from '@/api/adminGovernance'
 import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import { useAuthStore } from '@/stores/auth'
-import type { AdminListQuery, AiModelConfigDTO, AiModelConfigVO } from '@/types/adminGovernance'
+import type { AdminListQuery, AiModelConfigDTO, AiModelConfigVO, AiModelProbeVO, AiRuntimeStatusVO } from '@/types/adminGovernance'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
@@ -164,6 +270,19 @@ const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const models = ref<AiModelConfigVO[]>([])
 const total = ref(0)
+const probingId = ref<number>()
+const mutatingId = ref<number>()
+const probeDialogVisible = ref(false)
+const probeResult = ref<AiModelProbeVO>()
+const probePromptDialogVisible = ref(false)
+const probeTarget = ref<AiModelConfigVO>()
+const probePrompt = ref('请仅回复：连接正常。')
+const probeProgressVisible = ref(false)
+const probeElapsedSeconds = ref(0)
+let probeProgressTimer: number | undefined
+const runtimeLoading = ref(false)
+const runtimeError = ref('')
+const runtimeStatus = ref<AiRuntimeStatusVO>()
 const { guardAdminMobileWrite, isAdminMobileReadonly, mobileReadonlyTitle } = useAdminMobileReadonly()
 const authStore = useAuthStore()
 const {
@@ -214,6 +333,47 @@ const rules: FormRules<AiModelConfigDTO> = {
   apiKey: [{ validator: validateApiKey, trigger: 'blur' }]
 }
 const getModelStatus = (row: AiModelConfigVO) => Number(row.enabled ?? row.status ?? 0)
+const runtimeModeTagType = computed(() => {
+  const mode = runtimeStatus.value?.effectiveMode
+  if (mode === 'REAL') return 'success'
+  if (mode === 'MOCK' || mode === 'DEGRADED') return 'warning'
+  return 'info'
+})
+const defaultModelScopeLabel = computed(
+  () => runtimeStatus.value?.defaultModelScopeLabel || '全局唯一默认模型'
+)
+const defaultModelScopeShortLabel = computed(() =>
+  runtimeStatus.value?.defaultModelScope === 'GLOBAL' || !runtimeStatus.value?.defaultModelScope
+    ? '全局默认'
+    : defaultModelScopeLabel.value
+)
+const probeProgressLabel = computed(() => {
+  if (probeElapsedSeconds.value >= 30) return `供应商响应较慢，已等待 ${probeElapsedSeconds.value} 秒`
+  if (probeElapsedSeconds.value >= 8) return `正在等待模型返回，已等待 ${probeElapsedSeconds.value} 秒`
+  if (probeElapsedSeconds.value >= 2) return '已发起调用，正在等待供应商响应'
+  return '正在校验配置并建立连接'
+})
+const probeProgressDescription = computed(() => {
+  if (probeElapsedSeconds.value >= 30) return '调用仍在进行。完成后会展示实际返回内容或可诊断的失败信息。'
+  if (probeElapsedSeconds.value >= 8) return '供应商调用可能需要较长时间，页面会持续保留当前测活状态。'
+  return '正在向当前模型发送测试语句，不会切换默认模型或修改启停状态。'
+})
+const probeProgressPercent = computed(() => Math.min(95, 12 + probeElapsedSeconds.value * 3))
+const startProbeProgress = () => {
+  stopProbeProgress()
+  probeElapsedSeconds.value = 0
+  probeProgressVisible.value = true
+  probeProgressTimer = window.setInterval(() => {
+    probeElapsedSeconds.value += 1
+  }, 1000)
+}
+const stopProbeProgress = () => {
+  if (probeProgressTimer) {
+    window.clearInterval(probeProgressTimer)
+    probeProgressTimer = undefined
+  }
+  probeProgressVisible.value = false
+}
 const getModelHealth = (row: AiModelConfigVO) => {
   const status = String(row.callHealthStatus || '').trim().toUpperCase()
   if (['HEALTHY', 'SUCCESS', 'SUCCEEDED', 'AVAILABLE', 'OK'].includes(status)) {
@@ -233,6 +393,7 @@ const formatModelCallEvent = (at?: string, summary?: string) => {
 }
 const canManageModelWrite = computed(() => authStore.hasAnyAuthority(['admin:ai:model:write', 'ADMIN']))
 const canManageModelPublish = computed(() => authStore.hasAnyAuthority(['admin:ai:model:publish', 'ADMIN']))
+const canManageModelProbe = computed(() => canManageModelPublish.value)
 const hasModelFilters = computed(() => Boolean(query.keyword || query.status !== ''))
 const modelEmptyTitle = computed(() =>
   hasModelFilters.value ? '当前筛选没有模型配置' : '暂无模型配置'
@@ -257,6 +418,20 @@ const fetchModels = async () => {
     loading.value = false
   }
 }
+const fetchRuntimeStatus = async () => {
+  runtimeLoading.value = true
+  runtimeError.value = ''
+  try {
+    runtimeStatus.value = await getAdminAiRuntimeStatusApi()
+  } catch (error) {
+    runtimeError.value = getErrorMessage(error, 'AI 运行态暂时获取失败，模型列表仍可继续管理。')
+  } finally {
+    runtimeLoading.value = false
+  }
+}
+const refreshModelWorkspace = async () => {
+  await Promise.all([fetchModels(), fetchRuntimeStatus()])
+}
 const openDialog = (row?: AiModelConfigVO) => {
   editingId.value = row?.id
   Object.assign(form, { provider: row?.provider || '', modelName: row?.modelName || '', displayName: row?.displayName || '', apiBaseUrl: row?.apiBaseUrl || '', apiKey: '', enabled: row?.enabled ?? 0, temperature: row?.temperature ?? 0.7, maxTokens: row?.maxTokens ?? 4096, description: row?.description || '' })
@@ -264,7 +439,8 @@ const openDialog = (row?: AiModelConfigVO) => {
 }
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
-  await formRef.value?.validate()
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   const actionLabel = editingId.value ? '更新模型配置' : '新增模型配置'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}预览`,
@@ -302,13 +478,17 @@ const handleSave = async () => {
     else await createAdminAiModelApi(confirmedPayload)
     ElMessage.success('模型配置已保存')
     dialogVisible.value = false
-    await fetchModels()
+    await refreshModelWorkspace()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '模型配置保存失败，请检查接口地址、密钥和当前账号权限后重试。'))
   } finally { saving.value = false }
 }
 const handleStatus = async (row: AiModelConfigVO, status: number) => {
   if (!canManageModelPublish.value || !guardAdminMobileWrite()) return
+  if (row.isDefault === 1 && status === 0) {
+    ElMessage.warning('默认模型不能直接停用，请先将另一台已启用模型设为默认。')
+    return
+  }
   const actionLabel = status === 1 ? '启用' : '停用'
   const confirmed = await confirmDangerActionPreview({
     title: `${actionLabel}模型预览`,
@@ -324,17 +504,69 @@ const handleStatus = async (row: AiModelConfigVO, status: number) => {
     confirmButtonText: `确认${actionLabel}`
   })
   if (!confirmed) {
-    await fetchModels()
     return
   }
-  await updateAdminAiModelStatusApi(row.id, status, {
-    confirm: true,
-    dryRun: false,
-    reason: `Admin confirmed AI model ${status === 1 ? 'enable' : 'disable'} from model management page.`,
-    idempotencyKey: createOperationIdempotencyKey(`ai-model-status-${row.id}`)
+  mutatingId.value = row.id
+  try {
+    await updateAdminAiModelStatusApi(row.id, status, {
+      confirm: true,
+      dryRun: false,
+      reason: `Admin confirmed AI model ${status === 1 ? 'enable' : 'disable'} from model management page.`,
+      idempotencyKey: createOperationIdempotencyKey(`ai-model-status-${row.id}`)
+    })
+    ElMessage.success('状态已更新')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, `${actionLabel}模型失败，当前页面状态未改变。请稍后重试或打开诊断中心查看追踪信息。`))
+  } finally {
+    mutatingId.value = undefined
+    await refreshModelWorkspace()
+  }
+}
+const handleProbe = async (row: AiModelConfigVO) => {
+  if (!canManageModelProbe.value || !guardAdminMobileWrite()) return
+  probeTarget.value = row
+  probePrompt.value = '请仅回复：连接正常。'
+  probePromptDialogVisible.value = true
+}
+const confirmProbe = async () => {
+  const row = probeTarget.value
+  const prompt = probePrompt.value.trim()
+  if (!row || !prompt) return
+  const confirmed = await confirmDangerActionPreview({
+    title: '模型测活预览',
+    action: `测试模型「${row.modelName}」`,
+    target: `模型编号：${row.id}；供应商：${row.provider || '-'}；接口地址：${row.apiBaseUrl || '-'}`,
+    impact: `系统会向该模型发送测试语句「${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}」，产生一次真实供应商调用和可能的少量费用；不会切换默认模型或改变启停状态。`,
+    rollback: '测活不会修改模型配置；如不希望继续调用，可关闭当前模型或移除访问凭据。',
+    audit: '测活会记录模型编号、供应商、结果、耗时和脱敏错误摘要；测试语句不会写入模型运行记录。',
+    tips: ['确认测试语句不包含不应发送给供应商的业务敏感信息。', '确认供应商可能产生少量调用费用。'],
+    confirmButtonText: '确认测活'
   })
-  ElMessage.success('状态已更新')
-  await fetchModels()
+  if (!confirmed) return
+  probePromptDialogVisible.value = false
+  probingId.value = row.id
+  probeResult.value = undefined
+  startProbeProgress()
+  try {
+    const result = await probeAdminAiModelApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed AI model live probe from model management page.',
+      idempotencyKey: createOperationIdempotencyKey(`ai-model-probe-${row.id}`),
+      prompt
+    })
+    probeResult.value = result
+    probeDialogVisible.value = true
+    ElMessage[result.success ? 'success' : 'warning'](
+      result.success ? '模型连接成功' : '模型连接失败，请查看测活结果'
+    )
+    await refreshModelWorkspace()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '模型测活失败，请检查接口地址、密钥和当前账号权限。'))
+  } finally {
+    stopProbeProgress()
+    probingId.value = undefined
+  }
 }
 const handleDefault = async (row: AiModelConfigVO) => {
   if (!canManageModelPublish.value || !guardAdminMobileWrite()) return
@@ -349,17 +581,28 @@ const handleDefault = async (row: AiModelConfigVO) => {
     confirmButtonText: '确认设为默认'
   })
   if (!confirmed) return
-  await setDefaultAdminAiModelApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed default AI model switch from model management page.',
-    idempotencyKey: createOperationIdempotencyKey(`ai-model-default-${row.id}`)
-  })
-  ElMessage.success('默认模型已更新')
-  await fetchModels()
+  mutatingId.value = row.id
+  try {
+    await setDefaultAdminAiModelApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed default AI model switch from model management page.',
+      idempotencyKey: createOperationIdempotencyKey(`ai-model-default-${row.id}`)
+    })
+    ElMessage.success('默认模型已更新')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '默认模型切换失败，当前页面状态未改变。请确认模型已启用且默认作用域没有冲突。'))
+  } finally {
+    mutatingId.value = undefined
+    await refreshModelWorkspace()
+  }
 }
 const handleDelete = async (row: AiModelConfigVO) => {
   if (!canManageModelWrite.value || !guardAdminMobileWrite()) return
+  if (row.isDefault === 1) {
+    ElMessage.warning('默认模型不能直接删除，请先将另一台已启用模型设为默认。')
+    return
+  }
   const confirmed = await confirmDangerActionPreview({
     title: '删除模型预览',
     action: `删除模型「${row.modelName}」`,
@@ -371,14 +614,21 @@ const handleDelete = async (row: AiModelConfigVO) => {
     confirmButtonText: '确认删除'
   })
   if (!confirmed) return
-  await deleteAdminAiModelApi(row.id, {
-    confirm: true,
-    dryRun: false,
-    reason: 'Admin confirmed AI model delete from model management page.',
-    idempotencyKey: createOperationIdempotencyKey(`ai-model-delete-${row.id}`)
-  })
-  ElMessage.success('模型已删除')
-  await fetchModels()
+  mutatingId.value = row.id
+  try {
+    await deleteAdminAiModelApi(row.id, {
+      confirm: true,
+      dryRun: false,
+      reason: 'Admin confirmed AI model delete from model management page.',
+      idempotencyKey: createOperationIdempotencyKey(`ai-model-delete-${row.id}`)
+    })
+    ElMessage.success('模型已删除')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '模型删除失败，当前配置仍然保留。请确认该模型不是默认模型或唯一可用模型。'))
+  } finally {
+    mutatingId.value = undefined
+    await refreshModelWorkspace()
+  }
 }
 const handleRiskCommand = async (command: string | number | object, row: AiModelConfigVO) => {
   const riskCommand = String(command) as AiModelRiskCommand
@@ -394,13 +644,34 @@ const handleRiskCommand = async (command: string | number | object, row: AiModel
     await handleDelete(row)
   }
 }
-const handleSearch = () => { query.pageNo = 1; fetchModels() }
-const handleReset = () => { Object.assign(query, { keyword: '', status: '', pageNo: 1, pageSize: 10 }); fetchModels() }
-onMounted(fetchModels)
+const handleSearch = () => { query.pageNo = 1; void fetchModels() }
+const handleReset = () => { Object.assign(query, { keyword: '', status: '', pageNo: 1, pageSize: 10 }); void fetchModels() }
+onMounted(refreshModelWorkspace)
+onBeforeUnmount(stopProbeProgress)
 </script>
 
 <style scoped lang="scss">
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
+
+.admin-runtime-strip {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+.admin-runtime-strip__summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.admin-runtime-strip__summary > div { display: inline-flex; align-items: baseline; gap: 8px; }
+.admin-runtime-strip__summary span,
+.admin-runtime-strip__messages,
+.admin-runtime-strip__error { color: var(--el-text-color-secondary); font-size: 13px; }
+.admin-runtime-strip__summary strong { color: var(--el-text-color-primary); font-size: 14px; }
+.admin-runtime-strip__error { margin: 0; color: var(--el-color-danger); }
+.admin-runtime-strip__messages { margin: 0; line-height: 1.6; }
+.model-default-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.model-default-cell span { color: var(--el-text-color-secondary); font-size: 12px; }
 
 .admin-row-actions {
   display: flex;
@@ -417,6 +688,135 @@ onMounted(fetchModels)
 
 .risk-operation-trigger {
   font-weight: 600;
+}
+
+.model-probe-result {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.model-probe-result.is-success {
+  border-color: rgba(52, 211, 153, 0.42);
+}
+
+.model-probe-result.is-failure {
+  border-color: rgba(248, 113, 113, 0.42);
+}
+
+.model-probe-result__headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.model-probe-result__headline div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-probe-result__headline strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-probe-result__headline span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.model-probe-result__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.model-probe-result__metrics div {
+  min-width: 0;
+}
+
+.model-probe-result__metrics dt {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.model-probe-result__metrics dd {
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-probe-result__message {
+  margin: 0;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.model-probe-result__section {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.model-probe-result__section > span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.model-probe-result__preview {
+  max-height: 140px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.42);
+  color: var(--el-text-color-regular);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.model-probe-form__target {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.model-probe-form__target span {
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-probe-progress {
+  display: grid;
+  gap: 12px;
+}
+
+.model-probe-progress strong {
+  color: var(--el-text-color-primary);
+}
+
+.model-probe-progress p,
+.model-probe-progress small {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 .model-call-summary {

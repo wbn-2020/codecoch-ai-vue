@@ -2,8 +2,9 @@ import { defineComponent, nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
-import { useGameProfileStore } from '@/features/game-profile'
 import InterviewRoomView from '@/views/interview/InterviewRoomView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -245,6 +246,24 @@ describe('InterviewRoomView voice recording coordination', () => {
     expect(wrapper.find('.room-feedback-drawer > summary').text()).toContain('本题反馈')
     expect(wrapper.find('.answer-console').exists()).toBe(true)
     wrapper.unmount()
+  })
+
+  it('keeps voice-facing recovery messages in Chinese without implementation details', () => {
+    const roomSource = readFileSync(
+      resolve(process.cwd(), 'src/views/interview/InterviewRoomView.vue'),
+      'utf8'
+    )
+    const liveConsoleSource = readFileSync(
+      resolve(process.cwd(), 'src/views/interview/components/InterviewVoiceLiveConsole.vue'),
+      'utf8'
+    )
+
+    expect(roomSource).not.toContain('No active interview question')
+    expect(roomSource).not.toContain('Voice transcript confirmation failed')
+    expect(roomSource).not.toContain('Please confirm or clear the voice transcript draft')
+    expect(liveConsoleSource).not.toContain('Confirmed voice submission evidence')
+    expect(roomSource).toContain('当前没有可作答的面试题，请刷新页面后重试。')
+    expect(liveConsoleSource).toContain('语音提交凭证缺失，暂时无法进行表达分析。')
   })
 
   it('keeps the current question contract fixed above the scrollable question area', async () => {
@@ -588,39 +607,76 @@ describe('InterviewRoomView voice recording coordination', () => {
     wrapper.unmount()
   })
 
-  it('records a completed interview reward once when the room is reopened', async () => {
-    interviewApi.getCurrentQuestion.mockResolvedValue({
-      interviewId: 42,
-      status: 'COMPLETED',
-      currentQuestion: null
-    })
+  it('uses restored server timing and progress facts without resetting the same question', async () => {
+    vi.useFakeTimers()
+    const presentedAt = new Date(Date.now() - 65_000).toISOString()
+    interviewApi.getCurrentQuestion
+      .mockResolvedValueOnce({
+        ...currentQuestion,
+        currentQuestionIndex: 3,
+        totalQuestionCount: 8,
+        answeredQuestionCount: 2,
+        currentQuestion: {
+          ...currentQuestion.currentQuestion,
+          questionPresentedAt: presentedAt
+        }
+      })
+      .mockResolvedValueOnce({
+        ...currentQuestion,
+        currentQuestionIndex: 3,
+        totalQuestionCount: 8,
+        answeredQuestionCount: 2,
+        currentQuestion: {
+          ...currentQuestion.currentQuestion,
+          questionPresentedAt: presentedAt
+        }
+      })
+    const wrapper = await mountRoom()
 
-    const first = await mountRoom()
-    const gameProfile = useGameProfileStore()
-    expect(gameProfile.xp).toBe(200)
-    expect(gameProfile.streakDays).toBe(1)
-    expect(gameProfile.todayMissionDone).toBe(0)
-    first.unmount()
+    expect(wrapper.find('.question-briefbar').text()).toContain('第 3 / 8 题')
+    expect(wrapper.find('.topbar-progress').text()).toContain('2/8')
+    expect(wrapper.find('.room-timer').text()).toBe('01:05')
 
-    const second = await mountRoom()
-    expect(gameProfile.xp).toBe(200)
-    expect(gameProfile.streakDays).toBe(1)
-    second.unmount()
+    await wrapper.find('.answer-reload-action').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.room-timer').text()).toBe('01:05')
+    wrapper.unmount()
   })
 
-  it('only grants answer XP when the interview evaluation is passing', async () => {
+  it('merges follow-up progress and outline from the answer-review stream into the current room state', async () => {
+    interviewApi.getCurrentQuestion.mockResolvedValue({
+      ...currentQuestion,
+      currentQuestionIndex: 2,
+      totalQuestionCount: 5,
+      answeredQuestionCount: 1,
+      outline: [
+        { stageOrder: 1, stageName: '基础', expectedQuestionCount: 5 }
+      ]
+    })
     interviewApi.streamAnswerReview.mockImplementation((_id, _payload, handlers) => {
       void handlers.onEvent('done', {
         result: {
-          answerMessageId: 901,
-          score: 42,
-          evaluation: {
-            score: 42,
-            level: 'NEEDS_IMPROVEMENT',
-            comment: '需要补强'
+          interviewId: 42,
+          answerMessageId: 101,
+          evaluation: { comment: '继续说明恢复策略。' },
+          nextAction: 'FOLLOW_UP',
+          nextQuestion: {
+            messageId: 303,
+            questionId: 404,
+            questionContent: 'Describe the rollback plan.',
+            isFollowUp: true,
+            stageId: 1
           },
           interviewStatus: 'IN_PROGRESS',
-          nextAction: 'NEXT_QUESTION'
+          progress: {
+            currentQuestionIndex: 3,
+            totalQuestionCount: 5,
+            answeredQuestionCount: 2
+          },
+          outline: [
+            { stageOrder: 1, stageName: '基础', expectedQuestionCount: 5 },
+            { stageOrder: 2, stageName: '深入', expectedQuestionCount: 3 }
+          ]
         }
       })
       return {
@@ -628,32 +684,17 @@ describe('InterviewRoomView voice recording coordination', () => {
         finished: Promise.resolve()
       }
     })
-
     const wrapper = await mountRoom()
-    const gameProfile = useGameProfileStore()
-    await wrapper.find('textarea').setValue('A concise answer.')
+    await wrapper.find('textarea').setValue('I would roll back the release.')
     await wrapper.find('.answer-submit-action').trigger('click')
     await flushPromises()
 
-    expect(gameProfile.xp).toBe(0)
-    wrapper.unmount()
-  })
-
-  it('records completion XP immediately when finish returns a terminal status', async () => {
-    interviewApi.finishInterview.mockResolvedValue({
-      interviewId: 42,
-      status: 'REPORT_GENERATING',
-      reportStatus: 'GENERATING',
-      message: 'finishing'
-    })
-
-    const wrapper = await mountRoom()
-    const gameProfile = useGameProfileStore()
-    await wrapper.find('.topbar-report-action').trigger('click')
-    await flushPromises()
-
-    expect(gameProfile.xp).toBe(200)
-    expect(gameProfile.streakDays).toBe(1)
+    expect(wrapper.find('.voice-console-stub').attributes('data-question-key')).toBe('303')
+    expect(wrapper.find('.topbar-progress').text()).toContain('2/5')
+    expect(wrapper.find('.question-briefbar').text()).toContain('第 3 / 5 题')
+    expect((wrapper.vm as unknown as {
+      current: { outline?: Array<{ stageName: string }> }
+    }).current.outline?.map((stage) => stage.stageName)).toEqual(['基础', '深入'])
     wrapper.unmount()
   })
 })

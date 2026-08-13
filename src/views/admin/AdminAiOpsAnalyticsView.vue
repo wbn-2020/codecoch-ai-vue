@@ -24,6 +24,16 @@
       </div>
     </section>
 
+    <el-alert
+      v-if="actionErrorMessage"
+      class="admin-diagnostic-state"
+      type="error"
+      show-icon
+      :closable="false"
+      title="AI 运营任务操作失败"
+      :description="actionErrorMessage"
+    />
+
     <AppState v-if="errorMessage" type="error" title="AI 运营数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadPage">重试</el-button>
     </AppState>
@@ -555,6 +565,7 @@ const {
 const loading = ref(false)
 const vectorJobLoading = ref(false)
 const errorMessage = ref('')
+const actionErrorMessage = ref('')
 const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)
 const route = useRoute()
@@ -794,11 +805,11 @@ const manualForm = ref({
   maxTotalMinutes: undefined as number | undefined
 })
 
-const getErrorMessage = (error: unknown) => {
+const getErrorMessage = (error: unknown, fallback = '操作失败，请稍后重试。') => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002')
+    return toFriendlyMessage((error as { message?: unknown }).message, fallback)
   }
-  return '\u63a5\u53e3\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
+  return fallback
 }
 
 const getSettledValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T =>
@@ -998,12 +1009,16 @@ const loadPage = async () => {
     }
     partialErrors.value = failed.map((item) => item.label)
     await renderChart()
+  } catch (error) {
+    errorMessage.value = getErrorMessage(error, 'AI 运营数据处理失败，请重新加载。')
+    disposeChart()
   } finally {
     loading.value = false
   }
 }
 
 const openManualRun = () => {
+  actionErrorMessage.value = ''
   manualForm.value = {
     statDate: '',
     targetJobId: undefined,
@@ -1023,19 +1038,20 @@ const parseUserIds = () =>
 const runDailyPlan = async () => {
   if (!guardAdminMobileWrite()) return
   const userIds = parseUserIds()
-  const confirmed = await confirmDangerActionPreview({
-    title: '运行每日计划高风险确认',
-    action: '手动运行每日计划聚合',
-    target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按任务规则筛选可生成计划的用户',
-    impact: '可能为多个用户生成或刷新今日训练计划，并产生智能生成记录、任务处理记录和统计记录。',
-    rollback: '已生成的计划无法自动撤销；如误执行，需要通过任务处理记录和业务记录人工处理。',
-    audit: '系统会记录聚合任务处理记录，执行人、时间、任务参数可用于追踪。',
-    tips: ['确认统计日期、目标岗位和任务数量参数正确。', '确认当前不是演示只读模式或共享演示环境。'],
-    confirmButtonText: '确认运行'
-  })
-  if (!confirmed) return
-  manualRunning.value = true
+  actionErrorMessage.value = ''
   try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '运行每日计划高风险确认',
+      action: '手动运行每日计划聚合',
+      target: userIds.length ? `指定用户 ${userIds.length} 人：${userIds.join(', ')}` : '未指定用户，按任务规则筛选可生成计划的用户',
+      impact: '可能为多个用户生成或刷新今日训练计划，并产生智能生成记录、任务处理记录和统计记录。',
+      rollback: '已生成的计划无法自动撤销；如误执行，需要通过任务处理记录和业务记录人工处理。',
+      audit: '系统会记录聚合任务处理记录，执行人、时间、任务参数可用于追踪。',
+      tips: ['确认统计日期、目标岗位和任务数量参数正确。', '确认当前不是演示只读模式或共享演示环境。'],
+      confirmButtonText: '确认运行'
+    })
+    if (!confirmed) return
+    manualRunning.value = true
     await runAdminAnalyticsDailyPlanApi({
       jobCode: 'AGENT_DAILY_PLAN',
       jobName: '每日计划聚合',
@@ -1052,6 +1068,9 @@ const runDailyPlan = async () => {
     ElMessage.success('每日计划聚合任务已提交')
     manualDialogVisible.value = false
     await loadPage()
+  } catch (error) {
+    actionErrorMessage.value = getErrorMessage(error, '每日计划聚合提交失败，请确认任务参数或稍后重试。')
+    ElMessage.error(actionErrorMessage.value)
   } finally {
     manualRunning.value = false
   }
@@ -1060,19 +1079,20 @@ const runDailyPlan = async () => {
 const rerunJob = async (row: AdminAnalyticsJobLogVO) => {
   if (!guardAdminMobileWrite()) return
   const id = row.id
-  const confirmed = await confirmDangerActionPreview({
-    title: '重跑聚合任务高风险确认',
-    action: `重跑聚合任务 ${translateJobName(row.jobName || row.jobCode)}`,
-    target: `任务编号：${id}；统计日期：${row.statDate || '未提供'}`,
-    impact: '会重新提交该任务，可能覆盖或追加统计结果，并产生新的任务执行记录。',
-    rollback: '任务提交后不能直接撤销；如结果异常，需要依据任务输出和操作日志人工修正。',
-    audit: '重跑请求会进入聚合任务处理记录，可通过任务编号和操作时间追踪。',
-    tips: ['优先确认原任务失败原因已处理。', '避免对运行中任务重复提交。'],
-    confirmButtonText: '确认重跑'
-  })
-  if (!confirmed) return
-  rerunningId.value = id
+  actionErrorMessage.value = ''
   try {
+    const confirmed = await confirmDangerActionPreview({
+      title: '重跑聚合任务高风险确认',
+      action: `重跑聚合任务 ${translateJobName(row.jobName || row.jobCode)}`,
+      target: `任务编号：${id}；统计日期：${row.statDate || '未提供'}`,
+      impact: '会重新提交该任务，可能覆盖或追加统计结果，并产生新的任务执行记录。',
+      rollback: '任务提交后不能直接撤销；如结果异常，需要依据任务输出和操作日志人工修正。',
+      audit: '重跑请求会进入聚合任务处理记录，可通过任务编号和操作时间追踪。',
+      tips: ['优先确认原任务失败原因已处理。', '避免对运行中任务重复提交。'],
+      confirmButtonText: '确认重跑'
+    })
+    if (!confirmed) return
+    rerunningId.value = id
     await rerunAdminAnalyticsJobApi(id, {
       confirm: true,
       dryRun: false,
@@ -1081,6 +1101,9 @@ const rerunJob = async (row: AdminAnalyticsJobLogVO) => {
     })
     ElMessage.success('重跑请求已提交')
     await loadPage()
+  } catch (error) {
+    actionErrorMessage.value = getErrorMessage(error, '聚合任务重跑提交失败，请确认原任务状态后重试。')
+    ElMessage.error(actionErrorMessage.value)
   } finally {
     rerunningId.value = undefined
   }

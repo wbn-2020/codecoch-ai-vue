@@ -50,11 +50,24 @@
                 <el-input v-model="generateForm.industryDirection" placeholder="例如：电商 / 金融 / SaaS" clearable />
               </el-form-item>
               <el-form-item label="计划周期">
-                <el-select v-model="generateForm.expectedDurationDays">
-                  <el-option label="7 天" :value="7" />
-                  <el-option label="14 天" :value="14" />
-                  <el-option label="30 天" :value="30" />
-                </el-select>
+                <el-input-number
+                  v-model="generateForm.expectedDurationDays"
+                  :min="7"
+                  :max="30"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                />
+              </el-form-item>
+              <el-form-item label="每日投入（分钟）">
+                <el-input-number
+                  v-model="generateForm.dailyMinutes"
+                  :min="20"
+                  :max="360"
+                  :step="10"
+                  :precision="0"
+                  controls-position="right"
+                />
               </el-form-item>
               <el-form-item class="form-wide" label="补充要求">
                 <el-input
@@ -135,7 +148,6 @@
               description="学习计划需要基于面试报告或能力短板生成。先完成一次模拟面试，或从已有报告进入生成流程。"
             >
               <el-button type="primary" @click="router.push('/interviews/history')">从面试报告开始</el-button>
-              <el-button @click="router.push('/interviews/create')">先做一次面试</el-button>
             </AppState>
           </div>
 
@@ -159,6 +171,16 @@
                 <p class="section-kicker">路线详情</p>
                 <h2>{{ selectedPlan.planTitle || '学习计划' }}</h2>
                 <p>{{ selectedPlan.planSummary || '这份路线暂时还没有摘要' }}</p>
+                <div class="plan-config" aria-label="计划配置">
+                  <span>
+                    <b>计划周期</b>
+                    {{ formatPlanConfigValue(selectedPlan.durationDays, '天') }}
+                  </span>
+                  <span>
+                    <b>每日投入</b>
+                    {{ formatPlanConfigValue(selectedPlan.dailyMinutes, '分钟') }}
+                  </span>
+                </div>
               </div>
               <el-tag :type="statusType(selectedPlan.planStatus)" effect="plain">
                 {{ statusText(selectedPlan.planStatus) }}
@@ -265,7 +287,7 @@
                         <span v-if="task.taskType">{{ taskTypeText(task.taskType) }}</span>
                         <span>{{ formatPlannedDate(task.plannedDate) }}</span>
                         <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
-                        <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
+                        <span v-if="formatEstimatedDuration(task)">{{ formatEstimatedDuration(task) }}</span>
                         <span v-for="questionId in task.relatedQuestionIds || []" :key="questionId">
                           关联练习题已记录
                         </span>
@@ -320,7 +342,7 @@
                         <span v-if="task.knowledgePoint">{{ task.knowledgePoint }}</span>
                         <span>{{ formatPlannedDate(task.plannedDate) }}</span>
                         <span v-if="task.priority">{{ priorityText(task.priority) }}</span>
-                        <span v-if="task.estimatedHours">{{ task.estimatedHours }}h</span>
+                        <span v-if="formatEstimatedDuration(task)">{{ formatEstimatedDuration(task) }}</span>
                         <span v-for="tag in task.relatedTags || []" :key="tag">{{ tag }}</span>
                       </div>
                       <div class="task-actions">
@@ -452,6 +474,7 @@ const generateForm = reactive<StudyPlanGenerateDTO>({
   targetPosition: '',
   industryDirection: '',
   expectedDurationDays: 14,
+  dailyMinutes: 60,
   extraRequirements: ''
 })
 
@@ -635,11 +658,17 @@ const handleGenerate = async () => {
   streamContent.value = ''
   streamStatus.value = '正在提交学习计划生成任务'
   streamAbortReason.value = ''
+  const expectedDurationDays = clampNumber(generateForm.expectedDurationDays, 7, 30, 14)
+  const dailyMinutes = clampNumber(generateForm.dailyMinutes, 20, 360, 60)
+  generateForm.expectedDurationDays = expectedDurationDays
+  generateForm.dailyMinutes = dailyMinutes
   let streamStarted = false
   let streamPlanId = 0
   try {
     const payload = {
       ...generateForm,
+      expectedDurationDays,
+      dailyMinutes,
       targetPosition: generateForm.targetPosition || undefined,
       industryDirection: generateForm.industryDirection || undefined,
       extraRequirements: generateForm.extraRequirements || undefined
@@ -699,6 +728,8 @@ const handleGenerate = async () => {
     streamStatus.value = '生成过程暂时不稳定，已改用普通生成方式'
     const result = await generateStudyPlanApi({
       ...generateForm,
+      expectedDurationDays,
+      dailyMinutes,
       targetPosition: generateForm.targetPosition || undefined,
       industryDirection: generateForm.industryDirection || undefined,
       extraRequirements: generateForm.extraRequirements || undefined
@@ -865,6 +896,25 @@ const priorityText = (priority: string) => {
 }
 
 const formatPlannedDate = (value?: string) => value || '未规划日期'
+
+const clampNumber = (value: number | undefined, min: number, max: number, fallback: number) => {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return fallback
+  return Math.min(max, Math.max(min, Math.round(numericValue)))
+}
+
+const formatPlanConfigValue = (value: number | undefined, unit: string) =>
+  Number.isFinite(value) && Number(value) > 0 ? `${value}${unit}` : '待确认'
+
+const formatEstimatedDuration = (task: StudyTaskVO) => {
+  if (task.estimatedMinutes != null && task.estimatedMinutes > 0) {
+    return `${task.estimatedMinutes}分钟`
+  }
+  if (task.estimatedHours != null && task.estimatedHours > 0) {
+    return `${task.estimatedHours}h`
+  }
+  return ''
+}
 
 onMounted(async () => {
   try {
@@ -1039,6 +1089,28 @@ onBeforeUnmount(() => {
 
 .form-actions {
   align-self: end;
+}
+
+.plan-config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+
+  span {
+    padding: 6px 9px;
+    border: 1px solid var(--user-border);
+    border-radius: 8px;
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
+    font-size: 12px;
+  }
+
+  b {
+    margin-right: 5px;
+    color: var(--user-text-muted);
+    font-weight: 700;
+  }
 }
 
 .stream-panel {

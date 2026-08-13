@@ -1565,7 +1565,7 @@ const adminAiModelGovernanceChecks = [
     'ai-model-api-confirmation-payload',
     adminGovernanceApi,
     'export const createAdminAiModelApi',
-    1000,
+    1300,
     [
       'AdminOperationConfirmPayload',
       "request.post<AiModelConfigVO, AiModelConfigVO>('/admin/ai/models', data)",
@@ -2617,7 +2617,7 @@ const adminDangerOperationChecks = [
     'admin-async-task-retry',
     adminAsyncTaskPage,
     'const handleRetry = async',
-    3200,
+    4000,
     [
       'getAdminTaskRetryPreviewApi(row.id)',
       'confirmDangerActionPreview({',

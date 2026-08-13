@@ -209,7 +209,7 @@ describe('Direction D prototype fidelity contracts', () => {
     const interview = readSource('src/views/interview/ArenaInterviewCreateView.vue')
 
     expect(interview).toContain('第 1 步 · 选择模拟形式')
-    expect(interview).toContain('开始一场模拟面试 <span aria-hidden="true">🎤</span>')
+    expect(interview).toContain('开始一场模拟面试</h1>')
     expect(interview).toContain('选择适合当前目标的场景，完成后将生成面试复盘报告。')
     expect(interview).toContain('grid-template-columns: repeat(2, 1fr)')
     expect(interview).toContain('min-height: 150px')

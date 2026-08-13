@@ -11,7 +11,7 @@
       <div class="topbar-progress" aria-label="本场进度">
         <span>{{ current?.currentStage?.stageName || '本场训练' }}</span>
         <div class="topbar-progress__track" aria-hidden="true">
-          <i :style="{ width: `${battleProgressPercent}%` }"></i>
+          <i :style="{ width: `${progressPercent}%` }"></i>
         </div>
         <strong>{{ answeredCount }}/{{ expectedTotalText }}</strong>
       </div>
@@ -335,7 +335,7 @@
           </div>
           <strong class="rail-count">{{ answeredCount }}<small>/{{ expectedTotalText }}</small></strong>
           <p>{{ current?.currentStage?.stageName || '等待本轮开始' }}</p>
-          <div class="rail-progress" aria-hidden="true"><i :style="{ width: `${battleProgressPercent}%` }"></i></div>
+          <div class="rail-progress" aria-hidden="true"><i :style="{ width: `${progressPercent}%` }"></i></div>
         </section>
 
         <section class="rail-section rail-pace">
@@ -428,8 +428,6 @@ import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { NEXT_ACTION } from '@/constants/enums'
-import { useGameProfileStore } from '@/features/game-profile'
-import { useAuthStore } from '@/stores/auth'
 import {
   inspectInterviewVoiceDeviceSupport,
   interviewVoicePermissionMessage
@@ -470,18 +468,10 @@ import InterviewVoiceLiveConsole from '@/views/interview/components/InterviewVoi
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
-const gameProfile = useGameProfileStore()
 const interviewId = getRouteNumberParam(route.params.id as string)
 
-// ---- 副本战斗（游戏化增量，不改变面试逻辑） ----
 /** AI 面试官人格 */
 const INTERVIEWER_PERSONA = '面试官 · 岚'
-/** 本场已入账 XP（从持久化奖励账本汇总，刷新后不丢失也不重复） */
-const sessionXp = computed(() =>
-  interviewId ? gameProfile.rewardXpForPrefix(`interview:${interviewId}:`) : 0
-)
-const grantedAnswerIds = new Set<number>()
 let currentRequestVersion = 0
 let currentLoadingTimeout: number | null = null
 
@@ -492,7 +482,6 @@ const clearCurrentLoadingTimeout = () => {
   }
 }
 
-const answeredCount = ref(0)
 const loading = ref(false)
 const starting = ref(false)
 const submitting = ref(false)
@@ -510,7 +499,6 @@ const liveVoiceConsoleRef = ref<{
 const liveAsrRuntimeActive = ref(false)
 const lastSubmittedAnswer = ref('')
 const lastAnswerDuration = ref(0)
-const answerStartTime = ref(Date.now())
 const answerReviewMessage = ref('')
 const answerReviewAnswerId = ref<number | undefined>()
 const answerReviewAiCallLogId = ref<number | undefined>()
@@ -607,7 +595,11 @@ const elapsedText = computed(() => {
 
 const startElapsedTimer = () => {
   stopElapsedTimer()
-  elapsedSeconds.value = 0
+  const presentedAt = current.value?.currentQuestion?.questionPresentedAt
+  const presentedAtMs = presentedAt ? new Date(presentedAt).getTime() : Number.NaN
+  elapsedSeconds.value = Number.isFinite(presentedAtMs)
+    ? Math.max(0, Math.floor((Date.now() - presentedAtMs) / 1000))
+    : 0
   elapsedTimer = window.setInterval(() => {
     elapsedSeconds.value++
   }, 1000)
@@ -933,55 +925,10 @@ const latestEvaluationLevelText = computed(() => {
   return latestScoreText.value !== '--' ? '已评分，点评待补' : '等待评分结果'
 })
 
-// ---- 副本战斗：XP 挂钩与战斗进度 ----
-const completedInterviewStatuses = new Set([
-  'COMPLETED',
-  'REPORT_GENERATING',
-  'REPORT_DONE',
-  'GENERATED',
-  'FINISHED'
-])
-
-const isCompletedInterviewStatus = (status?: string | null) =>
-  completedInterviewStatuses.has(String(status || '').toUpperCase())
-
-const isAnswerRewardEligible = (result: InterviewAnswerResultVO) => {
-  const level = String(result.evaluation.level || '').toUpperCase()
-  if (['EXCELLENT', 'GOOD', 'PASS'].includes(level)) return true
-  const score = result.evaluation.score ?? result.score
-  return typeof score === 'number' && Number.isFinite(score) && score >= 60
-}
-
-const grantInterviewCompletionReward = () => {
-  if (!interviewId) return
-  const grant = gameProfile.grantXpOnce('interview_complete', `interview:${interviewId}:complete`)
-  if (grant) gameProfile.recordActivity()
-}
-
-/** 每次 AI 评分返回均计入题序；仅达标评分才发放“答对题目”经验。 */
-watch(lastResult, (result) => {
-  const answerMessageId = result?.answerMessageId
-  if (!answerMessageId) return
-  if (!grantedAnswerIds.has(answerMessageId)) {
-    grantedAnswerIds.add(answerMessageId)
-    answeredCount.value = grantedAnswerIds.size
-  }
-  if (isAnswerRewardEligible(result)) {
-    gameProfile.grantXpOnce('practice_correct', `interview:${interviewId}:answer:${answerMessageId}`)
-  }
-})
-
-/** 面试完成（一次性）→ 通关 +200 XP 并续连胜 */
-watch(
-  () => current.value?.status,
-  (status) => {
-    if (!isCompletedInterviewStatus(status)) return
-    grantInterviewCompletionReward()
-  }
-)
-
 /** 预计题量：大纲预期题数合计，退化为当前阶段预期 */
 const expectedTotalText = computed(() => {
+  const fromServer = Number(current.value?.totalQuestionCount)
+  if (Number.isFinite(fromServer) && fromServer > 0) return `${fromServer}`
   const fromOutline = outlineStages.value.reduce((sum, stage) => sum + (Number(stage.expectedQuestionCount) || 0), 0)
   if (fromOutline > 0) return `${fromOutline}`
   const fromStage = Number(current.value?.currentStage?.expectedQuestionCount)
@@ -989,8 +936,18 @@ const expectedTotalText = computed(() => {
   return '多'
 })
 
+const answeredCount = computed(() => {
+  const fromServer = Number(current.value?.answeredQuestionCount)
+  if (Number.isFinite(fromServer) && fromServer >= 0) return fromServer
+  const currentIndex = Number(current.value?.currentQuestionIndex)
+  return Number.isFinite(currentIndex) && currentIndex > 0 ? currentIndex - 1 : 0
+})
+
 const currentQuestionNumberText = computed(() => {
-  const currentNumber = Math.max(1, answeredCount.value + 1)
+  const serverIndex = Number(current.value?.currentQuestionIndex)
+  const currentNumber = Number.isFinite(serverIndex) && serverIndex > 0
+    ? serverIndex
+    : Math.max(1, answeredCount.value + 1)
   const total = Number(expectedTotalText.value)
   if (Number.isFinite(total) && total > 0) {
     return `第 ${Math.min(currentNumber, total)} / ${total} 题`
@@ -1034,10 +991,14 @@ const questionTimeRemainingText = computed(() => {
   return remaining > 0 ? formatQuestionTime(remaining) : '建议时间已用完'
 })
 
-const battleProgressPercent = computed(() => {
+const progressPercent = computed(() => {
   const total = Number(expectedTotalText.value)
-  if (!Number.isFinite(total) || total <= 0) return Math.min(100, answeredCount.value * 15)
-  return Math.min(100, Math.round((answeredCount.value / total) * 100))
+  const serverAnswered = Number(current.value?.answeredQuestionCount)
+  const completed = Number.isFinite(serverAnswered) && serverAnswered >= 0
+    ? serverAnswered
+    : answeredCount.value
+  if (!Number.isFinite(total) || total <= 0) return Math.min(100, completed * 15)
+  return Math.min(100, Math.round((completed / total) * 100))
 })
 
 const reviewFallbackVisible = computed(() => {
@@ -1415,7 +1376,7 @@ const buildVoiceAudioFile = (audio: InterviewVoiceRecordedAudio) => {
 
 const handleVoiceRecordedAudio = async (audio: InterviewVoiceRecordedAudio) => {
   if (!interviewId || !current.value?.currentQuestion) {
-    voicePreview.setError('upload_failed', 'No active interview question. Please refresh and retry.')
+    voicePreview.setError('upload_failed', '当前没有可作答的面试题，请刷新页面后重试。')
     return
   }
 
@@ -1480,7 +1441,7 @@ const persistLiveVoiceRecording = async (
   request: InterviewRealtimeVoicePersistenceRequest
 ): Promise<InterviewRealtimeVoicePersistenceResult> => {
   if (!interviewId || !current.value?.currentQuestion) {
-    throw new Error('No active interview question. Please refresh and retry.')
+    throw new Error('当前没有可作答的面试题，请刷新页面后重试。')
   }
 
   await cancelVoiceLifecycle('REPLACED')
@@ -1534,7 +1495,7 @@ const persistLiveVoiceRecording = async (
     }
     const transcript = transcribed.transcript
     if (!transcript?.transcriptId) {
-      throw new Error('Voice transcription did not persist a transcript row for confirmation.')
+      throw new Error('语音转写结果未成功保存，暂时无法确认，请重新录音或使用文本回答。')
     }
 
     const confirmed = await confirmInterviewVoiceTranscriptApi(
@@ -1628,11 +1589,11 @@ const handleVoiceConfirm = async () => {
       }
     }
     if (voicePreview.confirmDraft(meta)) {
-      ElMessage.success('Voice transcript confirmed. Please review the answer before submitting.')
+      ElMessage.success('语音转写已确认，请检查回答内容后再提交。')
     }
   } catch (error) {
     if (isVoiceRequestCanceled(error) || !isCurrentVoiceOperation(operationVersion, controller)) return
-    ElMessage.error(getErrorMessage(error, 'Voice transcript confirmation failed.'))
+    ElMessage.error(getErrorMessage(error, '语音转写确认失败，请稍后重试。'))
   } finally {
     if (voiceRequestController === controller) {
       voiceRequestController = null
@@ -1668,7 +1629,6 @@ const fetchCurrent = async () => {
       }
     }
     current.value = nextCurrent
-    answerStartTime.value = Date.now()
     if (current.value?.currentQuestion) {
       startElapsedTimer()
     }
@@ -1719,7 +1679,8 @@ const handleStart = async () => {
 }
 
 const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
-  lastResult.value = result
+  const normalizedResult = normalizeAnswerResultState(result)
+  lastResult.value = normalizedResult
   lastSubmittedAnswer.value = answerContent.value
   answerContent.value = ''
   mobileAnswerComposerOpen.value = false
@@ -1728,20 +1689,37 @@ const applyAnswerResult = async (result: InterviewAnswerResultVO) => {
   uploadedVoiceFileId.value = null
   resetConfirmedVoiceAnswer()
 
-  if (result.nextAction === NEXT_ACTION.FINISH) {
+  if (normalizedResult.nextAction === NEXT_ACTION.FINISH) {
     await handleFinish(false)
     return
   }
 
-  if (result.nextAction === NEXT_ACTION.FOLLOW_UP && result.nextQuestion) {
+  if (normalizedResult.nextAction === NEXT_ACTION.FOLLOW_UP && normalizedResult.nextQuestion) {
     await cleanupVoiceResources('QUESTION_CHANGED')
-    current.value = {
-      interviewId: result.interviewId,
-      status: result.interviewStatus,
-      currentStage: result.currentStage,
-      currentQuestion: result.nextQuestion
+    const activeInterviewId = normalizedResult.interviewId || current.value?.interviewId || interviewId
+    if (!activeInterviewId) {
+      await fetchCurrent()
+      return
     }
-    answerStartTime.value = Date.now()
+    current.value = {
+      ...current.value,
+      interviewId: activeInterviewId,
+      status: normalizedResult.interviewStatus || current.value?.status || 'IN_PROGRESS',
+      interviewStatus: normalizedResult.interviewStatus || current.value?.interviewStatus,
+      currentStage: normalizedResult.currentStage || current.value?.currentStage,
+      currentQuestion: normalizedResult.nextQuestion,
+      currentQuestionIndex: normalizedResult.progress?.currentQuestionIndex
+        ?? normalizedResult.currentQuestionIndex
+        ?? current.value?.currentQuestionIndex,
+      totalQuestionCount: normalizedResult.progress?.totalQuestionCount
+        ?? normalizedResult.totalQuestionCount
+        ?? current.value?.totalQuestionCount,
+      answeredQuestionCount: normalizedResult.progress?.answeredQuestionCount
+        ?? normalizedResult.answeredQuestionCount
+        ?? current.value?.answeredQuestionCount,
+      overallProgress: normalizedResult.overallProgress || current.value?.overallProgress,
+      outline: normalizedResult.outline || current.value?.outline
+    }
     startElapsedTimer()
     return
   }
@@ -1809,7 +1787,24 @@ const normalizeAnswerReviewResult = (
     currentStage: raw.currentStage,
     interviewStatus: raw.interviewStatus || 'IN_PROGRESS',
     reportStatus: raw.reportStatus,
-    progress: raw.progress
+    progress: raw.progress || data?.progress,
+    outline: raw.outline || data?.outline,
+    currentQuestionIndex: raw.currentQuestionIndex,
+    totalQuestionCount: raw.totalQuestionCount,
+    answeredQuestionCount: raw.answeredQuestionCount,
+    overallProgress: raw.overallProgress
+  }
+}
+
+const normalizeAnswerResultState = (result: InterviewAnswerResultVO): InterviewAnswerResultVO => {
+  const progress = result.progress
+  return {
+    ...result,
+    progress,
+    outline: result.outline,
+    currentQuestionIndex: result.currentQuestionIndex ?? progress?.currentQuestionIndex,
+    totalQuestionCount: result.totalQuestionCount ?? progress?.totalQuestionCount,
+    answeredQuestionCount: result.answeredQuestionCount ?? progress?.answeredQuestionCount
   }
 }
 
@@ -1862,7 +1857,7 @@ const handleSubmit = async () => {
   }
 
   if (voicePreview.hasPendingUnconfirmedTranscript.value) {
-    ElMessage.warning('Please confirm or clear the voice transcript draft before submitting.')
+    ElMessage.warning('请先确认或清空语音转写草稿，再提交回答。')
     return
   }
 
@@ -1896,7 +1891,9 @@ const handleSubmit = async () => {
     messageId: current.value.currentQuestion.messageId,
     questionId: current.value.currentQuestion.questionId,
     answerContent: answerContent.value,
-    answerDurationSeconds: Math.max(1, Math.round((Date.now() - answerStartTime.value) / 1000)),
+    // The server persists timing from questionPresentedAt. Keep this client value only
+    // for backward-compatible API consumers and local display before the response returns.
+    answerDurationSeconds: Math.max(1, elapsedSeconds.value),
     clientSubmitTime: new Date().toISOString(),
     ...voicePayload
   }
@@ -1974,9 +1971,6 @@ const handleFinish = async (_manual: boolean) => {
   finishing.value = true
   try {
     const result = await finishInterviewApi(interviewId)
-    if (isCompletedInterviewStatus(result.status)) {
-      grantInterviewCompletionReward()
-    }
     ElMessage.success(result.message || '正在结束面试并提交报告生成任务')
     const query: Record<string, string> = {}
     if (result.asyncMessageId) query.asyncMessageId = result.asyncMessageId
@@ -2015,7 +2009,6 @@ const handleManualFinish = async () => {
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   void fetchCurrent()
   void loadScenarioBinding()
 })
@@ -3338,27 +3331,6 @@ onBeforeUnmount(() => {
   }
 }
 
-// ---- 副本战斗（游戏化增量样式，暗色霓虹） ----
-.dungeon-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  background: rgba(124, 92, 252, 0.16);
-  color: #b3a1ff;
-  border: 1px solid rgba(124, 92, 252, 0.35);
-  white-space: nowrap;
-}
-
-.dungeon-chip--xp {
-  background: rgba(247, 144, 9, 0.14);
-  color: #f7b955;
-  border-color: rgba(247, 144, 9, 0.35);
-}
-
 .ai-persona {
   display: inline-flex;
   align-items: center;
@@ -3390,7 +3362,7 @@ onBeforeUnmount(() => {
     height: 3px;
     border-radius: 50%;
     background: currentColor;
-    animation: dungeonTyping 1.2s ease-in-out infinite;
+    animation: personaTyping 1.2s ease-in-out infinite;
   }
 
   i:nth-child(2) {
@@ -3402,116 +3374,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.battle-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(2, 6, 23, 0.5);
-}
-
-.battle-strip__label {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #f7b955;
-}
-
-.battle-strip__bar {
-  flex: 1;
-  height: 8px;
-  border-radius: 99px;
-  background: rgba(148, 163, 184, 0.18);
-  overflow: hidden;
-
-  i {
-    display: block;
-    height: 100%;
-    border-radius: 99px;
-    background: linear-gradient(90deg, #17b26a, #a3e635);
-    box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
-    transition: width 0.3s ease;
-  }
-}
-
-.battle-strip__text {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #cbd5e1;
-}
-
-.battle-strip__xp {
-  flex: none;
-  font-size: 11.5px;
-  font-weight: 800;
-  color: #f7b955;
-}
-
-.battle-status-card {
-  padding: 13px 15px;
-  border-radius: 14px;
-  border: 1px solid rgba(124, 92, 252, 0.3);
-  background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(2, 6, 23, 0.5));
-}
-
-.battle-status-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  font-weight: 800;
-  color: #e5edf8;
-}
-
-.battle-status-card__lv {
-  font-size: 10.5px;
-  color: #b3a1ff;
-}
-
-.battle-status-card__grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
-
-  > div {
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(148, 163, 184, 0.08);
-
-    span {
-      display: block;
-      font-size: 10px;
-      font-weight: 700;
-      color: rgba(203, 213, 225, 0.6);
-    }
-
-    strong {
-      display: block;
-      margin-top: 2px;
-      font-size: 12.5px;
-      color: #f8fafc;
-    }
-  }
-}
-
-.score-card__xp {
-  display: inline-flex;
-  margin-top: 7px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 800;
-  background: rgba(247, 144, 9, 0.16);
-  color: #f7b955;
-  border: 1px solid rgba(247, 144, 9, 0.35);
-}
-
-@keyframes dungeonTyping {
+@keyframes personaTyping {
   0%,
   100% {
     opacity: 0.3;
@@ -3523,7 +3386,7 @@ onBeforeUnmount(() => {
   }
 }
 
-// 方向 D · 深色副本壳。独立于用户端浅色 arena，但统一为绿/青柠/琥珀状态语言。
+// ---- 副本战斗（游戏化增量样式，暗色霓虹） ----
 .arena-room {
   --room-bg: #101513;
   --room-surface: #1a201d;
@@ -3566,8 +3429,6 @@ onBeforeUnmount(() => {
   .panel-title,
   .message-card,
   .score-card,
-  .battle-status-card__head,
-  .battle-status-card__grid strong,
   .ai-presence h2 {
     color: var(--room-text);
   }
@@ -3609,9 +3470,7 @@ onBeforeUnmount(() => {
   .pending-note,
   .feedback-stack section,
   .answer-rubric,
-  .followup-brief,
-  .battle-strip,
-  .battle-status-card {
+  .followup-brief {
     border-color: var(--room-line);
     background: rgba(255, 255, 255, 0.05);
   }
@@ -3641,24 +3500,9 @@ onBeforeUnmount(() => {
     }
   }
 
-  .battle-strip__label,
-  .battle-strip__xp,
-  .dungeon-chip--xp,
-  .score-card__xp {
-    color: var(--room-amber);
-  }
-
-  .battle-strip__bar {
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  .battle-status-card {
-    border-color: rgba(124, 92, 252, 0.32);
-    background: linear-gradient(150deg, rgba(124, 92, 252, 0.14), rgba(16, 21, 19, 0.62));
-  }
 }
 
-// 方向 D · 房间是独立沉浸壳：不继承用户端顶栏/底栏，也不把战斗信息扩展成第二个工作台。
+// 房间是独立沉浸壳，不继承用户端顶栏或底栏。
 .interview-room.arena-room {
   position: fixed;
   inset: 0;
@@ -3725,15 +3569,6 @@ onBeforeUnmount(() => {
     &::-webkit-scrollbar {
       display: none;
     }
-  }
-
-  .dungeon-chip {
-    display: none;
-  }
-
-  .dungeon-chip--xp {
-    display: inline-flex;
-    flex: 0 0 auto;
   }
 
   .topbar-status > .cc-badge,
@@ -3845,7 +3680,7 @@ onBeforeUnmount(() => {
   .answer-rubric,
   .followup-brief,
   .feedback-tabs,
-  .feedback-panel > :not(.battle-status-card):not(.panel-title) {
+  .feedback-panel > :not(.panel-title) {
     display: none;
   }
 
@@ -3905,29 +3740,6 @@ onBeforeUnmount(() => {
     display: grid;
     align-content: start;
     gap: 14px;
-  }
-
-  .battle-strip {
-    order: -1;
-    width: min(100%, 180px);
-    justify-self: end;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .battle-strip__label,
-  .battle-strip__xp {
-    display: none;
-  }
-
-  .battle-strip__text {
-    display: none;
-  }
-
-  .battle-strip__bar {
-    height: 8px;
   }
 
   .room-progress-summary {
@@ -4150,7 +3962,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .feedback-panel > :not(.battle-status-card):not(.panel-title):not(.room-feedback-drawer) {
+  .feedback-panel > :not(.panel-title):not(.room-feedback-drawer) {
     display: none;
   }
 
@@ -4174,21 +3986,6 @@ onBeforeUnmount(() => {
 
     &[open] > summary {
       margin-bottom: 12px;
-    }
-  }
-
-  .battle-status-card {
-    margin: 0;
-    border-color: rgba(247, 144, 9, 0.36);
-    background: rgba(247, 144, 9, 0.08);
-  }
-
-  .battle-status-card__grid {
-    grid-template-columns: 1fr;
-
-    > div:nth-child(3),
-    > div:nth-child(4) {
-      display: none;
     }
   }
 
@@ -4218,7 +4015,6 @@ onBeforeUnmount(() => {
       gap: 6px;
     }
 
-    .topbar-status > .dungeon-chip--xp,
     .topbar-status > .cc-badge,
     .topbar-status > .topbar-chip:not(.room-timer),
     .topbar-status > .ghost-action:first-of-type {
@@ -5027,9 +4823,7 @@ onBeforeUnmount(() => {
 
   .training-boundary,
   .ai-presence,
-  .battle-strip,
   .cockpit-state-strip,
-  .battle-status-card,
   .room-progress-summary,
   .panel-title,
   .feedback-tabs,

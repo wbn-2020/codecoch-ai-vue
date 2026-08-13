@@ -330,6 +330,7 @@ export interface DailyPlanVO {
   asyncTraceId?: string | null
   asyncBizType?: string | null
   asyncBizId?: string | null
+  asyncReceiptStatus?: 'RUN_REGISTERED' | 'MQ_ACCEPTED' | string | null
   startedAt?: string
   finishedAt?: string
   createdAt?: string

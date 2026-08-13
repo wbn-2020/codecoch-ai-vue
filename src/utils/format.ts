@@ -40,7 +40,17 @@ export const notificationTypeLabels: Record<string, string> = {
 
 export const formatNotificationType = (type?: string | null): string => {
   if (!type) return '通知'
-  return notificationTypeLabels[type] || type
+  const normalized = String(type).trim().replace(/[.-]/g, '_').toUpperCase()
+  if (notificationTypeLabels[normalized]) return notificationTypeLabels[normalized]
+  if (normalized.includes('APPLICATION') && normalized.includes('FOLLOW')) return '投递跟进提醒'
+  if (normalized.includes('INTERVIEW') && normalized.includes('REPORT')) return '面试报告提醒'
+  if (normalized.includes('INTERVIEW')) return '模拟面试提醒'
+  if (normalized.includes('REPORT')) return '报告提醒'
+  if (normalized.includes('TASK') || normalized.includes('AGENT')) return '训练任务提醒'
+  if (normalized.includes('PLAN') || normalized.includes('STUDY')) return '学习计划提醒'
+  if (normalized.includes('RESUME')) return '简历处理提醒'
+  if (normalized.includes('SECURITY') || normalized.includes('AUTH')) return '账户安全提醒'
+  return '系统通知'
 }
 
 export const formatLocalDate = (value: Date = new Date()): string => {

@@ -280,4 +280,45 @@ describe('ResumeEditView', () => {
     expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit \.mobile-pane-edit\s*\{[\s\S]*?display:\s*flex;/)
     expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
   })
+
+  it('keeps mobile preview inside its pane and keeps the save action sticky', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
+      'utf8'
+    )
+    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
+
+    expect(source).toContain(":style=\"{ '--resume-preview-zoom': previewZoom }\"")
+    expect(workbenchStyles).toMatch(
+      /\.resume-paper-stage\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;[\s\S]*?zoom:\s*var\(--resume-preview-zoom\);/
+    )
+    expect(workbenchStyles).not.toMatch(/\.resume-paper-stage\s*\{[\s\S]*?width:\s*max-content;/)
+    expect(workbenchStyles).toMatch(
+      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;/
+    )
+    expect(workbenchStyles).toMatch(
+      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-stage\s*\{[\s\S]*?zoom:\s*1;/
+    )
+    expect(workbenchStyles).toMatch(
+      /\.form-actions\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;/
+    )
+  })
+
+  it('maps validation failures to sections, returns to editing, and focuses the first invalid field', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
+      'utf8'
+    )
+
+    expect(source).toContain("skills: 'resume-skills'")
+    expect(source).toContain('const handleFormValidationFailure = async (failure: unknown) =>')
+    expect(source).toContain('invalidSectionIds.value = sections')
+    expect(source).toContain('if (section) focusSection(section)')
+    expect(source).toContain('formRef.value?.scrollToField?.(firstField)')
+    expect(source).toContain('focusFirstInvalidField(firstField)')
+    expect(source).toMatch(
+      /await formRef\.value\.validate\(\)[\s\S]*?catch \(failure\) \{[\s\S]*?await handleFormValidationFailure\(failure\)/
+    )
+    expect(source).toContain("@update:model-value=\"clearResolvedValidation('skills', $event)\"")
+  })
 })
