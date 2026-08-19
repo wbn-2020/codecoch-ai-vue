@@ -9,30 +9,44 @@ const skillOverview = vi.hoisted(() => ({ value: { profileId: 5 } as Record<stri
 const gapItems = vi.hoisted(() => ({ value: [] as unknown[] }))
 const studyPlans = vi.hoisted(() => ({ value: { records: [] as unknown[] } }))
 const matchReports = vi.hoisted(() => ({ value: { records: [] as unknown[] } }))
+const routeQuery = vi.hoisted(() => ({ value: {} as Record<string, string> }))
+const routerPush = vi.hoisted(() => vi.fn())
+const matchReportDetail = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }))
+const recommendationBatches = vi.hoisted(() => ({ value: { records: [] as unknown[] } }))
+const recommendationApi = vi.hoisted(() => ({
+  getQuestionRecommendationBatchesApi: vi.fn(async () => recommendationBatches.value),
+  submitQuestionRecommendationsFromMatchReportApi: vi.fn(),
+  getQuestionRecommendationBatchItemsApi: vi.fn()
+}))
+const skillProfileApi = vi.hoisted(() => ({
+  generateSkillProfileApi: vi.fn()
+}))
 
 vi.mock('@/api/questionRecommendation', () => ({
   getQuestionRecommendationBatchDetailApi: vi.fn(),
-  getQuestionRecommendationBatchItemsApi: vi.fn(),
+  getQuestionRecommendationBatchItemsApi: recommendationApi.getQuestionRecommendationBatchItemsApi,
+  getQuestionRecommendationBatchesApi: recommendationApi.getQuestionRecommendationBatchesApi,
   getQuestionRecommendationItemsFromGapBatchApi: vi.fn(async () => gapItems.value),
   getQuestionRecommendationItemsFromMatchReportBatchApi: vi.fn(async () => []),
   getQuestionRecommendationItemsFromStudyPlanBatchApi: vi.fn(async () => []),
   submitQuestionRecommendationsFromGapApi: vi.fn(),
-  submitQuestionRecommendationsFromMatchReportApi: vi.fn(),
+  submitQuestionRecommendationsFromMatchReportApi: recommendationApi.submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi: vi.fn()
 }))
 vi.mock('@/api/resumeJobMatch', () => ({
-  getResumeJobMatchReportDetailApi: vi.fn(),
+  getResumeJobMatchReportDetailApi: vi.fn(async () => matchReportDetail.value),
   getResumeJobMatchReportsApi: vi.fn(async () => matchReports.value)
 }))
 vi.mock('@/api/skillProfile', () => ({
-  getSkillProfileOverviewApi: vi.fn(async () => skillOverview.value)
+  getSkillProfileOverviewApi: vi.fn(async () => skillOverview.value),
+  generateSkillProfileApi: skillProfileApi.generateSkillProfileApi
 }))
 vi.mock('@/api/studyPlan', () => ({
   getStudyPlansApi: vi.fn(async () => studyPlans.value)
 }))
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  useRoute: () => ({ path: '/questions/recommendations', fullPath: '/questions/recommendations', query: {}, meta: {} })
+  useRouter: () => ({ push: routerPush }),
+  useRoute: () => ({ path: '/questions/recommendations', fullPath: '/questions/recommendations', query: routeQuery.value, meta: {} })
 }))
 
 const flush = async () => {
@@ -78,6 +92,15 @@ describe('ArenaTrainView', () => {
     gapItems.value = []
     studyPlans.value = { records: [] }
     matchReports.value = { records: [] }
+    routeQuery.value = {}
+    matchReportDetail.value = null
+    recommendationBatches.value = { records: [] }
+    recommendationApi.getQuestionRecommendationBatchesApi.mockReset()
+    recommendationApi.getQuestionRecommendationBatchesApi.mockResolvedValue(recommendationBatches.value)
+    recommendationApi.getQuestionRecommendationBatchItemsApi.mockReset()
+    recommendationApi.submitQuestionRecommendationsFromMatchReportApi.mockReset()
+    skillProfileApi.generateSkillProfileApi.mockReset()
+    routerPush.mockReset()
   })
 
   it('renders the compact direction D preview rows from real recommendation items', async () => {
@@ -107,6 +130,43 @@ describe('ArenaTrainView', () => {
     expect(wrapper.text()).toContain('2 道可练')
   })
 
+  it('routes a private recommendation draft into the practice session instead of disabling it as an unmatched public question', async () => {
+    gapItems.value = [{
+      id: 301,
+      batchId: 401,
+      questionTitle: '高并发订单扣减如何保证一致性',
+      skillName: '分布式事务',
+      difficulty: 'HARD',
+      questionType: 'SCENARIO',
+      answerHint: '说明锁、消息幂等和补偿机制',
+      evaluatePoints: '并发控制、幂等、失败补偿',
+      canPractice: true,
+      practiceKind: 'PRIVATE_RECOMMENDATION',
+      trustStatus: 'VERIFIED',
+      sourceType: 'RESUME_JOB_MATCH',
+      sourceId: 88
+    }]
+    const wrapper = mountTrain()
+    await flush()
+
+    const questionButton = wrapper.find('.arena-train__question-row')
+    expect(questionButton.attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('1 道可练')
+
+    await questionButton.trigger('click')
+
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/questions/practice',
+      query: expect.objectContaining({
+        mode: 'recommended',
+        recommendationItemIds: '301',
+        sourceType: 'RESUME_JOB_MATCH',
+        sourceId: '88',
+        autoStart: 'true'
+      })
+    })
+  })
+
   it('falls back to honest generic training when no trusted source exists', async () => {
     skillOverview.value = { profileId: undefined }
     const wrapper = mountTrain()
@@ -126,6 +186,36 @@ describe('ArenaTrainView', () => {
 
     expect(wrapper.text()).toContain('暂时没有推荐题')
     expect(wrapper.text()).toContain('重新生成')
+  })
+
+  it('submits a JD-specific batch when a trusted match report has no prior recommendation batch', async () => {
+    routeQuery.value = { source: 'matchReport', matchReportId: '9', targetJobId: '88' }
+    matchReportDetail.value = {
+      reportId: 9,
+      status: 'SUCCESS',
+      trustStatus: 'VERIFIED',
+      fallback: false,
+      schemaWarningCount: 0,
+      schemaWarnings: []
+    }
+    skillProfileApi.generateSkillProfileApi.mockResolvedValue({ profileId: 5, status: 'SUCCESS' })
+    recommendationApi.submitQuestionRecommendationsFromMatchReportApi.mockResolvedValue({
+      batchId: 17,
+      status: 'GENERATING',
+      questionCount: 10,
+      aiCallLogId: 19,
+      sourceType: 'RESUME_JOB_MATCH',
+      sourceId: 9,
+      trustStatus: 'PARTIAL',
+      asyncMessageId: 'message-17'
+    })
+    const wrapper = mountTrain()
+    await flush()
+
+    expect(skillProfileApi.generateSkillProfileApi).toHaveBeenCalledWith({ matchReportId: 9 })
+    expect(recommendationApi.submitQuestionRecommendationsFromMatchReportApi)
+      .toHaveBeenCalledWith({ matchReportId: 9, questionCount: 10 })
+    expect(wrapper.text()).toContain('题组正在准备')
   })
 
   it('switches source tabs and keeps arena tab styling hooks', async () => {

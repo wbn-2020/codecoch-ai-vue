@@ -494,7 +494,9 @@ const loadAll = async (force = false) => {
       )
       if (Number.isFinite(targetJobId) && targetJobId > 0) {
         try {
-          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId)
+          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId, {
+            silentError: true
+          })
           readinessError.value = ''
         } catch (error) {
           readinessError.value = getErrorMessage(error, '准备度加载失败，请稍后重试。')
@@ -522,7 +524,6 @@ const loadAll = async (force = false) => {
 }
 
 onMounted(async () => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   await loadAll()
 })
 </script>
@@ -534,7 +535,7 @@ onMounted(async () => {
   margin: 0;
 
   &__page {
-    max-width: 1060px;
+    width: min(100%, var(--user-content-max, 1440px));
     margin: 0 auto;
     padding: 28px 34px 42px;
     position: relative;

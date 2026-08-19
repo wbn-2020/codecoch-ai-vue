@@ -69,6 +69,15 @@
                   controls-position="right"
                 />
               </el-form-item>
+              <el-form-item label="开始日期">
+                <el-date-picker
+                  v-model="generateForm.startDate"
+                  value-format="YYYY-MM-DD"
+                  type="date"
+                  :clearable="false"
+                  placeholder="选择开始日期"
+                />
+              </el-form-item>
               <el-form-item class="form-wide" label="补充要求">
                 <el-input
                   v-model="generateForm.extraRequirements"
@@ -180,6 +189,10 @@
                     <b>每日投入</b>
                     {{ formatPlanConfigValue(selectedPlan.dailyMinutes, '分钟') }}
                   </span>
+                  <span>
+                    <b>开始日期</b>
+                    {{ selectedPlan.startDate || '待重新生成确认' }}
+                  </span>
                 </div>
               </div>
               <el-tag :type="statusType(selectedPlan.planStatus)" effect="plain">
@@ -195,6 +208,15 @@
                 <el-button size="small" type="primary" plain @click="goSelectedPlanTaskCenter">去任务中心</el-button>
               </div>
             </div>
+            <el-alert
+              v-else-if="selectedPlan.planStatus === 'ACTIVE' && !selectedPlan.startDate"
+              class="legacy-plan-alert"
+              type="warning"
+              show-icon
+              :closable="false"
+              title="这份旧计划缺少开始日期"
+              description="系统不会再根据创建时间推算任务日期。请从面试报告重新生成路线，确认新的开始日期和每日投入。"
+            />
             <div v-else-if="selectedPlan.planStatus === 'FAILED'" class="status-panel status-panel--error">
               <el-alert
                 type="error"
@@ -399,6 +421,7 @@ import {
 } from '@/api/studyPlan'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
+import { shouldPollAsyncOperation } from '@/features/async-operation-state'
 import type {
   SseEventVO,
   StudyPlanDailyViewVO,
@@ -475,6 +498,7 @@ const generateForm = reactive<StudyPlanGenerateDTO>({
   industryDirection: '',
   expectedDurationDays: 14,
   dailyMinutes: 60,
+  startDate: fallbackBusinessDate,
   extraRequirements: ''
 })
 
@@ -532,9 +556,16 @@ const clearPoll = () => {
   }
 }
 
+const shouldPollPlan = (plan?: StudyPlanDetailVO | StudyPlanListVO | null) =>
+  shouldPollAsyncOperation({
+    status: plan?.planStatus,
+    consumable: String(plan?.planStatus || '').toUpperCase() === 'ACTIVE',
+    hasExecution: Boolean(plan?.id)
+  })
+
 const schedulePlanPoll = () => {
   clearPoll()
-  if (!selectedPlan.value || selectedPlan.value.planStatus !== 'GENERATING') return
+  if (!selectedPlan.value || !shouldPollPlan(selectedPlan.value)) return
   if (pollCount.value >= 30) {
     ElMessage.warning('学习计划生成时间较长，可以稍后刷新路线或到任务中心查看进度')
     return
@@ -595,7 +626,7 @@ const selectPlan = async (id: number, updateRoute = true) => {
     if (updateRoute) {
       await router.replace({ path: '/study-plans', query: { planId: String(id) } })
     }
-    if (detail.planStatus === 'GENERATING') {
+    if (shouldPollPlan(detail)) {
       schedulePlanPoll()
     } else {
       clearPoll()
@@ -669,6 +700,7 @@ const handleGenerate = async () => {
       ...generateForm,
       expectedDurationDays,
       dailyMinutes,
+      startDate: generateForm.startDate || businessDate.value,
       targetPosition: generateForm.targetPosition || undefined,
       industryDirection: generateForm.industryDirection || undefined,
       extraRequirements: generateForm.extraRequirements || undefined
@@ -730,6 +762,7 @@ const handleGenerate = async () => {
       ...generateForm,
       expectedDurationDays,
       dailyMinutes,
+      startDate: generateForm.startDate || businessDate.value,
       targetPosition: generateForm.targetPosition || undefined,
       industryDirection: generateForm.industryDirection || undefined,
       extraRequirements: generateForm.extraRequirements || undefined
@@ -920,8 +953,12 @@ onMounted(async () => {
   try {
     const dashboard = await getUserDashboardOverviewApi()
     if (dashboard.businessDate) {
+      const previousBusinessDate = businessDate.value
       businessDate.value = dashboard.businessDate
       dailyDate.value = dashboard.businessDate
+      if (!generateForm.startDate || generateForm.startDate === previousBusinessDate) {
+        generateForm.startDate = dashboard.businessDate
+      }
     }
   } catch {
     businessDate.value = fallbackBusinessDate

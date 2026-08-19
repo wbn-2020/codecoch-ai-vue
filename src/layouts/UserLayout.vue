@@ -32,10 +32,11 @@
         <div v-if="requestError" class="user-request-error" role="alert">
           <div class="user-request-error__copy">
             <strong>{{ requestError.message }}</strong>
+            <span>{{ requestError.categoryLabel }}：{{ requestError.nextAction }}</span>
             <span v-if="requestError.traceId">错误编号：{{ displayTraceId(requestError.traceId) }}</span>
           </div>
           <div class="user-request-error__actions">
-            <button type="button" @click="reloadCurrentPage">重试当前页</button>
+            <button v-if="requestError.retryable" type="button" @click="reloadCurrentPage">重试当前页</button>
             <button type="button" class="user-request-error__close" aria-label="关闭错误提示" @click="requestError = null">关闭</button>
           </div>
         </div>
@@ -85,11 +86,13 @@ import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import XpGainToast from '@/components/game/XpGainToast.vue'
 import ArenaTopNav from '@/components/layout/ArenaTopNav.vue'
 import { appConfig } from '@/config'
+import { applyProductTheme, clearProductTheme } from '@/config/themePolicy'
 import { useGameProfileStore } from '@/features/game-profile'
 import { resolveAdminEntryPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import { useTagsViewStore } from '@/stores/tagsView'
 import { REQUEST_ERROR_EVENT, type RequestErrorDiagnostic } from '@/utils/errorEvents'
+import { showUserMessage } from '@/utils/userMessage'
 
 const router = useRouter()
 const route = useRoute()
@@ -110,6 +113,18 @@ const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
 const usesArenaShell = computed(() => !isImmersivePage.value)
 const isResumeWorkbench = computed(() => route.meta?.layoutMode === 'resume-workbench')
 const requestError = ref<RequestErrorDiagnostic | null>(null)
+
+watch(
+  () => authStore.userInfo?.id,
+  (userId) => {
+    if (userId == null) {
+      gameProfile.resetSession()
+      return
+    }
+    gameProfile.hydrate(userId)
+  },
+  { immediate: true }
+)
 
 watch(usesArenaShell, (enabled) => {
   document.body.classList.toggle('arena-overlay-theme', enabled)
@@ -159,7 +174,8 @@ const displayTraceId = (traceId?: string) => {
 
 const handleRequestError = (event: Event) => {
   const detail = (event as CustomEvent<RequestErrorDiagnostic>).detail
-  if (detail) requestError.value = detail
+  if (!detail || (detail.routePath && detail.routePath !== route.fullPath)) return
+  requestError.value = detail
 }
 
 const reloadCurrentPage = () => {
@@ -173,12 +189,22 @@ const handleRouteRetry = (reason: 'error' | 'loading') => {
   }
 }
 
+watch(
+  () => route.fullPath,
+  () => {
+    requestError.value = null
+    showUserMessage.closeTransientErrors()
+  }
+)
+
 onMounted(() => {
+  applyProductTheme('user')
   document.body.classList.add('is-user-layout-active')
   window.addEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 
 onBeforeUnmount(() => {
+  clearProductTheme('user')
   document.body.classList.remove('is-user-layout-active')
   document.body.classList.remove('arena-overlay-theme')
   window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
@@ -193,7 +219,6 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 100vh;
   min-width: 0;
-  overflow-x: clip;
   background: var(--user-bg);
   color: var(--user-text);
 }
@@ -204,25 +229,18 @@ onBeforeUnmount(() => {
   align-items: center;
   width: 100%;
   color-scheme: light;
-  background:
-    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
-    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
-    var(--arena-bg);
+  background: var(--arena-bg);
 }
 
 .arena-frame {
   position: relative;
-  width: min(calc(100% - 28px), 1180px);
+  width: min(calc(100% - 32px), 1680px);
   min-height: 820px;
   margin: 0 auto;
   align-self: center;
-  overflow: hidden;
-  border-radius: 22px;
-  background:
-    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
-    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
-    var(--arena-bg);
-  box-shadow: 0 24px 60px rgba(21, 33, 27, 0.18);
+  border-radius: 10px;
+  background: var(--arena-bg);
+  box-shadow: 0 10px 28px rgba(21, 33, 27, 0.14);
 }
 
 .arena-frame.is-resume-workbench-frame {
@@ -239,7 +257,6 @@ onBeforeUnmount(() => {
   min-height: calc(100vh - 64px);
   margin: 0 auto;
   padding: 14px 24px 28px;
-  overflow-x: clip;
 
   &.is-arena-main {
     width: 100%;
@@ -256,23 +273,22 @@ onBeforeUnmount(() => {
     }
 
     // Most extended user pages still keep their business-specific roots instead
-    // of the `.arena` root. Give those routes the same Direction D reading
-    // column as the prototype pages so legacy dashboard roots do not touch the
-    // frame edge or expand into the old cockpit canvas.
+    // of the `.arena` root. Preserve a broad desktop task area while keeping
+    // enough page padding for scan-friendly content at 1920px.
     > :deep(.page-shell:not(.arena):not(.interview-room)),
     > :deep(.user-page-shell:not(.arena):not(.interview-room)) {
       box-sizing: border-box;
-      width: min(100%, 1060px);
+      width: min(100%, 1440px);
       min-width: 0;
       margin: 0 auto;
-      padding: 28px 34px 46px;
+      padding: 28px 32px 46px;
     }
 
     // A few history and comparison views use a verified wider desktop grid.
     // Preserve their own content measure instead of compressing them into the
     // default extension-page column.
     > :deep(.page-shell.page-shell--wide) {
-      width: min(100%, 1240px);
+      width: min(100%, 1600px);
     }
 
     @media (max-width: 720px) {
@@ -296,7 +312,6 @@ onBeforeUnmount(() => {
 
   &.is-resume-workbench-main {
     min-height: calc(100dvh - 62px);
-    overflow: hidden;
   }
 }
 
@@ -406,6 +421,17 @@ onBeforeUnmount(() => {
     flex-direction: column;
     width: calc(100% - 24px);
     margin-bottom: 8px;
+  }
+}
+
+:global(.codecoach-global-message) {
+  box-sizing: border-box;
+  max-width: min(calc(100vw - 24px), 560px);
+}
+
+@media (max-width: 768px) {
+  :global(.codecoach-global-message) {
+    margin-top: env(safe-area-inset-top, 0px);
   }
 }
 </style>

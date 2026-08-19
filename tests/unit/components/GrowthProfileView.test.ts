@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -182,5 +185,25 @@ describe('GrowthProfileView', () => {
     expect(weeklyReportButton).toBeTruthy()
     await weeklyReportButton!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/agent/weekly-reports')
+  })
+
+  it('uses the navigation name consistently and keeps long evidence readable at 390px', async () => {
+    const wrapper = mount(GrowthProfileView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('成长档案')
+    expect(wrapper.text()).not.toContain('成长画像')
+
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/views/v4/GrowthProfileView.vue'),
+      'utf8'
+    )
+    expect(source).toContain('@media (max-width: 420px)')
+    expect(source).toMatch(/\.trend-row strong,[\s\S]*?overflow-wrap:\s*anywhere/)
+    expect(source).not.toMatch(/\.trend-row strong,[\s\S]{0,180}text-overflow:\s*ellipsis/)
   })
 })

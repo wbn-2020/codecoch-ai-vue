@@ -702,7 +702,7 @@
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .admin-layout {
     --admin-header-height: 48px;
     --admin-health-height: 30px;
@@ -710,15 +710,53 @@
   }
 
   .admin-layout .app-layout__aside {
-    position: static;
-    height: auto;
-    max-height: min(42dvh, 360px);
-    overflow-x: hidden;
-    overflow-y: auto;
+    display: none;
   }
 
   .admin-layout .app-layout__brand {
     display: none;
+  }
+
+  .admin-mobile-navigation.el-drawer {
+    width: min(320px, 86vw) !important;
+    max-width: 100vw;
+    background: var(--admin-sidebar);
+  }
+
+  .admin-mobile-navigation .el-drawer__body {
+    min-width: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .admin-mobile-navigation__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--admin-header-height);
+    padding: 0 14px;
+    border-bottom: 1px solid var(--admin-border);
+    color: var(--admin-text);
+  }
+
+  .admin-mobile-navigation__brand .brand-text {
+    min-width: 0;
+  }
+
+  .admin-mobile-navigation__brand .brand-text strong,
+  .admin-mobile-navigation__brand .brand-text span {
+    display: block;
+  }
+
+  .admin-mobile-navigation__brand .brand-text span {
+    margin-top: 2px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+  }
+
+  .admin-mobile-navigation .layout-menu {
+    overflow-y: auto;
   }
 
   .admin-layout .layout-menu {
@@ -844,6 +882,36 @@
     overflow-wrap: anywhere;
   }
 
+  .task-detail-drawer.el-drawer {
+    width: min(100vw, 680px) !important;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .task-detail-drawer .el-drawer__body,
+  .task-detail-drawer .el-descriptions,
+  .task-detail-drawer .el-descriptions__body,
+  .task-detail-drawer .el-descriptions__table {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .task-detail-drawer .el-descriptions__table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .task-detail-drawer .el-descriptions__cell,
+  .task-detail-drawer .el-descriptions__label,
+  .task-detail-drawer .el-descriptions__content,
+  .task-detail-drawer code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
   .admin-layout .el-dialog {
     width: calc(100vw - 24px) !important;
     max-width: none;
@@ -864,6 +932,21 @@
 
   .admin-layout .pagination-wrap {
     overflow-x: auto;
+  }
+
+  .admin-layout .table-card {
+    overflow-x: auto;
+  }
+}
+
+.codecoach-global-message {
+  box-sizing: border-box;
+  max-width: min(calc(100vw - 24px), 560px);
+}
+
+@media (max-width: 768px) {
+  .codecoach-global-message {
+    margin-top: env(safe-area-inset-top, 0px);
   }
 }
 

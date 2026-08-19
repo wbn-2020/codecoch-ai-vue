@@ -39,9 +39,9 @@ describe('Direction D prototype fidelity contracts', () => {
     const arena = readSource('src/styles/arena.scss')
 
     expect(layout).toContain('class="arena-frame"')
-    expect(layout).toContain('width: min(calc(100% - 28px), 1180px)')
+    expect(layout).toContain('width: min(calc(100% - 32px), 1680px)')
     expect(layout).toContain('align-items: center')
-    expect(layout).toContain('border-radius: 22px')
+    expect(layout).toContain('border-radius: 10px')
     expect(layout).toContain('v-if="!isImmersivePage"')
     expect(layout).toContain("class=\"jobcoach-main\"")
     expect(layout).toContain("'is-arena-main': usesArenaShell")
@@ -134,15 +134,17 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(layout).toContain('width: min(calc(100% - 16px), 1600px)')
     expect(routes).toContain("layoutMode: 'resume-workbench'")
 
-    // Direction D defines the tools page as a focused 760px single-column inventory.
-    expect(tools).toContain('width: min(100%, 760px)')
+    // The tools page keeps the Direction D inventory and adds a wider operational summary.
+    expect(tools).toContain('width: min(100%, 1180px)')
     expect(tools).toContain('gap: 14px')
     expect(tools).toContain('@media (max-width: 720px)')
     expect(tools).toContain('求职资料与工具')
     expect(tools).toContain(':data-tool-path="item.path"')
     expect(tools).toContain(':disabled="item.enabled === false"')
     expect(tools).toContain("appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放'")
-    expect(tools).not.toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(tools).toContain('class="arena-tools__operations"')
+    expect(tools).toContain('最近产物')
+    expect(tools).toContain('异常状态')
     expect(acceptanceEnv).toContain('VITE_ENABLE_V6_WEEKLY_REPORT=true')
 
     for (const toolRoute of [
@@ -190,8 +192,8 @@ describe('Direction D prototype fidelity contracts', () => {
     const evidenceDetail = readSource('src/views/project-evidence/ProjectEvidenceDetailView.vue')
     const evidenceEdit = readSource('src/views/project-evidence/ProjectEvidenceEditView.vue')
 
-    expect(layout).toContain('width: min(100%, 1060px)')
-    expect(layout).toContain('padding: 28px 34px 46px')
+    expect(layout).toContain('width: min(100%, 1440px)')
+    expect(layout).toContain('padding: 28px 32px 46px')
     expect(layout).toContain('padding: 18px 14px calc(84px + env(safe-area-inset-bottom, 0px))')
     expect(layout).toContain('> :deep(.page-shell.page-shell--wide)')
     expect(interviewHistory).toContain('class="interview-history-page page-shell page-shell--wide"')

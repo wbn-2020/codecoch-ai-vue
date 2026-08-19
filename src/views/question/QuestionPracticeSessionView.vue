@@ -119,19 +119,26 @@ import {
   getFavoriteQuestionsApi,
   getQuestionDetailApi,
   getQuestionsApi,
+  getRecommendationPracticeQuestionApi,
   getWrongQuestionsApi,
+  submitRecommendationAnswerReviewApi,
   submitQuestionAnswerReviewApi,
   updateQuestionMasteryApi
 } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import { MASTERY_STATUS } from '@/constants/enums'
+import { useAuthStore } from '@/stores/auth'
 import type { FavoriteQuestionVO, MasteryStatus, PracticeRecordVO, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 
 type PracticeMode = 'recommended' | 'random' | 'category' | 'wrong' | 'favorite'
 type PracticeQuestionRecord = QuestionDetailVO | FavoriteQuestionVO | WrongQuestionVO
+type PracticeQuestion = QuestionDetailVO & {
+  recommendationItemId?: number
+  privateRecommendation?: boolean
+}
 
 interface ModeOption {
   value: PracticeMode
@@ -142,6 +149,7 @@ interface ModeOption {
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const queryString = (name: string) => {
   const value = route.query[name]
@@ -157,10 +165,18 @@ const parseQuestionIds = () => {
     .filter((id) => Number.isFinite(id) && id > 0)
 }
 
+const parseRecommendationItemIds = () => {
+  const raw = queryString('recommendationItemIds') || queryString('recommendationItemId')
+  return raw
+    .split(/[,\s]+/)
+    .map((item) => Number(item))
+    .filter((id) => Number.isFinite(id) && id > 0)
+}
+
 const initialMode = (() => {
   const mode = queryString('mode') as PracticeMode
   if (['recommended', 'random', 'category', 'wrong', 'favorite'].includes(mode)) return mode
-  if (parseQuestionIds().length) return 'recommended'
+  if (parseQuestionIds().length || parseRecommendationItemIds().length) return 'recommended'
   if (
     queryString('skillName')
     || queryString('keyword')
@@ -173,6 +189,7 @@ const initialMode = (() => {
 })()
 
 const routeQuestionIds = computed(parseQuestionIds)
+const routeRecommendationItemIds = computed(parseRecommendationItemIds)
 const routeRecommendReason = computed(() => '')
 const routeSourceType = computed(() => queryString('sourceType'))
 const routeSourceId = computed(() => queryString('sourceId'))
@@ -243,7 +260,7 @@ const loadingQuestions = ref(false)
 const submitting = ref(false)
 const loadError = ref('')
 const partialLoadWarning = ref('')
-const questions = ref<QuestionDetailVO[]>([])
+const questions = ref<PracticeQuestion[]>([])
 const currentIndex = ref(0)
 const userAnswer = ref('')
 const answered = ref(false)
@@ -257,6 +274,25 @@ const showScoringPoints = ref(false)
 const reviewedScores = ref<number[]>([])
 let elapsedTimer: number | undefined
 const draftPrefix = 'question-practice-draft'
+const sessionPrefix = 'question-practice-session'
+const sessionSnapshotVersion = 1
+const sessionSnapshotTtlMs = 24 * 60 * 60 * 1000
+
+interface PracticeSessionSnapshot {
+  version: number
+  savedAt: number
+  questions: PracticeQuestion[]
+  currentIndex: number
+  userAnswer: string
+  answered: boolean
+  lastResult: PracticeRecordVO | null
+  masteryChoice: MasteryStatus | ''
+  skippedCount: number
+  answeredCount: number
+  elapsedSeconds: number
+  questionStartedAtSeconds: number
+  reviewedScores: number[]
+}
 
 const heroTitle = computed(() => config.mode === 'recommended' ? '按推荐题组训练' : '进入面试口径练习')
 const heroSubtitle = computed(() => {
@@ -366,6 +402,24 @@ const suggestedAnswerLength = computed(() => {
 const suggestedAnswerMinutes = computed(() => currentQuestion.value?.questionType === 'CODING' ? 8 : 3)
 const draftKey = (questionId?: number) =>
   `${draftPrefix}:${questionId || 'unknown'}:${config.mode}:${routeTargetJobId.value || 'all'}`
+const sessionOwner = () => String(
+  authStore.userInfo?.id
+  || authStore.userInfo?.username
+  || 'anonymous'
+)
+const sessionContext = () => {
+  const entries: [string, string][] = Object.entries(route.query)
+    .flatMap(([key, value]) => {
+      const values = Array.isArray(value) ? value : [value]
+      return values.map((item): [string, string] => [key, String(item ?? '')])
+    })
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+      leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue)
+    )
+  return new URLSearchParams(entries).toString() || `${config.mode}:${config.keyword}:${config.categoryId || ''}:${config.difficulty}`
+}
+const sessionKey = () =>
+  `${sessionPrefix}:${sessionOwner()}:${encodeURIComponent(sessionContext())}`
 const readDraft = (questionId?: number) => {
   if (!questionId) return ''
   try {
@@ -394,6 +448,76 @@ const clearDraft = (questionId?: number) => {
 }
 const restoreCurrentDraft = () => {
   userAnswer.value = readDraft(currentQuestion.value?.id)
+}
+const clearPracticeSession = () => {
+  try {
+    localStorage.removeItem(sessionKey())
+  } catch {
+    // Session cleanup is best effort.
+  }
+}
+const persistPracticeSession = () => {
+  if (!practicing.value || finished.value || !questions.value.length) return
+  const snapshot: PracticeSessionSnapshot = {
+    version: sessionSnapshotVersion,
+    savedAt: Date.now(),
+    questions: questions.value,
+    currentIndex: currentIndex.value,
+    userAnswer: userAnswer.value,
+    answered: answered.value,
+    lastResult: lastResult.value,
+    masteryChoice: masteryChoice.value,
+    skippedCount: skippedCount.value,
+    answeredCount: answeredCount.value,
+    elapsedSeconds: elapsedSeconds.value,
+    questionStartedAtSeconds: questionStartedAtSeconds.value,
+    reviewedScores: reviewedScores.value
+  }
+  try {
+    localStorage.setItem(sessionKey(), JSON.stringify(snapshot))
+  } catch {
+    // Session persistence must not block training.
+  }
+}
+const restorePracticeSession = () => {
+  try {
+    const raw = localStorage.getItem(sessionKey())
+    if (!raw) return false
+    const snapshot = JSON.parse(raw) as Partial<PracticeSessionSnapshot>
+    const expired = !snapshot.savedAt || Date.now() - snapshot.savedAt > sessionSnapshotTtlMs
+    const invalid = snapshot.version !== sessionSnapshotVersion
+      || expired
+      || !Array.isArray(snapshot.questions)
+      || snapshot.questions.length === 0
+      || !Number.isInteger(snapshot.currentIndex)
+      || Number(snapshot.currentIndex) < 0
+      || Number(snapshot.currentIndex) >= snapshot.questions.length
+    if (invalid) {
+      clearPracticeSession()
+      return false
+    }
+
+    const restoredQuestions = snapshot.questions as PracticeQuestion[]
+    questions.value = restoredQuestions
+    currentIndex.value = Number(snapshot.currentIndex)
+    userAnswer.value = String(snapshot.userAnswer || '')
+    answered.value = Boolean(snapshot.answered)
+    lastResult.value = snapshot.lastResult || null
+    masteryChoice.value = snapshot.masteryChoice || ''
+    skippedCount.value = Math.max(0, Number(snapshot.skippedCount || 0))
+    answeredCount.value = Math.max(0, Number(snapshot.answeredCount || 0))
+    elapsedSeconds.value = Math.max(0, Number(snapshot.elapsedSeconds || 0))
+    questionStartedAtSeconds.value = Math.max(0, Number(snapshot.questionStartedAtSeconds || 0))
+    reviewedScores.value = Array.isArray(snapshot.reviewedScores)
+      ? snapshot.reviewedScores.filter((score) => Number.isFinite(Number(score))).map(Number)
+      : []
+    practicing.value = true
+    finished.value = false
+    return true
+  } catch {
+    clearPracticeSession()
+    return false
+  }
 }
 const draftStatusText = computed(() => userAnswer.value.trim() ? '草稿已保留' : '提交失败会保留草稿')
 const mobilePracticeTitle = computed(() => {
@@ -463,11 +587,12 @@ const setMode = (mode: PracticeMode) => {
   partialLoadWarning.value = ''
 }
 
-const startTimer = () => {
+const startTimer = (reset = true) => {
   stopTimer()
-  elapsedSeconds.value = 0
+  if (reset) elapsedSeconds.value = 0
   elapsedTimer = window.setInterval(() => {
     elapsedSeconds.value++
+    if (elapsedSeconds.value % 5 === 0) persistPracticeSession()
   }, 1000)
 }
 
@@ -480,16 +605,37 @@ const stopTimer = () => {
 
 const fetchRecommendedQuestions = async () => {
   const ids = routeQuestionIds.value.slice(0, config.count)
-  if (ids.length) {
-    const results = await Promise.allSettled(ids.map(async (id) => {
+  const recommendationItemIds = routeRecommendationItemIds.value.slice(0, config.count)
+  if (ids.length || recommendationItemIds.length) {
+    const officialResults = await Promise.allSettled(ids.map(async (id) => {
       try {
         return await getQuestionDetailApi(id)
       } catch (error) {
         throw { id, error }
       }
     }))
+    const privateResults = await Promise.allSettled(recommendationItemIds.map(async (id) => {
+      try {
+        const item = await getRecommendationPracticeQuestionApi(id)
+        return {
+          id: item.id,
+          title: item.questionTitle || '岗位推荐题',
+          content: item.questionContent || '',
+          referenceAnswer: item.answerHint || item.evaluatePoints,
+          analysis: item.evaluatePoints || item.recommendReason,
+          difficulty: item.difficulty || 'MEDIUM',
+          questionType: item.questionType || 'SHORT_ANSWER',
+          favorite: false,
+          recommendationItemId: item.id,
+          privateRecommendation: true
+        } satisfies PracticeQuestion
+      } catch (error) {
+        throw { id, error }
+      }
+    }))
+    const results = [...officialResults, ...privateResults]
     const loadedQuestions = results
-      .filter((item): item is PromiseFulfilledResult<QuestionDetailVO> => item.status === 'fulfilled')
+      .filter((item): item is PromiseFulfilledResult<PracticeQuestion> => item.status === 'fulfilled')
       .map((item) => item.value)
     const failedResults = results.filter((item): item is PromiseRejectedResult => item.status === 'rejected')
     if (failedResults.length) {
@@ -521,7 +667,7 @@ const fetchQuestions = async () => {
       difficulty: config.difficulty || undefined
     }
 
-    let records: QuestionDetailVO[] = []
+    let records: PracticeQuestion[] = []
 
     if (config.mode === 'recommended') {
       records = await fetchRecommendedQuestions()
@@ -573,6 +719,7 @@ const startPractice = async () => {
   questionStartedAtSeconds.value = 0
   restoreCurrentDraft()
   startTimer()
+  persistPracticeSession()
 }
 
 const submitAnswer = async () => {
@@ -580,12 +727,17 @@ const submitAnswer = async () => {
   submitting.value = true
   try {
     const questionId = currentQuestion.value.id
-    const result = await submitQuestionAnswerReviewApi(questionId, {
+    const payload = {
       answerContent: userAnswer.value,
       answerDurationSeconds: Math.max(1, elapsedSeconds.value - questionStartedAtSeconds.value),
       source: routeSourceType.value || 'QUESTION_BANK',
+      recommendationItemId: currentQuestion.value.recommendationItemId,
+      batchId: Number(queryString('batchId')) || undefined,
       targetJobId: routeTargetJobId.value
-    })
+    }
+    const result = currentQuestion.value.privateRecommendation
+      ? await submitRecommendationAnswerReviewApi(currentQuestion.value.recommendationItemId || questionId, payload)
+      : await submitQuestionAnswerReviewApi(questionId, payload)
     const reviewStatus = String(result.reviewStatus || 'SUCCESS').toUpperCase()
     if (reviewStatus !== 'SUCCESS') {
       ElMessage.error(result.errorMessage || 'AI 点评暂时没有生成成功，草稿已保留。')
@@ -651,6 +803,7 @@ const markMastery = async (status: MasteryStatus) => {
 }
 
 const completePractice = () => {
+  clearPracticeSession()
   practicing.value = false
   finished.value = true
   stopTimer()
@@ -674,6 +827,7 @@ const finishPractice = async () => {
 }
 
 const resetPractice = () => {
+  clearPracticeSession()
   practicing.value = false
   finished.value = false
   questions.value = []
@@ -691,6 +845,21 @@ watch(userAnswer, (value) => {
 watch(currentQuestion, () => {
   if (practicing.value && !answered.value) restoreCurrentDraft()
 })
+
+watch(
+  [
+    currentIndex,
+    userAnswer,
+    answered,
+    lastResult,
+    masteryChoice,
+    skippedCount,
+    answeredCount,
+    reviewedScores
+  ],
+  () => persistPracticeSession(),
+  { deep: true }
+)
 
 onMounted(async () => {
   const hasPracticeContext = Boolean(
@@ -715,10 +884,19 @@ onMounted(async () => {
     })
   }
 
-  if (!practicing.value && !finished.value) void startPractice()
+  if (!practicing.value && !finished.value) {
+    if (restorePracticeSession()) {
+      startTimer(false)
+      return
+    }
+    void startPractice()
+  }
 })
 
-onBeforeUnmount(stopTimer)
+onBeforeUnmount(() => {
+  persistPracticeSession()
+  stopTimer()
+})
 </script>
 
 <style scoped lang="scss">

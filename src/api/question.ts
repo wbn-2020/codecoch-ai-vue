@@ -55,6 +55,7 @@ import type {
   WrongQuestionQueryDTO,
   WrongQuestionVO
 } from '@/types/question'
+import type { QuestionRecommendationItemVO } from '@/types/questionRecommendation'
 import {
   type BackendAdminQuestionVO,
   type BackendQuestionDetailVO,
@@ -245,6 +246,22 @@ export const downloadQuestionImportTemplate = () => {
 export const submitQuestionAnswerReviewApi = (questionId: number, data: PracticeSubmitDTO) => {
   return request.post<PracticeRecordVO, PracticeRecordVO>(
     `/questions/${questionId}/answer-review`,
+    data
+  )
+}
+
+export const getRecommendationPracticeQuestionApi = (recommendationItemId: number) => {
+  return request.get<QuestionRecommendationItemVO, QuestionRecommendationItemVO>(
+    `/practice/recommendations/${recommendationItemId}`
+  )
+}
+
+export const submitRecommendationAnswerReviewApi = (
+  recommendationItemId: number,
+  data: PracticeSubmitDTO
+) => {
+  return request.post<PracticeRecordVO, PracticeRecordVO>(
+    `/practice/recommendations/${recommendationItemId}/answers`,
     data
   )
 }

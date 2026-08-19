@@ -1687,7 +1687,6 @@ const handleVoiceTextFallback = () => {
 }
 
 onMounted(async () => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   await fetchResumes()
   await loadApplicationPackageContext()
   await applyRouteContext()

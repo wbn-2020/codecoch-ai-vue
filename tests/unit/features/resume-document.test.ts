@@ -43,9 +43,9 @@ describe('resume document model', () => {
     })
     expect(model.workEntries[0].bullets).toEqual(['负责订单服务重构', '接口错误率下降 30%'])
     expect(model.projectEntries[0].bullets).toEqual([
-      '支撑多渠道订单接入',
-      '解决热点数据竞争',
-      '峰值吞吐提升 40%'
+      '项目背景：支撑多渠道订单接入',
+      '技术难点：解决热点数据竞争',
+      '结果指标：峰值吞吐提升 40%'
     ])
     expect(model.skillGroups.flatMap((group) => group.items)).toEqual(model.skills)
   })

@@ -4,6 +4,7 @@ import { nextTick, reactive } from 'vue'
 
 import { getCurrentJobTargetApi } from '@/api/jobTarget'
 import {
+  generateSkillProfileApi,
   getSkillProfileByIdApi,
   getSkillProfileByJobTargetApi,
   getSkillProfileOverviewApi
@@ -25,6 +26,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api/skillProfile', () => ({
+  generateSkillProfileApi: vi.fn(),
   getSkillProfileByIdApi: vi.fn(),
   getSkillProfileByJobTargetApi: vi.fn(),
   getSkillProfileOverviewApi: vi.fn()
@@ -53,7 +55,7 @@ const componentStubs = {
   'el-input-number': { template: '<input class="el-input-number-stub" />' },
   'el-date-picker': { template: '<input class="el-date-picker-stub" />' },
   'el-tag': { template: '<span class="el-tag-stub"><slot /></span>' },
-  AppState: { template: '<div class="app-state-stub"></div>' }
+  AppState: { template: '<div class="app-state-stub"><slot /></div>' }
 }
 
 const gap = (id: number, sourceType: string, skillName: string, profileId = 5): SkillGapItemVO => ({
@@ -100,6 +102,7 @@ describe('StudyPlanFromGapView evidence-feedback badge', () => {
     routerPush.mockResolvedValue(undefined)
     Object.values(messageMocks).forEach((mock) => mock.mockReset())
     vi.mocked(getCurrentJobTargetApi).mockReset()
+    vi.mocked(generateSkillProfileApi).mockReset()
     vi.mocked(getSkillProfileByIdApi).mockReset()
     vi.mocked(getSkillProfileByJobTargetApi).mockReset()
     vi.mocked(getSkillProfileOverviewApi).mockReset()
@@ -298,5 +301,44 @@ describe('StudyPlanFromGapView evidence-feedback badge', () => {
     generation.resolve({ planId: 123, planStatus: 'GENERATED' })
     await flushPromises()
     expect(routerPush).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers trusted match reports a profile-generation path instead of an empty-state dead end', async () => {
+    routeState.current = reactive({
+      path: '/study-plans/from-gap',
+      query: { targetJobId: '9', matchReportId: '44', resumeId: '7' }
+    })
+    vi.mocked(getSkillProfileOverviewApi).mockResolvedValue({
+      targetJobId: 9,
+      topGaps: []
+    } as never)
+    vi.mocked(getSkillProfileByJobTargetApi).mockResolvedValue(null as never)
+    vi.mocked(generateSkillProfileApi).mockResolvedValue({
+      profileId: 12,
+      targetJobId: 9,
+      matchReportId: 44,
+      status: 'SUCCESS'
+    } as never)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const generateProfileButton = wrapper
+      .findAll('.el-button-stub')
+      .find((button) => button.text().includes('生成能力画像'))
+    expect(generateProfileButton).toBeTruthy()
+    await generateProfileButton!.trigger('click')
+    await flushPromises()
+
+    expect(generateSkillProfileApi).toHaveBeenCalledWith({ matchReportId: 44 })
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/study-plans/from-gap',
+      query: {
+        profileId: '12',
+        targetJobId: '9',
+        matchReportId: '44',
+        resumeId: '7'
+      }
+    })
   })
 })

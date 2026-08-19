@@ -9,6 +9,7 @@ export interface UserMessagePayload {
   groupingKey?: string
   throttleMs?: number
   showClose?: boolean
+  persistent?: boolean
 }
 
 export interface UserMessageHandle {
@@ -31,6 +32,7 @@ export const createUserMessageGateway = (
 ) => {
   const defaultThrottleMs = options.defaultThrottleMs ?? DEFAULT_ERROR_THROTTLE_MS
   const recentMessages = new Map<string, { shownAt: number; handle?: UserMessageHandle | void }>()
+  const activeErrors = new Set<UserMessageHandle>()
 
   const show = (type: UserMessageType, message: unknown, payload: Omit<UserMessagePayload, 'type' | 'message'> = {}) => {
     const normalizedMessage = normalizeMessage(message)
@@ -51,6 +53,10 @@ export const createUserMessageGateway = (
       message: normalizedMessage
     })
 
+    if (type === 'error' && !payload.persistent && handle?.close) {
+      activeErrors.add(handle)
+    }
+
     if (throttleMs > 0) {
       recentMessages.set(key, { shownAt: now, handle })
     }
@@ -62,22 +68,42 @@ export const createUserMessageGateway = (
     recentMessages.clear()
   }
 
+  const closeTransientErrors = () => {
+    const handlesToClose = new Set(activeErrors)
+    handlesToClose.forEach((handle) => handle.close?.())
+    activeErrors.clear()
+    recentMessages.forEach((recent, key) => {
+      if (recent.handle && handlesToClose.has(recent.handle)) {
+        recentMessages.delete(key)
+      }
+    })
+  }
+
   return {
     show,
     success: (message: unknown, payload?: Omit<UserMessagePayload, 'type' | 'message'>) => show('success', message, payload),
     warning: (message: unknown, payload?: Omit<UserMessagePayload, 'type' | 'message'>) => show('warning', message, payload),
     info: (message: unknown, payload?: Omit<UserMessagePayload, 'type' | 'message'>) => show('info', message, payload),
     error: (message: unknown, payload?: Omit<UserMessagePayload, 'type' | 'message'>) => show('error', message, payload),
-    clear
+    clear,
+    closeTransientErrors
   }
 }
+
+const userMessageOffset = () => (
+  typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+    ? 70
+    : 76
+)
 
 export const showUserMessage = createUserMessageGateway((payload) =>
   ElMessage({
     message: payload.message,
     type: payload.type,
-    duration: payload.duration,
+    duration: payload.persistent ? 0 : payload.duration,
     grouping: true,
-    showClose: payload.showClose ?? payload.type === 'error'
+    showClose: payload.showClose ?? payload.type === 'error',
+    customClass: 'codecoach-global-message',
+    offset: userMessageOffset()
   })
 )

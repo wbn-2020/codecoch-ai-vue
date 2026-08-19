@@ -156,56 +156,37 @@ const skillFallbackName = (skillCode?: unknown, domainCode?: unknown) =>
   SKILL_NAME_MAP[codeKey(skillCode)] || DOMAIN_NAME_MAP[codeKey(domainCode)] || '能力点目录'
 
 export const normalizeAbilityMap = (data?: AbilityMapInput | null): AbilityMapVO => {
+  const hasConflictingEmptyAssessment = data?.hasTrainingData === false
   const domains = (data?.domains || []).map((domain) => {
     const domainCode = safeCode(domain.domainCode)
     const domainName = safeText(domain.domainName, domainFallbackName(domainCode))
-    const skills = (domain.skills || []).map((skill) => normalizeSkill(skill, domainCode, domainName))
+    const skills = (domain.skills || []).map((skill) =>
+      normalizeSkill(skill, domainCode, domainName, hasConflictingEmptyAssessment)
+    )
+    const assessedSkills = skills.filter((skill) => skill.status !== 'UNASSESSED' && skill.evidenceCount > 0)
     return {
       domainCode,
       domainName,
       totalCount: domain.totalCount ?? skills.length,
-      assessedCount: domain.assessedCount ?? skills.filter((skill) => skill.status !== 'UNASSESSED').length,
-      weakCount: domain.weakCount ?? skills.filter((skill) => skill.status === 'WEAK').length,
+      assessedCount: assessedSkills.length,
+      weakCount: assessedSkills.filter((skill) => skill.status === 'WEAK').length,
       skills
     }
   })
   const allSkills = domains.flatMap((domain) => domain.skills)
-  const assessedSkillCount = data?.assessedSkillCount ?? allSkills.filter((skill) => skill.status !== 'UNASSESSED').length
-  const hasTrainingData = data?.hasTrainingData ?? assessedSkillCount > 0
-
-  if (data?.hasTrainingData === false) {
-    const unassessedDomains = domains.map((domain) => ({
-      ...domain,
-      assessedCount: 0,
-      weakCount: 0,
-      skills: domain.skills.map((skill) => ({
-        ...skill,
-        status: 'UNASSESSED',
-        evidenceCount: 0,
-        lastEvaluatedAt: undefined,
-        confidence: 'UNKNOWN',
-        summary: ''
-      }))
-    }))
-
-    return {
-      userId: data?.userId,
-      totalSkillCount: data?.totalSkillCount ?? allSkills.length,
-      assessedSkillCount: 0,
-      weakSkillCount: 0,
-      strongSkillCount: 0,
-      hasTrainingData: false,
-      domains: unassessedDomains
-    }
-  }
+  const assessedSkillCount = allSkills.filter((skill) => skill.status !== 'UNASSESSED' && skill.evidenceCount > 0).length
+  const hasTrainingData = allSkills.some((skill) => skill.evidenceCount > 0)
 
   return {
     userId: data?.userId,
     totalSkillCount: data?.totalSkillCount ?? allSkills.length,
     assessedSkillCount,
-    weakSkillCount: data?.weakSkillCount ?? allSkills.filter((skill) => skill.status === 'WEAK').length,
-    strongSkillCount: data?.strongSkillCount ?? allSkills.filter((skill) => skill.status === 'STRONG').length,
+    weakSkillCount: allSkills.filter((skill) => skill.status === 'WEAK' && skill.evidenceCount > 0).length,
+    strongSkillCount: allSkills.filter((skill) => skill.status === 'STRONG' && skill.evidenceCount > 0).length,
     hasTrainingData,
+    syncStatus: safeCode(data?.syncStatus),
+    syncMessage: safeText(data?.syncMessage, ''),
+    updatedAt: safeCode(data?.updatedAt),
     domains
   }
 }
@@ -213,18 +194,33 @@ export const normalizeAbilityMap = (data?: AbilityMapInput | null): AbilityMapVO
 const normalizeSkill = (
   skill: Partial<AbilitySkillNodeVO>,
   fallbackDomainCode = '',
-  fallbackDomainName = '能力方向'
-): AbilitySkillNodeVO => ({
-  id: skill.id,
-  code: safeCode(skill.code),
-  name: safeText(skill.name, skillFallbackName(skill.code, skill.domainCode || fallbackDomainCode)),
-  domainCode: safeCode(skill.domainCode, fallbackDomainCode),
-  domainName: safeText(skill.domainName, fallbackDomainName),
-  description: safeText(skill.description, '当前能力点描述暂不可用，先按能力目录进入训练。'),
-  sortOrder: skill.sortOrder ?? 0,
-  status: safeCode(skill.status, 'UNASSESSED'),
-  evidenceCount: skill.evidenceCount ?? 0,
-  lastEvaluatedAt: skill.lastEvaluatedAt,
-  confidence: safeCode(skill.confidence, 'UNKNOWN'),
-  summary: safeText(skill.summary, '')
-})
+  fallbackDomainName = '能力方向',
+  forceUnassessed = false
+): AbilitySkillNodeVO => {
+  const evidenceCount = Math.max(0, Number(skill.evidenceCount) || 0)
+  const hasEvidence = evidenceCount > 0
+  const hasTrustedAssessment = hasEvidence && !forceUnassessed
+  return {
+    id: skill.id,
+    code: safeCode(skill.code),
+    name: safeText(skill.name, skillFallbackName(skill.code, skill.domainCode || fallbackDomainCode)),
+    domainCode: safeCode(skill.domainCode, fallbackDomainCode),
+    domainName: safeText(skill.domainName, fallbackDomainName),
+    description: safeText(skill.description, '当前能力点描述暂不可用，先按能力目录进入训练。'),
+    sortOrder: skill.sortOrder ?? 0,
+    status: hasTrustedAssessment ? safeCode(skill.status, 'UNASSESSED') : 'UNASSESSED',
+    evidenceCount,
+    lastEvaluatedAt: hasTrustedAssessment ? skill.lastEvaluatedAt : undefined,
+    confidence: hasTrustedAssessment ? safeCode(skill.confidence, 'UNKNOWN') : 'UNKNOWN',
+    summary: hasEvidence ? safeText(skill.summary, '') : '',
+    evidenceSources: Array.isArray(skill.evidenceSources)
+      ? skill.evidenceSources.map((item) => safeText(item, '')).filter(Boolean)
+      : [],
+    sourceLabels: Array.isArray(skill.sourceLabels)
+      ? skill.sourceLabels.map((item) => safeText(item, '')).filter(Boolean)
+      : [],
+    syncStatus: safeCode(skill.syncStatus),
+    syncMessage: safeText(skill.syncMessage, ''),
+    updatedAt: safeCode(skill.updatedAt)
+  }
+}

@@ -33,7 +33,8 @@
       :inspector-mode="inspectorMode"
       :active-step="activeWorkbenchStep"
       @back="router.push('/resumes')"
-      @save="handleSave"
+      @save="handleSave('complete')"
+      @save-draft="handleSave('draft')"
       @open-templates="openTemplateGallery"
       @open-export="openDeliveryChecks"
       @open-preview="openPreviewStep"
@@ -45,7 +46,7 @@
         <b>简历尚未保存</b>
         <p>{{ saveError }}</p>
       </div>
-      <el-button type="primary" plain :loading="saving" @click="handleSave">重试保存</el-button>
+      <el-button type="primary" plain :loading="saving" @click="handleSave('complete')">重试保存</el-button>
     </div>
 
     <div class="workspace-tabs" role="tablist" aria-label="移动端简历工作区">
@@ -244,10 +245,11 @@
           </el-form>
 
           <div class="form-actions">
-            <span v-if="!isEdit" class="draft-save-hint">未保存的内容仅保留在当前页面</span>
+            <span v-if="!isEdit" class="draft-save-hint">草稿只需名称，其他内容可继续补充</span>
             <el-button @click="router.push('/resumes')">{{ isEdit ? '取消' : '返回简历列表' }}</el-button>
-            <el-button type="primary" :loading="saving" @click="handleSave">
-              {{ isEdit ? '保存更改' : '保存并创建简历' }}
+            <el-button :loading="saving" @click="handleSave('draft')">保存草稿</el-button>
+            <el-button type="primary" :loading="saving" @click="handleSave('complete')">
+              {{ isEdit ? '保存完整简历' : '保存并创建简历' }}
             </el-button>
           </div>
         </section>
@@ -365,7 +367,7 @@
                   <Sparkles :size="16" />
                   {{ latestOptimizeRecord ? '查看建议' : '生成建议' }}
                 </el-button>
-                <el-button v-else type="primary" :loading="saving" @click="handleSave">
+                <el-button v-else type="primary" :loading="saving" @click="handleSave('complete')">
                   <Save :size="16" />
                   保存后生成
                 </el-button>
@@ -778,6 +780,7 @@ import {
   getResumeOptimizeResultApi,
   getResumeDetailApi,
   optimizeResumeApi,
+  clearDefaultResumeApi,
   setDefaultResumeApi,
   updateResumeApi,
   updateResumeProjectApi
@@ -1482,23 +1485,66 @@ const toProjectDraft = (payload: ResumeProjectDTO, projectId: number): ResumePro
   sortOrder: payload.sortOrder ?? payload.sort ?? 0
 })
 
+const failedProjectDraftStorageKey = (targetResumeId: number) =>
+  `codecoachai:resume:${targetResumeId}:failed-project-drafts`
+
+const readFailedProjectDrafts = (targetResumeId: number): ResumeProjectVO[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.sessionStorage.getItem(failedProjectDraftStorageKey(targetResumeId))
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((project): project is ResumeProjectVO =>
+      Boolean(project)
+      && typeof project === 'object'
+      && Number((project as ResumeProjectVO).projectId) < 0
+      && Boolean(String((project as ResumeProjectVO).projectName || '').trim())
+    )
+  } catch {
+    return []
+  }
+}
+
+const writeFailedProjectDrafts = (targetResumeId: number, drafts: ResumeProjectVO[]) => {
+  if (typeof window === 'undefined') return
+  const storageKey = failedProjectDraftStorageKey(targetResumeId)
+  if (!drafts.length) {
+    window.sessionStorage.removeItem(storageKey)
+    return
+  }
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(drafts))
+  } catch {
+    // Session storage is a recovery aid; the in-page draft remains usable if it is unavailable.
+  }
+}
+
+const removeFailedProjectDraft = (targetResumeId: number, projectId: number) => {
+  writeFailedProjectDrafts(
+    targetResumeId,
+    readFailedProjectDrafts(targetResumeId).filter((project) => project.projectId !== projectId)
+  )
+}
+
 const persistDraftProjects = async (
   createdResumeId: number,
   draftProjects: ResumeProjectVO[],
   isCurrentOperation: () => boolean
 ) => {
   let failedCount = 0
+  const failedProjects: ResumeProjectVO[] = []
   for (const project of draftProjects) {
     if (!isCurrentOperation()) {
-      return { failedCount, stale: true }
+      return { failedCount, failedProjects, stale: true }
     }
     try {
       await createResumeProjectApi(createdResumeId, project)
     } catch {
       failedCount++
+      failedProjects.push(project)
     }
   }
-  return { failedCount, stale: !isCurrentOperation() }
+  return { failedCount, failedProjects, stale: !isCurrentOperation() }
 }
 
 const selectAllOptimizeSuggestions = () => {
@@ -1571,7 +1617,13 @@ const applyDetail = (detail: ResumeDetailVO) => {
   if (!optimizeForm.targetPosition) {
     optimizeForm.targetPosition = detail.targetPosition || ''
   }
-  projects.value = detail.projects || []
+  const storedFailedProjects = readFailedProjectDrafts(detail.id)
+  const serverProjects = detail.projects || []
+  const serverProjectIds = new Set(serverProjects.map((project) => project.projectId))
+  projects.value = [
+    ...serverProjects,
+    ...storedFailedProjects.filter((project) => !serverProjectIds.has(project.projectId))
+  ]
   savedResumeSignature.value = resumeDraftSignature.value
 }
 
@@ -1820,16 +1872,49 @@ const ensureStableVersionAfterSave = async (
   }
 }
 
-const handleSave = async () => {
+const validateSaveMode = async (mode: 'draft' | 'complete') => {
+  if (!formRef.value) return false
+  if (mode === 'draft') {
+    if (form.resumeName?.trim()) {
+      invalidFieldProps.value = []
+      invalidSectionIds.value = []
+      return true
+    }
+    await handleFormValidationFailure({
+      fields: {
+        resumeName: [{ message: '请输入简历名称' }]
+      }
+    })
+    ElMessage.warning('保存草稿前请先填写简历名称。')
+    return false
+  }
+  try {
+    await formRef.value.validate()
+    invalidFieldProps.value = []
+    invalidSectionIds.value = []
+    return true
+  } catch (failure) {
+    await handleFormValidationFailure(failure)
+    return false
+  }
+}
+
+const draftSaveMessage = (detail: ResumeDetailVO) => {
+  const missing = (detail.missingSections || []).slice(0, 3)
+  const suffix = missing.length ? `，待补充：${missing.join('、')}` : ''
+  return `草稿已保存（${detail.completionPercent ?? completion.value}%）${suffix}`
+}
+
+const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
   if (saving.value || !formRef.value) return
   const operationGeneration = ++resumeSaveOperationGeneration
   const requestGeneration = resumeLoadGeneration
   const editingResumeId = resumeId.value
-  const formSnapshot: ResumeCreateDTO = { ...form }
+  const formSnapshot: ResumeCreateDTO = { ...form, saveAsDraft: mode === 'draft' }
   const draftProjectsSnapshot = projects.value
     .filter((project) => project.projectId < 0)
     .map((project) => ({ ...project }))
-  const shouldCreateVersion = hasUnsavedResumeChanges.value
+  const shouldCreateVersion = mode === 'complete' && hasUnsavedResumeChanges.value
   const isCurrentOperation = () => (
     operationGeneration === resumeSaveOperationGeneration
     && isCurrentResumeRoute(requestGeneration, editingResumeId)
@@ -1838,30 +1923,36 @@ const handleSave = async () => {
   saving.value = true
   saveError.value = ''
   try {
-    try {
-      await formRef.value.validate()
-      invalidFieldProps.value = []
-      invalidSectionIds.value = []
-    } catch (failure) {
-      await handleFormValidationFailure(failure)
-      return
-    }
+    if (!(await validateSaveMode(mode))) return
     if (!isCurrentOperation()) return
 
     if (editingResumeId) {
-      await updateResumeApi(editingResumeId, formSnapshot)
+      const updated = await updateResumeApi(editingResumeId, formSnapshot)
       if (!isCurrentOperation()) return
-      if (formSnapshot.isDefault === 1) {
-        await setDefaultResumeApi(editingResumeId)
-        if (!isCurrentOperation()) return
-      }
-      const stableVersionReady = await ensureStableVersionAfterSave(
+      const projectResult = await persistDraftProjects(
         editingResumeId,
-        shouldCreateVersion,
+        draftProjectsSnapshot,
         isCurrentOperation
       )
+      if (projectResult.stale || !isCurrentOperation()) return
+      writeFailedProjectDrafts(editingResumeId, projectResult.failedProjects)
+      if (projectResult.failedCount) {
+        ElMessage.warning(`简历已保存，${projectResult.failedCount} 条项目草稿保存失败，请稍后重试。`)
+      }
+      if (mode === 'complete' && formSnapshot.isDefault === 1 && !updated.draft) {
+        await setDefaultResumeApi(editingResumeId)
+        if (!isCurrentOperation()) return
+      } else if (mode === 'complete' && formSnapshot.isDefault === 0 && !updated.draft) {
+        await clearDefaultResumeApi(editingResumeId)
+        if (!isCurrentOperation()) return
+      }
+      const stableVersionReady = mode === 'complete'
+        ? await ensureStableVersionAfterSave(editingResumeId, shouldCreateVersion, isCurrentOperation)
+        : true
       if (stableVersionReady === null || !isCurrentOperation()) return
-      ElMessage.success(stableVersionReady ? '简历与稳定版本已保存' : '简历已保存')
+      ElMessage.success(mode === 'draft'
+        ? draftSaveMessage(updated)
+        : (stableVersionReady ? '简历与稳定版本已保存' : '简历已保存'))
       saveError.value = ''
       await reloadCurrentResume()
       if (!isCurrentOperation()) return
@@ -1875,20 +1966,24 @@ const handleSave = async () => {
         isCurrentOperation
       )
       if (projectResult.stale || !isCurrentOperation()) return
+      writeFailedProjectDrafts(created.id, projectResult.failedProjects)
       if (projectResult.failedCount) {
         ElMessage.warning(`简历已创建，${projectResult.failedCount} 条项目草稿保存失败，请在编辑页补充。`)
       }
-      if (formSnapshot.isDefault === 1) {
+      if (mode === 'complete' && formSnapshot.isDefault === 1 && !created.draft) {
         await setDefaultResumeApi(created.id)
         if (!isCurrentOperation()) return
+      } else if (mode === 'complete' && formSnapshot.isDefault === 0 && !created.draft) {
+        await clearDefaultResumeApi(created.id)
+        if (!isCurrentOperation()) return
       }
-      const stableVersionReady = await ensureStableVersionAfterSave(
-        created.id,
-        true,
-        isCurrentOperation
-      )
+      const stableVersionReady = mode === 'complete'
+        ? await ensureStableVersionAfterSave(created.id, true, isCurrentOperation)
+        : true
       if (stableVersionReady === null || !isCurrentOperation()) return
-      ElMessage.success(stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建')
+      ElMessage.success(mode === 'draft'
+        ? draftSaveMessage(created)
+        : (stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建'))
       saveError.value = ''
       await router.replace(`/resumes/${created.id}/edit`)
     }
@@ -1954,7 +2049,7 @@ const handleSaveInlineProject = async () => {
 
   projectSaving.value = true
   try {
-    if (!targetResumeId || targetProjectId < 0) {
+    if (!targetResumeId) {
       projects.value = projects.value.map((item) => (
         item.projectId === targetProjectId ? toProjectDraft(projectPayload, targetProjectId) : item
       ))
@@ -1962,8 +2057,15 @@ const handleSaveInlineProject = async () => {
       return
     }
 
-    await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
+    if (targetProjectId < 0) {
+      await createResumeProjectApi(targetResumeId, projectPayload)
+    } else {
+      await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
+    }
     if (!isCurrentOperation()) return
+    if (targetProjectId < 0) {
+      removeFailedProjectDraft(targetResumeId, targetProjectId)
+    }
     ElMessage.success('项目经历已保存')
     await reloadCurrentResume()
   } catch (err) {
@@ -2008,7 +2110,7 @@ const enlargePreview = async () => {
 }
 
 const openProjectEvidenceCreate = (project: ResumeProjectVO) => {
-  if (!resumeId.value || !project.projectId) return
+  if (!resumeId.value || project.projectId <= 0) return
   router.push({
     path: '/project-evidence/create',
     query: {
@@ -2051,12 +2153,15 @@ const handleSaveProject = async () => {
       editingProject.value = null
       return
     }
-    if (targetProjectId) {
+    if (targetProjectId && targetProjectId > 0) {
       await updateResumeProjectApi(targetResumeId, targetProjectId, projectPayload)
     } else {
       await createResumeProjectApi(targetResumeId, projectPayload)
     }
     if (!isCurrentOperation()) return
+    if (targetProjectId && targetProjectId < 0) {
+      removeFailedProjectDraft(targetResumeId, targetProjectId)
+    }
     ElMessage.success('项目经历已保存')
     projectDialogVisible.value = false
     editingProjectId.value = null
@@ -2088,6 +2193,13 @@ const handleDeleteProject = async (project: ResumeProjectVO) => {
   if (!targetResumeId) {
     if (!isCurrentOperation()) return
     projects.value = projectsSnapshot.filter((item) => item.projectId !== projectSnapshot.projectId)
+    ElMessage.success('项目草稿已移除')
+    return
+  }
+  if (projectSnapshot.projectId < 0) {
+    if (!isCurrentOperation()) return
+    projects.value = projectsSnapshot.filter((item) => item.projectId !== projectSnapshot.projectId)
+    removeFailedProjectDraft(targetResumeId, projectSnapshot.projectId)
     ElMessage.success('项目草稿已移除')
     return
   }

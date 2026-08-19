@@ -35,7 +35,7 @@ describe('user dashboard visual guardrails', () => {
     expect(layout).toContain('ArenaTopNav')
     expect(layout).toContain('v-if="!isImmersivePage"')
     expect(layout).toContain("'is-arena-main': usesArenaShell")
-    expect(layout).toContain('radial-gradient(900px 480px at 90% -5%')
+    expect(layout).not.toContain('radial-gradient(')
     expect(layout).toContain('var(--arena-bg)')
 
     expect(arenaTopNav).toContain("from '@/config/userNavigation'")

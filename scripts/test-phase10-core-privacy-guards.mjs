@@ -83,10 +83,12 @@ expect(hasAll(content.aiConvert, [
   'setRawFieldsAvailable',
   'setRawFieldsIncluded',
   'setRawAccessPermission("admin:ai:log:raw:view")',
-  'AiResultSourceEnum.MOCK',
-  'AiResultSourceEnum.FALLBACK',
-  'AiResultSourceEnum.LLM'
-]), 'backend-ai-log', 'AI log converter must retain explicit raw gating and result source derivation')
+  'AiDeliverySemantics.resolve',
+  'AiDeliverySemantics.Outcome',
+  'delivery.legacyResultSource()',
+  'vo.setExecutionSource(delivery.executionSource())',
+  'vo.setDeliveryQuality(delivery.deliveryQuality())'
+]), 'backend-ai-log', 'AI log converter must retain explicit raw gating and canonical result source derivation')
 
 expect(hasAll(content.adminAiController, [
   'private static final String PERM_LOG_RAW_VIEW = "admin:ai:log:raw:view"',

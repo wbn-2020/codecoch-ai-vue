@@ -134,6 +134,10 @@ import {
   resumeTemplateOptions,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import {
+  downloadBlobReliably,
+  reliableDownloadOptionsForFile
+} from '@/features/reliable-download'
 import type { ResumeArtifactVO } from '@/types/resumeDelivery'
 import { getErrorMessage } from '@/utils/error'
 
@@ -236,12 +240,11 @@ const downloadArtifact = async (artifact: ResumeArtifactVO) => {
   downloadingIds.value = new Set(downloadingIds.value).add(artifact.id)
   try {
     const blob = await downloadResumeArtifactApi(artifact.id)
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = artifact.fileName
-    anchor.click()
-    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    downloadBlobReliably(
+      blob,
+      reliableDownloadOptionsForFile(artifact.fileName, artifact.mimeType)
+    )
+    ElMessage.success(`${artifact.fileName} 已开始下载。`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, 'Artifact 下载失败，请确认文件状态为可下载。'))
   } finally {

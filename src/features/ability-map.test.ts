@@ -65,4 +65,46 @@ describe('ability map feature', () => {
       description: '当前能力点描述暂不可用，先按能力目录进入训练。'
     })
   })
+
+  it('preserves collected but unquantified evidence instead of rewriting it to fake zero', () => {
+    const abilityMap = normalizeAbilityMap({
+      hasTrainingData: false,
+      assessedSkillCount: 9,
+      domains: [
+        {
+          domainCode: 'REDIS',
+          domainName: 'Redis',
+          assessedCount: 9,
+          weakCount: 4,
+          skills: [
+            {
+              code: 'REDIS_CACHE',
+              name: 'Redis',
+              domainCode: 'REDIS',
+              domainName: 'Redis',
+              status: 'UNASSESSED',
+              confidence: 'UNKNOWN',
+              evidenceCount: 2,
+              summary: '已归集可信匹配证据，当前等级仍待量化。',
+              sourceLabels: ['可信岗位匹配']
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(abilityMap.hasTrainingData).toBe(true)
+    expect(abilityMap.assessedSkillCount).toBe(0)
+    expect(abilityMap.weakSkillCount).toBe(0)
+    expect(abilityMap.domains[0]).toMatchObject({
+      assessedCount: 0,
+      weakCount: 0
+    })
+    expect(abilityMap.domains[0].skills[0]).toMatchObject({
+      status: 'UNASSESSED',
+      evidenceCount: 2,
+      summary: '已归集可信匹配证据，当前等级仍待量化。',
+      sourceLabels: ['可信岗位匹配']
+    })
+  })
 })

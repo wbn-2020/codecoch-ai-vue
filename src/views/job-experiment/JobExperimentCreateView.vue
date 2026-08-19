@@ -3,7 +3,7 @@
     <section class="form-section">
       <div class="card-title">
         <div>
-          <p class="section-kicker">JOB SEARCH EXPERIMENT</p>
+          <p class="section-kicker">求职实验</p>
           <h1>{{ isEdit ? '编辑求职实验' : '新建求职实验' }}</h1>
         </div>
         <el-tag type="info" effect="plain">证据化实验 v2</el-tag>
@@ -14,7 +14,7 @@
         type="info"
         show-icon
         :closable="false"
-        title="已关联 v2 hypothesis"
+        title="已关联实验假设"
         description="本页会更新旧实验基础信息；假设、变体和样本门槛请在实验详情页按生命周期调整。"
       />
 
@@ -52,7 +52,7 @@
     <section class="form-section" :class="{ 'is-readonly': isEdit && Boolean(linkedHypothesis) }">
       <div class="section-head">
         <div>
-          <p class="section-kicker">HYPOTHESIS</p>
+          <p class="section-kicker">可证伪假设</p>
           <h2>可证伪假设与评价边界</h2>
         </div>
         <el-tag effect="plain">不宣称因果</el-tag>
@@ -98,7 +98,7 @@
     <section class="form-section" :class="{ 'is-readonly': isEdit && Boolean(linkedHypothesis) }">
       <div class="section-head">
         <div>
-          <p class="section-kicker">BUSINESS OBJECTS</p>
+          <p class="section-kicker">关联业务对象</p>
           <h2>选择实验上下文</h2>
         </div>
         <el-tag effect="plain">使用已有业务对象</el-tag>
@@ -154,7 +154,7 @@
     <section class="form-section" :class="{ 'is-readonly': isEdit && Boolean(linkedHypothesis) }">
       <div class="section-head">
         <div>
-          <p class="section-kicker">VARIANTS</p>
+          <p class="section-kicker">实验变体</p>
           <h2>对照组与实验组</h2>
         </div>
         <el-button
@@ -507,11 +507,15 @@ const save = async () => {
   try {
     const detail = snapshot.experimentId
       ? await updateJobExperimentApi(snapshot.experimentId, snapshot.form)
-      : await createJobExperimentApi(snapshot.form)
+      : await createJobExperimentApi({
+          ...snapshot.form,
+          targetJobIds: snapshot.selectedTargetJobIds,
+          resumeIds: snapshot.selectedResumeIds
+        })
     if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
 
     if (snapshot.linkedHypothesisId) {
-      ElMessage.success('基础信息已更新；v2 hypothesis 保持不变。')
+      ElMessage.success('基础信息已更新；实验假设保持不变。')
       await router.push(`/job-experiments/${detail.id}`)
       return
     }
@@ -541,7 +545,7 @@ const save = async () => {
     } catch (error) {
       if (!isCurrentSaveOperation(snapshot, operationGeneration)) return
       ElMessage.warning(
-        `基础实验已${snapshot.experimentId ? '更新' : '创建'}，但 v2 hypothesis 保存失败。`
+      `基础实验已${snapshot.experimentId ? '更新' : '创建'}，但实验假设保存失败。`
         + '请稍后从实验详情重试或联系后端补充关联能力。'
       )
       await router.push(`/job-experiments/${detail.id}`)

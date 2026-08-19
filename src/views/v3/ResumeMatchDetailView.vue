@@ -401,7 +401,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, FileChartColumn, FileText, PackageCheck, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getResumeJobMatchReportDetailApi, regenerateResumeJobMatchReportApi } from '@/api/resumeJobMatch'
@@ -410,6 +410,11 @@ import { createApplicationApi, createResumeVersionApi, getApplicationsApi } from
 import AppState from '@/components/common/AppState.vue'
 import AiResultFeedback from '@/components/feedback/AiResultFeedback.vue'
 import { appConfig } from '@/config'
+import {
+  createAsyncOperationScope,
+  isCurrentAsyncOperationResponse,
+  shouldPollAsyncOperation
+} from '@/features/async-operation-state'
 import { useGameProfileStore } from '@/features/game-profile'
 import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
@@ -448,9 +453,11 @@ const gameProfile = useGameProfileStore()
 let reportPollTimer: ReturnType<typeof setTimeout> | undefined
 let reportPollRetryCount = 0
 let reportPollFailureNoticeShown = false
+let reportPollStartedAt = 0
 const RESUME_JOB_MATCH_TASK_BIZ_TYPE = 'resume-job-match.analyze'
 const REPORT_POLL_INTERVAL_MS = 2500
 const REPORT_POLL_MAX_RETRY_DELAY_MS = 10000
+const REPORT_POLL_MAX_DURATION_MS = 60000
 
 type OverviewTone = 'success' | 'warning' | 'info' | 'danger'
 type PrimaryActionKey = 'regenerate' | 'study-plan' | 'project-evidence' | 'interview' | 'profile'
@@ -510,8 +517,12 @@ const dimensionTone = (value?: number) => {
 
 const reportId = computed(() => Number(route.params.id) || 0)
 const isTrackingReport = computed(() => {
-  const status = report.value?.status
-  return status === 'PENDING' || status === 'PROCESSING'
+  const current = report.value
+  return shouldPollAsyncOperation({
+    status: current?.status,
+    hasExecution: Boolean(current?.reportId || reportId.value),
+    hasReceipt: Boolean(current?.asyncMessageId || current?.asyncTraceId)
+  })
 })
 const isSuccessReport = computed(() => report.value?.status === 'SUCCESS')
 const isUnscorableReport = computed(() => {
@@ -1023,24 +1034,41 @@ const grantTrustedReportXp = () => {
 }
 
 const loadReport = async (silent = false) => {
-  if (!reportId.value) {
+  const requestedReportId = reportId.value
+  if (!requestedReportId) {
     loadError.value = '报告记录无效。'
     return
   }
+  const requestScope = createAsyncOperationScope(RESUME_JOB_MATCH_TASK_BIZ_TYPE, requestedReportId)
   if (!silent) {
     loading.value = true
     loadError.value = ''
   }
   try {
-    report.value = await withReportLoadTimeout(getResumeJobMatchReportDetailApi(reportId.value))
+    const nextReport = await withReportLoadTimeout(getResumeJobMatchReportDetailApi(requestedReportId))
+    if (!isCurrentAsyncOperationResponse(
+      createAsyncOperationScope(RESUME_JOB_MATCH_TASK_BIZ_TYPE, reportId.value || 0),
+      requestScope
+    ) || !isCurrentAsyncOperationResponse(
+      requestScope,
+      createAsyncOperationScope(RESUME_JOB_MATCH_TASK_BIZ_TYPE, requestedReportId, {
+        asyncMessageId: nextReport.asyncMessageId,
+        asyncTraceId: nextReport.asyncTraceId
+      })
+    )) {
+      return
+    }
+    report.value = nextReport
     grantTrustedReportXp()
     reportPollRetryCount = 0
     reportPollFailureNoticeShown = false
     loadError.value = ''
     if (isTrackingReport.value) {
+      if (!reportPollStartedAt) reportPollStartedAt = Date.now()
       scheduleReportPoll()
     } else {
       stopReportPoll()
+      reportPollStartedAt = 0
     }
   } catch (error) {
     if (!silent) {
@@ -1073,6 +1101,10 @@ const nextReportPollDelay = () =>
 
 const scheduleReportPoll = (delay = REPORT_POLL_INTERVAL_MS) => {
   stopReportPoll()
+  if (reportPollStartedAt && Date.now() - reportPollStartedAt >= REPORT_POLL_MAX_DURATION_MS) {
+    loadError.value = '报告状态超过 60 秒仍未收敛，请查看任务记录或重新生成匹配报告。'
+    return
+  }
   reportPollTimer = setTimeout(() => {
     void loadReport(true)
   }, delay)
@@ -1316,6 +1348,14 @@ const runFailureRepairAction = (key: string) => {
   }
   goMatchTaskCenter()
 }
+
+watch(reportId, (id, previousId) => {
+  if (!id || id === previousId) return
+  stopReportPoll()
+  report.value = null
+  loadError.value = ''
+  void loadReport()
+})
 
 onMounted(loadReport)
 onBeforeUnmount(stopReportPoll)

@@ -63,7 +63,7 @@
           <el-input
             v-model.trim="asyncDiagnosticKeyword"
             clearable
-            placeholder="处理记录 / 处理线索 / 关联记录"
+            placeholder="执行编号 / 处理记录 / 处理线索"
             @clear="handleAsyncDiagnosticClear"
             @keyup.enter="handleAsyncSearch"
           />
@@ -537,7 +537,7 @@ import {
   Search,
   Target
 } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -558,6 +558,11 @@ import StatusTag from '@/components/common/StatusTag.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
 import { appConfig } from '@/config'
 import { buildAgentLoopActions } from '@/features/agent-loop/agentLoopRules'
+import {
+  isAsyncOperationTerminal,
+  preferTerminalAsyncOperationSnapshot,
+  resolveAsyncOperationState
+} from '@/features/async-operation-state'
 import { resolveAppRoutePath } from '@/features/route-safety'
 import type { AgentTaskQueryDTO, AgentTaskVO } from '@/types/agent'
 import type { AsyncTaskQueryDTO, AsyncTaskVO } from '@/types/asyncTask'
@@ -666,11 +671,17 @@ const asyncQuery = reactive<AsyncTaskQueryDTO>({
   bizType: '',
   status: '',
   bizId: '',
+  executionId: '',
   messageId: '',
   traceId: '',
   keyword: ''
 })
 const asyncDiagnosticKeyword = ref('')
+let asyncPollTimer: ReturnType<typeof window.setTimeout> | null = null
+let asyncPollAttempts = 0
+let asyncLoadSequence = 0
+const MAX_EXACT_ASYNC_POLL_ATTEMPTS = 30
+const EXACT_ASYNC_POLL_INTERVAL_MS = 4000
 const sourceFilter = ref('')
 const trustFilter = ref('')
 
@@ -881,6 +892,7 @@ const asyncActiveFilterItems = computed(() => {
   const items: Array<{ key: string; label: string; value: string }> = []
   if (asyncQuery.bizType) items.push({ key: 'bizType', label: '关联功能', value: getAsyncBizLabel(asyncQuery.bizType) })
   if (asyncQuery.status) items.push({ key: 'status', label: '状态', value: asyncStatusMap[asyncQuery.status] || asyncQuery.status })
+  if (asyncQuery.executionId) items.push({ key: 'executionId', label: '执行编号', value: asyncQuery.executionId })
   if (asyncQuery.messageId) items.push({ key: 'messageId', label: '处理凭证', value: asyncQuery.messageId })
   if (asyncQuery.traceId) items.push({ key: 'traceId', label: '处理线索', value: asyncQuery.traceId })
   if (asyncQuery.bizId) items.push({ key: 'bizId', label: '关联记录', value: asyncQuery.bizId })
@@ -888,7 +900,7 @@ const asyncActiveFilterItems = computed(() => {
   return items
 })
 const hasExactAsyncReceiptFilter = computed(() =>
-  Boolean(asyncQuery.messageId || (asyncQuery.bizType && asyncQuery.bizId))
+  Boolean(asyncQuery.executionId || asyncQuery.messageId || (asyncQuery.bizType && asyncQuery.bizId))
 )
 const asyncEmptyTitle = computed(() =>
   hasExactAsyncReceiptFilter.value ? '处理记录仍在登记' : '暂无处理进度'
@@ -1388,6 +1400,7 @@ const asyncTaskRecoveryHint = (task: AsyncTaskVO) => {
 const asyncDetailMetaItems = (task: AsyncTaskVO) => {
   const items = [
     { label: '处理记录', value: '已保存' },
+    { label: '执行编号', value: task.executionId || '-' },
     { label: '关联功能', value: getAsyncBizLabel(task.bizType) },
     { label: '关联记录', value: task.bizId ? '已绑定' : '-' },
     { label: '处理凭证', value: task.messageId ? '已提交' : '-' },
@@ -1678,19 +1691,80 @@ const fetchTasks = async () => {
 }
 
 const fetchAsyncTasks = async () => {
+  const loadSequence = ++asyncLoadSequence
   asyncLoading.value = true
   asyncErrorMessage.value = ''
   try {
     const result = await withTaskLoadTimeout(getUserAsyncTasksApi(asyncQuery), '生成进度')
-    asyncTasks.value = result.records || []
+    if (loadSequence !== asyncLoadSequence) return
+    asyncTasks.value = mergeAsyncTaskSnapshots(result.records || [])
     asyncTotal.value = result.total || 0
   } catch (error) {
+    if (loadSequence !== asyncLoadSequence) return
     asyncTasks.value = []
     asyncTotal.value = 0
     asyncErrorMessage.value = getErrorMessage(error)
   } finally {
-    asyncLoading.value = false
+    if (loadSequence === asyncLoadSequence) {
+      asyncLoading.value = false
+      syncExactAsyncTaskPolling()
+    }
   }
+}
+
+const stopExactAsyncTaskPolling = (reset = true) => {
+  if (asyncPollTimer) {
+    window.clearTimeout(asyncPollTimer)
+    asyncPollTimer = null
+  }
+  if (reset) asyncPollAttempts = 0
+}
+
+const isTerminalAsyncTask = (task?: AsyncTaskVO | null) => Boolean(task) && isAsyncOperationTerminal(
+  resolveAsyncOperationState({
+    status: task?.status,
+    hasExecution: true,
+    executionId: task?.executionId,
+    asyncMessageId: task?.messageId,
+    asyncTraceId: task?.traceId
+  })
+)
+
+const mergeAsyncTaskSnapshots = (received: AsyncTaskVO[]) => {
+  const currentByIdentity = new Map<string, AsyncTaskVO>()
+  asyncTasks.value.forEach((task) => {
+    currentByIdentity.set(task.executionId || `task:${task.id}`, task)
+  })
+  const merged = received.map((task) => {
+    const current = currentByIdentity.get(task.executionId || `task:${task.id}`)
+    return preferTerminalAsyncOperationSnapshot(current, task) || task
+  })
+  if (asyncQuery.executionId) {
+    const currentExact = asyncTasks.value.find((task) => task.executionId === asyncQuery.executionId)
+    const receivedExact = merged.some((task) => task.executionId === asyncQuery.executionId)
+    if (currentExact && isTerminalAsyncTask(currentExact) && !receivedExact) {
+      merged.push(currentExact)
+    }
+  }
+  return merged
+}
+
+const syncExactAsyncTaskPolling = () => {
+  if (!asyncQuery.executionId) {
+    stopExactAsyncTaskPolling()
+    return
+  }
+  const exactTask = asyncTasks.value.find((task) => task.executionId === asyncQuery.executionId)
+  if (isTerminalAsyncTask(exactTask)) {
+    stopExactAsyncTaskPolling()
+    return
+  }
+  if (asyncPollTimer || asyncPollAttempts >= MAX_EXACT_ASYNC_POLL_ATTEMPTS) return
+  asyncPollTimer = window.setTimeout(() => {
+    asyncPollTimer = null
+    asyncPollAttempts += 1
+    void fetchAsyncTasks()
+  }, EXACT_ASYNC_POLL_INTERVAL_MS)
 }
 
 const refreshCurrentWorkspace = async () => {
@@ -1734,6 +1808,7 @@ const applyTodayTaskScope = (date?: string) => {
 }
 
 const handleAsyncSearch = () => {
+  stopExactAsyncTaskPolling()
   applyAsyncDiagnosticKeyword()
   asyncQuery.pageNum = 1
   fetchAsyncTasks()
@@ -1746,6 +1821,7 @@ const handleAsyncReset = () => {
     bizType: '',
     status: '',
     bizId: '',
+    executionId: '',
     messageId: '',
     traceId: '',
     keyword: ''
@@ -1757,10 +1833,15 @@ const handleAsyncReset = () => {
 const applyAsyncDiagnosticKeyword = () => {
   const value = asyncDiagnosticKeyword.value.trim()
   asyncQuery.bizId = ''
+  asyncQuery.executionId = ''
   asyncQuery.messageId = ''
   asyncQuery.traceId = ''
   asyncQuery.keyword = ''
   if (!value) return
+  if (/^(execution|exec)[-_:]/i.test(value)) {
+    asyncQuery.executionId = value.replace(/^(execution|exec)[-_:]\s*/i, '')
+    return
+  }
   if (/^trace[-_:]/i.test(value)) {
     asyncQuery.traceId = value.replace(/^trace[-_:]\s*/i, '')
     return
@@ -1782,6 +1863,7 @@ const applyAsyncDiagnosticKeyword = () => {
 
 const handleAsyncDiagnosticClear = () => {
   asyncQuery.bizId = ''
+  asyncQuery.executionId = ''
   asyncQuery.messageId = ''
   asyncQuery.traceId = ''
   asyncQuery.keyword = ''
@@ -1931,36 +2013,42 @@ const firstRouteQueryString = (value: unknown) => {
 const applyRouteAsyncDiagnosticQuery = () => {
   const routeBizType = firstRouteQueryString(route.query.bizType || route.query.type)
   const routeBizId = firstRouteQueryString(route.query.bizId)
+  const routeExecutionId = firstRouteQueryString(route.query.executionId)
   const routeMessageId = firstRouteQueryString(route.query.messageId)
   const routeTraceId = firstRouteQueryString(route.query.traceId)
   const routeStatus = firstRouteQueryString(route.query.status)
   const routeKeyword = firstRouteQueryString(route.query.keyword)
-  if (!routeBizType && !routeBizId && !routeMessageId && !routeTraceId && !routeStatus && !routeKeyword) return false
+  stopExactAsyncTaskPolling()
+  if (!routeBizType && !routeBizId && !routeExecutionId && !routeMessageId && !routeTraceId && !routeStatus && !routeKeyword) return false
 
   workspaceTab.value = 'progress'
   asyncQuery.pageNum = 1
   asyncQuery.bizType = ''
   asyncQuery.status = ''
   asyncQuery.bizId = ''
+  asyncQuery.executionId = ''
   asyncQuery.messageId = ''
   asyncQuery.traceId = ''
   asyncQuery.keyword = ''
   if (routeBizType) asyncQuery.bizType = routeBizType
   if (routeStatus) asyncQuery.status = routeStatus.toUpperCase()
   if (routeBizId) asyncQuery.bizId = routeBizId
+  if (routeExecutionId) asyncQuery.executionId = routeExecutionId
   if (routeMessageId) asyncQuery.messageId = routeMessageId
   if (routeTraceId) asyncQuery.traceId = routeTraceId
   if (routeKeyword) asyncQuery.keyword = routeKeyword
-  asyncDiagnosticKeyword.value = routeMessageId
-    ? `message:${routeMessageId}`
-    : routeTraceId
+  asyncDiagnosticKeyword.value = routeExecutionId
+    ? `execution:${routeExecutionId}`
+    : routeMessageId
+      ? `message:${routeMessageId}`
+      : routeTraceId
       ? `trace:${routeTraceId}`
       : routeBizId || routeKeyword
   return true
 }
 
 watch(
-  () => [route.query.bizType, route.query.type, route.query.bizId, route.query.messageId, route.query.traceId, route.query.status, route.query.keyword],
+  () => [route.query.bizType, route.query.type, route.query.bizId, route.query.executionId, route.query.messageId, route.query.traceId, route.query.status, route.query.keyword],
   () => {
     if (applyRouteAsyncDiagnosticQuery()) {
       void fetchAsyncTasks()
@@ -1978,6 +2066,9 @@ onMounted(async () => {
   }
   void fetchTasks()
   void fetchAsyncTasks()
+})
+onBeforeUnmount(() => {
+  stopExactAsyncTaskPolling()
 })
 </script>
 

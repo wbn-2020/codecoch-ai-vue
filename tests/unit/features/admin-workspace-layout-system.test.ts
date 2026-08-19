@@ -17,6 +17,7 @@ const adminLayoutSource = readSource('src/layouts/AdminLayout.vue')
 const adminStyleSource = readOptionalSource('src/views/admin/admin-workspace.scss')
 const adminDashboardSource = readSource('src/views/admin/AdminDashboardView.vue')
 const adminSidebarSource = readSource('src/components/layout/AdminSidebar.vue')
+const asyncTaskSource = readSource('src/views/admin/AsyncTaskView.vue')
 const elementDarkSource = readSource('src/styles/element-dark.scss')
 const authStyleSource = readOptionalSource('src/views/auth/auth-workspace.scss')
 
@@ -71,12 +72,17 @@ describe('admin workspace layout system', () => {
     )
   })
 
-  it('keeps the mobile admin navigation vertically scrollable instead of clipping submenus', () => {
+  it('moves mobile admin navigation into a scrollable drawer instead of rendering the full sidebar in the first viewport', () => {
+    expect(adminLayoutSource).toContain('class="admin-mobile-navigation"')
+    expect(adminLayoutSource).toContain('v-model="mobileNavigationVisible"')
+    expect(adminLayoutSource).toContain('@select="mobileNavigationVisible = false"')
+    expect(adminLayoutSource).toContain('mobileNavigationVisible.value = false')
+    expect(adminLayoutSource).toContain("matchMedia('(max-width: 768px)')")
     expect(adminStyleSource).toMatch(
-      /@media \(max-width:\s*760px\)[\s\S]*?\.admin-layout \.app-layout__aside\s*\{[\s\S]*?max-height:\s*min\(42dvh,\s*360px\)[\s\S]*?overflow-y:\s*auto/
+      /@media \(max-width:\s*768px\)[\s\S]*?\.admin-layout \.app-layout__aside\s*\{[\s\S]*?display:\s*none/
     )
-    expect(adminStyleSource).not.toMatch(
-      /@media \(max-width:\s*760px\)[\s\S]*?\.admin-layout \.app-layout__aside\s*\{[\s\S]*?max-height:\s*48px[\s\S]*?overflow:\s*hidden/
+    expect(adminStyleSource).toMatch(
+      /\.admin-mobile-navigation \.el-drawer__body\s*\{[\s\S]*?overflow-y:\s*auto/
     )
   })
 
@@ -106,6 +112,16 @@ describe('admin workspace layout system', () => {
     expect(adminStyleSource).toContain('width: min(100vw, 460px) !important;')
     expect(adminStyleSource).toContain('overflow-x: hidden;')
     expect(adminStyleSource).toContain('min-height: 44px;')
+    expect(adminStyleSource).toMatch(/\.admin-layout \.table-card\s*\{[\s\S]*?overflow-x:\s*auto/)
+    expect(asyncTaskSource).toContain('class="task-mobile-summary"')
+    expect(asyncTaskSource).toContain('aria-label="任务移动摘要"')
+    expect(asyncTaskSource).toContain('class="task-detail-drawer"')
+    expect(adminStyleSource).toMatch(
+      /\.task-detail-drawer \.el-descriptions__table\s*\{[\s\S]*?table-layout:\s*fixed/
+    )
+    expect(adminStyleSource).toMatch(
+      /\.task-detail-drawer \.el-descriptions__cell,[\s\S]*?overflow-wrap:\s*anywhere/
+    )
   })
 
   it('uses native buttons for navigable dashboard metrics and exposes chart data as tables', () => {

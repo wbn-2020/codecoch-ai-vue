@@ -122,7 +122,15 @@
               <el-button link type="primary" @click="openVersionDrawer(row)">版本管理</el-button>
               <el-button v-permission="'admin:ai:prompt:write'" link type="primary" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="openDialog(row)">编辑</el-button>
               <el-button link type="primary" @click="openTemplateCallLogs(row)">AI 运行记录</el-button>
-              <el-button v-permission="'admin:ai:prompt:write'" link type="warning" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleStatus(row)">
+              <el-button
+                v-permission="row.status === 1 ? 'admin:ai:prompt:write' : 'admin:ai:prompt:publish'"
+                link
+                type="warning"
+                :disabled="isAdminMobileReadonly || statusChangingId === row.id"
+                :loading="statusChangingId === row.id"
+                :title="mobileReadonlyTitle()"
+                @click="handleStatus(row)"
+              >
                 {{ row.status === 1 ? '禁用' : '启用' }}
               </el-button>
               <el-button v-permission="'admin:ai:prompt:write'" link type="danger" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleDelete(row)">删除</el-button>
@@ -146,35 +154,48 @@
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑提示词模板元数据' : '新增提示词模板'" width="820px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="112px">
-        <el-form-item label="模板名称" prop="name">
-          <el-input v-model.trim="form.name" />
+        <el-alert v-if="promptFormErrorMessage" class="admin-form-error" type="error" :closable="false" show-icon :title="promptFormErrorMessage" />
+        <el-form-item label="模板名称" prop="name" :error="promptFieldErrors.name">
+          <el-input v-model.trim="form.name" @input="clearPromptFieldError('name')" />
         </el-form-item>
-        <el-form-item label="模板类型" prop="scene">
-          <el-select v-model="form.scene" style="width: 100%" :disabled="Boolean(editingId)">
+        <el-form-item label="模板类型" prop="scene" :error="promptFieldErrors.scene">
+          <el-select v-model="form.scene" style="width: 100%" :disabled="Boolean(editingId)" @change="clearPromptFieldError('scene')">
             <el-option v-for="item in sceneOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <div v-if="editingId" class="field-note">
             模板类型不在当前编辑态变更；如需调整提示词正文或发布版本，请走版本管理。
           </div>
         </el-form-item>
-        <el-form-item label="模板内容" prop="content">
+        <el-form-item label="模板内容" prop="content" :error="promptFieldErrors.content">
           <el-input
             v-model="form.content"
             type="textarea"
             :rows="9"
             :readonly="Boolean(editingId)"
             :placeholder="editingId ? '提示词内容请通过版本管理新增版本修改' : '请输入模板内容'"
+            @input="clearPromptFieldError('content')"
           />
           <div v-if="editingId" class="field-note">
             <span>提示词正文不能在这里直接保存，请通过版本管理新增版本修改。本次保存只更新模板名称和描述。</span>
             <el-button link type="primary" @click="openEditingVersionDrawer">去版本管理</el-button>
           </div>
         </el-form-item>
+        <el-form-item v-if="!editingId" label="变量声明" prop="variables" :error="promptFieldErrors.variables">
+          <el-input
+            v-model="form.variables"
+            type="textarea"
+            :rows="3"
+            placeholder="例如：input,userName；必须与正文中的 {{input}}、{{userName}} 完全一致"
+            @input="clearPromptFieldError('variables')"
+          />
+          <div class="field-note">支持逗号分隔、JSON 数组或 JSON 对象；正文没有变量时保持为空。</div>
+        </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item v-if="!editingId" label="状态">
-          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
+        <el-form-item v-if="!editingId" label="初始状态">
+          <el-tag type="info">停用草稿</el-tag>
+          <div class="field-note">新增模板不会直接生效。请创建版本、完成测试，再激活目标版本。</div>
         </el-form-item>
         <el-form-item v-else label="当前状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" disabled />
@@ -207,9 +228,10 @@
           </div>
         </div>
         <el-form ref="versionFormRef" :model="versionForm" :rules="versionRules" label-position="top">
+          <el-alert v-if="versionFormErrorMessage" class="admin-form-error" type="error" :closable="false" show-icon :title="versionFormErrorMessage" />
           <div class="version-form-grid">
-            <el-form-item label="版本号" prop="versionCode">
-              <el-input v-model.trim="versionForm.versionCode" placeholder="例如：v2" />
+            <el-form-item label="版本号" prop="versionCode" :error="versionFieldErrors.versionCode">
+              <el-input v-model.trim="versionForm.versionCode" placeholder="例如：v2" @input="clearVersionFieldError('versionCode')" />
             </el-form-item>
             <el-form-item label="版本名称">
               <el-input v-model.trim="versionForm.versionName" placeholder="例如：强化项目追问" />
@@ -221,8 +243,18 @@
               </el-select>
             </el-form-item>
           </div>
-          <el-form-item label="提示词内容" prop="content">
-            <el-input v-model="versionForm.content" type="textarea" :rows="7" placeholder="请输入新版本提示词内容" />
+          <el-form-item label="提示词内容" prop="content" :error="versionFieldErrors.content">
+            <el-input v-model="versionForm.content" type="textarea" :rows="7" placeholder="请输入新版本提示词内容" @input="clearVersionFieldError('content')" />
+          </el-form-item>
+          <el-form-item label="变量声明" prop="variablesJson" :error="versionFieldErrors.variables">
+            <el-input
+              v-model="versionForm.variablesJson"
+              type="textarea"
+              :rows="3"
+              placeholder="例如：input,userName；必须与正文中的 {{变量名}} 完全一致"
+              @input="clearVersionFieldError('variables')"
+            />
+            <div class="field-note">支持逗号分隔、JSON 数组或 JSON 对象；正文没有变量时保持为空。</div>
           </el-form-item>
           <el-form-item label="变更说明">
             <el-input v-model="versionForm.changeLog" type="textarea" :rows="2" placeholder="可选：说明本次版本调整原因" />
@@ -688,7 +720,10 @@ const saving = ref(false)
 const promptError = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
+const statusChangingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
+const promptFormErrorMessage = ref('')
+const promptFieldErrors = reactive<Record<string, string>>({})
 const prompts = ref<PromptTemplateVO[]>([])
 const total = ref(0)
 const versionDrawerVisible = ref(false)
@@ -696,6 +731,8 @@ const versionLoading = ref(false)
 const versionError = ref('')
 const versionSaving = ref(false)
 const versionFormRef = ref<FormInstance>()
+const versionFormErrorMessage = ref('')
+const versionFieldErrors = reactive<Record<string, string>>({})
 const currentPrompt = ref<PromptTemplateVO | null>(null)
 const versions = ref<PromptTemplateVersionVO[]>([])
 const versionRawMap = reactive<Record<number, PromptTemplateVersionVO>>({})
@@ -793,6 +830,7 @@ const form = reactive<PromptTemplateDTO>({
   scene: AI_SCENE.INTERVIEW_QUESTION_GENERATE,
   name: '',
   content: '',
+  variables: '',
   status: 0,
   description: ''
 })
@@ -813,6 +851,7 @@ const versionForm = reactive<CreatePromptTemplateVersionDTO>({
   versionCode: '',
   versionName: '',
   content: '',
+  variablesJson: '',
   status: 'DRAFT',
   changeLog: ''
 })
@@ -896,7 +935,7 @@ const getSceneLabel = (value?: AiScene | string | '') => {
   return sceneOptions.find((item) => item.value === raw)?.label || `未登记场景：${raw}`
 }
 
-const fetchPrompts = async () => {
+const fetchPrompts = async (options: { throwOnError?: boolean } = {}) => {
   loading.value = true
   promptError.value = ''
   try {
@@ -910,8 +949,118 @@ const fetchPrompts = async () => {
     prompts.value = []
     total.value = 0
     promptError.value = getErrorMessage(error, '提示词模板列表暂时加载失败，请稍后重试。')
+    if (options.throwOnError) throw error
   } finally {
     loading.value = false
+  }
+}
+
+const promptActionErrorMessage = (error: unknown, fallback: string) => {
+  const value = (error && typeof error === 'object' ? error : {}) as {
+    message?: unknown
+    msg?: unknown
+    traceId?: unknown
+    requestId?: unknown
+    response?: {
+      data?: { message?: unknown; msg?: unknown; traceId?: unknown; requestId?: unknown }
+      headers?: { get?: (name: string) => string | null }
+    }
+  }
+  const responseData = value.response?.data
+  const rawReason = [responseData?.message, responseData?.msg, value.message, value.msg]
+    .find((item) => typeof item === 'string' && item.trim())
+  const reason = rawReason ? String(rawReason).trim() : getErrorMessage(error, fallback)
+  const traceId = [
+    responseData?.traceId,
+    responseData?.requestId,
+    value.traceId,
+    value.requestId,
+    value.response?.headers?.get?.('X-Trace-Id'),
+    value.response?.headers?.get?.('X-Request-Id')
+  ].find((item) => typeof item === 'string' && item.trim())
+  return traceId ? `${reason}（追踪号：${String(traceId).trim()}）` : reason
+}
+
+const promptMutationDiagnostics = (error: unknown, fallback: string) => {
+  const value = (error && typeof error === 'object' ? error : {}) as {
+    message?: unknown
+    msg?: unknown
+    nextStep?: unknown
+    traceId?: unknown
+    requestId?: unknown
+    fieldErrors?: unknown
+    response?: {
+      data?: {
+        message?: unknown
+        msg?: unknown
+        nextStep?: unknown
+        traceId?: unknown
+        requestId?: unknown
+        fieldErrors?: unknown
+      }
+      headers?: { get?: (name: string) => string | null }
+    }
+  }
+  const payload = value.response?.data || value
+  const fields: Record<string, string> = {}
+  if (payload.fieldErrors && typeof payload.fieldErrors === 'object') {
+    Object.entries(payload.fieldErrors as Record<string, unknown>).forEach(([field, message]) => {
+      if (typeof message !== 'string' || !message.trim()) return
+      fields[field === 'variablesJson' ? 'variables' : field] = message.trim()
+    })
+  }
+  const reason = promptActionErrorMessage(error, fallback).replace(/（追踪号：[^）]+）$/, '')
+  const nextStep = typeof payload.nextStep === 'string' && payload.nextStep.trim()
+    ? payload.nextStep.trim()
+    : ''
+  const traceId = [
+    payload.traceId,
+    payload.requestId,
+    value.traceId,
+    value.requestId,
+    value.response?.headers?.get?.('X-Trace-Id'),
+    value.response?.headers?.get?.('X-Request-Id')
+  ].find((item) => typeof item === 'string' && item.trim())
+  return {
+    fieldErrors: fields,
+    message: [
+      reason,
+      nextStep ? `下一步：${nextStep}` : '',
+      traceId ? `追踪号：${String(traceId).trim()}` : ''
+    ].filter(Boolean).join('；')
+  }
+}
+
+const clearPromptFormErrors = () => {
+  promptFormErrorMessage.value = ''
+  Object.keys(promptFieldErrors).forEach((key) => delete promptFieldErrors[key])
+}
+const clearPromptFieldError = (field: string) => {
+  delete promptFieldErrors[field]
+  if (Object.keys(promptFieldErrors).length === 0) promptFormErrorMessage.value = ''
+}
+const clearVersionFormErrors = () => {
+  versionFormErrorMessage.value = ''
+  Object.keys(versionFieldErrors).forEach((key) => delete versionFieldErrors[key])
+}
+const clearVersionFieldError = (field: string) => {
+  delete versionFieldErrors[field]
+  if (Object.keys(versionFieldErrors).length === 0) versionFormErrorMessage.value = ''
+}
+
+const refreshAndVerifyPromptActivation = async (row: PromptTemplateVO, versionId: number) => {
+  await fetchPrompts({ throwOnError: true })
+  if (promptError.value) {
+    throw new Error(`启用请求已提交，但刷新验证失败：${promptError.value}`)
+  }
+  const persisted = prompts.value.find((item) => item.id === row.id)
+  if (!persisted) {
+    throw new Error(`启用请求已提交，但刷新结果未找到模板 ${row.id}`)
+  }
+  if (persisted.status !== 1 || Number(persisted.activeVersionId) !== versionId) {
+    throw new Error(
+      `启用请求已提交，但服务端持久化状态未生效：status=${persisted.status ?? '-'}，activeVersionId=${persisted.activeVersionId ?? '-'}`
+    )
   }
 }
 
@@ -920,9 +1069,11 @@ const resetVersionForm = () => {
     versionCode: '',
     versionName: '',
     content: '',
+    variablesJson: '',
     status: 'DRAFT',
     changeLog: ''
   })
+  clearVersionFormErrors()
   versionFormRef.value?.clearValidate()
 }
 
@@ -959,6 +1110,7 @@ const applyPrompt = (prompt?: PromptTemplateVO) => {
     name: prompt?.promptName || prompt?.name || '',
     scene: prompt?.promptType || prompt?.scene || AI_SCENE.INTERVIEW_QUESTION_GENERATE,
     content: prompt?.templateContent || prompt?.content || '',
+    variables: prompt?.variables || '',
     status: prompt?.status ?? 0,
     description: prompt?.description || ''
   })
@@ -1020,6 +1172,8 @@ const openDialog = (row?: PromptTemplateVO) => {
   if (!guardPromptWrite()) return
   editingId.value = row?.id || null
   applyPrompt(row)
+  clearPromptFormErrors()
+  formRef.value?.clearValidate()
   dialogVisible.value = true
 }
 
@@ -1109,6 +1263,7 @@ const handleSave = async () => {
   if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!formRef.value) return
+  clearPromptFormErrors()
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   const isEditingMetadata = Boolean(editingId.value)
@@ -1173,7 +1328,13 @@ const handleSave = async () => {
     dialogVisible.value = false
     await fetchPrompts()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '提示词模板保存失败，请检查内容、权限或当前版本状态后重试。'))
+    const diagnostic = promptMutationDiagnostics(
+      error,
+      '提示词模板保存失败，请检查内容、权限或当前版本状态后重试。'
+    )
+    Object.assign(promptFieldErrors, diagnostic.fieldErrors)
+    promptFormErrorMessage.value = diagnostic.message
+    ElMessage.error(diagnostic.message)
   } finally {
     saving.value = false
   }
@@ -1183,6 +1344,7 @@ const handleCreateVersion = async () => {
   if (!guardPromptWrite()) return
   if (!guardAdminMobileWrite()) return
   if (!versionFormRef.value || !currentPrompt.value?.id) return
+  clearVersionFormErrors()
   const valid = await versionFormRef.value.validate().catch(() => false)
   if (!valid) return
   const confirmed = await confirmDangerActionPreview({
@@ -1206,6 +1368,7 @@ const handleCreateVersion = async () => {
       versionCode: versionForm.versionCode,
       versionName: versionForm.versionName || undefined,
       content: versionForm.content,
+      variablesJson: versionForm.variablesJson || undefined,
       status: versionForm.status || 'DRAFT',
       changeLog: versionForm.changeLog || undefined,
       confirm: true,
@@ -1217,7 +1380,13 @@ const handleCreateVersion = async () => {
     resetVersionForm()
     await fetchVersions()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '提示词版本创建失败，请检查版本号、内容或权限后重试。'))
+    const diagnostic = promptMutationDiagnostics(
+      error,
+      '提示词版本创建失败，请检查版本号、内容或权限后重试。'
+    )
+    Object.assign(versionFieldErrors, diagnostic.fieldErrors)
+    versionFormErrorMessage.value = diagnostic.message
+    ElMessage.error(diagnostic.message)
   } finally {
     versionSaving.value = false
   }
@@ -1453,29 +1622,44 @@ const handleDisableVersion = async (row: PromptTemplateVersionVO) => {
 }
 
 const handleStatus = async (row: PromptTemplateVO) => {
-  if (!guardPromptWrite()) return
-  if (!guardAdminMobileWrite()) return
   const nextStatus = row.status === 1 ? 0 : 1
+  if (nextStatus === 1 ? !guardPromptPublish() : !guardPromptWrite()) return
+  if (!guardAdminMobileWrite()) return
   const actionLabel = nextStatus === 1 ? '启用' : '禁用'
-  const confirmed = await confirmDangerActionPreview({
-    title: `${actionLabel}提示词模板预览`,
-    action: `${actionLabel}模板「${displayPromptName(row)}」`,
-    target: `模板：${displayPromptName(row)}；模板编码：${row.templateCode || '-'}；场景：${row.promptType || row.scene || '-'}`,
-    impact:
-      nextStatus === 1
-        ? '该模板会重新进入可用范围，后续相关 AI 场景可以继续使用该模板。'
-        : '该模板会退出可用范围，依赖该模板的 AI 场景可能改用备用模板或暂时不可用。',
-    rollback: `可在提示词模板治理页再次${nextStatus === 1 ? '禁用' : '启用'}该模板；已产生的 AI 输出不会自动回到变更前。`,
-    audit: '模板启停会记录操作人、模板、目标状态和时间，便于追踪 AI 输出异常。',
-    tips: ['确认当前模板不是相关场景的唯一可用模板。', '确认已评估对面试提问、评分、追问或报告生成的影响。'],
-    confirmButtonText: `确认${actionLabel}`
-  })
-  if (!confirmed) return
-  if (nextStatus === 1) {
-    ElMessage.warning('Please activate a prompt version to enable this template.')
-    return
-  }
+  if (statusChangingId.value !== null) return
+  statusChangingId.value = row.id
   try {
+    const confirmed = await confirmDangerActionPreview({
+      title: `${actionLabel}提示词模板预览`,
+      action: `${actionLabel}模板「${displayPromptName(row)}」`,
+      target: `模板：${displayPromptName(row)}；模板编码：${row.templateCode || '-'}；场景：${row.promptType || row.scene || '-'}`,
+      impact:
+        nextStatus === 1
+          ? '该模板会重新进入可用范围，后续相关 AI 场景可以继续使用该模板。'
+          : '该模板会退出可用范围，依赖该模板的 AI 场景可能改用备用模板或暂时不可用。',
+      rollback: `可在提示词模板治理页再次${nextStatus === 1 ? '禁用' : '启用'}该模板；已产生的 AI 输出不会自动回到变更前。`,
+      audit: '模板启停会记录操作人、模板、目标状态和时间，便于追踪 AI 输出异常。',
+      tips: ['确认当前模板不是相关场景的唯一可用模板。', '确认已评估对面试提问、评分、追问或报告生成的影响。'],
+      confirmButtonText: `确认${actionLabel}`
+    })
+    if (!confirmed) return
+    if (nextStatus === 1) {
+      const versionId = Number(row.activeVersionId)
+      if (!Number.isInteger(versionId) || versionId <= 0) {
+        throw new Error('启用提示词模板前必须先激活一个可用版本，请进入版本管理完成激活')
+      }
+      await activatePromptTemplateVersionApi(versionId, {
+        changeLog: `Admin enabled prompt template ${row.id}`,
+        confirm: true,
+        dryRun: false,
+        reason: `Admin confirmed prompt template enable through version activation; templateId=${row.id}; versionId=${versionId}`,
+        idempotencyKey: createOperationIdempotencyKey(`prompt-template-enable-${row.id}`),
+        expectedCurrentActiveVersionId: row.activeVersionId ?? null
+      })
+      await refreshAndVerifyPromptActivation(row, versionId)
+      ElMessage.success('提示词模板已启用并完成持久化校验')
+      return
+    }
     await updateAdminAiPromptStatusApi(
       row.id,
       nextStatus,
@@ -1485,10 +1669,12 @@ const handleStatus = async (row: PromptTemplateVO) => {
         row
       )
     )
-    ElMessage.success('提示词模板已禁用')
     await fetchPrompts()
+    ElMessage.success('提示词模板已禁用')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, `${actionLabel}提示词模板失败，请确认权限或稍后重试。`))
+    ElMessage.error(promptActionErrorMessage(error, `${actionLabel}提示词模板失败，请确认权限或稍后重试。`))
+  } finally {
+    statusChangingId.value = null
   }
 }
 

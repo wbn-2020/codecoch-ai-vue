@@ -493,6 +493,10 @@ import {
   normalizeResumeTemplateCode,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import {
+  downloadBlobReliably,
+  reliableDownloadOptionsForFile
+} from '@/features/reliable-download'
 import type {
   ResumeArtifactVO,
   ResumeAtsTemplateVO,
@@ -951,12 +955,11 @@ const downloadArtifact = async (artifact: ResumeArtifactVO) => {
   downloadingArtifacts.value = new Set(downloadingArtifacts.value).add(artifact.id)
   try {
     const blob = await downloadResumeArtifactApi(artifact.id)
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = artifact.fileName
-    anchor.click()
-    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    downloadBlobReliably(
+      blob,
+      reliableDownloadOptionsForFile(artifact.fileName, artifact.mimeType)
+    )
+    ElMessage.success(`${artifact.fileName} 已开始下载。`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '文件下载失败，请刷新 artifact 状态后重试。'))
   } finally {

@@ -122,6 +122,31 @@ describe('AbilityMapView layout', () => {
     expect(wrapper.find('.ability-node.is-weak').exists()).toBe(true)
     expect(wrapper.find('.ability-node.is-strong').exists()).toBe(true)
     expect(wrapper.find('.ability-evidence-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('来源信息待同步')
+    expect(wrapper.text()).toContain('未返回同步状态')
+  })
+
+  it('shows collected evidence without converting unquantified nodes into zero scores', async () => {
+    const fixture = abilityMapFixture(false)
+    fixture.hasTrainingData = true
+    fixture.domains[0].skills[0].evidenceCount = 2
+    fixture.domains[0].skills[0].summary = '已归集可信岗位匹配证据，当前等级仍待量化。'
+    fixture.domains[0].skills[0].sourceLabels = ['可信岗位匹配']
+    vi.mocked(getAbilityMapApi).mockResolvedValue(fixture)
+
+    const wrapper = mount(AbilityMapView, {
+      global: {
+        stubs: componentStubs
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已归集 2 条证据，暂无可量化节点')
+    expect(wrapper.text()).toContain('2 条评估证据')
+    expect(wrapper.text()).toContain('待量化')
+    expect(wrapper.text()).toContain('已有证据，待量化')
+    expect(wrapper.find('.ability-formula__ring').text()).toContain('--')
+    expect(wrapper.text()).not.toContain('能力评估 · 已评估 0')
   })
 
   it('keeps each skill node itself tappable for training', async () => {

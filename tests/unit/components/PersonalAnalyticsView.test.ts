@@ -27,7 +27,12 @@ const stubs = {
   },
   'el-alert': true,
   'el-button': { template: '<button><slot /></button>' },
-  'el-segmented': true
+  'el-segmented': {
+    name: 'ElSegmented',
+    props: ['modelValue', 'options'],
+    emits: ['update:modelValue', 'change'],
+    template: '<div class="segmented-stub"></div>'
+  }
 }
 
 const overview = (overrides = {}) => ({
@@ -81,11 +86,19 @@ describe('PersonalAnalyticsView data-state boundaries', () => {
       totalAgentPlanCount: 1,
       agentSuccessRate: 0
     }))
+    vi.mocked(getPersonalTaskTrendApi).mockResolvedValue([{
+      date: '2026-08-12',
+      generatedCount: 4,
+      completedCount: 0,
+      skippedCount: 4,
+      estimatedMinutes: 40,
+      completedMinutes: 0
+    }])
 
     const wrapper = await mountView()
 
     expect(wrapper.text()).toContain('0%')
-    expect(wrapper.text()).toContain('0/4 个任务')
+    expect(wrapper.text()).toContain('0/4 个已结算任务')
   })
 
   it('renders a query error instead of treating a failed trend request as an empty result', async () => {
@@ -125,5 +138,37 @@ describe('PersonalAnalyticsView data-state boundaries', () => {
     expect(wrapper.text()).toContain('仅统计已完成且带有明确技能标签的任务')
     expect(wrapper.text()).toContain('Java')
     expect(wrapper.text()).not.toContain('Unclassified')
+  })
+
+  it('uses selected-period trend facts instead of relabeling the fixed seven-day overview', async () => {
+    vi.mocked(getPersonalAgentOverviewApi).mockResolvedValue(overview({
+      last7DaysTaskCount: 9,
+      last7DaysDoneCount: 9,
+      last7DaysCompletionRate: 100
+    }))
+    vi.mocked(getPersonalTaskTrendApi).mockResolvedValue([
+      {
+        date: '2026-08-12',
+        generatedCount: 4,
+        completedCount: 3,
+        skippedCount: 1,
+        estimatedMinutes: 40,
+        completedMinutes: 30
+      }
+    ])
+
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('近 7 天已结算完成率')
+    expect(wrapper.text()).toContain('3/4 个已结算任务')
+    expect(wrapper.text()).not.toContain('9/9 个任务')
+
+    const segmented = wrapper.findComponent({ name: 'ElSegmented' })
+    segmented.vm.$emit('update:modelValue', 30)
+    segmented.vm.$emit('change', 30)
+    await flushPromises()
+
+    expect(getPersonalTaskTrendApi).toHaveBeenLastCalledWith({ days: 30 })
+    expect(getPersonalSkillDistributionApi).toHaveBeenLastCalledWith({ days: 30 })
+    expect(wrapper.text()).toContain('近 30 天已结算完成率')
   })
 })

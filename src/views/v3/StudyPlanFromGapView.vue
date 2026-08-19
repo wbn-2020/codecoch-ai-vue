@@ -27,7 +27,22 @@
           show-icon
         />
         <AppState v-if="loadError" type="error" title="短板加载失败" :description="loadError"><el-button type="primary" @click="loadProfile">重试</el-button></AppState>
-        <AppState v-else-if="!gapItems.length" type="empty" title="暂无可选短板" description="请先生成能力画像，或刷新后再试。" />
+        <AppState
+          v-else-if="!gapItems.length"
+          type="empty"
+          title="暂无可选短板"
+          :description="emptyGapDescription"
+        >
+          <el-button
+            v-if="canGenerateProfileFromMatch"
+            type="primary"
+            :loading="profileGenerating"
+            @click="generateProfileFromMatch"
+          >
+            生成能力画像
+          </el-button>
+          <el-button v-else @click="router.push('/skill-profile')">前往能力画像</el-button>
+        </AppState>
         <el-checkbox-group v-else v-model="form.gapItemIds" class="gap-list">
           <label
             v-for="gap in gapItems"
@@ -83,7 +98,12 @@ import type { LocationQueryRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getCurrentJobTargetApi } from '@/api/jobTarget'
-import { getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
+import {
+  generateSkillProfileApi,
+  getSkillProfileByIdApi,
+  getSkillProfileByJobTargetApi,
+  getSkillProfileOverviewApi
+} from '@/api/skillProfile'
 import { generateStudyPlanFromGapApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
 import type { SkillGapItemVO } from '@/types/skillProfile'
@@ -94,6 +114,7 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const generating = ref(false)
+const profileGenerating = ref(false)
 const loadError = ref('')
 const contextWarning = ref('')
 const loadedProfileId = ref<number | undefined>()
@@ -114,10 +135,18 @@ const positiveRouteNumber = (value: unknown) => {
 const routeContext = computed(() => ({
   profileId: positiveRouteNumber(route.query.profileId),
   targetJobId: positiveRouteNumber(route.query.targetJobId),
-  resumeId: positiveRouteNumber(route.query.resumeId)
+  resumeId: positiveRouteNumber(route.query.resumeId),
+  matchReportId: positiveRouteNumber(route.query.matchReportId)
 }))
 const profileId = computed(() => loadedProfileId.value)
 const canGenerate = computed(() => Boolean(profileId.value && form.gapItemIds.length && !generating.value))
+const canGenerateProfileFromMatch = computed(() =>
+  Boolean(routeContext.value.matchReportId && !profileGenerating.value)
+)
+const emptyGapDescription = computed(() => canGenerateProfileFromMatch.value
+  ? '当前可信匹配报告尚未沉淀能力画像。生成后会自动带回短板供你选择。'
+  : '请先生成能力画像，或刷新后再试。'
+)
 const buildContextQuery = (extra: Record<string, unknown>): LocationQueryRaw => {
   const query: LocationQueryRaw = {}
   Object.entries(extra).forEach(([key, value]) => {
@@ -282,6 +311,35 @@ const loadProfileForContext = async (context: {
 
 const loadProfile = () => {
   void loadProfileForContext({ ...routeContext.value })
+}
+
+const generateProfileFromMatch = async () => {
+  const matchReportId = routeContext.value.matchReportId
+  if (!matchReportId || profileGenerating.value) return
+
+  profileGenerating.value = true
+  try {
+    const result = await generateSkillProfileApi({ matchReportId })
+    if (String(result.status || '').toUpperCase() !== 'SUCCESS' || !result.profileId) {
+      ElMessage.error(result.errorMessage || '能力画像生成失败，请先返回匹配报告检查数据。')
+      return
+    }
+
+    ElMessage.success('能力画像已生成，正在加载可选短板')
+    await router.push({
+      path: route.path || '/study-plans/from-gap',
+      query: buildContextQuery({
+        profileId: result.profileId,
+        targetJobId: result.targetJobId || routeContext.value.targetJobId,
+        matchReportId,
+        resumeId: routeContext.value.resumeId
+      })
+    })
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '能力画像生成失败，请稍后重试。'))
+  } finally {
+    profileGenerating.value = false
+  }
 }
 
 const generatePlan = async () => {

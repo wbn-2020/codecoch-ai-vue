@@ -148,11 +148,11 @@ export const userNavigationGroups: UserNavigationGroup[] = [
         key: 'resume-workbench',
         label: '简历工作台',
         description: '创建、编辑和优化求职简历',
-        path: '/resumes',
+        path: '/resumes/workbench',
         icon: FileText,
-        routeNames: ['ResumeJobHub', 'ResumeCreate', 'ResumeEdit'],
-        exactPaths: ['/resumes', '/resumes/create'],
-        prefixes: ['/resumes']
+        routeNames: ['ResumeWorkbench', 'ResumeCreate', 'ResumeEdit'],
+        exactPaths: ['/resumes/workbench', '/resumes/create'],
+        prefixes: ['/resumes/']
       },
       {
         key: 'resume-management',

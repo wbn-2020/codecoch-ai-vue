@@ -2,8 +2,8 @@
   <div class="page-shell v4-growth-page">
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">成长画像</div>
-        <h1>成长画像</h1>
+        <div class="v4-eyebrow">成长档案</div>
+        <h1>成长档案</h1>
         <p>仅汇总最近 Agent 任务状态，展示任务完成率、技能标签趋势和样本可信度。</p>
       </div>
       <div class="v4-actions">
@@ -226,9 +226,9 @@ const goWeeklyReport = () => router.push('/agent/weekly-reports')
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '成长画像暂时加载失败，请稍后重试。')
+    return toFriendlyMessage((error as { message?: unknown }).message, '成长档案暂时加载失败，请稍后重试。')
   }
-  return '成长画像暂时加载失败，请稍后重试。'
+  return '成长档案暂时加载失败，请稍后重试。'
 }
 
 const load = async () => {
@@ -266,7 +266,7 @@ const load = async () => {
     }
 
     if (overviewResult.status === 'rejected' && skillsResult.status === 'rejected' && readinessResult.status === 'rejected') {
-      errorMessage.value = warnings[0] || '成长画像暂时加载失败，请稍后重试。'
+      errorMessage.value = warnings[0] || '成长档案暂时加载失败，请稍后重试。'
       return
     }
     partialLoadWarning.value = [...new Set(warnings)].join('；')
@@ -309,6 +309,7 @@ onMounted(load)
 .trend-row span {
   color: var(--app-text-muted);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .v4-eyebrow,
@@ -323,6 +324,7 @@ onMounted(load)
 .skill-strip,
 .growth-explain-strip {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
@@ -330,6 +332,7 @@ onMounted(load)
 
 .v4-grid {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--app-border);
@@ -348,6 +351,7 @@ onMounted(load)
 
 .growth-next-action {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px 18px;
   align-items: center;
@@ -359,7 +363,9 @@ onMounted(load)
 
 .growth-next-action h2,
 .growth-next-action p {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .growth-next-action h2 {
@@ -393,6 +399,7 @@ onMounted(load)
 
 .v4-card,
 .trend-row {
+  min-width: 0;
   border: 1px solid var(--app-border);
   border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface, var(--app-surface));
@@ -419,6 +426,7 @@ onMounted(load)
   margin-top: 8px;
   font-size: 22px;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .v4-card small {
@@ -491,9 +499,8 @@ onMounted(load)
 .trend-row strong,
 .trend-row span {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .trend-row small {
@@ -530,7 +537,7 @@ onMounted(load)
 
   .v4-grid,
   .trend-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .v4-card {
@@ -540,6 +547,35 @@ onMounted(load)
 
   .v4-card:last-child {
     border-bottom: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .v4-growth-page,
+  .v4-page-header,
+  .v4-actions,
+  .growth-explain-strip,
+  .growth-next-action,
+  .content-card,
+  .content-card__body,
+  .trend-list,
+  .trend-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .v4-actions :deep(.el-button),
+  .growth-next-action__actions :deep(.el-button),
+  .compact-empty :deep(.el-button) {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .growth-explain-strip :deep(.el-tag),
+  .skill-strip :deep(.el-tag) {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
   }
 }
 </style>

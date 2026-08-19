@@ -54,6 +54,7 @@ export interface PromptTemplateDTO {
   scene: AiScene
   name: string
   content: string
+  variables?: string
   status: number
   description?: string
   confirm?: boolean

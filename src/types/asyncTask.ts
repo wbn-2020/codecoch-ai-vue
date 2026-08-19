@@ -5,6 +5,7 @@ export interface AsyncTaskQueryDTO extends PageQuery {
   bizType?: string
   bizId?: string
   status?: string
+  executionId?: string
   messageId?: string
   traceId?: string
   keyword?: string
@@ -17,10 +18,14 @@ export interface AsyncTaskVO {
   bizId?: string | null
   userId?: number | null
   traceId?: string | null
+  executionId?: string | null
+  parentExecutionId?: string | null
+  attemptNo?: number | null
   status?: string | null
   retryCount?: number | null
   maxRetry?: number | null
   failureReason?: string | null
+  terminalReasonCode?: string | null
   payloadPreview?: string | null
   payloadHash?: string | null
   resultPreview?: string | null

@@ -176,7 +176,6 @@ const loadBoard = async () => {
 }
 
 onMounted(async () => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   await loadBoard()
 })
 </script>

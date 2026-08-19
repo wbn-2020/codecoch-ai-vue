@@ -18,8 +18,9 @@
     <el-container class="app-layout__content">
       <el-header class="app-layout__header">
         <div class="header-left">
-          <button class="icon-button" type="button" aria-label="切换侧边栏" @click="appStore.toggleSidebar()">
-            <PanelLeftOpen v-if="appStore.sidebarCollapsed" :size="18" />
+          <button class="icon-button" type="button" aria-label="切换管理导航" @click="toggleNavigation">
+            <Menu v-if="isMobileNavigation" :size="19" />
+            <PanelLeftOpen v-else-if="appStore.sidebarCollapsed" :size="18" />
             <PanelLeftClose v-else :size="18" />
           </button>
           <AppBreadcrumb />
@@ -128,6 +129,23 @@
     </el-container>
   </el-container>
 
+  <el-drawer
+    v-model="mobileNavigationVisible"
+    class="admin-mobile-navigation"
+    direction="ltr"
+    size="min(320px, 86vw)"
+    :with-header="false"
+  >
+    <div class="admin-mobile-navigation__brand">
+      <div class="brand-mark">A</div>
+      <div class="brand-text">
+        <strong>CodeCoachAI</strong>
+        <span>AI 内容治理中心</span>
+      </div>
+    </div>
+    <AdminSidebar :collapsed="false" @select="mobileNavigationVisible = false" />
+  </el-drawer>
+
   <el-drawer v-model="diagnosticVisible" title="错误诊断中心" size="460px" class="admin-diagnostic-drawer">
     <div class="diagnostic-overview">
       <div>
@@ -173,12 +191,24 @@
             <dd>{{ requestDiagnosticStatusLabel(item.status) }} / {{ item.code || '-' }}</dd>
           </div>
           <div>
+            <dt>类型</dt>
+            <dd>{{ item.categoryLabel }} / {{ item.retryable ? '可重试' : '需处理后重试' }}</dd>
+          </div>
+          <div>
             <dt>追踪号</dt>
             <dd :title="item.traceId || undefined">{{ displayTraceId(item.traceId) }}</dd>
           </div>
+          <div>
+            <dt>归属</dt>
+            <dd>{{ item.module || '通用请求' }} / {{ item.routePath || '-' }}</dd>
+          </div>
+          <div>
+            <dt>建议动作</dt>
+            <dd>{{ item.nextAction }}</dd>
+          </div>
         </dl>
         <div class="diagnostic-card__actions">
-          <el-button size="small" plain @click="reloadCurrentPage">重新加载当前页</el-button>
+          <el-button v-if="item.retryable" size="small" plain @click="reloadCurrentPage">重新加载当前页</el-button>
           <el-button
             v-if="item.traceId && canOpenAdminLink(['admin:task:list'])"
             size="small"
@@ -218,12 +248,13 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { AlertTriangle, Bell, MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
+import { AlertTriangle, Bell, Menu, MonitorUp, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getAdminDashboardOverviewApi } from '@/api/dashboard'
 import { appConfig } from '@/config'
+import { applyProductTheme, clearProductTheme } from '@/config/themePolicy'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
 import AppState from '@/components/common/AppState.vue'
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
@@ -236,6 +267,7 @@ import { useTagsViewStore } from '@/stores/tagsView'
 import type { AdminDashboardOverviewVO, DashboardStatus } from '@/types/dashboard'
 import { REQUEST_ERROR_EVENT, type RequestErrorDiagnostic } from '@/utils/errorEvents'
 import { buildSafeRedirectTarget } from '@/utils/routeSecurity'
+import { showUserMessage } from '@/utils/userMessage'
 
 const router = useRouter()
 const route = useRoute()
@@ -245,6 +277,8 @@ const tagsStore = useTagsViewStore()
 const CommandPalette = defineAsyncComponent(() => import('@/components/layout/CommandPalette.vue'))
 const commandPaletteOpen = ref(false)
 const diagnosticVisible = ref(false)
+const mobileNavigationVisible = ref(false)
+const isMobileNavigation = ref(false)
 const requestErrors = ref<RequestErrorDiagnostic[]>([])
 const dashboardOverview = ref<AdminDashboardOverviewVO | null>(null)
 const dashboardHealthError = ref(false)
@@ -255,7 +289,9 @@ const displayName = computed(
 )
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const roleSummary = computed(() => authStore.roles.length ? authStore.roles.join('、') : '角色待确认')
-const latestError = computed(() => requestErrors.value[0])
+const latestError = computed(() => requestErrors.value.find((item) =>
+  !item.routePath || item.routePath === route.path
+))
 const adminPermissionDrift = computed(() => authStore.isAdmin && authStore.permissions.length === 0)
 const canOpenAdminLink = (permissions: string[]) => canAccessAdminPermissions(permissions, authStore)
 const canLoadDashboardHealth = computed(() => canOpenAdminLink(['admin:system:overview']))
@@ -332,9 +368,28 @@ const healthDetail = computed(() => {
   return `${services.length} 项服务已汇总`
 })
 
+const syncMobileNavigation = () => {
+  isMobileNavigation.value = window.matchMedia('(max-width: 768px)').matches
+  if (!isMobileNavigation.value) {
+    mobileNavigationVisible.value = false
+  }
+}
+
+const toggleNavigation = () => {
+  if (isMobileNavigation.value) {
+    mobileNavigationVisible.value = true
+    return
+  }
+  appStore.toggleSidebar()
+}
+
 watch(
   () => route.fullPath,
-  () => tagsStore.addVisitedView(route),
+  () => {
+    mobileNavigationVisible.value = false
+    showUserMessage.closeTransientErrors()
+    tagsStore.addVisitedView(route)
+  },
   { immediate: true }
 )
 
@@ -424,9 +479,10 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
     `时间：${formatTime(item.occurredAt)}`,
     `请求地址：${item.method || '-'} ${item.url || '-'}`,
     `状态：${requestDiagnosticStatusLabel(item.status)} / ${item.code || '-'}`,
+    `类型：${item.categoryLabel} / ${item.retryable ? '可重试' : '需处理后重试'}`,
     `追踪号：${item.traceId || '-'}`,
     `当前页面：${currentSafePagePath()}`,
-    '建议动作：可先重新加载当前页；如有追踪号，可按追踪号查询任务、生成记录或审计记录。',
+    `建议动作：${item.nextAction}`,
     `错误：${item.message}`
   ].join('\n')
   try {
@@ -438,7 +494,10 @@ const copyDiagnostic = async (item: RequestErrorDiagnostic) => {
 }
 
 onMounted(() => {
+  applyProductTheme('admin')
   document.body.classList.add('admin-overlay-theme')
+  syncMobileNavigation()
+  window.addEventListener('resize', syncMobileNavigation)
   if (canLoadDashboardHealth.value) {
     fetchDashboardHealth()
   } else {
@@ -448,7 +507,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearProductTheme('admin')
   document.body.classList.remove('admin-overlay-theme')
+  window.removeEventListener('resize', syncMobileNavigation)
   window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 </script>
@@ -849,7 +910,7 @@ onBeforeUnmount(() => {
   border-right: 0;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .app-layout {
     display: block;
   }

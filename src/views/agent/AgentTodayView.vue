@@ -41,18 +41,23 @@
         :title="planDataErrorTitle"
         :description="planDataErrorDescription"
       >
-        <el-button type="primary" :loading="loading" @click="loadPage(true)">重新加载</el-button>
+        <el-button
+          v-if="planFixAction"
+          type="primary"
+          @click="router.push(planFixAction.path)"
+        >
+          {{ planFixAction.label }}
+        </el-button>
+        <el-button
+          v-else-if="isPlanExecutionFailure"
+          type="primary"
+          :loading="generating"
+          @click="openGenerateDialog"
+        >
+          重新生成
+        </el-button>
+        <el-button v-else type="primary" :loading="loading" @click="loadPage(true)">重新加载</el-button>
         <el-button @click="goAsyncTaskCenter">查看任务进度</el-button>
-      </AppState>
-
-      <AppState
-        v-else-if="isPlanEmpty"
-        type="empty"
-        title="今天还没有计划"
-        :description="plan?.emptyMessage || emptyPlanRecoveryDescription"
-      >
-        <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
-        <el-button @click="router.push('/applications')">补充投递</el-button>
       </AppState>
 
       <AppState
@@ -63,6 +68,16 @@
       >
         <el-button type="primary" @click="goAsyncTaskCenter">查看任务进度</el-button>
         <el-button :loading="loading" @click="loadPage(true)">刷新</el-button>
+      </AppState>
+
+      <AppState
+        v-else-if="isPlanEmpty"
+        type="empty"
+        title="今天还没有计划"
+        :description="plan?.emptyMessage || emptyPlanRecoveryDescription"
+      >
+        <el-button type="primary" :loading="generating" @click="openGenerateDialog">生成今日计划</el-button>
+        <el-button @click="router.push('/applications')">补充投递</el-button>
       </AppState>
 
       <template v-else>
@@ -84,19 +99,14 @@
           <el-button @click="goAsyncTaskCenter">查看进度</el-button>
         </div>
 
-        <div v-if="planFixAction" class="plan-fix-row">
-          <el-button type="primary" @click="router.push(planFixAction.path)">{{ planFixAction.label }}</el-button>
-          <el-button :loading="generating" @click="openGenerateDialog">重新生成</el-button>
-        </div>
-
         <el-tabs v-model="todaySection" class="today-tabs">
           <el-tab-pane label="今天" name="today">
             <section class="priority-task-panel" aria-labelledby="priority-task-title">
               <div class="priority-task-panel__head">
                 <div>
                   <p class="section-kicker">当前优先任务</p>
-                  <h2 id="priority-task-title">{{ priorityTask ? displayTaskTitle(priorityTask) : '今天的任务已完成' }}</h2>
-                  <p>{{ priorityTask ? displayTaskDescription(priorityTask) : '没有待推进的任务，可以查看今天的完成记录或生成下一轮计划。' }}</p>
+                  <h2 id="priority-task-title">{{ priorityTask ? displayTaskTitle(priorityTask) : emptyPriorityTitle }}</h2>
+                  <p>{{ priorityTask ? displayTaskDescription(priorityTask) : emptyPriorityDescription }}</p>
                 </div>
                 <StatusTag v-if="priorityTask" :status="priorityTask.status" :map="taskStatusMap" />
               </div>
@@ -149,14 +159,14 @@
                   </el-dropdown>
                 </div>
               </template>
-              <el-button v-else :loading="generating" @click="openGenerateDialog">生成下一轮计划</el-button>
+              <el-button v-else :loading="generating" @click="openGenerateDialog">{{ emptyPriorityActionLabel }}</el-button>
             </section>
 
             <section class="today-remaining">
               <div class="section-head">
                 <div>
-                  <p class="section-kicker">今日剩余任务</p>
-                  <h2>{{ remainingTasks.length ? `还有 ${remainingTasks.length} 项` : '今天没有其他任务' }}</h2>
+                  <p class="section-kicker">{{ remainingSectionKicker }}</p>
+                  <h2>{{ remainingSectionTitle }}</h2>
                 </div>
                 <span>{{ todoCount }} 项待推进 · {{ doneCount }} 项已完成</span>
               </div>
@@ -484,6 +494,8 @@ import {
   resolveAgentTaskPlanChangeOrigin,
   resolveAgentWeekPlanChangeOrigin
 } from '@/features/agent-plan-change'
+import { preferTerminalAsyncOperationSnapshot } from '@/features/async-operation-state'
+import { resolveDailyPlanState } from '@/features/daily-plan-state'
 import { buildAgentWeekPlan } from '@/features/agent-week-plan'
 import { buildAgentWeekPlanFromBackend, hasBackendWeekPlanItems } from '@/features/agent-week-plan-backend'
 import type {
@@ -533,6 +545,7 @@ const errorMessage = ref('')
 const partialErrors = ref<string[]>([])
 const queryDate = ref(today)
 const loadedPageKey = ref('')
+let pageLoadSequence = 0
 const plan = ref<DailyPlanVO>()
 const todayTasks = ref<AgentTodayTaskVO>()
 const backendWeekPlan = ref<AgentWeekPlanBackendVO | null>(null)
@@ -716,23 +729,53 @@ const focusSessionLabel = computed(() => {
 const partialErrorDescription = computed(() =>
   `以下数据暂未返回：${partialErrors.value.join('、')}。页面会继续保留已成功加载的内容；如果你刚完成任务或刚生成计划，请重新加载或到任务中心继续查看。`
 )
-const hasAsyncReceipt = computed(() => Boolean(plan.value?.asyncMessageId || plan.value?.asyncTraceId || plan.value?.asyncBizType))
+const hasAsyncReceipt = computed(() => Boolean(
+  plan.value?.asyncMessageId
+  || plan.value?.asyncTraceId
+  || plan.value?.asyncBizType
+  || plan.value?.asyncReceiptStatus
+))
 const hasRegenerationImpact = computed(() => Boolean(plan.value?.runId || taskList.value.length || hasAsyncReceipt.value))
-const planStatus = computed(() => String(plan.value?.status || '').toUpperCase())
-const allAgentTasksDone = computed(() =>
-  taskList.value.length > 0
-  && taskList.value.every((task) => String(task.status || '').toUpperCase() === 'DONE')
-)
-const isAsyncPlanRunning = computed(() => planStatus.value === 'RUNNING' && !taskList.value.length)
+const dailyPlanSnapshot = computed(() => resolveDailyPlanState({
+  plan: plan.value,
+  tasks: taskList.value
+}))
+const dailyPlanState = computed(() => dailyPlanSnapshot.value.state)
+const allAgentTasksDone = computed(() => dailyPlanState.value === 'COMPLETED')
+const isPlanExecutionFailure = computed(() => dailyPlanState.value === 'FAILED')
+const isAsyncPlanRunning = computed(() => dailyPlanState.value === 'PROCESSING')
 const showAsyncTaskEntry = computed(() => hasAsyncReceipt.value || isAsyncPlanRunning.value)
 const hasPlanDataError = computed(() => sourceFailed(dataSourceLabels.plan) || sourceFailed(dataSourceLabels.tasks))
-const showPlanDataError = computed(() => !loading.value && !taskList.value.length && hasPlanDataError.value)
+const showPlanDataError = computed(() =>
+  !loading.value
+  && (isPlanExecutionFailure.value || (!taskList.value.length && hasPlanDataError.value))
+)
 const planDataErrorTitle = computed(() => {
+  if (isPlanExecutionFailure.value) {
+    if (dailyPlanSnapshot.value.operationState === 'CANCELLED') return '今日计划生成已取消'
+    if (['SUCCEEDED', 'SUCCEEDED_DEGRADED'].includes(dailyPlanSnapshot.value.operationState)) {
+      return '今日计划结果不可用'
+    }
+    return '今日计划生成失败'
+  }
   if (sourceFailed(dataSourceLabels.plan) && sourceFailed(dataSourceLabels.tasks)) return '今日计划和任务加载失败'
   if (sourceFailed(dataSourceLabels.plan)) return '今日计划加载失败'
   return '今日任务加载失败'
 })
 const planDataErrorDescription = computed(() => {
+  if (isPlanExecutionFailure.value) {
+    if (dailyPlanSnapshot.value.operationState === 'CANCELLED') {
+      return '本次计划生成已取消，没有产生新的可执行任务。可以重新生成，或到任务中心核对取消原因。'
+    }
+    if (['SUCCEEDED', 'SUCCEEDED_DEGRADED'].includes(dailyPlanSnapshot.value.operationState)) {
+      return '运行虽然结束，但没有返回可消费的任务结果。系统不会把空结果显示为完成，请重新生成或到任务中心核对执行记录。'
+    }
+    return plan.value?.failureSuggestion
+      || toFriendlyMessage(
+        plan.value?.errorMessage || plan.value?.terminalReasonCode || plan.value?.errorCode,
+        '计划生成失败，请检查目标岗位、简历和能力画像后重试。'
+      )
+  }
   if (sourceFailed(dataSourceLabels.plan) && sourceFailed(dataSourceLabels.tasks)) {
     return '计划摘要和任务列表都暂未返回。你可以重新加载，或到任务中心继续查看生成进度。'
   }
@@ -741,7 +784,11 @@ const planDataErrorDescription = computed(() => {
   }
   return '任务列表暂未返回，当前不能判断今天是否真的没有训练任务。请重新加载，或到任务中心查看最近任务。'
 })
-const isPlanEmpty = computed(() => !loading.value && !hasPlanDataError.value && !taskList.value.length && !isAsyncPlanRunning.value && (plan.value?.empty || !plan.value?.runId))
+const isPlanEmpty = computed(() =>
+  !loading.value
+  && !hasPlanDataError.value
+  && dailyPlanState.value === 'EMPTY'
+)
 const showGenerateDialogFooter = computed(() => generateDialogVisible.value && !generateSubmitting.value && !generateSubmitted.value)
 const taskListEmptyType = computed(() => sourceFailed(dataSourceLabels.tasks) ? 'error' : 'empty')
 const taskListEmptyTitle = computed(() => sourceFailed(dataSourceLabels.tasks) ? '任务列表加载失败' : '当前日期暂无任务')
@@ -753,6 +800,25 @@ const taskListEmptyDescription = computed(() =>
 const agentTodayPagePath = computed(() => buildSafeRedirectTarget(route.path, route.query, '/agent/today'))
 const doneCount = computed(() => taskList.value.filter((task) => task.status === 'DONE').length)
 const todoCount = computed(() => taskList.value.filter((task) => task.status === 'TODO' || task.status === 'DOING').length)
+const emptyPriorityTitle = computed(() =>
+  allAgentTasksDone.value ? '今天的任务已完成' : '今天没有待推进任务'
+)
+const emptyPriorityDescription = computed(() =>
+  allAgentTasksDone.value
+    ? '所有任务都已完成，可以查看今天的完成记录或重新生成计划。'
+    : '现有任务都已跳过、推迟、过期或取消；这些状态不会计为完成，可以查看记录或重新生成计划。'
+)
+const emptyPriorityActionLabel = computed(() =>
+  allAgentTasksDone.value ? '重新生成计划' : '调整今日计划'
+)
+const remainingSectionKicker = computed(() =>
+  dailyPlanState.value === 'ACTIVE' ? '今日剩余任务' : '今日任务记录'
+)
+const remainingSectionTitle = computed(() => {
+  if (allAgentTasksDone.value) return `已完成 ${doneCount.value} 项`
+  if (dailyPlanState.value === 'NO_TODO') return '暂无待推进任务'
+  return remainingTasks.value.length ? `还有 ${remainingTasks.value.length} 项` : '今天没有其他任务'
+})
 const estimatedMinutes = computed(() => taskList.value.reduce((sum, task) => sum + (task.estimatedMinutes || 0), 0))
 const agentLoopOverview = computed(() => buildAgentLoopOverview({
   plan: plan.value,
@@ -907,28 +973,25 @@ const priorityTaskActionLoading = computed(() => {
 const planStatusType = computed(() => (
   allAgentTasksDone.value
     ? 'success'
-    : planStatus.value === 'FAILED'
-      ? 'error'
-      : planStatus.value === 'RUNNING'
-        ? 'warning'
-        : 'info'
+    : dailyPlanSnapshot.value.operationState === 'SUCCEEDED_DEGRADED'
+      ? 'warning'
+      : 'info'
 ))
 const planStatusTitle = computed(() => {
   if (allAgentTasksDone.value) return '今日计划已完成'
-  if (planStatus.value === 'RUNNING') return '计划生成中'
-  if (planStatus.value === 'FAILED') return '计划生成失败'
+  if (dailyPlanState.value === 'NO_TODO') return '今日暂无待推进任务'
+  if (dailyPlanSnapshot.value.operationState === 'SUCCEEDED_DEGRADED') return '今日计划已降级生成'
   return '计划状态'
 })
 const planStatusMessage = computed(() => {
   if (allAgentTasksDone.value) {
     return `业务日 ${queryDate.value} 的 ${taskList.value.length} 项 Agent 任务均已完成，不需要重新生成今日计划。`
   }
-  if (planStatus.value === 'RUNNING') {
-    return '计划正在生成，可以离开页面；系统会避免重复提交同一天同岗位的生成请求，也可以到任务中心查看进度。'
+  if (dailyPlanState.value === 'NO_TODO') {
+    return `业务日 ${queryDate.value} 的任务当前均为已跳过、已推迟、已过期或已取消状态，不会计入已完成。`
   }
-  if (planStatus.value === 'FAILED') {
-    return plan.value?.failureSuggestion ||
-      toFriendlyMessage(plan.value?.errorMessage || plan.value?.errorCode, '计划生成失败，请检查目标岗位、简历和能力画像后重试。')
+  if (dailyPlanSnapshot.value.operationState === 'SUCCEEDED_DEGRADED') {
+    return '本次计划使用了降级结果，任务仍可执行；建议在任务依据中核对证据来源。'
   }
   return ''
 })
@@ -1284,6 +1347,7 @@ const invalidateCurrentTrainingCaches = () => {
 }
 
 const loadPage = async (force?: unknown) => {
+  const loadSequence = ++pageLoadSequence
   loading.value = true
   errorMessage.value = ''
   partialErrors.value = []
@@ -1312,8 +1376,11 @@ const loadPage = async (force?: unknown) => {
         status: AGENT_TODAY_PLAN_CHANGE_STATUSES
       }, { silentError: true })
     ])
+    if (loadSequence !== pageLoadSequence) return
     if (planResult.status === 'fulfilled') {
-      plan.value = planResult.value
+      plan.value = samePage
+        ? preferTerminalAsyncOperationSnapshot(plan.value, planResult.value) || undefined
+        : planResult.value
     } else if (!samePage) {
       plan.value = undefined
     }
@@ -1349,6 +1416,7 @@ const loadPage = async (force?: unknown) => {
       loadedPageKey.value = pageKey
     }
   } catch (error) {
+    if (loadSequence !== pageLoadSequence) return
     if (!samePage) {
       plan.value = undefined
       todayTasks.value = undefined
@@ -1360,7 +1428,9 @@ const loadPage = async (force?: unknown) => {
     planChangeStatusUnavailable.value = true
     errorMessage.value = getErrorMessage(error)
   } finally {
-    loading.value = false
+    if (loadSequence === pageLoadSequence) {
+      loading.value = false
+    }
   }
 }
 

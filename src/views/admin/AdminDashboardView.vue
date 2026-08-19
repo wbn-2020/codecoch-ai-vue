@@ -373,6 +373,8 @@ import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const failedTaskStatusFilter = 'FAILED,DEAD,ERROR,DEAD_LETTER'
+const failedTaskRoute = `/admin/async-tasks?status=${encodeURIComponent(failedTaskStatusFilter)}`
 const loading = ref(true)
 const overviewError = ref(false)
 const overviewErrorMessage = ref('')
@@ -394,7 +396,7 @@ const primaryLinks = [
   { label: '提示词管理', path: '/admin/ai/prompts', icon: MessageSquareCode, permissions: ['admin:ai:prompt:list'] },
   { label: 'AI 运行记录', path: '/admin/ai/logs', icon: ScrollText, permissions: ['admin:ai:log:list'] },
   { label: '文件治理', path: '/admin/files', icon: FileText, permissions: ['admin:file:list'] },
-  { label: '失败任务', path: '/admin/async-tasks?status=FAILED', icon: Timer, permissions: ['admin:task:list'] }
+  { label: '失败任务', path: failedTaskRoute, icon: Timer, permissions: ['admin:task:list'] }
 ]
 
 const quickLinks = [
@@ -404,7 +406,7 @@ const quickLinks = [
   { label: '简历解析失败', path: '/admin/files?parseStatus=FAILED', icon: FileText, desc: '定位解析失败文件和失败原因', permissions: ['admin:file:list'] },
   { label: '提示词管理', path: '/admin/ai/prompts', icon: MessageSquareCode, desc: '治理 AI 提示词版本', permissions: ['admin:ai:prompt:list'] },
   { label: 'AI 运行记录', path: '/admin/ai/logs?status=FAILED', icon: Bot, desc: '排查失败运行', permissions: ['admin:ai:log:list'] },
-  { label: '异步任务中心', path: '/admin/async-tasks?status=FAILED', icon: Timer, desc: '定位失败和死信任务', permissions: ['admin:task:list'] },
+  { label: '异步任务中心', path: failedTaskRoute, icon: Timer, desc: '核对全部失败、错误和死信任务', permissions: ['admin:task:list'] },
   { label: '慢 SQL Top', path: '/admin/slow-sql-logs', icon: Gauge, desc: '排查最近慢查询', permissions: ['admin:audit:slow-sql-log'] },
   { label: '生成效果分析', path: '/admin/analytics/agent', icon: LineChart, desc: '查看智能教练成功率和反馈', permissions: ['admin:analytics:agent'] },
   { label: '通知管理', path: '/admin/notices', icon: Bell, desc: '检查广播和用户通知', permissions: ['admin:notice:list'] },
@@ -539,7 +541,10 @@ const pendingRoutes: Record<string, { path: string; permissions: string[] }> = {
   promptVersions: { path: '/admin/ai/prompts', permissions: ['admin:ai:prompt:list'] },
   failedAiCalls: { path: '/admin/ai/logs?status=FAILED', permissions: ['admin:ai:log:list'] },
   failedResumeParses: { path: '/admin/files?parseStatus=FAILED', permissions: ['admin:file:list'] },
-  failedAsyncTasks: { path: '/admin/async-tasks?status=FAILED', permissions: ['admin:task:list'] },
+  failedAsyncTasks: {
+    path: failedTaskRoute,
+    permissions: ['admin:task:list']
+  },
   failedAgentRuns: { path: '/admin/agent/runs?status=FAILED', permissions: ['admin:agent:run:list'] },
   slowSqlWarnings: { path: '/admin/slow-sql-logs', permissions: ['admin:audit:slow-sql-log'] },
   notificationFailures: { path: '/admin/notices?sendStatus=FAILED', permissions: ['admin:notice:list'] }
@@ -551,7 +556,7 @@ const cardHintMap: Record<string, string> = {
   todayAiCalls: '今日 AI 运行记录',
   failedAiCalls: '需要排查的 AI 运行失败记录',
   failedResumeParses: '待处理的简历解析失败记录',
-  failedAsyncTasks: '需要排查或重试的异步任务',
+  failedAsyncTasks: '全部未删除任务；状态为 FAILED、DEAD、ERROR 或 DEAD_LETTER',
   agentSuccessRate: '近 7 日智能教练成功 / 成功+失败',
   slowSqlWarnings: '近 7 日慢 SQL 捕获数量',
   notificationFailures: '通知写入或投递失败记录'
@@ -586,9 +591,9 @@ const mobileWatchDefinitions = [
   {
     key: 'failedAsyncTasks',
     label: '失败任务',
-    path: '/admin/async-tasks?status=FAILED',
+    path: failedTaskRoute,
     icon: Timer,
-    hint: '定位任务编号、追踪号、关联功能和失败原因',
+    hint: '与首页相同口径：全部失败、错误和死信终态',
     tone: 'tone-red',
     permissions: ['admin:task:list']
   },

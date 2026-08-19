@@ -1404,7 +1404,7 @@ const promptTemplateContractChecks = [
   [
     'prompt-template-editing-content-locked-to-versioning',
     adminPromptTemplatePage,
-    '<el-form-item label="模板内容" prop="content">',
+    '<el-form-item label="模板内容" prop="content" :error="promptFieldErrors.content">',
     1200,
     [
       ':readonly="Boolean(editingId)"',
@@ -2621,13 +2621,9 @@ const adminDangerOperationChecks = [
     [
       'getAdminTaskRetryPreviewApi(row.id)',
       'confirmDangerActionPreview({',
-      "retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note))",
-      'confirm: true',
-      'dryRun: false',
-      'reason:',
-      'createOperationIdempotencyKey(`${operation}-${row.id}`)'
+      "retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note, preview))"
     ],
-    'Admin async task retry requires preview, confirmation, dry-run opt-out, reason, and idempotency key'
+    'Admin async task retry requires preview, confirmation, and the shared confirmed action payload'
   ],
   [
     'admin-async-dead-letter-retry',
@@ -2637,19 +2633,29 @@ const adminDangerOperationChecks = [
     [
       'getAdminDeadLetterRetryPreviewApi(row.id)',
       'confirmDangerActionPreview({',
-      "retryAdminDeadLetterTaskApi(row.id, buildTaskActionPayload('admin-dead-letter-retry', row, note))",
-      'confirm: true',
-      'dryRun: false',
-      'reason:',
-      'createOperationIdempotencyKey(`${operation}-${row.id}`)'
+      "retryAdminDeadLetterTaskApi(\n      row.id,\n      buildTaskActionPayload('admin-dead-letter-retry', row, note, preview)\n    )"
     ],
-    'Admin dead-letter retry requires preview, confirmation, dry-run opt-out, reason, and idempotency key'
+    'Admin dead-letter retry requires preview, confirmation, and the shared confirmed action payload'
   ]
 ]
 
 for (const [name, text, marker, length, needles, evidence] of adminDangerOperationChecks) {
   recordContainsAll('admin-danger-operation', name, sliceFrom(text, marker, length), needles, evidence)
 }
+
+recordContainsAll(
+  'admin-danger-operation',
+  'admin-async-task-confirmed-payload',
+  adminAsyncTaskPage,
+  [
+    'const buildTaskActionPayload =',
+    'confirm: true',
+    'dryRun: false',
+    'reason:',
+    'createOperationIdempotencyKey(`${operation}-${row.id}`)'
+  ],
+  'Async task retry payload centrally requires confirmation, dry-run opt-out, reason, and idempotency key'
+)
 
 const adminPromptSensitiveOperationChecks = [
   [

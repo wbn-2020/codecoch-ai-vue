@@ -17,6 +17,7 @@ const appConfig = vi.hoisted(() => ({
 }))
 const routePath = ref('/interviews/create')
 const routeMeta = ref<Record<string, unknown>>({})
+const routeQuery = ref<Record<string, unknown>>({})
 const push = vi.fn()
 
 vi.mock('@/config', () => ({ appConfig }))
@@ -31,6 +32,9 @@ vi.mock('vue-router', () => ({
     },
     get meta() {
       return routeMeta.value
+    },
+    get query() {
+      return routeQuery.value
     }
   }),
   useRouter: () => ({
@@ -89,6 +93,7 @@ describe('UserTopNav navigation discovery', () => {
     setActivePinia(createPinia())
     routePath.value = '/interviews/create'
     routeMeta.value = {}
+    routeQuery.value = {}
     appConfig.enableV6WeeklyReport = false
     appConfig.enableV9EvidenceLearning = false
     push.mockReset()
@@ -205,6 +210,21 @@ describe('UserTopNav navigation discovery', () => {
     expect(evidenceLink.text()).toContain('证据使用')
     expect(evidenceLink.classes()).toContain('is-active')
     expect(evidenceLink.attributes('aria-current')).toBe('page')
+  })
+
+  it('exposes a direct system announcement entry in the top navigation tools', async () => {
+    routePath.value = '/notifications'
+    routeQuery.value = { tab: 'announcements' }
+    const wrapper = mountNav()
+
+    await wrapper.get('.more-button').trigger('click')
+
+    const announcementLink = wrapper.get('[data-nav-path="/notifications?tab=announcements"]')
+    expect(announcementLink.text()).toContain('系统公告')
+    expect(announcementLink.classes()).toContain('is-active')
+
+    await announcementLink.trigger('click')
+    expect(push).toHaveBeenCalledWith('/notifications?tab=announcements')
   })
 
   it('uses the route title for mobile pages that are outside the feature navigation', () => {

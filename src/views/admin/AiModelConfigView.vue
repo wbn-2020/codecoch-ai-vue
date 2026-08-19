@@ -25,6 +25,9 @@
       <p v-else-if="runtimeStatus?.operatorMessages?.length" class="admin-runtime-strip__messages">
         {{ runtimeStatus.operatorMessages.join('；') }}
       </p>
+      <p class="admin-runtime-strip__policy">
+        真实业务路由必须且只能有一个已启用的全局默认模型。不支持直接取消默认；将其它模型设为默认时会原子替换当前默认模型。
+      </p>
     </section>
 
     <section class="admin-panel">
@@ -153,12 +156,13 @@
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑模型' : '新增模型'" width="680px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
-        <el-form-item label="供应商标识" prop="provider"><el-input v-model.trim="form.provider" placeholder="OPENAI_COMPATIBLE" /></el-form-item>
-        <el-form-item label="模型标识" prop="modelName"><el-input v-model.trim="form.modelName" placeholder="服务商要求的模型 ID" /></el-form-item>
+        <el-alert v-if="modelFormErrorMessage" class="admin-form-error" type="error" :closable="false" show-icon :title="modelFormErrorMessage" />
+        <el-form-item label="供应商标识" prop="provider" :error="modelFieldErrors.provider"><el-input v-model.trim="form.provider" placeholder="OPENAI_COMPATIBLE" @input="clearModelFieldError('provider')" /></el-form-item>
+        <el-form-item label="模型标识" prop="modelName" :error="modelFieldErrors.modelName"><el-input v-model.trim="form.modelName" placeholder="服务商要求的模型 ID" @input="clearModelFieldError('modelName')" /></el-form-item>
         <el-form-item label="显示名"><el-input v-model.trim="form.displayName" /></el-form-item>
-        <el-form-item label="接口地址" prop="apiBaseUrl"><el-input v-model.trim="form.apiBaseUrl" placeholder="https://provider.example.com/v1/chat/completions" /></el-form-item>
-        <el-form-item label="API Key" prop="apiKey"><el-input v-model.trim="form.apiKey" show-password :placeholder="editingId ? '留空则不修改' : '新增模型时必填'" /></el-form-item>
-        <el-form-item label="配置状态"><el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" /></el-form-item>
+        <el-form-item label="接口地址" prop="apiBaseUrl" :error="modelFieldErrors.apiBaseUrl"><el-input v-model.trim="form.apiBaseUrl" placeholder="https://provider.example.com/v1/chat/completions" @input="clearModelFieldError('apiBaseUrl')" /></el-form-item>
+        <el-form-item label="API Key" prop="apiKey" :error="modelFieldErrors.apiKey"><el-input v-model.trim="form.apiKey" show-password :placeholder="editingId ? '留空则不修改' : form.enabled === 1 ? '启用模型时必填' : '停用草稿可稍后配置'" @input="clearModelFieldError('apiKey')" /></el-form-item>
+        <el-form-item label="配置状态" :error="modelFieldErrors.enabled"><el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" @change="clearModelFieldError('enabled')" /></el-form-item>
         <el-form-item label="Temperature"><el-input-number v-model="form.temperature" :min="0" :max="2" :step="0.1" /></el-form-item>
         <el-form-item label="最大输出长度"><el-input-number v-model="form.maxTokens" :min="1" :step="512" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
@@ -268,6 +272,8 @@ const modelError = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const formRef = ref<FormInstance>()
+const modelFormErrorMessage = ref('')
+const modelFieldErrors = reactive<Record<string, string>>({})
 const models = ref<AiModelConfigVO[]>([])
 const total = ref(0)
 const probingId = ref<number>()
@@ -313,7 +319,7 @@ type AiModelRiskCommand = 'toggle-status' | 'set-default' | 'delete'
 const validateApiBaseUrl = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
   const rawValue = String(value || '').trim()
   if (!rawValue) {
-    callback(editingId.value ? undefined : new Error('请输入接口地址'))
+    callback(new Error('请输入接口地址'))
     return
   }
   try {
@@ -324,7 +330,8 @@ const validateApiBaseUrl = (_rule: unknown, value: unknown, callback: (error?: E
   }
 }
 const validateApiKey = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
-  callback(!editingId.value && !String(value || '').trim() ? new Error('新增模型时必须填写 API Key') : undefined)
+  const enabledDraftNeedsKey = !editingId.value && form.enabled === 1
+  callback(enabledDraftNeedsKey && !String(value || '').trim() ? new Error('启用模型时必须填写 API Key') : undefined)
 }
 const rules: FormRules<AiModelConfigDTO> = {
   provider: [{ required: true, message: '请输入供应商', trigger: 'blur' }],
@@ -432,13 +439,77 @@ const fetchRuntimeStatus = async () => {
 const refreshModelWorkspace = async () => {
   await Promise.all([fetchModels(), fetchRuntimeStatus()])
 }
+const clearModelFormErrors = () => {
+  modelFormErrorMessage.value = ''
+  Object.keys(modelFieldErrors).forEach((key) => delete modelFieldErrors[key])
+}
+const clearModelFieldError = (field: string) => {
+  delete modelFieldErrors[field]
+  if (Object.keys(modelFieldErrors).length === 0) modelFormErrorMessage.value = ''
+}
+const modelMutationDiagnostics = (error: unknown, fallback: string) => {
+  const value = (error && typeof error === 'object' ? error : {}) as {
+    message?: unknown
+    msg?: unknown
+    nextStep?: unknown
+    traceId?: unknown
+    requestId?: unknown
+    fieldErrors?: unknown
+    response?: {
+      data?: {
+        message?: unknown
+        msg?: unknown
+        nextStep?: unknown
+        traceId?: unknown
+        requestId?: unknown
+        fieldErrors?: unknown
+      }
+      headers?: { get?: (name: string) => string | null }
+    }
+  }
+  const payload = value.response?.data || value
+  const rawFields = payload.fieldErrors
+  const normalizedFields: Record<string, string> = {}
+  if (rawFields && typeof rawFields === 'object') {
+    Object.entries(rawFields as Record<string, unknown>).forEach(([field, message]) => {
+      if (typeof message !== 'string' || !message.trim()) return
+      const normalizedField = field === 'modelCode' ? 'modelName' : field
+      normalizedFields[normalizedField] = message.trim()
+    })
+  }
+  const rawMessage = [payload.message, payload.msg, value.message, value.msg]
+    .find((item) => typeof item === 'string' && item.trim())
+  const reason = rawMessage ? String(rawMessage).trim() : getErrorMessage(error, fallback)
+  const nextStep = typeof payload.nextStep === 'string' && payload.nextStep.trim()
+    ? payload.nextStep.trim()
+    : ''
+  const traceId = [
+    payload.traceId,
+    payload.requestId,
+    value.traceId,
+    value.requestId,
+    value.response?.headers?.get?.('X-Trace-Id'),
+    value.response?.headers?.get?.('X-Request-Id')
+  ].find((item) => typeof item === 'string' && item.trim())
+  return {
+    fieldErrors: normalizedFields,
+    message: [
+      reason,
+      nextStep ? `下一步：${nextStep}` : '',
+      traceId ? `追踪号：${String(traceId).trim()}` : ''
+    ].filter(Boolean).join('；')
+  }
+}
 const openDialog = (row?: AiModelConfigVO) => {
   editingId.value = row?.id
   Object.assign(form, { provider: row?.provider || '', modelName: row?.modelName || '', displayName: row?.displayName || '', apiBaseUrl: row?.apiBaseUrl || '', apiKey: '', enabled: row?.enabled ?? 0, temperature: row?.temperature ?? 0.7, maxTokens: row?.maxTokens ?? 4096, description: row?.description || '' })
+  clearModelFormErrors()
+  formRef.value?.clearValidate()
   dialogVisible.value = true
 }
 const handleSave = async () => {
   if (!guardAdminMobileWrite()) return
+  clearModelFormErrors()
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   const actionLabel = editingId.value ? '更新模型配置' : '新增模型配置'
@@ -480,7 +551,13 @@ const handleSave = async () => {
     dialogVisible.value = false
     await refreshModelWorkspace()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '模型配置保存失败，请检查接口地址、密钥和当前账号权限后重试。'))
+    const diagnostic = modelMutationDiagnostics(
+      error,
+      '模型配置保存失败，请检查接口地址、密钥和当前账号权限后重试。'
+    )
+    Object.assign(modelFieldErrors, diagnostic.fieldErrors)
+    modelFormErrorMessage.value = diagnostic.message
+    ElMessage.error(diagnostic.message)
   } finally { saving.value = false }
 }
 const handleStatus = async (row: AiModelConfigVO, status: number) => {
@@ -666,10 +743,13 @@ onBeforeUnmount(stopProbeProgress)
 .admin-runtime-strip__summary > div { display: inline-flex; align-items: baseline; gap: 8px; }
 .admin-runtime-strip__summary span,
 .admin-runtime-strip__messages,
-.admin-runtime-strip__error { color: var(--el-text-color-secondary); font-size: 13px; }
+.admin-runtime-strip__error,
+.admin-runtime-strip__policy { color: var(--el-text-color-secondary); font-size: 13px; }
 .admin-runtime-strip__summary strong { color: var(--el-text-color-primary); font-size: 14px; }
 .admin-runtime-strip__error { margin: 0; color: var(--el-color-danger); }
 .admin-runtime-strip__messages { margin: 0; line-height: 1.6; }
+.admin-runtime-strip__policy { margin: 0; line-height: 1.6; }
+.admin-form-error { margin-bottom: 16px; }
 .model-default-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .model-default-cell span { color: var(--el-text-color-secondary); font-size: 12px; }
 

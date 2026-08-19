@@ -12,7 +12,7 @@
             <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
               <span class="arena-chip arena-chip--grn-solid">推荐 · {{ todayTrustTag.label }}</span>
               <span class="arena-xp-tag">今日建议</span>
-              <span class="arena-tiny">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</span>
+              <span class="arena-tiny">{{ hasPracticeQuestions ? `${actionableItems.length} 道可练` : '通用训练' }}</span>
             </div>
             <h2 class="arena-h2" style="margin-top: 13px">{{ todayPlanName }}</h2>
             <p class="arena-p" style="margin-top: 8px">{{ todayReasonText }}</p>
@@ -47,16 +47,16 @@
                 <button
                   type="button"
                   class="arena-train__question-row"
-                  :disabled="!itemPracticeQuestionId(item)"
-                  :title="itemPracticeQuestionId(item) ? '进入题目训练' : '暂不可直接练，已准备通用训练'"
-                  :aria-label="itemPracticeQuestionId(item) ? `${item.questionTitle || `今日训练题 ${index + 1}`}，进入题目训练` : `${item.questionTitle || `今日训练题 ${index + 1}`}，暂不可直接练，已准备通用训练`"
+                  :disabled="!itemCanPractice(item)"
+                  :title="itemCanPractice(item) ? '进入题目训练' : '暂不可直接练，已准备通用训练'"
+                  :aria-label="itemCanPractice(item) ? `${item.questionTitle || `今日训练题 ${index + 1}`}，进入题目训练` : `${item.questionTitle || `今日训练题 ${index + 1}`}，暂不可直接练，已准备通用训练`"
                   @click="openQuestion(item)"
                 >
                   <span class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">{{ index + 1 }}</span>
                   <span class="arena-train__question-copy">
                     <b>{{ item.questionTitle || `今日训练题 ${index + 1}` }}</b>
                     <small>{{ item.skillName || item.skillCode || '综合能力' }} · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
-                    <small v-if="!itemPracticeQuestionId(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
+                    <small v-if="!itemCanPractice(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
                   </span>
                   <span class="arena-xp-tag">答后复盘</span>
                 </button>
@@ -116,15 +116,15 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getQuestionRecommendationBatchDetailApi,
   getQuestionRecommendationBatchItemsApi,
+  getQuestionRecommendationBatchesApi,
   getQuestionRecommendationItemsFromGapBatchApi,
-  getQuestionRecommendationItemsFromMatchReportBatchApi,
   getQuestionRecommendationItemsFromStudyPlanBatchApi,
   submitQuestionRecommendationsFromGapApi,
   submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi
 } from '@/api/questionRecommendation'
 import { getResumeJobMatchReportDetailApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
-import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { generateSkillProfileApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
@@ -167,6 +167,7 @@ const loadError = ref('')
 const items = ref<QuestionRecommendationItemVO[]>([])
 const generationDiagnostic = ref<GenerationDiagnostic | null>(null)
 const matchReportContextWarning = ref('')
+const autoMatchRecommendationSubmitted = ref(false)
 
 const sourceByRouteValue: Record<string, Source> = {
   gap: 'gap',
@@ -262,7 +263,9 @@ const itemPracticeQuestionId = (item: QuestionRecommendationItemVO) => {
   if (item.canPractice === false) return undefined
   return item.practiceQuestionId || item.questionId
 }
-const actionableItems = computed(() => items.value.filter((item) => Boolean(itemPracticeQuestionId(item))))
+const itemCanPractice = (item: QuestionRecommendationItemVO) =>
+  item.canPractice !== false && (item.practiceKind === 'PRIVATE_RECOMMENDATION' || Boolean(itemPracticeQuestionId(item)))
+const actionableItems = computed(() => items.value.filter(itemCanPractice))
 const toLocalDateKey = (date: Date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -297,7 +300,12 @@ const practiceQuestionIds = computed(() =>
     .map(itemPracticeQuestionId)
     .filter((id): id is number => typeof id === 'number' && id > 0)
 )
-const hasPracticeQuestions = computed(() => practiceQuestionIds.value.length > 0)
+const privateRecommendationItemIds = computed(() =>
+  actionableItems.value
+    .filter((item) => item.practiceKind === 'PRIVATE_RECOMMENDATION')
+    .map((item) => item.id)
+)
+const hasPracticeQuestions = computed(() => actionableItems.value.length > 0)
 const primaryPracticeLabel = computed(() => hasPracticeQuestions.value ? '开始推荐题组' : '先做一组通用训练')
 const highRiskCount = computed(() =>
   items.value.filter((item) => ['CRITICAL', 'HIGH'].includes(String(item.gapSeverity || ''))).length
@@ -722,7 +730,21 @@ const loadRecommendations = async () => {
     if (query.source === 'gap') {
       items.value = await getQuestionRecommendationItemsFromGapBatchApi({ skillProfileId: query.sourceId })
     } else if (query.source === 'matchReport') {
-      items.value = await getQuestionRecommendationItemsFromMatchReportBatchApi(query.sourceId)
+      const page = await getQuestionRecommendationBatchesApi({
+        pageNo: 1,
+        pageSize: 1,
+        matchReportId: query.sourceId,
+        sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH
+      })
+      const latestBatch = page.records?.[0]
+      setGenerationDiagnosticFromBatch(latestBatch)
+      items.value = latestBatch?.status === 'SUCCESS'
+        ? await getQuestionRecommendationBatchItemsApi(latestBatch.batchId)
+        : []
+      if (!latestBatch && !autoMatchRecommendationSubmitted.value) {
+        autoMatchRecommendationSubmitted.value = true
+        await generateRecommendations()
+      }
     } else {
       items.value = await getQuestionRecommendationItemsFromStudyPlanBatchApi(query.sourceId)
     }
@@ -756,6 +778,10 @@ const generateRecommendations = async () => {
     if (query.source === 'gap') {
       result = await submitQuestionRecommendationsFromGapApi({ skillProfileId: query.sourceId, questionCount: query.questionCount })
     } else if (query.source === 'matchReport') {
+      const profile = await generateSkillProfileApi({ matchReportId: query.sourceId })
+      if (String(profile.status || '').toUpperCase() !== 'SUCCESS') {
+        throw new Error(profile.errorMessage || '能力画像尚未生成成功，无法创建岗位专项题组。')
+      }
       result = await submitQuestionRecommendationsFromMatchReportApi({ matchReportId: query.sourceId, questionCount: query.questionCount })
     } else {
       result = await submitQuestionRecommendationsFromStudyPlanApi({ studyPlanId: query.sourceId, questionCount: query.questionCount })
@@ -811,24 +837,34 @@ const buildQuestionQuery = (item: QuestionRecommendationItemVO) => {
     gapSeverity: item.gapSeverity,
     trustStatus: item.trustStatus || generationDiagnostic.value?.trustStatus,
     fallback: item.fallback || generationDiagnostic.value?.fallback,
-    questionIds: itemPracticeQuestionId(item)
+    questionIds: itemPracticeQuestionId(item),
+    recommendationItemIds: item.practiceKind === 'PRIVATE_RECOMMENDATION' ? item.id : undefined
   })
 }
 
-const buildPracticeQuery = (questionIds: number[], item?: QuestionRecommendationItemVO) => compactRouterQuery({
+const buildPracticeQuery = (
+  questionIds: number[],
+  recommendationItemIds: number[],
+  item?: QuestionRecommendationItemVO
+) => compactRouterQuery({
   mode: 'recommended',
   questionIds: questionIds.join(','),
+  recommendationItemIds: recommendationItemIds.join(','),
   sourceType: item?.sourceType || sourceTypeBySource[query.source],
   sourceId: item?.sourceId || query.sourceId,
   trustStatus: item?.trustStatus || generationDiagnostic.value?.trustStatus,
   fallback: item?.fallback || generationDiagnostic.value?.fallback,
   skillName: trimForQuery(item?.skillName || item?.skillCode || topSkillNames.value[0], 60),
-  autoStart: questionIds.length ? true : undefined,
-  count: Math.min(questionIds.length || query.questionCount, query.questionCount)
+  autoStart: questionIds.length || recommendationItemIds.length ? true : undefined,
+  count: Math.min(questionIds.length + recommendationItemIds.length || query.questionCount, query.questionCount)
 })
 
 const openQuestion = (item: QuestionRecommendationItemVO) => {
   const questionId = itemPracticeQuestionId(item)
+  if (item.practiceKind === 'PRIVATE_RECOMMENDATION') {
+    startSinglePractice(item)
+    return
+  }
   if (!questionId) {
     ElMessage.warning('这条推荐暂时不能直接练，已为你准备通用练习。')
     return
@@ -840,13 +876,16 @@ const openQuestion = (item: QuestionRecommendationItemVO) => {
 }
 
 const startRecommendedPractice = () => {
-  if (!practiceQuestionIds.value.length) {
+  if (!actionableItems.value.length) {
     ElMessage.warning('当前没有可练习的推荐题')
     return
   }
   router.push({
     path: '/questions/practice',
-    query: buildPracticeQuery(practiceQuestionIds.value.slice(0, query.questionCount))
+    query: buildPracticeQuery(
+      practiceQuestionIds.value.slice(0, query.questionCount),
+      privateRecommendationItemIds.value.slice(0, query.questionCount)
+    )
   })
 }
 
@@ -878,10 +917,14 @@ const startFallbackPractice = () => {
 
 const startSinglePractice = (item: QuestionRecommendationItemVO) => {
   const questionId = itemPracticeQuestionId(item)
-  if (!questionId) return
+  if (!itemCanPractice(item)) return
   router.push({
     path: '/questions/practice',
-    query: buildPracticeQuery([questionId], item)
+    query: buildPracticeQuery(
+      questionId ? [questionId] : [],
+      item.practiceKind === 'PRIVATE_RECOMMENDATION' ? [item.id] : [],
+      item
+    )
   })
 }
 
@@ -889,11 +932,11 @@ const handleSourceChange = async () => {
   query.sourceId = undefined
   matchReportContextWarning.value = ''
   items.value = []
+  autoMatchRecommendationSubmitted.value = false
   await loadRecommendations()
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   void loadRecommendations()
 })
 </script>

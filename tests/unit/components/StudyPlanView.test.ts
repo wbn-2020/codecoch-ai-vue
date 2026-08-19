@@ -121,6 +121,7 @@ describe('StudyPlanView task duration', () => {
       planTitle: 'Interview repair plan',
       durationDays: 14,
       dailyMinutes: 60,
+      startDate: '2026-08-12',
       tasks: [task]
     })
     vi.mocked(getStudyPlanDailyViewApi).mockResolvedValue({
@@ -151,6 +152,8 @@ describe('StudyPlanView task duration', () => {
     expect(wrapper.text()).toContain('14天')
     expect(wrapper.text()).toContain('每日投入')
     expect(wrapper.text()).toContain('60分钟')
+    expect(wrapper.text()).toContain('开始日期')
+    expect(wrapper.text()).toContain('2026-08-12')
   })
 
   it('shows pending confirmation when persisted plan configuration is absent', async () => {
@@ -193,12 +196,14 @@ describe('StudyPlanView task duration', () => {
     expect(generateStudyPlanApi).toHaveBeenCalledWith(expect.objectContaining({
       reportId: 101,
       expectedDurationDays: 14,
-      dailyMinutes: 60
+      dailyMinutes: 60,
+      startDate: '2026-08-12'
     }))
     expect(streamStudyPlanGenerateApi).toHaveBeenCalledWith(expect.objectContaining({
       reportId: 101,
       expectedDurationDays: 14,
-      dailyMinutes: 60
+      dailyMinutes: 60,
+      startDate: '2026-08-12'
     }), expect.any(Object), expect.any(AbortSignal))
   })
 })

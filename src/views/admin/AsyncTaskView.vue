@@ -4,7 +4,7 @@
       <div class="admin-hero__content">
         <div class="admin-eyebrow"><Timer :size="16" /><span>任务中心</span></div>
         <h1 class="admin-hero__title">异步任务中心</h1>
-        <p class="admin-hero__desc">查看生成与处理任务、失败原因和死信状态，并对失败任务发起重试。</p>
+        <p class="admin-hero__desc">查看处理状态、失败诊断和治理结论；治理分类与实际重试分离，避免误触发补偿。</p>
       </div>
     </section>
 
@@ -113,11 +113,22 @@
           <el-form-item label="关键词"><el-input v-model.trim="query.keyword" clearable placeholder="任务名 / 关联记录" /></el-form-item>
           <el-form-item label="状态">
             <el-select v-model="query.status" clearable placeholder="全部" style="width: 140px">
+              <el-option label="全部失败终态" :value="failedTaskStatusFilter" />
               <el-option label="等待" value="PENDING" />
               <el-option label="执行中" value="RUNNING" />
               <el-option label="成功" value="SUCCESS" />
               <el-option label="失败" value="FAILED" />
               <el-option label="死信" value="DEAD_LETTER" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="治理状态">
+            <el-select v-model="query.governanceStatus" clearable placeholder="全部" style="width: 160px">
+              <el-option label="待评估" value="UNASSESSED" />
+              <el-option label="已批准重试" value="RETRY_APPROVED" />
+              <el-option label="重试中" value="RETRYING" />
+              <el-option label="已解决" value="RESOLVED" />
+              <el-option label="不再重试" value="WONT_RETRY" />
+              <el-option label="需人工处理" value="MANUAL_ACTION_REQUIRED" />
             </el-select>
           </el-form-item>
           <el-form-item label="类型"><el-input v-model.trim="query.type" clearable placeholder="如 resume.parse" /></el-form-item>
@@ -129,6 +140,20 @@
       </div>
 
       <div class="table-card admin-table-card">
+        <section v-if="tasks.length" class="task-mobile-summary" aria-label="任务移动摘要">
+          <article v-for="row in tasks.slice(0, 3)" :key="`mobile-${row.id}`">
+            <div>
+              <strong>{{ taskTypeLabel(row.taskType) }}</strong>
+              <span>{{ row.bizId || primaryTaskId(row) }}</span>
+            </div>
+            <div class="task-mobile-summary__meta">
+              <el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+              <el-tag :type="governanceTagType(row.governanceStatus)">{{ governanceLabel(row.governanceStatus) }}</el-tag>
+              <small>重试 {{ row.retryCount ?? 0 }}/{{ row.maxRetryCount ?? '-' }}</small>
+              <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            </div>
+          </article>
+        </section>
         <el-table v-loading="loading" :data="tasks" row-key="id" :size="tableSize">
           <el-table-column v-if="isColumnVisible('taskName')" prop="taskName" label="任务" min-width="180" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('taskType')" label="类型" min-width="170" show-overflow-tooltip>
@@ -136,6 +161,14 @@
           </el-table-column>
           <el-table-column v-if="isColumnVisible('bizId')" prop="bizId" label="关联记录" min-width="130" show-overflow-tooltip />
           <el-table-column v-if="isColumnVisible('status')" label="状态" width="120"><template #default="{ row }"><el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
+          <el-table-column v-if="isColumnVisible('governance')" label="治理" min-width="150">
+            <template #default="{ row }">
+              <div class="governance-cell">
+                <el-tag :type="governanceTagType(row.governanceStatus)">{{ governanceLabel(row.governanceStatus) }}</el-tag>
+                <small v-if="row.failureClass">{{ failureClassLabel(row.failureClass) }}</small>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column v-if="isColumnVisible('retry')" label="重试" width="90"><template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetryCount ?? '-' }}</template></el-table-column>
           <el-table-column v-if="isColumnVisible('deadLetter')" label="死信" width="90"><template #default="{ row }"><el-tag v-if="isDead(row)" type="danger">是</el-tag><span v-else>否</span></template></el-table-column>
           <el-table-column v-if="isColumnVisible('createdAt')" prop="createdAt" label="创建时间" min-width="170" />
@@ -152,9 +185,43 @@
               <span v-else class="task-error-preview--empty">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="170">
+          <el-table-column label="操作" min-width="320" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+              <template v-if="canGovern(row)">
+                <el-button
+                  v-permission="'admin:task:retry'"
+                  link
+                  type="primary"
+                  :disabled="withMobileReadonlyDisabled(governingId === row.id)"
+                  :loading="governingId === row.id"
+                  :title="mobileReadonlyTitle()"
+                  @click="handleGovernance(row, 'RETRY_APPROVED')"
+                >
+                  批准重试
+                </el-button>
+                <el-button
+                  v-permission="'admin:task:retry'"
+                  link
+                  :disabled="withMobileReadonlyDisabled(governingId === row.id)"
+                  :loading="governingId === row.id"
+                  :title="mobileReadonlyTitle()"
+                  @click="handleGovernance(row, 'WONT_RETRY')"
+                >
+                  不再重试
+                </el-button>
+                <el-button
+                  v-permission="'admin:task:retry'"
+                  link
+                  type="danger"
+                  :disabled="withMobileReadonlyDisabled(governingId === row.id)"
+                  :loading="governingId === row.id"
+                  :title="mobileReadonlyTitle()"
+                  @click="handleGovernance(row, 'MANUAL_ACTION_REQUIRED')"
+                >
+                  人工处理
+                </el-button>
+              </template>
               <el-button
                 v-if="isDead(row)"
                 v-permission="'admin:task:retry'"
@@ -199,7 +266,7 @@
       </div>
     </section>
 
-    <el-drawer v-model="drawerVisible" title="任务详情" size="680px">
+    <el-drawer v-model="drawerVisible" title="任务详情" size="680px" class="task-detail-drawer">
       <el-descriptions v-if="detail" :column="1" border>
         <el-descriptions-item label="处理编号">{{ primaryTaskId(detail) }}</el-descriptions-item>
         <el-descriptions-item v-if="secondaryTaskId(detail)" label="消息编号">{{ secondaryTaskId(detail) }}</el-descriptions-item>
@@ -210,6 +277,16 @@
           <code>{{ taskTypeCode(detail.taskType) || '-' }}</code>
         </el-descriptions-item>
         <el-descriptions-item label="状态"><el-tag :type="statusType(detail.status)">{{ statusLabel(detail.status) }}</el-tag></el-descriptions-item>
+        <el-descriptions-item label="治理状态">
+          <el-tag :type="governanceTagType(detail.governanceStatus)">{{ governanceLabel(detail.governanceStatus) }}</el-tag>
+          <span v-if="detail.governanceOwner"> / {{ detail.governanceOwner }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="治理说明">{{ detail.governanceReason || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="失败分类">{{ failureClassLabel(detail.failureClass) }}</el-descriptions-item>
+        <el-descriptions-item label="执行编号">{{ detail.executionId || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="父执行编号">{{ detail.parentExecutionId || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="执行尝试">{{ detail.attemptNo ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item label="终态原因代码">{{ detail.terminalReasonCode || '-' }}</el-descriptions-item>
         <el-descriptions-item label="关联记录">{{ detail.bizType || '-' }} / {{ detail.bizId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="追踪号">{{ detail.traceId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="关联记录">
@@ -249,23 +326,33 @@ import {
   getAdminDeadLetterRetryPreviewApi,
   getAdminTaskByMessageIdApi,
   getAdminTaskDetailApi,
+  getAdminTaskGovernancePreviewApi,
   getAdminTaskRetryPreviewApi,
   getAdminTasksByBizApi,
   getAdminTasksByTraceApi,
   getAdminTasksApi,
   retryAdminDeadLetterTaskApi,
-  retryAdminTaskApi
+  retryAdminTaskApi,
+  updateAdminTaskGovernanceApi
 } from '@/api/adminGovernance'
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
-import type { AdminListQuery, AdminTaskActionPayload, AdminTaskImpactPreviewVO, AsyncTaskVO } from '@/types/adminGovernance'
+import type {
+  AdminListQuery,
+  AdminTaskActionPayload,
+  AdminTaskGovernanceActionPayload,
+  AdminTaskGovernancePreviewVO,
+  AdminTaskImpactPreviewVO,
+  AsyncTaskVO
+} from '@/types/adminGovernance'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const router = useRouter()
+const failedTaskStatusFilter = 'FAILED,DEAD,ERROR,DEAD_LETTER'
 const loading = ref(false)
 const drawerVisible = ref(false)
 const tasks = ref<AsyncTaskVO[]>([])
@@ -273,8 +360,9 @@ const detail = ref<AsyncTaskVO | null>(null)
 const total = ref(0)
 const taskError = ref('')
 const retryingId = ref<number | null>(null)
+const governingId = ref<number | null>(null)
 const { guardAdminMobileWrite, mobileReadonlyTitle, withMobileReadonlyDisabled } = useAdminMobileReadonly()
-const query = reactive<AdminListQuery>({ keyword: '', status: '', type: '', pageNo: 1, pageSize: 10 })
+const query = reactive<AdminListQuery>({ keyword: '', status: '', type: '', governanceStatus: '', pageNo: 1, pageSize: 10 })
 const diagnosticLoading = ref(false)
 const diagnosticSearched = ref(false)
 const diagnosticTasks = ref<AsyncTaskVO[]>([])
@@ -291,6 +379,7 @@ type AsyncTaskColumnKey =
   | 'taskType'
   | 'bizId'
   | 'status'
+  | 'governance'
   | 'retry'
   | 'deadLetter'
   | 'createdAt'
@@ -308,6 +397,7 @@ const {
   { key: 'taskType', label: '类型', required: true },
   { key: 'bizId', label: '关联记录' },
   { key: 'status', label: '状态', required: true },
+  { key: 'governance', label: '治理状态' },
   { key: 'retry', label: '重试次数' },
   { key: 'deadLetter', label: '死信' },
   { key: 'createdAt', label: '创建时间' },
@@ -322,14 +412,16 @@ const firstQueryString = (value: unknown) => {
 const hasRouteQueryValue = (...keys: string[]) => keys.some((key) => firstQueryString(route.query[key]))
 
 const applyRouteQuery = () => {
-  if (!hasRouteQueryValue('status', 'type', 'keyword')) return false
+  if (!hasRouteQueryValue('status', 'type', 'keyword', 'governanceStatus')) return false
   const status = firstQueryString(route.query.status)
   const type = firstQueryString(route.query.type)
   const keyword = firstQueryString(route.query.keyword)
+  const governanceStatus = firstQueryString(route.query.governanceStatus)
   Object.assign(query, {
     keyword,
     status: status ? status.toUpperCase() : '',
     type,
+    governanceStatus: governanceStatus ? governanceStatus.toUpperCase() : '',
     pageNo: 1
   })
   return true
@@ -381,6 +473,43 @@ const statusLabel = (status?: string | null) => {
   const value = String(status || '').trim().toUpperCase()
   if (!value) return '-'
   return statusLabels[value] || '未登记状态'
+}
+
+const governanceLabels: Record<string, string> = {
+  UNASSESSED: '待评估',
+  RETRY_APPROVED: '已批准重试',
+  RETRYING: '重试中',
+  RESOLVED: '已解决',
+  WONT_RETRY: '不再重试',
+  MANUAL_ACTION_REQUIRED: '需人工处理'
+}
+
+const governanceLabel = (status?: string | null) => {
+  const value = String(status || 'UNASSESSED').trim().toUpperCase()
+  return governanceLabels[value] || '未登记治理状态'
+}
+
+const governanceTagType = (status?: string | null) => {
+  const value = String(status || 'UNASSESSED').trim().toUpperCase()
+  if (value === 'RESOLVED') return 'success'
+  if (value === 'RETRY_APPROVED' || value === 'RETRYING') return 'warning'
+  if (value === 'MANUAL_ACTION_REQUIRED') return 'danger'
+  return 'info'
+}
+
+const failureClassLabels: Record<string, string> = {
+  NONE: '无失败',
+  AUTH_OR_CONFIGURATION: '认证或配置',
+  PAYLOAD_CONTRACT: '数据契约',
+  UPSTREAM_UNAVAILABLE: '上游不可用',
+  RETRY_EXHAUSTED: '重试耗尽',
+  UNCLASSIFIED_FAILURE: '未分类失败',
+  PENDING_ASSESSMENT: '待评估'
+}
+
+const failureClassLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim().toUpperCase()
+  return failureClassLabels[normalized] || (normalized ? '未登记分类' : '-')
 }
 
 const taskTypeLabels: Record<string, string> = {
@@ -548,6 +677,7 @@ const hasPreviewDigest = (value: string | null | undefined) => Boolean(String(va
 
 const isDead = (row: AsyncTaskVO) => row.deadLetter === true || row.deadLetter === 1 || ['DEAD', 'DEAD_LETTER'].includes(String(row.status).toUpperCase())
 const canRetry = (row: AsyncTaskVO) => ['FAILED', 'ERROR', 'DEAD', 'DEAD_LETTER'].includes(String(row.status).toUpperCase())
+const canGovern = (row: AsyncTaskVO) => canRetry(row)
 
 const diagnosticEmptyTitle = computed(() => {
   if (diagnosticQuery.messageId) return '未找到这个处理编号'
@@ -655,6 +785,7 @@ const resetDiagnosticSearch = () => {
 
 const handleRetry = async (row: AsyncTaskVO) => {
   if (!guardAdminMobileWrite()) return
+  if (retryingId.value !== null) return
   retryingId.value = row.id
   let attempted = false
   try {
@@ -662,7 +793,7 @@ const handleRetry = async (row: AsyncTaskVO) => {
     const note = await promptActionNote('重试失败任务', row, preview)
     if (note === null) return
     attempted = true
-    await retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note))
+    await retryAdminTaskApi(row.id, buildTaskActionPayload('admin-task-retry', row, note, preview))
     ElMessage.success('已提交重试')
   } catch (error) {
     if (isTaskActionCancelled(error)) return
@@ -677,6 +808,7 @@ const handleRetry = async (row: AsyncTaskVO) => {
 
 const handleDeadRetry = async (row: AsyncTaskVO) => {
   if (!guardAdminMobileWrite()) return
+  if (retryingId.value !== null) return
   retryingId.value = row.id
   let attempted = false
   try {
@@ -684,7 +816,10 @@ const handleDeadRetry = async (row: AsyncTaskVO) => {
     const note = await promptActionNote('死信任务重试', row, preview)
     if (note === null) return
     attempted = true
-    await retryAdminDeadLetterTaskApi(row.id, buildTaskActionPayload('admin-dead-letter-retry', row, note))
+    await retryAdminDeadLetterTaskApi(
+      row.id,
+      buildTaskActionPayload('admin-dead-letter-retry', row, note, preview)
+    )
     ElMessage.success('已提交死信重试')
   } catch (error) {
     if (isTaskActionCancelled(error)) return
@@ -693,6 +828,36 @@ const handleDeadRetry = async (row: AsyncTaskVO) => {
     else ElMessage.error(message)
   } finally {
     retryingId.value = null
+    if (attempted) await fetchTasks()
+  }
+}
+
+const governanceActionLabels: Record<string, string> = {
+  RETRY_APPROVED: '批准任务重试',
+  WONT_RETRY: '标记不再重试',
+  MANUAL_ACTION_REQUIRED: '标记需人工处理'
+}
+
+const handleGovernance = async (row: AsyncTaskVO, governanceStatus: string) => {
+  if (!guardAdminMobileWrite()) return
+  governingId.value = row.id
+  let attempted = false
+  try {
+    const preview = await getAdminTaskGovernancePreviewApi(row.id)
+    if (!(preview.allowedGovernanceStatuses || []).includes(governanceStatus)) {
+      ElMessage.warning('当前任务状态不支持该治理操作，请刷新列表后重试')
+      return
+    }
+    const note = await promptGovernanceNote(row, preview, governanceStatus)
+    if (note === null) return
+    attempted = true
+    await updateAdminTaskGovernanceApi(row.id, buildGovernanceActionPayload(row, preview, governanceStatus, note))
+    ElMessage.success('治理结论已记录，未触发任务重试')
+  } catch (error) {
+    if (isTaskActionCancelled(error)) return
+    ElMessage.error(getErrorMessage(error, '治理状态更新失败，请刷新预览后重试。'))
+  } finally {
+    governingId.value = null
     if (attempted) await fetchTasks()
   }
 }
@@ -741,19 +906,87 @@ const promptActionNote = async (title: string, row: AsyncTaskVO, preview?: Admin
   return String(result.value || '').trim()
 }
 
-const buildTaskActionPayload = (operation: string, row: AsyncTaskVO, note: string): AdminTaskActionPayload => ({
+const promptGovernanceNote = async (
+  row: AsyncTaskVO,
+  preview: AdminTaskGovernancePreviewVO,
+  governanceStatus: string
+) => {
+  const action = governanceActionLabels[governanceStatus] || '更新任务治理状态'
+  const confirmed = await confirmDangerActionPreview({
+    title: `${action}预览`,
+    action,
+    target: `处理编号：${row.taskId || row.id}；任务类型：${taskTypeLabel(row.taskType)}；关联记录：${preview.bizType || row.bizType || '-'} / ${preview.bizId || row.bizId || '-'}`,
+    impact: preview.impact || '仅记录治理结论，不会投递 MQ 消息或改变当前执行状态。',
+    rollback: '治理结论可在刷新预览后重新分类；已实际重试的消息不能由本操作撤回。',
+    audit: '会记录操作人、治理状态、处理说明、预览校验值和时间，便于审计补偿决策。',
+    tips: [
+      `失败分类：${failureClassLabel(preview.failureClass)}`,
+      `建议责任方：${preview.recommendedOwner || '待确定'}`,
+      `任务已停留：${preview.ageMinutes ?? 0} 分钟`,
+      '此操作不会触发实际重试；实际重试需要单独使用“重试”按钮。'
+    ],
+    confirmButtonText: '继续填写说明'
+  })
+  if (!confirmed) return null
+  const result = await ElMessageBox.prompt(
+    `${preview.impact || '仅记录治理结论。'}\n请填写当前处置依据和后续责任方。`,
+    action,
+    {
+      type: governanceStatus === 'MANUAL_ACTION_REQUIRED' ? 'warning' : 'info',
+      inputType: 'textarea',
+      inputPlaceholder: '例如：已确认模型供应商额度恢复，由平台值班人员执行后续重试',
+      inputValidator: (value) => Boolean(String(value || '').trim()) || '请填写治理说明',
+      confirmButtonText: '确认记录',
+      cancelButtonText: '取消'
+    }
+  )
+  return String(result.value || '').trim()
+}
+
+type RetryPreviewContract = AdminTaskImpactPreviewVO & { previewHash?: string }
+type RetryTaskActionPayload = AdminTaskActionPayload & { previewHash: string }
+
+const requireRetryPreviewHash = (preview: RetryPreviewContract) => {
+  const previewHash = String(preview.previewHash || '').trim()
+  if (!previewHash) {
+    throw new Error('重试预览缺少校验值，请刷新后重新确认')
+  }
+  return previewHash
+}
+
+const buildTaskActionPayload = (
+  operation: string,
+  row: AsyncTaskVO,
+  note: string,
+  preview: RetryPreviewContract
+): RetryTaskActionPayload => ({
   note,
   confirm: true,
   dryRun: false,
   reason: `${operation} confirmed for async task ${row.id}: ${note}`.slice(0, 300),
-  idempotencyKey: createOperationIdempotencyKey(`${operation}-${row.id}`)
+  idempotencyKey: createOperationIdempotencyKey(`${operation}-${row.id}`),
+  previewHash: requireRetryPreviewHash(preview)
+})
+
+const buildGovernanceActionPayload = (
+  row: AsyncTaskVO,
+  preview: AdminTaskGovernancePreviewVO,
+  governanceStatus: string,
+  note: string
+): AdminTaskGovernanceActionPayload => ({
+  ...buildTaskActionPayload('admin-task-governance', row, note, preview),
+  reason: `governance ${governanceStatus} confirmed for async task ${row.id}: ${note}`.slice(0, 300),
+  idempotencyKey: createOperationIdempotencyKey(`admin-task-governance-${row.id}`),
+  governanceStatus,
+  governanceOwner: preview.recommendedOwner || undefined,
+  previewHash: preview.previewHash
 })
 
 const handleSearch = () => { query.pageNo = 1; fetchTasks() }
-const handleReset = () => { Object.assign(query, { keyword: '', status: '', type: '', pageNo: 1, pageSize: 10 }); fetchTasks() }
+const handleReset = () => { Object.assign(query, { keyword: '', status: '', type: '', governanceStatus: '', pageNo: 1, pageSize: 10 }); fetchTasks() }
 
 watch(
-  () => [route.query.status, route.query.type, route.query.keyword, route.query.messageId, route.query.traceId, route.query.bizType, route.query.bizId],
+  () => [route.query.status, route.query.type, route.query.keyword, route.query.governanceStatus, route.query.messageId, route.query.traceId, route.query.bizType, route.query.bizId],
   () => {
     if (applyRouteQuery()) {
       void fetchTasks()
@@ -871,6 +1104,20 @@ onMounted(() => {
   color: var(--app-text-muted, #64748b);
 }
 
+.governance-cell {
+  display: grid;
+  gap: 4px;
+
+  small {
+    color: var(--app-text-muted, #64748b);
+    font-size: 12px;
+  }
+}
+
+.task-mobile-summary {
+  display: none;
+}
+
 .pagination-wrap { display: flex; justify-content: flex-end; padding: 16px 20px 20px; }
 .muted-action { color: var(--app-text-muted); font-size: 12px; }
 
@@ -901,6 +1148,40 @@ onMounted(() => {
   .table-view-tools {
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .task-mobile-summary {
+    display: grid;
+    gap: 1px;
+    border-bottom: 1px solid var(--app-border, #e5e7eb);
+    background: var(--app-border, #e5e7eb);
+
+    article {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      background: var(--app-surface, #fff);
+    }
+
+    strong,
+    span {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    span,
+    small {
+      margin-top: 3px;
+      color: var(--app-text-muted, #64748b);
+      font-size: 12px;
+    }
+  }
+
+  .task-mobile-summary__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
 }
 </style>

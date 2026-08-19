@@ -192,6 +192,7 @@ const canGenerateFromReport = computed(() => Boolean(
 const canUseProfileForTraining = computed(() => Boolean(
   profileId.value
   && verifiedRouteMatchReport.value
+  && hasQuantifiedEvidence.value
 ))
 const buildContextQuery = (extra: Record<string, unknown>) => Object.fromEntries(
   Object.entries(extra)
@@ -211,6 +212,10 @@ const gapItems = computed<SkillGapItemVO[]>(() => {
   const detailGaps = Array.isArray(detail.value?.gapItems) ? detail.value.gapItems : []
   return topGaps.length ? topGaps : detailGaps
 })
+const hasQuantifiedEvidence = computed(() => [...sourceItems.value, ...gapItems.value].some((item) =>
+  numericLevel(item.currentLevel) !== undefined
+  && numericLevel(item.targetLevel) !== undefined
+))
 const quantifiedGapCount = computed(() => gapItems.value.filter((item) => {
   const current = numericLevel(item.currentLevel)
   const target = numericLevel(item.targetLevel)
@@ -272,6 +277,9 @@ const profileEvidenceTag = computed(() => {
 })
 const profileEvidenceText = computed(() => {
   if (matchReportVerifyMessage.value) return matchReportVerifyMessage.value
+  if (matchReportId.value && !hasQuantifiedEvidence.value) {
+    return '该画像已绑定可信简历匹配报告，但节点尚未形成可量化的当前/目标等级；总分、综合水平和训练入口暂不展示。'
+  }
   if (matchReportId.value) return '该画像已绑定通过可信校验的简历匹配报告，可用于后续学习计划和推荐题。'
   if (sourceMatchReportId.value) return '该画像关联的匹配报告尚未通过可信校验，数值仅保留为待量化状态，不能用于训练。'
   if (targetJobId.value) return '当前画像先按目标岗位和已有画像数据展示；从匹配报告进入时会获得更完整的分析。'
@@ -298,7 +306,7 @@ const numericLevel = (value?: number | null) => {
 }
 
 const trustedMetricValue = (value?: number | null) => {
-  if (!canUseProfileForTraining.value) return '--'
+  if (!canUseProfileForTraining.value || !hasQuantifiedEvidence.value) return '--'
   return numericLevel(value) ?? '--'
 }
 

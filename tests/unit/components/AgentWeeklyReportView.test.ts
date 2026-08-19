@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ElMessage } from 'element-plus'
 
 import {
   generateAgentWeeklyReportApi,
@@ -394,7 +395,7 @@ describe('AgentWeeklyReportView', () => {
 
     const wrapper = mountView()
     await flushPromises()
-    const generateButton = wrapper.findAll('button').find((button) => button.text() === '生成周报')
+    const generateButton = wrapper.findAll('button').find((button) => button.text().includes('生成周报'))
 
     expect(generateButton).toBeTruthy()
     await generateButton!.trigger('click')
@@ -411,6 +412,39 @@ describe('AgentWeeklyReportView', () => {
 
     resolveGenerate?.(weeklyReport())
     await flushPromises()
+  })
+
+  it('recovers a timeout by loading the committed final report before showing success', async () => {
+    vi.mocked(getCurrentAgentWeeklyReportApi)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(weeklyReport({ reportStatus: 'GENERATED' }))
+    vi.mocked(generateAgentWeeklyReportApi).mockRejectedValue(new Error('request timeout'))
+    const wrapper = mountView()
+    await flushPromises()
+    const generateButton = wrapper.findAll('button').find((button) => button.text().includes('生成周报'))
+
+    await generateButton!.trigger('click')
+    await flushPromises()
+
+    expect(getCurrentAgentWeeklyReportApi).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('周报摘要')
+    expect(ElMessage.success).toHaveBeenCalledWith('周报已生成，并已同步最终状态。')
+    expect(ElMessage.error).not.toHaveBeenCalled()
+  })
+
+  it('reports a definitive generation failure without claiming success or polling', async () => {
+    vi.mocked(getCurrentAgentWeeklyReportApi).mockResolvedValue(null)
+    vi.mocked(generateAgentWeeklyReportApi).mockRejectedValue(new Error('permission denied'))
+    const wrapper = mountView()
+    await flushPromises()
+    const generateButton = wrapper.findAll('button').find((button) => button.text() === '生成周报')
+
+    await generateButton!.trigger('click')
+    await flushPromises()
+
+    expect(getCurrentAgentWeeklyReportApi).toHaveBeenCalledTimes(1)
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith('周报生成失败，请稍后重试。')
   })
 
   it('loads report detail from the history list', async () => {

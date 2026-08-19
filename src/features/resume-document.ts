@@ -1,4 +1,5 @@
 import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
+import { buildResumeProjectPreviewBullets } from '@/features/resume-project-preview'
 
 export const RESUME_TEMPLATE_CODES = [
   'ATS_SINGLE_COLUMN',
@@ -314,22 +315,13 @@ const buildProjectEntries = (
     const period = projectText(source, ['projectTime', 'projectPeriod'])
     const role = projectText(source, ['role', 'responsibility'])
     const techStack = projectText(source, ['techStack'])
-    const bulletSource = [
-      projectText(source, ['projectBackground', 'description']),
-      projectText(source, ['coreFeatures']),
-      projectText(source, ['highlights']),
-      projectText(source, ['technicalChallenges', 'technicalDifficulties']),
-      projectText(source, ['optimizationResult', 'optimizationResults']),
-      projectText(source, ['extraInfo'])
-    ].filter(Boolean)
-
     return {
       key: `project-${String(source.projectId || source.id || index)}`,
       title,
       subtitle: role,
       period,
       meta: techStack,
-      bullets: bulletSource.flatMap(splitSentences)
+      bullets: buildResumeProjectPreviewBullets(source).flatMap(splitSentences)
     }
   })
 

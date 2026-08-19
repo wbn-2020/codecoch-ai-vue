@@ -14,7 +14,8 @@ const authEvents = vi.hoisted(() => ({
 
 vi.mock('@/utils/authEvents', () => authEvents)
 
-vi.mock('@/utils/errorEvents', () => ({
+vi.mock('@/utils/errorEvents', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/utils/errorEvents')>(),
   emitRequestError: vi.fn()
 }))
 

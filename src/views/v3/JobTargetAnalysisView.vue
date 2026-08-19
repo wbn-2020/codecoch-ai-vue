@@ -188,7 +188,7 @@
                   :snapshot-loading-id="readinessSnapshotLoadingId"
                   :loading="requirementLoading"
                   :refreshing="requirementRefreshing"
-                  :error="requirementError"
+                  :error="requirementInsightsError"
                   @refresh="refreshRequirementInsights"
                   @action="handleRequirementAction"
                   @select-snapshot="selectReadinessSnapshot"
@@ -283,6 +283,13 @@ import {
   normalizeJobRequirementMatrix
 } from '@/features/job-requirement-matrix'
 import { resolveSafeActionPath } from '@/features/job-readiness/readiness'
+import {
+  createAsyncOperationScope,
+  isAsyncOperationTerminal,
+  isCurrentAsyncOperationResponse,
+  resolveAsyncOperationState,
+  shouldPollAsyncOperation
+} from '@/features/async-operation-state'
 import type {
   JobReadinessSnapshotVO,
   JobRequirementActionVO,
@@ -321,6 +328,7 @@ const readinessSnapshotLoadingId = ref<number | null>(null)
 const requirementLoading = ref(false)
 const requirementRefreshing = ref(false)
 const requirementError = ref('')
+const readinessError = ref('')
 let readinessSnapshotRequestVersion = 0
 const JOB_TARGET_PARSE_TASK_BIZ_TYPE = 'job-target.parse'
 const {
@@ -336,6 +344,7 @@ const {
 let parseSseHandle: StreamSseHandle | null = null
 let parsePollTimer: ReturnType<typeof window.setTimeout> | null = null
 let parsePollAttempts = 0
+let parseExecutionVersion = 0
 const MAX_PARSE_POLL_ATTEMPTS = 10
 
 const targetId = computed(() => {
@@ -351,15 +360,24 @@ const targetSubtitle = computed(() => {
 const recentParseSseEvents = computed(() => parseSseEvents.value.slice(-3))
 const currentParseStatus = computed(() => String(analysis.value?.parseStatus || target.value?.parseStatus || '').toUpperCase())
 const displayParseStatus = computed(() => {
+  if (['PARSING', 'FAILED'].includes(currentParseStatus.value)) return currentParseStatus.value
   if (hasStructuredAnalysis(analysis.value)) return 'PARSED'
   return currentParseStatus.value || target.value?.parseStatus || analysis.value?.parseStatus
 })
+const parseOperationState = computed(() => resolveAsyncOperationState({
+  status: currentParseStatus.value,
+  hasExecution: Boolean(analysis.value?.executionId),
+  hasReceipt: Boolean(analysis.value?.asyncMessageId || analysis.value?.asyncTraceId)
+}))
+const parseOperationTerminal = computed(() => isAsyncOperationTerminal(parseOperationState.value))
 const targetHasRecoverableParseStatus = computed(() => ['PARSING', 'FAILED'].includes(currentParseStatus.value))
 const shouldAutoPollParse = computed(() => {
   if (!target.value || parsing.value) return false
-  if (hasStructuredAnalysis(analysis.value)) return false
-  if (currentParseStatus.value === 'FAILED') return false
-  return currentParseStatus.value === 'PARSING' || Boolean(analysis.value?.asyncMessageId || analysis.value?.asyncTraceId)
+  return shouldPollAsyncOperation({
+    status: currentParseStatus.value,
+    hasExecution: Boolean(analysis.value?.executionId),
+    hasReceipt: Boolean(analysis.value?.asyncMessageId || analysis.value?.asyncTraceId)
+  })
 })
 const analysisEmptyStateType = computed(() => shouldAutoPollParse.value ? 'loading' : 'empty')
 const analysisEmptyStateTitle = computed(() =>
@@ -380,8 +398,8 @@ const overviewSkillItems = computed(() => toDisplayItems(
 ).slice(0, 6))
 const primaryAction = computed<'edit' | 'parse' | 'task' | 'match'>(() => {
   if (!target.value?.jdText) return 'edit'
-  if (hasStructuredAnalysis(analysis.value)) return 'match'
   if (shouldAutoPollParse.value || target.value.parseStatus === 'PARSING') return 'task'
+  if (hasStructuredAnalysis(analysis.value)) return 'match'
   return 'parse'
 })
 const primaryActionTitle = computed(() => {
@@ -405,6 +423,7 @@ const primaryActionDescription = computed(() => {
 const parseTaskDiagnostics = computed(() => {
   const result = analysis.value
   const items: string[] = []
+  if (result?.executionId) items.push('执行记录已登记')
   if (result?.asyncMessageId) items.push('处理进度已提交')
   if (result?.asyncTraceId) items.push('处理线索已记录')
   if (result?.asyncBizType || result?.asyncBizId) {
@@ -433,10 +452,13 @@ const parseSubmitStatusText = (status?: string | null) => {
   return map[normalized] || '提交进度已更新'
 }
 const parseTaskVisible = computed(() => (
-  parseSseStatus.value !== 'idle'
-  || parseSseEvents.value.length > 0
-  || parseTaskDiagnostics.value.length > 0
-  || targetHasRecoverableParseStatus.value
+  (!hasStructuredAnalysis(analysis.value) || targetHasRecoverableParseStatus.value)
+  && (
+    parseSseStatus.value !== 'idle'
+    || parseSseEvents.value.length > 0
+    || parseTaskDiagnostics.value.length > 0
+    || targetHasRecoverableParseStatus.value
+  )
 ))
 const parseRecoveryVisible = computed(() => parseSseStatus.value === 'error' && !parsing.value)
 const parseRecoveryHint = computed(() => (
@@ -445,6 +467,15 @@ const parseRecoveryHint = computed(() => (
     : '如果分析结果已经落库，刷新后可继续查看；没有新结果时再重新提交分析。'
 ))
 const latestParseSseMessage = computed(() => {
+  if (['SUCCEEDED', 'SUCCEEDED_DEGRADED'].includes(parseOperationState.value)) {
+    return '岗位分析已完成，可以继续查看结构化结果。'
+  }
+  if (['FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED'].includes(parseOperationState.value)) {
+    return '岗位分析未完成，失败原因已保留，可以重新分析或到任务中心查看。'
+  }
+  if (hasStructuredAnalysis(analysis.value) && parseOperationState.value === 'NOT_STARTED') {
+    return '岗位分析已完成，可以继续查看结构化结果。'
+  }
   const recent = recentParseSseEvents.value
   const latest = recent[recent.length - 1]
   if (latest?.message) return latest.message
@@ -496,7 +527,8 @@ const firstParseStatus = (...values: unknown[]) => {
 }
 
 const hasParseTaskReceipt = (result?: JobDescriptionAnalysisVO | null) => Boolean(
-  result?.asyncMessageId
+  result?.executionId
+  || result?.asyncMessageId
   || result?.asyncTraceId
   || result?.asyncBizType
   || result?.asyncBizId
@@ -536,6 +568,10 @@ const scheduleParsePolling = () => {
 }
 
 const syncParsePollingState = () => {
+  if (parseOperationTerminal.value) {
+    stopParsePolling()
+    return
+  }
   if (shouldAutoPollParse.value) {
     scheduleParsePolling()
     return
@@ -544,10 +580,13 @@ const syncParsePollingState = () => {
 }
 
 const loadAll = async (silent = false) => {
-  if (!targetId.value) {
+  const requestedTargetId = targetId.value
+  if (!requestedTargetId) {
     loadError.value = '岗位目标链接不完整，请从岗位目标列表重新进入。'
     return
   }
+  const requestedExecutionVersion = parseExecutionVersion
+  const requestScope = createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, requestedTargetId)
   if (!silent) {
     loading.value = true
     loadError.value = ''
@@ -555,9 +594,15 @@ const loadAll = async (silent = false) => {
   }
   try {
     const [detailResult, analysisResult] = await Promise.allSettled([
-      getJobTargetDetailApi(targetId.value),
-      getJobDescriptionAnalysisApi(targetId.value)
+      getJobTargetDetailApi(requestedTargetId),
+      getJobDescriptionAnalysisApi(requestedTargetId)
     ])
+    if (!isCurrentAsyncOperationResponse(
+      createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, targetId.value || 0),
+      requestScope
+    ) || requestedExecutionVersion !== parseExecutionVersion) {
+      return
+    }
 
     if (!isFulfilled(detailResult)) {
       if (!silent) {
@@ -571,7 +616,7 @@ const loadAll = async (silent = false) => {
     target.value = detailResult.value
     if (isFulfilled(analysisResult)) {
       if (analysisResult.value) {
-        captureParseTaskReceipt(analysisResult.value)
+        captureParseTaskReceipt(requestedTargetId, analysisResult.value)
       } else if (!hasParseTaskReceipt(analysis.value)) {
         analysis.value = null
       }
@@ -606,15 +651,17 @@ const loadRequirementInsights = async (silent = false) => {
     readinessSnapshot.value = null
     readinessHistory.value = []
     requirementError.value = ''
+    readinessError.value = ''
     return
   }
   if (!silent) {
     requirementLoading.value = true
     requirementError.value = ''
+    readinessError.value = ''
   }
   const [matrixResult, readinessResult, historyResult] = await Promise.allSettled([
     getJobRequirementMatrixApi(id),
-    getLatestJobReadinessApi(id),
+    getLatestJobReadinessApi(id, { silentError: true }),
     getJobReadinessHistoryApi(id)
   ])
   if (isFulfilled(matrixResult)) {
@@ -630,6 +677,12 @@ const loadRequirementInsights = async (silent = false) => {
     readinessSnapshot.value = normalizeJobReadiness(readinessResult.value, id)
   } else {
     readinessSnapshot.value = null
+    if (!silent) {
+      readinessError.value = getErrorMessage(
+        readinessResult.reason,
+        '准备度暂时无法加载，请重试或先刷新岗位证据。'
+      )
+    }
   }
   if (isFulfilled(historyResult)) {
     readinessHistory.value = (historyResult.value || [])
@@ -637,6 +690,12 @@ const loadRequirementInsights = async (silent = false) => {
       .filter((item): item is JobReadinessSnapshotVO => Boolean(item))
   } else if (!silent) {
     readinessHistory.value = readinessSnapshot.value ? [readinessSnapshot.value] : []
+    if (!readinessError.value) {
+      readinessError.value = getErrorMessage(
+        historyResult.reason,
+        '准备度历史暂时无法加载，请稍后重试。'
+      )
+    }
   }
   if (!silent) requirementLoading.value = false
 }
@@ -648,7 +707,7 @@ const selectReadinessSnapshot = async (snapshotId: number) => {
   const requestVersion = ++readinessSnapshotRequestVersion
   readinessSnapshotLoadingId.value = snapshotId
   try {
-    const detail = await getJobReadinessSnapshotApi(id, snapshotId)
+    const detail = await getJobReadinessSnapshotApi(id, snapshotId, { silentError: true })
     if (requestVersion !== readinessSnapshotRequestVersion || targetId.value !== id) return
 
     const normalized = normalizeJobReadiness(detail, id)
@@ -656,7 +715,10 @@ const selectReadinessSnapshot = async (snapshotId: number) => {
     readinessSnapshot.value = normalized
   } catch (error) {
     if (requestVersion === readinessSnapshotRequestVersion && targetId.value === id) {
-      ElMessage.error(getErrorMessage(error, '就绪度快照详情暂时无法加载，请稍后重试。'))
+      readinessError.value = getErrorMessage(
+        error,
+        '准备度快照详情暂时无法加载，请重试或重新刷新岗位证据。'
+      )
     }
   } finally {
     if (requestVersion === readinessSnapshotRequestVersion) {
@@ -670,16 +732,24 @@ const refreshRequirementInsights = async () => {
   if (!id) return
   requirementRefreshing.value = true
   requirementError.value = ''
+  readinessError.value = ''
   try {
     await materializeJobRequirementsApi(id)
     await refreshJobRequirementMatrixApi(id)
+    let readinessRefreshError = ''
     try {
       await recalculateJobReadinessApi(id)
-    } catch {
-      // Evidence matrix remains useful while readiness is unavailable or still collecting samples.
+    } catch (error) {
+      readinessRefreshError = getErrorMessage(
+        error,
+        '岗位证据已刷新，但准备度重新计算未完成，请重试。'
+      )
     }
     await loadRequirementInsights()
-    if (!requirementError.value) ElMessage.success('岗位要求和证据已刷新')
+    if (readinessRefreshError) {
+      readinessError.value = readinessRefreshError
+    }
+    if (!requirementError.value && !readinessError.value) ElMessage.success('岗位要求和证据已刷新')
   } catch (error) {
     requirementError.value = getErrorMessage(error, '岗位证据刷新失败，请稍后重试。')
     ElMessage.error(requirementError.value)
@@ -687,6 +757,10 @@ const refreshRequirementInsights = async () => {
     requirementRefreshing.value = false
   }
 }
+
+const requirementInsightsError = computed(() =>
+  [requirementError.value, readinessError.value].filter(Boolean).join(' ')
+)
 
 const loadRequirementInsightsForActiveTab = async (silent = false) => {
   if (activeSection.value !== 'evidence') return
@@ -729,6 +803,7 @@ const mergeAnalysisReceipt = (next: JobDescriptionAnalysisVO): JobDescriptionAna
   if (!current || current.targetJobId !== next.targetJobId) return next
   return {
     ...next,
+    executionId: next.executionId || current.executionId,
     asyncMessageId: next.asyncMessageId || current.asyncMessageId,
     asyncTraceId: next.asyncTraceId || current.asyncTraceId,
     asyncBizType: next.asyncBizType || current.asyncBizType,
@@ -737,9 +812,14 @@ const mergeAnalysisReceipt = (next: JobDescriptionAnalysisVO): JobDescriptionAna
   }
 }
 
-const captureParseTaskReceipt = (...sources: unknown[]) => {
-  const id = targetId.value
-  if (!id) return
+const captureParseTaskReceipt = (expectedTargetId: number, ...sources: unknown[]) => {
+  if (!isCurrentAsyncOperationResponse(
+    createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, targetId.value || 0),
+    createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, expectedTargetId)
+  )) {
+    return
+  }
+  const id = expectedTargetId
   const records = sources.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
   if (!records.length) return
 
@@ -748,13 +828,31 @@ const captureParseTaskReceipt = (...sources: unknown[]) => {
   const flatRecords = [...records, resultRecord, metadataRecord].filter((item): item is Record<string, unknown> => Boolean(item))
   const directAnalysisRecord = records.find((item) => 'targetJobId' in item) as Partial<JobDescriptionAnalysisVO> | undefined
   const currentAnalysis = analysis.value?.targetJobId === id ? analysis.value : null
+  const nextAsyncMessageId = firstText(...flatRecords.flatMap((item) => [item.asyncMessageId, item.messageId]))
+  const nextAsyncTraceId = firstText(...flatRecords.flatMap((item) => [item.asyncTraceId, item.traceId, item.requestId]))
+  const nextExecutionId = firstText(...flatRecords.flatMap((item) => [item.executionId]))
+  if (currentAnalysis && !isCurrentAsyncOperationResponse(
+    createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, id, {
+      executionId: currentAnalysis.executionId,
+      asyncMessageId: currentAnalysis.asyncMessageId,
+      asyncTraceId: currentAnalysis.asyncTraceId
+    }),
+    createAsyncOperationScope(JOB_TARGET_PARSE_TASK_BIZ_TYPE, id, {
+      executionId: nextExecutionId,
+      asyncMessageId: nextAsyncMessageId,
+      asyncTraceId: nextAsyncTraceId
+    })
+  )) {
+    return
+  }
   const next: JobDescriptionAnalysisVO = {
     ...(currentAnalysis || {}),
     ...(resultRecord || {}),
     ...(directAnalysisRecord || {}),
     targetJobId: id,
-    asyncMessageId: firstText(...flatRecords.flatMap((item) => [item.asyncMessageId, item.messageId])),
-    asyncTraceId: firstText(...flatRecords.flatMap((item) => [item.asyncTraceId, item.traceId, item.requestId])),
+    executionId: nextExecutionId,
+    asyncMessageId: nextAsyncMessageId,
+    asyncTraceId: nextAsyncTraceId,
     asyncBizType: firstText(...flatRecords.flatMap((item) => [item.asyncBizType, item.bizType])) || JOB_TARGET_PARSE_TASK_BIZ_TYPE,
     asyncBizId: firstText(...flatRecords.flatMap((item) => [item.asyncBizId, item.bizId])) || String(id),
     asyncSendStatus: firstText(...flatRecords.flatMap((item) => [item.asyncSendStatus, item.sendStatus])),
@@ -764,6 +862,8 @@ const captureParseTaskReceipt = (...sources: unknown[]) => {
 }
 
 const parseTaskStatusLabel = (status: string) => {
+  if (['SUCCEEDED', 'SUCCEEDED_DEGRADED'].includes(parseOperationState.value)) return '已完成'
+  if (['FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED'].includes(parseOperationState.value)) return '失败'
   if (status === 'connecting') return '提交中'
   if (status === 'streaming') return '分析中'
   if (status === 'done') return '已完成'
@@ -778,6 +878,8 @@ const parseSseEventText = (item: { message?: string; event?: string }) => (
 )
 
 const parseTaskBadgeClass = (status: string) => {
+  if (['SUCCEEDED', 'SUCCEEDED_DEGRADED'].includes(parseOperationState.value)) return 'cc-badge--success'
+  if (['FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED'].includes(parseOperationState.value)) return 'cc-badge--danger'
   if (status === 'connecting') return 'cc-badge--thinking'
   if (status === 'streaming') return 'cc-badge--streaming'
   if (status === 'done') return 'cc-badge--success'
@@ -794,7 +896,7 @@ const stopParseSse = () => {
 
 const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => {
   try {
-    captureParseTaskReceipt(await parseJobDescriptionApi(id, payload))
+    captureParseTaskReceipt(id, await parseJobDescriptionApi(id, payload))
     setParseSseDone()
     ElMessage.success(analysis.value?.parseStatus === 'FAILED' ? '岗位分析已返回失败状态' : '岗位分析已完成')
     await loadAll()
@@ -808,10 +910,10 @@ const runParseFallback = async (id: number, payload: JobDescriptionParseDTO) => 
   }
 }
 
-const applyParseSseEvent = (event: JobTargetParseSseEventType, data?: JobTargetParseSseEvent) => {
+const applyParseSseEvent = (id: number, event: JobTargetParseSseEventType, data?: JobTargetParseSseEvent) => {
   const message = toFriendlyMessage(data?.message || data?.content || data?.stage, parseTaskStatusLabel(event))
   addParseSseEvent(event, message)
-  captureParseTaskReceipt(data, data?.result, data?.metadata)
+  captureParseTaskReceipt(id, data, data?.result, data?.metadata)
   if (event === 'done') {
     setParseSseDone()
   }
@@ -827,7 +929,7 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
     id,
     payload,
     {
-      onEvent: applyParseSseEvent,
+      onEvent: (event, data) => applyParseSseEvent(id, event, data),
       onError: (error, hasStarted) => {
         parseSseHandle = null
         if (!hasStarted) {
@@ -857,14 +959,25 @@ const startParseSse = (id: number, payload: JobDescriptionParseDTO) => {
 }
 
 const submitParseTask = async (id: number, payload: JobDescriptionParseDTO) => {
+  parseExecutionVersion += 1
   stopParsePolling()
   stopParseSse()
   resetParseSse()
   setParseSseConnecting()
   parsing.value = true
+  if (analysis.value?.targetJobId === id) {
+    analysis.value = {
+      ...analysis.value,
+      executionId: null,
+      asyncMessageId: null,
+      asyncTraceId: null,
+      asyncSendStatus: null,
+      parseStatus: 'PARSING'
+    }
+  }
   try {
-    captureParseTaskReceipt(await submitJobDescriptionParseTaskApi(id, payload))
-    setParseSseDone()
+    captureParseTaskReceipt(id, await submitJobDescriptionParseTaskApi(id, payload))
+    addParseSseEvent('accepted', '岗位分析任务已提交')
     if (analysis.value?.asyncMessageId || analysis.value?.parseStatus === 'PARSING') {
       ElMessage.success('岗位分析已提交，可以稍后在任务中心查看')
     } else {
@@ -908,6 +1021,7 @@ const handleParse = async () => {
 
 const goTaskCenter = () => {
   const query = compactRouteQuery({
+    executionId: analysis.value?.executionId || undefined,
     messageId: analysis.value?.asyncMessageId || undefined,
     traceId: analysis.value?.asyncTraceId || undefined,
     bizType: analysis.value?.asyncBizType || JOB_TARGET_PARSE_TASK_BIZ_TYPE,

@@ -121,7 +121,7 @@
           </el-table-column>
           <el-table-column v-if="isColumnVisible('parseError')" label="失败原因" min-width="180">
             <template #default="{ row }">
-              <el-tooltip v-if="row.parseErrorMessage" :content="friendlyParseError(row.parseErrorMessage)" placement="top">
+              <el-tooltip v-if="isParseFailed(row) && row.parseErrorMessage" :content="friendlyParseError(row.parseErrorMessage)" placement="top">
                 <span class="parse-error-text">{{ friendlyParseError(row.parseErrorMessage) }}</span>
               </el-tooltip>
               <span v-else class="muted-value">-</span>
@@ -255,9 +255,9 @@
                 </el-tag>
                 <span v-else>-</span>
               </el-descriptions-item>
-              <el-descriptions-item label="是否已确认">{{ formatConfirmed(detail.analysisConfirmed) }}</el-descriptions-item>
+              <el-descriptions-item label="确认状态">{{ formatConfirmed(detail) }}</el-descriptions-item>
               <el-descriptions-item label="解析失败原因">
-                <span class="parse-error-block">{{ friendlyParseError(detail.parseErrorMessage) || '-' }}</span>
+                <span class="parse-error-block">{{ parseFailureText(detail) }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="解析完成时间">{{ detail.parsedAt || '-' }}</el-descriptions-item>
               <el-descriptions-item label="确认时间">{{ detail.confirmedAt || '-' }}</el-descriptions-item>
@@ -279,6 +279,11 @@ import { downloadAdminFileApi, getAdminFileDetailApi, getAdminFilesApi } from '@
 import AppState from '@/components/common/AppState.vue'
 import { useAdminMobileReadonly } from '@/composables/useAdminMobileReadonly'
 import { useAdminTableView } from '@/composables/useAdminTableView'
+import {
+  downloadBlobReliably,
+  reliableDownloadOptionsForFile
+} from '@/features/reliable-download'
+import { presentAdminFileParseState } from '@/features/admin-file-parse-state'
 import type { AdminFileQueryDTO, FileInfoVO } from '@/types/file'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
@@ -422,11 +427,13 @@ const getFileStatusType = (status?: string | null) => {
   return 'info'
 }
 
-const formatConfirmed = (value?: boolean | null) => {
-  if (value === true) return '已确认'
-  if (value === false) return '未确认'
-  return '-'
-}
+const isParseFailed = (row?: FileInfoVO | null) => presentAdminFileParseState(row).failed
+
+const formatConfirmed = (row?: FileInfoVO | null) =>
+  presentAdminFileParseState(row).confirmationLabel
+
+const parseFailureText = (row?: FileInfoVO | null) =>
+  isParseFailed(row) ? friendlyParseError(row?.parseErrorMessage) || '解析失败，暂无更多原因。' : '当前状态无失败信息'
 
 const hasParseRecord = (row: FileInfoVO) =>
   Boolean(row.resumeAnalysisRecordId || row.resumeId || row.parseStatus || row.parseErrorMessage)
@@ -582,17 +589,19 @@ const downloadFile = async (row?: FileInfoVO | null) => {
       reason: accessReason,
       idempotencyKey: createOperationIdempotencyKey(`admin-file-download-${row.id}`)
     })
-    const url = URL.createObjectURL(blob)
-    try {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = row.originalFilename || `file_${row.id}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-    } finally {
-      URL.revokeObjectURL(url)
+    const expectedSize = Number(row.fileSize || 0)
+    const options = reliableDownloadOptionsForFile(
+      row.originalFilename || `file_${row.id}.${row.fileExt || 'bin'}`,
+      row.mimeType
+    )
+    if (expectedSize > 0) {
+      options.minBytes = expectedSize
+      options.maxBytes = expectedSize
     }
+    const receipt = downloadBlobReliably(blob, options)
+    ElMessage.success(`下载已开始：${receipt.filename}（${formatFileSize(receipt.size)}）`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '文件下载失败，请确认文件仍存在且元数据有效后重试。'))
   } finally {
     const next = new Set(downloadingIds.value)
     next.delete(row.id)

@@ -248,17 +248,22 @@
       </div>
     </section>
 
-    <section v-if="showGovernancePanel" class="admin-panel governance-panel">
-      <div class="admin-panel__header">
-        <div>
-          <h2>{{ governancePageTitle }}</h2>
-          <p>{{ governancePageDesc }}</p>
+    <RouteErrorBoundary
+      v-if="showGovernancePanel"
+      :key="governanceBoundaryKey"
+      fallback-path="/admin/questions"
+    >
+      <section class="admin-panel governance-panel">
+        <div class="admin-panel__header">
+          <div>
+            <h2>{{ governancePageTitle }}</h2>
+            <p>{{ governancePageDesc }}</p>
+          </div>
+          <el-button v-if="!props.governanceOnly" v-permission="'admin:question:generate'" :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
         </div>
-        <el-button v-if="!props.governanceOnly" v-permission="'admin:question:generate'" :loading="generating" @click="governanceTab = 'generate'">AI 生成题目</el-button>
-      </div>
 
-      <el-tabs v-model="governanceTab" :class="['governance-tabs', { 'governance-tabs--single': props.governanceOnly }]">
-        <el-tab-pane v-if="showGeneratePane" label="AI 生成" name="generate">
+        <el-tabs v-model="governanceTab" :class="['governance-tabs', { 'governance-tabs--single': props.governanceOnly }]">
+        <el-tab-pane v-if="showGeneratePane" key="generate" label="AI 生成" name="generate">
           <div class="ai-generate-panel">
             <el-alert
               type="info"
@@ -391,7 +396,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane v-if="showReviewsPane" label="审核池" name="reviews">
+        <el-tab-pane v-if="showReviewsPane" key="reviews" label="审核池" name="reviews">
           <div class="admin-filter-bar governance-filter">
             <el-form :model="reviewQuery" inline>
               <el-form-item label="关键词">
@@ -523,7 +528,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane v-if="showDuplicatesPane" label="重复题审核" name="duplicates">
+        <el-tab-pane v-if="showDuplicatesPane" key="duplicates" label="重复题审核" name="duplicates">
           <template v-if="isDuplicateMobilePatrol">
             <section class="mobile-patrol-panel" v-loading="duplicateLoading">
               <div class="mobile-patrol-head">
@@ -1133,8 +1138,9 @@
           </div>
           </template>
         </el-tab-pane>
-      </el-tabs>
-    </section>
+        </el-tabs>
+      </section>
+    </RouteErrorBoundary>
 
     <el-drawer v-model="duplicateDrawerVisible" title="重复候选详情" size="860px" class="duplicate-detail-drawer">
       <div v-loading="duplicateDetailLoading" class="duplicate-detail-content">
@@ -1577,6 +1583,7 @@ import { getQuestionGroupsApi } from '@/api/questionGroup'
 import { getQuestionTagsApi } from '@/api/questionTag'
 import AdminTableViewSettings from '@/components/admin/AdminTableViewSettings.vue'
 import AppState from '@/components/common/AppState.vue'
+import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAdminTableView } from '@/composables/useAdminTableView'
 import {
@@ -2041,6 +2048,9 @@ const showGovernancePanel = computed(() => props.governanceOnly || !showQuestion
 const showGeneratePane = computed(() => !props.governanceOnly || governanceTab.value === 'generate')
 const showReviewsPane = computed(() => !props.governanceOnly || governanceTab.value === 'reviews')
 const showDuplicatesPane = computed(() => !props.governanceOnly || governanceTab.value === 'duplicates')
+const governanceBoundaryKey = computed(() =>
+  props.governanceOnly ? `question-governance-${props.initialGovernanceTab}` : 'question-governance-workspace'
+)
 const isDuplicateMobilePatrol = computed(() =>
   props.governanceOnly && governanceTab.value === 'duplicates' && isAdminMobileReadonly.value
 )

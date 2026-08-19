@@ -76,6 +76,18 @@ describe('userNavigation', () => {
     expect(resolved?.item.key).toBe('resume-management')
   })
 
+  it('routes the resume workbench to an editable resume instead of the preparation guide', () => {
+    const workbench = userNavigationGroups
+      .find((group) => group.key === 'prepare')
+      ?.items.find((item) => item.key === 'resume-workbench')
+
+    expect(workbench?.path).toBe('/resumes/workbench')
+    expect(resolveUserNavigationItem({ name: 'ResumeJobHub', path: '/resumes' })?.item.key)
+      .not.toBe('resume-workbench')
+    expect(resolveUserNavigationItem({ name: 'ResumeEdit', path: '/resumes/42/edit' })?.item.key)
+      .toBe('resume-workbench')
+  })
+
   it('uses the longest matching prefix when no route name or exact path is available', () => {
     const resolved = resolveUserNavigationItem(
       { path: '/workspace/detail' },

@@ -290,6 +290,7 @@ import {
   History,
   Library,
   Menu,
+  Megaphone,
   MessageSquare,
   PackageCheck,
   RotateCcw,
@@ -344,6 +345,7 @@ interface FeatureLink {
   path: string
   icon: Component
   matches?: string[]
+  queryTab?: string
   previewOnly?: boolean
   featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
 }
@@ -562,6 +564,14 @@ const baseNavigationGroups: FeatureGroup[] = [
     label: '成长与支持',
     links: [
       {
+        label: '系统公告',
+        desc: '查看当前账号可见的产品与服务公告',
+        path: '/notifications?tab=announcements',
+        icon: Megaphone,
+        matches: ['/notifications'],
+        queryTab: 'announcements'
+      },
+      {
         label: '求职周报',
         desc: '查看本周事实、变化和下一步行动',
         path: '/agent/weekly-reports',
@@ -652,6 +662,7 @@ const isActive = (item: NavItem) => {
 const formattedXp = computed(() => gameProfile.xp.toLocaleString('zh-CN'))
 
 const isLinkActive = (link: FeatureLink) => {
+  if (link.queryTab && route.query.tab !== link.queryTab) return false
   const prefixes = link.matches || [link.path]
   return prefixes.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
 }

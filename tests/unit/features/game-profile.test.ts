@@ -89,6 +89,28 @@ describe('game-profile store', () => {
     expect(JSON.parse(raw as string).xp).toBe(210)
   })
 
+  it('keeps the active account snapshot stable when pages request hydration repeatedly', () => {
+    const store = useGameProfileStore()
+    localStorage.setItem('codecoachai_game_profile_42', JSON.stringify({
+      xp: 356,
+      streakDays: 1,
+      streakLastDate: '2026-08-17'
+    }))
+
+    store.hydrate(42)
+    expect(store.xp).toBe(356)
+    expect(store.streakDays).toBe(1)
+
+    localStorage.setItem('codecoachai_game_profile_42', JSON.stringify({
+      xp: 0,
+      streakDays: 0
+    }))
+    store.hydrate(42)
+
+    expect(store.xp).toBe(356)
+    expect(store.streakDays).toBe(1)
+  })
+
   it('isolates profiles per user id and never carries counters into a partial snapshot', () => {
     const store = useGameProfileStore()
     store.hydrate('alice')

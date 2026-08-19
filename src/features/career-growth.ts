@@ -246,6 +246,7 @@ export const normalizeCareerImportPreview = (value: unknown): CareerImportPrevie
   return {
     format: asString(item.format),
     timezone: asString(item.timezone),
+    contentHash: asString(item.contentHash) || undefined,
     headers: asStringArray(item.headers),
     suggestedMapping: Object.fromEntries(
       Object.entries(asRecord(item.suggestedMapping))
@@ -266,6 +267,7 @@ export const normalizeCareerImportResult = (value: unknown): CareerImportResultV
   return {
     batchId: item.batchId == null ? undefined : asNumber(item.batchId),
     format: asString(item.format),
+    contentHash: asString(item.contentHash) || undefined,
     status: asString(item.status) || undefined,
     totalCount: asNumber(item.totalCount),
     successCount: asNumber(item.successCount),

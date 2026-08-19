@@ -153,9 +153,15 @@
       </el-tabs>
     </section>
 
-    <AppState v-else-if="!loading" type="empty" title="项目证据不存在" description="该证据可能已被删除，或当前账号无权访问。">
+    <AppState
+      v-else-if="!loading"
+      :type="pageState.type"
+      :title="pageState.title"
+      :description="pageState.description"
+    >
       <div class="state-actions">
         <el-button type="primary" @click="router.push('/project-evidence')">返回项目证据库</el-button>
+        <el-button v-if="pageState.retryable" @click="fetchDetail">重新加载</el-button>
       </div>
     </AppState>
   </div>
@@ -175,6 +181,7 @@ import SkillEvidenceEditor from '@/components/project-evidence/SkillEvidenceEdit
 import { appConfig } from '@/config'
 import { summarizeSourceState } from '@/features/project-evidence'
 import type { ProjectEvidenceDetailVO } from '@/types/projectEvidence'
+import { getErrorMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
 
 type PreparationTab = 'skills' | 'story' | 'coverage'
@@ -187,11 +194,42 @@ interface NextStep {
   tab?: PreparationTab
 }
 
+interface ProjectEvidencePageState {
+  type: 'empty' | 'error'
+  title: string
+  description: string
+  retryable: boolean
+}
+
+interface RequestFailure {
+  code?: unknown
+  message?: unknown
+  traceId?: unknown
+  response?: {
+    status?: unknown
+    data?: {
+      code?: unknown
+      message?: unknown
+      traceId?: unknown
+    }
+    headers?: {
+      get?: (name: string) => unknown
+      [name: string]: unknown
+    }
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => getRouteNumberParam(route.params.id as string))
 const loading = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
+const pageState = ref<ProjectEvidencePageState>({
+  type: 'empty',
+  title: '项目证据不存在',
+  description: '该项目证据不存在或已被删除。',
+  retryable: false
+})
 const activePreparationTab = ref<PreparationTab | null>(null)
 const openedPreparationTabs = ref<PreparationTab[]>([])
 const skillEvidences = computed(() => detail.value?.skillEvidences || [])
@@ -237,6 +275,50 @@ const nextStep = computed<NextStep>(() => {
 })
 let detailRequestGeneration = 0
 
+const normalizeText = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim() : ''
+
+const failureTraceId = (failure: RequestFailure) => {
+  const bodyTraceId = normalizeText(failure.response?.data?.traceId) || normalizeText(failure.traceId)
+  if (bodyTraceId) return bodyTraceId
+  const headers = failure.response?.headers
+  const headerTraceId = typeof headers?.get === 'function'
+    ? normalizeText(headers.get('X-Trace-Id'))
+    : normalizeText(headers?.['x-trace-id'])
+  return headerTraceId
+}
+
+const classifyPageFailure = (error: unknown): ProjectEvidencePageState => {
+  const failure = (error || {}) as RequestFailure
+  const status = Number(failure.response?.status)
+  const code = Number(failure.response?.data?.code ?? failure.code)
+  if (status === 404 || code === 40400) {
+    return {
+      type: 'empty',
+      title: '项目证据不存在',
+      description: '该项目证据不存在或已被删除，请返回项目证据库确认。',
+      retryable: false
+    }
+  }
+  if (status === 403 || code === 41003) {
+    return {
+      type: 'error',
+      title: '无权访问项目证据',
+      description: '当前账号没有读取该项目证据的权限。',
+      retryable: false
+    }
+  }
+
+  const traceId = failureTraceId(failure)
+  const reason = getErrorMessage(error, '项目证据暂时无法加载，请稍后重试。')
+  return {
+    type: 'error',
+    title: status ? '项目证据加载失败' : '网络连接异常',
+    description: traceId ? `${reason}（追踪号：${traceId}）` : reason,
+    retryable: true
+  }
+}
+
 const openPreparationTab = (tab: PreparationTab) => {
   if (!openedPreparationTabs.value.includes(tab)) {
     openedPreparationTabs.value.push(tab)
@@ -268,6 +350,13 @@ const fetchDetail = async () => {
   const id = projectId.value
   const requestGeneration = ++detailRequestGeneration
   if (!id) {
+    detail.value = null
+    pageState.value = {
+      type: 'error',
+      title: '项目证据编号无效',
+      description: '当前链接缺少有效的项目证据编号，请返回项目证据库重新进入。',
+      retryable: false
+    }
     loading.value = false
     return
   }
@@ -277,9 +366,10 @@ const fetchDetail = async () => {
     if (requestGeneration === detailRequestGeneration) {
       detail.value = nextDetail
     }
-  } catch {
+  } catch (error) {
     if (requestGeneration === detailRequestGeneration) {
       detail.value = null
+      pageState.value = classifyPageFailure(error)
     }
   } finally {
     if (requestGeneration === detailRequestGeneration) {

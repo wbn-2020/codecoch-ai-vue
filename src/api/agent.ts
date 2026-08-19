@@ -178,19 +178,37 @@ const normalizeCoachAction = (action: AgentCoachActionVO): AgentCoachActionVO =>
   evidenceRefs: Array.isArray(action.evidenceRefs) ? action.evidenceRefs.filter(Boolean) : []
 })
 
-const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
+export const normalizeDailyPlan = (plan: DailyPlanVO): DailyPlanVO => {
   const tasks = (plan.tasks || []).map(normalizeTask)
-  const status = String(plan.status || '').toUpperCase()
-  const hasVisibleRun = Boolean(plan.runId && ['RUNNING', 'SUCCESS', 'FAILED'].includes(status))
+  const status = normalizeUpper(plan.status)
+  const executionStatus = normalizeUpper(plan.executionStatus)
+  const asyncReceiptStatus = normalizeUpper(plan.asyncReceiptStatus)
+  const hasLifecycleEvidence = Boolean(
+    plan.runId
+    || plan.executionId
+    || plan.idempotencyKey
+    || executionStatus
+    || status
+    || asyncReceiptStatus
+    || plan.asyncMessageId
+    || plan.asyncTraceId
+    || plan.asyncBizType
+  )
+  const explicitEmpty = plan.empty === true
   return {
     ...plan,
     date: plan.date || plan.planDate,
     planDate: plan.planDate || plan.date,
     status: status || plan.status,
+    executionStatus: executionStatus || plan.executionStatus,
+    deliveryQuality: normalizeUpper(plan.deliveryQuality) || plan.deliveryQuality,
+    executionSource: normalizeUpper(plan.executionSource) || plan.executionSource,
+    asyncReceiptStatus: asyncReceiptStatus || plan.asyncReceiptStatus,
+    consumable: plan.consumable == null ? plan.consumable : Boolean(plan.consumable),
     focusSkills: plan.focusSkills || [],
     tasks,
     activationHandoffs: normalizeActivationHandoffs(plan.activationHandoffs),
-    empty: Boolean(plan.empty || (!plan.runId && !hasVisibleRun && !tasks.length))
+    empty: explicitEmpty || (!hasLifecycleEvidence && !tasks.length)
   }
 }
 

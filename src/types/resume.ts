@@ -65,6 +65,11 @@ export interface ResumeDetailVO {
   isDefault: number
   status: number
   projects?: ResumeProjectVO[]
+  contextEligibility?: string
+  contextEligibilityReason?: string
+  draft?: boolean
+  completionPercent?: number
+  missingSections?: string[]
   createdAt?: string
   updatedAt?: string
 }
@@ -77,13 +82,14 @@ export interface ResumeCreateDTO {
   phone?: string
   summary?: string
   targetPosition?: string
-  skills: string
+  skills?: string
   skillStack?: string
   workSummary?: string
   workExperience?: string
   education?: string
   educationExperience?: string
   isDefault?: number
+  saveAsDraft?: boolean
 }
 
 export type ResumeUpdateDTO = ResumeCreateDTO
@@ -119,6 +125,27 @@ export type ResumeParseStatus = 'PENDING' | 'PARSING' | 'SUCCESS' | 'FAILED' | '
 export type ResumeOptimizeStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED'
 
 export type ResumeJsonValue = string | number | boolean | null | unknown[] | Record<string, unknown>
+
+export type ResumeImportWritePreviewStatus = 'WILL_WRITE' | 'MISSING' | string
+
+export interface ResumeImportWritePreviewVO {
+  fieldKey: string
+  label: string
+  value: string
+  status: ResumeImportWritePreviewStatus
+}
+
+export interface ResumeImportQualityReportVO {
+  schemaVersion: string
+  policyVersion: string
+  validationStatus: string
+  confirmable: boolean
+  duplicateProjectsRemoved: number
+  blockers: string[]
+  warnings: string[]
+  missingContacts: string[]
+  writePreview: ResumeImportWritePreviewVO[]
+}
 
 export interface ResumeUploadVO {
   fileId: number
@@ -158,7 +185,14 @@ export interface ResumeAnalysisResultVO {
   parseStatus: ResumeParseStatus
   errorMessage?: string
   structuredJson?: Record<string, ResumeJsonValue> | null
+  schemaVersion?: string
+  policyVersion?: string
+  sourceHash?: string
+  validationStatus?: string
+  repairBatchId?: string
+  qualityReport?: ResumeImportQualityReportVO | null
   rawTextSummary?: string
+  generatedAt?: string
   updatedAt?: string
 }
 

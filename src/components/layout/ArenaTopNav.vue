@@ -132,6 +132,22 @@
         </div>
       </nav>
 
+      <div class="arena-top-nav__tablet">
+        <span class="arena-top-nav__tablet-title" :title="currentLabel">{{ currentLabel }}</span>
+        <button
+          class="arena-top-nav__tablet-menu"
+          type="button"
+          aria-label="打开全部功能"
+          aria-haspopup="dialog"
+          :aria-expanded="mobileMoreOpen"
+          aria-controls="arena-mobile-more-panel"
+          @click="toggleMobileMore"
+        >
+          <Menu :size="17" aria-hidden="true" />
+          <span>全部功能</span>
+        </button>
+      </div>
+
       <div class="arena-top-nav__desktop-actions">
         <button
           class="arena-top-nav__chip arena-top-nav__chip--streak"
@@ -145,11 +161,11 @@
         <button
           class="arena-top-nav__chip arena-top-nav__chip--xp"
           type="button"
-          :title="`当前学习进度 ${formattedXp}`"
-          aria-label="返回今天查看学习进度"
+          :title="`当前成长经验 ${formattedXp}`"
+          aria-label="返回今天查看成长经验"
           @click="go('/dashboard')"
         >
-          进度 {{ formattedXp }}
+          经验 {{ formattedXp }}
         </button>
         <el-dropdown trigger="click" @command="handleUserCommand">
           <button class="arena-top-nav__avatar-button" type="button" :aria-label="`打开 ${displayName} 的账户菜单`">
@@ -250,7 +266,17 @@
 
         <div class="arena-mobile-more__groups">
           <section v-for="group in visibleNavigationGroups" :key="group.key" class="arena-mobile-more__group">
-            <h2>{{ group.label }}</h2>
+            <button
+              class="arena-mobile-more__group-link"
+              :class="{ 'is-active': activeGroup?.key === group.key }"
+              type="button"
+              :data-mobile-nav-group="group.path"
+              @click="go(group.path)"
+            >
+              <component :is="group.icon" :size="17" aria-hidden="true" />
+              <span>{{ group.label }}</span>
+              <ChevronRight :size="16" aria-hidden="true" />
+            </button>
             <div>
               <button
                 v-for="item in group.items"
@@ -259,6 +285,7 @@
                 :class="{ 'is-active': activeItem?.item.key === item.key }"
                 type="button"
                 :data-mobile-nav-item="item.path"
+                :title="item.label"
                 :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
                 @click="go(item.path)"
               >
@@ -304,7 +331,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, MoreHorizontal, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Menu, MoreHorizontal, X } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -334,6 +361,7 @@ const route = useRoute()
 const gameProfile = useGameProfileStore()
 const desktopNavRoot = ref<HTMLElement | null>(null)
 const mobileMorePanel = ref<HTMLElement | null>(null)
+const lastMobileMoreTrigger = ref<HTMLButtonElement | null>(null)
 const openDesktopKey = ref<UserNavigationGroupKey | 'more' | null>(null)
 const mobileMoreOpen = ref(false)
 let previousBodyOverflow = ''
@@ -481,7 +509,9 @@ function handleMenuKeydown(
   items[nextIndex]?.focus()
 }
 
-function toggleMobileMore() {
+function toggleMobileMore(event: MouseEvent) {
+  lastMobileMoreTrigger.value = event.currentTarget as HTMLButtonElement
+
   if (mobileMoreOpen.value) {
     closeMobileMore(true)
     return
@@ -503,7 +533,7 @@ function closeMobileMore(restoreFocus = false) {
 
   if (restoreFocus) {
     void nextTick(() => {
-      document.querySelector<HTMLButtonElement>('[aria-controls="arena-mobile-more-panel"]')?.focus()
+      lastMobileMoreTrigger.value?.focus()
     })
   }
 }
@@ -664,6 +694,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   color: var(--arena-sub);
   font-size: 13.5px;
   font-weight: 700;
+  white-space: nowrap;
 
   &:hover,
   &:focus-visible {
@@ -838,6 +869,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .arena-top-nav__chip {
@@ -874,6 +906,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 }
 
+.arena-top-nav__tablet,
 .arena-top-nav__mobile,
 .arena-bottom-nav,
 .arena-mobile-more {
@@ -890,6 +923,157 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 }
 
+@media (max-width: 900px) {
+  .arena-mobile-more {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: flex;
+    background: rgba(21, 33, 27, 0.32);
+  }
+
+  .arena-mobile-more__panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(100%, 520px);
+    max-height: min(78vh, 680px);
+    overflow: hidden;
+    border: 1px solid var(--arena-line);
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 8px 14px rgba(21, 33, 27, 0.14);
+  }
+
+  .arena-mobile-more__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--arena-line);
+
+    > div {
+      display: grid;
+      gap: 2px;
+    }
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    span {
+      color: var(--arena-mut);
+      font-size: 11px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--arena-sub);
+
+      &:hover,
+      &:focus-visible {
+        background: var(--arena-line2);
+        color: var(--arena-ink);
+        outline: 0;
+      }
+    }
+  }
+
+  .arena-mobile-more__groups {
+    display: grid;
+    gap: 14px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .arena-mobile-more__group {
+    display: grid;
+    gap: 6px;
+
+    > div {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+  }
+
+  .arena-mobile-more__group-link,
+  .arena-mobile-more__item {
+    min-width: 0;
+    border-radius: 8px;
+    color: var(--arena-sub);
+    text-align: left;
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &.is-active,
+    &:hover,
+    &:focus-visible {
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+      outline: 0;
+    }
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 2px var(--arena-grn);
+    }
+  }
+
+  .arena-mobile-more__group-link {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 7px 9px;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .arena-mobile-more__item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 42px;
+    padding: 8px 9px;
+    background: var(--arena-line2);
+
+    span {
+      font-size: 11.5px;
+      font-weight: 750;
+    }
+  }
+
+  .arena-mobile-more-enter-active,
+  .arena-mobile-more-leave-active {
+    transition: opacity 160ms ease;
+  }
+
+  .arena-mobile-more-enter-active .arena-mobile-more__panel,
+  .arena-mobile-more-leave-active .arena-mobile-more__panel {
+    transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .arena-mobile-more-enter-from,
+  .arena-mobile-more-leave-to {
+    opacity: 0;
+  }
+}
+
 @media (max-width: 900px) and (min-width: 721px) {
   .arena-top-nav__inner {
     padding-inline: 18px;
@@ -900,19 +1084,95 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 
   .arena-top-nav__desktop-links {
+    display: none;
+  }
+
+  .arena-top-nav__tablet {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
     margin-left: 12px;
   }
 
-  .arena-top-nav__link {
-    padding-inline: 8px;
+  .arena-top-nav__tablet-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--arena-ink);
+    font-size: 14px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .arena-top-nav__tablet-menu {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--arena-line2);
+    color: var(--arena-sub);
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible,
+    &[aria-expanded='true'] {
+      background: var(--arena-grn-soft);
+      color: var(--arena-grn-d);
+      outline: 0;
+    }
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 2px var(--arena-grn);
+    }
   }
 
   .arena-top-nav__desktop-actions {
-    gap: 6px;
+    gap: 0;
+    margin-left: 8px;
   }
 
+  .arena-top-nav__chip--streak,
   .arena-top-nav__chip--xp {
     display: none;
+  }
+
+  .arena-top-nav__avatar-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .arena-mobile-more {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding-top: 62px;
+  }
+
+  .arena-mobile-more__panel {
+    width: min(420px, 100vw);
+    height: calc(100vh - 62px);
+    max-height: none;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
+  }
+
+  .arena-mobile-more__groups {
+    padding: 16px;
+  }
+
+  .arena-mobile-more-enter-from .arena-mobile-more__panel,
+  .arena-mobile-more-leave-to .arena-mobile-more__panel {
+    transform: translateX(12px);
   }
 }
 
@@ -1035,142 +1295,15 @@ function handleDocumentKeydown(event: KeyboardEvent) {
   }
 
   .arena-mobile-more {
-    position: fixed;
-    inset: 0;
-    z-index: 55;
-    display: flex;
     align-items: flex-end;
     justify-content: center;
     padding: 54px 8px calc(68px + env(safe-area-inset-bottom));
-    background: rgba(21, 33, 27, 0.32);
   }
 
   .arena-mobile-more__panel {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
     width: min(100%, 520px);
     max-height: min(78vh, 680px);
-    overflow: hidden;
-    border: 1px solid var(--arena-line);
     border-radius: 12px;
-    background: #ffffff;
-    box-shadow: 0 8px 14px rgba(21, 33, 27, 0.14);
-  }
-
-  .arena-mobile-more__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 13px 14px;
-    border-bottom: 1px solid var(--arena-line);
-
-    > div {
-      display: grid;
-      gap: 2px;
-    }
-
-    strong {
-      color: var(--arena-ink);
-      font-size: 14px;
-      font-weight: 850;
-    }
-
-    span {
-      color: var(--arena-mut);
-      font-size: 11px;
-    }
-
-    button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--arena-sub);
-
-      &:hover,
-      &:focus-visible {
-        background: var(--arena-line2);
-        color: var(--arena-ink);
-        outline: 0;
-      }
-    }
-  }
-
-  .arena-mobile-more__groups {
-    display: grid;
-    gap: 14px;
-    padding: 12px;
-    overflow-y: auto;
-  }
-
-  .arena-mobile-more__group {
-    display: grid;
-    gap: 6px;
-
-    h2 {
-      margin: 0;
-      padding: 0 2px;
-      color: var(--arena-ink);
-      font-size: 12px;
-      font-weight: 850;
-    }
-
-    > div {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-  }
-
-  .arena-mobile-more__item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-    min-height: 42px;
-    padding: 8px 9px;
-    border-radius: 8px;
-    background: var(--arena-line2);
-    color: var(--arena-sub);
-    text-align: left;
-
-    span {
-      min-width: 0;
-      overflow-wrap: anywhere;
-      font-size: 11.5px;
-      font-weight: 750;
-    }
-
-    &.is-active,
-    &:hover,
-    &:focus-visible {
-      background: var(--arena-grn-soft);
-      color: var(--arena-grn-d);
-      outline: 0;
-    }
-
-    &:focus-visible {
-      box-shadow: inset 0 0 0 2px var(--arena-grn);
-    }
-  }
-
-  .arena-mobile-more-enter-active,
-  .arena-mobile-more-leave-active {
-    transition: opacity 160ms ease;
-  }
-
-  .arena-mobile-more-enter-active .arena-mobile-more__panel,
-  .arena-mobile-more-leave-active .arena-mobile-more__panel {
-    transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .arena-mobile-more-enter-from,
-  .arena-mobile-more-leave-to {
-    opacity: 0;
   }
 
   .arena-mobile-more-enter-from .arena-mobile-more__panel,

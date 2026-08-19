@@ -110,6 +110,7 @@ export const useGameProfileStore = defineStore('gameProfile', {
     /** 按用户装载（登录后/切换用户时调用） */
     hydrate(userId: string | number | null | undefined) {
       const id = userId == null || userId === '' ? 'guest' : String(userId)
+      if (this.hydrated && this.userId === id) return
       this.hydrated = false
       this.resetCounters()
       this.userId = id

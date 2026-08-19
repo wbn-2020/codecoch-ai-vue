@@ -22,7 +22,7 @@
         </div>
       </div>
 
-      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !hasAssessedSkills }">
         <div class="next-training-card__label">
           <Target :size="16" />
           下一步训练建议
@@ -91,10 +91,10 @@
             class="ability-formula__ring"
             :style="{ background: `conic-gradient(var(--arena-grn) 0 ${abilityPower}%, var(--arena-line) ${abilityPower}% 100%)` }"
           >
-            <span v-if="abilityMap.hasTrainingData">{{ abilityPower }}</span>
+            <span v-if="hasAssessedSkills">{{ abilityPower }}</span>
             <span v-else>--</span>
           </div>
-          <p v-if="abilityMap.hasTrainingData">综合评估参考<br />训练与面试证据</p>
+          <p v-if="hasAssessedSkills">综合评估参考<br />训练与匹配证据</p>
           <p v-else>评估证据不足<br />尚未生成综合结论</p>
         </div>
       </header>
@@ -138,7 +138,7 @@
         </div>
 
         <aside class="ability-action-rail">
-          <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+          <section class="priority-action-card" :class="{ 'is-muted': !hasAssessedSkills }">
             <div class="priority-action-card__label">
               <Target :size="16" />
               建议优先处理
@@ -160,12 +160,19 @@
               <span>评估依据</span>
               <ShieldCheck :size="15" />
             </div>
-            <strong>{{ totalEvidenceCount }} 条可用训练证据</strong>
+            <strong>{{ totalEvidenceCount }} 条评估证据</strong>
             <p>
-              {{ abilityMap.hasTrainingData
-                ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
-              : '完成一次训练后，这里会展示真实的评估依据，不会把空白状态当成零分。' }}
+              {{ hasAssessedSkills
+                ? '结论来自已完成训练、可信岗位匹配和其他明确评估；没有证据的节点不会被判定为强项或薄弱项。'
+                : totalEvidenceCount
+                  ? '证据已经归集，但目前不足以量化等级；页面保留真实证据数量，不会把待量化节点显示为零分。'
+                  : '完成一次训练或可信岗位匹配后，这里会展示真实评估依据，不会把空白状态当成零分。' }}
             </p>
+            <div class="ability-evidence-card__details">
+              <span>来源：{{ evidenceSourceSummary }}</span>
+              <span>最近更新：{{ latestEvidenceAt }}</span>
+              <span>同步状态：{{ evidenceSyncText }}</span>
+            </div>
             <el-button plain @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
               去补一组训练
               <ArrowRight :size="15" />
@@ -465,33 +472,74 @@ const activeDomain = computed(() =>
 
 const hasAbilityDirectory = computed(() => abilityMap.value.domains.length > 0)
 const isInitialLoading = computed(() => loading.value && !hasAbilityDirectory.value && !loadError.value)
+const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
+const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
+const hasAssessedSkills = computed(() => allSkills.value.some(
+  (skill) => skill.status !== 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+))
 const isEvidenceInsufficient = computed(() =>
-  !loading.value && !loadError.value && hasAbilityDirectory.value && !abilityMap.value.hasTrainingData
+  !loading.value && !loadError.value && hasAbilityDirectory.value && !hasAssessedSkills.value
 )
 const assessmentSummary = computed(() => {
   if (isInitialLoading.value) return '能力评估 · 正在加载'
   if (!hasAbilityDirectory.value) return '能力评估 · 尚未建立目录'
-  if (!abilityMap.value.hasTrainingData) return `能力评估 · 目录 ${abilityMap.value.totalSkillCount} 项，证据不足`
+  if (!hasAssessedSkills.value && totalEvidenceCount.value > 0) {
+    return `能力评估 · 已归集 ${totalEvidenceCount.value} 条证据，暂无可量化节点`
+  }
+  if (!hasAssessedSkills.value) return `能力评估 · 目录 ${abilityMap.value.totalSkillCount} 项，证据不足`
   return `能力评估 · 已评估 ${abilityMap.value.assessedSkillCount} / ${abilityMap.value.totalSkillCount}`
 })
 const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
-const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
 const canStartTraining = computed(() => !loading.value && !loadError.value && allSkills.value.length > 0)
-const weakSkills = computed(() => abilityMap.value.hasTrainingData ? allSkills.value.filter((skill) => skill.status === 'WEAK') : [])
-const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
+const weakSkills = computed(() => allSkills.value.filter(
+  (skill) => skill.status === 'WEAK' && (skill.evidenceCount || 0) > 0
+))
+const evidenceSourceSummary = computed(() => {
+  const labels = allSkills.value.flatMap((skill) => [
+    ...(skill.evidenceSources || []),
+    ...(skill.sourceLabels || [])
+  ])
+  const unique = Array.from(new Set(labels.filter(Boolean)))
+  return unique.length ? unique.join('、') : '来源信息待同步'
+})
+const latestEvidenceAt = computed(() => {
+  const values = [
+    abilityMap.value.updatedAt,
+    ...allSkills.value.flatMap((skill) => [skill.updatedAt, skill.lastEvaluatedAt])
+  ].filter((value): value is string => Boolean(value))
+  if (!values.length) return '暂无更新时间'
+  const latest = values
+    .map((value) => ({ value, timestamp: new Date(value).getTime() }))
+    .filter((item) => Number.isFinite(item.timestamp))
+    .sort((left, right) => right.timestamp - left.timestamp)[0]
+  return latest ? formatDate(latest.value) : '更新时间格式待确认'
+})
+const evidenceSyncText = computed(() => {
+  const status = String(abilityMap.value.syncStatus || '').toUpperCase()
+  if (status === 'SYNCED' || status === 'SUCCESS') return '已同步'
+  if (status === 'PENDING' || status === 'PROCESSING') return '同步中'
+  if (status === 'FAILED') return abilityMap.value.syncMessage || '同步失败'
+  return abilityMap.value.syncMessage || '未返回同步状态'
+})
 const recommendedSkill = computed(() => {
-  if (abilityMap.value.hasTrainingData && weakSkills.value.length) return weakSkills.value[0]
+  if (hasAssessedSkills.value && weakSkills.value.length) return weakSkills.value[0]
+  const unquantifiedWithEvidence = allSkills.value.find(
+    (skill) => skill.status === 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+  )
+  if (unquantifiedWithEvidence) return unquantifiedWithEvidence
   return activeDomain.value?.skills?.[0] || allSkills.value[0]
 })
 const nextTrainingTitle = computed(() => {
   if (!allSkills.value.length) return '先建立能力目录'
-  if (!abilityMap.value.hasTrainingData) return '先完成一次专项训练，建立评估证据'
+  if (!totalEvidenceCount.value) return '先完成一次专项训练，建立评估证据'
+  if (!hasAssessedSkills.value) return '继续训练，补足可量化证据'
   if (recommendedSkill.value && weakSkills.value.length) return `优先训练：${safeSkillName(recommendedSkill.value)}`
   return '保持专项训练，补齐证据链'
 })
 const nextTrainingDescription = computed(() => {
   if (!allSkills.value.length) return '当前没有可训练的能力点，请先进入题库完成一组基础训练。'
-  if (!abilityMap.value.hasTrainingData) return '目前没有训练数据，页面不会推断强弱。先围绕当前能力域做题，让图谱有真实证据。'
+  if (!totalEvidenceCount.value) return '目前没有评估证据，页面不会推断强弱。先围绕当前能力域完成训练或岗位匹配。'
+  if (!hasAssessedSkills.value) return '已有训练或匹配证据，但尚不足以形成等级结论。继续围绕有证据的节点训练，避免把“待量化”误读为零分。'
   if (recommendedSkill.value && weakSkills.value.length) {
     return safeSkillSummary(recommendedSkill.value, '这个能力点已被评估为薄弱，建议用专项题组补齐概念、方案和项目表达。')
   }
@@ -502,10 +550,10 @@ const nextTrainingMeta = computed(() => {
   return `${recommendedSkill.value.evidenceCount || 0} 条证据 · ${formatDate(recommendedSkill.value.lastEvaluatedAt)}`
 })
 const trainingTrustText = computed(() => {
-  if (!abilityMap.value.hasTrainingData) return '暂无强弱结论'
+  if (!hasAssessedSkills.value) return totalEvidenceCount.value ? '已有证据，待量化' : '暂无强弱结论'
   return recommendedSkill.value ? confidenceText(recommendedSkill.value) : '可信度待确认'
 })
-const nextTrainingActionLabel = computed(() => abilityMap.value.hasTrainingData && weakSkills.value.length ? '训练薄弱项' : '开始训练')
+const nextTrainingActionLabel = computed(() => hasAssessedSkills.value && weakSkills.value.length ? '训练薄弱项' : '开始训练')
 
 const fetchAbilityMap = async () => {
   loading.value = true
@@ -522,18 +570,18 @@ const fetchAbilityMap = async () => {
 }
 
 const domainWeakText = (domain: AbilityDomainVO) => {
-  if (!abilityMap.value.hasTrainingData) return '未评估'
   if (domain.weakCount) return `${domain.weakCount} 个薄弱项`
+  if (!domain.assessedCount) return domain.skills.some((skill) => (skill.evidenceCount || 0) > 0) ? '已有证据，待量化' : '未评估'
   return '暂无薄弱项'
 }
 
 const honestStatusLabel = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return '未评估'
+  if (skill.status === 'UNASSESSED') return skill.evidenceCount ? '待量化' : '未评估'
   return statusLabel(skill.status)
 }
 
 const confidenceText = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || !skill.evidenceCount) return '待训练验证'
+  if (!skill.evidenceCount) return '待训练验证'
   const labels: Record<string, string> = {
     UNKNOWN: '可信度待确认',
     LOW: '可信度低',
@@ -554,12 +602,12 @@ const formatDate = (value?: string) => {
 }
 
 const skillCardClass = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'is-unassessed'
+  if (skill.status === 'UNASSESSED') return 'is-unassessed'
   return `is-${String(skill.status).toLowerCase()}`
 }
 
 const skillScore = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 0
+  if (skill.status === 'UNASSESSED' || !skill.evidenceCount) return 0
   const scores: Record<string, number> = {
     WEAK: 32,
     BASIC: 58,
@@ -570,13 +618,16 @@ const skillScore = (skill: AbilitySkillNodeVO) => {
 }
 
 const skillScoreLabel = (skill: AbilitySkillNodeVO) =>
-  abilityMap.value.hasTrainingData && skill.status !== 'UNASSESSED'
+  skill.evidenceCount && skill.status !== 'UNASSESSED'
     ? String(skillScore(skill))
     : honestStatusLabel(skill)
 
 const abilityPower = computed(() => {
-  if (!allSkills.value.length || !abilityMap.value.hasTrainingData) return 0
-  return Math.round(allSkills.value.reduce((total, skill) => total + skillScore(skill), 0) / allSkills.value.length)
+  const assessed = allSkills.value.filter(
+    (skill) => skill.status !== 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+  )
+  if (!assessed.length) return 0
+  return Math.round(assessed.reduce((total, skill) => total + skillScore(skill), 0) / assessed.length)
 })
 
 const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
@@ -586,7 +637,7 @@ const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
     keyword,
     skillName: keyword,
     sourceType: 'SKILL_PROFILE',
-    trustStatus: abilityMap.value.hasTrainingData && (skill?.evidenceCount || 0) > 0 ? 'VERIFIED' : 'PARTIAL'
+    trustStatus: skill?.status !== 'UNASSESSED' && (skill?.evidenceCount || 0) > 0 ? 'VERIFIED' : 'PARTIAL'
   }
 }
 
@@ -600,7 +651,7 @@ const startDomainTraining = (domain?: AbilityDomainVO) => {
       keyword,
       skillName: keyword,
       sourceType: 'SKILL_PROFILE',
-      trustStatus: abilityMap.value.hasTrainingData ? 'PARTIAL' : 'FALLBACK'
+      trustStatus: totalEvidenceCount.value > 0 ? 'PARTIAL' : 'FALLBACK'
     }
   })
 }
@@ -623,7 +674,7 @@ const startRecommendedTraining = () => {
 
 /** 能力节点状态用于展示评估可用性。 */
 const skillNodeState = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'locked'
+  if (skill.status === 'UNASSESSED') return 'locked'
   if (skill.status === 'WEAK') return 'training'
   return 'unlocked'
 }
@@ -2292,6 +2343,18 @@ onMounted(fetchAbilityMap)
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .ability-evidence-card__details {
+    display: grid;
+    gap: 5px;
+
+    span {
+      color: var(--arena-sub);
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
   }
 
   .priority-action-card__label {

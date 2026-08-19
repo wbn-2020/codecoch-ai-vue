@@ -1,5 +1,11 @@
 <template>
-  <QuestionManageView governance-only initial-governance-tab="duplicates" />
+  <div class="question-duplicate-review-view">
+    <QuestionManageView
+      key="question-duplicate-review-workspace"
+      governance-only
+      initial-governance-tab="duplicates"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">

@@ -1,9 +1,17 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 import ArenaTopNav from '@/components/layout/ArenaTopNav.vue'
+
+const arenaTopNavSource = readFileSync(
+  resolve(process.cwd(), 'src/components/layout/ArenaTopNav.vue'),
+  'utf8'
+).replace(/\r\n/g, '\n')
 
 const appConfig = vi.hoisted(() => ({
   enableV4PreviewAccess: true,
@@ -190,5 +198,69 @@ describe('ArenaTopNav', () => {
     expect(document.body.style.overflow).toBe('')
     expect(document.activeElement).toBe(moreTrigger.element)
     wrapper.unmount()
+  })
+
+  it('exposes every core group through the tablet compact navigation drawer', async () => {
+    const wrapper = mountNav()
+    const tabletTrigger = wrapper.get('.arena-top-nav__tablet-menu')
+
+    expect(tabletTrigger.attributes('aria-haspopup')).toBe('dialog')
+    expect(tabletTrigger.attributes('aria-expanded')).toBe('false')
+
+    tabletTrigger.element.focus()
+    await tabletTrigger.trigger('click')
+    await nextTick()
+
+    expect(tabletTrigger.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('[data-mobile-nav-group]').map((item) => item.attributes('data-mobile-nav-group')))
+      .toEqual([
+        '/dashboard',
+        '/resumes',
+        '/job-targets',
+        '/questions/recommendations',
+        '/interviews/create',
+        '/applications',
+        '/project-evidence',
+        '/ability-map'
+      ])
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+
+    expect(wrapper.find('#arena-mobile-more-panel').exists()).toBe(false)
+    expect(document.activeElement).toBe(tabletTrigger.element)
+    wrapper.unmount()
+  })
+
+  it('uses a single-line compact strategy at the 768px tablet breakpoint', () => {
+    const tabletStart = arenaTopNavSource.indexOf(
+      '@media (max-width: 900px) and (min-width: 721px)'
+    )
+    const tabletEnd = arenaTopNavSource.indexOf('@media (max-width: 720px)', tabletStart)
+    const tabletStyles = arenaTopNavSource.slice(tabletStart, tabletEnd)
+
+    expect(tabletStart).toBeGreaterThan(-1)
+    expect(tabletEnd).toBeGreaterThan(tabletStart)
+    expect(tabletStyles).toMatch(
+      /\.arena-top-nav__desktop-links\s*\{[\s\S]*?display:\s*none;/
+    )
+    expect(tabletStyles).toMatch(
+      /\.arena-top-nav__tablet\s*\{[\s\S]*?display:\s*flex;/
+    )
+    expect(tabletStyles).toMatch(
+      /\.arena-top-nav__tablet-title\s*\{[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/
+    )
+    expect(tabletStyles).toMatch(
+      /\.arena-top-nav__tablet-menu\s*\{[\s\S]*?white-space:\s*nowrap;/
+    )
+    expect(tabletStyles).toMatch(
+      /\.arena-mobile-more__panel\s*\{[\s\S]*?width:\s*min\(420px,\s*100vw\);/
+    )
+    expect(arenaTopNavSource).toMatch(
+      /\.arena-top-nav__link\s*\{[\s\S]*?white-space:\s*nowrap;/
+    )
+    expect(arenaTopNavSource).toMatch(
+      /\.arena-mobile-more__group-link,[\s\S]*?span\s*\{[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/
+    )
   })
 })

@@ -67,7 +67,8 @@ const CareerCalendarGridStub = defineComponent({
     events: {
       type: Array,
       default: () => []
-    }
+    },
+    exporting: Boolean
   },
   emits: ['create', 'edit', 'export'],
   template: `
@@ -82,8 +83,8 @@ const CareerCalendarGridStub = defineComponent({
       >
         编辑
       </button>
-      <button data-testid="export-csv" @click="$emit('export', 'csv')">导出 CSV</button>
-      <button data-testid="export-ics" @click="$emit('export', 'ics')">导出 ICS</button>
+      <button data-testid="export-csv" :disabled="exporting" @click="$emit('export', 'csv')">导出 CSV</button>
+      <button data-testid="export-ics" :disabled="exporting" @click="$emit('export', 'ics')">导出 ICS</button>
     </div>
   `
 })
@@ -193,5 +194,50 @@ describe('CareerCalendarView local operation errors', () => {
     expect(api[apiKey]).toHaveBeenCalled()
     expect(wrapper.find('[data-testid="create-event"]').exists()).toBe(true)
     expect(elMessage.error).toHaveBeenCalledWith('日历导出失败，请稍后重试。')
+  })
+
+  it.each([
+    ['csv', 'export-csv', 'exportCsv', 'text/csv', 'company,role\n示例科技,Java 工程师', '.csv'],
+    ['ics', 'export-ics', 'exportIcs', 'text/calendar', 'BEGIN:VCALENDAR\r\nEND:VCALENDAR', '.ics']
+  ] as const)(
+    'validates %s content and emits a browser download with the expected filename',
+    async (_format, testId, apiKey, mimeType, content, extension) => {
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+      const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue(`blob:${apiKey}`)
+      const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+      const blob = new Blob([content], { type: mimeType })
+      api[apiKey].mockResolvedValue(blob)
+      const wrapper = await mountView()
+
+      await wrapper.get(`[data-testid="${testId}"]`).trigger('click')
+      await flushPromises()
+
+      expect(click).toHaveBeenCalledTimes(1)
+      expect(createObjectURL).toHaveBeenCalledWith(blob)
+      expect(revokeObjectURL).toHaveBeenCalledWith(`blob:${apiKey}`)
+      expect(elMessage.success).toHaveBeenCalledWith('日历导出已开始。')
+      const downloadedAnchor = click.mock.instances[0] as HTMLAnchorElement
+      expect(downloadedAnchor.download).toMatch(new RegExp(`\\${extension}$`))
+    }
+  )
+
+  it('fails closed for an invalid CSV response and succeeds on retry', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:retry')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    api.exportCsv
+      .mockResolvedValueOnce(new Blob(['{"error":"upstream"}'], { type: 'application/json' }))
+      .mockResolvedValueOnce(new Blob(['company,role\n示例科技,Java 工程师'], { type: 'text/csv' }))
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-testid="export-csv"]').trigger('click')
+    await flushPromises()
+    expect(click).not.toHaveBeenCalled()
+    expect(elMessage.error).toHaveBeenCalledWith(expect.stringContaining('下载文件类型异常'))
+
+    await wrapper.get('[data-testid="export-csv"]').trigger('click')
+    await flushPromises()
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(elMessage.success).toHaveBeenCalledWith('日历导出已开始。')
   })
 })

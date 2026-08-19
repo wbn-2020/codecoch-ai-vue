@@ -2,7 +2,7 @@
   <div class="page-shell agent-review-page">
     <section class="review-header">
       <div>
-        <div class="review-eyebrow">Agent daily review</div>
+        <div class="review-eyebrow">每日智能复盘</div>
         <h1>多日闭环复盘</h1>
         <p>先展示任务事实，再说明限制、偏移、调整和下一步。样本不足或降级来源只作为弱调整信号。</p>
       </div>

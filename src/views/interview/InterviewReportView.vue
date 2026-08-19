@@ -711,6 +711,14 @@
         <el-form-item label="每日投入（分钟）">
           <el-input-number v-model="studyPlanConfig.dailyMinutes" :min="20" :max="360" :step="10" :precision="0" />
         </el-form-item>
+        <el-form-item label="开始日期">
+          <el-date-picker
+            v-model="studyPlanConfig.startDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="studyPlanConfigVisible = false">取消</el-button>
@@ -758,7 +766,13 @@ import {
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
 import { appConfig } from '@/config'
+import {
+  isAsyncOperationFailure,
+  resolveAsyncOperationState,
+  shouldPollAsyncOperation
+} from '@/features/async-operation-state'
 import { resolveAppRoutePath } from '@/features/route-safety'
+import { downloadBlobReliably } from '@/features/reliable-download'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -770,6 +784,7 @@ import type {
 import type { InterviewReplayEligibilityVO } from '@/types/interviewAdvanced'
 import type { StudyPlanGenerateDTO } from '@/types/studyPlan'
 import { toFriendlyMessage } from '@/utils/error'
+import { formatDateInTimezone } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
@@ -789,9 +804,10 @@ const replayIdempotencyKeys = new Map<number, string>()
 const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
 const studyPlanConfigVisible = ref(false)
-const studyPlanConfig = ref<Pick<StudyPlanGenerateDTO, 'expectedDurationDays' | 'dailyMinutes'>>({
+const studyPlanConfig = ref<Pick<StudyPlanGenerateDTO, 'expectedDurationDays' | 'dailyMinutes' | 'startDate'>>({
   expectedDurationDays: 14,
-  dailyMinutes: 60
+  dailyMinutes: 60,
+  startDate: formatDateInTimezone(new Date(), 'Asia/Shanghai')
 })
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -851,15 +867,14 @@ const handleExportReport = async (command: string | number | object) => {
     if (!isCurrentReportRequest(id, generation)) return
     const mimeType = format === 'json' ? 'application/json;charset=UTF-8' : 'text/markdown;charset=UTF-8'
     const blob = response instanceof Blob ? response : new Blob([response as BlobPart], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    try {
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`
-      link.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    downloadBlobReliably(blob, {
+      filename: `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`,
+      allowedExtensions: [format === 'json' ? 'json' : 'md'],
+      allowedMimeTypes: format === 'json'
+        ? ['application/json', 'text/json']
+        : ['text/markdown', 'text/plain'],
+      maxBytes: 20 * 1024 * 1024
+    })
     ElMessage.success('报告已导出')
   } catch (error) {
     if (!isCurrentReportRequest(id, generation)) return
@@ -892,10 +907,24 @@ const normalizedStatus = computed(() => {
 
 const successReportStatuses = ['GENERATED', 'COMPLETED', 'SUCCESS']
 const unscorableReportStatuses = ['UNSCORABLE', 'NOT_SCORABLE', 'INSUFFICIENT_SAMPLE', 'SAMPLE_INSUFFICIENT']
-const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
-const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
+const reportOperationSnapshot = computed(() => ({
+  status: normalizedStatus.value,
+  consumable: isGenerated.value,
+  hasExecution: Boolean(report.value?.reportId || report.value?.id || interviewId.value),
+  hasReceipt: Boolean(
+    report.value?.asyncMessageId
+    || report.value?.asyncTraceId
+    || asyncReceipt.value.messageId
+    || asyncReceipt.value.traceId
+  )
+}))
+const isGenerating = computed(() => shouldPollAsyncOperation(reportOperationSnapshot.value))
+const isFailed = computed(() =>
+  !isUnscorable.value
+  && isAsyncOperationFailure(resolveAsyncOperationState(reportOperationSnapshot.value))
+)
 const isRecoveryState = computed(() => !loading.value && !isGenerating.value && !isGenerated.value)
 const normalizedTrustStatus = computed(() => String(report.value?.trustStatus || '').toUpperCase())
 const hasVerifiedReport = computed(() =>
@@ -2036,14 +2065,16 @@ const confirmGenerateStudyPlan = async () => {
     dailyMinutes: Math.min(
       360,
       Math.max(20, Math.round(Number(studyPlanConfig.value.dailyMinutes) || 60))
-    )
+    ),
+    startDate: studyPlanConfig.value.startDate || formatDateInTimezone(new Date(), 'Asia/Shanghai')
   }
   studyPlanGenerating.value = true
   try {
     const payload: StudyPlanGenerateDTO = {
       reportId,
       expectedDurationDays: studyPlanConfig.value.expectedDurationDays,
-      dailyMinutes: studyPlanConfig.value.dailyMinutes
+      dailyMinutes: studyPlanConfig.value.dailyMinutes,
+      startDate: studyPlanConfig.value.startDate
     }
     const result = await generateStudyPlanApi(payload)
     if (!isCurrentReportRequest(id, generation)) return

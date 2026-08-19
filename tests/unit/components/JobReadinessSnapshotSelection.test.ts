@@ -166,7 +166,9 @@ describe('readiness snapshot selection', () => {
     await matrixWrapper.find('[data-test="select-snapshot"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.getJobReadinessSnapshot).toHaveBeenCalledWith(15, 42)
+    expect(mocks.getJobReadinessSnapshot).toHaveBeenCalledWith(15, 42, {
+      silentError: true
+    })
     matrixWrapper = wrapper.findComponent(MatrixStub)
     expect(matrixWrapper.props('readiness')).toMatchObject({
       id: 42,

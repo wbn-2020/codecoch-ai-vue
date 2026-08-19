@@ -66,6 +66,7 @@ import {
 } from '@/api/careerGrowth'
 import { getApplicationsApi, type JobApplicationVO } from '@/api/v4'
 import { useCalendarTimezone } from '@/composables/useCalendarTimezone'
+import { downloadBlobReliably } from '@/features/reliable-download'
 import type { CareerCalendarEventSave } from '@/types/careerGrowth'
 import { getErrorMessage } from '@/utils/error'
 import CareerCalendarGrid from './components/CareerCalendarGrid.vue'
@@ -258,9 +259,19 @@ const exportCalendar = async (format: string) => {
   exporting.value = true
   try {
     if (format === 'ics') {
-      downloadBlob(await exportCareerCalendarIcsApi(timezone, monthRange.value), `career-calendar-${dateKey(currentMonth.value)}.ics`)
+      downloadBlobReliably(await exportCareerCalendarIcsApi(timezone, monthRange.value), {
+        filename: `career-calendar-${dateKey(currentMonth.value)}.ics`,
+        allowedExtensions: ['ics'],
+        allowedMimeTypes: ['text/calendar'],
+        maxBytes: 20 * 1024 * 1024
+      })
     } else {
-      downloadBlob(await exportCareerCalendarCsvApi(monthRange.value), `career-calendar-${dateKey(currentMonth.value)}.csv`)
+      downloadBlobReliably(await exportCareerCalendarCsvApi(monthRange.value), {
+        filename: `career-calendar-${dateKey(currentMonth.value)}.csv`,
+        allowedExtensions: ['csv'],
+        allowedMimeTypes: ['text/csv', 'application/csv', 'application/vnd.ms-excel'],
+        maxBytes: 20 * 1024 * 1024
+      })
     }
     ElMessage.success('日历导出已开始。')
   } catch (error) {
@@ -268,17 +279,6 @@ const exportCalendar = async (format: string) => {
   } finally {
     exporting.value = false
   }
-}
-
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }
 
 const onImported = () => {

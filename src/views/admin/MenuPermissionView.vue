@@ -233,6 +233,18 @@ const diffIds = (source: number[], target: number[]) => {
 const flattenMenus = (items: MenuVO[]): MenuVO[] =>
   items.flatMap((item) => [item, ...flattenMenus(item.children || [])])
 
+const toTreeCheckedKeys = (menuIds: number[]) => {
+  const grantedIds = new Set(normalizeIds(menuIds))
+  const hasGrantedDescendant = (menu: MenuVO): boolean =>
+    (menu.children || []).some((child) => grantedIds.has(child.id) || hasGrantedDescendant(child))
+
+  return normalizeIds(
+    flatMenus.value
+      .filter((menu) => grantedIds.has(menu.id) && !hasGrantedDescendant(menu))
+      .map((menu) => menu.id)
+  )
+}
+
 const toReadonlyMenuTree = (items: MenuVO[]): Array<MenuVO & { disabled?: boolean }> =>
   items.map((item) => ({
     ...item,
@@ -257,7 +269,7 @@ const applyCheckedKeys = async (menuIds: number[]) => {
     currentGrantMenuIds.value = normalizeIds(menuIds)
     return
   }
-  treeRef.value.setCheckedKeys(menuIds, false)
+  treeRef.value.setCheckedKeys(toTreeCheckedKeys(menuIds), false)
   await nextTick()
   syncCheckedState()
 }

@@ -1240,7 +1240,6 @@ const loadAll = async () => {
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   void loadAll()
 })
 

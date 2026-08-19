@@ -17,6 +17,7 @@ const resumeApiMocks = vi.hoisted(() => ({
   getResumeOptimizeResultApi: vi.fn(),
   getResumeDetailApi: vi.fn(),
   optimizeResumeApi: vi.fn(),
+  clearDefaultResumeApi: vi.fn(),
   setDefaultResumeApi: vi.fn(),
   updateResumeApi: vi.fn(),
   updateResumeProjectApi: vi.fn()
@@ -98,7 +99,20 @@ describe('ResumeEditView', () => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
     resumeApiMocks.getResumeOptimizeRecordsApi.mockResolvedValue([])
-    resumeApiMocks.updateResumeApi.mockResolvedValue(undefined)
+    resumeApiMocks.updateResumeApi.mockResolvedValue({
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    })
+    resumeApiMocks.clearDefaultResumeApi.mockResolvedValue(undefined)
     resumeApiMocks.setDefaultResumeApi.mockResolvedValue(undefined)
     resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
     resumeVersionApiMocks.createResumeVersionApi.mockResolvedValue({
@@ -183,7 +197,19 @@ describe('ResumeEditView', () => {
     })
     resumeApiMocks.updateResumeApi
       .mockRejectedValueOnce(new Error('保存服务暂时不可用'))
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        id: 2,
+        resumeName: 'Java 后端简历',
+        realName: '测试用户',
+        targetPosition: 'Java 工程师',
+        skills: 'Java, Spring Boot',
+        summary: '',
+        workSummary: '',
+        education: '',
+        isDefault: 0,
+        draft: false,
+        projects: []
+      })
 
     const wrapper = mount(ResumeEditView, {
       global: {
@@ -207,6 +233,59 @@ describe('ResumeEditView', () => {
 
     expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).not.toContain('简历尚未保存')
+  })
+
+  it('clears default status and reads the saved detail back after refresh', async () => {
+    const initialDetail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 1,
+      projects: []
+    }
+    const refreshedDetail = {
+      ...initialDetail,
+      summary: '保存后的摘要',
+      isDefault: 0
+    }
+    resumeApiMocks.getResumeDetailApi
+      .mockResolvedValueOnce(initialDetail)
+      .mockResolvedValueOnce(refreshedDetail)
+    resumeApiMocks.updateResumeApi.mockResolvedValue({
+      ...initialDetail,
+      summary: '保存后的摘要',
+      isDefault: 1,
+      draft: false
+    })
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: {
+          loading: () => undefined
+        },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { form: { isDefault: number } }
+    vm.form.isDefault = 0
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledWith(2, expect.objectContaining({
+      isDefault: 0,
+      summary: '初始摘要'
+    }))
+    expect(resumeApiMocks.clearDefaultResumeApi).toHaveBeenCalledWith(2)
+    expect(resumeApiMocks.getResumeDetailApi).toHaveBeenCalledTimes(2)
+    expect(vm.form.isDefault).toBe(0)
+    expect((wrapper.vm as unknown as { form: { summary: string } }).form.summary).toBe('保存后的摘要')
   })
 
   it('grants resume_section XP once only after a successful AI suggestion application', async () => {

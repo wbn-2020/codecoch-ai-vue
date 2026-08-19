@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -246,7 +249,9 @@ describe('ArenaHomeView', () => {
     const hole = wrapper.get('.arena-ring__hole')
     expect(hole.text()).toContain('76')
     expect(wrapper.text()).toContain('仍有 2 项岗位要求待补齐')
-    expect(getLatestJobReadinessApi).toHaveBeenCalledWith(88)
+    expect(getLatestJobReadinessApi).toHaveBeenCalledWith(88, {
+      silentError: true
+    })
   })
 
   it('does not display a score when the only readiness snapshot is fallback evidence', async () => {
@@ -280,5 +285,15 @@ describe('ArenaHomeView', () => {
     await flush()
 
     expect(wrapper.text()).toContain('周日')
+  })
+
+  it('uses the wide-screen workspace width for the existing task and readiness columns', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/user/ArenaHomeView.vue'), 'utf8')
+
+    expect(source).toContain('width: min(100%, var(--user-content-max, 1440px));')
+    expect(source).toContain('grid-template-columns: 1.55fr 1fr;')
+    expect(source).toContain('今日优先任务')
+    expect(source).toContain('求职准备清单')
+    expect(source).toContain('建议依据')
   })
 })

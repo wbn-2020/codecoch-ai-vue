@@ -8,6 +8,8 @@ import type {
   AdminNotificationVO,
   AdminOperationConfirmPayload,
   AdminTaskActionPayload,
+  AdminTaskGovernanceActionPayload,
+  AdminTaskGovernancePreviewVO,
   AdminTaskImpactPreviewVO,
   AiModelConfigDTO,
   AiModelProbeVO,
@@ -80,6 +82,19 @@ const normalizeTask = (item: any): AsyncTaskVO => ({
   resultPreview: pick(item, 'resultPreview', 'result_preview'),
   resultHash: pick(item, 'resultHash', 'result_hash'),
   rawFieldsAvailable: pick(item, 'rawFieldsAvailable', 'raw_fields_available'),
+  executionId: pick(item, 'executionId', 'execution_id'),
+  parentExecutionId: pick(item, 'parentExecutionId', 'parent_execution_id'),
+  runId: pick(item, 'runId', 'run_id'),
+  attemptNo: pick(item, 'attemptNo', 'attempt_no'),
+  idempotencyKey: pick(item, 'idempotencyKey', 'idempotency_key'),
+  terminalReasonCode: pick(item, 'terminalReasonCode', 'terminal_reason_code'),
+  governanceStatus: pick(item, 'governanceStatus', 'governance_status') || 'UNASSESSED',
+  governanceReason: pick(item, 'governanceReason', 'governance_reason'),
+  governanceOwner: pick(item, 'governanceOwner', 'governance_owner'),
+  governanceUpdatedAt: pick(item, 'governanceUpdatedAt', 'governance_updated_at'),
+  retryPreviewHash: pick(item, 'retryPreviewHash', 'retry_preview_hash'),
+  failureClass: pick(item, 'failureClass', 'failure_class'),
+  ageMinutes: pick(item, 'ageMinutes', 'age_minutes'),
   createdAt: pick(item, 'createdAt', 'createTime', 'created_at'),
   updatedAt: pick(item, 'updatedAt', 'updateTime', 'updated_at'),
   finishedAt: pick(item, 'finishedAt', 'finishTime', 'completedAt', 'completed_at')
@@ -238,7 +253,7 @@ const normalizeReport = (item: any): AdminInterviewReportVO => ({
 export const getAdminTasksApi = (params: AdminListQuery) =>
   request
     .get<PageResult<any> | any[], PageResult<any> | any[]>('/admin/tasks', {
-      params: cleanParams({ ...withCommonParams(params), bizType: params.type })
+      params: cleanParams({ ...withCommonParams(params), bizType: params.type, governanceStatus: params.governanceStatus })
     })
     .then((result) => normalizePageResult(result, params, normalizeTask, { allowArrayFallback: true }))
 
@@ -263,6 +278,25 @@ export const getAdminTaskRetryPreviewApi = (id: number) =>
 
 export const retryAdminTaskApi = (id: number, data: AdminTaskActionPayload) =>
   request.post<null, null>(`/admin/tasks/${id}/retry`, data)
+
+export const getAdminTaskGovernanceInventoryApi = (params?: {
+  bizType?: string
+  status?: string
+  governanceStatus?: string
+  minAgeMinutes?: number
+  limit?: number
+}) =>
+  request
+    .get<any[] | PageResult<any>, any[] | PageResult<any>>('/admin/tasks/governance-inventory', {
+      params: cleanParams(params)
+    })
+    .then((result) => normalizeListResult(result, normalizeTask))
+
+export const getAdminTaskGovernancePreviewApi = (id: number) =>
+  request.get<AdminTaskGovernancePreviewVO, AdminTaskGovernancePreviewVO>(`/admin/tasks/${id}/governance-preview`)
+
+export const updateAdminTaskGovernanceApi = (id: number, data: AdminTaskGovernanceActionPayload) =>
+  request.post<null, null>(`/admin/tasks/${id}/governance`, data)
 
 export const getAdminDeadLetterRetryPreviewApi = (id: number) =>
   request.get<AdminTaskImpactPreviewVO, AdminTaskImpactPreviewVO>(`/admin/tasks/${id}/dead-letter/retry-preview`)

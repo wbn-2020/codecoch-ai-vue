@@ -426,7 +426,6 @@ const optionClass = (idx: number) => {
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   refreshProfile()
 })
 

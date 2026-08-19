@@ -66,6 +66,9 @@ const componentStubs = {
   'el-input-number': {
     template: '<input />'
   },
+  'el-date-picker': {
+    template: '<input />'
+  },
   'el-dropdown': {
     template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>'
   },
@@ -260,7 +263,7 @@ describe('InterviewReportView metrics', () => {
     expect(generateStudyPlanApi).not.toHaveBeenCalled()
   })
 
-  it('submits confirmed study-plan duration and daily minutes only for a verified report', async () => {
+  it('submits confirmed study-plan schedule only for a verified report', async () => {
     vi.mocked(getInterviewReportApi).mockResolvedValue({
       id: 105,
       reportId: 105,
@@ -291,7 +294,8 @@ describe('InterviewReportView metrics', () => {
     expect(generateStudyPlanApi).toHaveBeenCalledWith({
       reportId: 105,
       expectedDurationDays: 14,
-      dailyMinutes: 60
+      dailyMinutes: 60,
+      startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
     })
     expect(routerPush).toHaveBeenCalledWith('/study-plans?planId=501')
   })

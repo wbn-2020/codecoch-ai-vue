@@ -11,7 +11,8 @@ const diagnostics = vi.hoisted(() => ({
   emitRequestError: vi.fn()
 }))
 
-vi.mock('@/utils/errorEvents', () => ({
+vi.mock('@/utils/errorEvents', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/utils/errorEvents')>(),
   emitRequestError: diagnostics.emitRequestError
 }))
 
@@ -222,5 +223,47 @@ describe('request response metadata', () => {
     expect(diagnostics.emitRequestError).toHaveBeenCalledWith(
       expect.objectContaining({ traceId: 'http-header-trace' })
     )
+  })
+
+  it('attaches the current route and explicit diagnostic ownership to request failures', async () => {
+    window.history.replaceState({}, '', '/resumes/42/edit')
+    installAdapter(async (config) => response(config, {
+      code: 500,
+      message: 'save failed'
+    }))
+    const { default: request } = await loadRequestModule()
+
+    await expect(request.put('/resumes/42', {}, {
+      errorModule: 'resume-editor',
+      errorRequestKey: 'resume:42:save'
+    })).rejects.toMatchObject({
+      code: 500,
+      message: 'save failed'
+    })
+
+    expect(diagnostics.emitRequestError).toHaveBeenCalledWith(expect.objectContaining({
+      routePath: '/resumes/42/edit',
+      module: 'resume-editor',
+      requestKey: 'resume:42:save'
+    }))
+  })
+
+  it('keeps a late failure owned by the route where its request started', async () => {
+    window.history.replaceState({}, '', '/dashboard')
+    installAdapter(async (config) => {
+      window.history.replaceState({}, '', '/questions/recommendations')
+      return response(config, {
+        code: 500,
+        message: 'readiness failed'
+      })
+    })
+    const { default: request } = await loadRequestModule()
+
+    await expect(request.get('/job-targets/42/readiness-snapshots/latest'))
+      .rejects.toMatchObject({ code: 500 })
+
+    expect(diagnostics.emitRequestError).toHaveBeenCalledWith(expect.objectContaining({
+      routePath: '/dashboard'
+    }))
   })
 })

@@ -328,6 +328,20 @@ describe('job requirement matrix normalization', () => {
     })
   })
 
+  it('rejects invalid readiness scores instead of clamping them into a visible result', () => {
+    expect(normalizeJobReadiness({
+      targetJobId: 9,
+      readinessScore: 101,
+      dimensions: []
+    }, 9)).toBeNull()
+
+    expect(normalizeJobReadiness({
+      targetJobId: 9,
+      readinessScore: 70,
+      dimensions: [{ dimension: 'RESUME', score: -1 }]
+    }, 9)).toBeNull()
+  })
+
   it('explains readiness changes without comparing insufficient samples', () => {
     const trend = buildJobReadinessTrend([
       {

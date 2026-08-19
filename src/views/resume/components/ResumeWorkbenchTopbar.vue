@@ -82,6 +82,14 @@
         <span>模板</span>
       </button>
       <button
+        class="resume-workbench-topbar__action"
+        type="button"
+        :disabled="saving"
+        @click="emit('save-draft')"
+      >
+        <span>{{ saving ? '保存中' : '保存草稿' }}</span>
+      </button>
+      <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--primary"
         type="button"
         :disabled="saving"
@@ -118,6 +126,7 @@ defineProps<{
 const emit = defineEmits<{
   back: []
   save: []
+  'save-draft': []
   'open-templates': []
   'open-export': []
   'open-preview': []
