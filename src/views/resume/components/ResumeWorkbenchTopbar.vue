@@ -61,6 +61,28 @@
       <span v-else class="resume-workbench-topbar__completion is-pending">
         待填写
       </span>
+      <div class="resume-workbench-topbar__history" role="group" aria-label="编辑历史">
+        <button
+          class="resume-workbench-topbar__icon-button"
+          type="button"
+          aria-label="撤销"
+          title="撤销"
+          :disabled="!canUndo"
+          @click="emit('undo')"
+        >
+          <Undo2 :size="16" aria-hidden="true" />
+        </button>
+        <button
+          class="resume-workbench-topbar__icon-button"
+          type="button"
+          aria-label="重做"
+          title="重做"
+          :disabled="!canRedo"
+          @click="emit('redo')"
+        >
+          <Redo2 :size="16" aria-hidden="true" />
+        </button>
+      </div>
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
         type="button"
@@ -107,8 +129,10 @@ import {
   ArrowLeft,
   FileText,
   LayoutTemplate,
+  Redo2,
   Save,
-  Sparkles
+  Sparkles,
+  Undo2
 } from 'lucide-vue-next'
 
 defineProps<{
@@ -118,6 +142,8 @@ defineProps<{
   hasStarted: boolean
   saving: boolean
   isEdit: boolean
+  canUndo: boolean
+  canRedo: boolean
   templateLabel: string
   inspectorMode: 'edit' | 'review' | 'ai'
   activeStep: 'fill' | 'review' | 'preview' | 'export'
@@ -130,6 +156,8 @@ const emit = defineEmits<{
   'open-templates': []
   'open-export': []
   'open-preview': []
+  undo: []
+  redo: []
   'mode-change': [mode: 'edit' | 'review' | 'ai']
 }>()
 </script>
@@ -272,6 +300,32 @@ const emit = defineEmits<{
   gap: 8px;
 }
 
+.resume-workbench-topbar__history {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding-right: 7px;
+  border-right: 1px solid var(--resume-workbench-line);
+
+  .resume-workbench-topbar__icon-button {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    &:disabled:hover,
+    &:disabled:focus-visible {
+      background: transparent;
+      color: var(--resume-workbench-muted);
+    }
+  }
+}
+
 .resume-workbench-topbar__completion {
   padding: 4px 7px;
   border-radius: 999px;
@@ -375,6 +429,12 @@ const emit = defineEmits<{
 
   .resume-workbench-topbar__action--primary {
     min-width: 68px;
+  }
+}
+
+@media (max-width: 480px) {
+  .resume-workbench-topbar__history {
+    display: none;
   }
 }
 

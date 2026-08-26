@@ -262,12 +262,26 @@ const commonStubs = {
   'el-tooltip': true
 }
 
+const resumeWorkbenchShellStub = {
+  template: [
+    '<div>',
+    '<slot name="rail" />',
+    '<slot name="preview" />',
+    '<slot name="editor" />',
+    '<slot name="inspector" />',
+    '</div>'
+  ].join('')
+}
+
 const mountView = (component: Component) => shallowMount(component, {
   global: {
     directives: {
       loading: {}
     },
-    stubs: commonStubs
+    stubs: {
+      ...commonStubs,
+      ResumeWorkbenchShell: resumeWorkbenchShellStub
+    }
   }
 })
 
@@ -836,8 +850,10 @@ describe('dynamic entity write operations', () => {
       isDefault: 1
     }))
     expect(api.createResumeProjectApi).toHaveBeenCalledWith(77, expect.objectContaining({
-      projectId: -1,
       projectName: 'Draft A'
+    }))
+    expect(api.createResumeProjectApi).toHaveBeenCalledWith(77, expect.not.objectContaining({
+      projectId: expect.anything()
     }))
     expect(api.setDefaultResumeApi).toHaveBeenCalledWith(77)
     expect(api.createResumeVersionApi).toHaveBeenCalledWith(77, {

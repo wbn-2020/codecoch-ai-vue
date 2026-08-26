@@ -1,5 +1,5 @@
 <template>
-  <aside class="resume-section-rail" aria-label="简历区块">
+  <aside class="resume-section-rail" :class="{ 'is-collapsed': collapsed }" aria-label="简历区块">
     <div class="resume-section-rail__heading">
       <div>
         <strong>填写进度</strong>
@@ -16,25 +16,67 @@
 
     <nav class="resume-section-rail__sections">
       <button
-        v-for="item in items"
+        v-for="item in visibleItems"
         :key="item.id"
         type="button"
         :class="{ 'is-active': item.id === activeId, 'is-done': item.done, 'is-invalid': item.invalid }"
+        :aria-label="`${item.label}${item.done ? '，已完善' : '，待完善'}`"
         :aria-current="item.id === activeId ? 'step' : undefined"
         :aria-invalid="item.invalid || undefined"
+        :title="item.label"
         @click="emit('select', item.id)"
       >
         <span class="resume-section-rail__icon">
           <component :is="sectionIcon(item.id)" :size="17" aria-hidden="true" />
         </span>
-        <span>{{ item.label }}</span>
+        <span v-if="!collapsed">{{ item.label }}</span>
         <AlertCircle v-if="item.invalid" :size="15" aria-label="需修正" />
         <CheckCircle2 v-else-if="item.done" :size="15" aria-label="已完善" />
         <Circle v-else :size="15" aria-label="待完善" />
       </button>
     </nav>
 
-    <div class="resume-section-rail__review">
+    <details v-if="!collapsed" class="resume-section-rail__manager">
+      <summary>
+        <Settings2 :size="15" aria-hidden="true" />
+        模块管理
+      </summary>
+      <div class="resume-section-rail__manager-list">
+        <div v-for="(item, index) in items" :key="item.id">
+          <span>{{ item.label }}</span>
+          <button
+            type="button"
+            :aria-label="`上移${item.label}`"
+            :title="`上移${item.label}`"
+            :disabled="index === 0"
+            @click="emit('move', item.id, -1)"
+          >
+            <ChevronUp :size="15" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            :aria-label="`下移${item.label}`"
+            :title="`下移${item.label}`"
+            :disabled="index === items.length - 1"
+            @click="emit('move', item.id, 1)"
+          >
+            <ChevronDown :size="15" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            :aria-label="isHidden(item.id) ? `显示${item.label}` : `隐藏${item.label}`"
+            :title="canHide(item.id) ? (isHidden(item.id) ? `显示${item.label}` : `隐藏${item.label}`) : `${item.label}不可隐藏`"
+            :disabled="!canHide(item.id)"
+            @click="emit('toggle-visibility', item.id, isHidden(item.id))"
+          >
+            <EyeOff v-if="isHidden(item.id)" :size="15" aria-hidden="true" />
+            <Eye v-else :size="15" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </details>
+
+    <div v-if="!collapsed" class="resume-section-rail__review">
       <strong>下一步：检查</strong>
       <span v-if="hasStarted">{{ exportReadyCount }}/{{ exportTotal }} 项通过</span>
       <span v-else>填写后检查完整度</span>
@@ -53,10 +95,15 @@ import {
   AlertCircle,
   BriefcaseBusiness,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   ClipboardCheck,
   Code2,
+  Eye,
+  EyeOff,
   FolderKanban,
+  Settings2,
   Target,
   UserRound
 } from 'lucide-vue-next'
@@ -71,15 +118,19 @@ interface SectionItem {
 const props = defineProps<{
   items: SectionItem[]
   activeId: string
+  collapsed?: boolean
   completion: number
   hasStarted: boolean
   exportReadyCount: number
   exportTotal: number
+  hiddenIds?: string[]
 }>()
 
 const emit = defineEmits<{
   select: [id: string]
   review: []
+  move: [id: string, delta: -1 | 1]
+  'toggle-visibility': [id: string, currentlyHidden: boolean]
 }>()
 
 const iconBySection: Record<string, Component> = {
@@ -92,6 +143,9 @@ const iconBySection: Record<string, Component> = {
 
 const sectionIcon = (id: string) => iconBySection[id] || Circle
 const completedCount = computed(() => props.items.filter((item) => item.done).length)
+const canHide = (id: string) => id !== 'resume-basic' && id !== 'resume-target'
+const isHidden = (id: string) => props.hiddenIds?.includes(id) === true
+const visibleItems = computed(() => props.items.filter((item) => !isHidden(item.id)))
 </script>
 
 <style scoped lang="scss">
@@ -103,6 +157,25 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
   border-right: 1px solid var(--resume-workbench-line);
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text);
+}
+
+.resume-section-rail.is-collapsed {
+  .resume-section-rail__heading,
+  .resume-section-rail__progress,
+  .resume-section-rail__sections button > span:nth-child(2),
+  .resume-section-rail__sections button > svg {
+    display: none;
+  }
+
+  .resume-section-rail__sections button {
+    grid-template-columns: 1fr;
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .resume-section-rail__sections button > svg {
+    justify-self: center;
+  }
 }
 
 .resume-section-rail__heading {
@@ -214,6 +287,94 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
   }
 }
 
+.resume-section-rail__manager {
+  position: relative;
+  margin: 8px 12px;
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 6px;
+    color: var(--resume-workbench-muted);
+    font-size: 11.5px;
+    font-weight: 650;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+  }
+}
+
+.resume-section-rail__manager-list {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  width: 210px;
+  padding: 7px;
+  border: 1px solid var(--resume-workbench-line);
+  border-radius: 7px;
+  background: var(--resume-workbench-surface);
+  box-shadow: 0 12px 28px rgba(22, 34, 28, 0.16);
+
+  > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px 28px 28px;
+    align-items: center;
+    min-height: 34px;
+    gap: 3px;
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--resume-workbench-text-soft);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--resume-workbench-muted);
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      background: var(--resume-workbench-surface-soft);
+      color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.32;
+    }
+  }
+}
+
 .resume-section-rail__icon {
   display: inline-flex;
   align-items: center;
@@ -264,7 +425,8 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
 @media (max-width: 1180px) {
   .resume-section-rail__heading > span,
   .resume-section-rail__heading div span,
-  .resume-section-rail__review {
+  .resume-section-rail__review,
+  .resume-section-rail__manager summary span {
     display: none;
   }
 
@@ -331,6 +493,16 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
         display: inline-flex;
       }
     }
+  }
+
+  .resume-section-rail__manager {
+    margin: 6px 12px 0;
+  }
+
+  .resume-section-rail__manager-list {
+    position: fixed;
+    top: 116px;
+    left: 14px;
   }
 }
 

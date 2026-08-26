@@ -31,6 +31,7 @@ const stripPaperPreviewStyles = (path: string, source: string) => {
       '.resume-paper { background: var(--resume-paper); }\n'
     )
     result = stripScopedStyleBlock(result, '.template-thumb')
+    result = stripScopedStyleBlock(result, '.accent-swatches')
   } else if (path.endsWith('ResumeDeliveryWorkbench.vue')) {
     result = result.replace(
       /\.a4-sheet\s*\{[\s\S]*?(?=\n\.section-empty,)/,
@@ -56,8 +57,8 @@ const stripPaperPreviewStyles = (path: string, source: string) => {
 
 const arenaMigrationScopeByPath: Record<string, { rootClass: string; selector: string }> = {
   'src/views/resume/ResumeEditView.vue': {
-    rootClass: 'class="arena arena-resume-studio resume-editor page-shell"',
-    selector: '.arena-resume-studio'
+    rootClass: 'class="arena resume-workbench-page resume-editor page-shell"',
+    selector: '.resume-workbench-page.resume-editor'
   }
 }
 
@@ -67,11 +68,15 @@ describe('resume, application package, and project evidence workspace layout', (
       const source = stripPaperPreviewStyles(path, readSource(path))
       const arenaScope = arenaMigrationScopeByPath[path]
       const validatedSource = arenaScope
-        ? stripScopedStyleBlock(source, arenaScope.selector)
+        ? stripScopedStyleBlock(
+          stripScopedStyleBlock(source, arenaScope.selector),
+          '.arena-resume-studio'
+        )
         : source
       if (arenaScope) {
         expect(source, path).toContain(arenaScope.rootClass)
-        expect(source, path).toContain('var(--arena-')
+        expect(source, path).toContain('--resume-workbench-bg:')
+        expect(source, path).not.toContain('class="arena arena-resume-studio resume-editor page-shell"')
       }
       expect(validatedSource, path).toContain('var(--user-')
       expect(validatedSource, path).not.toMatch(/var\(--app-|var\(--text-secondary|var\(--el-color-primary/i)

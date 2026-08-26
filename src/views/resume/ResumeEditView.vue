@@ -1,5 +1,5 @@
 <template>
-  <div class="arena arena-resume-studio resume-editor page-shell">
+  <div class="arena resume-workbench-page resume-editor page-shell">
     <AppState
       v-if="isEdit && loading"
       class="resume-editor-state"
@@ -17,7 +17,7 @@
     >
       <div class="resume-editor-state__actions">
         <el-button @click="router.push('/resumes')">返回简历管理</el-button>
-        <el-button type="primary" @click="fetchDetail">重试</el-button>
+        <el-button type="primary" @click="reloadCurrentResume">重试</el-button>
       </div>
     </AppState>
 
@@ -29,6 +29,8 @@
       :has-started="hasResumeContentStarted"
       :saving="saving"
       :is-edit="isEdit"
+      :can-undo="resumeHistory.canUndo.value"
+      :can-redo="resumeHistory.canRedo.value"
       :template-label="selectedResumeTemplateLabel"
       :inspector-mode="inspectorMode"
       :active-step="activeWorkbenchStep"
@@ -38,6 +40,8 @@
       @open-templates="openTemplateGallery"
       @open-export="openDeliveryChecks"
       @open-preview="openPreviewStep"
+      @undo="undoResumeEdit"
+      @redo="redoResumeEdit"
       @mode-change="setInspectorMode"
     />
 
@@ -58,10 +62,36 @@
         :aria-selected="mobileWorkspaceTab === 'edit'"
         :tabindex="mobileWorkspaceTab === 'edit' ? 0 : -1"
         :class="{ active: mobileWorkspaceTab === 'edit' }"
-        @click="mobileWorkspaceTab = 'edit'"
+        @click="selectMobileWorkspaceTab('edit')"
         @keydown="moveMobileWorkspaceTab($event)"
       >
         编辑
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="resume-tab-review"
+        aria-controls="resume-panel-inspector"
+        :aria-selected="mobileWorkspaceTab === 'review'"
+        :tabindex="mobileWorkspaceTab === 'review' ? 0 : -1"
+        :class="{ active: mobileWorkspaceTab === 'review' }"
+        @click="selectMobileWorkspaceTab('review')"
+        @keydown="moveMobileWorkspaceTab($event)"
+      >
+        检查
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="resume-tab-ai"
+        aria-controls="resume-panel-inspector"
+        :aria-selected="mobileWorkspaceTab === 'ai'"
+        :tabindex="mobileWorkspaceTab === 'ai' ? 0 : -1"
+        :class="{ active: mobileWorkspaceTab === 'ai' }"
+        @click="selectMobileWorkspaceTab('ai')"
+        @keydown="moveMobileWorkspaceTab($event)"
+      >
+        AI
       </button>
       <button
         type="button"
@@ -71,71 +101,74 @@
         :aria-selected="mobileWorkspaceTab === 'preview'"
         :tabindex="mobileWorkspaceTab === 'preview' ? 0 : -1"
         :class="{ active: mobileWorkspaceTab === 'preview' }"
-        @click="mobileWorkspaceTab = 'preview'"
+        @click="selectMobileWorkspaceTab('preview')"
         @keydown="moveMobileWorkspaceTab($event)"
       >
         预览
       </button>
     </div>
 
-    <div :class="['editor-workspace', `is-mobile-${mobileWorkspaceTab}`]">
+    <ResumeWorkbenchShell
+      :mobile-tab="mobileWorkspaceTab"
+      :rail-collapsed="railCollapsed"
+      :editor-collapsed="editorPanelCollapsed"
+      :preview-focus="previewFocusMode"
+    >
+      <template #rail>
       <ResumeSectionRail
         :items="sectionNavItems"
         :active-id="activeWorkshopModule"
+        :collapsed="railCollapsed || previewFocusMode"
         :completion="completion"
         :has-started="hasResumeContentStarted"
         :export-ready-count="exportReadyCount"
         :export-total="exportChecklistItems.length"
+        :hidden-ids="presentationConfig.hiddenModules"
         @select="focusSection"
         @review="setInspectorMode('review')"
+        @move="moveWorkshopModule"
+        @toggle-visibility="toggleWorkshopModule"
       />
-      <div id="resume-panel-advice-mount" class="workspace-teleport-target"></div>
-      <div id="resume-panel-preview-mount" class="workspace-teleport-target"></div>
+      </template>
+      <template #editor>
       <main
         v-show="inspectorMode === 'edit'"
         id="resume-panel-edit"
-        class="editor-column editor-main mobile-pane-edit"
+        class="editor-column resume-workbench-pane--editor mobile-pane-editor"
         role="tabpanel"
         aria-labelledby="resume-tab-edit"
       >
-        <section class="content-card side-panel ai-writing-card">
-          <div class="panel-kicker">
-            <Sparkles :size="15" />
-            AI 写作
+        <header class="resume-inspector-header">
+          <div>
+            <span class="resume-inspector-header__eyebrow">当前编辑</span>
+            <h1>{{ activeWorkshopModuleMeta.title }}</h1>
+            <p>{{ activeWorkshopModuleMeta.description }}</p>
           </div>
-          <h3>先锁定事实，再让表达更像简历</h3>
-          <p>这里不替你编造经历，只把当前缺口转成可执行的写作动作。</p>
-          <div class="prompt-list">
-            <button
-              v-for="prompt in aiWritingPrompts"
-              :key="prompt.target"
-              type="button"
-              class="prompt-card"
-              @click="focusSection(prompt.target)"
-            >
-              <span>{{ prompt.label }}</span>
-              <strong>{{ prompt.title }}</strong>
-              <small>{{ prompt.desc }}</small>
-            </button>
-          </div>
-        </section>
+          <button
+            type="button"
+            class="resume-inspector-header__template"
+            :aria-label="`打开模板设置，当前模板为 ${selectedResumeTemplateLabel}`"
+            @click="openTemplateGallery"
+          >
+            <LayoutTemplate :size="16" aria-hidden="true" />
+            <span>{{ selectedResumeTemplateLabel }}</span>
+            <ChevronRight :size="15" aria-hidden="true" />
+          </button>
+        </header>
 
         <section
           v-show="activeWorkshopModule !== 'resume-projects'"
           class="content-card editor-section edit-card"
           v-loading="loading"
         >
-          <div class="section-heading">
-            <div class="section-icon">
-              <UserRound :size="18" />
-            </div>
-            <div>
-              <h2>{{ activeWorkshopModuleMeta.title }}</h2>
-              <p>{{ activeWorkshopModuleMeta.description }}</p>
-            </div>
-          </div>
-
-          <el-form ref="formRef" class="resume-form" :model="form" :rules="rules" label-position="top">
+          <el-form
+            ref="formRef"
+            class="resume-form"
+            :model="form"
+            :rules="rules"
+            :disabled="saving"
+            label-position="top"
+          >
             <div v-show="activeWorkshopModule === 'resume-basic'" id="resume-basic" class="editor-block">
               <div class="block-head">
                 <span>基本信息</span>
@@ -270,11 +303,15 @@
               </div>
             </div>
             <div class="project-header__actions">
-              <el-button v-if="selectedInlineProject" @click="openProjectDialog(selectedInlineProject)">
+              <el-button
+                v-if="selectedInlineProject"
+                :disabled="saving"
+                @click="openProjectDialog(selectedInlineProject)"
+              >
                 <FilePenLine :size="16" />
                 完整编辑
               </el-button>
-              <el-button type="primary" @click="openProjectDialog()">
+              <el-button type="primary" :disabled="saving" @click="openProjectDialog()">
                 <Plus :size="16" />
                 {{ isEdit ? '新增项目' : '添加项目草稿' }}
               </el-button>
@@ -297,7 +334,7 @@
               </button>
             </div>
 
-            <el-form class="inline-project-editor" label-position="top">
+            <el-form class="inline-project-editor" :disabled="saving" label-position="top">
               <div class="inline-project-editor__meta">
                 <el-form-item label="项目名称">
                   <el-input v-model.trim="selectedInlineProject.projectName" placeholder="例如：招聘平台简历解析服务" />
@@ -371,7 +408,7 @@
                   <Save :size="16" />
                   保存后生成
                 </el-button>
-                <el-button :loading="projectSaving" @click="handleSaveInlineProject">
+                <el-button :loading="projectSaving" :disabled="saving" @click="handleSaveInlineProject">
                   <Save :size="16" />
                   保存项目
                 </el-button>
@@ -392,14 +429,15 @@
           </div>
         </section>
       </main>
+      </template>
 
-      <Teleport defer to="#resume-panel-preview-mount">
-        <section
-          id="resume-panel-preview"
-          class="preview-column content-card mobile-pane-preview"
-          role="tabpanel"
-          aria-labelledby="resume-tab-preview"
-        >
+      <template #preview>
+      <section
+        id="resume-panel-preview"
+        class="resume-workbench-pane--preview content-card mobile-pane-preview"
+        role="tabpanel"
+        aria-labelledby="resume-tab-preview"
+      >
           <div class="preview-toolbar">
             <div>
               <span>文档画布</span>
@@ -409,6 +447,35 @@
               <button type="button" @click="openTemplateGallery">
                 模板
               </button>
+              <div class="preview-layout-controls" role="group" aria-label="预览布局控制">
+                <button
+                  type="button"
+                  :aria-label="railCollapsed ? '展开模块导航' : '收起模块导航'"
+                  :title="railCollapsed ? '展开模块导航' : '收起模块导航'"
+                  @click="railCollapsed = !railCollapsed"
+                >
+                  <PanelLeftOpen v-if="railCollapsed" :size="15" aria-hidden="true" />
+                  <PanelLeftClose v-else :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  :aria-label="previewFocusMode ? '退出预览聚焦' : '进入预览聚焦'"
+                  :title="previewFocusMode ? '退出预览聚焦' : '进入预览聚焦'"
+                  @click="previewFocusMode = !previewFocusMode"
+                >
+                  <Minimize2 v-if="previewFocusMode" :size="15" aria-hidden="true" />
+                  <Maximize2 v-else :size="15" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  :aria-label="editorPanelCollapsed ? '展开编辑面板' : '收起编辑面板'"
+                  :title="editorPanelCollapsed ? '展开编辑面板' : '收起编辑面板'"
+                  @click="editorPanelCollapsed = !editorPanelCollapsed"
+                >
+                  <PanelRightOpen v-if="editorPanelCollapsed" :size="15" aria-hidden="true" />
+                  <PanelRightClose v-else :size="15" aria-hidden="true" />
+                </button>
+              </div>
               <div class="zoom-control" aria-label="预览缩放">
                 <button
                   type="button"
@@ -437,6 +504,7 @@
                 :draft="resumeDocumentDraft"
                 :template-code="selectedResumeTemplateCode"
                 :accent="previewAccent"
+                :presentation-config="presentationConfig"
                 :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
               />
             </div>
@@ -451,15 +519,17 @@
             </el-button>
             <span class="resume-preview-page-chip">A4 预览 · 分页以导出为准</span>
           </div>
-        </section>
-      </Teleport>
+      </section>
+      </template>
 
-      <Teleport defer to="#resume-panel-advice-mount">
-        <aside
-          v-show="inspectorMode !== 'edit'"
-          id="resume-panel-advice"
-          class="editor-column editor-aside mobile-pane-edit"
-        >
+      <template #inspector>
+      <aside
+        v-show="inspectorMode !== 'edit'"
+        id="resume-panel-inspector"
+        class="editor-column resume-workbench-pane--inspector mobile-pane-inspector"
+        role="tabpanel"
+        :aria-labelledby="mobileWorkspaceTab === 'ai' ? 'resume-tab-ai' : 'resume-tab-review'"
+      >
         <header class="resume-inspector-heading">
           <div>
             <span>{{ inspectorMode === 'review' ? '简历检查' : 'AI 优化' }}</span>
@@ -694,18 +764,21 @@
           </div>
         </section>
 
-        </aside>
-      </Teleport>
-    </div>
+      </aside>
+      </template>
+    </ResumeWorkbenchShell>
 
-    <ResumeTemplateGallery
+    <ResumeTemplateBrowser
       v-model="templateGalleryVisible"
-      :templates="resumeTemplateOptions"
+      :templates="selectableResumeTemplateOptions"
       :pending-code="pendingResumeTemplateCode"
       :accent="previewAccent"
       :accent-options="resumeAccentOptions"
       :zoom="previewZoom"
       :is-unlocked="isTemplateUnlocked"
+      :template-registry="resumeAtsTemplates"
+      :presentation-config="presentationConfig"
+      :registry-error="templateRegistryError"
       @select="pendingResumeTemplateCode = $event"
       @accent-change="previewAccent = $event"
       @zoom-change="changePreviewZoom"
@@ -760,16 +833,23 @@ import {
   FilePenLine,
   FolderOpen,
   GitCompareArrows,
+  ChevronRight,
+  LayoutTemplate,
   Layers3,
+  Maximize2,
+  Minimize2,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Save,
   Sparkles,
-  UserRound
 } from 'lucide-vue-next'
 import { getActivePinia } from 'pinia'
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
   applyResumeOptimizeResultApi,
@@ -785,22 +865,31 @@ import {
   updateResumeApi,
   updateResumeProjectApi
 } from '@/api/resume'
+import { getResumeAtsTemplatesApi } from '@/api/resumeDelivery'
 import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
+import { useResumeHistory } from '@/composables/useResumeHistory'
 import {
   buildResumeExportChecks,
   isResumeTemplateUnlocked,
   resumeTemplateOptions,
+  resumeTemplateSectionOrder,
   type ResumeTemplateOption,
   type ResumeAccent,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import {
+  createDefaultResumePresentation,
+  mergeResumeTemplatePresentation,
+  normalizeResumePresentation
+} from '@/features/resume-presentation'
 import { useGameProfileStore } from '@/features/game-profile'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
-import ResumeTemplateGallery from '@/views/resume/components/ResumeTemplateGallery.vue'
+import ResumeTemplateBrowser from '@/views/resume/components/ResumeTemplateBrowser.vue'
+import ResumeWorkbenchShell from '@/views/resume/components/ResumeWorkbenchShell.vue'
 import ResumeWorkbenchTopbar from '@/views/resume/components/ResumeWorkbenchTopbar.vue'
 import type {
   ResumeCreateDTO,
@@ -813,7 +902,8 @@ import type {
   ResumeProjectDTO,
   ResumeProjectVO
 } from '@/types/resume'
-import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
+import type { ResumeAtsTemplateVO, ResumeDeliveryDraft } from '@/types/resumeDelivery'
+import type { ResumePresentationConfig } from '@/types/resumePresentation'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { getRouteNumberParam } from '@/utils/route'
@@ -855,8 +945,11 @@ const optimizeSseMessage = ref('')
 const optimizeSseStatus = ref('未开始')
 const optimizeTask = ref<ResumeOptimizeSubmitVO | null>(null)
 const optimizeRecordsRefreshing = ref(false)
-const mobileWorkspaceTab = ref<'edit' | 'preview'>('edit')
+const mobileWorkspaceTab = ref<'edit' | 'review' | 'ai' | 'preview'>('edit')
 const inspectorMode = ref<'edit' | 'review' | 'ai'>('edit')
+const railCollapsed = ref(false)
+const editorPanelCollapsed = ref(false)
+const previewFocusMode = ref(false)
 const activeWorkbenchStep = ref<'fill' | 'review' | 'preview' | 'export'>('fill')
 type ResumeWorkbenchModule =
   | 'resume-basic'
@@ -870,19 +963,26 @@ const invalidSectionIds = ref<ResumeWorkbenchModule[]>([])
 const invalidFieldProps = ref<string[]>([])
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const pendingResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
-const previewAccent = ref<ResumeAccent>('ocean')
+const previewAccent = ref<ResumeAccent>('default')
 const previewZoom = ref(0.88)
+const presentationConfig = ref<ResumePresentationConfig>(createDefaultResumePresentation())
+const resumeAtsTemplates = ref<ResumeAtsTemplateVO[]>([])
+const templateRegistryError = ref('')
 const deliveryRefreshKey = ref(0)
 let resumeLoadGeneration = 0
 let resumeSaveOperationGeneration = 0
 let projectWriteOperationGeneration = 0
 const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
-  { value: 'ocean', label: '海洋蓝' },
-  { value: 'teal', label: '青绿色' },
-  { value: 'graphite', label: '石墨灰' },
-  { value: 'berry', label: '莓红色' }
+  { value: 'default', label: '默认黑' },
+  { value: 'blue', label: '蓝色' },
+  { value: 'green', label: '绿色' },
+  { value: 'purple', label: '紫色' },
+  { value: 'orange', label: '橙色' },
+  { value: 'red', label: '红色' },
+  { value: 'slate', label: '石板灰' },
+  { value: 'black', label: '纯黑' }
 ]
-const mobileWorkspaceTabs = ['edit', 'preview'] as const
+const mobileWorkspaceTabs = ['edit', 'review', 'ai', 'preview'] as const
 const isTemplateUnlocked = (template: ResumeTemplateOption) =>
   isResumeTemplateUnlocked(template, gameProfile?.streakDays || 0)
 
@@ -923,7 +1023,7 @@ const moveMobileWorkspaceTab = (event: KeyboardEvent) =>
     event,
     mobileWorkspaceTabs,
     mobileWorkspaceTab.value,
-    (value) => { mobileWorkspaceTab.value = value }
+    selectMobileWorkspaceTab
   )
 
 const createDefaultResumeForm = (): ResumeCreateDTO => ({
@@ -994,38 +1094,112 @@ const hasResumeContentStarted = computed(() => Boolean(
   || projects.value.length
 ))
 
-const sectionNavItems = computed(() => [
-  {
-    id: 'resume-basic',
-    label: '基本信息',
-    done: Boolean(form.resumeName?.trim() && form.realName?.trim()),
-    invalid: invalidSectionIds.value.includes('resume-basic')
-  },
-  {
-    id: 'resume-target',
-    label: '求职意向',
-    done: Boolean(form.targetPosition?.trim()),
-    invalid: invalidSectionIds.value.includes('resume-target')
-  },
-  {
-    id: 'resume-skills',
-    label: '技能栈',
-    done: Boolean(form.skills?.trim()),
-    invalid: invalidSectionIds.value.includes('resume-skills')
-  },
-  {
-    id: 'resume-projects',
-    label: '项目经历',
-    done: projects.value.length > 0,
-    invalid: invalidSectionIds.value.includes('resume-projects')
-  },
-  {
-    id: 'resume-experience',
-    label: '教育经历',
-    done: Boolean(form.workSummary?.trim() || form.education?.trim()),
-    invalid: invalidSectionIds.value.includes('resume-experience')
+const sectionNavItems = computed(() => {
+  const items: Array<{
+    id: ResumeWorkbenchModule
+    label: string
+    done: boolean
+    invalid: boolean
+  }> = [
+    {
+      id: 'resume-basic',
+      label: '基本信息',
+      done: Boolean(form.resumeName?.trim() && form.realName?.trim()),
+      invalid: invalidSectionIds.value.includes('resume-basic')
+    },
+    {
+      id: 'resume-target',
+      label: '求职意向',
+      done: Boolean(form.targetPosition?.trim()),
+      invalid: invalidSectionIds.value.includes('resume-target')
+    },
+    {
+      id: 'resume-skills',
+      label: '技能栈',
+      done: Boolean(form.skills?.trim()),
+      invalid: invalidSectionIds.value.includes('resume-skills')
+    },
+    {
+      id: 'resume-projects',
+      label: '项目经历',
+      done: projects.value.length > 0,
+      invalid: invalidSectionIds.value.includes('resume-projects')
+    },
+    {
+      id: 'resume-experience',
+      label: '教育经历',
+      done: Boolean(form.workSummary?.trim() || form.education?.trim()),
+      invalid: invalidSectionIds.value.includes('resume-experience')
+    }
+  ]
+  const order = presentationConfig.value.moduleOrder
+  return items.sort((left, right) =>
+    order.indexOf(left.id) - order.indexOf(right.id)
+  )
+})
+
+const sectionsForWorkshopModule: Record<ResumeWorkbenchModule, Array<'summary' | 'skills' | 'projects' | 'experience' | 'education'>> = {
+  'resume-basic': ['summary'],
+  'resume-target': [],
+  'resume-skills': ['skills'],
+  'resume-projects': ['projects'],
+  'resume-experience': ['experience', 'education']
+}
+
+const moveWorkshopModule = (id: string, delta: -1 | 1) => {
+  if (!presentationConfig.value.moduleOrder.includes(id)) return
+  const order = [...presentationConfig.value.moduleOrder]
+  const currentIndex = order.indexOf(id)
+  const nextIndex = currentIndex + delta
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= order.length) return
+  const [moved] = order.splice(currentIndex, 1)
+  order.splice(nextIndex, 0, moved)
+  presentationConfig.value = normalizeResumePresentation({
+    ...presentationConfig.value,
+    moduleOrder: order,
+    sectionOrder: order.flatMap((moduleId) =>
+      sectionsForWorkshopModule[moduleId as ResumeWorkbenchModule] || []
+    ),
+    overrides: {
+      ...presentationConfig.value.overrides,
+      sectionOrder: true
+    }
+  })
+}
+
+const toggleWorkshopModule = (id: string, currentlyHidden: boolean) => {
+  if (
+    id === 'resume-basic'
+    || id === 'resume-target'
+    || !presentationConfig.value.moduleOrder.includes(id)
+  ) return
+  const hiddenModules = currentlyHidden
+    ? presentationConfig.value.hiddenModules.filter((item) => item !== id)
+    : Array.from(new Set([...presentationConfig.value.hiddenModules, id]))
+  const presentationSections = sectionsForWorkshopModule[id as ResumeWorkbenchModule] || []
+  const hiddenSections = currentlyHidden
+    ? presentationConfig.value.hiddenSections.filter(
+      (item) => !presentationSections.includes(item)
+    )
+    : Array.from(new Set([
+      ...presentationConfig.value.hiddenSections,
+      ...presentationSections
+    ]))
+  presentationConfig.value = normalizeResumePresentation({
+    ...presentationConfig.value,
+    hiddenModules,
+    hiddenSections,
+    overrides: {
+      ...presentationConfig.value.overrides,
+      hiddenSections: true
+    }
+  })
+  if (!currentlyHidden && activeWorkshopModule.value === id) {
+    activeWorkshopModule.value = sectionNavItems.value.find(
+      (item) => !hiddenModules.includes(item.id)
+    )?.id || 'resume-basic'
   }
-])
+}
 
 const activeWorkshopModuleMeta = computed(() => {
   const modules = {
@@ -1054,8 +1228,31 @@ const activeWorkshopModuleMeta = computed(() => {
   return modules[activeWorkshopModule.value]
 })
 
+const selectableResumeTemplateOptions = computed(() => {
+  const activeCodes = new Set(
+    resumeAtsTemplates.value
+      .filter((template) => !template.status || template.status === 'ACTIVE')
+      .map((template) => template.templateCode)
+  )
+  const source = activeCodes.size
+    ? resumeTemplateOptions.filter((template) =>
+      !template.code.startsWith('ATS_') || activeCodes.has(template.code)
+    )
+    : resumeTemplateOptions
+  return source.length ? source : resumeTemplateOptions.slice(0, 3)
+})
+
+const activeResumeTemplate = computed(() =>
+  resumeAtsTemplates.value.find((template) =>
+    template.templateCode === selectedResumeTemplateCode.value
+    && (!template.status || template.status === 'ACTIVE')
+  )
+)
+
 const selectedResumeTemplateLabel = computed(() =>
-  resumeTemplateOptions.find((item) => item.code === selectedResumeTemplateCode.value)?.name || '极光绿'
+  `${activeResumeTemplate.value?.templateName
+    || selectableResumeTemplateOptions.value.find((item) => item.code === selectedResumeTemplateCode.value)?.name
+    || '极光绿'} · v${activeResumeTemplate.value?.templateVersion || presentationConfig.value.templateVersion || 1}`
 )
 
 const splitTextTags = (value?: string) =>
@@ -1111,7 +1308,8 @@ const resumeDeliveryDraft = computed<ResumeDeliveryDraft>(() => ({
   skillStack: form.skills,
   workExperience: form.workSummary,
   educationExperience: form.education,
-  projects: projects.value
+  projects: projects.value,
+  presentationConfig: presentationConfig.value
 }))
 
 const resumeDocumentDraft = computed(() => ({
@@ -1119,18 +1317,111 @@ const resumeDocumentDraft = computed(() => ({
   resumeName: form.resumeName
 }))
 const savedResumeSignature = ref('')
-const resumeDraftSignature = computed(() => JSON.stringify({
-  ...resumeDeliveryDraft.value,
-  isDefault: form.isDefault
-}))
+const createResumeDraftSignature = (
+  formValue: ResumeCreateDTO,
+  projectsValue: ResumeProjectVO[],
+  presentationValue: ResumePresentationConfig
+) => JSON.stringify({
+  title: formValue.resumeName,
+  realName: formValue.realName,
+  email: formValue.email,
+  phone: formValue.phone,
+  targetPosition: formValue.targetPosition,
+  summary: formValue.summary,
+  skillStack: formValue.skills || formValue.skillStack,
+  workExperience: formValue.workSummary || formValue.workExperience,
+  educationExperience: formValue.education || formValue.educationExperience,
+  projects: projectsValue,
+  presentationConfig: presentationValue,
+  isDefault: formValue.isDefault
+})
+const resumeDraftSignature = computed(() =>
+  createResumeDraftSignature(form, projects.value, presentationConfig.value)
+)
+const resumeHistory = useResumeHistory(30)
+const historyApplying = ref(false)
+let resumeHistoryTimer: ReturnType<typeof setTimeout> | undefined
+const createResumeHistorySnapshot = () => JSON.stringify({
+  form: { ...form },
+  projects: projects.value,
+  presentationConfig: presentationConfig.value
+})
+const restoreResumeHistorySnapshot = (snapshot?: string) => {
+  if (!snapshot) return
+  try {
+    const value = JSON.parse(snapshot) as {
+      form?: ResumeCreateDTO
+      projects?: ResumeProjectVO[]
+      presentationConfig?: ResumePresentationConfig
+    }
+    historyApplying.value = true
+    Object.assign(form, createDefaultResumeForm(), value.form || {})
+    projects.value = Array.isArray(value.projects)
+      ? value.projects.map((project) => ({ ...project }))
+      : []
+    presentationConfig.value = normalizeResumePresentation(value.presentationConfig)
+    selectedResumeTemplateCode.value = presentationConfig.value.templateCode as ResumeTemplateCode
+    pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
+    previewAccent.value = presentationConfig.value.accentColor
+    saveError.value = ''
+    void nextTick(() => {
+      historyApplying.value = false
+    })
+  } catch {
+    historyApplying.value = false
+    ElMessage.warning('这一步编辑历史无法恢复，已保留当前内容。')
+  }
+}
+const undoResumeEdit = () => restoreResumeHistorySnapshot(resumeHistory.undo())
+const redoResumeEdit = () => restoreResumeHistorySnapshot(resumeHistory.redo())
 const hasUnsavedResumeChanges = computed(() =>
   isEdit.value
-  && (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
+    ? (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
+    : hasResumeContentStarted.value
+      || resumeDraftSignature.value !== createResumeDraftSignature(
+        createDefaultResumeForm(),
+        [],
+        createDefaultResumePresentation()
+      )
 )
 const documentSaveStatus = computed(() => {
   if (saving.value) return '保存中'
   if (!isEdit.value) return hasResumeContentStarted.value ? '未保存，尚未创建简历' : '新建草稿，尚未保存'
   return hasUnsavedResumeChanges.value ? '有未保存改动' : '已保存'
+})
+
+const handleResumeBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (!hasUnsavedResumeChanges.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(async () => {
+  if (saving.value) {
+    ElMessage.warning('简历正在保存，请等待保存完成后再离开。')
+    return false
+  }
+  if (!hasUnsavedResumeChanges.value) return true
+
+  try {
+    await ElMessageBox.confirm(
+      '当前简历还有未保存改动，离开后这些内容会丢失。',
+      '确认离开编辑页',
+      {
+        type: 'warning',
+        confirmButtonText: '离开',
+        cancelButtonText: '继续编辑',
+        distinguishCancelAndClose: true
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleResumeBeforeUnload)
 })
 
 const previewPreferenceKey = computed(() =>
@@ -1146,9 +1437,16 @@ const loadPreviewPreferences = () => {
       accent?: ResumeAccent
       zoom?: number
     }
-    const storedTemplate = resumeTemplateOptions.find((item) => item.code === preference.templateCode)
+    const storedTemplate = selectableResumeTemplateOptions.value.find(
+      (item) => item.code === preference.templateCode
+    )
     if (storedTemplate && isTemplateUnlocked(storedTemplate)) {
       selectedResumeTemplateCode.value = storedTemplate.code
+      presentationConfig.value = normalizeResumePresentation({
+        ...presentationConfig.value,
+        templateCode: storedTemplate.code,
+        sectionOrder: resumeTemplateSectionOrder(storedTemplate.code)
+      })
     }
     if (resumeAccentOptions.some((item) => item.value === preference.accent)) {
       previewAccent.value = preference.accent as ResumeAccent
@@ -1190,9 +1488,18 @@ const closeTemplateGallery = () => {
 }
 
 const applyPendingTemplate = () => {
-  const template = resumeTemplateOptions.find((item) => item.code === pendingResumeTemplateCode.value)
+  const template = selectableResumeTemplateOptions.value.find(
+    (item) => item.code === pendingResumeTemplateCode.value
+  )
   if (!template || !isTemplateUnlocked(template)) return
   selectedResumeTemplateCode.value = template.code
+  presentationConfig.value = mergeResumeTemplatePresentation(
+    presentationConfig.value,
+    resumeAtsTemplates.value.find((item) => item.templateCode === template.code) || {
+      templateCode: template.code,
+      templateVersion: 1
+    }
+  )
   templateGalleryVisible.value = false
 }
 
@@ -1207,27 +1514,6 @@ const exportChecklistItems = computed(() => buildResumeExportChecks({
 const exportReadyCount = computed(() =>
   exportChecklistItems.value.filter((item) => item.state === 'PASS').length
 )
-
-const aiWritingPrompts = computed(() => [
-  {
-    target: 'resume-summary',
-    label: '摘要',
-    title: form.summary ? '把摘要压到 3 句话' : '先写 30 秒自我介绍',
-    desc: '背景、主技术栈、能证明的业务结果各保留一句。'
-  },
-  {
-    target: 'resume-skills',
-    label: '技能',
-    title: skillTags.value.length >= 6 ? '按岗位优先级排序' : '补齐核心技能簇',
-    desc: '语言、框架、中间件、数据库、工程实践分组展示。'
-  },
-  {
-    target: 'resume-projects',
-    label: '证据',
-    title: projects.value.length ? '给项目补结果指标' : '添加最能被追问的项目',
-    desc: '每段项目至少包含背景、职责、难点、方案和结果。'
-  }
-])
 
 const jdMatchItems = computed(() => [
   { label: '目标岗位', done: Boolean(routeTargetJobId.value || form.targetPosition?.trim()) },
@@ -1361,19 +1647,38 @@ const clearResolvedValidation = (fieldProp: string, value: unknown) => {
 
 watch(resumeDraftSignature, () => {
   if (saveError.value) saveError.value = ''
+  if (historyApplying.value) return
+  if (resumeHistoryTimer) clearTimeout(resumeHistoryTimer)
+  resumeHistoryTimer = setTimeout(() => {
+    resumeHistory.push(createResumeHistorySnapshot())
+  }, 450)
 })
+
+function selectMobileWorkspaceTab(tab: 'edit' | 'review' | 'ai' | 'preview') {
+  mobileWorkspaceTab.value = tab
+  inspectorMode.value = tab === 'preview' ? 'edit' : tab
+  if (tab === 'edit') activeWorkbenchStep.value = 'fill'
+  if (tab === 'review') activeWorkbenchStep.value = 'review'
+  if (tab === 'preview') activeWorkbenchStep.value = 'preview'
+}
 
 const setInspectorMode = (mode: 'edit' | 'review' | 'ai') => {
   inspectorMode.value = mode
-  mobileWorkspaceTab.value = 'edit'
+  selectMobileWorkspaceTab(mode)
   if (mode === 'edit') activeWorkbenchStep.value = 'fill'
   if (mode === 'review') activeWorkbenchStep.value = 'review'
 }
 
+const handlePresentationConfigUpdate = (nextConfig: ResumePresentationConfig) => {
+  const normalized = normalizeResumePresentation(nextConfig)
+  presentationConfig.value = normalized
+  selectedResumeTemplateCode.value = normalized.templateCode as ResumeTemplateCode
+  pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
+  previewAccent.value = normalized.accentColor
+}
+
 const openPreviewStep = () => {
-  inspectorMode.value = 'edit'
-  mobileWorkspaceTab.value = 'preview'
-  activeWorkbenchStep.value = 'preview'
+  selectMobileWorkspaceTab('preview')
 }
 
 watch(mobileWorkspaceTab, (tab) => {
@@ -1528,23 +1833,32 @@ const removeFailedProjectDraft = (targetResumeId: number, projectId: number) => 
 
 const persistDraftProjects = async (
   createdResumeId: number,
-  draftProjects: ResumeProjectVO[],
+  projectSnapshot: ResumeProjectVO[],
   isCurrentOperation: () => boolean
 ) => {
   let failedCount = 0
   const failedProjects: ResumeProjectVO[] = []
-  for (const project of draftProjects) {
+  const createdProjects: Array<{ draftId: number; project: ResumeProjectVO }> = []
+  for (const project of projectSnapshot) {
     if (!isCurrentOperation()) {
-      return { failedCount, failedProjects, stale: true }
+      return { failedCount, failedProjects, createdProjects, stale: true }
     }
     try {
-      await createResumeProjectApi(createdResumeId, project)
+      const payload = toProjectPayload(project)
+      if (project.projectId < 0) {
+        const createdProject = await createResumeProjectApi(createdResumeId, payload)
+        createdProjects.push({ draftId: project.projectId, project: createdProject })
+      } else {
+        await updateResumeProjectApi(createdResumeId, project.projectId, payload)
+      }
     } catch {
       failedCount++
-      failedProjects.push(project)
+      if (project.projectId < 0) {
+        failedProjects.push(project)
+      }
     }
   }
-  return { failedCount, failedProjects, stale: !isCurrentOperation() }
+  return { failedCount, failedProjects, createdProjects, stale: !isCurrentOperation() }
 }
 
 const selectAllOptimizeSuggestions = () => {
@@ -1568,6 +1882,8 @@ const isCurrentResumeRoute = (
 )
 
 const resetRouteState = () => {
+  historyApplying.value = true
+  if (resumeHistoryTimer) clearTimeout(resumeHistoryTimer)
   Object.assign(form, createDefaultResumeForm())
   Object.assign(optimizeForm, createDefaultOptimizeForm())
   projectDialogVisible.value = false
@@ -1589,19 +1905,28 @@ const resetRouteState = () => {
   activeWorkshopModule.value = 'resume-basic'
   selectedResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
   pendingResumeTemplateCode.value = 'ATS_SINGLE_COLUMN'
-  previewAccent.value = 'ocean'
+  previewAccent.value = 'default'
   previewZoom.value = 0.88
+  presentationConfig.value = createDefaultResumePresentation()
+  resumeAtsTemplates.value = []
+  templateRegistryError.value = ''
   templateGalleryVisible.value = false
   deliveryWorkbenchVisible.value = false
   savedResumeSignature.value = ''
+  resumeHistory.reset()
   detailError.value = ''
   saveError.value = ''
   loading.value = false
   deliveryRefreshKey.value += 1
-  void nextTick(() => formRef.value?.clearValidate?.())
+  void nextTick(() => {
+    formRef.value?.clearValidate?.()
+    historyApplying.value = false
+  })
 }
 
 const applyDetail = (detail: ResumeDetailVO) => {
+  historyApplying.value = true
+  if (resumeHistoryTimer) clearTimeout(resumeHistoryTimer)
   Object.assign(form, {
     resumeName: detail.resumeName,
     realName: detail.realName || '',
@@ -1614,17 +1939,59 @@ const applyDetail = (detail: ResumeDetailVO) => {
     education: detail.education || detail.educationExperience || '',
     isDefault: detail.isDefault
   })
+  presentationConfig.value = normalizeResumePresentation(detail.presentationConfig)
+  selectedResumeTemplateCode.value = presentationConfig.value.templateCode as ResumeTemplateCode
+  pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
+  previewAccent.value = presentationConfig.value.accentColor
   if (!optimizeForm.targetPosition) {
     optimizeForm.targetPosition = detail.targetPosition || ''
   }
   const storedFailedProjects = readFailedProjectDrafts(detail.id)
   const serverProjects = detail.projects || []
   const serverProjectIds = new Set(serverProjects.map((project) => project.projectId))
+  projects.value = serverProjects
+  savedResumeSignature.value = resumeDraftSignature.value
   projects.value = [
     ...serverProjects,
     ...storedFailedProjects.filter((project) => !serverProjectIds.has(project.projectId))
   ]
-  savedResumeSignature.value = resumeDraftSignature.value
+  resumeHistory.reset(createResumeHistorySnapshot())
+  void nextTick(() => {
+    historyApplying.value = false
+  })
+}
+
+const fetchResumeTemplateRegistry = async (
+  requestGeneration = resumeLoadGeneration,
+  targetResumeId = resumeId.value
+) => {
+  try {
+    const templates = await getResumeAtsTemplatesApi()
+    if (!isCurrentResumeRoute(requestGeneration, targetResumeId)) return
+    resumeAtsTemplates.value = (templates || []).filter((template) =>
+      !template.status || template.status === 'ACTIVE'
+    )
+    templateRegistryError.value = ''
+    if (targetResumeId) return
+    const currentRegistryTemplate = resumeAtsTemplates.value.find(
+      (template) => template.templateCode === selectedResumeTemplateCode.value
+    )
+    if (currentRegistryTemplate) {
+      return
+    } else if (selectableResumeTemplateOptions.value[0]) {
+      selectedResumeTemplateCode.value = selectableResumeTemplateOptions.value[0].code
+      presentationConfig.value = mergeResumeTemplatePresentation(
+        presentationConfig.value,
+        resumeAtsTemplates.value.find((template) =>
+          template.templateCode === selectedResumeTemplateCode.value
+        ) || {}
+      )
+    }
+  } catch (error) {
+    if (isCurrentResumeRoute(requestGeneration, targetResumeId)) {
+      templateRegistryError.value = getErrorMessage(error, '模板列表暂不可用，已保留当前模板设置。')
+    }
+  }
 }
 
 const fetchDetail = async (targetResumeId: number, requestGeneration: number) => {
@@ -1857,8 +2224,8 @@ const ensureStableVersionAfterSave = async (
 ) => {
   try {
     if (!isCurrentOperation()) return null
-    const shouldCreate = forceCreate
-      || (await getResumeVersionsApi(savedResumeId)).length === 0
+    const existingVersions = await getResumeVersionsApi(savedResumeId)
+    const shouldCreate = forceCreate || existingVersions.length === 0
     if (!isCurrentOperation()) return null
     if (shouldCreate) {
       await createResumeVersionApi(savedResumeId, { sourceType: 'MANUAL_SAVE' })
@@ -1910,11 +2277,23 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
   const operationGeneration = ++resumeSaveOperationGeneration
   const requestGeneration = resumeLoadGeneration
   const editingResumeId = resumeId.value
-  const formSnapshot: ResumeCreateDTO = { ...form, saveAsDraft: mode === 'draft' }
-  const draftProjectsSnapshot = projects.value
-    .filter((project) => project.projectId < 0)
-    .map((project) => ({ ...project }))
-  const shouldCreateVersion = mode === 'complete' && hasUnsavedResumeChanges.value
+  const presentationSnapshot = normalizeResumePresentation({
+    ...presentationConfig.value,
+    templateVersion: activeResumeTemplate.value?.templateVersion
+      || presentationConfig.value.templateVersion
+  })
+  const formSnapshot: ResumeCreateDTO = {
+    ...form,
+    saveAsDraft: mode === 'draft',
+    presentationConfig: presentationSnapshot
+  }
+  const projectSnapshot = projects.value.map((project) => ({ ...project }))
+  const saveSnapshotSignature = createResumeDraftSignature(
+    formSnapshot,
+    projectSnapshot,
+    presentationSnapshot
+  )
+  const shouldCreateVersion = mode === 'complete'
   const isCurrentOperation = () => (
     operationGeneration === resumeSaveOperationGeneration
     && isCurrentResumeRoute(requestGeneration, editingResumeId)
@@ -1931,13 +2310,15 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
       if (!isCurrentOperation()) return
       const projectResult = await persistDraftProjects(
         editingResumeId,
-        draftProjectsSnapshot,
+        projectSnapshot,
         isCurrentOperation
       )
       if (projectResult.stale || !isCurrentOperation()) return
       writeFailedProjectDrafts(editingResumeId, projectResult.failedProjects)
       if (projectResult.failedCount) {
-        ElMessage.warning(`简历已保存，${projectResult.failedCount} 条项目草稿保存失败，请稍后重试。`)
+        saveError.value = `简历基础信息已保存，但 ${projectResult.failedCount} 条项目未保存成功，请修复后重试。`
+        ElMessage.warning(saveError.value)
+        return
       }
       if (mode === 'complete' && formSnapshot.isDefault === 1 && !updated.draft) {
         await setDefaultResumeApi(editingResumeId)
@@ -1950,25 +2331,33 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
         ? await ensureStableVersionAfterSave(editingResumeId, shouldCreateVersion, isCurrentOperation)
         : true
       if (stableVersionReady === null || !isCurrentOperation()) return
-      ElMessage.success(mode === 'draft'
-        ? draftSaveMessage(updated)
-        : (stableVersionReady ? '简历与稳定版本已保存' : '简历已保存'))
+      const changedDuringSave = resumeDraftSignature.value !== saveSnapshotSignature
+      ElMessage.success(
+        changedDuringSave
+          ? '点击保存时的内容已保存，期间的新改动仍未保存，请继续保存。'
+          : mode === 'draft'
+            ? draftSaveMessage(updated)
+            : (stableVersionReady ? '简历与新稳定版本已保存' : '简历已保存')
+      )
       saveError.value = ''
-      await reloadCurrentResume()
-      if (!isCurrentOperation()) return
-      deliveryRefreshKey.value += 1
+      if (!changedDuringSave) {
+        await reloadCurrentResume()
+        if (!isCurrentOperation()) return
+        deliveryRefreshKey.value += 1
+      }
     } else {
       const created = await createResumeApi(formSnapshot)
       if (!isCurrentOperation()) return
       const projectResult = await persistDraftProjects(
         created.id,
-        draftProjectsSnapshot,
+        projectSnapshot,
         isCurrentOperation
       )
       if (projectResult.stale || !isCurrentOperation()) return
       writeFailedProjectDrafts(created.id, projectResult.failedProjects)
       if (projectResult.failedCount) {
-        ElMessage.warning(`简历已创建，${projectResult.failedCount} 条项目草稿保存失败，请在编辑页补充。`)
+        saveError.value = `简历已创建，但 ${projectResult.failedCount} 条项目未保存成功，请进入编辑页修复后再创建稳定版本。`
+        ElMessage.warning(saveError.value)
       }
       if (mode === 'complete' && formSnapshot.isDefault === 1 && !created.draft) {
         await setDefaultResumeApi(created.id)
@@ -1977,14 +2366,18 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
         await clearDefaultResumeApi(created.id)
         if (!isCurrentOperation()) return
       }
-      const stableVersionReady = mode === 'complete'
+      const stableVersionReady = mode === 'complete' && projectResult.failedCount === 0
         ? await ensureStableVersionAfterSave(created.id, true, isCurrentOperation)
         : true
       if (stableVersionReady === null || !isCurrentOperation()) return
       ElMessage.success(mode === 'draft'
         ? draftSaveMessage(created)
-        : (stableVersionReady ? '简历与初始稳定版本已创建' : '简历已创建'))
-      saveError.value = ''
+        : (stableVersionReady && projectResult.failedCount === 0
+          ? '简历与初始稳定版本已创建'
+          : '简历已创建，项目仍需修复后才能生成稳定版本'))
+      if (projectResult.failedCount === 0 && stableVersionReady) {
+        saveError.value = ''
+      }
       await router.replace(`/resumes/${created.id}/edit`)
     }
   } catch (error) {
@@ -2227,6 +2620,27 @@ const handleDeleteProject = async (project: ResumeProjectVO) => {
   }
 }
 
+watch(selectedResumeTemplateCode, (templateCode) => {
+  if (presentationConfig.value.templateCode === templateCode) return
+  const registryTemplate = resumeAtsTemplates.value.find(
+    (template) => template.templateCode === templateCode
+  )
+  presentationConfig.value = normalizeResumePresentation({
+    ...presentationConfig.value,
+    templateCode,
+    templateVersion: registryTemplate?.templateVersion
+      || presentationConfig.value.templateVersion
+      || 1
+  })
+})
+
+watch(previewAccent, (accentColor) => {
+  presentationConfig.value = normalizeResumePresentation({
+    ...presentationConfig.value,
+    accentColor
+  })
+})
+
 watch(
   [selectedResumeTemplateCode, previewAccent, previewZoom],
   persistPreviewPreferences
@@ -2238,6 +2652,8 @@ watch(
     const requestGeneration = ++resumeLoadGeneration
     resetRouteState()
     loadPreviewPreferences()
+    void fetchResumeTemplateRegistry(requestGeneration, nextResumeId)
+    resumeHistory.reset(createResumeHistorySnapshot())
     if (!nextResumeId) return
     loading.value = true
     void fetchDetail(nextResumeId, requestGeneration)
@@ -2249,6 +2665,8 @@ onBeforeUnmount(() => {
   resumeLoadGeneration += 1
   resumeSaveOperationGeneration += 1
   projectWriteOperationGeneration += 1
+  window.removeEventListener('beforeunload', handleResumeBeforeUnload)
+  if (resumeHistoryTimer) clearTimeout(resumeHistoryTimer)
 })
 </script>
 
@@ -2257,10 +2675,11 @@ onBeforeUnmount(() => {
   --resume-template-paper: #ffffff;
   --resume-paper-border: #d4dbe4;
   --resume-paper-line: #9aa7b5;
-  --resume-paper-ocean: #1779a7;
-  --resume-paper-teal: #0b7669;
-  --resume-paper-graphite: #3f4b59;
-  --resume-paper-berry: #a23b55;
+  --resume-paper-default: #1b1b18;
+  --resume-paper-blue: #3b82f6;
+  --resume-paper-green: #10b981;
+  --resume-paper-slate: #475569;
+  --resume-paper-red: #ef4444;
   --resume-paper-project: #255da8;
   --resume-paper-project-soft: #eef4fb;
   --resume-preview-top: 84px;
@@ -2463,7 +2882,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.editor-workspace {
+.resume-workbench-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(520px, 1.05fr);
   gap: var(--user-space-4);
@@ -2471,26 +2890,22 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.workspace-teleport-target {
-  display: contents;
-}
-
 .editor-column {
   gap: var(--user-space-3);
   min-width: 0;
 }
 
-.editor-main {
+.resume-workbench-editor {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.editor-main > .edit-card,
-.editor-main > .project-section {
+.resume-workbench-editor > .edit-card,
+.resume-workbench-editor > .project-section {
   grid-column: 1 / -1;
 }
 
-.editor-aside {
+.resume-workbench-inspector {
   position: static;
   grid-column: 1;
   grid-row: 2;
@@ -2504,7 +2919,7 @@ onBeforeUnmount(() => {
 }
 
 .content-card,
-.preview-column,
+.resume-workbench-preview,
 .side-panel {
   border: 1px solid var(--resume-border);
   border-radius: 8px;
@@ -2767,7 +3182,7 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.preview-column {
+.resume-workbench-preview {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2909,7 +3324,7 @@ onBeforeUnmount(() => {
   &::before {
     width: 58%;
     height: 4px;
-    background: var(--resume-paper-ocean);
+    background: #1b1b18;
   }
 
   i:nth-child(2) {
@@ -2926,7 +3341,7 @@ onBeforeUnmount(() => {
     &::before {
       width: 46%;
       height: 3px;
-      background: var(--resume-paper-graphite);
+      background: var(--resume-paper-slate);
     }
   }
 
@@ -3001,21 +3416,17 @@ onBeforeUnmount(() => {
     height: 24px;
     border: 3px solid var(--user-bg-panel);
     border-radius: 50%;
-    background: var(--resume-paper-ocean);
+    background: var(--resume-paper-default);
     box-shadow: 0 0 0 1px var(--user-border);
     cursor: pointer;
 
-    &.is-teal {
-      background: var(--resume-paper-teal);
-    }
-
-    &.is-graphite {
-      background: var(--resume-paper-graphite);
-    }
-
-    &.is-berry {
-      background: var(--resume-paper-berry);
-    }
+    &.is-blue { background: #3b82f6; }
+    &.is-green { background: #10b981; }
+    &.is-purple { background: #8b5cf6; }
+    &.is-orange { background: #f97316; }
+    &.is-red { background: #ef4444; }
+    &.is-slate { background: #475569; }
+    &.is-black { background: #000000; }
 
     &.active {
       box-shadow: 0 0 0 2px var(--user-primary);
@@ -3080,6 +3491,37 @@ onBeforeUnmount(() => {
   border: 1px solid var(--user-border);
   border-radius: 8px;
   background: var(--user-bg);
+}
+
+.preview-layout-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--user-border);
+  border-radius: 7px;
+  background: var(--user-control-bg);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--user-text-muted);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--user-surface-raised);
+      color: var(--user-primary);
+      outline: 0;
+    }
+  }
 }
 
 .resume-paper-stage {
@@ -3449,11 +3891,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1260px) {
-  .editor-workspace {
+  .resume-workbench-shell {
     grid-template-columns: minmax(0, 1fr) minmax(440px, 1fr);
   }
 
-  .editor-aside {
+  .resume-workbench-inspector {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
 
@@ -3470,26 +3912,11 @@ onBeforeUnmount(() => {
     z-index: 5;
   }
 
-  .editor-workspace {
+  .resume-workbench-shell {
     display: block;
   }
 
-  .mobile-pane-edit,
-  .mobile-pane-preview,
-  .mobile-pane-advice {
-    display: none;
-  }
-
-  .is-mobile-edit .mobile-pane-edit,
-  .is-mobile-advice .mobile-pane-advice {
-    display: grid;
-  }
-
-  .is-mobile-preview .mobile-pane-preview {
-    display: flex;
-  }
-
-  .preview-column {
+  .resume-workbench-preview {
     position: static;
     height: min(780px, calc(100dvh - 160px));
     max-height: min(780px, calc(100dvh - 160px));
@@ -3501,7 +3928,7 @@ onBeforeUnmount(() => {
     min-height: 0;
   }
 
-  .editor-aside {
+  .resume-workbench-inspector {
     grid-column: auto;
     grid-row: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3622,8 +4049,8 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
-  .editor-main,
-  .editor-aside,
+  .resume-workbench-editor,
+  .resume-workbench-inspector,
   .form-grid,
   .completion-list,
   .diagnostic-list,
@@ -3632,20 +4059,20 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .editor-main > .edit-card {
+  .resume-workbench-editor > .edit-card {
     order: -3;
   }
 
-  .editor-main > .ai-writing-card {
+  .resume-workbench-editor > .ai-writing-card {
     order: -2;
   }
 
-  .editor-main > .section-nav-card {
+  .resume-workbench-editor > .section-nav-card {
     order: -1;
   }
 
   .editor-section,
-  .preview-column,
+  .resume-workbench-preview,
   .side-panel {
     padding: 12px;
   }
@@ -3722,7 +4149,7 @@ onBeforeUnmount(() => {
 
   .live-feedback-strip,
   .content-card,
-  .preview-column,
+  .resume-workbench-preview,
   .side-panel,
   .resume-template-strip {
     border: 1.5px solid var(--arena-line);
@@ -3738,7 +4165,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .editor-workspace {
+  .resume-workbench-shell {
     grid-template-columns: 200px 360px minmax(0, 1fr);
     gap: 18px;
   }
@@ -3785,13 +4212,13 @@ onBeforeUnmount(() => {
     gap: 10px;
   }
 
-  .editor-main {
+  .resume-workbench-editor {
     grid-column: 3;
     grid-row: 1;
     grid-template-columns: 1fr;
   }
 
-  .preview-column {
+  .resume-workbench-preview {
     grid-column: 2;
     grid-row: 1 / span 2;
     position: sticky;
@@ -3799,11 +4226,11 @@ onBeforeUnmount(() => {
     align-self: start;
   }
 
-  .preview-column .preview-toolbar__status {
+  .resume-workbench-preview .preview-toolbar__status {
     display: none;
   }
 
-  .editor-aside {
+  .resume-workbench-inspector {
     grid-column: 1;
     grid-row: 1;
     grid-template-columns: 1fr;
@@ -3845,7 +4272,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .preview-column {
+  .resume-workbench-preview {
     background: linear-gradient(180deg, #ffffff, #f9fcf9);
   }
 
@@ -3938,19 +4365,19 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .arena-resume-studio {
-    .editor-workspace {
+    .resume-workbench-shell {
       grid-template-columns: minmax(310px, 0.8fr) minmax(0, 1fr);
     }
 
-    .editor-main {
+    .resume-workbench-editor {
       grid-column: 2;
     }
 
-    .preview-column {
+    .resume-workbench-preview {
       grid-column: 1;
     }
 
-    .editor-aside {
+    .resume-workbench-inspector {
       position: static;
       grid-column: 1 / -1;
       grid-row: 2;
@@ -3973,19 +4400,19 @@ onBeforeUnmount(() => {
   .arena-resume-studio {
     padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
 
-    .editor-workspace {
+    .resume-workbench-shell {
       grid-template-columns: 1fr;
     }
 
-    .editor-main,
-    .preview-column,
-    .editor-aside {
+    .resume-workbench-editor,
+    .resume-workbench-preview,
+    .resume-workbench-inspector {
       position: static;
       grid-column: auto;
       grid-row: auto;
     }
 
-    .editor-aside {
+    .resume-workbench-inspector {
       grid-template-columns: 1fr;
     }
 
@@ -4003,7 +4430,7 @@ onBeforeUnmount(() => {
       flex-direction: column;
     }
 
-    .preview-column {
+    .resume-workbench-preview {
       order: 2;
     }
   }
@@ -4315,7 +4742,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .editor-workspace {
+  .resume-workbench-shell {
     grid-template-columns: 200px 360px minmax(0, 1fr);
     gap: 18px;
     align-items: start;
@@ -4395,7 +4822,7 @@ onBeforeUnmount(() => {
     color: #9a5a10;
   }
 
-  .editor-aside {
+  .resume-workbench-inspector {
     grid-column: 1;
     grid-row: 1;
     align-content: start;
@@ -4403,11 +4830,11 @@ onBeforeUnmount(() => {
     padding: 0;
   }
 
-  .editor-aside > .side-panel:not(.section-nav-card) {
+  .resume-workbench-inspector > .side-panel:not(.section-nav-card) {
     display: none;
   }
 
-  .editor-aside > .export-check-panel {
+  .resume-workbench-inspector > .export-check-panel {
     display: grid;
     margin-top: 12px;
     padding: 12px;
@@ -4493,7 +4920,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .preview-column {
+  .resume-workbench-preview {
     grid-column: 2;
     grid-row: 1;
     height: auto;
@@ -4539,14 +4966,14 @@ onBeforeUnmount(() => {
     transform-origin: top center;
   }
 
-  .editor-main {
+  .resume-workbench-editor {
     grid-column: 3;
     grid-row: 1;
     gap: 14px;
   }
 
-  .editor-main > .edit-card,
-  .editor-main > .project-section {
+  .resume-workbench-editor > .edit-card,
+  .resume-workbench-editor > .project-section {
     min-height: 27rem;
     padding: 20px 22px;
     border-radius: var(--arena-radius-card);
@@ -4847,7 +5274,7 @@ onBeforeUnmount(() => {
     width: min(100%, 1060px);
     padding-inline: 24px;
 
-    .editor-workspace {
+    .resume-workbench-shell {
       grid-template-columns: 180px minmax(300px, 0.9fr) minmax(0, 1fr);
       gap: 14px;
     }
@@ -4860,14 +5287,14 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1020px) {
   .arena-resume-studio {
-    .editor-workspace {
+    .resume-workbench-shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 0;
       align-items: start;
     }
 
-    .editor-aside {
+    .resume-workbench-inspector {
       display: none;
     }
 
@@ -4875,25 +5302,12 @@ onBeforeUnmount(() => {
       display: flex;
     }
 
-    .editor-main {
+    .resume-workbench-editor {
       grid-column: 1;
       grid-row: 1;
     }
 
-    .mobile-pane-edit,
-    .mobile-pane-preview {
-      display: none;
-    }
-
-    .editor-workspace.is-mobile-edit .mobile-pane-edit {
-      display: grid;
-    }
-
-    .editor-workspace.is-mobile-preview .mobile-pane-preview {
-      display: flex;
-    }
-
-    .preview-column {
+    .resume-workbench-preview {
       grid-column: 1;
       grid-row: 1;
       height: auto;
@@ -4980,7 +5394,7 @@ onBeforeUnmount(() => {
       }
     }
 
-    .preview-column {
+    .resume-workbench-preview {
       height: auto;
       max-height: none;
     }
@@ -4993,7 +5407,7 @@ onBeforeUnmount(() => {
       transform-origin: top left;
     }
 
-    .editor-workspace {
+    .resume-workbench-shell {
       grid-template-columns: minmax(0, 1fr);
       gap: 0;
     }
@@ -5030,8 +5444,8 @@ onBeforeUnmount(() => {
       white-space: normal;
     }
 
-    .editor-main > .edit-card,
-    .editor-main > .project-section {
+    .resume-workbench-editor > .edit-card,
+    .resume-workbench-editor > .project-section {
       min-height: 0;
       padding: 16px;
     }
@@ -5077,7 +5491,7 @@ onBeforeUnmount(() => {
 }
 
 // Resume workbench v2. This final scoped layer owns only the resume editor route.
-.arena-resume-studio.resume-editor {
+.resume-workbench-page.resume-editor {
   --resume-workbench-bg: #e9edf2;
   --resume-workbench-surface: #ffffff;
   --resume-workbench-surface-soft: #f5f7fa;
@@ -5094,6 +5508,8 @@ onBeforeUnmount(() => {
   --resume-workbench-warning: #9a5d0b;
   width: 100%;
   max-width: none;
+  display: flex;
+  flex-direction: column;
   min-height: calc(100dvh - 62px);
   height: calc(100dvh - 62px);
   padding: 0;
@@ -5133,10 +5549,10 @@ onBeforeUnmount(() => {
     }
   }
 
-  .editor-workspace {
+  .resume-workbench-shell {
     display: grid;
     flex: 1 1 auto;
-    grid-template-columns: 220px minmax(640px, 1fr) 370px;
+    grid-template-columns: 220px minmax(0, 1fr) minmax(360px, 420px);
     grid-template-rows: minmax(0, 1fr);
     gap: 0;
     min-width: 0;
@@ -5145,13 +5561,9 @@ onBeforeUnmount(() => {
     background: var(--resume-workbench-bg);
   }
 
-  .workspace-teleport-target {
-    display: contents;
-  }
-
-  .preview-column,
-  .editor-main,
-  .editor-aside {
+  .resume-workbench-pane--preview,
+  .resume-workbench-pane--editor,
+  .resume-workbench-pane--inspector {
     position: static;
     top: auto;
     align-self: stretch;
@@ -5164,7 +5576,7 @@ onBeforeUnmount(() => {
     box-shadow: none;
   }
 
-  .preview-column {
+  .resume-workbench-pane--preview {
     position: relative;
     top: auto;
     grid-column: 2;
@@ -5325,8 +5737,8 @@ onBeforeUnmount(() => {
     }
   }
 
-  .editor-main,
-  .editor-aside {
+  .resume-workbench-pane--editor,
+  .resume-workbench-pane--inspector {
     grid-column: 3;
     grid-row: 1;
     align-content: start;
@@ -5338,7 +5750,7 @@ onBeforeUnmount(() => {
     scrollbar-gutter: stable;
   }
 
-  .editor-main {
+  .resume-workbench-pane--editor {
     display: flex;
     flex-direction: column;
 
@@ -5351,17 +5763,81 @@ onBeforeUnmount(() => {
     }
   }
 
-  .editor-aside {
+  .resume-inspector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px;
+    border-bottom: 1px solid var(--resume-workbench-line);
+    background: var(--resume-workbench-surface);
+
+    > div {
+      min-width: 0;
+    }
+
+    &__eyebrow {
+      color: var(--resume-workbench-muted);
+      font-size: 10.5px;
+    }
+
+    h1 {
+      margin: 4px 0 0;
+      color: var(--resume-workbench-text);
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    p {
+      max-width: 280px;
+      margin: 5px 0 0;
+      color: var(--resume-workbench-muted);
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+  }
+
+  .resume-inspector-header__template {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    max-width: 160px;
+    padding: 0 9px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 6px;
+    background: var(--resume-workbench-surface);
+    color: var(--resume-workbench-text-soft);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+  }
+
+  .resume-workbench-pane--inspector {
     display: flex;
     flex-direction: column;
     gap: 0;
   }
 
-  .editor-aside > .side-panel:not(.section-nav-card) {
+  .resume-workbench-pane--inspector > .side-panel:not(.section-nav-card) {
     display: block;
   }
 
-  .editor-aside > .export-check-panel {
+  .resume-workbench-pane--inspector > .export-check-panel {
     margin-top: 0;
     padding: 16px 18px;
   }
@@ -5856,15 +6332,15 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1180px) {
-  .arena-resume-studio.resume-editor {
-    .editor-workspace {
-      grid-template-columns: 64px minmax(600px, 1fr) 350px;
+  .resume-workbench-page.resume-editor {
+    .resume-workbench-shell {
+      grid-template-columns: 64px minmax(0, 1fr) 340px;
     }
   }
 }
 
 @media (max-width: 1260px) {
-  .arena-resume-studio.resume-editor {
+  .resume-workbench-page.resume-editor {
     height: auto;
     min-height: calc(100dvh - 62px);
     overflow: visible;
@@ -5898,7 +6374,7 @@ onBeforeUnmount(() => {
       }
     }
 
-    .editor-workspace {
+    .resume-workbench-shell {
       display: block;
       width: 100%;
       min-height: 0;
@@ -5906,22 +6382,9 @@ onBeforeUnmount(() => {
       overflow-x: hidden;
     }
 
-    .mobile-pane-edit,
-    .mobile-pane-preview {
-      display: none;
-    }
-
-    .editor-workspace.is-mobile-edit .mobile-pane-edit {
-      display: flex;
-    }
-
-    .editor-workspace.is-mobile-preview .mobile-pane-preview {
-      display: flex;
-    }
-
-    .editor-main,
-    .editor-aside,
-    .preview-column {
+    .resume-workbench-editor,
+    .resume-workbench-inspector,
+    .resume-workbench-preview {
       position: static;
       width: 100%;
       min-width: 0;
@@ -5949,12 +6412,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
-  .arena-resume-studio.resume-editor {
+  .resume-workbench-page.resume-editor {
     min-height: calc(100dvh - 54px);
 
-    .editor-main,
-    .editor-aside,
-    .preview-column {
+    .resume-workbench-editor,
+    .resume-workbench-inspector,
+    .resume-workbench-preview {
       height: auto;
       min-height: calc(100dvh - 158px);
       max-height: none;
@@ -6027,11 +6490,69 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arena-resume-studio.resume-editor {
+  .resume-workbench-page.resume-editor {
     .prompt-card,
     .project-switcher button,
     .preview-toolbar button {
       transition: none;
+    }
+  }
+}
+
+// Content-level constraints. Panel placement and collapse states are owned by
+// ResumeWorkbenchShell.vue.
+.resume-workbench-page.resume-editor {
+  gap: 0;
+
+  .preview-toolbar {
+    min-width: 0;
+
+    > div:first-child {
+      flex: 1 1 auto;
+      overflow: hidden;
+    }
+  }
+
+  .preview-toolbar__actions {
+    flex: 0 0 auto;
+  }
+
+  .resume-paper-wrap {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 1380px) and (min-width: 1261px) {
+  .resume-workbench-page.resume-editor {
+    .resume-paper-wrap {
+      padding-inline: 18px;
+    }
+  }
+}
+
+@media (max-width: 1260px) {
+  .resume-workbench-page.resume-editor {
+    .workspace-tabs {
+      display: flex;
+    }
+
+    .resume-paper-stage {
+      zoom: var(--resume-preview-zoom);
+    }
+
+    .resume-workbench-pane--editor > .ai-writing-card .prompt-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .resume-workbench-page.resume-editor {
+    .resume-workbench-pane--editor > .ai-writing-card .prompt-list {
+      grid-template-columns: 1fr;
     }
   }
 }

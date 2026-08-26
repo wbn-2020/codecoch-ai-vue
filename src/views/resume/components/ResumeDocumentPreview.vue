@@ -1,6 +1,8 @@
 <template>
   <article
+    v-if="!rendererComponent"
     class="resume-document"
+    :style="paperStyle"
     :class="[
       `is-${templateMeta.className}`,
       `is-${accent}`,
@@ -9,14 +11,24 @@
   >
     <aside v-if="isClassicTemplate" class="document-sidebar">
       <span class="document-sidebar__kicker">CAREER PROFILE</span>
-      <strong class="document-sidebar__role">{{ model.targetPosition }}</strong>
+      <strong v-if="isFieldVisible('targetPosition')" class="document-sidebar__role">{{ model.identity.targetPosition }}</strong>
 
-      <section v-if="model.contacts.length" class="document-sidebar__section">
+      <section v-if="visibleContacts.length" class="document-sidebar__section">
         <span>CONTACT</span>
-        <p v-for="item in model.contacts" :key="item">{{ item }}</p>
+        <p v-for="item in visibleContacts" :key="item.key" class="document-contact__item">
+          <component
+            v-if="presentation.iconMode !== 'HIDDEN'"
+            :is="item.icon"
+            :size="13"
+            :stroke-width="1.8"
+            aria-hidden="true"
+          />
+          <span v-if="item.showLabel" class="document-contact__label">{{ item.label }}</span>
+          <span class="document-contact__value">{{ item.value }}</span>
+        </p>
       </section>
 
-      <section v-if="model.skills.length" class="document-sidebar__section">
+      <section v-if="isFieldVisible('skills') && model.skills.length" class="document-sidebar__section">
         <span>SKILLS</span>
         <p v-for="skill in model.skills" :key="skill">{{ skill }}</p>
       </section>
@@ -25,18 +37,28 @@
     <div class="document-main">
       <header class="document-header">
         <div class="document-header__identity">
-          <span class="document-role-label">{{ model.targetPosition }}</span>
-          <h2>{{ model.name }}</h2>
-          <p>{{ model.targetPosition }}</p>
+          <span v-if="isFieldVisible('targetPosition')" class="document-role-label">{{ model.identity.targetPosition }}</span>
+          <h2 v-if="isFieldVisible('realName')">{{ model.identity.name }}</h2>
+          <p v-if="isFieldVisible('targetPosition')">{{ model.identity.targetPosition }}</p>
         </div>
-        <div v-if="model.contacts.length && !isClassicTemplate" class="document-contact">
-          <span v-for="item in model.contacts" :key="item">{{ item }}</span>
+        <div v-if="visibleContacts.length && !isClassicTemplate" class="document-contact">
+          <span v-for="item in visibleContacts" :key="item.key" class="document-contact__item">
+            <component
+              v-if="presentation.iconMode !== 'HIDDEN'"
+              :is="item.icon"
+              :size="13"
+              :stroke-width="1.8"
+              aria-hidden="true"
+            />
+            <span v-if="item.showLabel" class="document-contact__label">{{ item.label }}</span>
+            <span class="document-contact__value">{{ item.value }}</span>
+          </span>
         </div>
       </header>
 
       <div v-if="model.hasContent" class="document-body">
         <template v-for="section in sectionOrder" :key="section">
-          <section v-if="section === 'summary' && model.summary.length" class="document-section">
+          <section v-if="section === 'summary' && isSectionVisible('summary') && isFieldVisible('summary') && model.summary.length" class="document-section">
             <div class="document-section__heading">
               <h3>个人摘要</h3>
               <i></i>
@@ -46,7 +68,7 @@
             </div>
           </section>
 
-          <section v-else-if="section === 'skills' && model.skills.length" class="document-section skills-section">
+          <section v-else-if="section === 'skills' && isSectionVisible('skills') && isFieldVisible('skills') && model.skills.length" class="document-section skills-section">
             <div class="document-section__heading">
               <h3>专业技能</h3>
               <i></i>
@@ -62,28 +84,28 @@
             </div>
           </section>
 
-          <section v-else-if="section === 'experience' && model.workEntries.length" class="document-section">
+          <section v-else-if="section === 'experience' && isSectionVisible('experience') && isFieldVisible('workExperience') && model.experience.length" class="document-section">
             <div class="document-section__heading">
               <h3>工作经历</h3>
               <i></i>
             </div>
-            <ResumeDocumentEntries :entries="model.workEntries" />
+            <ResumeDocumentEntries :entries="model.experience" />
           </section>
 
-          <section v-else-if="section === 'projects' && model.projectEntries.length" class="document-section">
+          <section v-else-if="section === 'projects' && isSectionVisible('projects') && isFieldVisible('projects') && model.projects.length" class="document-section">
             <div class="document-section__heading">
               <h3>项目经历</h3>
               <i></i>
             </div>
-            <ResumeDocumentEntries :entries="model.projectEntries" project />
+            <ResumeDocumentEntries :entries="model.projects" project />
           </section>
 
-          <section v-else-if="section === 'education' && model.educationEntries.length" class="document-section">
+          <section v-else-if="section === 'education' && isSectionVisible('education') && isFieldVisible('educationExperience') && model.education.length" class="document-section">
             <div class="document-section__heading">
               <h3>教育经历</h3>
               <i></i>
             </div>
-            <ResumeDocumentEntries :entries="model.educationEntries" />
+            <ResumeDocumentEntries :entries="model.education" />
           </section>
         </template>
       </div>
@@ -95,33 +117,50 @@
       </div>
     </div>
   </article>
+  <component
+    v-else
+    :is="rendererComponent"
+    :model="model"
+    :class="[
+      `is-${templateMeta.className}`,
+      `is-${accent}`,
+      `is-density-${density}`
+    ]"
+  />
 </template>
 
 <script setup lang="ts">
-import { FileText } from 'lucide-vue-next'
+import { FileText, Mail, Phone } from 'lucide-vue-next'
 import { computed, defineComponent, h, type PropType } from 'vue'
 
 import {
-  buildResumeDocumentModel,
   normalizeResumeTemplateCode,
-  resumeTemplateOptions,
-  resumeTemplateSectionOrder,
   type ResumeAccent,
   type ResumeDocumentDraft,
   type ResumeDocumentEntry,
   type ResumePreviewDensity,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import {
+  isResumePresentationSectionVisible,
+  normalizeResumePresentation
+} from '@/features/resume-presentation'
+import { buildResumeRenderModel } from '@/features/resume-template/adapter'
+import { getResumeTemplateDefinition } from '@/features/resume-template/registry'
+import { getResumeRendererComponent } from '@/views/resume/templates'
+import type { ResumePresentationConfig } from '@/types/resumePresentation'
 
 const props = withDefaults(defineProps<{
   draft: ResumeDocumentDraft
   templateCode?: ResumeTemplateCode | string
   accent?: ResumeAccent
   density?: ResumePreviewDensity
+  presentationConfig?: ResumePresentationConfig
 }>(), {
   templateCode: 'ATS_SINGLE_COLUMN',
-  accent: 'ocean',
-  density: 'comfortable'
+  accent: 'default',
+  density: 'comfortable',
+  presentationConfig: undefined
 })
 
 const ResumeDocumentEntries = defineComponent({
@@ -146,7 +185,16 @@ const ResumeDocumentEntries = defineComponent({
           ])
           : null,
         entry.meta ? h('p', { class: 'document-entry__meta' }, entry.meta) : null,
-        entry.bullets.length
+        entry.projectSections?.length
+          ? h('div', { class: 'document-project-sections' },
+            entry.projectSections.map((section) => h('section', {
+              key: section.key,
+              class: 'document-project-section'
+            }, [
+              h('strong', { class: 'document-project-section__title' }, section.title),
+              h('ul', section.values.map((value) => h('li', { key: value }, value)))
+            ])))
+          : entry.bullets.length
           ? h('ul', entry.bullets.map((bullet) => h('li', { key: bullet }, bullet)))
           : null
       ]))
@@ -155,12 +203,42 @@ const ResumeDocumentEntries = defineComponent({
 })
 
 const templateCode = computed(() => normalizeResumeTemplateCode(props.templateCode))
-const templateMeta = computed(() =>
-  resumeTemplateOptions.find((item) => item.code === templateCode.value) || resumeTemplateOptions[0]
+const templateMeta = computed(() => getResumeTemplateDefinition(templateCode.value))
+const presentation = computed(() => normalizeResumePresentation(
+  props.presentationConfig || props.draft.presentationConfig,
+  {
+  templateCode: templateCode.value
+  }
+))
+const model = computed(() => buildResumeRenderModel(props.draft, presentation.value, props.density))
+const rendererComponent = computed(() =>
+  getResumeRendererComponent(templateMeta.value.rendererKey)
 )
-const model = computed(() => buildResumeDocumentModel(props.draft))
-const sectionOrder = computed(() => resumeTemplateSectionOrder(templateCode.value))
-const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SIDEBAR')
+const sectionOrder = computed(() => presentation.value.sectionOrder)
+const isClassicTemplate = computed(() => templateMeta.value.layout.contactPlacement === 'sidebar')
+const isSectionVisible = (section: 'summary' | 'skills' | 'experience' | 'projects' | 'education') =>
+  isResumePresentationSectionVisible(presentation.value, section)
+const isFieldVisible = (field: keyof NonNullable<ResumePresentationConfig['fieldVisibility']>) =>
+  presentation.value.fieldVisibility[field] !== false
+  && (
+    field !== 'realName'
+    && field !== 'targetPosition'
+    && field !== 'email'
+    && field !== 'phone'
+    || presentation.value.basicFieldVisibility[field] !== false
+  )
+const visibleContacts = computed(() => model.value.contacts.map((contact) => ({
+  ...contact,
+  icon: contact.iconKey === 'phone' ? Phone : Mail
+})))
+const paperStyle = computed(() => ({
+  '--paper-font-family': presentation.value.fontFamily,
+  '--paper-font-scale': String(presentation.value.fontScale),
+  '--paper-line-height': String(presentation.value.lineHeight),
+  '--paper-section-gap': `${17 * presentation.value.sectionSpacing}px`,
+  '--paper-pad-x': `${presentation.value.pageMarginPt}px`,
+  '--paper-pad-y': `${presentation.value.pageMarginPt}px`
+}))
 </script>
 
 <style scoped lang="scss">
@@ -179,32 +257,57 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   box-sizing: border-box;
   width: 100%;
   max-width: 720px;
-  min-height: 0;
+  height: auto;
   aspect-ratio: 210 / 297;
+  min-height: max-content;
   padding: var(--paper-pad-y) var(--paper-pad-x);
   border: 1px solid #d6dce3;
   background: #fff;
   color: var(--paper-ink);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-  font-family: Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-family: var(--paper-font-family, Arial), "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   overflow-wrap: anywhere;
 
-  &.is-teal {
-    --paper-accent: #0b7669;
-    --paper-accent-strong: #0b655b;
-    --paper-accent-soft: #e8f6f3;
+  &.is-blue {
+    --paper-accent: #3b82f6;
+    --paper-accent-strong: #1d4ed8;
+    --paper-accent-soft: #eff6ff;
   }
 
-  &.is-graphite {
-    --paper-accent: #3f4b59;
-    --paper-accent-strong: #202a35;
-    --paper-accent-soft: #edf0f3;
+  &.is-green {
+    --paper-accent: #10b981;
+    --paper-accent-strong: #047857;
+    --paper-accent-soft: #ecfdf5;
   }
 
-  &.is-berry {
-    --paper-accent: #a23b55;
-    --paper-accent-strong: #76263b;
-    --paper-accent-soft: #f9edf1;
+  &.is-purple {
+    --paper-accent: #8b5cf6;
+    --paper-accent-strong: #6d28d9;
+    --paper-accent-soft: #f5f3ff;
+  }
+
+  &.is-orange {
+    --paper-accent: #f97316;
+    --paper-accent-strong: #c2410c;
+    --paper-accent-soft: #fff7ed;
+  }
+
+  &.is-red {
+    --paper-accent: #ef4444;
+    --paper-accent-strong: #b91c1c;
+    --paper-accent-soft: #fef2f2;
+  }
+
+  &.is-slate {
+    --paper-accent: #475569;
+    --paper-accent-strong: #334155;
+    --paper-accent-soft: #f1f5f9;
+  }
+
+  &.is-black {
+    --paper-accent: #000000;
+    --paper-accent-strong: #000000;
+    --paper-accent-soft: #f5f5f5;
   }
 
   &.is-density-compact,
@@ -264,14 +367,14 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   h2 {
     margin: 5px 0 0;
     color: var(--paper-ink);
-    font-size: 30px;
+    font-size: calc(30px * var(--paper-font-scale, 1));
     line-height: 1.14;
   }
 
   p {
     margin: 7px 0 0;
     color: var(--paper-accent-strong);
-    font-size: 14px;
+    font-size: calc(14px * var(--paper-font-scale, 1));
     font-weight: 700;
   }
 }
@@ -291,12 +394,31 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   text-align: right;
 }
 
+.document-contact__item {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 5px;
+
+  > svg {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    color: var(--paper-accent-strong);
+  }
+}
+
+.document-contact__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .document-body {
   padding-top: 4px;
 }
 
 .document-section {
-  margin-top: 17px;
+  margin-top: var(--paper-section-gap, 17px);
   break-inside: avoid;
 }
 
@@ -330,7 +452,7 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   p {
     margin: 0;
     color: var(--paper-body);
-    font-size: var(--paper-body-size);
+    font-size: calc(var(--paper-body-size) * var(--paper-font-scale, 1));
     line-height: var(--paper-line-height);
     white-space: pre-wrap;
   }
@@ -421,8 +543,29 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   margin: 6px 0 0;
   padding-left: 18px;
   color: var(--paper-body);
-  font-size: var(--paper-body-size);
+  font-size: calc(var(--paper-body-size) * var(--paper-font-scale, 1));
   line-height: var(--paper-line-height);
+}
+
+.document-project-sections {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.document-project-section {
+  break-inside: avoid;
+
+  &__title {
+    display: block;
+    color: var(--paper-accent-strong);
+    font-size: 10.5px;
+    line-height: 1.45;
+  }
+
+  ul {
+    margin-top: 2px;
+  }
 }
 
 .document-entry li::marker {
@@ -528,6 +671,14 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
     color: #d7e1e7;
     font-size: 10px;
     line-height: 1.55;
+  }
+
+  .document-contact__item {
+    justify-content: flex-start;
+  }
+
+  .document-contact__item > svg {
+    color: #9cc8c0;
   }
 }
 
@@ -728,7 +879,7 @@ const isClassicTemplate = computed(() => templateCode.value === 'ATS_CLASSIC_SID
   .resume-document {
     --paper-pad-x: 25px;
     --paper-pad-y: 26px;
-    min-height: 0;
+    min-height: max-content;
   }
 
   .document-header {

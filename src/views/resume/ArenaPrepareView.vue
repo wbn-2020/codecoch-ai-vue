@@ -347,7 +347,7 @@
                 <ResumeDocumentPreview
                   :draft="resumeSnapshotDraft"
                   template-code="ATS_SINGLE_COLUMN"
-                  accent="ocean"
+                  accent="blue"
                   density="compact"
                 />
               </div>

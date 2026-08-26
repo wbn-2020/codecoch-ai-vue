@@ -9,7 +9,7 @@ const directionDPages = [
   ['登录', 'src/views/auth/LoginView.vue', 'class="arena login-page"', '示例成长面板预览'],
   ['今天', 'src/views/user/ArenaHomeView.vue', 'class="arena arena-home"', 'arena-home__boss'],
   ['准备', 'src/views/resume/ArenaPrepareView.vue', 'class="arena arena-prepare"', 'arena-prepare__workspace'],
-  ['简历工坊', 'src/views/resume/ResumeEditView.vue', 'class="arena arena-resume-studio resume-editor page-shell"', 'editor-workspace'],
+  ['简历工坊', 'src/views/resume/ResumeEditView.vue', 'class="arena resume-workbench-page resume-editor page-shell"', '<ResumeWorkbenchShell'],
   ['JD 匹配进入页', 'src/views/v3/ResumeMatchView.vue', 'class="arena arena-match v3-page match-entry-page"', 'match-entry-grid'],
   ['JD 匹配结算页', 'src/views/v3/ResumeMatchDetailView.vue', 'class="arena arena-match-detail v3-page"', 'arena-match-settlement'],
   ['训练', 'src/views/question/ArenaTrainView.vue', 'class="arena arena-train"', 'arena-train__preview-card'],
@@ -104,6 +104,7 @@ describe('Direction D prototype fidelity contracts', () => {
 
   it('preserves the signed-off resume workbench and prototype tools layout without weakening mobile reflow', () => {
     const resume = readSource('src/views/resume/ResumeEditView.vue')
+    const resumeShell = readSource('src/views/resume/components/ResumeWorkbenchShell.vue')
     const tools = readSource('src/views/tools/RecordsToolsView.vue')
     const userComponents = readSource('src/styles/user-components.scss')
     const layout = readSource('src/layouts/UserLayout.vue')
@@ -112,14 +113,13 @@ describe('Direction D prototype fidelity contracts', () => {
     const routes = readSource('src/router/routes.ts')
 
     // Resume workbench v2 keeps the A4 canvas central and the contextual editor on the right.
-    expect(resume).toContain(
-      'grid-template-columns: 220px minmax(640px, 1fr) 370px'
-    )
+    expect(resumeShell).toContain('--workbench-rail-width: 220px')
+    expect(resumeShell).toContain('--workbench-editor-width: 420px')
     expect(resume).toContain('<ResumeSectionRail')
     expect(resume).toContain('<ResumeWorkbenchTopbar')
-    expect(resume).toContain('<ResumeTemplateGallery')
-    expect(resume).toMatch(/\.preview-column\s*\{[\s\S]*?grid-column:\s*2;/)
-    expect(resume).toMatch(/\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;/)
+    expect(resume).toContain('<ResumeTemplateBrowser')
+    expect(resumeShell).toMatch(/\.resume-workbench-layout > :deep\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*2;/)
+    expect(resumeShell).toMatch(/\.resume-workbench-layout > :deep\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*3;/)
     expect(resume).toContain('label="背景"')
     expect(resume).toContain('label="技术决策"')
     expect(resume).toContain('label="量化结果"')
@@ -127,8 +127,8 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(resume).toContain('handleSaveInlineProject')
     expect(resume).toContain('openPdfExport')
     expect(resume).toContain('@media (max-width: 1260px)')
-    expect(resume).toContain('grid-template-columns: 64px minmax(600px, 1fr) 350px')
-    expect(resume).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
+    expect(resumeShell).toContain('@media (max-width: 1260px)')
+    expect(resumeShell).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/)
     expect(resume).toContain('A4 预览 · 分页以导出为准')
     expect(layout).toContain("'is-resume-workbench-frame': isResumeWorkbench")
     expect(layout).toContain('width: min(calc(100% - 16px), 1600px)')

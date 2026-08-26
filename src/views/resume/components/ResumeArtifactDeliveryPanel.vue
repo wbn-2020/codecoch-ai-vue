@@ -14,7 +14,7 @@
         <el-button
           type="primary"
           :loading="creatingZip"
-          :disabled="!resumeVersionId"
+          :disabled="!canCreateZip"
           @click="createZip"
         >
           <Archive :size="16" />
@@ -25,7 +25,7 @@
 
     <div v-if="resumeVersionId" class="artifact-template-picker" role="radiogroup" aria-label="ZIP 简历模板">
       <button
-        v-for="template in resumeTemplateOptions"
+        v-for="template in formalTemplateOptions"
         :key="template.code"
         type="button"
         role="radio"
@@ -34,7 +34,7 @@
         @click="selectedTemplateCode = template.code"
       >
         <strong>{{ template.name }}</strong>
-        <span>{{ template.description }}</span>
+        <span>{{ template.description }} · v{{ template.version }}</span>
       </button>
     </div>
 
@@ -45,6 +45,14 @@
       :closable="false"
       title="缺少推荐简历版本"
       description="请先在投递包中绑定可用简历版本，再生成正式 artifact。"
+    />
+    <el-alert
+      v-else-if="!numericApplicationPackageId()"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="投递包尚未落库"
+      description="当前页面没有可用的投递包编号，暂不能生成 ZIP。"
     />
 
     <div v-else-if="loading && !artifacts.length" class="panel-state">
@@ -116,11 +124,12 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { Archive, Download, FileText, PackageOpen, RefreshCw } from 'lucide-vue-next'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   createApplicationPackageArtifactApi,
   downloadResumeArtifactApi,
+  getResumeAtsTemplatesApi,
   getResumeArtifactApi,
   getResumeArtifactsApi
 } from '@/api/resumeDelivery'
@@ -130,6 +139,7 @@ import {
   normalizeResumeArtifact
 } from '@/features/resume-delivery'
 import {
+  isFormalResumeTemplateCode,
   normalizeResumeTemplateCode,
   resumeTemplateOptions,
   type ResumeTemplateCode
@@ -138,7 +148,7 @@ import {
   downloadBlobReliably,
   reliableDownloadOptionsForFile
 } from '@/features/reliable-download'
-import type { ResumeArtifactVO } from '@/types/resumeDelivery'
+import type { ResumeArtifactVO, ResumeAtsTemplateVO } from '@/types/resumeDelivery'
 import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{
@@ -150,11 +160,37 @@ const loading = ref(false)
 const creatingZip = ref(false)
 const loadError = ref('')
 const artifacts = ref<ResumeArtifactVO[]>([])
+const registeredTemplates = ref<ResumeAtsTemplateVO[]>([])
 const downloadingIds = ref(new Set<number>())
 const selectedTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
+const formalTemplateOptions = computed(() => resumeTemplateOptions
+  .filter((template) =>
+    isFormalResumeTemplateCode(template.code)
+    && registeredTemplates.value.some((item) =>
+      item.templateCode === template.code
+      && (!item.status || item.status === 'ACTIVE')
+    )
+  )
+  .map((template) => ({
+    ...template,
+    version: registeredTemplates.value
+      .filter((item) =>
+        item.templateCode === template.code
+        && (!item.status || item.status === 'ACTIVE')
+      )
+      .reduce((version, item) => Math.max(version, Number(item.templateVersion) || 1), 1)
+  })))
+const selectedTemplateVersion = computed(() =>
+  formalTemplateOptions.value.find((template) => template.code === selectedTemplateCode.value)?.version || 1
+)
+const canCreateZip = computed(() =>
+  Boolean(props.resumeVersionId && numericApplicationPackageId() && selectedTemplateVersion.value)
+)
 const artifactTimers = new Map<number, number>()
 const artifactPollAttempts = new Map<number, number>()
 const templatePreferenceKey = 'codecoachai.resume.artifact-template'
+let loadGeneration = 0
+let disposed = false
 
 const numericApplicationPackageId = () => {
   const value = Number(props.applicationPackageId)
@@ -167,24 +203,56 @@ const clearArtifactPolling = () => {
   artifactPollAttempts.clear()
 }
 
-const loadArtifacts = async () => {
+const loadArtifacts = async (): Promise<number> => {
+  const generation = ++loadGeneration
   clearArtifactPolling()
   if (!props.resumeVersionId) {
     artifacts.value = []
-    return
+    registeredTemplates.value = []
+    loading.value = false
+    return generation
   }
+  const resumeVersionId = props.resumeVersionId
   loading.value = true
   loadError.value = ''
   try {
-    artifacts.value = (await getResumeArtifactsApi(props.resumeVersionId)).map(normalizeResumeArtifact)
+    const artifactRows = await getResumeArtifactsApi(resumeVersionId)
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return generation
+    artifacts.value = artifactRows.map(normalizeResumeArtifact)
     artifacts.value
       .filter((artifact) => artifact.status === 'GENERATING')
-      .forEach((artifact) => schedulePoll(artifact.id))
+      .forEach((artifact) => schedulePoll(artifact.id, resumeVersionId, generation))
+    try {
+      registeredTemplates.value = await getResumeAtsTemplatesApi()
+      if (
+        disposed
+        || generation !== loadGeneration
+        || resumeVersionId !== props.resumeVersionId
+      ) return generation
+    } catch (error) {
+      if (
+        disposed
+        || generation !== loadGeneration
+        || resumeVersionId !== props.resumeVersionId
+      ) return generation
+      registeredTemplates.value = []
+      loadError.value = getErrorMessage(error, '正式模板清单暂时无法读取，暂不能生成投递 ZIP。')
+    }
   } catch (error) {
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return generation
     loadError.value = getErrorMessage(error, 'Artifact 清单暂时无法读取，请稍后刷新。')
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
+  return generation
 }
 
 const upsertArtifact = (artifact: ResumeArtifactVO) => {
@@ -197,37 +265,90 @@ const clearTimer = (id: number) => {
   artifactTimers.delete(id)
 }
 
-const schedulePoll = (id: number, resumeVersionId = props.resumeVersionId) => {
+const schedulePoll = (
+  id: number,
+  resumeVersionId: number | undefined = props.resumeVersionId,
+  generation = loadGeneration
+) => {
+  if (
+    disposed
+    || generation !== loadGeneration
+    || resumeVersionId !== props.resumeVersionId
+  ) return
   clearTimer(id)
   const attempts = artifactPollAttempts.get(id) || 0
   if (attempts >= 10) return
   artifactPollAttempts.set(id, attempts + 1)
   artifactTimers.set(id, window.setTimeout(async () => {
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return
     try {
       const artifact = normalizeResumeArtifact(await getResumeArtifactApi(id))
-      if (resumeVersionId !== props.resumeVersionId) return
+      if (
+        disposed
+        || generation !== loadGeneration
+        || resumeVersionId !== props.resumeVersionId
+      ) return
       upsertArtifact(artifact)
-      if (artifact.status === 'GENERATING') schedulePoll(id, resumeVersionId)
+      if (artifact.status === 'GENERATING') schedulePoll(id, resumeVersionId, generation)
     } catch {
-      if (resumeVersionId === props.resumeVersionId) schedulePoll(id, resumeVersionId)
+      if (
+        !disposed
+        && generation === loadGeneration
+        && resumeVersionId === props.resumeVersionId
+      ) {
+        schedulePoll(id, resumeVersionId, generation)
+      }
     }
   }, 1500))
 }
 
 const createZip = async () => {
-  if (!props.resumeVersionId || creatingZip.value) return
+  if (!canCreateZip.value || creatingZip.value) return
+  const resumeVersionId = props.resumeVersionId
+  const applicationPackageId = numericApplicationPackageId()
+  const templateVersion = selectedTemplateVersion.value
+  const generation = loadGeneration
+  if (!resumeVersionId || !applicationPackageId || !templateVersion) return
   creatingZip.value = true
   try {
     const artifact = normalizeResumeArtifact(await createApplicationPackageArtifactApi({
-      resumeVersionId: props.resumeVersionId,
-      applicationPackageId: numericApplicationPackageId(),
-      templateCode: selectedTemplateCode.value
+      resumeVersionId,
+      applicationPackageId,
+      templateCode: selectedTemplateCode.value,
+      templateVersion
     }))
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return
     upsertArtifact(artifact)
-    if (artifact.status === 'GENERATING') schedulePoll(artifact.id)
-    await loadArtifacts()
-    ElMessage.success('投递 ZIP 已生成。')
+    if (artifact.status === 'GENERATING') {
+      schedulePoll(artifact.id, resumeVersionId, loadGeneration)
+    }
+    const refreshedGeneration = await loadArtifacts()
+    if (
+      disposed
+      || refreshedGeneration !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return
+    if (artifact.status === 'READY') {
+      ElMessage.success('投递 ZIP 已生成。')
+    } else if (artifact.status === 'FAILED') {
+      ElMessage.error(artifact.errorMessage || '投递 ZIP 生成失败，请查看清单中的错误原因。')
+    } else {
+      ElMessage.info('投递 ZIP 正在生成，完成后会自动更新状态。')
+    }
   } catch (error) {
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== props.resumeVersionId
+    ) return
     ElMessage.error(getErrorMessage(error, '投递 ZIP 生成失败，请检查简历版本、文件服务和导出字体配置。'))
     await loadArtifacts()
   } finally {
@@ -263,15 +384,25 @@ const artifactTypeLabel = (artifact: ResumeArtifactVO) => {
 
 watch(() => props.resumeVersionId, () => void loadArtifacts())
 watch(selectedTemplateCode, (templateCode) => {
+  if (!isFormalResumeTemplateCode(templateCode)) return
   window.localStorage.setItem(templatePreferenceKey, templateCode)
 })
 onMounted(() => {
-  selectedTemplateCode.value = normalizeResumeTemplateCode(
-    window.localStorage.getItem(templatePreferenceKey) || undefined
-  )
+  const stored = normalizeResumeTemplateCode(window.localStorage.getItem(templatePreferenceKey) || undefined)
+  selectedTemplateCode.value = stored
   void loadArtifacts()
 })
-onBeforeUnmount(clearArtifactPolling)
+watch(formalTemplateOptions, (options) => {
+  if (!options.length) return
+  if (!options.some((template) => template.code === selectedTemplateCode.value)) {
+    selectedTemplateCode.value = options[0].code
+  }
+}, { deep: true })
+onBeforeUnmount(() => {
+  disposed = true
+  loadGeneration += 1
+  clearArtifactPolling()
+})
 </script>
 
 <style scoped lang="scss">

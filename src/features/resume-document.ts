@@ -1,16 +1,34 @@
 import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
-import { buildResumeProjectPreviewBullets } from '@/features/resume-project-preview'
+import {
+  buildResumeProjectPreviewBullets,
+  buildResumeProjectPreviewSections,
+  type ResumeProjectPreviewSection
+} from '@/features/resume-project-preview'
 
 export const RESUME_TEMPLATE_CODES = [
   'ATS_SINGLE_COLUMN',
   'ATS_COMPACT',
   'ATS_PROJECT_FOCUS',
   'ATS_CLASSIC_SIDEBAR',
-  'ATS_STREAK_SIGNATURE'
+  'ATS_STREAK_SIGNATURE',
+  'MAGIC_TIMELINE',
+  'MAGIC_MINIMALIST',
+  'MAGIC_ELEGANT',
+  'MAGIC_CREATIVE',
+  'MAGIC_EDITORIAL',
+  'MAGIC_SWISS'
 ] as const
 
 export type ResumeTemplateCode = typeof RESUME_TEMPLATE_CODES[number]
-export type ResumeAccent = 'ocean' | 'teal' | 'graphite' | 'berry'
+export type ResumeAccent =
+  | 'default'
+  | 'blue'
+  | 'green'
+  | 'purple'
+  | 'orange'
+  | 'red'
+  | 'slate'
+  | 'black'
 export type ResumePreviewDensity = 'comfortable' | 'compact'
 export const RESUME_STREAK_TEMPLATE_UNLOCK_DAYS = 7
 export type ResumeTemplateAtsRisk = 'LOW' | 'MEDIUM'
@@ -27,6 +45,7 @@ export interface ResumeDocumentEntry {
   period?: string
   meta?: string
   bullets: string[]
+  projectSections?: ResumeProjectPreviewSection[]
 }
 
 export interface ResumeSkillGroup {
@@ -141,6 +160,84 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     atsRiskDetail: '文字仍保持单栏，但装饰更明显；以正式 PDF/DOCX 结果为准。',
     typographyLayout: 'Arial / 微软雅黑；单栏、暖色边框与轻装饰、标题强调更强',
     unlockStreakDays: RESUME_STREAK_TEMPLATE_UNLOCK_DAYS
+  },
+  {
+    code: 'MAGIC_TIMELINE',
+    name: '时间轴',
+    description: '以时间线组织工作、项目和教育经历',
+    shortLabel: '时间轴',
+    className: 'timeline',
+    roleFit: '经历时间顺序清晰、项目证据较多的岗位',
+    pageTendency: '内容适中偏 1 页，经历较多时自然延展',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: '视觉时间轴仅用于预览，正式导出需使用已注册 ATS 模板。',
+    typographyLayout: 'Arial / 微软雅黑；节点、轨道和日期对齐'
+  },
+  {
+    code: 'MAGIC_MINIMALIST',
+    name: '极简',
+    description: '减少装饰，让内容和留白承担主要层级',
+    shortLabel: '极简',
+    className: 'minimalist',
+    roleFit: '内容成熟、希望突出表达质量的岗位',
+    pageTendency: '留白较多，长内容可能形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: '当前为浏览器预览模板，未接入正式 PDF/DOCX 导出。',
+    typographyLayout: 'Arial / 微软雅黑；低装饰、低噪声、留白优先'
+  },
+  {
+    code: 'MAGIC_ELEGANT',
+    name: '优雅',
+    description: '用细线、字体层级和留白建立稳定秩序',
+    shortLabel: '优雅',
+    className: 'elegant',
+    roleFit: '内容完整、重视版面质感的岗位',
+    pageTendency: '内容适中偏 1 页，正文较长时自然延展',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: '预览使用字体回退，正式导出模板尚未注册。',
+    typographyLayout: 'Arial / Georgia 回退；细线、留白和高层级标题'
+  },
+  {
+    code: 'MAGIC_CREATIVE',
+    name: '创意',
+    description: '强调区块标签与主题色，但保持 A4 可读边界',
+    shortLabel: '创意',
+    className: 'creative',
+    roleFit: '设计、市场、运营及重视视觉识别的岗位',
+    pageTendency: '内容适中偏 1 页，复杂项目可能形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: '视觉表达更强，正式投递前应切换到 ATS 模板。',
+    typographyLayout: 'Arial / 微软雅黑；强调区块、色带和横向标签'
+  },
+  {
+    code: 'MAGIC_EDITORIAL',
+    name: '画报风',
+    description: '以编辑感的标题、节奏和留白组织信息',
+    shortLabel: '画报',
+    className: 'editorial',
+    roleFit: '内容表达成熟、希望形成个人风格的岗位',
+    pageTendency: '留白较多，长文本更容易延展到 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: '当前仅提供前端预览，未接入正式导出 renderer。',
+    typographyLayout: 'Arial / 微软雅黑；编辑感标题、细线和多段节奏'
+  },
+  {
+    code: 'MAGIC_SWISS',
+    name: '瑞士网格',
+    description: '用严格网格和列对齐提升信息扫描效率',
+    shortLabel: '瑞士',
+    className: 'swiss',
+    roleFit: '研发、产品、数据和重视信息结构的岗位',
+    pageTendency: '内容适中偏 1 页，区块较多时形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: 'CSS Grid 仅用于浏览器预览，正式导出尚未接入。',
+    typographyLayout: 'Arial / 微软雅黑；严格网格、列对齐、少量主题色'
   }
 ]
 
@@ -153,6 +250,12 @@ export const normalizeResumeTemplateCode = (value?: string): ResumeTemplateCode 
   RESUME_TEMPLATE_CODES.includes(value as ResumeTemplateCode)
     ? value as ResumeTemplateCode
     : 'ATS_SINGLE_COLUMN'
+
+export const isFormalResumeTemplateCode = (
+  value?: string
+): boolean => value === 'ATS_SINGLE_COLUMN'
+  || value === 'ATS_COMPACT'
+  || value === 'ATS_PROJECT_FOCUS'
 
 const normalizeText = (value: unknown) =>
   String(value || '')
@@ -321,7 +424,11 @@ const buildProjectEntries = (
       subtitle: role,
       period,
       meta: techStack,
-      bullets: buildResumeProjectPreviewBullets(source).flatMap(splitSentences)
+      bullets: buildResumeProjectPreviewBullets(source).flatMap(splitSentences),
+      projectSections: buildResumeProjectPreviewSections(source).map((section) => ({
+        ...section,
+        values: section.values.flatMap(splitSentences)
+      }))
     }
   })
 

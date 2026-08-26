@@ -9,6 +9,7 @@ const interviewRoom = readSource('src/views/interview/InterviewRoomView.vue')
 const resumeMatch = readSource('src/views/v3/ResumeMatchView.vue')
 const resumePrepare = readSource('src/views/resume/ArenaPrepareView.vue')
 const resumeEditor = readSource('src/views/resume/ResumeEditView.vue')
+const resumeWorkbenchShell = readSource('src/views/resume/components/ResumeWorkbenchShell.vue')
 const abilityMap = readSource('src/views/ability-map/AbilityMapView.vue')
 const arenaInterviewCreate = readSource('src/views/interview/ArenaInterviewCreateView.vue')
 const interviewReport = readSource('src/views/interview/InterviewReportView.vue')
@@ -46,11 +47,17 @@ describe('direction D critical flows', () => {
   })
 
   it('mounts the resume workspace panes in left-to-right keyboard order', () => {
-    expect(resumeEditor).toContain('id="resume-panel-advice-mount"')
-    expect(resumeEditor).toContain('id="resume-panel-preview-mount"')
-    expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-advice-mount">')
-    expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-preview-mount">')
-    expect(resumeEditor).toContain('.workspace-teleport-target {\n  display: contents;')
+    expect(resumeEditor).toContain('<ResumeWorkbenchShell')
+    expect(resumeEditor).toContain('<template #preview>')
+    expect(resumeEditor).toContain('<template #editor>')
+    expect(resumeEditor).toContain('resume-workbench-pane--preview')
+    expect(resumeEditor).toContain('resume-workbench-pane--editor')
+    expect(resumeWorkbenchShell).toMatch(
+      /\.resume-workbench-pane--preview[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
+    )
+    expect(resumeWorkbenchShell).toMatch(
+      /\.resume-workbench-pane--editor[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
+    )
   })
 
   it('keeps every skill node itself tappable for training in the skill tree', () => {

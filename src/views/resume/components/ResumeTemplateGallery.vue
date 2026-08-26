@@ -18,6 +18,9 @@
     </template>
 
     <div class="resume-template-gallery">
+      <div v-if="registryError" class="resume-template-gallery__error" role="alert">
+        {{ registryError }}
+      </div>
       <div class="resume-template-gallery__grid" role="radiogroup" aria-label="选择简历模板">
         <button
           v-for="template in templates"
@@ -32,8 +35,14 @@
           @click="emit('select', template.code)"
           @keydown="moveSelection($event, template.code)"
         >
-          <span class="resume-template-gallery__preview" :class="`is-${template.className}`">
-            <i></i><i></i><i></i><i></i>
+          <span class="resume-template-gallery__preview">
+            <ResumeDocumentPreview
+              :draft="sampleDraft"
+              :template-code="template.code"
+              :accent="accent"
+              :density="template.code === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+              :presentation-config="previewTemplatePresentation(template.code)"
+            />
           </span>
           <span class="resume-template-gallery__copy">
             <span class="resume-template-gallery__title">
@@ -42,6 +51,10 @@
               <LockKeyhole v-else-if="!isUnlocked(template)" :size="16" aria-label="未解锁" />
             </span>
             <small>{{ template.description }}</small>
+            <span class="resume-template-gallery__status">
+              <span>v{{ templateDefinition(template.code).version }}</span>
+              <span>{{ templateAvailabilityLabel(template.code) }}</span>
+            </span>
             <dl>
               <div>
                 <dt>岗位</dt>
@@ -108,11 +121,22 @@
 import { computed, nextTick } from 'vue'
 import { CheckCircle2, LockKeyhole, Minus, Plus } from 'lucide-vue-next'
 
+import {
+  createDefaultResumePresentation,
+  mergeResumeTemplatePresentation,
+  normalizeResumePresentation
+} from '@/features/resume-presentation'
+import { listResumeTemplateDefinitions } from '@/features/resume-template/registry'
+import type { ResumeTemplateDefinition } from '@/features/resume-template/schema'
 import type {
   ResumeAccent,
+  ResumeDocumentDraft,
   ResumeTemplateCode,
   ResumeTemplateOption
 } from '@/features/resume-document'
+import type { ResumeAtsTemplateVO } from '@/types/resumeDelivery'
+import type { ResumePresentationConfig } from '@/types/resumePresentation'
+import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -122,6 +146,9 @@ const props = defineProps<{
   accentOptions: Array<{ value: ResumeAccent; label: string }>
   zoom: number
   isUnlocked: (template: ResumeTemplateOption) => boolean
+  templateRegistry?: ResumeAtsTemplateVO[]
+  presentationConfig?: ResumePresentationConfig
+  registryError?: string
 }>()
 
 const emit = defineEmits<{
@@ -135,6 +162,55 @@ const emit = defineEmits<{
 
 const unlockedTemplates = computed(() => props.templates.filter((template) => props.isUnlocked(template)))
 const unlockedCount = computed(() => unlockedTemplates.value.length)
+const sampleDraft: ResumeDocumentDraft = {
+  resumeName: 'Java 后端工程师简历',
+  realName: '林晨',
+  phone: '138 0000 0000',
+  email: 'linchen@example.com',
+  targetPosition: 'Java 后端工程师',
+  summary: '3 年企业应用开发经验，负责订单与履约链路。通过缓存治理和异步化改造，将核心接口 P95 降低 38%。',
+  skillStack: 'Java, Spring Boot, MySQL, Redis, Kafka, Docker',
+  workExperience: '某科技公司 · Java 工程师 2023.03 - 至今\n负责交易域微服务开发、性能治理和线上稳定性建设。',
+  educationExperience: '华东理工大学 · 软件工程 2019.09 - 2023.06',
+  projects: [
+    {
+      projectName: '订单履约平台',
+      projectPeriod: '2024.01 - 2025.06',
+      role: '核心开发',
+      techStack: 'Spring Boot / MySQL / Redis / Kafka',
+      responsibility: '负责订单状态机与库存一致性链路。',
+      optimizationResults: '高峰期吞吐提升 45%，故障恢复时间缩短到 8 分钟。'
+    }
+  ]
+}
+const templateDefinitions = computed(() =>
+  listResumeTemplateDefinitions(props.templateRegistry)
+)
+const templateDefinition = (code: ResumeTemplateCode): ResumeTemplateDefinition =>
+  templateDefinitions.value.find((template) => template.code === code)
+  || templateDefinitions.value[0]
+const templateAvailabilityLabel = (code: ResumeTemplateCode) => {
+  const template = templateDefinition(code)
+  if (!template.backendRegistered) return '预览配置'
+  return template.exportAvailable ? '正式导出可用' : '暂不可导出'
+}
+const previewPresentation = (code: ResumeTemplateCode) => normalizeResumePresentation({
+  ...createDefaultResumePresentation(code, templateDefinition(code).version),
+  accentColor: props.accent,
+  fontFamily: props.presentationConfig?.fontFamily,
+  fontScale: props.presentationConfig?.fontScale,
+  lineHeight: props.presentationConfig?.lineHeight,
+  sectionSpacing: props.presentationConfig?.sectionSpacing,
+  pageMarginPt: props.presentationConfig?.pageMarginPt
+}, props.presentationConfig)
+const previewTemplatePresentation = (code: ResumeTemplateCode) => mergeResumeTemplatePresentation(
+  previewPresentation(code),
+  {
+    templateCode: code,
+    templateVersion: templateDefinition(code).version,
+    definition: templateDefinition(code).backendDefinition
+  }
+)
 
 const moveSelection = (event: KeyboardEvent, currentCode: ResumeTemplateCode) => {
   const codes = unlockedTemplates.value.map((template) => template.code)
@@ -221,6 +297,17 @@ const moveSelection = (event: KeyboardEvent, currentCode: ResumeTemplateCode) =>
   gap: 18px;
 }
 
+.resume-template-gallery__error {
+  grid-column: 1 / -1;
+  padding: 9px 11px;
+  border: 1px solid #e7c98d;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #815318;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .resume-template-gallery__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -259,46 +346,68 @@ const moveSelection = (event: KeyboardEvent, currentCode: ResumeTemplateCode) =>
 }
 
 .resume-template-gallery__preview {
-  display: grid;
-  align-content: start;
-  gap: 5px;
-  aspect-ratio: 0.707;
-  padding: 12px 9px;
+  display: block;
+  width: 96px;
+  height: 136px;
+  overflow: hidden;
   border: 1px solid #d9dee7;
   background: #fff;
   box-shadow: 0 5px 8px rgba(39, 50, 68, 0.1);
 
-  i {
-    display: block;
-    height: 4px;
-    background: #b9c2cf;
+  :deep(.resume-document) {
+    width: 96px;
+    max-width: none;
+    min-height: 136px;
+    aspect-ratio: 210 / 297;
+    border: 0;
+    box-shadow: none;
+    transform-origin: top left;
   }
 
-  i:first-child {
-    width: 58%;
-    height: 7px;
-    background: #2563eb;
+  :deep(.resume-document:not(.is-classic)) {
+    --paper-pad-x: 8px !important;
+    --paper-pad-y: 8px !important;
   }
 
-  i:nth-child(2) {
-    width: 82%;
+  :deep(.document-header) {
+    gap: 3px;
+    padding-bottom: 3px;
   }
 
-  i:nth-child(3) {
-    width: 70%;
+  :deep(.document-header__identity h2) {
+    margin-top: 1px;
+    font-size: 5px;
   }
 
-  &.is-ats i:first-child {
-    width: 72%;
-    background: #334155;
+  :deep(.document-header__identity p),
+  :deep(.document-contact),
+  :deep(.document-section__heading h3),
+  :deep(.document-copy p),
+  :deep(.document-entry__head strong),
+  :deep(.document-entry__head span),
+  :deep(.document-entry__head time),
+  :deep(.document-entry__meta),
+  :deep(.document-entry li),
+  :deep(.skill-list span),
+  :deep(.skill-groups) {
+    font-size: 2.7px !important;
+    line-height: 1.25 !important;
   }
 
-  &.is-modern i:first-child {
-    background: #0f766e;
+  :deep(.document-section) {
+    margin-top: 3px;
   }
 
-  &.is-classic i:first-child {
-    background: #7f1d1d;
+  :deep(.document-section__heading) {
+    margin-bottom: 2px;
+  }
+
+  :deep(.document-section__heading h3) {
+    padding: 1px 2px;
+  }
+
+  :deep(.document-entries) {
+    gap: 2px;
   }
 }
 
@@ -348,6 +457,21 @@ const moveSelection = (event: KeyboardEvent, currentCode: ResumeTemplateCode) =>
   svg {
     flex: 0 0 auto;
     color: var(--user-primary);
+  }
+}
+
+.resume-template-gallery__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+
+  span {
+    padding: 2px 5px;
+    border: 1px solid var(--user-border);
+    border-radius: 4px;
+    color: var(--user-text-muted);
+    font-size: 9.5px;
   }
 }
 

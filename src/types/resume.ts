@@ -1,4 +1,5 @@
 import type { PageQuery } from './api'
+import type { ResumePresentationConfig } from './resumePresentation'
 
 export interface ResumeQueryDTO extends PageQuery {
   keyword?: string
@@ -70,6 +71,7 @@ export interface ResumeDetailVO {
   draft?: boolean
   completionPercent?: number
   missingSections?: string[]
+  presentationConfig?: ResumePresentationConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -90,6 +92,7 @@ export interface ResumeCreateDTO {
   educationExperience?: string
   isDefault?: number
   saveAsDraft?: boolean
+  presentationConfig?: ResumePresentationConfig
 }
 
 export type ResumeUpdateDTO = ResumeCreateDTO

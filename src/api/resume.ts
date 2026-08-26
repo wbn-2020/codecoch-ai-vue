@@ -75,6 +75,7 @@ const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T | null |
     workExperience: item.workExperience || item.workSummary || '',
     education: item.education || item.educationExperience || '',
     educationExperience: item.educationExperience || item.education || '',
+    presentationConfig: item.presentationConfig,
     isDefault: item.isDefault ?? 0,
     status: item.status ?? 0,
     projects
@@ -117,7 +118,8 @@ const toResumePayload = (data: ResumeCreateDTO | ResumeUpdateDTO) => ({
   education: data.education || data.educationExperience,
   summary: data.summary,
   isDefault: data.isDefault,
-  saveAsDraft: data.saveAsDraft
+  saveAsDraft: data.saveAsDraft,
+  presentationConfig: data.presentationConfig
 })
 
 const toProjectPayload = (data: ResumeProjectDTO) => ({
