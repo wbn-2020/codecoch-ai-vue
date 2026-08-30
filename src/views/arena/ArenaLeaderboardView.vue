@@ -206,7 +206,7 @@ onMounted(async () => {
 
   &__kicker {
     font-size: 12.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-grn-d);
   }
 
@@ -227,7 +227,7 @@ onMounted(async () => {
     b {
       display: block;
       font-size: 26px;
-      font-weight: 900;
+      font-weight: 600;
       letter-spacing: -0.5px;
       background: linear-gradient(100deg, var(--arena-grn), var(--arena-lime));
       -webkit-background-clip: text;
@@ -240,7 +240,7 @@ onMounted(async () => {
     b {
       display: block;
       font-size: 16px;
-      font-weight: 900;
+      font-weight: 600;
       margin-top: 2px;
     }
   }
@@ -248,7 +248,7 @@ onMounted(async () => {
   &__me-next {
     margin-left: auto;
     font-size: 11.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-amber);
     background: var(--arena-amber-soft);
     padding: 6px 12px;
@@ -268,7 +268,7 @@ onMounted(async () => {
     gap: 4px;
     padding: 4px;
     border-radius: 12px;
-    background: #f2f4f2;
+    background: var(--user-surface-muted);
 
     button {
       border: 0;
@@ -276,7 +276,7 @@ onMounted(async () => {
       padding: 7px 15px;
       border-radius: 9px;
       font-size: 12.5px;
-      font-weight: 800;
+      font-weight: 600;
       color: var(--arena-sub);
       cursor: pointer;
       font-family: inherit;
@@ -307,9 +307,8 @@ onMounted(async () => {
     position: relative;
 
     &.is-r1 {
-      border-color: #f3ddc0;
-      background: linear-gradient(160deg, #fff7ec, #ffffff 75%);
-      transform: translateY(-6px);
+      border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
+      background: linear-gradient(160deg, var(--user-warning-soft), var(--user-surface) 75%);
     }
 
     &.is-me {
@@ -336,7 +335,7 @@ onMounted(async () => {
   &__podium-score {
     margin-top: 6px;
     font-size: 19px;
-    font-weight: 900;
+    font-weight: 600;
     color: var(--arena-grn-d);
   }
 
@@ -366,7 +365,7 @@ onMounted(async () => {
     width: 26px;
     text-align: center;
     font-size: 13px;
-    font-weight: 900;
+    font-weight: 600;
     color: var(--arena-mut);
   }
 
@@ -400,7 +399,7 @@ onMounted(async () => {
 
   &__skeleton {
     height: 90px;
-    background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
+    background: linear-gradient(90deg, var(--user-surface), var(--user-surface-muted), var(--user-surface));
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
   }

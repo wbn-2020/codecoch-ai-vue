@@ -234,8 +234,8 @@ const handleFeedbackSubmitted = () => {
   margin-top: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.14);
-  color: #86efac;
+  background: var(--user-success-soft);
+  color: var(--user-success-text);
   font-size: 12px;
   line-height: 1.5;
 }

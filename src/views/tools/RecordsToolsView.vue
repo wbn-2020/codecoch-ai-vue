@@ -367,7 +367,7 @@ onMounted(loadSummary)
   background: transparent;
   color: var(--arena-grn-d);
   font: inherit;
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
 
   &:focus-visible {
@@ -540,7 +540,7 @@ onMounted(loadSummary)
   margin: 18px 2px 10px;
   color: var(--arena-mut);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 
@@ -581,7 +581,6 @@ onMounted(loadSummary)
     border-color: var(--arena-grn);
     background: var(--arena-grn-soft);
     box-shadow: var(--arena-shadow-hover);
-    transform: translateY(-1px);
   }
 
   &:focus-visible {
@@ -676,14 +675,14 @@ onMounted(loadSummary)
   &.is-enter {
     color: var(--arena-grn-d);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 
 .arena-tools__enter {
   color: var(--arena-grn-d);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 @media (max-width: 720px) {
