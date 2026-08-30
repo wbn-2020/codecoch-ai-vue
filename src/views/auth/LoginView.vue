@@ -303,35 +303,6 @@ watch(
   color: var(--arena-ink);
 }
 
-// 主题跟随的大色块光晕（用皮肤 token，不再硬编码绿色）
-.login-page::before,
-.login-page::after {
-  position: absolute;
-  z-index: 0;
-  border-radius: 50%;
-  content: '';
-  pointer-events: none;
-  filter: blur(90px);
-}
-
-.login-page::before {
-  top: -200px;
-  right: -140px;
-  width: 560px;
-  height: 560px;
-  background: radial-gradient(circle, var(--arena-grn-soft), transparent 70%);
-  opacity: 0.85;
-}
-
-.login-page::after {
-  bottom: -220px;
-  left: -160px;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, var(--arena-vio-soft), transparent 70%);
-  opacity: 0.7;
-}
-
 .login-brand {
   position: relative;
   z-index: 1;
@@ -348,7 +319,7 @@ watch(
   gap: 10px;
   color: var(--arena-ink);
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -377,7 +348,7 @@ watch(
   color: var(--arena-action);
   cursor: pointer;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
 
   &:hover {
     color: var(--arena-action-hover);
@@ -401,17 +372,15 @@ watch(
 
 .login-hero__title {
   margin: 18px 0 0;
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
+  color: var(--arena-ink);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 
 .login-hero__accent {
-  background: var(--arena-grad-accent, linear-gradient(135deg, var(--arena-grn), var(--arena-action-hover)));
-  background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
+  color: var(--arena-action);
 }
 
 .login-hero__sub {
@@ -460,8 +429,9 @@ watch(
 
 .login-card__title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 800;
+  color: var(--arena-ink);
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -485,7 +455,7 @@ watch(
   padding-bottom: 7px !important;
   color: var(--arena-sub);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
@@ -533,19 +503,14 @@ watch(
   box-shadow: 0 8px 18px -8px var(--arena-action-shadow);
   color: #fff;
   font-size: 15px;
-  font-weight: 700;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  font-weight: 600;
+  transition: box-shadow 0.15s ease, filter 0.15s ease;
 
   &:hover,
   &:focus {
     background: var(--arena-grad-accent, linear-gradient(135deg, var(--arena-grn), var(--arena-action-hover)));
     filter: brightness(1.05);
-    transform: translateY(-1px);
     box-shadow: 0 12px 24px -10px var(--arena-action-shadow);
-  }
-
-  &:active {
-    transform: translateY(1px);
   }
 }
 
@@ -558,7 +523,7 @@ watch(
   background: var(--arena-card);
   color: var(--arena-action);
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 
   &:hover,
@@ -600,7 +565,7 @@ watch(
   }
 
   .login-hero__title {
-    font-size: 34px;
+    font-size: 28px;
   }
 
   .login-hero__power {
@@ -614,7 +579,7 @@ watch(
   }
 
   .login-hero__title {
-    font-size: 29px;
+    font-size: 26px;
   }
 }
 
