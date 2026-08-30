@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-prepare">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-prepare__page">
       <!-- 页头：标题 + 资料接入环 -->
       <div class="arena-between arena-prepare__head">
@@ -412,6 +414,8 @@ import {
 import { getResumeDetailApi, getResumesApi } from '@/api/resume'
 import { getLatestResumeJobMatchReportApi } from '@/api/resumeJobMatch'
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
 import type { JobDescriptionAnalysisVO, TargetJobSaveDTO, TargetJobVO } from '@/types/jobTarget'
@@ -452,6 +456,7 @@ interface MapNode {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('prepare')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 
@@ -1256,25 +1261,38 @@ onBeforeUnmount(() => {
   margin: 0;
 
   &__page {
-    max-width: 1060px;
+    max-width: 1120px;
     margin: 0 auto;
-    padding: 28px 34px 42px;
+    padding: 22px 26px 36px;
     position: relative;
     z-index: 1;
   }
 
   &__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
     flex-wrap: wrap;
+    padding-bottom: 8px;
   }
 
   &__kicker {
-    font-size: 12.5px;
-    font-weight: 800;
-    color: var(--arena-grn-d);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--arena-action);
+    background: var(--arena-grn-soft);
+    padding: 5px 12px;
+    border-radius: 999px;
   }
 
   &__title {
-    margin-top: 5px;
+    margin-top: 12px;
   }
 
   &__readiness {
@@ -1321,10 +1339,10 @@ onBeforeUnmount(() => {
   }
 
   &__workspace {
-    margin-top: 20px;
+    margin-top: 18px;
     display: grid;
-    grid-template-columns: minmax(280px, 405px) minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+    gap: 18px;
     align-items: start;
   }
 
@@ -1333,9 +1351,10 @@ onBeforeUnmount(() => {
   }
 
   &__jd-card {
-    padding: 22px 24px;
-    border: 1.5px solid #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    padding: 20px 22px;
+    border: 1px solid var(--arena-grn-soft);
+    background: linear-gradient(135deg, #f3faf6, #ffffff 72%);
+    border-radius: var(--arena-radius-card);
   }
 
   &__jd-head {
@@ -1348,13 +1367,13 @@ onBeforeUnmount(() => {
   &__jd-lock {
     display: inline-flex;
     flex: none;
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     align-items: center;
     justify-content: center;
-    border-radius: 14px;
+    border-radius: 12px;
     background: var(--arena-amber-soft);
-    font-size: 22px;
+    font-size: 20px;
   }
 
   &__jd-grid {
@@ -1484,38 +1503,40 @@ onBeforeUnmount(() => {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    padding: 14px;
-    border: 2px solid var(--arena-line);
-    border-radius: 16px;
-    background: #fff;
+    padding: 16px;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-card);
     font-family: inherit;
     text-align: left;
     cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: var(--arena-shadow-subtle);
 
     &:hover {
       transform: translateY(-2px);
       border-color: var(--arena-grn);
-      box-shadow: 0 6px 16px rgba(23, 178, 106, 0.12);
+      box-shadow: var(--arena-shadow-card-hover);
     }
 
     &.is-done {
-      border-color: #b9e7cd;
-      background: linear-gradient(135deg, #f0fbf4, #ffffff 75%);
+      border-color: var(--arena-grn-soft);
+      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
     }
 
     &.is-current {
       border-color: var(--arena-grn);
-      box-shadow: 0 0 0 3px var(--arena-grn-soft);
+      box-shadow: 0 0 0 4px var(--arena-grn-soft), var(--arena-shadow-card);
     }
 
     &.is-locked {
       cursor: pointer;
-      background: #fafbfa;
+      background: var(--arena-sunken);
     }
 
     &.is-failed {
-      border-color: var(--arena-red);
+      border-color: var(--arena-red-soft);
+      background: linear-gradient(135deg, #fff8f8, #ffffff 70%);
     }
   }
 
@@ -1523,24 +1544,27 @@ onBeforeUnmount(() => {
     flex: none;
     width: 40px;
     height: 40px;
-    border-radius: 13px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    font-weight: 900;
-    background: var(--arena-line);
+    font-size: 15px;
+    font-weight: 700;
+    background: var(--arena-sunken);
     color: var(--arena-mut);
+    transition: background 0.2s ease, color 0.2s ease;
 
     .is-done & {
-      background: var(--arena-grn);
+      background: var(--arena-grad-accent);
       color: #fff;
+      box-shadow: 0 4px 10px rgba(31, 111, 92, 0.2);
     }
 
     .is-current & {
-      background: var(--arena-amber);
+      background: var(--arena-grad-accent);
       color: #fff;
-      animation: arenaPulse 1.6s ease-in-out infinite;
+      animation: arenaPulse 1.8s ease-in-out infinite;
+      box-shadow: 0 4px 12px rgba(31, 111, 92, 0.22);
     }
 
     .is-failed & {
@@ -1550,6 +1574,7 @@ onBeforeUnmount(() => {
 
     .is-running & {
       background: var(--arena-vio-soft);
+      color: var(--arena-vio);
     }
   }
 
@@ -1558,23 +1583,31 @@ onBeforeUnmount(() => {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 
     b {
-      font-size: 13.5px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
     }
 
     small {
       color: var(--arena-sub);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: 13px;
+      line-height: 1.55;
     }
   }
 
   &__node-cta {
-    font-size: 12.5px;
-    font-weight: 800;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--arena-grn-d);
+    margin-top: 4px;
+  }
+
+  // 「当前准备步骤」摘要卡：arena-card 只有边框底色，这里补内边距
+  &__stage-card {
+    padding: var(--user-space-5, 20px);
   }
 
   &__side {
@@ -1595,83 +1628,90 @@ onBeforeUnmount(() => {
 
   &__coach {
     display: grid;
-    gap: 8px;
-    margin-top: 14px;
-    padding: 15px 16px;
-    border-color: #d7ccff;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 16px 18px;
+    border-color: rgba(111, 92, 147, 0.18);
+    border-radius: var(--arena-radius-card);
     background: var(--arena-vio-soft);
 
     p {
       margin: 0;
       color: var(--arena-sub);
-      font-size: 11.5px;
+      font-size: 13px;
       line-height: 1.6;
     }
   }
 
   &__side-grid {
-    margin-top: 10px;
+    margin-top: 14px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 14px;
   }
 
   &__side-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 13px 16px;
-    border: 1.5px dashed var(--arena-line);
-    border-radius: 14px;
-    background: #fff;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-card);
     font-family: inherit;
     text-align: left;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    box-shadow: var(--arena-shadow-subtle);
 
     &:hover {
       border-color: var(--arena-grn);
+      box-shadow: var(--arena-shadow-card);
+      transform: translateY(-2px);
     }
 
     &.is-done {
       border-style: solid;
-      border-color: #b9e7cd;
+      border-color: var(--arena-grn-soft);
+      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
     }
 
     b {
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 600;
     }
 
     small {
       color: var(--arena-sub);
-      font-size: 11.5px;
-      line-height: 1.5;
+      font-size: 12.5px;
+      line-height: 1.55;
     }
   }
 
   &__grid {
-    margin-top: 20px;
+    margin-top: 18px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
-    gap: 20px;
+    gap: 18px;
   }
 
   &__more {
-    margin-top: 18px;
+    margin-top: 24px;
 
     > summary {
       display: flex;
       align-items: center;
-      min-height: 48px;
+      min-height: 46px;
       padding: 0 18px;
-      border: 1.5px solid var(--arena-line);
+      border: 1px solid var(--arena-line);
       border-radius: var(--arena-radius-card);
-      background: #ffffff;
+      background: var(--arena-card);
       color: var(--arena-ink);
       cursor: pointer;
-      font-size: 13px;
-      font-weight: 900;
+      font-size: 14px;
+      font-weight: 700;
       list-style: none;
+      box-shadow: var(--arena-shadow-subtle);
     }
 
     > summary::-webkit-details-marker {
@@ -1700,19 +1740,20 @@ onBeforeUnmount(() => {
   }
 
   &__panel {
-    padding: 20px 22px;
+    padding: 18px 20px;
+    border-radius: var(--arena-radius-card);
   }
 
   &__next {
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 70%);
-    border-color: #b9e7cd;
+    background: linear-gradient(135deg, #f3faf6, #ffffff 70%);
+    border-color: var(--arena-grn-soft);
   }
 
   &__skills {
-    margin-top: 14px;
+    margin-top: 18px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   &__skill {
@@ -1720,30 +1761,31 @@ onBeforeUnmount(() => {
     align-items: flex-start;
     gap: 12px;
     padding: 12px 14px;
-    border: 1.5px solid var(--arena-line2);
-    border-radius: 13px;
+    border: 1px solid var(--arena-line2);
+    border-radius: 14px;
+    background: var(--arena-card);
 
     &.is-done {
-      border-color: #d5efe0;
-      background: #fbfefc;
+      border-color: var(--arena-grn-soft);
+      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
     }
 
     &.is-locked {
-      background: #fafbfa;
+      background: var(--arena-sunken);
     }
   }
 
   &__skill-icon {
     flex: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    font-weight: 900;
-    background: var(--arena-line);
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--arena-sunken);
     color: var(--arena-mut);
 
     .is-done & {
@@ -1759,100 +1801,119 @@ onBeforeUnmount(() => {
 
   &__skill-score {
     flex: none;
-    font-size: 15px;
-    color: var(--arena-sub);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--arena-action);
   }
 
   &__risk-grid {
-    margin-top: 14px;
+    margin-top: 18px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 14px;
   }
 
   &__risk {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 13px 15px;
-    border: 1.5px solid var(--arena-line2);
-    border-radius: 13px;
+    padding: 14px 16px;
+    border: 1px solid var(--arena-line2);
+    border-radius: 14px;
+    background: var(--arena-card);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+    &:hover {
+      border-color: var(--arena-line-strong);
+      box-shadow: var(--arena-shadow-card);
+    }
   }
 
   &__project {
-    padding: 13px 15px;
-    border: 1.5px solid var(--arena-line2);
-    border-radius: 13px;
+    padding: 14px 16px;
+    border: 1px solid var(--arena-line2);
+    border-radius: 14px;
+    background: var(--arena-card);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+    &:hover {
+      border-color: var(--arena-line-strong);
+      box-shadow: var(--arena-shadow-card);
+    }
   }
 
   &__snapshot {
     --resume-snapshot-scale: 0.62;
-    margin-top: 12px;
+    margin-top: 16px;
     display: grid;
     height: 530px;
     place-items: start center;
-    border: 1.5px solid var(--arena-line2);
-    border-radius: 12px;
+    border: 1px solid var(--arena-line2);
+    border-radius: 16px;
     background:
-      linear-gradient(135deg, rgba(23, 178, 106, 0.08), transparent 45%),
-      #f7faf7;
+      linear-gradient(135deg, rgba(31, 111, 92, 0.06), transparent 45%),
+      #f7faf8;
     overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(26, 25, 23, 0.03);
 
     :deep(.resume-document) {
       width: 620px;
       max-width: none;
-      margin: 14px 0 0;
+      margin: 18px 0 0;
       transform: scale(var(--resume-snapshot-scale));
       transform-origin: top center;
-      box-shadow: 0 10px 24px rgba(21, 33, 27, 0.16);
+      box-shadow: 0 12px 28px rgba(26, 25, 23, 0.12);
     }
   }
 
   &__snapshot-empty {
-    margin-top: 12px;
+    margin-top: 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 22px 14px;
-    border: 1.5px dashed var(--arena-line);
-    border-radius: 12px;
+    gap: 10px;
+    padding: 22px 16px;
+    border: 1px dashed var(--arena-line);
+    border-radius: 16px;
     text-align: center;
+    background: var(--arena-sunken);
 
     b {
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 600;
     }
   }
 
   &__match-score {
-    margin-top: 10px;
-    font-size: 30px;
-    font-weight: 900;
-    letter-spacing: -0.5px;
-    background: linear-gradient(100deg, var(--arena-grn), var(--arena-lime));
+    margin-top: 12px;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+    background: var(--arena-grad-accent);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
   &__empty {
-    margin-top: 14px;
+    margin-top: 18px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding: 18px;
+    gap: 10px;
+    padding: 16px;
     border: 1.5px dashed var(--arena-line);
-    border-radius: 13px;
+    border-radius: var(--arena-radius-card);
 
     b {
-      font-size: 13.5px;
+      font-size: 14px;
     }
   }
 
   &__skeleton {
     height: 120px;
-    background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
+    border-radius: var(--arena-radius-card);
+    background: linear-gradient(90deg, #fff, #f2f1ec, #fff);
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
   }
@@ -1963,7 +2024,7 @@ onBeforeUnmount(() => {
 
     &__jd-card {
       width: 100%;
-      padding: 18px;
+      padding: 20px;
     }
 
     &__jd-head {
@@ -1976,41 +2037,42 @@ onBeforeUnmount(() => {
 
     &__mobile-stage-cards {
       display: grid;
-      gap: 9px;
-      margin-top: 14px;
+      gap: 12px;
+      margin-top: 18px;
     }
 
     &__mobile-stage-card {
       display: grid;
-      grid-template-columns: 30px minmax(0, 1fr) auto;
-      gap: 9px;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
       align-items: center;
       width: 100%;
-      padding: 11px 12px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: 12px;
-      background: #ffffff;
+      padding: 13px 14px;
+      border: 1px solid var(--arena-line);
+      border-radius: 14px;
+      background: var(--arena-card);
       color: var(--arena-ink);
       font-family: inherit;
       text-align: left;
+      box-shadow: var(--arena-shadow-subtle);
 
       > span {
         display: inline-flex;
-        width: 30px;
-        height: 30px;
+        width: 34px;
+        height: 34px;
         align-items: center;
         justify-content: center;
-        border-radius: 9px;
+        border-radius: 10px;
         background: var(--arena-amber-soft);
         color: var(--arena-amber);
-        font-size: 13px;
-        font-weight: 900;
+        font-size: 14px;
+        font-weight: 700;
       }
 
       > div {
         display: grid;
         min-width: 0;
-        gap: 2px;
+        gap: 3px;
       }
 
       b,
@@ -2022,24 +2084,24 @@ onBeforeUnmount(() => {
       }
 
       b {
-        font-size: 12px;
+        font-size: 13px;
       }
 
       small {
         color: var(--arena-sub);
-        font-size: 10.5px;
+        font-size: 11.5px;
       }
 
       em {
         max-width: 82px;
         color: var(--arena-grn-d);
-        font-size: 10.5px;
+        font-size: 11.5px;
         font-style: normal;
-        font-weight: 800;
+        font-weight: 700;
       }
 
       &.is-done {
-        border-color: #b9e7cd;
+        border-color: var(--arena-grn-soft);
 
         > span {
           background: var(--arena-grn-soft);

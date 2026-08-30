@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell v4-growth-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="v4-page-header">
       <div>
         <div class="v4-eyebrow">成长档案</div>
@@ -158,11 +160,14 @@ import {
   type SkillGrowthSnapshotVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { appConfig } from '@/config'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const errorMessage = ref('')
 const partialLoadWarning = ref('')
 const rangeDays = ref(30)

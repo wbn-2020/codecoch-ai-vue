@@ -1,16 +1,18 @@
 <template>
-  <div class="page-shell v4-application-page">
-    <section class="v4-page-header">
-      <div>
-        <div class="v4-eyebrow">我的求职</div>
-        <h1>投递工作台</h1>
-        <p>处理今天的推进事项，集中查看每一条投递的下一步。</p>
-      </div>
-      <div class="v4-actions">
+  <main class="page-shell v4-application-page cc-module-page">
+    <PageHeader
+      eyebrow="投递管理"
+      :icon="BriefcaseBusiness"
+      title="投递工作台"
+      description="集中处理每条投递的当前阶段、下一步安排和求职周期。"
+    >
+      <template #actions>
         <el-button :icon="RefreshCw" circle :loading="loading" title="刷新投递记录" @click="load" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新增投递</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <AppState v-if="errorMessage" type="error" title="求职进度加载失败" :description="errorMessage">
       <el-button type="primary" @click="load">重试</el-button>
@@ -49,6 +51,13 @@
       />
 
       <template v-else>
+      <section class="cc-metric-grid application-metrics" aria-label="投递统计">
+        <MetricCard label="进行中" :value="statsNumber(applicationStats?.activeCount)" detail="仍在推进的求职机会。" />
+        <MetricCard label="今日跟进" :value="statsNumber(applicationStats?.dueTodayFollowUpCount)" detail="需要在今天处理的事项。" tone="warning" />
+        <MetricCard label="面试中" :value="statsNumber(applicationStats?.interviewCount)" detail="处于面试阶段的机会。" tone="info" />
+        <MetricCard label="Offer" :value="statsNumber(applicationStats?.offerCount)" detail="当前已获得的 Offer。" tone="success" />
+      </section>
+
       <nav class="application-view-tabs" aria-label="投递工作台视图">
         <button
           type="button"
@@ -700,13 +709,14 @@
         <el-button type="primary" :disabled="!selectedDraft" @click="saveSelectedDraftAsEvent">保存为事件记录</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   ArrowUpRight,
+  BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -748,6 +758,10 @@ import {
 import { generateApplicationEventAiReviewApi } from '@/api/careerGrowth'
 import { getResumesApi } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { appConfig } from '@/config'
 import ApplicationEventReviewDialog from '@/views/application/components/ApplicationEventReviewDialog.vue'
 import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
@@ -806,6 +820,7 @@ const applicationWorkspaceEnabled = computed(() => appConfig.enableV7CampaignWor
 
 const statusOptions = applicationStatusOptions
 const followUpFilterOptions = applicationFollowUpFilterOptions
+const moduleTabs = useUserModuleTabs('progress')
 
 const sourceOptions = [
   { label: 'BOSS 直聘', value: 'BOSS' },
@@ -2172,6 +2187,12 @@ onMounted(async () => {
   gap: 16px;
 }
 
+.cc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .v4-page-header,
 .v4-actions,
 .panel-heading,
@@ -2243,26 +2264,23 @@ onMounted(async () => {
 
 .application-view-tabs {
   display: flex;
-  width: fit-content;
-  max-width: 100%;
   gap: 4px;
-  padding: 4px;
+  min-width: 0;
+  gap: 4px;
   overflow-x: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: var(--app-surface);
+  border-bottom: 1px solid var(--user-border);
 }
 
 .application-view-tabs button {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 37px;
   align-items: center;
   gap: 7px;
   padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -2271,8 +2289,8 @@ onMounted(async () => {
 }
 
 .application-view-tabs button.is-active {
-  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
-  color: var(--arena-grn-d, var(--app-primary-hover));
+  border-bottom-color: var(--user-primary);
+  color: var(--user-primary);
 }
 
 .application-view-tabs span {
@@ -2282,7 +2300,7 @@ onMounted(async () => {
   padding: 0 5px;
   place-items: center;
   border-radius: 999px;
-  background: var(--app-surface-muted);
+  background: var(--user-surface-muted);
   color: inherit;
   font-size: 11px;
 }
@@ -2966,6 +2984,10 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
+  .cc-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .v4-page-header,
   .v4-row-head,
   .event-row__head {
@@ -2988,6 +3010,10 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
+  .cc-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
   .v4-page-header,
   .records-toolbar,
   .panel-heading,

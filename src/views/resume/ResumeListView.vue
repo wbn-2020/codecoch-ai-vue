@@ -1,6 +1,37 @@
 ﻿<template>
-  <div class="resume-center page-shell">
-    <section class="resume-hero">
+  <main class="resume-center page-shell cc-module-page">
+    <PageHeader
+      eyebrow="简历准备"
+      :icon="FileText"
+      title="简历管理"
+      description="集中管理简历、导入文件和查看 AI 建议，把简历准备串成一条清晰的求职路径。"
+    >
+      <template #actions>
+        <el-button :loading="uploading" @click="toggleUploadWorkbench">
+          <UploadCloud :size="16" />
+          {{ uploadWorkbenchExpanded ? '收起导入' : '导入简历' }}
+        </el-button>
+        <el-button type="primary" @click="router.push('/resumes/create')">
+          <Plus :size="16" />
+          新建简历
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="cc-metric-grid">
+      <MetricCard label="简历资产" :value="`${total} 份`" detail="当前账号下可管理的简历。" />
+      <MetricCard label="最近更新" :value="latestUpdatedAt" detail="最后一次简历更新时间。" />
+      <MetricCard
+        label="AI 建议"
+        :value="latestOptimizeStatus"
+        detail="最近一条建议任务的处理状态。"
+        :tone="optimizeRecordsLoadError ? 'warning' : 'ai'"
+      />
+    </section>
+
+    <section class="resume-hero is-legacy-summary">
       <div class="hero-copy">
         <p class="hero-kicker">
           <FileText :size="16" />
@@ -626,7 +657,7 @@
         </div>
       </div>
     </el-drawer>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -669,6 +700,10 @@ import {
   type ResumeUploadDecisionVO
 } from '@/api/resume'
 import StatusTag from '@/components/common/StatusTag.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type {
   ResumeAnalysisResultVO,
   ResumeJsonValue,
@@ -714,6 +749,7 @@ import { toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('prepare')
 const route = useRoute()
 const routeTargetJobId = computed(() => {
   const rawValue = Array.isArray(route.query.targetJobId) ? route.query.targetJobId[0] : route.query.targetJobId
@@ -1674,19 +1710,31 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .resume-center {
+  display: grid;
   gap: var(--user-space-4);
   min-width: 0;
+}
+
+.cc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.resume-hero.is-legacy-summary {
+  display: none;
 }
 
 .resume-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: var(--user-space-5);
+  gap: var(--user-space-6);
   align-items: center;
-  padding: var(--user-space-5);
+  padding: var(--user-space-6);
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
-  background: var(--user-surface);
+  border-radius: var(--user-radius-lg);
+  background: var(--user-surface-tint);
+  box-shadow: var(--user-shadow-sm);
 }
 
 .hero-kicker,
@@ -1716,25 +1764,26 @@ onUnmounted(() => {
 
 .hero-copy {
   h1 {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     color: var(--user-text);
-    font-size: 26px;
-    line-height: 1.25;
+    font-size: 30px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
   }
 
   p {
     max-width: 680px;
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     color: var(--user-text-muted);
-    font-size: 13px;
-    line-height: 1.65;
+    font-size: 14px;
+    line-height: 1.7;
   }
 }
 
 .hero-actions {
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .hero-panel {
@@ -1746,8 +1795,8 @@ onUnmounted(() => {
 .hero-panel__stat {
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  padding: 9px 0;
+  min-height: 46px;
+  padding: 11px 0;
   border-bottom: 1px solid var(--user-border);
 
   &:last-child {
@@ -1761,7 +1810,8 @@ onUnmounted(() => {
 
   strong {
     color: var(--user-text-secondary);
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 700;
     text-align: right;
   }
 }
@@ -1795,8 +1845,8 @@ onUnmounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--user-border);
 
   strong,
@@ -1806,14 +1856,14 @@ onUnmounted(() => {
 
   strong {
     color: var(--user-text);
-    font-size: 15px;
+    font-size: 16px;
   }
 
   span {
-    margin-top: 4px;
+    margin-top: 5px;
     color: var(--user-text-muted);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 }
 
@@ -1830,7 +1880,8 @@ onUnmounted(() => {
   h2 {
     margin: 0;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: 20px;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -1997,15 +2048,17 @@ onUnmounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--user-space-4);
-  padding: var(--user-space-4);
+  padding: var(--user-space-5);
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 
   h2 {
     margin: 0;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: 20px;
+    letter-spacing: -0.01em;
   }
 
   p {
@@ -2078,9 +2131,9 @@ onUnmounted(() => {
 
 .resume-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
-  gap: 14px;
-  padding-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: 18px;
+  padding-top: 14px;
 }
 
 .resume-card {
@@ -2094,17 +2147,21 @@ onUnmounted(() => {
     "status"
     "optimize"
     "actions";
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  padding: 16px;
+  padding: 20px;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
-  transition: border-color 0.18s ease, background 0.18s ease;
+  box-shadow: var(--user-shadow-xs);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease,
+    transform 0.2s ease;
 
   &:hover {
     border-color: var(--user-primary-border);
     background: var(--user-surface-muted);
+    box-shadow: var(--user-shadow-md);
+    transform: translateY(-3px);
   }
 }
 
@@ -2133,7 +2190,9 @@ onUnmounted(() => {
     margin: 0;
     overflow: hidden;
     color: var(--user-text);
-    font-size: 16px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2157,9 +2216,9 @@ onUnmounted(() => {
 }
 
 .resume-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--user-radius-sm);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--user-radius-md);
 }
 
 .resume-tags {
@@ -2174,7 +2233,7 @@ onUnmounted(() => {
   grid-area: meta;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px 14px;
 
   span {
     gap: 6px;
@@ -2190,7 +2249,7 @@ onUnmounted(() => {
   overflow: hidden;
   color: var(--user-text-secondary);
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -2199,15 +2258,23 @@ onUnmounted(() => {
   grid-area: skills;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 
   span {
-    padding: 4px 8px;
+    padding: 5px 10px;
     border: 1px solid var(--user-border);
     border-radius: 999px;
     background: var(--user-control-bg);
     color: var(--user-text-secondary);
     font-size: 12px;
+    line-height: 1.4;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+
+    &:hover {
+      border-color: var(--user-primary-border);
+      background: var(--user-primary-soft);
+      color: var(--user-primary);
+    }
   }
 
   .is-placeholder {
@@ -2223,11 +2290,11 @@ onUnmounted(() => {
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
+  border-radius: var(--user-radius-md);
 
   div {
     flex: 1 1 130px;
-    padding: 8px 10px;
+    padding: 10px 12px;
     background: var(--user-surface-muted);
 
     & + div {
@@ -2257,9 +2324,9 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--user-warning);
-  border-radius: var(--user-radius-sm);
+  border-radius: var(--user-radius-md);
   background: var(--user-warning-soft);
   color: var(--user-warning);
 
@@ -2288,13 +2355,13 @@ onUnmounted(() => {
 
 .optimize-summary {
   grid-area: optimize;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--user-primary-border);
-  border-radius: var(--user-radius-sm);
+  border-radius: var(--user-radius-md);
   background: var(--user-primary-faint);
   color: var(--user-text-secondary);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .resume-card__actions {
@@ -2319,34 +2386,35 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-  border: 1px dashed var(--user-border);
-  border-radius: var(--user-radius-md);
-  background: var(--user-control-bg);
+  padding: 56px 24px;
+  border: 1px dashed var(--user-border-strong);
+  border-radius: var(--user-radius-lg);
+  background: var(--user-surface-muted);
   text-align: center;
 
   h3 {
-    margin: 18px 0 0;
-    font-size: 20px;
+    margin: 20px 0 0;
+    font-size: 22px;
+    letter-spacing: -0.01em;
   }
 
   p {
     max-width: 520px;
-    margin: 10px 0 0;
+    margin: 12px 0 0;
     color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
 
 .empty-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--user-radius-sm);
+  width: 60px;
+  height: 60px;
+  border-radius: var(--user-radius-md);
 }
 
 .empty-actions {
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 22px;
 }
 
 .pagination-wrap {
@@ -2624,9 +2692,9 @@ onUnmounted(() => {
 
   div {
     min-width: 0;
-    padding: 12px;
+    padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 10px;
+    border-radius: var(--user-radius-md);
     background: var(--user-control-bg);
   }
 
@@ -2714,7 +2782,7 @@ onUnmounted(() => {
   }
 
   .hero-copy h1 {
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .resume-card__header,

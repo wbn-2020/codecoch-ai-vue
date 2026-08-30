@@ -1,68 +1,97 @@
 <template>
-  <div class="job-target-page page-shell">
-    <section class="page-hero">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <Crosshair :size="16" />
-          目标岗位
-        </p>
-        <h1>把岗位目标和训练动作连起来</h1>
-        <p>围绕一个目标岗位管理岗位描述、分析结果和当前主目标，让简历匹配、题库训练和模拟面试都围绕同一条求职路线展开。</p>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/job-targets/create')">
-            <Plus :size="17" />
-            新增目标岗位
-          </el-button>
-          <el-button size="large" @click="router.push('/resume-match')">
-            <GitCompareArrows :size="17" />
-            发起简历匹配
-          </el-button>
-          <el-button size="large" text :loading="loading" @click="fetchAll">
-            <RefreshCw :size="17" />
-            刷新
-          </el-button>
-        </div>
-      </div>
+  <main class="job-target-page cc-module-page">
+    <PageHeader
+      eyebrow="岗位匹配"
+      :icon="Crosshair"
+      title="目标岗位"
+      description="维护目标岗位和岗位描述，让简历匹配、题库训练和模拟面试围绕同一条求职路线展开。"
+    >
+      <template #actions>
+        <el-button @click="router.push('/resume-match')">
+          <GitCompareArrows :size="16" />
+          发起简历匹配
+        </el-button>
+        <el-button type="primary" @click="router.push('/job-targets/create')">
+          <Plus :size="16" />
+          新增目标岗位
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <div class="hero-panel" v-loading="loading">
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="target-summary">
+      <div class="target-summary__copy">
         <span>当前主目标</span>
         <template v-if="currentTarget">
-          <strong>{{ currentTarget.jobTitle }}</strong>
+          <h2>{{ currentTarget.jobTitle }}</h2>
           <p>{{ currentTarget.companyName || '公司信息待补充' }} · {{ currentTarget.jobLevel || '级别待补充' }}</p>
           <JobTargetStatusTag :status="currentTarget.parseStatus" />
         </template>
         <template v-else>
-          <strong>还没有设置当前主目标</strong>
-          <p>先挑一条最想拿到的岗位，后续训练才会更聚焦。</p>
+          <h2>还没有设置当前主目标</h2>
+          <p>先挑一条最想拿到的岗位，后续训练和简历匹配才会更聚焦。</p>
         </template>
+      </div>
+      <div class="target-summary__actions">
+        <el-button text :loading="loading" @click="fetchAll">
+          <RefreshCw :size="16" />
+          刷新数据
+        </el-button>
+        <el-button v-if="currentTarget" type="primary" plain @click="router.push(`/job-targets/${currentTarget.id}/analysis`)">
+          <ScanSearch :size="16" />
+          查看分析
+        </el-button>
       </div>
     </section>
 
-    <section class="metric-grid">
-      <article class="metric-card">
-        <span>目标岗位总数</span>
-        <strong>{{ targets.length }}</strong>
-        <p>你当前正在准备的岗位数量。</p>
-      </article>
-      <article class="metric-card">
-        <span>已解析岗位</span>
-        <strong>{{ parsedCount }}</strong>
-        <p>已经提取出岗位要求和训练关注点的目标。</p>
-      </article>
-      <article class="metric-card">
-        <span>解析失败</span>
-        <strong>{{ failedCount }}</strong>
-        <p>需要回到编辑页补充岗位描述的目标。</p>
-      </article>
-      <article class="metric-card">
-        <span>最近更新时间</span>
-        <strong class="metric-date">{{ latestUpdatedAt }}</strong>
-        <p>帮助判断是否该重新整理岗位信息。</p>
-      </article>
+    <section class="cc-metric-grid">
+      <MetricCard label="目标岗位总数" :value="targets.length" detail="当前正在准备的岗位数量。" />
+      <MetricCard label="已解析岗位" :value="parsedCount" detail="已提取岗位要求和训练关注点。" tone="success" />
+      <MetricCard label="解析失败" :value="failedCount" detail="需要补充岗位描述后重新解析。" :tone="failedCount ? 'warning' : 'default'" />
+      <MetricCard label="最近更新时间" :value="latestUpdatedAt" detail="帮助判断是否该重新整理岗位信息。" />
     </section>
 
-    <section class="content-card">
-      <div class="content-card__body">
+    <DataTableFrame
+      title="目标岗位列表"
+      description="筛选并推进最需要跟进的岗位目标。"
+    >
+      <template #header>
+        <el-button text :loading="loading" @click="fetchAll">
+          <RefreshCw :size="15" />
+          同步最新
+        </el-button>
+      </template>
+
+      <template #filters>
+        <FilterBar>
+          <el-input
+            v-model.trim="query.keyword"
+            class="target-filter-keyword"
+            clearable
+            placeholder="搜索岗位、公司或级别"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <Search :size="15" />
+            </template>
+          </el-input>
+          <el-select v-model="query.status" clearable placeholder="状态">
+            <el-option label="启用" :value="1" />
+            <el-option label="停用" :value="0" />
+          </el-select>
+          <el-select v-model="query.current" clearable placeholder="主目标">
+            <el-option label="当前主目标" :value="true" />
+            <el-option label="非主目标" :value="false" />
+          </el-select>
+          <template #actions>
+            <el-button type="primary" :loading="loading" @click="handleSearch">筛选</el-button>
+            <el-button :disabled="loading" @click="handleReset">重置</el-button>
+          </template>
+        </FilterBar>
+      </template>
+
+      <div class="target-list" v-loading="loading">
         <el-alert
           v-if="partialLoadWarning"
           class="target-warning"
@@ -73,53 +102,6 @@
           :description="partialLoadWarning"
         />
 
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">岗位筛选</p>
-            <h2>从岗位清单里找到今天最该推进的那个</h2>
-          </div>
-          <el-button text :loading="loading" @click="fetchAll">同步最新</el-button>
-        </div>
-
-        <details class="target-filter-drawer">
-          <summary>
-            <Search :size="16" />
-            筛选岗位
-          </summary>
-          <el-form class="filter-form" :model="query" inline>
-            <el-form-item label="关键词">
-              <el-input
-                v-model.trim="query.keyword"
-                clearable
-                placeholder="岗位 / 公司 / 级别"
-                @keyup.enter="handleSearch"
-              >
-                <template #prefix>
-                  <Search :size="15" />
-                </template>
-              </el-input>
-            </el-form-item>
-            <el-form-item label="状态">
-              <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px">
-                <el-option label="启用" :value="1" />
-                <el-option label="停用" :value="0" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="当前主目标">
-              <el-select v-model="query.current" clearable placeholder="全部" style="width: 140px">
-                <el-option label="是" :value="true" />
-                <el-option label="否" :value="false" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="loading" @click="handleSearch">开始筛选</el-button>
-              <el-button :disabled="loading" @click="handleReset">重置</el-button>
-            </el-form-item>
-          </el-form>
-        </details>
-      </div>
-
-      <div class="target-list" v-loading="loading">
         <AppState
           v-if="loadError && !loading"
           type="error"
@@ -129,44 +111,42 @@
           <el-button type="primary" @click="fetchAll">重新加载</el-button>
         </AppState>
 
-        <AppState
+        <EmptyState
           v-else-if="!loading && targets.length === 0"
-          type="empty"
           title="暂无目标岗位"
           description="创建第一个目标岗位后，可以解析岗位描述、提取训练关注点并串联到简历匹配。"
         >
-          <el-button type="primary" @click="router.push('/job-targets/create')">新增目标岗位</el-button>
-        </AppState>
+          <template #icon>
+            <Crosshair :size="20" />
+          </template>
+          <template #actions>
+            <el-button type="primary" @click="router.push('/job-targets/create')">新增目标岗位</el-button>
+          </template>
+        </EmptyState>
 
         <div v-else class="target-card-list">
           <article
             v-for="row in targets"
             :key="row.id"
-            class="target-card"
+            class="target-row"
             :class="{ 'is-current': row.currentFlag === 1 }"
           >
-            <div class="target-card__head">
-              <div class="target-card__title">
-                <div class="target-card__tags">
-                  <el-tag v-if="row.currentFlag === 1" type="success" effect="dark">当前主目标</el-tag>
-                  <JobTargetStatusTag :status="row.status" />
-                  <JobTargetStatusTag :status="row.parseStatus" />
-                </div>
-                <h3>{{ row.jobTitle || '未命名岗位' }}</h3>
-                <p>{{ row.companyName || '公司待补充' }} · {{ row.jobLevel || '级别待补充' }}</p>
+            <div class="target-row__primary">
+              <div class="target-row__tags">
+                <StatusChip v-if="row.currentFlag === 1" label="当前主目标" tone="success" dot />
+                <JobTargetStatusTag :status="row.status" />
+                <JobTargetStatusTag :status="row.parseStatus" />
               </div>
-              <div class="target-card__updated">
-                <span>更新时间</span>
-                <strong>{{ formatDateTime(row.updatedAt || row.createdAt) }}</strong>
-              </div>
+              <h3>{{ row.jobTitle || '未命名岗位' }}</h3>
+              <p>{{ row.companyName || '公司待补充' }} · {{ row.jobLevel || '级别待补充' }}</p>
+              <p class="target-row__summary">{{ targetSummary(row) }}</p>
             </div>
-
-            <p class="target-card__summary">
-              {{ targetSummary(row) }}
-            </p>
-
-            <div class="target-actions">
-              <el-button type="primary" @click="router.push(`/job-targets/${row.id}/analysis`)">
+            <div class="target-row__meta">
+              <span>最近更新</span>
+              <strong>{{ formatDateTime(row.updatedAt || row.createdAt) }}</strong>
+            </div>
+            <div class="target-row__actions">
+              <el-button type="primary" plain @click="router.push(`/job-targets/${row.id}/analysis`)">
                 <ScanSearch :size="15" />
                 {{ analysisActionLabel(row) }}
               </el-button>
@@ -197,8 +177,8 @@
           </article>
         </div>
       </div>
-    </section>
-  </div>
+    </DataTableFrame>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -227,6 +207,14 @@ import {
   setCurrentJobTargetApi
 } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
+import DataTableFrame from '@/components/user-ui/DataTableFrame.vue'
+import EmptyState from '@/components/user-ui/EmptyState.vue'
+import FilterBar from '@/components/user-ui/FilterBar.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import StatusChip from '@/components/user-ui/StatusChip.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import JobTargetStatusTag from './components/JobTargetStatusTag.vue'
 import type { TargetJobQueryDTO, TargetJobVO } from '@/types/jobTarget'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
@@ -242,6 +230,8 @@ const currentTarget = ref<TargetJobVO | null>(null)
 const parsingId = ref<number | null>(null)
 const settingCurrentId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
+
+const moduleTabs = useUserModuleTabs('matching')
 
 const query = reactive<TargetJobQueryDTO>({
   keyword: '',
@@ -435,310 +425,182 @@ onMounted(fetchAll)
 
 <style scoped lang="scss">
 .job-target-page {
+  display: grid;
   gap: 16px;
 }
 
-.page-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
-  gap: 16px;
-  padding: 16px;
-  border: 1.5px solid var(--app-border);
-  border-radius: var(--arena-radius-card, var(--app-radius));
-  background: var(--app-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
-}
-
-.hero-kicker,
-.hero-actions,
-.section-head,
-.target-card__head,
-.target-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hero-kicker,
-.section-kicker {
-  margin: 0;
-  color: var(--app-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.hero-copy h1,
-.section-head h2,
-.target-card h3 {
-  margin: 0;
-}
-
-.hero-copy h1 {
-  color: var(--app-text);
-  font-size: 26px;
-  line-height: 1.18;
-}
-
-.hero-copy p,
-.hero-panel p,
-.metric-card p,
-.target-card p,
-.target-card__updated span,
-.target-card__title p {
-  color: var(--app-text-muted);
-}
-
-.hero-copy p {
-  max-width: 720px;
-  margin: 8px 0 0;
-  line-height: 1.65;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 16px;
-}
-
-.hero-panel {
-  align-self: stretch;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: var(--arena-bg, var(--app-bg));
-}
-
-.hero-panel span,
-.metric-card span {
-  color: var(--app-text-muted);
-  font-size: 12px;
-}
-
-.hero-panel strong {
-  color: var(--app-text);
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.metric-grid {
+.cc-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1.5px solid var(--app-border);
-  border-radius: 16px;
-  background: var(--app-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  gap: 16px;
 }
 
-.metric-card {
-  padding: 10px 14px;
-  border-right: 1px solid var(--app-border);
-  background: transparent;
-
-  &:last-child {
-    border-right: 0;
-  }
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 6px;
-  color: var(--app-text);
-  font-size: 20px;
-}
-
-.metric-date {
-  font-size: 16px !important;
-  line-height: 1.5;
-}
-
-.metric-card p {
-  margin: 8px 0 0;
-  line-height: 1.65;
-}
-
-.section-head {
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.section-head h2 {
-  font-size: 20px;
-}
-
-.filter-form {
+.target-summary {
   display: flex;
-  padding-top: 14px;
-  flex-wrap: wrap;
-}
-
-.target-filter-drawer {
-  margin-top: 12px;
-  border-top: 1px solid var(--app-border);
-
-  summary {
-    display: flex;
-    width: fit-content;
-    align-items: center;
-    gap: 8px;
-    padding-top: 12px;
-    color: var(--arena-grn-d, var(--app-primary-hover));
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 700;
-    list-style: none;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
-  }
-}
-
-.target-list {
-  min-height: 240px;
-  padding: 0 16px 16px;
-  border-top: 1px solid var(--app-border);
-}
-
-.target-list > .app-state {
-  margin-top: 20px;
-}
-
-.target-card-list {
-  display: grid;
-  gap: 10px;
-  padding-top: 16px;
-}
-
-.target-card {
-  padding: 14px;
-  border: 1.5px solid var(--app-border);
-  border-radius: 16px;
-  background: var(--app-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
-}
-
-.target-card.is-current {
-  border-color: #b9e7cd;
-  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
-}
-
-.target-card__head {
   justify-content: space-between;
-  align-items: flex-start;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
+  background: var(--user-primary-faint);
 }
 
-.target-card__title {
+.target-summary__copy {
   min-width: 0;
 }
 
-.target-card__title h3 {
-  color: var(--app-text);
+.target-summary__copy > span,
+.target-row__meta > span {
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.target-summary h2,
+.target-row h3 {
+  margin: 5px 0 0;
+  color: var(--user-text);
   font-size: 18px;
   line-height: 1.35;
 }
 
-.target-card__title p {
-  margin: 6px 0 0;
+.target-summary p,
+.target-row p {
+  margin: 5px 0 0;
+  color: var(--user-text-muted);
   font-size: 13px;
+  line-height: 1.6;
 }
 
-.target-card__tags,
-.target-actions {
+.target-summary :deep(.el-tag) {
+  margin-top: 10px;
+}
+
+.target-summary__actions {
   display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex: 0 0 auto;
   flex-wrap: wrap;
+  gap: 6px;
+}
+
+.target-filter-keyword {
+  width: min(280px, 100%);
+}
+
+.target-list {
+  min-height: 240px;
+  padding: 14px;
+}
+
+.target-warning {
+  margin-bottom: 12px;
+}
+
+.target-card-list {
+  display: grid;
   gap: 8px;
 }
 
-.target-card__updated {
-  min-width: 150px;
+.target-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 158px) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
+}
+
+.target-row.is-current {
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-faint);
+}
+
+.target-row__primary {
+  min-width: 0;
+}
+
+.target-row__tags,
+.target-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.target-row__summary {
+  max-width: 78ch;
+}
+
+.target-row__meta {
+  min-width: 0;
   text-align: right;
 }
 
-.target-card__updated span {
-  font-size: 12px;
-}
-
-.target-card__updated strong {
+.target-row__meta strong {
   display: block;
-  margin-top: 6px;
-  color: var(--app-text);
-  font-size: 13px;
+  margin-top: 4px;
+  color: var(--user-text-secondary);
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.target-card__summary {
-  margin: 14px 0 0;
-  color: var(--app-text-muted);
-  line-height: 1.7;
+@media (max-width: 1180px) {
+  .cc-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .target-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .target-row__meta {
+    grid-column: 1;
+    text-align: left;
+  }
+
+  .target-row__actions {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
+  }
 }
 
-.target-actions {
-  margin-top: 14px;
-}
-
-.target-actions :deep(.el-button) {
-  margin-left: 0;
-}
-
-@media (max-width: 1080px) {
-  .page-hero,
-  .metric-grid {
+@media (max-width: 760px) {
+  .cc-metric-grid {
     grid-template-columns: 1fr;
   }
 
-  .metric-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--app-border);
-  }
-
-  .metric-card:last-child {
-    border-bottom: 0;
-  }
-
-  .section-head {
+  .target-summary {
     flex-direction: column;
-    align-items: flex-start;
   }
 
-  .filter-form {
-    width: 100%;
+  .target-summary__actions {
     justify-content: flex-start;
   }
 
-  .target-card__head {
-    flex-direction: column;
-  }
-
-  .target-card__updated {
-    text-align: left;
-  }
-}
-
-@media (max-width: 720px) {
-  .page-hero {
-    padding: 14px;
-  }
-
-  .hero-copy h1 {
-    font-size: 24px;
-  }
-
-  .hero-actions {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .hero-actions :deep(.el-button) {
+  .target-filter-keyword,
+  :deep(.el-select) {
     width: 100%;
   }
 
   .target-list {
-    padding-left: 0;
-    padding-right: 0;
+    padding: 12px;
+  }
+
+  .target-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .target-row__meta,
+  .target-row__actions {
+    grid-column: auto;
+    grid-row: auto;
+    text-align: left;
   }
 }
 </style>

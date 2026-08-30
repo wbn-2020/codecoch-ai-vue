@@ -1,5 +1,7 @@
 ﻿<template>
   <div class="wrong-question-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="hero-band">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -146,12 +148,15 @@ import { ChevronRight, PenLine, RefreshCw, RotateCcw, Search, Sparkles } from 'l
 import { getWrongQuestionsApi, updateQuestionMasteryApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { difficultyOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { WrongQuestionQueryDTO, WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
 import { getOptionLabel } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const masteryChangingId = ref<number | null>(null)
 const records = ref<WrongQuestionVO[]>([])

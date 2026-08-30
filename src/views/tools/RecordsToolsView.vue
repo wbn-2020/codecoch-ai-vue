@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-tools records-tools-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-tools__page">
       <header class="arena-tools__head">
         <div>
@@ -152,6 +154,8 @@ import {
 import { getApplicationPackagesApi } from '@/api/applicationPackage'
 import { getUserAsyncTasksApi } from '@/api/task'
 import { appConfig } from '@/config'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { JobApplicationPackageListItemVO } from '@/types/applicationPackage'
 import type { AsyncTaskVO } from '@/types/asyncTask'
 import { getErrorMessage } from '@/utils/error'
@@ -173,6 +177,7 @@ interface ToolGroup {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const summaryLoading = ref(false)
 const summaryLoaded = ref(false)
 const summaryError = ref('')

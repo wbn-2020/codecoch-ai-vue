@@ -9,15 +9,36 @@
         'is-preview-focus': previewFocus
       }
     ]"
+    :style="workbenchStyle"
   >
     <slot name="rail" />
+    <button
+      v-if="!railCollapsed && !previewFocus"
+      class="resume-workbench-layout__resizer resume-workbench-layout__resizer--rail"
+      type="button"
+      aria-label="调整模块导航宽度"
+      title="拖动调整模块导航宽度，双击重置"
+      @pointerdown="startResize('rail', $event)"
+      @dblclick="resetWidth('rail')"
+    />
     <slot name="preview" />
+    <button
+      v-if="!editorCollapsed && !previewFocus"
+      class="resume-workbench-layout__resizer resume-workbench-layout__resizer--editor"
+      type="button"
+      aria-label="调整编辑器宽度"
+      title="拖动调整编辑器宽度，双击重置"
+      @pointerdown="startResize('editor', $event)"
+      @dblclick="resetWidth('editor')"
+    />
     <slot name="editor" />
     <slot name="inspector" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, onBeforeUnmount, ref } from 'vue'
+
 withDefaults(defineProps<{
   mobileTab?: 'edit' | 'review' | 'ai' | 'preview'
   railCollapsed?: boolean
@@ -29,6 +50,60 @@ withDefaults(defineProps<{
   editorCollapsed: false,
   previewFocus: false
 })
+
+const defaultRailWidth = 220
+const defaultEditorWidth = 420
+const railWidth = ref(defaultRailWidth)
+const editorWidth = ref(defaultEditorWidth)
+const workbenchStyle = computed(() => ({
+  '--workbench-rail-width': `${railWidth.value}px`,
+  '--workbench-editor-width': `${editorWidth.value}px`
+}))
+
+let activeResize: 'rail' | 'editor' | null = null
+let resizeStartX = 0
+let resizeStartWidth = 0
+let previousBodyCursor = ''
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const stopResize = () => {
+  activeResize = null
+  document.body.style.cursor = previousBodyCursor
+  document.removeEventListener('pointermove', resize)
+  document.removeEventListener('pointerup', stopResize)
+}
+
+const resize = (event: PointerEvent) => {
+  if (!activeResize) return
+  const delta = event.clientX - resizeStartX
+  if (activeResize === 'rail') {
+    railWidth.value = clamp(resizeStartWidth + delta, 176, 300)
+    return
+  }
+  editorWidth.value = clamp(resizeStartWidth - delta, 340, 560)
+}
+
+const startResize = (target: 'rail' | 'editor', event: PointerEvent) => {
+  if (window.matchMedia('(max-width: 1260px)').matches) return
+  activeResize = target
+  resizeStartX = event.clientX
+  resizeStartWidth = target === 'rail' ? railWidth.value : editorWidth.value
+  previousBodyCursor = document.body.style.cursor
+  document.body.style.cursor = 'col-resize'
+  document.addEventListener('pointermove', resize)
+  document.addEventListener('pointerup', stopResize, { once: true })
+}
+
+const resetWidth = (target: 'rail' | 'editor') => {
+  if (target === 'rail') {
+    railWidth.value = defaultRailWidth
+    return
+  }
+  editorWidth.value = defaultEditorWidth
+}
+
+onBeforeUnmount(stopResize)
 </script>
 
 <style scoped lang="scss">
@@ -36,6 +111,7 @@ withDefaults(defineProps<{
   --workbench-rail-width: 220px;
   --workbench-editor-width: 420px;
   display: grid;
+  position: relative;
   flex: 1 1 auto;
   grid-template-columns:
     var(--workbench-rail-width)
@@ -47,6 +123,48 @@ withDefaults(defineProps<{
   min-height: 0;
   overflow: hidden;
   background: var(--resume-workbench-bg, var(--user-bg-panel));
+}
+
+.resume-workbench-layout__resizer {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+
+  &::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 1px;
+    background: transparent;
+    content: '';
+    transition: background 0.18s ease;
+  }
+
+  &:hover::before,
+  &:focus-visible::before {
+    background: var(--resume-workbench-accent, var(--user-primary));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--resume-workbench-accent, var(--user-primary));
+    outline-offset: -2px;
+  }
+}
+
+.resume-workbench-layout__resizer--rail {
+  left: calc(var(--workbench-rail-width) - 4px);
+}
+
+.resume-workbench-layout__resizer--editor {
+  right: calc(var(--workbench-editor-width) - 4px);
 }
 
 .resume-workbench-layout > :deep(.resume-workbench-pane--preview),
@@ -146,6 +264,10 @@ withDefaults(defineProps<{
   }
 
   .resume-workbench-layout > :deep(.resume-section-rail) {
+    display: none;
+  }
+
+  .resume-workbench-layout__resizer {
     display: none;
   }
 

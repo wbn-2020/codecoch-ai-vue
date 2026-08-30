@@ -1,5 +1,7 @@
 <template>
   <div class="study-plan-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="study-hero">
       <div>
         <div class="eyebrow">
@@ -421,6 +423,8 @@ import {
 } from '@/api/studyPlan'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { shouldPollAsyncOperation } from '@/features/async-operation-state'
 import type {
   SseEventVO,
@@ -439,6 +443,7 @@ import { formatDateInTimezone } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 type RouterQueryValue = string | number | boolean | null | undefined
 const STUDY_PLAN_TASK_BIZ_TYPE = 'study-plan.generate'
 

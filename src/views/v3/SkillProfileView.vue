@@ -1,18 +1,20 @@
 <template>
-  <div class="v3-page">
-    <section class="page-hero">
-      <div>
-        <div class="hero-kicker"><Network :size="16" /> 能力画像</div>
-        <h1>{{ overview?.profileName || detail?.profileName || '能力画像' }}</h1>
-        <p>{{ overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能节点、短板与下一步动作。' }}</p>
-      </div>
-      <div class="hero-actions">
+  <main class="v3-page cc-module-page">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="Network"
+      :title="overview?.profileName || detail?.profileName || '能力画像'"
+      :description="overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能节点、短板与下一步动作。'"
+    >
+      <template #actions>
         <el-button :loading="loading" @click="loadAll"><RefreshCw :size="16" /> 刷新</el-button>
         <el-button type="primary" :loading="generating || matchReportVerifyLoading" :disabled="!canGenerateFromReport" @click="generateFromReport">
           <Sparkles :size="16" /> 从报告生成
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <el-alert
       v-if="matchReportVerifyMessage"
@@ -149,7 +151,7 @@
         </AppState>
       </section>
     </template>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -161,12 +163,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi, getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { SkillGapItemVO, SkillProfileDetailVO, SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const loading = ref(false)
 const generating = ref(false)
 const loadError = ref('')

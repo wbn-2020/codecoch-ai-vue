@@ -1,5 +1,51 @@
 <template>
   <div class="arena arena-ability ability-map page-shell" :aria-busy="loading">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="Map"
+      title="能力图谱"
+      description="汇总训练记录、能力状态和评估依据，定位下一轮准备重点；没有证据的能力不会被推断为强项或薄弱项。"
+    >
+      <template #actions>
+        <el-button @click="router.push('/project-evidence')">
+          <FolderOpen :size="16" />
+          项目证据
+        </el-button>
+        <el-button type="primary" :disabled="!canStartTraining" @click="startRecommendedTraining">
+          <Play :size="16" />
+          {{ nextTrainingActionLabel }}
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="cc-metric-grid">
+      <MetricCard
+        label="综合就绪度"
+        :value="hasAssessedSkills ? abilityPower : '--'"
+        :detail="hasAssessedSkills ? '基于训练与匹配证据的综合参考。' : '评估证据不足，暂不生成分数。'"
+        :tone="hasAssessedSkills ? 'success' : 'warning'"
+      />
+      <MetricCard
+        label="已评估能力"
+        :value="`${abilityMap.assessedSkillCount} / ${abilityMap.totalSkillCount}`"
+        detail="未评估项会明确保留为待验证。"
+      />
+      <MetricCard
+        label="评估证据"
+        :value="totalEvidenceCount"
+        detail="来自已完成训练、可信岗位匹配和明确评估。"
+        tone="info"
+      />
+      <MetricCard
+        label="优先补强"
+        :value="weakSkills.length"
+        :detail="weakSkills.length ? nextTrainingTitle : '当前没有证据支持的薄弱项。'"
+        :tone="weakSkills.length ? 'warning' : 'default'"
+      />
+    </section>
+
     <section class="growth-hero ability-summary">
       <div class="growth-hero__main">
         <div class="eyebrow">
@@ -202,6 +248,10 @@ import { useRouter } from 'vue-router'
 
 import { getAbilityMapApi } from '@/api/abilityMap'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { normalizeAbilityMap, statusLabel } from '@/features/ability-map'
 import type { AbilityDomainVO, AbilityMapVO, AbilitySkillNodeVO } from '@/types/abilityMap'
 import { getErrorMessage } from '@/utils/error'
@@ -211,6 +261,7 @@ const loading = ref(false)
 const loadError = ref('')
 const activeDomainCode = ref('')
 const abilityMap = ref<AbilityMapVO>(normalizeAbilityMap())
+const moduleTabs = useUserModuleTabs('growth')
 
 const domainFallbackCopy: Record<string, string> = {
   JAVA_CORE: 'Java 基础',
@@ -1821,6 +1872,12 @@ onMounted(fetchAbilityMap)
   padding: 28px 24px 46px;
   gap: 16px;
 
+  .cc-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
   .growth-hero,
   .signal-card,
   .power-radar-card,
@@ -1970,6 +2027,10 @@ onMounted(fetchAbilityMap)
 @media (max-width: 760px) {
   .arena-ability {
     padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .cc-metric-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 

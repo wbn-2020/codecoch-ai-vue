@@ -1,5 +1,7 @@
 <template>
   <div class="question-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="hero-band">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -188,10 +190,13 @@ import AppState from '@/components/common/AppState.vue'
 import QuestionFilters from '@/components/question/QuestionFilters.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { QuestionCategoryVO, QuestionQueryDTO, QuestionTagVO, QuestionVO } from '@/types/question'
 import { toFriendlyMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const favoriteChangingId = ref<number | null>(null)
 const loadError = ref('')

@@ -1,36 +1,137 @@
 <template>
   <div class="arena arena-home">
     <div class="arena-home__page">
-      <!-- 页头：问候 + 求职准备度 -->
-      <div class="arena-between arena-home__head">
-        <div>
-          <div class="arena-home__level">
-            求职准备 · {{ weekdayLabel }}
-          </div>
-          <h1 class="arena-h1 arena-home__title">{{ greetingName }}，{{ headTitle }}</h1>
+      <section class="arena-home__hero">
+        <div class="arena-home__hero-copy">
+          <p class="arena-home__eyebrow">求职准备 · {{ weekdayLabel }} · {{ businessDate }}</p>
+          <h1>{{ greetingName }}，{{ headTitle }}</h1>
+          <p>
+            {{ allAgentTasksDone
+              ? '今天的任务已记录完成，可以回顾训练过程或安排下一步。'
+              : missions.length
+                ? `还有 ${missions.length} 项待推进任务，优先完成最重要的一项。`
+                : '根据现有资料补齐今天的第一项行动，建立稳定的求职闭环。' }}
+          </p>
         </div>
-        <div class="arena-card arena-home__power">
+        <div class="arena-home__hero-actions">
           <div
-            class="arena-ring"
-            :style="{
-              width: '56px',
-              height: '56px',
-              background: `conic-gradient(var(--arena-grn) 0 ${readinessRingScore}%, var(--arena-line) ${readinessRingScore}% 100%)`
-            }"
+            class="arena-home__ring"
+            role="progressbar"
+            aria-label="今日任务完成进度"
+            :aria-valuemin="0"
+            :aria-valuemax="100"
+            :aria-valuenow="taskCompletionRate"
           >
-            <div class="arena-ring__hole" style="width: 44px; height: 44px">
-              <b style="font-size: 15px; line-height: 1">{{ readinessDisplayScore }}</b>
-              <span class="arena-tiny" style="font-size: 8px; font-weight: 800">准备度</span>
-            </div>
+            <svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true">
+              <circle class="arena-home__ring-track" cx="36" cy="36" r="31" />
+              <circle
+                class="arena-home__ring-fill"
+                cx="36"
+                cy="36"
+                r="31"
+                pathLength="100"
+                :stroke-dasharray="`${taskCompletionRate} ${100 - taskCompletionRate}`"
+              />
+            </svg>
+            <span class="arena-home__ring-copy">
+              <strong>{{ taskCompletionRate }}<small>%</small></strong>
+              <em>{{ completedTaskCount }}/{{ tasks.length || 0 }} 已完成</em>
+            </span>
           </div>
-          <div>
-            <div style="font-size: 12px; font-weight: 800">Offer 就绪度</div>
-            <div class="arena-tiny" style="margin-top: 2px">
-              {{ readinessSummary }}
-            </div>
-          </div>
+          <button class="arena-btn arena-btn--pri arena-home__cta" type="button" @click="handlePrimaryAction">
+            {{ allAgentTasksDone ? '查看今日记录' : missions[0] ? '开始优先任务' : '安排今日任务' }}
+          </button>
         </div>
-      </div>
+      </section>
+
+      <ModuleTabs :items="moduleTabs" />
+
+      <section class="arena-home__metrics" aria-label="今日关键指标">
+        <article class="arena-home__metric">
+          <div class="arena-home__metric-head">
+            <span class="arena-home__metric-icon arena-home__metric-icon--green">
+              <ClipboardList :size="18" aria-hidden="true" />
+            </span>
+            <span class="arena-home__metric-label">待办任务</span>
+          </div>
+          <strong>{{ missions.length }}<small> 项</small></strong>
+          <p>{{ allAgentTasksDone ? '今日任务已全部完成' : '按优先级继续推进' }}</p>
+        </article>
+        <article class="arena-home__metric" data-testid="readiness-metric">
+          <div class="arena-home__metric-head">
+            <span class="arena-home__metric-icon arena-home__metric-icon--blue">
+              <Target :size="18" aria-hidden="true" />
+            </span>
+            <span class="arena-home__metric-label">岗位准备度</span>
+          </div>
+          <strong>{{ readinessDisplayScore }}<small v-if="readinessScore !== undefined">%</small></strong>
+          <p>{{ readinessSummary }}</p>
+        </article>
+        <article class="arena-home__metric">
+          <div class="arena-home__metric-head">
+            <span class="arena-home__metric-icon arena-home__metric-icon--violet">
+              <GraduationCap :size="18" aria-hidden="true" />
+            </span>
+            <span class="arena-home__metric-label">模拟面试</span>
+          </div>
+          <strong>{{ interviewCount }}<small> 次</small></strong>
+          <p>{{ interviewCount ? '已沉淀真实复盘记录' : '开始一次模拟面试' }}</p>
+        </article>
+        <article class="arena-home__metric">
+          <div class="arena-home__metric-head">
+            <span class="arena-home__metric-icon arena-home__metric-icon--amber">
+              <CalendarCheck2 :size="18" aria-hidden="true" />
+            </span>
+            <span class="arena-home__metric-label">连续完成</span>
+          </div>
+          <strong>{{ gameProfile.streakDays }}<small> 天</small></strong>
+          <p>{{ gameProfile.streakTodayDone ? '今天已完成记录' : '完成一项任务即可延续' }}</p>
+        </article>
+      </section>
+
+      <!-- 快捷入口（对照原型 today 模块 qa-row） -->
+      <section class="arena-home__quick" aria-label="快捷入口">
+        <button class="arena-home__quick-card" type="button" @click="router.push('/agent/tasks')">
+          <span class="arena-home__quick-icon arena-home__quick-icon--violet">
+            <Bot :size="19" aria-hidden="true" />
+          </span>
+          <span class="arena-home__quick-body">
+            <b>AI 任务中心</b>
+            <small>查看 AI 派发的训练与诊断任务</small>
+          </span>
+          <ChevronRight :size="16" class="arena-home__quick-arrow" aria-hidden="true" />
+        </button>
+        <button class="arena-home__quick-card" type="button" @click="router.push('/resumes/workbench')">
+          <span class="arena-home__quick-icon arena-home__quick-icon--green">
+            <FileText :size="19" aria-hidden="true" />
+          </span>
+          <span class="arena-home__quick-body">
+            <b>简历工作台</b>
+            <small>多模板编辑与实时预览</small>
+          </span>
+          <ChevronRight :size="16" class="arena-home__quick-arrow" aria-hidden="true" />
+        </button>
+        <button class="arena-home__quick-card" type="button" @click="router.push('/interviews/create')">
+          <span class="arena-home__quick-icon arena-home__quick-icon--blue">
+            <Mic :size="19" aria-hidden="true" />
+          </span>
+          <span class="arena-home__quick-body">
+            <b>模拟面试</b>
+            <small>AI 面试官全流程实战演练</small>
+          </span>
+          <ChevronRight :size="16" class="arena-home__quick-arrow" aria-hidden="true" />
+        </button>
+        <button class="arena-home__quick-card" type="button" @click="router.push('/job-targets')">
+          <span class="arena-home__quick-icon arena-home__quick-icon--amber">
+            <Target :size="19" aria-hidden="true" />
+          </span>
+          <span class="arena-home__quick-body">
+            <b>岗位目标</b>
+            <small>管理目标岗位与匹配度</small>
+          </span>
+          <ChevronRight :size="16" class="arena-home__quick-arrow" aria-hidden="true" />
+        </button>
+      </section>
 
       <!-- 加载骨架 -->
       <div v-if="loading" class="arena-col" style="margin-top: 22px">
@@ -250,6 +351,7 @@
 </template>
 
 <script setup lang="ts">
+import { Bot, CalendarCheck2, ChevronRight, ClipboardList, FileText, GraduationCap, Mic, Target } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -257,6 +359,8 @@ import { completeAgentTaskApi } from '@/api/agent'
 import { fetchCachedDashboardOverview, fetchCachedTodayAgentTasks } from '@/composables/useUserHomeDataCache'
 import { getV3DashboardOverviewApi } from '@/api/dashboard'
 import { getLatestJobReadinessApi } from '@/api/jobRequirement'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore, type XpEventKey } from '@/features/game-profile'
 import { buildAgentTaskActionPath, hasAgentTaskActionEntry } from '@/utils/agentTaskAction'
 import { getErrorMessage } from '@/utils/error'
@@ -279,6 +383,7 @@ interface Mission {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('today')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 
@@ -310,6 +415,13 @@ const weekdayLabel = computed(() => WEEKDAY_LABELS[businessCalendarDate.value.ge
 const allAgentTasksDone = computed(() =>
   tasks.value.length > 0 && tasks.value.every((task) => String(task.status || '').toUpperCase() === 'DONE')
 )
+const completedTaskCount = computed(() =>
+  tasks.value.filter((task) => String(task.status || '').toUpperCase() === 'DONE').length
+)
+const taskCompletionRate = computed(() => {
+  if (!tasks.value.length) return 0
+  return Math.round((completedTaskCount.value / tasks.value.length) * 100)
+})
 
 const readinessScore = computed(() => {
   const snapshot = readinessSnapshot.value
@@ -470,6 +582,18 @@ const handleEmptyPrimaryAction = () => {
   go(hasResume.value ? '/agent/today' : '/resumes')
 }
 
+const handlePrimaryAction = () => {
+  if (allAgentTasksDone.value) {
+    go('/agent/today')
+    return
+  }
+  if (missions.value[0]) {
+    enterMission(missions.value[0])
+    return
+  }
+  handleEmptyPrimaryAction()
+}
+
 const retryTasks = () => {
   void loadAll(true)
 }
@@ -537,41 +661,368 @@ onMounted(async () => {
   &__page {
     width: min(100%, var(--user-content-max, 1440px));
     margin: 0 auto;
-    padding: 28px 34px 42px;
+    padding: 20px 24px 32px;
     position: relative;
     z-index: 1;
   }
 
-  &__head {
-    flex-wrap: wrap;
-  }
-
-  &__level {
-    font-size: 12.5px;
-    font-weight: 800;
-    color: var(--arena-grn-d);
-  }
-
-  &__title {
-    margin-top: 5px;
-  }
-
-  &__power {
+  &__hero {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 18px;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 22px 26px;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-grad-hero);
+    box-shadow: var(--arena-shadow-subtle);
+  }
+
+  &__hero-copy {
+    min-width: 0;
+
+    h1 {
+      margin: 6px 0 0;
+      color: var(--arena-ink);
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+    }
+
+    > p:last-child {
+      max-width: 720px;
+      margin: 8px 0 0;
+      color: var(--arena-sub);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  }
+
+  &__eyebrow {
+    margin: 0;
+    color: var(--arena-action);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  &__hero-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 16px;
+  }
+
+  // 今日进度环（真实完成数据）
+  &__ring {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+  }
+
+  &__ring svg {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+
+  &__ring-track {
+    fill: none;
+    stroke: color-mix(in srgb, var(--arena-action) 14%, transparent);
+    stroke-width: 6;
+  }
+
+  &__ring-fill {
+    fill: none;
+    stroke: var(--arena-action);
+    stroke-linecap: round;
+    stroke-width: 6;
+    transition: stroke-dasharray 0.4s ease;
+  }
+
+  &__ring-copy {
+    display: grid;
+    gap: 1px;
+    place-items: center;
+    text-align: center;
+
+    strong {
+      color: var(--arena-ink);
+      font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+
+      small {
+        color: var(--arena-mut);
+        font-size: 9.5px;
+        font-weight: 500;
+        margin-left: 1px;
+      }
+    }
+
+    em {
+      color: var(--arena-mut);
+      font-size: 8.5px;
+      font-style: normal;
+      white-space: nowrap;
+    }
+  }
+
+  &__cta {
+    height: 40px;
+    padding: 0 22px;
+    font-size: 14px;
+  }
+
+  &__completion {
+    min-width: 142px;
+
+    > span,
+    > strong {
+      display: block;
+    }
+
+    > span {
+      color: var(--arena-mut);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    > strong {
+      margin-top: 2px;
+      color: var(--arena-ink);
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  &__completion-bar {
+    width: 100%;
+    height: 6px;
+    margin-top: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--arena-line);
+
+    span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--arena-grn);
+      transition: width 180ms ease;
+    }
+  }
+
+  &__metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  // ---- 快捷入口（对照原型 .qa-row：icon tile + 文案 + 箭头，hover 不位移）----
+  &__quick {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  &__quick-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-card);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--arena-action);
+      box-shadow: var(--arena-shadow-card);
+      outline: 0;
+
+      .arena-home__quick-arrow {
+        color: var(--arena-action);
+        transform: translateX(2px);
+      }
+    }
+  }
+
+  &__quick-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+
+    &--green {
+      background: var(--arena-grn-soft);
+      color: var(--arena-action);
+    }
+
+    &--violet {
+      background: var(--arena-vio-soft);
+      color: var(--arena-vio);
+    }
+
+    &--blue {
+      background: var(--arena-info-soft);
+      color: var(--arena-info);
+    }
+
+    &--amber {
+      background: var(--arena-amber-soft);
+      color: var(--arena-amber);
+    }
+  }
+
+  &__quick-body {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 3px;
+
+    b {
+      overflow: hidden;
+      color: var(--arena-ink);
+      font-size: 13px;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    small {
+      overflow: hidden;
+      color: var(--arena-mut);
+      font-size: 11.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__quick-arrow {
+    flex: 0 0 auto;
+    color: var(--arena-line-strong);
+    transition: color 0.18s ease, transform 0.18s ease;
+  }
+
+  &__metric {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 112px;
+    align-content: start;
+    gap: 0;
+    padding: 16px 16px 14px;
+    overflow: hidden;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-card);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &:hover {
+      border-color: var(--arena-line-strong);
+      box-shadow: var(--arena-shadow-card);
+    }
+  }
+
+  &__metric-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__metric-label {
+    overflow: hidden;
+    color: var(--arena-mut);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  &__metric > strong {
+    display: block;
+    margin-top: 12px;
+    color: var(--arena-ink);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+
+    small {
+      color: var(--arena-mut);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+  }
+
+  &__metric > p {
+    display: -webkit-box;
+    margin: 8px 0 0;
+    overflow: hidden;
+    color: var(--arena-mut);
+    font-size: 12px;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  &__metric-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+
+    &--green {
+      background: var(--arena-grn-soft);
+      color: var(--arena-action);
+    }
+
+    &--blue {
+      background: var(--user-cyan-soft);
+      color: var(--user-cyan);
+    }
+
+    &--violet {
+      background: var(--arena-vio-soft);
+      color: var(--arena-vio);
+    }
+
+    &--amber {
+      background: var(--arena-amber-soft);
+      color: var(--arena-amber);
+    }
   }
 
   &__grid {
-    margin-top: 22px;
+    margin-top: 16px;
     display: grid;
     grid-template-columns: 1.55fr 1fr;
-    gap: 20px;
+    gap: 16px;
   }
 
   &__boss {
-    padding: 24px 26px;
+    padding: 20px 22px;
   }
 
   &__side-grid {
@@ -581,7 +1032,7 @@ onMounted(async () => {
   }
 
   &__side {
-    padding: 18px 20px;
+    padding: 16px 18px;
   }
 
   &__side-grid--empty {
@@ -611,11 +1062,11 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 15px 20px;
+    padding: 14px 18px;
   }
 
   &__panel {
-    padding: 20px 22px;
+    padding: 16px 18px;
   }
 
   &__offer {
@@ -632,7 +1083,7 @@ onMounted(async () => {
   }
 
   &__ai-note {
-    padding: 16px 20px;
+    padding: 14px 16px;
     border-left: 3px solid var(--arena-vio);
   }
 
@@ -681,6 +1132,34 @@ onMounted(async () => {
       padding: 18px 14px 26px;
     }
 
+    &__hero,
+    &__hero-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    &__hero {
+      gap: 18px;
+      padding: 18px;
+    }
+
+    &__hero-copy h1 {
+      font-size: 24px;
+    }
+
+    &__hero-actions .arena-btn {
+      width: 100%;
+    }
+
+    &__metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    &__metric {
+      min-height: 124px;
+      padding: 14px;
+    }
+
     &__grid,
     &__side-grid {
       grid-template-columns: 1fr;
@@ -697,11 +1176,24 @@ onMounted(async () => {
     &__grid {
       grid-template-columns: 1fr;
     }
+
+    &__metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    &__quick {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 }
 
 @media (max-width: 540px) {
   .arena-home {
+    &__metrics,
+    &__quick {
+      grid-template-columns: 1fr;
+    }
+
     &__side-grid {
       grid-template-columns: 1fr;
     }

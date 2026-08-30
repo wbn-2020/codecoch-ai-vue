@@ -31,7 +31,7 @@ const resolveBackendFile = (relativePath) => {
 
 const frontendApiFile = path.join(frontendRoot, 'src/api/v4.ts')
 const routeFile = path.join(frontendRoot, 'src/router/routes.ts')
-const sidebarFile = path.join(frontendRoot, 'src/components/layout/UserSidebar.vue')
+const userNavigationFile = path.join(frontendRoot, 'src/config/userNavigation.ts')
 const adminSidebarFile = path.join(frontendRoot, 'src/components/layout/AdminSidebar.vue')
 const jobCoachHomePageFile = path.join(frontendRoot, 'src/views/user/JobCoachHomeView.vue')
 const resumeVersionPageFile = path.join(frontendRoot, 'src/views/v4/ResumeVersionView.vue')
@@ -114,7 +114,7 @@ const backendFiles = {
 const [
   frontendApi,
   routes,
-  sidebar,
+  userNavigation,
   adminSidebar,
   jobCoachHomePage,
   resumeVersionPage,
@@ -190,7 +190,7 @@ const [
 ] = await Promise.all([
   read(frontendApiFile),
   read(routeFile),
-  read(sidebarFile),
+  read(userNavigationFile),
   read(adminSidebarFile),
   read(jobCoachHomePageFile),
   read(resumeVersionPageFile),
@@ -590,25 +590,30 @@ recordContainsAll(
   'Resume match detail gates resume-version and application CTAs behind the V4 preview flag instead of exposing dead-end links'
 )
 
+const navigationItemBlock = (routePath) => {
+  const start = userNavigation.indexOf(`path: '${routePath}'`)
+  return start === -1 ? '' : userNavigation.slice(start, start + 700)
+}
+
 const previewSidebarPaths = ['/agent/reviews', '/growth/profile', '/agent/memory', '/knowledge', '/resume-versions']
 for (const routePath of previewSidebarPaths) {
-  const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
+  const block = navigationItemBlock(routePath)
   record(
     'sidebar-preview',
     routePath,
-    Boolean(line) && (line.includes('previewOnly: true') || line.includes('featureFlag:')),
-    line.trim()
+    Boolean(block) && (block.includes('previewOnly: true') || block.includes('featureFlag:')),
+    block.split(/\r?\n/).slice(0, 8).join(' ').trim()
   )
 }
 
 const releasedSidebarPaths = ['/applications']
 for (const routePath of releasedSidebarPaths) {
-  const line = sidebar.split(/\r?\n/).find((item) => item.includes(`path: '${routePath}'`)) || ''
+  const block = navigationItemBlock(routePath)
   record(
     'sidebar-released',
     routePath,
-    Boolean(line) && !line.includes('previewOnly: true') && !line.includes("featureFlag: 'v4Preview'"),
-    line.trim()
+    Boolean(block) && !block.includes('previewOnly: true') && !block.includes("featureFlag: 'v4Preview'"),
+    block.split(/\r?\n/).slice(0, 8).join(' ').trim()
   )
 }
 

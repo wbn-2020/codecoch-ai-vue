@@ -1,21 +1,35 @@
 <template>
-  <div class="v3-page">
-    <section class="page-hero">
-      <div>
-        <div class="hero-kicker"><ListChecks :size="16" /> 推荐题目</div>
-        <h1>推荐题目</h1>
-        <p>优先使用最近的能力画像、匹配报告或学习计划生成训练题；资料不足时也会给出可先练的一组题。</p>
-      </div>
-      <div class="hero-actions">
+  <main class="v3-page cc-module-page">
+    <PageHeader
+      eyebrow="面试训练"
+      :icon="ListChecks"
+      title="推荐训练"
+      description="优先使用最近的能力画像、匹配报告或学习计划生成训练题；资料不足时提供可立即开始的通用题组。"
+    >
+      <template #actions>
         <el-button :loading="loading" @click="loadRecommendations"><RefreshCw :size="16" /> 刷新</el-button>
         <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">
           <Sparkles :size="16" /> {{ primaryActionText }}
         </el-button>
-      </div>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="cc-metric-grid">
+      <MetricCard label="本批推荐" :value="items.length" detail="当前批次返回的推荐题目。" />
+      <MetricCard label="可直接练习" :value="practiceQuestionIds.length" detail="已匹配正式题库的题目。" tone="success" />
+      <MetricCard label="训练题量" :value="query.questionCount" detail="本次生成或练习的目标题量。" />
+      <MetricCard label="推荐依据" :value="generationTrustText" :detail="sourceContextText" :tone="hasRecommendationContext ? 'info' : 'warning'" />
     </section>
 
-    <section class="content-panel">
-      <el-form class="filter-form" :model="query" inline>
+    <DataTableFrame
+      title="训练配置"
+      description="选择推荐来源和题量，系统会自动绑定最近可用的训练依据。"
+    >
+      <template #filters>
+        <FilterBar>
+          <el-form class="filter-form" :model="query" inline>
         <el-form-item label="来源">
           <el-segmented v-model="query.source" :options="sourceOptions" />
         </el-form-item>
@@ -26,7 +40,9 @@
         <el-form-item label="题目数量">
           <el-input-number v-model="query.questionCount" :min="3" :max="20" />
         </el-form-item>
-      </el-form>
+          </el-form>
+        </FilterBar>
+      </template>
       <div v-if="generationDiagnostic" class="diagnostic-strip">
         <div class="diagnostic-strip__main">
           <strong>推荐批次已记录</strong>
@@ -66,13 +82,22 @@
           查看处理记录
         </el-button>
       </div>
-    </section>
+    </DataTableFrame>
 
-    <section class="content-panel" v-loading="loading">
+    <DataTableFrame
+      title="推荐题组"
+      :description="practiceStripDesc"
+    >
+      <section class="recommendation-content" v-loading="loading">
       <AppState v-if="loadError" type="error" title="推荐题加载失败" :description="loadError"><el-button type="primary" @click="loadRecommendations">重试</el-button></AppState>
-      <AppState v-else-if="!items.length" type="empty" title="暂无推荐题" :description="emptyRecommendationDescription">
-        <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">{{ primaryActionText }}</el-button>
-      </AppState>
+      <EmptyState v-else-if="!items.length" title="暂无推荐题" :description="emptyRecommendationDescription">
+        <template #icon>
+          <ListChecks :size="20" />
+        </template>
+        <template #actions>
+          <el-button type="primary" :loading="generating" :disabled="!canGenerate" @click="generateRecommendations">{{ primaryActionText }}</el-button>
+        </template>
+      </EmptyState>
       <div v-else class="question-list">
         <div class="practice-strip">
           <div>
@@ -105,8 +130,9 @@
           </span>
         </button>
       </div>
-    </section>
-  </div>
+      </section>
+    </DataTableFrame>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -128,6 +154,13 @@ import {
 import { getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
+import DataTableFrame from '@/components/user-ui/DataTableFrame.vue'
+import EmptyState from '@/components/user-ui/EmptyState.vue'
+import FilterBar from '@/components/user-ui/FilterBar.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   QUESTION_RECOMMENDATION_SOURCE_TYPE,
   type QuestionRecommendationBatchListVO,
@@ -167,6 +200,7 @@ interface GenerationDiagnostic {
 }
 
 const generationDiagnostic = ref<GenerationDiagnostic | null>(null)
+const moduleTabs = useUserModuleTabs('train')
 
 const sourceByRouteValue: Record<string, Source> = {
   gap: 'gap',
@@ -726,32 +760,196 @@ onMounted(loadRecommendations)
 </script>
 
 <style scoped lang="scss">
-.v3-page { display: flex; flex-direction: column; gap: 16px; }
-.page-hero, .content-panel { border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.58); }
-.page-hero { display: flex; justify-content: space-between; gap: 16px; padding: 16px; }
-.hero-kicker, .hero-actions { display: flex; align-items: center; gap: 10px; }
-.hero-kicker { color: var(--app-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
-h1, p { margin: 0; }
-h1 { margin-top: 8px; font-size: 26px; }
-p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
-.content-panel { padding: 16px; min-width: 0; }
-.filter-form { display: flex; flex-wrap: wrap; gap: 8px; }
-.field-hint { margin-top: 6px; color: var(--app-text-muted); font-size: 12px; }
-.diagnostic-strip { display: grid; gap: 8px; margin-top: 16px; padding: 14px; border: 1px solid rgba(96, 165, 250, 0.24); border-radius: 8px; background: rgba(37, 99, 235, 0.08); }
-.diagnostic-strip__main, .diagnostic-strip__meta, .diagnostic-strip__evidence { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
-.diagnostic-strip__main span, .diagnostic-strip__meta span, .diagnostic-strip__evidence span { color: var(--app-text-muted); overflow-wrap: anywhere; }
-.diagnostic-strip__meta .is-error { color: var(--el-color-danger); }
-.question-list { display: grid; gap: 8px; }
-.practice-strip { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid rgba(34, 197, 94, 0.24); border-radius: 8px; background: rgba(22, 163, 74, 0.08); }
-.practice-strip div { display: grid; gap: 4px; min-width: 0; }
-.practice-strip strong, .practice-strip span { overflow-wrap: anywhere; }
-.practice-strip span { color: var(--app-text-muted); font-size: 13px; line-height: 1.6; }
-.question-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--app-border); border-radius: 8px; background: rgba(15, 23, 42, 0.28); color: var(--app-text); text-align: left; cursor: pointer; }
-.question-card--disabled { cursor: not-allowed; opacity: 0.78; }
-.question-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.question-main strong, .question-main small, .question-main em { display: block; overflow-wrap: anywhere; }
-.question-main small { margin-top: 5px; color: var(--app-text-muted); }
-.question-main em { margin-top: 8px; font-style: normal; line-height: 1.6; }
-.question-evidence { display: block; margin-top: 8px; color: var(--app-text-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-@media (max-width: 760px) { .page-hero, .practice-strip { flex-direction: column; align-items: stretch; } .hero-actions { flex-wrap: wrap; } .question-card { grid-template-columns: 1fr; } }
+.v3-page {
+  display: grid;
+  gap: 16px;
+}
+
+.cc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.filter-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.field-hint {
+  margin-top: 6px;
+  color: var(--user-text-muted);
+  font-size: 12px;
+}
+
+.diagnostic-strip {
+  display: grid;
+  gap: 8px;
+  margin: 14px;
+  padding: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.diagnostic-strip__main,
+.diagnostic-strip__meta,
+.diagnostic-strip__evidence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.diagnostic-strip__main span,
+.diagnostic-strip__meta span,
+.diagnostic-strip__evidence span {
+  color: var(--user-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-strip__meta .is-error {
+  color: var(--user-danger);
+}
+
+.recommendation-content {
+  min-height: 240px;
+  padding: 14px;
+}
+
+.question-list {
+  display: grid;
+  gap: 8px;
+}
+
+.practice-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--user-success-border);
+  border-radius: 8px;
+  background: var(--user-success-soft);
+}
+
+.practice-strip div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.practice-strip strong,
+.practice-strip span {
+  overflow-wrap: anywhere;
+}
+
+.practice-strip span {
+  color: var(--user-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.question-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--user-border);
+  border-radius: 8px;
+  background: var(--user-surface);
+  color: var(--user-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.question-card:hover,
+.question-card:focus-visible {
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-faint);
+}
+
+.question-card:focus-visible {
+  outline: 2px solid var(--user-primary);
+  outline-offset: 2px;
+}
+
+.question-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.question-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.question-main strong,
+.question-main small,
+.question-main em {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.question-main small {
+  margin-top: 5px;
+  color: var(--user-text-muted);
+}
+
+.question-main em {
+  margin-top: 8px;
+  color: var(--user-text-secondary);
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.question-evidence {
+  display: block;
+  margin-top: 8px;
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1080px) {
+  .cc-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .cc-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-form,
+  .filter-form :deep(.el-form-item) {
+    width: 100%;
+  }
+
+  .question-card {
+    grid-template-columns: 1fr;
+  }
+
+  .question-tags {
+    justify-content: flex-start;
+  }
+}
 </style>

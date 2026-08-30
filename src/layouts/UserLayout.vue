@@ -2,32 +2,23 @@
   <div
     class="jobcoach-layout"
     :class="{
-      'is-arena-page': usesArenaShell,
+      'is-user-redesign': !isImmersivePage,
       'is-resume-workbench-page': isResumeWorkbench
     }"
   >
-    <div
-      v-if="usesArenaShell"
-      class="arena-frame"
-      :class="{ 'is-resume-workbench-frame': isResumeWorkbench }"
+    <UserAppShell
+      v-if="!isImmersivePage"
+      :display-name="displayName"
+      :avatar-text="avatarText"
+      :avatar-url="authStore.userInfo?.avatarUrl || ''"
+      :can-access-admin="Boolean(adminEntryPath)"
+      @go-admin="goAdmin"
+      @user-command="handleCommand"
+      @open-command="commandPaletteOpen = true"
     >
-      <ArenaTopNav
-        v-if="!isImmersivePage"
-        :display-name="displayName"
-        :avatar-text="avatarText"
-        :avatar-url="authStore.userInfo?.avatarUrl || ''"
-        :can-access-admin="Boolean(adminEntryPath)"
-        @go-admin="goAdmin"
-        @user-command="handleCommand"
-      />
-
       <main
         class="jobcoach-main"
-        :class="{
-          'is-arena-main': usesArenaShell,
-          'is-immersive': isImmersivePage,
-          'is-resume-workbench-main': isResumeWorkbench
-        }"
+        :class="{ 'is-resume-workbench-main': isResumeWorkbench }"
       >
         <div v-if="requestError" class="user-request-error" role="alert">
           <div class="user-request-error__copy">
@@ -53,15 +44,12 @@
           </RouterView>
         </RouteErrorBoundary>
       </main>
-    </div>
+    </UserAppShell>
 
     <main
-      v-else
+      v-if="isImmersivePage"
       class="jobcoach-main"
-      :class="{
-        'is-arena-main': usesArenaShell,
-        'is-immersive': isImmersivePage
-      }"
+      :class="{ 'is-immersive': isImmersivePage }"
     >
       <RouteErrorBoundary
         :loading="routeLoading"
@@ -74,6 +62,7 @@
       </RouteErrorBoundary>
     </main>
 
+    <CommandPalette v-if="!isImmersivePage" v-model="commandPaletteOpen" scope="user" />
     <XpGainToast />
   </div>
 </template>
@@ -84,7 +73,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import RouteErrorBoundary from '@/components/common/RouteErrorBoundary.vue'
 import XpGainToast from '@/components/game/XpGainToast.vue'
-import ArenaTopNav from '@/components/layout/ArenaTopNav.vue'
+import CommandPalette from '@/components/layout/CommandPalette.vue'
+import UserAppShell from '@/components/layout/UserAppShell.vue'
 import { appConfig } from '@/config'
 import { applyProductTheme, clearProductTheme } from '@/config/themePolicy'
 import { useGameProfileStore } from '@/features/game-profile'
@@ -110,9 +100,9 @@ const displayName = computed(
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
 const adminEntryPath = computed(() => resolveAdminEntryPath(authStore))
 const isImmersivePage = computed(() => Boolean(route.meta?.immersive))
-const usesArenaShell = computed(() => !isImmersivePage.value)
 const isResumeWorkbench = computed(() => route.meta?.layoutMode === 'resume-workbench')
 const requestError = ref<RequestErrorDiagnostic | null>(null)
+const commandPaletteOpen = ref(false)
 
 watch(
   () => authStore.userInfo?.id,
@@ -126,9 +116,13 @@ watch(
   { immediate: true }
 )
 
-watch(usesArenaShell, (enabled) => {
-  document.body.classList.toggle('arena-overlay-theme', enabled)
-}, { immediate: true })
+watch(
+  isImmersivePage,
+  (immersive) => {
+    document.body.classList.toggle('user-overlay-theme', !immersive)
+  },
+  { immediate: true }
+)
 
 const goAdmin = async () => {
   try {
@@ -206,15 +200,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearProductTheme('user')
   document.body.classList.remove('is-user-layout-active')
-  document.body.classList.remove('arena-overlay-theme')
+  document.body.classList.remove('user-overlay-theme')
   window.removeEventListener(REQUEST_ERROR_EVENT, handleRequestError)
 })
 </script>
 
 <style scoped lang="scss">
 .jobcoach-layout {
-  // Direction D is a document-flow shell. A legacy global selector can otherwise
-  // turn it into an inline flex container and place the navigation beside content.
   display: block;
   width: 100%;
   min-height: 100vh;
@@ -223,85 +215,24 @@ onBeforeUnmount(() => {
   color: var(--user-text);
 }
 
-.jobcoach-layout.is-arena-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  color-scheme: light;
-  background: var(--arena-bg);
-}
-
-.arena-frame {
-  position: relative;
-  width: min(calc(100% - 32px), 1680px);
-  min-height: 820px;
-  margin: 0 auto;
-  align-self: center;
-  border-radius: 10px;
-  background: var(--arena-bg);
-  box-shadow: 0 10px 28px rgba(21, 33, 27, 0.14);
-}
-
-.arena-frame.is-resume-workbench-frame {
-  width: min(calc(100% - 16px), 1600px);
-  min-height: 100dvh;
-  border-radius: 12px;
-  background: var(--user-bg);
-  box-shadow: 0 10px 28px rgba(21, 33, 27, 0.14);
-}
-
 .jobcoach-main {
-  width: min(100%, 1440px);
+  width: 100%;
   min-width: 0;
-  min-height: calc(100vh - 64px);
-  margin: 0 auto;
-  padding: 14px 24px 28px;
+  min-height: calc(100dvh - 56px);
+  // v21 原型 .main 的阅读列留量
+  padding: 28px 32px 46px;
 
-  &.is-arena-main {
-    width: 100%;
-    min-height: calc(820px - 62px);
-    padding: 0;
+  > :deep(.page-shell:not(.interview-room)),
+  > :deep(.user-page-shell:not(.interview-room)),
+  > :deep(.arena:not(.interview-room)) {
+    box-sizing: border-box;
+    width: min(100%, 1440px);
+    min-width: 0;
+    margin: 0 auto;
+  }
 
-    // Legacy user styles compact `.page-shell` roots into a dashboard grid.
-    // Direction D pages own their flow and width, so restore the root display;
-    // each page keeps its prototype-specific max-width.
-    > :deep(.arena.page-shell) {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-
-    // Most extended user pages still keep their business-specific roots instead
-    // of the `.arena` root. Preserve a broad desktop task area while keeping
-    // enough page padding for scan-friendly content at 1920px.
-    > :deep(.page-shell:not(.arena):not(.interview-room)),
-    > :deep(.user-page-shell:not(.arena):not(.interview-room)) {
-      box-sizing: border-box;
-      width: min(100%, 1440px);
-      min-width: 0;
-      margin: 0 auto;
-      padding: 28px 32px 46px;
-    }
-
-    // A few history and comparison views use a verified wider desktop grid.
-    // Preserve their own content measure instead of compressing them into the
-    // default extension-page column.
-    > :deep(.page-shell.page-shell--wide) {
-      width: min(100%, 1600px);
-    }
-
-    @media (max-width: 720px) {
-      :deep(.arena:not(.arena-room)) {
-        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-      }
-
-      > :deep(.page-shell:not(.arena):not(.interview-room)),
-      > :deep(.user-page-shell:not(.arena):not(.interview-room)) {
-        min-width: 0;
-        padding: 18px 14px calc(84px + env(safe-area-inset-bottom, 0px));
-      }
-    }
+  > :deep(.page-shell.page-shell--wide) {
+    width: min(100%, 1600px);
   }
 
   &.is-immersive {
@@ -312,16 +243,20 @@ onBeforeUnmount(() => {
 
   &.is-resume-workbench-main {
     min-height: calc(100dvh - 62px);
+    padding: 0;
   }
 }
+
+// Arena 页面的最终视觉 token 由 src/styles/arena.scss 统一供给（v21 · Quiet Luxury）。
+// 这里不再覆盖 --arena-* 色板与圆角，避免「带 .arena / 不带 .arena」出现两套视觉系统。
 
 .demo-readonly-banner {
   margin-bottom: 16px;
   padding: 10px 14px;
-  border: 1px solid rgba(245, 158, 11, 0.34);
+  border: 1px solid var(--user-warning-border, rgba(245, 158, 11, 0.34));
   border-radius: var(--user-radius-sm);
   background: var(--user-warning-soft);
-  color: #fde68a;
+  color: var(--user-warning-text, #92400e);
   font-size: 13px;
   line-height: 1.6;
   box-shadow: none;
@@ -382,10 +317,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.jobcoach-layout.is-arena-page .demo-readonly-banner {
-  color: #b4560a;
-}
-
 @media (max-width: 720px) {
   .jobcoach-layout {
     --user-mobile-top-height: 58px;
@@ -393,27 +324,9 @@ onBeforeUnmount(() => {
     --user-mobile-nav-gap: 8px;
   }
 
-  .arena-frame {
-    width: 100%;
-    min-height: 100vh;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .arena-frame.is-resume-workbench-frame {
-    width: 100%;
-    min-height: 100dvh;
-    border-radius: 0;
-  }
-
   .jobcoach-main {
-    min-height: calc(100vh - 58px);
-    padding: 12px 12px calc(var(--user-mobile-nav-height) + var(--user-mobile-nav-gap) + 78px + env(safe-area-inset-bottom, 0px));
-
-    &.is-arena-main {
-      min-height: calc(100vh - 54px);
-      padding: 0;
-    }
+    min-height: calc(100dvh - 56px);
+    padding: 18px 14px calc(32px + env(safe-area-inset-bottom, 0px));
   }
 
   .user-request-error {

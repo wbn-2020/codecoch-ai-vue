@@ -1,16 +1,18 @@
 <template>
-  <div class="page-shell application-package-list">
-    <section class="list-header">
-      <div>
-        <p class="eyebrow">岗位投递包</p>
-        <h1>投递包列表</h1>
-        <p>查看已持久化的投递包快照、就绪状态和最近刷新记录。</p>
-      </div>
-      <div class="list-actions">
+  <main class="page-shell application-package-list cc-module-page">
+    <PageHeader
+      eyebrow="岗位匹配"
+      :icon="PackageCheck"
+      title="投递包"
+      description="查看已持久化的投递包快照、就绪状态和最近刷新记录。"
+    >
+      <template #actions>
         <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="router.push('/application-packages/preview')">创建预览</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <section class="list-toolbar">
       <el-input
@@ -146,22 +148,27 @@
         @size-change="search"
       />
     </section>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
 import { ArrowRight, Plus, Refresh, Search, View } from '@element-plus/icons-vue'
+import { PackageCheck } from 'lucide-vue-next'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getApplicationPackagesApi } from '@/api/applicationPackage'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { PageResult } from '@/types/api'
 import type { ApplicationPackageStatus, JobApplicationPackageListItemVO } from '@/types/applicationPackage'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('matching')
 const loading = ref(false)
 const errorMessage = ref('')
 

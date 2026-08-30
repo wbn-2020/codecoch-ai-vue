@@ -1,7 +1,12 @@
 <template>
   <Teleport to="body">
     <Transition name="command-palette">
-      <div v-if="modelValue" class="command-palette" @keydown="handleKeydown">
+      <div
+        v-if="modelValue"
+        class="command-palette"
+        :class="{ 'command-palette--user': scope === 'user' }"
+        @keydown="handleKeydown"
+      >
         <button class="command-palette__overlay" type="button" aria-label="关闭命令面板" @click="close" />
         <section
           class="command-palette__panel"
@@ -64,6 +69,7 @@ import { canAccessAdminPermissions } from '@/router/adminAccess'
 import { routes } from '@/router/routes'
 import { useAuthStore } from '@/stores/auth'
 import { appConfig } from '@/config'
+import { useDocumentScrollLock } from '@/composables/useDocumentScrollLock'
 
 type PaletteScope = 'user' | 'admin'
 
@@ -89,6 +95,7 @@ const authStore = useAuthStore()
 const keyword = ref('')
 const activeIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
+useDocumentScrollLock(() => props.modelValue)
 const close = () => {
   emit('update:modelValue', false)
 }
@@ -260,6 +267,74 @@ onBeforeUnmount(() => {
   background: #0f172a;
   box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
   color: #e5e7eb;
+}
+
+.command-palette--user {
+  // 面板 teleport 到 body，命中 body.user-overlay-theme 注入的 --el-* 皮肤变量，
+  // 因此这里一律用语义变量而非写死浅色，才能跟随明暗皮肤。
+  .command-palette__overlay {
+    background: var(--el-mask-color, rgba(15, 23, 42, 0.42));
+  }
+
+  .command-palette__panel {
+    border-color: var(--el-border-color-light, #e2e8f0);
+    background: var(--el-bg-color-overlay, #ffffff);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+    color: var(--el-text-color-regular, #334155);
+  }
+
+  .command-palette__search {
+    border-color: var(--el-border-color-light, #e2e8f0);
+    color: var(--el-text-color-secondary, #64748b);
+
+    input {
+      color: var(--el-text-color-primary, #0f172a);
+    }
+
+    input::placeholder {
+      color: var(--el-text-color-placeholder, #94a3b8);
+    }
+  }
+
+  .command-palette__item {
+    &.is-active,
+    &:hover {
+      border-color: var(--el-color-primary-light-7, rgba(16, 185, 129, 0.28));
+      background: var(--el-color-primary-light-9, #ecfdf5);
+    }
+  }
+
+  .command-palette__item-icon {
+    background: var(--el-color-primary-light-9, #f0fdf4);
+    color: var(--el-color-primary, #059669);
+  }
+
+  .command-palette__item-copy {
+    strong {
+      color: var(--el-text-color-primary, #0f172a);
+    }
+
+    small,
+    + .command-palette__item-path {
+      color: var(--el-text-color-secondary, #64748b);
+    }
+  }
+
+  .command-palette__item-path,
+  .command-palette__empty {
+    color: var(--el-text-color-placeholder, #94a3b8);
+  }
+
+  .command-palette__close {
+    border-color: var(--el-border-color-light, #e2e8f0);
+    background: var(--el-bg-color-overlay, #ffffff);
+    color: var(--el-text-color-secondary, #64748b);
+
+    &:hover {
+      border-color: var(--el-color-primary, #10b981);
+      color: var(--el-color-primary, #059669);
+    }
+  }
 }
 
 .command-palette__search {

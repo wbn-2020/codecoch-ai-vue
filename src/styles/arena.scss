@@ -2,57 +2,60 @@
 // Arena · 方向 D「霓虹竞技场」用户端视觉 token 与组件基元
 // 基线：文档相关/ui重构/2026-07-30-D方向霓虹竞技场落地方案.md
 // 原则：
-//   1. 页面变量挂在 .arena 或 UserLayout 的 .is-arena-page 作用域下，不影响存量暗色页面
+//   1. 页面变量挂在 .arena 作用域下；不带 .arena 根的用户端页面（.is-user-redesign）
+//      由运行时主题（src/features/theme/themeCss.ts）注入 --arena-* 变量
 //   2. 管理端禁止引入本文件变量
 //   3. 与原型 方向D原型/index.html 视觉保持一致
 // ============================================================
 
 // Element Plus 的下拉、对话框和消息默认 Teleport 到 body。
-// 方向 D 页面切换路由元数据时，UserLayout 会为 body 加上该类，避免弹层回落为暗色 cockpit 主题。
-body.arena-overlay-theme {
+// 用户端页面激活时，UserLayout 会为 body 加上 user-overlay-theme，避免弹层回落为暗色 cockpit 主题。
+// 本块补充 user-theme.scss 未覆盖的弹层细节（loading、arrow、标题/正文颜色、移动端宽度约束）。
+// v22 · Fresh Premium：通透暖白画布 + 活力鼠尾草绿（对照 2026-08-29 视觉升级）
+body.user-overlay-theme {
   --el-bg-color: #ffffff;
-  --el-bg-color-page: #f5f7f4;
+  --el-bg-color-page: #f6f6f4;
   --el-bg-color-overlay: #ffffff;
-  --el-fill-color: #f2f4f2;
+  --el-fill-color: #f0efeb;
   --el-fill-color-blank: #ffffff;
-  --el-fill-color-light: #f5f7f4;
-  --el-fill-color-lighter: #f8faf8;
-  --el-fill-color-extra-light: #fafcfa;
-  --el-fill-color-dark: #e9eee9;
-  --el-fill-color-darker: #dfe6e0;
-  --el-mask-color: rgba(21, 33, 27, 0.5);
-  --el-mask-color-extra-light: rgba(21, 33, 27, 0.3);
-  --el-border-color: #e4eae5;
-  --el-border-color-light: #e4eae5;
-  --el-border-color-lighter: #eef2ee;
-  --el-border-color-extra-light: #eef2ee;
-  --el-border-color-dark: #d5ddd6;
-  --el-border-color-darker: #c8d2ca;
-  --el-border-radius-base: 10px;
-  --el-text-color-primary: #15211b;
-  --el-text-color-regular: #5f6e66;
-  --el-text-color-secondary: #5f6e66;
-  --el-text-color-placeholder: #68766e;
-  --el-text-color-disabled: #5f6e66;
-  --el-disabled-bg-color: #f2f4f2;
-  --el-disabled-text-color: #5f6e66;
-  --el-disabled-border-color: #e4eae5;
-  --el-color-primary: #0a8750;
-  --el-color-primary-dark-2: #087542;
-  --el-color-primary-light-3: #55b483;
-  --el-color-primary-light-5: #8acbac;
-  --el-color-primary-light-7: #bce0cd;
-  --el-color-primary-light-8: #d8eee1;
-  --el-color-primary-light-9: rgba(23, 178, 106, 0.13);
+  --el-fill-color-light: #f0efeb;
+  --el-fill-color-lighter: #f6f6f4;
+  --el-fill-color-extra-light: #fdfdfb;
+  --el-fill-color-dark: #e3e0da;
+  --el-fill-color-darker: #c9c4bb;
+  --el-mask-color: rgba(26, 25, 23, 0.42);
+  --el-mask-color-extra-light: rgba(26, 25, 23, 0.24);
+  --el-border-color: #e3e0da;
+  --el-border-color-light: #e3e0da;
+  --el-border-color-lighter: #edebe7;
+  --el-border-color-extra-light: #edebe7;
+  --el-border-color-dark: #c9c4bb;
+  --el-border-color-darker: #a8a29a;
+  --el-border-radius-base: 12px;
+  --el-text-color-primary: #1a1917;
+  --el-text-color-regular: #57534e;
+  --el-text-color-secondary: #57534e;
+  --el-text-color-placeholder: #a8a29a;
+  --el-text-color-disabled: #a8a29a;
+  --el-disabled-bg-color: #f0efeb;
+  --el-disabled-text-color: #a8a29a;
+  --el-disabled-border-color: #e3e0da;
+  --el-color-primary: #1f6f5c;
+  --el-color-primary-dark-2: #1a5e4e;
+  --el-color-primary-light-3: #5cb29f;
+  --el-color-primary-light-5: #94d1c3;
+  --el-color-primary-light-7: #c5dcd4;
+  --el-color-primary-light-8: #dfece8;
+  --el-color-primary-light-9: rgba(31, 111, 92, 0.1);
 
   .el-loading-mask {
-    background: rgba(245, 247, 244, 0.76);
+    background: rgba(250, 250, 248, 0.78);
   }
 
   .el-loading-spinner .el-loading-text,
   .el-loading-spinner .path {
-    color: #17b26a;
-    stroke: #17b26a;
+    color: #1f6f5c;
+    stroke: #1f6f5c;
   }
 
   .el-popper,
@@ -63,48 +66,48 @@ body.arena-overlay-theme {
   .el-message,
   .el-dialog,
   .el-drawer {
-    border-color: #e4eae5;
+    border-color: #e3e0da;
     background: #ffffff;
-    color: #15211b;
-    box-shadow: 0 14px 34px rgba(21, 33, 27, 0.14);
+    color: #1a1917;
+    box-shadow: 0 8px 16px -4px rgba(26, 25, 23, 0.06), 0 28px 56px -16px rgba(26, 25, 23, 0.12);
   }
 
   .el-dropdown__popper .el-dropdown-menu {
-    border-color: #e4eae5;
+    border-color: #e3e0da;
     background: #ffffff;
   }
 
   .el-dropdown__popper .el-dropdown-menu__item {
-    color: #15211b;
+    color: #1a1917;
   }
 
   .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):hover,
   .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):focus {
-    background: rgba(10, 125, 72, 0.13);
-    color: #0e9f5d;
+    background: #eaf2ef;
+    color: #1f6f5c;
   }
 
   .el-popper__arrow::before {
-    border-color: #e4eae5;
+    border-color: #e3e0da;
     background: #ffffff;
   }
 
   .el-dialog__title,
   .el-drawer__title,
   .el-alert__title {
-    color: #15211b;
+    color: #1a1917;
   }
 
   .el-dialog__body,
   .el-drawer__body,
   .el-alert__description,
   .el-message__content {
-    color: #5f6e66;
+    color: #57534e;
   }
 }
 
 @media (max-width: 760px) {
-  body.arena-overlay-theme {
+  body.user-overlay-theme {
     .el-dialog {
       max-width: calc(100vw - 24px);
       margin-inline: 12px;
@@ -121,77 +124,93 @@ body.arena-overlay-theme {
   }
 }
 
-.arena,
-.jobcoach-layout.is-arena-page {
+.arena {
   // ---- Element Plus 浅色化（:root 的 --el-* 为暗色 cockpit，arena 内恢复浅色）----
   // 注意：el-select 等弹出层默认 teleport 到 body，需配合 :teleported="false" 才能命中本作用域
   --el-bg-color: #ffffff;
   --el-bg-color-page: var(--arena-bg);
   --el-bg-color-overlay: #ffffff;
-  --el-fill-color: #f2f4f2;
+  --el-fill-color: #f0efeb;
   --el-fill-color-blank: #ffffff;
-  --el-fill-color-light: #f5f7f4;
-  --el-fill-color-lighter: #f8faf8;
-  --el-fill-color-extra-light: #fafcfa;
-  --el-fill-color-dark: #e9eee9;
-  --el-fill-color-darker: #dfe6e0;
-  --el-mask-color: rgba(21, 33, 27, 0.5);
-  --el-mask-color-extra-light: rgba(21, 33, 27, 0.3);
+  --el-fill-color-light: #f0efeb;
+  --el-fill-color-lighter: #f6f6f4;
+  --el-fill-color-extra-light: #fdfdfb;
+  --el-fill-color-dark: #e3e0da;
+  --el-fill-color-darker: #c9c4bb;
+  --el-mask-color: rgba(26, 25, 23, 0.42);
+  --el-mask-color-extra-light: rgba(26, 25, 23, 0.24);
   --el-border-color: var(--arena-line);
   --el-border-color-light: var(--arena-line);
   --el-border-color-lighter: var(--arena-line2);
   --el-border-color-extra-light: var(--arena-line2);
-  --el-border-color-dark: #d5ddd6;
-  --el-border-color-darker: #c8d2ca;
-  --el-border-radius-base: 10px;
+  --el-border-color-dark: var(--arena-line-strong);
+  --el-border-color-darker: #a8a29a;
+  --el-border-radius-base: 12px;
   --el-text-color-primary: var(--arena-ink);
   --el-text-color-regular: var(--arena-sub);
   --el-text-color-secondary: var(--arena-sub);
   --el-text-color-placeholder: var(--arena-mut);
-  --el-text-color-disabled: #5f6e66;
-  --el-disabled-bg-color: #f2f4f2;
+  --el-text-color-disabled: var(--arena-mut);
+  --el-disabled-bg-color: var(--arena-sunken);
   --el-disabled-text-color: var(--arena-mut);
   --el-disabled-border-color: var(--arena-line);
   --el-color-primary: var(--arena-action);
   --el-color-primary-dark-2: var(--arena-action-hover);
-  --el-color-primary-light-3: #54c78d;
-  --el-color-primary-light-5: #8bdab2;
-  --el-color-primary-light-7: #bfe9d3;
-  --el-color-primary-light-8: #d9f2e4;
+  --el-color-primary-light-3: #5cb29f;
+  --el-color-primary-light-5: #94d1c3;
+  --el-color-primary-light-7: #c5dcd4;
+  --el-color-primary-light-8: #dfece8;
   --el-color-primary-light-9: var(--arena-grn-soft);
 
-  // ---- 色彩 ----
-  --arena-bg: #f5f7f4;
+  // ---- 色彩（v21 · Quiet Luxury：暖中性 + 深墨绿 #1F6F5C + 哑光梅紫）----
+  --arena-canvas: #f6f6f4;
+  --arena-sunken: #f0efeb;
+  --arena-bg: #f6f6f4;
   --arena-card: #ffffff;
-  --arena-ink: #15211b;
-  --arena-sub: #5f6e66;
-  // Ordinary helper text must remain legible on the white Direction D cards.
+  --arena-ink: #1a1917;
+  --arena-sub: #57534e;
+  // Ordinary helper text must remain legible on the white cards.
   // Disabled controls use their own token below and remain visually distinct.
-  --arena-mut: #68766e;
-  --arena-line: #e4eae5;
-  --arena-line2: #eef2ee;
-  --arena-grn: #17b26a;
-  --arena-grn-d: #0e9f5d;
-  // Keep the prototype green for decoration and use a darker scale for
-  // interactive surfaces that carry white text.
-  --arena-action: #0a8750;
-  --arena-action-hover: #087542;
-  --arena-action-shadow: #075f36;
-  --arena-grn-soft: rgba(23, 178, 106, 0.13);
-  --arena-lime: #a3e635;
-  --arena-amber: #f79009;
-  --arena-amber-soft: rgba(247, 144, 9, 0.13);
-  --arena-vio: #7c5cfc;
-  --arena-vio-soft: rgba(124, 92, 252, 0.12);
-  --arena-red: #e5484d;
-  --arena-red-soft: rgba(229, 72, 77, 0.1);
+  --arena-mut: #6e6963;
+  --arena-line: #e3e0da;
+  --arena-line2: #edebe7;
+  --arena-line-strong: #c9c4bb;
+  --arena-grn: #1f6f5c;
+  --arena-grn-d: #17493d;
+  // Keep the deep emerald for interactive surfaces that carry white text.
+  --arena-action: #1f6f5c;
+  --arena-action-hover: #1a5e4e;
+  --arena-action-active: #17493d;
+  --arena-action-shadow: #17493d;
+  --arena-grn-soft: #eaf2ef;
+  --arena-lime: #2a7a66;
+  --arena-amber: #b4690e;
+  --arena-amber-soft: #fdf3e3;
+  --arena-vio: #6f5c93;
+  --arena-vio-soft: #f1edf7;
+  --arena-red: #b03a3a;
+  --arena-red-soft: #fbeeee;
+  --arena-info: #3a6b8c;
+  --arena-info-soft: #eaf1f6;
+  --arena-success: #2e7d5b;
+  --arena-success-soft: #eaf3ee;
 
-  // ---- 尺寸 ----
-  --arena-radius-btn: 14px;
-  --arena-radius-card: 20px;
-  --arena-radius-inp: 13px;
-  --arena-shadow-card: 0 2px 4px rgba(21, 33, 27, 0.04);
-  --arena-shadow-hover: 0 4px 10px rgba(21, 33, 27, 0.08);
+  // ---- v21 渐变（仅 3 处克制用法，不跨色相）----
+  --arena-grad-hero: radial-gradient(120% 120% at 0% 0%, #fcfbf8 0%, #f2f1ec 45%, #eff2ee 100%);
+  --arena-grad-accent: linear-gradient(135deg, #2a7a66 0%, #1f6f5c 55%, #1a5e4e 100%);
+  --arena-grad-ai: radial-gradient(100% 100% at 100% 0%, rgba(111, 92, 147, 0.1), transparent 60%),
+    radial-gradient(80% 80% at 0% 100%, rgba(31, 111, 92, 0.08), transparent 55%), #ffffff;
+
+  // ---- 尺寸（v21 圆角收敛：6/10/14/20）----
+  --arena-radius-btn: 10px;
+  --arena-radius-card: 14px;
+  --arena-radius-inp: 10px;
+  --arena-shadow-subtle: 0 1px 2px rgba(26, 25, 23, 0.04), 0 1px 1px rgba(26, 25, 23, 0.03);
+  --arena-shadow-card: 0 2px 4px rgba(26, 25, 23, 0.04), 0 8px 16px -4px rgba(26, 25, 23, 0.06);
+  --arena-shadow-floating: 0 8px 12px -4px rgba(26, 25, 23, 0.06), 0 24px 48px -12px rgba(26, 25, 23, 0.14);
+  --arena-shadow-card-hover: var(--arena-shadow-card);
+  --arena-shadow-hover: var(--arena-shadow-card);
+  --arena-accent-ring: rgba(31, 111, 92, 0.22);
 
   // ---- 存量用户端页面的主题兼容层 ----
   // 旧页面仍引用 --user-* / --app-* 变量。保留组件结构和业务逻辑，
@@ -208,119 +227,112 @@ body.arena-overlay-theme {
 
   --user-bg: var(--arena-bg);
   --user-bg-panel: var(--arena-bg);
-  --user-bg-soft: #f0fbf4;
+  --user-bg-soft: var(--arena-sunken);
   --user-surface: var(--arena-card);
   --user-surface-raised: var(--arena-card);
-  --user-surface-muted: #f7faf7;
-  --user-surface-tint: #f0fbf4;
+  --user-surface-muted: var(--arena-sunken);
+  --user-surface-tint: var(--arena-grn-soft);
   --user-text: var(--arena-ink);
   --user-text-secondary: var(--arena-sub);
   // Existing user pages use `--user-text-muted` for real labels and body copy,
-  // not only inactive states. Keep it readable on the Direction D light canvas.
+  // not only inactive states. Keep it readable on the light canvas.
   --user-text-muted: var(--arena-sub);
-  --user-text-subtle: #7b8880;
+  --user-text-subtle: var(--arena-mut);
   --user-border: var(--arena-line);
-  --user-border-strong: #d5ddd6;
+  --user-border-strong: var(--arena-line-strong);
   --user-control-bg: var(--arena-card);
-  --user-control-bg-muted: #f2f4f2;
+  --user-control-bg-muted: var(--arena-sunken);
   --user-primary: var(--arena-action);
   --user-primary-hover: var(--arena-action-hover);
   --user-primary-contrast: #ffffff;
-  --user-primary-border: #b9e7cd;
+  --user-primary-border: rgba(31, 111, 92, 0.28);
   --user-primary-faint: var(--arena-grn-soft);
   --user-primary-soft: var(--arena-grn-soft);
-  --user-success: var(--arena-grn);
-  --user-success-text: #0e7a45;
-  --user-success-border: #b9e7cd;
-  --user-success-soft: var(--arena-grn-soft);
+  --user-success: var(--arena-success);
+  --user-success-text: var(--arena-success);
+  --user-success-border: rgba(46, 125, 91, 0.32);
+  --user-success-soft: var(--arena-success-soft);
   --user-warning: var(--arena-amber);
-  --user-warning-text: #8a4b00;
+  --user-warning-text: #8e520a;
   --user-warning-soft: var(--arena-amber-soft);
   --user-danger: var(--arena-red);
-  --user-danger-text: #b4233a;
-  --user-danger-border: #f4c3c5;
+  --user-danger-text: var(--arena-red);
+  --user-danger-border: rgba(176, 58, 58, 0.3);
   --user-danger-soft: var(--arena-red-soft);
   --user-ai: var(--arena-vio);
   --user-ai-soft: var(--arena-vio-soft);
-  --user-cyan-soft: rgba(23, 178, 106, 0.1);
+  --user-cyan-soft: var(--arena-info-soft);
   --user-disabled: var(--arena-mut);
-  --user-disabled-bg: #f2f4f2;
-  --user-radius-sm: 10px;
+  --user-disabled-bg: var(--arena-sunken);
+  --user-radius-sm: 6px;
   --user-radius-md: var(--arena-radius-btn);
-  --user-shadow-sm: 0 2px 4px rgba(21, 33, 27, 0.04);
+  --user-radius-lg: var(--arena-radius-card);
+  --user-shadow-sm: var(--arena-shadow-subtle);
 
   color: var(--arena-ink);
-  background:
-    radial-gradient(900px 480px at 90% -5%, rgba(163, 230, 53, 0.2), transparent 60%),
-    radial-gradient(800px 480px at -5% 100%, rgba(23, 178, 106, 0.14), transparent 60%),
-    var(--arena-bg);
+  background: var(--arena-canvas);
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   min-height: 100%;
 
-  // ---- 文字工具 ----
+  // ---- 文字工具（v22：更大更通透的标题，让 C 端页面更有呼吸感）----
   .arena-h1 {
     margin: 0;
-    font-size: 26px;
-    font-weight: 900;
-    letter-spacing: -0.5px;
-    line-height: 1.25;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.18;
   }
   .arena-h2 {
     margin: 0;
-    font-size: 19px;
-    font-weight: 900;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
     line-height: 1.3;
   }
   .arena-h3 {
-    font-size: 14.5px;
-    font-weight: 800;
+    font-size: 16px;
+    font-weight: 600;
   }
   .arena-p {
-    font-size: 13.5px;
-    line-height: 1.65;
+    font-size: 14px;
+    line-height: 1.7;
     color: var(--arena-sub);
   }
   .arena-tiny {
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--arena-mut);
   }
+  // v21 禁止渐变文字：改纯主色
   .arena-grad-text {
-    background: linear-gradient(100deg, var(--arena-grn), var(--arena-lime));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: var(--arena-action);
   }
 
-  // ---- 卡片 ----
+  // ---- 卡片（v22：更柔和的圆角 + 悬浮感阴影，hover 微微上浮）----
   .arena-card {
     background: var(--arena-card);
-    border: 1.5px solid var(--arena-line);
+    border: 1px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    box-shadow: var(--arena-shadow-card);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
   }
   .arena-card--hero {
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 70%);
-    border-color: #b9e7cd;
+    background: var(--arena-grad-hero);
+    border-color: var(--arena-line);
     position: relative;
     overflow: hidden;
   }
   .arena-card--hero::after {
-    content: '';
-    position: absolute;
-    top: -24px;
-    right: -24px;
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(163, 230, 53, 0.3), transparent 70%);
-    pointer-events: none;
+    content: none;
   }
   .arena-card--treasure {
-    background: linear-gradient(90deg, #fff7ec, #ffffff);
-    border-color: #f3ddc0;
+    background: var(--arena-grad-hero);
+    border-color: var(--arena-line);
   }
 
-  // ---- 按钮（Duolingo 式 3D 按压） ----
+  // ---- 按钮（v21：实底主按钮 + 同色相微渐变，去 3D 按压与位移）----
   .arena-btn {
     display: inline-flex;
     align-items: center;
@@ -328,85 +340,92 @@ body.arena-overlay-theme {
     gap: 8px;
     border: 0;
     cursor: pointer;
-    font-weight: 800;
+    font-weight: 600;
     font-family: inherit;
     font-size: 14px;
     border-radius: var(--arena-radius-btn);
     transition:
-      transform 0.15s,
-      box-shadow 0.15s,
-      border-color 0.15s;
+      background 0.15s ease,
+      box-shadow 0.15s ease,
+      border-color 0.15s ease;
   }
   .arena-btn--pri {
-    background: var(--arena-action);
+    background: var(--arena-grad-accent);
     color: #fff;
-    box-shadow: 0 4px 0 var(--arena-action-shadow);
+    box-shadow: var(--arena-shadow-subtle);
   }
   .arena-btn--pri:hover {
-    transform: translateY(-1px);
     background: var(--arena-action-hover);
-    box-shadow: 0 5px 0 var(--arena-action-shadow);
+    box-shadow: var(--arena-shadow-card);
   }
   .arena-btn--pri:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 var(--arena-action-shadow);
+    background: var(--arena-action-active);
+    box-shadow: var(--arena-shadow-subtle);
   }
   .arena-btn--pri:disabled {
-    background: #dce5de;
-    color: #526158;
+    background: var(--arena-sunken);
+    color: var(--arena-mut);
     opacity: 1;
-    transform: none;
-    box-shadow: 0 3px 0 #c8d2ca;
+    box-shadow: none;
     cursor: not-allowed;
   }
   .arena-btn--sec {
     background: #fff;
-    color: var(--arena-grn-d);
-    border: 2px solid var(--arena-line);
-    box-shadow: 0 3px 0 var(--arena-line);
+    color: var(--arena-action);
+    border: 1px solid var(--arena-line-strong);
+    box-shadow: none;
   }
   .arena-btn--sec:hover {
-    border-color: var(--arena-grn);
+    border-color: var(--arena-action);
+    background: var(--arena-grn-soft);
   }
   .arena-btn--sec:disabled,
   .arena-btn--txt:disabled {
-    border-color: #dfe6e0;
-    background: #f2f4f2;
-    color: #5f6e66;
+    border-color: var(--arena-line);
+    background: var(--arena-sunken);
+    color: var(--arena-mut);
     box-shadow: none;
     cursor: not-allowed;
   }
   .arena-btn--txt {
     background: none;
-    color: var(--arena-grn-d);
+    color: var(--arena-action);
     font-size: 13px;
     padding: 6px 4px;
+  }
+  .arena-btn--txt:hover {
+    color: var(--arena-action-hover);
+    background: var(--arena-grn-soft);
+  }
+  .arena-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--arena-accent-ring);
   }
 
   .el-button {
     --el-button-bg-color: #ffffff;
-    --el-button-border-color: #d5ddd6;
-    --el-button-text-color: #476158;
-    --el-button-hover-bg-color: #f0fbf4;
-    --el-button-hover-border-color: var(--arena-grn);
-    --el-button-hover-text-color: var(--arena-grn-d);
-    --el-button-active-bg-color: #e1f5e9;
-    --el-button-active-border-color: var(--arena-grn-d);
-    --el-button-active-text-color: var(--arena-grn-d);
-    --el-button-disabled-bg-color: #f2f4f2;
-    --el-button-disabled-border-color: #dfe6e0;
-    --el-button-disabled-text-color: #5f6e66;
+    --el-button-border-color: var(--arena-line-strong);
+    --el-button-text-color: var(--arena-sub);
+    --el-button-hover-bg-color: var(--arena-grn-soft);
+    --el-button-hover-border-color: var(--arena-action);
+    --el-button-hover-text-color: var(--arena-action);
+    --el-button-active-bg-color: var(--arena-grn-soft);
+    --el-button-active-border-color: var(--arena-action-hover);
+    --el-button-active-text-color: var(--arena-action-hover);
+    --el-button-disabled-bg-color: var(--arena-sunken);
+    --el-button-disabled-border-color: var(--arena-line);
+    --el-button-disabled-text-color: var(--arena-mut);
     border-radius: var(--arena-radius-btn);
-    font-weight: 800;
+    font-weight: 500;
   }
 
   .el-button.is-disabled,
   .el-button.is-disabled:hover,
   .el-button.is-disabled:focus,
   .el-button.is-disabled:active {
-    background: #f2f4f2;
-    border-color: #dfe6e0;
-    color: #5f6e66;
+    background: var(--arena-sunken);
+    border-color: var(--arena-line);
+    color: var(--arena-mut);
     opacity: 1;
   }
 
@@ -417,8 +436,8 @@ body.arena-overlay-theme {
     --el-button-hover-bg-color: var(--arena-action-hover);
     --el-button-hover-border-color: var(--arena-action-hover);
     --el-button-hover-text-color: #ffffff;
-    --el-button-active-bg-color: #054f2e;
-    --el-button-active-border-color: #054f2e;
+    --el-button-active-bg-color: var(--arena-action-active);
+    --el-button-active-border-color: var(--arena-action-active);
     --el-button-active-text-color: #ffffff;
   }
 
@@ -426,9 +445,9 @@ body.arena-overlay-theme {
   .el-button--primary.is-disabled:hover,
   .el-button--primary.is-disabled:focus,
   .el-button--primary.is-disabled:active {
-    background: #dce5de;
-    border-color: #dce5de;
-    color: #526158;
+    background: var(--arena-sunken);
+    border-color: var(--arena-sunken);
+    color: var(--arena-mut);
   }
 
   // Disabled semantic actions still need to communicate their state. Keep them
@@ -447,7 +466,7 @@ body.arena-overlay-theme {
   .el-button--warning.is-disabled:focus,
   .el-button--warning.is-disabled:active {
     background: var(--user-warning-soft);
-    border-color: rgba(247, 144, 9, 0.34);
+    border-color: rgba(180, 105, 14, 0.34);
     color: var(--user-warning-text);
   }
 
@@ -457,27 +476,27 @@ body.arena-overlay-theme {
   .el-button--danger.is-disabled:active {
     background: var(--user-danger-soft);
     border-color: var(--user-danger-border);
-    color: #b4233a;
+    color: var(--arena-red);
   }
 
-  // ---- 徽章 ----
+  // ---- 徽章（v21：tint 底 + hairline + 主色文字，去实色块冲击）----
   .arena-chip {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 600;
     padding: 4px 11px;
     border-radius: 999px;
     white-space: nowrap;
   }
   .arena-chip--grn {
     background: var(--arena-grn-soft);
-    color: var(--arena-grn-d);
+    color: var(--arena-action);
   }
   .arena-chip--grn-solid {
-    background: var(--arena-action);
-    color: #fff;
+    background: var(--arena-grn-soft);
+    color: var(--arena-action);
   }
   .arena-chip--amber {
     background: var(--arena-amber-soft);
@@ -493,16 +512,16 @@ body.arena-overlay-theme {
   }
   .arena-chip--line {
     background: #fff;
-    border: 1.5px solid var(--arena-line);
+    border: 1px solid var(--arena-line);
     color: var(--arena-amber);
   }
   .arena-chip--mut {
-    background: #f2f4f2;
+    background: var(--arena-sunken);
     color: var(--arena-sub);
   }
   .arena-xp-tag {
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-amber);
   }
 
@@ -524,41 +543,42 @@ body.arena-overlay-theme {
     justify-content: center;
   }
 
-  // ---- XP 进度条 ----
+  // ---- XP 进度条（v21：同色相微渐变）----
   .arena-xpbar {
     height: 7px;
     border-radius: 99px;
-    background: var(--arena-line);
+    background: var(--arena-sunken);
     overflow: hidden;
   }
   .arena-xpbar > i {
     display: block;
     height: 100%;
     border-radius: 99px;
-    background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
+    background: var(--arena-grad-accent);
     transition: width 0.3s ease;
   }
 
-  // ---- 输入 ----
+  // ---- 输入（v21：1px hairline + focus 主色 ring）----
   .arena-inp {
     width: 100%;
-    padding: 12px 14px;
-    border: 2px solid var(--arena-line);
+    padding: 11px 13px;
+    border: 1px solid var(--arena-line-strong);
     border-radius: var(--arena-radius-inp);
     background: #fff;
     font-size: 14px;
     color: var(--arena-ink);
     outline: none;
-    font-weight: 600;
+    font-weight: 500;
     font-family: inherit;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
   .arena-inp:focus {
-    border-color: var(--arena-grn);
+    border-color: var(--arena-action);
+    box-shadow: 0 0 0 3px var(--arena-accent-ring);
   }
   .arena-lbl {
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-sub);
     margin-bottom: 6px;
   }
@@ -569,12 +589,12 @@ body.arena-overlay-theme {
     height: 22px;
     border-radius: 7px;
     background: var(--arena-grn-soft);
-    color: var(--arena-grn-d);
+    color: var(--arena-action);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    font-weight: 900;
+    font-weight: 600;
     flex: none;
   }
   .arena-lock {
@@ -600,7 +620,7 @@ body.arena-overlay-theme {
     align-items: center;
     gap: 4px;
     font-size: 10.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-vio);
     background: var(--arena-vio-soft);
     padding: 3px 9px;
@@ -626,16 +646,16 @@ body.arena-overlay-theme {
     margin: 0 auto;
   }
   .arena-streak__box--done {
-    background: var(--arena-action);
-    color: #fff;
+    background: var(--arena-grn-soft);
+    color: var(--arena-action);
   }
   .arena-streak__box--today {
-    background: var(--arena-amber);
+    background: var(--arena-action);
     color: #fff;
-    box-shadow: 0 0 0 3px var(--arena-amber-soft);
+    box-shadow: 0 0 0 3px var(--arena-grn-soft);
   }
   .arena-streak__box--todo {
-    background: var(--arena-line);
+    background: var(--arena-sunken);
     color: var(--arena-mut);
   }
 

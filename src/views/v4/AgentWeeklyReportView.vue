@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell weekly-report-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="weekly-header">
       <div class="weekly-header__copy">
         <span>每周进展</span>
@@ -199,6 +201,7 @@ import WeeklyReportCoveragePanel from '@/components/agent-weekly-report/WeeklyRe
 import WeeklyReportFactsPanel from '@/components/agent-weekly-report/WeeklyReportFactsPanel.vue'
 import WeeklyReportSignalsPanel from '@/components/agent-weekly-report/WeeklyReportSignalsPanel.vue'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import {
   buildWeeklyReportIdempotencyKey,
   buildWeeklyReportRequestId,
@@ -220,6 +223,7 @@ import {
 } from '@/features/agent-weekly-report'
 import type { AgentWeeklyReport } from '@/types/agentWeeklyReport'
 import type { TargetJobVO } from '@/types/jobTarget'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getErrorMessage } from '@/utils/error'
 
 const timezone = normalizeWeeklyReportTimezone(
@@ -228,6 +232,7 @@ const timezone = normalizeWeeklyReportTimezone(
 )
 const route = inject(routeLocationKey, null)
 const router = inject(routerKey, null)
+const moduleTabs = useUserModuleTabs('progress')
 
 const stringQueryValue = (value: unknown) =>
   typeof value === 'string' ? value.trim() : ''

@@ -2,7 +2,7 @@
   .user-page-shell:not(.arena),
   .page-shell:not(.arena) {
     display: grid;
-    gap: 18px;
+    gap: 14px;
     color: var(--user-text);
   }
 
@@ -13,9 +13,10 @@
   .user-card,
   .el-card {
     border: 1px solid var(--user-border);
-    border-radius: var(--user-radius-sm);
+    border-radius: var(--user-radius-md);
     background: var(--user-surface);
-    box-shadow: none;
+    box-shadow: var(--user-shadow-xs);
+    transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
   }
 
   .content-card,
@@ -26,19 +27,31 @@
     overflow: hidden;
   }
 
+  .content-card:hover,
+  .cc-glass:hover,
+  .user-card:hover,
+  .el-card:hover {
+    box-shadow: var(--user-shadow-sm);
+  }
+
   .content-card__body,
   .el-card__body {
-    padding: 18px;
+    padding: 16px;
   }
 
   .page-title,
   .placeholder-panel__title {
     color: var(--user-text);
+    letter-spacing: -0.02em;
   }
 
   .page-subtitle,
   .placeholder-panel__desc {
     color: var(--user-text-muted);
+  }
+
+  .page-title + .page-subtitle {
+    margin-top: 6px;
   }
 
   .metric-card {
@@ -1326,5 +1339,149 @@ body.is-user-layout-active .jobcoach-layout {
     transition-duration: 0.01ms;
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
+  }
+}
+
+/* ---- Global layout density tightening (v15) ---- */
+body.is-user-layout-active .jobcoach-layout {
+  /* Form density */
+  .el-form-item {
+    margin-bottom: 14px;
+  }
+
+  .el-form-item__label {
+    padding-bottom: 4px;
+    line-height: 1.35;
+  }
+
+  /* Card header density */
+  .el-card__header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .el-card__header h2,
+  .el-card__header h3,
+  .el-card__header h4 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Table density */
+  .el-table .el-table__cell {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .el-table th.el-table__cell {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  /* Pagination spacing */
+  .el-pagination {
+    margin-top: 12px;
+  }
+
+  /* Empty state padding */
+  .el-empty {
+    padding: 32px 16px;
+  }
+
+  /* Tab bar density */
+  .el-tabs__item {
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .el-tabs__header {
+    margin-bottom: 14px;
+  }
+
+  /* Page headers */
+  .page-title {
+    margin: 0 0 4px;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  .page-subtitle {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Section headings */
+  .section-title,
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Placeholder / empty panels */
+  .placeholder-panel,
+  .empty-state,
+  .loading-state,
+  .error-state {
+    padding: 28px 20px;
+  }
+
+  .placeholder-panel__title {
+    font-size: 15px;
+  }
+
+  .placeholder-panel__desc {
+    font-size: 13px;
+  }
+
+  /* Filter / toolbar rows */
+  .filter-bar,
+  .toolbar-row,
+  .page-actions {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* Reduce oversized vertical rhythm on common list blocks */
+  .list-card,
+  .record-card,
+  .data-row {
+    padding: 12px 14px;
+  }
+
+  /* Tighten dialog body padding */
+  .el-dialog__body {
+    padding: 16px;
+  }
+
+  .el-dialog__header {
+    padding: 16px 16px 12px;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 16px 16px;
+  }
+
+  /* Drawer density */
+  .el-drawer__header {
+    padding: 14px 16px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--user-border);
+  }
+
+  .el-drawer__body {
+    padding: 16px;
+  }
+
+  .el-drawer__footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--user-border);
   }
 }

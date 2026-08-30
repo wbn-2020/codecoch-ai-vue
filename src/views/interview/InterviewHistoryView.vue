@@ -1,21 +1,20 @@
 <template>
-  <div class="interview-history-page page-shell page-shell--wide">
-    <header class="history-header">
-      <div>
-        <div class="eyebrow">
-          <History :size="16" />
-          面试中心
-        </div>
-        <h1>从当前这一轮继续</h1>
-        <p>先完成正在推进的面试，再回看报告、比较表现和安排下一轮训练。</p>
-      </div>
-      <div class="header-actions">
+  <main class="interview-history-page page-shell page-shell--wide cc-module-page">
+    <PageHeader
+      eyebrow="模拟面试"
+      :icon="History"
+      title="面试复盘"
+      description="先完成正在推进的面试，再回看报告、比较表现和安排下一轮训练。"
+    >
+      <template #actions>
         <el-button type="primary" @click="router.push('/interviews/create')">
           <Plus :size="16" />
           创建面试
         </el-button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <div class="view-tabs" role="tablist" aria-label="面试中心视图">
       <button
@@ -358,7 +357,7 @@
         </div>
       </section>
     </section>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -373,6 +372,9 @@ import {
 } from '@/api/interviewAdvanced'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { interviewModeOptions } from '@/constants/enums'
 import {
   comparisonReasonLabel,
@@ -392,6 +394,7 @@ interface SelectOption {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('interview')
 const loading = ref(false)
 const loadError = ref('')
 const interviews = ref<InterviewListVO[]>([])

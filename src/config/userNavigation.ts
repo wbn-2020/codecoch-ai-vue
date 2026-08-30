@@ -574,10 +574,12 @@ export const isUserNavigationItemVisible = (
 export const getVisibleUserNavigationGroups = (
   featureState: UserNavigationFeatureState = getUserNavigationFeatureState()
 ): UserNavigationGroup[] =>
-  userNavigationGroups.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => isUserNavigationItemVisible(item, featureState))
-  }))
+  userNavigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isUserNavigationItemVisible(item, featureState))
+    }))
+    .filter((group) => group.items.length > 0)
 
 interface MatcherScore {
   priority: number

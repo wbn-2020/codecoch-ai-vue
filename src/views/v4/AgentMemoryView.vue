@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell v4-memory-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="v4-page-header">
       <div>
         <div class="v4-eyebrow">长期记忆</div>
@@ -218,10 +220,14 @@ import {
   getAgentMemoryImpactPreviewApi
 } from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import type { AgentContextImpactPreviewVO, AgentMemoryLifecycle, AgentMemoryVO } from '@/types/agent'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { isAuthOrForbiddenError } from '@/utils/apiError'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
+
+const moduleTabs = useUserModuleTabs('growth')
 
 type MemoryFilter = 'ALL' | 'TRUSTED' | 'CANDIDATE' | 'GOVERNANCE' | 'DISABLED'
 type MemoryLifecycle = AgentMemoryLifecycle | 'trusted'

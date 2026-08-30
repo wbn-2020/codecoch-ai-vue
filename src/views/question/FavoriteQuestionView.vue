@@ -1,5 +1,7 @@
 ﻿<template>
   <div class="favorite-question-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="hero-band">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -146,12 +148,15 @@ import { BookmarkCheck, ChevronRight, RefreshCw, Search, Sparkles } from 'lucide
 
 import { getFavoriteQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { difficultyOptions } from '@/constants/enums'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { FavoriteQuestionVO, QuestionQueryDTO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
 import { getOptionLabel } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const removingId = ref<number | null>(null)
 const favorites = ref<FavoriteQuestionVO[]>([])

@@ -1,19 +1,18 @@
 ﻿<template>
-  <div class="page-shell analytics-page">
-    <section class="analytics-hero">
-      <div>
-        <div class="analytics-eyebrow">
-          <LineChart :size="16" />
-          <span>训练分析</span>
-        </div>
-        <h1>个人训练分析</h1>
-        <p>汇总每日任务、完成率、已完成任务预计分钟和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
-      </div>
-      <div class="analytics-actions">
+  <main class="page-shell analytics-page cc-module-page">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="LineChart"
+      title="个人训练分析"
+      description="汇总每日任务、完成率、已完成任务预计分钟和重点技能分布，帮助你看清最近一段时间的准备节奏。"
+    >
+      <template #actions>
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <AppState v-if="errorMessage" type="error" title="分析数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadPage">重试</el-button>
@@ -158,7 +157,7 @@
       </section>
       </template>
     </template>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -172,6 +171,9 @@ import {
   getPersonalTaskTrendApi
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { MetricPointVO, PersonalAgentOverviewVO, TrendPointVO } from '@/types/analytics'
 import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
@@ -179,6 +181,7 @@ import { toFriendlyMessage } from '@/utils/error'
 const loading = ref(false)
 const hasLoadedPage = ref(false)
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const errorMessage = ref('')
 const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)

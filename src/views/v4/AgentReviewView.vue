@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell agent-review-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="review-header">
       <div>
         <div class="review-eyebrow">每日智能复盘</div>
@@ -120,7 +122,9 @@ import { generateAgentReviewApi, getAgentReviewsApi, type AgentReviewVO } from '
 import PlanChangePreviewDialog from '@/components/agent-review/PlanChangePreviewDialog.vue'
 import ReviewPlanSuggestionPanel from '@/components/agent-review/ReviewPlanSuggestionPanel.vue'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { appConfig } from '@/config'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   buildAgentReviewPlanSuggestionList,
   createAgentPlanChangeRequestIdentity,
@@ -154,6 +158,7 @@ interface ActivePreviewRequest extends AgentPlanChangePreviewCommand {
 
 const today = formatLocalDate()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('progress')
 const adaptivePlanEnabled = computed(() => appConfig.enableV4AdaptivePlan)
 const date = ref(today)
 const loading = ref(false)

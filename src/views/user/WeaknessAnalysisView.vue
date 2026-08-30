@@ -1,5 +1,7 @@
 <template>
   <div class="weakness-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="weakness-hero">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -128,9 +130,12 @@ import { Dumbbell, RefreshCw, Target } from 'lucide-vue-next'
 
 import { getWeaknessAnalysisApi, type WeaknessAnalysisVO } from '@/api/questionStudy'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const error = ref('')
 const analysis = ref<WeaknessAnalysisVO>()

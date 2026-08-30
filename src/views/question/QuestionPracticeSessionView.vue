@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-practice practice-session-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section v-if="!practicing && !finished" class="practice-ready">
       <div class="practice-ready__head">
         <span class="arena-kicker">答题间</span>
@@ -127,6 +129,8 @@ import {
 } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { MASTERY_STATUS } from '@/constants/enums'
 import { useAuthStore } from '@/stores/auth'
 import type { FavoriteQuestionVO, MasteryStatus, PracticeRecordVO, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
@@ -149,6 +153,7 @@ interface ModeOption {
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const authStore = useAuthStore()
 
 const queryString = (name: string) => {

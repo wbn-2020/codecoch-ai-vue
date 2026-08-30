@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-train">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-train__page">
       <header class="arena-train__head">
         <div class="arena-train__kicker">面试训练计划</div>
@@ -126,6 +128,8 @@ import {
 import { getResumeJobMatchReportDetailApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -159,6 +163,7 @@ type GenerationDiagnostic = {
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 const loading = ref(false)
@@ -949,30 +954,30 @@ onMounted(() => {
   &__page {
     width: min(1060px, 100%);
     margin: 0 auto;
-    padding: 30px 34px 48px;
+    padding: 20px 24px 32px;
   }
 
   &__kicker {
     color: var(--arena-grn-d);
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 800;
   }
 
   &__title {
-    margin-top: 5px;
-    font-size: 28px;
+    margin-top: 4px;
+    font-size: 26px;
   }
 
   &__grid {
     display: grid;
     grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
-    gap: 20px;
+    gap: 16px;
     align-items: start;
-    margin-top: 22px;
+    margin-top: 16px;
   }
 
   &__hero {
-    padding: 24px 26px;
+    padding: 20px 22px;
     border-color: #b9e7cd;
     background: linear-gradient(135deg, #f0fbf4, #fff 72%);
   }
@@ -989,8 +994,8 @@ onMounted(() => {
   &__preview-card {
     display: grid;
     gap: 8px;
-    margin-top: 14px;
-    padding: 18px 20px;
+    margin-top: 12px;
+    padding: 16px 18px;
   }
 
   &__preview-heading {
@@ -1138,7 +1143,7 @@ onMounted(() => {
   }
 
   &__panel {
-    padding: 20px 22px;
+    padding: 16px 18px;
   }
 
   &__revive {
@@ -1213,8 +1218,8 @@ onMounted(() => {
   }
 
   &__controls {
-    margin-top: 14px;
-    padding: 15px 18px;
+    margin-top: 12px;
+    padding: 13px 16px;
   }
 
   &__controls-summary {
@@ -1333,8 +1338,8 @@ onMounted(() => {
     display: grid;
     justify-items: start;
     gap: 9px;
-    min-height: 180px;
-    padding: 26px;
+    min-height: 140px;
+    padding: 20px;
   }
 
   &__skeleton {
@@ -1371,19 +1376,19 @@ onMounted(() => {
     }
 
     &__hero {
-      padding: 25px 26px;
+      padding: 20px 22px;
     }
 
     &__preview-card {
-      padding: 18px 20px;
+      padding: 16px 18px;
     }
 
     &__side {
-      gap: 16px;
+      gap: 14px;
     }
 
     &__panel {
-      padding: 20px 22px;
+      padding: 16px 18px;
     }
 
     &__question-row {

@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell knowledge-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="knowledge-hero">
       <div>
         <p class="eyebrow">个人资料空间</p>
@@ -1422,6 +1424,8 @@ import {
   type KnowledgeSearchTraceVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { StreamSseHandle } from '@/utils/sse'
 import type { AgentContextImpactPreviewVO } from '@/types/agent'
 
@@ -1431,6 +1435,7 @@ type GovernancePanelKey = 'overview' | 'duplicates' | 'quality'
 const loading = ref(false)
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const knowledgeViewFromQuery = (): KnowledgeViewKey => {
   const rawValue = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
   return rawValue === 'search' || rawValue === 'governance' ? rawValue : 'materials'

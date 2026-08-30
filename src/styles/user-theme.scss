@@ -80,7 +80,7 @@
   --user-space-4: 16px;
   --user-space-5: 20px;
   --user-space-6: 24px;
-  --user-content-max: 1440px;
+  --user-content-max: 1280px;
   --user-support-rail: 300px;
 }
 
@@ -164,4 +164,169 @@
   --el-color-danger-light-9: var(--user-danger-soft);
   --el-box-shadow-light: var(--user-shadow-sm);
   --el-box-shadow: var(--user-shadow-md);
+}
+
+// The application root keeps the administrator console's dark defaults.
+// User pages opt into this explicit light scope so teleported Element Plus
+// overlays can be themed independently without leaking into admin routes.
+// v21 · Quiet Luxury：暖中性画布 + 深墨绿主色（对照 文档相关/原型/v21-visual-brief.md）
+.jobcoach-layout.is-user-redesign,
+.jobcoach-layout.is-user-redesign .arena {
+  color-scheme: light;
+
+  --user-canvas: #f6f6f4;
+  --user-surface-sunken: #f0efeb;
+  --user-bg: #f6f6f4;
+  --user-bg-soft: #f0efeb;
+  --user-bg-panel: #ffffff;
+  --user-sidebar-bg: #ffffff;
+  --user-surface: #ffffff;
+  --user-surface-muted: #f0efeb;
+  --user-surface-raised: #ffffff;
+  --user-surface-tint: #eaf2ef;
+  --user-border: #e3e0da;
+  --user-border-strong: #c9c4bb;
+  --user-border-subtle: #edebe7;
+
+  --user-text: #1a1917;
+  --user-text-secondary: #57534e;
+  --user-text-muted: #6e6963;
+  --user-text-subtle: #a8a29a;
+
+  --user-primary: #1f6f5c;
+  --user-primary-hover: #1a5e4e;
+  --user-primary-active: #17493d;
+  --user-primary-contrast: #ffffff;
+  --user-primary-soft: #eaf2ef;
+  --user-primary-faint: rgba(31, 111, 92, 0.08);
+  --user-primary-border: rgba(31, 111, 92, 0.28);
+  --user-accent-ring: rgba(31, 111, 92, 0.22);
+  --user-ai: #6f5c93;
+  --user-ai-soft: #f1edf7;
+  --user-cyan: #3a6b8c;
+  --user-cyan-soft: #eaf1f6;
+  --user-success: #2e7d5b;
+  --user-success-text: #2e7d5b;
+  --user-success-hover: #227557;
+  --user-success-soft: #eaf3ee;
+  --user-success-border: rgba(46, 125, 91, 0.32);
+  --user-warning: #b4690e;
+  --user-warning-text: #8e520a;
+  --user-warning-soft: #fdf3e3;
+  --user-danger: #b03a3a;
+  --user-danger-text: #b03a3a;
+  --user-danger-hover: #a83838;
+  --user-danger-soft: #fbeeee;
+  --user-danger-border: rgba(176, 58, 58, 0.3);
+  --user-disabled: #a8a29a;
+  --user-disabled-bg: #f0efeb;
+  --user-control-bg: #ffffff;
+  --user-control-bg-muted: #f0efeb;
+  --user-state-bg: #f0efeb;
+  --user-state-border: #c9c4bb;
+  --user-state-error-bg: #fbeeee;
+  --user-state-warning-bg: #fdf3e3;
+  --user-state-success-bg: #eaf3ee;
+
+  --user-radius-sm: 8px;
+  --user-radius-md: 12px;
+  --user-radius-lg: 16px;
+  --user-shadow-xs: 0 1px 2px rgba(26, 25, 23, 0.03), 0 1px 1px rgba(26, 25, 23, 0.02);
+  --user-shadow-sm: 0 2px 6px rgba(26, 25, 23, 0.04), 0 12px 24px -8px rgba(26, 25, 23, 0.08);
+  --user-shadow-md: 0 8px 16px -4px rgba(26, 25, 23, 0.06), 0 28px 56px -16px rgba(26, 25, 23, 0.12);
+  --user-shadow-lg: 0 12px 28px -6px rgba(26, 25, 23, 0.08), 0 36px 72px -18px rgba(26, 25, 23, 0.14);
+
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f6f6f4;
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color: #f0efeb;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f0efeb;
+  --el-fill-color-lighter: #f6f6f4;
+  --el-fill-color-extra-light: #faf9f7;
+  --el-fill-color-dark: #e3e0da;
+  --el-fill-color-darker: #c9c4bb;
+  --el-mask-color: rgba(26, 25, 23, 0.42);
+  --el-mask-color-extra-light: rgba(26, 25, 23, 0.24);
+  --el-border-color: #e3e0da;
+  --el-border-color-light: #e3e0da;
+  --el-border-color-lighter: #edebe7;
+  --el-border-color-extra-light: #f0efeb;
+  --el-border-color-dark: #c9c4bb;
+  --el-border-color-darker: #a8a29a;
+  --el-text-color-primary: #1a1917;
+  --el-text-color-regular: #57534e;
+  --el-text-color-secondary: #6e6963;
+  --el-text-color-placeholder: #a8a29a;
+  --el-text-color-disabled: #a8a29a;
+  --el-disabled-bg-color: #f0efeb;
+  --el-disabled-text-color: #a8a29a;
+  --el-disabled-border-color: #e3e0da;
+  --el-color-primary: #1f6f5c;
+  --el-color-primary-dark-2: #1a5e4e;
+  --el-color-primary-light-3: #559382;
+  --el-color-primary-light-5: #8fb8ab;
+  --el-color-primary-light-7: #c5dcd4;
+  --el-color-primary-light-8: #dfece8;
+  --el-color-primary-light-9: #eaf2ef;
+  --el-color-success: #2e7d5b;
+  --el-color-success-dark-2: #227557;
+  --el-color-success-light-9: #eaf3ee;
+  --el-color-warning: #b4690e;
+  --el-color-warning-dark-2: #8e520a;
+  --el-color-warning-light-9: #fdf3e3;
+  --el-color-info: #6e6963;
+  --el-color-info-light-9: #f0efeb;
+  --el-color-danger: #b03a3a;
+  --el-color-danger-dark-2: #a83838;
+  --el-color-danger-light-9: #fbeeee;
+}
+
+body.user-overlay-theme {
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f6f6f4;
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color: #f0efeb;
+  --el-fill-color-blank: #ffffff;
+  --el-border-color: #e3e0da;
+  --el-border-color-light: #e3e0da;
+  --el-border-color-lighter: #edebe7;
+  --el-text-color-primary: #1a1917;
+  --el-text-color-regular: #57534e;
+  --el-text-color-secondary: #6e6963;
+  --el-color-primary: #1f6f5c;
+  --el-color-primary-dark-2: #1a5e4e;
+  --el-color-primary-light-9: #eaf2ef;
+  --el-color-danger: #b03a3a;
+  --el-color-warning: #b4690e;
+  --el-color-success: #2e7d5b;
+  --el-mask-color: rgba(26, 25, 23, 0.42);
+
+  .el-popper,
+  .el-select__popper,
+  .el-dropdown__popper,
+  .el-picker__popper,
+  .el-popover.el-popper,
+  .el-message,
+  .el-dialog,
+  .el-drawer {
+    border-color: #e3e0da;
+    background: #ffffff;
+    color: #1a1917;
+    box-shadow: 0 8px 16px -4px rgba(26, 25, 23, 0.06), 0 28px 56px -16px rgba(26, 25, 23, 0.12);
+  }
+
+  .el-dropdown__popper .el-dropdown-menu {
+    background: #ffffff;
+  }
+
+  .el-dropdown__popper .el-dropdown-menu__item {
+    color: #57534e;
+  }
+
+  .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):hover,
+  .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):focus {
+    background: #eaf2ef;
+    color: #1f6f5c;
+  }
 }

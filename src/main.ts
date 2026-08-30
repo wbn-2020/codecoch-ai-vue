@@ -10,8 +10,12 @@ import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
 import App from './App.vue'
+import { initAppTheme } from '@/features/theme/useTheme'
 import { permission } from './directives/permission'
 import router from './router'
+
+// 在挂载前注入皮肤变量，避免首屏闪现默认配色
+initAppTheme()
 
 const app = createApp(App)
 

@@ -30,6 +30,8 @@
       </div>
     </section>
 
+    <ModuleTabs :items="moduleTabs" />
+
     <AppState v-if="errorMessage" type="error" title="今日计划加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadPage(true)">重新加载</el-button>
     </AppState>
@@ -481,7 +483,9 @@ import PlanChangeStatusBanner from '@/components/agent-review/PlanChangeStatusBa
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AgentTaskEvidence from '@/components/job-readiness/AgentTaskEvidence.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   fetchCachedLatestDailyPlan,
   fetchCachedTodayAgentTasks,
@@ -530,6 +534,7 @@ import { fromAgentTask } from '@/utils/suggestionAdapter'
 import { resolveAppRoutePath } from '@/features/route-safety'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('today')
 const route = useRoute()
 const today = formatDateInTimezone(new Date(), 'Asia/Shanghai')
 

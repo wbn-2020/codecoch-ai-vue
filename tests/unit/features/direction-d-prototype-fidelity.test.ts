@@ -31,33 +31,31 @@ describe('Direction D prototype fidelity contracts', () => {
     }
   })
 
-  it('keeps the shared arena shell, navigation and route metadata explicit', () => {
+  it('keeps the redesigned user shell, navigation and route metadata explicit', () => {
     const layout = readSource('src/layouts/UserLayout.vue')
-    const topNav = readSource('src/components/layout/ArenaTopNav.vue')
+    const appShell = readSource('src/components/layout/UserAppShell.vue')
+    const sidebar = readSource('src/components/layout/UserSidebar.vue')
     const navigation = readSource('src/config/userNavigation.ts')
     const routes = readSource('src/router/routes.ts')
-    const arena = readSource('src/styles/arena.scss')
+    const theme = readSource('src/styles/user-theme.scss')
 
-    expect(layout).toContain('class="arena-frame"')
-    expect(layout).toContain('width: min(calc(100% - 32px), 1680px)')
-    expect(layout).toContain('align-items: center')
-    expect(layout).toContain('border-radius: 10px')
+    expect(layout).toContain('<UserAppShell')
+    expect(layout).toContain('<CommandPalette v-if="!isImmersivePage" v-model="commandPaletteOpen" scope="user" />')
     expect(layout).toContain('v-if="!isImmersivePage"')
     expect(layout).toContain("class=\"jobcoach-main\"")
-    expect(layout).toContain("'is-arena-main': usesArenaShell")
     expect(layout).toContain("document.body.classList.add('is-user-layout-active')")
     expect(layout).toContain("document.body.classList.remove('is-user-layout-active')")
-    expect(layout).not.toContain('UserTopNav')
+    expect(layout).toContain("document.body.classList.toggle('user-overlay-theme', !immersive)")
+    expect(layout).not.toContain('ArenaTopNav')
+    expect(appShell).toContain('class="user-app-shell"')
+    expect(appShell).toContain('<UserSidebar :collapsed="isSidebarCollapsed" :badges="sidebarBadges" />')
+    expect(appShell).toContain("localStorage.setItem(storageKey, collapsed ? '1' : '0')")
+    expect(appShell).toContain('useDocumentScrollLock(mobileOpen)')
+    expect(sidebar).toContain("from '@/config/userNavigation'")
 
     for (const label of ['今日', '简历准备', '岗位匹配', '面试训练', '模拟面试', '投递管理', '求职资料', '成长分析']) {
       expect(navigation, `primary navigation: ${label}`).toContain(`label: '${label}'`)
     }
-    expect(topNav).toContain("from '@/config/userNavigation'")
-    expect(topNav).toContain('@click="go(group.path)"')
-    expect(topNav).toContain('toggleDesktopMenu(group.key)')
-    expect(topNav).toContain('arena-bottom-nav')
-    expect(topNav).toContain('arena-mobile-more')
-    expect(topNav).toContain('@media (max-width: 720px)')
     expect(navigation).toContain("path: '/tools'")
 
     for (const route of [
@@ -78,28 +76,27 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(routes).toContain('immersive: true')
 
     for (const token of [
-      '--arena-bg: #f5f7f4',
-      '--arena-card: #ffffff',
-      '--arena-ink: #15211b',
-      '--arena-grn: #17b26a',
-      '--arena-grn-d: #0e9f5d',
-      '--arena-action: #0a8750',
-      '--arena-action-hover: #087542',
-      '--el-color-primary: #0a8750',
-      '--el-color-primary-dark-2: #087542'
+      '.jobcoach-layout.is-user-redesign',
+      // v21 · Quiet Luxury：暖中性画布 + 深墨绿主色（文档相关/原型/v21-visual-brief.md）
+      '--user-bg: #f6f6f4',
+      '--user-sidebar-bg: #ffffff',
+      '--user-primary: #1f6f5c',
+      '--user-ai: #6f5c93',
+      '--el-color-primary: #1f6f5c',
+      'body.user-overlay-theme'
     ]) {
-      expect(arena).toContain(token)
+      expect(theme).toContain(token)
     }
-    expect(arena).toContain('radial-gradient(900px 480px at 90% -5%')
   })
 
   it('keeps white text on Direction D primary actions readable', () => {
     const arena = readSource('src/styles/arena.scss')
 
-    expect(arena).toContain('background: var(--arena-action);')
+    // v21 · Quiet Luxury：主按钮改同色相微渐变，白字对比度不变（#1F6F5C 深墨绿）
+    expect(arena).toContain('background: var(--arena-grad-accent);')
     expect(arena).toContain('--el-button-bg-color: var(--arena-action);')
     expect(arena).toContain('--user-primary: var(--arena-action);')
-    expect(arena).toContain('--user-warning-text: #8a4b00;')
+    expect(arena).toContain('--user-warning-text: #8e520a;')
   })
 
   it('preserves the signed-off resume workbench and prototype tools layout without weakening mobile reflow', () => {
@@ -130,8 +127,8 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(resumeShell).toContain('@media (max-width: 1260px)')
     expect(resumeShell).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/)
     expect(resume).toContain('A4 预览 · 分页以导出为准')
-    expect(layout).toContain("'is-resume-workbench-frame': isResumeWorkbench")
-    expect(layout).toContain('width: min(calc(100% - 16px), 1600px)')
+    expect(layout).toContain("'is-resume-workbench-page': isResumeWorkbench")
+    expect(layout).toContain("'is-resume-workbench-main': isResumeWorkbench")
     expect(routes).toContain("layoutMode: 'resume-workbench'")
 
     // The tools page keeps the Direction D inventory and adds a wider operational summary.
@@ -181,7 +178,7 @@ describe('Direction D prototype fidelity contracts', () => {
     // Legacy workbench rules must not turn an arena page root into a grid.
     expect(userComponents).toContain('.page-shell:not(.arena)')
     expect(userComponents).toContain('.user-page-shell:not(.arena)')
-    expect(layout).toContain('> :deep(.arena.page-shell)')
+    expect(layout).toContain('> :deep(.arena:not(.interview-room))')
   })
 
   it('keeps extended tool destinations inside the Direction D reading column and mobile safe area', () => {
@@ -194,9 +191,9 @@ describe('Direction D prototype fidelity contracts', () => {
 
     expect(layout).toContain('width: min(100%, 1440px)')
     expect(layout).toContain('padding: 28px 32px 46px')
-    expect(layout).toContain('padding: 18px 14px calc(84px + env(safe-area-inset-bottom, 0px))')
+    expect(layout).toContain('padding: 18px 14px calc(32px + env(safe-area-inset-bottom, 0px))')
     expect(layout).toContain('> :deep(.page-shell.page-shell--wide)')
-    expect(interviewHistory).toContain('class="interview-history-page page-shell page-shell--wide"')
+    expect(interviewHistory).toContain('class="interview-history-page page-shell page-shell--wide cc-module-page"')
     expect(agentToday).toContain('class="agent-page page-shell"')
 
     for (const source of [evidenceList, evidenceDetail, evidenceEdit]) {

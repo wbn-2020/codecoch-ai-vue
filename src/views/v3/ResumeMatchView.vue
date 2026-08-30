@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-match v3-page match-entry-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section v-if="!entryResolved || redirectingToLatestReport" class="match-state-card match-route-resolving">
       <AppState
         type="loading"
@@ -255,6 +257,8 @@ import {
   streamCreateResumeJobMatchReportApi
 } from '@/api/resumeJobMatch'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useSseState } from '@/composables/useSseState'
 import type { TargetJobVO } from '@/types/jobTarget'
 import type { ResumeVO } from '@/types/resume'
@@ -271,6 +275,7 @@ import type { StreamSseHandle } from '@/utils/sse'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('matching')
 const loading = ref(false)
 const submitting = ref(false)
 const reportsLoading = ref(false)

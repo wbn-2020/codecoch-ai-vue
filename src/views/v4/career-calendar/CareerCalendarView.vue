@@ -1,12 +1,13 @@
 <template>
-  <div class="career-calendar-view page-shell">
-    <header class="view-header">
-      <div>
-        <p class="view-kicker">今日推进</p>
-        <h1>求职日历</h1>
-        <p class="view-subtitle">集中安排投递、跟进、面试和 Offer 截止，重要节点一眼可见。</p>
-      </div>
-    </header>
+  <main class="career-calendar-view page-shell cc-module-page">
+    <PageHeader
+      eyebrow="投递管理"
+      :icon="CalendarDays"
+      title="求职日历"
+      description="集中安排投递、跟进、面试和 Offer 截止，重要节点一眼可见。"
+    />
+
+    <ModuleTabs :items="moduleTabs" />
 
     <el-tabs v-model="activeTab" class="view-tabs">
       <el-tab-pane label="求职日历" name="calendar">
@@ -48,12 +49,13 @@
       @update:visible="preparationDialogVisible = $event"
       @generated="loadEvents"
     />
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CalendarDays } from 'lucide-vue-next'
 
 import {
   createCareerCalendarEventApi,
@@ -65,7 +67,10 @@ import {
   type CareerCalendarEventWithPreparationVO
 } from '@/api/careerGrowth'
 import { getApplicationsApi, type JobApplicationVO } from '@/api/v4'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { useCalendarTimezone } from '@/composables/useCalendarTimezone'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { downloadBlobReliably } from '@/features/reliable-download'
 import type { CareerCalendarEventSave } from '@/types/careerGrowth'
 import { getErrorMessage } from '@/utils/error'
@@ -75,6 +80,7 @@ import CareerImportPanel from './components/CareerImportPanel.vue'
 import CareerInterviewPreparationDialog from './components/CareerInterviewPreparationDialog.vue'
 
 const { timezone } = useCalendarTimezone()
+const moduleTabs = useUserModuleTabs('progress')
 
 const activeTab = ref<'calendar' | 'import'>('calendar')
 const events = ref<CareerCalendarEventWithPreparationVO[]>([])

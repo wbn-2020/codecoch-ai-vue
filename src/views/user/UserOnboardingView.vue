@@ -21,6 +21,8 @@
       </div>
     </section>
 
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="real-progress-panel" v-loading="realProgressLoading">
       <div class="real-progress-head">
         <div>
@@ -242,6 +244,8 @@ import {
   fetchCachedTodayAgentTasks,
   fetchCachedV3DashboardOverview
 } from '@/composables/useUserHomeDataCache'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import { getErrorMessage } from '@/utils/error'
@@ -279,6 +283,7 @@ interface RealPrimaryAction {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('today')
 
 const steps: StepItem[] = [
   { key: 'path', title: '选择路径', desc: '先决定从哪里开始准备' },

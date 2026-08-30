@@ -246,8 +246,8 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    const hole = wrapper.get('.arena-ring__hole')
-    expect(hole.text()).toContain('76')
+    const readinessMetric = wrapper.get('[data-testid="readiness-metric"]')
+    expect(readinessMetric.text()).toContain('76')
     expect(wrapper.text()).toContain('仍有 2 项岗位要求待补齐')
     expect(getLatestJobReadinessApi).toHaveBeenCalledWith(88, {
       silentError: true
@@ -266,7 +266,7 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.get('.arena-ring__hole').text()).toContain('--')
+    expect(wrapper.get('[data-testid="readiness-metric"]').text()).toContain('--')
     expect(wrapper.text()).toContain('当前证据不足，暂不展示准备度分数')
   })
 

@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-bt">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-bt__page">
       <!-- 页头 -->
       <div class="arena-between arena-bt__head">
@@ -179,6 +181,8 @@ import {
 } from '@/features/arena-social'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 
 type Phase = 'lobby' | 'matching' | 'fighting' | 'settled'
 
@@ -186,6 +190,7 @@ const QUESTION_SECONDS = 20
 const QUESTION_COUNT = 5
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 

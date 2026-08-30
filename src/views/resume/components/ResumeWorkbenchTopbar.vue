@@ -167,11 +167,12 @@ const emit = defineEmits<{
   display: grid;
   grid-template-columns: minmax(250px, 1fr) auto minmax(360px, 1fr);
   align-items: center;
-  min-height: 58px;
-  padding: 0 16px;
+  min-height: 60px;
+  padding: 0 18px;
   border-bottom: 1px solid var(--resume-workbench-line);
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text);
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.03), 0 8px 20px -16px rgba(26, 25, 23, 0.18);
 }
 
 .resume-workbench-topbar__document,
@@ -199,12 +200,13 @@ const emit = defineEmits<{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 9px;
   background: transparent;
   color: var(--resume-workbench-muted);
+  transition: background 0.16s ease, color 0.16s ease;
 
   &:hover,
   &:focus-visible {
@@ -260,13 +262,14 @@ const emit = defineEmits<{
     align-items: center;
     justify-content: center;
     gap: 5px;
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 6px;
+    min-height: 36px;
+    padding: 0 13px;
+    border-radius: 9px;
     background: transparent;
     color: var(--resume-workbench-muted);
     font-size: 12.5px;
     font-weight: 650;
+    transition: background 0.16s ease, color 0.16s ease;
 
     &:hover,
     &:focus-visible {
@@ -278,14 +281,15 @@ const emit = defineEmits<{
     &.is-active {
       background: var(--resume-workbench-accent-soft);
       color: var(--resume-workbench-accent);
+      font-weight: 700;
     }
 
     > span {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 16px;
-      height: 16px;
+      width: 17px;
+      height: 17px;
       border: 1px solid currentColor;
       border-radius: 50%;
       font-size: 9px;
@@ -305,13 +309,13 @@ const emit = defineEmits<{
   align-items: center;
   flex: 0 0 auto;
   gap: 2px;
-  padding-right: 7px;
+  padding-right: 9px;
   border-right: 1px solid var(--resume-workbench-line);
 
   .resume-workbench-topbar__icon-button {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
 
     &:disabled {
       cursor: not-allowed;
@@ -345,14 +349,16 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 0 11px;
+  min-height: 36px;
+  padding: 0 13px;
   border: 1px solid var(--resume-workbench-line-strong);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text-soft);
   font-size: 12.5px;
   font-weight: 650;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease,
+    box-shadow 0.16s ease, transform 0.08s ease;
 
   &:hover,
   &:focus-visible {
@@ -375,12 +381,14 @@ const emit = defineEmits<{
   border-color: var(--resume-workbench-accent);
   background: var(--resume-workbench-accent);
   color: #fff;
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.06), 0 8px 16px -8px rgba(31, 111, 92, 0.5);
 
   &:hover,
   &:focus-visible {
     border-color: var(--resume-workbench-accent-strong);
     background: var(--resume-workbench-accent-strong);
     color: #fff;
+    box-shadow: 0 2px 4px rgba(26, 25, 23, 0.08), 0 12px 22px -10px rgba(31, 111, 92, 0.55);
   }
 }
 

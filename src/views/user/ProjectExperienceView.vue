@@ -1,5 +1,7 @@
 <template>
   <div class="project-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="page-hero">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -239,12 +241,15 @@ import {
   updateResumeProjectApi
 } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { ResumeDetailVO, ResumeProjectDTO, ResumeProjectVO, ResumeVO } from '@/types/resume'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const route = useRoute()
 const resumes = ref<ResumeVO[]>([])
 const selectedResumeId = ref<number>()

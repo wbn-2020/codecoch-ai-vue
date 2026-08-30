@@ -65,7 +65,10 @@ vi.mock('@/utils/userMessage', () => ({
 const mountLayout = () => mount(UserLayout, {
   global: {
     stubs: {
-      ArenaTopNav: true,
+      UserAppShell: {
+        template: '<div class="user-app-shell-stub"><slot /></div>'
+      },
+      CommandPalette: true,
       RouteErrorBoundary: {
         template: '<div><slot /></div>'
       },
@@ -96,7 +99,7 @@ describe('UserLayout request error ownership', () => {
     routePath.value = '/dashboard'
     routeMeta.value = {}
     userMessageApi.closeTransientErrors.mockReset()
-    document.body.classList.remove('is-user-layout-active', 'arena-overlay-theme')
+    document.body.classList.remove('is-user-layout-active', 'user-overlay-theme')
   })
 
   it('clears the error panel on navigation and ignores late errors owned by the previous route', async () => {

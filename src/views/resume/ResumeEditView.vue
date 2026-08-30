@@ -45,6 +45,8 @@
       @mode-change="setInspectorMode"
     />
 
+    <ModuleTabs class="resume-workbench-module-tabs" :items="moduleTabs" />
+
     <div v-if="saveError" class="resume-save-error" role="alert">
       <div>
         <b>简历尚未保存</b>
@@ -869,7 +871,9 @@ import { getResumeAtsTemplatesApi } from '@/api/resumeDelivery'
 import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   buildResumeExportChecks,
   isResumeTemplateUnlocked,
@@ -911,6 +915,7 @@ import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('prepare')
 const gameProfile = getActivePinia() ? useGameProfileStore() : null
 const resumeId = computed(() => getRouteNumberParam(route.params.id as string))
 const isEdit = computed(() => Boolean(resumeId.value))
@@ -4112,10 +4117,10 @@ onBeforeUnmount(() => {
   gap: 16px;
 
   .editor-hero {
-    border: 1.5px solid #b9e7cd;
+    border: 1px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #effcf4, #ffffff 70%);
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    background: var(--arena-grn-soft);
+    box-shadow: var(--arena-shadow-subtle);
 
     h1 {
       font-size: 28px;
@@ -4154,7 +4159,7 @@ onBeforeUnmount(() => {
   .resume-template-strip {
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    box-shadow: var(--arena-shadow-subtle);
   }
 
   .live-feedback-strip {
@@ -4252,8 +4257,8 @@ onBeforeUnmount(() => {
   }
 
   .ai-writing-card {
-    border-color: #d7ccff;
-    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
+    border-color: rgba(111, 92, 147, 0.28);
+    background: var(--arena-vio-soft);
   }
 
   .template-selector {
@@ -4479,7 +4484,7 @@ onBeforeUnmount(() => {
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
     background: #ffffff;
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    box-shadow: var(--arena-shadow-subtle);
   }
 
   .resume-document-status {
@@ -4651,7 +4656,7 @@ onBeforeUnmount(() => {
       border: 1.5px solid var(--arena-line);
       border-radius: 7px;
       background: #ffffff;
-      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+      box-shadow: var(--arena-shadow-subtle);
     }
 
     .template-copy {
@@ -5492,20 +5497,20 @@ onBeforeUnmount(() => {
 
 // Resume workbench v2. This final scoped layer owns only the resume editor route.
 .resume-workbench-page.resume-editor {
-  --resume-workbench-bg: #e9edf2;
+  --resume-workbench-bg: #edebe7;
   --resume-workbench-surface: #ffffff;
-  --resume-workbench-surface-soft: #f5f7fa;
-  --resume-workbench-line: #dde2e9;
-  --resume-workbench-line-strong: #c7cfda;
-  --resume-workbench-text: #18202b;
-  --resume-workbench-text-soft: #3f4b5c;
-  --resume-workbench-muted: #667386;
-  --resume-workbench-accent: #2563eb;
-  --resume-workbench-accent-strong: #1d4ed8;
-  --resume-workbench-accent-soft: #eaf1ff;
-  --resume-workbench-success: #137a63;
-  --resume-workbench-success-soft: #e8f6f1;
-  --resume-workbench-warning: #9a5d0b;
+  --resume-workbench-surface-soft: #f0efeb;
+  --resume-workbench-line: #e3e0da;
+  --resume-workbench-line-strong: #c9c4bb;
+  --resume-workbench-text: #1a1917;
+  --resume-workbench-text-soft: #57534e;
+  --resume-workbench-muted: #6e6963;
+  --resume-workbench-accent: #1f6f5c;
+  --resume-workbench-accent-strong: #1a5e4e;
+  --resume-workbench-accent-soft: #eaf2ef;
+  --resume-workbench-success: #1f6f5c;
+  --resume-workbench-success-soft: #eaf2ef;
+  --resume-workbench-warning: #b4690e;
   width: 100%;
   max-width: none;
   display: flex;
@@ -6389,8 +6394,8 @@ onBeforeUnmount(() => {
       width: 100%;
       min-width: 0;
       max-width: 100%;
-      height: min(780px, calc(100dvh - 160px));
-      max-height: min(780px, calc(100dvh - 160px));
+      height: min(780px, calc(100dvh - var(--resume-mobile-workbench-chrome)));
+      max-height: min(780px, calc(100dvh - var(--resume-mobile-workbench-chrome)));
       border-left: 0;
       overflow: auto;
     }
@@ -6413,13 +6418,15 @@ onBeforeUnmount(() => {
 
 @media (max-width: 720px) {
   .resume-workbench-page.resume-editor {
+    --resume-mobile-workbench-chrome: 196px;
+
     min-height: calc(100dvh - 54px);
 
     .resume-workbench-editor,
     .resume-workbench-inspector,
     .resume-workbench-preview {
       height: auto;
-      min-height: calc(100dvh - 158px);
+      min-height: calc(100dvh - var(--resume-mobile-workbench-chrome));
       max-height: none;
     }
 
@@ -6440,7 +6447,7 @@ onBeforeUnmount(() => {
     }
 
     .resume-paper-wrap {
-      min-height: calc(100dvh - 260px);
+      min-height: calc(100dvh - 298px);
       padding: 14px 8px 24px;
     }
 
@@ -6502,7 +6509,15 @@ onBeforeUnmount(() => {
 // Content-level constraints. Panel placement and collapse states are owned by
 // ResumeWorkbenchShell.vue.
 .resume-workbench-page.resume-editor {
+  --resume-mobile-workbench-chrome: 212px;
   gap: 0;
+
+  .resume-workbench-module-tabs {
+    flex: 0 0 auto;
+    padding-inline: 16px;
+    border-bottom: 1px solid var(--resume-workbench-line, var(--user-border));
+    background: var(--resume-workbench-surface, var(--user-surface));
+  }
 
   .preview-toolbar {
     min-width: 0;

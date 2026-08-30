@@ -1,5 +1,7 @@
 <template>
   <div class="agent-task-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="task-hero">
       <div>
         <div class="task-eyebrow">
@@ -556,6 +558,8 @@ import AgentCoachActionDialog from '@/components/agent/AgentCoachActionDialog.vu
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useAgentCoachAction } from '@/composables/useAgentCoachAction'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { appConfig } from '@/config'
 import { buildAgentLoopActions } from '@/features/agent-loop/agentLoopRules'
 import {
@@ -588,6 +592,7 @@ interface SelectOption {
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('today')
 const workspaceTab = ref<'pending' | 'progress' | 'history'>('pending')
 const loading = ref(false)
 const asyncLoading = ref(false)

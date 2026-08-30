@@ -1,264 +1,353 @@
 <template>
-  <el-menu
-    ref="menuRef"
-    class="layout-menu user-sidebar-menu"
-    :default-active="activePath"
-    :collapse="collapsed"
-    :unique-opened="true"
-    router
-    @select="handleSelect"
-  >
-    <template v-for="section in menuSections" :key="section.key">
-      <el-menu-item v-if="section.children.length === 1 && !section.forceGroup" :index="section.children[0].path">
-        <el-icon>
-          <component :is="section.icon" />
-        </el-icon>
-        <template #title>{{ section.children[0].label }}</template>
-      </el-menu-item>
-      <el-sub-menu v-else :index="section.key">
-        <template #title>
-          <el-icon>
-            <component :is="section.icon" />
-          </el-icon>
-          <span>{{ section.label }}</span>
-        </template>
-        <el-menu-item v-for="item in section.children" :key="item.path" :index="item.path">
-          <el-icon>
-            <component :is="item.icon" />
-          </el-icon>
-          <template #title>{{ item.label }}</template>
-        </el-menu-item>
-      </el-sub-menu>
+  <nav class="user-sidebar-nav" :class="{ 'is-collapsed': sidebarProps.collapsed }" aria-label="用户端主导航">
+    <template v-for="row in visibleRows" :key="row.key">
+      <p v-if="row.section && !sidebarProps.collapsed" class="user-sidebar-nav__section">{{ row.section }}</p>
+      <section
+        class="user-sidebar-nav__group"
+        :class="{ 'is-first-in-section': Boolean(row.section) }"
+      >
+        <div
+          class="user-sidebar-nav__group-row"
+          :class="{ 'is-active': activeGroup?.key === row.group.key }"
+        >
+          <RouterLink
+            class="user-sidebar-nav__group-link"
+            :to="row.group.path"
+            :title="collapsed ? row.group.label : undefined"
+            :aria-current="activeGroup?.key === row.group.key ? 'page' : undefined"
+          >
+            <component :is="row.group.icon" :size="18" aria-hidden="true" />
+            <span>{{ row.group.label }}</span>
+            <small v-if="badgeOf(row.group) && !sidebarProps.collapsed" class="user-sidebar-nav__badge">{{ badgeOf(row.group) }}</small>
+          </RouterLink>
+          <button
+            v-if="!sidebarProps.collapsed && row.group.items.length"
+            type="button"
+            class="user-sidebar-nav__toggle"
+            :aria-expanded="isExpanded(row.group.key)"
+            :aria-label="`切换「${row.group.label}」子菜单`"
+            @click="toggleGroup(row.group.key)"
+          >
+            <ChevronDown v-if="isExpanded(row.group.key)" :size="14" aria-hidden="true" />
+            <ChevronRight v-else :size="14" aria-hidden="true" />
+          </button>
+        </div>
+        <div v-if="!collapsed && isExpanded(row.group.key)" class="user-sidebar-nav__items">
+          <RouterLink
+            v-for="item in row.group.items"
+            :key="item.key"
+            class="user-sidebar-nav__item"
+            :class="{ 'is-active': activeItem?.item.key === item.key }"
+            :to="item.path"
+            :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
+          >
+            <component :is="item.icon" :size="15" aria-hidden="true" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
+      </section>
     </template>
-  </el-menu>
+  </nav>
 </template>
 
 <script setup lang="ts">
-import {
-  Bell,
-  Calendar,
-  Collection,
-  Compass,
-  DataBoard,
-  DocumentChecked,
-  Files,
-  Key,
-  MagicStick,
-  Medal,
-  Reading,
-  Star,
-  TrendCharts,
-  User
-} from '@element-plus/icons-vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import { ChevronDown, ChevronRight } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { appConfig } from '@/config'
-import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 
-const props = defineProps<{
+import {
+  getVisibleUserNavigationGroups,
+  resolveUserNavigationGroup,
+  resolveUserNavigationItem,
+  type UserNavigationGroup
+} from '@/config/userNavigation'
+
+const sidebarProps = withDefaults(defineProps<{
   collapsed?: boolean
-}>()
+  /** 组 key → 徽标数（仅展示真实业务数据，无数据的组不显示） */
+  badges?: Record<string, string | number>
+}>(), { collapsed: false, badges: () => ({}) })
 
 const route = useRoute()
-const menuRef = ref<{ close: (index: string) => void }>()
+const visibleGroups = computed(() => getVisibleUserNavigationGroups())
+const routeContext = computed(() => ({
+  name: route.name,
+  path: String(route.path || route.fullPath || '/').split(/[?#]/, 1)[0] || '/'
+}))
+const activeItem = computed(() => resolveUserNavigationItem(routeContext.value, visibleGroups.value))
+const activeGroup = computed(() => resolveUserNavigationGroup(routeContext.value, visibleGroups.value))
 
-interface UserMenuItem {
-  label: string
-  path: string
-  icon: unknown
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
-  previewOnly?: boolean
+// v21 原型侧边栏的两级分组标题（文档相关/原型/dashboard-redesign.html）
+const SECTION_BY_GROUP: Partial<Record<UserNavigationGroup['key'], string>> = {
+  today: '主流程',
+  prepare: '求职准备'
 }
 
-interface UserMenuSection {
+interface SidebarRow {
   key: string
-  label: string
-  icon: unknown
-  forceGroup?: boolean
-  children: UserMenuItem[]
+  group: UserNavigationGroup
+  section?: string
 }
 
-const isMenuItemVisible = (item: UserMenuItem) => {
-  if (item.previewOnly) return isV4PreviewAccessEnabled()
-  const featureFlag = item.featureFlag
-  if (!featureFlag) return true
-  if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
-  if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
-  if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
-  if (featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
-  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
-  return true
-}
-
-const baseMenuSections: UserMenuSection[] = [
-  {
-    key: 'workspace',
-    label: '工作台',
-    icon: DataBoard,
-    forceGroup: true,
-    children: [
-      { label: '今日计划', path: '/dashboard', icon: DataBoard },
-      { label: '新手引导', path: '/onboarding', icon: Compass }
-    ]
-  },
-  {
-    key: 'agent-growth',
-    label: '今日训练',
-    icon: MagicStick,
-    forceGroup: true,
-    children: [
-      { label: '今日任务', path: '/agent/today', icon: MagicStick },
-      { label: '任务中心', path: '/agent/tasks', icon: Calendar },
-      { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '求职周报', path: '/agent/weekly-reports', icon: TrendCharts, featureFlag: 'v6WeeklyReport' },
-      { label: '求职实验台', path: '/job-experiments', icon: TrendCharts },
-      { label: '作品集演示', path: '/portfolio-demo', icon: DocumentChecked },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Growth' },
-      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Growth' },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Growth' }
-    ]
-  },
-  {
-    key: 'resume-job',
-    label: '简历求职',
-    icon: Files,
-    forceGroup: true,
-    children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files, previewOnly: true },
-      { label: '简历', path: '/resumes', icon: Files },
-      { label: '项目经历', path: '/projects', icon: Files },
-      { label: '项目素材', path: '/project-evidence', icon: Files },
-      { label: '证据使用', path: '/evidence-assets', icon: DocumentChecked, featureFlag: 'v9EvidenceLearning' },
-      { label: '求职进度', path: '/applications', icon: Compass },
-      { label: '求职日历', path: '/career-calendar', icon: Calendar },
-      { label: '投递包', path: '/application-packages', icon: DocumentChecked },
-      { label: '岗位目标', path: '/job-targets', icon: Compass },
-      { label: '简历匹配', path: '/resume-match', icon: Files },
-      { label: '能力画像', path: '/skill-profile', icon: Medal },
-      { label: '能力地图', path: '/ability-map', icon: Medal }
-    ]
-  },
-  {
-    key: 'question-practice',
-    label: '题库练习',
-    icon: Collection,
-    forceGroup: true,
-    children: [
-      { label: '推荐题目', path: '/questions/recommendations', icon: Collection },
-      { label: '刷题练习', path: '/questions/practice', icon: Reading },
-      { label: '题库', path: '/questions', icon: Collection },
-      { label: '错题本', path: '/questions/wrong-records', icon: DocumentChecked },
-      { label: '收藏题目', path: '/questions/favorites', icon: Star }
-    ]
-  },
-  {
-    key: 'interview-training',
-    label: '面试训练',
-    icon: Compass,
-    forceGroup: true,
-    children: [
-      { label: '创建面试', path: '/interviews/create', icon: Compass },
-      { label: '面试历史', path: '/interviews/history', icon: Medal }
-    ]
-  },
-  {
-    key: 'study-plan',
-    label: '学习成长',
-    icon: Reading,
-    forceGroup: true,
-    children: [
-      { label: '差距学习计划', path: '/study-plans/from-gap', icon: Reading },
-      { label: '计划总览', path: '/study-plans', icon: Reading },
-      { label: '每日任务', path: '/daily-tasks', icon: Calendar },
-      { label: '薄弱点分析', path: '/weakness-analysis', icon: TrendCharts }
-    ]
-  },
-  {
-    key: 'personal-center',
-    label: '个人中心',
-    icon: User,
-    forceGroup: true,
-    children: [
-      { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Knowledge' },
-      { label: '修改密码', path: '/password', icon: Key },
-      { label: '个人资料', path: '/profile', icon: User }
-    ]
+const visibleRows = computed<SidebarRow[]>(() => {
+  const rows: SidebarRow[] = []
+  let lastSection: string | undefined
+  for (const group of visibleGroups.value) {
+    const section = SECTION_BY_GROUP[group.key]
+    rows.push({ key: group.key, group, section: section && section !== lastSection ? section : undefined })
+    lastSection = section ?? lastSection
   }
-]
-
-const menuSections = computed(() =>
-  baseMenuSections
-    .map((section) => ({
-      ...section,
-      children: section.children.filter(isMenuItemVisible)
-    }))
-    .filter((section) => section.children.length > 0)
-)
-
-const closeAllMenus = () => {
-  if (!props.collapsed) return
-  nextTick(() => {
-    menuSections.value.forEach((section) => menuRef.value?.close(section.key))
-  })
-}
-
-const handleSelect = () => {
-  closeAllMenus()
-}
-
-const activePath = computed(() => {
-  if (route.path.startsWith('/onboarding')) return '/onboarding'
-  if (route.path.startsWith('/agent/today') || route.path.startsWith('/agent/runs')) return '/agent/today'
-  if (route.path.startsWith('/agent/tasks')) return '/agent/tasks'
-  if (route.path.startsWith('/agent/weekly-reports')) return '/agent/weekly-reports'
-  if (route.path.startsWith('/analytics/personal')) return '/analytics/personal'
-  if (route.path.startsWith('/job-experiments')) return '/job-experiments'
-  if (route.path.startsWith('/portfolio-demo')) return '/portfolio-demo'
-  if (route.path.startsWith('/agent/reviews')) return '/agent/reviews'
-  if (route.path.startsWith('/growth/profile') || route.path.startsWith('/growth/skills') || route.path.startsWith('/growth/readiness')) return '/growth/profile'
-  if (route.path.startsWith('/agent/memory')) return '/agent/memory'
-  if (route.path.startsWith('/knowledge')) return '/knowledge'
-  if (route.path.startsWith('/resume-versions')) return '/resume-versions'
-  if (route.path.startsWith('/applications')) return '/applications'
-  if (route.path.startsWith('/job-targets')) return '/job-targets'
-  if (route.path.startsWith('/resume-match')) return '/resume-match'
-  if (route.path.startsWith('/skill-profile')) return '/skill-profile'
-  if (route.path.startsWith('/ability-map')) return '/ability-map'
-  if (route.path.startsWith('/study-plans/from-gap')) return '/study-plans/from-gap'
-  if (route.path.startsWith('/questions/recommendations')) return '/questions/recommendations'
-  if (route.path.startsWith('/questions/practice')) return '/questions/practice'
-  if (route.path.startsWith('/questions/wrong-records')) return '/questions/wrong-records'
-  if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
-  if (route.path.startsWith('/questions')) return '/questions'
-  if (route.path.startsWith('/project-evidence')) return '/project-evidence'
-  if (route.path.startsWith('/evidence-assets')) return '/evidence-assets'
-  if (route.path.startsWith('/resumes')) return '/resumes'
-  if (route.path.startsWith('/projects')) return '/projects'
-  if (route.path.startsWith('/study-plans')) return '/study-plans'
-  if (route.path.startsWith('/daily-tasks')) return '/daily-tasks'
-  if (route.path.startsWith('/weakness-analysis')) return '/weakness-analysis'
-  if (route.path.startsWith('/notifications')) return '/notifications'
-  if (route.path.startsWith('/password')) return '/password'
-  if (route.path.startsWith('/interviews/history')) return '/interviews/history'
-  if (route.path.startsWith('/interviews')) return '/interviews/create'
-  return route.path
+  return rows
 })
 
-watch(() => route.fullPath, closeAllMenus)
+const badgeOf = (group: UserNavigationGroup) => {
+  const value = sidebarProps.badges?.[group.key]
+  return value === undefined || value === '' || value === 0 ? undefined : value
+}
+
+const EXPANDED_KEY = 'codecoachai:user-sidebar-expanded-groups'
+
+const readExpandedGroups = (): Set<string> | null => {
+  try {
+    const raw = localStorage.getItem(EXPANDED_KEY)
+    if (raw === null) return null
+    const parsed = JSON.parse(raw) as unknown
+    const keys = Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === 'string') : []
+    return new Set(keys)
+  } catch {
+    return null
+  }
+}
+
+// 在 setup 阶段同步恢复展开状态，先于下方 immediate watcher 运行；
+// 否则 watcher 会先把（空的）集合持久化，导致“首次访问展开全部”永远不生效。
+// 区分“从未持久化（默认展开全部）”与“用户主动全部收起（尊重空集合）”。
+const persistedGroups = readExpandedGroups()
+const expandedGroups = ref<Set<string>>(
+  persistedGroups ?? new Set(visibleGroups.value.map((group) => group.key))
+)
+
+const saveExpandedGroups = () => {
+  try {
+    localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedGroups.value]))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const isExpanded = (key: string) => expandedGroups.value.has(key)
+
+const toggleGroup = (key: string) => {
+  if (isExpanded(key)) {
+    expandedGroups.value.delete(key)
+  } else {
+    expandedGroups.value.add(key)
+  }
+  saveExpandedGroups()
+}
+
+// Auto-expand the active group so users always see where they are
+watch(
+  activeGroup,
+  (group) => {
+    if (group && !isExpanded(group.key)) {
+      expandedGroups.value.add(group.key)
+      saveExpandedGroups()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
-.user-sidebar-menu {
-  :deep(.el-sub-menu__title),
-  :deep(.el-menu-item) {
-    gap: 4px;
-  }
+.user-sidebar-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  padding: 14px 10px;
+  scrollbar-width: thin;
+}
 
-  :deep(.el-sub-menu .el-menu-item) {
-    min-width: 0;
-    padding-left: 48px !important;
-    font-size: 14px;
+.user-sidebar-nav__section {
+  margin: 6px 0 0;
+  padding: 0 10px;
+  color: var(--user-text-subtle, #a8a29a);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.user-sidebar-nav__group {
+  min-width: 0;
+}
+
+.user-sidebar-nav__group.is-first-in-section {
+  margin-top: 4px;
+}
+
+.user-sidebar-nav__group-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 40px;
+  padding-right: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--user-radius-md, 10px);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+// 链接热区铺满整行（保留旧「点任意位置即导航」交互），toggle 在其上独立可点
+.user-sidebar-nav__group-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.user-sidebar-nav__group-link,
+.user-sidebar-nav__item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--user-text-secondary, #57534e);
+  text-decoration: none;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.user-sidebar-nav__group-link {
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--user-radius-md, 10px);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.user-sidebar-nav__group-row:hover,
+.user-sidebar-nav__group-row:focus-within {
+  background: var(--user-surface-muted, #f0efeb);
+}
+
+.user-sidebar-nav__group-row:hover .user-sidebar-nav__group-link,
+.user-sidebar-nav__item:hover,
+.user-sidebar-nav__item:focus-visible {
+  color: var(--user-text, #1a1917);
+}
+
+.user-sidebar-nav__group-link:focus-visible,
+.user-sidebar-nav__item:focus-visible {
+  outline: 0;
+}
+
+// v21 侧栏 active 态：tint 底 + 主色文字 + 1px 内描边（不做左侧色条）
+.user-sidebar-nav__group-row.is-active {
+  background: var(--user-primary-soft, #eaf2ef);
+  border-color: var(--user-primary-border, rgba(31, 111, 92, 0.28));
+}
+
+.user-sidebar-nav__group-row.is-active .user-sidebar-nav__group-link {
+  color: var(--user-primary, #1f6f5c);
+}
+
+.user-sidebar-nav__group-link span,
+.user-sidebar-nav__item span {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-sidebar-nav__badge {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--user-danger-soft, #fbeeee);
+  color: var(--user-danger, #b03a3a);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-sidebar-nav__items {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 28px;
+}
+
+.user-sidebar-nav__item {
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--user-radius-sm, 6px);
+  color: var(--user-text-muted, #6e6963);
+  font-size: 12px;
+}
+
+.user-sidebar-nav__item.is-active {
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
+  font-weight: 600;
+}
+
+.user-sidebar-nav__toggle {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--user-text-subtle, #a8a29a);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.user-sidebar-nav__toggle:hover,
+.user-sidebar-nav__toggle:focus-visible {
+  background: var(--user-surface-muted, #f0efeb);
+  color: var(--user-primary, #1f6f5c);
+  outline: 0;
+}
+
+// ---- Collapsed (icon rail) state ----
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__section {
+  display: none;
+}
+
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link span,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__badge,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__toggle,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__items {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .user-sidebar-nav {
+    padding-inline: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-sidebar-nav__group-link,
+  .user-sidebar-nav__item {
+    transition: none;
   }
 }
 </style>

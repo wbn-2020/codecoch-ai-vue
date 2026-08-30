@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-iv">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-iv__page">
       <!-- 首屏只承载模拟形式选择，推荐依据和微调留在后续折叠区。 -->
       <div class="arena-between arena-iv__head">
@@ -447,6 +449,8 @@ import {
 import { buildInterviewCreatePayload } from '@/features/interview-create'
 import { saveInterviewVoiceProductContext } from '@/features/interview-voice-product'
 import { useGameProfileStore } from '@/features/game-profile'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useAuthStore } from '@/stores/auth'
 import type {
   InterviewScenarioBindingVO,
@@ -466,6 +470,7 @@ import type { SelectOption } from '@/types/common'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('interview')
 const route = useRoute()
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()

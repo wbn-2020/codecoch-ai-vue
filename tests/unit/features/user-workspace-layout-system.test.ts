@@ -88,28 +88,29 @@ describe('user workspace layout system', () => {
 
   it('uses the wide compact user workspace shell', () => {
     const layout = readSource('src/layouts/UserLayout.vue')
-    const topNav = readSource('src/components/layout/UserTopNav.vue')
+    const appShell = readSource('src/components/layout/UserAppShell.vue')
     const components = readSource('src/styles/user-components.scss')
     const elementTheme = readSource('src/styles/element-dark.scss')
     const variables = readSource('src/styles/variables.scss')
-    const arena = readSource('src/styles/arena.scss')
+    const theme = readSource('src/styles/user-theme.scss')
     const routes = readSource('src/router/routes.ts')
 
     expect(layout).toMatch(/width:\s*min\(100%,\s*1440px\)/)
-    expect(layout).toMatch(/\.arena-frame\s*\{[\s\S]*?width:\s*min\(calc\(100%\s*-\s*32px\),\s*1680px\)/)
     expect(layout).toMatch(
-      />\s*:deep\(\.page-shell:not\(\.arena\):not\(\.interview-room\)\),[\s\S]*?width:\s*min\(100%,\s*1440px\)/
+      />\s*:deep\(\.page-shell:not\(\.interview-room\)\),[\s\S]*?width:\s*min\(100%,\s*1440px\)/
     )
     expect(layout).toMatch(
       />\s*:deep\(\.page-shell\.page-shell--wide\)\s*\{[\s\S]*?width:\s*min\(100%,\s*1600px\)/
     )
     expect(layout).not.toMatch(/font-size:\s*[^;]*vw/)
     expect(layout).not.toMatch(/radial-gradient\(/)
-    expect(topNav).toMatch(/width:\s*min\(100%,\s*1440px\)/)
-    expect(layout).toContain("document.body.classList.toggle('arena-overlay-theme', enabled)")
-    expect(layout).toContain("document.body.classList.remove('arena-overlay-theme')")
+    expect(appShell).toContain('grid-template-columns: var(--user-sidebar-width) minmax(0, 1fr)')
+    expect(appShell).toContain('width: var(--user-sidebar-width)')
+    expect(appShell).toContain('useDocumentScrollLock(mobileOpen)')
+    expect(layout).toContain("document.body.classList.toggle('user-overlay-theme', !immersive)")
+    expect(layout).toContain("document.body.classList.remove('user-overlay-theme')")
     expect(routes).toContain('arenaTheme: true')
-    expect(arena).toMatch(/body\.arena-overlay-theme\s*\{[\s\S]*?--el-bg-color:\s*#ffffff/)
+    expect(theme).toMatch(/body\.user-overlay-theme\s*\{[\s\S]*?--el-bg-color:\s*#ffffff/)
     expect(components).toContain('Compact workspace density')
     expect(components).toMatch(/\.content-card__body,[\s\S]*?padding:\s*16px/)
     expect(elementTheme).not.toMatch(/backdrop-filter\s*:/i)
