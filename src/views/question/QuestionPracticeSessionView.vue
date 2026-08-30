@@ -1674,8 +1674,8 @@ onBeforeUnmount(() => {
   }
 
   .session-hero {
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    border-color: #d5e8e0;
+    background: linear-gradient(135deg, #eaf2ef, #ffffff 72%);
     padding: 22px;
 
     h1 {
@@ -1929,7 +1929,7 @@ onBeforeUnmount(() => {
 
   .setup-details {
     border-color: var(--arena-line);
-    background: #f8faf8;
+    background: #f6f6f4;
   }
 
   .setup-details summary {
@@ -1948,12 +1948,12 @@ onBeforeUnmount(() => {
   .route-context,
   .current-question-head,
   .review-stage-head {
-    border-color: #b9e7cd;
-    background: #f5fcf7;
+    border-color: #d5e8e0;
+    background: #f6f6f4;
   }
 
   .source-trust-box {
-    border-color: #d7ccff;
+    border-color: #d8cfeb;
     background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 75%);
   }
 
@@ -1961,7 +1961,7 @@ onBeforeUnmount(() => {
   .question-content,
   .answer-frame,
   .review-grid section {
-    background: #f8faf8;
+    background: #f6f6f4;
   }
 
   .answer-frame em {
@@ -1976,8 +1976,8 @@ onBeforeUnmount(() => {
   }
 
   .coverage-list article.done {
-    border-color: #b9e7cd;
-    background: #f5fcf7;
+    border-color: #d5e8e0;
+    background: #f6f6f4;
   }
 
   .progress-body :deep(.el-progress-bar__outer),
@@ -2087,9 +2087,9 @@ onBeforeUnmount(() => {
 
 .practice-ready {
   padding: 26px 28px;
-  border: 1.5px solid #b9e7cd;
+  border: 1.5px solid #d5e8e0;
   border-radius: var(--arena-radius-card);
-  background: linear-gradient(135deg, #f0fbf4, #fff 74%);
+  background: linear-gradient(135deg, #eaf2ef, #fff 74%);
   box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
 }
 
@@ -2149,12 +2149,20 @@ onBeforeUnmount(() => {
 .practice-ready__settings summary::after {
   content: '+';
   float: right;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--arena-grn-soft);
   color: var(--arena-grn-d);
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .practice-ready__settings[open] summary::after {
-  content: '-';
+  content: '−';
 }
 
 .practice-ready__settings > :not(summary) {
@@ -2320,9 +2328,9 @@ onBeforeUnmount(() => {
   align-items: baseline;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid #b9e7cd;
+  border: 1px solid #d5e8e0;
   border-radius: 10px;
-  background: #f5fcf7;
+  background: #f6f6f4;
 
   span,
   em {
@@ -2349,7 +2357,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   border: 1px solid var(--arena-line);
   border-radius: 10px;
-  background: #f8faf8;
+  background: #f6f6f4;
 
   strong {
     width: 100%;
@@ -2380,7 +2388,7 @@ onBeforeUnmount(() => {
 .practice-review__coverage span {
   padding: 8px 10px;
   border-radius: 9px;
-  background: #f8faf8;
+  background: #f6f6f4;
   color: var(--arena-sub);
   font-size: 12px;
 }
@@ -2426,7 +2434,7 @@ onBeforeUnmount(() => {
     padding: 12px;
     border: 1px solid var(--arena-line);
     border-radius: 10px;
-    background: #f8faf8;
+    background: #f6f6f4;
   }
 
   h3 {
@@ -2487,7 +2495,7 @@ onBeforeUnmount(() => {
 }
 
 .practice-support-card--ai {
-  border-color: #d7ccff;
+  border-color: #d8cfeb;
   background: #fbfaff;
 }
 
@@ -2523,7 +2531,7 @@ onBeforeUnmount(() => {
 .practice-finish__stats span {
   padding: 7px 9px;
   border-radius: 9px;
-  background: #f2f4f2;
+  background: #f0efeb;
   color: var(--arena-sub);
   font-size: 12px;
 }

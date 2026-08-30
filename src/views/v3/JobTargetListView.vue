@@ -64,7 +64,7 @@
       </template>
 
       <template #filters>
-        <FilterBar>
+        <FilterBar class="target-filters">
           <el-input
             v-model.trim="query.keyword"
             class="target-filter-keyword"
@@ -128,51 +128,48 @@
           <article
             v-for="row in targets"
             :key="row.id"
-            class="target-row"
-            :class="{ 'is-current': row.currentFlag === 1 }"
+            class="target-card"
+            :class="[`is-${parseStateOf(row)}`, { 'is-current': row.currentFlag === 1 }]"
           >
-            <div class="target-row__primary">
-              <div class="target-row__tags">
-                <StatusChip v-if="row.currentFlag === 1" label="当前主目标" tone="success" dot />
-                <JobTargetStatusTag :status="row.status" />
-                <JobTargetStatusTag :status="row.parseStatus" />
+            <div class="target-card__tags">
+              <StatusChip v-if="row.currentFlag === 1" label="当前主目标" tone="success" dot />
+              <JobTargetStatusTag :status="row.status" />
+              <JobTargetStatusTag :status="row.parseStatus" />
+            </div>
+            <h3>{{ row.jobTitle || '未命名岗位' }}</h3>
+            <p class="target-card__company">{{ row.companyName || '公司待补充' }} · {{ row.jobLevel || '级别待补充' }}</p>
+            <p class="target-card__summary">{{ targetSummary(row) }}</p>
+            <div class="target-card__foot">
+              <span class="target-card__updated">最近更新 {{ formatDateTime(row.updatedAt || row.createdAt) }}</span>
+              <div class="target-card__actions">
+                <el-button type="primary" plain size="small" @click="router.push(`/job-targets/${row.id}/analysis`)">
+                  <ScanSearch :size="14" />
+                  {{ analysisActionLabel(row) }}
+                </el-button>
+                <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(row, command)">
+                  <el-button :icon="MoreHorizontal" circle size="small" title="更多岗位操作" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="edit">
+                        <Pencil :size="14" />
+                        编辑岗位描述
+                      </el-dropdown-item>
+                      <el-dropdown-item :disabled="parsingId !== null" command="parse">
+                        <Sparkles :size="14" />
+                        {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析岗位描述' }}
+                      </el-dropdown-item>
+                      <el-dropdown-item :disabled="row.currentFlag === 1 || settingCurrentId !== null" command="current">
+                        <CircleDot :size="14" />
+                        设为当前
+                      </el-dropdown-item>
+                      <el-dropdown-item :disabled="deletingId !== null" divided command="delete">
+                        <Trash2 :size="14" />
+                        删除岗位
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
-              <h3>{{ row.jobTitle || '未命名岗位' }}</h3>
-              <p>{{ row.companyName || '公司待补充' }} · {{ row.jobLevel || '级别待补充' }}</p>
-              <p class="target-row__summary">{{ targetSummary(row) }}</p>
-            </div>
-            <div class="target-row__meta">
-              <span>最近更新</span>
-              <strong>{{ formatDateTime(row.updatedAt || row.createdAt) }}</strong>
-            </div>
-            <div class="target-row__actions">
-              <el-button type="primary" plain @click="router.push(`/job-targets/${row.id}/analysis`)">
-                <ScanSearch :size="15" />
-                {{ analysisActionLabel(row) }}
-              </el-button>
-              <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(row, command)">
-                <el-button :icon="MoreHorizontal" circle title="更多岗位操作" />
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="edit">
-                      <Pencil :size="15" />
-                      编辑岗位描述
-                    </el-dropdown-item>
-                    <el-dropdown-item :disabled="parsingId !== null" command="parse">
-                      <Sparkles :size="15" />
-                      {{ row.parseStatus === 'PARSED' ? '重新解析' : '解析岗位描述' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item :disabled="row.currentFlag === 1 || settingCurrentId !== null" command="current">
-                      <CircleDot :size="15" />
-                      设为当前
-                    </el-dropdown-item>
-                    <el-dropdown-item :disabled="deletingId !== null" divided command="delete">
-                      <Trash2 :size="15" />
-                      删除岗位
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
             </div>
           </article>
         </div>
@@ -251,10 +248,21 @@ const latestUpdatedAt = computed(() => {
     .filter(Boolean)
     .sort()
   const latest = sortedDates[sortedDates.length - 1]
-  return latest ? formatDateTime(latest) : '--'
+  if (!latest) return '--'
+  // KPI 卡里只保留「月-日 时:分」，完整时间戳留给列表行
+  const compact = formatDateTime(latest).match(/^\d{4}-(\d{2}-\d{2}) (\d{2}:\d{2})/)
+  return compact ? `${compact[1]} ${compact[2]}` : formatDateTime(latest)
 })
 
 const normalizeParseStatus = (status?: string) => String(status || '').toUpperCase()
+// 原型 job-card 顶部色条按解析状态着色
+const parseStateOf = (row: TargetJobVO) => {
+  const status = normalizeParseStatus(row.parseStatus)
+  if (status === 'PARSED') return 'parsed'
+  if (status === 'PARSING') return 'parsing'
+  if (status === 'FAILED') return 'failed'
+  return 'pending'
+}
 const isParseInProgress = (status?: string) => normalizeParseStatus(status) === 'PARSING'
 const isParseFailed = (status?: string) => normalizeParseStatus(status) === 'FAILED'
 
@@ -437,38 +445,46 @@ onMounted(fetchAll)
 
 .target-summary {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 16px;
-  border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
-  background: var(--user-primary-faint);
+  padding: 16px 20px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-lg);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .target-summary__copy {
   min-width: 0;
 }
 
-.target-summary__copy > span,
-.target-row__meta > span {
-  color: var(--user-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
+// 「当前主目标」eyebrow 徽章（替代整片绿色水洗底）
+.target-summary__copy > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 600;
+  line-height: 1.6;
 }
 
-.target-summary h2,
-.target-row h3 {
+.target-summary h2 {
   margin: 5px 0 0;
   color: var(--user-text);
-  font-size: 18px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
 }
 
-.target-summary p,
-.target-row p {
+.target-summary p {
   margin: 5px 0 0;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.6;
 }
 
@@ -489,6 +505,11 @@ onMounted(fetchAll)
   width: min(280px, 100%);
 }
 
+// 收敛筛选行：下拉框不再撑满整行，与搜索框一行排布
+.target-filters :deep(.el-select) {
+  width: 168px;
+}
+
 .target-list {
   min-height: 240px;
   padding: 14px;
@@ -498,54 +519,112 @@ onMounted(fetchAll)
   margin-bottom: 12px;
 }
 
+// 原型 .job-card：双列卡片网格 + 顶部 3px 状态色条 + 虚线分隔的底部操作区
 .target-card-list {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.target-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, 158px) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 14px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-}
-
-.target-row.is-current {
-  border-color: var(--user-primary-border);
-  background: var(--user-primary-faint);
-}
-
-.target-row__primary {
+.target-card {
+  position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 18px 14px;
+  overflow: hidden;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-lg);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    background: var(--user-border-strong);
+  }
+
+  // v21 · 悬停仅用 hairline + 阴影表达层级，不做位移
+  &:hover {
+    border-color: var(--user-border-strong);
+    box-shadow: var(--user-shadow-sm);
+  }
+
+  &.is-parsed::before {
+    background: var(--user-primary);
+  }
+
+  &.is-parsing::before {
+    background: var(--user-warning);
+  }
+
+  &.is-failed::before {
+    background: var(--user-danger);
+  }
+
+  &.is-current {
+    border-color: var(--user-primary-border);
+
+    &::before {
+      background: var(--user-primary);
+    }
+  }
 }
 
-.target-row__tags,
-.target-row__actions {
+.target-card__tags,
+.target-card__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
 }
 
-.target-row__summary {
-  max-width: 78ch;
+.target-card h3 {
+  margin: 2px 0 0;
+  color: var(--user-text);
+  font-size: var(--user-text-h4, 15px);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
-.target-row__meta {
-  min-width: 0;
-  text-align: right;
-}
-
-.target-row__meta strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--user-text-secondary);
-  font-size: 12px;
+.target-card__company {
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-caption, 12px);
   line-height: 1.5;
+}
+
+.target-card__summary {
+  margin: 0;
+  color: var(--user-text-secondary);
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.target-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px dashed var(--user-border);
+}
+
+.target-card__updated {
+  color: var(--user-text-subtle);
+  font-size: var(--user-text-overline, 11px);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1180px) {
@@ -553,19 +632,8 @@ onMounted(fetchAll)
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .target-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .target-row__meta {
-    grid-column: 1;
-    text-align: left;
-  }
-
-  .target-row__actions {
-    grid-row: 1 / span 2;
-    grid-column: 2;
-    align-self: center;
+  .target-card-list {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -591,16 +659,10 @@ onMounted(fetchAll)
     padding: 12px;
   }
 
-  .target-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .target-row__meta,
-  .target-row__actions {
-    grid-column: auto;
-    grid-row: auto;
-    text-align: left;
+  .target-card__foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 }
 </style>

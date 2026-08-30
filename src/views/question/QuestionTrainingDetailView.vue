@@ -1,28 +1,28 @@
 <template>
   <div class="question-detail-page page-shell">
-    <section class="detail-hero">
-      <div>
-        <div class="eyebrow">
-          <MessageSquareText :size="16" />
-          题目训练工作区
-        </div>
-        <h1>{{ detail?.title || '题目训练' }}</h1>
-        <p>先用自己的语言回答，再用 AI 点评、参考答案和追问清单修正面试表达。</p>
-        <div class="hero-rhythm" aria-label="训练节奏">
-          <span>1 读题</span>
-          <span>2 作答</span>
-          <span>3 点评</span>
-          <span>4 复盘</span>
-        </div>
+    <PageHeader
+      class="question-detail-page__head"
+      :title="detail?.title || '题目训练'"
+      description="先用自己的语言回答，再用 AI 点评、参考答案和追问清单修正面试表达。"
+    >
+      <template #eyebrow>
+        <MessageSquareText :size="13" aria-hidden="true" />
+        题目训练工作区
+      </template>
+      <div class="hero-rhythm" aria-label="训练节奏">
+        <span>1 读题</span>
+        <span>2 作答</span>
+        <span>3 点评</span>
+        <span>4 复盘</span>
       </div>
-      <div class="hero-actions">
+      <template #actions>
         <el-button @click="goBackToQuestionBank">返回题库</el-button>
         <el-button type="primary" :disabled="!detail" @click="startPractice">
           <Play :size="16" />
           练这一题
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
 
     <section class="workspace-grid">
       <main class="content-card question-workspace" v-loading="loading">
@@ -217,6 +217,7 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import QuestionAnswerReviewPanel from '@/components/question/QuestionAnswerReviewPanel.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { MASTERY_STATUS, masteryOptions } from '@/constants/enums'
 import type { MasteryStatus, QuestionDetailVO, QuestionTagVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
@@ -452,43 +453,11 @@ onMounted(fetchDetail)
   gap: 16px;
 }
 
-.detail-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
-  padding: 18px;
-  border: 1.5px solid var(--user-border);
-  border-radius: var(--arena-radius-card, 20px);
-  background: var(--user-surface);
-  box-shadow: var(--user-shadow-sm);
-
-  h1,
-  p {
-    margin: 0;
-  }
-
-  h1 {
-    margin-top: 12px;
-    font-size: 24px;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-  }
-
-  p {
-    max-width: 680px;
-    margin-top: 10px;
-    color: var(--user-text-muted);
-    line-height: 1.7;
-  }
+// PageHeader 自带 margin-bottom，交给 .page-shell 的 grid gap 统一控制节奏
+.question-detail-page__head {
+  margin-bottom: 0;
 }
 
-.detail-hero > div:first-child {
-  min-width: 0;
-}
-
-.eyebrow,
-.hero-actions,
 .hero-rhythm,
 .side-title,
 .next-actions button {
@@ -497,31 +466,18 @@ onMounted(fetchDetail)
   gap: 8px;
 }
 
-.eyebrow {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.hero-actions {
-  align-self: flex-start;
-  flex-wrap: wrap;
-  max-width: 360px;
-  justify-content: flex-end;
-}
-
 .hero-rhythm {
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin-top: 0;
 
   span {
-    padding: 6px 10px;
+    padding: 5px 10px;
     border: 1px solid var(--user-primary-border);
-    border-radius: 999px;
+    border-radius: var(--user-radius-full, 999px);
     background: var(--user-primary-faint);
     color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    font-size: var(--user-text-caption, 12px);
+    font-weight: 500;
   }
 }
 
@@ -563,7 +519,7 @@ onMounted(fetchDetail)
   gap: 10px 14px;
   padding: 14px;
   border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-primary-faint);
 
   div {
@@ -577,26 +533,30 @@ onMounted(fetchDetail)
 
   span {
     color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   strong {
     margin-top: 4px;
     color: var(--user-text);
+    font-weight: 600;
   }
 
   p {
     grid-column: 1 / -1;
     margin: 0;
     color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
     line-height: 1.7;
   }
 
   small {
     grid-column: 1 / -1;
     color: var(--user-text-secondary);
-    font-size: 12px;
+    font-size: var(--user-text-caption, 12px);
     line-height: 1.6;
     overflow-wrap: anywhere;
   }
@@ -608,14 +568,18 @@ onMounted(fetchDetail)
   span {
     display: block;
     color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   h2 {
     margin: 5px 0 0;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.45;
   }
 }
@@ -623,7 +587,7 @@ onMounted(fetchDetail)
 .question-content {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 16px;
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface-muted);
 
   :deep(.markdown-preview) {
@@ -644,13 +608,16 @@ onMounted(fetchDetail)
   section {
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface-muted);
   }
 
   h2 {
     margin: 0 0 10px;
-    font-size: 17px;
+    color: var(--user-text);
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -666,19 +633,22 @@ onMounted(fetchDetail)
   article {
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface-muted);
   }
 
   span {
     color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   p {
     margin: 8px 0 0;
     color: var(--user-text);
+    font-size: var(--user-text-body-sm, 13px);
     line-height: 1.7;
   }
 }
@@ -687,7 +657,7 @@ onMounted(fetchDetail)
   article {
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface-muted);
   }
 
@@ -697,12 +667,15 @@ onMounted(fetchDetail)
   }
 
   h3 {
-    font-size: 16px;
+    color: var(--user-text);
+    font-size: var(--user-text-h4, 15px);
+    font-weight: 600;
   }
 
   p {
     margin-top: 8px;
     color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
     line-height: 1.7;
   }
 }
@@ -712,7 +685,10 @@ onMounted(fetchDetail)
 
   h2 {
     margin: 0;
-    font-size: 17px;
+    color: var(--user-text);
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -729,7 +705,7 @@ onMounted(fetchDetail)
 .side-label {
   margin-bottom: 10px;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
 }
 
 .mastery-group {
@@ -761,6 +737,7 @@ onMounted(fetchDetail)
 .side-muted {
   margin: 0 0 10px;
   color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.7;
 }
 
@@ -773,17 +750,27 @@ onMounted(fetchDetail)
     min-height: 42px;
     padding: 10px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface-muted);
     color: var(--user-text);
     cursor: pointer;
+    font-size: var(--user-text-body-sm, 13px);
     text-align: left;
+    transition: border-color 0.18s ease;
+
+    &:hover {
+      border-color: var(--user-border-strong);
+    }
 
     &:first-child {
       border-color: var(--user-primary-border);
       background: var(--user-primary-faint);
       color: var(--user-primary);
-      font-weight: 800;
+      font-weight: 600;
+    }
+
+    &:first-child:hover {
+      border-color: var(--user-primary);
     }
   }
 }
@@ -793,19 +780,15 @@ onMounted(fetchDetail)
 }
 
 @media (max-width: 960px) {
-  .detail-hero,
   .workspace-grid,
   .review-layout {
     grid-template-columns: 1fr;
   }
 
-  .detail-hero {
-    flex-direction: column;
-  }
-
-  .hero-actions {
+  .question-detail-page__head :deep(.cc-hero-band__actions) {
     justify-content: flex-start;
     max-width: 100%;
+    width: 100%;
   }
 
   .review-layout {
@@ -835,29 +818,29 @@ onMounted(fetchDetail)
   h2 {
     margin-top: 4px;
     color: var(--user-text);
-    font-size: 18px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.4;
   }
 
   > div > p:last-child {
     margin-top: 6px;
     color: var(--user-text-muted);
-    font-size: 13px;
+    font-size: var(--user-text-body-sm, 13px);
     line-height: 1.6;
   }
 }
 
 .review-disclosure__eyebrow {
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 640px) {
-  .detail-hero {
-    padding: 16px;
-  }
-
   .recommendation-callout {
     grid-template-columns: 1fr;
 
@@ -872,7 +855,7 @@ onMounted(fetchDetail)
     grid-template-columns: 1fr;
   }
 
-  .hero-actions :deep(.el-button),
+  .question-detail-page__head :deep(.cc-hero-band__actions .el-button),
   .next-actions button,
   .review-disclosure :deep(.el-button) {
     width: 100%;

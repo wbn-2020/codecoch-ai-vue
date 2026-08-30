@@ -1,31 +1,32 @@
 ﻿<template>
   <div class="favorite-question-page page-shell">
+    <PageHeader
+      class="favorite-question-page__head"
+      title="把高价值题目沉淀成复习路线"
+      description="从收藏里挑一组重点题，集中练习并保留真正有用的内容。"
+    >
+      <template #eyebrow>
+        <BookmarkCheck :size="13" aria-hidden="true" />
+        收藏复习
+      </template>
+      <template #actions>
+        <el-button type="primary" @click="startFavoritePractice">
+          <BookmarkCheck :size="16" />
+          进入收藏训练
+        </el-button>
+        <el-button @click="router.push('/questions/recommendations')">
+          <Sparkles :size="16" />
+          今日推荐
+        </el-button>
+      </template>
+    </PageHeader>
+
     <ModuleTabs :items="moduleTabs" />
 
-    <section class="hero-band">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <BookmarkCheck :size="16" />
-          收藏复习
-        </p>
-        <h1>把高价值题目沉淀成复习路线</h1>
-        <p>从收藏里挑一组重点题，集中练习并保留真正有用的内容。</p>
-        <div class="hero-actions">
-          <el-button type="primary" @click="startFavoritePractice">
-            <BookmarkCheck :size="16" />
-            进入收藏训练
-          </el-button>
-          <el-button @click="router.push('/questions/recommendations')">
-            <Sparkles :size="16" />
-            今日推荐
-          </el-button>
-        </div>
-      </div>
-      <aside class="hero-panel">
-        <div class="hero-panel__stat"><span>本页可复习</span><strong>{{ favorites.length }}</strong></div>
-        <div class="hero-panel__stat"><span>困难题</span><strong>{{ hardFavoriteCount }}</strong></div>
-        <p>累计收藏 {{ total || favorites.length }} 道题。</p>
-      </aside>
+    <section class="favorite-metrics">
+      <StatCard label="本页可复习" :value="favorites.length" />
+      <StatCard label="困难题" :value="hardFavoriteCount" />
+      <p class="favorite-metrics__note">累计收藏 {{ total || favorites.length }} 道题。</p>
     </section>
 
     <section class="source-panel">
@@ -149,6 +150,8 @@ import { BookmarkCheck, ChevronRight, RefreshCw, Search, Sparkles } from 'lucide
 import { getFavoriteQuestionsApi, unfavoriteQuestionApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import StatCard from '@/components/user-ui/StatCard.vue'
 import { difficultyOptions } from '@/constants/enums'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { FavoriteQuestionVO, QuestionQueryDTO } from '@/types/question'
@@ -290,107 +293,66 @@ onMounted(fetchFavorites)
 .favorite-question-page {
   display: grid;
   min-width: 0;
-  gap: 22px;
+  gap: 18px;
 }
 
-.hero-band {
+// PageHeader 自带 margin-bottom，交给 grid gap 统一控制节奏
+.favorite-question-page__head {
+  margin-bottom: 0;
+}
+
+.favorite-metrics {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(204px, 236px);
-  gap: 22px;
-  padding: 22px 24px;
-  border: 1.5px solid var(--user-primary-border);
-  border-radius: 20px;
-  background: var(--user-surface-tint);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
 }
 
-.hero-kicker,
-.hero-actions,
+.favorite-metrics__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.6;
+}
+
 .panel-actions,
 .question-head,
 .card-actions,
-.side-summary,
-.hero-panel__stat {
+.side-summary {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker,
 .section-kicker {
   margin: 0;
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.hero-copy h1,
 .panel-head h2,
 .question-card h3 {
   margin: 0;
   color: var(--user-text);
 }
 
-.hero-copy h1 {
-  margin-top: 8px;
-  font-size: 26px;
-  font-weight: 900;
-  line-height: 1.3;
-}
-
-.hero-copy p,
-.hero-panel p,
 .panel-head p,
-.insight-card p,
 .review-block p,
 .side-summary span,
 .side-summary small {
   color: var(--user-text-secondary);
 }
 
-.hero-copy p {
-  max-width: 640px;
-  margin: 8px 0 0;
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-
-.hero-panel {
-  display: grid;
-  gap: 11px;
-  align-content: center;
-  padding-left: 24px;
-  border-left: 1.5px solid var(--user-primary-border);
-}
-
-.hero-panel__stat {
-  align-items: baseline;
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-.hero-panel__stat span {
-  color: var(--user-text-muted);
-  font-size: 12px;
-}
-
-.hero-panel__stat strong {
-  color: var(--user-text);
-  font-size: 24px;
-  font-weight: 900;
-  line-height: 1;
-}
-
 .question-card {
   border: 1px solid var(--user-border);
-  border-radius: 16px;
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .source-panel {
@@ -408,17 +370,17 @@ onMounted(fetchFavorites)
 }
 
 .panel-head h2 {
-  margin: 0;
   margin-top: 5px;
-  font-size: 19px;
-  font-weight: 900;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .panel-head p {
   margin: 6px 0 0;
   max-width: 620px;
-  font-size: 13.5px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.6;
 }
 
@@ -455,13 +417,13 @@ onMounted(fetchFavorites)
   display: block;
   margin-bottom: 6px;
   color: var(--user-text-subtle);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 500;
 }
 
 .question-card h3 {
-  font-size: 17px;
-  font-weight: 900;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -474,10 +436,10 @@ onMounted(fetchFavorites)
 
 .tag-row span {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full, 999px);
   background: var(--user-control-bg-muted);
   color: var(--user-text-secondary);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
 }
 
 .review-block {
@@ -490,6 +452,7 @@ onMounted(fetchFavorites)
   display: block;
   margin-bottom: 6px;
   color: var(--user-text);
+  font-weight: 600;
 }
 
 .review-block p,
@@ -512,8 +475,8 @@ onMounted(fetchFavorites)
   display: block;
   margin: 6px 0 8px;
   color: var(--user-text);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--user-text-h4, 15px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -522,8 +485,7 @@ onMounted(fetchFavorites)
 }
 
 .card-actions :deep(.el-button),
-.panel-actions :deep(.el-button),
-.hero-actions :deep(.el-button) {
+.panel-actions :deep(.el-button) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -537,7 +499,6 @@ onMounted(fetchFavorites)
 }
 
 @media (max-width: 980px) {
-  .hero-band,
   .question-card {
     grid-template-columns: 1fr;
   }
@@ -552,21 +513,6 @@ onMounted(fetchFavorites)
 }
 
 @media (max-width: 720px) {
-  .hero-band {
-    gap: 18px;
-    padding: 20px 18px;
-  }
-
-  .hero-panel {
-    padding: 16px 0 0;
-    border-top: 1.5px solid var(--user-primary-border);
-    border-left: 0;
-  }
-
-  .hero-copy h1 {
-    font-size: 23px;
-  }
-
   .card-actions {
     flex-direction: column;
   }
@@ -578,8 +524,7 @@ onMounted(fetchFavorites)
   }
 
   .card-actions :deep(.el-button),
-  .panel-actions :deep(.el-button),
-  .hero-actions :deep(.el-button) {
+  .panel-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
   }
