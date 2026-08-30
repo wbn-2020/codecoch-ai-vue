@@ -815,7 +815,7 @@ onMounted(fetchAbilityMap)
 .eyebrow {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -858,7 +858,7 @@ onMounted(fetchAbilityMap)
 .next-training-card__label {
   color: var(--user-warning);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .next-training-card__meta {
@@ -1003,7 +1003,7 @@ onMounted(fetchAbilityMap)
   span {
     color: var(--app-text);
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   em {
@@ -1064,7 +1064,7 @@ onMounted(fetchAbilityMap)
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   h2,
@@ -1161,12 +1161,12 @@ onMounted(fetchAbilityMap)
   background: var(--user-primary);
   color: var(--user-primary-contrast);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.26);
 }
 
 .growth-stage:not(.active) .growth-stage__node {
-  background: #94a3b8;
+  background: var(--user-text-subtle);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
 }
 
@@ -1331,7 +1331,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-danger-soft);
 
   &::before {
-    background: #ef4444;
+    background: var(--user-danger);
     box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28);
   }
 }
@@ -1342,7 +1342,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-success-soft);
 
   &::before {
-    background: #16a34a;
+    background: var(--user-success);
     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.28);
   }
 }
@@ -1351,7 +1351,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-surface-muted);
 
   &::before {
-    background: #94a3b8;
+    background: var(--user-text-subtle);
     box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
   }
 }
@@ -1447,7 +1447,7 @@ onMounted(fetchAbilityMap)
   }
 
   span {
-    font-weight: 800;
+    font-weight: 600;
   }
 
   small {
@@ -1492,7 +1492,7 @@ onMounted(fetchAbilityMap)
   svg {
     flex: 0 0 auto;
     margin-top: 2px;
-    color: #16a34a;
+    color: var(--user-success-text);
   }
 
   strong,
@@ -1685,7 +1685,7 @@ onMounted(fetchAbilityMap)
   }
 
   &:hover {
-    transform: translateY(-1px);
+    box-shadow: var(--arena-shadow-hover, var(--user-shadow-sm));
   }
 }
 
@@ -1758,7 +1758,7 @@ onMounted(fetchAbilityMap)
 
 .power-radar__label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   fill: rgba(203, 213, 225, 0.75);
 }
 
@@ -1777,7 +1777,7 @@ onMounted(fetchAbilityMap)
   span {
     display: block;
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     color: rgba(203, 213, 225, 0.6);
   }
 
@@ -1785,7 +1785,7 @@ onMounted(fetchAbilityMap)
     display: block;
     margin-top: 3px;
     font-size: 14px;
-    color: #f8fafc;
+    color: #f6f6f4;
   }
 
   &.is-weak strong {
@@ -1812,7 +1812,7 @@ onMounted(fetchAbilityMap)
 
   span {
     font-size: 12.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: #e5edf8;
   }
 
@@ -1889,17 +1889,17 @@ onMounted(fetchAbilityMap)
   .skill-card {
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: #ffffff;
+    background: var(--user-surface);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .growth-hero {
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    border-color: var(--user-primary-border);
+    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 72%);
 
     h1 {
       font-size: 28px;
-      font-weight: 900;
+      font-weight: 600;
     }
   }
 
@@ -1910,24 +1910,24 @@ onMounted(fetchAbilityMap)
   }
 
   .next-training-card {
-    border: 1.5px solid #b9e7cd;
+    border: 1.5px solid var(--user-primary-border);
     border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 76%);
+    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 76%);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .signal-card {
     border-radius: 14px;
-    background: #ffffff;
+    background: var(--user-surface);
 
     &.signal-card--weak {
-      border-color: #f3ddc0;
-      background: #fffaf2;
+      border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
+      background: var(--user-warning-soft);
     }
 
     &.signal-card--usable {
-      border-color: #b9e7cd;
-      background: #f5fcf7;
+      border-color: var(--user-primary-border);
+      background: var(--user-canvas);
     }
   }
 
@@ -1937,7 +1937,7 @@ onMounted(fetchAbilityMap)
 
   .power-radar__ring,
   .power-radar__axis {
-    stroke: #dce4dd;
+    stroke: var(--user-border);
   }
 
   .power-radar__value {
@@ -1952,7 +1952,7 @@ onMounted(fetchAbilityMap)
 
   .power-radar__stat {
     border-radius: 13px;
-    background: #f5f7f4;
+    background: var(--user-surface-muted);
 
     span {
       color: var(--arena-sub);
@@ -1963,7 +1963,7 @@ onMounted(fetchAbilityMap)
     }
 
     &.is-weak strong {
-      color: #b4560a;
+      color: var(--user-warning-text);
     }
 
     &.is-strong strong {
@@ -1981,7 +1981,7 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
-    background: #f8faf8;
+    background: var(--user-canvas);
   }
 
   .domain-item {
@@ -1999,7 +1999,7 @@ onMounted(fetchAbilityMap)
   }
 
   .skill-node-icon {
-    background: #f2f4f2;
+    background: var(--user-surface-muted);
 
     &.is-unlocked {
       background: var(--arena-grn-soft);
@@ -2020,7 +2020,7 @@ onMounted(fetchAbilityMap)
     border-color: var(--arena-grn);
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 
@@ -2055,7 +2055,7 @@ onMounted(fetchAbilityMap)
     margin-top: 7px;
     color: var(--arena-ink);
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.25;
   }
 
@@ -2106,7 +2106,7 @@ onMounted(fetchAbilityMap)
     span {
       color: var(--arena-grn-d);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     h2,
@@ -2123,7 +2123,7 @@ onMounted(fetchAbilityMap)
       margin-top: 6px;
       color: var(--arena-ink);
       font-size: 26px;
-      font-weight: 900;
+      font-weight: 600;
       line-height: 1.25;
     }
   }
@@ -2152,7 +2152,7 @@ onMounted(fetchAbilityMap)
     padding: 9px 12px;
     border: 1px solid var(--arena-line);
     border-radius: 13px;
-    background: #f8faf8;
+    background: var(--user-canvas);
 
     &__ring {
       display: grid;
@@ -2168,10 +2168,10 @@ onMounted(fetchAbilityMap)
         aspect-ratio: 1;
         place-items: center;
         border-radius: 50%;
-        background: #ffffff;
+        background: var(--user-surface);
         color: var(--arena-grn-d);
         font-size: 14px;
-        font-weight: 900;
+        font-weight: 600;
       }
     }
 
@@ -2221,7 +2221,7 @@ onMounted(fetchAbilityMap)
 
     strong {
       font-size: 14px;
-      font-weight: 900;
+      font-weight: 600;
     }
 
     small {
@@ -2239,7 +2239,7 @@ onMounted(fetchAbilityMap)
       color: var(--arena-grn-d);
       font-size: 11px;
       font-style: normal;
-      font-weight: 800;
+      font-weight: 600;
     }
   }
 
@@ -2260,7 +2260,7 @@ onMounted(fetchAbilityMap)
     padding: 10px 12px;
     border: 1.5px solid var(--arena-line);
     border-radius: 14px;
-    background: #ffffff;
+    background: var(--user-surface);
     color: inherit;
     font: inherit;
     text-align: left;
@@ -2270,7 +2270,7 @@ onMounted(fetchAbilityMap)
     &:hover,
     &:focus-visible {
       border-color: var(--arena-grn);
-      transform: translateY(-1px);
+      box-shadow: var(--arena-shadow-hover, var(--user-shadow-sm));
     }
 
     &:focus-visible {
@@ -2279,18 +2279,18 @@ onMounted(fetchAbilityMap)
     }
 
     &.is-weak {
-      border-color: #f3ddc0;
-      background: #fffaf2;
+      border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
+      background: var(--user-warning-soft);
     }
 
     &.is-strong,
     &.is-competent {
-      border-color: #b9e7cd;
-      background: #f5fcf7;
+      border-color: var(--user-primary-border);
+      background: var(--user-canvas);
     }
 
     &.is-unassessed {
-      background: #f5f7f4;
+      background: var(--user-surface-muted);
     }
 
     > b {
@@ -2305,10 +2305,10 @@ onMounted(fetchAbilityMap)
     height: 28px;
     place-items: center;
     border-radius: 9px;
-    background: #eef2ee;
+    background: var(--user-surface-muted);
     color: var(--arena-mut);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
 
     &.is-unlocked {
       background: var(--arena-grn-soft);
@@ -2367,16 +2367,16 @@ onMounted(fetchAbilityMap)
     display: grid;
     gap: 12px;
     padding: 18px;
-    border: 1.5px solid #f3ddc0;
+    border: 1.5px solid color-mix(in srgb, var(--user-warning) 35%, transparent);
     border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #fff7ec, #ffffff 76%);
+    background: linear-gradient(135deg, var(--user-warning-soft), var(--user-surface) 76%);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .priority-action-card {
     &.is-muted {
       border-color: var(--arena-line);
-      background: #f8faf8;
+      background: var(--user-canvas);
     }
 
     h2,
@@ -2387,7 +2387,7 @@ onMounted(fetchAbilityMap)
     h2 {
       color: var(--arena-ink);
       font-size: 19px;
-      font-weight: 900;
+      font-weight: 600;
       line-height: 1.35;
     }
 
@@ -2421,7 +2421,7 @@ onMounted(fetchAbilityMap)
   .priority-action-card__label {
     color: var(--arena-amber);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .priority-action-card__meta {
@@ -2435,8 +2435,8 @@ onMounted(fetchAbilityMap)
   }
 
   .ability-evidence-card {
-    border-color: #d7ccff;
-    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 76%);
+    border-color: color-mix(in srgb, var(--user-ai) 30%, transparent);
+    background: linear-gradient(135deg, var(--arena-vio-soft), var(--user-surface) 76%);
 
     strong {
       color: var(--arena-ink);
@@ -2455,14 +2455,14 @@ onMounted(fetchAbilityMap)
     justify-content: space-between;
     color: var(--arena-vio);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   :deep(.el-button--primary) {
     border-color: var(--arena-grn);
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 

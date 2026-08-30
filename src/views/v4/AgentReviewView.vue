@@ -586,7 +586,7 @@ onMounted(load)
 .review-eyebrow {
   color: var(--arena-grn-d, var(--app-primary));
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .review-actions,
@@ -651,7 +651,7 @@ onMounted(load)
 .review-row__head span {
   color: var(--app-text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-row__head h2 {

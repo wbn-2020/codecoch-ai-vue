@@ -780,9 +780,9 @@ onMounted(load)
 }
 
 .v4-eyebrow {
-  color: #5eead4;
+  color: var(--user-success-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,
@@ -842,7 +842,7 @@ onMounted(load)
 
 .v4-summary-item__value {
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -979,7 +979,7 @@ onMounted(load)
 
 .v4-memory-meta__label {
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-memory-reasons {
@@ -1026,7 +1026,7 @@ onMounted(load)
 .v4-governance-item > span {
   min-width: 28px;
   color: var(--user-warning-text, var(--user-warning));
-  font-weight: 800;
+  font-weight: 600;
   text-align: right;
 }
 

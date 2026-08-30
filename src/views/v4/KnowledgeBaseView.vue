@@ -4077,7 +4077,7 @@ watch(
   margin: 0;
   color: var(--arena-grn);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .knowledge-tabs {
@@ -4104,7 +4104,7 @@ watch(
     span {
       color: var(--arena-ink);
       font-size: 14px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     small {
@@ -4146,7 +4146,7 @@ watch(
     span {
       color: var(--arena-ink);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     small {
@@ -4178,7 +4178,7 @@ watch(
     padding: 0 14px;
     color: var(--arena-ink);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     cursor: pointer;
     list-style: none;
 
@@ -4190,7 +4190,7 @@ watch(
       content: '展开';
       color: var(--arena-sub);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     &:focus-visible {
@@ -4348,7 +4348,7 @@ watch(
 
 .version-row__title {
   margin-top: 10px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .version-row p {
@@ -5237,7 +5237,7 @@ watch(
 
 .result-meta span {
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pagination-wrap {

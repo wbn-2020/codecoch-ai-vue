@@ -4,7 +4,7 @@
 
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">成长档案</div>
+        <div class="v4-eyebrow">成长分析</div>
         <h1>成长档案</h1>
         <p>仅汇总最近 Agent 任务状态，展示任务完成率、技能标签趋势和样本可信度。</p>
       </div>
@@ -29,12 +29,9 @@
         title="部分成长数据暂时不可用"
         :description="partialLoadWarning"
       />
-      <section v-if="overview && !loading" class="growth-explain-strip">
-        <el-tag effect="plain">时间窗：{{ overview.timeWindow || `最近 ${rangeDays} 天` }}</el-tag>
-        <el-tag effect="plain" :type="confidenceTagType">可信度：{{ confidenceLabel }}</el-tag>
-        <el-tag effect="plain">证据数量：{{ overview.evidenceCount ?? 0 }}</el-tag>
-        <el-tag v-for="label in dataSourceLabels" :key="label" effect="plain" type="info">{{ label }}</el-tag>
-      </section>
+      <p v-if="overview && !loading" class="growth-explain-strip">
+        统计口径：{{ overview.timeWindow || `最近 ${rangeDays} 天` }} · 可信度{{ confidenceLabel }} · 证据 {{ overview.evidenceCount ?? 0 }} 条<template v-if="dataSourceLabels.length"> · {{ dataSourceLabels.join('；') }}</template>
+      </p>
 
       <section
         v-if="isColdStart && !loading"
@@ -208,12 +205,6 @@ const confidenceLabel = computed(() => {
   if (level === 'MEDIUM') return '中'
   return '低'
 })
-const confidenceTagType = computed(() => {
-  const level = String(overview.value?.confidenceLevel || 'LOW').toUpperCase()
-  if (level === 'HIGH') return 'success'
-  if (level === 'MEDIUM') return 'warning'
-  return 'info'
-})
 const formatPercent = (value?: number) => `${Math.max(0, Math.min(100, Number(value || 0))).toFixed(0)}%`
 const confidenceText = (level?: string) => {
   const normalized = String(level || 'LOW').toUpperCase()
@@ -321,13 +312,12 @@ onMounted(load)
 .section-kicker {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .v4-actions,
-.skill-strip,
-.growth-explain-strip {
+.skill-strip {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
@@ -335,14 +325,20 @@ onMounted(load)
   align-items: center;
 }
 
+// 数据口径说明：一行静音文字（不再用一排描边 tag 显得像调试信息）
+.growth-explain-strip {
+  margin: -4px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
 .v4-grid {
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: var(--arena-radius-card, 16px);
-  background: var(--user-surface-muted, var(--app-surface-raised));
+  gap: 12px;
 }
 
 .partial-alert {
@@ -360,10 +356,11 @@ onMounted(load)
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px 18px;
   align-items: center;
-  padding: 16px;
-  border: 1px solid var(--user-primary-border, var(--app-border));
+  padding: 16px 20px;
+  border: 1px solid var(--app-border);
   border-radius: var(--arena-radius-card, 16px);
-  background: var(--user-primary-faint, var(--arena-grn-soft));
+  background: var(--user-surface, var(--app-surface));
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.04);
 }
 
 .growth-next-action h2,
@@ -385,9 +382,15 @@ onMounted(load)
 }
 
 .growth-next-action__label {
-  color: var(--arena-grn-d, var(--app-primary-hover));
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.6;
 }
 
 .growth-next-action__actions {
@@ -411,14 +414,11 @@ onMounted(load)
 }
 
 .v4-card {
-  padding: 12px 14px;
-  border-width: 0 1px 0 0;
-  border-radius: 0;
-  background: transparent;
-
-  &:last-child {
-    border-right: 0;
-  }
+  padding: 16px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface, var(--app-surface));
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.04);
 }
 
 .v4-card span {
@@ -428,9 +428,11 @@ onMounted(load)
 
 .v4-card strong {
   display: block;
-  margin-top: 8px;
-  font-size: 22px;
+  margin-top: 6px;
+  font-size: 24px;
   line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -540,18 +542,12 @@ onMounted(load)
     flex-direction: column;
   }
 
-  .v4-grid,
+  .v4-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trend-row {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .v4-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--app-border);
-  }
-
-  .v4-card:last-child {
-    border-bottom: 0;
   }
 }
 
@@ -576,7 +572,6 @@ onMounted(load)
     white-space: normal;
   }
 
-  .growth-explain-strip :deep(.el-tag),
   .skill-strip :deep(.el-tag) {
     max-width: 100%;
     height: auto;

@@ -632,7 +632,7 @@ onMounted(async () => {
 .weekly-header__copy > span {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .weekly-header h1,
@@ -733,7 +733,7 @@ onMounted(async () => {
 .weekly-summary span {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .weekly-summary p {

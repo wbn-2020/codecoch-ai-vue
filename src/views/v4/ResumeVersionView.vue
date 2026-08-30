@@ -616,7 +616,7 @@ onMounted(async () => {
 .section-kicker {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,
