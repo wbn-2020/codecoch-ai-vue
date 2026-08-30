@@ -1,23 +1,17 @@
 <template>
   <div class="arena arena-home">
     <div class="arena-home__page">
-      <!-- 对照原型 .page-head：eyebrow 徽标 + H1 + sub + 右侧动作 -->
-      <header class="arena-home__head">
-        <div class="arena-home__head-copy">
-          <span class="arena-home__eyebrow">
-            <i class="arena-home__dot" aria-hidden="true"></i>
-            {{ weekdayLabel }} · {{ businessDate }}
-          </span>
-          <h1>{{ greetingName }}，{{ headTitle }}</h1>
-          <p class="arena-home__sub">
-            {{ allAgentTasksDone
-              ? '今天的任务已记录完成，回顾训练过程或安排下一步。'
-              : missions.length
-                ? `还有 ${missions.length} 项待推进任务，优先完成最重要的一项。`
-                : '根据现有资料补齐今天的第一项行动，建立稳定的求职闭环。' }}
-          </p>
-        </div>
-        <div class="arena-home__head-actions">
+      <HeroBand class="arena-home__head">
+        <template #eyebrow>{{ weekdayLabel }} · {{ businessDate }}</template>
+        <template #title>{{ greetingName }}，{{ headTitle }}</template>
+        <template #sub>
+          {{ allAgentTasksDone
+            ? '今天的任务已记录完成，回顾训练过程或安排下一步。'
+            : missions.length
+              ? `还有 ${missions.length} 项待推进任务，优先完成最重要的一项。`
+              : '根据现有资料补齐今天的第一项行动，建立稳定的求职闭环。' }}
+        </template>
+        <template #actions>
           <button class="arena-btn arena-btn--sec" type="button" @click="go('/career-calendar')">
             <CalendarDays :size="14" aria-hidden="true" />
             跳到日历
@@ -26,8 +20,8 @@
             <Sparkles :size="14" aria-hidden="true" />
             {{ allAgentTasksDone ? '查看今日记录' : '生成今日计划' }}
           </button>
-        </div>
-      </header>
+        </template>
+      </HeroBand>
 
       <ModuleTabs :items="moduleTabs" />
 
@@ -176,6 +170,7 @@ import { fetchCachedDashboardOverview, fetchCachedTodayAgentTasks } from '@/comp
 import { getV3DashboardOverviewApi } from '@/api/dashboard'
 import { getLatestJobReadinessApi } from '@/api/jobRequirement'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import HeroBand from '@/components/user-ui/HeroBand.vue'
 import StatCard from '@/components/user-ui/StatCard.vue'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore, type XpEventKey } from '@/features/game-profile'
@@ -515,46 +510,9 @@ onMounted(async () => {
     padding: 24px 24px 40px;
   }
 
-  // ---- 页头（原型 .page-head）----
+  // ---- 页头由 HeroBand 提供，这里只保留间距覆盖 ----
   &__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
     margin-bottom: 20px;
-  }
-
-  &__head-copy {
-    min-width: 0;
-
-    h1 {
-      margin: 10px 0 0;
-      color: var(--user-text);
-      font-size: var(--user-text-h1, 30px);
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      line-height: 1.2;
-    }
-  }
-
-  &__sub {
-    margin: 6px 0 0;
-    color: var(--user-text-muted);
-    font-size: var(--user-text-body-sm, 13px);
-    line-height: 1.5;
-  }
-
-  &__head-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-
-    .arena-btn {
-      height: 36px;
-      padding: 0 16px;
-      font-size: 13px;
-    }
   }
 
   &__eyebrow {
@@ -867,15 +825,6 @@ onMounted(async () => {
   .arena-home {
     &__page {
       padding: 18px 14px 28px;
-    }
-
-    &__head {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
-    &__head-actions .arena-btn {
-      flex: 1 1 auto;
     }
 
     &__guide {

@@ -297,7 +297,7 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.get('.arena-home__eyebrow').text()).toContain('周日')
+    expect(wrapper.get('.cc-hero-band__eyebrow').text()).toContain('周日')
   })
 
   it('uses the prototype two-column workspace structure for the task and stat rails', () => {
