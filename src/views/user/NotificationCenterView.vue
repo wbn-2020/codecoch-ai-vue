@@ -441,36 +441,42 @@ onMounted(() => {
   justify-content: space-between;
   gap: 20px;
   padding: 22px 24px;
-  border: 1.5px solid var(--user-primary-border);
-  border-radius: 20px;
-  background: var(--user-surface-tint);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-xl);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .eyebrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-copy {
   h1 {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     color: var(--user-text);
-    font-size: 26px;
-    font-weight: 900;
-    line-height: 1.3;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
   }
 
   p {
-    margin: 10px 0 0;
+    margin: 6px 0 0;
     max-width: 620px;
-    color: var(--user-text-secondary);
-    font-size: 13.5px;
-    line-height: 1.7;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
+    line-height: 1.5;
   }
 }
 
@@ -482,9 +488,9 @@ onMounted(() => {
 
 .notification-page > .content-card {
   border: 1px solid var(--user-border);
-  border-radius: 20px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .notification-sections {
@@ -494,7 +500,7 @@ onMounted(() => {
   padding: 4px;
   align-self: flex-start;
   border: 1px solid var(--user-border);
-  border-radius: 10px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 
   button {
@@ -505,7 +511,7 @@ onMounted(() => {
     min-height: 38px;
     padding: 0 14px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--user-radius-sm);
     background: transparent;
     color: var(--user-text-secondary);
     font: inherit;
@@ -519,11 +525,11 @@ onMounted(() => {
       min-width: 18px;
       height: 18px;
       padding: 0 5px;
-      border-radius: 999px;
+      border-radius: var(--user-radius-full);
       background: var(--el-color-danger);
-      color: #ffffff;
+      color: var(--user-primary-contrast);
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     &:hover {
@@ -539,7 +545,7 @@ onMounted(() => {
     &.is-active {
       background: var(--user-primary-soft);
       color: var(--user-primary);
-      font-weight: 800;
+      font-weight: 600;
     }
   }
 }
@@ -572,11 +578,11 @@ onMounted(() => {
   height: 18px;
   margin-left: 4px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full);
   background: var(--el-color-danger);
-  color: #ffffff;
+  color: var(--user-primary-contrast);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .notification-list {
@@ -626,7 +632,7 @@ onMounted(() => {
     margin-inline: -8px;
     padding-inline: 10px;
     border-bottom-color: transparent;
-    border-radius: 12px;
+    border-radius: var(--user-radius-md);
     background: var(--user-surface-tint);
 
     .notification-body strong {
@@ -661,8 +667,8 @@ onMounted(() => {
 
   strong {
     color: var(--user-text);
-    font-size: 15px;
-    font-weight: 800;
+    font-size: var(--user-text-h4, 15px);
+    font-weight: 600;
     line-height: 1.45;
   }
 }

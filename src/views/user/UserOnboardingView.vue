@@ -567,7 +567,7 @@ onMounted(() => {
 .guide-rail,
 .setup-panel {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
   box-shadow: none;
 }
@@ -582,8 +582,10 @@ onMounted(() => {
   h1 {
     margin: 12px 0 10px;
     color: var(--user-text);
-    font-size: 26px;
-    line-height: 1.3;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
   }
 
   p {
@@ -605,9 +607,14 @@ onMounted(() => {
 }
 
 .eyebrow {
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-actions {
@@ -631,14 +638,17 @@ onMounted(() => {
 
 .real-progress-head {
   span {
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   h2 {
     margin: 8px 0;
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
   }
 
   p {
@@ -676,7 +686,7 @@ onMounted(() => {
   padding: 12px;
   overflow: hidden;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
   color: var(--user-text);
   font: inherit;
@@ -695,7 +705,8 @@ onMounted(() => {
   }
 
   strong {
-    font-size: 16px;
+    font-size: var(--user-text-h4, 15px);
+    font-weight: 600;
   }
 
   small {
@@ -707,7 +718,7 @@ onMounted(() => {
     color: var(--user-text-muted);
     font-size: 12px;
     font-style: normal;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   &:hover,
@@ -727,7 +738,7 @@ onMounted(() => {
   position: static;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -735,20 +746,23 @@ onMounted(() => {
   align-items: center;
   padding: 12px 14px;
   border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-primary-faint);
 
   span {
     display: block;
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   strong {
     display: block;
     margin-top: 6px;
-    font-size: 18px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
   }
 
   p {
@@ -774,7 +788,8 @@ onMounted(() => {
 
   h2 {
     margin: 0 0 8px;
-    font-size: 18px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
   }
 
   p {
@@ -791,7 +806,7 @@ onMounted(() => {
   gap: 10px;
   padding: 11px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: transparent;
   color: var(--user-text);
   font: inherit;
@@ -809,11 +824,11 @@ onMounted(() => {
     justify-content: center;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
+    border-radius: var(--user-radius-sm);
     background: var(--user-control-bg-muted);
     color: var(--user-text-muted);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong,
@@ -823,6 +838,7 @@ onMounted(() => {
 
   strong {
     font-size: 14px;
+    font-weight: 600;
   }
 
   small {
@@ -861,14 +877,17 @@ onMounted(() => {
   margin-bottom: 20px;
 
   span {
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   h2 {
     margin: 8px 0;
-    font-size: 24px;
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
   }
 
   p {
@@ -889,7 +908,7 @@ onMounted(() => {
   min-height: 0;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
   color: var(--user-text);
   font: inherit;
@@ -901,7 +920,8 @@ onMounted(() => {
   }
 
   strong {
-    font-size: 17px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
   }
 
   span {
@@ -932,7 +952,7 @@ onMounted(() => {
 
   span {
     color: var(--user-text);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -942,7 +962,7 @@ onMounted(() => {
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-warning-soft);
   color: var(--user-warning);
 
@@ -962,11 +982,11 @@ onMounted(() => {
   min-height: 42px;
   padding: 0 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
   color: var(--user-text-secondary);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 
   &.selected,
@@ -983,7 +1003,7 @@ onMounted(() => {
   gap: 18px;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
 
   svg {
@@ -992,7 +1012,8 @@ onMounted(() => {
 
   h3 {
     margin: 0 0 8px;
-    font-size: 21px;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
   }
 
   p {
@@ -1015,7 +1036,7 @@ onMounted(() => {
   article {
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md);
     background: var(--user-surface);
 
     &.done {
@@ -1025,9 +1046,11 @@ onMounted(() => {
   }
 
   span {
-    color: var(--user-primary);
-    font-size: 12px;
-    font-weight: 800;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   strong,
@@ -1098,7 +1121,7 @@ onMounted(() => {
   }
 
   .onboarding-hero h1 {
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
   }
 
   .hero-actions,
