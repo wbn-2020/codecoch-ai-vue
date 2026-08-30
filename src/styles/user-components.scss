@@ -94,7 +94,7 @@
     background: var(--user-surface-muted);
     color: var(--user-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1;
   }
 
@@ -211,7 +211,7 @@
   .el-table th.el-table__cell {
     background: var(--user-surface-muted);
     color: var(--user-text-secondary);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .el-button {
@@ -228,7 +228,7 @@
     --el-button-disabled-border-color: var(--user-border);
     --el-button-disabled-text-color: var(--user-disabled);
     border-radius: var(--user-radius-sm);
-    font-weight: 700;
+    font-weight: 600;
     transition:
       border-color 0.18s ease,
       background 0.18s ease,
@@ -1379,7 +1379,7 @@ body.is-user-layout-active .jobcoach-layout {
   .el-table th.el-table__cell {
     padding: 10px 12px;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: uppercase;
   }

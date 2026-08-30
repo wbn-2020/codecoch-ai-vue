@@ -445,7 +445,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--user-text, #1a1917);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
 .user-app-shell__breadcrumb strong {
   overflow: hidden;
   color: var(--user-text, #1a1917);
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
