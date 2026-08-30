@@ -1,16 +1,16 @@
 <template>
   <div class="v3-page">
-    <section class="page-hero">
-      <div>
-        <div class="hero-kicker"><RouteIcon :size="16" /> 短板学习计划</div>
-        <h1>差距学习计划</h1>
-        <p>从能力画像中选择短板项，配置周期和每日时长后生成学习计划。</p>
-      </div>
-      <div class="hero-actions">
+    <PageHeader
+      eyebrow="短板学习计划"
+      :icon="RouteIcon"
+      title="差距学习计划"
+      description="从能力画像中选择短板项，配置周期和每日时长后生成学习计划。"
+    >
+      <template #actions>
         <el-button @click="router.push('/skill-profile')"><Radar :size="16" /> 能力画像</el-button>
         <el-button type="primary" @click="router.push('/study-plans')"><BookOpenCheck :size="16" /> 学习计划</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
 
     <section class="plan-grid">
       <div class="content-panel" v-loading="loading">
@@ -106,6 +106,7 @@ import {
 } from '@/api/skillProfile'
 import { generateStudyPlanFromGapApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import type { SkillGapItemVO } from '@/types/skillProfile'
 import type { StudyPlanGenerateVO } from '@/types/studyPlan'
 import { getErrorMessage } from '@/utils/error'
@@ -423,51 +424,29 @@ onBeforeUnmount(() => {
   color: var(--user-text);
 }
 
-.page-hero,
 .content-panel {
   min-width: 0;
+  padding: 20px;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
 }
 
-.page-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 22px 24px;
-}
-
-.hero-kicker,
-.hero-actions,
 .section-head {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-h1,
 h2,
 p {
   margin: 0;
 }
 
-h1 {
-  margin-top: 7px;
-  font-size: 24px;
-  line-height: 1.3;
-}
-
 h2 {
   color: var(--user-text);
-  font-size: 17px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -475,14 +454,8 @@ p {
   max-width: 68ch;
   margin-top: 7px;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.65;
-}
-
-.hero-actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .plan-grid {
@@ -490,10 +463,6 @@ p {
   grid-template-columns: minmax(0, 1fr) minmax(276px, 304px);
   align-items: start;
   gap: 20px;
-}
-
-.content-panel {
-  padding: 20px;
 }
 
 .section-head {
@@ -554,7 +523,8 @@ p {
 
 .gap-card strong {
   color: var(--user-text);
-  font-size: 15px;
+  font-size: var(--user-text-h4, 15px);
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -562,7 +532,7 @@ p {
   flex: 0 0 auto;
   max-width: 58%;
   color: var(--user-text-muted);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
   line-height: 1.45;
   text-align: right;
 }
@@ -570,7 +540,7 @@ p {
 .gap-card em {
   margin-top: 8px;
   color: var(--user-text-secondary);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   font-style: normal;
   line-height: 1.6;
 }
@@ -591,27 +561,25 @@ p {
 }
 
 @media (max-width: 900px) {
-  .page-hero,
   .plan-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .hero-actions {
+  :deep(.cc-hero-band__actions) {
     justify-content: flex-start;
   }
 }
 
 @media (max-width: 600px) {
-  .page-hero,
   .content-panel {
     padding: 16px;
   }
 
-  .hero-actions {
+  :deep(.cc-hero-band__actions) {
     width: 100%;
 
-    :deep(.el-button) {
+    .el-button {
       flex: 1 1 0;
       min-width: 0;
     }

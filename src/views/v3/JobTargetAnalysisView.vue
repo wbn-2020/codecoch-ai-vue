@@ -1,15 +1,12 @@
 <template>
   <div class="arena job-analysis-page page-shell">
-    <section class="analysis-hero">
-      <div>
-        <div class="hero-kicker">
-          <ScanSearch :size="16" />
-          岗位分析
-        </div>
-        <h1>{{ target?.jobTitle || '岗位分析结果' }}</h1>
-        <p>{{ targetSubtitle }}</p>
-      </div>
-      <div class="hero-actions">
+    <PageHeader
+      eyebrow="岗位分析"
+      :icon="ScanSearch"
+      :title="target?.jobTitle || '岗位分析结果'"
+      :description="targetSubtitle"
+    >
+      <template #actions>
         <el-button @click="router.push('/job-targets')">
           <ArrowLeft :size="16" />
           返回列表
@@ -22,8 +19,8 @@
           <RefreshCw :size="16" />
           刷新
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
 
     <section class="analysis-layout">
       <main class="content-card main-panel">
@@ -277,6 +274,7 @@ import {
   refreshJobRequirementMatrixApi
 } from '@/api/jobRequirement'
 import AppState from '@/components/common/AppState.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { useSseState } from '@/composables/useSseState'
 import {
   normalizeJobReadiness,
@@ -1084,47 +1082,9 @@ onBeforeUnmount(() => {
   color: var(--arena-ink);
 }
 
-.analysis-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px;
-  border: 1.5px solid var(--arena-line);
-  border-radius: var(--arena-radius-card);
-  background: var(--arena-card);
-}
-
-.hero-kicker,
-.hero-actions,
 .section-head {
   display: flex;
   align-items: center;
-}
-
-.hero-kicker {
-  gap: 8px;
-  color: var(--arena-grn-d);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.analysis-hero h1 {
-  margin: 8px 0 0;
-  color: var(--arena-ink);
-  font-size: 28px;
-}
-
-.analysis-hero p {
-  margin: 8px 0 0;
-  color: var(--arena-sub);
-  line-height: 1.7;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .analysis-layout {
@@ -1167,8 +1127,8 @@ onBeforeUnmount(() => {
 .overview-kicker {
   display: block;
   color: var(--arena-grn-d);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 600;
 }
 
 .parse-task-progress {
@@ -1177,7 +1137,7 @@ onBeforeUnmount(() => {
   margin-top: 16px;
   padding: 12px;
   border: 1px solid var(--arena-line);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg);
   background: var(--arena-grn-soft);
 
   p {
@@ -1230,7 +1190,7 @@ onBeforeUnmount(() => {
     max-width: 100%;
     padding: 4px 8px;
     border: 1px dashed var(--arena-line);
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm);
     color: var(--arena-sub);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 11px;
@@ -1247,10 +1207,10 @@ onBeforeUnmount(() => {
   margin-top: 12px;
   padding: 8px 10px;
   border: 1px dashed var(--arena-grn);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--arena-grn-soft);
   color: var(--arena-sub);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
   line-height: 1.5;
 }
 
@@ -1263,10 +1223,10 @@ onBeforeUnmount(() => {
   span {
     max-width: 100%;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm);
     background: var(--arena-line2);
     color: var(--arena-sub);
-    font-size: 11px;
+    font-size: var(--user-text-overline, 11px);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
@@ -1344,7 +1304,7 @@ onBeforeUnmount(() => {
 .overview-conclusion {
   padding: 18px;
   border: 1px solid var(--arena-line);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg);
   background: var(--arena-card);
 
   > p {
@@ -1380,7 +1340,7 @@ onBeforeUnmount(() => {
   gap: 20px;
   padding: 18px;
   border: 1.5px solid var(--arena-grn);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg);
   background: var(--arena-grn-soft);
 
   h3 {
@@ -1438,7 +1398,7 @@ onBeforeUnmount(() => {
   padding: 16px;
   overflow: auto;
   border: 1px solid var(--arena-line);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg);
   background: var(--arena-line2);
   color: var(--arena-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
@@ -1452,12 +1412,6 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .analysis-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .hero-actions,
   .section-head {
     align-items: flex-start;
     flex-direction: column;
@@ -1470,7 +1424,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
-  .analysis-hero,
   .overview-conclusion,
   .overview-next {
     padding: 16px;

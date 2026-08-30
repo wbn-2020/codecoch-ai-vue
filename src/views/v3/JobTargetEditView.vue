@@ -1,15 +1,12 @@
 <template>
   <div class="job-target-edit page-shell">
-    <section class="edit-hero">
-      <div>
-        <div class="hero-kicker">
-          <FilePenLine :size="16" />
-          岗位目标
-        </div>
-        <h1>{{ pageTitle }}</h1>
-        <p>填写岗位名称、公司、经验要求和岗位描述，保存后进入岗位分析页。</p>
-      </div>
-      <div class="hero-actions">
+    <PageHeader
+      eyebrow="岗位目标"
+      :icon="FilePenLine"
+      :title="pageTitle"
+      description="填写岗位名称、公司、经验要求和岗位描述，保存后进入岗位分析页。"
+    >
+      <template #actions>
         <el-button @click="router.push('/job-targets')">
           <ArrowLeft :size="16" />
           返回列表
@@ -18,8 +15,8 @@
           <ScanSearch :size="16" />
           查看分析
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
 
     <section class="content-card">
       <div v-if="loading" class="state-wrap">
@@ -71,6 +68,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { createJobTargetApi, getJobTargetDetailApi, updateJobTargetApi } from '@/api/jobTarget'
 import AppState from '@/components/common/AppState.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import type { TargetJobSaveDTO } from '@/types/jobTarget'
 import { getErrorMessage } from '@/utils/error'
 
@@ -157,48 +155,6 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.edit-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1.5px solid var(--arena-line, var(--app-border));
-  border-radius: var(--arena-radius-card, 20px);
-  background: var(--arena-card, var(--app-surface));
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
-}
-
-.hero-kicker,
-.hero-actions {
-  display: flex;
-  align-items: center;
-}
-
-.hero-kicker {
-  gap: 8px;
-  color: var(--arena-grn-d, var(--app-primary-hover));
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.edit-hero h1 {
-  margin: 8px 0 0;
-  font-size: 26px;
-}
-
-.edit-hero p {
-  margin: 8px 0 0;
-  color: var(--app-text-muted);
-  line-height: 1.7;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .state-wrap {
   padding: 20px;
 }
@@ -211,16 +167,19 @@ onMounted(() => {
 
 .form-side {
   padding-right: 16px;
-  border-right: 1px solid var(--arena-line, var(--app-border));
+  border-right: 1px solid var(--user-border);
 
   h2 {
     margin: 0;
-    font-size: 20px;
+    color: var(--user-text);
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   p {
     margin: 10px 0 0;
-    color: var(--app-text-muted);
+    color: var(--user-text-muted);
     line-height: 1.7;
   }
 }
@@ -232,9 +191,9 @@ onMounted(() => {
 
   div {
     padding: 12px;
-    border: 1px solid var(--arena-line, var(--app-border));
-    border-radius: 12px;
-    background: var(--arena-bg, var(--app-bg));
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-md);
+    background: var(--user-surface-muted);
   }
 
   span,
@@ -243,30 +202,21 @@ onMounted(() => {
   }
 
   span {
-    color: var(--app-text-muted);
-    font-size: 12px;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
   }
 
   strong {
     margin-top: 6px;
-    color: var(--app-text);
-    font-size: 13px;
+    color: var(--user-text);
+    font-size: var(--user-text-body-sm, 13px);
+    font-weight: 600;
   }
 }
 
 @media (max-width: 900px) {
-  .edit-hero,
   .edit-workspace {
     grid-template-columns: 1fr;
-  }
-
-  .edit-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .hero-actions {
-    justify-content: flex-start;
   }
 
   .form-side {

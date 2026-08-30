@@ -59,10 +59,10 @@
       </section>
 
       <section class="metric-grid">
-        <article class="metric-card"><span>综合水平</span><strong>{{ trustedMetricValue(overview?.overallLevel ?? detail?.overallLevel) }}</strong></article>
-        <article class="metric-card"><span>画像评分</span><strong>{{ trustedMetricValue(overview?.overallScore ?? detail?.overallScore) }}</strong></article>
-        <article class="metric-card"><span>已量化短板</span><strong>{{ quantifiedGapCount }}</strong></article>
-        <article class="metric-card"><span>状态</span><strong class="status">{{ profileStatusLabel(overview?.status || detail?.status) }}</strong></article>
+        <MetricCard label="综合水平" :value="trustedMetricValue(overview?.overallLevel ?? detail?.overallLevel)" />
+        <MetricCard label="画像评分" :value="trustedMetricValue(overview?.overallScore ?? detail?.overallScore)" />
+        <MetricCard label="已量化短板" :value="quantifiedGapCount" />
+        <MetricCard label="状态" :value="profileStatusLabel(overview?.status || detail?.status)" />
       </section>
 
       <section class="profile-grid">
@@ -163,6 +163,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi, getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
@@ -542,51 +543,29 @@ watch(() => route.query.matchReportId, () => verifyMatchReport(routeMatchReportI
   color: var(--user-text);
 }
 
-.page-hero,
 .content-panel {
   min-width: 0;
+  padding: 20px;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
 }
 
-.page-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 22px 24px;
-}
-
-.hero-kicker,
-.hero-actions,
 .section-head {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-h1,
 h2,
 p {
   margin: 0;
 }
 
-h1 {
-  margin-top: 7px;
-  font-size: 24px;
-  line-height: 1.3;
-}
-
 h2 {
   color: var(--user-text);
-  font-size: 17px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -594,18 +573,8 @@ p {
   max-width: 68ch;
   margin-top: 7px;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.65;
-}
-
-.hero-actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.content-panel {
-  padding: 20px;
 }
 
 .evidence-panel {
@@ -643,40 +612,7 @@ p {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
-  background: var(--user-surface);
-}
-
-.metric-card {
-  min-width: 0;
-  padding: 16px 18px;
-  border-right: 1px solid var(--user-border);
-  background: var(--user-surface);
-
-  &:last-child {
-    border-right: 0;
-  }
-
-  span {
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 7px;
-    overflow-wrap: anywhere;
-    color: var(--user-text);
-    font-size: 23px;
-    line-height: 1.2;
-  }
-
-  .status {
-    color: var(--user-primary);
-    font-size: 17px;
-  }
+  gap: 14px;
 }
 
 .profile-grid {
@@ -696,10 +632,10 @@ p {
 .skill-count {
   flex: 0 0 auto;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full);
   background: var(--user-surface-muted);
   color: var(--user-text-muted);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
 }
 
 .skill-domain-grid {
@@ -753,7 +689,7 @@ p {
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--user-border);
-  border-radius: 10px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 }
 
@@ -865,7 +801,7 @@ p {
   em {
     flex: 0 0 auto;
     padding: 3px 7px;
-    border-radius: 999px;
+    border-radius: var(--user-radius-full);
     background: var(--user-control-bg);
     color: var(--user-text-secondary);
     font-size: 12px;
@@ -881,7 +817,7 @@ p {
 
   .severity-medium {
     background: var(--user-warning-soft);
-    color: #8c4709;
+    color: var(--user-warning-text);
   }
 }
 
@@ -907,7 +843,7 @@ p {
 
   b {
     color: var(--user-text-secondary);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -925,14 +861,13 @@ p {
 }
 
 @media (max-width: 900px) {
-  .page-hero,
   .profile-grid,
   .evidence-panel {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .hero-actions,
+  :deep(.cc-hero-band__actions),
   .evidence-tags {
     justify-content: flex-start;
   }
@@ -940,26 +875,17 @@ p {
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .metric-card:nth-child(2) {
-    border-right: 0;
-  }
-
-  .metric-card:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--user-border);
-  }
 }
 
 @media (max-width: 640px) {
-  .page-hero,
   .content-panel {
     padding: 16px;
   }
 
-  .hero-actions {
+  :deep(.cc-hero-band__actions) {
     width: 100%;
 
-    :deep(.el-button) {
+    .el-button {
       flex: 1 1 0;
       min-width: 0;
     }
@@ -968,15 +894,6 @@ p {
   .metric-grid,
   .gap-card-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .metric-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--user-border);
-
-    &:last-child {
-      border-bottom: 0;
-    }
   }
 
   .skill-node-grid {
