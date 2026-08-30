@@ -79,6 +79,7 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
 .cc-module-tabs {
   display: inline-flex;
   gap: 2px;
+  width: fit-content;
   max-width: 100%;
   padding: 4px;
   overflow-x: auto;
@@ -100,7 +101,7 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
   gap: 6px;
   min-height: 32px;
   padding: 0 14px;
-  border-radius: 7px;
+  border-radius: var(--user-radius-sm, 6px);
   color: var(--user-text-muted, #6e6963);
   font-size: 13px;
   font-weight: 500;
@@ -111,7 +112,6 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
 
 .cc-module-tabs__item:hover {
   color: var(--user-text, #1a1917);
-  background: var(--user-primary-faint, rgba(31, 111, 92, 0.08));
 }
 
 .cc-module-tabs__item:focus-visible {
@@ -123,19 +123,7 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
   background: var(--user-surface, #ffffff);
   color: var(--user-primary, #1f6f5c);
   font-weight: 600;
-  box-shadow: var(--user-shadow-sm, 0 2px 4px rgba(26, 25, 23, 0.04));
-}
-
-.cc-module-tabs__item.is-active::after {
-  content: '';
-  position: absolute;
-  right: 14px;
-  bottom: 5px;
-  left: 14px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--user-primary, #1f6f5c);
-  opacity: 0.9;
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.05), 0 3px 8px rgba(26, 25, 23, 0.08);
 }
 
 .cc-module-tabs__item.is-disabled {
@@ -150,9 +138,15 @@ small {
   place-items: center;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--user-primary-soft, #eaf2ef);
-  color: var(--user-primary, #1f6f5c);
+  background: var(--user-surface, #ffffff);
+  color: var(--user-text-muted, #6e6963);
   font-size: 11px;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-module-tabs__item.is-active small {
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
 }
 </style>

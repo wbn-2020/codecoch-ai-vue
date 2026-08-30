@@ -584,7 +584,7 @@ body.is-user-layout-active {
 
   .el-select-dropdown__item.is-selected {
     color: var(--user-primary);
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .el-popper__arrow::before {
@@ -1256,7 +1256,7 @@ body.is-user-layout-active .jobcoach-layout {
     .hub-hero
   ) {
     min-height: 0;
-    padding: 18px 20px;
+    padding: 32px 40px;
     border-color: var(--user-border);
     background: var(--user-surface);
     box-shadow: none;
@@ -1280,8 +1280,10 @@ body.is-user-layout-active .jobcoach-layout {
     .hub-hero
   ) h1 {
     margin-top: 6px;
-    font-size: 26px;
-    line-height: 1.25;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
   }
 
   .content-card__body,

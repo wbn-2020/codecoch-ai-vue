@@ -228,9 +228,22 @@
   --user-state-warning-bg: #fdf3e3;
   --user-state-success-bg: #eaf3ee;
 
-  --user-radius-sm: 8px;
-  --user-radius-md: 12px;
-  --user-radius-lg: 16px;
+  --user-radius-sm: 6px;
+  --user-radius-md: 10px;
+  --user-radius-lg: 14px;
+  --user-radius-xl: 20px;
+  --user-radius-full: 999px;
+
+  // v21 字阶（base 14 · 7 档）；权重仅 400/500/600
+  --user-text-h1: 30px;
+  --user-text-h2: 22px;
+  --user-text-h3: 17px;
+  --user-text-h4: 15px;
+  --user-text-body: 14px;
+  --user-text-body-sm: 13px;
+  --user-text-caption: 12px;
+  --user-text-overline: 11px;
+
   --user-shadow-xs: 0 1px 2px rgba(26, 25, 23, 0.03), 0 1px 1px rgba(26, 25, 23, 0.02);
   --user-shadow-sm: 0 2px 6px rgba(26, 25, 23, 0.04), 0 12px 24px -8px rgba(26, 25, 23, 0.08);
   --user-shadow-md: 0 8px 16px -4px rgba(26, 25, 23, 0.06), 0 28px 56px -16px rgba(26, 25, 23, 0.12);

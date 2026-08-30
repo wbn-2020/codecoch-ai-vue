@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 100dvh;
   background: var(--user-bg, #f7f8fa);
-  color: var(--user-text, #0f172a);
+  color: var(--user-text, #1a1917);
   transition: grid-template-columns 180ms ease;
 
   &.is-sidebar-collapsed {
@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
   width: var(--user-sidebar-width);
   height: 100dvh;
   overflow: hidden;
-  border-right: 1px solid var(--user-border, #e2e8f0);
+  border-right: 1px solid var(--user-border, #e3e0da);
   background: var(--user-sidebar-bg, #fafbfc);
   transition: width 180ms ease, transform 180ms ease;
 }
@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   min-height: 72px;
   padding: 16px;
-  border-bottom: 1px solid var(--user-border, #e2e8f0);
+  border-bottom: 1px solid var(--user-border, #e3e0da);
 }
 
 .user-app-shell__brand,
@@ -443,7 +443,7 @@ onBeforeUnmount(() => {
 .user-app-shell__brand-copy strong,
 .user-app-shell__account-copy strong {
   overflow: hidden;
-  color: var(--user-text, #0f172a);
+  color: var(--user-text, #1a1917);
   font-size: 14px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
 
 .user-app-shell__brand-copy small,
 .user-app-shell__account-copy small {
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
 }
 
 .user-app-shell__collapse:hover,
@@ -476,8 +476,8 @@ onBeforeUnmount(() => {
 .user-app-shell__menu-trigger:focus-visible,
 .user-app-shell__icon-button:hover,
 .user-app-shell__icon-button:focus-visible {
-  background: var(--user-primary-soft, #ecfdf5);
-  color: var(--user-primary, #10b981);
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
   outline: 0;
 }
 
@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   margin: auto 12px 16px;
   padding: 10px;
-  border: 1px solid var(--user-border, #e2e8f0);
+  border: 1px solid var(--user-border, #e3e0da);
   border-radius: 10px;
   background: var(--user-surface, #fff);
 }
@@ -523,7 +523,7 @@ onBeforeUnmount(() => {
   height: 26px;
   margin-left: auto;
   border-radius: 6px;
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
 }
 
 .user-app-shell.is-sidebar-collapsed .user-app-shell__account {
@@ -554,9 +554,8 @@ onBeforeUnmount(() => {
   gap: 20px;
   min-height: 56px;
   padding: 0 24px;
-  border-bottom: 1px solid var(--user-border, #e2e8f0);
-  background: color-mix(in srgb, var(--user-surface, #fff) 94%, transparent);
-  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--user-border, #e3e0da);
+  background: var(--user-surface, #ffffff);
 }
 
 .user-app-shell__topbar-left,
@@ -584,13 +583,13 @@ onBeforeUnmount(() => {
 .user-app-shell__breadcrumb {
   gap: 6px;
   min-width: 0;
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
   font-size: 13px;
 }
 
 .user-app-shell__breadcrumb strong {
   overflow: hidden;
-  color: var(--user-text, #0f172a);
+  color: var(--user-text, #1a1917);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -603,10 +602,10 @@ onBeforeUnmount(() => {
   width: min(360px, 32vw);
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid var(--user-border, #e2e8f0);
+  border: 1px solid var(--user-border, #e3e0da);
   border-radius: 8px;
   background: var(--user-surface, #fff);
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -615,7 +614,7 @@ onBeforeUnmount(() => {
 
 .user-app-shell__search:hover,
 .user-app-shell__search:focus-visible {
-  border-color: var(--user-primary, #10b981);
+  border-color: var(--user-primary, #1f6f5c);
   outline: 0;
 }
 
@@ -629,7 +628,7 @@ onBeforeUnmount(() => {
 .user-app-shell__search kbd {
   flex: 0 0 auto;
   padding: 2px 5px;
-  border: 1px solid var(--user-border, #e2e8f0);
+  border: 1px solid var(--user-border, #e3e0da);
   border-radius: 4px;
   background: var(--user-bg, #f7f8fa);
   font-size: 10px;
@@ -643,7 +642,7 @@ onBeforeUnmount(() => {
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  color: var(--user-text-secondary, #334155);
+  color: var(--user-text-secondary, #3a3630);
 }
 
 // 顶栏连胜 / 经验值胶囊（对照原型 topbar 右侧 icon 位）
@@ -676,7 +675,7 @@ onBeforeUnmount(() => {
 .user-app-shell__avatar {
   gap: 4px;
   padding: 0 2px;
-  color: var(--user-text-muted, #64748b);
+  color: var(--user-text-muted, #6e6963);
 }
 
 .user-app-shell__mobile-backdrop {

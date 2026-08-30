@@ -49,7 +49,7 @@ withDefaults(defineProps<{
 }
 
 .is-warning {
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: color-mix(in srgb, var(--user-warning) 32%, transparent);
   background: var(--user-warning-soft);
   color: var(--user-warning-text);
 }
@@ -61,13 +61,13 @@ withDefaults(defineProps<{
 }
 
 .is-info {
-  border-color: rgba(59, 130, 246, 0.25);
-  background: rgba(59, 130, 246, 0.08);
-  color: #2563eb;
+  border-color: color-mix(in srgb, var(--user-cyan) 28%, transparent);
+  background: var(--user-cyan-soft);
+  color: var(--user-cyan);
 }
 
 .is-ai {
-  border-color: rgba(139, 92, 246, 0.24);
+  border-color: color-mix(in srgb, var(--user-ai) 26%, transparent);
   background: var(--user-ai-soft);
   color: var(--user-ai);
 }

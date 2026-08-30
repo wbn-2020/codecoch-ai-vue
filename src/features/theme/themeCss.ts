@@ -111,6 +111,7 @@ export const buildThemeCss = (preset: ThemePreset): string => {
   const radiusSm = `${Math.max(4, t.radius - 4)}px`
   const radiusMd = `${t.radius}px`
   const radiusLg = `${t.radius + 4}px`
+  const radiusXl = `${t.radius + 10}px`
   const contrast = dark ? '#0b1220' : '#ffffff'
   const subtleLine = dark ? shade(t.canvas, 0.08) : shade(t.canvas, -0.03)
 
@@ -192,7 +193,9 @@ export const buildThemeCss = (preset: ThemePreset): string => {
 
   --user-radius-sm: ${radiusSm};
   --user-radius-md: ${radiusMd};
-  --user-radius-lg: ${radiusLg};${shadows}`
+  --user-radius-lg: ${radiusLg};
+  --user-radius-xl: ${radiusXl};
+  --user-radius-full: 999px;${shadows}`
 
   const arenaTokens = `
   --arena-canvas: ${t.canvas};

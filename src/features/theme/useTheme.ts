@@ -12,7 +12,7 @@ import { computed, ref } from 'vue'
 import { buildThemeCss } from './themeCss'
 import { defaultThemePresetId, findThemePreset, themePresets, type ThemePreset } from './presets'
 
-const STORAGE_KEY = 'codecoachai:app-theme'
+const STORAGE_KEY = 'codecoachai:app-theme:v2'
 const STYLE_ELEMENT_ID = 'app-skin-style'
 
 const themeId = ref<string>(defaultThemePresetId)

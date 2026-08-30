@@ -70,7 +70,7 @@ p {
 }
 
 .is-warning {
-  border-color: rgba(245, 158, 11, 0.32);
+  border-color: color-mix(in srgb, var(--user-warning) 32%, transparent);
   background: var(--user-warning-soft);
 }
 

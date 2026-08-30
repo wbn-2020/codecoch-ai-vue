@@ -275,7 +275,7 @@ export const themePresets: ThemePreset[] = [
   }
 ]
 
-export const defaultThemePresetId = 'sage'
+export const defaultThemePresetId = 'ink'
 
 export const findThemePreset = (id: string | null | undefined): ThemePreset =>
   themePresets.find((preset) => preset.id === id) ??

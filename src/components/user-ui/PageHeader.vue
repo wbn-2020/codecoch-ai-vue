@@ -49,16 +49,17 @@ defineProps<{
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.5;
 }
 
 h1 {
   margin: 6px 0 0;
   color: var(--user-text);
-  font-size: 28px;
-  font-weight: 700;
+  font-size: var(--user-text-h1, 30px);
+  font-weight: 600;
   line-height: 1.2;
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 

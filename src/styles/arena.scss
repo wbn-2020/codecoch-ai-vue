@@ -310,13 +310,13 @@ body.user-overlay-theme {
     color: var(--arena-action);
   }
 
-  // ---- 卡片（v22：更柔和的圆角 + 悬浮感阴影，hover 微微上浮）----
+  // ---- 卡片（v21：柔和圆角 + 分层阴影，hover 只升阴影/描边，不位移）----
   .arena-card {
     background: var(--arena-card);
     border: 1px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
     box-shadow: var(--arena-shadow-card);
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
   .arena-card--hero {
     background: var(--arena-grad-hero);
@@ -619,7 +619,7 @@ body.user-overlay-theme {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--arena-vio);
     background: var(--arena-vio-soft);

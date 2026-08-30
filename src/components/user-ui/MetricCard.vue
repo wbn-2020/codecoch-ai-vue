@@ -86,7 +86,7 @@ p.is-emphasis {
 }
 
 .is-warning {
-  border-color: rgba(180, 105, 14, 0.28);
+  border-color: color-mix(in srgb, var(--user-warning, #b4690e) 30%, transparent);
   background: var(--user-warning-soft, #fdf3e3);
 }
 
@@ -96,12 +96,12 @@ p.is-emphasis {
 }
 
 .is-info {
-  border-color: rgba(58, 107, 140, 0.26);
+  border-color: color-mix(in srgb, var(--user-cyan, #3a6b8c) 28%, transparent);
   background: var(--user-cyan-soft, #eaf1f6);
 }
 
 .is-ai {
-  border-color: rgba(111, 92, 147, 0.26);
+  border-color: color-mix(in srgb, var(--user-ai, #6f5c93) 26%, transparent);
   background: var(--user-ai-soft, #f1edf7);
 }
 
