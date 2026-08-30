@@ -170,6 +170,12 @@
 // User pages opt into this explicit light scope so teleported Element Plus
 // overlays can be themed independently without leaking into admin routes.
 // v21 · Quiet Luxury：暖中性画布 + 深墨绿主色（对照 文档相关/原型/v21-visual-brief.md）
+// v21 · Quiet Luxury：字重只有 400/500/600，语义加粗统一按 600 渲染
+.jobcoach-layout.is-user-redesign b,
+.jobcoach-layout.is-user-redesign strong {
+  font-weight: 600;
+}
+
 .jobcoach-layout.is-user-redesign,
 .jobcoach-layout.is-user-redesign .arena {
   color-scheme: light;
