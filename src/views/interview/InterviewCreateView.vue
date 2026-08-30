@@ -1730,7 +1730,7 @@ onMounted(async () => {
 .eyebrow {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .hero-tags {
@@ -1792,7 +1792,7 @@ onMounted(async () => {
 .quick-label {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .recommended-plan-grid {
@@ -1921,7 +1921,7 @@ onMounted(async () => {
   summary {
     color: var(--user-primary);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     cursor: pointer;
   }
 
@@ -1964,7 +1964,7 @@ onMounted(async () => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2059,7 +2059,7 @@ onMounted(async () => {
   > span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   :deep(.el-tag) {
@@ -2122,7 +2122,7 @@ onMounted(async () => {
 
 .quick-primary-cta {
   min-height: 44px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .create-grid {
@@ -2209,7 +2209,7 @@ onMounted(async () => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2313,14 +2313,13 @@ onMounted(async () => {
     color: var(--user-primary);
     font-size: 12px;
     font-style: normal;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   &:hover:not(.disabled),
   &.active {
     border-color: var(--user-primary-border);
     background: var(--user-primary-soft);
-    transform: translateY(-2px);
   }
 
   &.disabled {
@@ -2351,7 +2350,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  font-weight: 700;
+  font-weight: 600;
 
   span {
     display: inline-flex;
@@ -2539,7 +2538,7 @@ onMounted(async () => {
     background: var(--user-primary-border);
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong,

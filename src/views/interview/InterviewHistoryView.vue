@@ -767,8 +767,9 @@ onMounted(fetchInterviews)
   h1 {
     margin: 6px 0;
     color: var(--user-text);
-    font-size: 28px;
-    font-weight: 900;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
     line-height: 1.25;
     text-wrap: balance;
   }
@@ -804,106 +805,109 @@ onMounted(fetchInterviews)
 .eyebrow,
 .quick-label {
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .view-tabs {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
-  padding: 4px;
+  padding: 3px;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: var(--user-surface);
+  border-radius: var(--user-radius-sm, 6px);
+  background: var(--user-surface-muted);
 }
 
 .view-tab {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 30px;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--user-radius-sm, 6px);
   background: transparent;
-  color: var(--user-text-secondary);
+  color: var(--user-text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  transition: background-color 180ms ease, color 180ms ease;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
 
   span {
     display: inline-grid;
-    min-width: 18px;
-    min-height: 18px;
+    min-width: 16px;
+    min-height: 16px;
     place-items: center;
-    border-radius: 50%;
-    background: var(--user-surface-muted);
+    border-radius: var(--user-radius-full, 999px);
+    background: var(--user-surface);
     color: var(--user-text-muted);
-    font-size: 11px;
+    font-size: var(--user-text-overline, 11px);
+    font-variant-numeric: tabular-nums;
   }
 
   &:hover {
-    background: var(--user-surface-muted);
     color: var(--user-text);
   }
 
   &:focus-visible {
     outline: 2px solid var(--user-primary);
-    outline-offset: 2px;
+    outline-offset: 1px;
   }
 }
 
 .view-tab--active {
-  background: var(--user-primary-soft);
+  background: var(--user-surface);
   color: var(--user-primary);
+  font-weight: 600;
+  box-shadow: var(--user-shadow-sm);
 
   span {
-    background: var(--user-primary);
-    color: var(--user-primary-contrast);
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
   }
 }
 
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-sm);
-  background: var(--user-surface);
+  gap: 12px;
 }
 
 .summary-item {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
-  padding: 13px 16px;
-  border-right: 1px solid var(--user-border);
+  padding: 14px 18px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-lg, 14px);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 
-  &:last-child {
-    border-right: 0;
-  }
-
-  span,
-  small {
+  span {
     color: var(--user-text-muted);
-    font-size: 12px;
+    font-size: var(--user-text-caption, 12px);
+    font-weight: 500;
   }
 
   strong {
     color: var(--user-text);
-    font-size: 21px;
-    line-height: 1;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
 
   small {
-    grid-column: 1 / -1;
     overflow: hidden;
+    color: var(--user-text-subtle);
+    font-size: var(--user-text-caption, 12px);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -931,7 +935,7 @@ onMounted(fetchInterviews)
   gap: 28px;
   padding: 24px;
   border: 1px solid var(--user-primary-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface);
 }
 
@@ -958,8 +962,9 @@ onMounted(fetchInterviews)
   max-width: 32ch;
   margin: 10px 0 8px;
   color: var(--user-text);
-  font-size: 24px;
-  font-weight: 900;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1.3;
   text-wrap: balance;
 }
@@ -1031,8 +1036,8 @@ onMounted(fetchInterviews)
   h2 {
     margin: 0;
     color: var(--user-text);
-    font-size: 20px;
-    font-weight: 900;
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
     line-height: 1.3;
   }
 
@@ -1055,7 +1060,7 @@ onMounted(fetchInterviews)
   min-width: 0;
   padding: 0;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface);
   overflow: hidden;
 }
@@ -1081,7 +1086,7 @@ onMounted(fetchInterviews)
   color: var(--user-text-secondary);
   cursor: pointer;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   list-style: none;
 }
 
@@ -1106,7 +1111,7 @@ onMounted(fetchInterviews)
     margin-left: auto;
     color: var(--user-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -1275,8 +1280,8 @@ onMounted(fetchInterviews)
 .card-head h3 {
   margin: 4px 0 0;
   color: var(--user-text);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -1292,7 +1297,7 @@ onMounted(fetchInterviews)
   span {
     padding: 3px 7px;
     border: 1px solid var(--user-border);
-    border-radius: 999px;
+    border-radius: var(--user-radius-full, 999px);
     background: var(--user-surface-muted);
     color: var(--user-text-secondary);
     font-size: 12px;
@@ -1352,8 +1357,10 @@ onMounted(fetchInterviews)
 
   strong {
     color: var(--user-text);
-    font-size: 24px;
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
     line-height: 1.1;
+    font-variant-numeric: tabular-nums;
   }
 
   p {
@@ -1449,18 +1456,6 @@ onMounted(fetchInterviews)
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .summary-item {
-    border-bottom: 1px solid var(--user-border);
-
-    &:nth-child(2n) {
-      border-right: 0;
-    }
-
-    &:nth-last-child(-n + 2) {
-      border-bottom: 0;
-    }
-  }
-
   .filter-bar :deep(.el-input),
   .filter-bar :deep(.el-select) {
     width: 100%;
@@ -1519,17 +1514,6 @@ onMounted(fetchInterviews)
 
   .summary-strip {
     grid-template-columns: 1fr;
-  }
-
-  .summary-item,
-  .summary-item:nth-child(2n),
-  .summary-item:nth-last-child(-n + 2) {
-    border-right: 0;
-    border-bottom: 1px solid var(--user-border);
-  }
-
-  .summary-item:last-child {
-    border-bottom: 0;
   }
 
   .view-tabs {

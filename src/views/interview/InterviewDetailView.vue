@@ -403,7 +403,7 @@ onMounted(fetchDetail)
   margin-bottom: 10px;
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .detail-hero h1 {
@@ -650,7 +650,7 @@ onMounted(fetchDetail)
   margin-bottom: 8px;
   color: var(--user-text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .answer-block p,

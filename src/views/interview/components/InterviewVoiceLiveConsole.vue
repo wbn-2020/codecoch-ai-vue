@@ -889,12 +889,12 @@ onBeforeUnmount(() => {
 
   strong {
     margin-top: 4px;
-    color: #f8fafc;
+    color: #f6f6f4;
   }
 
   p {
     margin: 5px 0 0;
-    color: #94a3b8;
+    color: #a8a29a;
     font-size: 12px;
     line-height: 1.5;
   }
@@ -931,7 +931,7 @@ onBeforeUnmount(() => {
   > p {
     min-height: 38px;
     margin: 7px 0 10px;
-    color: #94a3b8;
+    color: #a8a29a;
     font-size: 12px;
     line-height: 1.55;
   }
@@ -946,20 +946,20 @@ onBeforeUnmount(() => {
   }
 
   span {
-    color: #94a3b8;
+    color: #a8a29a;
     font-size: 11px;
   }
 
   strong {
     margin-top: 4px;
-    color: #e2e8f0;
+    color: #e3e0da;
   }
 }
 
 .voice-level {
   justify-content: space-between;
   margin: 7px 0;
-  color: #94a3b8;
+  color: #a8a29a;
   font-size: 11px;
 }
 
@@ -990,14 +990,14 @@ onBeforeUnmount(() => {
 
   strong {
     margin-top: 4px;
-    color: #f8fafc;
+    color: #f6f6f4;
   }
 }
 
 .partial-transcript {
   min-height: 54px;
   margin: 0;
-  color: #e2e8f0;
+  color: #e3e0da;
   line-height: 1.65;
   white-space: pre-wrap;
 }
@@ -1006,7 +1006,7 @@ onBeforeUnmount(() => {
   align-items: center;
 
   span {
-    color: #94a3b8;
+    color: #a8a29a;
     font-size: 11px;
     line-height: 1.45;
   }
@@ -1015,7 +1015,7 @@ onBeforeUnmount(() => {
 :deep(.transcript-panel .el-textarea__inner) {
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(2, 6, 23, 0.68);
-  color: #e2e8f0;
+  color: #e3e0da;
   box-shadow: none;
 }
 
