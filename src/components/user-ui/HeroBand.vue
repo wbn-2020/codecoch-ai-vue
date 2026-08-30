@@ -39,7 +39,7 @@ withDefaults(defineProps<{
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 
   &__copy {
     min-width: 0;

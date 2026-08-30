@@ -37,6 +37,6 @@ withDefaults(defineProps<{
 <style scoped lang="scss">
 // 页头几何与排版统一由 HeroBand 承担，这里只保留调用方惯用的间距钩子
 .cc-page-header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 </style>

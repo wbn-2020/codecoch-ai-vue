@@ -510,11 +510,6 @@ onMounted(async () => {
     padding: 24px 24px 40px;
   }
 
-  // ---- 页头由 HeroBand 提供，这里只保留间距覆盖 ----
-  &__head {
-    margin-bottom: 20px;
-  }
-
   &__eyebrow {
     display: inline-flex;
     align-items: center;
@@ -561,7 +556,7 @@ onMounted(async () => {
 
   // ---- 闭环引导卡 ----
   &__guide {
-    padding: 24px;
+    padding: 20px;
   }
 
   &__guide-head {
