@@ -134,9 +134,9 @@ describe('ArenaPrepareView', () => {
     expect(wrapper.text()).toContain('已完成 0/3')
     expect(wrapper.text()).toContain('目标岗位')
     expect(wrapper.text()).toContain('JD 匹配状态')
-    expect(wrapper.findAll('.arena-prepare__node')).toHaveLength(1)
+    expect(wrapper.findAll('.arena-prepare__step')).toHaveLength(3)
     // 第 1 步为当前步骤，其余待开始
-    expect(wrapper.get('.arena-prepare__map').findAll('.arena-chip--amber')).toHaveLength(1)
+    expect(wrapper.get('.arena-prepare__steps').findAll('.arena-chip--amber')).toHaveLength(1)
     // 下一步行动
     expect(wrapper.text()).toContain('先补简历')
     expect(wrapper.text()).toContain('0/6')

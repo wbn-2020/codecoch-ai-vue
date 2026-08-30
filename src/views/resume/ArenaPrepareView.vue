@@ -1,8 +1,8 @@
 <template>
   <div class="arena arena-prepare">
-    <ModuleTabs :items="moduleTabs" />
-
     <div class="arena-prepare__page">
+      <ModuleTabs :items="moduleTabs" />
+
       <!-- 页头：标题 + 资料接入环 -->
       <div class="arena-between arena-prepare__head">
         <div>
@@ -32,14 +32,6 @@
           </div>
         </div>
       </div>
-      <div class="arena-prepare__progress" aria-label="求职准备进度">
-        <i
-          v-for="node in mainNodes"
-          :key="node.key"
-          :class="{ 'is-done': node.state === 'done', 'is-current': node.state === 'current' || node.state === 'running' }"
-        ></i>
-      </div>
-
       <!-- 加载骨架 -->
       <div v-if="loading" class="arena-col" style="margin-top: 22px">
         <div v-for="i in 3" :key="i" class="arena-card arena-prepare__skeleton"></div>
@@ -53,72 +45,39 @@
           <button class="arena-btn arena-btn--txt" @click="loadAll">刷新</button>
         </div>
 
+        <!-- 三步流程：步骤卡片（整卡可点，替代旧的进度点 + 单节点流程） -->
+        <div class="arena-prepare__steps" aria-label="求职准备进度">
+          <button
+            v-for="(node, index) in mainNodes"
+            :key="node.key"
+            type="button"
+            class="arena-prepare__step"
+            :class="`is-${node.state}`"
+            @click="node.action"
+          >
+            <span class="arena-prepare__step-num" aria-hidden="true">
+              <template v-if="node.state === 'done'">✓</template>
+              <template v-else-if="node.state === 'failed'">✗</template>
+              <template v-else>{{ index + 1 }}</template>
+            </span>
+            <span class="arena-prepare__step-body">
+              <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
+                <b>{{ node.title }}</b>
+                <span v-if="node.state === 'current'" class="arena-chip arena-chip--amber">当前步骤</span>
+                <span v-else-if="node.state === 'done'" class="arena-chip arena-chip--grn">已完成</span>
+                <span v-else-if="node.state === 'failed'" class="arena-chip arena-chip--red">需要重新处理</span>
+                <span v-else-if="node.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
+                <span v-else class="arena-chip arena-chip--mut">待开始</span>
+              </span>
+              <small>{{ node.desc }}</small>
+              <span class="arena-prepare__step-cta">{{ node.cta }} →</span>
+            </span>
+          </button>
+        </div>
+
         <div class="arena-prepare__workspace">
-          <!-- 准备流程 -->
-          <div class="arena-prepare__map">
-            <div class="arena-prepare__track">
-              <button
-                v-if="currentMainNode"
-                type="button"
-                class="arena-prepare__node"
-                :class="`is-${currentMainNode.state}`"
-                @click="currentMainNode.action"
-              >
-                <span class="arena-prepare__badge">
-                  <template v-if="currentMainNode.state === 'done'">✓</template>
-                  <template v-else-if="currentMainNode.state === 'failed'">✗</template>
-                  <template v-else-if="currentMainNode.state === 'running'">⏳</template>
-                  <template v-else-if="currentMainNode.state === 'locked'">🔒</template>
-                  <template v-else>⚡</template>
-                </span>
-                <span class="arena-prepare__node-body">
-                  <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                    <b>{{ currentMainNode.title }}</b>
-                    <span v-if="currentMainNode.state === 'current'" class="arena-chip arena-chip--amber">当前步骤</span>
-                    <span v-else-if="currentMainNode.state === 'done'" class="arena-chip arena-chip--grn">已完成</span>
-                    <span v-else-if="currentMainNode.state === 'failed'" class="arena-chip arena-chip--red">需要重新处理</span>
-                    <span v-else-if="currentMainNode.state === 'running'" class="arena-chip arena-chip--vio">生成中</span>
-                    <span v-else class="arena-chip arena-chip--mut">待开始</span>
-                  </span>
-                  <small>{{ currentMainNode.desc }}</small>
-                  <span class="arena-prepare__node-cta">{{ currentMainNode.cta }} →</span>
-                </span>
-              </button>
-            </div>
-
-            <aside class="arena-card arena-prepare__coach">
-              <div class="arena-row" style="gap: 8px">
-                <span class="arena-chip arena-chip--vio">✦ AI</span>
-                <b>教练提示</b>
-              </div>
-              <p>
-                {{ currentTarget
-                  ? '岗位已接入。贴上完整 JD 后，我会帮你提取关键词并生成匹配报告。'
-                  : '先把目标岗位接进来，后续训练和模拟面试才会有明确的岗位上下文。' }}
-              </p>
-            </aside>
-
-            <!-- 补充资料 -->
-            <details class="arena-prepare__side">
-              <summary>更多准备动作</summary>
-              <div class="arena-prepare__side-grid">
-                <button
-                  v-for="side in sideNodes"
-                  :key="side.key"
-                  type="button"
-                  class="arena-prepare__side-card"
-                  :class="{ 'is-done': side.done }"
-                  @click="router.push(side.path)"
-                >
-                  <span class="arena-between">
-                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完善' : '可选资料' }}</span>
-                  </span>
-                  <b>{{ side.title }}</b>
-                  <small>{{ side.desc }}</small>
-                </button>
-              </div>
-            </details>
-          </div>
+          <!-- 左：当前步骤工作区 -->
+          <div class="arena-col">
 
           <!-- 当前步骤：在准备流内完成目标岗位和 JD 接入，避免用户被跳回旧岗位工作台。 -->
           <section
@@ -161,26 +120,36 @@
                 </button>
               </div>
               <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
-              <div class="arena-prepare__mobile-stage-cards">
-                <button
-                  v-for="node in [mainNodes[0], mainNodes[2]].filter(Boolean)"
-                  :key="node.key"
-                  type="button"
-                  class="arena-prepare__mobile-stage-card"
-                  :class="`is-${node.state}`"
-                  @click="node.action"
-                >
-                  <span>{{ node.state === 'done' ? '✓' : node.state === 'locked' ? '🔒' : '⚡' }}</span>
-                  <div>
-                    <b>{{ node.title }}</b>
-                    <small>{{ node.desc }}</small>
-                  </div>
-                  <em>{{ node.cta }} →</em>
-                </button>
-              </div>
             </div>
 
           </div>
+          </section>
+
+          <section
+            v-else-if="currentMainNode?.key === 'match'"
+            class="arena-card arena-prepare__stage-card"
+            aria-labelledby="prepare-match-title"
+          >
+            <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
+              <span class="arena-chip arena-chip--grn-solid">JD 匹配</span>
+              <span
+                class="arena-chip"
+                :class="hasTrustedMatch ? 'arena-chip--grn' : latestMatch?.status === 'FAILED' ? 'arena-chip--red' : 'arena-chip--amber'"
+              >
+                {{ hasTrustedMatch ? '可信报告' : latestMatch?.status === 'FAILED' ? '上次生成失败' : isCompletedMatch ? '报告待复核' : '待生成' }}
+              </span>
+            </div>
+            <div class="arena-prepare__stage-score">
+              <b>{{ matchScoreText }}</b>
+              <span>当前匹配分</span>
+            </div>
+            <h2 id="prepare-match-title" class="arena-h2" style="margin-top: 12px">{{ currentMainNode.title }}</h2>
+            <p class="arena-p" style="margin-top: 6px">{{ matchSummary }}</p>
+            <div class="arena-prepare__stage-actions">
+              <button class="arena-btn arena-btn--pri" type="button" @click="goMatchAction">
+                {{ currentMainNode.cta }} →
+              </button>
+            </div>
           </section>
 
           <section
@@ -204,32 +173,100 @@
             v-if="currentTarget && currentMainNode?.key !== 'target'"
             class="arena-card arena-prepare__jd-quick-edit"
           >
-            <summary>编辑目标岗位 JD</summary>
-            <p class="arena-p">更新岗位描述后，旧的匹配报告会清除，避免把旧岗位上下文继续当成当前依据。</p>
-            <label class="arena-prepare__jd-textarea">
-              <span>岗位 JD 原文</span>
-              <textarea
-                v-model="jdDraft"
-                rows="7"
-                maxlength="12000"
-                placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
-                :disabled="jdSaving"
-              />
-            </label>
-            <div class="arena-prepare__jd-actions">
-              <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
-                {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
+            <summary>
+              <span class="arena-row" style="gap: 8px; flex-wrap: wrap">
+                <b>编辑目标岗位 JD</b>
+                <span class="arena-chip arena-chip--line">更新后旧报告会清除</span>
+              </span>
+            </summary>
+            <div class="arena-prepare__jd-quick-edit-body">
+              <p class="arena-p">更新岗位描述后，旧的匹配报告会清除，避免把旧岗位上下文继续当成当前依据。</p>
+              <label class="arena-prepare__jd-textarea">
+                <span>岗位 JD 原文</span>
+                <textarea
+                  v-model="jdDraft"
+                  rows="7"
+                  maxlength="12000"
+                  placeholder="粘贴岗位职责、任职要求、技术栈和加分项。"
+                  :disabled="jdSaving"
+                />
+              </label>
+              <div class="arena-prepare__jd-actions">
+                <button class="arena-btn arena-btn--pri" type="button" :disabled="jdSaving || !jdReady" @click="saveTargetAndParse">
+                  {{ jdSaving ? '正在保存并解析…' : '保存并解析 JD' }}
+                </button>
+                <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
+                  去生成匹配 →
+                </button>
+              </div>
+              <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
+            </div>
+          </details>
+
+          <aside class="arena-card arena-prepare__coach">
+            <div class="arena-row" style="gap: 8px">
+              <span class="arena-chip arena-chip--vio">✦ AI</span>
+              <b>教练提示</b>
+            </div>
+            <p>
+              {{ currentTarget
+                ? '岗位已接入。贴上完整 JD 后，我会帮你提取关键词并生成匹配报告。'
+                : '先把目标岗位接进来，后续训练和模拟面试才会有明确的岗位上下文。' }}
+            </p>
+          </aside>
+          </div>
+
+          <!-- 右：推荐下一步 + 可选资料 -->
+          <div class="arena-col">
+            <div class="arena-card arena-prepare__panel arena-prepare__next">
+              <div class="arena-row" style="gap: 8px">
+                <span class="arena-chip arena-chip--grn-solid">推荐下一步</span>
+              </div>
+              <div class="arena-h2" style="margin-top: 12px">{{ nextStep.title }}</div>
+              <p class="arena-p" style="margin-top: 8px">{{ nextStep.desc }}</p>
+              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px; margin-top: 16px; width: 100%" @click="router.push(nextStep.path)">
+                ⚔ {{ nextStep.cta }}
               </button>
-              <button class="arena-btn arena-btn--sec" type="button" :disabled="!canMatch || jdSaving" @click="goMatchAction">
-                去生成匹配 →
+              <button class="arena-btn arena-btn--txt" style="margin-top: 8px; width: 100%" :disabled="loading || secondaryLoading" @click="loadAll">
+                {{ secondaryLoading ? '正在补齐匹配与证据…' : '刷新数据' }}
               </button>
             </div>
-            <p v-if="jdFeedback" class="arena-prepare__jd-feedback" role="status">{{ jdFeedback }}</p>
-          </details>
+
+            <div class="arena-card arena-prepare__panel">
+              <div class="arena-between">
+                <div>
+                  <div class="arena-prepare__kicker">更多准备动作</div>
+                  <div class="arena-h3" style="margin-top: 4px">可选资料，让训练证据更完整</div>
+                </div>
+              </div>
+              <div class="arena-prepare__side-grid" style="grid-template-columns: 1fr; margin-top: 14px">
+                <button
+                  v-for="side in sideNodes"
+                  :key="side.key"
+                  type="button"
+                  class="arena-prepare__side-card"
+                  :class="{ 'is-done': side.done }"
+                  @click="router.push(side.path)"
+                >
+                  <span class="arena-between">
+                    <span class="arena-chip" :class="side.done ? 'arena-chip--grn' : 'arena-chip--line'">{{ side.done ? '✓ 已完善' : '可选资料' }}</span>
+                  </span>
+                  <b>{{ side.title }}</b>
+                  <small>{{ side.desc }}</small>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <details class="arena-prepare__more">
-          <summary>查看准备资料与进度</summary>
+        <!-- 准备资料与进度：常驻区块（不再折叠） -->
+        <section class="arena-prepare__detail" aria-labelledby="prepare-detail-title">
+          <div class="arena-between">
+            <div>
+              <div class="arena-prepare__kicker">准备资料与进度</div>
+              <div class="arena-h3" style="margin-top: 4px">简历、目标岗位、匹配报告与项目证据的最新状态</div>
+            </div>
+          </div>
           <div class="arena-prepare__grid">
           <div class="arena-col">
             <!-- 岗位关键词覆盖情况 -->
@@ -322,21 +359,6 @@
 
           <!-- 右栏 -->
           <div class="arena-col">
-            <!-- 下一步行动 -->
-            <div class="arena-card arena-prepare__panel arena-prepare__next">
-              <div class="arena-row" style="gap: 8px">
-                <span class="arena-chip arena-chip--grn-solid">推荐下一步</span>
-              </div>
-              <div class="arena-h2" style="margin-top: 12px">{{ nextStep.title }}</div>
-              <p class="arena-p" style="margin-top: 8px">{{ nextStep.desc }}</p>
-              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px; margin-top: 16px; width: 100%" @click="router.push(nextStep.path)">
-                ⚔ {{ nextStep.cta }}
-              </button>
-              <button class="arena-btn arena-btn--txt" style="margin-top: 8px; width: 100%" :disabled="loading || secondaryLoading" @click="loadAll">
-                {{ secondaryLoading ? '正在补齐匹配与证据…' : '刷新数据' }}
-              </button>
-            </div>
-
             <!-- 简历快照 -->
             <div class="arena-card arena-prepare__panel">
               <div class="arena-between">
@@ -394,7 +416,7 @@
             </div>
           </div>
           </div>
-        </details>
+        </section>
       </template>
     </div>
   </div>
@@ -1303,28 +1325,6 @@ onBeforeUnmount(() => {
     max-width: 340px;
   }
 
-  &__progress {
-    display: none;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 16px;
-
-    i {
-      display: block;
-      height: 6px;
-      border-radius: 999px;
-      background: var(--arena-line);
-
-      &.is-done {
-        background: var(--arena-grn);
-      }
-
-      &.is-current {
-        background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
-      }
-    }
-  }
-
   &__warn {
     margin-top: 16px;
     display: flex;
@@ -1341,13 +1341,9 @@ onBeforeUnmount(() => {
   &__workspace {
     margin-top: 18px;
     display: grid;
-    grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
     gap: 18px;
     align-items: start;
-  }
-
-  &__map {
-    min-width: 0;
   }
 
   &__jd-card {
@@ -1439,7 +1435,8 @@ onBeforeUnmount(() => {
     }
   }
 
-  &__jd-actions {
+  &__jd-actions,
+  &__stage-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
@@ -1453,17 +1450,13 @@ onBeforeUnmount(() => {
     line-height: 1.55;
   }
 
-  &__mobile-stage-cards {
-    display: none;
-  }
-
   &__jd-tip {
     display: none;
     flex-direction: column;
     align-items: flex-start;
     gap: 9px;
     padding: 16px;
-    border: 1.5px solid #d7ccff;
+    border: 1.5px solid #d8cfeb;
     border-radius: 16px;
     background: linear-gradient(150deg, var(--arena-vio-soft), #fff 76%);
 
@@ -1479,31 +1472,19 @@ onBeforeUnmount(() => {
     }
   }
 
-  &__track {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  &__steps {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
   }
 
-  &__link {
-    flex: none;
-    width: 4px;
-    height: 18px;
-    border-radius: 99px;
-    background: var(--arena-line);
-    margin: 0 0 0 32px;
-
-    &.is-done {
-      background: linear-gradient(90deg, var(--arena-grn), var(--arena-lime));
-    }
-  }
-
-  &__node {
+  &__step {
     min-width: 0;
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    padding: 16px;
+    padding: 16px 18px;
     border: 1px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
     background: var(--arena-card);
@@ -1521,7 +1502,7 @@ onBeforeUnmount(() => {
 
     &.is-done {
       border-color: var(--arena-grn-soft);
-      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
+      background: linear-gradient(135deg, #eaf2ef, #ffffff 70%);
     }
 
     &.is-current {
@@ -1530,7 +1511,6 @@ onBeforeUnmount(() => {
     }
 
     &.is-locked {
-      cursor: pointer;
       background: var(--arena-sunken);
     }
 
@@ -1540,7 +1520,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  &__badge {
+  &__step-num {
     flex: none;
     width: 40px;
     height: 40px;
@@ -1554,17 +1534,15 @@ onBeforeUnmount(() => {
     color: var(--arena-mut);
     transition: background 0.2s ease, color 0.2s ease;
 
-    .is-done & {
+    .is-done &,
+    .is-current & {
       background: var(--arena-grad-accent);
       color: #fff;
       box-shadow: 0 4px 10px rgba(31, 111, 92, 0.2);
     }
 
     .is-current & {
-      background: var(--arena-grad-accent);
-      color: #fff;
       animation: arenaPulse 1.8s ease-in-out infinite;
-      box-shadow: 0 4px 12px rgba(31, 111, 92, 0.22);
     }
 
     .is-failed & {
@@ -1578,7 +1556,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  &__node-body {
+  &__step-body {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -1586,44 +1564,102 @@ onBeforeUnmount(() => {
     gap: 6px;
 
     b {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 600;
       letter-spacing: -0.01em;
     }
 
     small {
       color: var(--arena-sub);
-      font-size: 13px;
+      font-size: 12.5px;
       line-height: 1.55;
     }
   }
 
-  &__node-cta {
-    font-size: 13px;
+  &__step-cta {
+    font-size: 12.5px;
     font-weight: 700;
     color: var(--arena-grn-d);
-    margin-top: 4px;
+    margin-top: 2px;
   }
 
   // 「当前准备步骤」摘要卡：arena-card 只有边框底色，这里补内边距
   &__stage-card {
-    padding: var(--user-space-5, 20px);
+    padding: var(--user-space-6, 24px);
   }
 
-  &__side {
+  &__stage-score {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     margin-top: 14px;
 
-    summary {
+    b {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--arena-ink);
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    span {
       color: var(--arena-sub);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+  }
+
+  // 「编辑目标岗位 JD」设计化折叠卡：整行可点 + 旋转箭头（不再用浏览器默认三角）
+  &__jd-quick-edit {
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 52px;
+      padding: 0 18px;
+      border-radius: var(--arena-radius-card);
+      color: var(--arena-ink);
       cursor: pointer;
-      font-size: 12px;
-      font-weight: 800;
+      font-size: 14px;
+      font-weight: 600;
       list-style: none;
 
       &::-webkit-details-marker {
         display: none;
       }
+
+      &::after {
+        content: '';
+        flex: none;
+        width: 9px;
+        height: 9px;
+        margin-left: 12px;
+        border-right: 2px solid var(--arena-sub);
+        border-bottom: 2px solid var(--arena-sub);
+        transform: rotate(45deg);
+        transition: transform 0.2s ease;
+      }
     }
+
+    > summary:hover {
+      background: var(--arena-sunken);
+    }
+
+    &[open] > summary {
+      border-bottom: 1px solid var(--arena-line);
+      border-bottom-right-radius: 0;
+      border-bottom-left-radius: 0;
+
+      &::after {
+        transform: rotate(225deg);
+        margin-bottom: 4px;
+      }
+    }
+  }
+
+  &__jd-quick-edit-body {
+    padding: 14px 18px 18px;
   }
 
   &__coach {
@@ -1673,7 +1709,7 @@ onBeforeUnmount(() => {
     &.is-done {
       border-style: solid;
       border-color: var(--arena-grn-soft);
-      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
+      background: linear-gradient(135deg, #eaf2ef, #ffffff 70%);
     }
 
     b {
@@ -1688,55 +1724,16 @@ onBeforeUnmount(() => {
     }
   }
 
+  &__detail {
+    margin-top: 26px;
+    display: grid;
+    gap: 16px;
+  }
+
   &__grid {
-    margin-top: 18px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
     gap: 18px;
-  }
-
-  &__more {
-    margin-top: 24px;
-
-    > summary {
-      display: flex;
-      align-items: center;
-      min-height: 46px;
-      padding: 0 18px;
-      border: 1px solid var(--arena-line);
-      border-radius: var(--arena-radius-card);
-      background: var(--arena-card);
-      color: var(--arena-ink);
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 700;
-      list-style: none;
-      box-shadow: var(--arena-shadow-subtle);
-    }
-
-    > summary::-webkit-details-marker {
-      display: none;
-    }
-
-    > summary::after {
-      content: '+';
-      margin-left: auto;
-      color: var(--arena-grn-d);
-      font-size: 18px;
-    }
-
-    &[open] > summary {
-      border-bottom-right-radius: 0;
-      border-bottom-left-radius: 0;
-    }
-
-    &[open] > summary::after {
-      content: '-';
-    }
-
-    &[open] > .arena-prepare__grid {
-      padding-top: 18px;
-    }
   }
 
   &__panel {
@@ -1767,7 +1764,7 @@ onBeforeUnmount(() => {
 
     &.is-done {
       border-color: var(--arena-grn-soft);
-      background: linear-gradient(135deg, #f5fbf8, #ffffff 70%);
+      background: linear-gradient(135deg, #eaf2ef, #ffffff 70%);
     }
 
     &.is-locked {
@@ -1942,6 +1939,15 @@ onBeforeUnmount(() => {
       padding-inline: 18px;
     }
 
+    &__steps {
+      grid-template-columns: 1fr;
+    }
+
+    &__workspace {
+      display: flex;
+      flex-direction: column;
+    }
+
     &__grid {
       grid-template-columns: 1fr;
     }
@@ -1987,20 +1993,8 @@ onBeforeUnmount(() => {
       padding: 18px 14px 26px;
     }
 
-    &__track {
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    &__progress {
-      display: grid;
-      margin-top: 14px;
-    }
-
-    &__link {
-      width: 4px;
-      height: 18px;
-      margin: 0 0 0 32px;
+    &__steps {
+      grid-template-columns: 1fr;
     }
 
     &__workspace,
@@ -2018,10 +2012,6 @@ onBeforeUnmount(() => {
       margin-top: 16px;
     }
 
-    &__map {
-      display: none;
-    }
-
     &__jd-card {
       width: 100%;
       padding: 20px;
@@ -2033,81 +2023,6 @@ onBeforeUnmount(() => {
 
     &__jd-lock {
       display: none;
-    }
-
-    &__mobile-stage-cards {
-      display: grid;
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    &__mobile-stage-card {
-      display: grid;
-      grid-template-columns: 34px minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-      width: 100%;
-      padding: 13px 14px;
-      border: 1px solid var(--arena-line);
-      border-radius: 14px;
-      background: var(--arena-card);
-      color: var(--arena-ink);
-      font-family: inherit;
-      text-align: left;
-      box-shadow: var(--arena-shadow-subtle);
-
-      > span {
-        display: inline-flex;
-        width: 34px;
-        height: 34px;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        background: var(--arena-amber-soft);
-        color: var(--arena-amber);
-        font-size: 14px;
-        font-weight: 700;
-      }
-
-      > div {
-        display: grid;
-        min-width: 0;
-        gap: 3px;
-      }
-
-      b,
-      small,
-      em {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      b {
-        font-size: 13px;
-      }
-
-      small {
-        color: var(--arena-sub);
-        font-size: 11.5px;
-      }
-
-      em {
-        max-width: 82px;
-        color: var(--arena-grn-d);
-        font-size: 11.5px;
-        font-style: normal;
-        font-weight: 700;
-      }
-
-      &.is-done {
-        border-color: var(--arena-grn-soft);
-
-        > span {
-          background: var(--arena-grn-soft);
-          color: var(--arena-grn-d);
-        }
-      }
     }
   }
 }
