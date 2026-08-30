@@ -84,8 +84,9 @@ describe('non-resume user UI polish', () => {
   })
 
   it('keeps auxiliary user pages on Direction D semantic colors', () => {
-    expect(growthTasks).toContain('border: 1px solid var(--user-primary-border, var(--app-border));')
-    expect(growthTasks).toContain('background: var(--user-primary-faint, var(--arena-grn-soft));')
+    // v21 · Quiet Luxury：「下一步」提示卡收敛为白卡 + eyebrow 徽章（弃用薄荷水洗底）
+    expect(growthTasks).toContain('border: 1px solid var(--app-border);')
+    expect(growthTasks).toContain('background: var(--user-surface, var(--app-surface));')
 
     expect(projectExperience).toContain('border-color: var(--user-primary-border);')
     expect(projectExperience).not.toContain('border-color: rgba(37, 99, 235, 0.35);')
