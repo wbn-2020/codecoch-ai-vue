@@ -7,7 +7,7 @@ const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 
 
 const directionDPages = [
   ['登录', 'src/views/auth/LoginView.vue', 'class="arena login-page"', '示例成长面板预览'],
-  ['今天', 'src/views/user/ArenaHomeView.vue', 'class="arena arena-home"', 'arena-home__boss'],
+  ['今天', 'src/views/user/ArenaHomeView.vue', 'class="arena arena-home"', 'arena-home__task'],
   ['准备', 'src/views/resume/ArenaPrepareView.vue', 'class="arena arena-prepare"', 'arena-prepare__workspace'],
   ['简历工坊', 'src/views/resume/ResumeEditView.vue', 'class="arena resume-workbench-page resume-editor page-shell"', '<ResumeWorkbenchShell'],
   ['JD 匹配进入页', 'src/views/v3/ResumeMatchView.vue', 'class="arena arena-match v3-page match-entry-page"', 'match-entry-grid'],

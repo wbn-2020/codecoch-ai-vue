@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref } from 'vue'
+import { nextTick } from 'vue'
 
 import ArenaHomeView from '@/views/user/ArenaHomeView.vue'
 import { useGameProfileStore } from '@/features/game-profile'
@@ -65,6 +65,7 @@ describe('ArenaHomeView', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     completeAgentTaskApi.mockClear()
+    completeAgentTaskApi.mockResolvedValue({ id: 1, status: 'DONE' })
     homeCacheApi.fetchCachedTodayAgentTasks.mockReset()
     homeCacheApi.fetchCachedDashboardOverview.mockReset()
     homeCacheApi.fetchCachedTodayAgentTasks.mockImplementation(async () => todayTasks.value)
@@ -124,27 +125,36 @@ describe('ArenaHomeView', () => {
     }
   })
 
-  it('renders a priority task and follow-up tasks from real agent tasks', async () => {
+  it('renders the prototype task checklist from real agent tasks', async () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('今日优先任务')
-    expect(wrapper.text()).toContain('做出一份能匹配的简历')
-    expect(wrapper.text()).toContain('约 8 分钟')
-    expect(wrapper.text()).toContain('后续任务 1')
-    expect(wrapper.text()).toContain('贴一段目标 JD')
-    expect(wrapper.text()).toContain('后续任务 2')
-    expect(wrapper.text()).toContain('轻量技术面 5 题')
+    expect(wrapper.text()).toContain('先把今天的 3 项任务清掉')
+    expect(wrapper.text()).toContain('今日任务清单')
+    expect(wrapper.text()).toContain('0 / 3')
+    expect(wrapper.text()).toContain('优先完成「做出一份能匹配的简历」')
+    expect(wrapper.text()).toContain('通关后解锁 JD 精准匹配')
+
+    const rows = wrapper.findAll('.arena-home__task')
+    expect(rows).toHaveLength(3)
+    expect(rows[0].text()).toContain('做出一份能匹配的简历')
+    expect(rows[0].text()).toContain('8 分钟')
+    expect(rows[0].find('input[type="checkbox"]').element.checked).toBe(false)
+    expect(rows[1].text()).toContain('贴一段目标 JD')
+    expect(rows[2].text()).toContain('轻量技术面 5 题')
   })
 
-  it('shows the empty-first-quest state when there are no open missions', async () => {
+  it('shows the empty-first-quest guide when there are no open missions', async () => {
     todayTasks.value = { tasks: [] }
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('今天还没有任务，先安排第一项')
+    expect(wrapper.text()).toContain('安排第一项任务')
+    expect(wrapper.text()).toContain('先安排第一项任务，把今天的闭环跑通')
+    expect(wrapper.text()).toContain('新的一天 · 约 8 分钟起步')
     // mock 概览中已有简历（resumeCount=1），主行动为生成今日计划
-    expect(wrapper.text()).toContain('生成今日计划')
+    const cta = wrapper.findAll('button').find((button) => button.text().includes('生成今日计划'))
+    expect(cta).toBeTruthy()
   })
 
   it('does not present task-loading failure as an empty task list and recovers on retry', async () => {
@@ -155,7 +165,8 @@ describe('ArenaHomeView', () => {
     await flush()
 
     expect(wrapper.text()).toContain('今日任务尚未加载')
-    expect(wrapper.text()).not.toContain('今天还没有任务，先安排第一项')
+    expect(wrapper.text()).toContain('任务服务暂时不可用')
+    expect(wrapper.text()).not.toContain('先安排第一项任务，把今天的闭环跑通')
 
     await wrapper.findAll('button').find((button) => button.text().includes('重新加载任务'))!.trigger('click')
     await flush()
@@ -184,9 +195,15 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
+    expect(wrapper.text()).toContain('今日计划已完成')
     expect(wrapper.text()).toContain('今天的训练已全部完成')
     expect(wrapper.text()).toContain('查看今日完成记录')
-    expect(wrapper.text()).not.toContain('今天还没有任务，先安排第一项')
+    expect(wrapper.text()).toContain('3 / 3')
+    expect(wrapper.findAll('.arena-home__task')).toHaveLength(3)
+    for (const row of wrapper.findAll('.arena-home__task')) {
+      expect(row.find('input[type="checkbox"]').element.checked).toBe(true)
+    }
+    expect(wrapper.text()).not.toContain('先生成今日计划')
   })
 
   it('falls back to resume creation when the user has no resume', async () => {
@@ -195,51 +212,56 @@ describe('ArenaHomeView', () => {
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('创建简历')
+    expect(wrapper.text()).toContain('先完成一份可用简历')
+    const cta = wrapper.findAll('button').find((button) => button.text().includes('创建简历'))
+    expect(cta).toBeTruthy()
   })
 
-  it('completes a task via the real api and updates progress state', async () => {
+  it('completes a task via the real api and keeps it checked in the list', async () => {
     const gameProfile = useGameProfileStore()
     const wrapper = mountHome()
     await flush()
 
-    const primaryCompleteButton = wrapper
-      .get('.arena-home__boss')
+    const firstCompleteButton = wrapper
+      .findAll('.arena-home__task')
+      .find((row) => row.text().includes('做出一份能匹配的简历'))!
       .findAll('button')
       .find((btn) => btn.text().includes('标记为已完成'))
-    expect(primaryCompleteButton).toBeTruthy()
-    await primaryCompleteButton!.trigger('click')
+    expect(firstCompleteButton).toBeTruthy()
+    await firstCompleteButton!.trigger('click')
     await flush()
 
     expect(completeAgentTaskApi).toHaveBeenCalledWith(11, { note: '用户在今日任务页标记完成' })
     expect(gameProfile.xp).toBe(150)
     expect(gameProfile.streakDays).toBe(1)
     expect(gameProfile.todayMissionDone).toBe(1)
-    expect(wrapper.text()).not.toContain('做出一份能匹配的简历')
+
+    const completedRow = wrapper
+      .findAll('.arena-home__task')
+      .find((row) => row.text().includes('做出一份能匹配的简历'))!
+    expect(completedRow.find('input[type="checkbox"]').element.checked).toBe(true)
+    expect(wrapper.text()).toContain('1 / 3')
   })
 
-  it('updates the daily completion record after all tasks are done', async () => {
-    todayTasks.value = {
-      tasks: [
-        { id: 21, title: '唯一一关', status: 'TODO', taskType: 'JOB_TARGET', estimatedMinutes: 5 }
-      ]
-    }
-    const gameProfile = useGameProfileStore()
+  it('surfaces a failed completion without checking the task off', async () => {
+    completeAgentTaskApi.mockRejectedValueOnce(new Error('任务服务暂时不可用'))
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('唯一一关')
-    await wrapper.findAll('button').find((btn) => btn.text().includes('标记为已完成'))!.trigger('click')
+    const firstCompleteButton = wrapper
+      .findAll('.arena-home__task')
+      .find((row) => row.text().includes('做出一份能匹配的简历'))!
+      .findAll('button')
+      .find((btn) => btn.text().includes('标记为已完成'))
+    await firstCompleteButton!.trigger('click')
     await flush()
 
-    expect(gameProfile.chestReady).toBe(true)
-    expect(wrapper.text()).toContain('今日任务已全部完成')
-
-    const chestButton = wrapper.findAll('button').find((btn) => btn.text().includes('确认完成'))
-    expect(chestButton).toBeTruthy()
-    await chestButton!.trigger('click')
-    await flush()
-    expect(gameProfile.xp).toBe(60 + 100)
+    expect(wrapper.text()).toContain('任务服务暂时不可用')
+    const row = wrapper
+      .findAll('.arena-home__task')
+      .find((item) => item.text().includes('做出一份能匹配的简历'))!
+    expect(row.find('input[type="checkbox"]').element.checked).toBe(false)
+    expect(wrapper.text()).toContain('0 / 3')
   })
 
   it('renders the backend readiness snapshot instead of a client-side weighted score', async () => {
@@ -270,30 +292,22 @@ describe('ArenaHomeView', () => {
     expect(wrapper.text()).toContain('当前证据不足，暂不展示准备度分数')
   })
 
-  it('keeps the full seven-day streak visible', async () => {
-    const wrapper = mountHome()
-    await flush()
-
-    expect(wrapper.findAll('.arena-streak__day')).toHaveLength(7)
-    expect(wrapper.text()).toContain('六')
-    expect(wrapper.text()).toContain('日')
-  })
-
   it('derives the weekday from the backend business date', async () => {
     overview.value = { ...overview.value, businessDate: '2026-08-09' }
     const wrapper = mountHome()
     await flush()
 
-    expect(wrapper.text()).toContain('周日')
+    expect(wrapper.get('.arena-home__eyebrow').text()).toContain('周日')
   })
 
-  it('uses the wide-screen workspace width for the existing task and readiness columns', () => {
+  it('uses the prototype two-column workspace structure for the task and stat rails', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/user/ArenaHomeView.vue'), 'utf8')
 
     expect(source).toContain('width: min(100%, var(--user-content-max, 1440px));')
-    expect(source).toContain('grid-template-columns: 1.55fr 1fr;')
-    expect(source).toContain('今日优先任务')
-    expect(source).toContain('求职准备清单')
+    expect(source).toContain('grid-template-columns: 2fr 1fr;')
+    expect(source).toContain('今日任务清单')
+    expect(source).toContain('Offer 就绪度')
+    expect(source).toContain('本周完成度')
     expect(source).toContain('建议依据')
   })
 })
