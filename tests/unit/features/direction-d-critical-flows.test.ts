@@ -94,7 +94,7 @@ describe('direction D critical flows', () => {
   it('keeps the ability-map entry action aligned with the Direction D prototype', () => {
     expect(tools).toContain('<span class="arena-tools__enter">进入 ›</span>')
     expect(tools).toMatch(
-      /\.arena-tools__enter\s*\{[\s\S]*?color:\s*var\(--arena-grn-d\);[\s\S]*?font-size:\s*13px;[\s\S]*?font-weight:\s*800;/
+      /\.arena-tools__enter\s*\{[\s\S]*?color:\s*var\(--arena-grn-d\);[\s\S]*?font-size:\s*13px;[\s\S]*?font-weight:\s*600;/
     )
   })
 
