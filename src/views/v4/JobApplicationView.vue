@@ -2245,7 +2245,7 @@ onMounted(async () => {
   margin: 0;
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,
@@ -2284,7 +2284,7 @@ onMounted(async () => {
   cursor: pointer;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -2420,7 +2420,7 @@ onMounted(async () => {
   height: 36px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #b9e7cd;
+  border: 1px solid var(--user-primary-border);
   border-radius: 12px;
   color: var(--arena-grn-d, var(--app-primary-hover));
   background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
@@ -2493,7 +2493,7 @@ onMounted(async () => {
 
 .campaign-entry__icon {
   border-color: rgba(124, 92, 252, 0.24);
-  color: var(--arena-vio, #7c5cfc);
+  color: var(--arena-vio, #6f5c93);
   background: var(--arena-vio-soft, rgba(124, 92, 252, 0.12));
 }
 
@@ -2535,7 +2535,7 @@ onMounted(async () => {
 }
 
 .funnel-overview .is-risk {
-  color: var(--arena-red, #e5484d);
+  color: var(--arena-red, #b03a3a);
 }
 
 .status-funnel {
@@ -2706,7 +2706,7 @@ onMounted(async () => {
   margin: 0;
   color: var(--app-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -2745,11 +2745,11 @@ onMounted(async () => {
 }
 
 .follow-up-note--overdue {
-  color: var(--arena-red, #e5484d);
+  color: var(--arena-red, #b03a3a);
 }
 
 .follow-up-note--due-today {
-  color: var(--arena-amber, #f79009);
+  color: var(--arena-amber, #b4690e);
 }
 
 .follow-up-note--upcoming {
@@ -2846,9 +2846,9 @@ onMounted(async () => {
 }
 
 .attachment-error {
-  border-color: color-mix(in srgb, var(--arena-red, #e5484d) 42%, var(--app-border));
-  background: color-mix(in srgb, var(--arena-red, #e5484d) 7%, var(--app-surface));
-  color: var(--arena-red, #b42318);
+  border-color: color-mix(in srgb, var(--arena-red, #b03a3a) 42%, var(--app-border));
+  background: color-mix(in srgb, var(--arena-red, #b03a3a) 7%, var(--app-surface));
+  color: var(--arena-red, #b03a3a);
 }
 
 .attachment-list,
@@ -2932,7 +2932,7 @@ onMounted(async () => {
   width: fit-content;
   color: var(--app-text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .attachment-pending-status.is-uploading {
@@ -2941,7 +2941,7 @@ onMounted(async () => {
 
 .attachment-pending-status.is-failed,
 .attachment-pending-error {
-  color: var(--arena-red, #b42318);
+  color: var(--arena-red, #b03a3a);
 }
 
 .attachment-pending-error {

@@ -1006,7 +1006,7 @@ onBeforeUnmount(() => {
     margin: 8px 0;
     color: var(--user-text);
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.3;
   }
 
@@ -1028,7 +1028,7 @@ onBeforeUnmount(() => {
 .section-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: none;
 }
 
@@ -1048,7 +1048,7 @@ onBeforeUnmount(() => {
     margin: 4px 0 0;
     color: var(--user-text);
     font-size: 19px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   p {
@@ -1151,7 +1151,7 @@ onBeforeUnmount(() => {
   b {
     margin-right: 5px;
     color: var(--user-text-muted);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -1485,7 +1485,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .all-task-details__body {

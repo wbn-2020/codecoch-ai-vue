@@ -308,7 +308,7 @@ onMounted(load)
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .list-actions,

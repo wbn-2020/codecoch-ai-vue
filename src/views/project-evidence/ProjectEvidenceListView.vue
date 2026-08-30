@@ -315,7 +315,7 @@ onMounted(fetchList)
   margin: 0;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -397,7 +397,7 @@ onMounted(fetchList)
   margin: 0;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -592,7 +592,7 @@ onMounted(fetchList)
   gap: 8px;
   color: var(--user-warning-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .missing {

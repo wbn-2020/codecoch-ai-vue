@@ -357,14 +357,14 @@ onMounted(fetchList)
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: none;
 }
 
 h1 {
   margin: 6px 0;
   font-size: 26px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .page-hero p:last-child,
@@ -425,7 +425,7 @@ h1 {
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .agent-suggestion h2,
