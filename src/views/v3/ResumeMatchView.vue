@@ -1010,7 +1010,7 @@ onBeforeUnmount(stopMatchSse)
 .arena-kicker {
   color: var(--arena-grn-d);
   font-size: 12.5px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .arena-h1,
@@ -1082,9 +1082,9 @@ b {
   gap: 12px;
   align-items: center;
   padding: 14px;
-  border: 1.5px solid #b9e7cd;
+  border: 1.5px solid #d5e8e0;
   border-radius: 12px;
-  background: linear-gradient(135deg, #f0fbf4, #fff 70%);
+  background: linear-gradient(135deg, #eaf2ef, #fff 70%);
 }
 
 .match-jd-preview span,
@@ -1171,8 +1171,8 @@ b {
 }
 
 .match-next-card {
-  border-color: #b9e7cd;
-  background: linear-gradient(135deg, #f0fbf4, #fff 74%);
+  border-color: #d5e8e0;
+  background: linear-gradient(135deg, #eaf2ef, #fff 74%);
 }
 
 .match-next-card .arena-h3 {
@@ -1187,14 +1187,15 @@ b {
 .match-support-details summary,
 .match-stream summary {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
   list-style: none;
   padding: 14px 17px;
   color: var(--arena-ink);
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .match-support-details summary::-webkit-details-marker,
@@ -1202,15 +1203,26 @@ b {
   display: none;
 }
 
+// 圆形 +/− 胶囊展开指示（替代裸文本 +）
 .match-support-details summary::after,
 .match-stream summary::after {
   content: '+';
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--arena-grn-soft);
   color: var(--arena-grn-d);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .match-support-details[open] summary::after,
 .match-stream[open] summary::after {
-  content: '-';
+  content: '−';
 }
 
 .match-support-details__body,
@@ -1295,8 +1307,8 @@ b {
 
 .match-stream {
   margin-top: 14px;
-  border-color: #d7ccff;
-  background: #fbfaff;
+  border-color: color-mix(in srgb, var(--user-ai) 30%, transparent);
+  background: var(--user-ai-soft);
 }
 
 .match-stream summary span,
@@ -1314,7 +1326,7 @@ b {
 .match-stream__events span {
   padding: 4px 7px;
   border-radius: 999px;
-  background: #f2f4f2;
+  background: #f0efeb;
   color: var(--arena-sub);
   font-size: 11px;
 }
@@ -1323,7 +1335,7 @@ b {
   border-color: var(--arena-grn);
   background: var(--arena-grn);
   box-shadow: 0 4px 0 var(--arena-grn-d);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 :deep(.el-input__wrapper),

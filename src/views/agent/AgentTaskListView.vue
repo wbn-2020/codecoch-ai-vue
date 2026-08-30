@@ -2106,7 +2106,7 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .task-hero h1 {
@@ -2192,22 +2192,22 @@ onBeforeUnmount(() => {
 }
 
 .recovery-panel__copy span {
-  color: #0f766e;
+  color: var(--user-primary-active);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .recovery-panel__copy strong {
   display: block;
   margin-top: 8px;
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   font-size: 18px;
   line-height: 1.45;
 }
 
 .recovery-panel__copy p {
   margin: 10px 0 0;
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -2247,14 +2247,14 @@ onBeforeUnmount(() => {
 }
 
 .recovery-link strong {
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   font-size: 13px;
   line-height: 1.35;
 }
 
 .recovery-link small {
   margin-top: 4px;
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2279,20 +2279,20 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   strong {
     display: block;
     margin-top: 6px;
-    color: var(--app-text, #111827);
+    color: var(--app-text, #1a1917);
     font-size: 18px;
     line-height: 1.4;
   }
 
   p {
     margin: 8px 0 0;
-    color: var(--app-text-muted, #64748b);
+    color: var(--app-text-muted, #6e6963);
     font-size: 13px;
     line-height: 1.65;
   }
@@ -2315,7 +2315,7 @@ onBeforeUnmount(() => {
   padding-top: 4px;
 
   > span {
-    color: var(--app-text-muted, #64748b);
+    color: var(--app-text-muted, #6e6963);
     font-size: 12px;
     font-weight: 600;
   }
@@ -2366,7 +2366,7 @@ onBeforeUnmount(() => {
 
   h3 {
     margin: 8px 0 0;
-    color: var(--app-text, #111827);
+    color: var(--app-text, #1a1917);
     font-size: 16px;
     line-height: 1.35;
   }
@@ -2379,7 +2379,7 @@ onBeforeUnmount(() => {
   gap: 10px;
 
   > span {
-    color: var(--app-text-muted, #64748b);
+    color: var(--app-text-muted, #6e6963);
     font-size: 12px;
     font-weight: 600;
   }
@@ -2393,7 +2393,7 @@ onBeforeUnmount(() => {
 
 .task-recovery-hint {
   margin: 8px 0 0;
-  color: #475569;
+  color: #57534e;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -2480,7 +2480,7 @@ onBeforeUnmount(() => {
 .task-date {
   display: block;
   margin-bottom: 6px;
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 12px;
   font-weight: 600;
 }
@@ -2529,9 +2529,9 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: 100%;
   padding: 4px 8px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed #c9c4bb;
   border-radius: 6px;
-  color: #64748b;
+  color: #6e6963;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 1.35;
@@ -2550,7 +2550,7 @@ onBeforeUnmount(() => {
 .task-review-summary span {
   display: block;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .task-review-summary p,
@@ -2599,7 +2599,7 @@ onBeforeUnmount(() => {
 
 .dialog-helper-text {
   margin: 10px 0 0;
-  color: #64748b;
+  color: #6e6963;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -2614,14 +2614,14 @@ onBeforeUnmount(() => {
 }
 
 .task-progress span {
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 12px;
 }
 
 .task-progress strong {
   display: block;
   margin-top: 6px;
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   font-size: 20px;
 }
 
@@ -2653,7 +2653,7 @@ onBeforeUnmount(() => {
 .focus-session-bar span {
   color: var(--user-success);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .focus-session-bar strong {
@@ -2673,7 +2673,7 @@ onBeforeUnmount(() => {
 }
 
 .more-button {
-  color: #475569;
+  color: #57534e;
 }
 
 .pagination-wrap {
@@ -2724,7 +2724,7 @@ onBeforeUnmount(() => {
 .review-kicker {
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .review-hint {
@@ -2752,7 +2752,7 @@ onBeforeUnmount(() => {
   > span {
     color: var(--user-primary);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   h3,
@@ -2761,13 +2761,13 @@ onBeforeUnmount(() => {
   }
 
   h3 {
-    color: #0f172a;
+    color: #1a1917;
     font-size: 20px;
     line-height: 1.35;
   }
 
   p {
-    color: #475569;
+    color: #57534e;
     line-height: 1.7;
   }
 }
@@ -2971,7 +2971,7 @@ onBeforeUnmount(() => {
 
 .workspace-tabs :deep(.el-tabs__item.is-active) {
   color: var(--arena-primary, var(--user-primary));
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .workspace-tabs :deep(.el-tabs__active-bar) {
@@ -3081,7 +3081,7 @@ onBeforeUnmount(() => {
 .task-detail summary {
   color: var(--arena-text-secondary, var(--user-text-secondary));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 

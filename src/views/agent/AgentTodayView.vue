@@ -1749,7 +1749,7 @@ onMounted(() => {
 .agent-eyebrow {
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .task-review-summary {
@@ -1758,13 +1758,13 @@ onMounted(() => {
   border: 1px solid var(--user-primary-border);
   border-radius: 8px;
   background: var(--user-primary-soft);
-  color: #1e3a8a;
+  color: var(--user-cyan);
 }
 
 .task-review-summary span {
   display: block;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .task-review-summary p,
@@ -1782,7 +1782,7 @@ onMounted(() => {
   gap: 12px;
   margin-top: 10px;
   padding: 10px 12px;
-  border: 1px solid #bbf7d0;
+  border: 1px solid var(--user-primary-border);
   border-radius: 8px;
   background: var(--user-success-soft);
 }
@@ -1794,13 +1794,13 @@ onMounted(() => {
 }
 
 .focus-session-bar span {
-  color: #15803d;
+  color: var(--user-success-text);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .focus-session-bar strong {
-  color: #14532d;
+  color: var(--user-primary-active);
   font-size: 14px;
 }
 
@@ -1856,7 +1856,7 @@ onMounted(() => {
 }
 
 .agent-diagnostic-state {
-  border-color: #fde68a;
+  border-color: color-mix(in srgb, var(--user-warning) 40%, transparent);
   background: var(--user-warning-soft);
   box-shadow: none;
 }
@@ -1929,7 +1929,7 @@ onMounted(() => {
 .section-kicker {
   margin: 0 0 6px;
   color: var(--user-primary);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .plan-panel {
@@ -1966,7 +1966,7 @@ onMounted(() => {
   min-width: 0;
 
   strong {
-    color: #1e3a8a;
+    color: var(--user-cyan);
     font-size: 14px;
   }
 
@@ -1981,7 +1981,7 @@ onMounted(() => {
 .plan-summary {
   margin: 18px 0 0;
   padding: 14px;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--user-border);
   border-radius: 8px;
   background: var(--user-surface-muted);
 }
@@ -2067,7 +2067,7 @@ onMounted(() => {
 
 .agent-week-plan__head span {
   color: var(--user-text);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .agent-week-plan__head p,
@@ -2134,7 +2134,7 @@ onMounted(() => {
 .agent-week-plan__source span.agent-week-plan__review-origin {
   background: var(--user-success-soft);
   color: var(--user-success);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .agent-week-plan__next {
@@ -2212,7 +2212,7 @@ onMounted(() => {
   background: var(--user-success-soft);
   color: var(--user-success);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .task-plan-change-origin small {
@@ -2277,7 +2277,7 @@ onMounted(() => {
 .review-kicker {
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .review-hint {
@@ -2354,7 +2354,7 @@ onMounted(() => {
     span {
       color: var(--user-primary);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     strong {
@@ -2439,7 +2439,7 @@ onMounted(() => {
 
 .today-tabs :deep(.el-tabs__item.is-active) {
   color: var(--arena-primary, var(--user-primary));
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .today-tabs :deep(.el-tabs__active-bar) {
@@ -2539,7 +2539,7 @@ onMounted(() => {
   margin: 0 0 5px;
   color: var(--arena-primary, var(--user-primary));
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .remaining-task-list {
@@ -2604,7 +2604,7 @@ onMounted(() => {
 
 .task-detail summary {
   color: var(--arena-text-secondary, var(--user-text-secondary));
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
