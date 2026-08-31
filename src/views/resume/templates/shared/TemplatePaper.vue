@@ -27,11 +27,11 @@ const props = withDefaults(defineProps<{
 const accentColors = {
   default: { accent: '#1b1b18', strong: '#11110f', soft: '#f1f0ee' },
   blue: { accent: '#3b82f6', strong: '#1d4ed8', soft: '#eff6ff' },
-  green: { accent: '#10b981', strong: '#047857', soft: '#ecfdf5' },
+  green: { accent: '#1f6f5c', strong: '#17493d', soft: '#eaf2ef' },
   purple: { accent: '#8b5cf6', strong: '#6d28d9', soft: '#f5f3ff' },
   orange: { accent: '#f97316', strong: '#c2410c', soft: '#fff7ed' },
   red: { accent: '#ef4444', strong: '#b91c1c', soft: '#fef2f2' },
-  slate: { accent: '#475569', strong: '#334155', soft: '#f1f5f9' },
+  slate: { accent: '#57534e', strong: '#3a3630', soft: '#f0efeb' },
   black: { accent: '#000000', strong: '#000000', soft: '#f5f5f5' }
 } as const
 
@@ -62,9 +62,9 @@ const paperStyle = computed(() => ({
   --template-accent: #176b87;
   --template-accent-strong: #124f66;
   --template-accent-soft: #e8f2f4;
-  --template-ink: #18232d;
-  --template-body: #35414b;
-  --template-muted: #687681;
+  --template-ink: #1a1917;
+  --template-body: #3a3630;
+  --template-muted: #6e6963;
   container: template-paper / inline-size;
   box-sizing: border-box;
   width: 794px;
@@ -72,7 +72,7 @@ const paperStyle = computed(() => ({
   min-height: 1123px;
   aspect-ratio: 210 / 297;
   padding: var(--template-page-margin);
-  border: 1px solid #d7dde2;
+  border: 1px solid #d8d4cc;
   background: #ffffff;
   color: var(--template-ink);
   font-family: var(--template-font-family), Arial, "Microsoft YaHei", sans-serif;

@@ -26,14 +26,15 @@ h3 {
   margin: 0;
   color: var(--template-accent-strong);
   font-size: calc(13px * var(--template-font-scale, 1));
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   line-height: 1.35;
 }
 
 span {
   flex: 1 1 auto;
   height: 1px;
-  background: var(--template-accent);
+  background: color-mix(in srgb, var(--template-accent) 45%, white);
 }
 
 .template-section-title--band h3 {

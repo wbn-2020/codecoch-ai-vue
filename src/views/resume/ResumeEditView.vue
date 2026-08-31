@@ -2682,8 +2682,8 @@ onBeforeUnmount(() => {
   --resume-paper-line: #9aa7b5;
   --resume-paper-default: #1b1b18;
   --resume-paper-blue: #3b82f6;
-  --resume-paper-green: #10b981;
-  --resume-paper-slate: #475569;
+  --resume-paper-green: #1f6f5c;
+  --resume-paper-slate: #57534e;
   --resume-paper-red: #ef4444;
   --resume-paper-project: #255da8;
   --resume-paper-project-soft: #eef4fb;
@@ -3371,7 +3371,7 @@ onBeforeUnmount(() => {
     }
 
     &::before {
-      background: #e2e8f0;
+      background: #e3e0da;
     }
   }
 
@@ -3426,11 +3426,11 @@ onBeforeUnmount(() => {
     cursor: pointer;
 
     &.is-blue { background: #3b82f6; }
-    &.is-green { background: #10b981; }
+    &.is-green { background: #1f6f5c; }
     &.is-purple { background: #8b5cf6; }
     &.is-orange { background: #f97316; }
     &.is-red { background: #ef4444; }
-    &.is-slate { background: #475569; }
+    &.is-slate { background: #57534e; }
     &.is-black { background: #000000; }
 
     &.active {
@@ -4777,7 +4777,7 @@ onBeforeUnmount(() => {
     }
 
     &.is-pass {
-      border-color: #b9e7cd;
+      border-color: #d5e8e0;
     }
 
     &.is-warning {
@@ -4901,7 +4901,7 @@ onBeforeUnmount(() => {
     }
 
     &.done {
-      border-color: #b9e7cd;
+      border-color: #d5e8e0;
       background: #ffffff;
 
       svg {
@@ -5151,7 +5151,7 @@ onBeforeUnmount(() => {
 
   .inline-project-skills :deep(.el-tag) {
     max-width: 100%;
-    border-color: #b9e7cd;
+    border-color: #d5e8e0;
     border-radius: 999px;
     background: var(--arena-grn-soft);
     color: var(--arena-grn-d);

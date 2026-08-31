@@ -549,22 +549,35 @@ const paperStyle = computed(() => ({
 
 .document-project-sections {
   display: grid;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 9px;
+  margin-top: 8px;
 }
 
 .document-project-section {
   break-inside: avoid;
 
   &__title {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: var(--paper-accent-strong);
-    font-size: 10.5px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
     line-height: 1.45;
+
+    &::before {
+      content: '';
+      flex: none;
+      width: 3px;
+      height: 10px;
+      border-radius: 2px;
+      background: var(--paper-accent);
+    }
   }
 
   ul {
-    margin-top: 2px;
+    margin-top: 4px;
   }
 }
 

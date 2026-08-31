@@ -57,7 +57,9 @@ defineProps<{
 
 .template-entry__head strong {
   color: var(--template-ink);
-  font-size: calc(12px * var(--template-font-scale, 1));
+  font-size: calc(12.5px * var(--template-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.4;
 }
 
@@ -71,7 +73,8 @@ defineProps<{
   flex: 0 0 auto;
   color: var(--template-accent-strong);
   font-size: calc(10px * var(--template-font-scale, 1));
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -83,9 +86,9 @@ defineProps<{
 
 .template-entry ul {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   margin: 6px 0 0;
-  padding-left: 18px;
+  padding-left: 16px;
   color: var(--template-body);
   font-size: calc(11px * var(--template-font-scale, 1));
   line-height: var(--template-line-height);
@@ -97,12 +100,26 @@ defineProps<{
 
 .template-entry__sections {
   display: grid;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 9px;
+  margin-top: 8px;
 }
 
 .template-entry__sections strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--template-accent-strong);
-  font-size: calc(10.5px * var(--template-font-scale, 1));
+  font-size: calc(11px * var(--template-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.03em;
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 3px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--template-accent);
+  }
 }
 </style>
