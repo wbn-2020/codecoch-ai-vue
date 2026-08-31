@@ -344,3 +344,35 @@ export const mergeFlatEdit = (
 
   return { ...migrated, sections }
 }
+const BLOCK_MARKER = new RegExp(
+  '^\s*(?:[-*•·]\s+|(\d+)[.)、]\s+)')
+
+
+/** 扁平文本 → 块列表：行首标记决定块类型，空行只作分隔。 */
+export const textToBlocks = (text: string | undefined | null, prefix = 'blk'): ResumeBlock[] =>
+  String(text || '')
+    .split(String.fromCharCode(10))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line, index): ResumeBlock => {
+      const match = BLOCK_MARKER.exec(line)
+      const body = match ? line.slice(match[0].length).trim() : line
+      return {
+        id: `${prefix}-${index}`,
+        kind: match ? (match[1] ? 'ordered' : 'bullet') : 'line',
+        text: body
+      }
+    })
+
+
+/** 块列表 → markdown-lite 文本：供块编辑器写回旧表单字段。 */
+export const blocksToMarkdownLines = (blocks: ResumeBlock[]): string =>
+  blocks
+    .map((block) => (block.kind === 'bullet'
+      ? `- ${block.text}`
+      : block.kind === 'ordered'
+        ? `1. ${block.text}`
+        : block.text))
+    .filter((line) => line.trim().length > 0)
+    .join(String.fromCharCode(10))
+

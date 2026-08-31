@@ -226,11 +226,15 @@
                 </el-tag>
               </div>
             <el-form-item label="个人摘要">
-              <el-input
-                v-model="form.summary"
-                type="textarea"
-                :rows="4"
+              <BlockField
+                :blocks="summaryBlocks"
+                label="个人摘要"
                 placeholder="简要说明工作背景、优势方向、项目类型和求职重点"
+                @text="setSummaryText"
+                @kind="setSummaryKind"
+                @add="addSummaryBlock"
+                @remove="removeSummaryBlock"
+                @move="moveSummaryBlock"
               />
             </el-form-item>
             </div>
@@ -261,19 +265,27 @@
                 </el-tag>
             </div>
             <el-form-item label="工作经历 / 工作摘要">
-              <el-input
-                v-model="form.workSummary"
-                type="textarea"
-                :rows="5"
+              <BlockField
+                :blocks="workSummaryBlocks"
+                label="工作经历"
                 placeholder="描述公司类型、负责系统、业务规模、核心职责和结果"
+                @text="setWorkSummaryText"
+                @kind="setWorkSummaryKind"
+                @add="addWorkSummaryBlock"
+                @remove="removeWorkSummaryBlock"
+                @move="moveWorkSummaryBlock"
               />
             </el-form-item>
             <el-form-item label="教育经历">
-              <el-input
-                v-model="form.education"
-                type="textarea"
-                :rows="3"
+              <BlockField
+                :blocks="educationBlocks"
+                label="教育经历"
                 placeholder="学校、专业、学历、时间范围等"
+                @text="setEducationText"
+                @kind="setEducationKind"
+                @add="addEducationBlock"
+                @remove="removeEducationBlock"
+                @move="moveEducationBlock"
               />
             </el-form-item>
             </div>
@@ -872,6 +884,7 @@ import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import BlockField from '@/views/resume/workbench/blocks/BlockField.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -890,6 +903,7 @@ import {
 } from '@/features/resume-presentation'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
+import { useBlockText } from '@/features/resume-workbench/use-block-text'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
@@ -1052,6 +1066,33 @@ const createDefaultOptimizeForm = (): ResumeOptimizeRequestDTO => ({
 })
 
 const form = reactive<ResumeCreateDTO>(createDefaultResumeForm())
+
+const {
+  blocks: summaryBlocks,
+  setText: setSummaryText,
+  setKind: setSummaryKind,
+  add: addSummaryBlock,
+  remove: removeSummaryBlock,
+  move: moveSummaryBlock
+} = useBlockText(() => form.summary, (value) => { form.summary = value }, 'sum')
+
+const {
+  blocks: workSummaryBlocks,
+  setText: setWorkSummaryText,
+  setKind: setWorkSummaryKind,
+  add: addWorkSummaryBlock,
+  remove: removeWorkSummaryBlock,
+  move: moveWorkSummaryBlock
+} = useBlockText(() => form.workSummary, (value) => { form.workSummary = value }, 'work')
+
+const {
+  blocks: educationBlocks,
+  setText: setEducationText,
+  setKind: setEducationKind,
+  add: addEducationBlock,
+  remove: removeEducationBlock,
+  move: moveEducationBlock
+} = useBlockText(() => form.education, (value) => { form.education = value }, 'edu')
 
 const optimizeForm = reactive<ResumeOptimizeRequestDTO>(createDefaultOptimizeForm())
 
