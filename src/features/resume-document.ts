@@ -257,19 +257,19 @@ export const isFormalResumeTemplateCode = (
   || value === 'ATS_COMPACT'
   || value === 'ATS_PROJECT_FOCUS'
 
-const normalizeText = (value: unknown) =>
+export const normalizeText = (value: unknown) =>
   String(value || '')
     .replace(/\r\n?/g, '\n')
     .replace(/\u00a0/g, ' ')
     .trim()
 
-const splitLines = (value: unknown) =>
+export const splitLines = (value: unknown) =>
   normalizeText(value)
     .split(/\n+/)
     .map((line) => line.replace(/^\s*(?:(?:[-*•·])\s*|(?:\d+[.)、])\s+)/, '').trim())
     .filter(Boolean)
 
-const splitSentences = (value: string) => {
+export const splitSentences = (value: string) => {
   if (!value) return []
   const explicit = splitLines(value)
   if (explicit.length > 1) return explicit
@@ -316,7 +316,7 @@ const isLikelyEntryTitle = (
   return /(?:大学|学院|学校|研究院)/.test(value)
 }
 
-const buildNarrativeEntries = (
+export const buildNarrativeEntries = (
   value: unknown,
   fallbackTitle: string,
   prefix: string
@@ -359,7 +359,7 @@ const buildNarrativeEntries = (
   }).filter((entry): entry is ResumeDocumentEntry => Boolean(entry))
 }
 
-const splitSkills = (value: unknown) =>
+export const splitSkills = (value: unknown) =>
   normalizeText(value)
     .split(/[，,、\n/|；;]+/)
     .map((item) => item.trim())
@@ -368,7 +368,7 @@ const splitSkills = (value: unknown) =>
 const matchesAny = (value: string, patterns: RegExp[]) =>
   patterns.some((pattern) => pattern.test(value))
 
-const groupSkills = (skills: string[]): ResumeSkillGroup[] => {
+export const groupSkills = (skills: string[]): ResumeSkillGroup[] => {
   const buckets: Record<string, string[]> = {
     语言与基础: [],
     框架与架构: [],
@@ -409,7 +409,7 @@ const projectText = (
   keys: string[]
 ) => keys.map((key) => normalizeText(project[key])).find(Boolean) || ''
 
-const buildProjectEntries = (
+export const buildProjectEntries = (
   projects: ResumeDeliveryDraft['projects']
 ): ResumeDocumentEntry[] =>
   (projects || []).map((project, index) => {
