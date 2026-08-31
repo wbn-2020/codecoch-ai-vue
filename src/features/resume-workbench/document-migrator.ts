@@ -299,3 +299,48 @@ export const fromResumeDocument = (document: ResumeDocumentV2): LegacyProjection
     projects: projectedProjects
   }
 }
+
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+/**
+ * 老客户端只能表达扁平列：用它重建内置分区内容，同时保留自定义分区、分区顺序与可见性。
+ * 与服务器 ResumeDocumentStore.mergeFlatEdit 保持同一规则。
+ */
+export const mergeFlatEdit = (
+  existing: ResumeDocumentV2,
+  legacy: LegacyResumeScalars,
+  projects: ResumeProjectVO[],
+  presentation?: ResumePresentationConfig | null
+): ResumeDocumentV2 => {
+  const migrated = toResumeDocument(legacy, projects, presentation)
+  const fresh = new Map(
+    migrated.sections
+      .filter((section): section is ResumeSection & { builtinKey: string } => Boolean(section.builtinKey))
+      .map((section) => [section.builtinKey, section])
+  )
+  const used = new Set<string>()
+  const sections: ResumeSection[] = []
+
+  existing.sections.forEach((section) => {
+    const key = section.builtinKey
+    if (!key) {
+      sections.push(clone(section))
+      return
+    }
+    const replacement = fresh.get(key)
+    if (!replacement) return
+    used.add(key)
+    sections.push({
+      ...clone(replacement),
+      id: section.id || replacement.id,
+      title: section.title?.trim() || replacement.title,
+      visible: section.visible !== false
+    } as ResumeSection)
+  })
+
+  fresh.forEach((section, key) => {
+    if (!used.has(key)) sections.push(section)
+  })
+
+  return { ...migrated, sections }
+}

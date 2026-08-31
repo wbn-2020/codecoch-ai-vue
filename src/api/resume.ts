@@ -119,7 +119,8 @@ const toResumePayload = (data: ResumeCreateDTO | ResumeUpdateDTO) => ({
   summary: data.summary,
   isDefault: data.isDefault,
   saveAsDraft: data.saveAsDraft,
-  presentationConfig: data.presentationConfig
+  presentationConfig: data.presentationConfig,
+  document: data.document
 })
 
 const toProjectPayload = (data: ResumeProjectDTO) => ({

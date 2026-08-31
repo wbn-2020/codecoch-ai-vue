@@ -1,5 +1,6 @@
 import type { PageQuery } from './api'
 import type { ResumePresentationConfig } from './resumePresentation'
+import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
 
 export interface ResumeQueryDTO extends PageQuery {
   keyword?: string
@@ -72,6 +73,7 @@ export interface ResumeDetailVO {
   completionPercent?: number
   missingSections?: string[]
   presentationConfig?: ResumePresentationConfig
+  document?: ResumeDocumentV2
   createdAt?: string
   updatedAt?: string
 }
@@ -93,6 +95,7 @@ export interface ResumeCreateDTO {
   isDefault?: number
   saveAsDraft?: boolean
   presentationConfig?: ResumePresentationConfig
+  document?: ResumeDocumentV2
 }
 
 export type ResumeUpdateDTO = ResumeCreateDTO
