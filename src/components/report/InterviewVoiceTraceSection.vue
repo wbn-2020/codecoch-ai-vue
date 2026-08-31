@@ -148,7 +148,7 @@ const shortTraceId = (value?: string) => {
     background: var(--user-primary-soft);
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 

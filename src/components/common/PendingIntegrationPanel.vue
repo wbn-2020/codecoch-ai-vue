@@ -107,7 +107,7 @@ const router = useRouter()
   gap: 8px;
   color: var(--cc-ai-cyan);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }

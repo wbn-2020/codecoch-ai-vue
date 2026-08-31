@@ -264,9 +264,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 8px;
-  background: #0f172a;
+  background: #1a1917;
   box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
-  color: #e5e7eb;
+  color: #e3e0da;
 }
 
 .command-palette--user {
@@ -277,22 +277,22 @@ onBeforeUnmount(() => {
   }
 
   .command-palette__panel {
-    border-color: var(--el-border-color-light, #e2e8f0);
+    border-color: var(--el-border-color-light, #e3e0da);
     background: var(--el-bg-color-overlay, #ffffff);
     box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
-    color: var(--el-text-color-regular, #334155);
+    color: var(--el-text-color-regular, #3a3630);
   }
 
   .command-palette__search {
-    border-color: var(--el-border-color-light, #e2e8f0);
-    color: var(--el-text-color-secondary, #64748b);
+    border-color: var(--el-border-color-light, #e3e0da);
+    color: var(--el-text-color-secondary, #6e6963);
 
     input {
-      color: var(--el-text-color-primary, #0f172a);
+      color: var(--el-text-color-primary, #1a1917);
     }
 
     input::placeholder {
-      color: var(--el-text-color-placeholder, #94a3b8);
+      color: var(--el-text-color-placeholder, #a8a29a);
     }
   }
 
@@ -300,39 +300,39 @@ onBeforeUnmount(() => {
     &.is-active,
     &:hover {
       border-color: var(--el-color-primary-light-7, rgba(16, 185, 129, 0.28));
-      background: var(--el-color-primary-light-9, #ecfdf5);
+      background: var(--el-color-primary-light-9, #eaf2ef);
     }
   }
 
   .command-palette__item-icon {
-    background: var(--el-color-primary-light-9, #f0fdf4);
-    color: var(--el-color-primary, #059669);
+    background: var(--el-color-primary-light-9, #f3f8f5);
+    color: var(--el-color-primary, #1a5e4e);
   }
 
   .command-palette__item-copy {
     strong {
-      color: var(--el-text-color-primary, #0f172a);
+      color: var(--el-text-color-primary, #1a1917);
     }
 
     small,
     + .command-palette__item-path {
-      color: var(--el-text-color-secondary, #64748b);
+      color: var(--el-text-color-secondary, #6e6963);
     }
   }
 
   .command-palette__item-path,
   .command-palette__empty {
-    color: var(--el-text-color-placeholder, #94a3b8);
+    color: var(--el-text-color-placeholder, #a8a29a);
   }
 
   .command-palette__close {
-    border-color: var(--el-border-color-light, #e2e8f0);
+    border-color: var(--el-border-color-light, #e3e0da);
     background: var(--el-bg-color-overlay, #ffffff);
-    color: var(--el-text-color-secondary, #64748b);
+    color: var(--el-text-color-secondary, #6e6963);
 
     &:hover {
-      border-color: var(--el-color-primary, #10b981);
-      color: var(--el-color-primary, #059669);
+      border-color: var(--el-color-primary, #1f6f5c);
+      color: var(--el-color-primary, #1a5e4e);
     }
   }
 }
@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
   height: 56px;
   padding: 0 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  color: #94a3b8;
+  color: #a8a29a;
 
   input {
     min-width: 0;
@@ -352,12 +352,12 @@ onBeforeUnmount(() => {
     border: 0;
     outline: 0;
     background: transparent;
-    color: #f8fafc;
+    color: #f6f6f4;
     font-size: 15px;
   }
 
   input::placeholder {
-    color: #64748b;
+    color: #6e6963;
   }
 }
 
@@ -412,14 +412,14 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    color: #f8fafc;
+    color: #f6f6f4;
     font-size: 14px;
     font-weight: 650;
   }
 
   small {
     margin-top: 3px;
-    color: #94a3b8;
+    color: #a8a29a;
     font-size: 12px;
   }
 }
@@ -427,7 +427,7 @@ onBeforeUnmount(() => {
 .command-palette__item-path {
   max-width: 220px;
   overflow: hidden;
-  color: #64748b;
+  color: #6e6963;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -435,7 +435,7 @@ onBeforeUnmount(() => {
 
 .command-palette__empty {
   padding: 32px 12px;
-  color: #94a3b8;
+  color: #a8a29a;
   text-align: center;
 }
 
@@ -449,12 +449,12 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.9);
-  color: #cbd5e1;
+  color: #c9c4bb;
   cursor: pointer;
 
   &:hover {
     border-color: rgba(99, 102, 241, 0.46);
-    color: #f8fafc;
+    color: #f6f6f4;
   }
 }
 

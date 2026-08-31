@@ -117,7 +117,7 @@ const handleAnalyze = async () => {
   margin: 0 0 4px;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 h3,
@@ -158,7 +158,7 @@ h4 {
     color: var(--app-text);
     cursor: pointer;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   p {

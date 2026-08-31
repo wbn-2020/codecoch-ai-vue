@@ -485,7 +485,7 @@ const requestPreview = () => {
 
 .review-plan-suggestion__details dt {
   color: var(--app-text-muted);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-plan-suggestion__details dd {
@@ -497,7 +497,7 @@ const requestPreview = () => {
   margin: 9px 0 0;
   color: var(--app-text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-plan-suggestion__notice.is-accepted {
@@ -548,7 +548,7 @@ const requestPreview = () => {
   margin: 0;
   color: var(--app-text-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 @media (max-width: 900px) {

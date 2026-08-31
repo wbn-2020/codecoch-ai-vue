@@ -178,7 +178,7 @@ onMounted(fetchGenerations)
   margin: 0 0 4px;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 h3 {

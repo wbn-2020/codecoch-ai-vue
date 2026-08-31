@@ -141,7 +141,7 @@ const isOpen = isCampaignActionOpen
 .section-kicker {
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .action-list {

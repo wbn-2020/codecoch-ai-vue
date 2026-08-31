@@ -202,7 +202,7 @@ dd {
 .blocked-conclusions span {
   color: var(--user-warning-text, var(--user-warning));
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .blocked-conclusions p {

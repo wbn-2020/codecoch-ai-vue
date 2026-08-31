@@ -4,35 +4,27 @@
       <p v-if="row.section && !sidebarProps.collapsed" class="user-sidebar-nav__section">{{ row.section }}</p>
       <section
         class="user-sidebar-nav__group"
-        :class="{ 'is-first-in-section': Boolean(row.section) }"
+        :class="{ 'is-first-in-section': Boolean(row.section), 'is-open': !sidebarProps.collapsed && isOpen(row.group.key) }"
       >
-        <div
-          class="user-sidebar-nav__group-row"
+        <RouterLink
+          class="user-sidebar-nav__group-link"
           :class="{ 'is-active': activeGroup?.key === row.group.key }"
+          :to="row.group.path"
+          :title="sidebarProps.collapsed ? row.group.label : undefined"
+          :aria-current="activeGroup?.key === row.group.key ? 'page' : undefined"
+          :aria-expanded="!sidebarProps.collapsed && row.group.items.length ? isOpen(row.group.key) : undefined"
         >
-          <RouterLink
-            class="user-sidebar-nav__group-link"
-            :to="row.group.path"
-            :title="collapsed ? row.group.label : undefined"
-            :aria-current="activeGroup?.key === row.group.key ? 'page' : undefined"
-          >
-            <component :is="row.group.icon" :size="18" aria-hidden="true" />
-            <span>{{ row.group.label }}</span>
-            <small v-if="badgeOf(row.group) && !sidebarProps.collapsed" class="user-sidebar-nav__badge">{{ badgeOf(row.group) }}</small>
-          </RouterLink>
-          <button
+          <component :is="row.group.icon" :size="18" aria-hidden="true" />
+          <span>{{ row.group.label }}</span>
+          <small v-if="badgeOf(row.group) && !sidebarProps.collapsed" class="user-sidebar-nav__badge">{{ badgeOf(row.group) }}</small>
+          <ChevronDown
             v-if="!sidebarProps.collapsed && row.group.items.length"
-            type="button"
-            class="user-sidebar-nav__toggle"
-            :aria-expanded="isExpanded(row.group.key)"
-            :aria-label="`切换「${row.group.label}」子菜单`"
-            @click="toggleGroup(row.group.key)"
-          >
-            <ChevronDown v-if="isExpanded(row.group.key)" :size="14" aria-hidden="true" />
-            <ChevronRight v-else :size="14" aria-hidden="true" />
-          </button>
-        </div>
-        <div v-if="!collapsed && isExpanded(row.group.key)" class="user-sidebar-nav__items">
+            class="user-sidebar-nav__chevron"
+            :size="15"
+            aria-hidden="true"
+          />
+        </RouterLink>
+        <div v-if="!sidebarProps.collapsed && isOpen(row.group.key)" class="user-sidebar-nav__items">
           <RouterLink
             v-for="item in row.group.items"
             :key="item.key"
@@ -51,8 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, ChevronRight } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import {
@@ -75,7 +67,23 @@ const routeContext = computed(() => ({
   path: String(route.path || route.fullPath || '/').split(/[?#]/, 1)[0] || '/'
 }))
 const activeItem = computed(() => resolveUserNavigationItem(routeContext.value, visibleGroups.value))
-const activeGroup = computed(() => resolveUserNavigationGroup(routeContext.value, visibleGroups.value))
+// 先按子项匹配；组落地页（如 /resumes 本身）不属于任何子项，按组路径前缀兜底，
+// 保证 accordion 的展开组始终跟随当前路由。
+const activeGroup = computed(() => {
+  const fromItem = resolveUserNavigationGroup(routeContext.value, visibleGroups.value)
+  if (fromItem) return fromItem
+  const routePath = routeContext.value.path
+  return (
+    visibleGroups.value.find((group) => {
+      const basePath = String(group.path || '').split(/[?#]/, 1)[0]
+      return Boolean(basePath) && (routePath === basePath || routePath.startsWith(`${basePath}/`))
+    }) ?? null
+  )
+})
+
+// v21 原型侧边栏是 accordion：只有当前所在模块展开子菜单。
+// 点击分组行即导航，展开状态完全跟随路由，不需要单独的折叠小按钮。
+const isOpen = (key: string) => activeGroup.value?.key === key
 
 // v21 原型侧边栏的两级分组标题（文档相关/原型/dashboard-redesign.html）
 const SECTION_BY_GROUP: Partial<Record<UserNavigationGroup['key'], string>> = {
@@ -104,59 +112,6 @@ const badgeOf = (group: UserNavigationGroup) => {
   const value = sidebarProps.badges?.[group.key]
   return value === undefined || value === '' || value === 0 ? undefined : value
 }
-
-const EXPANDED_KEY = 'codecoachai:user-sidebar-expanded-groups'
-
-const readExpandedGroups = (): Set<string> | null => {
-  try {
-    const raw = localStorage.getItem(EXPANDED_KEY)
-    if (raw === null) return null
-    const parsed = JSON.parse(raw) as unknown
-    const keys = Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === 'string') : []
-    return new Set(keys)
-  } catch {
-    return null
-  }
-}
-
-// 在 setup 阶段同步恢复展开状态，先于下方 immediate watcher 运行；
-// 否则 watcher 会先把（空的）集合持久化，导致“首次访问展开全部”永远不生效。
-// 区分“从未持久化（默认展开全部）”与“用户主动全部收起（尊重空集合）”。
-const persistedGroups = readExpandedGroups()
-const expandedGroups = ref<Set<string>>(
-  persistedGroups ?? new Set(visibleGroups.value.map((group) => group.key))
-)
-
-const saveExpandedGroups = () => {
-  try {
-    localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedGroups.value]))
-  } catch {
-    // ignore storage errors
-  }
-}
-
-const isExpanded = (key: string) => expandedGroups.value.has(key)
-
-const toggleGroup = (key: string) => {
-  if (isExpanded(key)) {
-    expandedGroups.value.delete(key)
-  } else {
-    expandedGroups.value.add(key)
-  }
-  saveExpandedGroups()
-}
-
-// Auto-expand the active group so users always see where they are
-watch(
-  activeGroup,
-  (group) => {
-    if (group && !isExpanded(group.key)) {
-      expandedGroups.value.add(group.key)
-      saveExpandedGroups()
-    }
-  },
-  { immediate: true }
-)
 </script>
 
 <style scoped lang="scss">
@@ -188,25 +143,6 @@ watch(
   margin-top: 4px;
 }
 
-.user-sidebar-nav__group-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  min-height: 40px;
-  padding-right: 6px;
-  border: 1px solid transparent;
-  border-radius: var(--user-radius-md, 10px);
-  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
-}
-
-// 链接热区铺满整行（保留旧「点任意位置即导航」交互），toggle 在其上独立可点
-.user-sidebar-nav__group-link::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-}
-
 .user-sidebar-nav__group-link,
 .user-sidebar-nav__item {
   display: flex;
@@ -220,21 +156,19 @@ watch(
 .user-sidebar-nav__group-link {
   flex: 1 1 auto;
   gap: 10px;
-  min-height: 38px;
-  padding: 0 4px 0 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
   border-radius: var(--user-radius-md, 10px);
   font-size: 13px;
   font-weight: 600;
 }
 
-.user-sidebar-nav__group-row:hover,
-.user-sidebar-nav__group-row:focus-within {
-  background: var(--user-surface-muted, #f0efeb);
-}
-
-.user-sidebar-nav__group-row:hover .user-sidebar-nav__group-link,
+.user-sidebar-nav__group-link:hover,
+.user-sidebar-nav__group-link:focus-visible,
 .user-sidebar-nav__item:hover,
 .user-sidebar-nav__item:focus-visible {
+  background: var(--user-surface-muted, #f0efeb);
   color: var(--user-text, #1a1917);
 }
 
@@ -244,12 +178,9 @@ watch(
 }
 
 // v21 侧栏 active 态：tint 底 + 主色文字 + 1px 内描边（不做左侧色条）
-.user-sidebar-nav__group-row.is-active {
+.user-sidebar-nav__group-link.is-active {
   background: var(--user-primary-soft, #eaf2ef);
   border-color: var(--user-primary-border, rgba(31, 111, 92, 0.28));
-}
-
-.user-sidebar-nav__group-row.is-active .user-sidebar-nav__group-link {
   color: var(--user-primary, #1f6f5c);
 }
 
@@ -263,7 +194,6 @@ watch(
 
 .user-sidebar-nav__badge {
   flex: none;
-  margin-left: auto;
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--user-danger-soft, #fbeeee);
@@ -272,6 +202,21 @@ watch(
   font-weight: 600;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
+}
+
+.user-sidebar-nav__chevron {
+  flex: none;
+  color: var(--user-text-subtle, #a8a29a);
+  transform: rotate(-90deg);
+  transition: transform 180ms ease, color 150ms ease;
+}
+
+.user-sidebar-nav__group.is-open .user-sidebar-nav__chevron {
+  transform: rotate(0deg);
+}
+
+.user-sidebar-nav__group-link.is-active .user-sidebar-nav__chevron {
+  color: var(--user-primary, #1f6f5c);
 }
 
 .user-sidebar-nav__items {
@@ -295,31 +240,6 @@ watch(
   font-weight: 600;
 }
 
-.user-sidebar-nav__toggle {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--user-text-subtle, #a8a29a);
-  cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
-}
-
-.user-sidebar-nav__toggle:hover,
-.user-sidebar-nav__toggle:focus-visible {
-  background: var(--user-surface-muted, #f0efeb);
-  color: var(--user-primary, #1f6f5c);
-  outline: 0;
-}
-
 // ---- Collapsed (icon rail) state ----
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__section {
   display: none;
@@ -333,7 +253,7 @@ watch(
 
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link span,
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__badge,
-.user-sidebar-nav.is-collapsed .user-sidebar-nav__toggle,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__chevron,
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__items {
   display: none;
 }
@@ -346,7 +266,8 @@ watch(
 
 @media (prefers-reduced-motion: reduce) {
   .user-sidebar-nav__group-link,
-  .user-sidebar-nav__item {
+  .user-sidebar-nav__item,
+  .user-sidebar-nav__chevron {
     transition: none;
   }
 }
