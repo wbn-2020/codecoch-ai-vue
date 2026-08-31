@@ -889,6 +889,7 @@ import {
   normalizeResumePresentation
 } from '@/features/resume-presentation'
 import { useGameProfileStore } from '@/features/game-profile'
+import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
@@ -1389,8 +1390,21 @@ const hasUnsavedResumeChanges = computed(() =>
         createDefaultResumePresentation()
       )
 )
+// A draft write clears the server-side default flag, so the default resume keeps the explicit save.
+const resumeAutosave = useResumeAutosave({
+  enabled: () => isEdit.value
+    && !saving.value
+    && form.isDefault !== 1
+    && hasUnsavedResumeChanges.value,
+  run: () => handleSave('draft', { silent: true })
+})
+
+watch(resumeDraftSignature, () => {
+  if (isEdit.value) resumeAutosave.schedule()
+})
+
 const documentSaveStatus = computed(() => {
-  if (saving.value) return '保存中'
+  if (saving.value) return resumeAutosave.status.value === 'saving' ? '自动保存中' : '保存中'
   if (!isEdit.value) return hasResumeContentStarted.value ? '未保存，尚未创建简历' : '新建草稿，尚未保存'
   return hasUnsavedResumeChanges.value ? '有未保存改动' : '已保存'
 })
@@ -2277,7 +2291,7 @@ const draftSaveMessage = (detail: ResumeDetailVO) => {
   return `草稿已保存（${detail.completionPercent ?? completion.value}%）${suffix}`
 }
 
-const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
+const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { silent?: boolean } = {}) => {
   if (saving.value || !formRef.value) return
   const operationGeneration = ++resumeSaveOperationGeneration
   const requestGeneration = resumeLoadGeneration
@@ -2337,13 +2351,15 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete') => {
         : true
       if (stableVersionReady === null || !isCurrentOperation()) return
       const changedDuringSave = resumeDraftSignature.value !== saveSnapshotSignature
-      ElMessage.success(
-        changedDuringSave
-          ? '点击保存时的内容已保存，期间的新改动仍未保存，请继续保存。'
-          : mode === 'draft'
-            ? draftSaveMessage(updated)
-            : (stableVersionReady ? '简历与新稳定版本已保存' : '简历已保存')
-      )
+      if (!options.silent) {
+        ElMessage.success(
+          changedDuringSave
+            ? '点击保存时的内容已保存，期间的新改动仍未保存，请继续保存。'
+            : mode === 'draft'
+              ? draftSaveMessage(updated)
+              : (stableVersionReady ? '简历与新稳定版本已保存' : '简历已保存')
+        )
+      }
       saveError.value = ''
       if (!changedDuringSave) {
         await reloadCurrentResume()
