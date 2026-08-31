@@ -159,12 +159,3 @@ export const MAX_BLOCKS_PER_FIELD = 60
 export const MAX_BLOCK_TEXT_LENGTH = 2000
 export const MAX_SECTION_TITLE_LENGTH = 40
 export const ALLOWED_LINK_PROTOCOLS = ['http:', 'https:', 'mailto:']
-
-export const isBuiltInSection = (section: ResumeSection) => Boolean(section.builtinKey)
-export const findBuiltInSection = <K extends ResumeSection['kind']>(
-  document: ResumeDocumentV2,
-  builtinKey: ResumeBuiltInSectionKey
-): Extract<ResumeSection, { kind: K }> | undefined =>
-  document.sections.find(
-    (section): section is Extract<ResumeSection, { kind: K }> => section.builtinKey === builtinKey
-  )

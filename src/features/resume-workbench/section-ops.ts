@@ -1,9 +1,7 @@
 import {
-  DEFAULT_BUILTIN_SECTION_TITLES,
   MAX_CUSTOM_SECTIONS,
   type ProjectSection,
   type ResumeBlock,
-  type ResumeBuiltInSectionKey,
   type ResumeDocumentV2,
   type ResumeEntryItem,
   type ResumeProjectItem,
@@ -181,9 +179,6 @@ export const moveEntryItem = (
   list.splice(to, 0, item)
   return next
 }
-
-export const builtinSectionDefaults = (key: ResumeBuiltInSectionKey) => DEFAULT_BUILTIN_SECTION_TITLES[key]
-
 
 /** Replaces a skills section's groups wholesale; the editor owns the array arithmetic. */
 export const updateSectionGroups = (
