@@ -53,15 +53,11 @@
         />
       </div>
 
-      <BlockField
+      <TextBlocksField
         :blocks="item.blocks"
         :label="`${label} ${index + 1} 描述`"
         :placeholder="headings[3]"
-        @text="(blockId, text) => setText(item.id, blockId, text)"
-        @kind="(blockId, kind) => setKind(item.id, blockId, kind)"
-        @add="addItemBlock(item.id)"
-        @remove="removeItemBlock(item.id, $event)"
-        @move="(blockId, delta) => moveItemBlock(item.id, blockId, delta)"
+        @update:blocks="(blocks) => patch(item.id, { blocks })"
       />
     </article>
 
@@ -71,10 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import BlockField from '@/views/resume/workbench/blocks/BlockField.vue'
-import { nextDocumentId } from '@/features/resume-workbench/document-migrator'
+import TextBlocksField from '@/views/resume/workbench/blocks/TextBlocksField.vue'
 import { createEntryItem } from '@/features/resume-workbench/section-ops'
-import type { ResumeBlock, ResumeEntryItem } from '@/features/resume-workbench/document'
+import type { ResumeEntryItem } from '@/features/resume-workbench/document'
 
 const props = withDefaults(defineProps<{
   items: ResumeEntryItem[]
@@ -87,44 +82,11 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:items': [items: ResumeEntryItem[]] }>()
 
 const value = (event: Event) => (event.target as HTMLInputElement).value
-const write = (items: ResumeEntryItem[]) => emit('update:items',
-  items.map((item) => ({ ...item, blocks: item.blocks.map((block) => ({ ...block })) })))
+const write = (items: ResumeEntryItem[]) => emit('update:items', items.map((item) => ({ ...item })))
 const locate = (id: string) => props.items.findIndex((item) => item.id === id)
-const mapItem = (id: string, mutate: (item: ResumeEntryItem) => ResumeEntryItem) =>
-  write(props.items.map((item, index) => (index === locate(id) ? mutate(item) : item)))
 
 const patch = (id: string, changes: Partial<ResumeEntryItem>) =>
-  mapItem(id, (item) => ({ ...item, ...changes }))
-
-const setText = (id: string, blockId: string, text: string) => mapItem(id, (item) => ({
-  ...item,
-  blocks: item.blocks.map((block) => (block.id === blockId ? { ...block, text } : block))
-}))
-
-const setKind = (id: string, blockId: string, kind: ResumeBlock['kind']) => mapItem(id, (item) => ({
-  ...item,
-  blocks: item.blocks.map((block) => (block.id === blockId ? { ...block, kind } : block))
-}))
-
-const addItemBlock = (id: string) => mapItem(id, (item) => ({
-  ...item,
-  blocks: [...item.blocks, { id: nextDocumentId('blk'), kind: 'line', text: '' }]
-}))
-
-const removeItemBlock = (id: string, blockId: string) => mapItem(id, (item) =>
-  item.blocks.length <= 1
-    ? item
-    : { ...item, blocks: item.blocks.filter((block) => block.id !== blockId) })
-
-const moveItemBlock = (id: string, blockId: string, delta: number) => mapItem(id, (item) => {
-  const from = item.blocks.findIndex((block) => block.id === blockId)
-  const to = from + delta
-  if (from < 0 || to < 0 || to >= item.blocks.length) return item
-  const blocks = [...item.blocks]
-  const [moved] = blocks.splice(from, 1)
-  blocks.splice(to, 0, moved)
-  return { ...item, blocks }
-})
+  write(props.items.map((item, index) => (index === locate(id) ? { ...item, ...changes } : item)))
 
 const move = (index: number, delta: number) => {
   const to = index + delta
@@ -253,4 +215,3 @@ const addItem = () => write([...props.items, createEntryItem()])
   }
 }
 </style>
-

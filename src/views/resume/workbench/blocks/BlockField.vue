@@ -1,5 +1,5 @@
 <template>
-  <div class="block-field">
+  <div ref="root" class="block-field">
     <div
       v-for="(block, index) in blocks"
       :key="block.id"
@@ -57,14 +57,14 @@
       </div>
     </div>
 
-    <button type="button" class="block-field__add" :disabled="disabled" @click="emit('add')">
+    <button type="button" class="block-field__add" :disabled="disabled" @click="emitAdd(blocks.length - 1)">
       {{ addLabel }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import AutoGrowTextarea from '@/views/resume/workbench/blocks/AutoGrowTextarea.vue'
 import MarkdownToolbar from '@/views/resume/workbench/blocks/MarkdownToolbar.vue'
@@ -83,7 +83,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   text: [blockId: string, value: string]
   kind: [blockId: string, kind: ResumeBlock['kind']]
-  add: []
+  add: [afterIndex: number]
   remove: [blockId: string]
   move: [blockId: string, delta: number]
 }>()
@@ -97,7 +97,19 @@ const moveUpLabel = '上移内容块'
 const moveDownLabel = '下移内容块'
 
 const focused = ref('')
+const root = ref<HTMLElement | null>(null)
 const fields = new Map<string, InstanceType<typeof AutoGrowTextarea>>()
+
+/** 插入位置由触发行决定；父级写完后把光标送进真正新增的那一行。 */
+const emitAdd = (afterIndex: number) => {
+  emit('add', afterIndex)
+  void nextTick(() => {
+    const target = root.value?.querySelectorAll('textarea')[afterIndex + 1]
+    if (!target) return
+    target.focus()
+    target.setSelectionRange(0, 0)
+  })
+}
 
 const rememberField = (id: string, node: unknown) => {
   if (node) fields.set(id, node as InstanceType<typeof AutoGrowTextarea>)
@@ -110,7 +122,7 @@ const marker = (kind: ResumeBlock['kind']) =>
 const onKeydown = (event: KeyboardEvent, block: ResumeBlock, index: number) => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
-    emit('add')
+    emitAdd(index)
     return
   }
   if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {

@@ -23,6 +23,7 @@ import {
 } from '@/features/resume-workbench/section-ops'
 import type { ResumeBlock, ResumeDocumentV2 } from '@/features/resume-workbench/document'
 import type { ResumeDetailVO, ResumeProjectVO } from '@/types/resume'
+import type { ResumePresentationConfig } from '@/types/resumePresentation'
 
 const HISTORY_LIMIT = 50
 
@@ -43,16 +44,31 @@ const scalarsOf = (detail?: ResumeDetailVO | null): LegacyResumeScalars => ({
 
 const projectsOf = (detail?: ResumeDetailVO | null): ResumeProjectVO[] => detail?.projects || []
 
+export interface ResumeDocumentBridgeContext {
+  /**
+   * 项目行由独立接口持久化，扁平写回时要用「当下」的项目集合重建项目分区；
+   * 用载入时的快照重建会让用户刚新增的项目从文档里消失。
+   */
+  projects?: () => ResumeProjectVO[]
+  presentation?: () => ResumePresentationConfig | null | undefined
+}
+
 /**
  * 文档 v2 是简历工作台的唯一真相：读取时优先用服务器返回的文档，缺失时由扁平列合成；
  * 所有编辑都以不可变方式替换文档并进入撤销栈。派生的 legacy 投影让既有表单与导出继续可用。
  */
-export const useResumeDocument = (detail?: ResumeDetailVO | null) => {
-  const hydrate = (source?: ResumeDetailVO | null): ResumeDocumentV2 =>
-    normalizeResumeDocument(source?.document)
-    || toResumeDocument(scalarsOf(source), projectsOf(source), source?.presentationConfig)
+export const useResumeDocument = (context: ResumeDocumentBridgeContext = {}) => {
+  const sourceDetail = shallowRef<ResumeDetailVO | null>(null)
+  const currentProjects = (): ResumeProjectVO[] => context.projects?.() ?? projectsOf(sourceDetail.value)
+  const currentPresentation = () => context.presentation?.() ?? sourceDetail.value?.presentationConfig
 
-  const current = shallowRef<ResumeDocumentV2>(hydrate(detail))
+  const hydrate = (source?: ResumeDetailVO | null): ResumeDocumentV2 => {
+    sourceDetail.value = source || null
+    return normalizeResumeDocument(source?.document)
+      || toResumeDocument(scalarsOf(source), projectsOf(source), source?.presentationConfig)
+  }
+
+  const current = shallowRef<ResumeDocumentV2>(hydrate(null))
   const past = shallowRef<ResumeDocumentV2[]>([])
   const future = shallowRef<ResumeDocumentV2[]>([])
 
@@ -84,7 +100,7 @@ export const useResumeDocument = (detail?: ResumeDetailVO | null) => {
     },
 
     /** 扁平文本编辑（旧表单路径）：重建内置分区内容，保留自定义分区与顺序。 */
-    syncLegacy(patch: Partial<LegacyResumeScalars>, projects: ResumeProjectVO[] = projectsOf(detail)) {
+    syncLegacy(patch: Partial<LegacyResumeScalars>, projects: ResumeProjectVO[] = currentProjects()) {
       const base: LegacyResumeScalars = {
         realName: legacy.value.realName,
         email: legacy.value.email,
@@ -95,7 +111,7 @@ export const useResumeDocument = (detail?: ResumeDetailVO | null) => {
         workExperience: legacy.value.workExperience,
         educationExperience: legacy.value.educationExperience
       }
-      commit(mergeFlatEdit(current.value, { ...base, ...patch }, projects, detail?.presentationConfig))
+      commit(mergeFlatEdit(current.value, { ...base, ...patch }, projects, currentPresentation()))
     },
 
     /** AI 建议按身份锚点整段替换，重排后依然命中同一块内容。 */
@@ -137,7 +153,7 @@ export const useResumeDocument = (detail?: ResumeDetailVO | null) => {
     /** 保存载荷：文档为准，扁平列同步写出，兼容尚未升级的读取方。 */
     payload(): LegacyResumeScalars & { document: ResumeDocumentV2 } {
       return {
-        ...scalarsOf(detail),
+        ...scalarsOf(sourceDetail.value),
         realName: legacy.value.realName,
         email: legacy.value.email,
         phone: legacy.value.phone,

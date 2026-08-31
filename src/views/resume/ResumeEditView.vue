@@ -226,15 +226,11 @@
                 </el-tag>
               </div>
             <el-form-item label="个人摘要">
-              <BlockField
+              <TextBlocksField
                 :blocks="summaryBlocks"
                 label="个人摘要"
                 placeholder="简要说明工作背景、优势方向、项目类型和求职重点"
-                @text="setSummaryText"
-                @kind="setSummaryKind"
-                @add="addSummaryBlock"
-                @remove="removeSummaryBlock"
-                @move="moveSummaryBlock"
+                @update:blocks="applySummaryBlocks"
               />
             </el-form-item>
             </div>
@@ -337,37 +333,27 @@
             <el-form class="inline-project-editor" :disabled="saving" label-position="top">
               <div class="inline-project-editor__meta">
                 <el-form-item label="项目名称">
-                  <el-input v-model.trim="selectedInlineProject.projectName" placeholder="例如：招聘平台简历解析服务" />
+                  <el-input
+                    :model-value="selectedInlineProject.projectName"
+                    placeholder="例如：招聘平台简历解析服务"
+                    @update:model-value="setInlineProjectName"
+                  />
                 </el-form-item>
                 <el-form-item label="项目时间">
-                  <el-input v-model.trim="selectedInlineProject.projectTime" placeholder="例如：2024.03 - 2024.08" />
+                  <el-input
+                    :model-value="selectedInlineProject.projectTime"
+                    placeholder="例如：2024.03 - 2024.08"
+                    @update:model-value="setInlineProjectPeriod"
+                  />
                 </el-form-item>
               </div>
 
-              <el-form-item label="背景">
-                <el-input
-                  v-model="selectedInlineProject.projectBackground"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="说明业务场景、规模和系统边界"
-                />
-              </el-form-item>
-              <el-form-item label="技术决策">
-                <el-input
-                  v-model="selectedInlineProject.technicalChallenges"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="说明为什么这样设计、关键方案和取舍"
-                />
-              </el-form-item>
-              <el-form-item class="inline-project-editor__result" label="量化结果">
-                <el-input
-                  v-model="selectedInlineProject.optimizationResult"
-                  type="textarea"
-                  :rows="3"
-                  placeholder="用性能、效率、稳定性、成本或业务指标证明结果"
-                />
-              </el-form-item>
+              <ProjectItemEditor
+                :fields="inlineProjectFields"
+                :label="selectedInlineProject.projectName || '项目经历'"
+                :disabled="saving"
+                @update:fields="applyProjectFields"
+              />
             </el-form>
 
             <div class="inline-project-skills">
@@ -870,9 +856,10 @@ import { createResumeVersionApi, getResumeVersionsApi } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
-import BlockField from '@/views/resume/workbench/blocks/BlockField.vue'
 import SkillGroupEditor from '@/views/resume/workbench/blocks/SkillGroupEditor.vue'
 import EntryItemEditor from '@/views/resume/workbench/blocks/EntryItemEditor.vue'
+import ProjectItemEditor from '@/views/resume/workbench/blocks/ProjectItemEditor.vue'
+import TextBlocksField from '@/views/resume/workbench/blocks/TextBlocksField.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -891,10 +878,20 @@ import {
 } from '@/features/resume-presentation'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
-import { useBlockText } from '@/features/resume-workbench/use-block-text'
 import { useResumeDocument } from '@/features/resume-workbench/use-resume-document'
-import { updateSectionGroups, updateSectionItems } from '@/features/resume-workbench/section-ops'
-import type { ResumeEntryItem, ResumeSkillGroupItem } from '@/features/resume-workbench/document'
+import { projectToDocumentItem } from '@/features/resume-workbench/document-migrator'
+import {
+  updateProjectItems,
+  updateSectionBlocks,
+  updateSectionGroups,
+  updateSectionItems
+} from '@/features/resume-workbench/section-ops'
+import type {
+  ResumeBlock,
+  ResumeEntryItem,
+  ResumeProjectItem,
+  ResumeSkillGroupItem
+} from '@/features/resume-workbench/document'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
@@ -1058,16 +1055,10 @@ const createDefaultOptimizeForm = (): ResumeOptimizeRequestDTO => ({
 
 const form = reactive<ResumeCreateDTO>(createDefaultResumeForm())
 
-const {
-  blocks: summaryBlocks,
-  setText: setSummaryText,
-  setKind: setSummaryKind,
-  add: addSummaryBlock,
-  remove: removeSummaryBlock,
-  move: moveSummaryBlock
-} = useBlockText(() => form.summary, (value) => { form.summary = value }, 'sum')
-
-const resumeDocument = useResumeDocument()
+const resumeDocument = useResumeDocument({
+  projects: () => projects.value,
+  presentation: () => presentationConfig.value
+})
 
 const skillsSection = computed(() => resumeDocument.document.value.sections
   .find((section) => section.builtinKey === 'skills'))
@@ -1095,6 +1086,45 @@ watch(() => form.skills, (value) => {
 
 const builtinSection = (key: string) => resumeDocument.document.value.sections
   .find((section) => section.builtinKey === key)
+
+const summaryBlocks = computed<ResumeBlock[]>(() => {
+  const section = builtinSection('summary')
+  return section && section.kind === 'text' ? section.content.blocks : []
+})
+
+// 摘要块由文档持有：击键只替换目标块，避免每次输入都按标点重切分整段、丢掉光标位置。
+const applySummaryBlocks = (blocks: ResumeBlock[]) => {
+  const section = builtinSection('summary')
+  if (!section || section.kind !== 'text') return
+  resumeDocument.replace(updateSectionBlocks(resumeDocument.document.value, section.id, blocks))
+  form.summary = resumeDocument.legacy.value.summary
+}
+
+const sameAsDocument = () => {
+  const legacy = resumeDocument.legacy.value
+  return (form.realName || '') === legacy.realName
+    && (form.email || '') === legacy.email
+    && (form.phone || '') === legacy.phone
+    && (form.targetPosition || '') === legacy.targetPosition
+    && (form.summary || '') === legacy.summary
+}
+
+// 保存时服务器会用文档投影覆盖扁平列，所以这些输入必须回流进文档，否则编辑会被上一次的内容盖掉。
+watch(
+  [() => form.realName, () => form.email, () => form.phone, () => form.targetPosition, () => form.summary],
+  () => {
+    if (sameAsDocument()) return
+    resumeDocument.syncLegacy({
+      realName: form.realName,
+      email: form.email,
+      phone: form.phone,
+      targetPosition: form.targetPosition,
+      summary: form.summary
+    })
+    // 摘要文本由外部写入（AI 采纳、历史回退、上传解析）时会被重新切分，表单需要接受切分结果。
+    form.summary = resumeDocument.legacy.value.summary
+  }
+)
 
 const workItems = computed<ResumeEntryItem[]>(() => {
   const section = builtinSection('experience')
@@ -1368,6 +1398,96 @@ const inlineProjectSuggestedStatement = computed(() => {
     project?.optimizationResults ||
     '保存真实项目内容后，可生成一条需要人工核实的量化表达建议。'
 })
+
+const projectSection = computed(() => {
+  const section = builtinSection('projects')
+  return section && section.kind === 'project' ? section : null
+})
+
+const EMPTY_PROJECT_FIELDS: ResumeProjectItem['fields'] = {
+  background: [],
+  coreFeatures: [],
+  technicalChallenges: [],
+  outcome: [],
+  supplement: []
+}
+
+const inlineProjectItem = computed<ResumeProjectItem | null>(() => {
+  const project = selectedInlineProject.value
+  if (!project) return null
+  const items = projectSection.value?.content.items || []
+  // 失败重投的本地草稿还没进服务器文档，合成一条让行内编辑器始终有内容可写。
+  return items.find((item) => item.serverId === project.projectId)
+    || projectToDocumentItem(project, items.length)
+})
+
+const inlineProjectFields = computed(() => inlineProjectItem.value?.fields || EMPTY_PROJECT_FIELDS)
+
+/**
+ * 服务器项目行至今成对存储历史别名列（technicalDifficulties / optimizationResults / projectPeriod…），
+ * 保存载荷又按「别名优先」取值，所以写回时必须成对赋值，否则旧别名会盖掉刚编辑的内容。
+ */
+const writeProjectedProject = (target: ResumeProjectVO, source: ResumeProjectVO) => {
+  target.projectBackground = source.projectBackground || ''
+  target.description = source.projectBackground || ''
+  target.coreFeatures = source.coreFeatures || ''
+  target.technicalChallenges = source.technicalChallenges || ''
+  target.technicalDifficulties = source.technicalChallenges || ''
+  target.optimizationResult = source.optimizationResult || ''
+  target.optimizationResults = source.optimizationResult || ''
+  target.extraInfo = source.extraInfo || ''
+}
+
+const patchInlineProject = (changes: Partial<ResumeProjectVO>) => {
+  const project = selectedInlineProject.value
+  if (!project) return
+  Object.assign(project, changes)
+  if (changes.projectTime !== undefined) project.projectPeriod = changes.projectTime
+}
+
+const setInlineProjectName = (value: unknown) =>
+  patchInlineProject({ projectName: String(value ?? '').trim() })
+
+const setInlineProjectPeriod = (value: unknown) =>
+  patchInlineProject({ projectTime: String(value ?? '').trim() })
+
+const applyProjectFields = (fields: ResumeProjectItem['fields']) => {
+  const section = projectSection.value
+  const item = inlineProjectItem.value
+  const project = selectedInlineProject.value
+  if (!section || !item || !project) return
+  const items = section.content.items
+  const nextItems = items.some((entry) => entry.id === item.id)
+    ? items.map((entry) => (entry.id === item.id ? { ...entry, fields } : entry))
+    : [...items, { ...item, fields }]
+  resumeDocument.replace(updateProjectItems(resumeDocument.document.value, section.id, nextItems))
+  const projected = resumeDocument.legacy.value.projects.find((entry) => entry.projectId === project.projectId)
+  if (projected) writeProjectedProject(project, projected)
+}
+
+const projectRowsSignature = (list: ResumeProjectVO[]) => JSON.stringify(list.map((project) => [
+  project.projectId,
+  project.projectName,
+  project.projectTime,
+  project.role || project.responsibility,
+  project.techStack,
+  project.projectBackground,
+  project.coreFeatures,
+  project.technicalChallenges,
+  project.optimizationResult,
+  project.extraInfo
+]))
+
+watch(
+  projects,
+  () => {
+    if (projectRowsSignature(projects.value) === projectRowsSignature(resumeDocument.legacy.value.projects)) {
+      return
+    }
+    resumeDocument.syncLegacy({}, projects.value)
+  },
+  { deep: true }
+)
 
 const hasPreviewContent = computed(() =>
   Boolean(

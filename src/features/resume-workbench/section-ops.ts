@@ -1,12 +1,14 @@
 import {
   DEFAULT_BUILTIN_SECTION_TITLES,
   MAX_CUSTOM_SECTIONS,
+  type ProjectSection,
   type ResumeBlock,
   type ResumeBuiltInSectionKey,
   type ResumeDocumentV2,
   type ResumeEntryItem,
-  type ResumeSkillGroupItem,
+  type ResumeProjectItem,
   type ResumeSection,
+  type ResumeSkillGroupItem,
   type SkillSection,
 } from '@/features/resume-workbench/document'
 import { nextDocumentId } from '@/features/resume-workbench/document-migrator'
@@ -229,6 +231,20 @@ export const updateSectionItems = (
   const target = next.sections[index]
   if (target.kind === 'entry') target.content = { items: clone(items) }
   else if (target.kind === 'custom') target.content = { ...target.content, items: clone(items) }
+  return next
+}
+
+/** 整段替换项目分区条目：项目行仍由各自接口持久化，文档承载内容块与顺序。 */
+export const updateProjectItems = (
+  document: ResumeDocumentV2,
+  sectionId: string,
+  items: ResumeProjectItem[]
+): ResumeDocumentV2 => {
+  const index = findSectionIndex(document, sectionId)
+  const section = index < 0 ? undefined : document.sections[index]
+  if (!section || section.kind !== 'project') return document
+  const next = clone(document)
+  next.sections[index] = { ...next.sections[index] as ProjectSection, content: { items: clone(items) } }
   return next
 }
 

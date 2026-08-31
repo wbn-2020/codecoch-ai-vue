@@ -40,8 +40,29 @@ export interface LegacyResumeScalars {
   educationExperience?: string
 }
 
-const toBlocks = (values: string[], prefix: string): ResumeBlock[] =>
-  values.map((text, index) => ({ id: `${prefix}-b${index}`, kind: 'line', text }))
+/** 行首圆点标记：ATS 文本用 "- " 表达要点，所以只有它需要在扁平列与块类型之间无损往返。 */
+const BULLET_MARKER = /^\s*[-*•·]\s+/
+
+/**
+ * 摘要扁平列 → 内容块：行首圆点决定块类型，长句继续按句切分。
+ * 与服务器 ResumeDocumentMigrator 的摘要分支保持同一规则，投影回写时才不会吃掉用户手写的列表符号。
+ */
+const summaryToBlocks = (text: string | undefined, prefix: string): ResumeBlock[] => {
+  const blocks: ResumeBlock[] = []
+  String(text || '')
+    .split(String.fromCharCode(10))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .forEach((line) => {
+      const marker = BULLET_MARKER.exec(line)
+      const kind: ResumeBlock['kind'] = marker ? 'bullet' : 'line'
+      const body = marker ? line.slice(marker[0].length).trim() : line
+      splitSentences(body).forEach((sentence) => {
+        blocks.push({ id: `${prefix}-b${blocks.length}`, kind, text: sentence })
+      })
+    })
+  return blocks
+}
 
 const entriesToBlocksStyle = (
   raw: string | undefined,
@@ -71,7 +92,8 @@ const skillGroupsToItems = (raw: string | undefined, prefix: string): ResumeSkil
   return groups.map((group, index) => ({ id: `${prefix}-g${index}`, label: group.label, items: group.items }))
 }
 
-const projectToItem = (project: ResumeProjectVO, index: number): ResumeProjectItem => {
+/** 项目行 → 文档条目：id 由 serverId 决定，重排与二次同步都不会漂移。 */
+export const projectToDocumentItem = (project: ResumeProjectVO, index: number): ResumeProjectItem => {
   const id = `prj-${project.projectId ?? project.id ?? index}`
   const field = (value: string | undefined, prefix: string): ResumeBlock[] =>
     splitSentences(normalizeText(value)).map((text, bIndex) => ({
@@ -149,7 +171,7 @@ export const toResumeDocument = (
     switch (section.builtinKey) {
       case 'summary':
         return section.kind === 'text'
-          ? { ...section, content: { blocks: toBlocks(splitSentences(summaryText), 'sec-summary') } }
+          ? { ...section, content: { blocks: summaryToBlocks(summaryText, 'sec-summary') } }
           : section
       case 'skills':
         return section.kind === 'skills'
@@ -165,7 +187,7 @@ export const toResumeDocument = (
           : section
       case 'projects':
         return section.kind === 'project'
-          ? { ...section, content: { items: (projects || []).map(projectToItem) } }
+          ? { ...section, content: { items: (projects || []).map(projectToDocumentItem) } }
           : section
       default:
         return section
@@ -344,35 +366,4 @@ export const mergeFlatEdit = (
 
   return { ...migrated, sections }
 }
-const BLOCK_MARKER = new RegExp(
-  '^\s*(?:[-*•·]\s+|(\d+)[.)、]\s+)')
-
-
-/** 扁平文本 → 块列表：行首标记决定块类型，空行只作分隔。 */
-export const textToBlocks = (text: string | undefined | null, prefix = 'blk'): ResumeBlock[] =>
-  String(text || '')
-    .split(String.fromCharCode(10))
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line, index): ResumeBlock => {
-      const match = BLOCK_MARKER.exec(line)
-      const body = match ? line.slice(match[0].length).trim() : line
-      return {
-        id: `${prefix}-${index}`,
-        kind: match ? (match[1] ? 'ordered' : 'bullet') : 'line',
-        text: body
-      }
-    })
-
-
-/** 块列表 → markdown-lite 文本：供块编辑器写回旧表单字段。 */
-export const blocksToMarkdownLines = (blocks: ResumeBlock[]): string =>
-  blocks
-    .map((block) => (block.kind === 'bullet'
-      ? `- ${block.text}`
-      : block.kind === 'ordered'
-        ? `1. ${block.text}`
-        : block.text))
-    .filter((line) => line.trim().length > 0)
-    .join(String.fromCharCode(10))
 
