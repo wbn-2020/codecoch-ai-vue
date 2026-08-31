@@ -247,13 +247,7 @@
                 </el-tag>
             </div>
             <el-form-item label="核心技术栈" prop="skills">
-              <el-input
-                v-model="form.skills"
-                type="textarea"
-                :rows="4"
-                placeholder="Spring Boot、MySQL、Redis、MQ、Spring Cloud、Vue..."
-                @update:model-value="clearResolvedValidation('skills', $event)"
-              />
+              <SkillGroupEditor :groups="skillGroups" @update:groups="applySkillGroups" />
             </el-form-item>
             </div>
 
@@ -885,6 +879,7 @@ import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import BlockField from '@/views/resume/workbench/blocks/BlockField.vue'
+import SkillGroupEditor from '@/views/resume/workbench/blocks/SkillGroupEditor.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -904,6 +899,9 @@ import {
 import { useGameProfileStore } from '@/features/game-profile'
 import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
 import { useBlockText } from '@/features/resume-workbench/use-block-text'
+import { useResumeDocument } from '@/features/resume-workbench/use-resume-document'
+import { updateSectionGroups } from '@/features/resume-workbench/section-ops'
+import type { ResumeSkillGroupItem } from '@/features/resume-workbench/document'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
@@ -1093,6 +1091,32 @@ const {
   remove: removeEducationBlock,
   move: moveEducationBlock
 } = useBlockText(() => form.education, (value) => { form.education = value }, 'edu')
+
+const resumeDocument = useResumeDocument()
+
+const skillsSection = computed(() => resumeDocument.document.value.sections
+  .find((section) => section.builtinKey === 'skills'))
+
+const skillGroups = computed<ResumeSkillGroupItem[]>(() => (
+  skillsSection.value && skillsSection.value.kind === 'skills'
+    ? skillsSection.value.content.groups
+    : []
+))
+
+// 分组结构只有文档能表达；扁平关键词串继续供校验、完成度和导出使用，
+// 但只在用户真正编辑分组时改写，避免打开编辑器就重排用户手写的关键词顺序。
+const applySkillGroups = (groups: ResumeSkillGroupItem[]) => {
+  const section = skillsSection.value
+  if (!section) return
+  resumeDocument.replace(updateSectionGroups(resumeDocument.document.value, section.id, groups))
+  form.skills = resumeDocument.legacy.value.skillStack
+  clearResolvedValidation('skills', form.skills)
+}
+
+watch(() => form.skills, (value) => {
+  if ((value || '') === resumeDocument.legacy.value.skillStack) return
+  resumeDocument.syncLegacy({ skillStack: value })
+})
 
 const optimizeForm = reactive<ResumeOptimizeRequestDTO>(createDefaultOptimizeForm())
 
@@ -1406,6 +1430,16 @@ const restoreResumeHistorySnapshot = (snapshot?: string) => {
     projects.value = Array.isArray(value.projects)
       ? value.projects.map((project) => ({ ...project }))
       : []
+    resumeDocument.syncLegacy({
+      realName: form.realName,
+      email: form.email,
+      phone: form.phone,
+      targetPosition: form.targetPosition,
+      summary: form.summary,
+      skillStack: form.skills,
+      workExperience: form.workSummary,
+      educationExperience: form.education
+    })
     presentationConfig.value = normalizeResumePresentation(value.presentationConfig)
     selectedResumeTemplateCode.value = presentationConfig.value.templateCode as ResumeTemplateCode
     pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
@@ -2015,6 +2049,7 @@ const applyDetail = (detail: ResumeDetailVO) => {
     ...serverProjects,
     ...storedFailedProjects.filter((project) => !serverProjectIds.has(project.projectId))
   ]
+  resumeDocument.hydrate(detail)
   resumeHistory.reset(createResumeHistorySnapshot())
   void nextTick(() => {
     historyApplying.value = false
@@ -2345,7 +2380,8 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
   const formSnapshot: ResumeCreateDTO = {
     ...form,
     saveAsDraft: mode === 'draft',
-    presentationConfig: presentationSnapshot
+    presentationConfig: presentationSnapshot,
+    document: resumeDocument.document.value
   }
   const projectSnapshot = projects.value.map((project) => ({ ...project }))
   const saveSnapshotSignature = createResumeDraftSignature(

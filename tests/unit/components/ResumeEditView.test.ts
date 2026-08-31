@@ -688,6 +688,8 @@ describe('ResumeEditView', () => {
     expect(source).toMatch(
       /await formRef\.value\.validate\(\)[\s\S]*?catch \(failure\) \{[\s\S]*?await handleFormValidationFailure\(failure\)/
     )
-    expect(source).toContain("@update:model-value=\"clearResolvedValidation('skills', $event)\"")
+    // The skills field is a group editor now, so validation clears when the groups are applied
+    // instead of on a textarea model update.
+    expect(source).toContain("clearResolvedValidation('skills', form.skills)")
   })
 })

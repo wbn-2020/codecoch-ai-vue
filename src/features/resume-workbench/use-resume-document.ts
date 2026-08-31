@@ -85,7 +85,17 @@ export const useResumeDocument = (detail?: ResumeDetailVO | null) => {
 
     /** 扁平文本编辑（旧表单路径）：重建内置分区内容，保留自定义分区与顺序。 */
     syncLegacy(patch: Partial<LegacyResumeScalars>, projects: ResumeProjectVO[] = projectsOf(detail)) {
-      commit(mergeFlatEdit(current.value, { ...scalarsOf(detail), ...patch }, projects, detail?.presentationConfig))
+      const base: LegacyResumeScalars = {
+        realName: legacy.value.realName,
+        email: legacy.value.email,
+        phone: legacy.value.phone,
+        targetPosition: legacy.value.targetPosition,
+        summary: legacy.value.summary,
+        skillStack: legacy.value.skillStack,
+        workExperience: legacy.value.workExperience,
+        educationExperience: legacy.value.educationExperience
+      }
+      commit(mergeFlatEdit(current.value, { ...base, ...patch }, projects, detail?.presentationConfig))
     },
 
     /** AI 建议按身份锚点整段替换，重排后依然命中同一块内容。 */

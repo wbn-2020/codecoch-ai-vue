@@ -5,7 +5,9 @@ import {
   type ResumeBuiltInSectionKey,
   type ResumeDocumentV2,
   type ResumeEntryItem,
-  type ResumeSection
+  type ResumeSkillGroupItem,
+  type ResumeSection,
+  type SkillSection,
 } from '@/features/resume-workbench/document'
 import { nextDocumentId } from '@/features/resume-workbench/document-migrator'
 
@@ -179,3 +181,37 @@ export const moveEntryItem = (
 }
 
 export const builtinSectionDefaults = (key: ResumeBuiltInSectionKey) => DEFAULT_BUILTIN_SECTION_TITLES[key]
+
+
+/** Replaces a skills section's groups wholesale; the editor owns the array arithmetic. */
+export const updateSectionGroups = (
+  document: ResumeDocumentV2,
+  sectionId: string,
+  groups: ResumeSkillGroupItem[]
+): ResumeDocumentV2 => {
+  const index = findSectionIndex(document, sectionId)
+  const section = index < 0 ? undefined : document.sections[index]
+  if (!section || section.kind !== 'skills') return document
+  const next = clone(document)
+  next.sections[index] = { ...next.sections[index] as SkillSection, content: { groups: clone(groups) } }
+  return next
+}
+
+
+/** Replaces a text or custom(text) section's blocks wholesale. */
+export const updateSectionBlocks = (
+  document: ResumeDocumentV2,
+  sectionId: string,
+  blocks: ResumeBlock[]
+): ResumeDocumentV2 => {
+  const index = findSectionIndex(document, sectionId)
+  const section = index < 0 ? undefined : document.sections[index]
+  if (!section) return document
+  if (section.kind !== 'text' && !(section.kind === 'custom' && section.variant === 'text')) return document
+  const next = clone(document)
+  const target = next.sections[index]
+  if (target.kind === 'text') target.content = { blocks: clone(blocks) }
+  else if (target.kind === 'custom') target.content = { ...target.content, blocks: clone(blocks) }
+  return next
+}
+
