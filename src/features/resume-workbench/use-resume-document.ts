@@ -65,7 +65,7 @@ export const useResumeDocument = (context: ResumeDocumentBridgeContext = {}) => 
   const hydrate = (source?: ResumeDetailVO | null): ResumeDocumentV2 => {
     sourceDetail.value = source || null
     return normalizeResumeDocument(source?.document)
-      || toResumeDocument(scalarsOf(source), projectsOf(source), source?.presentationConfig)
+      || toResumeDocument(scalarsOf(source), projectsOf(source), currentPresentation())
   }
 
   const current = shallowRef<ResumeDocumentV2>(hydrate(null))

@@ -888,6 +888,7 @@ import {
 } from '@/features/resume-workbench/section-ops'
 import type {
   ResumeBlock,
+  ResumeDocumentV2,
   ResumeEntryItem,
   ResumeProjectItem,
   ResumeSkillGroupItem
@@ -1467,15 +1468,15 @@ const applyProjectFields = (fields: ResumeProjectItem['fields']) => {
 
 const projectRowsSignature = (list: ResumeProjectVO[]) => JSON.stringify(list.map((project) => [
   project.projectId,
-  project.projectName,
-  project.projectTime,
-  project.role || project.responsibility,
-  project.techStack,
-  project.projectBackground,
-  project.coreFeatures,
-  project.technicalChallenges,
-  project.optimizationResult,
-  project.extraInfo
+  project.projectName || '',
+  project.projectTime || '',
+  project.role || project.responsibility || '',
+  project.techStack || '',
+  project.projectBackground || '',
+  project.coreFeatures || '',
+  project.technicalChallenges || '',
+  project.optimizationResult || '',
+  project.extraInfo || ''
 ]))
 
 watch(
@@ -1520,11 +1521,26 @@ const resumeDocumentDraft = computed(() => ({
   resumeName: form.resumeName
 }))
 const savedResumeSignature = ref('')
+/**
+ * 键序无关的稳定序列化：同一份文档可能来自客户端合成或服务器规范化，
+ * 键序不同不代表内容不同，否则每次打开都会被误判成“有未保存改动”。
+ */
+const stableStringify = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
 const createResumeDraftSignature = (
   formValue: ResumeCreateDTO,
   projectsValue: ResumeProjectVO[],
-  presentationValue: ResumePresentationConfig
-) => JSON.stringify({
+  presentationValue: ResumePresentationConfig,
+  documentValue?: ResumeDocumentV2 | null
+) => stableStringify({
   title: formValue.resumeName,
   realName: formValue.realName,
   email: formValue.email,
@@ -1536,10 +1552,11 @@ const createResumeDraftSignature = (
   educationExperience: formValue.education || formValue.educationExperience,
   projects: projectsValue,
   presentationConfig: presentationValue,
+  document: documentValue || null,
   isDefault: formValue.isDefault
 })
 const resumeDraftSignature = computed(() =>
-  createResumeDraftSignature(form, projects.value, presentationConfig.value)
+  createResumeDraftSignature(form, projects.value, presentationConfig.value, resumeDocument.document.value)
 )
 const resumeHistory = useResumeHistory(30)
 const historyApplying = ref(false)
@@ -1547,7 +1564,8 @@ let resumeHistoryTimer: ReturnType<typeof setTimeout> | undefined
 const createResumeHistorySnapshot = () => JSON.stringify({
   form: { ...form },
   projects: projects.value,
-  presentationConfig: presentationConfig.value
+  presentationConfig: presentationConfig.value,
+  document: resumeDocument.document.value
 })
 const restoreResumeHistorySnapshot = (snapshot?: string) => {
   if (!snapshot) return
@@ -1556,22 +1574,15 @@ const restoreResumeHistorySnapshot = (snapshot?: string) => {
       form?: ResumeCreateDTO
       projects?: ResumeProjectVO[]
       presentationConfig?: ResumePresentationConfig
+      document?: ResumeDocumentV2
     }
     historyApplying.value = true
     Object.assign(form, createDefaultResumeForm(), value.form || {})
     projects.value = Array.isArray(value.projects)
       ? value.projects.map((project) => ({ ...project }))
       : []
-    resumeDocument.syncLegacy({
-      realName: form.realName,
-      email: form.email,
-      phone: form.phone,
-      targetPosition: form.targetPosition,
-      summary: form.summary,
-      skillStack: form.skills,
-      workExperience: form.workSummary,
-      educationExperience: form.education
-    })
+    // 文档是这一步的真相：扁平列只是它的投影，回退必须整体替换文档。
+    if (value.document) resumeDocument.replace(value.document)
     presentationConfig.value = normalizeResumePresentation(value.presentationConfig)
     selectedResumeTemplateCode.value = presentationConfig.value.templateCode as ResumeTemplateCode
     pendingResumeTemplateCode.value = selectedResumeTemplateCode.value
@@ -1587,16 +1598,15 @@ const restoreResumeHistorySnapshot = (snapshot?: string) => {
 }
 const undoResumeEdit = () => restoreResumeHistorySnapshot(resumeHistory.undo())
 const redoResumeEdit = () => restoreResumeHistorySnapshot(resumeHistory.redo())
-const hasUnsavedResumeChanges = computed(() =>
-  isEdit.value
-    ? (!savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value)
-    : hasResumeContentStarted.value
-      || resumeDraftSignature.value !== createResumeDraftSignature(
-        createDefaultResumeForm(),
-        [],
-        createDefaultResumePresentation()
-      )
-)
+const hasUnsavedResumeChanges = computed(() => {
+  if (isEdit.value) {
+    return !savedResumeSignature.value || savedResumeSignature.value !== resumeDraftSignature.value
+  }
+  // 新建态没有服务器基线，文档又完全由扁平字段合成，所以只看扁平字段。
+  return hasResumeContentStarted.value
+    || createResumeDraftSignature(form, projects.value, presentationConfig.value, null)
+      !== createResumeDraftSignature(createDefaultResumeForm(), [], createDefaultResumePresentation(), null)
+})
 // A draft write clears the server-side default flag, so the default resume keeps the explicit save.
 const resumeAutosave = useResumeAutosave({
   enabled: () => isEdit.value
@@ -2139,6 +2149,7 @@ const resetRouteState = () => {
   templateGalleryVisible.value = false
   deliveryWorkbenchVisible.value = false
   savedResumeSignature.value = ''
+  resumeDocument.hydrate(null)
   resumeHistory.reset()
   detailError.value = ''
   saveError.value = ''
@@ -2176,15 +2187,18 @@ const applyDetail = (detail: ResumeDetailVO) => {
   const serverProjects = detail.projects || []
   const serverProjectIds = new Set(serverProjects.map((project) => project.projectId))
   projects.value = serverProjects
-  savedResumeSignature.value = resumeDraftSignature.value
+  resumeDocument.hydrate(detail)
   projects.value = [
     ...serverProjects,
     ...storedFailedProjects.filter((project) => !serverProjectIds.has(project.projectId))
   ]
-  resumeDocument.hydrate(detail)
   resumeHistory.reset(createResumeHistorySnapshot())
   void nextTick(() => {
     historyApplying.value = false
+    // 载入时表单与文档投影会做一次性对齐（例如技能分隔符），这一轮排期的自动保存要作废：
+    // 基线在对齐之后重取，否则每次打开都会写一条没人改过的草稿。
+    resumeAutosave.cancel()
+    savedResumeSignature.value = resumeDraftSignature.value
   })
 }
 
@@ -2519,7 +2533,8 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
   const saveSnapshotSignature = createResumeDraftSignature(
     formSnapshot,
     projectSnapshot,
-    presentationSnapshot
+    presentationSnapshot,
+    formSnapshot.document
   )
   const shouldCreateVersion = mode === 'complete'
   const isCurrentOperation = () => (
