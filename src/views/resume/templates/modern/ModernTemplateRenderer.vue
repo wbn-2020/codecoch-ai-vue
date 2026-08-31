@@ -17,19 +17,19 @@
       </div>
     </header>
 
-    <div v-if="visibleSections(model).length" class="modern-renderer__body">
+    <div v-if="visibleRenderSections(model).length" class="modern-renderer__body">
       <section
-        v-for="section in visibleSections(model)"
-        :key="section"
+        v-for="section in visibleRenderSections(model)"
+        :key="section.id"
         class="modern-renderer__section"
       >
-        <TemplateSectionTitle :title="sectionTitles[section]" tone="band" />
+        <TemplateSectionTitle :title="section.title" tone="band" />
 
-        <div v-if="section === 'summary'" class="modern-renderer__summary">
+        <div v-if="section.builtinKey === 'summary'" class="modern-renderer__summary">
           <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
         </div>
 
-        <div v-else-if="section === 'skills'" class="modern-renderer__skills">
+        <div v-else-if="section.builtinKey === 'skills'" class="modern-renderer__skills">
           <div v-for="group in model.skillGroups" :key="group.label" class="modern-renderer__skill-group">
             <strong>{{ group.label }}</strong>
             <span>{{ group.items.join(' · ') }}</span>
@@ -40,18 +40,19 @@
         </div>
 
         <TemplateEntryList
-          v-else-if="section === 'experience'"
+          v-else-if="section.builtinKey === 'experience'"
           :entries="model.experience"
         />
         <TemplateEntryList
-          v-else-if="section === 'projects'"
+          v-else-if="section.builtinKey === 'projects'"
           :entries="model.projects"
           project
         />
         <TemplateEntryList
-          v-else-if="section === 'education'"
+          v-else-if="section.builtinKey === 'education'"
           :entries="model.education"
         />
+        <TemplateSectionBody v-else :section="section" />
       </section>
     </div>
   </TemplatePaper>
@@ -59,10 +60,11 @@
 
 <script setup lang="ts">
 import type { ResumeRenderModel } from '@/features/resume-template/schema'
-import { isFieldVisible, sectionTitles, visibleSections } from '@/views/resume/templates/shared/renderModel'
+import { isFieldVisible, visibleRenderSections } from '@/views/resume/templates/shared/renderModel'
 import TemplateContactItem from '@/views/resume/templates/shared/TemplateContactItem.vue'
 import TemplateEntryList from '@/views/resume/templates/shared/TemplateEntryList.vue'
 import TemplatePaper from '@/views/resume/templates/shared/TemplatePaper.vue'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
 import TemplateSectionTitle from '@/views/resume/templates/shared/TemplateSectionTitle.vue'
 
 defineProps<{

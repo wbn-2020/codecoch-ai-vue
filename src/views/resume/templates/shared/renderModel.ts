@@ -1,4 +1,4 @@
-import type { ResumeRenderModel } from '@/features/resume-template/schema'
+import type { ResumeRenderModel, ResumeRenderSection } from '@/features/resume-template/schema'
 import type {
   ResumePresentationField,
   ResumePresentationSection
@@ -60,3 +60,7 @@ export const hasSectionContent = (
 
 export const visibleSections = (model: ResumeRenderModel) =>
   model.sectionOrder.filter((section) => hasSectionContent(model, section))
+
+
+export const visibleRenderSections = (model: ResumeRenderModel): ResumeRenderSection[] =>
+  model.renderSections

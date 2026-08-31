@@ -5,13 +5,16 @@ import {
   type ResumePreviewDensity,
   type ResumeDocumentDraft
 } from '@/features/resume-document'
+import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
+import { buildRenderSections } from './render-sections'
 import { normalizeResumePresentation } from '@/features/resume-presentation'
 import type { ResumePresentationConfig } from '@/types/resumePresentation'
 
 import type {
   ResumeContactIconKey,
   ResumeContactModel,
-  ResumeRenderModel
+  ResumeRenderModel,
+  ResumeRenderSection
 } from './schema'
 
 type ResumeBasicField = 'realName' | 'targetPosition' | 'email' | 'phone'
@@ -60,10 +63,11 @@ const normalizeContact = (
 export const buildResumeRenderModel = (
   draft: ResumeDocumentDraft,
   presentationSource?: ResumePresentationConfig,
-  density: ResumePreviewDensity = 'comfortable'
+  density: ResumePreviewDensity = 'comfortable',
+  document?: ResumeDocumentV2 | null
 ): ResumeRenderModel => {
   const rawPresentation = presentationSource || draft.presentationConfig
-  const document = buildResumeDocumentModel(draft)
+  const documentModel = buildResumeDocumentModel(draft)
   const presentation = normalizeResumePresentation(
     rawPresentation,
     { templateCode: normalizeResumeTemplateCode(rawPresentation?.templateCode) }
@@ -79,10 +83,10 @@ export const buildResumeRenderModel = (
     presentation.sectionOrder = resumeTemplateSectionOrder(templateCode)
   }
 
-  return {
+  const model: ResumeRenderModel = {
     identity: {
-      name: document.name,
-      targetPosition: document.targetPosition
+      name: documentModel.name,
+      targetPosition: documentModel.targetPosition
     },
     basicLayout: presentation.basicLayout,
     basicFieldOrder: presentation.basicFieldOrder,
@@ -91,16 +95,19 @@ export const buildResumeRenderModel = (
     iconMode: presentation.iconMode,
     density,
     contacts: normalizeContact(draft, presentation),
-    summary: document.summary,
-    skills: document.skills,
-    skillGroups: document.skillGroups,
-    experience: document.workEntries,
-    projects: document.projectEntries,
-    education: document.educationEntries,
+    summary: documentModel.summary,
+    skills: documentModel.skills,
+    skillGroups: documentModel.skillGroups,
+    experience: documentModel.workEntries,
+    projects: documentModel.projectEntries,
+    education: documentModel.educationEntries,
     sectionOrder: presentation.sectionOrder,
     hiddenSections: presentation.hiddenSections,
+    renderSections: [] as ResumeRenderSection[],
     presentation,
     source: draft,
-    hasContent: document.hasContent
+    hasContent: documentModel.hasContent
   }
+  model.renderSections = buildRenderSections(document, model)
+  return model
 }

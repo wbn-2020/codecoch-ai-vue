@@ -49,7 +49,8 @@ describe('resume editor and delivery workspace layout', () => {
     expect(preview).toMatch(/\.resume-document\s*\{[\s\S]*?background:\s*#fff/)
     expect(preview).toContain('document-section__heading')
     expect(preview).toContain('normalizeResumePresentation')
-    expect(preview).toContain('presentation.value.sectionOrder')
+    // M5: the ATS inline article iterates document-driven render sections for order/visibility.
+    expect(preview).toContain('v-for="section in renderSections"')
   })
 
   it('keeps the supporting workspace in the editor column and bounds the sticky preview to the viewport', () => {

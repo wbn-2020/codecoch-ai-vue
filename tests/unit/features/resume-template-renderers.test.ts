@@ -102,9 +102,10 @@ describe('resume template renderer foundation', () => {
     )
 
     expect(projectSource).not.toContain('projectFirstOrder')
-    expect(projectSource).toContain('visibleSections(props.model)')
+    // M5: renderers iterate document-driven render sections instead of presentation ids.
+    expect(projectSource).toContain('visibleRenderSections(props.model)')
     expect(streakSource).toContain('v-for="section in sections"')
-    expect(streakSource).toContain('streamEntriesBySection[section]')
+    expect(streakSource).toContain('streamEntriesBySection[section.builtinKey]')
     expect(streakSource).not.toContain('grid-template-columns: 74px minmax(0, 1fr)')
   })
 })

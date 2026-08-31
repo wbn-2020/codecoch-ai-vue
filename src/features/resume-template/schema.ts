@@ -4,6 +4,7 @@ import type {
   ResumeSkillGroup,
   ResumeTemplateCode
 } from '@/features/resume-document'
+import type { ResumeBlock } from '@/features/resume-workbench/document'
 import type { ResumePresentationConfig, ResumePresentationSection } from '@/types/resumePresentation'
 
 export type ResumeTemplateCategory =
@@ -70,6 +71,18 @@ export interface ResumeContactModel {
   showLabel: boolean
 }
 
+/**
+ * 渲染器消费的分区单元：顺序、可见性与标题都来自文档 v2，
+ * 内置分区沿用既有模型字段，自定义分区自带内容块或条目。
+ */
+export interface ResumeRenderSection {
+  id: string
+  title: string
+  builtinKey?: ResumePresentationSection
+  kind: 'text' | 'skills' | 'entry' | 'project' | 'custom'
+  blocks?: ResumeBlock[]
+  entries?: ResumeDocumentEntry[]
+}
 export interface ResumeRenderModel {
   identity: {
     name: string
@@ -89,6 +102,7 @@ export interface ResumeRenderModel {
   projects: ResumeDocumentEntry[]
   education: ResumeDocumentEntry[]
   sectionOrder: ResumePresentationSection[]
+  renderSections: ResumeRenderSection[]
   hiddenSections: ResumePresentationSection[]
   presentation: ResumePresentationConfig
   source: ResumeDocumentDraft

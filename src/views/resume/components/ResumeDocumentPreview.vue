@@ -56,9 +56,9 @@
         </div>
       </header>
 
-      <div v-if="model.hasContent" class="document-body">
-        <template v-for="section in sectionOrder" :key="section">
-          <section v-if="section === 'summary' && isSectionVisible('summary') && isFieldVisible('summary') && model.summary.length" class="document-section">
+      <div v-if="model.hasContent || renderSections.length" class="document-body">
+        <template v-for="section in renderSections" :key="section.id">
+          <section v-if="section.builtinKey === 'summary' && isFieldVisible('summary') && model.summary.length" class="document-section">
             <div class="document-section__heading">
               <h3>个人摘要</h3>
               <i></i>
@@ -68,7 +68,7 @@
             </div>
           </section>
 
-          <section v-else-if="section === 'skills' && isSectionVisible('skills') && isFieldVisible('skills') && model.skills.length" class="document-section skills-section">
+          <section v-else-if="section.builtinKey === 'skills' && isFieldVisible('skills') && model.skills.length" class="document-section skills-section">
             <div class="document-section__heading">
               <h3>专业技能</h3>
               <i></i>
@@ -84,7 +84,7 @@
             </div>
           </section>
 
-          <section v-else-if="section === 'experience' && isSectionVisible('experience') && isFieldVisible('workExperience') && model.experience.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'experience' && isFieldVisible('workExperience') && model.experience.length" class="document-section">
             <div class="document-section__heading">
               <h3>工作经历</h3>
               <i></i>
@@ -92,7 +92,7 @@
             <ResumeDocumentEntries :entries="model.experience" />
           </section>
 
-          <section v-else-if="section === 'projects' && isSectionVisible('projects') && isFieldVisible('projects') && model.projects.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'projects' && isFieldVisible('projects') && model.projects.length" class="document-section">
             <div class="document-section__heading">
               <h3>项目经历</h3>
               <i></i>
@@ -100,12 +100,20 @@
             <ResumeDocumentEntries :entries="model.projects" project />
           </section>
 
-          <section v-else-if="section === 'education' && isSectionVisible('education') && isFieldVisible('educationExperience') && model.education.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'education' && isFieldVisible('educationExperience') && model.education.length" class="document-section">
             <div class="document-section__heading">
               <h3>教育经历</h3>
               <i></i>
             </div>
             <ResumeDocumentEntries :entries="model.education" />
+          </section>
+
+          <section v-else class="document-section">
+            <div class="document-section__heading">
+              <h3>{{ section.title }}</h3>
+              <i></i>
+            </div>
+            <TemplateSectionBody :section="section" />
           </section>
         </template>
       </div>
@@ -141,10 +149,9 @@ import {
   type ResumePreviewDensity,
   type ResumeTemplateCode
 } from '@/features/resume-document'
-import {
-  isResumePresentationSectionVisible,
-  normalizeResumePresentation
-} from '@/features/resume-presentation'
+import { normalizeResumePresentation } from '@/features/resume-presentation'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
+import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
 import { buildResumeRenderModel } from '@/features/resume-template/adapter'
 import { getResumeTemplateDefinition } from '@/features/resume-template/registry'
 import { getResumeRendererComponent } from '@/views/resume/templates'
@@ -152,11 +159,13 @@ import type { ResumePresentationConfig } from '@/types/resumePresentation'
 
 const props = withDefaults(defineProps<{
   draft: ResumeDocumentDraft
+  document?: ResumeDocumentV2 | null
   templateCode?: ResumeTemplateCode | string
   accent?: ResumeAccent
   density?: ResumePreviewDensity
   presentationConfig?: ResumePresentationConfig
 }>(), {
+  document: null,
   templateCode: 'ATS_SINGLE_COLUMN',
   accent: 'default',
   density: 'comfortable',
@@ -210,14 +219,12 @@ const presentation = computed(() => normalizeResumePresentation(
   templateCode: templateCode.value
   }
 ))
-const model = computed(() => buildResumeRenderModel(props.draft, presentation.value, props.density))
+const model = computed(() => buildResumeRenderModel(props.draft, presentation.value, props.density, props.document))
 const rendererComponent = computed(() =>
   getResumeRendererComponent(templateMeta.value.rendererKey)
 )
-const sectionOrder = computed(() => presentation.value.sectionOrder)
+const renderSections = computed(() => model.value.renderSections)
 const isClassicTemplate = computed(() => templateMeta.value.layout.contactPlacement === 'sidebar')
-const isSectionVisible = (section: 'summary' | 'skills' | 'experience' | 'projects' | 'education') =>
-  isResumePresentationSectionVisible(presentation.value, section)
 const isFieldVisible = (field: keyof NonNullable<ResumePresentationConfig['fieldVisibility']>) =>
   presentation.value.fieldVisibility[field] !== false
   && (

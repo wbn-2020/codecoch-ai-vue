@@ -20,23 +20,23 @@
     <main v-if="sections.length" class="timeline-renderer__body">
       <section
         v-for="section in sections"
-        :key="section"
-        :data-section="section"
+        :key="section.id"
+        :data-section="section.builtinKey || section.id"
         class="timeline-renderer__section"
       >
-        <TemplateSectionTitle :title="sectionTitles[section]" />
+        <TemplateSectionTitle :title="section.title" />
 
-        <div v-if="section === 'summary'" class="timeline-renderer__summary">
+        <div v-if="section.builtinKey === 'summary'" class="timeline-renderer__summary">
           <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
         </div>
 
-        <div v-else-if="section === 'skills'" class="timeline-renderer__skills">
+        <div v-else-if="section.builtinKey === 'skills'" class="timeline-renderer__skills">
           <span v-for="skill in model.skills" :key="skill">{{ skill }}</span>
         </div>
 
-        <div v-else class="timeline-renderer__track">
+        <div v-else-if="section.builtinKey" class="timeline-renderer__track">
           <article
-            v-for="entry in entriesFor(section)"
+            v-for="entry in entriesFor(section.builtinKey)"
             :key="entry.key"
             class="timeline-renderer__entry"
           >
@@ -64,6 +64,7 @@
             </div>
           </article>
         </div>
+        <TemplateSectionBody v-else :section="section" />
       </section>
     </main>
 
@@ -81,16 +82,16 @@ import type { ResumeDocumentEntry } from '@/features/resume-document'
 import type { ResumeRenderModel } from '@/features/resume-template/schema'
 import {
   isFieldVisible,
-  sectionTitles,
-  visibleSections
+  visibleRenderSections
 } from '@/views/resume/templates/shared/renderModel'
 import TemplateContactItem from '@/views/resume/templates/shared/TemplateContactItem.vue'
 import TemplatePaper from '@/views/resume/templates/shared/TemplatePaper.vue'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
 import TemplateSectionTitle from '@/views/resume/templates/shared/TemplateSectionTitle.vue'
 import type { ResumePresentationSection } from '@/types/resumePresentation'
 
 const props = defineProps<{ model: ResumeRenderModel }>()
-const sections = computed(() => visibleSections(props.model))
+const sections = computed(() => visibleRenderSections(props.model))
 
 const entriesFor = (section: ResumePresentationSection): ResumeDocumentEntry[] => {
   if (section === 'experience') return props.model.experience

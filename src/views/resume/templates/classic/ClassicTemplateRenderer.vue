@@ -17,35 +17,36 @@
       </div>
     </header>
 
-    <div v-if="visibleSections(model).length" class="classic-renderer__body">
+    <div v-if="visibleRenderSections(model).length" class="classic-renderer__body">
       <section
-        v-for="section in visibleSections(model)"
-        :key="section"
+        v-for="section in visibleRenderSections(model)"
+        :key="section.id"
         class="classic-renderer__section"
       >
-        <TemplateSectionTitle :title="sectionTitles[section]" />
+        <TemplateSectionTitle :title="section.title" />
 
-        <div v-if="section === 'summary'" class="classic-renderer__summary">
+        <div v-if="section.builtinKey === 'summary'" class="classic-renderer__summary">
           <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
         </div>
 
-        <div v-else-if="section === 'skills'" class="classic-renderer__skills">
+        <div v-else-if="section.builtinKey === 'skills'" class="classic-renderer__skills">
           <span v-for="skill in model.skills" :key="skill">{{ skill }}</span>
         </div>
 
         <TemplateEntryList
-          v-else-if="section === 'experience'"
+          v-else-if="section.builtinKey === 'experience'"
           :entries="model.experience"
         />
         <TemplateEntryList
-          v-else-if="section === 'projects'"
+          v-else-if="section.builtinKey === 'projects'"
           :entries="model.projects"
           project
         />
         <TemplateEntryList
-          v-else-if="section === 'education'"
+          v-else-if="section.builtinKey === 'education'"
           :entries="model.education"
         />
+        <TemplateSectionBody v-else :section="section" />
       </section>
     </div>
 
@@ -60,12 +61,12 @@
 import type { ResumeRenderModel } from '@/features/resume-template/schema'
 import {
   isFieldVisible,
-  sectionTitles,
-  visibleSections
+  visibleRenderSections
 } from '@/views/resume/templates/shared/renderModel'
 import TemplateContactItem from '@/views/resume/templates/shared/TemplateContactItem.vue'
 import TemplateEntryList from '@/views/resume/templates/shared/TemplateEntryList.vue'
 import TemplatePaper from '@/views/resume/templates/shared/TemplatePaper.vue'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
 import TemplateSectionTitle from '@/views/resume/templates/shared/TemplateSectionTitle.vue'
 
 defineProps<{

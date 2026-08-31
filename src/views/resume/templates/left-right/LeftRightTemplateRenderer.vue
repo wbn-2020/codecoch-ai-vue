@@ -35,28 +35,29 @@
       <div v-if="mainSections.length" class="left-right-renderer__body">
         <section
           v-for="section in mainSections"
-          :key="section"
+          :key="section.id"
           class="left-right-renderer__section"
         >
-          <TemplateSectionTitle :title="sectionTitles[section]" />
+          <TemplateSectionTitle :title="section.title" />
 
-          <div v-if="section === 'summary'" class="left-right-renderer__summary">
+          <div v-if="section.builtinKey === 'summary'" class="left-right-renderer__summary">
             <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
           </div>
 
           <TemplateEntryList
-            v-else-if="section === 'experience'"
+            v-else-if="section.builtinKey === 'experience'"
             :entries="model.experience"
           />
           <TemplateEntryList
-            v-else-if="section === 'projects'"
+            v-else-if="section.builtinKey === 'projects'"
             :entries="model.projects"
             project
           />
           <TemplateEntryList
-            v-else-if="section === 'education'"
+            v-else-if="section.builtinKey === 'education'"
             :entries="model.education"
           />
+          <TemplateSectionBody v-else :section="section" />
         </section>
       </div>
     </main>
@@ -66,10 +67,11 @@
 <script setup lang="ts">
 import type { ResumeRenderModel } from '@/features/resume-template/schema'
 import { computed } from 'vue'
-import { isFieldVisible, sectionTitles, visibleSections } from '@/views/resume/templates/shared/renderModel'
+import { isFieldVisible, visibleRenderSections } from '@/views/resume/templates/shared/renderModel'
 import TemplateContactItem from '@/views/resume/templates/shared/TemplateContactItem.vue'
 import TemplateEntryList from '@/views/resume/templates/shared/TemplateEntryList.vue'
 import TemplatePaper from '@/views/resume/templates/shared/TemplatePaper.vue'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
 import TemplateSectionTitle from '@/views/resume/templates/shared/TemplateSectionTitle.vue'
 
 const props = defineProps<{
@@ -77,7 +79,7 @@ const props = defineProps<{
 }>()
 
 const mainSections = computed(() =>
-  visibleSections(props.model).filter((section) => section !== 'skills')
+  visibleRenderSections(props.model).filter((section) => section.builtinKey !== 'skills')
 )
 </script>
 

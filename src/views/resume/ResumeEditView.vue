@@ -510,6 +510,7 @@
                 :accent="previewAccent"
                 :presentation-config="presentationConfig"
                 :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+                :document="resumeDocument.document.value"
               />
             </div>
           </div>

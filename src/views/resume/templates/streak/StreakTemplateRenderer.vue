@@ -21,24 +21,24 @@
     </header>
 
     <main v-if="sections.length" class="streak-renderer__body">
-      <template v-for="section in sections" :key="section">
+      <template v-for="section in sections" :key="section.id">
         <section
-          v-if="section === 'summary' && summaryVisible"
+          v-if="section.builtinKey === 'summary' && summaryVisible"
           class="streak-renderer__section streak-renderer__section--summary"
           data-section="summary"
         >
-          <TemplateSectionTitle :title="sectionTitles.summary" />
+          <TemplateSectionTitle :title="section.title" />
           <div class="streak-renderer__summary">
             <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
           </div>
         </section>
 
         <section
-          v-else-if="section === 'skills' && skillsVisible"
+          v-else-if="section.builtinKey === 'skills' && skillsVisible"
           class="streak-renderer__section streak-renderer__section--skills"
           data-section="skills"
         >
-          <TemplateSectionTitle :title="sectionTitles.skills" />
+          <TemplateSectionTitle :title="section.title" />
           <div class="streak-renderer__skills">
             <div
               v-for="group in model.skillGroups"
@@ -53,14 +53,14 @@
         </section>
 
         <section
-          v-else-if="streamEntriesBySection[section]?.length"
+          v-else-if="section.builtinKey && streamEntriesBySection[section.builtinKey]?.length"
           class="streak-renderer__section streak-renderer__section--stream"
-          :data-section="section"
+          :data-section="section.builtinKey"
         >
-          <TemplateSectionTitle :title="sectionTitles[section]" />
+          <TemplateSectionTitle :title="section.title" />
           <div class="streak-renderer__stream">
             <article
-              v-for="entry in streamEntriesBySection[section]"
+              v-for="entry in streamEntriesBySection[section.builtinKey]"
               :key="entry.key"
               class="streak-renderer__entry"
             >
@@ -88,6 +88,15 @@
             </article>
           </div>
         </section>
+
+        <section
+          v-else-if="!section.builtinKey"
+          class="streak-renderer__section streak-renderer__section--custom"
+          :data-section="section.id"
+        >
+          <TemplateSectionTitle :title="section.title" />
+          <TemplateSectionBody :section="section" />
+        </section>
       </template>
     </main>
 
@@ -108,10 +117,11 @@ import {
   hasSectionContent,
   isFieldVisible,
   sectionTitles,
-  visibleSections
+  visibleRenderSections
 } from '@/views/resume/templates/shared/renderModel'
 import TemplateContactItem from '@/views/resume/templates/shared/TemplateContactItem.vue'
 import TemplatePaper from '@/views/resume/templates/shared/TemplatePaper.vue'
+import TemplateSectionBody from '@/views/resume/templates/shared/TemplateSectionBody.vue'
 import TemplateSectionTitle from '@/views/resume/templates/shared/TemplateSectionTitle.vue'
 
 interface StreakStreamEntry extends ResumeDocumentEntry {
@@ -122,7 +132,7 @@ const props = defineProps<{ model: ResumeRenderModel }>()
 
 const summaryVisible = computed(() => hasSectionContent(props.model, 'summary'))
 const skillsVisible = computed(() => hasSectionContent(props.model, 'skills'))
-const sections = computed(() => visibleSections(props.model))
+const sections = computed(() => visibleRenderSections(props.model))
 
 const streamEntriesBySection = computed<Record<ResumePresentationSection, StreakStreamEntry[]>>(() => {
   const toEntries = (
