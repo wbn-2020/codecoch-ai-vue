@@ -63,6 +63,7 @@ export interface ResumeLayoutMeta {
   fontFamily: ResumePresentationFont
   fontScale: number
   lineHeight: number
+  /** 与 ResumePresentationConfig 同一约定：分区间距为模板自带间距的倍率，页边距为磅值。 */
   sectionSpacing: number
   pageMarginPt: number
   autoOnePage: boolean

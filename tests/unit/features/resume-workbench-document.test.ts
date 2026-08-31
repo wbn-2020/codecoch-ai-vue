@@ -171,15 +171,30 @@ describe('normalizer', () => {
     })!
     expect(doc.basics.name.length).toBeLessThanOrEqual(60)
     expect(doc.basics.contacts[0].kind).toBe('text')
-    expect(doc.layout.fontScale).toBe(1.3)
+    expect(doc.layout.fontScale).toBe(1.18)
     expect(doc.layout.lineHeight).toBe(1)
-    expect(doc.layout.sectionSpacing).toBe(4)
-    expect(doc.layout.pageMarginPt).toBe(60)
+    expect(doc.layout.sectionSpacing).toBe(0.7)
+    expect(doc.layout.pageMarginPt).toBe(72)
     expect(doc.sections[0].title).toBe('总结')
     expect(doc.sections[0].kind).toBe('text')
     if (doc.sections[0].kind === 'text') {
       expect(doc.sections[0].content.blocks[0].id).toBeTruthy()
     }
+  })
+
+  it('keeps migrated layout values untouched by normalization', () => {
+    const doc = toResumeDocument(legacyScalars, legacyProjects as never, {
+      templateCode: 'ATS_COMPACT',
+      fontScale: 0.94,
+      lineHeight: 1.45,
+      sectionSpacing: 0.82,
+      pageMarginPt: 64
+    } as never)
+    const normalized = normalizeResumeDocument(doc)!
+    expect(normalized.layout.fontScale).toBe(0.94)
+    expect(normalized.layout.lineHeight).toBe(1.45)
+    expect(normalized.layout.sectionSpacing).toBe(0.82)
+    expect(normalized.layout.pageMarginPt).toBe(64)
   })
 
   it('dedupes builtin keys and caps custom sections', () => {

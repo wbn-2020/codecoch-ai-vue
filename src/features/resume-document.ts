@@ -273,8 +273,11 @@ export const splitSentences = (value: string) => {
   if (!value) return []
   const explicit = splitLines(value)
   if (explicit.length > 1) return explicit
-  if (value.length < 58) return [value]
-  return value
+  // 列表标记必须被剥离：投影回扁平列时会重新加上“- ”，保留会让文本每次保存都变长。
+  if (!explicit.length) return []
+  const [single] = explicit
+  if (single.length < 58) return [single]
+  return single
     .split(/(?<=[。！？；;])\s*/)
     .map((item) => item.trim())
     .filter(Boolean)
