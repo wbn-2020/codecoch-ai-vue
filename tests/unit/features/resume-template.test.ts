@@ -67,14 +67,15 @@ describe('resume template registry', () => {
     expect(compact?.exportAvailable).toBe(false)
   })
 
-  it('keeps local-only visual templates out of the formal export contract', () => {
+  it('keeps design-only visual templates out of the formal export contract', () => {
     const sidebar = getResumeTemplateDefinition('ATS_CLASSIC_SIDEBAR')
     const streak = getResumeTemplateDefinition('ATS_STREAK_SIGNATURE')
     const magic = getResumeTemplateDefinition('MAGIC_TIMELINE')
 
     expect(sidebar.exportAvailable).toBe(false)
     expect(streak.exportAvailable).toBe(false)
-    expect(magic.exportAvailable).toBe(false)
+    // V4_128 registers the MAGIC_* codes on the server ATS channel as single-column exports.
+    expect(magic.exportAvailable).toBe(true)
     expect(getResumeTemplateDefinition('ATS_SINGLE_COLUMN').exportAvailable).toBe(true)
     expect(getResumeTemplateDefinition('ATS_COMPACT').exportAvailable).toBe(true)
     expect(getResumeTemplateDefinition('ATS_PROJECT_FOCUS').exportAvailable).toBe(true)

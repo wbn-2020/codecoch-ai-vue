@@ -81,6 +81,10 @@ export interface ResumeTemplateOption {
   unlockStreakDays?: number
 }
 
+/** V4_128：MAGIC_* 的双通道事实说明，供模板卡与导出检查复用。 */
+export const RESUME_MAGIC_TEMPLATE_NOTE =
+  '设计版用浏览器打印通道导出；服务器正式导出为单栏 ATS 版式，ATS 解析优先。'
+
 export interface ResumeExportCheckItem {
   key: string
   label: string
@@ -171,7 +175,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '内容适中偏 1 页，经历较多时自然延展',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: '视觉时间轴仅用于预览，正式导出需使用已注册 ATS 模板。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / 微软雅黑；节点、轨道和日期对齐'
   },
   {
@@ -184,7 +188,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '留白较多，长内容可能形成 2 页',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: '当前为浏览器预览模板，未接入正式 PDF/DOCX 导出。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / 微软雅黑；低装饰、低噪声、留白优先'
   },
   {
@@ -197,7 +201,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '内容适中偏 1 页，正文较长时自然延展',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: '预览使用字体回退，正式导出模板尚未注册。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / Georgia 回退；细线、留白和高层级标题'
   },
   {
@@ -210,7 +214,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '内容适中偏 1 页，复杂项目可能形成 2 页',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: '视觉表达更强，正式投递前应切换到 ATS 模板。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / 微软雅黑；强调区块、色带和横向标签'
   },
   {
@@ -223,7 +227,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '留白较多，长文本更容易延展到 2 页',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: '当前仅提供前端预览，未接入正式导出 renderer。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / 微软雅黑；编辑感标题、细线和多段节奏'
   },
   {
@@ -236,7 +240,7 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     pageTendency: '内容适中偏 1 页，区块较多时形成 2 页',
     atsRisk: 'MEDIUM',
     atsRiskLabel: '中',
-    atsRiskDetail: 'CSS Grid 仅用于浏览器预览，正式导出尚未接入。',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
     typographyLayout: 'Arial / 微软雅黑；严格网格、列对齐、少量主题色'
   }
 ]
@@ -251,11 +255,27 @@ export const normalizeResumeTemplateCode = (value?: string): ResumeTemplateCode 
     ? value as ResumeTemplateCode
     : 'ATS_SINGLE_COLUMN'
 
+/**
+ * Templates registered on the server ATS export channel (V4_128 seeds the MAGIC_* codes as
+ * single-column ATS documents). Kept here so the delivery workbench and the template registry
+ * share one source of truth for what can produce a formal PDF/DOCX.
+ */
+export const RESUME_FORMAL_EXPORT_TEMPLATE_CODES: readonly ResumeTemplateCode[] = [
+  'ATS_SINGLE_COLUMN',
+  'ATS_COMPACT',
+  'ATS_PROJECT_FOCUS',
+  'MAGIC_TIMELINE',
+  'MAGIC_MINIMALIST',
+  'MAGIC_ELEGANT',
+  'MAGIC_CREATIVE',
+  'MAGIC_EDITORIAL',
+  'MAGIC_SWISS'
+]
+
 export const isFormalResumeTemplateCode = (
   value?: string
-): boolean => value === 'ATS_SINGLE_COLUMN'
-  || value === 'ATS_COMPACT'
-  || value === 'ATS_PROJECT_FOCUS'
+): boolean =>
+  RESUME_FORMAL_EXPORT_TEMPLATE_CODES.includes(value as ResumeTemplateCode)
 
 export const normalizeText = (value: unknown) =>
   String(value || '')

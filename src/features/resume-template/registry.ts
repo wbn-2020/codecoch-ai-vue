@@ -1,6 +1,7 @@
 import {
   normalizeResumeTemplateCode,
   resumeTemplateOptions,
+  RESUME_FORMAL_EXPORT_TEMPLATE_CODES,
   type ResumeTemplateCode,
   type ResumeTemplateOption
 } from '@/features/resume-document'
@@ -23,11 +24,9 @@ const supportedSections: ResumePresentationSection[] = [
   'education'
 ]
 
-const exportTemplateCodes = new Set<ResumeTemplateCode>([
-  'ATS_SINGLE_COLUMN',
-  'ATS_COMPACT',
-  'ATS_PROJECT_FOCUS'
-])
+// The server ATS channel list is the single source of truth in resume-document.ts
+// (V4_128 registers the MAGIC_* codes as honest single-column ATS exports).
+const exportTemplateCodes = new Set<ResumeTemplateCode>(RESUME_FORMAL_EXPORT_TEMPLATE_CODES)
 
 const typography: ResumeTemplateTypography = {
   bodyFont: 'Arial',
