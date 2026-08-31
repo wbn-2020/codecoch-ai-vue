@@ -125,8 +125,10 @@
         :has-started="hasResumeContentStarted"
         :export-ready-count="exportReadyCount"
         :export-total="exportChecklistItems.length"
-        :hidden-ids="presentationConfig.hiddenModules"
+        :hidden-ids="hiddenPaneIds"
+        :custom-section-quota="customSectionQuota"
         @select="focusSection"
+        @add-section="addCustomSectionPane"
         @review="setInspectorMode('review')"
         @move="moveWorkshopModule"
         @toggle-visibility="toggleWorkshopModule"
@@ -159,7 +161,7 @@
         </header>
 
         <section
-          v-show="activeWorkshopModule !== 'resume-projects'"
+          v-show="!isCustomSectionPane && activeWorkshopModule !== 'resume-projects'"
           class="content-card editor-section edit-card"
           v-loading="loading"
         >
@@ -413,6 +415,22 @@
               </el-button>
             </div>
           </div>
+        </section>
+
+        <section
+          v-for="section in customSections"
+          v-show="activeWorkshopModule === section.id"
+          :id="section.id"
+          :key="section.id"
+          class="content-card editor-section custom-section"
+        >
+          <SectionCard
+            :section="section"
+            @update:blocks="applyCustomSectionBlocks"
+            @update:items="applyCustomSectionItems"
+            @rename="renameCustomSection"
+            @remove="removeCustomSectionPane"
+          />
         </section>
       </main>
       </template>
@@ -860,6 +878,7 @@ import SkillGroupEditor from '@/views/resume/workbench/blocks/SkillGroupEditor.v
 import EntryItemEditor from '@/views/resume/workbench/blocks/EntryItemEditor.vue'
 import ProjectItemEditor from '@/views/resume/workbench/blocks/ProjectItemEditor.vue'
 import TextBlocksField from '@/views/resume/workbench/blocks/TextBlocksField.vue'
+import SectionCard from '@/views/resume/workbench/blocks/SectionCard.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -886,7 +905,9 @@ import {
   updateSectionGroups,
   updateSectionItems
 } from '@/features/resume-workbench/section-ops'
+import { MAX_CUSTOM_SECTIONS } from '@/features/resume-workbench/document'
 import type {
+  CustomSection,
   ResumeBlock,
   ResumeDocumentV2,
   ResumeEntryItem,
@@ -967,7 +988,7 @@ type ResumeWorkbenchModule =
   | 'resume-projects'
   | 'resume-experience'
 
-const activeWorkshopModule = ref<ResumeWorkbenchModule>('resume-basic')
+const activeWorkshopModule = ref<string>('resume-basic')
 const invalidSectionIds = ref<ResumeWorkbenchModule[]>([])
 const invalidFieldProps = ref<string[]>([])
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
@@ -1127,6 +1148,51 @@ watch(
   }
 )
 
+// 自定义分区完全由文档表达：顺序即数组位置，隐藏即 visible=false。
+const customSections = computed<CustomSection[]>(() =>
+  resumeDocument.document.value.sections.filter(
+    (section): section is CustomSection => !section.builtinKey
+  )
+)
+
+const customSectionQuota = computed(() => MAX_CUSTOM_SECTIONS - customSections.value.length)
+const isCustomSectionPane = computed(() =>
+  customSections.value.some((section) => section.id === activeWorkshopModule.value)
+)
+const hiddenPaneIds = computed(() => [
+  ...presentationConfig.value.hiddenModules,
+  ...customSections.value.filter((section) => !section.visible).map((section) => section.id)
+])
+
+const customSectionDone = (section: CustomSection) => section.variant === 'text'
+  ? (section.content.blocks || []).some((block) => block.text.trim().length > 0)
+  : (section.content.items || []).length > 0
+
+const addCustomSectionPane = (variant: 'text' | 'entry') => {
+  if (customSectionQuota.value <= 0) return
+  resumeDocument.addCustomSection({ variant })
+  const created = customSections.value[customSections.value.length - 1]
+  if (created) {
+    activeWorkshopModule.value = created.id
+    inspectorMode.value = 'edit'
+    mobileWorkspaceTab.value = 'edit'
+  }
+}
+
+const renameCustomSection = (sectionId: string, title: string) =>
+  resumeDocument.renameSection(sectionId, title)
+
+const removeCustomSectionPane = (sectionId: string) => {
+  if (activeWorkshopModule.value === sectionId) activeWorkshopModule.value = 'resume-basic'
+  resumeDocument.removeSection(sectionId)
+}
+
+const applyCustomSectionBlocks = (sectionId: string, blocks: ResumeBlock[]) =>
+  resumeDocument.replace(updateSectionBlocks(resumeDocument.document.value, sectionId, blocks))
+
+const applyCustomSectionItems = (sectionId: string, items: ResumeEntryItem[]) =>
+  resumeDocument.replace(updateSectionItems(resumeDocument.document.value, sectionId, items))
+
 const workItems = computed<ResumeEntryItem[]>(() => {
   const section = builtinSection('experience')
   return section && section.kind === 'entry' ? section.content.items : []
@@ -1210,7 +1276,7 @@ const hasResumeContentStarted = computed(() => Boolean(
 
 const sectionNavItems = computed(() => {
   const items: Array<{
-    id: ResumeWorkbenchModule
+    id: string
     label: string
     done: boolean
     invalid: boolean
@@ -1247,9 +1313,27 @@ const sectionNavItems = computed(() => {
     }
   ]
   const order = presentationConfig.value.moduleOrder
-  return items.sort((left, right) =>
-    order.indexOf(left.id) - order.indexOf(right.id)
-  )
+  const panes = [
+    ...items
+      .sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id))
+      .map((item) => ({ ...item, kind: 'module' as const })),
+    ...customSections.value.map((section) => ({
+      id: section.id,
+      label: section.title,
+      done: customSectionDone(section),
+      invalid: false,
+      kind: 'custom' as const
+    }))
+  ]
+  // 模块与自定义分区各自成群：跨类型的排序由文档顺序决定，导航条不承诺它。
+  return panes.map((pane, index) => ({
+    id: pane.id,
+    label: pane.label,
+    done: pane.done,
+    invalid: pane.invalid,
+    movableUp: index > 0 && panes[index - 1].kind === pane.kind,
+    movableDown: index < panes.length - 1 && panes[index + 1].kind === pane.kind
+  }))
 })
 
 const sectionsForWorkshopModule: Record<ResumeWorkbenchModule, Array<'summary' | 'skills' | 'projects' | 'experience' | 'education'>> = {
@@ -1261,6 +1345,14 @@ const sectionsForWorkshopModule: Record<ResumeWorkbenchModule, Array<'summary' |
 }
 
 const moveWorkshopModule = (id: string, delta: -1 | 1) => {
+  const sections = resumeDocument.document.value.sections
+  const sectionIndex = sections.findIndex((section) => section.id === id && !section.builtinKey)
+  if (sectionIndex >= 0) {
+    const neighbor = sections[sectionIndex + delta]
+    if (!neighbor || neighbor.builtinKey) return
+    resumeDocument.moveSection(id, sectionIndex + delta)
+    return
+  }
   if (!presentationConfig.value.moduleOrder.includes(id)) return
   const order = [...presentationConfig.value.moduleOrder]
   const currentIndex = order.indexOf(id)
@@ -1282,6 +1374,12 @@ const moveWorkshopModule = (id: string, delta: -1 | 1) => {
 }
 
 const toggleWorkshopModule = (id: string, currentlyHidden: boolean) => {
+  const isCustomSection = customSections.value.some((section) => section.id === id)
+  if (isCustomSection) {
+    resumeDocument.toggleSectionVisible(id)
+    if (!currentlyHidden && activeWorkshopModule.value === id) activeWorkshopModule.value = 'resume-basic'
+    return
+  }
   if (
     id === 'resume-basic'
     || id === 'resume-target'
@@ -1339,7 +1437,14 @@ const activeWorkshopModuleMeta = computed(() => {
     }
   } as const
 
-  return modules[activeWorkshopModule.value]
+  const custom = customSections.value.find((section) => section.id === activeWorkshopModule.value)
+  if (custom) {
+    return {
+      title: custom.title,
+      description: '这个分区只属于这份简历，预览与导出按文档顺序呈现它。'
+    }
+  }
+  return modules[activeWorkshopModule.value as ResumeWorkbenchModule] || modules['resume-basic']
 })
 
 const selectableResumeTemplateOptions = computed(() => {
@@ -1812,6 +1917,12 @@ const focusSection = (sectionId: string) => {
   const moduleId = sectionId === 'resume-summary'
     ? 'resume-basic'
     : sectionId
+
+  if (customSections.value.some((section) => section.id === sectionId)) {
+    activeWorkshopModule.value = sectionId
+    inspectorMode.value = 'edit'
+    mobileWorkspaceTab.value = 'edit'
+  }
 
   if (
     moduleId === 'resume-basic'
@@ -5254,6 +5365,10 @@ onBeforeUnmount(() => {
     margin-top: 0;
   }
 
+  .custom-section {
+    padding: 14px 18px 18px;
+  }
+
   .project-section {
     display: flex;
     flex-direction: column;
@@ -5347,14 +5462,6 @@ onBeforeUnmount(() => {
     line-height: 1.3;
   }
 
-  .inline-project-editor :deep(.el-textarea__inner) {
-    min-height: 0 !important;
-    border-color: var(--arena-line);
-    border-radius: 10px;
-    color: var(--arena-ink);
-    line-height: 1.55;
-    resize: vertical;
-  }
 
   .inline-project-editor__meta {
     display: grid;
@@ -5362,10 +5469,6 @@ onBeforeUnmount(() => {
     gap: 12px;
   }
 
-  .inline-project-editor__result :deep(.el-textarea__inner) {
-    border-color: var(--arena-amber);
-    background: #fffdf7;
-  }
 
   .inline-project-skills {
     display: grid;

@@ -48,7 +48,7 @@
             type="button"
             :aria-label="`上移${item.label}`"
             :title="`上移${item.label}`"
-            :disabled="index === 0"
+            :disabled="!canMoveUp(item, index)"
             @click="emit('move', item.id, -1)"
           >
             <ChevronUp :size="15" aria-hidden="true" />
@@ -57,7 +57,7 @@
             type="button"
             :aria-label="`下移${item.label}`"
             :title="`下移${item.label}`"
-            :disabled="index === items.length - 1"
+            :disabled="!canMoveDown(item, index)"
             @click="emit('move', item.id, 1)"
           >
             <ChevronDown :size="15" aria-hidden="true" />
@@ -71,6 +71,16 @@
           >
             <EyeOff v-if="isHidden(item.id)" :size="15" aria-hidden="true" />
             <Eye v-else :size="15" aria-hidden="true" />
+          </button>
+        </div>
+        <div v-if="customSectionQuota && customSectionQuota > 0" class="resume-section-rail__manager-add">
+          <button type="button" @click="emit('add-section', 'text')">
+            <Plus :size="14" aria-hidden="true" />
+            文本分区
+          </button>
+          <button type="button" @click="emit('add-section', 'entry')">
+            <Plus :size="14" aria-hidden="true" />
+            条目分区
           </button>
         </div>
       </div>
@@ -103,6 +113,7 @@ import {
   Eye,
   EyeOff,
   FolderKanban,
+  Plus,
   Settings2,
   Target,
   UserRound
@@ -113,6 +124,8 @@ interface SectionItem {
   label: string
   done: boolean
   invalid?: boolean
+  movableUp?: boolean
+  movableDown?: boolean
 }
 
 const props = defineProps<{
@@ -124,6 +137,7 @@ const props = defineProps<{
   exportReadyCount: number
   exportTotal: number
   hiddenIds?: string[]
+  customSectionQuota?: number
 }>()
 
 const emit = defineEmits<{
@@ -131,6 +145,7 @@ const emit = defineEmits<{
   review: []
   move: [id: string, delta: -1 | 1]
   'toggle-visibility': [id: string, currentlyHidden: boolean]
+  'add-section': [variant: 'text' | 'entry']
 }>()
 
 const iconBySection: Record<string, Component> = {
@@ -142,6 +157,10 @@ const iconBySection: Record<string, Component> = {
 }
 
 const sectionIcon = (id: string) => iconBySection[id] || Circle
+const canMoveUp = (item: SectionItem, index: number) =>
+  item.movableUp === undefined ? index > 0 : item.movableUp
+const canMoveDown = (item: SectionItem, index: number) =>
+  item.movableDown === undefined ? index < props.items.length - 1 : item.movableDown
 const completedCount = computed(() => props.items.filter((item) => item.done).length)
 const canHide = (id: string) => id !== 'resume-basic' && id !== 'resume-target'
 const isHidden = (id: string) => props.hiddenIds?.includes(id) === true
@@ -371,6 +390,39 @@ const visibleItems = computed(() => props.items.filter((item) => !isHidden(item.
     &:disabled {
       cursor: not-allowed;
       opacity: 0.32;
+    }
+  }
+}
+
+.resume-section-rail__manager-add {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--resume-workbench-line);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 28px;
+    padding: 0 6px;
+    border: 1px dashed var(--resume-workbench-line-strong);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--resume-workbench-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      border-style: solid;
+      color: var(--resume-workbench-accent);
+      outline: 0;
     }
   }
 }
