@@ -259,27 +259,19 @@
                 </el-tag>
             </div>
             <el-form-item label="工作经历 / 工作摘要">
-              <BlockField
-                :blocks="workSummaryBlocks"
+              <EntryItemEditor
+                :items="workItems"
                 label="工作经历"
-                placeholder="描述公司类型、负责系统、业务规模、核心职责和结果"
-                @text="setWorkSummaryText"
-                @kind="setWorkSummaryKind"
-                @add="addWorkSummaryBlock"
-                @remove="removeWorkSummaryBlock"
-                @move="moveWorkSummaryBlock"
+                :headings="['公司 / 组织', '职位', '规模、技术栈或地点', '描述这一段的职责与结果']"
+                @update:items="(items) => applyEntryItems('experience', items, (value) => { form.workSummary = value })"
               />
             </el-form-item>
             <el-form-item label="教育经历">
-              <BlockField
-                :blocks="educationBlocks"
+              <EntryItemEditor
+                :items="educationItems"
                 label="教育经历"
-                placeholder="学校、专业、学历、时间范围等"
-                @text="setEducationText"
-                @kind="setEducationKind"
-                @add="addEducationBlock"
-                @remove="removeEducationBlock"
-                @move="moveEducationBlock"
+                :headings="['学校', '专业与学历', '补充', '主修课程、荣誉等']"
+                @update:items="(items) => applyEntryItems('education', items, (value) => { form.education = value })"
               />
             </el-form-item>
             </div>
@@ -880,6 +872,7 @@ import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import BlockField from '@/views/resume/workbench/blocks/BlockField.vue'
 import SkillGroupEditor from '@/views/resume/workbench/blocks/SkillGroupEditor.vue'
+import EntryItemEditor from '@/views/resume/workbench/blocks/EntryItemEditor.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -900,8 +893,8 @@ import { useGameProfileStore } from '@/features/game-profile'
 import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
 import { useBlockText } from '@/features/resume-workbench/use-block-text'
 import { useResumeDocument } from '@/features/resume-workbench/use-resume-document'
-import { updateSectionGroups } from '@/features/resume-workbench/section-ops'
-import type { ResumeSkillGroupItem } from '@/features/resume-workbench/document'
+import { updateSectionGroups, updateSectionItems } from '@/features/resume-workbench/section-ops'
+import type { ResumeEntryItem, ResumeSkillGroupItem } from '@/features/resume-workbench/document'
 import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
 import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
@@ -1074,24 +1067,6 @@ const {
   move: moveSummaryBlock
 } = useBlockText(() => form.summary, (value) => { form.summary = value }, 'sum')
 
-const {
-  blocks: workSummaryBlocks,
-  setText: setWorkSummaryText,
-  setKind: setWorkSummaryKind,
-  add: addWorkSummaryBlock,
-  remove: removeWorkSummaryBlock,
-  move: moveWorkSummaryBlock
-} = useBlockText(() => form.workSummary, (value) => { form.workSummary = value }, 'work')
-
-const {
-  blocks: educationBlocks,
-  setText: setEducationText,
-  setKind: setEducationKind,
-  add: addEducationBlock,
-  remove: removeEducationBlock,
-  move: moveEducationBlock
-} = useBlockText(() => form.education, (value) => { form.education = value }, 'edu')
-
 const resumeDocument = useResumeDocument()
 
 const skillsSection = computed(() => resumeDocument.document.value.sections
@@ -1116,6 +1091,43 @@ const applySkillGroups = (groups: ResumeSkillGroupItem[]) => {
 watch(() => form.skills, (value) => {
   if ((value || '') === resumeDocument.legacy.value.skillStack) return
   resumeDocument.syncLegacy({ skillStack: value })
+})
+
+const builtinSection = (key: string) => resumeDocument.document.value.sections
+  .find((section) => section.builtinKey === key)
+
+const workItems = computed<ResumeEntryItem[]>(() => {
+  const section = builtinSection('experience')
+  return section && section.kind === 'entry' ? section.content.items : []
+})
+
+const educationItems = computed<ResumeEntryItem[]>(() => {
+  const section = builtinSection('education')
+  return section && section.kind === 'entry' ? section.content.items : []
+})
+
+const applyEntryItems = (
+  key: 'experience' | 'education',
+  items: ResumeEntryItem[],
+  writeField: (value: string) => void
+) => {
+  const section = builtinSection(key)
+  if (!section || (section.kind !== 'entry' && section.kind !== 'custom')) return
+  resumeDocument.replace(updateSectionItems(resumeDocument.document.value, section.id, items))
+  writeField(key === 'experience'
+    ? resumeDocument.legacy.value.workExperience
+    : resumeDocument.legacy.value.educationExperience)
+}
+
+watch([() => form.workSummary, () => form.education], () => {
+  const legacy = resumeDocument.legacy.value
+  if ((form.workSummary || '') === legacy.workExperience && (form.education || '') === legacy.educationExperience) {
+    return
+  }
+  resumeDocument.syncLegacy({
+    workExperience: form.workSummary,
+    educationExperience: form.education
+  })
 })
 
 const optimizeForm = reactive<ResumeOptimizeRequestDTO>(createDefaultOptimizeForm())

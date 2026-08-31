@@ -215,3 +215,20 @@ export const updateSectionBlocks = (
   return next
 }
 
+/** Replaces an entry or custom(entry) section's items wholesale. */
+export const updateSectionItems = (
+  document: ResumeDocumentV2,
+  sectionId: string,
+  items: ResumeEntryItem[]
+): ResumeDocumentV2 => {
+  const index = findSectionIndex(document, sectionId)
+  const section = index < 0 ? undefined : document.sections[index]
+  if (!section) return document
+  if (section.kind !== 'entry' && !(section.kind === 'custom' && section.variant === 'entry')) return document
+  const next = clone(document)
+  const target = next.sections[index]
+  if (target.kind === 'entry') target.content = { items: clone(items) }
+  else if (target.kind === 'custom') target.content = { ...target.content, items: clone(items) }
+  return next
+}
+
