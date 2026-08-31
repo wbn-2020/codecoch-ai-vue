@@ -58,7 +58,7 @@
 
       <div v-if="model.hasContent || renderSections.length" class="document-body">
         <template v-for="section in renderSections" :key="section.id">
-          <section v-if="section.builtinKey === 'summary' && isFieldVisible('summary') && model.summary.length" class="document-section">
+          <section v-if="section.builtinKey === 'summary' && isFieldVisible('summary') && model.summary.length" class="document-section" data-section="summary">
             <div class="document-section__heading">
               <h3>个人摘要</h3>
               <i></i>
@@ -68,7 +68,7 @@
             </div>
           </section>
 
-          <section v-else-if="section.builtinKey === 'skills' && isFieldVisible('skills') && model.skills.length" class="document-section skills-section">
+          <section v-else-if="section.builtinKey === 'skills' && isFieldVisible('skills') && model.skills.length" class="document-section skills-section" data-section="skills">
             <div class="document-section__heading">
               <h3>专业技能</h3>
               <i></i>
@@ -84,7 +84,7 @@
             </div>
           </section>
 
-          <section v-else-if="section.builtinKey === 'experience' && isFieldVisible('workExperience') && model.experience.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'experience' && isFieldVisible('workExperience') && model.experience.length" class="document-section" data-section="experience">
             <div class="document-section__heading">
               <h3>工作经历</h3>
               <i></i>
@@ -92,7 +92,7 @@
             <ResumeDocumentEntries :entries="model.experience" />
           </section>
 
-          <section v-else-if="section.builtinKey === 'projects' && isFieldVisible('projects') && model.projects.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'projects' && isFieldVisible('projects') && model.projects.length" class="document-section" data-section="projects">
             <div class="document-section__heading">
               <h3>项目经历</h3>
               <i></i>
@@ -100,7 +100,7 @@
             <ResumeDocumentEntries :entries="model.projects" project />
           </section>
 
-          <section v-else-if="section.builtinKey === 'education' && isFieldVisible('educationExperience') && model.education.length" class="document-section">
+          <section v-else-if="section.builtinKey === 'education' && isFieldVisible('educationExperience') && model.education.length" class="document-section" data-section="education">
             <div class="document-section__heading">
               <h3>教育经历</h3>
               <i></i>
@@ -108,7 +108,7 @@
             <ResumeDocumentEntries :entries="model.education" />
           </section>
 
-          <section v-else class="document-section">
+          <section v-else class="document-section" :data-section="section.id">
             <div class="document-section__heading">
               <h3>{{ section.title }}</h3>
               <i></i>

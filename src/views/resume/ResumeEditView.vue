@@ -519,6 +519,10 @@
               <FileCheck2 :size="15" />
               导出 PDF
             </el-button>
+            <el-button @click="openPrintPreview">
+              <Printer :size="15" />
+              打印设计版
+            </el-button>
             <el-button @click="enlargePreview">
               放大检查
             </el-button>
@@ -823,6 +827,18 @@
         <el-button type="primary" :loading="projectSaving" @click="handleSaveProject">保存项目</el-button>
       </template>
     </el-dialog>
+
+    <PrintPreviewOverlay
+      v-if="printPreviewVisible"
+      :draft="resumeDocumentDraft"
+      :template-code="selectedResumeTemplateCode"
+      :accent="previewAccent"
+      :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+      :presentation-config="presentationConfig"
+      :document="resumeDocument.document.value"
+      :template-name="printTemplateName"
+      @close="printPreviewVisible = false"
+    />
     </template>
   </div>
 </template>
@@ -849,6 +865,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  Printer,
   Save,
   Sparkles,
 } from 'lucide-vue-next'
@@ -880,6 +897,7 @@ import EntryItemEditor from '@/views/resume/workbench/blocks/EntryItemEditor.vue
 import ProjectItemEditor from '@/views/resume/workbench/blocks/ProjectItemEditor.vue'
 import TextBlocksField from '@/views/resume/workbench/blocks/TextBlocksField.vue'
 import SectionCard from '@/views/resume/workbench/blocks/SectionCard.vue'
+import PrintPreviewOverlay from '@/views/resume/workbench/dialogs/PrintPreviewOverlay.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
@@ -899,6 +917,7 @@ import {
 import { useGameProfileStore } from '@/features/game-profile'
 import { useResumeAutosave } from '@/features/resume-workbench/use-resume-autosave'
 import { useResumeDocument } from '@/features/resume-workbench/use-resume-document'
+import { getResumeTemplateDefinition } from '@/features/resume-template/registry'
 import { projectToDocumentItem } from '@/features/resume-workbench/document-migrator'
 import {
   updateProjectItems,
@@ -2850,6 +2869,16 @@ const openPdfExport = async () => {
   }
   await openDeliveryChecks()
   await deliveryWorkbenchRef.value?.createExport('PDF')
+}
+
+const printPreviewVisible = ref(false)
+const printTemplateName = computed(() =>
+  getResumeTemplateDefinition(selectedResumeTemplateCode.value).name
+)
+
+const openPrintPreview = () => {
+  printPreviewVisible.value = true
+  mobileWorkspaceTab.value = 'preview'
 }
 
 const enlargePreview = async () => {

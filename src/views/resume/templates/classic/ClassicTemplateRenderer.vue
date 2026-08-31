@@ -22,6 +22,7 @@
         v-for="section in visibleRenderSections(model)"
         :key="section.id"
         class="classic-renderer__section"
+        :data-section="section.builtinKey || section.id"
       >
         <TemplateSectionTitle :title="section.title" />
 

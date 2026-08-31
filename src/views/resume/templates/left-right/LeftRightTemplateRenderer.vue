@@ -37,6 +37,7 @@
           v-for="section in mainSections"
           :key="section.id"
           class="left-right-renderer__section"
+          :data-section="section.builtinKey || section.id"
         >
           <TemplateSectionTitle :title="section.title" />
 
